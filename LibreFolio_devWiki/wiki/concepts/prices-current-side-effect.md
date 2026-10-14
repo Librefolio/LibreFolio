@@ -116,8 +116,8 @@ fresh delta after each `/current` call; it always produced an empty
 
 | Role | Path |
 |------|------|
-| Backend writer (side-effect owner) | `backend/app/services/asset_source.py` (`AssetSourceManager.get_current_prices_bulk`, ~L2756, L2877) |
-| Backend delta reader | `backend/app/services/asset_source.py` (`_count_actual_price_changes`) |
+| Backend writer (side-effect owner) | `backend/app/services/asset_sources/price_query.py` (`get_current_prices_bulk`; until 2026-09-11 in the monolithic `asset_source.py`, now a facade — [[entities/asset-sources-package]]) |
+| Backend delta reader | `backend/app/services/asset_sources/refresh.py` (`_count_actual_price_changes`) |
 | Frontend live poll (correct pattern) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` (`pollCurrentPriceOnce`) |
 | Post-mortem | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3_1_Closure_2.prompt.md` (§ "I-bis #24 — Auto-refresh mirato post-sync", v3→v4 paragraph) |
 | Commit message | `/tmp/libreFolio_commit_ibis24_v4.txt` |

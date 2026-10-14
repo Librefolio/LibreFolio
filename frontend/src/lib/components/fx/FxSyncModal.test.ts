@@ -122,17 +122,30 @@ describe('FxSyncModal — the section it builds', () => {
         expect(screen.getByTestId('sync-modal-start')).toBeDisabled();
     });
 
-    it('sends the pairs and the date range, with a timeout the user cannot influence', async () => {
+    /**
+     * The request may take what the user agreed to wait. It used to be capped at a
+     * hardcoded 120 s whatever the Timeout field said; now SyncModalBase hands the
+     * section a limit — the 120 s floor while the field sits under it, and the
+     * field plus 5 s of grace above — and this modal gives it to axios unchanged.
+     */
+    it('sends the pairs and the date range, with the request limit the Timeout field sets', async () => {
         respondWith({pair: 'EUR-USD', status: 'ok'});
-        mount({pairs: ['EUR-USD', 'EUR-GBP'], dateStart: '2023-01-01', dateEnd: '2023-06-30'});
+        const request = {pairs: ['EUR-USD', 'EUR-GBP'], start: '2023-01-01', end: '2023-06-30'};
+        const {unmount} = mount({pairs: ['EUR-USD', 'EUR-GBP'], dateStart: '2023-01-01', dateEnd: '2023-06-30'});
 
-        // Raise the modal's own timeout field before starting: it moves the
-        // countdown and nothing else — see the report.
+        // At the default 20 s the request keeps the 120 s floor…
+        expect(screen.getByTestId('sync-modal-timeout')).toHaveValue(20);
+        await startSync();
+        await settled();
+        expect(syncRates).toHaveBeenLastCalledWith(request, {timeout: 120_000});
+        unmount();
+
+        // …and once the field is raised past it, the field leads by 5 s.
+        mount({pairs: ['EUR-USD', 'EUR-GBP'], dateStart: '2023-01-01', dateEnd: '2023-06-30'});
         await fireEvent.input(screen.getByTestId('sync-modal-timeout'), {target: {value: '300'}});
         await startSync();
         await settled();
-
-        expect(syncRates).toHaveBeenCalledWith({pairs: ['EUR-USD', 'EUR-GBP'], start: '2023-01-01', end: '2023-06-30'}, {timeout: 120_000});
+        expect(syncRates).toHaveBeenLastCalledWith(request, {timeout: 305_000});
     });
 });
 

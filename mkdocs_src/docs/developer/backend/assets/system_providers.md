@@ -7,9 +7,9 @@ This section provides the technical deep-dive for each asset pricing provider in
 | Provider | Code | Features | `get_asset_url` | `params_schema` | Identifier Types | Test Level |
 |:---|:---|:---|:---:|:---:|:---|:---|
 | [**Yahoo Finance**](provider_yahoo_finance.md) | `yfinance` | History, Search, Metadata | ✅ | — | TICKER, ISIN | Beta |
-| [**JustETF**](provider_justetf.md) | `justetf` | History, Search, Metadata | ✅ | — | ISIN | Beta |
+| [**JustETF**](provider_justetf.md) | `justetf` | History, Search, Metadata | ✅ | ✅ | ISIN | Beta |
 | [**Borsa Italiana**](provider_borsa_italiana.md) | `borsa_italiana` | History, Search, Metadata, URL resolution | ✅ | ✅ | ISIN | Beta |
-| [**CSS Scraper**](provider_cssscraper.md) | `cssscraper` | Current Value | ✅ | ✅ | URL | Beta |
+| [**CSS Scraper**](provider_cssscraper.md) | `css_scraper` | Current Value | ✅ | ✅ | URL | Beta |
 | [**Scheduled Investment**](provider_scheduled_investment.md) | `scheduled_investment` | History (Calc), Events | — | ✅ | AUTO_GENERATED | Beta |
 | **Mock Provider** | `mockprov` | History, Search | — | — | TICKER, ISIN | Alpha |
 
@@ -19,7 +19,7 @@ This section provides the technical deep-dive for each asset pricing provider in
 - 🔎 **Search**: Supports searching for assets by name/ticker. Detected via `test_search_query is not None`.
 - 📋 **Metadata**: Can fetch asset details (sector, description, identifiers) via `fetch_asset_metadata()`.
 - 💰 **Current Value**: Can fetch the latest real-time price.
-- 📊 **Events**: Can produce asset events (dividends, interest, settlements) via `supports_events = True`.
+- 📊 **Events**: Can produce asset events, returned with the history in `FAHistoricalData.events` — dividends and splits (Yahoo Finance), dividends (JustETF), interest and settlements (Scheduled Investment). There is no `supports_events` flag.
 - 🔗 **`get_asset_url`**: Generates a link to the provider's page for this asset (e.g., Yahoo Finance quote page).
 - 🧩 **`params_schema`**: Exposes a form schema for the frontend to render dynamic configuration fields.
 - 🧪 **Probe**: All providers support `POST /assets/provider/probe` for dry-run testing (`current_price`, `history`, `metadata` operations).
@@ -38,7 +38,7 @@ The primary market data provider — fetches stock, ETF, crypto, and index price
 
 - **Features**: History, Search, Metadata, Current Value
 - **Identifier types**: `TICKER`, `ISIN`
-- **Key details**: `ticker.info` for current price (no `history()` or `fast_info`), search caching (10 min TTL), currency caching (24h), sector/geographic metadata
+- **Key details**: `ticker.info` for current price (no `history()` or `fast_info`), core search-query cache (15 min TTL), currency caching (24h), single-sector metadata (no geographic split)
 - 📖 [Technical Details →](provider_yahoo_finance.md)
 - 📖 [User Guide →](../../../user/assets/providers/yahoo-finance.md)
 
@@ -48,7 +48,7 @@ The primary market data provider — fetches stock, ETF, crypto, and index price
 
 Specialized ETF provider — fetches data from [justetf.com](https://www.justetf.com/) including sector and geographic distributions.
 
-- **Features**: History, Search, Metadata, Current Value (Gettex)
+- **Features**: History, Search, Metadata, Current Value (gettex live in EUR, daily `latestQuote` otherwise)
 - **Identifier types**: `ISIN`
 - **Key details**: Cached ETF list for instant search, Gettex WebSocket for real-time quotes, geographic/sector distributions, pre-warm at startup
 - 📖 [Technical Details →](provider_justetf.md)
@@ -62,14 +62,14 @@ Italian market data provider — fetches stocks, bonds (BTP), and ETFs listed on
 
 - **Features**: History, Search, Metadata, Current Value
 - **Identifier types**: `ISIN`
-- **Provider params**: Optional `language` (`"en"` / `"it"`) and `codice_fondo` for mutual funds
+- **Provider params**: Optional `language` (`"en"` / `"it"`), `codice_fondo` for mutual funds, `mic` / `platform` for market routing; the page `url` is stored automatically
 - **URL resolution**: `resolvable_url_domains = ["borsaitaliana.it"]`; `resolve_url(url)` returns the canonical IT + EN result set for fund/detail pages, then search flattens and de-dupes by `(identifier, language)`
 - **Key details**: Full OHLCV history for listed instruments, dual-language search with flag emojis, fund NAV pricing by internal `codice_fondo` (not ISIN), current fund NAV only when NAV date is today, fund history as one NAV point at its real date, `identifier_other` stored as a JSON list for alternative technical identifiers
 - 📖 [Technical Details →](provider_borsa_italiana.md)
 
 ---
 
-## 🌐 [CSS Scraper (`cssscraper`)](provider_cssscraper.md)
+## 🌐 [CSS Scraper (`css_scraper`)](provider_cssscraper.md)
 
 A versatile provider that can extract a current price from **any public webpage** using a CSS selector. Useful for tracking assets from niche sources without an API.
 

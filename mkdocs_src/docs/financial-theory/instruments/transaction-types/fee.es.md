@@ -1,6 +1,6 @@
 # ![](../../../static/icons/transactions/fee.png){: width="32" style="vertical-align: middle;" } Comisiones e Impuestos ![](../../../static/icons/transactions/tax.png){: width="32" style="vertical-align: middle;" }
 
-Las **comisiones** y los **impuestos** representan costes que reducen el valor de su cartera. Son tipos de transacciones separados para distinguir entre los costes cobrados por el bróker y las obligaciones impuestas por el gobierno.
+Las **comisiones** y los **impuestos** representan costes que reducen el valor de tu cartera. Son tipos de transacciones separados para distinguir entre los costes cobrados por el bróker y las obligaciones impuestas por el gobierno.
 
 ---
 
@@ -40,7 +40,7 @@ Las **comisiones** y los **impuestos** representan costes que reducen el valor d
 
 ## 📐 Impacto en los Rendimientos
 
-Las comisiones y los impuestos reducen directamente su rendimiento neto. La relación entre el rendimiento bruto y el neto es:
+Las comisiones y los impuestos reducen directamente tu rendimiento neto. La relación entre el rendimiento bruto y el neto es:
 
 $$
 R_{net} = R_{gross} - \frac{\text{Fees} + \text{Taxes}}{V_{start}}
@@ -49,7 +49,7 @@ $$
 Donde:
 
 - $R_{gross}$ = rendimiento antes de costes (la rentabilidad del mercado)
-- $R_{net}$ = rendimiento después de costes (lo que usted conserva realmente)
+- $R_{net}$ = rendimiento después de costes (lo que conservas realmente)
 - $V_{start}$ = valor de la cartera al inicio del periodo
 
 !!! note "Cómo LibreFolio atribuye comisiones e impuestos"
@@ -71,18 +71,18 @@ $$
 Donde:
 
 - $V_0$ = inversión inicial
-- $r$ = tasa de rendimiento bruto anual (ej., 0.07 para 7%)
-- $f$ = tasa de comisión anual (ej., 0.01 para 1%)
+- $r$ = tasa de rendimiento bruto anual (ej., 0,07 para 7%)
+- $f$ = tasa de comisión anual (ej., 0,01 para 1%)
 - $n$ = número de años
 
 !!! example "El lastre del 1% durante 30 años"
 
-    Con $10,000 invertidos a un rendimiento bruto del 7%:
+    Con $10.000 invertidos a un rendimiento bruto del 7%:
 
-    - **Sin comisiones**: $10,000 × $(1.07)^{30}$ = **$76,123**
-    - **Con comisión del 1%**: $10,000 × $(1.06)^{30}$ = **$57,435**
+    - **Sin comisiones**: $10.000 × $(1.07)^{30}$ = **$76.123**
+    - **Con comisión del 1%**: $10.000 × $(1.06)^{30}$ = **$57.435**
 
-    La comisión anual del 1% le cuesta **$18,688**, una reducción del 26% en el valor final.
+    La comisión anual del 1% te cuesta **$18.688**, una reducción del 26% en el valor final.
 
 ---
 

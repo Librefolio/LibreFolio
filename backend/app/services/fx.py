@@ -6,6 +6,8 @@ Handles currency conversion and FX rate management with support for multiple pro
 import asyncio
 import time
 from abc import ABC, abstractmethod
+from bisect import bisect_right
+from collections import namedtuple
 from datetime import date
 from decimal import Decimal
 from typing import Literal
@@ -18,13 +20,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from backend.app.db.models import FxConversionRoute, FxRate
+from backend.app.db.precision import truncate_fx_rate
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import Currency
 from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncLegDetail, FXSyncPairResult, SyncDateRangeModel, SyncStatus
 from backend.app.services.provider_registry import FXProviderRegistry
-from backend.app.utils.cache_utils import get_ttl_cache
-from backend.app.utils.decimal_utils import truncate_fx_rate
+from backend.app.utils.runtime.cache import clear_cache, get_ttl_cache
 
 logger = get_logger(__name__)
 
@@ -63,7 +65,7 @@ class FXRateProvider(ABC):
     1. Create a new class inheriting from FXRateProvider
     2. Implement all abstract methods
     3. Add @register_provider(FXProviderRegistry) decorator
-    4. Place in backend/app/services/fx_providers/ directory
+    4. Put it in backend/app/services/fx_providers/<name>/plugin.py, beside an __init__.py holding only its docstring
     5. Provider will be auto-discovered on startup
     6. See docs/fx/provider-development.md for details
     """
@@ -997,8 +999,8 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
 
                 # If fallback was used, log it
                 if route_idx > 0 and result.status in (SyncStatus.OK, SyncStatus.PARTIAL):
-                    providers_used = [s["provider"] for s in steps if s["provider"].upper() != "MANUAL"]
-                    logger.warning(f"Pair {pair_slug}: primary route failed, used fallback route {route_idx + 1} " f"(providers: {', '.join(providers_used)})")
+                    non_manual_step_provider_codes = [s["provider"] for s in steps if s["provider"].upper() != "MANUAL"]
+                    logger.warning(f"Pair {pair_slug}: primary route failed, used fallback route {route_idx + 1} " f"(providers: {', '.join(non_manual_step_provider_codes)})")
 
                 return result
 
@@ -1105,8 +1107,8 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
         fallback_errors: list[str],
     ) -> FXSyncPairResult:
         """Compute rates for a multi-step chain route."""
-        providers_used = [s["provider"] for s in steps]
-        source = "CHAIN:" + "+".join(providers_used)
+        step_provider_codes = [s["provider"] for s in steps]
+        source = "CHAIN:" + "+".join(step_provider_codes)
 
         # Collect all dates from leg_rates
         all_dates = sorted({key[2] for key in leg_rates.keys() if _is_date_within_sync_range(key[2], start_date, end_date)})
@@ -1213,8 +1215,6 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
         # Fresh FX rates change every converted valuation: portfolio reports and engine
         # blobs cached before this sync would keep showing the old data-quality banner
         # (and stale totals) for their whole TTL (30 min / 24 h).
-        from backend.app.utils.cache_utils import clear_cache  # noqa: PLC0415 — avoids a utils→services import cycle at module load
-
         clear_cache("portfolio_layer2")
         clear_cache("portfolio_blob")
 
@@ -1229,6 +1229,10 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
 # ============================================================================
 # CURRENCY CONVERSION FUNCTIONS
 # ============================================================================
+
+
+# Lightweight (date, rate) record used by convert_bulk's lookup.
+_RateRow = namedtuple("_RateRow", ["date", "rate"])
 
 
 async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with backward-fill search
@@ -1313,11 +1317,13 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
         # We'll fetch the most recent rate for each pair that satisfies all dates
         pair_key = (base, quote)
         if pair_key not in pairs_needed:
-            pairs_needed[pair_key] = {"max_date": as_of_date, "indices": []}
+            pairs_needed[pair_key] = {"min_date": as_of_date, "max_date": as_of_date, "indices": []}
         else:
-            # Track the maximum date needed for this pair
+            # Track the date window needed for this pair
             if as_of_date > pairs_needed[pair_key]["max_date"]:
                 pairs_needed[pair_key]["max_date"] = as_of_date
+            if as_of_date < pairs_needed[pair_key]["min_date"]:
+                pairs_needed[pair_key]["min_date"] = as_of_date
 
         pairs_needed[pair_key]["indices"].append(idx)
 
@@ -1327,22 +1333,31 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
 
         conditions = []
         for (base, quote), info in pairs_needed.items():
-            # For each pair, get all rates up to the max date needed
-            conditions.append(and_(FxRate.base == base, FxRate.quote == quote, FxRate.date <= info["max_date"]))
+            # Only the window the conversions can use: from the last rate on/before the
+            # earliest requested date (the backward-fill anchor) up to the latest date.
+            # Without the lower bound every call loaded the pair's whole history, which
+            # made per-day portfolio conversions load millions of rows.
+            anchor = sql_select(func.max(FxRate.date)).where(FxRate.base == base, FxRate.quote == quote, FxRate.date <= info["min_date"]).scalar_subquery()
+            conditions.append(
+                and_(
+                    FxRate.base == base,
+                    FxRate.quote == quote,
+                    FxRate.date <= info["max_date"],
+                    FxRate.date >= func.coalesce(anchor, info["min_date"]),
+                )
+            )
 
-        # Single query fetching all rates needed
-        stmt = select(FxRate).where(or_(*conditions)).order_by(FxRate.base, FxRate.quote, FxRate.date.desc())
+        # Single query fetching all rates needed (plain columns: no ORM object per row)
+        stmt = sql_select(FxRate.base, FxRate.quote, FxRate.date, FxRate.rate).where(or_(*conditions)).order_by(FxRate.base, FxRate.quote, FxRate.date)
 
         result = await session.execute(stmt)
-        all_rates = result.scalars().all()
 
-        # Build lookup dictionary: {(base, quote): [rates_sorted_desc_by_date]}
+        # Build lookup: {(base, quote): ([dates ascending], [rates])} for bisect
         rates_lookup = {}
-        for rate in all_rates:
-            pair_key = (rate.base, rate.quote)
-            if pair_key not in rates_lookup:
-                rates_lookup[pair_key] = []
-            rates_lookup[pair_key].append(rate)
+        for rate_base, rate_quote, rate_date, rate_value in result.all():
+            dates, values = rates_lookup.setdefault((rate_base, rate_quote), ([], []))
+            dates.append(rate_date)
+            values.append(rate_value)
     else:
         rates_lookup = {}
 
@@ -1362,14 +1377,11 @@ async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with back
 
             # Find appropriate rate for this conversion
             pair_key = (meta["base"], meta["quote"])
-            pair_rates = rates_lookup.get(pair_key, [])
+            pair_dates, pair_values = rates_lookup.get(pair_key, ([], []))
 
-            # Find first rate <= requested date (backward-fill)
-            rate_record = None
-            for rate in pair_rates:
-                if rate.date <= meta["date"]:
-                    rate_record = rate
-                    break
+            # Find the latest rate <= requested date (backward-fill)
+            pos = bisect_right(pair_dates, meta["date"])
+            rate_record = _RateRow(pair_dates[pos - 1], pair_values[pos - 1]) if pos else None
 
             if not rate_record:
                 # No rate found at all for this pair
@@ -1516,8 +1528,6 @@ async def upsert_rates_bulk(
 
     # Manual rates change valuations exactly like a provider sync — drop the cached
     # portfolio layers so the next report recomputes (same invalidation as sync_pairs_bulk).
-    from backend.app.utils.cache_utils import clear_cache  # noqa: PLC0415 — avoids a utils→services import cycle at module load
-
     clear_cache("portfolio_layer2")
     clear_cache("portfolio_blob")
     return results
@@ -1655,5 +1665,9 @@ async def delete_rates_bulk(  # noqa: C901 — flat batch delete: normalize, cou
 
     # Single commit for all deletions
     await session.commit()
+
+    if deleted_count_total > 0:
+        clear_cache("portfolio_layer2")
+        clear_cache("portfolio_blob")
 
     return results

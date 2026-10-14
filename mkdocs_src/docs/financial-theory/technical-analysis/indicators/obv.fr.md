@@ -1,6 +1,6 @@
 # 📊 OBV — Volume en Équilibre (On-Balance Volume)
 
-L'OBV construit un cumul simple qui ajoute le volume total d'un jour lorsque le prix clôture en hausse, et le soustrait lorsque le prix clôture en baisse. C'est la méthode la plus ancienne et la plus simple pour intégrer l'activité de trading dans un signal directionnel.
+L'OBV construit un cumul simple qui ajoute le volume total d'une séance lorsque le prix clôture en hausse, et le soustrait lorsque le prix clôture en baisse. C'est la méthode la plus ancienne et la plus simple pour intégrer l'activité de trading dans un signal directionnel.
 
 ---
 
@@ -27,13 +27,13 @@ où $V_t$ est le volume échangé au moment $t$. L'OBV est une pure **somme cumu
 
 ## ⚙️ Paramètres
 
-L'OBV ne prend **aucun paramètre**. Il n'a pas de `période`, de seuil ou de réglage de lissage à configurer.
+L'OBV ne prend **aucun paramètre**. Il n'a pas de `period`, de seuil ou de réglage de lissage à configurer.
 
 !!! note "Rebasé sur la plage du graphique"
 
     L'OBV est mathématiquement une somme cumulée démarrant au début de
     l'historique d'un actif, donc son niveau absolu n'a pas de signification
-    intrinsèque. LibreFolio rebase la série OBV affichée à zéro au **début de la
+    intrinsèque. LibreFolio rebase la série OBV affichée à zéro à la **première séance de la
     plage de graphique demandée**, de sorte que ce que vous lisez à l'écran est
     toujours le "volume net signé accumulé depuis le bord gauche du graphique" —
     comparable indépendamment de la profondeur historique des données sous-jacentes.
@@ -46,12 +46,12 @@ L'OBV est un **intégrateur** en temps discret (un accumulateur, l'équivalent n
 
 ```mermaid
 flowchart LR
- C["💹 Prix de clôture"] --> SGN["➕➖0️⃣ signe(ΔClôture)"]
- V["📦 Volume"] --> MUL["✖️ volume signé"]
- SGN --> MUL
- MUL --> ACC["🔁 Somme cumulée (intégrateur)"]
- ACC --> OBV["📊 OBV(t)"]
- ACC -.->|"rétroaction"| ACC
+    C["💹 Prix de clôture"] --> SGN["➕➖0️⃣ signe(ΔClôture)"]
+    V["📦 Volume"] --> MUL["✖️ volume signé"]
+    SGN --> MUL
+    MUL --> ACC["🔁 Somme cumulée (intégrateur)"]
+    ACC --> OBV["📊 OBV(t)"]
+    ACC -.->|"rétroaction"| ACC
 ```
 
 :material-link: [Volume en équilibre sur Wikipédia](https://en.wikipedia.org/wiki/On-balance_volume){ target="_blank" }

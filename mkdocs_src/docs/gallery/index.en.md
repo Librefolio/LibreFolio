@@ -22,6 +22,8 @@ Welcome to the LibreFolio visual gallery! Here you can explore all the features 
 !!! tip "What You'll See"
 
     - **Authentication**: Secure login with password strength meter
+    - **Security**: Connection security indicator in the sidebar, open on its level and the reason for it
+    - **Onboarding**: First-run welcome setup, guided Core tour and contextual guides, replayable from Settings
     - **Dashboard**: Quick overview of your portfolio
     - **Brokers**: Manage multiple brokerage accounts
     - **Files**: Upload and manage broker reports with grid & table views
@@ -30,6 +32,8 @@ Welcome to the LibreFolio visual gallery! Here you can explore all the features 
     - **Media & Upload**: Image crop/edit, asset picker, file renaming
     - **FX Rates**: Currency pairs, charts, sync, data editor, CSV import
     - **Assets**: Track stocks, ETFs, bonds, crypto with charts, signals, measures & classification
+    - **Risk Analysis**: Correlation matrix, loss comparison, risk/return against a benchmark, historical replay and simulation
+    - **Tools**: Catalogue of standalone calculations, with the PAC allocator
 
 ## 🌍 Language Support
 

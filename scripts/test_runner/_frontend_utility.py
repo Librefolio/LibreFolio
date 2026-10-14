@@ -3,33 +3,54 @@
 import subprocess
 
 from . import _common
-from ._common import Colors, _get_category_tests_for_all, _run_test_suite, print_error, print_section, print_success
-from ._frontend_common import _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
+from ._common import Colors, _get_category_tests_for_all, _run_test_suite, add_test, make_category, print_error, print_header, print_section, print_success
+from ._frontend_common import _ensure_db_populated, _ensure_frontend_build, _ensure_test_users, _run_playwright, reset_setup_scope
 
 
 def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run core store + shared input/select primitive unit tests (Vitest)."""
+    """Run core store + shared input/select primitive unit tests (Vitest).
+
+    Supplied name-pattern regexes are OR-joined; no names runs the full catalog.
+    """
     print(f"\n{Colors.BLUE}Running: Core store Vitest unit tests{Colors.NC}")
+    if test_names:
+        print(f"{Colors.YELLOW}Filter: {' | '.join(test_names)}{Colors.NC}")
     result = subprocess.run(
         [
             "npx",
             "vitest",
             "run",
             "src/lib/stores/core/entityStore.test.ts",
+            "src/lib/stores/app/onboarding.test.ts",
+            "src/lib/stores/app/privacyStore.test.ts",
+            "src/lib/stores/app/privacyStoreSsr.test.ts",
+            "src/lib/stores/app/navigationStore.test.ts",
+            "src/lib/stores/app/settings.test.ts",
             "src/lib/components/ui/select/optionFilter.test.ts",
             "src/lib/utils/__tests__/dateArrowStep.test.ts",
             "src/lib/utils/__tests__/dateOnly.test.ts",
+            "src/lib/utils/__tests__/internalPath.test.ts",
             "src/lib/utils/__tests__/parseDecimalInput.test.ts",
             "src/lib/utils/__tests__/parseTypedDate.test.ts",
             "src/lib/utils/__tests__/requestConcurrency.test.ts",
             "src/lib/utils/__tests__/urlFilters.test.ts",
             "src/lib/utils/__tests__/trySave.test.ts",
+            "src/lib/utils/layout/headerScroll.test.ts",
+            "src/lib/utils/security/connectionSecurity.test.ts",
             "src/lib/charts/__tests__/loadComparisonData.test.ts",
+            "src/lib/charts/__tests__/signalLabel.test.ts",
+            "src/lib/services/fxCreationSync.test.ts",
             "src/lib/utils/sync/__tests__/syncToastHelpers.test.ts",
+            "src/lib/utils/sync/__tests__/syncRange.test.ts",
+            "src/lib/stores/reference/fxRoutesStore.test.ts",
             "src/lib/utils/core/__tests__/formatDecimal.test.ts",
             "src/lib/utils/core/__tests__/escapeHtml.test.ts",
+            "src/lib/utils/core/__tests__/entityLink.test.ts",
             "src/lib/utils/core/__tests__/translateOr.test.ts",
             "src/lib/utils/core/__tests__/formatPercent.test.ts",
+            "src/lib/utils/core/__tests__/formatFixed.test.ts",
+            "src/lib/stores/app/uiLocale.test.ts",
+            "src/lib/utils/files/upload.test.ts",
             "src/lib/utils/core/__tests__/positionKey.test.ts",
             "src/lib/utils/core/__tests__/finiteNumber.test.ts",
             "src/lib/utils/core/__tests__/formatAxisDate.test.ts",
@@ -57,18 +78,40 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/charts/priceChartHelpers.test.ts",
             "src/lib/components/charts/candlestickChartHelpers.test.ts",
             "src/lib/components/charts/chartSignalsHelpers.test.ts",
+            "src/lib/components/charts/lineChartHelpers.sessionGaps.test.ts",
+            "src/lib/components/charts/scatterChartHelpers.test.ts",
             "src/lib/components/risk/riskAnalysisHelpers.test.ts",
+            "src/lib/components/risk/correlationHelpers.test.ts",
+            "src/lib/components/risk/assetSetSelection.test.ts",
+            "src/lib/components/risk/eligibility.test.ts",
+            "src/lib/components/risk/matrixMetadata.test.ts",
+            "src/lib/components/risk/assetSetLevels.test.ts",
+            "src/lib/components/risk/assetSetI18n.test.ts",
+            "src/lib/components/risk/warningTranslatorSites.test.ts",
+            "src/lib/components/risk/syncTargets.test.ts",
             "src/lib/components/assets/providerProbe.test.ts",
             "src/lib/components/assets/resolveProviderError.test.ts",
             "src/lib/components/assets/assetIdentifiers.test.ts",
+            "src/lib/components/assets/providerComparisonQueue.test.ts",
             "src/lib/components/assets/currencyBlocker.test.ts",
             "src/lib/components/assets/assetPayload.test.ts",
             "src/lib/components/assets/assetFormState.test.ts",
             "src/lib/components/assets/scheduleSerialization.test.ts",
+            "src/lib/components/assets/assetBrowse.test.ts",
             "src/lib/components/table/dataTableLogic.test.ts",
             "src/lib/components/transactions/shared/resolveFormItems.test.ts",
             "src/lib/utils/files/imageCrop.test.ts",
+            "src/lib/utils/files/pdfPreviewState.test.ts",
+            "src/lib/utils/files/pdfViewerAssets.test.ts",
             "src/lib/utils/currency/fxConversionHelper.test.ts",
+            "src/lib/utils/currency/currencyFormat.test.ts",
+            "src/lib/utils/privacy/maskable.test.ts",
+            "src/lib/utils/privacy/moneyRenderSites.test.ts",
+            "src/routes/documentTitle.guard.test.ts",
+            "src/htmlInterpolation.gate.test.ts",
+            "src/htmlSink.gate.test.ts",
+            "src/clipboardSink.gate.test.ts",
+            "src/lib/api/dashboardReportFixture.test.ts",
             "src/lib/components/brokers/lots/lotChartShared.test.ts",
             "src/lib/components/brokers/lots/lotWacPriceChartHelpers.test.ts",
             "src/lib/components/brokers/lots/lotComparisonChartHelpers.test.ts",
@@ -81,15 +124,31 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/stores/chartSettingsStore.test.ts",
             "src/lib/stores/chartSettingsStoreSsr.test.ts",
             "src/lib/stores/reference/brokerStore.test.ts",
+            "src/lib/stores/reference/brokerStoreIconHydration.test.ts",
             "src/lib/features/changelog/changelog.test.ts",
             "src/lib/features/update-check/updateCheck.test.ts",
+            "src/lib/features/onboarding/guideAnchors.test.ts",
+            "src/lib/features/onboarding/onboardingTourSurfaces.test.ts",
+            "src/lib/features/onboarding/guideCopy.test.ts",
+            "src/lib/features/tools/client.test.ts",
+            "src/lib/features/tools/registry.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/decimal.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/format.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/modeText.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/pluralCountSites.test.ts",
+            "src/lib/i18n/catalogIcuLocale.test.ts",
+            "src/lib/i18n/riskGlossary.test.ts",
+            "src/lib/components/support/supportLinks.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.test.ts",
+            "src/lib/charts/signals/__tests__/syntheticSignals.languageSwitch.test.ts",
             "src/lib/charts/signals/__tests__/comparisonSignals.test.ts",
+            "src/lib/charts/signals/__tests__/comparisonSignalPages.test.ts",
             "src/lib/charts/signals/__tests__/measureSignal.test.ts",
             "src/lib/charts/signals/__tests__/signalProblemSeverity.test.ts",
             "src/lib/charts/signals/__tests__/catalogPartitions.test.ts",
             "src/lib/charts/signals/__tests__/backendRendererSegments.test.ts",
+            *(["-t", "|".join(test_names)] if test_names else []),
         ],
         cwd="frontend",
         capture_output=not verbose,
@@ -113,8 +172,13 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
     testing-library harness, and they cover a surface — the UI primitives — that
     E2E reaches only incidentally, if at all. Splitting them also means the two
     families can be run, timed and parallelised independently.
+
+    Supplied ``test_names`` are Vitest name-pattern regexes, combined with OR.
+    With no names, the entire registered file catalog runs unchanged.
     """
     print(f"\n{Colors.BLUE}Running: Svelte component unit tests (jsdom){Colors.NC}")
+    if test_names:
+        print(f"{Colors.YELLOW}Filter: {' | '.join(test_names)}{Colors.NC}")
     result = subprocess.run(
         [
             "npx",
@@ -123,46 +187,102 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/date/CalendarMonth.test.ts",
             "src/lib/components/ui/date/SingleDatePicker.test.ts",
             "src/lib/components/ui/date/DateRangePicker.test.ts",
+            "src/lib/components/ui/input/ExactDecimalInput.test.ts",
+            "src/lib/components/ui/input/ExactQuantityInput.test.ts",
             "src/lib/components/ui/input/TagInput.test.ts",
+            "src/lib/components/ui/input/PasswordInput.test.ts",
             "src/lib/components/ui/select/SimpleSelect.test.ts",
             "src/lib/components/ui/select/SearchSelect.test.ts",
+            "src/lib/components/ui/select/SearchSelect.reopen.test.ts",
+            "src/lib/components/ui/select/CurrencySearchSelect.test.ts",
             "src/lib/components/ui/select/FxProviderSelect.test.ts",
+            "src/lib/components/ui/select/TreeSelect.test.ts",
+            "src/lib/components/ui/select/AssetTypeSelect.test.ts",
+            "src/lib/components/ui/select/AssetPickerPanel.test.ts",
             "src/lib/components/ui/data-editor/DataEditor.test.ts",
             "src/lib/components/ui/media/AssetPickerModal.test.ts",
             "src/lib/components/ui/media/ImageEditModal.test.ts",
             "src/lib/components/ui/modals/SyncModalBase.test.ts",
+            "src/lib/components/ui/modals/ModalBase.test.ts",
+            "src/lib/components/ui/modals/ModalBase.escapeLayers.test.ts",
             "src/lib/components/ui/modals/SyncResultRow.test.ts",
+            "src/lib/components/ui/media/FileEditModal.test.ts",
+            "src/lib/components/ui/media/FileUploader.test.ts",
             "src/lib/components/ui/modals/PageSyncModal.test.ts",
+            "src/lib/components/ui/feedback/ToastContainer.test.ts",
+            "src/lib/components/ui/feedback/Tooltip.test.ts",
+            "src/lib/components/ui/tabs/TabBar.test.ts",
             "src/lib/components/table/DataTableColumnFilter.test.ts",
             "src/lib/components/table/DataTable.test.ts",
+            "src/lib/components/table/DataTable.rowOrder.test.ts",
             "src/lib/components/table/DataTablePagination.test.ts",
             "src/lib/components/assets/ScheduledInvestmentEditor.test.ts",
             "src/lib/components/assets/AssetModal.test.ts",
+            "src/lib/components/assets/AssetModal.providerLifecycle.test.ts",
             "src/lib/components/assets/AssetSearchAutocomplete.test.ts",
             "src/lib/components/assets/AssetCurrencyChangeModal.test.ts",
             "src/lib/components/assets/ProviderComparisonModal.test.ts",
             "src/lib/components/assets/CellDateRange.test.ts",
             "src/lib/components/assets/ProviderAssignmentSection.test.ts",
+            "src/lib/components/assets/providerProbeState.test.ts",
             "src/lib/components/assets/AssetSyncModal.test.ts",
+            "src/lib/components/assets/AssetBrowseNav.test.ts",
             "src/lib/components/fx/FxSyncModal.test.ts",
             "src/lib/components/fx/FxMissingRate.test.ts",
+            "src/lib/components/fx/FxPairAddModal.test.ts",
             "src/lib/components/files/FilePreviewModal.test.ts",
+            "src/lib/components/files/FilesTable.test.ts",
             "src/lib/components/transactions/modals/ImportWizardModal.test.ts",
             "src/lib/components/transactions/modals/TransactionCompareModal.test.ts",
             "src/lib/components/transactions/modals/TransactionFormModal.test.ts",
+            "src/lib/components/transactions/TransactionsTable.privacy.test.ts",
+            "src/lib/components/transactions/wac/WacPreviewSection.test.ts",
             "src/lib/components/ui/display/CompactCashCell.test.ts",
+            "src/lib/components/ui/display/KpiMetricBar.test.ts",
+            "src/lib/components/ui/display/KpiDivergingFlowBar.test.ts",
+            "src/lib/components/ui/display/RiskMetricCard.test.ts",
+            "src/lib/components/ui/display/RiskCardGrid.test.ts",
+            "src/lib/components/ui/display/CurrencyAmount.test.ts",
+            "src/lib/components/ui/HeaderToggles.i18n.test.ts",
             "src/lib/components/charts/ChartSignalsSection.test.ts",
+            "src/lib/components/charts/SignalTreeSelect.test.ts",
             "src/lib/components/charts/MeasurePanel.test.ts",
+            "src/lib/components/charts/PriceChartFull.test.ts",
+            "src/lib/components/charts/LineChart.test.ts",
+            "src/lib/components/risk/AssetSetLossComparisonSection.test.ts",
+            "src/lib/components/risk/AssetSetRiskReturnSection.test.ts",
+            "src/lib/components/charts/ScatterChart.test.ts",
+            "src/lib/components/risk/AssetSetReplaySection.test.ts",
+            "src/lib/components/risk/AssetSetComparisonLevels.test.ts",
+            "src/lib/components/risk/AssetSetCorrelationSection.test.ts",
+            "src/lib/components/risk/AssetChip.test.ts",
             "src/lib/components/auth/RegisterCard.test.ts",
+            "src/lib/components/auth/LoginCard.test.ts",
             "src/lib/components/auth/DonationPopupModal.test.ts",
+            "src/lib/components/support/SupportActions.test.ts",
+            "src/lib/components/support/SocialShareModal.test.ts",
+            "src/lib/components/support/shareNavigation.test.ts",
+            "src/lib/utils/clipboard.test.ts",
+            "src/lib/utils/core/sanitizeHtml.test.ts",
+            "src/lib/components/brokers/BrokerModal.test.ts",
             "src/lib/components/brokers/BrokerSharingPanel.test.ts",
+            "src/lib/components/brokers/BrokerCard.test.ts",
             "src/lib/components/assets/AssetTable.test.ts",
+            "src/lib/components/assets/AssetTable.privacy.test.ts",
             "src/lib/components/dashboard/KpiSection.test.ts",
             "src/lib/components/dashboard/ExposureTable.test.ts",
+            "src/lib/components/dashboard/ExposureTreemap.test.ts",
+            "src/lib/components/dashboard/GrowthChart.tooltip.test.ts",
             "src/lib/components/dashboard/ContributionTable.test.ts",
+            "src/lib/components/dashboard/PerformanceChart.test.ts",
+            "src/lib/components/dashboard/OtherPeriodEffectsTable.test.ts",
+            "src/lib/components/dashboard/AllocationPanel.test.ts",
             "src/lib/components/table/DataTableHeaderTooltip.test.ts",
             "src/lib/components/transactions/import/FixFlaggedStep.test.ts",
+            "src/lib/components/transactions/import/ReportSetCard.escape.test.ts",
             "src/lib/components/layout/ChangelogModal.test.ts",
+            "src/lib/components/layout/Header.test.ts",
+            "src/lib/components/layout/ConnectionSecurityIndicator.test.ts",
             "src/lib/components/auth/UpdateAvailableModal.test.ts",
             "src/lib/components/settings/SettingControls.test.ts",
             "src/lib/components/settings/SettingsLayout.test.ts",
@@ -173,6 +293,15 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/settings/tabs/ProfileTab.test.ts",
             "src/lib/components/settings/tabs/AboutTab.test.ts",
             "src/lib/components/settings/tabs/GlobalSettingsTab.test.ts",
+            "src/lib/features/tools/ToolsHub.test.ts",
+            "src/lib/features/tools/ToolHost.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/result/StateNotice.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/result/ResultCell.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/result/model.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/result/text.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/request.test.ts",
+            "src/lib/components/ui/display/BrokerBadge.test.ts",
+            *(["-t", "|".join(test_names)] if test_names else []),
         ],
         cwd="frontend",
         capture_output=not verbose,
@@ -188,87 +317,294 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
     return False
 
 
+def front_onboarding_component_unit(
+    verbose: bool = False,
+    ui: bool = False,
+    headed: bool = False,
+    debug: bool = False,
+    test_names: list = None,
+    coverage: bool = False,
+) -> bool:
+    """Run the isolated onboarding component tests without importing the full UI catalog."""
+    print(f"\n{Colors.BLUE}Running: Onboarding component unit tests{Colors.NC}")
+    if test_names:
+        print(f"{Colors.YELLOW}Filter: {' | '.join(test_names)}{Colors.NC}")
+    result = subprocess.run(
+        [
+            "npx",
+            "vitest",
+            "run",
+            "src/lib/features/onboarding/components/OnboardingCoachmark.test.ts",
+            "src/lib/features/onboarding/components/OnboardingIntroScene.test.ts",
+            "src/lib/features/onboarding/components/OnboardingReplaySection.test.ts",
+            "src/lib/features/onboarding/components/WelcomeForm.test.ts",
+            "src/lib/features/onboarding/components/WelcomePage.test.ts",
+            "src/lib/features/onboarding/components/DeferredAppPopups.test.ts",
+            "src/lib/features/onboarding/onboardingRouteSettlement.test.ts",
+            "src/routes/(app)/layout.gate.test.ts",
+            "src/routes/(app)/layout.authGate.test.ts",
+            "src/lib/components/assets/AssetModal.test.ts",
+            "src/lib/components/brokers/BrokerModal.test.ts",
+            "src/lib/components/fx/FxPairAddModal.test.ts",
+            "src/lib/components/layout/Header.test.ts",
+            "src/lib/components/settings/tabs/PreferencesTab.test.ts",
+            "src/lib/components/transactions/modals/ImportWizardModal.test.ts",
+            *(["-t", "|".join(test_names)] if test_names else []),
+        ],
+        cwd="frontend",
+        capture_output=not verbose,
+    )
+    if result.returncode == 0:
+        print_success("Onboarding component unit tests - PASSED")
+        return True
+
+    print_error(f"Onboarding component unit tests - FAILED (exit code: {result.returncode})")
+    if not verbose:
+        print(result.stdout.decode() if result.stdout else "")
+        print(result.stderr.decode() if result.stderr else "")
+    return False
+
+
 def front_auth(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run auth E2E tests."""
     print_section("Frontend Auth Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("auth.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run settings E2E tests."""
     print_section("Frontend Settings Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("settings.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_files(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run files E2E tests."""
     print_section("Frontend Files Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("files.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_files_pdf_offline(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the PDF preview with every origin but the lane's refused (1.2 gap 7)."""
+    print_section("Frontend Files PDF Offline Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("files-pdf-offline.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_files_uploader(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run uploader URL, list/grid and avatar regressions with synthetic APIs."""
+    print_section("Frontend Files Uploader Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("files-uploader.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
+def front_support_copy_and_go(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run native popup ordering, denied-copy flows and the legacy-copy limit on desktop and mobile."""
+    print_section("Frontend Support Copy And Go Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("support-copy-and-go.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
+def front_header_scroll(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run all-device header geometry and scroll-state regressions."""
+    print_section("Frontend Header Scroll Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/header-scroll.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
+def front_document_title(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the window-title regression across client-side route changes."""
+    print_section("Frontend Document Title Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/document-title.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
+def front_pac_allocator_real(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the PAC allocator (beta) end to end on real data (1.2 gap 3) on the desktop project, the runner default."""
+    print_section("Frontend PAC Allocator Real-Data Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("pac-allocator-real.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_changelog_locale(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the changelog modal's chapter languages in the Italian and English UI (lot CL, desktop)."""
+    print_section("Frontend Changelog Locale Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/changelog-locale.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_toolbar_width_sweep(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Sweep the five PageToolbar bars 1700 → 320 px in English, French, Italian and Spanish, plus the Assets lifecycle pill at phone widths (K step 13, item 5; lot 51)."""
+    print_section("Frontend Toolbar Width Sweep Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/toolbar-width-sweep.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_app_start_auth(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the app-start auth gate: a slow /auth/me is not a sign-out, and the login keeps the requested page (K step 19)."""
+    print_section("Frontend App Start Auth Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/app-start-auth.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_connection_security(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the connection-security indicator: localhost, a mapped .lan name and a public name, with and without a public source (plan 36)."""
+    print_section("Frontend Connection Security Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/connection-security.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
+def front_docs_offline_math(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the documentation's formulas without internet: nested pages in English and Italian, MathJax and its fonts from the site's own copy (M-19)."""
+    print_section("Frontend Docs Offline Math Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/docs-offline-math.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_files_destructive(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run files destructive-route E2E tests (single/bulk delete, failure, BRIM)."""
     print_section("Frontend Files Destructive Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("files-destructive.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_select(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run select components E2E tests."""
     print_section("Frontend Select Components Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("select-components.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_image_crop(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run image crop & media components E2E tests."""
     print_section("Frontend Image Crop & Media Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("image-crop.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_utilities(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run utilities API E2E tests."""
     print_section("Frontend Utilities API Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("utilities.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_onboarding_tour(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the onboarding tour on desktop and mobile."""
+    print_section("Frontend Onboarding Tour Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("onboarding-tour.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
+
+
+def front_onboarding_guides(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the contextual onboarding guide walks on desktop and mobile."""
+    print_section("Frontend Onboarding Guides Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("onboarding-guides.spec.ts", ui=ui, headed=headed, debug=debug, project="", test_names=test_names, coverage=coverage)
 
 
 def front_tooltip(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run shared Tooltip component E2E tests (pinned hover/click model)."""
     print_section("Frontend Tooltip Component Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("tooltip-component.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_scheduler(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run scheduler settings E2E tests (admin: config modal, log modal, regression)."""
     print_section("Frontend Scheduler Settings Tests")
-    if not _ensure_frontend_build(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_playwright("settings/scheduler.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, coverage: bool = False) -> bool:
     """Run all frontend utility/component E2E tests."""
-    from ._common import print_header
     print_header("Frontend Utility Tests (Playwright)")
     if _common.nothing_left_to_run("front-utility"):
         return _common.consolidated_verdict("front-utility")
     reset_setup_scope()
-    if not _ensure_frontend_build(): return False
-    if not _ensure_test_users(): return False
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
     return _run_test_suite(
         suite_name="Frontend Utility Tests",
         tests=_get_category_tests_for_all("front-utility", verbose, ui=ui, headed=headed, debug=debug, coverage=coverage),
@@ -282,19 +618,139 @@ def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = Fa
 
 def populate_registry(registry: dict) -> None:
     """Register all frontend utility test entries."""
-    from ._common import add_test, make_category
-    cat = make_category(
-        help_text="Frontend utility & component E2E tests (auth, settings, files, select, image-crop)",
-        description="""Frontend Utility & Component Tests\n\nOptions: --ui, --headed, --debug""")
+    cat = make_category(help_text="Frontend utility & component E2E tests (auth, settings, files, select, image-crop)", description="""Frontend Utility & Component Tests\n\nOptions: --ui, --headed, --debug""")
     add_test(cat, "auth", front_auth, name="Auth Tests", desc="Login, register, logout, language change", prereq="Test users created", tests="auth.spec.ts")
-    add_test(cat, "core-unit", front_utility_unit, test_names=False, name="Core Store Unit Tests", desc="entityStore, option filter, date/decimal parsing, request concurrency, HTML escaping for hand-built markup, safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic, signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping, transaction form-item resolution (paired orientation, hidden-broker sentinel, injected lookups) and image-crop presets/MIME/file-naming with the cropper contract faked, FX tooltip data assembly where a zero rate is the absence sentinel and not a quote, brokerStore.getOwnedBrokers roles×shares matrix (F2 dashboard scope), changelog chapter parsing incl. the canonical-Unreleased known gap, and the update-check probe (version compare, 24h throttle, dismissal memory, never-throw fetch)", tests="src/lib/stores/core/entityStore.test.ts")
-    add_test(cat, "component-unit", front_component_unit, test_names=False, name="Svelte Component Unit Tests", desc="UI primitives mounted in jsdom: CalendarMonth grid/states, SingleDatePicker typed/calendar seam, TagInput keyboard model, SimpleSelect keyboard/unavailable states, FxProviderSelect route picker, DataTableColumnFilter filter modes, DataTable sorting/paging/selection/row actions, ScheduledInvestmentEditor schedule payload round trip, ImportWizardModal shell/open-gating/close, TransactionCompareModal outlier judgement and diff highlighting, TransactionFormModal draft seeding (create-mode empty quantity T1-b, duplicate-mode date preservation T3), CompactCashCell decimal typing through the parent prop loop (T1-a), SyncModalBase run/timeout/retry/session engine with SyncResultRow the one result line the three sync modals share, MeasurePanel measure add/preview/summary table, RegisterCard sign-up validation gate and server-error ladder, DonationPopupModal deliberate absence of every escape hatch, BrokerSharingPanel role ladder and last-owner guard, the five Setting* controls plus SettingsLayout bulk bar, PasswordChangeModal validation and post-success window, SchedulerConfigModal day/time/timezone payload, SchedulerLogModal run outcomes, PreferencesTab theme/language/currency save payloads and the un-rolled-back optimistic apply, ProfileTab edit lock with its discard dialog plus the per-field save/undo/revert ladder, AboutTab system facts, copy-for-issue payload and plugin discovery status, GlobalSettingsTab admin lock, value_type dispatch, 403 ladder and bulk save, FX card/table/editor rendering an absent rate as absent rather than as 0.0000, plus the beta-feedback batch: AssetTable txCount scope badge palette (F15), KpiSection absolute-vs-period ROI separation (F5), ExposureTable/ContributionTable analyzed-row tint (F9), DataTable header tooltips opening upward via a Tooltip probe (F10), the import wizard's report-issue banner (F11), ChangelogModal chapter rendering, clickable search hits and the header update-check delegation (F12/F14) and UpdateAvailableModal show/later/skip (F12/F14)", tests="src/lib/components/ui/date/CalendarMonth.test.ts")
+    add_test(
+        cat,
+        "core-unit",
+        front_utility_unit,
+        test_names=True,
+        name="Core Store Unit Tests",
+        desc="entityStore, option filter, date/decimal parsing, request concurrency, HTML escaping for hand-built markup, the clipboard gate (only the shared helper reaches navigator.clipboard or execCommand('copy'), so every copy button keeps working over plain HTTP), safe accessors for widened API unions, import-wizard dedup/merge/compare pure logic, URL filter round trip for DataTable deep links, trySave error seam (FastAPI detail ladder, pydantic issue unpacking and formatting, toast/prefix/pre-handler), comparison-overlay loader (query shape, resolved series injected back into the signal, currency filter, refused conversions), sync toast variants for asset/FX results, chart helpers (echarts tooltip/animation/zoom-pan, geography map, price-chart & candlestick series/scale arithmetic and event markers (a partial last week or month keeps its markers on its bar), signal-problem formatting), chart-settings store (per-account hydration, scoped global vs per-item overrides, sanitising, debounced persistence, SSR silence), signal registry (palette assignment, config creation, round trip), local signal maths (linear/compound/sine benchmarks, measure ruler, asset & FX comparison overlays), signal catalog partition rules and backend renderer slice capping, onboarding tour surface contracts and the tour/guide copy gate (no step names a guide or a tour unless its key is registered with a reason), transaction form-item resolution (paired orientation, hidden-broker sentinel, injected lookups) and image-crop presets/MIME/file-naming with the cropper contract faked, FX tooltip data assembly where a zero rate is the absence sentinel and not a quote, brokerStore.getOwnedBrokers roles×shares matrix (F2 dashboard scope), changelog chapter parsing incl. the canonical-Unreleased known gap, and the update-check probe (version compare, 24h throttle, dismissal memory, never-throw fetch), plus the Asset Global laboratory pure layer (F): correlation banding/symmetric lookup/average-linkage clustering/lower-triangle points where every pair keeps its square even when the payload never mentioned it, and the D19 initial-selection ladder (persisted ∩ existing → owned → a readable handful) with its storage seam, filter composition and mass actions, plus the per-asset comparison arithmetic behind L1° and L3°: a row survives for an asset that could not be measured because a missing row reads as an unselected one, and the scatter can hold no portfolio point at all since the contract has no field to carry one, plus the laboratory's eligibility wording read off the generated reason enum (a reason the engine adds, such as no_price_history, stays red until reasonText words it and all four catalogues carry its sentence, naming only the values reasonText supplies), and the warning-translator gate: every component call of warningSentence, resultReasons or partialNotice, found through the Svelte compiler's AST with aliases and member calls followed, passes a translator as its second argument",
+        tests=("src/lib/stores/core/entityStore.test.ts", "src/lib/features/onboarding/onboardingTourSurfaces.test.ts"),
+    )
+    add_test(
+        cat,
+        "component-unit",
+        front_component_unit,
+        test_names=True,
+        name="Svelte Component Unit Tests",
+        desc="UI primitives mounted in jsdom: CalendarMonth grid/states, SingleDatePicker typed/calendar seam, TagInput keyboard model, SimpleSelect keyboard/unavailable states, FxProviderSelect route picker, DataTableColumnFilter filter modes, DataTable sorting/paging/selection/row actions, ScheduledInvestmentEditor schedule payload round trip, ImportWizardModal shell/open-gating/close, TransactionCompareModal outlier judgement and diff highlighting, TransactionFormModal draft seeding (create-mode empty quantity T1-b, duplicate-mode date preservation T3), CompactCashCell decimal typing through the parent prop loop (T1-a), SyncModalBase run/timeout/retry/session engine with SyncResultRow the one result line the three sync modals share, MeasurePanel measure add/preview/summary table, RegisterCard sign-up validation gate and server-error ladder, DonationPopupModal deliberate absence of every escape hatch, BrokerSharingPanel role ladder and last-owner guard, the five Setting* controls plus SettingsLayout bulk bar, PasswordChangeModal validation and post-success window, SchedulerConfigModal day/time/timezone payload, SchedulerLogModal run outcomes, PreferencesTab theme/language/currency save payloads and the un-rolled-back optimistic apply, ProfileTab edit lock with its discard dialog plus the per-field save/undo/revert ladder, AboutTab system facts, copy-for-issue payload and plugin discovery status, GlobalSettingsTab admin lock, value_type dispatch, 403 ladder and bulk save, FX card/table/editor rendering an absent rate as absent rather than as 0.0000, plus the beta-feedback batch: AssetTable txCount scope badge palette (F15), KpiSection absolute-vs-period ROI separation (F5), ExposureTable/ContributionTable analyzed-row tint (F9), DataTable header tooltips opening upward via a Tooltip probe (F10), the import wizard's report-issue banner (F11), ChangelogModal chapter rendering, clickable search hits and the header update-check delegation (F12/F14) and UpdateAvailableModal show/later/skip (F12/F14), plus the promoted primitives and the risk metric card: KpiMetricBar and KpiDivergingFlowBar proving their defaults still render the dashboard bars unchanged after the move out of dashboard/, and that a non-finite percentage renders 0% instead of having `width: NaN%` rejected by the CSS parser and leaving the fill at its previous width, and RiskMetricCard proving by node identity across a loading flip — the same DOM object before and after — that the value never leaves the DOM and the card cannot shift layout, and RiskCardGrid proving the risk cards are laid out by auto-fit rather than by enumerated breakpoints, and that the column floor stays capped at the container width so a narrow screen stacks the cards instead of cropping them, and the laboratory's historical replay section mounted over a real, observed panel controller: a replay answer discarded three times running is disclosed as risk.errors.answer_discarded while a discard the re-ask recovered from is not, and a keyed replay warning is worded through its catalogue key and values in all four locales instead of the backend's English sentence",
+        tests="src/lib/components/ui/date/CalendarMonth.test.ts",
+    )
+    add_test(
+        cat,
+        "onboarding-component-unit",
+        front_onboarding_component_unit,
+        test_names=True,
+        name="Onboarding Component Unit Tests",
+        desc="Isolated welcome, replay, coachmark, header and import-guide behavior",
+        tests=(
+            "src/lib/features/onboarding/components/OnboardingCoachmark.test.ts",
+            "src/lib/features/onboarding/components/OnboardingIntroScene.test.ts",
+            "src/lib/features/onboarding/components/OnboardingReplaySection.test.ts",
+            "src/lib/features/onboarding/components/WelcomeForm.test.ts",
+            "src/lib/features/onboarding/components/WelcomePage.test.ts",
+            "src/lib/features/onboarding/components/DeferredAppPopups.test.ts",
+            "src/lib/features/onboarding/onboardingRouteSettlement.test.ts",
+            "src/lib/components/assets/AssetModal.test.ts",
+            "src/lib/components/brokers/BrokerModal.test.ts",
+            "src/lib/components/fx/FxPairAddModal.test.ts",
+            "src/lib/components/layout/Header.test.ts",
+            "src/lib/components/settings/tabs/PreferencesTab.test.ts",
+            "src/lib/components/transactions/modals/ImportWizardModal.test.ts",
+        ),
+    )
     add_test(cat, "settings", front_settings, name="Settings Tests", desc="User preferences, global settings (admin)", prereq="Login working", tests="settings.spec.ts")
     add_test(cat, "files", front_files, name="Files Tests", desc="Files page, tabs, URL filters", prereq="Login working", tests="files.spec.ts")
+    add_test(
+        cat,
+        "files-pdf-offline",
+        front_files_pdf_offline,
+        name="Files PDF Offline Tests",
+        desc="The PDF preview without internet (1.2 gap 7): every origin but the lane's refused and every browser request recorded from before the first navigation; signed in through the API as an ordinary member, a one-page Latin PDF (Helvetica, not embedded) uploaded and previewed from the Files list reaches file-preview-pdf data-state=ready with not one request to another origin; positive controls: the engine's worker fetched /_app/immutable/assets/pdfium.<hash>.wasm from the lane (GET, 200), every viewer fallback font asked for is a 200 from the lane, a jsDelivr probe from the page is refused and recorded",
+        prereq="Test users created (TEST_USER an ordinary member)",
+        tests="files-pdf-offline.spec.ts",
+    )
+    add_test(cat, "files-uploader", front_files_uploader, name="Files Uploader Tests", desc="Uploader URL/list-grid/reload parity, unknown/null identities and avatar geometry with synthetic APIs", tests="files-uploader.spec.ts")
+    add_test(
+        cat,
+        "support-copy-and-go",
+        front_support_copy_and_go,
+        name="Support Copy And Go Tests",
+        desc="Icon-to-dialog, fixed public clipboard payload, native blank-tab reservation, safe navigation and denied-copy cleanup; a refused secure write falls back once to the legacy copy, which fails explicitly because opening the share tab already consumed the click's user activation (known limit)",
+        tests="support-copy-and-go.spec.ts",
+    )
+    add_test(cat, "header-scroll", front_header_scroll, name="Header Scroll Tests", desc="Desktop/mobile document-scroll geometry, retained layout, menu pins and reduced motion with synthetic APIs", tests="layout/header-scroll.spec.ts")
+    add_test(cat, "document-title", front_document_title, name="Document Title Tests", desc="No page changes the tab title: direct landing on every main page and a tool page, sidebar hops in one runtime, a Files query change", prereq="Test users created", tests="layout/document-title.spec.ts")
+    add_test(
+        cat,
+        "pac-allocator-real",
+        front_pac_allocator_real,
+        name="PAC Allocator Real-Data Tests",
+        desc="The PAC allocator (beta) end to end on real data (1.2 gap 3): a disposable account holds two priced positions and cash in its own broker; the Tools hub opens the planner (tool code read from the catalogue), «copy from LibreFolio» brings the broker's cash, the positions with their stored prices and their current distribution as the targets, a budget is typed and «Calculate plan» runs the real engine; the tool's own request carries the copied facts, its answer is a proven optimum, and the screen prints it — run state, result state and proof the answer's, per Asset the value after the plan, the ideal value and the signed gap, per order the amount and the fee, on sign and digits at the currency's minor unit — within the budget",
+        prereq="Populated DB + test users (registration enabled)",
+        tests="pac-allocator-real.spec.ts",
+    )
+    add_test(
+        cat,
+        "changelog-locale",
+        front_changelog_locale,
+        name="Changelog Locale Tests",
+        desc="The changelog modal opened from the sidebar version: in the Italian UI each chapter is Italian when the repository's CHANGELOG.it.md translates it and English with the Italian not-translated pill otherwise; in the English UI every chapter is English with no pill (content-agnostic, desktop, lot CL)",
+        prereq="Test users created",
+        tests="layout/changelog-locale.spec.ts",
+    )
+    add_test(
+        cat,
+        "toolbar-width-sweep",
+        front_toolbar_width_sweep,
+        name="Toolbar Width Sweep",
+        desc="The five PageToolbar bars (assets list and detail, dashboard, broker detail, FX list) swept 1700 → 320 px every 10 px in English, French, Italian and Spanish: no box past its bar, no sideways page scroll, every violation in one table per bar and language; then the Assets Active/Inactive pill from 390 to 320 px in the same four languages, both labels whole inside it and Search still usable beside it (K step 13, item 5; lot 51)",
+        prereq="Populated DB + test users",
+        tests="layout/toolbar-width-sweep.spec.ts",
+    )
+    add_test(
+        cat,
+        "app-start-auth",
+        front_app_start_auth,
+        name="App Start Auth",
+        desc="Only a 401 signs out: a GET /auth/me silent past 5 s shows the server-unreachable panel on the requested page instead of leaving it, and its late answer loads that page; signed out, an app page goes to /?redirect=<path+query> and signing in there lands on it; a 401 mid-session goes to the login carrying the page it happened on (K step 19)",
+        prereq="Populated DB + test users",
+        tests="layout/app-start-auth.spec.ts",
+    )
+    add_test(
+        cat,
+        "connection-security",
+        front_connection_security,
+        name="Connection Security Indicator",
+        desc="The sidebar's connection indicator from the browser's view and the server's (GET /system/connection): secure on localhost, local network on a mapped .lan name, uncertain on a public name the server sees as local, not secure with the menu dot when the server sees a public source; details, docs link (plan 36)",
+        prereq="Populated DB + test users",
+        tests="layout/connection-security.spec.ts",
+    )
+    add_test(
+        cat,
+        "docs-offline-math",
+        front_docs_offline_math,
+        name="Docs Offline Math",
+        desc="The documentation draws its formulas without internet: on a nested page in English and its Italian twin a folder deeper, every origin but the lane's refused, lib-loader.js loads MathJax from the site's root (/mkdocs/javascripts/vendor/mathjax/tex-mml-chtml.js, 200), every formula gets its mjx-container, every MathJax font is a 200 from the site's copy (vendor/mathjax/output/chtml/fonts/woff-v2/) with at least one MJX face loaded and none in error, MathJax is never asked of another origin (jsDelivr included), and mathjax.js raises no typesetPromise page error (M-19, batch 25)",
+        prereq="Docs site built with the MathJax copy and its fonts (dev.py cache js, then dev.py mkdocs build)",
+        tests="layout/docs-offline-math.spec.ts",
+    )
     add_test(cat, "files-destructive", front_files_destructive, name="Files Destructive Tests", desc="Single + bulk file delete, confirm/cancel, delete failure, BRIM delete + empty state (disposable rows, self-restoring)", prereq="Login working", tests="files-destructive.spec.ts")
     add_test(cat, "select", front_select, name="Select Components Tests", desc="SimpleSelect, SearchSelect, keyboard nav", prereq="Login working", tests="select-components.spec.ts")
     add_test(cat, "image-crop", front_image_crop, name="Image Crop & Media Tests", desc="ImageEditModal, AssetPicker, FileGrid, avatar", prereq="Login working", tests="image-crop.spec.ts")
     add_test(cat, "utilities", front_utilities, name="Utilities API E2E", desc="Currencies, countries, sectors API", prereq="Login working", tests="utilities.spec.ts")
+    add_test(cat, "onboarding-tour", front_onboarding_tour, name="Onboarding Tour Tests", desc="Welcome handoff, semantic intro tour and contextual import guide on desktop/mobile", prereq="Test users created", tests="onboarding-tour.spec.ts")
+    add_test(
+        cat,
+        "onboarding-guides",
+        front_onboarding_guides,
+        name="Onboarding Guides Tests",
+        desc="The nine broker/FX/asset contextual guides walked step by step against their real pages (anchored, stable, one described target, completed on the server), pause-on-leave/resume-on-return with the Add-modal restart contrast, and replay persistence across tabs, logout and cross-tab close on desktop/mobile",
+        prereq="Test users created",
+        tests="onboarding-guides.spec.ts",
+    )
     add_test(cat, "tooltip", front_tooltip, name="Tooltip Component Tests", desc="Pinned hover/click model: hover-only, click-to-pin, grace dismiss, click-outside", prereq="Login working", tests="tooltip-component.spec.ts")
     add_test(cat, "scheduler", front_scheduler, name="Scheduler Settings E2E", desc="ConfigModal, LogModal, status row, fetch_interval regression", prereq="Admin user + populated DB", tests="settings/scheduler.spec.ts")
     add_test(cat, "all", front_utility_all, test_names=False, name="All Frontend Utility Tests", desc="Run all utility/component E2E tests")

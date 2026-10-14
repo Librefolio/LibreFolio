@@ -3,9 +3,10 @@
 How to add a backend technical indicator to LibreFolio's schema-driven signal system.
 
 **Base class**: `SignalPlugin`  
-**Plugin folder**: `backend/app/services/signal_plugins/`  
 **Registry**: `SignalPluginRegistry`  
 **Orchestrator**: `SignalService`
+
+**Plugin folder**: `backend/app/services/signal_plugins/<name>/` — `plugin.py`, a docstring-only `__init__.py`, and its `i18n/` fragment.
 
 ---
 
@@ -50,7 +51,7 @@ flowchart TB
 
     subgraph PLUGINS["Python plugin boundary"]
         ABC["🧱 SignalPlugin ABC"]
-        FAMILIES["📉 Trend · 🧭 Momentum<br/>🌊 Volatility · 📊 Volume"]
+        FAMILIES["📉 Trend · 🧭 Momentum<br/>🌊 Volatility · 📊 Volume<br/>⚠️ Risk"]
     end
 
     CHART_ADAPTER -->|"neutral chart price/event arrays"| SERVICE
@@ -67,7 +68,7 @@ flowchart TB
 |---|---|
 | `signal_runtime.py` | Verify the locked `pandas-ta-classic` + TA-Lib stack at startup and reject silent fallback. |
 | `signal_plugins/base.py` | Define the plugin contract and build static catalog metadata. |
-| `provider_registry.py` | Discover plugin files, validate definitions, and reject duplicate codes. |
+| `provider_registry.py` | Discover plugin folders, validate definitions, and reject duplicate codes. |
 | `signal_service.py` | Plan batches, calculate required history, check coverage, execute plugins, isolate failures, and slice output. |
 | `signal_annotations.py` | Derive line crossovers and threshold crossings from extended canonical data. |
 | Chart Asset/FX adapters | Load chart-domain data, perform currency conversion, and map it into neutral points. |
@@ -90,6 +91,10 @@ not change plugin math.
 
 Chart requests and AI Export components have separate adapters. They converge only at
 `SignalService`.
+
+Results live only as long as their request: `SignalService` keeps no cache and writes no
+table. The chart pages hold them in a page-local `SignalResultState`, which a reload or a new
+page discards, and an AI Export snapshot carries them only in the text it copies.
 
 ### 📈 Chart Asset/FX Lifecycle
 
@@ -175,11 +180,29 @@ sequenceDiagram
 - validates parameters with the plugin-owned Pydantic model;
 - deduplicates identical code/parameter combinations while preserving instance IDs;
 - asks every plugin for its parameter-aware warm-up requirement;
-- aggregates the maximum history and union of required price fields/events;
+- aggregates the maximum warm-up, kept apart by what the plugin counts: sessions for a
+  quote-day plugin (`max_session_total_points`), calendar days otherwise
+  (`max_calendar_total_points`); prepared-series plugins keep their own maximum;
+- aggregates the union of required price fields/events;
 - records per-instance preflight failures without aborting the remaining batch.
 
 The chart Asset/FX adapter or AI Export domain assembler uses that plan to load one
-extended input range.
+extended input range. For the plain price input, the warm-up in calendar days is
+`SignalExecutionPlan.max_history_days_before_visible`: the larger of the session
+warm-up times `SESSION_WARMUP_DAY_MULTIPLIER` and the calendar warm-up. The multiplier
+is 2 (`signal_series_preparation.py`): a year holds about 252 sessions in 365 days, and
+long holiday windows lower that further. The Asset price query, the FX endpoint, and
+the AI Export FX loader all size their load with it.
+
+A warm-up can also be unbounded. A plugin whose result depends on the whole past returns
+`SignalWarmupRequirement(full_history=True)`, and the plan sets `requires_full_history`:
+the Asset price query (`price_query.py`) then loads from the start of the available
+history instead of the point-derived warm-up, and still slices to the visible range after
+the computation. Underwater drawdown (`RISK_DRAWDOWN`) does so through its `full_history`
+parameter, on by default (the card's **Full history** checkbox); off, only the visible
+range and a minimal warm-up are loaded, so the running peak is the window's own. AI Export
+ignores that setting: its drawdown context (`ai_export/components/drawdown_context.py`)
+always starts from the beginning of the history.
 
 ### 2. 🧮 Execution
 
@@ -188,13 +211,23 @@ sequentially, so synchronous numerical libraries never block FastAPI's event loo
 
 For each plugin, the service:
 
-1. measures field and date coverage;
+1. measures field and date coverage on the calendar input;
 2. applies the declared gap policy;
-3. verifies minimum history and warm-up;
-4. calls `plugin.compute(...)`;
-5. validates series shape, finite values, declared output keys, axes, and units;
-6. slices the extended result to the requested visible range;
-7. isolates failures to that signal instance.
+3. keeps only the quote days of the selected points when the plugin
+   [computes on quote days](#sessions-or-calendar-days) and does not use the prepared
+   series;
+4. verifies minimum history and warm-up, counted on the points the plugin receives
+   (sessions for a quote-day plugin);
+5. calls `plugin.compute(...)`;
+6. validates series shape, finite values, declared output keys, axes, units, and
+   output dates against the dates the plugin received;
+7. slices the extended result to the requested visible range;
+8. isolates failures to that signal instance.
+
+Coverage (`SignalInputCoverage`) is measured before step 3 and stays calendar-based,
+so the UI coverage thresholds in [Status and Data Policy](#status-and-data-policy)
+keep their meaning. A quote-day plugin's output is dated on sessions; the chart aligns
+it by date and bridges the days without a point.
 
 ### 3. 🎯 Annotations
 
@@ -221,14 +254,16 @@ Every concrete plugin must declare:
 |---|---|
 | `signal_code` | Stable uppercase identifier used by APIs and saved settings. |
 | `implementation_version` | Version of the plugin's numerical behavior. |
-| `category` | Trend, momentum, volatility, or volume. |
-| `display_name_key` | Frontend i18n key for the human-readable name. |
+| `category` | Trend, momentum, volatility, volume, or risk. |
+| `display_name_key` | Frontend i18n key for the human-readable name. Its parent (`signals.rsi` for `signals.rsi.name`) is the plugin's translation space, held by its `i18n/` fragment (see [Folder and Translations](#folder-and-translations)). |
 | `description_key` | Frontend i18n key for the short selector description. |
+| `semantic_id` / `semantic_description` | Canonical identity and neutral, non-prescriptive meaning exposed to AI consumers (`describe_for_ai()`). |
 | `icon` | Emoji displayed by the signal selector. |
 | `docs_path` | MkDocs path opened by the UI information button. |
 | `params_model` | Pydantic model with `extra="forbid"` and JSON Schema UI metadata. |
 | `input_requirements` | Required OHLCV fields, events, coverage, and data policy. |
-| `output_specs` | Declared line/bar/band components, descriptions, styles, units, axes, levels, and regions. |
+| `computes_on_quote_days` | Inherited `True`: the plugin computes on sessions. Set `False` only for calendar spans (see below). |
+| `output_specs` | Declared line/area/bar/band components with semantic ids, an explicit `aggregation_profile`, descriptions, styles, units, axes, levels, and regions. |
 | `compatible_domains` | `ASSET`, `FX`, or both. |
 | `annotation_capabilities` | Supported generic annotation primitives. |
 | `ai_export_temporal_rules` | Plugin-owned fixed or parameter-matched AI Export temporal classes. |
@@ -238,6 +273,45 @@ Every concrete plugin must declare:
 The base class converts this declaration into `SignalCatalogDefinition`. Therefore the
 frontend receives names, descriptions, parameter controls, required data, output shapes,
 and documentation links without a signal-specific UI implementation.
+
+`catalog_visible` (inherited `True`) decides whether the plugin appears in that catalog:
+`SignalPluginRegistry.list_definitions()` skips a plugin that sets it to `False`, so no
+selector offers it, while a request naming its code still runs. Of the 23 registered plugins,
+`calendar_rolling_return` (`ASSET_CALENDAR_ROLLING_RETURN`) is the one hidden: the asset chart
+requests it for its **Rolling Return** mode (see
+[Chart internals](../../frontend/components/charts.md#asset-detail-prices-and-rolling-return)).
+The Asset catalog, `GET /api/v1/assets/prices/signals`, lists the 22 visible plugins whose
+`compatible_domains` include `ASSET`, which is all of them; the FX catalog,
+`GET /api/v1/fx/currencies/signals`, lists the 9 close-only ones that also declare `FX`: EMA,
+SMA, KAMA, MACD, PPO, ROC, RSI, Stochastic RSI and Bollinger Bands.
+`test_signal_plugin_matrix.py` pins both sets.
+
+### 📅 Sessions or Calendar Days
+
+`computes_on_quote_days` decides what a plugin's periods count. When it is `True` (the
+inherited default), `SignalService` hands the plugin only the **quote days** of its
+input, the sessions, so a period of N means N sessions, as the standard definitions
+count them: SMA 200 is 200 sessions, not 200 calendar days.
+
+A quote day is a point whose **price** was quoted on its own date: `backward_fill_info`
+is `None` or `days_back == 0` (`is_quote_day()` in `signal_series_preparation.py`). The
+exchange rate does not decide it: a quote converted with a rate carried from an earlier
+day is still a session of the instrument. On the Asset path, a stored weekend or
+market-holiday row that exactly repeats the previous close is marked as carried before
+the signals run (`mark_market_closed_carries`, with the holiday table from
+`market_calendar.ensure_market_holidays()`), so a stored carry is not a session either.
+
+Set `computes_on_quote_days = False` only when:
+
+- the windows are calendar spans by definition, as in `calendar_rolling_return`: its
+  input keeps every calendar point, and its window is declared in days;
+- the plugin uses the prepared series (`input_requirements.uses_prepared_asset_series`),
+  as the five prepared-series risk signals do (drawdown and rolling beta, return, Sharpe,
+  volatility): that series is already on the quote calendar, and the service never
+  filters it.
+
+AI Export technical components follow the same rule; see
+[Calculation Range, Exported Range, and Warm-up](ai_export_sampling.md#calculation-range-exported-range-and-warm-up).
 
 ### 🎨 Plugin-owned presentation
 
@@ -311,15 +385,74 @@ plugin's minimum history; otherwise it uses the longest sufficient segment. Outp
 partial and never jumps across the gap.
 
 Coverage metadata includes both the total missing-point ratio and
-`max_consecutive_missing_points`. The UI keeps the backend `partial` status visible, but
-promotes it to an amber warning only when coverage is at most 95% or a missing streak is
-longer than seven cadence points. Smaller gaps remain an informational notice.
+`max_consecutive_missing_points`. The UI keeps the backend `partial` status visible, and the
+chart card turns each result into one icon: `getSignalProblemSeverity()`
+(`lib/charts/signals/signalProblem.ts`) grades a problem, and `getSignalIssue()`
+(`ChartSignalsSection.svelte`) adds the card's own checks.
+
+| Icon | When |
+|---|---|
+| Spinner | A request is in flight; no problem from the previous answer is shown meanwhile |
+| Red ⚠ (error) | `unavailable`, `failed`, or no result for the instance; no point loaded; an Asset comparison whose currency conversion failed |
+| Amber ⚠ (warning) | An incomplete warm-up missing at least 5% of the requested points, or of unknown size; partial coverage or a data gap with coverage at most 95%, a missing streak longer than seven cadence points, or either unknown; any other `partial` problem; data that starts after the range start |
+| Grey ℹ (notice) | An incomplete warm-up or a coverage gap below those thresholds |
+
+An error or a warning also tints the card red or amber; a notice leaves it plain.
 
 !!! warning "A long history is not automatically complete"
 
     An asset can contain decades of closing prices while still lacking `high`, `low`, or
     `volume` on one required date. OHLC/volume plugins will report the exact coverage
     problem instead of computing over silently altered input.
+
+### 🚦 Enforced Status Matrix
+
+A plugin never sets the status itself. `compute()` returns a `SignalComputation`, or raises
+`SignalUnavailableError` (`backend/app/services/signal_plugins/base.py`) with an
+*unavailable* `reason_code`, such as `undefined_metric` or `insufficient_history`, when the
+result is mathematically undefined. The service then assigns the status of a computed result —
+`partial` when the warm-up is incomplete, partial coverage was used, or the availability
+reason is `partial_undefined_metric`; `ok` otherwise — and builds a `SignalResult`. Its
+`validate_status_matrix` validator (`backend/app/schemas/signals.py`) rejects every
+combination outside this matrix:
+
+| Status | Required | Forbidden |
+|---|---|---|
+| `ok` | `availability` and `warmup`; non-empty `series`; `can_compute=true` with a complete warm-up; no `reason_code` and no partial coverage; no missing value in any visible point | `error` |
+| `partial` | `availability` and `warmup`; non-empty `series`; `can_compute=true`; at least one warning; an incomplete warm-up, partial coverage, or the `partial_undefined_metric` reason | `error` |
+| `unavailable` | `availability` and `warmup`, with `can_compute=false`: the reason travels in `availability.reason_code` | `series`, `annotations`, `error` |
+| `failed` | a structured `error` | `series`, `annotations` |
+
+A `failed` result is further constrained by its error code:
+
+- **pre-compute failure** (`unknown_signal`, `invalid_params`, `planning_error`): no
+  `availability` and no `warmup`;
+- **runtime failure** (`compute_error`, `invalid_output`, `contract_violation`):
+  `availability` and `warmup` present, with `can_compute=true`.
+
+Three rules apply whatever the status:
+
+- when `availability` and `warmup` are both present, `availability.required_points` must
+  equal the warm-up total (`warmup.requirement.total_points`), and
+  `availability.warmup_complete` must equal `warmup.complete`;
+- `risk_metadata` and `data_quality` are either both present or both absent;
+- all series share identical dates and cardinality, with unique `key` and `semantic_id`
+  values.
+
+What this means for a plugin:
+
+- Individual empty visible points (`None`) are accepted when the result is `partial`
+  (incomplete warm-up or partial coverage) or when the plugin flags the window with an
+  `undefined_metric_window` warning, which makes it `partial`. In a result that would
+  otherwise be `ok`, they fail the instance with `invalid_output`.
+- A visible series with no value at all yields `unavailable` when the warm-up is
+  incomplete or the window is flagged as `undefined_metric_window`; otherwise the instance
+  fails with `invalid_output`.
+- Raise `SignalUnavailableError` with an unavailable reason only. A partial reason such as
+  `incomplete_warmup` does not form a valid unavailable state, and the instance fails with
+  `planning_error`.
+- A result the matrix rejects never reaches the client as `ok` or `partial`: the service
+  replaces it with a runtime `failed` result (`invalid_output`) for that instance only.
 
 ---
 
@@ -332,12 +465,13 @@ TP_t = \frac{H_t + L_t + C_t}{3}
 $$
 
 ```python
-# backend/app/services/signal_plugins/typical_price.py
+# backend/app/services/signal_plugins/typical_price/plugin.py
 from collections.abc import Sequence
 
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.signals import (
+    SignalAggregationProfile,
     SignalAxisRole,
     SignalAxisSpec,
     SignalCategory,
@@ -374,6 +508,8 @@ class TypicalPriceSignalPlugin(SignalPlugin):
     category = SignalCategory.TREND
     display_name_key = "signals.typicalPrice.name"
     description_key = "signals.typicalPrice.description"
+    semantic_id = "typical_price"
+    semantic_description = "Averages the high, low, and close of each session."
     icon = "⚖️"
     docs_path = (
         "financial-theory/technical-analysis/indicators/typical-price/"
@@ -390,7 +526,10 @@ class TypicalPriceSignalPlugin(SignalPlugin):
         SignalOutputSpec(
             key="typical_price",
             label_key="signals.typicalPrice.output",
+            semantic_id="typical_price.value",
+            semantic_description="Mean of the high, low, and close prices.",
             kind=SignalSeriesKind.LINE,
+            aggregation_profile=SignalAggregationProfile.LAST_WITH_RANGE,
             unit=SignalUnit.PRICE,
             axis=SignalAxisSpec(
                 key="price",
@@ -401,6 +540,7 @@ class TypicalPriceSignalPlugin(SignalPlugin):
     )
     compatible_domains = (SignalDomain.ASSET,)
     annotation_capabilities = ("line_crossover",)
+    # computes_on_quote_days is inherited (True): compute() receives sessions only.
 
     @classmethod
     def warmup_requirement(
@@ -443,6 +583,8 @@ class TypicalPriceSignalPlugin(SignalPlugin):
                 SignalLineSeries(
                     key=spec.key,
                     label_key=spec.label_key,
+                    semantic_id=spec.semantic_id,
+                    semantic_description=spec.semantic_description,
                     unit=spec.unit,
                     axis=spec.axis.model_copy(deep=True),
                     view_transform=spec.view_transform,
@@ -452,15 +594,60 @@ class TypicalPriceSignalPlugin(SignalPlugin):
         )
 ```
 
-No central registration list is required. Importing the module triggers
-`@register_plugin(SignalPluginRegistry)`.
+### 🗂️ Folder and Translations {: #folder-and-translations }
+
+No central registration list is required. The plugin is a folder of `signal_plugins/`, and
+discovery loads its `plugin.py` as `backend.app.services.signal_plugins.typical_price.plugin`,
+which triggers `@register_plugin(SignalPluginRegistry)`:
+
+```text
+backend/app/services/signal_plugins/
+├── base.py            ← the SignalPlugin contract, shared by every plugin (the registry ignores `base`)
+└── typical_price/
+    ├── __init__.py    ← its docstring and nothing else
+    ├── plugin.py      ← the code above
+    └── i18n/          ← en.json, it.json, fr.json, es.json
+```
+
+Import and patch the plugin's names from `backend.app.services.signal_plugins.typical_price.plugin`:
+the package re-exports nothing. A helper only this plugin uses sits beside `plugin.py` as `_*.py`.
+[Plugin Folder Layout](registry_pattern.md#plugin-layout) has the discovery rules and the gate that
+keeps them, `./dev.py test utils gate-plugin-layout`.
+
+The plugin's translation space is the parent of its `display_name_key`, here
+`signals.typicalPrice`, and its fragment holds every key under it — the name, the description,
+the output labels, and any reference level or region:
+
+```json
+{"signals": {"typicalPrice": {"name": "Typical Price", "description": "Average of high, low and close", "output": "Typical price"}}}
+```
+
+The space need not match the folder's name: the `drawdown` plugin's is `signals.riskDrawdown`.
+Add the keys in the four languages and name the folder with `--into`: without it, the first key of
+a new plugin lands in the `charts` subsystem, which owns the `signals` prefix.
+
+```bash
+./dev.py i18n add "signals.typicalPrice.name" --en "Typical Price" --it "…" --fr "…" --es "…" --into signal_plugins/typical_price
+./dev.py i18n add "signals.typicalPrice.description" --en "Average of high, low and close" --it "…" --fr "…" --es "…" --into signal_plugins/typical_price
+./dev.py i18n add "signals.typicalPrice.output" --en "Typical price" --it "…" --fr "…" --es "…" --into signal_plugins/typical_price
+./dev.py i18n where "signals.typicalPrice.output"   # backend/app/services/signal_plugins/typical_price/i18n/en.json (exists)
+```
+
+Keys outside the plugin's space stay in the `charts` subsystem, where `add` puts them by itself:
+the parameter captions and tooltips named by `x-i18n-key` and `x-tooltip-key`
+(`chartSettings.params.*`, `chartSettings.tooltips.*`), the units (`signals.units.*`), and the
+keys several plugins share — `signals.reference.zero`, and `signals.riskRollingReturn.*`, the space
+of the two rolling-return plugins. `./dev.py test utils gate-plugin-i18n-ownership` keeps every key
+the plugin declares in its space — `display_name_key`, `description_key`, and the `label_key` and
+`description_key` of its outputs, reference levels and regions — in its fragment
+([A Plugin's Translations](registry_pattern.md#plugin-translations)).
 
 ---
 
 ## 🎛️ Parameter Metadata
 
 Parameters are ordinary Pydantic fields. JSON Schema extensions control the generic
-frontend form:
+frontend form. The SMA period (`signal_plugins/sma/plugin.py`):
 
 ```python
 period: int = Field(
@@ -470,21 +657,32 @@ period: int = Field(
     json_schema_extra={
         "x-i18n-key": "chartSettings.params.period",
         "x-control-order": 1,
-        "x-suffix": "days",
+        "x-suffix": "sessions",
         "x-step": 1,
-        "x-tooltip-key": "chartSettings.tooltips.period",
-        "x-affects-outputs": ["line"],
+        "x-tooltip-key": "chartSettings.tooltips.sessionPeriod",
     },
 )
 ```
+
+`x-suffix` names the unit shown next to the input. A period counted in sessions
+declares `"x-suffix": "sessions"` and the shared tooltip
+`chartSettings.tooltips.sessionPeriod`, unless the period needs its own explanation
+(EMA, MACD/PPO, and Stochastic RSI keep dedicated tooltip keys). A calendar window
+declares `"x-suffix": "days"` (`calendar_rolling_return` and the rolling risk windows).
+`SignalParamControl.svelte` renders the suffix through the i18n key
+`signals.units.<suffix>` and falls back to the raw value when the key is missing: a
+symbol such as `%` or `σ` needs no key, while a word unit needs `signals.units.<suffix>`
+in the four languages. The units are shared by every plugin, so they live in the `charts`
+subsystem, where `./dev.py i18n add` writes them without `--into`.
 
 Prefer schema metadata over frontend conditionals. New parameter shapes should be added
 to the shared JSON Schema mapper only when they are reusable across plugins.
 
 For composite indicators, `x-affects-outputs` lists the output keys changed by a
 parameter. The generic card resolves those keys to localized component labels. Stochastic
-RSI, for example, declares that its main period affects `%K` and the derived `%D`, while
-`dPeriod` affects `%D` only and threshold parameters affect the `%K` zones.
+RSI, for example, declares that its main period affects `%K` and the derived `%D`
+(`"x-affects-outputs": ["k", "d"]`), while `dPeriod` affects `%D` only and threshold
+parameters affect the `%K` zones.
 
 ---
 
@@ -538,23 +736,32 @@ event selection, and tests.
 
 ## ✅ Adding a Plugin
 
-1. Create one Python file under `signal_plugins/`.
+1. Create a folder `signal_plugins/<name>/` holding the code in `plugin.py` and an
+   `__init__.py` with the plugin's docstring and nothing else
+   ([Folder and Translations](#folder-and-translations)).
 2. Define a strict Pydantic parameter model.
 3. Declare required price fields/events and compatible domains.
-4. Declare every canonical output in `output_specs`.
-5. If AI Export will curate the plugin, declare fixed or parameter-matched
+4. Decide what the periods count: sessions (keep the inherited
+   `computes_on_quote_days = True`, declare `"x-suffix": "sessions"`) or a calendar
+   span (`computes_on_quote_days = False`, `"x-suffix": "days"`).
+5. Declare every canonical output in `output_specs`.
+6. If AI Export will curate the plugin, declare fixed or parameter-matched
    `ai_export_temporal_rules`; never add a signal-code branch to AI Export.
-6. Implement parameter-aware `warmup_requirement()`.
-7. Implement and normalize `compute()`.
-8. Validate semantic input/output and provide AI descriptions and annotations.
-9. Add all EN/IT/FR/ES UI keys.
-10. Add the English financial-theory page referenced by `docs_path`.
-11. Add focused numerical/parity tests, temporal-rule resolution tests, and shared-grid
+7. Implement parameter-aware `warmup_requirement()` in the units the plugin receives
+   (sessions for a quote-day plugin); the plan converts them to calendar days.
+8. Implement and normalize `compute()`.
+9. Validate semantic input/output and provide AI descriptions and annotations.
+10. Add the plugin's UI keys in the four languages to its fragment,
+    `signal_plugins/<name>/i18n/`, with
+    `./dev.py i18n add <key> --en … --it … --fr … --es … --into signal_plugins/<name>`.
+11. Add the English financial-theory page referenced by `docs_path`.
+12. Add focused numerical/parity tests, temporal-rule resolution tests, and shared-grid
     tests for multi-output indicators.
-12. Update `EXPECTED_CODES`, curated AI Export bundle expectations when applicable,
-    and the initial class mapping documentation.
-13. Verify the selected detail/class matrix row and sampling/event manifests.
-14. Run the catalog, plugin, service, API, frontend, and documentation gates.
+13. Update the registry pins in `test_signal_plugin_matrix.py` (code sets,
+    `EXPECTED_IMPLEMENTATION_VERSIONS`, `EXPECTED_PARAM_UNITS`), curated AI Export
+    bundle expectations when applicable, and the initial class mapping documentation.
+14. Verify the selected detail/class matrix row and sampling/event manifests.
+15. Run the catalog, plugin, service, API, frontend, and documentation gates.
 
 Useful commands:
 
@@ -562,6 +769,9 @@ Useful commands:
 ./dev.py test services signal-plugin-matrix
 ./dev.py test services signal-service
 ./dev.py test api signal-catalogs
+./dev.py test utils gate-plugin-layout
+./dev.py test utils gate-plugin-i18n-ownership
+./dev.py i18n check
 ./dev.py api sync
 ./dev.py front check
 ./dev.py mkdocs build
@@ -574,8 +784,12 @@ Useful commands:
 
 - Keep formulas and third-party library selection inside the plugin.
 - Keep DB access, provider calls, currency conversion, and HTTP outside the plugin.
-- Never compact missing dates or fields silently.
-- Return canonical line, bar, or band series only.
+- Never compact missing dates or fields silently; dropping the carried days from a
+  quote-day plugin's input is the declared contract, not compaction.
+- Count a period over trading activity in sessions (inherited
+  `computes_on_quote_days = True`); a window that is a calendar span by definition sets
+  `computes_on_quote_days = False` and declares days.
+- Return canonical line, area, bar, or band series only.
 - Use finite numeric output; `NaN` may represent warm-up gaps, infinity may not.
 - Declare every output key exactly once in `output_specs`.
 - Keep plugin construction argument-free and computation deterministic.
@@ -583,7 +797,10 @@ Useful commands:
 - Keep AI Export temporal classification in the plugin; keep sampling parameters and
   formula in the central temporal policy.
 - Require exactly one temporal-rule match for every curated instance; no silent fallback.
-- Increment `implementation_version` when numerical behavior changes.
+- Increment `implementation_version` when numerical behavior changes. Changing what a
+  plugin computes on changes its values: moving to quote days redefines its periods, so
+  it is a major bump; refining the input preparation or the reported provenance (a
+  stored weekend or holiday repeat now reported as carried) is a minor one.
 
 ---
 

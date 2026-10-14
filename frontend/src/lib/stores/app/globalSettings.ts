@@ -17,6 +17,8 @@ export interface GlobalSettings {
     default_theme: string;
     session_ttl_hours: number;
     max_file_upload_mb: number;
+    // Read by the login page: «Register here» is offered only while it is open.
+    enable_registration: boolean;
     // Scheduler
     scheduler_enabled: boolean;
     scheduler_current_price_frequency_minutes: number;
@@ -31,12 +33,16 @@ const defaultGlobalSettings: GlobalSettings = {
     default_theme: 'auto',
     session_ttl_hours: 24,
     max_file_upload_mb: 10,
+    enable_registration: true,
     scheduler_enabled: true,
     scheduler_current_price_frequency_minutes: 10,
     scheduler_history_sync_times: '06:00,23:00',
     scheduler_history_sync_days: 'mon,tue,wed,thu,fri,sat',
     scheduler_history_sync_horizon_days: 14,
 };
+
+/** The values the backend reads as true in a `bool` setting (`_convert_value` in global_settings_service.py). */
+const BACKEND_TRUE_VALUES = new Set(['true', '1', 'yes', 'on']);
 
 /**
  * Create the global settings store
@@ -79,6 +85,8 @@ function createGlobalSettingsStore() {
                         settingsObj[key] = parseInt(value, 10) || defaultGlobalSettings[key];
                     } else if (key === 'scheduler_enabled') {
                         settingsObj[key] = value === 'true';
+                    } else if (key === 'enable_registration') {
+                        settingsObj[key] = BACKEND_TRUE_VALUES.has(value.toLowerCase());
                     } else {
                         (settingsObj as any)[key] = value;
                     }

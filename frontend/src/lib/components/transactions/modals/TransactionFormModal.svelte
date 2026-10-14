@@ -4,13 +4,13 @@
   Modes:
   - 'create'   → blank form, POST /transactions/commit with 1 item in creates
   - 'edit'     → pre-filled from items[0] (id immutable, type/broker locked),
-                 POST /transactions/commit with 1 TXUpdateItem in updates
-  - 'duplicate'→ pre-filled (date preserved — it is the point of the
-                 correction workflow), id stripped, link_uuid regenerated,
-                 commits as 'create'
+                   POST /transactions/commit with 1 TXUpdateItem in updates
   - 'view'     → readonly display (Save button hidden)
 
-  Field gating per type comes from `transactionTypeRules.ts` (UI hint only —
+  With commitOnSave=false, Apply only emits the local draft to BulkModal;
+  the parent owns batch validation and commit.
+
+  Field gating per type comes from `transactionTypeStore.ts` (UI hint only —
   authoritative validation is server-side via POST /transactions/validate).
 
   Sections:
@@ -47,6 +47,7 @@
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import TagInput from '$lib/components/ui/input/TagInput.svelte';
+    import ExactQuantityInput from '$lib/components/ui/input/ExactQuantityInput.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import CompactCashCell from '$lib/components/ui/display/CompactCashCell.svelte';
@@ -67,16 +68,18 @@
     import {createValidateScheduler} from '$lib/utils/transactions/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
+    import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {generateUUID} from '$lib/utils/core/uuid';
-    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {computeSignHint} from '$lib/utils/transactions/signHintColor';
     import {deduplicateIssues, signLabel, signHintKey} from '$lib/utils/transactions/txFormFields';
-    import {buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/transactions/txPayloadHelpers';
+    import {applySign, buildCreatePayload, buildUpdateDiff, diffDualItem, buildDualCreatePayloads, exactDecimalSign, upgradeAutoToDetail, type TxFields, type TxOriginal, type TxDualSide, type PairFormLayout as PayloadPairLayout} from '$lib/utils/transactions/txPayloadHelpers';
     import {lookupFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {computeFxConversionInfo, buildFxTooltipData, buildFxTooltipHtml} from '$lib/utils/currency/fxConversionHelper';
     import type {TXReadItem} from '../types';
     import {type FormModalItems, isInaccessible} from '../shared/resolveFormItems';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
 
     // =========================================================================
     // Types
@@ -94,7 +97,7 @@
         loc?: string;
     }
 
-    type Mode = 'create' | 'edit' | 'duplicate' | 'view';
+    type Mode = 'create' | 'edit' | 'view';
 
     interface Props {
         open: boolean;
@@ -151,17 +154,6 @@
         pendingTxIds?: Set<number> | null;
         /** When true, the optional section (description, tags, etc.) is expanded when the modal opens. Default false. */
         initialOptionalOpen?: boolean;
-        /**
-         * List of field wrapper data-testid values to visually highlight (amber ring).
-         * Used by the duplicate compare flow to mark fields that match the parsed transaction.
-         * Example: ['tx-form-date-wrap', 'tx-form-cash-wrap']
-         */
-        highlightFields?: string[];
-        /**
-         * When set, replaces the auto-generated title in the modal header.
-         * Used by the duplicate compare flow to show a custom title.
-         */
-        titleOverride?: string;
     }
 
     let {
@@ -185,9 +177,29 @@
         editingTempId = null,
         pendingTxIds = null,
         initialOptionalOpen = false,
-        highlightFields = [],
-        titleOverride,
     }: Props = $props();
+
+    let guideObservedOpen = false;
+
+    function releaseCreateGuideHost(): void {
+        if (onboardingGuide.active?.flow === 'transaction_create_guide') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
+        onboardingGuide.clearQueued('transaction_create_guide');
+        guideObservedOpen = false;
+    }
+
+    $effect(() => {
+        const isOpen = open && mode === 'create';
+        if (isOpen && !guideObservedOpen) {
+            guideObservedOpen = true;
+            onboardingGuide.maybeStartContextual('transaction_create_guide');
+            return;
+        }
+        if (!isOpen && guideObservedOpen) {
+            releaseCreateGuideHost();
+        }
+    });
 
     // Internal derived: main row from items[0], partner info from items[1]
     let mainRow = $derived(items?.[0] ?? null);
@@ -242,7 +254,7 @@
         broker_id: number;
         /** For fx: the "To" cash (different currency). */
         cash: {code: string; amount: string} | null;
-        /** "To" side date — may differ from "From" side (e.g. wire transfer arrival). */
+        /** Destination date, which may differ from the source date. */
         date: string;
         /** Quantity for the "To" side (transfer_asset: receiver qty). */
         quantity?: string;
@@ -285,12 +297,13 @@
         // Also normalize paired types (transfer_asset, transfer_cash) — the dual
         // form always displays absolute values; sign is determined by From/To sides.
         let qty = tx.quantity;
-        if (Number(qty) < 0 && (txRule.quantityRule === 'negative' || txRule.pairFormLayout != null)) {
-            qty = String(Math.abs(Number(qty)));
+        if (txRule.quantityRule === 'negative' || txRule.pairFormLayout != null) {
+            qty = applySign(qty, 'positive');
         }
         let cash = tx.cash ? {code: tx.cash.code, amount: tx.cash.amount} : null;
-        if (cash && txRule.cashSign === 'negative' && Number(cash.amount) < 0) {
-            cash = {code: cash.code, amount: String(Math.abs(Number(cash.amount)))};
+        // Paired cash editors show magnitudes; the collector signs the two legs.
+        if (cash && (txRule.cashSign === 'negative' || (txRule.requiresPair && mode !== 'view'))) {
+            cash = {code: cash.code, amount: applySign(cash.amount, 'positive')};
         }
         return {
             broker_id: tx.broker_id,
@@ -355,12 +368,13 @@
     /** Bug5-fix: broker_id of partner that the user cannot access.
      *  When set, the "To" side shows a locked placeholder instead of empty. */
     let inaccessiblePartnerBrokerId = $state<number | null>(null);
-    /** User-facing display string for `draft.quantity`. Decoupled from the
-     *  authoritative payload so the user can type freely (e.g. "0.0000")
-     *  without us reformatting mid-keystroke (Bugfix-4 §U18). The display
-     *  is reseeded from `draft.quantity` whenever the draft itself is reset
-     *  (modal open, type change reset). */
-    let qtyDisplay = $state('');
+    /** ExactQuantityInput owns the locale-specific edit buffer; the draft stays normalized. */
+    let quantityInputValid = $state(true);
+    /** V-37: each date picker's verdict on its typed text. A refused text never reaches the draft, so the draft
+     *  alone cannot tell that the field on screen shows another date. Not reset on open: the picker is the source
+     *  of truth for its own text, and reports it on mount, on every change, and once more if it unmounts refusing. */
+    let dateMainValid = $state(true);
+    let dateToValid = $state(true);
 
     // Reset draft on open; broker store must be loaded first.
     $effect(() => {
@@ -383,6 +397,7 @@
             inaccessiblePartnerBrokerId = inaccessFromItems?.broker_id ?? null;
             partnerRow = null;
             loadingPartner = false;
+            quantityInputValid = true;
             formWacResult = null;
             wacCurrencyHint = null;
             dualTo = emptyDualTo();
@@ -425,9 +440,6 @@
                     draft = emptyDraft();
                     costBasisMode = 'auto';
                 }
-            } else if (m === 'duplicate' && row) {
-                draft = fromTx(row, {regenerateLink: row.related_transaction_id != null});
-                costBasisMode = draft.cost_basis_override ? 'manual' : 'auto';
             } else if ((m === 'edit' || m === 'view') && row) {
                 draft = fromTx(row);
                 // Use injected partner directly instead of fetching from the API.
@@ -502,7 +514,6 @@
             }
             lastTypeForReset = draft.type;
             initialDraftKey = JSON.stringify(draft) + JSON.stringify(dualTo);
-            qtyDisplay = formatDecimalForDisplay(draft.quantity);
         });
         // Async hydration (brokers + currencies + asset cache for the picked asset).
         void (async () => {
@@ -577,19 +588,19 @@
                 draft = fromTx(partner);
                 dualTo = {
                     broker_id: partner.broker_id,
-                    cash: row.cash ? {code: row.cash.code, amount: String(Math.abs(Number(row.cash.amount)))} : null,
+                    cash: row.cash ? {code: row.cash.code, amount: applySign(row.cash.amount, 'positive')} : null,
                     date: row.date,
                 };
             } else {
                 dualTo = {
                     broker_id: partner.broker_id,
-                    cash: partner.cash ? {code: partner.cash.code, amount: String(Math.abs(Number(partner.cash.amount)))} : null,
+                    cash: partner.cash ? {code: partner.cash.code, amount: applySign(partner.cash.amount, 'positive')} : null,
                     date: partner.date,
                 };
             }
         } else if (layout === 'transfer_asset') {
-            const myQty = Number(row.quantity);
-            if (myQty > 0) {
+            const myQtySign = exactDecimalSign(row.quantity) ?? 0;
+            if (myQtySign > 0) {
                 // row is receiver (qty>0), partner is sender (qty<0)
                 draft = fromTx(partner);
                 dualTo = {broker_id: row.broker_id, cash: null, date: row.date, cost_basis_override: row.cost_basis_override ? (typeof row.cost_basis_override === 'object' ? (row.cost_basis_override as {code: string; amount: string}) : null) : null};
@@ -600,20 +611,16 @@
             // Sender draft must have empty cost_basis_override
             draft = {...draft, cost_basis_override: null};
             // Dual form always shows absolute qty — sign is determined by From/To sides
-            if (Number(draft.quantity) < 0) {
-                draft = {...draft, quantity: String(Math.abs(Number(draft.quantity)))};
-            }
-            qtyDisplay = formatDecimalForDisplay(draft.quantity);
+            draft = {...draft, quantity: applySign(draft.quantity, 'positive')};
         } else if (layout === 'transfer_cash') {
             const myAmount = Number(row.cash?.amount ?? 0);
             const fromRow = myAmount < 0 ? row : partner;
             const toRow = myAmount < 0 ? partner : row;
             draft = fromTx(fromRow);
-            if (draft.cash && Number(draft.cash.amount) < 0) {
-                draft = {...draft, cash: {code: draft.cash.code, amount: String(Math.abs(Number(draft.cash.amount)))}};
+            if (draft.cash) {
+                draft = {...draft, cash: {code: draft.cash.code, amount: applySign(draft.cash.amount, 'positive')}};
             }
             dualTo = {broker_id: toRow.broker_id, cash: null, date: toRow.date};
-            qtyDisplay = formatDecimalForDisplay(draft.quantity);
         }
         // B1-fix: if the pair has mismatched description, concatenate with explanatory note
         const rowDesc = row.description ?? '';
@@ -673,7 +680,6 @@
             if (r.cashField === 'forbidden' && next.cash != null) next.cash = null;
             if (r.quantityMode === 'forbidden') {
                 next.quantity = '0';
-                qtyDisplay = '0';
             }
             // Clear linked event when no longer applicable.
             if (!r.eventLinkable && next.asset_event_id != null) next.asset_event_id = null;
@@ -722,15 +728,12 @@
         }
         return null;
     });
-    /** Auto-sign: user enters positive, backend expects negative. */
-    let autoNegateQty = $derived(rule.quantityRule === 'negative');
+    /** FX has one broker, including presets, late hydration and type switches.
+     *  Keep the stored partner untouched in view mode so historical facts stay visible. */
+    let effectiveDualTo = $derived<DualDraftTo>(pairLayout === 'fx' && mode !== 'view' ? {...dualTo, broker_id: draft.broker_id} : dualTo);
+    /** Auto-sign: user enters positive, backend expects negative cash. */
     let autoNegateCash = $derived(rule.cashSign === 'negative');
     let isReadonly = $derived(mode === 'view');
-    /** Helper: returns CSS classes for highlighted fields in view mode.
-     *  Uses a yellow gradient background + a brief pulse animation on first render. */
-    function hl(testid: string): string {
-        return highlightFields.includes(testid) ? ' hl-match rounded-lg' : '';
-    }
     // Bugfix-5 §A4: `unlockImmutable=true` (deep-edit from BulkModal) overrides
     // the default immutability so the user can change `type`/`broker` on an
     // existing draft. `view` mode always wins (everything stays readonly).
@@ -755,12 +758,17 @@
      *  In paired mode also requires the partner side fields (broker, cash for FX). */
     let isFormComplete = $derived.by(() => {
         void $typesVersion; // re-derive when server type rules load
-        if (!isDraftReadyForValidation(draft)) return false;
+        if (!draft.date || !isDraftReadyForValidation(draft)) return false;
         // Paired mode: partner side must also be populated
         if (pairLayout != null) {
-            if (!dualTo.broker_id || dualTo.broker_id <= 0) return false;
-            // FX layout requires partner cash amount
-            if (pairLayout === 'fx' && (!dualTo.cash || !dualTo.cash.amount || dualTo.cash.amount.trim() === '' || dualTo.cash.amount === '0')) return false;
+            if (!effectiveDualTo.broker_id || effectiveDualTo.broker_id <= 0 || !effectiveDualTo.date) return false;
+            if (pairLayout === 'fx') {
+                return [draft.cash, effectiveDualTo.cash].every((cash) => {
+                    if (!cash?.code.trim() || !cash.amount.trim()) return false;
+                    const amount = Number(cash.amount);
+                    return Number.isFinite(amount) && amount !== 0;
+                });
+            }
         }
         return true;
     });
@@ -842,15 +850,36 @@
         return null;
     });
 
+    // Cash sign validation — paired mode uses 'positive' (user enters positive, flip negates FROM).
+    // Single mode uses the type's cashSign rule.
+    let effectiveCashRule = $derived(pairLayout != null ? 'positive' : rule.cashSign);
+    let cashSignResult = $derived(computeSignHint(parseFloat(draft.cash?.amount ?? '0'), effectiveCashRule));
+    let cashToSignViolation = $derived(pairLayout === 'fx' && computeSignHint(parseFloat(dualTo.cash?.amount ?? '0'), 'positive').bad);
+
+    // Block submit for an invalid exact quantity (syntax, 12+6 budget, range or
+    // sign) and for the legacy cash-sign checks.
+    let hasSignViolation = $derived((rule.quantityMode !== 'forbidden' && !quantityInputValid) || cashSignResult.bad || cashToSignViolation);
+
+    /** A date picker shows a date it refused: the draft still holds the previous one. */
+    let hasDateError = $derived(!dateMainValid || !dateToValid);
+    /**
+     * V-37: the errors the form sees on its own — a quantity or cash sign it refuses, two sides that must differ, a
+     * typed date the picker refused. While any is on screen the server is not asked: the payload would carry the
+     * sign-corrected quantity or the previous date, and its verdict would be about a draft that is not the one shown.
+     * So no automatic run, no manual one, no «valid» and no Apply. Declared before the scheduler, whose constructor
+     * already reads `enabled`.
+     */
+    let hasLocalErrors = $derived(hasSignViolation || !!dualValidationError || hasDateError);
+
     // =========================================================================
     // Validate scheduler — debounced/manual/idle, always enabled (1 row).
     // =========================================================================
 
     const scheduler = createValidateScheduler({
-        // Auto-fire only when the form is fully complete (both sides for paired).
-        // Bugfix-2 §C5 + W3-fix: uses isFormComplete which checks dualTo fields.
-        // Manual ⚡ Validate now always fires regardless.
-        enabled: () => !isReadonly && isFormComplete,
+        // Auto-fire only when the form is fully complete (both sides for paired) and holds
+        // no error of its own (V-37). The manual dispatch ignores `enabled`: «Validate now»
+        // checks `hasLocalErrors` itself, in `validateNow`.
+        enabled: () => !isReadonly && isFormComplete && !hasLocalErrors,
         draftKey: () => lastDraftKey,
         validateFn: async () => {
             if (isReadonly) return {issuesCount: 0};
@@ -927,14 +956,17 @@
         },
     });
 
-    onDestroy(() => scheduler.dispose());
+    onDestroy(() => {
+        scheduler.dispose();
+        if (guideObservedOpen) releaseCreateGuideHost();
+    });
 
     // Trigger 'change' on every meaningful draft mutation.
     let lastDraftKey = $state('');
     /** Bugfix-4 §U16: track validate freshness for the green/warning banner UX. */
     let lastValidatedDraftKey = $state('');
     let issuesDismissed = $state(false);
-    let isFreshlyValid = $derived(!isReadonly && scheduler.state.lastValidatedAt != null && issues.length === 0 && lastValidatedDraftKey === lastDraftKey && lastDraftKey !== '');
+    let isFreshlyValid = $derived(!isReadonly && !hasLocalErrors && scheduler.state.lastValidatedAt != null && issues.length === 0 && lastValidatedDraftKey === lastDraftKey && lastDraftKey !== '');
     let showIssuesBanner = $derived(issues.length > 0 && !issuesDismissed);
     let fieldIssues = $derived(issues.filter((i) => i.index >= 0));
     let balanceIssues = $derived(issues.filter((i) => i.index < 0));
@@ -957,11 +989,20 @@
     });
     $effect(() => {
         if (!open || isReadonly) return;
-        const key = JSON.stringify(draft) + JSON.stringify(dualTo) + (wacCurrencyHint ?? '');
+        const key = JSON.stringify(draft) + JSON.stringify(effectiveDualTo) + (wacCurrencyHint ?? '') + `:${$typesVersion}`;
         if (key === lastDraftKey) return;
         lastDraftKey = key;
         commitFailed = false;
         scheduler.trigger('change');
+    });
+    // V-37: when the form's own errors clear, ask the scheduler again. The change that cleared them can reach it
+    // while they still stand — the quantity input and the date picker report their validity after the draft
+    // moves — and the scheduler drops a change it is not enabled for. Either order ends in one debounced run.
+    let hadLocalErrors = false;
+    $effect(() => {
+        const blocked = hasLocalErrors;
+        if (hadLocalErrors && !blocked && open && !isReadonly) scheduler.trigger('change');
+        hadLocalErrors = blocked;
     });
 
     // -------------------------------------------------------------------------
@@ -972,6 +1013,8 @@
      *  defeat browser autofill heuristics (Bugfix-1 §U7). Stable per modal
      *  open. */
     const autocompleteNonce = $derived(Math.random().toString(36).slice(2, 10));
+    let quantityInputId = $derived(`tx-form-quantity-${autocompleteNonce}`);
+    let quantityHintId = $derived(`tx-form-quantity-hint-${autocompleteNonce}`);
 
     /** BrokerSearchSelect expects `BrokerSelectItem[]`; the brokerStore's
      *  `BrokerInfo` is structurally compatible (id/name/icon_url present)
@@ -1013,7 +1056,7 @@
             tags: draft.tags,
             description: draft.description,
             cost_basis_override: cbOverride,
-            cost_basis_mode: costBasisMode === 'auto' ? 'auto' : undefined,
+            cost_basis_mode: costBasisMode,
             asset_event_id: draft.asset_event_id,
             link_uuid: draft.link_uuid,
         };
@@ -1042,11 +1085,11 @@
         if (!pairLayout) return [collectCreate()];
 
         const toSide: TxDualSide = {
-            broker_id: dualTo.broker_id,
-            date: dualTo.date,
-            cash: dualTo.cash,
-            quantity: dualTo.quantity,
-            cost_basis_override: dualTo.cost_basis_override,
+            broker_id: effectiveDualTo.broker_id,
+            date: effectiveDualTo.date,
+            cash: effectiveDualTo.cash,
+            quantity: effectiveDualTo.quantity,
+            cost_basis_override: effectiveDualTo.cost_basis_override,
         };
         return buildDualCreatePayloads(pairLayout as PayloadPairLayout, draftToTxFields(), toSide, linkUuid);
     }
@@ -1068,7 +1111,7 @@
                 toOrig = mainRow;
             }
         } else if (pairLayout === 'transfer_asset') {
-            if (Number(mainRow.quantity) > 0) {
+            if ((exactDecimalSign(mainRow.quantity) ?? 0) > 0) {
                 fromOrig = partnerRow;
                 toOrig = mainRow;
             }
@@ -1079,9 +1122,43 @@
             }
         }
 
-        const allItems = [diffDualItem(items[0], fromOrig as unknown as TxOriginal), diffDualItem(items[1], toOrig as unknown as TxOriginal)];
+        const allItems = [diffDualItem(items[0], fromOrig as unknown as TxOriginal, null), diffDualItem(items[1], toOrig as unknown as TxOriginal, costBasisMode)];
         // Only include items that have actual changes (more than just `id`)
         return allItems.filter((item) => Object.keys(item).length > 1);
+    }
+
+    // =========================================================================
+    // Local errors (V-37): «Validate now» and the first field to fix
+    // =========================================================================
+
+    /** The scrollable form body, searched by `focusFirstLocalError`. */
+    let formBodyEl = $state<HTMLDivElement | undefined>(undefined);
+
+    /**
+     * Moves the focus to the first field, in screen order, that holds one of the form's own errors. Each selector
+     * matches what that control publishes — the date picker's `data-invalid` root, the quantity input's test id — or,
+     * for the cells that publish nothing, the test id this form gives them. `querySelector` on the list returns the
+     * first match in document order, whatever the layout (single, pair, FX).
+     */
+    function focusFirstLocalError() {
+        if (!formBodyEl) return;
+        const selectors: string[] = [];
+        if (hasDateError) selectors.push('[data-invalid="true"] input[type="text"]');
+        if (rule.quantityMode !== 'forbidden' && !quantityInputValid) selectors.push('input[data-testid="tx-form-quantity"]');
+        if (cashSignResult.bad) selectors.push('input[data-testid="tx-form-cash-amount"]', 'input[data-testid="tx-form-cash-from-amount"]');
+        if (cashToSignViolation) selectors.push('input[data-testid="tx-form-cash-to-amount"]');
+        if (dualValidationError) selectors.push(pairLayout === 'fx' ? '[data-testid="tx-form-cash-to"] [role="combobox"]' : '[data-testid="tx-form-dual-to"] [role="combobox"]');
+        if (selectors.length === 0) return;
+        formBodyEl.querySelector<HTMLElement>(selectors.join(', '))?.focus();
+    }
+
+    /** «Validate now» asks the server, unless the form holds an error of its own: then it leads to that field. */
+    function validateNow() {
+        if (hasLocalErrors) {
+            focusFirstLocalError();
+            return;
+        }
+        scheduler.trigger('manual');
     }
 
     // =========================================================================
@@ -1095,6 +1172,12 @@
             formError = dualValidationError;
             return;
         }
+        // V-37: Apply is disabled while the form holds an error of its own; this guard
+        // covers a click that lands before the button repaints.
+        if (hasLocalErrors) {
+            focusFirstLocalError();
+            return;
+        }
         // Bugfix-5 §A4: when wired from the BulkModal, "Apply" pushes the draft
         // back to the parent grid instead of committing to the backend.
         if (!commitOnSave) {
@@ -1105,9 +1188,9 @@
                 const payload: Record<string, unknown> = {
                     _dual: true,
                     _items: items,
-                    _partnerBrokerId: dualTo.broker_id,
-                    _partnerCash: dualTo.cash,
-                    _partnerDate: dualTo.date,
+                    _partnerBrokerId: effectiveDualTo.broker_id,
+                    _partnerCash: effectiveDualTo.cash,
+                    _partnerDate: effectiveDualTo.date,
                     _cost_basis_mode: costBasisMode,
                     _wac_currency_hint: wacCurrencyHint,
                 };
@@ -1165,14 +1248,15 @@
     }
     function setBroker(v: number) {
         draft = {...draft, broker_id: v};
-        // FX layout: shared broker — keep dualTo in sync (constraint: broker_id equal)
-        if (pairLayout === 'fx') dualTo = {...dualTo, broker_id: v};
     }
     function setBrokerTo(v: number) {
         dualTo = {...dualTo, broker_id: v};
     }
     function setDate(v: string) {
         draft = {...draft, date: v};
+    }
+    function setDateTo(v: string) {
+        dualTo = {...dualTo, date: v};
     }
     function setAsset(v: number | null) {
         draft = {...draft, asset_id: v};
@@ -1194,15 +1278,14 @@
     /** W36: Swap Da↔A sides in dual form. */
     function swapDualSides() {
         if (!pairLayout) return;
-        // Always swap dates
         const tmpDate = draft.date;
         if (pairLayout === 'fx') {
-            // Swap cash (currencies)
+            // FX shares a broker, not necessarily a settlement date.
             const tmpCash = draft.cash;
             draft = {...draft, cash: dualTo.cash, date: dualTo.date};
             dualTo = {...dualTo, cash: tmpCash, date: tmpDate};
         } else {
-            // transfer_asset / transfer_cash: swap brokers
+            // transfer_asset / transfer_cash: swap brokers and dates
             const tmpBroker = draft.broker_id;
             draft = {...draft, broker_id: dualTo.broker_id, date: dualTo.date};
             dualTo = {...dualTo, broker_id: tmpBroker, date: tmpDate};
@@ -1214,17 +1297,14 @@
         if ((draft.tags ?? []).includes(v)) return;
         draft = {...draft, tags: [...(draft.tags ?? []), v]};
     }
-    function onQuantityInput(e: Event) {
-        const v = (e.currentTarget as HTMLInputElement).value;
-        qtyDisplay = v; // preserve raw user input mid-typing
-        setQuantity(normalizeDecimalInput(v));
+    function onQuantityValidityChange(state: {valid: boolean}) {
+        quantityInputValid = state.valid;
     }
-    /** The field is a text input (locale-safe), so the arrow keys are wired by hand. */
-    function onQuantityKeydown(e: KeyboardEvent) {
-        const stepped = decimalArrowStep(e, qtyDisplay);
-        if (stepped === null) return;
-        qtyDisplay = stepped;
-        setQuantity(stepped);
+    function onDateMainValidityChange(state: {valid: boolean}) {
+        dateMainValid = state.valid;
+    }
+    function onDateToValidityChange(state: {valid: boolean}) {
+        dateToValid = state.valid;
     }
     function onDescriptionInput(e: Event) {
         draft = {...draft, description: (e.currentTarget as HTMLTextAreaElement).value};
@@ -1286,23 +1366,17 @@
     let cashHint = $derived(signHintText(rule.cashSign));
     let cashLabel = $derived(signLabel(rule.cashSign));
 
-    // Sign-based border coloring for quantity field (mirrors CompactCashCell pattern).
-    // Colors reflect whether the VALUE AFTER AUTO-FLIP conforms to the rule.
-    // Does NOT block input — purely visual guidance.
-    // In paired mode (transfer_asset/transfer_cash/fx), the form forces positive input
-    // (system balances both sides) → effective rule is 'positive', not raw type rule.
+    // The quantity editor classifies sign from the exact string. Negative backend
+    // rules are auto-flipped, so their user-facing entry rule is positive.
     let effectiveQtyRule = $derived(pairLayout != null ? 'positive' : rule.quantityRule);
-    let qtySignHint = $derived(computeSignHint(parseFloat(draft.quantity), effectiveQtyRule));
-    let qtyBorderColor = $derived(qtySignHint.bad ? 'oklch(0.637 0.237 25.331 / 0.7)' : qtySignHint.ok ? 'oklch(0.765 0.177 163.223 / 0.7)' : '');
+    let quantityInputSignRule = $derived.by<'positive' | 'nonzero' | 'zero' | 'any'>(() => {
+        if (effectiveQtyRule === 'positive' || effectiveQtyRule === 'negative') return 'positive';
+        if (effectiveQtyRule === 'nonzero' || effectiveQtyRule === 'zero') return effectiveQtyRule;
+        return 'any';
+    });
 
-    // Cash sign validation — paired mode uses 'positive' (user enters positive, flip negates FROM).
-    // Single mode uses the type's cashSign rule.
-    let effectiveCashRule = $derived(pairLayout != null ? 'positive' : rule.cashSign);
-    let cashSignResult = $derived(computeSignHint(parseFloat(draft.cash?.amount ?? '0'), effectiveCashRule));
-
-    // Block submit when any sign rule is violated (red border = bad).
-    // Only active when the field has a meaningful value (not empty/NaN).
-    let hasSignViolation = $derived(qtySignHint.bad || cashSignResult.bad);
+    // The cash sign checks and `hasSignViolation` live above the validate scheduler, with
+    // `hasLocalErrors`: the scheduler's constructor already reads them.
 
     // =========================================================================
     // W39: Inline broker / asset creation modals
@@ -1343,9 +1417,7 @@
         <!-- ============================================================= -->
         <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-form-title">
-                {#if titleOverride}
-                    {titleOverride}
-                {:else if pairLayout}
+                {#if pairLayout}
                     {#if pairLayout === 'fx'}💱{:else if pairLayout === 'transfer_asset'}📦{:else}🏦{/if}
                     {#if mode === 'edit'}
                         ✎ {dualTitle}
@@ -1366,8 +1438,6 @@
                     {:else}{dualTitle}{/if}
                 {:else if mode === 'create'}
                     ➕ {$t('transactions.form.titleCreate')}
-                {:else if mode === 'duplicate'}
-                    📋 {$t('transactions.form.titleDuplicate')}
                 {:else if mode === 'edit'}
                     ✎ {$t('transactions.form.titleEdit')} #{mainRow?.id}
                 {:else}
@@ -1389,7 +1459,7 @@
         <!-- ============================================================= -->
         <!-- Body (scrollable) -->
         <!-- ============================================================= -->
-        <div class="overflow-y-auto flex-1 min-h-0 px-5 py-4 space-y-4" data-testid="tx-form-body">
+        <div class="overflow-y-auto flex-1 min-h-0 px-5 py-4 space-y-4" data-testid="tx-form-body" data-guide-scroll-root bind:this={formBodyEl}>
             <!-- Inline banners: red ⛔ for commit failure, green ✓ for valid,
                  yellow for validate issues. Both error types show categorized lists. -->
             {#if formError}
@@ -1404,7 +1474,7 @@
                         <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.issuesHeader')}</p>
                         <ul class="list-disc list-inside space-y-0.5 text-sm" data-testid="tx-form-issues">
                             {#each fieldIssues as issue}
-                                <li data-testid="tx-form-issue">{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                                <li data-testid="tx-form-issue">{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
                             {/each}
                         </ul>
                     {/if}
@@ -1412,7 +1482,7 @@
                         <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
                         <ul class="list-disc list-inside space-y-0.5 text-sm">
                             {#each balanceIssues as issue}
-                                <li>{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                                <li>{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
                             {/each}
                         </ul>
                     {/if}
@@ -1447,7 +1517,7 @@
                                         <span>{$t('transactions.errors.wacFxUnavailableOrManual')}</span>
                                     </li>
                                 {:else}
-                                    <li data-testid="tx-form-issue">{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                                    <li data-testid="tx-form-issue">{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
                                 {/if}
                             {/each}
                         </ul>
@@ -1456,7 +1526,7 @@
                         <p class="font-semibold text-sm {fieldIssues.length > 0 ? 'mt-2' : ''} mb-1.5">{$t('transactions.validate.balanceIssuesHeader')}</p>
                         <ul class="list-disc list-inside space-y-0.5 text-sm">
                             {#each balanceIssues as issue}
-                                <li>{@html resolveIssueMessage(issue, $t, resolverCtx)}</li>
+                                <li>{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}</li>
                             {/each}
                         </ul>
                     {/if}
@@ -1474,13 +1544,13 @@
             <!-- DUAL FORM — FX / Transfer Asset / Transfer Cash -->
             <!-- ============================================================= -->
             {#if pairLayout}
-                <fieldset class="border border-gray-200 dark:border-slate-700 rounded-lg p-4" data-testid="tx-form-required">
+                <fieldset class="border border-gray-200 dark:border-slate-700 rounded-lg p-4" data-testid="tx-form-required" use:guideAnchor={'transaction.create.amounts'}>
                     <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-1">{$t('transactions.form.sectionRequired')}</legend>
 
                     <!-- Type (date is now inside Da/A panels) -->
                     <div class="text-sm">
                         <!-- Type: editable in create dual mode (W41), readonly in edit/view -->
-                        <div class="flex flex-col gap-1{hl('tx-form-type-wrap')}" data-testid="tx-form-type-wrap">
+                        <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap" use:guideAnchor={'transaction.create.basics'}>
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.type')}</span>
                             {#if typeImmutable}
                                 <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
@@ -1532,28 +1602,30 @@
                             <span class="text-xs text-gray-500 dark:text-gray-400">
                                 {$t('transactions.table.quantity')} <span class="text-amber-500">(+)</span>
                             </span>
-                            <input
-                                type="text"
-                                inputmode="decimal"
-                                autocomplete="off"
-                                spellcheck="false"
+                            <ExactQuantityInput
+                                value={draft.quantity}
+                                onchange={setQuantity}
+                                onvaliditychange={onQuantityValidityChange}
+                                step="1"
+                                maxIntegerDigits={12}
+                                maxFractionDigits={6}
+                                allowNegative
+                                signRule={quantityInputSignRule}
+                                resetKey={`${open}:${openKey ?? 0}`}
+                                id={quantityInputId}
                                 name="qty-{autocompleteNonce}"
                                 placeholder="0"
-                                class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
-                                style:border-color={qtyBorderColor || undefined}
-                                value={qtyDisplay}
+                                ariaLabel={$t('transactions.table.quantity')}
+                                className="qty-input !rounded-lg !bg-white !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-libre-green/30 dark:!bg-slate-800"
                                 disabled={isReadonly}
-                                oninput={onQuantityInput}
-                                onkeydown={onQuantityKeydown}
-                                onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
-                                data-testid="tx-form-quantity"
+                                testid="tx-form-quantity"
                             />
                         </div>
                     {/if}
 
                     <!-- Transfer Cash: shared cash -->
                     {#if pairLayout === 'transfer_cash'}
-                        <div class="mt-3 flex flex-col gap-1{hl('tx-form-cash-wrap')}" data-testid="tx-form-cash-wrap">
+                        <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-cash-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">
                                 {$t('transactions.table.cash')} *
                             </span>
@@ -1574,7 +1646,7 @@
                                 {#if isReadonly}
                                     <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{draft.date || '—'}</div>
                                 {:else}
-                                    <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} />
+                                    <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} onvaliditychange={onDateMainValidityChange} />
                                 {/if}
                             </div>
                             {#if pairLayout === 'fx'}
@@ -1620,16 +1692,9 @@
                                 <div class="flex flex-col gap-1 mb-2">
                                     <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.date')}</span>
                                     {#if isReadonly}
-                                        <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{dualTo.date || '—'}</div>
+                                        <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200">{effectiveDualTo.date || '—'}</div>
                                     {:else}
-                                        <SingleDatePicker
-                                            bind:value={dualTo.date}
-                                            label=""
-                                            inputStyle={true}
-                                            onchange={(d) => {
-                                                dualTo = {...dualTo, date: d};
-                                            }}
-                                        />
+                                        <SingleDatePicker value={effectiveDualTo.date} label="" inputStyle={true} onchange={setDateTo} onvaliditychange={onDateToValidityChange} />
                                     {/if}
                                 </div>
                             {/if}
@@ -1709,7 +1774,7 @@
                                 <Tooltip html={buildFxTooltipHtml(tooltipData, $t)} position="bottom">
                                     <span class="inline-flex items-center gap-1 text-xs text-violet-600 dark:text-violet-400 cursor-help px-2 py-0.5 rounded bg-violet-50 dark:bg-violet-900/20">
                                         <Info size={12} />
-                                        <span class="font-mono">{fxInfo.impliedRate.toFixed(4)}</span>
+                                        <span class="font-mono">{formatFixed(fxInfo.impliedRate, 4)}</span>
                                         {#if tooltipData.staleDays != null && tooltipData.staleDays > 0}
                                             <span class="text-amber-500">⚠️</span>
                                         {/if}
@@ -1751,7 +1816,7 @@
                 <!-- ============================================================= -->
             {:else}
                 <!-- Required section -->
-                <fieldset class="border border-gray-200 dark:border-slate-700 rounded-lg p-4" data-testid="tx-form-required">
+                <fieldset class="border border-gray-200 dark:border-slate-700 rounded-lg p-4" data-testid="tx-form-required" use:guideAnchor={'transaction.create.amounts'}>
                     <legend class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-1">{$t('transactions.form.sectionRequired')}</legend>
 
                     <!-- Reordered to match table column order (Bugfix-1 §U5):
@@ -1762,17 +1827,17 @@
                          full-width Cash row when the type forces quantity=0. -->
                     <div class="grid grid-cols-2 gap-3 text-sm">
                         <!-- Date -->
-                        <div class="flex flex-col gap-1{hl('tx-form-date-wrap')}" data-testid="tx-form-date-wrap">
+                        <div class="flex flex-col gap-1" data-testid="tx-form-date-wrap">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.date')}</span>
                             {#if isReadonly}
                                 <div class="px-3 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-gray-200" data-testid="tx-form-date-readonly">{draft.date || '—'}</div>
                             {:else}
-                                <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} />
+                                <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} onvaliditychange={onDateMainValidityChange} />
                             {/if}
                         </div>
 
                         <!-- Type -->
-                        <div class="flex flex-col gap-1{hl('tx-form-type-wrap')}" data-testid="tx-form-type-wrap">
+                        <div class="flex flex-col gap-1" data-testid="tx-form-type-wrap" use:guideAnchor={'transaction.create.basics'}>
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.type')}</span>
                             {#if typeImmutable}
                                 <!-- Bugfix-4 §U17 + Bugfix-5 §U22: render the
@@ -1809,27 +1874,30 @@
                                     {$t('transactions.table.quantity')}{#if qtyLabel}
                                         <span class="text-amber-500">{qtyLabel}</span>{/if}
                                 </span>
-                                <input
-                                    type="text"
-                                    inputmode="decimal"
-                                    autocomplete="off"
-                                    spellcheck="false"
+                                <ExactQuantityInput
+                                    value={draft.quantity}
+                                    onchange={setQuantity}
+                                    onvaliditychange={onQuantityValidityChange}
+                                    step="1"
+                                    maxIntegerDigits={12}
+                                    maxFractionDigits={6}
+                                    allowNegative
+                                    signRule={quantityInputSignRule}
+                                    resetKey={`${open}:${openKey ?? 0}`}
+                                    id={quantityInputId}
                                     name="qty-{autocompleteNonce}"
                                     placeholder="0"
-                                    class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
-                                    style:border-color={qtyBorderColor || undefined}
-                                    value={qtyDisplay}
+                                    ariaLabel={$t('transactions.table.quantity')}
+                                    ariaDescribedby={qtyHint ? quantityHintId : undefined}
+                                    className="qty-input !rounded-lg !bg-white !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-libre-green/30 dark:!bg-slate-800"
                                     disabled={isReadonly}
-                                    oninput={onQuantityInput}
-                                    onkeydown={onQuantityKeydown}
-                                    onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
-                                    data-testid="tx-form-quantity"
+                                    testid="tx-form-quantity"
                                 />
                                 {#if qtyHint}
-                                    <span class="text-[10px] text-gray-400">{qtyHint}</span>
+                                    <span id={quantityHintId} class="text-[10px] text-gray-400">{qtyHint}</span>
                                 {/if}
                             </div>
-                            <div class="flex flex-col gap-1{hl('tx-form-cash-wrap')}" data-testid="tx-form-cash-wrap">
+                            <div class="flex flex-col gap-1" data-testid="tx-form-cash-wrap">
                                 <span class="text-xs text-gray-500 dark:text-gray-400">
                                     {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel}
                                         <span class="text-amber-500">{cashLabel}</span>{/if}
@@ -1854,29 +1922,32 @@
                                     {$t('transactions.table.quantity')}{#if qtyLabel}
                                         <span class="text-amber-500">{qtyLabel}</span>{/if}
                                 </span>
-                                <input
-                                    type="text"
-                                    inputmode="decimal"
-                                    autocomplete="off"
-                                    spellcheck="false"
+                                <ExactQuantityInput
+                                    value={draft.quantity}
+                                    onchange={setQuantity}
+                                    onvaliditychange={onQuantityValidityChange}
+                                    step="1"
+                                    maxIntegerDigits={12}
+                                    maxFractionDigits={6}
+                                    allowNegative
+                                    signRule={quantityInputSignRule}
+                                    resetKey={`${open}:${openKey ?? 0}`}
+                                    id={quantityInputId}
                                     name="qty-{autocompleteNonce}"
                                     placeholder="0"
-                                    class="qty-input w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-600 rounded-lg text-right font-mono tabular-nums disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-libre-green/30"
-                                    style:border-color={qtyBorderColor || undefined}
-                                    value={qtyDisplay}
+                                    ariaLabel={$t('transactions.table.quantity')}
+                                    ariaDescribedby={qtyHint ? quantityHintId : undefined}
+                                    className="qty-input !rounded-lg !bg-white !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-libre-green/30 dark:!bg-slate-800"
                                     disabled={isReadonly}
-                                    oninput={onQuantityInput}
-                                    onkeydown={onQuantityKeydown}
-                                    onblur={() => (qtyDisplay = formatDecimalForDisplay(draft.quantity))}
-                                    data-testid="tx-form-quantity"
+                                    testid="tx-form-quantity"
                                 />
                                 {#if qtyHint}
-                                    <span class="text-[10px] text-gray-400">{qtyHint}</span>
+                                    <span id={quantityHintId} class="text-[10px] text-gray-400">{qtyHint}</span>
                                 {/if}
                             </div>
                         {:else if rule.cashField !== 'forbidden'}
                             <!-- Only cash visible (quantity forbidden) → full width -->
-                            <div class="flex flex-col gap-1 col-span-2{hl('tx-form-cash-wrap')}" data-testid="tx-form-cash-wrap">
+                            <div class="flex flex-col gap-1 col-span-2" data-testid="tx-form-cash-wrap">
                                 <span class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
                                     {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel}
                                         <span class="text-amber-500">{cashLabel}</span>{/if}
@@ -1949,9 +2020,9 @@
                                 onOpenFxSync={handleSyncFx}
                                 quantity={draft.quantity}
                             />
-                            {#if Number(draft.quantity) > 0 && costBasisMode !== 'auto' && !draft.cost_basis_override?.amount?.trim()}
+                            {#if (exactDecimalSign(draft.quantity) ?? 0) > 0 && costBasisMode !== 'auto' && !draft.cost_basis_override?.amount?.trim()}
                                 <p class="text-xs text-amber-600 dark:text-amber-400 mt-1" data-testid="tx-form-cost-basis-warning">
-                                    {$t('transactions.costBasisOverride.warningAdjustment') || 'No cost basis set — lot will be created with zero cost. Set a value if this is not a stock split or gift.'}
+                                    {$t('transactions.costBasisOverride.warningAdjustment') || 'The manual cost basis is empty: the transaction cannot be saved without it. If these shares cost nothing (a stock split or a gift), enter 0.'}
                                 </p>
                             {/if}
                         </div>
@@ -1988,7 +2059,7 @@
             <!-- Optional disclosure -->
             {#if !isReadonly || (draft.tags && draft.tags.length > 0) || (draft.description ?? '').trim() || draft.asset_event_id != null || draft.link_uuid != null || pairPartnerId != null}
                 <details class="border border-gray-200 dark:border-slate-700 rounded-lg" bind:open={optionalOpen}>
-                    <summary class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-4 py-3 cursor-pointer select-none" data-testid="tx-form-optional-toggle">{$t('transactions.form.sectionOptional')}</summary>
+                    <summary class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 px-4 py-3 cursor-pointer select-none" data-testid="tx-form-optional-toggle" use:guideAnchor={'transaction.create.details'}>{$t('transactions.form.sectionOptional')}</summary>
                     <div class="px-4 pb-4 space-y-3 text-sm">
                         <!-- 1. Asset event link (before tags) -->
                         {#if canShowAssetEvent}
@@ -2020,7 +2091,7 @@
                         </div>
 
                         <!-- 3. Description -->
-                        <label class="flex flex-col gap-1{hl('tx-form-description')}">
+                        <label class="flex flex-col gap-1">
                             <span class="text-xs text-gray-500 dark:text-gray-400">{$t('common.description')}</span>
                             <textarea
                                 autocomplete="off"
@@ -2076,7 +2147,7 @@
                         type="button"
                         class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
                         disabled={!isFormComplete}
-                        onclick={() => scheduler.trigger('manual')}
+                        onclick={validateNow}
                         data-testid="tx-form-validate-now"
                         title={$t('transactions.validate.now')}
                     >
@@ -2104,9 +2175,10 @@
                     <button
                         type="button"
                         class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5"
-                        disabled={committing || loadingPartner || !!dualValidationError || hasSignViolation || (!commitOnSave && !isFormComplete)}
+                        disabled={committing || loadingPartner || hasLocalErrors || (!commitOnSave && !isFormComplete)}
                         onclick={commit}
                         data-testid="tx-form-save"
+                        use:guideAnchor={'transaction.create.save'}
                         title={committing ? $t('common.saving') : !commitOnSave ? $t('common.apply') : $t('common.save')}
                     >
                         {#if committing}
@@ -2169,7 +2241,9 @@
         dateEnd={fxSyncDateEnd}
         pairs={fxSyncPairs}
         zIndex={zIndex + 10}
-        onsynced={() => scheduler.trigger('manual')}
+        onsynced={() => {
+            if (!hasLocalErrors) scheduler.trigger('manual');
+        }}
         onclose={() => {
             showFxSyncModal = false;
         }}
@@ -2193,46 +2267,4 @@
     /* Duplicate-compare highlight: soft amber background + smooth entrance.
        Starts transparent → peaks bright yellow → settles to a light tint.
        animation-fill-mode: forwards keeps the resting state after the animation. */
-    @keyframes hl-pulse {
-        0% {
-            background-color: rgba(253, 224, 71, 0);
-        }
-        40% {
-            background-color: rgba(253, 224, 71, 0.65);
-        }
-        50% {
-            background-color: rgba(253, 224, 71, 0.65);
-        }
-        100% {
-            background-color: rgba(253, 224, 71, 0.18);
-        }
-    }
-    :global(.hl-match) {
-        animation: hl-pulse 3s linear 1 forwards;
-        padding: 6px 8px;
-    }
-    /* Inputs inside a highlighted wrapper should be transparent so the
-       yellow background shows through instead of being covered by white bg. */
-    :global(.hl-match input),
-    :global(.hl-match textarea),
-    :global(.hl-match select) {
-        background-color: transparent !important;
-    }
-    :global(.dark .hl-match) {
-        animation: hl-pulse-dark 3s linear 1 forwards;
-    }
-    @keyframes hl-pulse-dark {
-        0% {
-            background-color: rgba(180, 130, 20, 0);
-        }
-        40% {
-            background-color: rgba(180, 130, 20, 0.55);
-        }
-        50% {
-            background-color: rgba(180, 130, 20, 0.55);
-        }
-        100% {
-            background-color: rgba(180, 130, 20, 0.22);
-        }
-    }
 </style>

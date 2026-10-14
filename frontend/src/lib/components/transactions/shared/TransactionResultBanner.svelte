@@ -14,6 +14,7 @@
 -->
 <script lang="ts">
     import type {Snippet} from 'svelte';
+    import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
 
     interface Props {
         /** 'success' = green, 'warning' = amber, 'error' = red */
@@ -58,7 +59,7 @@
         {#if messages.length > 0}
             <ul class="list-disc pl-4 space-y-0.5 text-sm mt-1.5 text-left">
                 {#each messages as msg}
-                    <li>{@html msg}</li>
+                    <li>{@html sanitizeHtml(msg)}</li>
                 {/each}
             </ul>
         {/if}

@@ -10,6 +10,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {_ as t} from '$lib/i18n';
     import {ChevronDown, Trash2} from 'lucide-svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
@@ -24,6 +25,8 @@
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {ColumnDef, HtmlCell} from '$lib/components/table/types';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     // =========================================================================
     // Props
@@ -45,6 +48,12 @@
         mainCurrency?: string;
         /** Main asset native currency flag emoji (e.g. "🇺🇸") */
         mainCurrencyFlag?: string;
+        /** Presentation semantics for the measured primary series. */
+        measurementUnit?: 'price' | 'percentage-points';
+        /** Keep date anchors when the active series temporarily lacks endpoints. */
+        preserveUnavailableMeasures?: boolean;
+        /** Isolate DataTable preferences when multiple panels are mounted. */
+        storageKeyPrefix?: string;
     }
 
     let {
@@ -58,6 +67,9 @@
         displayCurrencyFlag: displayCurrencyFlagProp,
         mainCurrency: mainCurrencyProp,
         mainCurrencyFlag: mainCurrencyFlagProp,
+        measurementUnit = 'price',
+        preserveUnavailableMeasures = false,
+        storageKeyPrefix = 'measure-summary',
     }: Props = $props();
 
     // =========================================================================
@@ -105,6 +117,20 @@
         pendingMeasure = null;
         onmeasuremodechange?.(false);
         emitRendered(); // clear pending preview
+    }
+
+    export function clearMeasures() {
+        measures = [];
+        pendingStartDate = null;
+        pendingStartValue = null;
+        pendingMeasure = null;
+        measureActive = false;
+        nextId = 0;
+        expandedIds = new Set();
+        measureTableRefs = {};
+        lastAddPointTime = 0;
+        onmeasuremodechange?.(false);
+        emitRendered();
     }
 
     /** Called from parent on mousemove to update live preview line */
@@ -161,9 +187,10 @@
      * Useful on mobile where 2-tap interaction is unreliable.
      */
     export function addMeasureFromChartData() {
-        if (chartData.length < 2) return;
-        const startDate = chartData[0].date;
-        const endDate = chartData[chartData.length - 1].date;
+        const measurable = chartData.filter((point) => !point.missing);
+        if (measurable.length < 2) return;
+        const startDate = measurable[0].date;
+        const endDate = measurable[measurable.length - 1].date;
         if (startDate === endDate) return;
 
         const id = `measure-${nextId++}`;
@@ -209,6 +236,11 @@
         // Check if the new range produces a valid measurement BEFORE triggering reactivity
         const check = m.getMeasurement(chartData);
         if (!check) {
+            if (preserveUnavailableMeasures) {
+                measures = [...measures];
+                emitRendered();
+                return;
+            }
             // Auto-delete: range doesn't have matching data points for start/end
             removeMeasure(id);
             return;
@@ -236,9 +268,11 @@
         void viewMode;
         if (measures.length > 0) {
             // Auto-delete measures whose start/end dates are no longer in chartData
-            const valid = measures.filter((m) => m.getMeasurement(chartData) !== null);
-            if (valid.length < measures.length) {
-                measures = valid;
+            if (!preserveUnavailableMeasures && chartData.length > 0) {
+                const valid = measures.filter((m) => m.getMeasurement(chartData) !== null);
+                if (valid.length < measures.length) {
+                    measures = valid;
+                }
             }
             emitRendered();
         }
@@ -248,25 +282,37 @@
     // Derived
     // =========================================================================
 
-    let measurements: Array<{measure: MeasureSignal; result: MeasurementResult | null}> = $derived(measures.map((m) => ({measure: m, result: m.getMeasurement(chartData)})));
+    let measurements: Array<{measure: MeasureSignal; result: MeasurementResult | null}> = $derived.by(() => {
+        void overlaySignals;
+        return measures.map((measure) => ({
+            measure,
+            result: measure.getMeasurement(chartData),
+        }));
+    });
 
     // =========================================================================
     // Formatting helpers
     // =========================================================================
 
     function fmtValue(v: number): string {
-        if (Math.abs(v) >= 1) return v.toFixed(4);
-        return v.toFixed(6).replace(/\.?0+$/, '');
+        if (measurementUnit === 'percentage-points') return formatPercent(v, {signed: false});
+        if (Math.abs(v) >= 1) return formatFixed(v, 4);
+        return formatFixed(v, 6, {trim: true});
     }
 
     function fmtDelta(v: number): string {
-        const sign = v >= 0 ? '+' : '';
-        return `${sign}${v.toFixed(4)}`;
+        return measurementUnit === 'percentage-points' ? formatPercent(v, {suffix: ' pp'}) : formatFixed(v, 4, {signed: true});
     }
 
     function fmtPct(v: number): string {
-        const sign = v >= 0 ? '+' : '';
-        return `${sign}${v.toFixed(2)}%`;
+        return formatPercent(v);
+    }
+
+    function compactDelta(result: MeasurementResult): {
+        value: number;
+        label: string;
+    } {
+        return measurementUnit === 'percentage-points' ? {value: result.deltaAbs, label: fmtDelta(result.deltaAbs)} : {value: result.deltaPct, label: fmtPct(result.deltaPct)};
     }
 
     function toggleExpand(id: string) {
@@ -288,6 +334,7 @@
         deltaAbs: number;
         deltaPct: number;
         annualizedPct: number | null;
+        days: number;
         isGhost?: boolean;
     }
 
@@ -299,7 +346,7 @@
         return {type: 'html', html: isGhost ? `<span style="opacity:0.7">${html}</span>` : html};
     }
 
-    const summaryColumns: ColumnDef<MeasureSummaryRow>[] = [
+    const allSummaryColumns: ColumnDef<MeasureSummaryRow>[] = [
         {
             id: 'signal',
             header: () => $t('measure.table.signal'),
@@ -336,7 +383,7 @@
         },
         {
             id: 'deltaAbs',
-            header: () => $t('measure.table.deltaAbs'),
+            header: () => (measurementUnit === 'percentage-points' ? 'Δ pp' : $t('measure.table.deltaAbs')),
             type: 'number',
             cell: (r) => wrapGhost(`<span class="font-mono ${colorClass(r.deltaAbs)}">${fmtDelta(r.deltaAbs)}</span>`, r.isGhost),
             getValue: (r) => r.deltaAbs,
@@ -365,7 +412,18 @@
             filterable: true,
             width: 80,
         },
+        {
+            id: 'days',
+            header: () => $t('datePicker.granularity.days'),
+            type: 'number',
+            cell: (row) => wrapGhost(`<span class="font-mono text-gray-500 dark:text-gray-400">${row.days}d</span>`, row.isGhost),
+            getValue: (row) => row.days,
+            sortable: true,
+            filterable: true,
+            width: 70,
+        },
     ];
+    let summaryColumns = $derived(allSummaryColumns.filter((column) => (measurementUnit === 'percentage-points' ? column.id !== 'deltaPct' && column.id !== 'annualizedPct' : column.id !== 'days')));
 
     /** Original (unconverted) chart data derived from chartData's originalValue field */
     let originalChartData: LineDataPoint[] = $derived.by(() => {
@@ -379,13 +437,13 @@
     function buildSummaryRows(result: MeasurementResult, measureObj: MeasureSignal): MeasureSummaryRow[] {
         // When FX conversion is active, add 💱(target currency) suffix to main label
         // When no conversion, add (native currency) suffix
-        const conversionActive = originalChartData.length > 0 && displayCurrencyProp && displayCurrencyFlagProp;
+        const conversionActive = measurementUnit === 'price' && originalChartData.length > 0 && displayCurrencyProp && displayCurrencyFlagProp;
         let mainLabel: string;
         let mainSuffix: string | undefined;
         if (conversionActive) {
             mainLabel = mainSignalInfo.label ?? 'Main';
             mainSuffix = ` <span style="font-size:10px">(${displayCurrencyFlagProp} ${displayCurrencyProp}) 💱</span>`;
-        } else if (mainCurrencyProp) {
+        } else if (measurementUnit === 'price' && mainCurrencyProp) {
             mainLabel = mainSignalInfo.label ?? 'Main';
             mainSuffix = ` <span style="font-size:10px;opacity:0.7">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
         } else {
@@ -401,6 +459,7 @@
                 deltaAbs: result.deltaAbs,
                 deltaPct: result.deltaPct,
                 annualizedPct: result.annualizedPct,
+                days: result.days,
             },
         ];
 
@@ -424,6 +483,7 @@
                     deltaAbs: origResult.deltaAbs,
                     deltaPct: origResult.deltaPct,
                     annualizedPct: origResult.annualizedPct,
+                    days: result.days,
                     isGhost: true,
                 });
             }
@@ -438,7 +498,7 @@
                 let sigLabel = signal.label;
                 let sigSuffix: string | undefined;
                 if (!isGhost && signal.currency) {
-                    sigSuffix = ` <span style="font-size:10px;opacity:0.7">(${signal.currencyFlag || ''} ${signal.currency})</span>`;
+                    sigSuffix = ` <span style="font-size:10px;opacity:0.7">(${signal.currencyFlag || ''} ${escapeHtml(signal.currency)})</span>`;
                 }
                 rows.push({
                     id: `sig-${signal.label}`,
@@ -454,6 +514,7 @@
                     deltaAbs: sigResult.deltaAbs,
                     deltaPct: sigResult.deltaPct,
                     annualizedPct: sigResult.annualizedPct,
+                    days: result.days,
                     isGhost,
                 });
             }
@@ -466,7 +527,7 @@
     <!-- Pending indicator -->
     {#if measureActive && pendingStartDate}
         <div class="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-3 py-1.5 border border-amber-200 dark:border-amber-800">
-            📍 {$t('measure.pending', {values: {startDate: pendingStartDate, startValue: pendingStartValue?.toFixed(4) ?? ''}})}
+            📍 {$t('measure.pending', {values: {startDate: pendingStartDate, startValue: pendingStartValue == null ? '' : formatFixed(pendingStartValue, 4)}})}
         </div>
     {/if}
 
@@ -499,8 +560,9 @@
                             <span class="flex items-center gap-2 text-xs font-mono text-gray-600 dark:text-gray-300 cursor-pointer self-center" onclick={() => toggleExpand(measure.id)}>
                                 📏 {measure.params.startDate} → {measure.params.endDate}
                                 {#if result}
-                                    <span class={result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}>
-                                        {fmtPct(result.deltaPct)}
+                                    {@const delta = compactDelta(result)}
+                                    <span class={delta.value >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}>
+                                        {delta.label}
                                     </span>
                                     <span class="text-gray-400 dark:text-gray-500">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
                                 {/if}
@@ -510,9 +572,10 @@
                         <!-- 3. Stats + Style wrapper (flex-1 fills remaining space) -->
                         <div class="flex-1 flex {isNarrow ? 'flex-col justify-between items-end' : 'items-center gap-2'} min-w-0">
                             {#if result}
+                                {@const delta = compactDelta(result)}
                                 <div class="flex items-center gap-2 shrink-0 {isExpanded ? '' : 'hidden'}">
-                                    <span class="text-xs font-mono shrink-0 {result.deltaPct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
-                                        {fmtPct(result.deltaPct)}
+                                    <span class="text-xs font-mono shrink-0 {delta.value >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                                        {delta.label}
                                     </span>
                                     <span class="text-xs font-mono text-gray-400 dark:text-gray-500 shrink-0">· {result.days}d</span>
                                 </div>
@@ -564,7 +627,7 @@
                                     data={buildSummaryRows(result, measure)}
                                     columns={summaryColumns}
                                     getRowId={(r) => r.id}
-                                    storageKey="measure-summary-{measure.id}"
+                                    storageKey={`${storageKeyPrefix}-${measure.id}`}
                                     enableSelection={false}
                                     enableActions={false}
                                     enableSorting={true}

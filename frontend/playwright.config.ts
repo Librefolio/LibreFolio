@@ -1,4 +1,5 @@
 import {defineConfig, devices} from '@playwright/test';
+import {randomUUID} from 'crypto';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import {fileURLToPath} from 'url';
@@ -6,17 +7,42 @@ import {fileURLToPath} from 'url';
 // ES module compatibility for __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const PROJECT_ROOT = path.resolve(__dirname, '..');
 
-// Load .env from project root
-dotenv.config({path: path.resolve(__dirname, '../.env')});
+// Load dotenv once, then prevent nested Pipenv commands in global setup from
+// replacing this lane's explicit port/data values.
+const DONT_LOAD_ENV = /^(1|true|yes|on)$/i.test(process.env.PIPENV_DONT_LOAD_ENV || '');
+if (!DONT_LOAD_ENV) {
+    const configuredDotenv = process.env.PIPENV_DOTENV_LOCATION;
+    dotenv.config({
+        path: configuredDotenv ? path.resolve(process.cwd(), configuredDotenv) : path.resolve(PROJECT_ROOT, '.env'),
+    });
+}
 
 // Use TEST_PORT for E2E tests (server runs in test mode)
 const TEST_PORT = process.env.TEST_PORT || '6041';
+const TEST_DATA_DIR = path.resolve(PROJECT_ROOT, process.env.LIBREFOLIO_TEST_DATA_DIR || 'backend/data/test');
+process.env.TEST_PORT = TEST_PORT;
+process.env.LIBREFOLIO_TEST_DATA_DIR = TEST_DATA_DIR;
+process.env.PIPENV_DONT_LOAD_ENV = '1';
 const BASE_URL = `http://localhost:${TEST_PORT}`;
+const TEST_LANE_ID = process.env.LIBREFOLIO_TEST_LANE_ID || randomUUID();
+process.env.LIBREFOLIO_TEST_LANE_ID = TEST_LANE_ID;
+const WEB_SERVER_ENV: Record<string, string> = {
+    TEST_PORT,
+    LIBREFOLIO_TEST_DATA_DIR: TEST_DATA_DIR,
+    LIBREFOLIO_TEST_LANE_ID: TEST_LANE_ID,
+    PIPENV_DONT_LOAD_ENV: '1',
+};
+if (process.env.COVERAGE_JS === '1') {
+    WEB_SERVER_ENV.COVERAGE_INSTRUMENT = '1';
+    WEB_SERVER_ENV.NODE_OPTIONS = '--max-old-space-size=8192';
+}
 
 // How many Playwright workers hit the backend at once. Still 1 by default:
-// fullyParallel is off and the suite shares state, so raising it is a decision
-// taken per-run (or by the test runner), not a silent default.
+// fullyParallel is on, but every test of a lane shares one database and one
+// backend, so raising the workers is a decision taken per run (the test
+// runner's `--workers` exports E2E_WORKERS), not a silent default.
 const E2E_WORKERS = Math.max(1, Number(process.env.E2E_WORKERS || '1') || 1);
 
 // Backend size follows the parallelism actually pointed at it: one uvicorn
@@ -47,6 +73,17 @@ if (process.env.E2E_FORCE_PARALLEL) {
 // used" and takes the whole frontend phase down with it. Measured: exit 1.
 const SHARED_SERVER = !!process.env.LIBREFOLIO_TEST_SHARED_SERVER;
 
+// How long Playwright waits for its own `dev.py server --test` to answer: the same contract as
+// STARTUP_TIMEOUT in scripts/test_runner/_server.py, which waits for the runner's shared backend.
+// 300 s everywhere, overridable with LIBREFOLIO_TEST_STARTUP_TIMEOUT (whole seconds). The server
+// first rebuilds a stale frontend and MkDocs (about 130 s after a large merge, longer on a loaded
+// machine or a cold CI cache); a server that exits fails at once, so only a hung start waits this long.
+const STARTUP_TIMEOUT_RAW = process.env.LIBREFOLIO_TEST_STARTUP_TIMEOUT ?? '300';
+if (!/^\s*\d+\s*$/.test(STARTUP_TIMEOUT_RAW)) {
+    throw new Error(`LIBREFOLIO_TEST_STARTUP_TIMEOUT must be a whole number of seconds, got ${JSON.stringify(STARTUP_TIMEOUT_RAW)}`);
+}
+const STARTUP_TIMEOUT_S = Number(STARTUP_TIMEOUT_RAW);
+
 export default defineConfig({
     globalSetup: './e2e/global-setup.ts',
     testDir: './e2e',
@@ -62,7 +99,8 @@ export default defineConfig({
     // Blocks that genuinely share state opt *out* with
     // `test.describe.configure({mode: 'serial'})` and a written reason — the
     // exception catalogue, the twin of `exclusive_because` on the backend.
-    // Currently: brokers/multi-user, asset-event-delete, tx-brim-import.
+    // Currently: brokers/multi-user, files-destructive, fx/fx-destructive,
+    // settings/scheduler («Saving»), transactions/tx-brim-import.
     fullyParallel: true,
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
@@ -104,7 +142,8 @@ export default defineConfig({
         },
     ],
 
-    // Server avviato automaticamente in test mode (--force kills stale servers)
+    // Server avviato automaticamente in test mode. An occupied lane fails
+    // instead of reusing or killing a backend owned by another worktree.
     // Worker count: LIBREFOLIO_SERVER_WORKERS / GALLERY_SERVER_WORKERS, else derived
     // from E2E_WORKERS (see SERVER_WORKERS above).
     // COVERAGE_BACKEND=1 enables backend code coverage tracking during E2E tests
@@ -135,7 +174,7 @@ export default defineConfig({
         // drags the network into the suite. Measured on the shared path when it
         // was still missing: ±700-1300 lines of backend coverage between two
         // identical runs, and one run where the Bank of England answered HTML.
-        command: `cd .. && exec ./dev.py server --test --force --no-reload --no-scheduler --workers ${SERVER_WORKERS}${process.env.COVERAGE_BACKEND ? ' --coverage' : ''}`,
+        command: `cd .. && exec ./dev.py server --test --no-reload --no-scheduler --workers ${SERVER_WORKERS}${process.env.COVERAGE_BACKEND ? ' --coverage' : ''}`,
         // The server auto-rebuilds the frontend when it thinks the sources moved,
         // and that rebuild does not know what kind of build the runner just made.
         // Without this it produced a *plain* bundle on top of the instrumented
@@ -143,18 +182,13 @@ export default defineConfig({
         // and the run then reported "no JS coverage collected" while every test
         // passed. Passing the flags down means a rebuild, if one still happens,
         // reproduces the same kind and has the heap to finish it.
-        env: process.env.COVERAGE_JS === '1' ? {COVERAGE_INSTRUMENT: '1', NODE_OPTIONS: '--max-old-space-size=8192'} : {},
-        url: `${BASE_URL}/api/v1/system/health`,
-        // In coverage mode, always start a fresh server (don't reuse a
-        // non-coverage server that may already be running on the port) —
-        // unless the runner started the shared one, which already has coverage
-        // enabled because both follow the same flag.
-        reuseExistingServer: SHARED_SERVER ? true : process.env.COVERAGE_BACKEND ? false : !process.env.CI,
-        // CI runners also build the MkDocs site from the test server on a cold
-        // cache; 120s proved too tight there (gallery webServer timeout on
-        // 2026-09-04 after the docs growth). Locally a warm reuse makes the
-        // short timeout fine.
-        timeout: process.env.CI ? 300 * 1000 : 120 * 1000,
+        env: WEB_SERVER_ENV,
+        url: `${BASE_URL}/api/v1/system/test-lane-health?token=${encodeURIComponent(TEST_LANE_ID)}`,
+        // Only the runner-owned shared backend may be reused. Any other process
+        // on the lane's port is a collision and Playwright must fail closed.
+        reuseExistingServer: SHARED_SERVER,
+        // Same wait as the runner's shared backend: see STARTUP_TIMEOUT_S above.
+        timeout: STARTUP_TIMEOUT_S * 1000,
         // Send SIGTERM instead of SIGKILL so coverage run can flush .coverage.<pid>.
         // In coverage mode the flush itself takes time (writing the coverage data file), and a
         // SIGKILL there silently discards the whole run's backend coverage — so the grace

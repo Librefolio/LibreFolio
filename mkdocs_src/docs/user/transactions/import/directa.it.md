@@ -1,9 +1,5 @@
 # <img src="https://www.directa.it/favicon.ico" alt=""> Directa SIM
 
-!!! info "Beta"
-
-    Questo plugin è in **Beta** — testato con file di esempio, ma potrebbero esistere casi limite.
-
 ## 📥 Come Esportare
 
 LibreFolio supporta sia il formato **CSV** sia **XLSX** (Excel) esportati da Directa SIM. Gli screenshot qui sotto sono da desktop, ma i passaggi sono simili anche da mobile.
@@ -24,7 +20,7 @@ Salva il file e importalo in LibreFolio. Se scegli il CSV, non aprirlo né risal
 
 ## 📝 Note
 
-- Supporta operazioni su azioni, obbligazioni ed ETF, dividendi, tasse (ritenute fiscali) e commissioni di transazione.
+- Supporta operazioni su azioni, obbligazioni ed ETF, dividendi, imposte (ritenute fiscali) e commissioni di transazione.
 - Sono supportati sia il formato **CSV** sia **XLSX** (Excel) — non ods.
 - Le operazioni del conto sono denominate in EUR.
 - L'esportazione copre fino a 3.000 righe per file. Per storici più lunghi, esporta più periodi e importali in sequenza.

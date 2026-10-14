@@ -1,11 +1,15 @@
 """Strict schema tests for canonical risk series and metadata."""
 
+import json
+import re
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
+from backend.app.schemas import risk as risk_schemas
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.portfolio import (
     DataQualityExcludedAsset,
@@ -23,15 +27,28 @@ from backend.app.schemas.risk import (
     PortfolioRiskScope,
     PreparedAssetSeries,
     PreparedAssetSeriesSet,
+    RiskAnalyticOutput,
     RiskAnalyticRequest,
     RiskAnalyticResult,
+    RiskAssetSetComparisonItem,
+    RiskAssetSetComparisonOutput,
+    RiskAssetSetDrawdownOutput,
+    RiskAssetSetKpiOutput,
+    RiskAssetSetReturnItem,
+    RiskAssetSetReturnOutput,
+    RiskAssetSetVarCvarOutput,
+    RiskComparisonOutput,
+    RiskComparisonPoint,
     RiskCompositionPolicy,
+    RiskContributionOutput,
     RiskDrawdownOutput,
+    RiskDrawdownPoint,
     RiskDrawdownRecoveryStatus,
     RiskError,
     RiskErrorCode,
     RiskHistoricalReplayAudit,
     RiskHistoricalReplayExcludedAsset,
+    RiskHistoricalReplayExclusionReason,
     RiskHistoricalReplayExclusionTreatment,
     RiskHistoricalReplayProxyAsset,
     RiskKpiOutput,
@@ -41,6 +58,8 @@ from backend.app.schemas.risk import (
     RiskResultMetadata,
     RiskResultStatus,
     RiskReturnBasis,
+    RiskReturnItem,
+    RiskReturnOutput,
     RiskSamplingStrategy,
     RiskScopeKind,
     RiskStressApplicationRule,
@@ -49,15 +68,18 @@ from backend.app.schemas.risk import (
     RiskStressImpact,
     RiskStressMethod,
     RiskStressOutput,
+    RiskVarCvarBin,
     RiskVarCvarOutput,
 )
 from backend.app.schemas.risk_scenarios import (
+    RISK_SCENARIO_OFFICIAL_LANGUAGES,
     RiskHistoricalReplayScenario,
     RiskHypotheticalShockScenario,
     RiskScenarioDimension,
     RiskScenarioLocalizedText,
     RiskScenarioMissingHistoryPolicy,
 )
+from scripts.i18n_catalog import load_catalog
 
 
 def make_valuation(
@@ -292,6 +314,9 @@ def test_historical_replay_audit_is_strict_and_serializable():
         "missing_history_policy": "manual_proxy_or_exclude",
         "composition_policy": "current_buy_and_hold",
         "proxy_series_usage": "returns_only",
+        # No proposal (K3): both fields present, empty.
+        "suggested_range": None,
+        "suggested_range_recovers": [],
     }
 
     with pytest.raises(ValidationError, match="proxy_count"):
@@ -306,6 +331,100 @@ def test_historical_replay_audit_is_strict_and_serializable():
             asset_id=7,
             proxy_asset_id=7,
         )
+
+
+def test_historical_replay_audit_with_a_proposal_round_trips_through_json():
+    # K3: the part of the replay window that brings back an asset the window's start excluded.
+    audit = RiskHistoricalReplayAudit(
+        proxy_count=0,
+        excluded_count=1,
+        excluded_assets=[
+            RiskHistoricalReplayExcludedAsset(
+                asset_id=12,
+                reason=RiskHistoricalReplayExclusionReason.STARTS_AFTER_WINDOW_START,
+                weight=0.3,
+                treatment=RiskHistoricalReplayExclusionTreatment.ZERO_RETURN_RESIDUAL,
+            )
+        ],
+        excluded_weight_total=0.3,
+        missing_history_policy=RiskScenarioMissingHistoryPolicy.MANUAL_PROXY_OR_EXCLUDE,
+        composition_policy=RiskCompositionPolicy.CURRENT_BUY_AND_HOLD,
+        suggested_range=DateRangeModel(start=date(2020, 3, 10), end=date(2020, 4, 30)),
+        suggested_range_recovers=[12],
+    )
+
+    dumped = audit.model_dump(mode="json")
+    assert dumped == {
+        "proxy_count": 0,
+        "proxy_assets": [],
+        "excluded_count": 1,
+        "excluded_assets": [
+            {
+                "asset_id": 12,
+                "reason": "starts_after_window_start",
+                "weight": 0.3,
+                "treatment": "zero_return_residual",
+            }
+        ],
+        "excluded_weight_total": 0.3,
+        "missing_history_policy": "manual_proxy_or_exclude",
+        "composition_policy": "current_buy_and_hold",
+        "proxy_series_usage": "returns_only",
+        "suggested_range": {"start": "2020-03-10", "end": "2020-04-30"},
+        "suggested_range_recovers": [12],
+    }
+    # Through JSON text and back: the ISO dates parse into the same range and nothing moves.
+    restored = RiskHistoricalReplayAudit.model_validate(json.loads(json.dumps(dumped)))
+    assert restored == audit
+    assert restored.model_dump(mode="json") == dumped
+
+
+# The rules of `validate_suggested_range`. Moved here from test_risk_analytics.py (follow-up 6):
+# they exercise the schema alone, next to `validate_audit` above.
+
+AUDIT_PROPOSED = DateRangeModel(start=date(2026, 1, 9), end=date(2026, 1, 21))
+
+
+def audit_payload(**overrides) -> dict:
+    """A valid audit: one manual exclusion (2) and two automatic ones (3, 4) that a range recovers."""
+    return {
+        "proxy_count": 0,
+        "excluded_count": 3,
+        "excluded_assets": [
+            {"asset_id": 2, "reason": "manual_exclusion", "treatment": "omitted_from_replay"},
+            {"asset_id": 3, "reason": "starts_after_window_start", "treatment": "omitted_from_replay"},
+            {"asset_id": 4, "reason": "stale_at_window_end", "treatment": "omitted_from_replay"},
+        ],
+        "excluded_weight_total": 0,
+        "missing_history_policy": "manual_proxy_or_exclude",
+        "composition_policy": "current_buy_and_hold",
+        "suggested_range": {"start": "2026-01-09", "end": "2026-01-21"},
+        "suggested_range_recovers": [3, 4],
+        **overrides,
+    }
+
+
+def test_historical_replay_audit_accepts_a_consistent_proposal():
+    audit = RiskHistoricalReplayAudit.model_validate(audit_payload())
+
+    assert (audit.suggested_range, audit.suggested_range_recovers) == (AUDIT_PROPOSED, [3, 4])
+    assert RiskHistoricalReplayAudit.model_validate(audit_payload(suggested_range=None, suggested_range_recovers=[])).suggested_range is None
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        pytest.param({"suggested_range_recovers": [4, 3]}, "must be unique and ordered by asset", id="recovers-out-of-order"),
+        pytest.param({"suggested_range_recovers": [3, 3]}, "must be unique and ordered by asset", id="recovers-repeated"),
+        pytest.param({"suggested_range_recovers": []}, "must be set together", id="range-without-recovers"),
+        pytest.param({"suggested_range": None}, "must be set together", id="recovers-without-range"),
+        pytest.param({"suggested_range_recovers": [2, 3]}, "can only recover automatically excluded assets", id="recovers-a-manual-exclusion"),
+        pytest.param({"suggested_range_recovers": [3, 5]}, "can only recover automatically excluded assets", id="recovers-an-asset-not-excluded"),
+    ],
+)
+def test_historical_replay_audit_rejects_an_inconsistent_proposal(overrides, message):
+    with pytest.raises(ValueError, match=message):
+        RiskHistoricalReplayAudit.model_validate(audit_payload(**overrides))
 
 
 def test_risk_query_uses_strict_discriminated_scopes_and_mode_policy():
@@ -451,6 +570,7 @@ def test_risk_result_contract_enforces_status_and_var_tail_ordering():
         RiskVarCvarOutput(
             confidence_level=0.95,
             horizon_days=1,
+            horizon_observations=1,
             observations=4,
             value_at_risk=0.2,
             conditional_value_at_risk=0.1,
@@ -669,3 +789,1024 @@ def test_risk_drawdown_output_open_episode_forbids_recovery_date():
 def test_risk_drawdown_output_recovered_requires_recovery_date():
     with pytest.raises(ValidationError, match="recovered episodes require a recovery date"):
         RiskDrawdownOutput(**_drawdown_output(maximum_drawdown_recovery_date=None))
+
+
+def _risk_return_output(**overrides):
+    base = {
+        "portfolio_volatility": 0.06,
+        "portfolio_expected_annual_return": 0.09,
+        "cash_weight": 0.25,
+        "items": [
+            {
+                "asset_id": 1,
+                "weight": 0.5,
+                "volatility": 0.29,
+                "expected_annual_return": 0.46,
+            },
+            {
+                "asset_id": 6,
+                "weight": 0.25,
+                "volatility": 0.88,
+                "expected_annual_return": -0.11,
+            },
+        ],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_risk_return_output_round_trips_through_the_discriminated_result_union():
+    output = RiskReturnOutput(**_risk_return_output())
+    payload = output.model_dump(mode="json")
+    assert payload["kind"] == "risk_return"
+    assert [item["asset_id"] for item in payload["items"]] == [1, 6]
+
+    result = RiskAnalyticResult(
+        instance_id="rr",
+        analytic_code="asset_risk_return",
+        status=RiskResultStatus.OK,
+        output=payload,
+        metadata=RiskResultMetadata(
+            analyzed_range=DateRangeModel(start=date(2026, 1, 2), end=date(2026, 1, 8)),
+            n_observations=6,
+            calendar_days=6,
+            annualization_factor=6 * 365 / 6,
+            coverage=1.0,
+            currency="EUR",
+            scope=RiskScopeKind.PORTFOLIO,
+            scope_reference="portfolio",
+            mode=RiskMode.CURRENT_COMPOSITION,
+            composition_policy=RiskCompositionPolicy.CURRENT_BUY_AND_HOLD,
+            return_basis=RiskReturnBasis.PRICE_ONLY,
+            algorithm_version="1.0.0",
+            computed_at=datetime.now(UTC),
+        ),
+        data_quality=DataQualityReport(),
+    )
+    assert isinstance(result.output, RiskReturnOutput)
+    assert result.output.kind == RiskOutputKind.RISK_RETURN
+
+    # The plugin drops any holding it cannot measure a dispersion for, so a plot with
+    # no points at all is a reachable state rather than a malformed one: the whole is
+    # still measured on the primary series, and cash still accounts for the rest.
+    empty = RiskReturnOutput(portfolio_volatility=0.06, portfolio_expected_annual_return=0.09)
+    assert empty.items == []
+    assert empty.cash_weight == 0
+    assert RiskReturnOutput.model_validate(empty.model_dump(mode="json")) == empty
+
+
+def test_risk_return_output_bounds_the_risk_axis_but_not_the_reward_axis():
+    """The asymmetry the two constraints encode, one case per axis.
+
+    A holding that lost money over the window has a negative expected return and has
+    to stay plottable — clamping it at zero would move the point onto a coordinate
+    nobody measured. A negative volatility is not a measurement but a sign error, and
+    ``ge=0`` is what stops one reaching an axis.
+    """
+    losing = RiskReturnItem(asset_id=6, weight=0.25, volatility=0.88, expected_annual_return=-0.11)
+    assert losing.expected_annual_return < 0
+    assert RiskReturnOutput(**_risk_return_output(portfolio_expected_annual_return=-0.4)).portfolio_expected_annual_return < 0
+
+    with pytest.raises(ValidationError):
+        RiskReturnItem(asset_id=6, weight=0.25, volatility=-0.88, expected_annual_return=-0.11)
+    with pytest.raises(ValidationError):
+        RiskReturnOutput(**_risk_return_output(portfolio_volatility=-0.01))
+    with pytest.raises(ValidationError):
+        RiskReturnOutput(**_risk_return_output(cash_weight=-0.01))
+    with pytest.raises(ValidationError):
+        RiskReturnItem(asset_id=0, weight=0.25, volatility=0.88, expected_annual_return=-0.11)
+    with pytest.raises(ValidationError):
+        RiskReturnOutput(**_risk_return_output(portfolio_volatility=float("nan")))
+
+    # The pair is published *because* the slope through a zero intercept already is
+    # the Sharpe ratio. Adding it as a field would state it twice and let the two
+    # disagree, so the strict model refuses the key rather than accepting a duplicate.
+    with pytest.raises(ValidationError):
+        RiskReturnOutput(**_risk_return_output(portfolio_sharpe=1.45))
+
+
+# ---------------------------------------------------------------------------
+# k6 (agreed with the Dashboard owner on 06/10/2026): the ratios beside the points.
+#
+# - `RiskReturnItem` gains `sharpe` and `sortino`: optional finite numbers of either sign, `None` when
+#   undefined, absent from a payload written before k6. The whole still has no ratio of its own.
+# - `RiskComparisonOutput` gains the benchmark's own `comparison_sharpe` / `comparison_sortino` and
+#   `items`, one `RiskComparisonHoldingItem {asset_id, beta, correlation}` per holding, empty by
+#   default. The item is strict: a positive id, a finite beta of any sign, a finite correlation in
+#   [-1, 1], both optional. The output refuses the benchmark among its items, and a holding twice.
+# - `RiskAssetSetComparisonOutput` gains the reference's `comparison_sharpe` / `comparison_sortino`; its
+#   items gain nothing.
+# Every model still validates a payload that carries none of the new fields.
+#
+# `RiskComparisonHoldingItem` is read through the module, so its absence reds these tests and not the
+# collection of the file.
+# ---------------------------------------------------------------------------
+
+
+def _comparison_output(**overrides):
+    base = {
+        "comparison_asset_id": 9,
+        "active_return": 0.012,
+        "tracking_error": 0.08,
+        "information_ratio": 0.15,
+        "correlation": 0.7,
+        "beta": 0.9,
+        "observations": 30,
+        "comparison_volatility": 0.14,
+        "comparison_expected_annual_return": 0.07,
+    }
+    base.update(overrides)
+    return base
+
+
+def _holding(asset_id: int, beta: float | None = 1.1, correlation: float | None = 0.6) -> dict:
+    return {"asset_id": asset_id, "beta": beta, "correlation": correlation}
+
+
+def test_risk_return_items_carry_their_own_sharpe_and_sortino_or_none():
+    """Optional finite numbers of either sign: a holding that lost money has negative ratios, and that is a measurement."""
+    older = RiskReturnOutput(**_risk_return_output())
+    assert [(item.sharpe, item.sortino) for item in older.items] == [(None, None), (None, None)]
+
+    rated = RiskReturnItem(asset_id=6, weight=0.25, volatility=0.88, expected_annual_return=-0.11, sharpe=-0.16, sortino=-0.21)
+    assert (rated.sharpe, rated.sortino) == (-0.16, -0.21)
+    for field in ("sharpe", "sortino"):
+        for value in (float("nan"), float("inf")):
+            with pytest.raises(ValidationError):
+                RiskReturnItem(asset_id=6, weight=0.25, volatility=0.88, expected_annual_return=-0.11, **{field: value})
+
+    measured = {"asset_id": 1, "weight": 0.5, "volatility": 0.29, "expected_annual_return": 0.46, "sharpe": 1.58, "sortino": None}
+    output = RiskReturnOutput(**_risk_return_output(items=[rated.model_dump(), measured]))
+    restored = TypeAdapter(RiskAnalyticOutput).validate_python(output.model_dump(mode="json"))
+    assert isinstance(restored, RiskReturnOutput)
+    assert [(item.asset_id, item.sharpe, item.sortino) for item in restored.items] == [(6, -0.16, -0.21), (1, 1.58, None)]
+
+
+def test_comparison_output_without_the_k6_fields_still_validates_with_their_defaults():
+    older = RiskComparisonOutput(**_comparison_output())
+
+    assert (older.comparison_sharpe, older.comparison_sortino, older.items) == (None, None, [])
+    assert RiskComparisonOutput.model_validate(older.model_dump(mode="json")) == older
+
+
+def test_comparison_output_states_the_benchmark_ratios_and_one_item_per_holding():
+    holding_item = risk_schemas.RiskComparisonHoldingItem
+
+    output = RiskComparisonOutput(**_comparison_output(comparison_sharpe=-0.35, comparison_sortino=0.42, items=[_holding(1, beta=1.3, correlation=-0.4), _holding(2, beta=None, correlation=None)]))
+
+    assert (output.comparison_sharpe, output.comparison_sortino) == (-0.35, 0.42)
+    assert [type(item) for item in output.items] == [holding_item, holding_item]
+    restored = TypeAdapter(RiskAnalyticOutput).validate_python(output.model_dump(mode="json"))
+    assert isinstance(restored, RiskComparisonOutput)
+    assert restored.model_dump(mode="json") == output.model_dump(mode="json")
+    assert [(item.asset_id, item.beta, item.correlation) for item in restored.items] == [(1, 1.3, -0.4), (2, None, None)]
+    for field in ("comparison_sharpe", "comparison_sortino"):
+        with pytest.raises(ValidationError):
+            RiskComparisonOutput(**_comparison_output(**{field: float("nan")}))
+
+
+@pytest.mark.parametrize(
+    ("beta", "correlation"),
+    [
+        pytest.param(2.4, 1.0, id="a-steep-beta-at-the-upper-bound"),
+        pytest.param(-0.5, -1.0, id="a-negative-beta-at-the-lower-bound"),
+        pytest.param(0.0, None, id="a-flat-holding"),
+        pytest.param(None, None, id="a-flat-benchmark"),
+    ],
+)
+def test_comparison_holding_item_takes_any_finite_beta_and_a_correlation_within_its_bounds(beta, correlation):
+    holding_item = risk_schemas.RiskComparisonHoldingItem
+
+    item = holding_item(asset_id=1, beta=beta, correlation=correlation)
+
+    assert (item.asset_id, item.beta, item.correlation) == (1, beta, correlation)
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        pytest.param({"asset_id": 0}, id="zero-id"),
+        pytest.param({"asset_id": -3}, id="negative-id"),
+        pytest.param({"correlation": 1.0001}, id="correlation-above-one"),
+        pytest.param({"correlation": -1.0001}, id="correlation-below-minus-one"),
+        pytest.param({"correlation": float("nan")}, id="nan-correlation"),
+        pytest.param({"beta": float("nan")}, id="nan-beta"),
+        pytest.param({"beta": float("inf")}, id="infinite-beta"),
+        pytest.param({"tracking_error": 0.1}, id="a-field-it-does-not-have"),
+    ],
+)
+def test_comparison_holding_item_refuses(override):
+    holding_item = risk_schemas.RiskComparisonHoldingItem
+    assert holding_item(**_holding(1)).asset_id == 1  # the control: the same item, unaltered, is valid
+
+    with pytest.raises(ValidationError):
+        holding_item(**{**_holding(1), **override})
+
+
+def test_comparison_output_refuses_the_benchmark_among_its_holdings_and_a_holding_twice():
+    """The yardstick is never one of the measured (D371), and a holding has one beta, not two."""
+    # The control: the same holdings once each, without the benchmark, are a valid payload — so each
+    # refusal below is the validator's, not an unknown key's.
+    control = RiskComparisonOutput(**_comparison_output(items=[_holding(1), _holding(2)]))
+    assert [item.asset_id for item in control.items] == [1, 2]
+
+    with pytest.raises(ValidationError):
+        RiskComparisonOutput(**_comparison_output(items=[_holding(1), _holding(9, beta=1.0, correlation=1.0)]))
+    with pytest.raises(ValidationError):
+        RiskComparisonOutput(**_comparison_output(items=[_holding(1), _holding(2), _holding(1, beta=0.4, correlation=0.2)]))
+
+
+def test_asset_set_comparison_output_carries_the_reference_ratios_and_its_items_gain_nothing():
+    base = {
+        "comparison_asset_id": 103,
+        "observations": 30,
+        "comparison_volatility": 0.14,
+        "comparison_expected_annual_return": 0.08,
+        "items": [{"asset_id": 101, "active_return": 0.01, "tracking_error": 0.05, "information_ratio": 0.2, "correlation": 0.6, "beta": 1.1}],
+    }
+    older = RiskAssetSetComparisonOutput(**base)
+    assert (older.comparison_sharpe, older.comparison_sortino) == (None, None)
+
+    rated = RiskAssetSetComparisonOutput(**base, comparison_sharpe=0.57, comparison_sortino=-0.81)
+    restored = TypeAdapter(RiskAnalyticOutput).validate_python(rated.model_dump(mode="json"))
+    assert isinstance(restored, RiskAssetSetComparisonOutput)
+    assert (restored.comparison_sharpe, restored.comparison_sortino) == (0.57, -0.81)
+    for field in ("comparison_sharpe", "comparison_sortino"):
+        with pytest.raises(ValidationError):
+            RiskAssetSetComparisonOutput(**base, **{field: float("nan")})
+    # The per-asset row gains nothing: the ratios are the reference's, not the selection's.
+    assert set(RiskAssetSetComparisonItem.model_fields) == {"asset_id", "active_return", "tracking_error", "information_ratio", "correlation", "beta"}
+
+
+def test_portfolio_scope_asset_slice_is_unique_sorted_and_bounded():
+    scope = PortfolioRiskScope(
+        kind="portfolio",
+        broker_ids=[9, 3],
+        asset_ids=[7, 2],
+    )
+    assert scope.kind == RiskScopeKind.PORTFOLIO
+    assert scope.asset_ids == [2, 7]
+    assert scope.model_dump(mode="json") == {
+        "kind": "portfolio",
+        "broker_ids": [3, 9],
+        "asset_ids": [2, 7],
+    }
+    assert PortfolioRiskScope(kind="portfolio").asset_ids is None
+    assert PortfolioRiskScope(kind="portfolio", asset_ids=list(range(1, 101))).asset_ids[-1] == 100
+
+    sliced_request = RiskQueryRequest.model_validate(
+        {
+            "scope": {"kind": "portfolio", "asset_ids": [4, 1]},
+            "date_range": {"start": "2026-01-01", "end": "2026-01-31"},
+            "target_currency": "EUR",
+            "mode": "historical",
+            "analytics": [
+                {
+                    "instance_id": "kpi",
+                    "analytic_code": "historical_kpi",
+                }
+            ],
+        }
+    )
+    assert isinstance(sliced_request.scope, PortfolioRiskScope)
+    assert sliced_request.scope.kind == RiskScopeKind.PORTFOLIO
+    assert sliced_request.scope.asset_ids == [1, 4]
+
+    with pytest.raises(ValidationError, match="asset_ids must be unique"):
+        PortfolioRiskScope(kind="portfolio", asset_ids=[3, 3])
+    with pytest.raises(ValidationError):
+        PortfolioRiskScope(kind="portfolio", asset_ids=[])
+    with pytest.raises(ValidationError):
+        PortfolioRiskScope(kind="portfolio", asset_ids=list(range(1, 102)))
+    with pytest.raises(ValidationError):
+        PortfolioRiskScope(kind="portfolio", asset_ids=[0])
+    with pytest.raises(ValidationError):
+        PortfolioRiskScope.model_validate({"kind": "portfolio", "asset_id": [1]})
+
+
+def test_risk_result_metadata_asset_slice_requires_portfolio_scope():
+    base = {
+        "analyzed_range": DateRangeModel(start=date(2026, 1, 2), end=date(2026, 1, 4)),
+        "n_observations": 2,
+        "calendar_days": 2,
+        "annualization_factor": 365.0,
+        "coverage": 1.0,
+        "currency": "EUR",
+        "return_basis": RiskReturnBasis.PRICE_ONLY,
+        "algorithm_version": "risk-test@1.0.0",
+        "computed_at": datetime(2026, 1, 5, tzinfo=UTC),
+    }
+    metadata = RiskResultMetadata(
+        **base,
+        scope=RiskScopeKind.PORTFOLIO,
+        scope_reference="portfolio:3,5/assets:2,7",
+        broker_ids=[3, 5],
+        sliced_asset_ids=[7, 2],
+        mode=RiskMode.HISTORICAL,
+    )
+    assert metadata.sliced_asset_ids == [2, 7]
+    assert metadata.model_dump(mode="json")["sliced_asset_ids"] == [2, 7]
+    assert RiskResultMetadata(**base, scope=RiskScopeKind.PORTFOLIO, scope_reference="portfolio:3,5").sliced_asset_ids is None
+
+    with pytest.raises(ValidationError, match="sliced_asset_ids must be unique"):
+        RiskResultMetadata(
+            **base,
+            scope=RiskScopeKind.PORTFOLIO,
+            scope_reference="portfolio:3,5/assets:7",
+            sliced_asset_ids=[7, 7],
+        )
+    with pytest.raises(ValidationError, match="sliced_asset_ids cannot be empty"):
+        RiskResultMetadata(
+            **base,
+            scope=RiskScopeKind.PORTFOLIO,
+            scope_reference="portfolio:3,5",
+            sliced_asset_ids=[],
+        )
+    with pytest.raises(ValidationError, match="sliced_asset_ids metadata requires portfolio scope"):
+        RiskResultMetadata(
+            **base,
+            scope=RiskScopeKind.ASSET,
+            scope_reference="asset:7",
+            sliced_asset_ids=[7],
+        )
+
+
+# =============================================================================
+# K1 — the three additive chart fields, and the three decisions ratified with them
+#
+# ``RiskVarCvarOutput.return_bins`` / ``.var_bin_edge`` and
+# ``RiskDrawdownOutput.underwater_series`` exist so a client can draw the
+# distribution and the underwater curve. Three decisions were ratified with them,
+# and each is pinned below:
+#
+#   1. UNIT — decimal ratio everywhere, never percentages. ``-0.1`` is minus ten
+#      percent, the same convention ``RiskComparisonPoint.primary_drawdown`` already
+#      publishes. Percentage formatting stays a renderer concern.
+#   2. TWO SIGN CONVENTIONS IN ONE OBJECT — ``return_bins`` and ``var_bin_edge`` live
+#      in SIGNED RETURN space (losses negative), while ``value_at_risk`` and
+#      ``conditional_value_at_risk`` on the SAME object are POSITIVE loss magnitudes,
+#      because the producer applies a zero floor and the schema declares ``ge=0``.
+#      D76 warns against exactly this, so it was accepted deliberately and is pinned
+#      PER FIELD: a test that checks only one side would pass under a "harmonisation"
+#      that broke the other.
+#   3. TRIMMED BASELINE — ``underwater_series`` is a PER-OBSERVATION series. The
+#      wealth grid it comes from spans ``(baseline, *dates)``, and the baseline entry
+#      is dropped, as ``RiskComparisonPoint`` does with its ``[1:]`` slice.
+#
+# WHAT THIS LAYER CANNOT CHECK, recorded so no consumer over-trusts a 200:
+#   * No field bound distinguishes a ratio from a percentage: a payload pre-scaled by
+#     100 validates. The unit is a documented contract, not an enforced one.
+#   * ``underwater_series`` has no length, ordering or alignment validator, so an
+#     untrimmed (observation + 1) grid would validate here. Decision 3 is enforced by
+#     the producer instead — ``drawdown_summary`` zips ``dates`` against
+#     ``report.drawdowns[1:]`` with ``strict=True``, so dropping the slice raises.
+#   * ``validate_return_bins`` polices ASCENDING LOWER BOUNDS ONLY. It does not
+#     require contiguity, so a gapped or overlapping grid validates; a renderer must
+#     not infer ``bins[i].upper_bound == bins[i + 1].lower_bound`` from a 200 alone.
+#   * Bin counts are not required to sum to ``observations``.
+# =============================================================================
+
+
+def _chart_var_cvar_payload(**overrides):
+    # Uniform 0.031-wide grid whose edges fall exactly on the negated VaR, which is the
+    # shape ``return_distribution_histogram`` produces once it is pinned on ``var_bin_edge``.
+    base = {
+        "confidence_level": 0.95,
+        "horizon_days": 1,
+        "horizon_observations": 1,
+        "observations": 40,
+        "value_at_risk": 0.031,
+        "conditional_value_at_risk": 0.042,
+        "return_bins": [
+            RiskVarCvarBin(lower_bound=-0.093, upper_bound=-0.062, count=2),
+            RiskVarCvarBin(lower_bound=-0.062, upper_bound=-0.031, count=6),
+            RiskVarCvarBin(lower_bound=-0.031, upper_bound=0.0, count=13),
+            RiskVarCvarBin(lower_bound=0.0, upper_bound=0.031, count=15),
+            RiskVarCvarBin(lower_bound=0.031, upper_bound=0.062, count=4),
+        ],
+        "var_bin_edge": -0.031,
+    }
+    base.update(overrides)
+    return base
+
+
+def _chart_underwater_dates():
+    # Six observation dates with a weekend gap, so nothing here can pass by assuming a
+    # dense calendar. ``date(2026, 1, 1)`` is the pre-return baseline and is NOT a point.
+    return [date(2026, 1, 2), date(2026, 1, 5), date(2026, 1, 6), date(2026, 1, 7), date(2026, 1, 8), date(2026, 1, 9)]
+
+
+def _chart_underwater_series():
+    # Coherent with the episode below: a dip already open at the first observation, a
+    # new peak on the 5th, the -0.25 trough on the 6th, recovery on the 8th, fresh -0.03.
+    depths = [-0.01, 0.0, -0.25, -0.12, 0.0, -0.03]
+    return [RiskDrawdownPoint(date=observed, drawdown=depth) for observed, depth in zip(_chart_underwater_dates(), depths, strict=True)]
+
+
+def _chart_drawdown_payload(**overrides):
+    base = {
+        "current_drawdown": -0.03,
+        "current_peak_date": date(2026, 1, 8),
+        "current_drawdown_duration_days": 1,
+        "maximum_drawdown": -0.25,
+        "maximum_drawdown_peak_date": date(2026, 1, 5),
+        "maximum_drawdown_trough_date": date(2026, 1, 6),
+        "maximum_drawdown_recovery_status": RiskDrawdownRecoveryStatus.RECOVERED,
+        "maximum_drawdown_recovery_date": date(2026, 1, 8),
+        "maximum_drawdown_duration_days": 3,
+        "maximum_drawdown_recovered_ratio": 1.0,
+        "remaining_to_peak_ratio": 0.03 / 0.97,
+        "available_start": date(2026, 1, 2),
+        "available_end": date(2026, 1, 9),
+        "n_observations": 6,
+        "coverage": 1.0,
+        "calculation_basis": "price_only_close",
+        "return_basis": RiskReturnBasis.PRICE_ONLY,
+        "underwater_series": _chart_underwater_series(),
+    }
+    base.update(overrides)
+    return base
+
+
+def test_chart_series_fields_are_decimal_ratios_matching_the_comparison_point_convention():
+    # Decision 1. ``-0.1`` means minus ten percent in every one of these fields, and it
+    # is the SAME number ``RiskComparisonPoint`` has always published for a drawdown.
+    comparison = RiskComparisonPoint(
+        date=date(2026, 1, 6),
+        primary_cumulative_return=-0.1,
+        comparison_cumulative_return=0.04,
+        primary_drawdown=-0.1,
+        comparison_drawdown=-0.02,
+    )
+    underwater = RiskDrawdownPoint(date=date(2026, 1, 6), drawdown=-0.1)
+    assert underwater.drawdown == comparison.primary_drawdown
+    assert underwater.model_dump(mode="json")["drawdown"] == comparison.model_dump(mode="json")["primary_drawdown"] == -0.1
+
+    # Both sides of the convention reject the mirrored sign, so neither model can be
+    # quietly flipped into "positive depth" without this failing.
+    with pytest.raises(ValidationError, match="less than or equal to 0"):
+        RiskDrawdownPoint(date=date(2026, 1, 6), drawdown=0.1)
+    with pytest.raises(ValidationError, match="less than or equal to 0"):
+        RiskComparisonPoint(
+            date=date(2026, 1, 6),
+            primary_cumulative_return=-0.1,
+            comparison_cumulative_return=0.04,
+            primary_drawdown=0.1,
+            comparison_drawdown=-0.02,
+        )
+
+    # The ratios survive JSON unscaled: no serializer multiplies by 100 on the way out.
+    var_payload = RiskVarCvarOutput(**_chart_var_cvar_payload()).model_dump(mode="json")
+    assert var_payload["return_bins"][0]["lower_bound"] == -0.093
+    assert var_payload["return_bins"][-1]["upper_bound"] == 0.062
+    assert var_payload["var_bin_edge"] == -0.031
+    assert var_payload["value_at_risk"] == 0.031
+    drawdown_payload = RiskDrawdownOutput(**_chart_drawdown_payload()).model_dump(mode="json")
+    assert [point["drawdown"] for point in drawdown_payload["underwater_series"]] == [-0.01, 0.0, -0.25, -0.12, 0.0, -0.03]
+    # A ten-percent decline is a tenth, never a ten: the bins that a percentage payload
+    # would need are two orders of magnitude wider than the ones this contract carries.
+    assert max(abs(point["drawdown"]) for point in drawdown_payload["underwater_series"]) < 1.0
+
+
+def test_var_cvar_output_carries_positive_tail_magnitudes_and_a_negative_return_space_bin_edge():
+    # Decision 2, demonstrated on ONE object: two opposite sign conventions coexist.
+    output = RiskVarCvarOutput(**_chart_var_cvar_payload())
+
+    # Loss-magnitude half — positive, floored at zero by the producer and by ``ge=0``.
+    assert output.value_at_risk > 0
+    assert output.conditional_value_at_risk > 0
+    assert output.conditional_value_at_risk >= output.value_at_risk
+
+    # Signed-return half — the cut is negative, and the histogram spans both sides of
+    # zero because it has to show the gains as well as the tail.
+    assert output.var_bin_edge is not None
+    assert output.var_bin_edge < 0
+    assert output.var_bin_edge == -output.value_at_risk
+    assert min(item.lower_bound for item in output.return_bins) < 0
+    assert max(item.upper_bound for item in output.return_bins) > 0
+    # The crossing point is a real bin boundary, not an interpolated one.
+    assert output.var_bin_edge in {item.lower_bound for item in output.return_bins} | {item.upper_bound for item in output.return_bins}
+
+    # PER FIELD, identified by ERROR LOCATION rather than by message. A payload that
+    # made both fields negative at once was measured BLIND to removing either floor:
+    # each field's surviving constraint stood in for the other's, and the ``pytest.raises``
+    # passed for the wrong reason. One field is moved at a time, and the error has to be
+    # that field's ``ge=0`` — a model-level ordering complaint does not count.
+    for field in ("value_at_risk", "conditional_value_at_risk"):
+        overrides = {"value_at_risk": 0.0, "conditional_value_at_risk": 0.0, "var_bin_edge": None, field: -0.031}
+        with pytest.raises(ValidationError) as caught:
+            RiskVarCvarOutput(**_chart_var_cvar_payload(**overrides))
+        errors = caught.value.errors()
+        assert [item["loc"] for item in errors] == [(field,)]
+        assert errors[0]["type"] == "greater_than_equal"
+
+    # And the other direction: the edge MUST stay free to be negative. Adding ``ge=0``
+    # to ``var_bin_edge`` to "make the signs agree" would break exactly this line.
+    assert RiskVarCvarOutput(**_chart_var_cvar_payload(var_bin_edge=-0.5)).var_bin_edge == -0.5
+
+    # Both conventions survive serialization side by side, which is what the client reads.
+    payload = output.model_dump(mode="json")
+    assert payload["value_at_risk"] > 0 > payload["var_bin_edge"]
+
+
+def test_underwater_series_is_a_per_observation_grid_that_excludes_the_baseline_point():
+    # Decision 3. The wealth grid is (baseline, *dates); the published series is the
+    # ``[1:]`` slice of it, so it has one point per observation and starts at the first
+    # observation date, never at the baseline.
+    output = RiskDrawdownOutput(**_chart_drawdown_payload())
+    series = output.underwater_series
+
+    assert len(series) == output.n_observations
+    assert series[0].date == output.available_start
+    assert series[-1].date == output.available_end
+    assert [point.date for point in series] == sorted({point.date for point in series})
+
+    # The tell of a trimmed series: its first point is a real observation and may
+    # already be underwater. An untrimmed grid would lead with the baseline, which is
+    # 0.0 by construction, and would carry ``n_observations + 1`` points.
+    assert series[0].drawdown < 0
+    assert output.available_start > date(2026, 1, 1)
+
+    # ``[]`` means "this server does not publish the curve"; a genuinely flat series is
+    # ``n_observations`` points of exactly 0.0. A renderer must not conflate them.
+    absent = RiskDrawdownOutput(**{key: value for key, value in _chart_drawdown_payload().items() if key != "underwater_series"})
+    assert absent.underwater_series == []
+    flat = RiskDrawdownOutput(
+        **_chart_drawdown_payload(
+            current_drawdown=0.0,
+            current_drawdown_duration_days=0,
+            maximum_drawdown=0.0,
+            maximum_drawdown_peak_date=None,
+            maximum_drawdown_trough_date=None,
+            maximum_drawdown_recovery_status=RiskDrawdownRecoveryStatus.NO_DRAWDOWN,
+            maximum_drawdown_recovery_date=None,
+            maximum_drawdown_duration_days=0,
+            maximum_drawdown_recovered_ratio=None,
+            remaining_to_peak_ratio=0.0,
+            underwater_series=[RiskDrawdownPoint(date=observed, drawdown=0.0) for observed in _chart_underwater_dates()],
+        )
+    )
+    assert len(flat.underwater_series) == flat.n_observations
+    assert all(point.drawdown == 0.0 for point in flat.underwater_series)
+    assert flat.underwater_series != absent.underwater_series
+
+
+def test_chart_series_bounds_admit_no_floating_point_epsilon():
+    # ``le=0`` and ``ge=0`` are exact: they carry no tolerance at all, so the producer's
+    # ``min(0.0, value)`` / ``max(-value, 0.0)`` clamps are the only thing standing
+    # between a sub-epsilon sign artefact and a 500 at the serialization boundary.
+    # Anyone tempted to "simplify" a clamp away has to get past these four lines.
+    for rejected in (1e-17, 1e-300, 5e-324):
+        with pytest.raises(ValidationError, match="less than or equal to 0"):
+            RiskDrawdownPoint(date=date(2026, 1, 6), drawdown=rejected)
+    with pytest.raises(ValidationError, match="greater than or equal to 0"):
+        RiskVarCvarOutput(**_chart_var_cvar_payload(value_at_risk=-5e-324, var_bin_edge=5e-324))
+
+    # The boundary itself is admissible on both sides, including the negative zero a
+    # clamp can hand back.
+    assert RiskDrawdownPoint(date=date(2026, 1, 6), drawdown=0.0).drawdown == 0.0
+    assert RiskDrawdownPoint(date=date(2026, 1, 6), drawdown=-0.0).drawdown == 0.0
+    assert RiskVarCvarOutput(**_chart_var_cvar_payload(value_at_risk=0.0, conditional_value_at_risk=0.0, var_bin_edge=-0.0)).value_at_risk == 0.0
+
+    # A bin count is a population: never negative, allowed to be empty.
+    with pytest.raises(ValidationError, match="greater than or equal to 0"):
+        RiskVarCvarBin(lower_bound=-0.062, upper_bound=-0.031, count=-1)
+    assert RiskVarCvarBin(lower_bound=-0.062, upper_bound=-0.031, count=0).count == 0
+
+
+def test_return_bins_are_policed_for_strictly_ascending_lower_bounds():
+    # What the validator actually enforces, pinned as it is rather than as it reads:
+    # strictly ascending ``lower_bound`` across the series, and a strictly positive
+    # width within each bin. Contiguity is NOT among the guarantees (see the block
+    # comment above), so this pins the rejections and claims nothing more.
+    ascending = RiskVarCvarOutput(**_chart_var_cvar_payload())
+    assert [item.lower_bound for item in ascending.return_bins] == sorted({item.lower_bound for item in ascending.return_bins})
+
+    reversed_bins = list(reversed(_chart_var_cvar_payload()["return_bins"]))
+    with pytest.raises(ValidationError, match="ordered by ascending lower_bound"):
+        RiskVarCvarOutput(**_chart_var_cvar_payload(return_bins=reversed_bins))
+    with pytest.raises(ValidationError, match="ordered by ascending lower_bound"):
+        RiskVarCvarOutput(
+            **_chart_var_cvar_payload(
+                return_bins=[
+                    RiskVarCvarBin(lower_bound=-0.031, upper_bound=0.0, count=13),
+                    RiskVarCvarBin(lower_bound=-0.031, upper_bound=0.031, count=15),
+                ]
+            )
+        )
+
+    # A zero-width or inverted bin is not a degenerate bar, it is an unplottable one.
+    with pytest.raises(ValidationError, match="upper_bound must be greater than lower_bound"):
+        RiskVarCvarBin(lower_bound=-0.031, upper_bound=-0.031, count=1)
+    with pytest.raises(ValidationError, match="upper_bound must be greater than lower_bound"):
+        RiskVarCvarBin(lower_bound=0.0, upper_bound=-0.031, count=1)
+
+
+def test_var_cvar_chart_fields_are_omissible_because_the_additive_design_rests_on_it():
+    # THE LOAD-BEARING GUARANTEE OF K1, and the one that had no test.
+    #
+    # Both chart fields are additive: every consumer written before they existed — the
+    # generated TypeScript client, the E2E mocks, any producer not yet taught to fill
+    # them — keeps validating. That is not a convenience, it is the whole reason the
+    # pair was introduced as ``default_factory``/``None`` rather than as required
+    # fields. If either is later "tidied up" into a mandatory one, all of those break
+    # at once, and this is the test that says so first.
+    #
+    # Built by SUBTRACTION from the live payload instead of from a hand-copied field
+    # list, so a future required field added to the model fails here too rather than
+    # escaping a stale literal.
+    pre_k1 = {key: value for key, value in _chart_var_cvar_payload().items() if key not in {"return_bins", "var_bin_edge"}}
+    # `horizon_observations` is required on purpose (developer's decision of 30/09/2026): the
+    # tripwire fired as designed, and the new field is acknowledged here rather than escaping it.
+    assert set(pre_k1) == {"confidence_level", "horizon_days", "horizon_observations", "observations", "value_at_risk", "conditional_value_at_risk"}
+
+    output = RiskVarCvarOutput(**pre_k1)
+    assert output.return_bins == []
+    assert output.var_bin_edge is None
+    assert output.kind == RiskOutputKind.VAR_CVAR
+
+    # ``None`` is NOT interchangeable with ``0.0``, and the difference is REACHABLE in
+    # production rather than theoretical: the producer floors the tail at zero, so a
+    # portfolio that never lost money across the window publishes ``value_at_risk ==
+    # 0.0`` and therefore a cut at ``-0.0``. A renderer testing ``if not var_bin_edge``
+    # would read "no cut published" off a well-formed result whose cut is simply at
+    # zero — the one case where the two states are told apart only by ``is None``.
+    at_zero = RiskVarCvarOutput(**_chart_var_cvar_payload(value_at_risk=0.0, conditional_value_at_risk=0.0, var_bin_edge=-0.0))
+    assert at_zero.var_bin_edge is not None
+    assert at_zero.var_bin_edge == 0.0
+
+    # The two are INDEPENDENTLY omissible: a producer may publish the histogram without
+    # pinning the cut, or pin the cut without the histogram. Neither half drags in the
+    # other, so a partial migration is a valid state rather than a broken one.
+    bins_only = {key: value for key, value in _chart_var_cvar_payload().items() if key != "var_bin_edge"}
+    assert RiskVarCvarOutput(**bins_only).var_bin_edge is None
+    edge_only = {key: value for key, value in _chart_var_cvar_payload().items() if key != "return_bins"}
+    assert RiskVarCvarOutput(**edge_only).return_bins == []
+
+    # What the client actually receives for an omitted pair: an empty array and a null,
+    # both PRESENT in the serialized body rather than dropped, so the generated parser
+    # meets the keys its schema declares.
+    payload = output.model_dump(mode="json")
+    assert payload["return_bins"] == []
+    assert payload["var_bin_edge"] is None
+    assert RiskVarCvarOutput.model_validate(payload) == output
+
+
+def _i18n_catalogue(language: str) -> dict:
+    """One frontend translation catalogue, merged from its sources without the English fallback.
+
+    Read through ``scripts/i18n_catalog.py`` from the sources of the checkout this file belongs to — the library finds
+    them from its own file, never from the process CWD, because pytest is invoked from the repository root in the
+    runner and from the file's own directory when a developer runs one test, and a CWD-relative path silently reads
+    nothing in the second case, which is the failure mode this whole test exists to prevent. Never the generated
+    ``frontend/src/lib/i18n/<lang>.json``: it exists only after a frontend build, and its English fallback would show
+    every sentence a language lacks as present.
+    """
+    # A MISSING catalogue must be a RED, never a skip. The defect this test
+    # guards against is "a code that renders as a generic fallback because no
+    # key exists"; a test that quietly passes when it cannot find the
+    # catalogues at all would be the same defect wearing the test's name.
+    # load_catalog raises (CatalogError, KeyError for a language the sources
+    # do not have) rather than returning an empty catalogue.
+    return load_catalog(language, fallback=False)
+
+
+#: The controller that emits the frontend-owned on-demand error code (F9).
+_RISK_CONTROLLER_TS = "src/lib/stores/risk/riskPanelController.svelte.ts"
+#: The helper that refines a size limit into the display code of its remedy (D379).
+_ERROR_DISPLAY_CODE_TS = "src/lib/components/risk/levels/errorDisplayCode.ts"
+#: One entry of a ``Map`` of snake_case strings, in the one form Prettier writes (``singleQuote``).
+_STRING_PAIR = re.compile(r"\[\s*'([a-z][a-z0-9_]*)'\s*,\s*'([a-z][a-z0-9_]*)'\s*,?\s*\]")
+
+
+def _frontend_source(relative_path: str) -> str:
+    """One frontend source file, read from disk — found from this file, never from the CWD, and a RED when missing."""
+    path = Path(__file__).resolve().parents[3] / "frontend" / relative_path
+    assert path.is_file(), f"frontend source not found: {path}"
+    return path.read_text(encoding="utf-8")
+
+
+def _frontend_string_constant(relative_path: str, name: str) -> str:
+    """The value of ``export const <name> = '<code>';`` in a frontend source, found by NAME, never by line.
+
+    Fails loudly rather than guessing: a constant that is missing (renamed or removed),
+    declared twice, or no longer exported as one string literal is an assertion error
+    naming the file and the constant. A pin that silently read nothing would pass while
+    tracking nothing.
+    """
+    source = _frontend_source(relative_path)
+    declarations = re.findall(rf"\bconst\s+{re.escape(name)}\b\s*[:=]", source)
+    assert declarations, f"{relative_path}: no `const {name}` — renamed or removed? The risk.errors pin reads the frontend-owned code from it by name."
+    assert len(declarations) == 1, f"{relative_path}: `const {name}` is declared {len(declarations)} times — which one the panel emits cannot be told from here."
+    literal = re.search(rf"^\s*export\s+const\s+{re.escape(name)}\s*(?::[^=\n]*)?=\s*(['\"])([a-z][a-z0-9_]*)\1\s*(?:as\s+const\s*)?;", source, re.MULTILINE)
+    assert literal, f"{relative_path}: `const {name}` is not exported as one snake_case string literal, so the code it emits cannot be read."
+    return literal.group(2)
+
+
+def _frontend_string_map(relative_path: str, name: str) -> dict[str, str]:
+    """The entries of ``const <name> = new Map([...]);`` in a frontend source, found by NAME, never by line.
+
+    Fails loudly rather than guessing, like ``_frontend_string_constant``: a constant that is
+    missing, declared twice or not built as one ``new Map([ … ]);`` is an assertion error
+    naming the file and the constant. So is an entry that is not one
+    ``['<snake_case>', '<snake_case>']`` pair — double quotes, a template literal, a spread,
+    a computed value — because skipping it is the failure that stays green: the other
+    entries still read cleanly, and the pin quietly stops following the one it skipped. An
+    empty map and a key listed twice (a ``Map`` keeps only the last) are refused too.
+    """
+    # `//` comments go first: a commented-out entry is not a live one, and a `]);` inside a
+    # comment must not end the body early. Once the pairs are taken out, only commas and
+    # whitespace may be left.
+    source = re.sub(r"//[^\n]*", "", _frontend_source(relative_path))
+    declarations = re.findall(rf"\bconst\s+{re.escape(name)}\b\s*[:=]", source)
+    assert declarations, f"{relative_path}: no `const {name}` — renamed or removed? The risk.errors pin reads the frontend-owned display codes from it by name."
+    assert len(declarations) == 1, f"{relative_path}: `const {name}` is declared {len(declarations)} times — which one the frontend reads cannot be told from here."
+    built = re.search(rf"\bconst\s+{re.escape(name)}\b\s*(?::[^=]*)?=\s*new\s+Map\s*(?:<[^>]*>)?\s*\(\s*\[(.*?)\]\s*\)\s*;", source, re.DOTALL)
+    assert built, f"{relative_path}: `const {name}` is not built as one `new Map([ … ]);`, so its entries cannot be read."
+    body = built.group(1)
+    pairs = _STRING_PAIR.findall(body)
+    unparsed = [re.sub(r"^[\s,]+|[\s,]+$", "", line) for line in _STRING_PAIR.sub("\n", body).splitlines()]
+    unparsed = [entry for entry in unparsed if entry]
+    assert not unparsed, f"{relative_path}: `const {name}` holds entries this reader cannot parse — each must be one ['<snake_case>', '<snake_case>'] pair: {unparsed}"
+    assert pairs, f"{relative_path}: `const {name}` has no entries, so the pin would follow nothing."
+    keys = [key for key, _ in pairs]
+    duplicated = sorted({key for key in keys if keys.count(key) > 1})
+    assert not duplicated, f"{relative_path}: `const {name}` lists {duplicated} more than once — a Map keeps only the last entry, so the earlier ones are dead."
+    return dict(pairs)
+
+
+def _resource_limit_display_codes() -> dict[str, str]:
+    """``details.remedy`` → display code, as ``errorDisplayCode()`` refines ``resource_limit`` (D379).
+
+    Read from ``RESOURCE_LIMIT_DISPLAY_CODES`` by name, and held to the form the frontend
+    promises, ``resource_limit_<remedy>``: a value that drifted from its remedy would word
+    one cure under another cure's key.
+    """
+    display_codes = _frontend_string_map(_ERROR_DISPLAY_CODE_TS, "RESOURCE_LIMIT_DISPLAY_CODES")
+    malformed = {remedy: code for remedy, code in display_codes.items() if code != f"{RiskErrorCode.RESOURCE_LIMIT.value}_{remedy}"}
+    assert not malformed, f"{_ERROR_DISPLAY_CODE_TS}: RESOURCE_LIMIT_DISPLAY_CODES maps a remedy to a code other than {RiskErrorCode.RESOURCE_LIMIT.value}_<remedy>: {malformed}"
+    return display_codes
+
+
+def _frontend_risk_error_codes() -> frozenset[str]:
+    """The ``risk.errors`` keys the FRONTEND owns: the catalogues carry them, ``RiskErrorCode`` never emits them.
+
+    Named, never counted — a key the backend does not emit needs a reason to exist,
+    and each reason is the frontend line that uses it:
+
+    - ``unknown`` — the fallback ``RiskLevelSection.svelte`` words a code through when
+      that code has no sentence of its own:
+      ``translateErrorCode(code, $t, 'risk.errors.unknown')``. Without it the fallback
+      path would print its own key.
+    - ``ANSWER_DISCARDED_CODE`` in ``riskPanelController.svelte.ts`` — an on-demand
+      answer discarded twice running (F9), emitted by ``discardedErrorCodes`` and worded
+      as ``risk.errors.<code>`` like every backend code. Read from that source by name,
+      so the pin follows the constant the panel emits instead of a copy of its value.
+    - the values of ``RESOURCE_LIMIT_DISPLAY_CODES`` in ``errorDisplayCode.ts`` —
+      ``errorDisplayCode()`` refines ``resource_limit`` by ``details.remedy`` (D379), and
+      each display code is worded as ``risk.errors.<display code>`` by
+      ``translateErrorCode`` (the levels) and by ``RiskResultFrame.svelte`` (Asset
+      Detail). Read from that source by name, so the pin follows the map the frontend
+      uses instead of a copy of its entries.
+    """
+    return frozenset({"unknown", _frontend_string_constant(_RISK_CONTROLLER_TS, "ANSWER_DISCARDED_CODE"), *_resource_limit_display_codes().values()})
+
+
+def test_every_risk_error_code_has_a_sentence_in_every_official_language():
+    """Every ``RiskErrorCode`` must be renderable, in all four languages.
+
+    WHY THIS IS A TEST AND NOT A CONVENTION
+    ---------------------------------------
+    ``translateErrorCode(code, $t, 'risk.errors.unknown')`` asks svelte-i18n for
+    ``risk.errors.<code>``; svelte-i18n returns the KEY ITSELF when no message
+    exists, and the helper turns that into the generic fallback sentence. So a
+    backend that starts emitting a code nobody translated does not crash, does
+    not log, and does not show the key: it shows
+
+        "This measurement did not return a result."
+
+    which is indistinguishable from an empty-but-valid result. The failure is
+    silent, plausible, and permanent — a declared behaviour that is never
+    rendered. Nothing else in the build can see it: the backend does not read
+    the catalogues, and the frontend never enumerates the enum.
+
+    This test is the only place where the two halves are compared, which is why
+    it asserts the FULL enum rather than a list of codes someone remembered.
+    """
+    for language in RISK_SCENARIO_OFFICIAL_LANGUAGES:
+        catalogue = _i18n_catalogue(language)
+        sentences = catalogue.get("risk", {}).get("errors", {})
+
+        missing = sorted(code.value for code in RiskErrorCode if code.value not in sentences)
+        assert not missing, f"{language}.json has no risk.errors entry for: {', '.join(missing)}"
+
+        # The fallback the helper is CALLED with. Without it the degraded path
+        # prints the literal key `risk.errors.unknown` on screen, so the guard
+        # against a missing code would itself be the next leak.
+        assert "unknown" in sentences, f"{language}.json is missing the risk.errors.unknown fallback"
+
+        # A key that exists but is blank renders as nothing at all: the error
+        # row appears with no text, which reads as a layout bug rather than as
+        # a message. Present-but-empty is not the same as present.
+        blank = sorted(key for key, value in sentences.items() if not isinstance(value, str) or not value.strip())
+        assert not blank, f"{language}.json has empty risk.errors sentences: {', '.join(blank)}"
+
+
+def test_risk_error_catalogues_agree_across_languages():
+    """The four catalogues carry the SAME key set.
+
+    Parity is asserted between the catalogues and not only against the enum
+    because the two drift in different directions: the enum-vs-catalogue check
+    above catches a code nobody translated, while this one catches a key added
+    to ``en`` and forgotten in ``fr`` — which renders an English sentence to a
+    French user with no error anywhere, the quietest of the two failures.
+    """
+    per_language = {language: set(_i18n_catalogue(language).get("risk", {}).get("errors", {})) for language in RISK_SCENARIO_OFFICIAL_LANGUAGES}
+
+    reference_language = RISK_SCENARIO_OFFICIAL_LANGUAGES[0]
+    reference = per_language[reference_language]
+    for language, keys in per_language.items():
+        assert keys == reference, f"{language}.json risk.errors differs from {reference_language}.json: only-in-{language}={sorted(keys - reference)}, missing-from-{language}={sorted(reference - keys)}"
+
+    # Pin the relationship, not the number: the catalogues are exactly the enum plus the
+    # codes the FRONTEND owns (`_frontend_risk_error_codes`, each with the line that emits
+    # it). Asserting a literal count would have to be edited by anyone adding a legitimate
+    # code, and an assertion people edit to make green is an assertion that stops meaning
+    # anything.
+    backend_codes = {code.value for code in RiskErrorCode}
+    frontend_codes = _frontend_risk_error_codes()
+    # One key with two owners would be ambiguous — the backend emitting a code the frontend
+    # already words for its own purpose — and the union below would absorb it in silence.
+    assert frontend_codes.isdisjoint(backend_codes), f"risk.errors codes owned by both RiskErrorCode and the frontend: {sorted(frontend_codes & backend_codes)}"
+    expected = backend_codes | frontend_codes
+    assert reference == expected, f"risk.errors is not RiskErrorCode plus the frontend-owned codes: unexpected={sorted(reference - expected)}, missing={sorted(expected - reference)}"
+
+
+def test_resource_limit_remedies_agree_between_backend_and_frontend():
+    """Every remedy the backend can name is one the frontend words, and the reverse.
+
+    D379 splits one contract across the two stacks: the backend names the cure of a size
+    limit in ``details.remedy`` (``_REMEDY_BY_METRIC``), and the frontend words the remedies
+    it knows (``RESOURCE_LIMIT_DISPLAY_CODES``), keeping the generic sentence for any other.
+    Each half is pinned by its own tests, and nothing else compares them. So a remedy the
+    backend starts emitting that the frontend does not know renders "This calculation is
+    too large to run." — no crash, no log, the cure dropped in silence: the failure the
+    tests above catch for ``RiskErrorCode``, one level down. The reverse is a sentence in
+    four catalogues that no refusal reaches, and a remedy renamed on one side only is both.
+    """
+    # Imported here, not at the top: this file's top-level imports stay schema-only, and a
+    # renamed table fails this test alone rather than the collection of the whole file.
+    from backend.app.services.risk_plugins.simulation.plugin import _REMEDY_BY_METRIC  # noqa: PLC0415
+
+    emitted = set(_REMEDY_BY_METRIC.values())
+    worded = set(_resource_limit_display_codes())
+    assert emitted == worded, f"details.remedy and RESOURCE_LIMIT_DISPLAY_CODES disagree: emitted-but-unworded={sorted(emitted - worded)} (shown as the generic resource_limit sentence), worded-but-never-emitted={sorted(worded - emitted)} (a sentence no refusal reaches)"
+
+
+@pytest.mark.parametrize(
+    "unreadable",
+    [
+        pytest.param('["positions", "resource_limit_positions"]', id="double-quotes"),
+        pytest.param("[`positions`, `resource_limit_positions`]", id="template-literal"),
+        pytest.param("...MORE_DISPLAY_CODES", id="spread"),
+        pytest.param("['positions', 'resource_limit_' + 'positions']", id="computed-value"),
+    ],
+)
+def test_the_map_reader_names_an_entry_it_cannot_parse(monkeypatch, unreadable):
+    """An entry ``_frontend_string_map`` cannot parse is a RED that names it, never a skip.
+
+    The real ``errorDisplayCode.ts`` only ever takes the happy path, so this is the one place
+    the refusal is proved. A skip would be the quiet failure: the other entries still read
+    cleanly, every test above stays green, and the skipped display code is one the pin no
+    longer follows.
+    """
+    source = f"const RESOURCE_LIMIT_DISPLAY_CODES: ReadonlyMap<string, string> = new Map([\n    ['period', 'resource_limit_period'],\n    {unreadable},\n]);\n"
+    # The readers look `_frontend_source` up in this module's globals at call time.
+    monkeypatch.setitem(globals(), "_frontend_source", lambda relative_path: source)
+
+    with pytest.raises(AssertionError, match="cannot parse") as refused:
+        _frontend_string_map(_ERROR_DISPLAY_CODE_TS, "RESOURCE_LIMIT_DISPLAY_CODES")
+    assert unreadable in str(refused.value)
+
+
+# ---------------------------------------------------------------------------
+# `excluded_weight` (developer's decision of 29/09/2026): Σ weights of the scope assets left without a
+# series. `cash_weight` is the zero-return residual, clamped at zero. With non-negative true cash the
+# first sits inside the second (up to all of it: a slice holds no true cash); with negative true cash
+# they are not nested — so no rule ties them, and only `excluded_weight >= 0` is enforced.
+# ---------------------------------------------------------------------------
+
+
+def _contribution_output(**overrides):
+    base = {
+        "portfolio_volatility": 0.06,
+        "cash_weight": 0.25,
+        "items": [
+            {"asset_id": 1, "weight": 0.5, "marginal_contribution": 0.09, "component_contribution": 0.045, "percentage_contribution": 0.75},
+            {"asset_id": 6, "weight": 0.25, "marginal_contribution": 0.06, "component_contribution": 0.015, "percentage_contribution": 0.25},
+        ],
+    }
+    base.update(overrides)
+    return base
+
+
+WEIGHTED_OUTPUTS = [
+    pytest.param(RiskContributionOutput, _contribution_output, id="contribution"),
+    pytest.param(RiskReturnOutput, _risk_return_output, id="risk_return"),
+]
+
+
+@pytest.mark.parametrize(("model", "payload"), WEIGHTED_OUTPUTS)
+def test_excluded_weight_defaults_to_zero_and_is_not_bounded_by_cash(model, payload):
+    assert model(**payload()).excluded_weight == 0
+    assert model(**payload(excluded_weight=0.1)).excluded_weight == pytest.approx(0.1)
+    assert model(**payload(excluded_weight=0.25)).excluded_weight == pytest.approx(0.25)
+    # Negative true cash: weights 0.8 and 0.4, the second excluded — a residual of 0.2 next to an
+    # excluded weight of 0.4. Both are stated as they are.
+    beyond = model(**payload(cash_weight=0.2, excluded_weight=0.4))
+    assert beyond.cash_weight == pytest.approx(0.2)
+    assert beyond.excluded_weight == pytest.approx(0.4)
+
+
+@pytest.mark.parametrize(("model", "payload"), WEIGHTED_OUTPUTS)
+@pytest.mark.parametrize(
+    ("value", "error_type"),
+    [
+        pytest.param(-0.01, "greater_than_equal", id="negative"),
+        pytest.param(float("nan"), "finite_number", id="nan"),
+    ],
+)
+def test_excluded_weight_is_a_finite_non_negative_share(model, payload, value, error_type):
+    assert model(**payload(excluded_weight=0.0)).excluded_weight == 0
+
+    with pytest.raises(ValidationError) as exc_info:
+        model(**payload(excluded_weight=value))
+
+    assert error_type in [error["type"] for error in exc_info.value.errors()]
+
+
+@pytest.mark.parametrize(("model", "payload"), WEIGHTED_OUTPUTS)
+def test_excluded_weight_survives_the_discriminated_output_union(model, payload):
+    wire = model(**payload(excluded_weight=0.1)).model_dump(mode="json")
+    assert wire["excluded_weight"] == pytest.approx(0.1)
+
+    restored = TypeAdapter(RiskAnalyticOutput).validate_python(wire)
+
+    assert isinstance(restored, model)
+    assert restored.excluded_weight == pytest.approx(0.1)
+    assert restored.cash_weight == pytest.approx(0.25)
+
+
+def test_a_weightless_asset_set_output_has_no_excluded_weight_to_state():
+    """No weights, no residual: like `cash_weight`, the excluded part is not a zero but unexpressible."""
+    set_outputs = (RiskAssetSetKpiOutput, RiskAssetSetVarCvarOutput, RiskAssetSetDrawdownOutput, RiskAssetSetReturnOutput, RiskAssetSetComparisonOutput)
+
+    assert all("excluded_weight" not in output.model_fields for output in set_outputs)
+    with pytest.raises(ValidationError) as exc_info:
+        RiskAssetSetReturnOutput(items=[RiskAssetSetReturnItem(asset_id=1, volatility=0.2, expected_annual_return=0.1)], excluded_weight=0.0)
+    assert [error["type"] for error in exc_info.value.errors()] == ["extra_forbidden"]
+
+
+# =============================================================================
+# VaR horizons in calendar days (developer's decision of 30/09/2026)
+#
+# `horizon_days` echoes the request's calendar horizon; `horizon_observations` states how many
+# observations it compounded — 21 for a month of a weekday series, 30 for one quoted every day. It is
+# required, at least one, and it must survive the discriminated union, or a client would read a
+# calendar month as if it were 30 trading days.
+# =============================================================================
+
+
+def _var_outputs():
+    single = _chart_var_cvar_payload(horizon_days=30, horizon_observations=21, observations=20)
+    per_asset = {"confidence_level": 0.95, "horizon_days": 30, "horizon_observations": 21, "observations": 20, "items": [{"asset_id": 1, "value_at_risk": 0.03, "conditional_value_at_risk": 0.04}]}
+    return [
+        pytest.param(RiskVarCvarOutput, single, id="var_cvar"),
+        pytest.param(RiskAssetSetVarCvarOutput, per_asset, id="var_cvar_set"),
+    ]
+
+
+@pytest.mark.parametrize(("model", "payload"), _var_outputs())
+def test_var_outputs_state_the_observations_their_calendar_horizon_compounded(model, payload):
+    output = model(**payload)
+
+    assert (output.horizon_days, output.horizon_observations) == (30, 21)
+    restored = TypeAdapter(RiskAnalyticOutput).validate_python(output.model_dump(mode="json"))
+    assert isinstance(restored, model)
+    assert restored.horizon_observations == 21
+    assert restored.model_dump(mode="json") == output.model_dump(mode="json")
+
+
+@pytest.mark.parametrize(("model", "payload"), _var_outputs())
+def test_var_outputs_require_at_least_one_horizon_observation(model, payload):
+    missing = {key: value for key, value in payload.items() if key != "horizon_observations"}
+    with pytest.raises(ValidationError) as absent:
+        model(**missing)
+    assert [(error["loc"], error["type"]) for error in absent.value.errors()] == [(("horizon_observations",), "missing")]
+
+    for invalid in (0, -21):
+        with pytest.raises(ValidationError) as below:
+            model(**{**payload, "horizon_observations": invalid})
+        assert [error["loc"] for error in below.value.errors()] == [("horizon_observations",)]
+
+    assert model(**{**payload, "horizon_observations": 1}).horizon_observations == 1

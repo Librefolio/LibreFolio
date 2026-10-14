@@ -1,5 +1,25 @@
-import {beforeEach, describe, expect, it} from 'vitest';
-import {decimalArrowStep, normalizeDecimalInput, resetDecimalArrowHold, stepDecimalValue} from '$lib/utils/core/parseDecimalInput';
+import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {decimalArrowStep, exactDecimalArrowStep, filterDecimalInput, normalizeDecimalInput, resetDecimalArrowHold, stepDecimalValue, stepExactDecimalValue} from '$lib/utils/core/parseDecimalInput';
+
+describe('filterDecimalInput', () => {
+    it('drops letters immediately while preserving decimal punctuation and every digit', () => {
+        expect(filterDecimalInput('EUR 12,34abc')).toBe('12,34');
+        expect(filterDecimalInput('1x.2y,3z')).toBe('1.2,3');
+    });
+
+    it('preserves partial comma and dot drafts for later normalization', () => {
+        expect(filterDecimalInput('12,')).toBe('12,');
+        expect(filterDecimalInput('.')).toBe('.');
+        expect(filterDecimalInput(',5')).toBe(',5');
+    });
+
+    it('keeps only a permitted leading sign', () => {
+        expect(filterDecimalInput('-12,3')).toBe('12,3');
+        expect(filterDecimalInput('-12,3', true)).toBe('-12,3');
+        expect(filterDecimalInput('12-3', true)).toBe('123');
+        expect(filterDecimalInput('  -0.5', true)).toBe('-0.5');
+    });
+});
 
 describe('normalizeDecimalInput', () => {
     it('leaves canonical input untouched', () => {
@@ -74,6 +94,63 @@ describe('stepDecimalValue', () => {
 
     it('goes below zero when asked', () => {
         expect(stepDecimalValue('0', -1)).toBe('-1');
+    });
+});
+
+describe('stepExactDecimalValue', () => {
+    it('keeps twelve integer and twelve fractional digits exact', () => {
+        expect(stepExactDecimalValue('999999999998.999999999999', 1, '0.000000000001')).toBe('999999999999.000000000000');
+        expect(stepExactDecimalValue('0.300000000001', -1, '0.000000000001')).toBe('0.300000000000');
+    });
+
+    it('normalizes locale input before applying the exact step', () => {
+        expect(stepExactDecimalValue('1.234,500000000001', 1, '0,000000000001')).toBe('1234.500000000002');
+    });
+
+    it('steps through zero without losing the sign or precision contract', () => {
+        expect(stepExactDecimalValue('0.000000000000', -1, '0.000000000001')).toBe('-0.000000000001');
+        expect(stepExactDecimalValue('-0.000000000001', 1, '0.000000000001')).toBe('0.000000000000');
+    });
+
+    it('uses zero as the starting point for an invalid current value', () => {
+        expect(stepExactDecimalValue('not-a-number', 1, '0.25')).toBe('0.25');
+    });
+
+    it.each(['0', '-1', 'Infinity', 'not-a-step'])('leaves the raw value alone for invalid step %s', (step) => {
+        expect(stepExactDecimalValue('1.25', 1, step)).toBe('1.25');
+    });
+});
+
+describe('exactDecimalArrowStep', () => {
+    function keyEvent(key: string, modifiers: Partial<Pick<KeyboardEvent, 'ctrlKey' | 'metaKey' | 'altKey'>> = {}) {
+        return {
+            key,
+            ctrlKey: false,
+            metaKey: false,
+            altKey: false,
+            preventDefault: vi.fn(),
+            ...modifiers,
+        } as unknown as KeyboardEvent;
+    }
+
+    it('maps ArrowUp and ArrowDown to exact string arithmetic and prevents the native step', () => {
+        const up = keyEvent('ArrowUp');
+        const down = keyEvent('ArrowDown');
+
+        expect(exactDecimalArrowStep(up, '5.900000000001', '0.000000000001')).toBe('5.900000000002');
+        expect(exactDecimalArrowStep(down, '5.900000000001', '0.000000000001')).toBe('5.900000000000');
+        expect(up.preventDefault).toHaveBeenCalledTimes(1);
+        expect(down.preventDefault).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        ['a non-arrow key', keyEvent('Enter')],
+        ['Ctrl+ArrowUp', keyEvent('ArrowUp', {ctrlKey: true})],
+        ['Meta+ArrowDown', keyEvent('ArrowDown', {metaKey: true})],
+        ['Alt+ArrowUp', keyEvent('ArrowUp', {altKey: true})],
+    ])('leaves %s to the browser', (_label, event) => {
+        expect(exactDecimalArrowStep(event, '1.5', '0.1')).toBeNull();
+        expect(event.preventDefault).not.toHaveBeenCalled();
     });
 });
 

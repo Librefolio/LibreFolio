@@ -3,7 +3,7 @@
 > Cross-domain view of feature dependencies. Shows which features must exist before others can be built.
 > Read [[features/registry]] for feature descriptions.
 > Last updated: 2026-05-13
-> F-075–F-095 range (21 planned/idea features) is now tracked in the registry. Inverse `enables:` links from their dependencies have been populated.
+> [[F-075]]–[[F-095]] range (21 planned/idea features) is now tracked in the registry. Inverse `enables:` links from their dependencies have been populated.
 
 ---
 

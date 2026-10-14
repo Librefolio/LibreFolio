@@ -1,7 +1,7 @@
 ---
 title: "Domain: CALCULATIONS"
 category: domain
-features: [F-056, F-057, F-058]
+features: [F-056, F-057, F-058, F-107, F-110]
 status: stable
 mkdocs: null
 ---
@@ -17,7 +17,12 @@ FIFO at Runtime (F-056) is the core algorithm. Given a chronologically ordered l
 
 Currency Conversion (F-057) uses the triangulation graph built by the FX domain. When converting GBP→CHF and no direct pair exists, the system traverses the configured-pairs graph to find a path (e.g., GBP→EUR→CHF) and chains the rate multiplications. The `BackwardFillInfo` mechanism handles missing rates on non-trading days: the system returns the most recent prior rate and annotates the response so the frontend can display a "rate from {date}" notice.
 
-ROI Calculations (F-058) implement **TWRR** (Time-Weighted Rate of Return) and **MWRR** (Money-Weighted Rate of Return / XIRR via Newton-Raphson) — see [[concepts/twrr-mwrr-algorithms]]. The FIFO/WAC engine provides the realized/unrealized breakdown and cash-flow timing; the ROI layer (`roi_utils.py`) aggregates these into the two headline percentage figures shown on the Dashboard KPI cards.
+ROI Calculations (F-058) implement **TWRR** (Time-Weighted Rate of Return) and **MWRR** (Money-Weighted Rate of Return / XIRR via Newton-Raphson) — see [[concepts/twrr-mwrr-algorithms]]. The FIFO/WAC engine provides the realized/unrealized breakdown and cash-flow timing; the ROI layer (`financial_math/returns.py`, `roi_utils.py` until 2026-10-12) aggregates these into the two headline percentage figures shown on the Dashboard KPI cards.
+
+Since 2026-10-12 every one of these calculations has one home, `backend/app/services/financial_math/` — average cost,
+native cash, returns, valuation, price marks, Yield on Cost, the FIFO engine, the portfolio engine and the lots math
+([[decisions/financial-math-one-home]]). Cash held in a foreign currency is revalued every day from one native-cash
+ledger ([[decisions/native-cash-daily-revaluation]]).
 
 ## Feature cluster
 
@@ -26,12 +31,14 @@ ROI Calculations (F-058) implement **TWRR** (Time-Weighted Rate of Return) and *
 | [[F-056]] | FIFO at Runtime (on-demand cost basis) | backend | core — lot matching, realized/unrealized P&L computation | implemented |
 | [[F-057]] | Currency Conversion (triangulation via FX graph) | backend | core — multi-hop cross-currency conversion | implemented |
 | [[F-058]] | ROI Calculations (TWRR + MWRR) | backend | core — portfolio return percentage computation | implemented |
+| [[F-107]] | PAC allocator (a Tool: SCIP search, exact Decimal replay) | fullstack | plans purchases toward target weights; the frontend only builds the scenario and shows the result | documented |
+| [[F-110]] | Risk engine (analytic plugins over prepared series; QuantLib and riskfolio-lib in spawned processes) | backend | computes every risk figure the Risk tabs and the Lab show | documented |
 
 ## Architecture at a glance
 
 ```mermaid
 graph TD
-    TxDB[(Transaction table<br/>F-046, ordered by date)] --> FIFO[F-056 FIFO Engine<br/>transaction_service.py]
+    TxDB[(Transaction table<br/>F-046, ordered by date)] --> FIFO[F-056 FIFO Engine<br/>financial_math/fifo/]
     FIFO -->|open lots| UnrealizedPos[Unrealized position<br/>qty × current_price − cost_basis]
     FIFO -->|closed lots| RealizedGain[Realized gain<br/>per sell transaction]
 
@@ -53,24 +60,36 @@ graph TD
 - [[decisions/fifo-runtime-decision]] — FIFO lots are **never persisted**. The decision record covers the analysis of the alternative (caching lots in the DB): rejected because retroactive transaction edits (fixing a BRIM import error) would require cascading invalidation across cached lot states. Runtime recalculation is simpler and correct by construction.
 - **Backend-only calculations** (see [[concepts/backend-only-calculations]]) — all F-056, F-057, F-058 logic lives exclusively in the backend. The frontend receives pre-computed values (NAV in user currency, P&L numbers, ROI percentages) and renders them. This prevents divergence between the display and the truth, and allows any future client (mobile app, API consumer) to get consistent results.
 - **FIFO-first, fiscal method selection deferred** — Phase 7 ships FIFO only. LIFO, PMC (Prezzo Medio di Carico / Average Cost), and SelectID are deferred to Phase 8+ via [[F-081]]. The API response includes a `method` field from the start so clients can label which method was used.
+- [[decisions/financial-math-one-home]] — one home for every financial calculation, moved by renames first and a cut second, guarded by an AST test (2026-10-12).
+- [[decisions/native-cash-daily-revaluation]] — foreign cash revalued every day; its exchange result is a return, never capital (2026-10-12).
+- [[decisions/pac-scip-searches-exact-replay-certifies]] and [[decisions/pac-lexicographic-fixed-l2-objective]] — the
+  PAC allocator ([[F-107]]) searches with SCIP, certifies every number by an exact replay, and optimises a
+  fixed-reference L2 before anything else; it keeps its own exact engine in `services/pac_allocator/`.
 
 ## Known problems / limitations
 
-No open problems. F-056, F-057, and F-058 are all implemented and correct. The FX conversion handles missing rates via `BackwardFillInfo` (returns the most recent prior rate with annotation). F-058 (TWRR/MWRR) is fully wired into the Dashboard via the unified `/portfolio/report` endpoint (see [[concepts/portfolio-report-unified]]).
+No open problems in F-056, F-057 or F-058: they are implemented and correct. The FX conversion handles missing rates via `BackwardFillInfo` (returns the most recent prior rate with annotation). F-058 (TWRR/MWRR) is fully wired into the Dashboard via the unified `/portfolio/report` endpoint (see [[concepts/portfolio-report-unified]]). Open in the portfolio engine: a day on which only a security's exchange rate moves is not re-valued ([[problems/dirty-days-ignore-fx-only-moves]]).
+
+> *Corrected 2026-10-12:* the diagram and the «Source files» table placed the FIFO engine in
+> `transaction_service.py`. It was `services/fifo_lot_engine.py` from 2026-07-16 (`2a647c2f1`) and is
+> `financial_math/fifo/` since 2026-10-12 ([[entities/fifo-lot-engine]]).
 
 ## What comes next
 
 - [[F-081]] Fiscal Sale Method — allow users to choose FIFO / LIFO / PMC / SelectID per fiscal jurisdiction. This will be an additive change to F-056, not a rewrite.
-- [[F-091]] Multi-Worker Cache Server — if the deployment model moves to multiple hosts, the in-process cache (currently `theine` per-process) would need a Redis backend. The abstraction in `cache_utils.py` makes this a provider-swap change.
+- [[F-091]] Multi-Worker Cache Server — if the deployment model moves to multiple hosts, the in-process cache (currently `theine` per-process) would need a Redis backend. The abstraction in `utils/runtime/cache.py` (`cache_utils.py` until 2026-10-12) makes this a provider-swap change.
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| FIFO engine | `backend/app/services/transaction_service.py` |
+| FIFO engine | `backend/app/services/financial_math/fifo/engine.py` |
+| Financial math layer (rule and module map) | `backend/app/services/financial_math/__init__.py` |
+| Native cash (since 2026-10-11) | `backend/app/services/financial_math/native_cash.py` |
 | Currency conversion | `backend/app/services/fx.py` |
 | FX conversion API | `backend/app/api/v1/fx.py` |
-| ROI utilities (TWRR/MWRR) | `backend/app/utils/financial/roi_utils.py` |
+| ROI utilities (TWRR/MWRR) | `backend/app/services/financial_math/returns.py` |
+| PAC allocator engine | `backend/app/services/pac_allocator/planner.py` |
 | DB models (Transaction, FxRate, FxConversionRoute) | `backend/app/db/models.py` |
 | Currency graph store (frontend) | `frontend/src/lib/stores/currencyGraphStore.ts` |
 | FIFO decision | `LibreFolio_devWiki/wiki/decisions/fifo-runtime-decision.md` |

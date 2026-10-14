@@ -55,8 +55,9 @@ aggregation**, never for permissions:
 - **0 % is a valid share**: a 0 % OWNER keeps full admin rights but contributes nothing to the
   owner's aggregated numbers.
 - Aggregation scales by share **only for OWNERs** — EDITOR/VIEWER rows always carry share 0 by
-  schema rule yet see full data, so the engine uses scale 1 for them
-  (`portfolio_service.py`, `portfolio_engine.py`). Role/share edits change every scaled number
+  schema rule yet see full data, so the engine uses scale 1 for them (`effective_share()` in
+  `financial_math/native_cash.py`, called by `portfolio_service.py` and
+  `financial_math/portfolio/engine.py`). Role/share edits change every scaled number
   but not the underlying data, so they also join the cache fingerprint for instant invalidation.
 
 ### 🔒 The "Last Owner" Rule
@@ -99,3 +100,30 @@ Access management is exposed via the following endpoints:
 - `POST /api/v1/brokers/{id}/access`: Grant access.
 - `PATCH /api/v1/brokers/{id}/access/{user_id}`: Change role.
 - `DELETE /api/v1/brokers/{id}/access/{user_id}`: Revoke access.
+
+## 👑 Superusers and the User CLI {: #superusers }
+
+Besides the broker roles, every account carries one system-wide flag, `users.is_superuser`: the
+*administrator* of the admin manual. It belongs to the account, not to a broker.
+
+- **Granted** to the first account registered (`POST /api/v1/auth/register` when `count_users()`
+  is 0, accepted even when `enable_registration` is off), to every account created with
+  `./dev.py user create` (`scripts/user_cli.py` calls `user_service.create_user()` with
+  `is_superuser=True`), and by `./dev.py user promote`.
+- **Promote and demote** go through `user_service.set_user_admin()`, which refuses a no-op
+  (*already an admin*, *not an admin*) and does **not** check that another superuser remains. The
+  only last-superuser guard is on self-deletion: `DELETE /api/v1/auth/users/me` answers `400` when
+  `count_superusers()` is 1 or less.
+- **Applied at the next request**: the user CLI writes the database directly, with the server
+  running or not, and `get_current_user()` reloads the user on every request. A deactivated
+  account (`user deactivate`, `user_service.set_user_active()`) gets `401` *User account is
+  disabled*, and its login `401` *Account is disabled*.
+- **Password reset** (`user reset`, `user_service.reset_password()`) changes only the hash. The
+  session JWT carries the user id alone (`sub`, with `iat` and `exp`) and nothing revokes it: a
+  token issued before the reset stays valid until it expires (`session_ttl_hours`). Deactivation
+  is the immediate lock-out.
+- **CLI password rules**: `create` and `reset` call `validate_password()` in
+  `scripts/user_cli.py`: at least 8 characters, with an upper-case letter, a lower-case letter, a
+  digit and a symbol from its `special_chars` set. The API schemas only ask for 8 characters.
+
+The admin commands are in [Command-Line Tools](../../admin/cli_tools.md).

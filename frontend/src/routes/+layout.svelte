@@ -7,6 +7,12 @@
     // Initialize i18n
     initI18n();
 
+    // Only the first dictionary gates the app. svelte-i18n also raises `isLoading` for a
+    // later language switch whose dictionary takes more than 200 ms; tearing the app down
+    // for it rebuilt every page from scratch, and Welcome lost the language being chosen.
+    let i18nBooted = false;
+    $: if (!$i18nLoading) i18nBooted = true;
+
     function removeSplash() {
         const splash = document.getElementById('app-splash');
         if (splash) {
@@ -29,17 +35,18 @@
     // "en" and nothing ever updated it, so screen readers, browser translation
     // and search engines were told the wrong language for every non-English user.
     //
-    // `data-i18n-ready` is the companion signal: `locale` flips the moment the
-    // user picks a language, but the dictionary lands later, so "the strings on
-    // screen are in that language" was previously unobservable — which is exactly
-    // why tests waited a fixed 300ms for it instead of asking.
+    // `data-i18n-ready` is the companion signal: it is "false" while any dictionary
+    // is loading. svelte-i18n moves `locale` to a new language only once its
+    // dictionary has loaded, or at once when a load of it is already in flight,
+    // so "the strings on screen are in that language" is `lang` plus
+    // `data-i18n-ready="true"` — which is what tests wait for, never a fixed delay.
     $: if (typeof document !== 'undefined') {
         document.documentElement.lang = $locale ?? DEFAULT_LOCALE;
         document.documentElement.dataset.i18nReady = String(!$i18nLoading);
     }
 </script>
 
-{#if $i18nLoading}
+{#if !i18nBooted}
     <!-- Splash screen is visible in app.html; keep a minimal placeholder here -->
     <div></div>
 {:else}

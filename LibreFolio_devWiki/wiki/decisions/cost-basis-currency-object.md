@@ -48,11 +48,11 @@ New column `cost_basis_currency VARCHAR(3)` alongside existing `cost_basis_overr
 - **Breaking change**: old format `"42.50"` → 422 validation error. No backward compatibility.
 - All frontend code must send `{code: "EUR", amount: "42.50"}` instead of `"42.50"`
 - `./dev.py api sync` regenerates Zodios client with new Currency type for cost_basis
-- Enables WAC cross-currency calculations (F-097)
+- Enables WAC cross-currency calculations ([[F-097]])
 - `TXReadItem.from_db_model()` constructs Currency from two DB columns
 
 ## Implementation
-- Commit: `92f4b1ba` (SP-A)
+- Commit: `a79e68156` (SP-A)
 - Files: `backend/app/db/models.py`, `backend/app/schemas/transactions.py`, `backend/alembic/versions/001_initial.py`
 
 ## Source files

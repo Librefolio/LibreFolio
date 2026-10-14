@@ -224,8 +224,8 @@ Add a `## Source files` section at the bottom of every page:
 | Role | Path |
 |------|------|
 | Abstract base | `backend/app/services/fx.py` |
-| ECB provider | `backend/app/services/fx_providers/ecb.py` |
-| FED provider | `backend/app/services/fx_providers/fed.py` |
+| ECB provider | `backend/app/services/fx_providers/ecb/plugin.py` |
+| FED provider | `backend/app/services/fx_providers/fed/plugin.py` |
 | API endpoints | `backend/app/api/v1/fx.py` |
 | mkdocs | `mkdocs_src/docs/developer/backend/fx/architecture.md` |
 ```
@@ -554,8 +554,8 @@ Add a `## Source files` section at the bottom of every page:
 | Role | Path |
 |------|------|
 | Abstract base | `backend/app/services/fx.py` |
-| ECB provider | `backend/app/services/fx_providers/ecb.py` |
-| FED provider | `backend/app/services/fx_providers/fed.py` |
+| ECB provider | `backend/app/services/fx_providers/ecb/plugin.py` |
+| FED provider | `backend/app/services/fx_providers/fed/plugin.py` |
 | API endpoints | `backend/app/api/v1/fx.py` |
 | mkdocs | `mkdocs_src/docs/developer/backend/fx/architecture.md` |
 ```

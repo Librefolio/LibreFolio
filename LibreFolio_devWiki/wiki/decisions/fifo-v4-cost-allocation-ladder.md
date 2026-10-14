@@ -74,5 +74,5 @@ type)` to its target lot(s); assetless costs never enter this flow at all; unmat
 | Rejected unified ladder | `.../v4-fee_tax_integration/high-level-analysis-v2.md` §8 |
 | Rejected adjacent-day matching | `.../v4-fee_tax_integration/feasibility-analysis-v2.md` §5 |
 | Executable plan | `.../v4-fee_tax_integration/implementation-plan-v5.md` Fase 4-5 |
-| Engine implementation | `backend/app/services/fifo_lot_engine.py` |
+| Engine implementation | `backend/app/services/financial_math/fifo/engine.py` |
 | User-facing doc | `mkdocs_src/docs/financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.en.md` §"Costs & Net Metrics" |

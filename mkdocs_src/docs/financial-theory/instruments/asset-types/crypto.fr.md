@@ -13,7 +13,7 @@ Les **cryptomonnaies** sont des actifs numériques qui utilisent la technologie 
 | **Devise de cotation** | Généralement cotées en USD, mais échangeables contre de nombreuses paires de devises fiduciaires et crypto |
 | **Dividendes** | Aucun pour la plupart (certains jetons DeFi offrent des récompenses de staking) |
 | **Volatilité** | Significativement plus élevée que celle des actifs traditionnels |
-| **Fournisseurs typiques** | Yahoo Finance (ex: `BTC-USD`), Manuel |
+| **Fournisseurs typiques** | Yahoo Finance (ex. : `BTC-USD`), ou prix saisis manuellement dans l'[éditeur de données](../../../user/assets/detail/data-editor.md) |
 
 ---
 
@@ -33,7 +33,7 @@ La capitalisation boursière est la métrique principale pour comparer les actif
 
 ### 🔄 Paires de trading
 
-Les actifs crypto s'échangent par **paires** (ex: BTC/USD, ETH/BTC). LibreFolio suit chaque crypto comme un actif unique avec une devise de référence, en utilisant les [taux de change](../../../user/fx/index.md) pour la conversion.
+Les actifs crypto s'échangent par **paires** (ex. : BTC/USD, ETH/BTC). LibreFolio suit chaque crypto comme un actif unique avec une devise de référence, en utilisant les [taux de change](../../../user/fx/index.md) pour la conversion.
 
 ### ⚡ Staking
 

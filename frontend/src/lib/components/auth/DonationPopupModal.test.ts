@@ -1,50 +1,52 @@
 // @vitest-environment jsdom
-/**
- * DonationPopupModal — component test (Vitest + jsdom).
- *
- * This popup is the one place in the app where the usual escape hatches are
- * deliberately removed: no X, no Escape, no backdrop click. Its own header
- * comment says so in five lines, ending "intentional, not a bug" — which is
- * exactly the kind of statement that survives in a comment and dies in a
- * refactor, because every other modal in the codebase behaves the other way and
- * `closeOnEscape` defaults to `true` in `ModalBase`.
- *
- * So this file is not chasing branches: `DonationPopupModal.svelte` has none. It
- * exists to turn that comment into something that fails. Delete
- * `closeOnEscape={false}` and a test goes red naming the rule that was dropped.
- *
- * Visibility is owned by `donationPopup`, a module-level rune store shared by
- * every test in the process, so each test resets it.
- *
- * `$lib/i18n` is mocked with an identity translator: the two labels render as
- * their keys, which are the same in EN/IT/FR/ES, so nothing here asserts a
- * sentence.
- */
-import {afterEach, describe, expect, it, vi} from 'vitest';
-import {readable} from 'svelte/store';
-import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
-
-vi.mock('$lib/i18n', () => ({_: readable((key: string) => key)}));
-
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import DonationPopupModal from './DonationPopupModal.svelte';
 import {donationPopup} from '$lib/stores/app/donationPopupStore.svelte';
 
 const DONATION_URL = 'https://www.buymeacoffee.com/librefolio';
 
-function modal(): HTMLElement | null {
+function popup(): HTMLElement | null {
     return screen.queryByTestId('donation-popup-modal');
 }
 
-/** Mounts the popup already open, the state it spends its whole life in. */
-async function open(): Promise<HTMLElement> {
+function shareModal(): HTMLElement | null {
+    return screen.queryByTestId('support-social-share-modal');
+}
+
+async function openPopup(): Promise<HTMLElement> {
     render(DonationPopupModal);
     donationPopup.trigger();
-    await waitFor(() => expect(modal()).not.toBeNull());
-    return modal()!;
+    await waitFor(() => expect(popup()).not.toBeNull());
+    return popup()!;
 }
+
+beforeAll(async () => {
+    await setupI18n();
+});
+
+beforeEach(() => {
+    vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    vi.spyOn(Element.prototype, 'getClientRects').mockImplementation(
+        () =>
+            [
+                {
+                    x: 0,
+                    y: 0,
+                    width: 1,
+                    height: 1,
+                    top: 0,
+                    right: 1,
+                    bottom: 1,
+                    left: 0,
+                },
+            ] as unknown as DOMRectList,
+    );
+});
 
 afterEach(() => {
     donationPopup.dismiss();
+    vi.restoreAllMocks();
     cleanup();
 });
 
@@ -52,92 +54,114 @@ describe('DonationPopupModal — when it appears', () => {
     it('stays out of the way until login says to show it', () => {
         render(DonationPopupModal);
 
-        expect(modal()).toBeNull();
+        expect(popup()).toBeNull();
     });
 
     it('appears when the store is triggered', async () => {
-        await open();
+        await openPopup();
 
-        expect(modal()).toBeInTheDocument();
+        expect(popup()).toBeInTheDocument();
     });
 
     it('appears for the debug override too, which is the same door', async () => {
         render(DonationPopupModal);
         donationPopup.forceShow();
 
-        await waitFor(() => expect(modal()).not.toBeNull());
+        await waitFor(() => expect(popup()).not.toBeNull());
     });
 });
 
-describe('DonationPopupModal — the only two ways out', () => {
+describe('DonationPopupModal — the original two dismissal hooks', () => {
+    it('keeps the later button, the donate link and the support card test handles', async () => {
+        const dialog = await openPopup();
+
+        expect(within(dialog).getByTestId('donation-popup-later')).toBeInTheDocument();
+        expect(within(dialog).getByTestId('donation-popup-donate')).toBeInTheDocument();
+        expect(within(dialog).getByTestId('donation-popup-support-card')).toBeInTheDocument();
+    });
+
     it('closes on "later"', async () => {
-        const dialog = await open();
+        const dialog = await openPopup();
 
         await fireEvent.click(within(dialog).getByTestId('donation-popup-later'));
 
-        await waitFor(() => expect(modal()).toBeNull());
+        await waitFor(() => expect(popup()).toBeNull());
         expect(donationPopup.shouldShow).toBe(false);
     });
 
     it('closes on "donate" as well, so the user does not come back to it', async () => {
-        const dialog = await open();
+        const dialog = await openPopup();
 
         await fireEvent.click(within(dialog).getByTestId('donation-popup-donate'));
 
-        await waitFor(() => expect(modal()).toBeNull());
+        await waitFor(() => expect(popup()).toBeNull());
         expect(donationPopup.shouldShow).toBe(false);
-    });
-
-    it('offers no third one: one button and one link, and no close control', async () => {
-        const dialog = await open();
-
-        const buttons = within(dialog).getAllByRole('button');
-        expect(buttons).toHaveLength(1);
-        expect(buttons[0]).toHaveAttribute('data-testid', 'donation-popup-later');
-
-        const links = within(dialog).getAllByRole('link');
-        expect(links).toHaveLength(1);
-        expect(links[0]).toHaveAttribute('data-testid', 'donation-popup-donate');
     });
 });
 
 describe('DonationPopupModal — the escape hatches that were removed on purpose', () => {
     it('ignores Escape', async () => {
-        const dialog = await open();
+        const dialog = await openPopup();
 
         await fireEvent.keyDown(dialog, {key: 'Escape'});
 
-        expect(modal()).toBeInTheDocument();
+        expect(popup()).toBeInTheDocument();
         expect(donationPopup.shouldShow).toBe(true);
     });
 
     it('ignores a click on the backdrop', async () => {
-        const dialog = await open();
+        const dialog = await openPopup();
 
-        // The full gesture: ModalBase only treats a click as a backdrop click
-        // when the mousedown landed there too.
         await fireEvent.mouseDown(dialog);
         await fireEvent.click(dialog);
 
-        expect(modal()).toBeInTheDocument();
+        expect(popup()).toBeInTheDocument();
         expect(donationPopup.shouldShow).toBe(true);
     });
 });
 
-describe('DonationPopupModal — the donation link', () => {
-    it('points at the project donation page', async () => {
-        const dialog = await open();
+describe('DonationPopupModal — support actions', () => {
+    it('keeps the donation link on the project page and opens it in an isolated new tab', async () => {
+        const donate = within(await openPopup()).getByTestId('donation-popup-donate');
 
-        expect(within(dialog).getByTestId('donation-popup-donate')).toHaveAttribute('href', DONATION_URL);
-    });
-
-    it('opens it in a new tab, without handing the app over to it', async () => {
-        // `rel="noopener"` is what stops the opened page from reaching back
-        // through `window.opener` into a session that has just logged in.
-        const donate = within(await open()).getByTestId('donation-popup-donate');
-
+        expect(donate).toHaveAttribute('href', DONATION_URL);
         expect(donate).toHaveAttribute('target', '_blank');
         expect(donate.getAttribute('rel')).toContain('noopener');
         expect(donate.getAttribute('rel')).toContain('noreferrer');
+    });
+
+    it('uses the unified share buttons and opens the nested share modal without dismissing the popup', async () => {
+        const dialog = await openPopup();
+
+        expect(within(dialog).queryByTestId('support-share-x-manual')).toBeNull();
+        expect(within(dialog).queryByTestId('support-share-reddit-direct')).toBeNull();
+
+        await fireEvent.click(within(dialog).getByTestId('support-share-reddit'));
+
+        await waitFor(() => expect(shareModal()).not.toBeNull());
+        expect(shareModal()?.querySelector('[data-social-icon="reddit"]')).not.toBeNull();
+        expect(popup()).toBeInTheDocument();
+
+        await fireEvent.click(screen.getByTestId('support-social-share-close'));
+
+        await waitFor(() => expect(shareModal()).toBeNull());
+        expect(popup()).toBeInTheDocument();
+        expect(donationPopup.shouldShow).toBe(true);
+    });
+
+    it('drops an open share overlay when the store dismisses the popup, and keeps it closed on the next popup', async () => {
+        const dialog = await openPopup();
+
+        await fireEvent.click(within(dialog).getByTestId('support-share-x'));
+        await waitFor(() => expect(shareModal()).not.toBeNull());
+
+        donationPopup.dismiss();
+
+        await waitFor(() => expect(popup()).toBeNull());
+        expect(shareModal()).toBeNull();
+
+        donationPopup.trigger();
+        await waitFor(() => expect(popup()).not.toBeNull());
+        expect(shareModal()).toBeNull();
     });
 });

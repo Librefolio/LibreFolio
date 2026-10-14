@@ -1,6 +1,5 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {schemas} from '$lib/api';
     import AssetIcon from '$lib/components/assets/AssetIcon.svelte';
@@ -9,12 +8,15 @@
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
-    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {formatExactDecimal} from '$lib/utils/core/formatFixed';
+    import {maskableQuantity} from '$lib/utils/privacy/maskable';
     import {safeDecimal} from '$lib/types';
     import {ArrowRightLeft, Info, Minus, Plus, X} from 'lucide-svelte';
     import type {z} from 'zod';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import {compareHistoryEvents, eventMarkerKind, getBroker as sharedGetBroker, groupCustodySlices, historyKey, multiplyOrNull, unwrapScalar, type EventMarkerKind} from './lotCustodyModalHelpers';
+    import {isUnknownOrNonZero} from './lotChartShared';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotTimelineEventSchema = z.infer<typeof schemas.LotTimelineEventSchema>;
@@ -63,20 +65,31 @@
         const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
         const date = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(value);
         if (Number.isNaN(date.getTime())) return value;
-        return date.toLocaleDateString($currentLanguage || undefined, kind === 'short' ? {day: '2-digit', month: '2-digit'} : {year: 'numeric', month: 'long', day: 'numeric'});
+        return date.toLocaleDateString(uiLocale(), kind === 'short' ? {day: '2-digit', month: '2-digit'} : {year: 'numeric', month: 'long', day: 'numeric'});
     }
 
+    /** A lot quantity; masked under privacy (D5′), with the sign and the unit left outside. */
     function formatQuantity(value: string | number | null | undefined, opts: {signed?: boolean} = {}): string {
         const parsed = parseNumber(value);
         if (parsed == null) return '—';
         const abs = Math.abs(parsed);
         const sign = opts.signed ? (parsed > 0 ? '+' : parsed < 0 ? '-' : '') : '';
-        return `${sign}${formatDecimalForDisplay(abs, {minFrac: 0, maxFrac: 8})}${assetUnitLabel ? ` ${assetUnitLabel}` : ''}`;
+        return `${sign}${maskableQuantity(formatExactDecimal(abs, {minFrac: 0, maxFrac: 8}))}${assetUnitLabel ? ` ${assetUnitLabel}` : ''}`;
     }
 
     function formatPrice(value: string | number | null | undefined): string {
         const parsed = parseNumber(value);
         return parsed == null ? '—' : formatCurrencyAmountPlain(parsed, currency);
+    }
+
+    /**
+     * A price per unit — opening, closing. Public: a price is not patrimony and a purchase
+     * price is admissible (product owner, 2026-09-22), and with the quantity masked (D5′)
+     * price × quantity rebuilds nothing. Totals keep `formatPrice`, which masks.
+     */
+    function formatUnitPrice(value: unknown): string {
+        const parsed = parseNumber(value);
+        return parsed == null ? '—' : formatCurrencyAmountPlain(parsed, currency, {sensitivity: 'public'});
     }
 
     function formatSignedCurrency(value: string | number | null | undefined): string {
@@ -128,7 +141,7 @@
         if (event.kind === 'SPLIT') {
             const ratio = unwrapScalar<string | null>(event.ratio) ?? null;
             if (ratio == null) return '×';
-            return `×${formatDecimalForDisplay(ratio, {minFrac: 0, maxFrac: 8})}`;
+            return `×${formatExactDecimal(ratio, {minFrac: 0, maxFrac: 8})}`;
         }
         return formatQuantity(event.quantity);
     }
@@ -144,7 +157,7 @@
         }
         if (event.kind === 'SPLIT') {
             const ratio = unwrapScalar<string | null>(event.ratio) ?? null;
-            return ratio != null ? `${eventKindLabel(event.kind)} ×${formatDecimalForDisplay(ratio, {minFrac: 0, maxFrac: 8})}` : eventKindLabel(event.kind);
+            return ratio != null ? `${eventKindLabel(event.kind)} ×${formatExactDecimal(ratio, {minFrac: 0, maxFrac: 8})}` : eventKindLabel(event.kind);
         }
         const brokerName = getBrokerName(event.broker_id ?? lot?.opening_broker_id);
         return brokerName ? `${eventKindLabel(event.kind)} ${brokerName}` : eventKindLabel(event.kind);
@@ -153,7 +166,7 @@
     function eventDetailItems(event: LotTimelineEventSchema): EventDetailItem[] {
         if (event.kind === 'BUY' || event.kind === 'ADJUSTMENT_IN') {
             const openingPrice = parseNumber(event.open_unit_price ?? event.unit_price);
-            return openingPrice == null ? [] : [{label: $_('brokers.lots.modal.historyDetail.openPrice'), value: formatPrice(openingPrice)}];
+            return openingPrice == null ? [] : [{label: $_('brokers.lots.modal.historyDetail.openPrice'), value: formatUnitPrice(openingPrice)}];
         }
 
         if (event.kind === 'SELL' || event.kind === 'ADJUSTMENT_OUT') {
@@ -162,7 +175,7 @@
             const proceeds = parseNumber(event.proceeds);
             const realizedPnl = parseNumber(event.realized_pnl);
             if (closePrice != null) {
-                items.push({label: $_('brokers.lots.modal.historyDetail.closePrice'), value: formatPrice(closePrice)});
+                items.push({label: $_('brokers.lots.modal.historyDetail.closePrice'), value: formatUnitPrice(closePrice)});
             }
             if (proceeds != null) {
                 items.push({label: $_('brokers.lots.modal.historyDetail.proceeds'), value: formatSignedCurrency(proceeds), tone: proceeds >= 0 ? 'positive' : 'negative'});
@@ -175,7 +188,7 @@
 
         if (event.kind === 'SPLIT') {
             const ratio = unwrapScalar<string | null>(event.ratio) ?? null;
-            return ratio == null ? [] : [{label: $_('brokers.lots.modal.historyDetail.splitRatio'), value: `×${formatDecimalForDisplay(ratio, {minFrac: 0, maxFrac: 8})}`}];
+            return ratio == null ? [] : [{label: $_('brokers.lots.modal.historyDetail.splitRatio'), value: `×${formatExactDecimal(ratio, {minFrac: 0, maxFrac: 8})}`}];
         }
 
         if (event.kind === 'TRANSFER_DEPART') {
@@ -236,11 +249,12 @@
     let lotNetTotalPnl = $derived.by(() => (lot ? parseNumber(lot.net_total_pnl) : null));
     let lotNetTotalReturn = $derived.by(() => (lot ? parseNumber(lot.net_total_return) : null));
     let lotNetMetricsStatus = $derived.by(() => (lot ? (unwrapScalar<string | null>(lot.net_metrics_status) ?? 'AVAILABLE') : 'AVAILABLE'));
-    let lotHasNetCosts = $derived((lotAllocatedFees != null && lotAllocatedFees !== 0) || (lotAllocatedTaxes != null && lotAllocatedTaxes !== 0));
+    // An amount the API could not value (null) keeps its row, shown as «—», never hidden as if it were zero.
+    let lotHasNetCosts = $derived(lot != null && (isUnknownOrNonZero(lotAllocatedFees) || isUnknownOrNonZero(lotAllocatedTaxes)));
     let lotNetAvailable = $derived(lotNetMetricsStatus !== 'UNAVAILABLE');
     let lotValueSource = $derived.by(() => (lot ? (unwrapScalar<string | null>(lot.value_source) ?? null) : null));
     let lotIsEstimated = $derived(lotValueSource === 'ESTIMATED_AT_COST');
-    let lotHasIncome = $derived(lotAssetIncome != null && lotAssetIncome !== 0);
+    let lotHasIncome = $derived(lot != null && isUnknownOrNonZero(lotAssetIncome));
 
     $effect(() => {
         void open;
@@ -283,23 +297,23 @@
                         <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{directionLabel(lot.direction)}</dd>
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.originalQuantity')}</dt>
+                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.originalQuantity')}</dt>
                         <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatQuantity(lot.original_quantity)}</dd>
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.openQuantity')}</dt>
+                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.openQuantity')}</dt>
                         <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatQuantity(lot.open_quantity)}</dd>
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                         <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.openingPrice')}</dt>
-                        <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatPrice(lot.opening_unit_price)}</dd>
+                        <dd class="mt-1 text-sm font-medium text-slate-900 dark:text-slate-100">{formatUnitPrice(lot.opening_unit_price)}</dd>
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
                         <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.openingValue')}</dt>
                         <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">{formatPrice(lotOpeningValue)}</dd>
                     </div>
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.currentValue')}</dt>
+                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.currentValue')}</dt>
                         <dd class="mt-1 text-sm font-medium tabular-nums text-slate-900 dark:text-slate-100">{formatPrice(lotCurrentValue)}</dd>
                         {#if lotIsEstimated}
                             <p class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400" data-testid="lot-custody-modal-value-source">
@@ -325,17 +339,17 @@
                         </div>
                     {/if}
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.fifoPnl')}</dt>
+                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.fifoPnl')}</dt>
                         <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotPnl)}`}>{formatSignedCurrency(lotPnl)}</dd>
                     </div>
                     {#if lotTotalPnl != null}
                         <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.totalPnl')}</dt>
+                            <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.totalPnl')}</dt>
                             <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotTotalPnl)}`} data-testid="lot-custody-modal-total-pnl">{formatSignedCurrency(lotTotalPnl)}</dd>
                         </div>
                     {/if}
                     <div class="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-900/70">
-                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.modal.openReturn')}</dt>
+                        <dt class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">{$_('brokers.lots.openReturn')}</dt>
                         <dd class={`mt-1 text-sm font-medium tabular-nums ${signedToneClass(lotRelativeReturn)}`}>{formatPercent(lotRelativeReturn)}</dd>
                     </div>
                     {#if lotTotalReturn != null}

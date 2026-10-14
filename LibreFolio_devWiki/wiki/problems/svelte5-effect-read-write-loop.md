@@ -1,6 +1,7 @@
 ---
 title: "Svelte 5 $effect Read-Write Loop — effect_update_depth_exceeded"
 category: problem
+status: resolved
 tags: [svelte5, frontend, runes, effect, reactivity, infinite-loop]
 severity: critical
 resolved: true
@@ -62,6 +63,11 @@ $effect(() => {
 ## Rule
 
 > In Svelte 5 `$effect`, always collect reads first into local variables, then perform all writes at the end. Never interleave reads and writes of the same signal.
+
+**Applied before the code (2026-10-12, plan 44).** The import wizard needed a counter of broker loads in flight,
+incremented by `loadBrokers()`, which runs inside the wizard's opening `$effect`. A `$state` counter would have been
+read and written there, and the effect would have started again at every load. The counter is a plain variable, and
+the template reads only `brokersLoading` — [[problems/import-wizard-next-before-brokers-loaded]].
 
 ## Affected File
 

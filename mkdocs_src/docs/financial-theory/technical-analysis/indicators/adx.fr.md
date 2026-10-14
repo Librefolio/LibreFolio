@@ -22,7 +22,7 @@ Les traders associent souvent l'ADX à un système de suivi de tendance (croisem
     -DM_t = \max(L_{t-1} - L_t,\, 0) \quad \text{si} \quad L_{t-1} - L_t > H_t - H_{t-1}, \text{ sinon } 0
     $$
 
-2. **True Range** $TR_t$ (voir [ATR](atr.md)), lissé sur $N$ périodes, normalise les mouvements directionnels en **+DI** / **-DI** :
+2. **True Range** $TR_t$ (voir [ATR](atr.md)), lissé sur $N$ séances, normalise les mouvements directionnels en **+DI** / **-DI** :
 
     $$
     +DI_t = 100 \cdot \frac{SMMA_N(+DM)}{SMMA_N(TR)}, \qquad
@@ -42,7 +42,7 @@ Les traders associent souvent l'ADX à un système de suivi de tendance (croisem
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 14 | Fenêtre de lissage pour +DM, -DM, TR et DX. |
+| Période ($N$) | `period` | 14 | Fenêtre de lissage pour +DM, -DM, TR et DX, en séances. |
 
 ---
 
@@ -52,14 +52,14 @@ Les traders associent souvent l'ADX à un système de suivi de tendance (croisem
 
 ```mermaid
 flowchart LR
- HL["📈 Haut / Bas"] --> DM["➕➖ +DM / -DM"]
- HLC["📊 Haut / Bas / Clôture"] --> TR["🌡️ True Range"]
- DM --> SMMA1["🔁 SMMA(N)"]
- TR --> SMMA2["🔁 SMMA(N)"]
- SMMA1 --> DI["📐 +DI / -DI"]
- SMMA2 --> DI
- DI --> DX["🔄 DX = |+DI−-DI| / (+DI+-DI)"]
- DX --> ADX["💹 ADX = SMMA(N, DX)"]
+    HL["📈 Haut / Bas"] --> DM["➕➖ +DM / -DM"]
+    HLC["📊 Haut / Bas / Clôture"] --> TR["🌡️ True Range"]
+    DM --> SMMA1["🔁 SMMA(N)"]
+    TR --> SMMA2["🔁 SMMA(N)"]
+    SMMA1 --> DI["📐 +DI / -DI"]
+    SMMA2 --> DI
+    DI --> DX["🔄 DX = |+DI−-DI| / (+DI+-DI)"]
+    DX --> ADX["💹 ADX = SMMA(N, DX)"]
 ```
 
 !!! warning "L'ADX n'est pas directionnel"
@@ -68,4 +68,4 @@ flowchart LR
     `-DI` au-dessus de `+DI` confirme une **tendance baissière**. L'ADX seul, sans vérifier quelle ligne DI
     est au-dessus, vous indique seulement qu'une tendance existe — jamais dans quelle direction elle pointe.
 
-:material-link: [Average Directional Index on Wikipedia](https://en.wikipedia.org/wiki/Average_directional_movement_index){ target="_blank" }
+:material-link: [Average Directional Index sur Wikipédia](https://en.wikipedia.org/wiki/Average_directional_movement_index){ target="_blank" }

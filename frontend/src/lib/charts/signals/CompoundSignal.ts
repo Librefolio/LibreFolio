@@ -19,6 +19,7 @@
 
 import {ChartSignal, type SignalParamDescriptor} from './ChartSignal';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 
 export class CompoundSignal extends ChartSignal {
     static override signalType = 'compound';
@@ -36,7 +37,7 @@ export class CompoundSignal extends ChartSignal {
             min: -100,
             max: 1000,
             step: 0.5,
-            suffix: '%/yr',
+            suffix: 'percentPerYear',
             tooltip: 'chartSettings.tooltips.annualRate',
         },
         {
@@ -87,13 +88,13 @@ export class CompoundSignal extends ChartSignal {
     }
 
     getLabel(): string {
-        const rate = this.params.annualRate ?? 8;
+        const rate = Number(this.params.annualRate ?? 8);
         const offset = Number(this.params.offset ?? 0);
+        const label = ChartSignal.text('chartSettings.signals.compoundLabel', {rate: formatPercent(rate, {signed: false, trim: true})});
         // The sign travels with the number: a hard-coded `+` in front of a
         // negative offset reads as `+-5%`, which users reported. The
         // descriptor allows `min: -100`, so a benchmark below the start is a
         // legitimate thing to draw.
-        const offsetStr = offset !== 0 ? ` ${offset > 0 ? '+' : ''}${offset}%` : '';
-        return `Compound ${rate}%/yr${offsetStr}`;
+        return offset !== 0 ? `${label} ${formatPercent(offset, {trim: true})}` : label;
     }
 }

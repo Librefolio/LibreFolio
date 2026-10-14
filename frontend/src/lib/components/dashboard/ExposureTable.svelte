@@ -2,7 +2,8 @@
   ExposureTable — Holdings snapshot table for open positions at the selected end date.
 
   Shows open holdings only (snapshot at date_to).
-  Columns: Asset, Δ P&L 1D, Δ P&L % 1D, P&L, P&L %, Value, Weight, Quantity, Price (hidden), PMC (hidden), Broker.
+  Columns: Asset, Δ P&L 1D, Δ P&L % 1D, P&L, P&L %, Annualized, YOC, Value,
+  Weight, Quantity, Price (hidden), PMC (hidden), Oldest open lot (hidden), Broker.
   Sorted by value descending.
 
   Pattern: Svelte 5 Runes, DataTable, data-testid, dark mode.
@@ -15,15 +16,19 @@
     import type {ColumnDef, RowAction} from '$lib/components/table/types';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
+    import YieldOnCostCell from './YieldOnCostCell.svelte';
     import {ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {makePositionKey} from '$lib/utils/core/positionKey';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {maskableQuantity} from '$lib/utils/privacy/maskable';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
-    import {safeDecimal, safeNumber, safeString} from '$lib/types';
+    import {safeDecimal, safeNumber, safeScalar, safeString} from '$lib/types';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface Holding {
         asset_id: number;
@@ -40,9 +45,34 @@
         gain_loss?: string | (string | null)[] | null;
         gain_loss_percent?: string | (string | null)[] | null;
         annualized_return?: string | (string | null)[] | null;
+        yield_on_cost: YieldOnCostLike | (YieldOnCostLike | null)[];
         gain_loss_change_1d?: string | (string | null)[] | null;
         gain_loss_change_1d_percent?: string | (string | null)[] | null;
         oldest_open_lot_date?: string | (string | null)[] | null;
+    }
+
+    interface YieldOnCostLike {
+        status: 'available' | 'no_income' | 'unavailable';
+        value?: string | (string | null)[] | null;
+        reason?: string | (string | null)[] | null;
+        provenance: {
+            window_start: string;
+            window_end: string;
+            first_pair_transaction_date?: string | (string | null)[] | null;
+            gross_income_transaction_count?: number;
+            gross_income_per_unit?: {code: string; amount: string} | ({code: string; amount: string} | null)[] | null;
+            net_zero?: boolean;
+            fx?: Array<{
+                purpose: 'income' | 'wac';
+                requested_date: string;
+                rate_date: string;
+                from_currency: string;
+                to_currency: string;
+                days_back: number;
+            }>;
+            issue_date?: string | (string | null)[] | null;
+            issue_pair?: string | (string | null)[] | null;
+        };
     }
 
     interface Props {
@@ -68,6 +98,9 @@
         unrealizedPnl: number | null;
         unrealizedPnlPercent: number | null;
         annualizedReturn: number | null;
+        yieldOnCost: YieldOnCostLike;
+        yieldOnCostStatus: 'available' | 'no_income' | 'unavailable';
+        yieldOnCostValue: number | null;
         gainLossChange1d: number | null;
         gainLossChange1dPercent: number | null;
         quantity: number | null;
@@ -103,22 +136,27 @@
         const classes = value > 0 ? 'text-green-600 dark:text-green-400' : value < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400';
         return {
             type: 'html' as const,
-            html: `<span class="font-medium ${classes}">${formatCurrencyAmountPlain(value, displayCurrency, {showSign: value !== 0})}</span>`,
+            html: `<span class="font-medium ${classes}">${escapeHtml(formatCurrencyAmountPlain(value, displayCurrency, {showSign: value !== 0}))}</span>`,
         };
     }
 
     function percentChangeCell(value: number | null) {
         if (value == null) return '—';
-        const pct = (value * 100).toFixed(2);
         const classes = value >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
         return {
             type: 'html' as const,
-            html: `<span class="font-medium ${classes}">${value >= 0 ? '+' : ''}${pct}%</span>`,
+            html: `<span class="font-medium ${classes}">${formatPercent(value, {scale: 100})}</span>`,
         };
     }
 
+    /** A position quantity; masked under privacy (D5′), an em dash when absent. */
     function formatQuantity(value: number | null): string {
-        return value == null ? '—' : value.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 6});
+        return value == null ? '—' : maskableQuantity(value.toLocaleString(uiLocale(), {minimumFractionDigits: 0, maximumFractionDigits: 6}));
+    }
+
+    function label(key: string, fallback: string): string {
+        const translated = $_(key);
+        return translated === key ? fallback : translated;
     }
 
     let rows = $derived.by<DisplayRow[]>(() => {
@@ -129,6 +167,7 @@
                 const brokerId = safeNumber(holding.broker_id);
                 const broker = brokerId == null ? null : (brokerMap.get(brokerId) ?? null);
                 const currentValue = safeDecimal(holding.current_value);
+                const yieldOnCost = safeScalar(holding.yield_on_cost) as YieldOnCostLike;
                 return {
                     key: makePositionKey(holding.asset_id, brokerId),
                     assetId: holding.asset_id,
@@ -142,6 +181,9 @@
                     unrealizedPnl: safeDecimal(holding.gain_loss),
                     unrealizedPnlPercent: safeDecimal(holding.gain_loss_percent),
                     annualizedReturn: safeDecimal(holding.annualized_return),
+                    yieldOnCost,
+                    yieldOnCostStatus: yieldOnCost.status,
+                    yieldOnCostValue: safeDecimal(yieldOnCost.value),
                     gainLossChange1d: safeDecimal(holding.gain_loss_change_1d),
                     gainLossChange1dPercent: safeDecimal(holding.gain_loss_change_1d_percent),
                     quantity: safeDecimal(holding.quantity),
@@ -168,11 +210,11 @@
             cell: (row) => {
                 const info = getAssetInfo(row.assetId);
                 const typeIconSrc = info?.icon_url || getAssetTypeIconUrl(row.assetType) || '';
-                const name = escapeHtml(row.assetName);
+                const nameHtml = escapeHtml(row.assetName);
                 const typeIconHtml = typeIconSrc ? `<img src="${escapeHtml(typeIconSrc)}" alt="${escapeHtml(row.assetType)}" class="w-4 h-4 rounded object-contain shrink-0" onerror="this.style.display='none'" />` : '';
                 return {
                     type: 'html',
-                    html: `<div class="flex items-center gap-1.5 min-w-0">${typeIconHtml}<span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-gray-700 dark:text-gray-200" title="${name}">${name}</span></div>`,
+                    html: `<div class="flex items-center gap-1.5 min-w-0">${typeIconHtml}<span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-gray-700 dark:text-gray-200" title="${nameHtml}">${nameHtml}</span></div>`,
                 };
             },
         };
@@ -275,6 +317,27 @@
                 cell: (row) => percentChangeCell(row.annualizedReturn),
             },
             {
+                id: 'yield-on-cost',
+                header: () => label('dashboard.yieldOnCost', 'YOC'),
+                displayName: () => label('dashboard.yieldOnCostDisplayName', 'Yield on Cost (YOC)'),
+                headerTooltip: () => label('dashboard.yieldOnCostTooltip', 'Compares gross dividends and interest recorded over the last year with the average purchase price (WAC).'),
+                headerTooltipUrl: '/mkdocs/financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost/',
+                headerTooltipLinkMode: 'gesture',
+                type: 'number',
+                align: 'right',
+                width: 120,
+                minWidth: 105,
+                maxWidth: 180,
+                resizable: true,
+                sortable: true,
+                getValue: (row) => (row.yieldOnCostStatus === 'no_income' ? 0 : row.yieldOnCostStatus === 'available' ? row.yieldOnCostValue : null),
+                cell: (row) => ({
+                    type: 'custom',
+                    component: YieldOnCostCell,
+                    props: {result: row.yieldOnCost},
+                }),
+            },
+            {
                 id: 'value',
                 header: () => $_('common.value'),
                 type: 'number',
@@ -298,7 +361,7 @@
                 resizable: true,
                 sortable: true,
                 getValue: (row) => row.navWeight ?? 0,
-                cell: (row) => (row.navWeight == null ? '—' : `${row.navWeight.toFixed(1)}%`),
+                cell: (row) => formatPercent(row.navWeight, {signed: false, digits: 1}),
             },
             {
                 id: 'quantity',
@@ -325,7 +388,11 @@
                 sortable: true,
                 hiddenByDefault: true,
                 getValue: (row) => row.price ?? 0,
-                cell: (row) => (row.price == null ? '—' : formatCurrencyAmountPlain(row.price, displayCurrency)),
+                // Public, like the same quote in AssetTable. Until 2026-09-23 it was masked
+                // on purpose: the row also carried `quantity`, visible by D5, and
+                // quantity × price reconstructs `value`. D5′ masks the quantity beside it,
+                // so the reason is gone, and a market price is not patrimony.
+                cell: (row) => (row.price == null ? '—' : formatCurrencyAmountPlain(row.price, displayCurrency, {sensitivity: 'public'})),
             },
             {
                 id: 'pmc',
@@ -340,7 +407,8 @@
                 sortable: true,
                 hiddenByDefault: true,
                 getValue: (row) => row.wacPerUnit ?? 0,
-                cell: (row) => (row.wacPerUnit == null ? '—' : formatCurrencyAmountPlain(row.wacPerUnit, displayCurrency)),
+                // The WAC per unit is admissible (product owner, 2026-09-22); masked only while the quantity was visible.
+                cell: (row) => (row.wacPerUnit == null ? '—' : formatCurrencyAmountPlain(row.wacPerUnit, displayCurrency, {sensitivity: 'public'})),
             },
             {
                 id: 'oldest-open-lot',

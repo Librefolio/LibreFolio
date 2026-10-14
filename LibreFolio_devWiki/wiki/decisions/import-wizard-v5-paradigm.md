@@ -30,13 +30,16 @@ User testing revealed this was too restrictive for real-world workflows where us
    - Pro: simpler state machine.
    - Con: serial re-open for multi-broker, no overview of all files at once, poor UX for power users.
 
-2. **v5 (chosen)** — wide multi-file modal with 4-step numbered stepper + back navigation.
+2. **v5 (chosen)** — wide multi-file modal with four numbered macro stages, conditional
+   review states, and back navigation.
    - Pro: entire import session in one flow; all brokers visible simultaneously; upload-first philosophy; clickable back navigation preserves context.
    - Con: larger component, more complex state machine.
 
 ## Decision
 
-**v5 chosen**. Key changes from v4:
+**v5 chosen**. The product still presents four numbered stages, while the current
+implementation inserts `assets`, `fix`, and `duplicates` only when required.
+Key changes from v4:
 
 | v4 Assumption | v5 Reality |
 |---------------|------------|
@@ -48,8 +51,11 @@ User testing revealed this was too restrictive for real-world workflows where us
 
 ## Consequences
 
-- `ImportWizardModal` is now a **4-step stateful wizard** with distinct `UploadedFileEntry[]` → `FileSelection[]` → `ParsedFileResult[]` → `MergedTransaction[]` data pipeline.
-- Z-layer stack established: z:60 BulkModal / z:70 ImportWizardModal / z:80 sub-modals.
+- `ImportWizardModal` is a conditional state machine over
+  `PendingFileEntry[]` → `FileSelection[]` → `ParsedFileResult[]` →
+  `MergedTx[] + AssetResolution[]`.
+- Z-layer stack is parent-relative: BulkModal under ImportWizardModal, with each nested
+  inspector/confirmation rendered above its caller.
 - `ImportTodo` signals introduced for plugin-emitted field blanks.
 - `WorkspaceIntent` pattern clarified as frontend-only (not backend multi-tenancy).
 - Schwab broker parser added as part of v5 delivery.
@@ -70,4 +76,4 @@ User testing revealed this was too restrictive for real-world workflows where us
 |------|------|
 | v5 plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte5/plan-phase07Part5-v5-ImportWizard.prompt.md` |
 | Component | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| BRIM API | `backend/app/api/v1/brim.py` |
+| BRIM API | `backend/app/api/v1/brokers.py` |

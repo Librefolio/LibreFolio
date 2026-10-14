@@ -126,6 +126,8 @@ Full list: `knowledge_base/08_i18n_duplicates.md`
 ## Links
 
 - [[features/F-008]] — i18n System feature page
+- [[decisions/plugin-folders-and-split-i18n]] — planned (2026-10-12): the catalogues split into 17 subsystems plus a
+  `base`, plugin translations in their folders, no key renamed
 - Source: `LibreFolio_developer_journal/knowledge_base/08_i18n_duplicates.md`
 - Plan: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step6/plan-phase06Step6-i18n-dedup.prompt.md`
 
@@ -134,9 +136,9 @@ Full list: `knowledge_base/08_i18n_duplicates.md`
 | Role | Path |
 |------|------|
 | Source KB file | `LibreFolio_developer_journal/knowledge_base/08_i18n_duplicates.md` |
-| EN translations | `frontend/src/lib/i18n/en.json` |
-| IT translations | `frontend/src/lib/i18n/it.json` |
-| FR translations | `frontend/src/lib/i18n/fr.json` |
-| ES translations | `frontend/src/lib/i18n/es.json` |
+| EN translations | `frontend/src/lib/i18n/base/en.json` |
+| IT translations | `frontend/src/lib/i18n/base/it.json` |
+| FR translations | `frontend/src/lib/i18n/base/fr.json` |
+| ES translations | `frontend/src/lib/i18n/base/es.json` |
 | i18n audit CLI | `dev.py` (i18n audit subcommand) |
 | Phase 6 plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step6/plan-phase06Step6-i18n-dedup.prompt.md` |

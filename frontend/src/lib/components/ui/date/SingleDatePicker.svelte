@@ -5,14 +5,16 @@
   and close). The date itself is a text field, because reaching a date far from
   today through month arrows is slow and a user who already knows the date should
   simply be able to write it. Typed input accepts both orders and all three
-  separators (see `parseTypedDate`); anything unreadable is refused and the field
-  falls back to the current value rather than guessing.
+  separators (see `parseTypedDate`); anything unreadable is refused: the text stays
+  on screen, marked invalid, while `value` keeps the previous date — a parent that
+  must not act on that date listens to `onvaliditychange`.
 
   Used by: DataEditor (new row date editing), transaction form, broker form.
 -->
 <script lang="ts">
+    import {onDestroy} from 'svelte';
     import {todayIso} from '$lib/utils/dateOnly';
-    import {Calendar} from 'lucide-svelte';
+    import {Calendar, X} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import CalendarMonth from './CalendarMonth.svelte';
     import {parseTypedDate} from '$lib/utils/core/parseTypedDate';
@@ -66,11 +68,21 @@
         allowFuture?: boolean;
         /** Disable both the field and the calendar. */
         disabled?: boolean;
+        /** Allow an existing value to be cleared. */
+        clearable?: boolean;
         /** Test id for E2E targeting. */
         testid?: string;
+        /**
+         * Called with `{valid: false}` while the field holds text the picker refuses and the user has left it — the
+         * moment the field turns red — and with `{valid: true}` otherwise. It reports once on mount and then on every
+         * change; a picker that unmounts while refusing reports `{valid: true}` once more, so a parent never keeps
+         * the complaint of a field that is gone. The refused text never reaches `value`: a parent that ignores this
+         * keeps the previous date while the screen shows another (V-37).
+         */
+        onvaliditychange?: (state: {valid: boolean}) => void;
     }
 
-    let {value = $bindable(''), label = 'Date', compact = false, inputStyle = false, onchange, disabledDates, allowFuture = false, disabled = false, testid}: Props = $props();
+    let {value = $bindable(''), label = 'Date', compact = false, inputStyle = false, onchange, disabledDates, allowFuture = false, disabled = false, clearable = false, testid, onvaliditychange}: Props = $props();
 
     /**
      * Prefix for the structural test ids. `testid` names the *input*, which is what a
@@ -87,6 +99,7 @@
     let calendarOpen = $state(false);
     let calYear = $state(new Date().getFullYear());
     let calMonth = $state(new Date().getMonth());
+    let inputEl = $state<HTMLInputElement | null>(null);
     let triggerEl: HTMLElement | null = $state(null);
     let popoverStyle = $state('');
     /** What the user is typing. `null` means the field just shows `value`. */
@@ -110,6 +123,22 @@
     let typedInvalid = $derived(validationArmed && typedUnparseable);
     /** What the calendar highlights: the date being typed as soon as it reads as one. */
     let previewIso = $derived(isSelectable(typedIso) ? typedIso : value);
+
+    $effect(() => {
+        inputEl?.setCustomValidity(typedUnparseable ? $_('datePicker.invalidDate') : '');
+    });
+
+    /** The validity last reported to `onvaliditychange`; `null` until the first report. Not reactive on purpose. */
+    let reportedValid: boolean | null = null;
+    $effect(() => {
+        const valid = !typedInvalid;
+        if (valid === reportedValid) return;
+        reportedValid = valid;
+        onvaliditychange?.({valid});
+    });
+    onDestroy(() => {
+        if (reportedValid === false) onvaliditychange?.({valid: true});
+    });
 
     // =========================================================================
     // Helpers
@@ -140,6 +169,15 @@
      */
     function commitTyped() {
         if (typed === null) return;
+        if (typed.trim() === '') {
+            if (clearable && value !== '') {
+                value = '';
+                onchange('');
+            }
+            typed = null;
+            validationArmed = false;
+            return;
+        }
         const parsed = parseTypedDate(typed);
         if (isSelectable(parsed)) {
             if (parsed !== value) {
@@ -149,7 +187,16 @@
             typed = null;
             return;
         }
-        if (typed.trim() === '') typed = null;
+    }
+
+    function clearValue(event: MouseEvent) {
+        event.stopPropagation();
+        if (disabled || !clearable || value === '') return;
+        value = '';
+        typed = null;
+        validationArmed = false;
+        closeCalendar();
+        onchange('');
     }
 
     function updatePopoverPosition() {
@@ -346,6 +393,7 @@
         </button>
         {#if label}<span class="flex-shrink-0 text-[10px] font-medium tracking-wide text-gray-400 uppercase dark:text-gray-500">{label}</span>{/if}
         <input
+            bind:this={inputEl}
             type="text"
             inputmode="numeric"
             autocomplete="off"
@@ -368,6 +416,9 @@
                 validationArmed = true;
                 commitTyped();
             }}
+            oninvalid={() => {
+                validationArmed = true;
+            }}
             onkeyup={resetDateArrowHold}
             onkeydown={handleInputKeydown}
             onfocus={openCalendar}
@@ -378,6 +429,19 @@
                 if (!calendarOpen) openCalendar();
             }}
         />
+        {#if clearable && shown}
+            <button
+                type="button"
+                class="flex-shrink-0 rounded text-gray-400 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-libre-green/70 disabled:cursor-not-allowed dark:hover:text-gray-200"
+                {disabled}
+                aria-label={$_('common.clear')}
+                title={$_('common.clear')}
+                data-testid="{tid}-clear"
+                onclick={clearValue}
+            >
+                <X size={inputStyle ? 14 : compact ? 12 : 14} aria-hidden="true" />
+            </button>
+        {/if}
     </div>
 
     {#if calendarOpen}

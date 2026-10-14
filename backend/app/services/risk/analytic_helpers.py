@@ -80,6 +80,78 @@ def require_annualization_factor(context: RiskExecutionContext) -> float:
     return context.annualization_factor
 
 
+def prepared_scope_series(
+    context: RiskExecutionContext,
+) -> tuple[tuple[int, tuple[date, ...], tuple[float, ...]], ...]:
+    """Return one ``(asset_id, dates, returns)`` triple per usable scope asset.
+
+    For a scope that has no aggregate series of its own — an asset set has no
+    weights, so there is no whole to reduce to — this is the counterpart of
+    :func:`require_primary_returns`: it hands the analytic every series it is
+    meant to describe, and nothing else.
+
+    ⚠️ EVERY TRIPLE SHARES ONE CALENDAR, AND THAT IS NOT A COINCIDENCE.
+    ``PreparedAssetSeriesSet`` validates that each series carries exactly the
+    set's joint return dates, and the set is built once per request. So the
+    points an analytic produces here are commensurable by construction: they are
+    measured over the same days, with the same number of observations. Fanning
+    the same work out across one request per asset would produce a different
+    joint calendar each time and lose precisely that property.
+    """
+    if not context.scope_asset_ids:
+        raise RiskUnavailableError(
+            "No scope asset has a usable prepared return series",
+            code=RiskErrorCode.DATA_UNAVAILABLE,
+        )
+    return tuple((asset_id, *prepared_asset_returns(context, asset_id)) for asset_id in context.scope_asset_ids)
+
+
+def require_joint_baseline(context: RiskExecutionContext) -> date:
+    """Return the prepared set's shared valuation baseline.
+
+    ``primary_baseline_date`` is the baseline of a scope's own series, and a
+    weightless scope has none. The joint baseline is the valuation date every
+    asset's first return is measured against, which is the same thing one level
+    down and is shared by all of them.
+    """
+    prepared = context.prepared_series
+    if prepared is None or prepared.baseline_date is None or not prepared.joint_return_dates:
+        raise RiskUnavailableError(
+            "Prepared valuation baseline is unavailable",
+            code=RiskErrorCode.DATA_UNAVAILABLE,
+        )
+    if prepared.baseline_date >= prepared.joint_return_dates[0]:
+        raise RiskUnavailableError(
+            "Prepared valuation baseline does not precede the first return",
+            code=RiskErrorCode.DATA_UNAVAILABLE,
+        )
+    return prepared.baseline_date
+
+
+def require_joint_return_dates(context: RiskExecutionContext) -> tuple[date, ...]:
+    """Return the shared joint return calendar, refusing an empty one.
+
+    A caller that indexes ``joint_return_dates[0]`` behind an ``if prepared else
+    []`` fallback has written a guard its own next line contradicts: the empty
+    branch can only raise ``IndexError``, which the service reports as an
+    internal failure instead of a domain refusal. This states the requirement
+    once, and states it as the domain error it actually is.
+    """
+    prepared = context.prepared_series
+    if prepared is None or not prepared.joint_return_dates:
+        raise RiskUnavailableError(
+            "Prepared joint return calendar is unavailable",
+            code=RiskErrorCode.DATA_UNAVAILABLE,
+        )
+    return tuple(prepared.joint_return_dates)
+
+
+def joint_elapsed_calendar_days(context: RiskExecutionContext) -> tuple[int, ...]:
+    """Return baseline-inclusive calendar offsets on the shared joint calendar."""
+    baseline = require_joint_baseline(context)
+    return (0, *((point_date - baseline).days for point_date in require_joint_return_dates(context)))
+
+
 def elapsed_calendar_days(context: RiskExecutionContext) -> tuple[int, ...]:
     """Return baseline-inclusive calendar offsets for drawdown duration."""
     dates, _returns = require_primary_returns(context)
@@ -94,8 +166,12 @@ def elapsed_calendar_days(context: RiskExecutionContext) -> tuple[int, ...]:
 
 __all__ = [
     "elapsed_calendar_days",
+    "joint_elapsed_calendar_days",
     "prepared_asset_return_points",
     "prepared_asset_returns",
+    "prepared_scope_series",
     "require_annualization_factor",
+    "require_joint_baseline",
+    "require_joint_return_dates",
     "require_primary_returns",
 ]

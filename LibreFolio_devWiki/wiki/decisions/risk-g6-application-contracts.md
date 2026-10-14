@@ -67,12 +67,14 @@ filtering, grouping, or tag UI.
   residual; remaining assets are not renormalized.
 - Execution proceeds backend-first, then one functional view at a time with a
   mandatory human visual gate.
+- The canonical request identity sorts `asset_ids`, so a risk payload's order is not the order of the selection
+  on screen: [[problems/risk-request-sorts-asset-ids]].
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| Authoritative IA | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md` |
-| Execution plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/plan-phase01Step6RiskFrontendIntegration.prompt.md` |
-| Mathematical/semantic contract | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/contract-phase01RiskMetricsMathematical.md` |
-| Application plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/plan-phase01RiskAnalysisApplication.prompt.md` |
+| Authoritative IA | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md` |
+| Execution plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/plan-phase01Step6RiskFrontendIntegration.prompt.md` |
+| Mathematical/semantic contract | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/contract-phase01RiskMetricsMathematical.md` |
+| Application plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/plan-phase01RiskAnalysisApplication.prompt.md` |

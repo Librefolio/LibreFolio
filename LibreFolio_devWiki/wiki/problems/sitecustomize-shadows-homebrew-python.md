@@ -1,10 +1,11 @@
 ---
 title: "Custom sitecustomize.py on PYTHONPATH shadows Homebrew Python's own — pipenv breaks"
 category: problem
+status: resolved
 date: 2026-09-03
 tags: [testing, coverage, macos, homebrew, python, environment]
 related:
-  - concepts/test-runner-architecture
+  - entities/test-runner
 ---
 
 # Problem: a project sitecustomize.py on PYTHONPATH silently breaks Homebrew Python

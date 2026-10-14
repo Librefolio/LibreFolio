@@ -12,6 +12,8 @@ import {getCachedFxProviders} from '$lib/stores/currencyGraphStore';
 import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 import {zodiosApi} from '$lib/api';
 import {writable} from 'svelte/store';
+import {escapeHtml} from '$lib/utils/core/escapeHtml';
+import {entityDetailLinkHtml} from '$lib/utils/core/entityLink';
 
 // =========================================================================
 // 1. SHARED — colours, chain parsing
@@ -54,7 +56,7 @@ export function fxProviderBadgeHtml(providerCode: string): string {
     const info = providers.find((p) => p.code === providerCode);
     const cls = PROVIDER_COLORS[providerCode] ?? DEFAULT_PROVIDER_COLOR;
     if (info?.icon_url) {
-        return `<span class="inline-flex items-center px-1 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${info.icon_url}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.parentElement.textContent='${providerCode.slice(0, 2)}'" /></span>`;
+        return `<span class="inline-flex items-center px-1 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${escapeHtml(info.icon_url)}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.parentElement.textContent='${providerCode.slice(0, 2)}'" /></span>`;
     }
     return `<span class="inline-flex items-center px-1 py-0.5 text-[9px] font-medium rounded ${cls}">${providerCode}</span>`;
 }
@@ -62,18 +64,28 @@ export function fxProviderBadgeHtml(providerCode: string): string {
 /** ArrowLeftRight SVG (inline, for FX pair display in toast/badge HTML) */
 const arrowLrSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin:0 2px;width:10px;height:10px"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>`;
 
+export interface FxPairHtmlOptions {
+    outerFlags?: boolean;
+    linkToDetail?: boolean;
+}
+
 /**
- * Format FX pair slug as HTML with flags and ArrowLeftRight icon.
- * e.g. "EUR-USD" → "🇪🇺 EUR ↔ 🇺🇸 USD"
+ * Format FX pairs with emoji flags; creation feedback can link the pair between its flags.
+ * The default retains the existing ArrowLeftRight presentation.
  */
-export function fxPairHtml(slug: string): string {
+export function fxPairHtml(slug: string, options: FxPairHtmlOptions = {}): string {
     const parts = slug.split('-');
     const base = parts[0] ?? slug;
     const quote = parts[1] ?? '';
     const baseFlag = getCurrencyInfo(base).flag_emoji;
     const quoteFlag = quote ? getCurrencyInfo(quote).flag_emoji : '';
-    if (!quote) return `${baseFlag} ${base}`;
-    return `${baseFlag} ${base} ${arrowLrSvg} ${quoteFlag} ${quote}`;
+    if (!quote) return `${escapeHtml(baseFlag)} ${escapeHtml(base)}`;
+    if (options.outerFlags || options.linkToDetail) {
+        const label = `${base} / ${quote}`;
+        const pair = options.linkToDetail ? entityDetailLinkHtml({kind: 'fx', slug}, label) : escapeHtml(label);
+        return `<span class="emoji-flag">${escapeHtml(baseFlag)}</span> ${pair} <span class="emoji-flag">${escapeHtml(quoteFlag)}</span>`;
+    }
+    return `${escapeHtml(baseFlag)} ${escapeHtml(base)} ${arrowLrSvg} ${escapeHtml(quoteFlag)} ${escapeHtml(quote)}`;
 }
 
 // =========================================================================
@@ -164,9 +176,9 @@ export function assetProviderBadgeHtml(providerCode: string): string {
     const name = assetProviderNames.get(providerCode) ?? providerCode;
     const cls = PROVIDER_COLORS[providerCode] ?? DEFAULT_PROVIDER_COLOR;
     if (iconUrl) {
-        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${iconUrl}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.style.display='none'" /><span class="text-[10px] font-medium">${name}</span></span>`;
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${cls}" title="${providerCode}"><img src="${escapeHtml(iconUrl)}" alt="${providerCode}" class="w-3.5 h-3.5 rounded-sm object-contain" onerror="this.style.display='none'" /><span class="text-[10px] font-medium">${escapeHtml(name)}</span></span>`;
     }
-    return `<span class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}">${name}</span>`;
+    return `<span class="inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded ${cls}">${escapeHtml(name)}</span>`;
 }
 
 // =========================================================================

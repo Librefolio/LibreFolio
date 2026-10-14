@@ -7,9 +7,11 @@ Tests WAC orchestration and history aggregation.
 Reference: backend/app/services/portfolio_service.py
 """
 
+import json
 import sys
 from datetime import date, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -22,20 +24,30 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import backend.app.services.portfolio_engine as portfolio_engine_module
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, PriceHistory, ProviderInputType, Transaction, TransactionType, User, UserRole
+import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
+import backend.app.services.portfolio_service as portfolio_service_module
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, ProviderInputType, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import BRAccessBulkItem
-from backend.app.schemas.portfolio import AssetPeriodContribution, IssueCode, PortfolioReportQuery
+from backend.app.schemas.portfolio import (
+    AssetPeriodContribution,
+    DataQualityStatus,
+    IssueCode,
+    IssueSeverity,
+    PortfolioReportQuery,
+    StalePriceAsset,
+)
 from backend.app.services.broker_service import BrokerService
+from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
+from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.portfolio_service import (
     PortfolioService,
     _portfolio_l2_cache,
 )
 from backend.app.utils.datetime_utils import utcnow
-from backend.app.utils.financial.valuation_utils import compute_holding_value
 
 # =============================================================================
 # FIXTURES
@@ -331,6 +343,284 @@ class TestPortfolioServiceGetSummary:
         assert by_broker[broker_two.id].gain_loss.amount == Decimal("0")
         assert by_broker[broker_two.id].gain_loss_percent == Decimal("0")
 
+    # Internal cash transfer between two owned brokers (lot 41). Moving one's own cash from
+    # one broker to another changes where the value sits, not how much was earned: no broker
+    # card may show the move as a gain or a loss.
+
+    async def _owned_receiver_broker(self, session, user: User) -> Broker:
+        """A second broker the user owns at 100%, beside ``broker_with_access``."""
+        receiver = Broker(name=f"PfBroker_receiver_{uuid4().hex[:12]}")
+        session.add(receiver)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=receiver.id, user_id=user.id, role=UserRole.OWNER, share_percentage=Decimal("1.0")))
+        await session.flush()
+        return receiver
+
+    async def _deposit_and_transfer(self, session, sender: Broker, receiver: Broker, *, sent_on: date, received_on: date, deposited_on: date = date(2025, 1, 1)) -> None:
+        """5000 EUR deposited at ``sender`` on ``deposited_on`` (2025-01-01 unless given), then
+        1000 EUR moved to ``receiver`` as a linked CASH_TRANSFER pair: -1000 on ``sent_on``,
+        +1000 on ``received_on``.
+
+        Same construction as the linked pairs of test_transaction_service.py: both legs are
+        flushed first to get their ids, then point at each other (the foreign key of
+        ``related_transaction_id`` is deferred)."""
+        session.add(Transaction(broker_id=sender.id, type=TransactionType.DEPOSIT, date=deposited_on, amount=Decimal("5000"), currency="EUR"))
+        sent = Transaction(broker_id=sender.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=sent_on, quantity=Decimal("0"), amount=Decimal("-1000"), currency="EUR")
+        received = Transaction(broker_id=receiver.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=received_on, quantity=Decimal("0"), amount=Decimal("1000"), currency="EUR")
+        session.add_all([sent, received])
+        await session.flush()
+        sent.related_transaction_id = received.id
+        received.related_transaction_id = sent.id
+        await session.flush()
+
+    @staticmethod
+    def _card_problems(summary, when: str, expected: list[tuple[str, int, str, str, str]]) -> list[str]:
+        """Every mismatch between ``summary.by_broker`` and the ``expected`` rows of
+        (who, broker_id, net_worth, gain_loss, gain_loss_percent), so one red shows them all."""
+        if summary.by_broker is None:
+            return [f"{when}: by_broker is None"]
+        cards = {card.broker_id: card for card in summary.by_broker}
+        problems: list[str] = []
+        for who, broker_id, *wanted in expected:
+            card = cards.get(broker_id)
+            if card is None:
+                problems.append(f"{when} {who}: no broker card")
+                continue
+            actual = (card.net_worth.amount, card.gain_loss.amount, card.gain_loss_percent)
+            for field, got, want in zip(("net_worth", "gain_loss", "gain_loss_percent"), actual, wanted, strict=True):
+                if got != Decimal(want):
+                    problems.append(f"{when} {who}: {field} expected {want}, got {got}")
+        return problems
+
+    @staticmethod
+    def _card_cash_problems(summary, when: str, expected: list[tuple[str, int, str]]) -> list[str]:
+        """Every mismatch between the cash of the cards in ``summary.by_broker``
+        (``cash_total``) and the ``expected`` rows of (who, broker_id, cash_total)."""
+        if summary.by_broker is None:
+            return [f"{when}: by_broker is None"]
+        cards = {card.broker_id: card for card in summary.by_broker}
+        problems: list[str] = []
+        for who, broker_id, want in expected:
+            card = cards.get(broker_id)
+            if card is None:
+                problems.append(f"{when} {who}: no broker card")
+            elif card.cash_total.amount != Decimal(want):
+                problems.append(f"{when} {who}: cash_total expected {want}, got {card.cash_total.amount}")
+        return problems
+
+    @pytest.mark.asyncio
+    async def test_summary_with_breakdown_internal_cash_transfer_same_day_is_not_gain(self, session, test_user, broker_with_access):
+        """Moving one's own cash between two owned brokers is neither a gain nor a loss.
+
+        5000 EUR deposited at A; on 2025-01-10, 1000 EUR goes from A to B, both legs that day.
+        Afterwards A's card shows 4000 and B's 1000, each with gain 0 and 0%: the invested
+        capital moves with the cash. Before lot 41 the cards showed the move as P&L:
+        A -1000, B +1000."""
+        sender, _ = broker_with_access
+        receiver = await self._owned_receiver_broker(session, test_user)
+        await self._deposit_and_transfer(session, sender, receiver, sent_on=date(2025, 1, 10), received_on=date(2025, 1, 10))
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR", date_to=date(2025, 1, 20))
+
+        problems = self._card_problems(summary, "2025-01-20", [("A (sender)", sender.id, "4000", "0", "0"), ("B (receiver)", receiver.id, "1000", "0", "0")])
+        assert not problems, "\n".join(problems)
+
+    @pytest.mark.asyncio
+    async def test_summary_with_breakdown_internal_cash_transfer_in_transit_stays_with_sender(self, session, test_user, broker_with_access):
+        """Cash in transit between two owned brokers still belongs to the sender, and its
+        arrival is not a gain.
+
+        5000 EUR deposited at A; 1000 EUR leaves A on 2025-01-10 and reaches B on 2025-01-15.
+        During the transit (2025-01-12) A's card keeps the whole 5000 with gain 0 and B's shows
+        0 with gain 0; after the arrival (2025-01-20) A shows 4000 and B 1000, both with gain 0.
+        Before lot 41 A showed 4000 with a loss of 1000 during the transit."""
+        sender, _ = broker_with_access
+        receiver = await self._owned_receiver_broker(session, test_user)
+        await self._deposit_and_transfer(session, sender, receiver, sent_on=date(2025, 1, 10), received_on=date(2025, 1, 15))
+        service = PortfolioService(session)
+
+        in_transit = await service.get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR", date_to=date(2025, 1, 12))
+        arrived = await service.get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR", date_to=date(2025, 1, 20))
+
+        problems = self._card_problems(in_transit, "2025-01-12 (in transit)", [("A (sender)", sender.id, "5000", "0", "0"), ("B (receiver)", receiver.id, "0", "0", "0")])
+        problems += self._card_problems(arrived, "2025-01-20 (arrived)", [("A (sender)", sender.id, "4000", "0", "0"), ("B (receiver)", receiver.id, "1000", "0", "0")])
+        assert not problems, "\n".join(problems)
+
+    @pytest.mark.asyncio
+    async def test_summary_with_breakdown_internal_cash_transfer_foreign_currency_moves_capital_at_arrival_rate(self, session, test_user, broker_with_access):
+        """An internal transfer of foreign cash moves the invested capital at the rate of the
+        arrival day.
+
+        Base EUR; 1 CNY is worth 0.8 EUR on 2038-01-01, 0.9 on 01-10, 0.95 on 01-14, 1.0 on
+        01-15 and 1.2 on 01-20. 1000 CNY deposited at A on 01-01 (capital 1000 × 0.8 = 800);
+        500 CNY leaves A on 01-10 and reaches B on 01-15. During the transit (01-14) A's card
+        holds its 500 CNY of cash and the 500 in transit, both at 0.95: 950 with gain 150 on 800
+        (0.1875); B's shows 0. On arrival the 500 CNY enter B at 1.0, so 500 of capital moves
+        from A to B: on 01-20 each holds 500 CNY at 1.2 = 600, A with gain 300 on 300 (100%), B
+        with gain 100 on 500 (20%). The FX gain on the moved money is split by where it sat: A's
+        until the arrival (0.8 to 1.0), B's afterwards (1.0 to 1.2); the card gains add up to
+        400 = 1000 CNY × 1.2 - 800. Before lot 41 A showed 475 with a loss of 325 on 01-14 (the
+        in-transit value missing, the transfer invisible to the capital); on 01-20 A showed 600
+        with a loss of 200 and B 600 with a gain of 600 (0%, no capital)."""
+        sender, _ = broker_with_access
+        receiver = await self._owned_receiver_broker(session, test_user)
+        session.add_all(
+            [
+                FxRate(date=date(2038, 1, 1), base="CNY", quote="EUR", rate=Decimal("0.8"), source="TEST"),
+                FxRate(date=date(2038, 1, 10), base="CNY", quote="EUR", rate=Decimal("0.9"), source="TEST"),
+                FxRate(date=date(2038, 1, 14), base="CNY", quote="EUR", rate=Decimal("0.95"), source="TEST"),
+                FxRate(date=date(2038, 1, 15), base="CNY", quote="EUR", rate=Decimal("1.0"), source="TEST"),
+                FxRate(date=date(2038, 1, 20), base="CNY", quote="EUR", rate=Decimal("1.2"), source="TEST"),
+            ]
+        )
+        session.add(Transaction(broker_id=sender.id, type=TransactionType.DEPOSIT, date=date(2038, 1, 1), amount=Decimal("1000"), currency="CNY"))
+        sent = Transaction(broker_id=sender.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=date(2038, 1, 10), quantity=Decimal("0"), amount=Decimal("-500"), currency="CNY")
+        received = Transaction(broker_id=receiver.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=date(2038, 1, 15), quantity=Decimal("0"), amount=Decimal("500"), currency="CNY")
+        session.add_all([sent, received])
+        await session.flush()
+        sent.related_transaction_id = received.id
+        received.related_transaction_id = sent.id
+        await session.flush()
+        service = PortfolioService(session)
+
+        # Mid-transit check on 01-14, the last transit day, with its own rate: the engine fully re-values a day only when something happens on it (a transaction, a price, a transit boundary), not on a rate-only change (B4/F scope).
+        in_transit = await service.get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR", date_to=date(2038, 1, 14))
+        arrived = await service.get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR", date_to=date(2038, 1, 20))
+
+        problems = self._card_problems(in_transit, "2038-01-14 (in transit)", [("A (sender)", sender.id, "950", "150", "0.1875"), ("B (receiver)", receiver.id, "0", "0", "0")])
+        problems += self._card_problems(arrived, "2038-01-20 (arrived)", [("A (sender)", sender.id, "600", "300", "1"), ("B (receiver)", receiver.id, "600", "100", "0.2")])
+        assert not problems, "\n".join(problems)
+
+    @pytest.mark.asyncio
+    async def test_summary_with_breakdown_foreign_cash_in_transit_headline_equals_sum_of_cards(self, session, test_user, broker_with_access):
+        """The headline of the summary is the sum of its broker cards, also while foreign cash
+        is in transit (T1c, lot 41 step F).
+
+        Same scenario as the test above: base EUR; 1 CNY is worth 0.8 EUR on 2038-01-01, 0.9 on
+        01-10, 0.95 on 01-14, 1.0 on 01-15 and 1.2 on 01-20; 1000 CNY deposited at A on 01-01
+        (capital 800); 500 CNY leave A on 01-10 and reach B on 01-15. Cash is valued at the
+        rate of the valuation day, at a broker or in transit alike. On 01-14 the headline is
+        A's card: net worth 950 (500 CNY of cash at 0.95, 475, plus the 500 in transit, 475),
+        gain 150, cash 475; B's card is all 0. On 01-20 the 1000 CNY are worth 1.2: net worth
+        1200, gain 400, cash 1200, i.e. A's card 600 / 300 / 600 plus B's 600 / 100 / 600.
+
+        Before F, the headline kept each cash movement at the rate of its own date while the
+        cards revalued their cash at the valuation date: on 01-14 the headline showed cash 350
+        (800 - 450), net worth 825 and P&L 25; on 01-20 cash 850 (350 + 500 at 1.0), net worth
+        850 and P&L 50."""
+        sender, _ = broker_with_access
+        receiver = await self._owned_receiver_broker(session, test_user)
+        session.add_all(
+            [
+                FxRate(date=date(2038, 1, 1), base="CNY", quote="EUR", rate=Decimal("0.8"), source="TEST"),
+                FxRate(date=date(2038, 1, 10), base="CNY", quote="EUR", rate=Decimal("0.9"), source="TEST"),
+                FxRate(date=date(2038, 1, 14), base="CNY", quote="EUR", rate=Decimal("0.95"), source="TEST"),
+                FxRate(date=date(2038, 1, 15), base="CNY", quote="EUR", rate=Decimal("1.0"), source="TEST"),
+                FxRate(date=date(2038, 1, 20), base="CNY", quote="EUR", rate=Decimal("1.2"), source="TEST"),
+            ]
+        )
+        session.add(Transaction(broker_id=sender.id, type=TransactionType.DEPOSIT, date=date(2038, 1, 1), amount=Decimal("1000"), currency="CNY"))
+        sent = Transaction(broker_id=sender.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=date(2038, 1, 10), quantity=Decimal("0"), amount=Decimal("-500"), currency="CNY")
+        received = Transaction(broker_id=receiver.id, asset_id=None, type=TransactionType.CASH_TRANSFER, date=date(2038, 1, 15), quantity=Decimal("0"), amount=Decimal("500"), currency="CNY")
+        session.add_all([sent, received])
+        await session.flush()
+        sent.related_transaction_id = received.id
+        received.related_transaction_id = sent.id
+        await session.flush()
+        service = PortfolioService(session)
+
+        in_transit = await service.get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR", date_to=date(2038, 1, 14))
+        arrived = await service.get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR", date_to=date(2038, 1, 20))
+
+        problems: list[str] = []
+        # (when, summary, expected headline net_worth / total_gain_loss / cash_total)
+        for when, summary, wanted in (("2038-01-14 (in transit)", in_transit, ("950", "150", "475")), ("2038-01-20 (arrived)", arrived, ("1200", "400", "1200"))):
+            headline = (summary.net_worth.amount, summary.total_gain_loss.amount, summary.cash_total.amount)
+            for field, got, want in zip(("net_worth", "total_gain_loss", "cash_total"), headline, wanted, strict=True):
+                if got != Decimal(want):
+                    problems.append(f"{when} headline: {field} expected {want}, got {got}")
+            if summary.by_broker is not None:  # a missing breakdown is reported by _card_problems below
+                card_sums = (sum((card.net_worth.amount for card in summary.by_broker), Decimal("0")), sum((card.gain_loss.amount for card in summary.by_broker), Decimal("0")), sum((card.cash_total.amount for card in summary.by_broker), Decimal("0")))
+                for field, got, card_sum in zip(("net_worth", "total_gain_loss", "cash_total"), headline, card_sums, strict=True):
+                    if got != card_sum:
+                        problems.append(f"{when} headline: {field} {got} != sum of the cards {card_sum}")
+        problems += self._card_problems(in_transit, "2038-01-14 (in transit)", [("A (sender)", sender.id, "950", "150", "0.1875"), ("B (receiver)", receiver.id, "0", "0", "0")])
+        problems += self._card_cash_problems(in_transit, "2038-01-14 (in transit)", [("A (sender)", sender.id, "475"), ("B (receiver)", receiver.id, "0")])
+        problems += self._card_problems(arrived, "2038-01-20 (arrived)", [("A (sender)", sender.id, "600", "300", "1"), ("B (receiver)", receiver.id, "600", "100", "0.2")])
+        problems += self._card_cash_problems(arrived, "2038-01-20 (arrived)", [("A (sender)", sender.id, "600"), ("B (receiver)", receiver.id, "600")])
+        assert not problems, "\n".join(problems)
+
+    # The horizon of the card (lot 41). Called directly without ``date_to`` (get_report always
+    # passes one, ``date_to or today``), the summary values the portfolio today: the engine
+    # (capital, value in transit, headline) stops there, and every number the service reads
+    # from the rows must stop there too, even when a row is dated after today. Dates are
+    # relative to today so these tests never age; every row sits at least two days away from
+    # it, so a midnight between the test and the service cannot move a row to the other side
+    # of today.
+
+    @pytest.mark.asyncio
+    async def test_summary_with_breakdown_internal_cash_transfer_arriving_after_today_stays_in_transit(self, session, test_user, broker_with_access):
+        """Without ``date_to``, an internal cash transfer whose arrival is dated after today
+        is still in transit today, on the cards as in the headline.
+
+        5000 EUR deposited at A ten days ago; 1000 EUR leaves A two days ago and its arrival
+        at B is dated three days from now. Today A's card holds 4000 of cash and the 1000 in
+        transit: 5000 with gain 0 and 0%; B's holds 0 of cash: 0 with gain 0 and 0%. The two
+        cards add up to the headline net worth, 5000. Before T2g the card cash read every row
+        of the broker, the future arrival too, while capital, value in transit and headline
+        stop at today: B showed 1000 of cash, a net worth of 1000 and a gain of 1000 (its
+        capital had not moved yet), and the cards added up to 6000 against a headline of 5000."""
+        sender, _ = broker_with_access
+        receiver = await self._owned_receiver_broker(session, test_user)
+        today = date.today()
+        await self._deposit_and_transfer(session, sender, receiver, deposited_on=today - timedelta(days=10), sent_on=today - timedelta(days=2), received_on=today + timedelta(days=3))
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR")
+
+        when = f"{today} (no date_to, in transit)"
+        problems = self._card_problems(summary, when, [("A (sender)", sender.id, "5000", "0", "0"), ("B (receiver)", receiver.id, "0", "0", "0")])
+        problems += self._card_cash_problems(summary, when, [("A (sender)", sender.id, "4000"), ("B (receiver)", receiver.id, "0")])
+        cards_net_worth = sum((card.net_worth.amount for card in summary.by_broker or [] if card.broker_id in (sender.id, receiver.id)), Decimal("0"))
+        if cards_net_worth != summary.net_worth.amount:
+            problems.append(f"{when}: the cards add up to {cards_net_worth}, the headline net_worth is {summary.net_worth.amount}")
+        if summary.net_worth.amount != Decimal("5000"):
+            problems.append(f"{when}: headline net_worth expected 5000, got {summary.net_worth.amount}")
+        assert not problems, "\n".join(problems)
+
+    @pytest.mark.asyncio
+    async def test_summary_with_breakdown_future_dated_deposit_is_outside_today_valuation(self, session, test_user, broker_with_access):
+        """Without ``date_to``, a deposit dated after today is in neither the card nor the
+        period totals.
+
+        5000 EUR deposited at A ten days ago, 700 EUR more with a date five days from now.
+        Today A's card holds 5000 of cash: 5000 with gain 0 and 0%. The headline net worth is
+        5000, and so is the total deposited: the period totals reconcile to that net worth,
+        so they stop at the same day. Before T2g the card cash and the period totals read
+        every row of the broker, the future deposit too, while capital and headline stop at
+        today: the card showed 5700 with a gain of 700 (0.14) beside a headline of 5000, and
+        the total deposited was 5700."""
+        broker, _ = broker_with_access
+        today = date.today()
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=today - timedelta(days=10), amount=Decimal("5000"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=today + timedelta(days=5), amount=Decimal("700"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        summary = await PortfolioService(session).get_summary(user_id=test_user.id, include_breakdown=True, target_currency_override="EUR")
+
+        when = f"{today} (no date_to)"
+        problems = self._card_problems(summary, when, [("A", broker.id, "5000", "0", "0")])
+        problems += self._card_cash_problems(summary, when, [("A", broker.id, "5000")])
+        if summary.net_worth.amount != Decimal("5000"):
+            problems.append(f"{when}: headline net_worth expected 5000, got {summary.net_worth.amount}")
+        total_deposited = summary.total_deposited.amount if summary.total_deposited is not None else None
+        if total_deposited != Decimal("5000"):
+            problems.append(f"{when}: total_deposited expected 5000, got {total_deposited}")
+        assert not problems, "\n".join(problems)
+
     @pytest.mark.asyncio
     async def test_summary_filter_by_broker(self, session, test_user, broker_with_access):
         """broker_ids filter: valid broker_id -> no crash, valid structure."""
@@ -508,6 +798,87 @@ class TestRoleAwareShareScaling:
         assert row.period_income == Decimal("30"), f"30%-owner income must be 30, got {row.period_income}"
         assert row.end_value == Decimal("330"), f"30%-owner end value must be 330 (3 × 110), got {row.end_value}"
 
+    @pytest.mark.asyncio
+    async def test_income_history_scales_by_owner_share_not_by_role(self, session, test_user):
+        """G1c — get_income_history() must apply the SAME F2 rule as get_summary()/
+        get_positions_contribution() (reuses this class's _make_broker_with_role,
+        the existing multi-share fixture pattern, rather than inventing a new one):
+        a 30%-OWNER broker's DIVIDEND is scaled by its share exactly once, while an
+        EDITOR broker's INTEREST is shown in full despite share_percentage=0 (the
+        schema-mandated value for non-owner roles must never be read as "0% of
+        the data").
+        """
+        owner_broker = await self._make_broker_with_role(session, test_user, "OWNER", Decimal("0.3"))
+        editor_broker = await self._make_broker_with_role(session, test_user, "EDITOR", Decimal("0"))
+        session.add_all(
+            [
+                Transaction(broker_id=owner_broker.id, type=TransactionType.DIVIDEND, date=date(2025, 4, 10), amount=Decimal("100"), currency="EUR"),
+                Transaction(broker_id=editor_broker.id, type=TransactionType.INTEREST, date=date(2025, 4, 10), amount=Decimal("40"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        history = await service.get_income_history(user_id=test_user.id, date_from=None, date_to=date(2025, 4, 30))
+
+        assert [p.date for p in history.points] == [date(2025, 4, 10)], "both brokers' income lands on the same date -> one grouped point"
+        point = history.points[0]
+        assert point.dividend.amount == Decimal("30"), f"30%-owner dividend must be scaled to 30 (applied once, not skipped/doubled), got {point.dividend.amount}"
+        assert point.interest.amount == Decimal("40"), f"EDITOR interest must be full despite share_percentage=0, got {point.interest.amount}"
+        assert history.missing_fx_pairs == []
+
+
+class TestPortfolioYieldOnCost:
+    @pytest.mark.asyncio
+    async def test_summary_wires_yoc_to_holding_independently_of_date_from(self, session, test_user, broker_with_access, test_asset):
+        """YOC owns its trailing window: report date_from must not trim qualifying income."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.BUY,
+                    date=date(2024, 1, 1),
+                    quantity=Decimal("10"),
+                    amount=Decimal("-100"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.DIVIDEND,
+                    date=date(2025, 1, 15),
+                    amount=Decimal("20"),
+                    currency="EUR",
+                ),
+            ]
+        )
+        await session.flush()
+
+        summary = await PortfolioService(session).get_summary(
+            user_id=test_user.id,
+            date_from=date(2025, 7, 1),
+            date_to=date(2025, 12, 31),
+        )
+
+        holding = next(
+            (item for item in summary.holdings if item.asset_id == test_asset.id and item.broker_id == broker.id),
+            None,
+        )
+        assert holding is not None
+        assert holding.yield_on_cost is not None
+        assert "yield_on_cost" in holding.model_dump()
+        assert holding.yield_on_cost.provenance.net_zero is False
+        assert holding.yield_on_cost.status == "available"
+        assert holding.yield_on_cost.value == Decimal("0.2")
+        assert holding.yield_on_cost.reason is None
+        assert holding.yield_on_cost.provenance.window_start == date(2025, 1, 1)
+        assert holding.yield_on_cost.provenance.window_end == date(2025, 12, 31)
+        assert holding.yield_on_cost.provenance.gross_income_transaction_count == 1
+        assert holding.yield_on_cost.provenance.gross_income_per_unit is not None
+        assert holding.yield_on_cost.provenance.gross_income_per_unit.amount == Decimal("2")
+
 
 class TestAccessFingerprintCacheBust:
     """R2-F2a — role/share edits must bust the report caches.
@@ -638,6 +1009,392 @@ class TestAccessFingerprintCacheBust:
 
 
 # =============================================================================
+# TestPortfolioFxCacheIdentity — compute_portfolio_fx_cache_identity()
+# =============================================================================
+
+
+class TestPortfolioFxCacheIdentity:
+    """compute_portfolio_fx_cache_identity() is the shared FX fingerprint for both
+    portfolio cache layers (L1 blob in financial_math/portfolio/engine.py, L2 report in
+    portfolio_service.py). Its dependency set is deliberately BOUNDED: only
+    currencies actually present in a scope's transactions/held-asset
+    currencies/price history, paired with the target currency. A global,
+    unbounded fingerprint (e.g. hashing the whole fx_rates table) would bust
+    every user's cache on any FX sync anywhere in the system; a fingerprint
+    that ignores a real dependency would silently serve stale numbers for a
+    whole TTL instead (see TestAccessFingerprintCacheBust above for that
+    failure mode on the access side).
+
+    All rows here use currency pairs nowhere else in this codebase (EUR/ZAR,
+    EUR/THB, EUR/NOK) so "this identity doesn't already depend on unrelated
+    committed data" is true by construction, not by cleanup — same reasoning
+    as FX_CORE_BASE/FX_CORE_QUOTE in test_fx_core.py. Every row is created on
+    the test's own rolled-back `session`, so nothing here needs cleanup.
+    """
+
+    FX_TARGET = "EUR"
+    FX_SCOPE_CCY = "ZAR"  # currency actually present in the test's scope
+    FX_IRRELEVANT_CCY = "THB"  # a pair the scope never touches
+    FX_OUT_OF_SCOPE_CCY = "NOK"  # lives only on a broker outside scope_broker_ids
+    FX_COST_BASIS_CCY = "KWD"  # enters the scope only through cost_basis_currency
+    IDENTITY_DATE = date(2032, 6, 15)
+
+    async def _scoped_broker(self, session, test_user, currency) -> Broker:
+        """A broker in test_user's scope with one transaction in `currency`."""
+        broker = Broker(name=f"PfFxIdentity_{currency}_{utcnow().timestamp()}")
+        session.add(broker)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=broker.id, user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal("1")))
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=self.IDENTITY_DATE - timedelta(days=30),
+                amount=Decimal("100"),
+                currency=currency,
+            )
+        )
+        await session.flush()
+        return broker
+
+    async def _cost_basis_only_broker(self, session, test_user) -> Broker:
+        """Scope whose only non-target currency is an opening cost basis."""
+        marker = uuid4().hex
+        broker = Broker(name=f"PfFxIdentity_CostBasis_{marker}")
+        asset = Asset(
+            display_name=f"PfFxIdentityAsset_{marker}",
+            ticker=f"PFCB{marker[:8]}",
+            currency=self.FX_TARGET,
+            type=AssetType.STOCK,
+        )
+        session.add_all([broker, asset])
+        await session.flush()
+        session.add_all(
+            [
+                BrokerUserAccess(
+                    broker_id=broker.id,
+                    user_id=test_user.id,
+                    role=UserRole.OWNER,
+                    share_percentage=Decimal("1"),
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=asset.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=self.IDENTITY_DATE - timedelta(days=30),
+                    quantity=Decimal("2"),
+                    amount=Decimal("0"),
+                    currency=None,
+                    cost_basis_override=Decimal("25"),
+                    cost_basis_currency=self.FX_COST_BASIS_CCY,
+                ),
+                PriceHistory(
+                    asset_id=asset.id,
+                    date=self.IDENTITY_DATE,
+                    close=Decimal("100"),
+                    currency=self.FX_TARGET,
+                    source_plugin_key="manual_test",
+                ),
+            ]
+        )
+        await session.flush()
+        return broker
+
+    @pytest.mark.asyncio
+    async def test_stable_identity_when_deps_unchanged(self, session, test_user):
+        """Two calls, nothing written in between → identical identity (cache hit)."""
+        broker = await self._scoped_broker(session, test_user, self.FX_SCOPE_CCY)
+        id1 = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        id2 = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert id1 == id2
+        assert id1 != "no_fx", "scope has a ZAR transaction against an EUR target — must be a real fingerprint, not the empty-deps sentinel"
+
+    @pytest.mark.asyncio
+    async def test_irrelevant_fx_pair_does_not_change_identity(self, session, test_user):
+        """A rate+route for a pair the scope never touches (EUR/THB) must not move
+        the EUR/ZAR-scoped identity — this is the bounded-query guarantee."""
+        broker = await self._scoped_broker(session, test_user, self.FX_SCOPE_CCY)
+        baseline = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+
+        session.add(FxRate(date=self.IDENTITY_DATE, base=self.FX_TARGET, quote=self.FX_IRRELEVANT_CCY, rate=Decimal("35.0"), source="TEST"))
+        session.add(
+            FxConversionRoute(
+                base=self.FX_TARGET,
+                quote=self.FX_IRRELEVANT_CCY,
+                priority=1,
+                chain_steps=json.dumps([{"from": self.FX_TARGET, "to": self.FX_IRRELEVANT_CCY, "provider": "ECB"}]),
+            )
+        )
+        await session.flush()
+
+        after = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert after == baseline, "an unrelated EUR/THB rate+route perturbed the EUR/ZAR-scoped identity"
+
+    @pytest.mark.asyncio
+    async def test_out_of_scope_broker_does_not_affect_identity(self, session, test_user):
+        """A second broker+currency+rate that is NOT in scope_broker_ids must not
+        leak into this scope's fingerprint — the query is bounded per scope, not
+        per user or globally."""
+        broker = await self._scoped_broker(session, test_user, self.FX_SCOPE_CCY)
+        baseline = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+
+        await self._scoped_broker(session, test_user, self.FX_OUT_OF_SCOPE_CCY)
+        session.add(FxRate(date=self.IDENTITY_DATE, base=self.FX_TARGET, quote=self.FX_OUT_OF_SCOPE_CCY, rate=Decimal("11.0"), source="TEST"))
+        await session.flush()
+
+        after = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert after == baseline, "an out-of-scope broker's currency/FX data leaked into this scope's identity"
+
+    @pytest.mark.asyncio
+    async def test_relevant_fx_rate_insert_and_update_change_identity(self, session, test_user):
+        """A relevant EUR/ZAR rate insert moves the identity; editing its value
+        moves it again — both are real dependency changes."""
+        broker = await self._scoped_broker(session, test_user, self.FX_SCOPE_CCY)
+        baseline = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+
+        rate = FxRate(date=self.IDENTITY_DATE, base=self.FX_TARGET, quote=self.FX_SCOPE_CCY, rate=Decimal("20.50"), source="TEST")
+        session.add(rate)
+        await session.flush()
+        after_insert = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert after_insert != baseline, "inserting the scope's own EUR/ZAR rate did not move the identity"
+
+        rate.rate = Decimal("21.75")
+        await session.flush()
+        after_update = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert after_update != after_insert, "updating the scope's own EUR/ZAR rate value did not move the identity"
+
+    @pytest.mark.asyncio
+    async def test_relevant_fx_rate_deletion_and_replacement_change_identity(self, session, test_user):
+        """Deleting and replacing the scope's only relevant rate must each move
+        the identity."""
+        broker = await self._scoped_broker(session, test_user, self.FX_SCOPE_CCY)
+        rate = FxRate(date=self.IDENTITY_DATE, base=self.FX_TARGET, quote=self.FX_SCOPE_CCY, rate=Decimal("19.0"), source="TEST")
+        session.add(rate)
+        await session.flush()
+        with_rate = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+
+        await session.delete(rate)
+        await session.flush()
+        without_rate = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert without_rate != with_rate, "deleting the scope's only relevant rate did not move the identity"
+
+        replacement = FxRate(date=self.IDENTITY_DATE, base=self.FX_TARGET, quote=self.FX_SCOPE_CCY, rate=Decimal("22.0"), source="REPLACEMENT")
+        session.add(replacement)
+        await session.flush()
+        with_replacement = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert with_replacement != without_rate, "replacing the scope's relevant rate did not move the identity"
+        assert with_replacement != with_rate, "replacement data produced the deleted rate's identity"
+
+    @pytest.mark.asyncio
+    async def test_relevant_route_change_changes_identity(self, session, test_user):
+        """A conversion-route insert (provider/chain config) and a subsequent
+        priority edit are both relevant config changes and must each move the
+        identity — a stale route could route the same pair through a different,
+        no-longer-configured provider chain without the cache noticing."""
+        broker = await self._scoped_broker(session, test_user, self.FX_SCOPE_CCY)
+        baseline = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+
+        route = FxConversionRoute(
+            base=self.FX_TARGET,
+            quote=self.FX_SCOPE_CCY,
+            priority=1,
+            chain_steps=json.dumps([{"from": self.FX_TARGET, "to": self.FX_SCOPE_CCY, "provider": "ECB"}]),
+        )
+        session.add(route)
+        await session.flush()
+        after_route = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert after_route != baseline, "adding a route for the scope's own pair did not move the identity"
+
+        route.priority = 2
+        await session.flush()
+        after_priority = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert after_priority != after_route, "editing the route's priority did not move the identity"
+
+        route.chain_steps = json.dumps([{"from": self.FX_TARGET, "to": self.FX_SCOPE_CCY, "provider": "MOCKFX"}])
+        await session.flush()
+        after_provider = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert after_provider != after_priority, "editing the route's provider chain did not move the identity"
+
+    @pytest.mark.asyncio
+    async def test_cost_basis_currency_fx_cache_identity_tracks_rate_and_route(self, session, test_user):
+        """A third currency used only by cost_basis_currency is an FX dependency."""
+        broker = await self._cost_basis_only_broker(session, test_user)
+        baseline = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert baseline != "no_fx", "cost_basis_currency was ignored when cash, asset, and price currencies all matched the target"
+
+        rate = FxRate(
+            date=self.IDENTITY_DATE,
+            base=self.FX_TARGET,
+            quote=self.FX_COST_BASIS_CCY,
+            rate=Decimal("0.25"),
+            source="TEST",
+        )
+        session.add(rate)
+        await session.flush()
+        after_rate = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert after_rate != baseline, "a rate used only by cost_basis_currency did not move the FX identity"
+
+        route = FxConversionRoute(
+            base=self.FX_TARGET,
+            quote=self.FX_COST_BASIS_CCY,
+            priority=1,
+            chain_steps=json.dumps([{"from": self.FX_COST_BASIS_CCY, "to": self.FX_TARGET, "provider": "ECB"}]),
+        )
+        session.add(route)
+        await session.flush()
+        after_route = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert after_route != after_rate, "a route used only by cost_basis_currency did not move the FX identity"
+
+        route.chain_steps = json.dumps([{"from": self.FX_COST_BASIS_CCY, "to": self.FX_TARGET, "provider": "MOCKFX"}])
+        await session.flush()
+        after_provider = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert after_provider != after_route, "changing the cost-basis route provider did not move the FX identity"
+
+    @pytest.mark.asyncio
+    async def test_future_dated_rate_beyond_date_to_excluded(self, session, test_user):
+        """date_to bounds the FX dependency window: a rate dated after date_to is
+        not yet usable for this valuation and must not appear in the identity —
+        but the same rate DOES move the identity once date_to reaches it (sanity
+        check that the function is sensitive at all, not just conveniently blind)."""
+        broker = await self._scoped_broker(session, test_user, self.FX_SCOPE_CCY)
+        baseline = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+
+        session.add(FxRate(date=self.IDENTITY_DATE + timedelta(days=1), base=self.FX_TARGET, quote=self.FX_SCOPE_CCY, rate=Decimal("99.0"), source="TEST"))
+        await session.flush()
+
+        still_baseline = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE)
+        assert still_baseline == baseline, "a rate dated after date_to leaked into the identity"
+
+        widened = await portfolio_engine_module.compute_portfolio_fx_cache_identity(session, {broker.id}, self.FX_TARGET, self.IDENTITY_DATE + timedelta(days=1))
+        assert widened != baseline, "widening date_to to include the future-dated rate did not move the identity"
+
+
+# =============================================================================
+# TestPortfolioBlobCacheFxSensitivity — L1 blob cache key integration
+# =============================================================================
+
+
+class TestPortfolioBlobCacheFxSensitivity:
+    """The L1 blob cache key (PortfolioCalculationEngine.calculate) now includes
+    compute_portfolio_fx_cache_identity(). This exercises the integration end to
+    end: identical scope/date → cache hit (DailyStateBuilder.build not called
+    again); an irrelevant FX pair → still a cache hit; a relevant FX rate insert
+    → cache miss (recompute)."""
+
+    @pytest.mark.asyncio
+    async def test_blob_cache_hit_stable_then_miss_on_relevant_fx_change(self, session, test_user, monkeypatch):
+        broker = Broker(name=f"PfFxBlob_{utcnow().timestamp()}")
+        session.add(broker)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=broker.id, user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal("1")))
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=date(2033, 1, 1),
+                amount=Decimal("500"),
+                currency="ZAR",
+            )
+        )
+        await session.flush()
+        portfolio_engine_module._portfolio_blob_cache.clear()
+
+        build_calls = {"n": 0}
+        original_build = DailyStateBuilder.build
+
+        def counting_build(builder_self):
+            build_calls["n"] += 1
+            return original_build(builder_self)
+
+        monkeypatch.setattr(DailyStateBuilder, "build", counting_build)
+
+        engine = portfolio_engine_module.PortfolioCalculationEngine(session)
+        date_to = date(2033, 1, 10)
+
+        await engine.calculate(test_user.id, broker_ids=[broker.id], date_to=date_to, target_currency="EUR")
+        assert build_calls["n"] == 1
+
+        # Unchanged deps → cache hit, no recompute.
+        await engine.calculate(test_user.id, broker_ids=[broker.id], date_to=date_to, target_currency="EUR")
+        assert build_calls["n"] == 1, "identical scope/date recomputed instead of hitting the L1 blob cache"
+
+        # Irrelevant FX pair (EUR/THB — this scope only has ZAR) → still a cache hit.
+        session.add(FxRate(date=date_to, base="EUR", quote="THB", rate=Decimal("35.0"), source="TEST"))
+        await session.flush()
+        await engine.calculate(test_user.id, broker_ids=[broker.id], date_to=date_to, target_currency="EUR")
+        assert build_calls["n"] == 1, "an unrelated EUR/THB rate busted the L1 blob cache"
+
+        # Relevant FX rate (EUR/ZAR) → must bust the cache.
+        session.add(FxRate(date=date_to, base="EUR", quote="ZAR", rate=Decimal("20.5"), source="TEST"))
+        await session.flush()
+        await engine.calculate(test_user.id, broker_ids=[broker.id], date_to=date_to, target_currency="EUR")
+        assert build_calls["n"] == 2, "a relevant EUR/ZAR rate insert did not bust the L1 blob cache"
+
+    @pytest.mark.asyncio
+    async def test_cost_basis_currency_fx_cache_change_busts_l1_blob(self, session, test_user, monkeypatch, request):
+        identity_fixture = TestPortfolioFxCacheIdentity()
+        broker = await identity_fixture._cost_basis_only_broker(session, test_user)
+        portfolio_engine_module._portfolio_blob_cache.clear()
+        request.addfinalizer(portfolio_engine_module._portfolio_blob_cache.clear)
+
+        build_calls = {"n": 0}
+        original_build = DailyStateBuilder.build
+
+        def counting_build(builder_self):
+            build_calls["n"] += 1
+            return original_build(builder_self)
+
+        monkeypatch.setattr(DailyStateBuilder, "build", counting_build)
+
+        engine = portfolio_engine_module.PortfolioCalculationEngine(session)
+
+        async def calculate():
+            return await engine.calculate(
+                test_user.id,
+                broker_ids=[broker.id],
+                date_to=identity_fixture.IDENTITY_DATE,
+                target_currency=identity_fixture.FX_TARGET,
+            )
+
+        await calculate()
+        await calculate()
+        assert build_calls["n"] == 1, "unchanged cost-basis FX dependencies missed the L1 blob cache"
+
+        session.add(
+            FxRate(
+                date=identity_fixture.IDENTITY_DATE,
+                base=identity_fixture.FX_TARGET,
+                quote=identity_fixture.FX_COST_BASIS_CCY,
+                rate=Decimal("0.25"),
+                source="TEST",
+            )
+        )
+        await session.flush()
+        await calculate()
+        assert build_calls["n"] == 2, "a rate used only by cost_basis_currency did not bust the L1 blob cache"
+
+        session.add(
+            FxConversionRoute(
+                base=identity_fixture.FX_TARGET,
+                quote=identity_fixture.FX_COST_BASIS_CCY,
+                priority=1,
+                chain_steps=json.dumps(
+                    [
+                        {
+                            "from": identity_fixture.FX_COST_BASIS_CCY,
+                            "to": identity_fixture.FX_TARGET,
+                            "provider": "MOCKFX",
+                        }
+                    ]
+                ),
+            )
+        )
+        await session.flush()
+        await calculate()
+        assert build_calls["n"] == 3, "a route used only by cost_basis_currency did not bust the L1 blob cache"
+
+
+# =============================================================================
 # TestTransactionImpliedDataQuality
 # =============================================================================
 
@@ -725,6 +1482,256 @@ class TestTransactionImpliedDataQuality:
         # Narrow range behaves identically (the flag is as-of, not range-dependent).
         summary_narrow = await service.get_summary(user_id=test_user.id, date_from=date(2024, 3, 1), date_to=report_end)
         assert IssueCode.TRANSACTION_IMPLIED not in {i.code for i in summary_narrow.data_quality.issues}
+
+
+# =============================================================================
+# TestStalePriceDataQuality
+# =============================================================================
+
+
+class TestStalePriceDataQuality:
+    """STALE_PRICE ("prezzi non aggiornati") — decision D8 (30/09), R2 step 13 item 9.
+
+    The engine already knows, per open position, whether its market price has been
+    carried forward for more than ``STALE_PRICE_THRESHOLD_DAYS`` (7) days
+    (``DailyPositionState.valuation_stale``), and ``build_data_quality_report`` already
+    renders STALE_PRICE from ``stale_prices_dto``. But ``get_summary`` never passes that
+    argument — not since the engine rewrite 77b976ebc — so the banner never appears.
+
+    The approved rule: at ``date_to`` an asset is flagged when ALL of these hold —
+      * it has an open position (quantity above dust);
+      * that position is valued at a MARKET price, not at a trade price;
+      * that market price is carried forward more than 7 days;
+      * the asset has a provider assignment.
+    One ``StalePriceAsset`` per asset (never per broker), ``stale_days`` counted from the
+    carried price date to the valuation date, and the CTA is ``sync_asset_prices``.
+
+    Each test owns its user, broker(s), asset and prices — flushed, then rolled back by
+    the ``session`` fixture — so the portfolio under test is exactly what the test wrote;
+    that is what makes the exact assertions below legitimate. Dates are relative to
+    ``date.today()``: staleness is measured against the calendar, so a fixed date would
+    only test the day it was written. Every negative case first proves, through the
+    holding row, that its position is valued the way the case claims — an absence
+    assertion without that barrier would also pass on a portfolio that never held
+    anything.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _pin_today(self):
+        """Read the calendar once per test: seeding, ``date_to`` and the expected ages
+        then agree even if the test straddles midnight."""
+        self.today = date.today()
+
+    async def _seed_prices(self, session, asset: Asset, *days_ago: int) -> None:
+        """EUR market quotes ``days_ago`` before today, closes 100, 101, … in the given order."""
+        for index, days in enumerate(days_ago):
+            close = Decimal(100 + index)
+            session.add(PriceHistory(asset_id=asset.id, date=self.today - timedelta(days=days), open=close, high=close, low=close, close=close, volume=Decimal("1"), currency="EUR", source_plugin_key="manual_test"))
+        await session.flush()
+
+    async def _seed_position(self, session, broker: Broker, asset: Asset, *, bought_days_ago: int, sold_days_ago: int | None = None) -> None:
+        """Fund ``broker``, BUY 10 units at 100 EUR, and optionally SELL all of them."""
+        bought = self.today - timedelta(days=bought_days_ago)
+        rows = [
+            Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=bought, amount=Decimal("10000"), currency="EUR"),
+            Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=bought, quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR"),
+        ]
+        if sold_days_ago is not None:
+            rows.append(Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=self.today - timedelta(days=sold_days_ago), quantity=Decimal("-10"), amount=Decimal("1000"), currency="EUR"))
+        session.add_all(rows)
+        await session.flush()
+
+    async def _summary(self, session, user: User, date_to: date | None = None):
+        return await PortfolioService(session).get_summary(user_id=user.id, date_to=date_to or self.today)
+
+    @staticmethod
+    def _stale_issue(summary):
+        return next((issue for issue in summary.data_quality.issues if issue.code == IssueCode.STALE_PRICE), None)
+
+    @staticmethod
+    def _only_holding(summary, asset_id: int):
+        rows = [holding for holding in summary.holdings if holding.asset_id == asset_id]
+        assert len(rows) == 1, f"expected exactly one open holding of asset {asset_id}, got {rows}"
+        return rows[0]
+
+    @classmethod
+    def _assert_not_flagged(cls, summary) -> None:
+        issue = cls._stale_issue(summary)
+        assert issue is None, f"unexpected STALE_PRICE issue: {issue}"
+        assert summary.data_quality.stale_prices == []
+
+    @pytest.mark.asyncio
+    async def test_provider_asset_with_ten_day_old_market_price_is_flagged(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """Case 1 — the defect. An open position of a provider-priced asset whose last
+        quote is 10 days old is flagged once, with its carried date, its age in days and a
+        «Sincronizza» CTA. Red until ``get_summary`` passes ``stale_prices_dto``."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        today = self.today
+        await self._seed_position(session, broker, asset, bought_days_ago=40)
+        await self._seed_prices(session, asset, 40, 30, 20, 10)
+
+        summary = await self._summary(session, test_user)
+
+        holding = self._only_holding(summary, asset.id)
+        assert holding.valuation_source == "MARKET_PRICE"
+        assert holding.valuation_reference_date == today - timedelta(days=10)
+
+        issue = self._stale_issue(summary)
+        assert issue is not None, f"no STALE_PRICE issue; the report carries {[i.code for i in summary.data_quality.issues]}"
+        assert issue.severity == IssueSeverity.WARNING
+        assert issue.message_i18n_key == "dataQuality.stalePrice"
+        assert issue.message_params["count"] == 1
+        assert issue.count == 1
+        assert issue.affected_asset_ids == [asset.id]
+        assert issue.affected_asset_names == [asset.display_name]
+        assert issue.cta_action == "sync_asset_prices"
+        assert summary.data_quality.stale_prices == [StalePriceAsset(asset_id=asset.id, name=asset.display_name, last_price_date=today - timedelta(days=10), stale_days=10)]
+
+    @pytest.mark.asyncio
+    async def test_stale_price_alone_reports_carried_forward_status(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """D8 §3 — a stale quote with nothing worse in the report makes the summary's
+        data quality ``carried_forward`` (derived by the schema) and lists the asset in
+        ``stale_prices``. Red today: ``stale_prices`` is never filled, so the status
+        reads ``ok``."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_position(session, broker, asset, bought_days_ago=40)
+        await self._seed_prices(session, asset, 40, 30, 20, 10)
+
+        dq = (await self._summary(session, test_user)).data_quality
+
+        # "Nothing worse": each of these would make the status PARTIAL instead.
+        assert dq.missing_price_assets == []
+        assert dq.missing_fx_pairs == []
+        assert dq.incomplete_nav_dates == []
+        assert asset.id in {stale.asset_id for stale in dq.stale_prices}
+        assert dq.data_quality_status == DataQualityStatus.CARRIED_FORWARD
+
+    @pytest.mark.asyncio
+    async def test_market_price_exactly_seven_days_old_is_not_stale(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """Case 2 — control on the threshold: stale means carried *more than* 7 days, so a
+        quote exactly 7 days old is still current."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        today = self.today
+        await self._seed_position(session, broker, asset, bought_days_ago=40)
+        await self._seed_prices(session, asset, 40, 30, 20, 7)
+
+        summary = await self._summary(session, test_user)
+
+        holding = self._only_holding(summary, asset.id)
+        assert holding.valuation_source == "MARKET_PRICE"
+        assert holding.valuation_reference_date == today - timedelta(days=7)
+        self._assert_not_flagged(summary)
+
+    @pytest.mark.asyncio
+    async def test_fresh_market_price_is_not_flagged(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """Case 3 — control: a quote carried for 2 days is ordinary (weekends do that)."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        today = self.today
+        await self._seed_position(session, broker, asset, bought_days_ago=40)
+        await self._seed_prices(session, asset, 40, 30, 20, 2)
+
+        summary = await self._summary(session, test_user)
+
+        holding = self._only_holding(summary, asset.id)
+        assert holding.valuation_source == "MARKET_PRICE"
+        assert holding.valuation_reference_date == today - timedelta(days=2)
+        self._assert_not_flagged(summary)
+
+    @pytest.mark.asyncio
+    async def test_manual_asset_with_stale_market_price_is_not_flagged(self, session, test_user, broker_with_access, test_asset):
+        """Case 4 — control on the provider condition: a manual asset (no provider
+        assignment) whose market price is 10 days old is exactly as stale as case 1 for
+        the engine, but there is nothing to sync, so it is never flagged."""
+        broker, _ = broker_with_access
+        asset = test_asset
+        today = self.today
+        assignment = (await session.execute(select(AssetProviderAssignment.id).where(AssetProviderAssignment.asset_id == asset.id))).first()
+        assert assignment is None, "precondition: the manual asset must have no provider assignment"
+        await self._seed_position(session, broker, asset, bought_days_ago=40)
+        await self._seed_prices(session, asset, 40, 30, 20, 10)
+
+        summary = await self._summary(session, test_user)
+
+        holding = self._only_holding(summary, asset.id)
+        assert holding.valuation_source == "MARKET_PRICE"
+        assert holding.valuation_reference_date == today - timedelta(days=10)
+        self._assert_not_flagged(summary)
+
+    @pytest.mark.asyncio
+    async def test_position_sold_before_date_to_is_not_flagged(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """Case 5 — control on the open-position condition: the rule is evaluated at
+        ``date_to``, and a position fully sold before it has no price to be stale.
+
+        Barrier: the day before the sale the same holding was open and valued at a
+        market price already carried 9 days — the only thing that changes by today is
+        that the position is closed."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        today = self.today
+        await self._seed_position(session, broker, asset, bought_days_ago=40, sold_days_ago=5)
+        await self._seed_prices(session, asset, 40, 30, 20, 15)
+
+        before_sale = await self._summary(session, test_user, date_to=today - timedelta(days=6))
+        summary = await self._summary(session, test_user)
+
+        holding = self._only_holding(before_sale, asset.id)
+        assert holding.valuation_source == "MARKET_PRICE"
+        assert holding.valuation_reference_date == today - timedelta(days=15)
+        assert [h for h in summary.holdings if h.asset_id == asset.id] == []
+        self._assert_not_flagged(summary)
+
+    @pytest.mark.asyncio
+    async def test_trade_priced_provider_asset_is_left_to_transaction_implied(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """Case 6 — control on the MARKET_PRICE condition: a provider asset with no quote
+        at all, bought 20 days ago, is valued at its trade price. The engine marks that
+        valuation stale too (20 days > 7), but it is TRANSACTION_IMPLIED's case — the
+        missing quote is already reported there — and must not be reported twice."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_position(session, broker, asset, bought_days_ago=20)
+
+        summary = await self._summary(session, test_user)
+
+        holding = self._only_holding(summary, asset.id)
+        assert holding.valuation_source == "LAST_TRADE_PRICE"
+        implied = next((issue for issue in summary.data_quality.issues if issue.code == IssueCode.TRANSACTION_IMPLIED), None)
+        assert implied is not None and asset.id in implied.affected_asset_ids, "barrier: past the 14-day grace the asset must be reported as valued at cost"
+        self._assert_not_flagged(summary)
+
+    @pytest.mark.asyncio
+    async def test_asset_held_at_two_brokers_is_one_stale_entry(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """Case 7 — aggregation: one asset held at two brokers is one stale price, so one
+        ``StalePriceAsset`` and one affected id, not one per broker. Red today because
+        nothing is reported at all; a per-broker fix would be red with two entries."""
+        broker, _ = broker_with_access
+        second = Broker(name=f"PfBroker_stale_{uuid4().hex[:12]}")
+        session.add(second)
+        await session.flush()
+        session.add(BrokerUserAccess(broker_id=second.id, user_id=test_user.id, role=UserRole.OWNER, share_percentage=Decimal("1.0")))
+        await session.flush()
+        asset = test_asset_with_provider
+        today = self.today
+        await self._seed_position(session, broker, asset, bought_days_ago=40)
+        await self._seed_position(session, second, asset, bought_days_ago=35)
+        await self._seed_prices(session, asset, 40, 30, 20, 10)
+
+        summary = await self._summary(session, test_user)
+
+        holdings = [h for h in summary.holdings if h.asset_id == asset.id]
+        assert {h.broker_id for h in holdings} == {broker.id, second.id}
+        assert {(h.valuation_source, h.valuation_reference_date) for h in holdings} == {("MARKET_PRICE", today - timedelta(days=10))}
+
+        entries = [stale for stale in summary.data_quality.stale_prices if stale.asset_id == asset.id]
+        assert entries == [StalePriceAsset(asset_id=asset.id, name=asset.display_name, last_price_date=today - timedelta(days=10), stale_days=10)]
+        issue = self._stale_issue(summary)
+        assert issue is not None
+        assert issue.affected_asset_ids == [asset.id]
+        assert issue.count == 1
+        assert issue.message_params["count"] == 1
 
 
 # =============================================================================
@@ -1662,10 +2669,330 @@ class TestPortfolioServiceGetReport:
         assert second.model_dump() == first.model_dump()
 
     @pytest.mark.asyncio
+    async def test_implicit_date_rollover_and_explicit_same_day_use_distinct_l2_keys(
+        self,
+        session,
+        test_user,
+        broker_with_access,
+        monkeypatch,
+        request,
+    ):
+        """Cache identity preserves raw date_to intent plus its effective date."""
+        broker, _ = broker_with_access
+        first_day = date(2037, 5, 10)
+        second_day = first_day + timedelta(days=1)
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=first_day - timedelta(days=2),
+                amount=Decimal("750"),
+                currency="EUR",
+            )
+        )
+        await session.flush()
+        _portfolio_l2_cache.clear()
+        portfolio_engine_module._portfolio_blob_cache.clear()
+        request.addfinalizer(_portfolio_l2_cache.clear)
+        request.addfinalizer(portfolio_engine_module._portfolio_blob_cache.clear)
+
+        class MutableToday(date):
+            current = first_day
+
+            @classmethod
+            def today(cls):
+                return cls.current
+
+        monkeypatch.setattr(
+            portfolio_service_module,
+            "date_type",
+            MutableToday,
+        )
+        monkeypatch.setattr(
+            portfolio_engine_module,
+            "date_type",
+            MutableToday,
+        )
+
+        observed_keys = []
+        original_get = _portfolio_l2_cache.get
+
+        def capture_get(key):
+            observed_keys.append(key)
+            return original_get(key)
+
+        monkeypatch.setattr(_portfolio_l2_cache, "get", capture_get)
+
+        engine_calls = {"count": 0}
+        original_calculate = portfolio_engine_module.PortfolioCalculationEngine.calculate
+
+        async def counting_calculate(engine_self, *args, **kwargs):
+            engine_calls["count"] += 1
+            return await original_calculate(engine_self, *args, **kwargs)
+
+        monkeypatch.setattr(
+            portfolio_engine_module.PortfolioCalculationEngine,
+            "calculate",
+            counting_calculate,
+        )
+
+        service = PortfolioService(session)
+        implicit_query = PortfolioReportQuery(
+            broker_ids=[broker.id],
+            target_currency="EUR",
+            include_summary=False,
+            include_history=False,
+            include_allocation_history=False,
+            include_breakdown=False,
+            include_positions_contribution=False,
+        )
+        explicit_query = PortfolioReportQuery(
+            broker_ids=[broker.id],
+            target_currency="EUR",
+            date_range={"end": str(first_day)},
+            include_summary=False,
+            include_history=False,
+            include_allocation_history=False,
+            include_breakdown=False,
+            include_positions_contribution=False,
+        )
+
+        implicit_first = await service.get_report(
+            user_id=test_user.id,
+            query=implicit_query,
+        )
+        assert implicit_first.metadata.requested_date_to is None
+        assert implicit_first.metadata.computed_date_to == first_day
+
+        explicit_same_day = await service.get_report(
+            user_id=test_user.id,
+            query=explicit_query,
+        )
+        assert explicit_same_day.metadata.requested_date_to == first_day
+        assert explicit_same_day.metadata.computed_date_to == first_day
+        assert engine_calls["count"] == 2
+        assert len(observed_keys) == 2
+        assert observed_keys[0] != observed_keys[1]
+
+        MutableToday.current = second_day
+        implicit_second = await service.get_report(
+            user_id=test_user.id,
+            query=implicit_query,
+        )
+
+        assert implicit_second.metadata.requested_date_to is None
+        assert implicit_second.metadata.computed_date_to == second_day
+        assert engine_calls["count"] == 3
+        assert len(observed_keys) == 3
+        assert len(set(observed_keys)) == 3
+
+    @pytest.mark.asyncio
+    async def test_layer2_uses_exact_shared_fx_identity_for_summaryless_reports_and_never_falls_back_stale(
+        self,
+        session,
+        test_user,
+        broker_with_access,
+        monkeypatch,
+        request,
+    ):
+        """Every report shape uses the shared FX identity verbatim in its L2 key.
+
+        Stable identity -> hit. Changed identity -> fresh engine call; a fresh
+        failure propagates instead of returning the stale prior report.
+        """
+        broker, _ = broker_with_access
+        report_date = date(2035, 4, 30)
+        session.add(
+            Transaction(
+                broker_id=broker.id,
+                type=TransactionType.DEPOSIT,
+                date=report_date - timedelta(days=1),
+                amount=Decimal("750"),
+                currency="EUR",
+            )
+        )
+        await session.flush()
+        _portfolio_l2_cache.clear()
+        portfolio_engine_module._portfolio_blob_cache.clear()
+        request.addfinalizer(_portfolio_l2_cache.clear)
+        request.addfinalizer(portfolio_engine_module._portfolio_blob_cache.clear)
+
+        identity = {"value": "shared-fx-identity-a"}
+        identity_calls: list[tuple[object, set[int], str, date]] = []
+
+        async def shared_identity(db, scope_broker_ids, target_currency, date_to):
+            identity_calls.append((db, set(scope_broker_ids), target_currency, date_to))
+            return identity["value"]
+
+        monkeypatch.setattr(
+            portfolio_engine_module,
+            "compute_portfolio_fx_cache_identity",
+            shared_identity,
+        )
+
+        observed_keys = []
+        original_get = _portfolio_l2_cache.get
+
+        def capture_get(key):
+            observed_keys.append(key)
+            return original_get(key)
+
+        monkeypatch.setattr(_portfolio_l2_cache, "get", capture_get)
+
+        engine_calls = {"count": 0, "fail": False}
+        original_calculate = portfolio_engine_module.PortfolioCalculationEngine.calculate
+
+        async def controlled_calculate(engine_self, *args, **kwargs):
+            engine_calls["count"] += 1
+            if engine_calls["fail"]:
+                raise RuntimeError("fresh FX identity calculation failed")
+            return await original_calculate(engine_self, *args, **kwargs)
+
+        monkeypatch.setattr(
+            portfolio_engine_module.PortfolioCalculationEngine,
+            "calculate",
+            controlled_calculate,
+        )
+
+        service = PortfolioService(session)
+        query = PortfolioReportQuery(
+            broker_ids=[broker.id],
+            target_currency="EUR",
+            date_range={"start": "2035-04-01", "end": str(report_date)},
+            include_summary=False,
+            include_history=False,
+            include_allocation_history=False,
+            include_breakdown=False,
+            include_positions_contribution=False,
+        )
+
+        first = await service.get_report(user_id=test_user.id, query=query)
+        second = await service.get_report(user_id=test_user.id, query=query)
+
+        assert second.model_dump() == first.model_dump()
+        assert engine_calls["count"] == 1
+        assert len(observed_keys) == 2
+        assert observed_keys[0] == observed_keys[1]
+        assert observed_keys[0][-2] == "shared-fx-identity-a"
+        assert observed_keys[0][-1] == "no_yoc"
+        assert len(identity_calls) == 3
+        assert all(call[0] is session for call in identity_calls)
+        assert all(call[1:] == ({broker.id}, "EUR", report_date) for call in identity_calls)
+
+        identity["value"] = "shared-fx-identity-b"
+        engine_calls["fail"] = True
+        with pytest.raises(RuntimeError, match="fresh FX identity calculation failed"):
+            await service.get_report(user_id=test_user.id, query=query)
+
+        assert engine_calls["count"] == 2
+        assert observed_keys[-1][-2] == "shared-fx-identity-b"
+        assert observed_keys[-1][-1] == "no_yoc"
+        assert observed_keys[-1] != observed_keys[0]
+
+    @pytest.mark.asyncio
+    async def test_layer2_identity_changes_when_linked_split_material_changes(
+        self,
+        session,
+        test_user,
+        broker_with_access,
+        test_asset,
+        monkeypatch,
+        request,
+    ):
+        """AssetEvent split ratio is a material L2 dependency even without summary."""
+        broker, _ = broker_with_access
+        report_date = date(2036, 12, 31)
+        split_event = AssetEvent(
+            asset_id=test_asset.id,
+            date=date(2036, 6, 1),
+            type=AssetEventType.SPLIT,
+            value=Decimal("2"),
+            currency="EUR",
+        )
+        session.add(split_event)
+        await session.flush()
+        assert split_event.id is not None
+        session.add_all(
+            [
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    type=TransactionType.BUY,
+                    date=date(2035, 1, 1),
+                    quantity=Decimal("10"),
+                    amount=Decimal("-100"),
+                    currency="EUR",
+                ),
+                Transaction(
+                    broker_id=broker.id,
+                    asset_id=test_asset.id,
+                    asset_event_id=split_event.id,
+                    type=TransactionType.ADJUSTMENT,
+                    date=split_event.date,
+                    quantity=Decimal("10"),
+                    amount=Decimal("0"),
+                    currency="EUR",
+                ),
+            ]
+        )
+        await session.flush()
+        _portfolio_l2_cache.clear()
+        portfolio_engine_module._portfolio_blob_cache.clear()
+        request.addfinalizer(_portfolio_l2_cache.clear)
+        request.addfinalizer(portfolio_engine_module._portfolio_blob_cache.clear)
+
+        observed_keys = []
+        original_get = _portfolio_l2_cache.get
+
+        def capture_get(key):
+            observed_keys.append(key)
+            return original_get(key)
+
+        monkeypatch.setattr(_portfolio_l2_cache, "get", capture_get)
+
+        engine_calls = {"count": 0}
+        original_calculate = portfolio_engine_module.PortfolioCalculationEngine.calculate
+
+        async def counting_calculate(engine_self, *args, **kwargs):
+            engine_calls["count"] += 1
+            return await original_calculate(engine_self, *args, **kwargs)
+
+        monkeypatch.setattr(
+            portfolio_engine_module.PortfolioCalculationEngine,
+            "calculate",
+            counting_calculate,
+        )
+
+        service = PortfolioService(session)
+        query = PortfolioReportQuery(
+            broker_ids=[broker.id],
+            target_currency="EUR",
+            date_range={"start": "2036-01-01", "end": str(report_date)},
+            include_summary=False,
+            include_history=False,
+            include_allocation_history=False,
+            include_breakdown=False,
+            include_positions_contribution=False,
+        )
+
+        await service.get_report(user_id=test_user.id, query=query)
+        await service.get_report(user_id=test_user.id, query=query)
+        assert engine_calls["count"] == 1
+        assert observed_keys[0] == observed_keys[1]
+
+        split_event.value = Decimal("3")
+        await session.flush()
+
+        await service.get_report(user_id=test_user.id, query=query)
+        assert engine_calls["count"] == 2
+        assert observed_keys[-1] != observed_keys[0]
+        assert observed_keys[-1][-1] != observed_keys[0][-1]
+
+    @pytest.mark.asyncio
     async def test_get_report_narrower_date_to_not_corrupted_by_wider_blob_cache(self, session, test_user, broker_with_access, test_asset):
         """Regression test for dashboard KPI cards showing 0-delta for a custom date range.
 
-        Root cause: the L1 portfolio "blob" cache (portfolio_engine.py) is keyed by
+        Root cause: the L1 portfolio "blob" cache (financial_math/portfolio/engine.py) is keyed by
         tx/price fingerprints, NOT by date range. Its old "contained" condition
         (blob_to >= actual_to) returned a wider cached blob unmodified whenever a
         narrower date_to was requested with an identical fingerprint — which happens
@@ -1763,3 +3090,634 @@ class TestPortfolioServiceGetReport:
         # Day-over-day delta (mirrors the frontend KPI calc: history[-1] - history[-2])
         # must reflect day3 vs day2 (real data), not two identical phantom future days.
         assert narrow.history[-1].nav_value.amount - narrow.history[-2].nav_value.amount == Decimal("50")
+
+    @pytest.mark.asyncio
+    async def test_get_report_income_history_flag_gates_section_and_busts_l2_cache(self, session, test_user, broker_with_access):
+        """G1c wiring: PortfolioReportQuery.include_income_history gates
+        PortfolioReportResponse.income_history and metadata.included_features, and
+        the flag is part of the L2 cache key (_portfolio_l2_cache) — flipping ONLY
+        this flag between two otherwise-identical calls must never return the
+        first call's cached (flag=False) report for the second (flag=True) call.
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2025, 8, 1), amount=Decimal("1000"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 8, 5), amount=Decimal("40"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+        _portfolio_l2_cache.clear()
+
+        service = PortfolioService(session)
+        base_kwargs = {
+            "broker_ids": [broker.id],
+            "include_summary": True,
+            "include_history": False,
+            "include_allocation_history": False,
+            "date_range": {"start": "2025-08-01", "end": "2025-08-31"},
+        }
+
+        off = await service.get_report(user_id=test_user.id, query=PortfolioReportQuery(**base_kwargs, include_income_history=False))
+        assert off.income_history is None
+        assert "income_history" not in off.metadata.included_features
+
+        on = await service.get_report(user_id=test_user.id, query=PortfolioReportQuery(**base_kwargs, include_income_history=True))
+        assert on.income_history is not None, "must recompute, not reuse the flag=False L2 cache entry"
+        assert "income_history" in on.metadata.included_features
+        assert [p.date for p in on.income_history.points] == [date(2025, 8, 5)]
+        assert on.income_history.points[0].dividend.amount == Decimal("40")
+        assert on.income_history.points[0].interest.amount == Decimal("0")
+        # Reconciles with summary.period_income for the identical (date_from, date_to] window.
+        assert on.summary.period_income.amount == Decimal("40")
+
+
+# =============================================================================
+# G1c — SIGNED PERSONAL INCOME HISTORY (get_income_history + reconciliation)
+# =============================================================================
+
+
+class TestGetIncomeHistory:
+    """PortfolioService.get_income_history() — a pure transaction scan (no engine
+    run) over DIVIDEND/INTEREST transactions, signed (plan §4.4): a legacy
+    negative correction reduces its bucket instead of being abs()'d into it.
+
+    ``sum(dividend) + sum(interest)`` across every point must reproduce
+    ``PortfolioSummary.period_income`` exactly for the same scope/window — the
+    two are independently computed (a pure tx scan vs. an engine-result-derived
+    accumulator) so this reconciliation is a real cross-check, not a tautology.
+    """
+
+    @pytest.mark.asyncio
+    async def test_golden_scenario_reconciles_with_summary_period_income(self, session, test_user, broker_with_access):
+        """DEPOSIT 1000 (day1, not income); DIVIDEND 50 (day10); DIVIDEND -20 (day15,
+        a legacy correction); INTEREST 5 (day20) — all broker-level (asset_id=None).
+
+        Expected points: 3 sparse entries (day1 is a DEPOSIT, never a point).
+        sum(dividend)+sum(interest) = 50 + (-20) + 5 = 35, and this MUST equal
+        get_summary()'s period_income for the identical (date_from=None,
+        date_to=2025-01-31] window.
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2025, 1, 1), amount=Decimal("1000"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 1, 10), amount=Decimal("50"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 1, 15), amount=Decimal("-20"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.INTEREST, date=date(2025, 1, 20), amount=Decimal("5"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        history = await service.get_income_history(user_id=test_user.id, date_from=None, date_to=date(2025, 1, 31))
+
+        assert [p.date for p in history.points] == [date(2025, 1, 10), date(2025, 1, 15), date(2025, 1, 20)], "sparse: no point for the DEPOSIT-only day1"
+        by_date = {p.date: p for p in history.points}
+        assert by_date[date(2025, 1, 10)].dividend.amount == Decimal("50")
+        assert by_date[date(2025, 1, 10)].interest.amount == Decimal("0")
+        assert by_date[date(2025, 1, 15)].dividend.amount == Decimal("-20"), "legacy negative correction must be signed, never abs()'d"
+        assert by_date[date(2025, 1, 15)].interest.amount == Decimal("0")
+        assert by_date[date(2025, 1, 20)].dividend.amount == Decimal("0")
+        assert by_date[date(2025, 1, 20)].interest.amount == Decimal("5")
+        assert history.missing_fx_pairs == []
+
+        total = sum((p.dividend.amount + p.interest.amount for p in history.points), Decimal("0"))
+        assert total == Decimal("35"), f"50 + (-20) + 5 = 35, got {total}"
+
+        summary = await service.get_summary(user_id=test_user.id, date_from=None, date_to=date(2025, 1, 31))
+        assert summary.period_income is not None
+        assert summary.period_income.amount == Decimal("35"), f"get_summary().period_income must reconcile exactly with the income-history sum, got {summary.period_income.amount}"
+
+        # Third independent cross-check: get_positions_contribution() must also
+        # surface this -20 correction (never silently drop it) via its
+        # UnallocatedContribution row — all three transactions are broker-level
+        # (asset_id=None) and net to the same signed total.
+        contribution = await service.get_positions_contribution(user_id=test_user.id, date_from=None, date_to=date(2025, 1, 31))
+        unalloc_matches = [u for u in contribution.unallocated if u.broker_id == broker.id]
+        assert len(unalloc_matches) == 1, f"expected exactly one unallocated row for this test's broker, got {len(unalloc_matches)}"
+        assert unalloc_matches[0].unallocated_income == Decimal("35"), f"get_positions_contribution()'s unallocated_income must also reconcile to 35 (50-20+5), got {unalloc_matches[0].unallocated_income}"
+
+    @pytest.mark.asyncio
+    async def test_pure_positive_regression_matches_hand_arithmetic(self, session, test_user, broker_with_access):
+        """No correction anywhere — locks in that the ordinary path is numerically
+        unaffected, and that same-date DIVIDEND rows from independent transactions
+        are grouped/summed into one point (plan: "groups by (date, type)")."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 2, 1), amount=Decimal("30"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 2, 1), amount=Decimal("45"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.INTEREST, date=date(2025, 2, 15), amount=Decimal("12"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        history = await service.get_income_history(user_id=test_user.id, date_from=None, date_to=date(2025, 2, 28))
+
+        assert [p.date for p in history.points] == [date(2025, 2, 1), date(2025, 2, 15)]
+        by_date = {p.date: p for p in history.points}
+        assert by_date[date(2025, 2, 1)].dividend.amount == Decimal("75"), "30 + 45 = 75, two same-date DIVIDEND rows grouped into one point"
+        assert by_date[date(2025, 2, 15)].interest.amount == Decimal("12")
+        assert history.missing_fx_pairs == []
+
+    @pytest.mark.asyncio
+    async def test_date_from_boundary_is_exclusive_start_inclusive_end(self, session, test_user, broker_with_access):
+        """Canonical (date_from, date_to] boundary: a transaction dated exactly on
+        date_from is excluded; one dated on date_to is included."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 3, 5), amount=Decimal("11"), currency="EUR"),  # == date_from -> excluded
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 3, 6), amount=Decimal("22"), currency="EUR"),  # inside window
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 3, 10), amount=Decimal("33"), currency="EUR"),  # == date_to -> included
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        history = await service.get_income_history(user_id=test_user.id, date_from=date(2025, 3, 5), date_to=date(2025, 3, 10))
+
+        assert [p.date for p in history.points] == [date(2025, 3, 6), date(2025, 3, 10)], "date_from itself excluded, date_to included"
+
+    @pytest.mark.asyncio
+    async def test_missing_fx_pair_excluded_from_sums_never_zeroed(self, session, test_user, broker_with_access):
+        """A DIVIDEND/INTEREST in a currency with no configured FX rate/route must be
+        excluded from the sums (not silently substituted with 0) and its pair
+        reported in missing_fx_pairs — while OTHER same-date/other-date transactions
+        still contribute normally.
+
+        PGK (Papua New Guinea Kina) is used deliberately: not one of this codebase's
+        configured mock FX pairs (EUR/USD, GBP/EUR, USD/CHF — see populate_mock_data.py
+        and TestPortfolioFxCacheIdentity's own choice of obscure pairs for the same
+        reason), so "this conversion genuinely has no rate" is true by construction.
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 5, 1), amount=Decimal("100"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 5, 1), amount=Decimal("500"), currency="PGK"),
+                Transaction(broker_id=broker.id, type=TransactionType.INTEREST, date=date(2025, 5, 10), amount=Decimal("200"), currency="PGK"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        history = await service.get_income_history(user_id=test_user.id, date_from=None, date_to=date(2025, 5, 31))
+
+        assert history.missing_fx_pairs == ["PGK/EUR"], "deduplicated despite 2 failed PGK conversions"
+        # day 1: the EUR dividend still contributes; the PGK one is excluded, not zeroed into it.
+        # day 10: its ONLY transaction failed conversion -> the whole date is omitted (sparse), not a zero point.
+        assert [p.date for p in history.points] == [date(2025, 5, 1)]
+        assert history.points[0].dividend.amount == Decimal("100")
+        assert history.points[0].interest.amount == Decimal("0")
+
+
+# =============================================================================
+# G1c — get_positions_contribution(): signed accumulation + positive-only filter fixes
+# =============================================================================
+
+
+class TestPositionsContributionSignedIncome:
+    """The 3 independent per-plan filter fixes in get_positions_contribution()
+    (plan §4.4): a legacy negative-only DIVIDEND/INTEREST correction must still
+    surface — never be silently dropped by a stale `> 0` / `<= 0` gate that
+    predates signed income. FEE/TAX `> 0` gates are explicitly unchanged
+    (out of scope) and are not touched by these tests.
+    """
+
+    @pytest.mark.asyncio
+    async def test_asset_linked_negative_net_income_surfaces_as_position_row(self, session, test_user, test_asset, broker_with_access):
+        """Asset with DIVIDEND activity only (no BUY/SELL ever) netting to a
+        NEGATIVE income total. Regression lock for two of the five fixes:
+        - `if income == 0 and fees == 0: continue` (was `<= 0`): income=-40 would
+          have been wrongly dropped by the old `<= 0` gate (income<=0 AND fees<=0
+          both true for a pure negative correction).
+        - `period_income=income if income else None` (was `income if income > 0
+          else None`): -40 would have rendered as None (no income at all) instead
+          of a visible negative correction.
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.DIVIDEND, date=date(2025, 2, 1), amount=Decimal("10"), currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=test_asset.id, type=TransactionType.DIVIDEND, date=date(2025, 2, 5), amount=Decimal("-50"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        contribution = await service.get_positions_contribution(user_id=test_user.id, date_from=date(2025, 1, 31), date_to=date(2025, 2, 28))
+
+        matches = [p for p in contribution.positions if p.broker_id == broker.id and p.asset_id == test_asset.id]
+        assert len(matches) == 1, f"expected exactly one position row for this test's (broker, asset), got {len(matches)}"
+        row = matches[0]
+        assert row.period_income == Decimal("-40"), f"10 + (-50) = -40, got {row.period_income}"
+        assert row.period_pnl == Decimal("-40"), "income(-40) - fees(0) = -40"
+        assert row.is_fully_sold is True
+        assert not any(u.broker_id == broker.id for u in contribution.unallocated), "asset-linked income must never leak into UnallocatedContribution"
+
+    @pytest.mark.asyncio
+    async def test_unallocated_negative_net_income_surfaces_not_dropped(self, session, test_user, broker_with_access):
+        """Broker-level (asset_id=None) DIVIDEND activity netting to a NEGATIVE
+        total. Regression lock for the remaining three of the five fixes:
+        - `if inc or (fee and fee > 0):` (was `if (inc and inc > 0) or (fee and fee > 0):`)
+        - `unallocated_income=inc if inc else None` (was `inc if inc and inc > 0 else None`)
+        - the "Unallocated income" other_effects entry's `if inc:` (was `if inc and inc > 0:`)
+        A pure `inc=-40, fee=0` broker would have been excluded from `unallocated`
+        (and its `other_effects` row) entirely under the old all-positive gates.
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 3, 1), amount=Decimal("10"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2025, 3, 5), amount=Decimal("-50"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        contribution = await service.get_positions_contribution(user_id=test_user.id, date_from=date(2025, 2, 28), date_to=date(2025, 3, 31))
+
+        unalloc_matches = [u for u in contribution.unallocated if u.broker_id == broker.id]
+        assert len(unalloc_matches) == 1, f"expected exactly one unallocated row for this test's broker, got {len(unalloc_matches)}"
+        unalloc = unalloc_matches[0]
+        assert unalloc.unallocated_income == Decimal("-40"), f"10 + (-50) = -40, got {unalloc.unallocated_income}"
+        assert unalloc.unallocated_fees_taxes is None
+
+        income_effects = [e for e in contribution.other_effects if e.broker_id == broker.id and e.category == "Income"]
+        assert len(income_effects) == 1, f"expected exactly one 'Unallocated income' other_effects row for this test's broker, got {len(income_effects)}"
+        assert income_effects[0].period_pnl == Decimal("-40")
+        assert income_effects[0].description == "Unallocated income"
+
+    @pytest.mark.asyncio
+    async def test_fee_only_positive_gates_are_unchanged(self, session, test_user, broker_with_access):
+        """Guard against scope creep: FEE/TAX `> 0` comparisons were deliberately
+        left untouched by this plan. A broker with FEE only (no income at all)
+        must behave exactly as before — fees are always accumulated via abs(), so
+        they can never be negative, and the row must still surface normally."""
+        broker, _ = broker_with_access
+        session.add(
+            Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2025, 6, 1), amount=Decimal("-15"), currency="EUR"),
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        contribution = await service.get_positions_contribution(user_id=test_user.id, date_from=date(2025, 5, 31), date_to=date(2025, 6, 30))
+
+        unalloc_matches = [u for u in contribution.unallocated if u.broker_id == broker.id]
+        assert len(unalloc_matches) == 1
+        assert unalloc_matches[0].unallocated_fees_taxes == Decimal("15"), "FEE is reported as a positive magnitude, unaffected by the signed-income fix"
+        assert unalloc_matches[0].unallocated_income is None
+        cost_effects = [e for e in contribution.other_effects if e.broker_id == broker.id and e.category == "Cost"]
+        assert len(cost_effects) == 1
+        assert cost_effects[0].period_pnl == Decimal("-15")
+
+
+# =============================================================================
+# BATCH 2 — SHARED SIGNED TRANSACTION SCAN (_signed_transaction_sums_by_date)
+# =============================================================================
+#
+# get_income_history's original body was extracted into the private
+# _signed_transaction_sums_by_date and is now shared by three public methods that
+# differ only in which tx_types they scan and how they combine the per-type sums:
+#
+#   get_income_history   DIVIDEND/INTEREST kept separate
+#   get_cost_history     FEE+TAX summed into ONE signed "cost"
+#   get_deposit_history  DEPOSIT alone
+#
+# The three behaviours that live IN the shared scan — FX-missing tracking, F2
+# OWNER-share scaling, and the canonical (date_from, date_to] boundary — are
+# therefore worth exercising through the NEW callers rather than through the
+# private helper directly: the helper is an implementation detail, while "a FEE in
+# an unconvertible currency must not silently become a zero cost" is the contract a
+# consumer actually depends on. get_income_history's own coverage of the same three
+# (TestGetIncomeHistory above) is left untouched and must keep passing verbatim —
+# that IS the refactor's regression gate.
+
+
+async def _make_scan_broker(session, user: User, role: str, share: Decimal | None) -> Broker:
+    """One broker with one access row of the given role/share, no transactions.
+
+    Mirrors TestRoleAwareShareScaling._make_broker_with_role, minus its DEPOSIT (which
+    would land inside get_deposit_history's own subject matter and confuse the numbers).
+    """
+    broker = Broker(name=f"PfBroker_Scan_{role}_{share}_{utcnow().timestamp()}")
+    session.add(broker)
+    await session.flush()
+    session.add(BrokerUserAccess(broker_id=broker.id, user_id=user.id, role=role, share_percentage=share))
+    await session.flush()
+    return broker
+
+
+class TestGetCostHistory:
+    """PortfolioService.get_cost_history() — signed FEE+TAX, combined per date."""
+
+    @pytest.mark.asyncio
+    async def test_fee_and_tax_are_summed_into_one_signed_cost_per_date(self, session, test_user, broker_with_access):
+        """The dimension is "Fees & taxes", one figure — a FEE and a TAX on the same
+        date collapse into a single point, not two. And the sign is the RAW
+        Transaction.amount sign: costs stay negative, they are never flipped to a
+        positive magnitude (unlike get_positions_contribution's unallocated_fees_taxes,
+        which reports a magnitude by design — the two conventions coexist deliberately).
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 1, 10), amount=Decimal("-12"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.TAX, date=date(2026, 1, 10), amount=Decimal("-30"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 1, 20), amount=Decimal("-5"), currency="EUR"),
+                # A DIVIDEND on a cost date must not leak in — the scan is tx_type-filtered.
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2026, 1, 20), amount=Decimal("99"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_cost_history(user_id=test_user.id, date_from=None, date_to=date(2026, 1, 31))
+
+        assert [p.date for p in history.points] == [date(2026, 1, 10), date(2026, 1, 20)], "one point per date, FEE+TAX merged"
+        by_date = {p.date: p for p in history.points}
+        assert by_date[date(2026, 1, 10)].cost.amount == Decimal("-42"), f"-12 (FEE) + -30 (TAX) = -42, got {by_date[date(2026, 1, 10)].cost.amount}"
+        assert by_date[date(2026, 1, 20)].cost.amount == Decimal("-5"), "the same-date DIVIDEND must not contribute"
+        assert history.missing_fx_pairs == []
+
+    @pytest.mark.asyncio
+    async def test_positive_fee_correction_keeps_its_sign(self, session, test_user, broker_with_access):
+        """Signed fidelity runs both ways: a legacy positive FEE row (a refund/correction)
+        must be reported as positive and net against the same date's negative rows, never
+        abs()'d into another -N."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 2, 5), amount=Decimal("-40"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 2, 5), amount=Decimal("15"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_cost_history(user_id=test_user.id, date_from=None, date_to=date(2026, 2, 28))
+
+        assert [p.date for p in history.points] == [date(2026, 2, 5)]
+        assert history.points[0].cost.amount == Decimal("-25"), "-40 + 15 = -25; an abs()-based scan would have produced -55"
+
+    @pytest.mark.asyncio
+    async def test_date_boundary_is_exclusive_start_inclusive_end(self, session, test_user, broker_with_access):
+        """The canonical (date_from, date_to] window, inherited from the shared scan."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 3, 5), amount=Decimal("-11"), currency="EUR"),  # == date_from -> excluded
+                Transaction(broker_id=broker.id, type=TransactionType.TAX, date=date(2026, 3, 6), amount=Decimal("-22"), currency="EUR"),  # inside
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 3, 10), amount=Decimal("-33"), currency="EUR"),  # == date_to -> included
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 3, 11), amount=Decimal("-44"), currency="EUR"),  # after date_to -> excluded
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_cost_history(user_id=test_user.id, date_from=date(2026, 3, 5), date_to=date(2026, 3, 10))
+
+        assert [p.date for p in history.points] == [date(2026, 3, 6), date(2026, 3, 10)], "date_from itself excluded, date_to included"
+        assert sum(p.cost.amount for p in history.points) == Decimal("-55")
+
+    @pytest.mark.asyncio
+    async def test_missing_fx_pair_excluded_from_sums_never_zeroed(self, session, test_user, broker_with_access):
+        """Same contract as income: an unconvertible cost is EXCLUDED and its pair
+        reported, rather than silently contributing 0 — a zeroed cost would read as
+        "this day was free", which is a different and wrong statement.
+
+        PGK (Papua New Guinea Kina) is deliberately not one of this codebase's configured
+        mock FX pairs, same choice and same reason as TestGetIncomeHistory's own FX test.
+        """
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 4, 1), amount=Decimal("-10"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.TAX, date=date(2026, 4, 1), amount=Decimal("-500"), currency="PGK"),
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 4, 10), amount=Decimal("-200"), currency="PGK"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_cost_history(user_id=test_user.id, date_from=None, date_to=date(2026, 4, 30))
+
+        assert history.missing_fx_pairs == ["PGK/EUR"], "deduplicated despite 2 failed PGK conversions"
+        assert [p.date for p in history.points] == [date(2026, 4, 1)], "04-10's only row failed conversion -> the whole date is omitted, not zeroed"
+        assert history.points[0].cost.amount == Decimal("-10"), "the EUR fee still contributes in full"
+
+    @pytest.mark.asyncio
+    async def test_scales_by_owner_share_and_never_by_role(self, session, test_user):
+        """F2, inherited from the shared scan: a 30%-OWNER broker's costs are scaled
+        exactly once, while an EDITOR broker's costs are full despite the schema-mandated
+        share_percentage=0 that its role carries."""
+        owner_broker = await _make_scan_broker(session, test_user, "OWNER", Decimal("0.3"))
+        editor_broker = await _make_scan_broker(session, test_user, "EDITOR", Decimal("0"))
+        session.add_all(
+            [
+                Transaction(broker_id=owner_broker.id, type=TransactionType.FEE, date=date(2026, 5, 10), amount=Decimal("-100"), currency="EUR"),
+                Transaction(broker_id=editor_broker.id, type=TransactionType.TAX, date=date(2026, 5, 10), amount=Decimal("-40"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_cost_history(user_id=test_user.id, date_from=None, date_to=date(2026, 5, 31))
+
+        assert [p.date for p in history.points] == [date(2026, 5, 10)], "both brokers' costs land on one date -> one grouped point"
+        assert history.points[0].cost.amount == Decimal("-70"), f"-30 (30% of -100) + -40 (full EDITOR) = -70, got {history.points[0].cost.amount}"
+
+    @pytest.mark.asyncio
+    async def test_zero_share_owner_contributes_nothing_but_the_date_still_reports(self, session, test_user):
+        """A 0%-OWNER is a valid configuration (F2), and 0 * -100 = 0 is a genuine
+        zero, not a missing value. The scan writes the date key either way, so the point
+        exists with amount 0 — distinguishable from the FX-missing case above, which
+        omits the date entirely."""
+        broker = await _make_scan_broker(session, test_user, "OWNER", Decimal("0"))
+        session.add(Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 6, 1), amount=Decimal("-100"), currency="EUR"))
+        await session.flush()
+
+        history = await PortfolioService(session).get_cost_history(user_id=test_user.id, broker_ids=[broker.id], date_from=None, date_to=date(2026, 6, 30))
+
+        assert [p.date for p in history.points] == [date(2026, 6, 1)]
+        assert history.points[0].cost.amount == Decimal("0")
+
+    @pytest.mark.asyncio
+    async def test_user_with_no_broker_access_gets_an_empty_series(self, session, test_user):
+        """The early return before the scan even runs."""
+        history = await PortfolioService(session).get_cost_history(user_id=test_user.id, broker_ids=[999999])
+
+        assert history.points == []
+        assert history.missing_fx_pairs == []
+
+
+class TestGetDepositHistory:
+    """PortfolioService.get_deposit_history() — the third caller of the shared scan."""
+
+    @pytest.mark.asyncio
+    async def test_same_date_deposits_are_grouped_and_other_types_excluded(self, session, test_user, broker_with_access):
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 7, 1), amount=Decimal("1000"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 7, 1), amount=Decimal("250"), currency="EUR"),
+                # Neither of these is a DEPOSIT: a withdrawal is not a negative deposit here,
+                # and the dimension is deliberately "money put in", not net external flow.
+                Transaction(broker_id=broker.id, type=TransactionType.WITHDRAWAL, date=date(2026, 7, 1), amount=Decimal("-400"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 7, 15), amount=Decimal("75"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_deposit_history(user_id=test_user.id, date_from=None, date_to=date(2026, 7, 31))
+
+        assert [p.date for p in history.points] == [date(2026, 7, 1), date(2026, 7, 15)]
+        by_date = {p.date: p for p in history.points}
+        assert by_date[date(2026, 7, 1)].deposit.amount == Decimal("1250"), "1000 + 250; the same-date WITHDRAWAL must not net against it"
+        assert by_date[date(2026, 7, 15)].deposit.amount == Decimal("75")
+        assert history.missing_fx_pairs == []
+
+    @pytest.mark.asyncio
+    async def test_date_boundary_is_exclusive_start_inclusive_end(self, session, test_user, broker_with_access):
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 8, 5), amount=Decimal("11"), currency="EUR"),  # == date_from -> excluded
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 8, 6), amount=Decimal("22"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 8, 10), amount=Decimal("33"), currency="EUR"),  # == date_to -> included
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_deposit_history(user_id=test_user.id, date_from=date(2026, 8, 5), date_to=date(2026, 8, 10))
+
+        assert [p.date for p in history.points] == [date(2026, 8, 6), date(2026, 8, 10)]
+
+    @pytest.mark.asyncio
+    async def test_missing_fx_pair_excluded_from_sums_never_zeroed(self, session, test_user, broker_with_access):
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 9, 1), amount=Decimal("100"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 9, 1), amount=Decimal("900"), currency="PGK"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_deposit_history(user_id=test_user.id, date_from=None, date_to=date(2026, 9, 30))
+
+        assert history.missing_fx_pairs == ["PGK/EUR"]
+        assert [p.date for p in history.points] == [date(2026, 9, 1)]
+        assert history.points[0].deposit.amount == Decimal("100"), "the PGK deposit is excluded, never added as 0 or at a 1:1 fallback rate"
+
+    @pytest.mark.asyncio
+    async def test_scales_by_owner_share_and_never_by_role(self, session, test_user):
+        owner_broker = await _make_scan_broker(session, test_user, "OWNER", Decimal("0.3"))
+        editor_broker = await _make_scan_broker(session, test_user, "EDITOR", Decimal("0"))
+        session.add_all(
+            [
+                Transaction(broker_id=owner_broker.id, type=TransactionType.DEPOSIT, date=date(2026, 10, 10), amount=Decimal("1000"), currency="EUR"),
+                Transaction(broker_id=editor_broker.id, type=TransactionType.DEPOSIT, date=date(2026, 10, 10), amount=Decimal("40"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_deposit_history(user_id=test_user.id, date_from=None, date_to=date(2026, 10, 31))
+
+        assert [p.date for p in history.points] == [date(2026, 10, 10)]
+        assert history.points[0].deposit.amount == Decimal("340"), f"300 (30% of 1000) + 40 (full EDITOR) = 340, got {history.points[0].deposit.amount}"
+
+    @pytest.mark.asyncio
+    async def test_user_with_no_broker_access_gets_an_empty_series(self, session, test_user):
+        history = await PortfolioService(session).get_deposit_history(user_id=test_user.id, broker_ids=[999999])
+
+        assert history.points == []
+
+
+class TestSharedScanCallersAreIndependent:
+    """The three callers pass different tx_types into one shared scan. A regression that
+    widened or leaked a type set would be invisible in any single-caller test, so this
+    checks the partition on ONE dataset containing every relevant type at once.
+    """
+
+    @pytest.mark.asyncio
+    async def test_one_dataset_partitions_cleanly_across_income_cost_and_deposit(self, session, test_user, broker_with_access):
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date(2026, 11, 2), amount=Decimal("500"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2026, 11, 2), amount=Decimal("60"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.INTEREST, date=date(2026, 11, 2), amount=Decimal("7"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.FEE, date=date(2026, 11, 2), amount=Decimal("-3"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.TAX, date=date(2026, 11, 2), amount=Decimal("-9"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.WITHDRAWAL, date=date(2026, 11, 2), amount=Decimal("-50"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        service = PortfolioService(session)
+        kwargs = {"user_id": test_user.id, "broker_ids": [broker.id], "date_from": None, "date_to": date(2026, 11, 30)}
+        income = await service.get_income_history(**kwargs)
+        cost = await service.get_cost_history(**kwargs)
+        deposit = await service.get_deposit_history(**kwargs)
+
+        assert income.points[0].dividend.amount == Decimal("60")
+        assert income.points[0].interest.amount == Decimal("7"), "INTEREST must not be swallowed by the FEE/TAX caller"
+        assert cost.points[0].cost.amount == Decimal("-12"), "-3 + -9; no DIVIDEND/INTEREST/DEPOSIT leakage"
+        assert deposit.points[0].deposit.amount == Decimal("500"), "DEPOSIT alone; the WITHDRAWAL is in none of the three"
+
+
+class TestGetIncomeHistoryRefactorRegression:
+    """The refactor's one genuine behavioural surface, not already pinned by
+    TestGetIncomeHistory above.
+
+    The ORIGINAL built its date list from ``set(dividend_by_date) | set(interest_by_date)``
+    — two defaultdicts written by ``+=``, so a date whose bucket NETS to exactly zero
+    still had a key and still produced a point. The refactor collects dates from a single
+    ``sums_by_date`` mapping instead. That is equivalent only because the inner
+    accumulation is likewise unconditional; a future "skip zero sums" micro-optimisation
+    in the shared scan would silently start dropping these days, and every existing income
+    test would stay green because none of them nets a bucket to zero.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_date_whose_bucket_nets_to_zero_still_emits_a_point(self, session, test_user, broker_with_access):
+        """+50 and -50 DIVIDEND on the same date: the day HAPPENED (two real corrections
+        cancelling out) and must be reported as a zero, which is a different statement
+        from the date being absent (which means "no income activity at all")."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2026, 12, 3), amount=Decimal("50"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2026, 12, 3), amount=Decimal("-50"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.INTEREST, date=date(2026, 12, 4), amount=Decimal("8"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_income_history(user_id=test_user.id, broker_ids=[broker.id], date_from=None, date_to=date(2026, 12, 31))
+
+        assert [p.date for p in history.points] == [date(2026, 12, 3), date(2026, 12, 4)], "the net-zero date must still be a point"
+        by_date = {p.date: p for p in history.points}
+        assert by_date[date(2026, 12, 3)].dividend.amount == Decimal("0")
+        assert by_date[date(2026, 12, 3)].interest.amount == Decimal("0")
+        assert by_date[date(2026, 12, 4)].interest.amount == Decimal("8")
+
+    @pytest.mark.asyncio
+    async def test_points_stay_sorted_by_date(self, session, test_user, broker_with_access):
+        """The original sorted a set of dates; the refactor sorts ``sums_by_date.items()``
+        (tuples). Both are date-ordered because keys are unique — but the tuple form would
+        attempt to compare the dict values on a tie, so this pins that dates, inserted out
+        of order, still come back ascending."""
+        broker, _ = broker_with_access
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2027, 1, 20), amount=Decimal("3"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.INTEREST, date=date(2027, 1, 2), amount=Decimal("1"), currency="EUR"),
+                Transaction(broker_id=broker.id, type=TransactionType.DIVIDEND, date=date(2027, 1, 11), amount=Decimal("2"), currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+        history = await PortfolioService(session).get_income_history(user_id=test_user.id, broker_ids=[broker.id], date_from=None, date_to=date(2027, 1, 31))
+
+        dates = [p.date for p in history.points]
+        assert dates == sorted(dates) == [date(2027, 1, 2), date(2027, 1, 11), date(2027, 1, 20)]

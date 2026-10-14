@@ -24,7 +24,7 @@ proposed a `DerivedViewsBuilder.build_summary()` method as the intended home for
 renaming the `net_worth` response field to `nav_value` to better reflect that it is sourced from the engine's
 NAV computation rather than a naive sum.
 
-By the time the Holdings/Performance refactor (commit `78aaa0a3`, 2026-07-06) closed out the remaining gaps,
+By the time the Holdings/Performance refactor (commit `13052a006`, 2026-07-06) closed out the remaining gaps,
 none of these three proposals were implemented as originally designed. This record captures why, so future
 ingests don't flag them as "incomplete" or regressions.
 
@@ -81,7 +81,7 @@ ingests don't flag them as "incomplete" or regressions.
 | Role | Path |
 |------|------|
 | Service (get_summary, shared helper) | `backend/app/services/portfolio_service.py` |
-| Engine (position_states_end) | `backend/app/services/portfolio_engine.py` |
+| Engine (position_states_end) | `backend/app/services/financial_math/portfolio/daily_state.py` |
 | API (single /report entrypoint) | `backend/app/api/v1/portfolio_api.py` |
 | Implementation notes | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/lowDashboard/Low-dashboard_implementation_notes.md` |
 | Original architecture proposal | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/portfolio_engine_architecture_v2.md` |

@@ -1,6 +1,6 @@
 # 💪 RSI — Índice de Fuerza Relativa
 
-El RSI mide si los compradores o los vendedores han dominado *recientemente*. Responde a: *"En los últimos $N$ días, ¿qué proporción del movimiento total del precio fue ascendente frente a descendente?"*
+El RSI mide si los compradores o los vendedores han dominado *recientemente*. Responde a: *"En las últimas $N$ sesiones, ¿qué proporción del movimiento total del precio fue ascendente frente a descendente?"*
 
 ---
 
@@ -15,7 +15,7 @@ El resultado se comprime en un rango de 0 a 100:
 
 ## 🔢 Fórmulas Matemáticas
 
-1. **Descomponer** los cambios diarios en ganancias y pérdidas:
+1. **Descomponer** el cambio de una sesión a la siguiente en ganancias y pérdidas:
 
     $$
     U_t = \max(P_t - P_{t-1},\; 0), \qquad
@@ -44,7 +44,7 @@ La normalización $100 - 100/(1+RS)$ es una sigmoide monótonamente creciente qu
 
 | Parámetro | Clave | Por defecto | Descripción |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 14 | Ventana de retroceso para SMMA. |
+| Periodo ($N$) | `period` | 14 | Ventana de retroceso para SMMA, en sesiones. |
 | Sobrecompra | `overbought` | 70 | Umbral para la zona de sobrecompra. |
 | Sobreventa | `oversold` | 30 | Umbral para la zona de sobreventa. |
 
@@ -52,7 +52,7 @@ La normalización $100 - 100/(1+RS)$ es una sigmoide monótonamente creciente qu
 
 ## 🎛️ Equivalente en Procesamiento de Señales — Ciclo de Trabajo / Indicador de Saturación
 
-Imagine dividir la señal de variación de precio $\Delta P[n]$ en sus componentes rectificados de media onda positiva y negativa, y luego aplicar un filtro de paso bajo a cada una. El RSI es la **relación entre la envolvente positiva y la envolvente total**, reescalada a $[0, 100]$.
+Imagina dividir la señal de variación de precio $\Delta P[n]$ en sus componentes rectificados de media onda positiva y negativa, y luego aplicar un filtro de paso bajo a cada una. El RSI es la **relación entre la envolvente positiva y la envolvente total**, reescalada a $[0, 100]$.
 
 En términos de sistemas de control, es un **detector de saturación**: cuando la salida del sistema (precio) se ha movido en una dirección durante demasiado tiempo, el RSI indica que el actuador (mercado) ha alcanzado su límite de saturación. Como cualquier oscilador en un bucle de retroalimentación, cuanto más lejos esté del equilibrio, más fuerte será la fuerza restauradora; lo que explica la propiedad de reversión a la media que explotan los traders.
 

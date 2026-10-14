@@ -13,7 +13,7 @@ A **stock** (or share / equity) represents partial ownership in a publicly trade
 | **Currency** | Denominated in the exchange's local currency |
 | **Dividends** | Many stocks pay periodic cash dividends (quarterly in the US, semi-annually in Europe) |
 | **Splits** | Companies may split shares (e.g., 4:1) to lower the per-share price |
-| **Typical providers** | Yahoo Finance, CSS Scraper |
+| **Typical providers** | Yahoo Finance, Borsa Italiana, CSS Scraper |
 
 ---
 

@@ -6,6 +6,8 @@
 
     import RiskAnalysisPanel from './RiskAnalysisPanel.svelte';
     import RiskBetaBanner from './RiskBetaBanner.svelte';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     interface Props {
         assetId: number;
@@ -18,7 +20,7 @@
         rollingRiskSignals?: RenderedSignal[];
         refreshVersion?: number;
         onconfigure?: () => void | Promise<void>;
-        onsynced?: () => void | Promise<void>;
+        onsynced?: (detail: {accepted: boolean}) => void | Promise<void>;
     }
 
     let {assetId, dateStart, dateEnd, targetCurrency, assetClass = null, sectorExposure = null, geographyExposure = null, rollingRiskSignals = [], refreshVersion = 0, onconfigure, onsynced}: Props = $props();
@@ -53,8 +55,8 @@
 
     function formatRollingValue(value: number | null | undefined, unit: RenderedSignal['unit']): string {
         if (value == null) return '—';
-        if (unit === 'percentage') return `${(value * 100).toFixed(2)}%`;
-        return value.toFixed(3);
+        if (unit === 'percentage') return formatPercent(value, {scale: 100, signed: false});
+        return formatFixed(value, 3);
     }
 </script>
 

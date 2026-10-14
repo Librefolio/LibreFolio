@@ -18,9 +18,10 @@ Component and model for unified data quality warnings across the LibreFolio UI.
 | File | Role |
 |------|------|
 | 🐍 `backend/app/schemas/portfolio.py` | Defines `IssueCode`, `IssueSeverity`, `IssueDomain`, `DataQualityIssue`, and `DataQualityReport` schemas. |
-| ⚙️ `backend/app/services/portfolio_engine.py` | `DerivedViewsBuilder.build_data_quality_report()` — generates portfolio-wide issues. |
+| ⚙️ `backend/app/services/financial_math/portfolio/data_quality.py` | `build_data_quality_report()` — generates portfolio-wide issues from the engine's daily states; `DerivedViewsBuilder.build_data_quality_report()` (`derived_views.py`) passes its daily states to it. |
+| 📊 `backend/app/services/portfolio_service.py` | `get_summary()` / `get_report()` — collect the missing FX pairs and the assets without cost basis, then call `build_data_quality_report()`. |
 | 🎨 `frontend/src/lib/components/ui/feedback/DataQualityBanner.svelte` | Reusable UI component (supporting `grouped` and `flat` modes). |
-| 🌐 `frontend/src/lib/i18n/{en,it,fr,es}.json` | `dataQuality.*` translation namespace for localized warnings. |
+| 🌐 `frontend/src/lib/i18n/dataQuality/{en,it,fr,es}.json` | `dataQuality.*` translation namespace for localized warnings: the `dataQuality` subsystem, one of the sources of the generated catalogue (see [Internationalization](i18n.md)). |
 
 ---
 
@@ -31,7 +32,7 @@ Here is how data quality reports are computed in the backend and rendered inside
 ```mermaid
 graph TD
     Engine["⚙️ Backend Engine<br>(DerivedViewsBuilder)"] -->|"Computes issues"| Report["📄 DataQualityReport<br>Schema"]
-    Report -->|"JSON payload"| API["📡 API Endpoint<br>(POST /summary)"]
+    Report -->|"JSON payload"| API["📡 API Endpoint<br>(POST /portfolio/report)"]
     API -->|"issues[]"| Dash["📊 Dashboard Page"]
     Dash -->|"grouped mode"| Banner["🛡️ DataQualityBanner"]
     Detail["📈 Client Pages<br>(Asset/FX Detail)"] -->|"flat mode (per-issue)"| Banner
@@ -44,8 +45,8 @@ graph TD
 ### 1. `grouped` — Dashboard 📊
 * Single amber/sky container grouping all issues.
 * Issues are sorted by severity: **Error** 🔴 → **Warning** 🟡 → **Info** 🔵.
-* The header adapts dynamically: `"1 error"`, `"2 warnings"`, or `"Data quality note"` (for info-only alerts).
-* First 3 issues are visible; an expand button appears when there are more.
+* The header counts errors and warnings only, naming just the non-zero counts: `"1 error(s)"`, `"2 warning(s)"` or `"1 error(s), 2 warning(s)"` (`dataQuality.headerErrors`, `dataQuality.headerWarnings`). With neither — info issues only — it reads `"Data quality note"` (`dataQuality.headerInfoOnly`).
+* The banner starts collapsed, showing only its header (`let expanded = $state(false)`). The header is itself the toggle: a button (test id `data-quality-toggle`, with `aria-expanded` and a chevron) that opens and closes the whole list. Once open, the errors and warnings — the issues the header counts — sit indented under it (`data-quality-actionable`); the info issues follow apart, not indented (`data-quality-info`), below a thin rule when errors or warnings precede them.
 
 ```svelte
 <DataQualityBanner issues={dataQualityIssues} mode="grouped" onaction={handleBannerAction} />
@@ -74,8 +75,12 @@ onaction?: (action: string, target: string | null, issue: DataQualityIssue) => v
 | Action | Target | Handled By | Description |
 |--------|--------|------------|-------------|
 | `navigate_asset` | asset_id string | `goto('/assets/' + target)` | Redirects the user to the specific asset details page. |
-| `navigate_fx` | FX pair slug | `goto('/fx/' + target + '?start=...&end=...')` | Redirects to the FX pair details page. |
+| `navigate_fx` | FX pair slug | `goto('/fx/' + target)` on the dashboard; the asset detail adds `?start=...&end=...` | Redirects to the FX pair details page. |
 | `add_fx_pair` | FX pair slug | `FxPairAddModal` | Opens the modal to configure the missing FX pair. |
+| `sync_fx_pair` | First affected pair, unused — the handler syncs every pair in `issue.affected_fx_pairs` (`cta_target` only when that list is empty) | `POST /api/v1/fx/currencies/sync` (dashboard `syncMissingFxRates`) | Body built by `buildMissingFxRatesSyncRequest` (`utils/sync/syncRange.ts`): `{pairs, start, end}`, the pairs as alphabetical slugs and the issue's `message_params.date_from`…`date_to` widened by `padSyncRange` to 7 days either side, the end capped at today — the margin `buildComparisonSyncRange` also uses. E.g. `2022-11-03`…`2023-06-27` → `start: '2022-10-27'`, `end: '2023-07-04'`. Without usable dates: the full history (`start: 'min'`, `end`: today). Timeout 120 s (`FX_SYNC_TIMEOUT_MS`). After the answer — not after a transport error — the dashboard bumps `refreshVersion` and reloads its report. `refreshVersion` is the signal **Refresh** sends too ([How a page uses the cache](state/domain-state.md#how-a-page-uses-the-cache)): new rates change the lots and risk figures, so an open `LotsAnalysisPanel` asks `POST /api/v1/portfolio/lots/analysis` again with `force` and drops a warning the sync fixed, and a mounted `RiskLevelsPanel` (Risk tab) reloads too. Then the dashboard emits one notification, `fx.rates.synced`, detail `{origin: 'dashboard-banner', pairs, start, end, outcome, stillMissing}` (`stillMissing` is `null` when the report was not reloaded); its toast has one line per pair. When the sync answered `ok` or `partial` but the reloaded report still has a `sync_fx_pair` issue for one of those pairs, the toast appends `dataQuality.missingFxRatesAfterSync` and a success becomes a warning. |
+| `sync_asset_prices` | First affected id, unused — the handler syncs every id in `issue.affected_asset_ids` | `POST /api/v1/assets/prices/sync` (dashboard `handleBannerAction`) | Sends one item per affected asset: `{asset_id, date_range: {start: 'resume', end: <dashboard end date>}}`. `'resume'` is the backend sentinel for "the day after the last stored price" (full history when there is none). After the answer — not after a failed request, which shows one error toast and reloads nothing — it shows one toast per asset result, bumps `refreshVersion` as `sync_fx_pair` does (new prices change the lots and risk figures too: an open `LotsAnalysisPanel` and a mounted `RiskLevelsPanel` ask again), and reloads the dashboard report. |
+
+In grouped mode, `navigate_asset` renders one link per affected asset; every other action, `sync_asset_prices` included, renders a single CTA button. While a sync request runs, the dashboard passes the issue's code as the `busyCode` prop: that issue's CTA button shows a spinner and stays disabled until the request settles. The CTA test id (`data-quality-cta-{code}`) and `busyCode` are keyed by the issue code alone, so the two `MISSING_FX_RATES` rows share them: while **Sync rates** runs, the MANUAL row's **View FX** button spins and is disabled too (known limitation).
 
 ---
 
@@ -89,12 +94,57 @@ onaction?: (action: string, target: string | null, issue: DataQualityIssue) => v
 
 | Code | Severity | Condition | CTA Action |
 |------|----------|-----------|------------|
-| `MISSING_PRICE` | 🔴 Error | Asset held with no PriceHistory and no WAC/cost basis fallback | `navigate_asset` |
-| `TRANSACTION_IMPLIED` | 🟡 Warning | Asset held with no PriceHistory but WAC/cost basis available — valued at cost temporarily | `navigate_asset` |
-| `STALE_PRICE` | 🟡 Warning | Latest price older than staleness threshold | `navigate_asset` |
-| `MISSING_FX_MARKET` | 🟡 Warning | Asset in foreign currency without a configured FX pair | `add_fx_pair` |
-| `NAV_INCOMPLETE` | 🔵 Info | One or more days had incomplete NAV (caused by MISSING_PRICE) | none |
-| `MWRR_NOT_CALCULABLE` | 🔵 Info | MWRR did not converge or period is too short | none |
+| `MISSING_PRICE` | 🔴 Error | Open position with no price on the end date: no market quote and no priced trade on or before it (`ValuationSource.MISSING`, see the `TRANSACTION_IMPLIED` rule below). The NAV leaves the asset out | `navigate_asset` |
+| `TRANSACTION_IMPLIED` | 🟡 Warning | Open position valued on the end date at a trade price (`ValuationSource.LAST_TRADE_PRICE`) instead of a market quote, for an asset with a provider, outside the 14-day grace period after its first `BUY` or `SELL` (full rule below). `message_params`: `count`, `as_of_date`; group `transaction_implied` | `navigate_asset` |
+| `STALE_PRICE` | 🟡 Warning | Open position valued at a market price carried forward more than 7 days, on an asset with a provider (full rule below) | `sync_asset_prices` |
+| `MISSING_COST_BASIS` | 🟡 Warning | An acquisition of the asset has no known cost: a `TRANSFER` or `ADJUSTMENT` adding quantity without `cost_basis_override` (full rule below). Also emitted by the FIFO lots analysis for the analysed asset. `message_params`: `count`; group `missing_cost_basis` | `navigate_asset` |
+| `MISSING_FX_MARKET` | 🟡 Warning | A conversion the report needed ([sources below](#where-missing-fx-pairs-come-from)) has no configured FX pair | `add_fx_pair` |
+| `MISSING_FX_RATES` | 🟡 Warning | A configured pair with a real (non-`MANUAL`) provider in at least one route step cannot convert an amount on some dates: no rate exists on or before them (`convert_bulk` backfills without limit), so they precede the pair's first stored rate. Movement dates come from the whole history up to the end date, valuation dates only from the period ([sources below](#where-missing-fx-pairs-come-from)). `message_params`: `count`, `date_from`/`date_to` (span over all affected pairs), `dates_count`; group `missing_fx_rates` | `sync_fx_pair` |
+| `MISSING_FX_RATES` | 🟡 Warning | Same, for configured pairs whose routes are all `MANUAL`. `message_params`: `count` only; group `missing_fx_rates_manual` | `navigate_fx` |
+| `NAV_INCOMPLETE` | 🔵 Info | One or more days of the period had an incomplete NAV: an asset held that day had no price (the `MISSING_PRICE` condition, day by day) | none |
+| `MWRR_NOT_CALCULABLE` | 🔵 Info | The summary has no MWRR (`mwrr_available=False`): no net invested capital in the period, a NAV of zero or less on the end date, a period of zero days, or a solver that does not converge. A `get_report()` without a summary always reports it | none |
+| `MWRR_SERIES_UNRELIABLE` | 🟡 Warning | After a cold-start retry, the history's last cumulative MWRR is still missing or further from the summary's than the tolerance, so the history's MWRR is set to `null`. Added by `PortfolioService.get_report()`, not by `build_data_quality_report` (full rule below). `message_params`: `summary_cum`, `series_cum`, `divergence_pp`, `first_bad_date` | none |
+
+**`TRANSACTION_IMPLIED` rule.** The engine values every holding through the unified price resolver: `DailyStateBuilder._market_value_for()` (`backend/app/services/financial_math/portfolio/daily_state.py`) reads a per-asset `AssetPriceSeries` (`backend/app/services/financial_math/price_marks.py`). The series holds market quotes (`PriceHistory`) and trade prices: the unit price of each `BUY` or `SELL` of the asset at the brokers in scope, and the `cost_basis_override` of each `ADJUSTMENT` not linked to a split whose override is set and not zero. Trades of the same day are averaged, and a quote of that day wins over them. For each day the resolver takes the latest observation on or before it: a quote values the holding at `MARKET_PRICE`, a trade at `LAST_TRADE_PRICE`; with no observation at all the holding is `MISSING` (`MISSING_PRICE`). Each daily state collects its `LAST_TRADE_PRICE` assets in `transaction_implied_asset_ids`. `PortfolioService.get_summary()` reads that set on the end-date state only — an asset quoted since its latest trade is not listed, whatever its past — and drops:
+
+* the assets whose first `BUY` or `SELL` (`first_position_dates`, the earliest over their brokers) is at most `TRANSACTION_IMPLIED_GRACE_DAYS` (14, `backend/app/services/data_quality_thresholds.py`) days before the end date: a normal placement lag, e.g. a bond bought at issue before its first quote. An asset with no `BUY` or `SELL` gets no grace period;
+* the assets without a provider (no `AssetProviderAssignment`): valuing them at their last trade price is their intended behaviour.
+
+The list holds one entry per open position, so an asset held at two brokers counts twice in `count`. `as_of_date` is the date of the last daily state. The English message of `dataQuality.transactionImplied` reads "{count} asset(s) valued at their last transaction price — no market price available for over 2 weeks (as of {as_of_date})": the engine does value these assets at their latest trade price, and the "over 2 weeks" matches the 14-day grace period, which counts from the first `BUY` or `SELL`, not from the latest quote.
+
+**`STALE_PRICE` rule.** `PortfolioService.get_summary` builds the list and passes it to `build_data_quality_report` as `stale_prices_dto`. An asset is listed when, at the end date, all of these hold:
+
+* its position is open (quantity above the dust threshold);
+* the position is valued at a **market** price (`ValuationSource.MARKET_PRICE`), not at a trade price;
+* that price is carried forward **more than** `STALE_PRICE_THRESHOLD_DAYS` (7) days, so a quote exactly 7 days old is still current;
+* the asset has a provider assignment.
+
+Each asset appears once, whatever the number of brokers holding it, as `StalePriceAsset{asset_id, name, last_price_date, stale_days}`, with `stale_days` counted from `last_price_date` to the end date. Left out on purpose: manual assets, which have nothing to sync (those valued at their last trade price, such as crowdfunding or `HOLD` assets, are stale by design); provider assets valued at a trade price, which are `TRANSACTION_IMPLIED`'s case, or with no price at all, which are `MISSING_PRICE`'s; closed positions. With stale prices and nothing that makes it `partial`, the report's derived `data_quality_status` is `carried_forward` ([source-data status](../../financial-theory/technical-analysis/risk-metrics/data-quality.md#source-data-status)), so portfolio risk results that read it can turn `PARTIAL`.
+
+**`MISSING_COST_BASIS` rule.** `PortfolioService._missing_cost_basis_assets()` lists the assets whose average cost, in the engine run behind the report, has an acquisition of unknown cost (`AverageCost.unknown_cost_movement_ids`): a `TRANSFER` or `ADJUSTMENT` adding quantity, not split-linked, without `cost_basis_override` (see [WAC & Cost Basis](../backend/transactions/wac.md#diagnostics)). The engine replays the whole history up to the end date, so the position does not have to be open any more. Each asset appears once, as `(asset_id, name)`, whatever the number of brokers. The average cost adds the quantity without any cost: the units count at zero in the purchase cost (`open_cost_basis`), and the position's `wac_per_unit`, `gain_loss` and `annualized_return` are `null` until the pool empties. In grouped mode the issue renders one link per affected asset, labelled with the asset's name.
+
+Two producers build this issue, both through `build_data_quality_report(missing_cost_basis_assets=...)`:
+
+| Producer | Assets listed | Where it shows |
+|----------|---------------|----------------|
+| `PortfolioService._missing_cost_basis_assets()` | Every asset with an acquisition of unknown cost in the engine run behind the report | Dashboard banner (`summary.data_quality`, or the report's own `data_quality` without a summary) |
+| `LotsAnalysisService._report_gaps()` | The analysed asset, when one of its WAC lines has an acquisition of unknown cost; the analysis also turns `DEGRADED` | FIFO lots analysis `data_quality`, rendered by `LotDataQualityBanner` without call-to-action buttons |
+
+**`MWRR_SERIES_UNRELIABLE` rule.** `build_data_quality_report` never produces this code. `PortfolioService.get_report()` runs the check only when the request includes both the summary and the history and the history has at least two points, and adds the issue after the report's data quality is built. It compares the summary's `mwrr_cumulative_percent` with the `mwrr_cumulative` of the last history point. When both exist and differ by more than `max(0.005, 0.05 × |summary|)` — half a percentage point, or 5% of the summary value when that is larger — it rebuilds the history with a cold-start solver (`get_history(..., _mwrr_use_warm_start=False)`). If the last point of the rebuilt series still differs by more than that, or has no MWRR, it sets `mwrr_annualized` and `mwrr_cumulative` to `null` on every history point, so the growth chart has no MWRR line, and appends a WARNING issue to `summary.data_quality`, which is also the report's `data_quality`. The issue carries `message_i18n_key` `dataQuality.mwrrSeriesUnreliable` and, in `message_params`, `summary_cum`, `series_cum` and `divergence_pp` (percentages rounded to two decimals) and `first_bad_date`: the first point whose cumulative MWRR strays beyond the tolerance from the summary's annualized MWRR compounded to that point, or `unknown`. It has no CTA, no affected assets and no group. No test covers it.
+
+### 💱 Where missing FX pairs come from {: #where-missing-fx-pairs-come-from }
+
+`PortfolioService.get_summary()` merges every conversion it could not make into `summary.missing_fx_pairs` (pair `FROM/TO` with its dates, `_merge_missing_pairs()`), and `build_data_quality_report()` turns them into `MISSING_FX_MARKET` / `MISSING_FX_RATES` issues. Two sources feed the list:
+
+| Source | Conversions | Dates kept |
+|--------|-------------|------------|
+| The summary's own conversions | Transaction cash amounts at their dates, from the engine's native cash (`NativeCash.missing_conversions()`); holding prices at the end date; the previous day's price for Δ1; Yield on Cost income | As requested |
+| The engine, through `_engine_missing_fx_pairs()` | **Movements** — `PortfolioCalculationResult.missing_fx`: the average cost of each acquisition (report and asset leg), cash amounts, external cash flows, the cost of assets in transit (at the arrival date) | Every date, whenever the movement happened |
+| | **Valuations** — `DailyPortfolioState.missing_fx_pairs`: market prices and in-transit cash, day by day | Only the days of the period shown, `[date_from, end date]`; the first one is the period's opening state |
+
+So a purchase made years ago whose rate is missing is reported, because its cost weighs on today's figures, while a valuation gap before the period changes nothing on screen and is left out. When `get_report()` builds no summary, its own `data_quality` takes its missing pairs from the engine source only, and still reports `MISSING_COST_BASIS`.
+
+The FIFO lots analysis reports in its own `data_quality` every conversion it could not make — in its WAC lines, its daily valuation and every other figure it returns (value, return, price and performance histories, lot summary, Gantt segments, event rows, income events), merged per pair — and the WAC lines' acquisitions of unknown cost. Any such gap turns a `COMPLETE` analysis `DEGRADED`; see [Lots Analysis Service — FX Conversion](../backend/transactions/lots_analysis_service.md#fx-conversion) and [WAC Lines](../backend/transactions/lots_analysis_service.md#wac-lines).
 
 ### 📈 Asset Detail Issues (built client-side in `assets/[id]/+page.svelte`)
 
@@ -120,12 +170,15 @@ onaction?: (action: string, target: string | null, issue: DataQualityIssue) => v
 
 | Issue | How to Trigger |
 |-------|----------------|
-| `MISSING_PRICE` | Add a BUY transaction for an asset that has no PriceHistory entries AND no WAC/cost basis is available. The NAV will exclude it. |
-| `TRANSACTION_IMPLIED` | Buy an asset (e.g. BTP in collocamento) before its first PriceHistory is available. WAC must exist. The engine uses WAC as a temporary proxy; the issue disappears once the first price becomes available. |
-| `STALE_PRICE` | Use an asset that hasn't been synced recently, or manually set `last_price_date` far in the past in the DB. |
-| `MISSING_FX_MARKET` | Add an asset in a foreign currency (e.g. USD) when the dashboard target currency is EUR and the EUR/USD pair is not configured. |
-| `NAV_INCOMPLETE` | Same scenario as `MISSING_PRICE` — appears automatically when NAV is incomplete for ≥1 day. |
-| `MWRR_NOT_CALCULABLE` | Portfolio with only 1 transaction on 1 day. MWRR needs ≥2 nav snapshots with a non-zero cash flow. |
+| `MISSING_PRICE` | Hold an asset that has no `PriceHistory` row and no priced trade, e.g. one brought in by an `ADJUSTMENT` with a cost basis of 0 (typed in Manual, or computed by Auto at a broker with no other transaction in the asset). A `BUY` is not enough: its own price values the holding. The NAV leaves the asset out. |
+| `TRANSACTION_IMPLIED` | Buy an asset **with a provider** that has no quote yet (e.g. a BTP in collocamento), then look at a dashboard end date more than 14 days after that first `BUY`, still before its first quote. Within those 14 days the asset is valued at its trade price without an issue; the issue goes away once the asset has a quote at least as recent as its latest trade, on or before the end date. A manual asset is never listed. |
+| `STALE_PRICE` | Hold an open position in an asset **with a provider** whose newest market price, with no trade of the asset after it, is more than 7 days before the dashboard end date, e.g. prices seeded with `POST /api/v1/assets/prices` and ending 10 days ago. Any fresh quote clears it, including the live-price polling of the asset pages (`POST /api/v1/assets/prices/current` stores today's quote). `e2e/portfolio/stale-price-banner.spec.ts` seeds a holding that stays stale: `mockprov` with `INVALID_TICKER_12345`, the one identifier the mock refuses a current price for, and it intercepts the sync the CTA sends. |
+| `MISSING_COST_BASIS` | Hold an asset with a `TRANSFER` or `ADJUSTMENT` adding quantity, not split-linked, without `cost_basis_override`. The app refuses to save such a row with `costBasisRequired` (`TransactionService._requires_cost_basis`): `validate_cost_basis` (`backend/app/services/transaction_batch_stages.py`) checks every create, update and promote of a batch — new promoted rows as creates, saved ones on the promote that paired them. Auto rows skip the check: the Auto step writes their cost, or blocks the batch when a rate is missing. The condition survives in two cases. **Rows left by an older version**: a `TRANSFER` pair, or an `ADJUSTMENT` adding quantity, stored without cost basis. **One app path, open as backlog item P-10**: an `ADJUSTMENT` linked to a `SPLIT` and saved in Auto is stored without cost basis, since the split rescales the pool instead (`TransactionService._compute_wac_for_auto_items`); retype the event to `PRICE_ADJUSTMENT` and the row, no longer split-linked, becomes an acquisition of unknown cost — pinned by `backend/test_scripts/test_api/test_portfolio_wac.py::TestPortfolioWACSplit::test_forward_split_relabelled_as_price_adjustment_becomes_an_unknown_cost_acquisition`. How the tests produce it: the backend inserts the rows through the session (`test_portfolio_cost_currency.py`, S5 and S7); in E2E, `e2e/portfolio/data-quality-real.spec.ts` follows the P-10 path through the API, and `e2e/portfolio/data-quality-legacy.spec.ts` has `backend/test_scripts/test_db/legacy_cost_rows.py` write legacy rows — only into the lane's test database, for brokers the given user owns. |
+| `MISSING_FX_MARKET` | Hold an asset in a foreign currency (e.g. buy a USD asset) when the dashboard target currency is EUR and the EUR/USD pair is not configured. |
+| `MISSING_FX_RATES` | Pick a currency X and configure its pair with the dashboard currency through a route that has a real (non-`MANUAL`) provider, but no rate on or before the dates of the movements in X — cash movements, purchases or sales paid in X: e.g. deposit X at a broker and buy an EUR asset with it, before the pair's first stored rate. The issue names the pair and the missing dates, with `sync_fx_pair` (**Sync rates**). When every step of the pair's routes is `MANUAL`, the same gap lands in the `missing_fx_rates_manual` group with `navigate_fx`. To run the sync offline, as `e2e/portfolio/data-quality-real.spec.ts` (E1) does, route the pair through the test-only `MOCKFX` provider (`backend/app/services/fx_providers/mockfx/plugin.py`: 1.2345 for every day and currency, hidden from `GET /api/v1/fx/providers`): **Sync rates** really stores the rates, the reloaded report drops the issue and its banner row goes. |
+| `NAV_INCOMPLETE` | Same scenario as `MISSING_PRICE` — appears automatically when NAV is incomplete for ≥1 day of the period shown. |
+| `MWRR_NOT_CALCULABLE` | A portfolio whose only transaction is one deposit made after the start of the selected range: the period opens on that deposit's day at a NAV of 0 and counts no flow after it, so it has no net invested capital and `get_summary()` does not solve MWRR. |
+| `MWRR_SERIES_UNRELIABLE` | No test or fixture produces it. It needs a report whose history, even rebuilt with the cold-start solver, ends on a cumulative MWRR that is missing or further from the summary's than the tolerance. |
 
 ### 📈 Asset Detail
 
@@ -147,7 +200,7 @@ onaction?: (action: string, target: string | null, issue: DataQualityIssue) => v
 
 ## 🔍 Debugging: Verify `data_quality.issues` Payload
 
-Open browser DevTools → Network → find the `POST /api/v1/portfolio/summary` request.
+Open browser DevTools → Network → find the `POST /api/v1/portfolio/report` request.
 
 In the response JSON, look for:
 
@@ -188,26 +241,100 @@ In the response JSON, look for:
 ## 🧪 Test Coverage
 
 ### 🐍 Backend Unit Tests (`test_data_quality_report.py`)
-* Covers all 5 portfolio codes: severity, affected fields, CTA, count, date_range.
+* 38 tests over 7 of the 9 portfolio codes — `MISSING_PRICE`, `TRANSACTION_IMPLIED`, `STALE_PRICE`, `MISSING_FX_MARKET`, `MISSING_FX_RATES` (both groups), `NAV_INCOMPLETE` and `MWRR_NOT_CALCULABLE`: severity, affected fields, CTA, count, date_range.
 * Empty inputs produce no issues.
-* All 5 codes can appear together.
+* Codes together in one report: `test_all_five_codes_can_appear_together` (`MISSING_PRICE`, `STALE_PRICE`, `MISSING_FX_MARKET`, `NAV_INCOMPLETE`, `MWRR_NOT_CALCULABLE`) and `test_all_six_codes_can_appear_together` (the same plus `TRANSACTION_IMPLIED`).
+* `TestStalePriceIssue`: the `sync_asset_prices` CTA, the unchanged `dataQuality.stalePrice` message contract (count, aligned affected ids and names) and the `carried_forward` status of a stale-only report.
+* Not in this file: `MISSING_COST_BASIS`, covered by `test_portfolio_cost_currency.py` (below); no test covers `MWRR_SERIES_UNRELIABLE`.
 
-Run test suite:
+### 🗄️ Backend Service Tests (`test_portfolio_service.py`)
+`TestStalePriceDataQuality` checks the `STALE_PRICE` rule through `get_summary`, on a DB-backed portfolio:
+
+* a provider asset last quoted 10 days ago is flagged once, with its `last_price_date`, its `stale_days` and the `sync_asset_prices` CTA, and the status is `carried_forward`;
+* not flagged: a quote exactly 7 days old, a fresh quote, a manual asset with the same 10-day-old quote, a position sold before the end date, a provider asset valued at its trade price (left to `TRANSACTION_IMPLIED`);
+* an asset held at two brokers is a single `StalePriceAsset`.
+
+### 🗄️ Backend Service Tests (`test_portfolio_cost_currency.py`)
+On a DB-backed portfolio whose rows are inserted directly through the session:
+
+* `TestCostDiagnostics`: a purchase, or an opening cost, in a currency without rates leaves the position's cost incomplete and reaches the banner with its pair (S4, S4b); an `ADJUSTMENT` adding quantity without cost basis raises `MISSING_COST_BASIS` and leaves the row without WAC or P&L (S5); the engine's failures reach `missing_fx_pairs` with the purchase date and only the period's valuation days (S6); 4 units that reach a second broker by a `TRANSFER` without cost basis — linked to a −4 out of the first broker, or an orphan in-leg — raise `MISSING_COST_BASIS` for the asset: the receiving broker's row has no WAC nor P&L (its value stays known), while the sending broker keeps what it paid, complete (S7).
+* `TestLotsAverageCostLines`: a purchase that cannot be converted is reported by the lots analysis (pair, issue, `DEGRADED`) and blanks its WAC lines until the pool empties (L2); an `ADJUSTMENT` adding quantity without cost basis does the same — `DEGRADED`, lines blank until the pool empties — with a `MISSING_COST_BASIS` issue for the asset instead of a pair, reported once for both lines, while its control with a cost basis stays `COMPLETE` (L3); S7's linked `TRANSFER` arrival is a `MISSING_COST_BASIS` issue for the asset, the only one — the FIFO engine itself raises nothing — and the analysis is `DEGRADED` (L4). The orphan in-leg is left to S7: it fails the FIFO lots (`TRANSFER_PAIR_MISSING`).
+
+Run both backend suites:
 ```bash
 pipenv run ./dev.py test services roi-fifo-utils
+pipenv run ./dev.py test services roi-fifo-utils TestStalePriceIssue TestStalePriceDataQuality   # STALE_PRICE only
+pipenv run ./dev.py test services roi-fifo-utils TestCostDiagnostics TestLotsAverageCostLines   # missing cost and FX only
 ```
-*(Covers `test_services/test_financial/` — includes `test_data_quality_report.py` and `test_transaction_implied.py`)*
+*(Covers `test_services/test_financial/` — includes `test_portfolio_engine/test_data_quality_report.py`, `test_portfolio_service.py` and `test_portfolio_cost_currency.py`)*
 
 ### 🎭 Frontend E2E Tests (`e2e/portfolio/data-quality-banners.spec.ts`)
-* Dashboard loads without JS errors.
-* Legacy inline banners removed (old testids gone).
-* Grouped mode structure checks when issues present.
-* Header does not show `"0 errors, 0 warnings"` for info-only issues.
-* NAV incomplete message includes dates.
-* Flat mode: checks that no grouped container is rendered.
-* FX pair missing: CTA button checks.
+Every test signs in as the shared E2E user (`TEST_USER`) and runs on the seeded data, in parallel with other specs. The dashboard states it needs are portfolio-wide: seeding them for real would mean committing transactions that move the NAV those specs read. So the file injects the issues into the real report it intercepts (`injectDashboardIssues`, and `serveMissingFxRates` for `MISSING_FX_RATES`; both first drop any real issue with the same code, so the row under test is the only one with its code), and it fakes the FX sync (`holdFxSync`: no provider is reached, no rate is written). What it tests is the rendering, the request a CTA builds and what the page does with the answer, not whether the engine emits the issue. `data-quality-real.spec.ts` (below) is the counterpart that mocks nothing: it follows the engine's own issues on disposable accounts.
+
+**Dashboard (grouped mode)**
+
+* The dashboard loads without JS errors, shows its page and its KPI row (`kpi-row`), and no longer renders the pre-migration banners `dashboard-missing-prices-banner` and `dashboard-missing-fx-banner` (three tests).
+* Two data-conditional checks on the seed's own issues: a banner on screen is a single grouped container with at least one issue row, and its header names no zero count (no "0 error", no "0 warning"). When the seed shows no banner, each test records an `info` annotation and passes.
+* `NAV_INCOMPLETE`, injected with `date_from` `2019-03-04` and `date_to` `2019-03-06`: its row shows both dates, interpolated from `message_params`.
+* `MISSING_PRICE`, injected with two assets: its row renders one `navigate_asset` link per asset. The links are counted inside the row (`data-quality-nav-assets-MISSING_PRICE`), because every `navigate_asset` issue names its links with the same pattern, `data-quality-nav-asset-{id}`. A `TRANSACTION_IMPLIED` sibling, injected beside it with a third asset, shows its link in its own row: the page has another link, and the count leaves it out by scope.
+* **Sync rates** on an injected `MISSING_FX_RATES` issue for `EUR-USD`, missing dates `2022-11-03`…`2023-06-27`: nothing syncs before the click, then one `POST /api/v1/fx/currencies/sync` with `{pairs: ['EUR-USD'], start: '2022-10-27', end: '2023-07-04'}`, a week either side. While `holdFxSync` holds it, the CTA is disabled and the page's `data-busy` is `true`. Once the canned `ok` answer is released, the dashboard reloads its report and emits `fx.rates.synced` with `{origin: 'dashboard-banner', pairs, start, end, outcome: 'ok', stillMissing: false}`; one click, one sync.
+* **Sync rates** with missing dates from 30 to 2 days ago: the request starts 37 days ago and ends today, not 5 days ahead — the end is capped at today — and `fx.rates.synced` carries that range.
+* **Sync rates** when the reloaded report still carries the issue (`serveMissingFxRates` keeps it after the sync, as when the provider had nothing for those dates): `fx.rates.synced` reports `outcome: 'ok'` with `stillMissing: true`, and a warning toast is on screen.
+
+**Asset Detail (flat mode)**
+
+* The first asset of the assets page opens without JS errors, without the pre-migration `asset-archived-banner`, and without a grouped container: flat mode never renders `data-quality-banner` (three tests).
+* `FX_PAIR_MISSING`: the FX routes the page reads (`GET /api/v1/fx/providers/routes`) are stubbed to none (`stubFxRoutes`), and `injectForeignEvent` appends to every `POST /api/v1/assets/prices/query` result a `DIVIDEND` in USD (GBP for a USD asset) without `original_value` — how the backend returns an event whose conversion failed. The event's pair is required and not configured: the issue row and its CTA button (`add_fx_pair`) are visible.
+* `FX_PAIR_NO_DATA`: the same injected event, in a currency the asset's currency has a configured route with (the real routes): the pair exists but the event came back unconverted, so the row and its CTA button (`navigate_fx`) are visible. Neither FX test clicks the CTA, and both pick a seeded asset first (Apple, Microsoft, NVIDIA): the shared listing also holds assets that neighbouring specs have just created, usually with no data.
+
+**FX Detail (flat mode)**, on `EUR-USD`
+
+* The pair's page loads without JS errors and renders no grouped container (two tests).
+* Data-conditional: `/fx/EUR-USD?start=2000-01-01&end=2000-12-31` shows `RANGE_BEFORE_FIRST_DATA`, whose message names the first available date (the test looks for a year). When the issue does not show — the pair's data starts before 2000 — the test records an `info` annotation and passes.
 
 Run test suite:
 ```bash
 pipenv run ./dev.py test front-portfolio banners
+```
+
+### 🎭 Frontend E2E Tests (`e2e/portfolio/stale-price-banner.spec.ts`)
+* On a disposable account, a provider-priced holding last quoted 10 days ago is reported as `STALE_PRICE` with the `sync_asset_prices` CTA.
+* The grouped banner shows the issue with its single CTA button, not per-asset links.
+* The CTA posts one item per affected asset to `POST /api/v1/assets/prices/sync` (`start: 'resume'`, `end`: the dashboard end date), and the button is disabled while the sync runs.
+* Once the sync answers, the dashboard reloads its report and the CTA is enabled again. The sync is intercepted with a canned response: no provider is called and no price is written.
+* A second test, on an account of its own, opens the dashboard with the stale holding's lots panel already open (`?tab=posizioni&asset={id}`), the lot of the seeded `BUY` on screen. Once **Sync prices** — intercepted the same way — has answered, the open panel asks `POST /api/v1/portfolio/lots/analysis` again by itself, and the answer still lists the lot, in the same document: nothing reloaded the page (`performance.timeOrigin` unchanged). The canned sync moves no figure, so asked and answered is the whole claim — E1's lots-panel check (below), for **Sync prices**.
+
+Run test suite:
+```bash
+pipenv run ./dev.py test front-portfolio stale-price-banner
+```
+
+### 🎭 Frontend E2E Tests (`e2e/portfolio/data-quality-real.spec.ts`)
+Unlike `data-quality-banners.spec.ts`, which injects issues into the report it intercepts, this spec routes and mocks nothing: each test registers a disposable account that owns the whole dashboard, writes its data through the API and follows the engine's own issues from the report to the screen. The positions cells are read by column: DataTable's data cells (`<td class="td-data">` in `frontend/src/lib/components/table/DataTable.svelte`) carry `data-column-id`, so this spec and `data-quality-legacy.spec.ts` read the `pnl`, `pnl-percent` and `pmc` cells of the holdings row `data-row-id="{asset_id}-{broker_id}"`.
+
+* **E1 — a missing rate is reported, never counted at zero.** An EUR asset is bought and partly sold with cash in a currency whose pair has a `MOCKFX` route and no rate yet. The report raises one `MISSING_FX_RATES` issue (`sync_fx_pair`) with the pair and the two movement days (`dates_count: 2`), and the holding's `wac_per_unit`, `gain_loss` and `gain_loss_percent` are `null`; the banner row shows the pair and both dates, the P&L, P&L % and average-cost cells read «—», and the lots panel reports the issue. No sync request leaves before the click. **Sync rates** posts the issue dates a week either side, `MOCKFX` answers `ok`, and `fx.rates.synced` reports `outcome: 'ok'`, `stillMissing: false`. The first movement day then converts at its own stored rate, the reloaded report has no `MISSING_FX_RATES`, the figures come back and the banner row goes — and the lots panel that was already open asks `POST /api/v1/portfolio/lots/analysis` again by itself, without a reload, and drops the issue.
+* **E2 — an acquisition of unknown cost, through the P-10 path.** A `BUY`, a `SPLIT` event, an `ADJUSTMENT` linked to it and saved in Auto without a cost, then the event retyped to `PRICE_ADJUSTMENT`. The report raises one `MISSING_COST_BASIS` issue naming the asset; the banner row has one link, labelled with the asset's name, and the link opens the asset page; the three cells read «—» on the dashboard and on the broker page (`/brokers/{id}?tab=posizioni`), and the lots panel reports the issue. An explicit purchase cost on the `ADJUSTMENT` — 0 per unit — clears it: the WAC is known again and the banner row goes.
+* **E3 — the «Unrealized change» breakdown.** One asset quoted in a foreign currency and one in EUR, both bought with EUR, with hand-entered rates that move after the purchase. The report's `period_unrealized_breakdown` splits the period's change per asset currency into the assets' own change (`asset`) and the exchange-rate effect on their cost (`fx`), in the backend's order, adding up to `period_unrealized_gain_loss_delta`. The tooltip of the **Unrealized change** bar of KPI card 1 (`kpi-unrealized-delta`) shows exactly those rows (`kpi-unrealized-breakdown-{kind}-{currency}`), in that order and to the cent, the loss with its minus.
+
+FX rates and routes are global tables, so each FX test reserves one currency per Playwright project, used by no other test, seed or spec, and deletes the pair's rates and routes before and after. Brokers, assets and the account are deleted by id in the fixture teardown.
+
+Run test suite:
+```bash
+pipenv run ./dev.py test front-portfolio data-quality-real
+```
+
+### 🎭 Frontend E2E Tests (`e2e/portfolio/data-quality-legacy.spec.ts`)
+One test, E4 in the numbering above: `MISSING_COST_BASIS` from rows an older version left behind, which the API can no longer create. A disposable account creates through the API brokers A and B, two manual EUR assets, a `DEPOSIT` and a `BUY` of 10 units at A for 200 EUR. The spec then runs `backend/test_scripts/test_db/legacy_cost_rows.py` in a child process (`python -m backend.test_scripts.test_db.legacy_cost_rows`, which inherits `TEST_PORT` and `LIBREFOLIO_TEST_DATA_DIR`). In one database transaction the helper writes a `TRANSFER` pair of 4 units from A to B, linked both ways, and an `ADJUSTMENT` adding 5 units of the second asset at B — no cost basis, no cash, no asset event — and prints their ids as one line of JSON. It writes only into the lane's existing test database, and only for brokers that `--user-id` owns as `OWNER`; otherwise it writes nothing. The spec reads the rows back through the API, then checks:
+
+* one `MISSING_COST_BASIS` warning naming both assets, ids ascending, with `navigate_asset` and `count: 2`; the units at B have no average cost nor P&L, while A keeps what it paid (6 units at 20, +60);
+* the banner row has exactly one link per asset, labelled with its name;
+* «—» in the `pnl`, `pnl-percent` and `pmc` cells of both rows at B, figures on A's row;
+* the lots panel of the transferred asset, opened by the URL, carries the same warning, and the analysis is `DEGRADED`;
+* the adjusted asset's link opens its page.
+
+The teardown deletes the brokers with `force` — the helper's rows go with them — then the assets and the account.
+
+Run test suite:
+```bash
+pipenv run ./dev.py test front-portfolio data-quality-legacy
 ```

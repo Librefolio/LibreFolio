@@ -17,14 +17,16 @@
     import {ExternalLink, Layers} from 'lucide-svelte';
     import {t} from '$lib/i18n';
     import ContextMenu, {type ContextMenuItem} from '$lib/components/ui/ContextMenu.svelte';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
+    import {maskable, maskFormattedNumber, shouldMaskAmount} from '$lib/utils/privacy/maskable';
     import {truncateName} from '$lib/utils/text';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     interface AssetPeriodContribution {
         asset_id: number;
@@ -158,26 +160,37 @@
         return value.replace(/[{}]/g, '');
     }
 
+    /** A sign at the start of a formatted number, with the invisible bidi marks some locales
+     *  write around it. The same pattern `maskFormattedNumber` keeps outside the mask. */
+    const LEADING_SIGN = /^[\p{Cf}+\-\u2212]*/u;
+
     function shortMoney(amount: number, currency: string, showSign = true): string {
         const info = getCurrencyInfo(currency);
         const symbol = info.symbol && info.symbol !== currency ? info.symbol : '';
         const abs = Math.abs(amount);
-        const compact = abs >= 1000 ? new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: 1}).format(abs) : abs.toLocaleString(undefined, {minimumFractionDigits: abs % 1 === 0 ? 0 : 2, maximumFractionDigits: 2});
-        const sign = showSign && amount > 0 ? '+' : amount < 0 ? '-' : '';
-        return symbol ? `${sign}${symbol}${compact}` : `${sign}${compact} ${currency}`;
+        // D23: the sign comes from the same call as the digits, so it is the one the browser
+        // locale writes (U+2212 in Swedish). `exceptZero` gives no sign to an amount that rounds
+        // to zero; `-0 === 0`, so a negative zero becomes +0, which `auto` would print `-0`.
+        const signDisplay = showSign ? 'exceptZero' : 'auto';
+        const value = amount === 0 ? 0 : amount;
+        const formatted = abs >= 1000 ? new Intl.NumberFormat(uiLocale(), {notation: 'compact', maximumFractionDigits: 1, signDisplay}).format(value) : value.toLocaleString(uiLocale(), {minimumFractionDigits: abs % 1 === 0 ? 0 : 2, maximumFractionDigits: 2, signDisplay});
+        const sign = LEADING_SIGN.exec(formatted)?.[0] ?? '';
+        const compact = formatted.slice(sign.length);
+        // D8: sign, symbol and currency stay readable. The compact suffix goes inside the
+        // mask: `€•••K` would still disclose the order of magnitude.
+        return symbol ? `${sign}${symbol}${maskable(compact)}` : `${sign}${maskable(compact)} ${currency}`;
     }
 
     function axisTickAmount(amount: number): string {
-        if (amount === 0) return '0';
-        const abs = Math.abs(amount);
-        const compact = new Intl.NumberFormat(undefined, {notation: 'compact', maximumFractionDigits: abs < 10 ? 2 : abs < 100 ? 1 : 0}).format(abs);
-        return `${amount < 0 ? '-' : ''}${compact}`;
+        // D18: exact digits, so two ticks never share a label (`1.5K`, `12.5K`) and a whole
+        // amount has none (`2K`). D23: the signed amount goes in, so the minus is the locale's;
+        // a negative zero prints `0`. D8: the sign stays outside the mask, the compact suffix
+        // inside it, zero included (D12).
+        return maskFormattedNumber(new Intl.NumberFormat(uiLocale(), {notation: 'compact', maximumSignificantDigits: 15}).format(amount === 0 ? 0 : amount));
     }
 
     function formatSignedPercent(value: number): string {
-        const normalized = Object.is(value, -0) ? 0 : value;
-        const sign = normalized > 0 ? '+' : '';
-        return `${sign}${normalized.toLocaleString(undefined, {minimumFractionDigits: 1, maximumFractionDigits: 1})}%`;
+        return formatPercent(value, {digits: 1});
     }
 
     function openingPctSuffix(value: number, openingValue: number): string {
@@ -274,6 +287,7 @@
     function otherEffectDescriptionLabel(description: string): string {
         if (description === 'Unallocated income') return translateOr($t, 'dashboard.unallocatedIncome', description);
         if (description === 'Unallocated costs') return translateOr($t, 'dashboard.unallocatedCosts', description);
+        if (description === 'FX on cash') return translateOr($t, 'dashboard.fxOnCash', description);
         if (description === 'Other / reconciliation residual') return translateOr($t, 'dashboard.otherReconciliationResidual', description);
         return description;
     }
@@ -985,6 +999,10 @@
                 axisLabel: {
                     color: gridColors.textColor,
                     formatter: (value: number) => axisTickAmount(Number(value)),
+                    // D25: the two edges sit on ±axisBound, not on round ticks, and ECharts
+                    // labels them with their raw value. The labels go, the bounds stay.
+                    showMinLabel: false,
+                    showMaxLabel: false,
                 },
             },
             yAxis: {
@@ -1040,6 +1058,7 @@
         if (chartInstance && chartInstance.getDom() !== chartContainer) {
             tooltipCleanup?.();
             resizeWatcher.disconnect();
+            delete (chartInstance.getDom() as unknown as Record<string, unknown>).__lfChart;
             chartInstance.dispose();
             chartInstance = undefined;
         }
@@ -1047,6 +1066,10 @@
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
             attachChartReady(chartInstance, chartContainer, 'performance');
+            // ECharts draws to a canvas, so an axis label or a bar has no DOM a test could
+            // read. Exposing the instance is the only way to assert what reached the option
+            // — same hook, same name, as PriceChartFull.svelte.
+            (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
             needsInitialLayoutStabilityPass = true;
             setupResizeObserver();
             tooltipCleanup?.();
@@ -1100,6 +1123,7 @@
             tooltipCleanup?.();
             darkModeObserver?.disconnect();
             resizeWatcher.disconnect();
+            if (chartInstance) delete (chartInstance.getDom() as unknown as Record<string, unknown>).__lfChart;
             chartInstance?.dispose();
         };
     });
@@ -1113,7 +1137,10 @@
         void isMobile;
         void axisBound;
         void labels;
-        void $currentLanguage;
+        void uiLocale();
+        // Read here, not in renderChart: the render runs inside `tick().then`, where a read
+        // registers no dependency, so the privacy toggle would not redraw the labels.
+        void shouldMaskAmount();
 
         if (!chartContainer) return;
 

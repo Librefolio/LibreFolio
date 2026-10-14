@@ -3,7 +3,7 @@ title: "Phase 0 — Risk Analysis backend G0-G5"
 category: source
 source_type: plan
 date_ingested: 2026-07-28
-original_path: LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/plan-phase01RiskAnalysisImplementation.prompt.md
+original_path: LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/plan-phase01RiskAnalysisImplementation.prompt.md
 tags: [phase0, backend, risk, quantlib, riskfolio, simulation, optimization]
 related:
   - decisions/risk-quant-engine-process-boundary
@@ -17,6 +17,13 @@ related:
 ---
 
 # Source: Phase 0 — Risk Analysis backend G0-G5
+
+> **Archived (checked 2026-10-12, folder 02 step R6).** On 2026-09-16 (`245aabf97`) this plan moved to
+> `_archive-backendFirst-G0G6/` when Risk was replanned. Its README says what still holds — the mathematical contract,
+> the worker architecture, the benchmark evidence, the library versions, the simulation oracle — and what is
+> superseded: the G6 chain and its sequence of views, the priority among metrics, the four-tab information
+> architecture of Asset Global. Since then the archive changed once, the alignment with the code of 2026-10-09
+> (`33d5a599b`, 4 files, 11 lines added). Current planning and what shipped: [[sources/phase00-risk-integration-2026-09]].
 
 ## Summary
 
@@ -85,15 +92,15 @@ into its frontend plan and was not implemented.
 
 | Role | Path |
 |------|------|
-| Final recap | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_RECAP-and-implementation-reading-guide.md` |
-| Mathematical contract | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/contract-phase01RiskMetricsMathematical.md` |
-| Master implementation plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/plan-phase01RiskAnalysisImplementation.prompt.md` |
-| Corrected G5 plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/plan-phase01Step5SimulationScaleOptimization.prompt.md` |
-| Quantitative library spike | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/spike-phase01QuantLibraries.md` |
-| Simulation oracle report | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/spike-phase01SimulationAdapters.md` |
-| Production benchmark | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/benchmark-phase01SimulationScale.md` |
-| Audit/remediation report | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/report-phase01RiskBackendAuditAndRemediation.md` |
-| Reconciled G6 plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/plan-phase01Step6RiskFrontendIntegration.prompt.md` |
+| Final recap | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/_RECAP-and-implementation-reading-guide.md` |
+| Mathematical contract | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/contract-phase01RiskMetricsMathematical.md` |
+| Master implementation plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/plan-phase01RiskAnalysisImplementation.prompt.md` |
+| Corrected G5 plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/plan-phase01Step5SimulationScaleOptimization.prompt.md` |
+| Quantitative library spike | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/spike-phase01QuantLibraries.md` |
+| Simulation oracle report | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/spike-phase01SimulationAdapters.md` |
+| Production benchmark | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/benchmark-phase01SimulationScale.md` |
+| Audit/remediation report | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/report-phase01RiskBackendAuditAndRemediation.md` |
+| Reconciled G6 plan | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/plan-phase01Step6RiskFrontendIntegration.prompt.md` |
 | Risk service | `backend/app/services/risk/` |
 | Risk plugins | `backend/app/services/risk_plugins/` |
 | Risk API schemas | `backend/app/schemas/risk.py` |

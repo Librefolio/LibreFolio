@@ -22,6 +22,7 @@
     import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {formatCurrencyAmountPlain, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
+    import {formatExactDecimal, formatFixed} from '$lib/utils/core/formatFixed';
 
     // =========================================================================
     // Types
@@ -311,15 +312,15 @@
 
     function buildFxTooltipHtml(qtx: QtxRow): string {
         if (!qtx.fx_info || !qtx.original_currency || !qtx.currency) return '';
-        const rate = qtx.fx_rate_used ? parseFloat(qtx.fx_rate_used).toFixed(4) : '?';
+        const rate = qtx.fx_rate_used ? formatFixed(parseFloat(qtx.fx_rate_used), 4) : '?';
         const fromHtml = formatCurrencyCodeHtml(qtx.original_currency);
         const toHtml = formatCurrencyCodeHtml(qtx.currency);
         const date = qtx.fx_info.fx_rate_date ?? '?';
         const days = qtx.fx_info.fx_days_back ?? 0;
         const daysLabel = days === 0 ? $t('transactions.wac.fxTooltipSameDay') || 'same day' : `${days} ${$t('transactions.wac.fxTooltipDaysBefore') || 'days before'}`;
         const dateColor = days > 0 ? 'text-amber-500' : '';
-        const staleNote = days > 5 ? `<br/><span class="text-red-500">⚠️ ${$t('transactions.wac.fxTooltipStale') || 'Rate not up to date'}</span>` : '';
-        return `<b>FX:</b> 1 ${fromHtml} = ${rate} ${toHtml}<br/>📅 ${date} <span class="${dateColor}">(${daysLabel})</span>${staleNote}`;
+        const staleNoteHtml = days > 5 ? `<br/><span class="text-red-500">⚠️ ${$t('transactions.wac.fxTooltipStale') || 'Rate not up to date'}</span>` : '';
+        return `<b>FX:</b> 1 ${fromHtml} = ${rate} ${toHtml}<br/>📅 ${date} <span class="${dateColor}">(${daysLabel})</span>${staleNoteHtml}`;
     }
 
     function buildBadgeTooltipHtml(): string {
@@ -348,7 +349,7 @@
     <div class="flex items-center gap-2">
         <span class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap flex items-center gap-1">
             {$t('transactions.form.costBasis')}
-            <Tooltip text={$t('transactions.costBasisOverride.tooltip')} position="top">
+            <Tooltip text={$t('transactions.costBasisOverride.tooltip')} position="top" testId="{testid}-help">
                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400 dark:text-gray-500"
                     ><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg
                 >
@@ -512,7 +513,7 @@
         </div>
     {/if}
 
-    <!-- Qualifying TXs table (expandable) -->
+    <!-- Qualifying TXs table (expandable). Unit cost and running WAC are unit values: public (D5′-c). -->
     {#if !hideTable && showQualifying && previewResult?.qualifying_txs?.length}
         <div class="mt-1 max-h-40 w-0 min-w-full overflow-x-auto overflow-y-auto border border-gray-200 dark:border-slate-700 rounded text-[10px] scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-slate-600" data-testid="{testid}-qualifying-table">
             <table class="w-max min-w-full">
@@ -550,19 +551,21 @@
                                 </span>
                             </td>
                             <td class="px-2 py-0.5">{qtx.date}</td>
-                            <td class="px-2 py-0.5 text-right font-mono">{formatDecimalForDisplay(qtx.quantity)}</td>
+                            <td class="px-2 py-0.5 text-right font-mono">{formatExactDecimal(qtx.quantity)}</td>
                             <td class="px-2 py-0.5 text-right font-mono">
                                 {#if qtx.original_unit_cost && qtx.original_currency && qtx.currency && qtx.original_currency !== qtx.currency}
                                     <Tooltip html={buildFxTooltipHtml(qtx)} position="bottom">
                                         <span class="cursor-help">
-                                            {formatCurrencyAmountPlain(parseFloat(qtx.original_unit_cost), qtx.original_currency, {maxFraction: 2})} → {qtx.unit_cost && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2}) : '?'}
+                                            {formatCurrencyAmountPlain(parseFloat(qtx.original_unit_cost), qtx.original_currency, {maxFraction: 2, sensitivity: 'public'})} → {qtx.unit_cost && qtx.currency
+                                                ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2, sensitivity: 'public'})
+                                                : '?'}
                                             {#if qtx.fx_info && (qtx.fx_info.fx_days_back ?? 0) > 5}
                                                 <span class="text-amber-500 ml-0.5">⚠️</span>
                                             {/if}
                                         </span>
                                     </Tooltip>
                                 {:else}
-                                    {qtx.unit_cost && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2}) : qtx.unit_cost ? parseFloat(qtx.unit_cost).toFixed(2) : '—'}
+                                    {qtx.unit_cost && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.unit_cost), qtx.currency, {maxFraction: 2, sensitivity: 'public'}) : qtx.unit_cost ? formatFixed(parseFloat(qtx.unit_cost), 2) : '—'}
                                 {/if}
                             </td>
                             <td class="px-2 py-0.5 text-right">
@@ -583,7 +586,7 @@
                                             : ($t('transactions.wacPreview.effect.addZeroCost') ?? 'Dilution')}</span
                                 >
                             </td>
-                            <td class="px-2 py-0.5 text-left font-mono">{qtx.running_wac && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.running_wac), qtx.currency, {maxFraction: 4}) : qtx.running_wac ? parseFloat(qtx.running_wac).toFixed(4) : '—'}</td>
+                            <td class="px-2 py-0.5 text-left font-mono">{qtx.running_wac && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.running_wac), qtx.currency, {maxFraction: 4, sensitivity: 'public'}) : qtx.running_wac ? formatFixed(parseFloat(qtx.running_wac), 4) : '—'}</td>
                         </tr>
                     {/each}
                 </tbody>

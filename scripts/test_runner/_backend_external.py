@@ -48,9 +48,8 @@ def _discover_provider_codes(registry_type: str) -> list[str]:
         return []
 
     codes: list[str] = []
-    for py in target_dir.glob("*.py"):
-        if py.name == "__init__.py":
-            continue
+    # A plugin is a folder: its code is in ``<name>/plugin.py`` (helpers are ``_*.py`` beside it, never scanned).
+    for py in target_dir.glob("*/plugin.py"):
         try:
             text = py.read_text(encoding="utf-8")
             match = _PROVIDER_CODE_RE.search(text)
@@ -228,6 +227,39 @@ def external_brim_providers(verbose: bool = False, test_names: list = None,
     return run_command(cmd, "BRIM providers tests", verbose=verbose)
 
 
+def external_brim_danske_bank(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Danske Bank report-set plugin (custody XLSX + cash CSV)."""
+    print_section("External: BRIM Danske Bank Report-Set Tests")
+    print_info("Testing: broker_danske_bank — recognition, reading, classification, rule M, pairing")
+    print_info("Tests: zones and outcomes, truth points, combined format, parse of the combined file, sample facts")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_danske_bank.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM Danske Bank tests", verbose=verbose)
+
+
+def external_brim_degiro(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the DEGIRO plugin (Account Statement by position, any language)."""
+    print_section("External: BRIM DEGIRO Tests")
+    print_info("Testing: broker_degiro — recognition, reading by position, types, FX pairs, numbers, messages")
+    print_info("Tests: Dutch and English samples row by row, orders list, warnings with evidence")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_degiro.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM DEGIRO tests", verbose=verbose)
+
+
+def external_brim_scalable(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Scalable Capital plugins (broker account and overnight account)."""
+    print_section("External: BRIM Scalable Capital Tests")
+    print_info("Testing: broker_scalable and broker_scalable_deposit — recognition by header, refusals with a code, mapping, legs, notices")
+    print_info("Tests: PRIME and exporter samples row by row, mirrored internal transfers, synthetic edge cases")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_scalable.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM Scalable Capital tests", verbose=verbose)
+
+
 def external_all(verbose: bool = False,
                  providers: list = None, exclude_providers: list = None) -> bool:
     """Run all external tests (network-dependent)."""
@@ -270,6 +302,15 @@ These tests verify external API integrations:
     add_test(cat, "brim-providers", external_brim_providers, name="BRIM Providers",
              desc="Test broker report import plugins", prereq="Sample files in test fixtures",
              tests="Plugin discovery, file parsing, auto-detection")
+    add_test(cat, "brim-danske-bank", external_brim_danske_bank, name="BRIM Danske Bank",
+             desc="Test the Danske Bank report-set plugin", prereq="Sample files in test fixtures",
+             tests="Roles, combine (zones, pairing, truth points), parse of the combined file")
+    add_test(cat, "brim-degiro", external_brim_degiro, name="BRIM DEGIRO",
+             desc="Test the DEGIRO plugin", prereq="Sample files in test fixtures",
+             tests="Recognition, reading by position, types, FX pairs, numbers, messages, orders list")
+    add_test(cat, "brim-scalable", external_brim_scalable, name="BRIM Scalable Capital",
+             desc="Test the Scalable Capital plugins (broker and overnight account)", prereq="Sample files in test fixtures",
+             tests="Recognition, refusals with a code, PRIME and exporter samples, legs, notices, synthetic edge cases")
     add_test(cat, "all", external_all, test_names=False, name="All External Tests",
              desc="Run all external tests")
     registry["external"] = cat

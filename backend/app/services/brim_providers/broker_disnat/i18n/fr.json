@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_disnat": {
+      "description": "Importe les transactions de l’export CSV de Disnat. Prend en charge les achats et ventes, les dividendes, les impôts, les mouvements de liquidités, les frais et les intérêts.",
+      "name": "Disnat"
+    }
+  }
+}

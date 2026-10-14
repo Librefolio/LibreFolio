@@ -35,6 +35,9 @@ backend/data/**
 # MCP
 .playwright-mcp/
 
+# Worktrees
+.worktrees/
+
 # Testing
 .pytest_cache/
 scripts/test_runner/.run_cache.json

@@ -17,6 +17,7 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/stores/__tests__/assetPriceStoreRegistry.test.ts",
         "src/lib/utils/__tests__/assetPriceDerived.test.ts",
         "src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts",
+        "src/lib/components/charts/__tests__/timeSeriesAggregationGolden.test.ts",
         "src/lib/components/charts/__tests__/lineChartHelpers.test.ts",
         "src/lib/components/charts/chartCoreHelpers.test.ts",
         "src/lib/charts/signals/__tests__/backendRenderer.test.ts",
@@ -29,6 +30,10 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/utils/__tests__/assetSimilarity.test.ts",
         "src/lib/utils/__tests__/assetGrouping.test.ts",
         "src/lib/utils/__tests__/assetIdentifiers.test.ts",
+        "src/lib/utils/__tests__/assetTypeTables.test.ts",
+        "src/lib/components/dashboard/allocationTypeEmoji.test.ts",
+        "src/lib/components/dashboard/growthLadderAxis.test.ts",
+        "src/lib/components/dashboard/growthLadderBuckets.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Asset Vitest unit tests{Colors.NC}")
     result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose)
@@ -37,6 +42,35 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         return True
     else:
         print_error(f"Asset Vitest unit tests - FAILED (exit code: {result.returncode})")
+        if not verbose:
+            print(result.stdout.decode() if result.stdout else "")
+            print(result.stderr.decode() if result.stderr else "")
+        return False
+
+
+def front_growth_chart_memo(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the GrowthChart component tests (Vitest + jsdom).
+
+    Mounts the real dashboard GrowthChart — only the ECharts module is swapped for a
+    recorder, since jsdom has no canvas and pixels are not the subject — and replays the
+    arrival order that broke it: the per-resolution memo is populated while a lazily
+    fetched input is still absent, the input then lands, and the next render must not be
+    answered from the entry cached without it (measured before the fix: 0 real candles of
+    93). Parameterised over the whole class of late-arriving inputs, not just the one that
+    was reported, so a seventh such prop is covered by adding a row rather than a file.
+
+    The same file also pins the privacy masking of axis and tooltip amounts (with its
+    privacy-off parity), the persisted mode/submode restore and its fallbacks, and the
+    candle caption.
+    """
+    cmd = ["npx", "vitest", "run", "src/lib/components/dashboard/GrowthChart.test.ts"]
+    print(f"\n{Colors.BLUE}Running: GrowthChart component tests{Colors.NC}")
+    result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose)
+    if result.returncode == 0:
+        print_success("GrowthChart component tests - PASSED")
+        return True
+    else:
+        print_error(f"GrowthChart component tests - FAILED (exit code: {result.returncode})")
         if not verbose:
             print(result.stdout.decode() if result.stdout else "")
             print(result.stderr.decode() if result.stderr else "")
@@ -106,6 +140,42 @@ def front_asset_event_delete(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("assets/asset-event-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_asset_name_xss(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the stored-XSS E2E tests for asset names and icon URLs (K step 13, item 0)."""
+    print_section("Frontend Asset Name XSS Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-name-xss.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_asset_mobile_layout(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the phone-width asset layout E2E tests (K step 13, items 4 + 6a, 6b, 7)."""
+    print_section("Frontend Asset Mobile Layout Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-mobile-layout.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_asset_browse(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the asset detail prev/next browse E2E tests (K step 16, item 2)."""
+    print_section("Frontend Asset Browse Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("assets/asset-browse.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_asset_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all Asset tests (unit + E2E)."""
     if _common.nothing_left_to_run("front-asset"):
@@ -128,7 +198,8 @@ def populate_registry(registry: dict) -> None:
     cat = make_category(
         help_text="Frontend Asset E2E & unit tests (list, detail, modal, classification)",
         description="""Frontend Asset Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "asset-unit", front_asset_unit, test_names=False, name="Asset Unit Tests (Vitest)", desc="Unit tests: price store, derived-state, chart aggregation, local signals, worker pool, asset identity engine", tests="vitest")
+    add_test(cat, "asset-unit", front_asset_unit, test_names=False, name="Asset Unit Tests (Vitest)", desc="Unit tests: price store, derived-state, chart aggregation (incl. the pre-refactor golden corpus pinning the four groupPointsByBucket consumers), local signals, worker pool, asset identity engine, an explicit emoji for every asset type in the historical allocation chart, the GrowthChart ladder-axis planner (labels, month separators, sparse anchor) against an independent oracle, and the GrowthChart ladder's calendar periods (Monday weeks, months from the 1st, quarters, halves and years, fixed 3D and 2W blocks that never move), a period that is over and cut by the series marked partial and the one still running left whole", tests="vitest")
+    add_test(cat, "growth-chart-memo", front_growth_chart_memo, test_names=False, name="GrowthChart Component Tests (Vitest + jsdom)", desc="Mounts the real dashboard GrowthChart with ECharts swapped for a recorder. Arrival-order regression for the per-resolution aggregation memo: the component is mounted with a lazily fetched input absent, the memo is populated in that state, the input then lands, and the rebuilt series must carry real values instead of the cached gap sentinels. Parameterised over the whole late-arriving class — pnlCandles, brokerPnlHistory, incomeHistory, costHistory, depositHistory, acquisitionFunding. Also: privacy masking of axis and tooltip amounts (and privacy-off parity), one form for every signed tooltip amount with the locale's own sign (D23, D23b), the persisted mode/submode restore with its fallbacks, the candle caption, the grid's left inset, and the Candles/Income ladder x axis (S7): end-anchored buckets on a category axis, the planner's labels and separators, the short oldest bucket drawn translucent and explained in its tooltip (escaped), and the zoom window kept across rung changes and redraws, and the money axis ticks (S7b): exact, distinct labels (D18), the locale's minus (D23), the auto-scaled lower edge unlabelled while Income keeps ECharts' zero-based defaults (D25), and the Income purchase value (S8): both halves named as the book value in the full build and the partial update, one legend entry, the bold total over its two ↳ shares and their sum, new capital in the KPI blue (R11, D26), and the P&L line rebuilt whole when its set of brokers changes (one leaves, one is swapped, one joins), so it draws and lists exactly the brokers in scope, while new amounts for the same brokers stay a partial update (plan 47, C2)", tests="src/lib/components/dashboard/GrowthChart.test.ts")
     add_test(cat, "asset-list", front_asset_list, name="Asset List Page", desc="List page navigation, cards/table, filters", tests="assets/asset-list.spec.ts")
     add_test(cat, "asset-detail", front_asset_detail, name="Asset Detail Page", desc="Detail chart, panels, sync, edit", tests="assets/asset-detail.spec.ts")
     add_test(cat, "asset-merge", front_asset_merge, name="Asset Merge", desc="Merge duplicate assets: dry-run preview counts, confirm, ISIN inheritance", tests="assets/asset-merge.spec.ts")
@@ -136,5 +207,22 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "asset-data-editor", front_asset_data_editor, name="Asset Data Editor", desc="Prices/Events tabs, CSV import", tests="assets/asset-data-editor.spec.ts")
     add_test(cat, "asset-classification", front_asset_classification, name="Asset Classification", desc="Distribution editors round-trip (geo, sector)", tests="assets/asset-classification.spec.ts")
     add_test(cat, "asset-event-delete", front_asset_event_delete, name="Asset Event Delete", desc="Delete asset events flow", tests="assets/asset-event-delete.spec.ts")
+    add_test(cat, "asset-name-xss", front_asset_name_xss, name="Asset Name XSS", desc="A stored asset name and icon URL carrying markup stay text in the table and card views of /assets, and run nothing (K step 13, item 0)", tests="assets/asset-name-xss.spec.ts")
+    add_test(
+        cat,
+        "asset-mobile-layout",
+        front_asset_mobile_layout,
+        name="Asset Mobile Layout",
+        desc="Phone width (390/360 px, 1280 control): AssetModal footer reachable in create and edit (items 4 + 6a), Sync plain while the provider assignment loads and full-cell when blocked (6b), detail tabs never empty (7) — K step 13",
+        tests="assets/asset-mobile-layout.spec.ts",
+    )
+    add_test(
+        cat,
+        "asset-browse",
+        front_asset_browse,
+        name="Asset Browse",
+        desc="Asset detail ‹ n/N › prev/next: follows the list left behind (searched grid in DOM order, table sorted by name), the default order on a direct entry, one Back to the list (header and browser), disabled at the edges, the query kept; at 390/360 px the nav fits and the page does not scroll sideways — K step 16, item 2",
+        tests="assets/asset-browse.spec.ts",
+    )
     add_test(cat, "all", front_asset_all, test_names=False, name="All Asset Tests", desc="Run all Asset tests (unit + E2E)")
     registry["front-asset"] = cat

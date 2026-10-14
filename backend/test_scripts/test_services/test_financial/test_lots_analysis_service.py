@@ -1,6 +1,7 @@
 """Integration tests for LotsAnalysisService."""
 
 import sys
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -18,9 +19,10 @@ setup_test_database()
 from sqlalchemy import delete, event
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, BrokerUserAccess, FxConversionRoute, FxRate, PriceHistory, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import IssueCode
+from backend.app.schemas.portfolio import EconomicAllocationGroupSchema, EconomicLotAllocationSchema, IssueCode
+from backend.app.services.financial_math.returns import cumulative_to_annualized
 from backend.app.services.lots_analysis_service import get_lots_analysis
 from backend.app.utils.datetime_utils import utcnow
 
@@ -1764,3 +1766,744 @@ async def test_price_history_real_quote_wins_but_trade_fills_later_gap(session, 
     # After the sale: the trade is the most recent observation -> fills with 130, flagged estimate.
     assert points[date(2025, 2, 3)].market_price == Decimal("130")
     assert points[date(2025, 2, 3)].estimated is True
+
+
+@pytest.mark.asyncio
+async def test_an_asset_without_a_rate_to_the_target_currency_is_degraded_never_valued_in_its_own_currency(session, test_user, broker):
+    """B3a: a VND asset, quoted and bought in VND, analysed in EUR with no VND/EUR rate or route.
+
+    Every VND amount is unknown in EUR. The service used to put the native figures in the EUR
+    fields -- 26 000 VND per share shown as 26 000 EUR, the 2 500 000 VND purchase counted as
+    2 500 000 EUR -- and report nothing. It must instead leave empty what needs the missing rate
+    and say why: VND/EUR in ``missing_fx_pairs`` (the BUY date among its dates), the
+    MISSING_FX_MARKET issue the portfolio banner raises for an unconfigured pair, and DEGRADED.
+
+    The absence of the pair is owned, not assumed. ``fx_rates`` and ``fx_conversion_routes`` are
+    global and store a pair alphabetically (EUR/VND): both are emptied for it inside this test's
+    transaction, which the ``session`` fixture rolls back -- the ``_own_fx_rate`` contract. A
+    neighbour's committed rate would matter even if years old: the FX service backward-fills
+    without limit.
+    """
+    stamp = str(utcnow().timestamp()).replace(".", "")
+    vnd_asset = Asset(display_name=f"LotsVND_{stamp}", identifier_ticker=f"LVND{stamp[-4:]}", currency="VND", asset_type=AssetType.STOCK)
+    session.add(vnd_asset)
+    await session.flush()
+    base, quote = sorted(("VND", "EUR"))
+    await session.execute(delete(FxRate).where(FxRate.base == base, FxRate.quote == quote))
+    await session.execute(delete(FxConversionRoute).where(FxConversionRoute.base == base, FxConversionRoute.quote == quote))
+
+    buy_date = date(2025, 6, 9)
+    date_to = date(2025, 6, 13)
+    session.add_all(
+        [
+            Transaction(broker_id=broker.id, asset_id=vnd_asset.id, type=TransactionType.BUY, date=buy_date, quantity=Decimal("100"), amount=Decimal("-2500000"), currency="VND"),
+            PriceHistory(asset_id=vnd_asset.id, date=buy_date, close=Decimal("25000"), currency="VND", source_plugin_key="TEST"),
+            PriceHistory(asset_id=vnd_asset.id, date=date(2025, 6, 12), close=Decimal("26000"), currency="VND", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await get_lots_analysis(
+        session=session,
+        user_id=test_user.id,
+        asset_id=vnd_asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date_to,
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=["LOT_SUMMARY", "VALUE_HISTORY", "PRICE_HISTORY", "PERFORMANCE_HISTORY"],
+    )
+
+    # Presence first: the BUY opened this asset's only lot, and the analysis covers its five days.
+    window = [buy_date + timedelta(days=offset) for offset in range((date_to - buy_date).days + 1)]
+    assert result.lots is not None and len(result.lots) == 1
+    lot = result.lots[0]
+    assert (lot.opening_date, lot.original_quantity) == (buy_date, Decimal("100"))
+    assert result.performance_history is not None
+    assert [point.date for point in result.performance_history] == window
+
+    # Reported: the status, the pair with the BUY date, the issue.
+    assert result.calculation_status == "DEGRADED"
+    assert result.data_quality is not None
+    missing_dates = {item.pair: item.dates for item in result.data_quality.missing_fx_pairs}
+    assert buy_date in missing_dates.get("VND/EUR", []), f"missing_fx_pairs={result.data_quality.missing_fx_pairs}"
+    # The banner names a pair by its slug: both codes sorted, joined by a dash (_normalize_fx_pair_slug).
+    market_issue_pairs = [issue.affected_fx_pairs for issue in result.data_quality.issues if issue.code == IssueCode.MISSING_FX_MARKET]
+    assert any("EUR-VND" in pairs for pairs in market_issue_pairs), f"issues={result.data_quality.issues}"
+
+    # Never valued in VND as if it were EUR: no figure, no point, no performance.
+    assert (lot.open_value, lot.pnl, lot.total_pnl) == (None, None, None)
+    assert result.value_history is not None
+    assert [(point.date, point.open_value) for point in result.value_history if point.lot_id == lot.lot_id] == []
+    assert result.price_history is not None
+    assert [(point.date, point.market_price) for point in result.price_history if point.lot_id == lot.lot_id] == []
+    assert [(point.date, point.roi, point.twrr) for point in result.performance_history] == [(day, None, None) for day in window]
+
+
+# --------------------------------------------------------------------------- #
+# B3b: an economic event without a rate is withheld on the lots it reaches
+# --------------------------------------------------------------------------- #
+#
+# The asset is in EUR and analysed in EUR; the events (or the trades weighting them)
+# are in VND, which has no rate and no route to EUR. The engine still places such an
+# event -- the service hands it the native amount only as a placeholder -- and its
+# audit says which lots each pool reaches. On those lots, from the pool's date, every
+# figure that needs the event in EUR is withheld (None) and net_metrics_status says
+# UNAVAILABLE; every other lot, figure and day keeps its value. Today the native
+# amount is read as euros and nothing is withheld.
+
+_ECONOMIC_ANALYSES = ["LOT_SUMMARY", "VALUE_HISTORY", "RETURN_HISTORY", "INCOME_EVENTS"]
+
+
+async def _own_missing_rate(session, currency: str, target: str) -> None:
+    """Guarantee that ``currency`` has no rate and no route to ``target`` while this test runs.
+
+    The ``_own_fx_rate`` contract applied to an absence: ``fx_rates`` and ``fx_conversion_routes`` are
+    global and store a pair alphabetically, so both are emptied for it inside this test's transaction,
+    which the ``session`` fixture rolls back -- a neighbour's rows come back intact. Even a years-old
+    rate would matter: the FX service backward-fills without limit.
+    """
+    base, quote = sorted((currency, target))
+    await session.execute(delete(FxRate).where(FxRate.base == base, FxRate.quote == quote))
+    await session.execute(delete(FxConversionRoute).where(FxConversionRoute.base == base, FxConversionRoute.quote == quote))
+
+
+async def _economic_analysis(session, user: User, asset: Asset, broker: Broker, date_to: date):
+    """The four analyses that read the economic allocation, on this test's own broker, in EUR."""
+    return await get_lots_analysis(
+        session=session,
+        user_id=user.id,
+        asset_id=asset.id,
+        broker_ids=[broker.id],
+        date_from=None,
+        date_to=date_to,
+        target_currency="EUR",
+        selected_lot_ids=None,
+        requested_analyses=_ECONOMIC_ANALYSES,
+    )
+
+
+def _assert_reported_missing(result, pair: str, on: date) -> None:
+    """Precondition: the analysis itself reports the rate missing that day (B3a), so a None below is about it."""
+    assert result.data_quality is not None
+    missing = {item.pair: item.dates for item in result.data_quality.missing_fx_pairs}
+    assert on in missing.get(pair, []), f"missing_fx_pairs={result.data_quality.missing_fx_pairs}"
+
+
+def _group_of(result, transaction_id: int) -> EconomicAllocationGroupSchema:
+    """The audit group pooling ``transaction_id``: found by the source this test created, never by position."""
+    assert result.economic_allocation_groups is not None
+    matches = [group for group in result.economic_allocation_groups if transaction_id in group.source_transaction_ids]
+    assert len(matches) == 1, f"economic_allocation_groups={result.economic_allocation_groups}"
+    return matches[0]
+
+
+def _lot_allocations(group: EconomicAllocationGroupSchema) -> dict[int, EconomicLotAllocationSchema]:
+    return {allocation.lot_id: allocation for operation in group.operation_allocations for allocation in operation.lot_allocations}
+
+
+def _figures(row, expected: dict) -> dict:
+    """The fields of ``row`` named by ``expected``, to compare in one assertion that shows every value."""
+    return {name: getattr(row, name) for name in expected}
+
+
+def _days_between(start: date, end: date) -> list[date]:
+    return [start + timedelta(days=offset) for offset in range((end - start).days + 1)]
+
+
+def _lot_points(points, lot_id: int) -> dict:
+    return _points_by_date([point for point in points if point.lot_id == lot_id])
+
+
+@dataclass(frozen=True)
+class _DividendSeed:
+    buy_a: Transaction
+    buy_b: Transaction
+    buy_c: Transaction
+    eur_dividend: Transaction
+    vnd_dividend: Transaction
+    date_to: date
+
+
+async def _seed_a_dividend_without_a_rate(session, asset: Asset, broker: Broker) -> _DividendSeed:
+    """Two EUR lots paid an EUR dividend, then a VND one without a rate; a third lot opens the day after.
+
+    * A: 10 bought on 3 Mar, B: 30 bought on 4 Mar, both at 100 EUR.
+    * 10 Mar, 40 EUR of dividend: A and B held on D-1, 10 and 30.
+    * 24 Mar, 80 VND of dividend: A and B held on D-1 again. Without a rate; today read as 80 EUR, 20 and 60.
+    * C: 5 bought on 25 Mar at 100 EUR, after both dividends: reached by neither.
+    * Priced 100 EUR until 110 EUR on 30 Apr, the end of the analysis (more than 30 days for each lot,
+      so their annualized return is computed).
+
+    The VND amount is small on purpose: the native fallback then yields a plausible figure (+3% of
+    income on A), which is exactly what makes it dangerous; an absurd one would be noticed.
+    """
+    buy_a = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 3, 3), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR")
+    buy_b = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 3, 4), quantity=Decimal("30"), amount=Decimal("-3000"), currency="EUR")
+    eur_dividend = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.DIVIDEND, date=date(2025, 3, 10), quantity=Decimal("0"), amount=Decimal("40"), currency="EUR")
+    vnd_dividend = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.DIVIDEND, date=date(2025, 3, 24), quantity=Decimal("0"), amount=Decimal("80"), currency="VND")
+    buy_c = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 3, 25), quantity=Decimal("5"), amount=Decimal("-500"), currency="EUR")
+    date_to = date(2025, 4, 30)
+    session.add_all(
+        [
+            buy_a,
+            buy_b,
+            eur_dividend,
+            vnd_dividend,
+            buy_c,
+            *(PriceHistory(asset_id=asset.id, date=day, close=Decimal("100"), currency="EUR", source_plugin_key="TEST") for day in (buy_a.date, buy_b.date, buy_c.date)),
+            PriceHistory(asset_id=asset.id, date=date_to, close=Decimal("110"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+    return _DividendSeed(buy_a=buy_a, buy_b=buy_b, buy_c=buy_c, eur_dividend=eur_dividend, vnd_dividend=vnd_dividend, date_to=date_to)
+
+
+@pytest.mark.asyncio
+async def test_a_dividend_without_a_rate_is_withheld_from_the_summary_of_the_lots_it_reaches(session, test_user, asset, broker):
+    """B3b: the VND dividend reaches lots A and B, whose income in EUR is then unknown.
+
+    Their income, every figure built on it (total P&L, cash yield, total return, the net figures, the
+    annualized return) and their net metrics status are withheld; what does not depend on income (value,
+    P&L, market P&L, fees, taxes) stays. Today the 80 VND count as 80 EUR on top of the 40 EUR dividend.
+    Lot C opened after the dividend: not reached, it keeps every figure.
+    """
+    await _own_missing_rate(session, "VND", "EUR")
+    seed = await _seed_a_dividend_without_a_rate(session, asset, broker)
+
+    result = await _economic_analysis(session, test_user, asset, broker, seed.date_to)
+
+    _assert_reported_missing(result, "VND/EUR", seed.vnd_dividend.date)
+    assert result.lots is not None
+    lots = {lot.lot_id: lot for lot in result.lots}
+    lot_a, lot_b, lot_c = lots[seed.buy_a.id], lots[seed.buy_b.id], lots[seed.buy_c.id]
+
+    # Not reached: C keeps its figures, the net ones included.
+    c_expected = {
+        "asset_income": Decimal("0"),
+        "open_value": Decimal("550"),
+        "pnl": Decimal("50"),
+        "total_pnl": Decimal("50"),
+        "cash_yield": Decimal("0"),
+        "total_return": Decimal("0.1"),
+        "allocated_fees": Decimal("0"),
+        "allocated_taxes": Decimal("0"),
+        "net_total_pnl": Decimal("50"),
+        "net_total_return": Decimal("0.1"),
+        "annualized_return": cumulative_to_annualized(Decimal("0.1"), (seed.date_to - seed.buy_c.date).days),
+        "net_metrics_status": "AVAILABLE",
+    }
+    assert _figures(lot_c, c_expected) == c_expected
+
+    # Reached: what does not depend on income stays.
+    for lot, cost in ((lot_a, Decimal("1000")), (lot_b, Decimal("3000"))):
+        capital = {"open_value": cost * Decimal("1.1"), "pnl": cost / 10, "market_pnl": cost / 10, "allocated_fees": Decimal("0"), "allocated_taxes": Decimal("0")}
+        assert _figures(lot, capital) == capital, f"lot {lot.lot_id}"
+
+    # Reached: income and every figure built on it are withheld, and the lot says so.
+    withheld = dict.fromkeys(("asset_income", "total_pnl", "cash_yield", "total_return", "net_total_pnl", "net_total_return", "annualized_return"))
+    for lot in (lot_a, lot_b):
+        assert _figures(lot, withheld) == withheld, f"lot {lot.lot_id}"
+        assert lot.net_metrics_status == "UNAVAILABLE", f"lot {lot.lot_id}"
+
+
+@pytest.mark.asyncio
+async def test_a_dividend_without_a_rate_is_withheld_from_the_histories_from_its_date(session, test_user, asset, broker):
+    """B3b: the same dividend in the value and return histories of lots A and B.
+
+    Up to the day before it the income is known (the EUR dividend: 10 and 30 from 10 Mar), and so are
+    the returns built on it. From 24 Mar the income is unknown, and with it the income-inclusive total
+    return and the net total return; the capital fields and the value history's net P&L (which excludes
+    income) stay. Today the VND amount is added to the income as if it were euros.
+    """
+    await _own_missing_rate(session, "VND", "EUR")
+    seed = await _seed_a_dividend_without_a_rate(session, asset, broker)
+
+    result = await _economic_analysis(session, test_user, asset, broker, seed.date_to)
+
+    _assert_reported_missing(result, "VND/EUR", seed.vnd_dividend.date)
+    assert result.value_history is not None and result.return_history is not None
+    vnd_date = seed.vnd_dividend.date
+    day_before = vnd_date - timedelta(days=1)
+    from_vnd_date = _days_between(vnd_date, seed.date_to)
+    for lot_id, cost, eur_share in ((seed.buy_a.id, Decimal("1000"), Decimal("10")), (seed.buy_b.id, Decimal("3000"), Decimal("30"))):
+        values, returns = _lot_points(result.value_history, lot_id), _lot_points(result.return_history, lot_id)
+
+        # Known before: nothing until the EUR dividend, its share from then to the day before the VND one.
+        assert (values[date(2025, 3, 9)].income, returns[date(2025, 3, 9)].income) == (Decimal("0"), Decimal("0")), f"lot {lot_id}"
+        known = (values[day_before].income, returns[day_before].income, returns[day_before].total_return, returns[day_before].net_total_return)
+        assert known == (eur_share, eur_share, Decimal("0.01"), Decimal("0.01")), f"lot {lot_id}"
+
+        # Every day from the VND dividend on keeps its points and their capital fields.
+        assert [day for day in sorted(values) if day >= vnd_date] == from_vnd_date, f"lot {lot_id}"
+        assert [day for day in sorted(returns) if day >= vnd_date] == from_vnd_date, f"lot {lot_id}"
+        capital_at_end = {"open_value": cost * Decimal("1.1"), "proceeds": Decimal("0"), "total_value": cost * Decimal("1.1"), "original_cost": cost, "pnl": cost / 10, "net_pnl": cost / 10}
+        assert _figures(values[seed.date_to], capital_at_end) == capital_at_end, f"lot {lot_id}"
+        assert returns[seed.date_to].relative_return == Decimal("0.1"), f"lot {lot_id}"
+
+        # Withheld from the VND dividend on.
+        assert {values[day].income for day in from_vnd_date} == {None}, f"lot {lot_id}"
+        assert {(returns[day].income, returns[day].total_return, returns[day].net_total_return) for day in from_vnd_date} == {(None, None, None)}, f"lot {lot_id}"
+
+
+@pytest.mark.asyncio
+async def test_a_dividend_without_a_rate_is_withheld_from_its_income_event(session, test_user, asset, broker):
+    """B3b: the chart marker of the VND dividend still names the lots it reached, but has no EUR amount.
+
+    Today its amount is the native 80 VND read as 80 EUR. The EUR dividend's marker is unchanged.
+    """
+    await _own_missing_rate(session, "VND", "EUR")
+    seed = await _seed_a_dividend_without_a_rate(session, asset, broker)
+
+    result = await _economic_analysis(session, test_user, asset, broker, seed.date_to)
+
+    _assert_reported_missing(result, "VND/EUR", seed.vnd_dividend.date)
+    assert result.income_events is not None
+    events = {event.transaction_id: event for event in result.income_events}
+    eur_event, vnd_event = events[seed.eur_dividend.id], events[seed.vnd_dividend.id]
+    reached = {seed.buy_a.id, seed.buy_b.id}
+    assert (eur_event.date, eur_event.amount, set(eur_event.lot_ids)) == (seed.eur_dividend.date, Decimal("40"), reached)
+    assert (vnd_event.date, set(vnd_event.lot_ids)) == (seed.vnd_dividend.date, reached)
+    assert vnd_event.amount is None
+
+
+@pytest.mark.asyncio
+async def test_a_degraded_pool_is_withheld_from_the_audit_but_keeps_its_native_figures(session, test_user, asset, broker):
+    """B3b: the audit group of the VND dividend.
+
+    Its native figures are right -- 80 VND split 1:3 by the quantities held on D-1 -- and stay. Its target
+    figures (pool total, orphan, each lot's amount) are withheld: today they are the same native numbers
+    labelled EUR. The EUR dividend's group, a pool with its rate, keeps its target figures.
+    """
+    await _own_missing_rate(session, "VND", "EUR")
+    seed = await _seed_a_dividend_without_a_rate(session, asset, broker)
+
+    result = await _economic_analysis(session, test_user, asset, broker, seed.date_to)
+
+    _assert_reported_missing(result, "VND/EUR", seed.vnd_dividend.date)
+    eur_group, vnd_group = _group_of(result, seed.eur_dividend.id), _group_of(result, seed.vnd_dividend.id)
+    lot_a, lot_b = seed.buy_a.id, seed.buy_b.id
+
+    # Control: a pool with its rate keeps its target figures.
+    assert (eur_group.target_pool_total, eur_group.target_orphan) == (Decimal("40"), Decimal("0"))
+    assert {lot_id: allocation.target_amount for lot_id, allocation in _lot_allocations(eur_group).items()} == {lot_a: Decimal("10"), lot_b: Decimal("30")}
+
+    # The VND pool: who it is and its native figures stay.
+    assert (vnd_group.economic_type, vnd_group.native_currency, vnd_group.target_currency, vnd_group.rule) == ("DIVIDEND", "VND", "EUR", "ASSET_INCOME_HOLDINGS")
+    assert (vnd_group.native_pool_total, vnd_group.native_orphan) == (Decimal("80"), Decimal("0"))
+    vnd_allocations = _lot_allocations(vnd_group)
+    assert {lot_id: (allocation.weight, allocation.native_amount) for lot_id, allocation in vnd_allocations.items()} == {lot_a: (Decimal("0.25"), Decimal("20")), lot_b: (Decimal("0.75"), Decimal("60"))}
+
+    # Its target figures are withheld.
+    assert (vnd_group.target_pool_total, vnd_group.target_orphan) == (None, None)
+    assert {lot_id: allocation.target_amount for lot_id, allocation in vnd_allocations.items()} == {lot_a: None, lot_b: None}
+
+
+@pytest.mark.asyncio
+async def test_a_fee_without_a_rate_is_withheld_from_the_lot_its_same_day_trade_closed(session, test_user, asset, broker):
+    """B3b: a FEE of 9 VND, without a rate, on the day an EUR SELL closed 4 of lot A.
+
+    The FEE follows its same-day trade, so all of it lands on A, whose fees in EUR are unknown from that
+    day: its allocated fees, net P&L and net returns are withheld and its net metrics are UNAVAILABLE.
+    Before that day its 7 EUR fee (on its BUY) is known, and so are its gross figures throughout. Today
+    the 9 VND are added to the 7 EUR as euros (16). Lot B, which the SELL did not touch, keeps its figures.
+    """
+    await _own_missing_rate(session, "VND", "EUR")
+    buy_a = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 6), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR")
+    eur_fee = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.FEE, date=date(2025, 1, 6), quantity=Decimal("0"), amount=Decimal("-7"), currency="EUR")
+    buy_b = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 1, 20), quantity=Decimal("20"), amount=Decimal("-2200"), currency="EUR")
+    sell = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2025, 2, 10), quantity=Decimal("-4"), amount=Decimal("480"), currency="EUR")
+    vnd_fee = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.FEE, date=date(2025, 2, 10), quantity=Decimal("0"), amount=Decimal("-9"), currency="VND")
+    date_to = date(2025, 2, 20)
+    session.add_all(
+        [
+            buy_a,
+            eur_fee,
+            buy_b,
+            sell,
+            vnd_fee,
+            *(PriceHistory(asset_id=asset.id, date=day, close=close, currency="EUR", source_plugin_key="TEST") for day, close in ((date(2025, 1, 6), Decimal("100")), (date(2025, 1, 15), Decimal("110")), (date(2025, 1, 20), Decimal("110")), (date(2025, 2, 10), Decimal("120")))),
+        ]
+    )
+    await session.flush()
+
+    result = await _economic_analysis(session, test_user, asset, broker, date_to)
+
+    _assert_reported_missing(result, "VND/EUR", vnd_fee.date)
+    vnd_group = _group_of(result, vnd_fee.id)
+    assert (vnd_group.rule, set(_lot_allocations(vnd_group))) == ("SAME_DAY_TRADES", {buy_a.id})
+    assert result.lots is not None and result.value_history is not None and result.return_history is not None
+    lots = {lot.lot_id: lot for lot in result.lots}
+    lot_a, lot_b = lots[buy_a.id], lots[buy_b.id]
+
+    # Not reached: B (20 at 110, now 120) keeps its fees and net figures.
+    b_expected = {"allocated_fees": Decimal("0"), "total_pnl": Decimal("200"), "net_total_pnl": Decimal("200"), "net_total_return": Decimal("200") / Decimal("2200"), "net_metrics_status": "AVAILABLE"}
+    assert _figures(lot_b, b_expected) == b_expected
+
+    # Reached, but gross: 6 open at 120 plus 480 of proceeds against a cost of 1000, 80 of it realized.
+    a_gross = {"pnl": Decimal("200"), "realized_pnl": Decimal("80"), "market_pnl": Decimal("120"), "asset_income": Decimal("0"), "total_pnl": Decimal("200"), "total_return": Decimal("0.2"), "allocated_taxes": Decimal("0")}
+    assert _figures(lot_a, a_gross) == a_gross
+
+    # A's history before the VND fee: the 7 EUR fee is known, and its net P&L / net return with it.
+    values, returns = _lot_points(result.value_history, buy_a.id), _lot_points(result.return_history, buy_a.id)
+    assert [(day, values[day].pnl, values[day].allocated_fees, values[day].net_pnl) for day in (date(2025, 1, 6), date(2025, 2, 9))] == [
+        (date(2025, 1, 6), Decimal("0"), Decimal("7"), Decimal("-7")),
+        (date(2025, 2, 9), Decimal("100"), Decimal("7"), Decimal("93")),
+    ]
+    assert returns[date(2025, 2, 9)].net_total_return == Decimal("0.093")
+    from_fee_date = _days_between(vnd_fee.date, date_to)
+    assert [day for day in sorted(values) if day >= vnd_fee.date] == from_fee_date
+    assert [day for day in sorted(returns) if day >= vnd_fee.date] == from_fee_date
+    assert {(values[day].pnl, values[day].income, values[day].allocated_taxes, returns[day].total_return) for day in from_fee_date} == {(Decimal("200"), Decimal("0"), Decimal("0"), Decimal("0.2"))}
+
+    # Withheld on A: its fees and everything net, in the summary and from the VND fee's date on.
+    withheld = dict.fromkeys(("allocated_fees", "net_total_pnl", "net_total_return", "annualized_return"))
+    assert _figures(lot_a, withheld) == withheld
+    assert lot_a.net_metrics_status == "UNAVAILABLE"
+    assert {(values[day].allocated_fees, values[day].net_pnl, returns[day].net_total_return) for day in from_fee_date} == {(None, None, None)}
+
+
+@pytest.mark.asyncio
+async def test_a_tax_without_a_rate_is_withheld_but_the_income_it_taxes_is_not(session, test_user, asset, broker):
+    """B3b: a TAX of 12 VND, without a rate, on the day of a 50 EUR dividend on the only lot.
+
+    The TAX follows the income it taxes and reaches the same lot. The dividend has its rate: the income,
+    the gross figures built on it (total P&L, cash yield, total return) and the income-inclusive return
+    history stay. The taxes and every net figure are withheld, from the dividend's date on in the
+    histories, and the net metrics are UNAVAILABLE. Today the 12 VND are subtracted as 12 EUR.
+    """
+    await _own_missing_rate(session, "VND", "EUR")
+    buy = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 8, 4), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR")
+    dividend = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.DIVIDEND, date=date(2025, 9, 1), quantity=Decimal("0"), amount=Decimal("50"), currency="EUR")
+    vnd_tax = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.TAX, date=date(2025, 9, 1), quantity=Decimal("0"), amount=Decimal("-12"), currency="VND")
+    date_to = date(2025, 9, 10)
+    session.add_all(
+        [
+            buy,
+            dividend,
+            vnd_tax,
+            PriceHistory(asset_id=asset.id, date=buy.date, close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=asset.id, date=date_to, close=Decimal("110"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await _economic_analysis(session, test_user, asset, broker, date_to)
+
+    _assert_reported_missing(result, "VND/EUR", vnd_tax.date)
+    tax_group = _group_of(result, vnd_tax.id)
+    assert (tax_group.rule, set(_lot_allocations(tax_group))) == ("SAME_DAY_INCOME", {buy.id})
+    assert result.lots is not None and result.value_history is not None and result.return_history is not None
+    lot = next(row for row in result.lots if row.lot_id == buy.id)
+
+    # Known: the income and the gross figures (10 at 110 against 1000, plus 50 of dividend).
+    gross = {"asset_income": Decimal("50"), "allocated_fees": Decimal("0"), "pnl": Decimal("100"), "total_pnl": Decimal("150"), "cash_yield": Decimal("0.05"), "total_return": Decimal("0.15")}
+    assert _figures(lot, gross) == gross
+
+    values, returns = _lot_points(result.value_history, buy.id), _lot_points(result.return_history, buy.id)
+    day_before = vnd_tax.date - timedelta(days=1)
+    assert (values[day_before].allocated_taxes, values[day_before].net_pnl, returns[day_before].net_total_return) == (Decimal("0"), Decimal("0"), Decimal("0"))
+    from_tax_date = _days_between(vnd_tax.date, date_to)
+    assert [day for day in sorted(values) if day >= vnd_tax.date] == from_tax_date
+    assert [day for day in sorted(returns) if day >= vnd_tax.date] == from_tax_date
+    assert [(day, values[day].income, returns[day].income, returns[day].total_return) for day in (vnd_tax.date, date_to)] == [
+        (vnd_tax.date, Decimal("50"), Decimal("50"), Decimal("0.05")),
+        (date_to, Decimal("50"), Decimal("50"), Decimal("0.15")),
+    ]
+
+    # Withheld: the taxes and everything net.
+    withheld = dict.fromkeys(("allocated_taxes", "net_total_pnl", "net_total_return", "annualized_return"))
+    assert _figures(lot, withheld) == withheld
+    assert lot.net_metrics_status == "UNAVAILABLE"
+    assert {(values[day].allocated_taxes, values[day].net_pnl, returns[day].net_total_return) for day in from_tax_date} == {(None, None, None)}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("fee_delay", "rule"), [(0, "SAME_DAY_TRADES"), (1, "PREVIOUS_DAY_TRADES")], ids=["same-day-trades", "previous-day-trades"])
+async def test_a_fee_weighted_by_trades_in_mixed_currencies_one_without_a_rate_is_withheld(session, test_user, asset, broker, fee_delay, rule):
+    """B3b: a 20 EUR FEE weighted by two BUYs of 10 each, one paid 1000 EUR, the other 1000 VND without a rate.
+
+    The FEE is known in EUR but its split is not: the weights are the trades' EUR values and one is
+    unknown. Today the 1000 VND weigh as 1000 EUR and the FEE is halved, 10 and 10 -- a split no rate
+    supports. Both lots' fees are withheld, whether the trades are on the FEE's day or the day before.
+    """
+    await _own_missing_rate(session, "VND", "EUR")
+    trade_date = date(2025, 4, 7)
+    buy_eur = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=trade_date, quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR")
+    buy_vnd = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=trade_date, quantity=Decimal("10"), amount=Decimal("-1000"), currency="VND")
+    fee = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.FEE, date=trade_date + timedelta(days=fee_delay), quantity=Decimal("0"), amount=Decimal("-20"), currency="EUR")
+    date_to = date(2025, 5, 12)
+    session.add_all([buy_eur, buy_vnd, fee, PriceHistory(asset_id=asset.id, date=trade_date, close=Decimal("100"), currency="EUR", source_plugin_key="TEST")])
+    await session.flush()
+
+    result = await _economic_analysis(session, test_user, asset, broker, date_to)
+
+    _assert_reported_missing(result, "VND/EUR", trade_date)
+    fee_group = _group_of(result, fee.id)
+    assert (fee_group.rule, fee_group.native_currency, fee_group.native_pool_total, set(_lot_allocations(fee_group))) == (rule, "EUR", Decimal("20"), {buy_eur.id, buy_vnd.id})
+    assert result.lots is not None
+    lots = {lot.lot_id: lot for lot in result.lots}
+    eur_lot, vnd_lot = lots[buy_eur.id], lots[buy_vnd.id]
+
+    # Gross: the EUR lot is worth what it cost.
+    gross = {"pnl": Decimal("0"), "total_pnl": Decimal("0"), "total_return": Decimal("0")}
+    assert _figures(eur_lot, gross) == gross
+
+    # Withheld on both lots: their share of the FEE, and on the EUR lot every net figure.
+    for lot in (eur_lot, vnd_lot):
+        assert (lot.allocated_fees, lot.net_metrics_status) == (None, "UNAVAILABLE"), f"lot {lot.lot_id}"
+    withheld = dict.fromkeys(("net_total_pnl", "net_total_return", "annualized_return"))
+    assert _figures(eur_lot, withheld) == withheld
+
+
+@pytest.mark.asyncio
+async def test_a_fee_weighted_by_trades_all_in_one_rate_less_currency_is_not_withheld(session, test_user, asset, broker):
+    """B3b guard: the same 20 EUR FEE weighted by two BUYs both paid in VND, 3000 and 1000, still without a rate.
+
+    The EUR value of each trade is unknown, but in one currency their ratio is exact (3:1), so the split
+    is known: 15 and 5. The pool is not degraded: the lots keep their fees and AVAILABLE, and the audit
+    its target figures. (The lots' VND cost has no rate either; that is the base fields' rule, pinned by
+    the pure tests, not this one.)
+    """
+    await _own_missing_rate(session, "VND", "EUR")
+    trade_date = date(2025, 4, 14)
+    buy_big = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=trade_date, quantity=Decimal("10"), amount=Decimal("-3000"), currency="VND")
+    buy_small = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=trade_date, quantity=Decimal("10"), amount=Decimal("-1000"), currency="VND")
+    fee = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.FEE, date=trade_date, quantity=Decimal("0"), amount=Decimal("-20"), currency="EUR")
+    session.add_all([buy_big, buy_small, fee, PriceHistory(asset_id=asset.id, date=trade_date, close=Decimal("100"), currency="EUR", source_plugin_key="TEST")])
+    await session.flush()
+
+    result = await _economic_analysis(session, test_user, asset, broker, date(2025, 4, 30))
+
+    _assert_reported_missing(result, "VND/EUR", trade_date)
+    fee_group = _group_of(result, fee.id)
+    assert (fee_group.rule, fee_group.target_pool_total) == ("SAME_DAY_TRADES", Decimal("20"))
+    assert {lot_id: allocation.target_amount for lot_id, allocation in _lot_allocations(fee_group).items()} == {buy_big.id: Decimal("15"), buy_small.id: Decimal("5")}
+    assert result.lots is not None
+    lots = {lot.lot_id: lot for lot in result.lots}
+    assert {lot_id: (lots[lot_id].allocated_fees, lots[lot_id].net_metrics_status) for lot_id in (buy_big.id, buy_small.id)} == {
+        buy_big.id: (Decimal("15"), "AVAILABLE"),
+        buy_small.id: (Decimal("5"), "AVAILABLE"),
+    }
+
+
+@dataclass(frozen=True)
+class _TradeSplitSeed:
+    sell: Transaction
+    vnd_trade: Transaction
+    fee: Transaction
+    lot_a: int
+    lot_a2: int
+    vnd_lot: int
+    vnd_context: str
+    date_to: date
+
+
+async def _seed_a_fee_split_by_two_trades(session, asset: Asset, broker: Broker, *, sell_currency: str, vnd_trade_type: TransactionType, fee_delay: int) -> _TradeSplitSeed:
+    """A 20 EUR FEE weighted by two trades on 13 Oct: a SELL in ``sell_currency``, and a trade in VND, which has no rate.
+
+    * A: 15 bought on 6 Oct for 1500, A2: 5 on 7 Oct for 500, both in ``sell_currency``; V: 10 on 8 Oct for 1000 VND.
+    * 13 Oct: the SELL of 20 for 3000 closes all of A and A2, so it reaches them by 15:5. The VND trade is a SELL
+      of 4 of V for 1000 VND (two SELLs) or a BUY of 10 for 1000 VND opening its own lot (a SELL and a BUY).
+    * The FEE is paid on 13 Oct (same-day trades) or on 14 Oct (previous-day trades).
+
+    Weighted by the trades' values, 3000 against 1000, the FEE splits 15 and 5 -- when their ratio is known.
+    """
+    trade_date = date(2025, 10, 13)
+    buy_a = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 10, 6), quantity=Decimal("15"), amount=Decimal("-1500"), currency=sell_currency)
+    buy_a2 = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 10, 7), quantity=Decimal("5"), amount=Decimal("-500"), currency=sell_currency)
+    buy_v = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 10, 8), quantity=Decimal("10"), amount=Decimal("-1000"), currency="VND")
+    sell = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=trade_date, quantity=Decimal("-20"), amount=Decimal("3000"), currency=sell_currency)
+    prices = [PriceHistory(asset_id=asset.id, date=day, close=close, currency="EUR", source_plugin_key="TEST") for day, close in ((buy_a.date, Decimal("100")), (trade_date, Decimal("150")))]
+    session.add_all([buy_a, buy_a2, buy_v, sell, *prices])
+    await session.flush()
+    # Same-day trades replay by transaction id. Flushed after the SELL, the VND trade comes second: the SELL closes
+    # the oldest lots, A and A2, and a VND SELL then closes V -- never a lot bought in another currency.
+    closes_v = vnd_trade_type is TransactionType.SELL
+    vnd_quantity, vnd_amount = (Decimal("-4"), Decimal("1000")) if closes_v else (Decimal("10"), Decimal("-1000"))
+    vnd_trade = Transaction(broker_id=broker.id, asset_id=asset.id, type=vnd_trade_type, date=trade_date, quantity=vnd_quantity, amount=vnd_amount, currency="VND")
+    fee = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.FEE, date=trade_date + timedelta(days=fee_delay), quantity=Decimal("0"), amount=Decimal("-20"), currency="EUR")
+    session.add_all([vnd_trade, fee])
+    await session.flush()
+    assert sell.id < vnd_trade.id, "the SELL must replay before the VND trade, to close A and A2"
+    return _TradeSplitSeed(
+        sell=sell,
+        vnd_trade=vnd_trade,
+        fee=fee,
+        lot_a=buy_a.id,
+        lot_a2=buy_a2.id,
+        vnd_lot=buy_v.id if closes_v else vnd_trade.id,
+        vnd_context="CLOSURE" if closes_v else "OPENING",
+        date_to=date(2025, 10, 31),
+    )
+
+
+_EACH_TRADE_WEIGHTED_RULE = pytest.mark.parametrize(
+    ("vnd_trade_type", "fee_delay", "rule"),
+    [(TransactionType.SELL, 0, "SAME_DAY_TRADES"), (TransactionType.BUY, 0, "SAME_DAY_MIXED_TRADES"), (TransactionType.BUY, 1, "PREVIOUS_DAY_TRADES")],
+    ids=["same-day-trades", "same-day-mixed-trades", "previous-day-trades"],
+)
+
+
+@pytest.mark.asyncio
+@_EACH_TRADE_WEIGHTED_RULE
+async def test_a_pool_split_by_trades_in_mixed_currencies_one_without_a_rate_withholds_its_split_in_the_audit(session, test_user, asset, broker, vnd_trade_type, fee_delay, rule):
+    """B3b: the audit group of the 20 EUR FEE, weighted by an EUR SELL and a VND trade without a rate.
+
+    The FEE has its rate: its totals are known, 20 native and 20 EUR, nothing orphan. Its split between the two
+    trades is not -- each weighs by its EUR value and the VND one has none (its 1000 VND, read as 1000 EUR, would
+    make it 15 and 5). So every operation weight, and every lot's native and target share, is withheld. Inside
+    an operation the lots share by quantity, which needs no rate: the SELL keeps A and A2 at 0.75 and 0.25. The
+    lots reached have their fees withheld and their net metrics UNAVAILABLE. For each trade-weighted rule: two
+    SELLs, or a SELL and a BUY, on the FEE's day, and that pair on the day before it.
+    """
+    await _own_missing_rate(session, "VND", "EUR")
+    seed = await _seed_a_fee_split_by_two_trades(session, asset, broker, sell_currency="EUR", vnd_trade_type=vnd_trade_type, fee_delay=fee_delay)
+
+    result = await _economic_analysis(session, test_user, asset, broker, seed.date_to)
+
+    _assert_reported_missing(result, "VND/EUR", seed.vnd_trade.date)
+    fee_group = _group_of(result, seed.fee.id)
+    reached = {seed.lot_a, seed.lot_a2, seed.vnd_lot}
+
+    # Presence: the FEE's pool, weighted by the two trades, each reaching its lots by quantity.
+    assert (fee_group.economic_type, fee_group.rule, fee_group.native_currency, fee_group.target_currency) == ("FEE", rule, "EUR", "EUR")
+    lot_weights = {(operation.context, operation.operation_transaction_id): {allocation.lot_id: allocation.weight for allocation in operation.lot_allocations} for operation in fee_group.operation_allocations}
+    assert lot_weights == {
+        ("CLOSURE", seed.sell.id): {seed.lot_a: Decimal("0.75"), seed.lot_a2: Decimal("0.25")},
+        (seed.vnd_context, seed.vnd_trade.id): {seed.vnd_lot: Decimal("1")},
+    }
+
+    # Known: what the FEE amounts to, natively and in EUR.
+    assert (fee_group.native_pool_total, fee_group.target_pool_total, fee_group.native_orphan, fee_group.target_orphan) == (Decimal("20"), Decimal("20"), Decimal("0"), Decimal("0"))
+
+    # Withheld: how it splits between the trades, and so every lot's share of it.
+    assert [operation.weight for operation in fee_group.operation_allocations] == [None, None]
+    assert {lot_id: (allocation.native_amount, allocation.target_amount) for lot_id, allocation in _lot_allocations(fee_group).items()} == dict.fromkeys(reached, (None, None))
+
+    # And on the lots reached: their fees, and so their net metrics.
+    assert result.lots is not None
+    lots = {lot.lot_id: lot for lot in result.lots}
+    assert {lot_id: (lots[lot_id].allocated_fees, lots[lot_id].net_metrics_status) for lot_id in reached} == dict.fromkeys(reached, (None, "UNAVAILABLE"))
+
+
+@pytest.mark.asyncio
+@_EACH_TRADE_WEIGHTED_RULE
+async def test_a_pool_split_by_trades_all_in_one_rate_less_currency_keeps_its_split_in_the_audit(session, test_user, asset, broker, vnd_trade_type, fee_delay, rule):
+    """B3b guard: the same FEE and trades, with the SELL and its lots in VND as well -- every weighting trade in one
+    currency, none of them with a rate.
+
+    Their EUR values are unknown, but in one currency their ratio is exact (3000:1000), so the split is known and
+    the pool is not degraded: the audit keeps each operation's weight (0.75 and 0.25) and each lot's native and
+    target share -- 11.25 and 3.75 on A and A2, 5 on the VND trade's lot -- and the lots keep their fees, AVAILABLE.
+    """
+    await _own_missing_rate(session, "VND", "EUR")
+    seed = await _seed_a_fee_split_by_two_trades(session, asset, broker, sell_currency="VND", vnd_trade_type=vnd_trade_type, fee_delay=fee_delay)
+
+    result = await _economic_analysis(session, test_user, asset, broker, seed.date_to)
+
+    _assert_reported_missing(result, "VND/EUR", seed.sell.date)
+    fee_group = _group_of(result, seed.fee.id)
+    assert (fee_group.rule, fee_group.native_pool_total, fee_group.target_pool_total) == (rule, Decimal("20"), Decimal("20"))
+    shares = {seed.lot_a: Decimal("11.25"), seed.lot_a2: Decimal("3.75"), seed.vnd_lot: Decimal("5")}
+    assert len(fee_group.operation_allocations) == 2
+    operations = {(operation.context, operation.operation_transaction_id): (operation.weight, {allocation.lot_id: (allocation.weight, allocation.native_amount, allocation.target_amount) for allocation in operation.lot_allocations}) for operation in fee_group.operation_allocations}
+    assert operations == {
+        ("CLOSURE", seed.sell.id): (Decimal("0.75"), {seed.lot_a: (Decimal("0.75"), shares[seed.lot_a], shares[seed.lot_a]), seed.lot_a2: (Decimal("0.25"), shares[seed.lot_a2], shares[seed.lot_a2])}),
+        (seed.vnd_context, seed.vnd_trade.id): (Decimal("0.25"), {seed.vnd_lot: (Decimal("1"), shares[seed.vnd_lot], shares[seed.vnd_lot])}),
+    }
+    assert result.lots is not None
+    lots = {lot.lot_id: lot for lot in result.lots}
+    assert {lot_id: (lots[lot_id].allocated_fees, lots[lot_id].net_metrics_status) for lot_id in shares} == {lot_id: (share, "AVAILABLE") for lot_id, share in shares.items()}
+
+
+@pytest.mark.asyncio
+async def test_an_orphan_income_without_a_rate_is_withheld_from_the_asset_total(session, test_user, asset, broker):
+    """B3b: a 70 VND dividend, without a rate, paid after the only lot was sold: orphan income.
+
+    How much that is in EUR is unknown, so the asset's orphan income is withheld (today the native 70
+    VND, as 70 EUR), and so are the target figures of its audit group, whose native ones stay. A 5 EUR
+    FEE orphaned the same day stays known: only the degraded pool's type is withheld. The lot, reached
+    by neither, keeps its figures.
+    """
+    await _own_missing_rate(session, "VND", "EUR")
+    buy = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 6, 2), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR")
+    sell = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2025, 6, 16), quantity=Decimal("-10"), amount=Decimal("1100"), currency="EUR")
+    vnd_dividend = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.DIVIDEND, date=date(2025, 7, 1), quantity=Decimal("0"), amount=Decimal("70"), currency="VND")
+    eur_fee = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.FEE, date=date(2025, 7, 1), quantity=Decimal("0"), amount=Decimal("-5"), currency="EUR")
+    session.add_all(
+        [
+            buy,
+            sell,
+            vnd_dividend,
+            eur_fee,
+            PriceHistory(asset_id=asset.id, date=buy.date, close=Decimal("100"), currency="EUR", source_plugin_key="TEST"),
+            PriceHistory(asset_id=asset.id, date=sell.date, close=Decimal("110"), currency="EUR", source_plugin_key="TEST"),
+        ]
+    )
+    await session.flush()
+
+    result = await _economic_analysis(session, test_user, asset, broker, vnd_dividend.date)
+
+    _assert_reported_missing(result, "VND/EUR", vnd_dividend.date)
+    income_group, fee_group = _group_of(result, vnd_dividend.id), _group_of(result, eur_fee.id)
+    # Both pools are orphan: no allocation, the whole native amount left over.
+    assert (income_group.operation_allocations, income_group.native_pool_total, income_group.native_orphan) == ([], Decimal("70"), Decimal("70"))
+    assert (fee_group.operation_allocations, fee_group.rule, fee_group.target_orphan) == ([], "OPEN_LOTS_FALLBACK", Decimal("5"))
+    assert result.lots is not None
+    lot = next(row for row in result.lots if row.lot_id == buy.id)
+    assert (lot.asset_income, lot.allocated_fees, lot.net_metrics_status) == (Decimal("0"), Decimal("0"), "AVAILABLE")
+
+    # Known: the orphan FEE in EUR, and no orphan tax.
+    assert (result.asset_orphan_fees, result.asset_orphan_taxes) == (Decimal("5"), Decimal("0"))
+
+    # Withheld: the orphan income, at asset level and in its audit group.
+    assert result.asset_orphan_income is None
+    assert (income_group.target_pool_total, income_group.target_orphan) == (None, None)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("event_type", "amount", "currency", "code", "audit_target", "stated"),
+    [
+        pytest.param(TransactionType.DIVIDEND, Decimal("70"), "VND", IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS, None, (Decimal("70"), "VND"), id="dividend-without-rate"),
+        pytest.param(TransactionType.FEE, Decimal("-9"), "VND", IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS, None, (Decimal("9"), "VND"), id="fee-without-rate"),
+        pytest.param(TransactionType.TAX, Decimal("-12"), "VND", IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS, None, (Decimal("12"), "VND"), id="tax-without-rate"),
+        pytest.param(TransactionType.DIVIDEND, Decimal("8"), "USD", IssueCode.ASSET_INCOME_NO_ELIGIBLE_LOTS, Decimal("6.4"), (Decimal("6.4"), "EUR"), id="dividend-converted"),
+        pytest.param(TransactionType.FEE, Decimal("-8"), "USD", IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS, Decimal("6.4"), (Decimal("6.4"), "EUR"), id="fee-converted"),
+        pytest.param(TransactionType.TAX, Decimal("-8"), "USD", IssueCode.ASSET_COST_NO_ELIGIBLE_LOTS, Decimal("6.4"), (Decimal("6.4"), "EUR"), id="tax-converted"),
+    ],
+)
+async def test_an_orphan_pool_issue_states_its_amount_in_a_currency_it_is_known_in(session, test_user, asset, broker, event_type, amount, currency, code, audit_target, stated):
+    """B3b: the data-quality issue of an orphan pool, whose banner reads "No open lot eligible for {economic_type} of
+    {target_amount} {target_currency} on {as_of_date}".
+
+    Without a rate (VND), the pool's target amount is only the native placeholder the engine was handed: stated in the
+    target currency, 70 VND reads "70 EUR". The issue states it in its own currency instead -- the pool's native total
+    and native currency -- which is true, and needs no new message. With a rate (USD, 1.25 per EUR, owned for the day)
+    the issue keeps the converted amount in the target currency: 8 USD is 6.4 EUR. One orphan pool per case -- income
+    (ASSET_INCOME_NO_ELIGIBLE_LOTS), FEE and TAX (ASSET_COST_NO_ELIGIBLE_LOTS) -- paid after the only lot was sold.
+    """
+    await _own_missing_rate(session, "VND", "EUR")
+    orphan_date = date(2025, 7, 1)
+    await _own_fx_rate(session, on=orphan_date, base="EUR", quote="USD", rate=Decimal("1.25"))
+    buy = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=date(2025, 6, 2), quantity=Decimal("10"), amount=Decimal("-1000"), currency="EUR")
+    sell = Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.SELL, date=date(2025, 6, 16), quantity=Decimal("-10"), amount=Decimal("1100"), currency="EUR")
+    orphan = Transaction(broker_id=broker.id, asset_id=asset.id, type=event_type, date=orphan_date, quantity=Decimal("0"), amount=amount, currency=currency)
+    prices = [PriceHistory(asset_id=asset.id, date=day, close=close, currency="EUR", source_plugin_key="TEST") for day, close in ((buy.date, Decimal("100")), (sell.date, Decimal("110")))]
+    session.add_all([buy, sell, orphan, *prices])
+    await session.flush()
+
+    result = await _economic_analysis(session, test_user, asset, broker, orphan_date)
+
+    # Presence: the pool is orphan, natively the event's amount, and its target total known exactly when the rate is.
+    group = _group_of(result, orphan.id)
+    assert (group.operation_allocations, group.native_currency, group.native_pool_total, group.target_pool_total) == ([], currency, abs(amount), audit_target)
+
+    # Its issue, found by its code and its source transaction.
+    assert result.data_quality is not None
+    issues = [issue for issue in result.data_quality.issues if issue.code == code and issue.message_params.get("transaction_id") == orphan.id]
+    assert len(issues) == 1, f"issues={result.data_quality.issues}"
+    params = issues[0].message_params
+    assert (params["economic_type"], params["as_of_date"], params["target_amount"], params["target_currency"]) == (event_type.value, orphan_date.isoformat(), *stated)

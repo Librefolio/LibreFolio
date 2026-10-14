@@ -36,6 +36,7 @@ from datetime import date
 from decimal import Decimal
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from backend.app.schemas.assets import FAClassificationParams
@@ -52,10 +53,13 @@ from backend.app.schemas.portfolio import (
     PortfolioReportResponse,
     PortfolioSummary,
     PositionsContribution,
+    YieldOnCostProvenance,
+    YieldOnCostResult,
+    YieldOnCostStatus,
 )
 from backend.app.schemas.prices import FAPricePoint, FAPriceQueryResult
 from backend.app.services.ai_export.components import asset_core
-from backend.app.services.ai_export.components.asset_payloads import AssetLotCustodyRow, AssetLotDetailRow
+from backend.app.services.ai_export.components.asset_payloads import AssetLotCustodyRow, AssetLotDetailPayload, AssetLotDetailRow
 from backend.app.services.ai_export.components.asset_resources import AssetMetadataResource, AssetNotFoundError
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.resources import PriceResultsResource
@@ -154,6 +158,21 @@ def _price_results(*, observed_close: object | None = None, observed_currency: s
     return PriceResultsResource.from_results([FAPriceQueryResult(asset_id=ASSET_ID, prices=[point])])
 
 
+def _required_yoc() -> YieldOnCostResult:
+    return YieldOnCostResult(
+        status=YieldOnCostStatus.NO_INCOME,
+        value=Decimal("0"),
+        provenance=YieldOnCostProvenance(
+            window_start=date(2025, 1, 1),
+            window_end=date(2025, 12, 31),
+            first_pair_transaction_date=date(2025, 1, 1),
+            gross_income_transaction_count=0,
+            gross_income_per_unit=Currency(code=CURRENCY, amount=Decimal("0")),
+            net_zero=False,
+        ),
+    )
+
+
 def _holding(
     broker_id: int, *, asset_id: int = ASSET_ID, quantity: object = 10, wac_per_unit: object | None = 40, current_price: object | None = 50, current_value: object | None = 500, gain_loss: object | None = 100, gain_loss_percent: object | None = 25, valuation_source: str | None = "MARKET_PRICE"
 ) -> PortfolioHolding:
@@ -170,6 +189,7 @@ def _holding(
         gain_loss=Decimal(str(gain_loss)) if gain_loss is not None else None,
         gain_loss_percent=Decimal(str(gain_loss_percent)) if gain_loss_percent is not None else None,
         valuation_source=valuation_source,
+        yield_on_cost=_required_yoc(),
     )
 
 
@@ -249,10 +269,30 @@ def _lot(
     )
 
 
-def _lots_response(scope: BuildScope, lots: list[LotSummarySchema]) -> LotsAnalysisResponse:
+# B3b: the lot figures the lots analysis leaves None when a rate they need is missing, keyed by the
+# `AssetLotDetailRow` field each one becomes.
+_UNVALUED_LOT_ROW_FIELDS = {
+    "opening_unit_price": "opening_unit_price",
+    "original_cost": "original_cost",
+    "cumulative_proceeds": "cumulative_proceeds",
+    "realized_pnl": "realized_pnl",
+    "income": "asset_income",
+    "allocated_fees": "allocated_fees",
+    "allocated_taxes": "allocated_taxes",
+}
+
+
+def _unvalued_lot(**overrides) -> LotSummarySchema:
+    """A lot whose target-currency figures the lots analysis could not value (B3b): each None, its net metrics UNAVAILABLE."""
+    lot = _lot(**overrides)
+    return LotSummarySchema.model_validate({**lot.model_dump(), **dict.fromkeys(_UNVALUED_LOT_ROW_FIELDS.values()), "net_metrics_status": "UNAVAILABLE"})
+
+
+def _lots_response(scope: BuildScope, lots: list[LotSummarySchema], *, quote_base_quantity: int = 1) -> LotsAnalysisResponse:
     return LotsAnalysisResponse(
         asset_id=ASSET_ID,
         target_currency=scope.target_currency,
+        quote_base_quantity=quote_base_quantity,
         calculation_status="COMPLETE",
         calculation_metadata=LotsAnalysisMetadata(requested_analyses=[LotAnalysisType.LOT_SUMMARY], generated_at=scope.snapshot_as_of),
         lots=list(lots),
@@ -831,13 +871,166 @@ class TestLotDetail:
         assert row["opening_market_value"] is None
 
     @pytest.mark.asyncio
-    async def test_lot_detail_component_is_versioned_v2_in_registry_and_placeholder(self):
-        """F6 bumped asset.lot_detail to version 2 — the real spec and the frozen
-        catalog placeholder must move together (the registry consistency test
-        compares them; this pins the number itself so a revert on one side only
-        cannot stay green)."""
+    @pytest.mark.parametrize(
+        "quote_base_quantity, original_quantity, reference_unit_price, expected_market_value",
+        [
+            # A bond quoted per 100 nominal: 1000 nominal at 98.5 is worth 1000 / 100 × 98.5 = 985.
+            pytest.param(100, 1000, "98.5", Decimal("985"), id="bond_quoted_per_100_nominal"),
+            # Quoted per 10 units: 1000 / 10 × 98.5 = 9850. A `/100` applied whenever the quote base
+            # is not 1 passes the bond case above but gives 985 here: the divisor is the asset's own field.
+            pytest.param(10, 1000, "98.5", Decimal("9850"), id="quoted_per_10_units"),
+            pytest.param(1, 10, "50", Decimal("500"), id="quoted_per_single_unit"),
+            pytest.param(100, 1000, None, None, id="bond_without_reference"),
+        ],
+    )
+    async def test_opening_market_value_normalizes_the_per_quote_reference_by_quote_base_quantity(self, monkeypatch, quote_base_quantity, original_quantity, reference_unit_price, expected_market_value):
+        """B2: `reference_unit_price` is quoted per `quote_base_quantity` units of the asset, so the
+        opening market value is original_quantity / quote_base_quantity × reference — the portfolio's
+        `compute_holding_value`, normalized through the asset's own field, never a hard-coded /100.
+        Multiplying the quote by the nominal gives 98 500 for the bond instead of 985. The reference
+        itself is exported as quoted."""
+        scope = _scope(period_start=date(2026, 1, 1), period_end=date(2026, 1, 31))
+        lots = [_lot(lot_id=1, closing_date=None, original_quantity=original_quantity, open_quantity=original_quantity, reference_unit_price=reference_unit_price, reference_price_source="exact" if reference_unit_price is not None else None)]
+        _patch_metadata(monkeypatch, _metadata(quote_base_quantity=quote_base_quantity))
+        _patch_report(monkeypatch, _report(scope, holdings=()))
+        _patch_lots(monkeypatch, _lots_response(scope, lots, quote_base_quantity=quote_base_quantity))
+        context = _make_context(scope, _make_async_session())
+
+        envelope = await context.resolve("asset.lot_detail", required=True)
+
+        (row,) = envelope.payload["lots"]
+        assert row["opening_reference_unit_price"] == reference_unit_price
+        market_value = row["opening_market_value"]
+        assert (Decimal(market_value) if market_value is not None else None) == expected_market_value
+
+    def test_lot_row_money_fields_accept_null_as_unavailable(self):
+        """B3b: the seven money fields a missing FX rate can leave unknown are nullable on the row, and keep the null.
+
+        Null there means unavailable; a 0 would claim a recorded zero (no cost, no proceeds, no fee)."""
+        row = AssetLotDetailRow(
+            lot_ref="L1",
+            opening_broker_id=1,
+            opening_date=date(2025, 6, 1),
+            original_quantity=Decimal("10"),
+            open_quantity=Decimal("4"),
+            realized_quantity=Decimal("6"),
+            net_metrics_status="UNAVAILABLE",
+            **dict.fromkeys(_UNVALUED_LOT_ROW_FIELDS),
+        )
+
+        assert {name: getattr(row, name) for name in _UNVALUED_LOT_ROW_FIELDS} == dict.fromkeys(_UNVALUED_LOT_ROW_FIELDS)
+
+    @pytest.mark.asyncio
+    async def test_unvalued_lot_figures_are_exported_as_null_never_zero(self, monkeypatch):
+        """B3b: a lot whose cost, proceeds, realized P&L, income, fees and taxes the lots analysis could not value in
+        the target currency (a missing FX rate) reaches `asset.lot_detail` with those figures null. The builder passes
+        the None through -- never a 0, which would read as a recorded zero -- and still exports the lot, its
+        quantities and its UNAVAILABLE net metrics. A valued lot beside it keeps its figures."""
+        scope = _scope(period_start=date(2026, 1, 1), period_end=date(2026, 1, 31))
+        lots = [
+            _lot(lot_id=1, opening_date=date(2025, 6, 1)),
+            # partially closed: its closures had no rate either, so its proceeds and realized P&L are unknown too
+            _unvalued_lot(lot_id=2, opening_date=date(2025, 7, 1), original_quantity=10, open_quantity=4),
+        ]
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=()))
+        _patch_lots(monkeypatch, _lots_response(scope, lots))
+        context = _make_context(scope, _make_async_session())
+
+        envelope = await context.resolve("asset.lot_detail", required=True)
+
+        rows = {row["lot_ref"]: row for row in envelope.payload["lots"]}
+        assert set(rows) == {"L1", "L2"}  # by opening date: L1 the valued lot, L2 the unvalued one
+        assert (rows["L2"]["original_quantity"], rows["L2"]["open_quantity"], rows["L2"]["net_metrics_status"]) == ("10", "4", "UNAVAILABLE")
+        assert {name: rows["L2"][name] for name in _UNVALUED_LOT_ROW_FIELDS} == dict.fromkeys(_UNVALUED_LOT_ROW_FIELDS)
+        assert {name: rows["L1"][name] for name in _UNVALUED_LOT_ROW_FIELDS} == {
+            "opening_unit_price": "100",
+            "original_cost": "1000",
+            "cumulative_proceeds": "0",
+            "realized_pnl": "0",
+            "income": "0",
+            "allocated_fees": "0",
+            "allocated_taxes": "0",
+        }
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("case", "exported", "expected"),
+        [
+            pytest.param("all-valued", 2, 0, id="all-valued"),
+            pytest.param("one-unvalued", 2, 1, id="one-unvalued"),
+            pytest.param("unvalued-but-not-exported", 1, 0, id="unvalued-but-not-exported"),
+        ],
+    )
+    async def test_lot_detail_counts_the_exported_lots_with_an_unknown_amount(self, monkeypatch, case, exported, expected):
+        """B3b: `unavailable_amount_lot_count` counts the payload's lots with at least one of the seven nullable amounts
+        unknown. The valued lots have no market price nor reference: their open value, P&L and opening reference/market
+        value are None, which does not count -- those are unknown for other reasons, and stated elsewhere. A lot closed
+        before the period is not in `lots`, so it does not count however unvalued."""
+        scope = _scope(period_start=date(2026, 1, 1), period_end=date(2026, 1, 31))
+        valued = _lot(lot_id=1, opening_date=date(2025, 6, 1))
+        lots = {
+            "all-valued": [valued, _lot(lot_id=2, opening_date=date(2025, 7, 1), original_quantity=10, open_quantity=4)],
+            "one-unvalued": [valued, _unvalued_lot(lot_id=2, opening_date=date(2025, 7, 1), original_quantity=10, open_quantity=4)],
+            "unvalued-but-not-exported": [valued, _unvalued_lot(lot_id=3, opening_date=date(2025, 7, 1), original_quantity=10, open_quantity=0, closing_date=date(2025, 12, 1))],
+        }[case]
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=()))
+        _patch_lots(monkeypatch, _lots_response(scope, lots))
+        context = _make_context(scope, _make_async_session())
+
+        envelope = await context.resolve("asset.lot_detail", required=True)
+
+        assert len(envelope.payload["lots"]) == exported
+        assert envelope.payload.get("unavailable_amount_lot_count") == expected
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("row_field", list(_UNVALUED_LOT_ROW_FIELDS))
+    async def test_lot_detail_counts_a_lot_with_only_one_unknown_amount(self, monkeypatch, row_field):
+        """B3b: each of the seven nullable amounts, alone unknown, makes its lot count -- e.g. only the fees, on a lot a
+        FEE pool split by trades in mixed currencies reaches."""
+        scope = _scope(period_start=date(2026, 1, 1), period_end=date(2026, 1, 31))
+        one_unknown = LotSummarySchema.model_validate({**_lot(lot_id=2, opening_date=date(2025, 7, 1)).model_dump(), _UNVALUED_LOT_ROW_FIELDS[row_field]: None})
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=()))
+        _patch_lots(monkeypatch, _lots_response(scope, [_lot(lot_id=1, opening_date=date(2025, 6, 1)), one_unknown]))
+        context = _make_context(scope, _make_async_session())
+
+        envelope = await context.resolve("asset.lot_detail", required=True)
+
+        rows = {row["lot_ref"]: row for row in envelope.payload["lots"]}
+        assert (set(rows), rows["L2"][row_field]) == ({"L1", "L2"}, None)
+        assert envelope.payload.get("unavailable_amount_lot_count") == 1
+
+    @pytest.mark.asyncio
+    async def test_lot_detail_unavailable_amount_lot_count_is_required_and_never_negative(self, monkeypatch):
+        """B3b: a stated count, never a default. The builder's own payload validates; the same payload without the count,
+        or with a negative one, does not."""
+        scope = _scope(period_start=date(2026, 1, 1), period_end=date(2026, 1, 31))
+        _patch_metadata(monkeypatch, _metadata())
+        _patch_report(monkeypatch, _report(scope, holdings=()))
+        _patch_lots(monkeypatch, _lots_response(scope, [_lot(lot_id=1)]))
+        context = _make_context(scope, _make_async_session())
+        payload = (await context.resolve("asset.lot_detail", required=True)).payload
+
+        AssetLotDetailPayload.model_validate(payload)
+        with pytest.raises(ValidationError):
+            AssetLotDetailPayload.model_validate({name: value for name, value in payload.items() if name != "unavailable_amount_lot_count"})
+        with pytest.raises(ValidationError):
+            AssetLotDetailPayload.model_validate({**payload, "unavailable_amount_lot_count": -1})
+
+    @pytest.mark.asyncio
+    async def test_lot_detail_component_is_versioned_v3_in_registry_and_placeholder(self):
+        """B3b bumped asset.lot_detail to version 3 (F6 had made it 2): seven of its money fields became nullable.
+        The real spec and the frozen catalog placeholder must move together -- the catalog checks their parity on
+        import; this pins the number itself on both sides, so a revert, or a bump on one side only, cannot stay
+        green. The catalog is imported here rather than at module level, so a parity failure on import reds this
+        test only."""
+        from backend.app.services.ai_export.components import catalog  # noqa: PLC0415 — test-local: a real/placeholder parity failure on import must red this test only
+
         real = next(spec for spec in asset_core.ASSET_CORE_COMPONENTS if spec.component_id == "asset.lot_detail")
-        assert real.version == 2
+        placeholder = next(spec for spec in catalog.ALL_FOUNDATION_COMPONENTS if spec.component_id == "asset.lot_detail")
+        assert (real.version, placeholder.version) == (3, 3)
 
 
 # =============================================================================

@@ -10,14 +10,65 @@
  *
  * formatCurrencyAmount is asserted with an explicit locale ('en-US') so the
  * expected string is deterministic regardless of the host process locale.
+ *
+ * Without a locale it writes in the interface language (M-18 CP2): every figure
+ * follows the UI language through one source, `uiLocale()`, where until now an
+ * absent locale meant the browser's (`Intl.NumberFormat(undefined, …)`). An
+ * explicit locale still wins. The browser is pinned to en-US before any import —
+ * Node's follows the host's ICU locale — so an English UI is written en-US and an
+ * Italian one bare `it` (an en-US browser lends no region to Italian). That block
+ * switches the language as LanguageSelector does and puts English back after
+ * each case; its Italian amounts come from `Intl.NumberFormat` in this runtime,
+ * never typed (Italian puts a no-break space before the €).
+ *
+ * It is also the one function here that reads a store — the global privacy flag
+ * — so this file resets that flag around every test. The reset is not optional:
+ * the store is module level and shared with every other suite in the run, and a
+ * leftover `true` would turn each `'$1,234.50'` below into a placeholder.
  */
-import {describe, expect, it} from 'vitest';
+import {readFileSync} from 'node:fs';
+import {afterAll, afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
+// The browser, pinned before any import: the interface locale takes its region from it.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
 import type {RiskDataQualityReport} from '$lib/risk/riskTypes';
 import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
-import {addDays, buildBaseAnalytics, formatCurrencyAmount, formatRatio, localizedScenarioText, normalizeQualityIssue, numberRecord, presentStressBuckets, resultByCode, scalarString, stressImpactDimension, type BaseAnalyticsContext} from './riskAnalysisHelpers';
+import {currentLanguage} from '$lib/stores/app/language';
+import {setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+import {uiLocale} from '$lib/stores/app/uiLocale';
+import {
+    addDays,
+    ASSET_SET_DAILY_VAR_INSTANCE,
+    ASSET_SET_MONTHLY_VAR_INSTANCE,
+    buildBaseAnalytics,
+    DAILY_VAR_INSTANCE,
+    formatCurrencyAmount,
+    formatRatio,
+    formatScopedCurrencyAmount,
+    localizedScenarioText,
+    MONTHLY_VAR_HORIZON_DAYS,
+    MONTHLY_VAR_INSTANCE,
+    normalizeQualityIssue,
+    numberRecord,
+    presentStressBuckets,
+    resultByCode,
+    scalarString,
+    stressImpactDimension,
+    type BaseAnalyticsContext,
+} from './riskAnalysisHelpers';
 
 type Issue = NonNullable<RiskDataQualityReport['issues']>[number];
+
+const riskAnalysisPanelSource = readFileSync(new URL('./RiskAnalysisPanel.svelte', import.meta.url), 'utf8');
+const assetRiskScenariosViewSource = readFileSync(new URL('./AssetRiskScenariosView.svelte', import.meta.url), 'utf8');
+
+beforeEach(() => setPrivacyEnabled(false));
+afterEach(() => setPrivacyEnabled(false));
+afterAll(() => vi.unstubAllGlobals());
 
 /** A result whose only field the code under test reads is `analytic_code`. */
 function result(code: string): RiskAnalyticResult {
@@ -304,6 +355,219 @@ describe('formatCurrencyAmount', () => {
     it('respects the currency argument', () => {
         expect(formatCurrencyAmount('1000', 'EUR', 'en-US')).toBe('€1,000.00');
     });
+
+    describe('with global privacy on', () => {
+        it('masks the digits of a formattable amount and keeps its currency', () => {
+            // Control: the same call, one line earlier in time, with the flag
+            // off. It is what makes the next assertion a substitution rather
+            // than a function that has always returned `$•••`.
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe('$1,234.50');
+
+            setPrivacyEnabled(true);
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe('$•••');
+            expect(formatCurrencyAmount(['1234.5', '99'], 'USD', 'en-US')).toBe('$•••');
+        });
+
+        it('still says em-dash for an absent value', () => {
+            setPrivacyEnabled(true);
+
+            // Masking an absence would promote "there is no figure here" into
+            // "there is a figure here and you may not see it" — a number the
+            // portfolio does not have.
+            expect(formatCurrencyAmount(null, 'USD', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount(undefined, 'USD', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount([null], 'USD', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount([], 'USD', 'en-US')).toBe('—');
+
+            // Positive control for the flag: in this exact state a *present*
+            // value comes back masked. Without it every line above would also
+            // hold on a run where privacy never turned on, which is the one way
+            // this test could pass while testing nothing.
+            expect(formatCurrencyAmount('0', 'USD', 'en-US')).toBe('$•••');
+        });
+
+        it('still says em-dash for a value that is not a finite number', () => {
+            setPrivacyEnabled(true);
+
+            expect(formatCurrencyAmount('not-a-number', 'USD', 'en-US')).toBe('—');
+            expect(formatCurrencyAmount('Infinity', 'USD', 'en-US')).toBe('—');
+            // Control: a parseable neighbour of the same shape is masked, so the
+            // two em-dashes above are the absence check and not a masked branch
+            // that happens to look like one.
+            expect(formatCurrencyAmount('12', 'USD', 'en-US')).toBe('$•••');
+        });
+
+        it('gives two very different magnitudes the identical placeholder', () => {
+            // Control: unmasked they differ, and by length, and the digit check
+            // below is able to see a digit when there is one.
+            const small = formatCurrencyAmount('1000', 'USD', 'en-US');
+            const large = formatCurrencyAmount('9999999', 'USD', 'en-US');
+            expect(small).not.toBe(large);
+            expect(small.length).not.toBe(large.length);
+            expect(large).toMatch(/\d/);
+
+            setPrivacyEnabled(true);
+            const maskedSmall = formatCurrencyAmount('1000', 'USD', 'en-US');
+            const maskedLarge = formatCurrencyAmount('9999999', 'USD', 'en-US');
+
+            expect(maskedSmall).toBe(maskedLarge);
+            expect(maskedSmall).toBe('$•••');
+            expect(maskedSmall).not.toMatch(/\d/);
+            // Width is the leak that survives an equality check on content in a
+            // padded formatter, so it is asserted in its own right.
+            expect(maskedSmall.length).toBe(maskedLarge.length);
+        });
+
+        it('keeps the sign of a loss, as the shared formatters do (D8)', () => {
+            expect(formatCurrencyAmount('-1234.5', 'USD', 'en-US')).toBe('-$1,234.50');
+
+            setPrivacyEnabled(true);
+            // The sign stays outside the mask by decision D8 of the product
+            // owner, as the shared currency formatters keep it (see
+            // `maskable`). This formatter used to hide it, with no recorded
+            // reason for departing from D8.
+            expect(formatCurrencyAmount('-1234.5', 'USD', 'en-US')).toBe('-$•••');
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe('$•••');
+            expect(formatCurrencyAmount('-1234.5', 'USD', 'en-US')).not.toBe(formatCurrencyAmount('1234.5', 'USD', 'en-US'));
+        });
+
+        it('keeps the currency marker, like the shared currency formatter', () => {
+            // Control: the currency is visible in the clear.
+            expect(formatCurrencyAmount('1000', 'USD', 'en-US')).toContain('$');
+            expect(formatCurrencyAmount('1000', 'EUR', 'en-US')).toContain('€');
+            expect(formatCurrencyAmount('1000', 'USD', 'en-US')).toMatch(/\d/);
+
+            setPrivacyEnabled(true);
+            // Product owner, 2026-09-22: privacy hides the number, not the
+            // currency. This formatter used to return the bare placeholder, on
+            // the argument that the currency labels the column rather than the
+            // cell; that argument was overruled, and it now keeps its currency
+            // as formatCurrencyAmountPlain keeps `••• $ 🇺🇸 USD`. A marker that
+            // is present proves nothing on its own — an unmasked string has it
+            // too — so each is paired with the absence of the digits.
+            const maskedUsd = formatCurrencyAmount('1000', 'USD', 'en-US');
+            const maskedEur = formatCurrencyAmount('1000', 'EUR', 'en-US');
+            expect(maskedUsd).not.toBe(maskedEur);
+            expect(maskedUsd).toContain('$');
+            expect(maskedEur).toContain('€');
+            expect(maskedUsd).not.toMatch(/\d/);
+            expect(maskedEur).not.toMatch(/\d/);
+            expect(maskedEur).toBe('€•••');
+        });
+
+        it('comes back unmasked as soon as the flag goes off', () => {
+            setPrivacyEnabled(true);
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe('$•••');
+
+            setPrivacyEnabled(false);
+            // The formatter reads the flag per call: nothing is memoised, so a
+            // toggle is visible on the next render without an invalidation.
+            expect(formatCurrencyAmount('1234.5', 'USD', 'en-US')).toBe('$1,234.50');
+        });
+    });
+});
+
+describe('formatScopedCurrencyAmount', () => {
+    it('formats normally on a portfolio scope', () => {
+        expect(formatScopedCurrencyAmount('1234.5', 'USD', 'portfolio', 'en-US')).toBe('$1,234.50');
+    });
+
+    // The mutation-sensitive pair. The backend sends null on these scopes today,
+    // so both would read '—' with or without the guard; passing a real amount is
+    // the only way to make the assertion capable of failing.
+    it('suppresses a real amount on an asset scope', () => {
+        expect(formatScopedCurrencyAmount('1234.5', 'USD', 'asset', 'en-US')).toBe('—');
+    });
+
+    it('suppresses a real amount on an asset_set scope', () => {
+        expect(formatScopedCurrencyAmount('1234.5', 'USD', 'asset_set', 'en-US')).toBe('—');
+    });
+
+    // Guards the other direction: a guard that blanked every scope would also
+    // pass the two above, and would silently empty the dashboard's amounts on
+    // the day the backend starts computing them.
+    it('still em-dashes a missing amount on a portfolio scope', () => {
+        expect(formatScopedCurrencyAmount(null, 'USD', 'portfolio', 'en-US')).toBe('—');
+    });
+});
+
+describe('formatCurrencyAmount / formatScopedCurrencyAmount — without a locale, the interface language (M-18)', () => {
+    /** A gain above a thousand and a loss: the grouping, the decimal separator and the place of the sign. */
+    const AMOUNTS = ['12345.5', '-1234.5'] as const;
+
+    /** Each amount as Intl writes it in `locale`, with the formatter's options. */
+    function intlAmounts(locale: string, currency: string): string[] {
+        const format = new Intl.NumberFormat(locale, {style: 'currency', currency, maximumFractionDigits: 2});
+        return AMOUNTS.map((value) => format.format(Number(value)));
+    }
+
+    /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    /** The UI in Italian on the pinned en-US browser: the interface locale is bare `it`. */
+    async function italianUi(): Promise<void> {
+        await uiLanguage('it');
+        expect(uiLocale(), 'control: an Italian UI on an en-US browser is written bare it').toBe('it');
+    }
+
+    /** The two notations, and the premise that they differ amount by amount. */
+    function notations(currency: string): {italian: string[]; american: string[]} {
+        const italian = intlAmounts('it', currency);
+        const american = intlAmounts('en-US', currency);
+        italian.forEach((text, index) => expect(text, `control: Italian writes ${AMOUNTS[index]} ${currency} otherwise than en-US`).not.toBe(american[index]));
+        return {italian, american};
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it('formatCurrencyAmount: an Italian UI reads Italian amounts without passing a locale; an explicit locale still wins', async () => {
+        const {italian, american} = notations('EUR');
+        expect(
+            AMOUNTS.map((value) => formatCurrencyAmount(value, 'EUR')),
+            'control: an English UI on an en-US browser writes en-US',
+        ).toEqual(american);
+
+        await italianUi();
+        expect(
+            AMOUNTS.map((value) => formatCurrencyAmount(value, 'EUR', 'en-US')),
+            'an explicit locale still wins',
+        ).toEqual(american);
+
+        expect(
+            AMOUNTS.map((value) => formatCurrencyAmount(value, 'EUR')),
+            `without a locale, an Italian UI must read Italian amounts: ${spelled(italian)}`,
+        ).toEqual(italian);
+    });
+
+    it('formatScopedCurrencyAmount: on a portfolio scope, the same Italian amounts without a locale; an explicit locale still wins', async () => {
+        const {italian, american} = notations('EUR');
+        expect(
+            AMOUNTS.map((value) => formatScopedCurrencyAmount(value, 'EUR', 'portfolio')),
+            'control: an English UI on an en-US browser writes en-US',
+        ).toEqual(american);
+
+        await italianUi();
+        expect(
+            AMOUNTS.map((value) => formatScopedCurrencyAmount(value, 'EUR', 'portfolio', 'en-US')),
+            'an explicit locale still wins',
+        ).toEqual(american);
+
+        expect(
+            AMOUNTS.map((value) => formatScopedCurrencyAmount(value, 'EUR', 'portfolio')),
+            `without a locale, an Italian UI must read Italian amounts: ${spelled(italian)}`,
+        ).toEqual(italian);
+    });
 });
 
 describe('addDays', () => {
@@ -345,6 +609,27 @@ describe('buildBaseAnalytics', () => {
         expect(analytics.map((a) => a.instance_id)).toEqual(['base-historical-historical_kpi', 'base-historical-correlation', 'base-historical-historical_var']);
     });
 
+    it('historical: omits the drawdown summary unless the call site opts in, even when advertised', () => {
+        // The guard that keeps the parked Asset Detail surface off the wire.
+        // If this ever defaults to on, Asset Detail starts requesting an analytic
+        // nobody added to Asset Detail.
+        const advertised = ['historical_kpi', 'correlation', 'historical_var', 'drawdown_summary'];
+        expect(buildBaseAnalytics('historical', ctx(advertised)).map((a) => a.analytic_code)).not.toContain('drawdown_summary');
+    });
+
+    it('historical: appends the drawdown summary when the call site opts in', () => {
+        const advertised = ['historical_kpi', 'correlation', 'historical_var', 'drawdown_summary'];
+        const analytics = buildBaseAnalytics('historical', {...ctx(advertised), includeDrawdownSummary: true});
+        expect(analytics.map((a) => a.analytic_code)).toEqual(['historical_kpi', 'correlation', 'historical_var', 'drawdown_summary']);
+    });
+
+    it('historical: opting in cannot conjure a capability the catalog withholds', () => {
+        // `drawdown_summary` does not accept an asset set; an opt-in must not
+        // turn that into a request the backend will reject.
+        const analytics = buildBaseAnalytics('historical', {...ctx(['historical_kpi']), includeDrawdownSummary: true});
+        expect(analytics.map((a) => a.analytic_code)).toEqual(['historical_kpi']);
+    });
+
     it('historical: seeds KPI with the applied risk-free rate as a fraction', () => {
         const analytics = buildBaseAnalytics('historical', ctx(['historical_kpi'], 2));
         expect(analytics[0].parameters).toEqual({risk_free_annual_rate: 0.02, target_annual_return: 0});
@@ -353,6 +638,26 @@ describe('buildBaseAnalytics', () => {
     it('historical: VaR carries a 1-day 95% window', () => {
         const analytics = buildBaseAnalytics('historical', ctx(['historical_var']));
         expect(analytics[0].parameters).toEqual({confidence_level: 0.95, horizon_days: 1});
+    });
+
+    // The bad month is a calendar month: the backend turns calendar days into the observations the
+    // series holds (21 for a weekday series, 30 for one quoted every day — developer's decision of
+    // 30/09/2026), so the request says 30, not the 21 trading days it used to assume.
+    it('historical: the monthly VaR asks for a calendar month, 30 days, beside the 1-day one', () => {
+        const analytics = buildBaseAnalytics('historical', {...ctx(['historical_var']), includeMonthlyVar: true});
+        expect(MONTHLY_VAR_HORIZON_DAYS).toBe(30);
+        expect(analytics.map((a) => [a.instance_id, a.parameters])).toEqual([
+            [DAILY_VAR_INSTANCE, {confidence_level: 0.95, horizon_days: 1}],
+            [MONTHLY_VAR_INSTANCE, {confidence_level: 0.95, horizon_days: 30}],
+        ]);
+    });
+
+    it('asset set: the monthly per-asset VaR asks for the same calendar month', () => {
+        const analytics = buildBaseAnalytics('historical', {...ctx(['asset_set_var']), includeAssetSetLevels: true});
+        expect(analytics.map((a) => [a.instance_id, a.parameters])).toEqual([
+            [ASSET_SET_DAILY_VAR_INSTANCE, {confidence_level: 0.95, horizon_days: 1}],
+            [ASSET_SET_MONTHLY_VAR_INSTANCE, {confidence_level: 0.95, horizon_days: 30}],
+        ]);
     });
 
     it('historical: omits any capability the catalog does not advertise', () => {
@@ -380,6 +685,21 @@ describe('buildBaseAnalytics', () => {
         expect(buildBaseAnalytics('current_composition', ctx([]))).toEqual([]);
     });
 
+    // k6 (06/10): each risk/return point publishes its own Sharpe and Sortino, so the scatter is charged
+    // exactly what the KPI beside it is charged — the same perimeter, the same rate, the same target.
+    it('current_composition: the risk/return points are charged the rate and the target of the KPI beside them', () => {
+        const analytics = buildBaseAnalytics('current_composition', {...ctx(['risk_contribution', 'historical_kpi', 'asset_risk_return'], 3.5), includeCurrentCompositionRiskReturn: true});
+        expect(
+            analytics.map((a) => a.analytic_code),
+            'premise: the risk/return pair rides with the KPI in this wave',
+        ).toEqual(['risk_contribution', 'historical_kpi', 'asset_risk_return']);
+        const kpi = analytics.find((a) => a.analytic_code === 'historical_kpi');
+        const riskReturn = analytics.find((a) => a.analytic_code === 'asset_risk_return');
+        expect(kpi?.parameters, 'premise: the KPI is charged 3.5% as a fraction').toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0});
+        expect(riskReturn?.parameters, "the risk/return points are not charged the KPI's rate and target").toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0});
+        expect(JSON.stringify(riskReturn?.parameters), 'the risk/return points carry the same parameters as the KPI in other bytes').toBe(JSON.stringify(kpi?.parameters));
+    });
+
     it('passes the mode through to the capability predicate', () => {
         const seen: Array<[string, string]> = [];
         buildBaseAnalytics('historical', {
@@ -394,5 +714,181 @@ describe('buildBaseAnalytics', () => {
             ['correlation', 'historical'],
             ['historical_var', 'historical'],
         ]);
+    });
+
+    // ------------------------------------------------------------------
+    // The asset-set wave, split per level (the developer's decision, 2026-10-02).
+    //
+    // L1° — «How much did each of these hurt?» — is measured WITHOUT the benchmark; only L3° —
+    // «What did each of these pay for its risk?» — asks with it. The backend prepares one joint
+    // window per request, with the benchmark inside whenever the request asks for it, so a
+    // benchmark sharing L1°'s request decided L1°'s window: one with stale prices turned L1°
+    // «Partial» for a reason L1° never asks about. Hence two additive flags, one request each:
+    //   - `includeAssetSetLossLevels`: the per-asset VaR over a day and over a calendar month, then
+    //     the drawdown — never the comparison, whatever benchmark is set;
+    //   - `includeAssetSetPaidLevels`: the per-asset KPI and risk/return, then the comparison
+    //     against the benchmark when there is one.
+    // `includeAssetSetLevels` stays their union, byte for byte what it returns today.
+    //
+    // Written red first: today neither flag does anything, so every case that needs one to ask
+    // goes red on the analytics it misses. The pins of the union are green today and must stay so.
+    // ------------------------------------------------------------------
+    describe('the asset-set wave, split per level', () => {
+        /** The whole per-asset family is advertised, so every absence below is the flags' doing, never the catalogue's. */
+        const ASSET_SET_CODES = ['asset_set_kpi', 'asset_set_var', 'asset_set_drawdown', 'asset_set_risk_return', 'asset_set_comparison'];
+        /** Invented, and unlike any other number an analytic carries — a horizon, a confidence, a rate. */
+        const BENCHMARK = 47;
+
+        /** Each analytic as the wire carries it: instance, code, parameters. */
+        function wire(analytics: ReturnType<typeof buildBaseAnalytics>): unknown[] {
+            return analytics.map((analytic) => [analytic.instance_id, analytic.analytic_code, analytic.parameters]);
+        }
+
+        // Written out, never derived from the constants that build them. The context charges a 2%
+        // risk-free rate, so the KPI carries 0.02 — and so, since k6 (06/10), does the comparison: the
+        // reference's own Sharpe and Sortino are charged the reader's rate and a zero target, as the KPI is.
+        const KPI = ['base-historical-asset_set_kpi', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0}];
+        const BAD_DAY = ['base-historical-asset_set_var', 'asset_set_var', {confidence_level: 0.95, horizon_days: 1}];
+        const BAD_MONTH = ['base-historical-asset_set_var-monthly', 'asset_set_var', {confidence_level: 0.95, horizon_days: 30}];
+        const DRAWDOWN = ['base-historical-asset_set_drawdown', 'asset_set_drawdown', {}];
+        const RISK_RETURN = ['base-historical-asset_set_risk_return', 'asset_set_risk_return', {}];
+        const COMPARISON = ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: BENCHMARK, risk_free_annual_rate: 0.02, target_annual_return: 0}];
+
+        /**
+         * What the union returns with a benchmark of 47, copied from a run before the split and kept literal: the pin.
+         * k6 (06/10) is its one deliberate change: the comparison also carries the rate and the target.
+         */
+        const UNION_TODAY = [
+            ['base-historical-asset_set_kpi', 'asset_set_kpi', {risk_free_annual_rate: 0.02, target_annual_return: 0}],
+            ['base-historical-asset_set_var', 'asset_set_var', {confidence_level: 0.95, horizon_days: 1}],
+            ['base-historical-asset_set_var-monthly', 'asset_set_var', {confidence_level: 0.95, horizon_days: 30}],
+            ['base-historical-asset_set_drawdown', 'asset_set_drawdown', {}],
+            ['base-historical-asset_set_risk_return', 'asset_set_risk_return', {}],
+            ['base-historical-asset_set_comparison', 'asset_set_comparison', {comparison_asset_id: 47, risk_free_annual_rate: 0.02, target_annual_return: 0}],
+        ];
+
+        it.each<[string, number | null]>([
+            ['without a benchmark', null],
+            ['with a benchmark set', BENCHMARK],
+        ])('L1° alone, %s: the bad day, the bad month and the drawdown — never the comparison', (_when, benchmark) => {
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetLossLevels: true, assetSetBenchmarkId: benchmark});
+            expect(wire(analytics), "L1°'s request is not the loss family alone — the VaR over a day and over a calendar month, then the drawdown, and nothing of the benchmark").toEqual([BAD_DAY, BAD_MONTH, DRAWDOWN]);
+        });
+
+        it('L3° alone, without a benchmark: the KPI and the risk/return, and no comparison', () => {
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetPaidLevels: true});
+            expect(wire(analytics), "L3°'s request without a benchmark is not the KPI and the risk/return alone").toEqual([KPI, RISK_RETURN]);
+        });
+
+        it('L3° alone, with a benchmark: the comparison against it closes the request', () => {
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetPaidLevels: true, assetSetBenchmarkId: BENCHMARK});
+            expect(wire(analytics), "L3°'s request does not end on the comparison against the benchmark, after its KPI and risk/return").toEqual([KPI, RISK_RETURN, COMPARISON]);
+        });
+
+        // k6 (06/10): the comparison publishes the reference's own Sharpe and Sortino, so it is charged what
+        // the KPI beside it is charged — the reader's risk-free rate as a fraction, and a zero target.
+        it('L3° with a benchmark: the comparison carries the benchmark, then the rate and the target of the KPI beside it', () => {
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES, 3.5), includeAssetSetPaidLevels: true, assetSetBenchmarkId: BENCHMARK});
+            const kpi = analytics.find((analytic) => analytic.analytic_code === 'asset_set_kpi');
+            const comparison = analytics.find((analytic) => analytic.analytic_code === 'asset_set_comparison');
+            expect(kpi?.parameters, 'premise: the KPI beside it is charged 3.5% as a fraction').toEqual({risk_free_annual_rate: 0.035, target_annual_return: 0});
+            const expected = {comparison_asset_id: BENCHMARK, risk_free_annual_rate: 0.035, target_annual_return: 0};
+            expect(comparison?.parameters, "the comparison is not charged the KPI's rate and target").toEqual(expected);
+            expect(JSON.stringify(comparison?.parameters), 'the comparison carries the right parameters in other bytes: the benchmark first, then the two rates').toBe(JSON.stringify(expected));
+        });
+
+        it.each<[string, number | null]>([
+            ['with a benchmark', BENCHMARK],
+            ['without a benchmark', null],
+        ])('the union, %s, is still what it is today — byte for byte', (_when, benchmark) => {
+            const today = benchmark === null ? UNION_TODAY.filter(([, code]) => code !== 'asset_set_comparison') : UNION_TODAY;
+            const analytics = buildBaseAnalytics('historical', {...ctx(ASSET_SET_CODES), includeAssetSetLevels: true, assetSetBenchmarkId: benchmark});
+            expect(wire(analytics), 'the union moved: every caller of includeAssetSetLevels now sends a different request').toEqual(today);
+            expect(JSON.stringify(wire(analytics)), 'the union asks the same analytics in different bytes: a parameter changed its key order, or gained a key').toBe(JSON.stringify(today));
+        });
+
+        it.each<[string, number | null]>([
+            ['with a benchmark', BENCHMARK],
+            ['without a benchmark', null],
+        ])('both split flags, %s, ask exactly the union: the same analytics, in the same order, byte for byte', (_when, benchmark) => {
+            const context = {...ctx(ASSET_SET_CODES), assetSetBenchmarkId: benchmark};
+            const union = buildBaseAnalytics('historical', {...context, includeAssetSetLevels: true});
+            const split = buildBaseAnalytics('historical', {...context, includeAssetSetLossLevels: true, includeAssetSetPaidLevels: true});
+            expect(union.length, 'premise: the union asks the per-asset family').toBeGreaterThan(0);
+            expect(wire(split), 'L1° and L3° together ask something other than the union: splitting the request would change what is measured').toEqual(wire(union));
+            expect(JSON.stringify(split), 'L1° and L3° together ask the union in different bytes').toBe(JSON.stringify(union));
+        });
+
+        it('the union beside a split flag still asks each analytic once', () => {
+            const context = {...ctx(ASSET_SET_CODES), includeAssetSetLevels: true, assetSetBenchmarkId: BENCHMARK};
+            expect(wire(buildBaseAnalytics('historical', {...context, includeAssetSetLossLevels: true})), 'the union beside the loss flag asks an analytic twice, or drops one').toEqual(UNION_TODAY);
+            expect(wire(buildBaseAnalytics('historical', {...context, includeAssetSetPaidLevels: true})), 'the union beside the paid flag asks an analytic twice, or drops one').toEqual(UNION_TODAY);
+        });
+
+        it('the split flags still go through the catalogue: a code it withholds is never requested', () => {
+            // Only the VaR is advertised: no drawdown for L1°, whatever the flag asks.
+            expect(wire(buildBaseAnalytics('historical', {...ctx(['asset_set_var']), includeAssetSetLossLevels: true})), 'the loss flag requested a code the catalogue withholds, or dropped one it offers').toEqual([BAD_DAY, BAD_MONTH]);
+            // No comparison advertised: none for L3°, even with a benchmark set.
+            const paid = buildBaseAnalytics('historical', {...ctx(['asset_set_kpi', 'asset_set_risk_return']), includeAssetSetPaidLevels: true, assetSetBenchmarkId: BENCHMARK});
+            expect(wire(paid), 'the paid flag requested a code the catalogue withholds, or dropped one it offers').toEqual([KPI, RISK_RETURN]);
+        });
+
+        it('the split flags ask the capability predicate about every code they add, in historical mode', () => {
+            const seen: Array<[string, string]> = [];
+            const analytics = buildBaseAnalytics('historical', {
+                appliedRiskFreePercent: 2,
+                hasCapability: (code, mode) => {
+                    seen.push([code, mode]);
+                    return false;
+                },
+                includeAssetSetLossLevels: true,
+                includeAssetSetPaidLevels: true,
+                assetSetBenchmarkId: BENCHMARK,
+            });
+            expect(analytics, 'a code the catalogue refused was requested anyway').toEqual([]);
+            // In any order: what matters is that none of them skips the predicate.
+            expect(seen.filter(([code]) => code.startsWith('asset_set_')).sort(), 'a code of the split skipped the capability predicate, or was asked about in the wrong mode').toEqual([
+                ['asset_set_comparison', 'historical'],
+                ['asset_set_drawdown', 'historical'],
+                ['asset_set_kpi', 'historical'],
+                ['asset_set_risk_return', 'historical'],
+                ['asset_set_var', 'historical'],
+                ['asset_set_var', 'historical'],
+            ]);
+        });
+
+        it('the split flags ask nothing in current_composition mode, like the union', () => {
+            // Advertised in every mode, so only the mode branch can keep the family out.
+            const context = {...ctx([...ASSET_SET_CODES, 'risk_contribution']), includeAssetSetLossLevels: true, includeAssetSetPaidLevels: true, assetSetBenchmarkId: BENCHMARK};
+            expect(buildBaseAnalytics('historical', context), 'premise: in historical mode the same context asks the whole per-asset family').toHaveLength(6);
+            expect(wire(buildBaseAnalytics('current_composition', context)), 'the per-asset family leaked into the current-composition wave').toEqual([['base-current_composition-risk_contribution', 'risk_contribution', {}]]);
+        });
+    });
+});
+
+describe('sync completion source contracts', () => {
+    it('forwards PageSyncModal completion detail through RiskAnalysisPanel unchanged', () => {
+        const modalTag = riskAnalysisPanelSource.match(/<PageSyncModal\b[\s\S]*?\/>/)?.at(0) ?? '';
+        expect(modalTag).not.toBe('');
+        expect(modalTag).toMatch(/\bonsynced\s*=\s*\{handleSynced\}/);
+
+        const handlerMatch = riskAnalysisPanelSource.match(/async\s+function\s+handleSynced\(\s*detail\s*:\s*\{\s*accepted\s*:\s*boolean\s*\}\s*\)\s*:\s*Promise<void>\s*\{([\s\S]*?)\n\s{4}\}/);
+        expect(handlerMatch).not.toBeNull();
+        const handlerBody = handlerMatch?.at(1)?.replace(/\s+/g, ' ').trim() ?? '';
+        expect(handlerBody).toMatch(/\bawait\s+onsynced\?\.\(\s*detail\s*\)\s*;/);
+        expect(handlerBody).not.toMatch(/\bonsynced\?\.\(\s*\)/);
+        expect(handlerBody).not.toMatch(/\bonsynced\?\.\(\s*\{/);
+    });
+
+    it('types and forwards AssetRiskScenariosView completion callbacks unchanged', () => {
+        expect(assetRiskScenariosViewSource).toMatch(/\bonsynced\?\s*:\s*\(\s*detail\s*:\s*\{\s*accepted\s*:\s*boolean\s*\}\s*\)\s*=>\s*void\s*\|\s*Promise<void>\s*;/);
+
+        const propsBinding = assetRiskScenariosViewSource.match(/let\s*\{([\s\S]*?)\}\s*:\s*Props\s*=\s*\$props\(\)\s*;/)?.at(1) ?? '';
+        expect(propsBinding).toMatch(/(?:^|,)\s*onsynced\s*(?:,|$)/);
+
+        const riskPanelTag = assetRiskScenariosViewSource.match(/<RiskAnalysisPanel\b[\s\S]*?\/>/)?.at(0) ?? '';
+        expect(riskPanelTag).not.toBe('');
+        expect(riskPanelTag).toContain('{onsynced}');
+        expect(riskPanelTag).not.toMatch(/\bonsynced\s*=/);
     });
 });

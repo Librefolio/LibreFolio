@@ -12,6 +12,7 @@
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import {currentUser} from '$lib/stores/app/auth';
 
     type _DispatchEvents = {
         close: void;
@@ -133,6 +134,8 @@
 
         <!-- Body -->
         <form class="p-4 space-y-4" on:submit|preventDefault={handleSubmit}>
+            <!-- Tells the browser's password manager which saved account the new password belongs to. -->
+            <input autocomplete="username" hidden name="username" readonly type="text" value={$currentUser?.username ?? ''} />
             <InfoBanner dismissible message={error} ondismiss={() => (error = '')} variant="error" />
 
             {#if success}
@@ -146,14 +149,14 @@
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="currentPassword">
                     {$_('settings.currentPassword')}
                 </label>
-                <PasswordInput autocomplete="current-password" bind:value={currentPassword} disabled={isSubmitting || !!success} id="currentPassword" placeholder={$_('settings.currentPassword')} testId="password-current" />
+                <PasswordInput autocomplete="current-password" bind:value={currentPassword} disabled={isSubmitting || !!success} id="currentPassword" name="current-password" placeholder={$_('settings.currentPassword')} testId="password-current" />
             </div>
 
             <div class="space-y-2">
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="newPassword">
                     {$_('settings.newPassword')}
                 </label>
-                <PasswordInput autocomplete="new-password" bind:value={newPassword} disabled={isSubmitting || !!success} id="newPassword" placeholder={$_('settings.newPassword')} testId="password-new" />
+                <PasswordInput autocomplete="new-password" bind:value={newPassword} disabled={isSubmitting || !!success} id="newPassword" name="new-password" placeholder={$_('settings.newPassword')} testId="password-new" />
                 <PasswordStrength password={newPassword} />
             </div>
 
@@ -161,7 +164,7 @@
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300" for="confirmPassword">
                     {$_('settings.confirmNewPassword')}
                 </label>
-                <PasswordInput autocomplete="new-password" bind:value={confirmPassword} disabled={isSubmitting || !!success} id="confirmPassword" placeholder={$_('settings.confirmNewPassword')} testId="password-confirm" />
+                <PasswordInput autocomplete="new-password" bind:value={confirmPassword} disabled={isSubmitting || !!success} id="confirmPassword" name="confirm-password" placeholder={$_('settings.confirmNewPassword')} testId="password-confirm" />
                 {#if confirmPassword && newPassword !== confirmPassword}
                     <p class="text-xs text-red-500">{$_('settings.passwordsMustMatch')}</p>
                 {/if}

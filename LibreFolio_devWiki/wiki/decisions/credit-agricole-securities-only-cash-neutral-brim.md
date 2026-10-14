@@ -20,6 +20,6 @@ Coupons (`CEDOLA`) remain direct INTEREST rows with no automatic counter-entry, 
 ## Source files
 | Role | Path |
 |------|------|
-| Implementation | `backend/app/services/brim_providers/broker_credit_agricole.py` |
+| Implementation | `backend/app/services/brim_providers/broker_credit_agricole/plugin.py` |
 | Tests | `backend/test_scripts/test_external/test_brim_providers.py` |
 | User docs | `mkdocs_src/docs/user/transactions/import/credit_agricole.en.md` |

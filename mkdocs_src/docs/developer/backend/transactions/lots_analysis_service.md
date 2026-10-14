@@ -6,6 +6,22 @@ It runs `FifoLotEngine` once, then converts engine output into `LotsAnalysisResp
 
 ---
 
+## 🗂️ Where the Code Lives {: #code-layout }
+
+The service keeps the orchestration (`get_lots_analysis()`), the database loaders, the response builders — lot summaries (`_build_lot_summaries()`), Gantt segments (`_build_gantt_segments()`), event rows (`_build_lot_event_rows()`) — and the analysis' data-quality report (`_build_data_quality_report()`, `_report_gaps()`). The pure math it calls lives in the [financial math layer](../financial_math.md), as functions of `backend/app/services/financial_math/lots/` that take every input as an argument:
+
+| Module | What it holds |
+|--------|---------------|
+| `prices.py` | `PriceHistoryLookup` (the asset's `price_history` rows, resolved by date) and `opening_reference_price()` |
+| `conversions.py` | `FxRateResolver`, and the conversions each view needs: `collect_fx_needs()`, `collect_performance_fx_needs()`, `needs_market_series()`, `unconvertible_ids()` |
+| `economic_events.py` | The engine's income and FEE/TAX inputs (`build_income_economic_events()`, `build_cost_economic_events()`, `build_engine_transactions()`), their outputs (`extract_income_outputs()`, `extract_cost_outputs()`), `WithheldEconomics` / `withheld_economics()` and `map_economic_groups()` |
+| `histories.py` | The value, return, price and performance histories (`build_value_history()`, `build_return_history()`, `build_price_history()`, `build_performance_history()`) with their per-day snapshot helpers, `lot_history_end_date()`, `trim_dates()`, `known_realized_pnl()`, `known_cumulative_proceeds()` |
+| `average_cost_lines.py` | `ALL_BROKERS`, and the broker and cumulative WAC history points (`build_broker_wac_history()`, `build_cumulative_wac_history()`, `average_cost_points()`) |
+
+`FxRateResolver.load()` is the package's only async step and its only I/O: one `convert_bulk()` call for the rates registered since the previous load. The FIFO replay is in `financial_math/fifo/` ([FIFO Lot Engine](fifo_lot_engine.md)), the daily marks in `financial_math/price_marks.py` ([Price Resolver](price_resolver.md)). The functions of `lots/` and the service's sync builders are tested by `./dev.py test services lots-analysis-pure`.
+
+---
+
 ## 🔌 API Contract
 
 ### 🛣️ Endpoint
@@ -70,7 +86,7 @@ Top-level fields always present:
 | `asset_id` | Requested asset |
 | `target_currency` | Final response currency |
 | `quote_base_quantity` | Asset qbq, needed by frontend price/WAC axis |
-| `calculation_status` | `COMPLETE`, `DEGRADED`, or `FAILED` (public global status; an empty-but-valid analysis is `COMPLETE`) |
+| `calculation_status` | `COMPLETE`, `DEGRADED`, or `FAILED` (public global status; an empty-but-valid analysis is `COMPLETE`). A `COMPLETE` engine run becomes `DEGRADED` when a conversion is missing — in a WAC line or in any other figure of the analysis — or a WAC line misses a cost basis (see [FX Conversion](#fx-conversion) and [WAC Lines](#wac-lines)) |
 | `calculation_metadata` | Broker scope, selection, requested/computed date bounds, generation date |
 | `data_quality` | FIFO/data-quality issues mapped to UI-friendly DTOs |
 | `economic_allocation_groups` | 3-level economic audit (income + FEE/TAX) mapped from the engine, `None` unless `LOT_SUMMARY` requested |
@@ -100,30 +116,73 @@ async def get_lots_analysis(
 
 High-level flow:
 
-1. Load accessible brokers, asset transactions, split ratios, broker shorting flags, `price_history`, asset income transactions.
-2. Build `reference_price_lookup()` and run `run_fifo_lot_engine(...)`.
+1. Load accessible brokers, asset transactions, split ratios, broker shorting flags, `price_history`, asset income and FEE / TAX transactions.
+2. When a requested analysis reads income, fees or taxes, build the engine's economic inputs first — income and FEE / TAX events and the BUY / SELL amounts that weight the FEE / TAX split, each converted at its own date (`build_income_economic_events()`, `build_cost_economic_events()`, `build_engine_transactions()`). Then build `reference_price_lookup()` and run `run_fifo_lot_engine(...)`.
 3. Resolve selected lots.
-4. Collect needed FX pairs with `_collect_fx_needs()` / `_collect_performance_fx_needs()`, then batch-load rates through `_FxRateResolver`.
-5. Extract the engine's **economic stage** outputs — income, FEE/TAX and net metrics — with `_extract_income_outputs()` and `_extract_cost_outputs()` (allocation itself happens inside the engine, not here).
+4. Collect needed FX pairs with `collect_fx_needs()` / `collect_performance_fx_needs()`, then batch-load rates through `FxRateResolver`.
+5. Extract the engine's **economic stage** outputs — income, FEE/TAX and net metrics — with `extract_income_outputs()` and `extract_cost_outputs()` (allocation itself happens inside the engine, not here).
 6. Build one qbq-aware resolver series with `build_asset_price_series()`; feed both valuation maps and price-history lines from it.
-7. Emit only requested DTO sections.
+7. When `BROKER_WAC_HISTORY` or `CUMULATIVE_WAC_HISTORY` is requested, compute the average-cost lines with one `compute_average_costs()` call (see [WAC Lines](#wac-lines)); their gaps — missing rates, unknown costs — are reported in step 9.
+8. Emit only requested DTO sections.
+9. Once every builder has run, report the gaps once, for the whole analysis: `_report_gaps()` adds to `data_quality` the WAC lines' gaps and every conversion `FxRateResolver` could not make (see [FX Conversion](#fx-conversion)).
 
-### 💱 FX Conversion
+Step 1's broker scope comes from `_get_scope_broker_ids()`: every broker the user can access, in any role, intersected with `broker_ids` when given. No owner share is applied anywhere in the analysis — quantities, values and P&L are each broker's full figures, unlike the portfolio summary, which scales an OWNER's brokers by their `share_percentage`. The lot modal says so next to its quantities (`brokers.lots.modal.absoluteQuantityTooltip`).
 
-`_FxRateResolver` is thin prefetch + conversion helper:
+### 💱 FX Conversion {: #fx-conversion }
+
+`FxRateResolver` (`financial_math/lots/conversions.py`) is a thin prefetch + conversion helper:
 
 - `need(currency, as_of_date)` registers required pairs
-- `load(session)` calls `convert_bulk(...)` once
-- `convert(amount, currency, as_of_date)` applies date-specific conversion into `target_currency`
+- `load(session)` calls `convert_bulk(...)` once, for the pairs registered since the previous load
+- `convert(amount, currency, as_of_date)` applies date-specific conversion into `target_currency`; a conversion it cannot make — a non-`None` amount in a currency other than the target, with no loaded rate for that `(currency, date)` — returns `None` and is recorded
+- `missing_pairs()` returns the recorded misses as `WACMissingPairInfo(pair, dates)`, one entry per `FROM/TO` pair with its dates sorted
 
 Service converts:
 
 - lot opening cost and opening unit price
 - closure proceeds / realized P&L
+- Gantt fragment unit prices
 - native resolver marks from `build_asset_price_series()`
-- dividend / interest cash flows
-- WAC inputs
+- dividend / interest and FEE / TAX amounts, and the BUY / SELL amounts that weight the FEE / TAX split (economic-stage inputs)
 - performance-history external flows
+
+**No native fallback.** A figure that needs a missing rate is never computed from the unconverted amount — it is `None`, or it has no point:
+
+- **Daily valuation**: a mark whose rate is missing leaves that day unvalued, like a `MISSING` mark — `market_prices[date]` is `None` and the day has no price-history point. Only `estimated_mode` (an asset with no price at all) values an open lot at cost on such a day; see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback).
+- **Value and return histories** (`_lot_value_basis()` and `_lot_snapshot_on_date()`, shared by both builders): a lot whose original cost — or, for a SHORT, its proceeds — has no rate gets no point; a LONG lot's series stops the day before the first closure whose proceeds have no rate (`_closure_proceeds_prefix()` returns the converted prefix and that date). Same rule as the [WAC Lines](#wac-lines): a point that cannot be computed is omitted. Within an emitted point, the income, fee and tax fields that a degraded economic pool withholds — and the figures read from them — are `None` instead (see [Economic events and degraded pools](#degraded-economic-pools)).
+- **Performance history**: a BUY amount, an ADJUSTMENT-in's money (`_adjustment_native_cost()` / `adjustment_cash_flow_cost()`) or a SELL closure's proceeds without a rate set `invalid_external_flow_from`: ROI and TWRR are `None` from that date.
+- **Lot summary**: `original_cost` and `opening_unit_price` are `None` when the rate at the opening date is missing; `realized_pnl` (`known_realized_pnl()`) and `cumulative_proceeds` (`known_cumulative_proceeds()`) are `None` when one closure's rate is missing — for a SHORT lot's proceeds, the opening-date rate. `total_value` (when the proceeds have no rate), `pnl`, `market_pnl`, `total_pnl`, `cash_yield`, `total_return`, `net_total_pnl`, `net_total_return` and `annualized_return` are `None` when one of their inputs is unknown — an amount above, or the income, fees or taxes a degraded economic pool withholds — and the estimated-at-cost branch values no lot without a converted cost.
+- **Gantt topology**: `GanttSegmentSchema.unit_price` is `None` when the rate at the fragment's `start_date` is missing.
+- **Economic events** (income, FEE, TAX): a missing rate on an event degrades its pool, and one on a trade can degrade a FEE / TAX pool that the trade weights; the figures a degraded pool feeds are withheld — see [Economic events and degraded pools](#degraded-economic-pools).
+
+The misses are reported once, after every builder: `_report_gaps()` merges `missing_pairs()` with the WAC lines' gaps into `data_quality` (see [WAC Lines](#wac-lines)), and any of them turns a `COMPLETE` run `DEGRADED`. Only what is returned is converted, so the report holds no gap of a figure nobody reads: event rows (`_build_lot_event_rows()`) are built only when `CUSTODY_HISTORY` or `EVENT_HISTORY` is requested, and the daily valuation covers every history day only for the value, return, price and performance histories — a `LOT_SUMMARY` alone values just the last day, the only one it reads.
+
+The WAC lines do not go through `FxRateResolver`: `compute_average_costs()` converts each acquisition itself, at its own date.
+
+**Known limit (pre-existing).** The engine's `_close_position_piece()` (`financial_math/fifo/engine.py`) computes a closure's realized P&L from the sale's unit price minus the lot's, and its proceeds from the sale's unit price, with no conversion: a lot opened in one currency and closed by a sale in another mixes the two currencies, and the service converts the closure with the lot's currency.
+
+#### 🧾 Economic events and degraded pools {: #degraded-economic-pools }
+
+An income / FEE / TAX event without a rate still enters the engine with its native amount, only as a placeholder: the engine then places it — pools it, matches it, lets a TAX follow the income it taxes — exactly as it would place a converted one. `_engine_target_amount()` hands that amount over, for the events and for the BUY / SELL amounts that weight the FEE / TAX split, and the resolver records the miss. `unconvertible_ids()` collects the events (`unconvertible_event_ids`) and the trades (`unconvertible_trade_ids`) without a rate on their date, and `withheld_economics()` finds the engine pools (`EconomicAllocationGroup`) they degrade:
+
+| Pool | Degraded when | Unknown |
+|------|---------------|---------|
+| **Amount-degraded** | One of its source events is in `unconvertible_event_ids` | Its target-currency amount, hence every target share of it |
+| **Split-degraded** | A trade-weighted FEE / TAX rule (`SAME_DAY_TRADES`, `SAME_DAY_MIXED_TRADES`, `PREVIOUS_DAY_TRADES`), with a weighting trade in `unconvertible_trade_ids` and weighting trades in more than one currency | Its split: every operation weight and every per-lot share |
+
+When every weighting trade is in one currency, the pool is not split-degraded: the trades share one date, hence one rate, and their native placeholders keep the exact ratios.
+
+`WithheldEconomics` records, per lot, the date from which its income (`income_from`), fees (`fees_from`) and taxes (`taxes_from`) are unknown — the date of the earliest degraded pool of that kind that allocates to the lot — with the degraded pool indexes (`amount_degraded`, `split_degraded`), `unconvertible_event_ids` and the kinds whose orphan pool is degraded (`orphan_unknown`). The response withholds:
+
+- **Lot summary** (`_build_lot_summaries()`): on a lot a degraded pool reaches, that kind's `asset_income`, `allocated_fees` or `allocated_taxes` is `None`, and so is every figure that reads it — `total_pnl`, `cash_yield` and `total_return` read the income; `net_total_pnl`, `net_total_return` and `annualized_return` read all three. The lot's `net_metrics_status` is `"UNAVAILABLE"` (`withheld.reaches(lot_id)`).
+- **Value and return histories** (`_economics_on_date()`, `_known_prefix_on_date()`, `_lot_returns()`): each kind is `None` from its date on — the value history's `income`, `allocated_fees` and `allocated_taxes`, and its `net_pnl` with the fees or the taxes; the return history's `income`, its `total_return` with the income, and its `net_total_return` with any of the three. An earlier date sums only earlier pools, all of them known.
+- **Income events**: `LotIncomeEventSchema.amount` is `None` for an event in `unconvertible_event_ids`.
+- **Orphans**: `asset_orphan_income`, `asset_orphan_fees` or `asset_orphan_taxes` is `None` when an orphan pool of that kind is degraded.
+- **Audit** (`map_economic_groups()`): an amount-degraded pool has `target_pool_total`, `target_orphan` and each lot allocation's `target_amount` set to `None`; a split-degraded pool has each operation `weight` and each lot allocation's `native_amount` and `target_amount` set to `None`. The native pool total, the native orphan and each lot's `weight` inside an operation — a quantity ratio — stay.
+
+**Orphan issues.** The engine builds an orphan pool's `ASSET_INCOME_NO_ELIGIBLE_LOTS` / `ASSET_COST_NO_ELIGIBLE_LOTS` issue with the pool's `target_amount` and `target_currency` in its params. `_build_data_quality_report()` passes them through `_orphan_issue_params()`: for an amount-degraded orphan pool — matched by the issue's `transaction_id`, the pool's first source — the issue states the pool in its own currency, `target_amount` = `native_pool_total` and `target_currency` = `native_currency`, so the banner shows an orphan 70 VND dividend without a rate as "70 VND", never "70 EUR". The message keys keep their `target_` names: such an issue holds a native amount and currency under them, and summing `message_params.target_amount` across issues would mix currencies. A convertible orphan pool keeps its converted amount in the target currency.
+
+The native placeholder therefore never reaches the response.
 
 ### ⚠️ qbq Scaling Gotcha
 
@@ -137,13 +196,14 @@ Service converts:
     two scales and historically caused huge fake returns/P&L. Example: a bond can trade near `100`, while
     `opening_unit_price` is near `1` because cost was divided by nominal quantity.
 
-    Service fixes this in two places:
+    The analysis fixes this in two places:
 
-    - **Valuation path**: `_build_lot_summaries()`, `_build_value_history()`, `_build_return_history()`,
-      `_build_performance_history()` call `compute_holding_value(..., quote_base_quantity)` so
-      `open_value = (qty / qbq) * price`.
-    - **Reference-price fallback path**: `_opening_reference_price()` multiplies fallback
-      `lot.opening_unit_price * quote_base_quantity` when no market quote exists on opening date.
+    - **Valuation path**: the service's `_build_lot_summaries()` and the `financial_math/lots/histories.py`
+      functions `build_value_history()`, `build_return_history()` and `build_performance_history()` call
+      `compute_holding_value(..., quote_base_quantity)` so `open_value = (qty / qbq) * price`.
+    - **Reference-price fallback path**: `opening_reference_price()` (`financial_math/lots/prices.py`)
+      multiplies fallback `lot.opening_unit_price * quote_base_quantity` when no market quote exists on
+      opening date.
 
 Exact fallback scaling code:
 
@@ -158,7 +218,7 @@ That multiplication is **only** for fallback Scenario B. Real market quotes alre
 
 ## 🧭 Unified Price Resolver
 
-`LotsAnalysisService` uses `backend/app/services/price_resolver.py` as the single daily mark path —
+`LotsAnalysisService` uses `backend/app/services/financial_math/price_marks.py` as the single daily mark path —
 the resolver's full contract (tiers, staleness semantics, qbq scale, the "only valuation path"
 invariant) lives in its own page: [Price Resolver](price_resolver.md).
 
@@ -182,7 +242,7 @@ Resolution tiers are owned by `AssetPriceSeries.resolve()`:
 | 3 | `CARRIED` | Last observation carried forward (LOCF), market- or trade-origin. |
 | 4 | `MISSING` | No observation on/before the day. |
 
-Marks stay in **native currency** and on the market × `quote_base_quantity` axis. The service converts `mark.unit_price` with `_FxRateResolver.convert(..., current_date)`, so carried foreign marks use FX for the **valuation date**, not the original observation date.
+Marks stay in **native currency** and on the market × `quote_base_quantity` axis. The service converts `mark.unit_price` with `FxRateResolver.convert(..., current_date)`, so carried foreign marks use FX for the **valuation date**, not the original observation date.
 
 Both internal maps are built from this same resolver:
 
@@ -200,11 +260,13 @@ The old duplicate map pattern (`_build_market_price_map` plus `_build_estimated_
 Since FIFO v5 the **allocation** of asset-linked income (`DIVIDEND` / `INTEREST`) and asset-linked cost
 (`FEE` / `TAX`) happens **inside the engine's economic stage** (see
 [FIFO Lot Engine](fifo_lot_engine.md)), not in the service. The service only **extracts** the already-computed
-per-lot accumulators and audit groups:
+per-lot accumulators and audit groups, withholding what a missing rate leaves unknown, through the
+functions of `financial_math/lots/economic_events.py`:
 
-- `_extract_income_outputs(engine_result, ...)` reads `engine_result.economic_accumulators_by_lot[*].gross_income`
-- `_extract_cost_outputs(engine_result, ...)` reads `.allocated_fees` / `.allocated_taxes`
-- `_map_economic_groups(...)` maps the 3-level audit into `economic_allocation_groups`
+- `extract_income_outputs(engine_result, ...)` reads `engine_result.economic_accumulators_by_lot[*].gross_income`
+- `extract_cost_outputs(engine_result, ...)` reads `.allocated_fees` / `.allocated_taxes`
+- `map_economic_groups(...)` maps the 3-level audit into `economic_allocation_groups`
+- `withheld_economics(...)` finds the pools a missing rate degrades, whose figures the response withholds (see [Economic events and degraded pools](#degraded-economic-pools))
 
 !!! warning "Allocation rule moved and changed"
 
@@ -230,23 +292,29 @@ net_total_pnl    = total_pnl - allocated_fees - allocated_taxes          # total
 net_total_return = net_total_pnl / opening_value       (opening_value > 0)
 ```
 
-History builders expose their own net lines: `_build_value_history()` emits
-`net_pnl = pnl - allocated_fees - allocated_taxes` (**pnl excludes income**), while `_build_return_history()`
+History builders expose their own net lines: `build_value_history()` emits
+`net_pnl = pnl - allocated_fees - allocated_taxes` (**pnl excludes income**), while `build_return_history()`
 emits an income-inclusive `net_total_return`. The asymmetry is intentional — each net line mirrors its gross
 counterpart minus costs.
 
 !!! note "`net_metrics_status`"
 
-    Every processed lot is emitted with `net_metrics_status = "AVAILABLE"`. Because a missing FX rate falls
-    back to the native amount, the net of an existing lot is always mathematically determined, so no path
-    currently emits `"UNAVAILABLE"`.
+    A lot that a degraded economic pool reaches is emitted with `net_metrics_status = "UNAVAILABLE"`
+    (`withheld.reaches(lot_id)`): its income, fees or taxes are unknown, and so are its net figures (see
+    [Economic events and degraded pools](#degraded-economic-pools)). Every other lot is `"AVAILABLE"`. The status
+    speaks only for the economic pools: a net figure can also be `None` because its total P&L or its opening value
+    needs a missing rate, with the status still `"AVAILABLE"`; every missing pair goes to `data_quality` (see
+    [FX Conversion](#fx-conversion)).
 
 ### 🧺 Orphans & conservation
 
 When income or FEE/TAX has no eligible lot (e.g. a cost after the position is fully closed), the amount is
 **not dropped**: it is returned at asset level as `asset_orphan_income` / `asset_orphan_fees` /
 `asset_orphan_taxes` and surfaced as a `ASSET_INCOME_NO_ELIGIBLE_LOTS` / `ASSET_COST_NO_ELIGIBLE_LOTS`
-data-quality issue. The engine guarantees, per pool, `Σ allocated + orphan == converted pool total`.
+data-quality issue. The engine guarantees, per pool, `Σ allocated + orphan == converted pool total`. For a pool
+whose amount has no rate, it conserves the native placeholder instead: the response withholds that pool's target
+figures and, for an orphan pool, the asset-level orphan total of its kind, and the orphan issue states the pool in
+its own currency (see [Economic events and degraded pools](#degraded-economic-pools)).
 
 !!! info "Costs without an asset"
 
@@ -255,14 +323,14 @@ data-quality issue. The engine guarantees, per pool, `Σ allocated + orphan == c
 
 ---
 
-## 🧮 Estimated-at-Cost Fallback
+## 🧮 Estimated-at-Cost Fallback {: #estimated-at-cost-fallback }
 
 When no asset-system quote exists (`price_lookup.latest() is None`), service enters `estimated_mode` and emits a `CURRENT_PRICE_ASSUMED_AT_COST` data-quality warning for the analysis window.
 
-If the unified resolver returns `MISSING` for an open LONG lot, the service values the remaining quantity at residual cost:
+If the latest mark is `None` for an open LONG lot — the unified resolver returns `MISSING`, or the mark's rate is missing — the service values the remaining quantity at residual cost, provided the cost itself converts (`opening_value`, the original cost converted at the opening date, is not `None`; otherwise the lot is not valued):
 
 ```python
-open_value = (opening_value or Decimal("0")) * lot.open_quantity / lot.original_quantity
+open_value = opening_value * lot.open_quantity / lot.original_quantity
 value_source = "ESTIMATED_AT_COST"
 market_pnl = Decimal("0")
 ```
@@ -271,11 +339,11 @@ Implications:
 
 - `LotSummarySchema.value_source = "ESTIMATED_AT_COST"` only on the true missing-mark fallback branch
 - `open_value` still exists for crowdfunding / unquoted assets
-- `total_value`, `total_pnl`, `cash_yield`, `total_return` remain usable
+- `total_value`, `total_pnl`, `cash_yield`, `total_return` remain usable, as long as the proceeds and realized P&L they read convert (see [FX Conversion](#fx-conversion))
 - `relative_return` stays `None` because no true market/reference comparison exists
 - data quality report adds `CURRENT_PRICE_ASSUMED_AT_COST`
 
-If the resolver can derive a TRADE-origin mark from transactions, `market_prices[date]` is not `None`: valuation uses that mark, while the price-history point carries `estimated=True`. For history builders, the cost fallback appears in `_build_value_history()` and `_build_return_history()` when `market_price is None` but lot is still open.
+If the resolver can derive a TRADE-origin mark from transactions, `market_prices[date]` is not `None`: valuation uses that mark, while the price-history point carries `estimated=True`. For history builders, the cost fallback lives in `_lot_snapshot_on_date()` (`financial_math/lots/histories.py`), shared by `build_value_history()` and `build_return_history()`: in `estimated_mode`, a day whose `market_price is None` values a still-open LONG lot at cost; outside `estimated_mode`, that day has no point.
 
 ---
 
@@ -311,18 +379,46 @@ Also note: `PERFORMANCE_HISTORY` ignores lot selection entirely by schema/implem
 
 ---
 
+## 📈 WAC Lines {: #wac-lines }
+
+`BROKER_WAC_HISTORY` and `CUMULATIVE_WAC_HISTORY` come from LibreFolio's single average-cost implementation, `compute_average_costs()` (see [WAC & Cost Basis](wac.md)). The lines are computed only when one of the two analyses is requested.
+
+`_compute_average_cost_lines()` maps the loaded asset transactions (ordered by date, then id) with `cost_movement_from_transaction()` — split-linked adjustments become splits — and makes **one** call for all the lines:
+
+| Line key | Movements | Feeds |
+|----------|-----------|-------|
+| Broker id | That broker's movements | `broker_wac_history` (`BrokerWACHistoryPoint`) |
+| `"__all__"` (`ALL_BROKERS`) | Every broker in scope, pooled: a transfer between two brokers in scope leaves at the pool's average and comes back in at its cost basis | `cumulative_wac_history` (`CumulativeWACHistoryPoint`) |
+
+The report currency is the analysis `target_currency`, with `asset_leg=False`. Each acquisition is converted at its own date; quantities are the brokers' own, with no owner share applied.
+
+`average_cost_points(line, history_dates)` (`financial_math/lots/average_cost_lines.py`) emits `(date, wac, pool_qty)` for each history date from the line's first movement on, reading `line.state_at(date)`: `wac` is `unit_cost_report` (per single unit, in the target currency), `pool_qty` the pool's quantity. **A date on which the pool lacks part of its cost has no point** — a missing conversion or an acquisition without cost basis — so the chart shows a gap rather than a wrong average. `trim_dates()` then cuts the points to the displayed range.
+
+`_report_gaps(data_quality, lines, conversion_gaps, target_currency, asset)` puts in the response what the lines could not compute, merged with every other conversion the analysis could not make (`conversion_gaps = fx_resolver.missing_pairs()`, see [FX Conversion](#fx-conversion)). It runs once, after every builder, through the same `build_data_quality_report()` (`financial_math/portfolio/data_quality.py`) as the Dashboard banner:
+
+- **Missing conversions** (the lines' report leg plus `conversion_gaps`): `data_quality.missing_fx_pairs` receives one `WACMissingPairInfo(pair, dates)` per pair, its dates merged across sources, and `data_quality.issues` the `MISSING_FX_MARKET` / `MISSING_FX_RATES` issues derived from them, given the configured and real-provider pair sets of `load_configured_fx_pair_sets()`;
+- **Acquisitions of unknown cost** (`unknown_cost_movement_ids` on any line): one `MISSING_COST_BASIS` issue for the analysed asset, built with `missing_cost_basis_assets=[(asset.id, asset.display_name)]` — the same issue as the portfolio banner;
+- `calculation_status` turns from `COMPLETE` to `DEGRADED` when a line misses a rate or a cost basis, **or** any other conversion of the analysis is missing: the gap is isolable.
+
+In the panel, the issues appear in `LotDataQualityBanner`, grouped by code and without call-to-action buttons.
+
+---
+
 ## 🕰️ History Builders
 
-Key builders:
+Key builders — in the service:
 
 - `_build_lot_summaries()` — scalar lot rows for table/modal
 - `_build_gantt_segments()` — custody fragments
 - `_build_lot_event_rows()` — full lot chronology
-- `_build_value_history()` — continues closed lots to `date_to` via `_lot_history_end_date(..., extend_closed=True)`
-- `_build_return_history()` — same continuity rule, plus `relative_return`
-- `_build_price_history()` — truncates at closure date, no post-close points
-- `_build_broker_wac_history()` / `_build_cumulative_wac_history()` — WAC snapshots via `_compute_wac_series()`
-- `_build_performance_history()` — asset-wide ROI/TWRR from NAV + external cash flows
+
+and in `financial_math/lots/`:
+
+- `build_value_history()` — continues closed lots to `date_to` via `lot_history_end_date(..., extend_closed=True)`, unless a rate is missing (see [FX Conversion](#fx-conversion))
+- `build_return_history()` — same continuity rule, plus `relative_return`
+- `build_price_history()` — truncates at closure date, no post-close points
+- `build_broker_wac_history()` / `build_cumulative_wac_history()` — WAC points read from the average-cost lines via `average_cost_points()` (see [WAC Lines](#wac-lines))
+- `build_performance_history()` — asset-wide ROI/TWRR from NAV + external cash flows
 
 Important nuance: `date_from` trims emitted rows only. Engine still starts from earliest in-scope asset transaction so FIFO state stays correct.
 
@@ -331,5 +427,7 @@ Important nuance: `date_from` trims emitted rows only. Engine still starts from 
 ## 🔗 Related
 
 - 🧠 **[FIFO Lot Engine](fifo_lot_engine.md)** — Pure event-sourced FIFO core
+- 🧮 **[Financial Math Layer](../financial_math.md)** — The layer `financial_math/lots/` belongs to: rules, package map, guards
+- ⚖️ **[WAC & Cost Basis](wac.md)** — The average-cost function behind the WAC lines
 - 📖 **[FIFO Lot Analysis Theory](../../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)** — Financial interpretation of lot metrics
 - 🖥️ **[Lots Analysis Frontend](../../frontend/components/features/lots-analysis.md)** — `LotsAnalysisPanel` and chart/table consumers

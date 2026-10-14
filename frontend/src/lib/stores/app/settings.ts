@@ -6,11 +6,12 @@
  *
  * Now uses Zodios client for type-safe API calls with Zod validation.
  */
-import {get, writable} from 'svelte/store';
+import {derived, get, writable} from 'svelte/store';
 import {browser} from '$app/environment';
 import {zodiosApi} from '$lib/api';
 import type {UserSettings} from '$lib/types';
 import {getClientSessionGeneration, getClientSessionUserId, isClientSessionCurrent, registerClientSessionReset} from '$lib/stores/app/clientSession';
+import {globalSettings} from '$lib/stores/app/globalSettings';
 
 // Re-export type for backward compatibility
 export type {UserSettings} from '$lib/types';
@@ -48,21 +49,23 @@ function createUserSettingsStore() {
         /**
          * Load settings from backend
          */
-        async load(): Promise<void> {
+        async load(): Promise<boolean> {
             const sessionGeneration = getClientSessionGeneration();
             try {
                 // Zodios returns UserSettingsRead directly
                 const settings = await zodiosApi.get_user_settings_endpoint_api_v1_settings_user_get();
-                if (!isClientSessionCurrent(sessionGeneration)) return;
+                if (!isClientSessionCurrent(sessionGeneration)) return false;
                 set(settings);
 
                 // Cache in localStorage
                 persist(settings);
+                return true;
             } catch (e) {
-                if (!isClientSessionCurrent(sessionGeneration)) return;
+                if (!isClientSessionCurrent(sessionGeneration)) return false;
                 console.error('Failed to load user settings:', e);
                 // Use defaults if not authenticated or error
                 set(defaultSettings);
+                return false;
             }
         },
 
@@ -125,5 +128,12 @@ function createUserSettingsStore() {
 }
 
 export const userSettings = createUserSettingsStore();
+
+/**
+ * The currency a page starts in: the user's own Default Currency. The instance's
+ * `default_currency` is the one *new* users get, so it is only the fallback for a user
+ * who has none — and 'EUR' the last resort before any settings are known.
+ */
+export const defaultDisplayCurrency = derived([userSettings, globalSettings], ([$user, $global]) => $user?.base_currency || $global.default_currency || 'EUR');
 
 registerClientSessionReset('userSettings', () => userSettings.reset());

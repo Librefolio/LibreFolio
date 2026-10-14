@@ -18,6 +18,7 @@
   Used by: PriceChartFull (candlestick mode)
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
@@ -30,9 +31,14 @@
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
     import {downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
-    import {formatMonthLabel, getBucketInfo} from './priceChartHelpers';
+    import {bucketSpanUpTo, formatMonthLabel, getBucketInfo} from './priceChartHelpers';
     import {buildCandleSeriesData, computePercentageBase, formatCandlePrice, formatVolume, hasRenderableVolume, isBullishBar, parseCandleTooltipValue} from './candlestickChartHelpers';
+    import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {truncateName} from '$lib/utils/text';
+    import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
 
     // =========================================================================
     // Props
@@ -83,6 +89,8 @@
         yAxisMin?: number;
         /** Y-axis maximum (when yAxisMode='custom') */
         yAxisMax?: number;
+        /** Stable semantic settings for active non-primary axes. */
+        secondaryAxisScales?: Record<string, AxisScaleSettings>;
         /** Shared chart resolution decided by PriceChartFull */
         resolution?: ChartResolution;
     }
@@ -111,6 +119,7 @@
         yAxisMode = 'auto',
         yAxisMin,
         yAxisMax,
+        secondaryAxisScales = {},
     }: Props = $props();
 
     // =========================================================================
@@ -124,6 +133,8 @@
     let chartOptionSet = false;
     let needsInitialLayoutStabilityPass = false;
     let lastRenderedResolution: ChartResolution | null = null;
+    let lastRenderedDates: string[] = [];
+    let responsiveXAxisCompact = false;
 
     // =========================================================================
     // Lifecycle
@@ -154,6 +165,8 @@
             void yAxisMode;
             void yAxisMin;
             void yAxisMax;
+            void secondaryAxisScales;
+            void uiLocale();
             tick().then(renderChart);
         }
     });
@@ -163,25 +176,30 @@
         resizeObserver = null;
         chartOptionSet = false;
         lastRenderedResolution = null;
+        lastRenderedDates = [];
         dataZoomTouchPanHandle?.dispose();
         dataZoomTouchPanHandle = null;
+        if (chartContainer) {
+            delete (chartContainer as unknown as Record<string, unknown>).__lfChart;
+        }
         chartInstance?.dispose();
         chartInstance = null;
     }
 
     function buildTooltipHeader(date: string, bucketInfo?: {bucketStart: string; bucketEnd: string}): string {
         if (resolution === 'daily') {
-            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${(isDarkProp ?? document.documentElement.classList.contains('dark')) ? '#e2e8f0' : '#1f2937'}">${date}</div>`;
+            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${(isDarkProp ?? document.documentElement.classList.contains('dark')) ? '#e2e8f0' : '#1f2937'}">${formatDay(date)}</div>`;
         }
 
         const dark = isDarkProp ?? document.documentElement.classList.contains('dark');
-        const info = bucketInfo ?? {bucketStart: date, bucketEnd: date};
+        // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
+        const info = bucketSpanUpTo(date, bucketInfo ?? {bucketStart: date, bucketEnd: date});
 
         if (resolution === 'weekly') {
-            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.weekRange', {values: {start: info.bucketStart, end: info.bucketEnd}})}</div>`;
+            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</div>`;
         }
 
-        return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</div><div style="font-size:11px;margin-bottom:3px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: info.bucketEnd}})}</div>`;
+        return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</div><div style="font-size:11px;margin-bottom:3px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</div>`;
     }
 
     // =========================================================================
@@ -196,6 +214,21 @@
                 if (chartOptionSet) {
                     try {
                         chartInstance?.resize();
+                        if (chartInstance && lastRenderedDates.length > 0) {
+                            const policy = buildResponsiveXAxisPolicy({
+                                width: chartContainer.clientWidth,
+                                values: lastRenderedDates,
+                                locale: uiLocale(),
+                                axisType: 'category',
+                            });
+                            const wasCompact = responsiveXAxisCompact;
+                            responsiveXAxisCompact = policy.compact;
+                            if (policy.axisLabel) {
+                                chartInstance.setOption({xAxis: {axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                            } else if (wasCompact) {
+                                renderChart();
+                            }
+                        }
                         if (chartInstance) updateArrowRotations(chartInstance);
                     } catch (_) {
                         /* ignore coord errors during resize */
@@ -212,6 +245,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            (chartContainer as unknown as Record<string, unknown>).__lfChart = chartInstance;
             attachChartReady(chartInstance, chartContainer, 'candlestick');
             needsInitialLayoutStabilityPass = true;
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
@@ -288,6 +322,7 @@
         const labelColor = dark ? '#94a3b8' : '#6b7280';
 
         const dates = data.map((d) => d.date);
+        lastRenderedDates = dates;
         const bucketInfoByDate = new Map(dates.map((date, index) => [date, getBucketInfo(data[index], resolution)]));
 
         // ── Percentage mode: transform prices relative to first data point ──
@@ -313,7 +348,7 @@
         // ── Overlay signals ──
         const downsampledOverlaySignals = resolution === 'daily' ? overlaySignals : overlaySignals.map((signal) => downsampleRenderedSignal(signal, resolution, data)).filter((signal) => signal.data.length > 0);
         const resolvedOverlaySignals = assignOverlaySignalAxes(downsampledOverlaySignals);
-        const {axes: secondaryAxes, extraAxesCount, nextAxisIndex: volumeYAxisIndex} = buildSecondaryYAxes(resolvedOverlaySignals, dark, 0);
+        const {axes: secondaryAxes, extraAxesCount, nextAxisIndex: volumeYAxisIndex} = buildSecondaryYAxes(resolvedOverlaySignals, dark, 0, true, secondaryAxisScales);
 
         const series: any[] = [];
 
@@ -374,12 +409,24 @@
         }
 
         // ── X-axes ──
+        const xAxisPolicy = buildResponsiveXAxisPolicy({
+            width: rect.width,
+            values: dates,
+            locale: uiLocale(),
+            axisType: 'category',
+        });
+        responsiveXAxisCompact = xAxisPolicy.compact;
         const xAxisBase = {
             type: 'category' as const,
             data: dates,
             boundaryGap: true,
             axisLine: {lineStyle: {color: axisColor}},
-            axisLabel: {color: labelColor, fontSize: 14},
+            axisLabel: {
+                color: labelColor,
+                fontSize: 14,
+                formatter: xAxisPolicy.formatter,
+                ...(xAxisPolicy.axisLabel ?? {}),
+            },
             splitLine: {show: false},
         };
 
@@ -467,7 +514,7 @@
 
                 // Overlay signal line
                 if (p.value !== null && p.value !== undefined) {
-                    html += `<div style="font-size:11px"><span style="color:${p.color ?? '#888'}">${truncateName(String(p.seriesName ?? ''))}: ${typeof p.value === 'number' ? p.value.toFixed(4) : p.value}</span></div>`;
+                    html += `<div style="font-size:11px"><span style="color:${p.color ?? '#888'}">${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${typeof p.value === 'number' ? formatFixed(p.value, 4) : p.value}</span></div>`;
                 }
             }
 
@@ -503,6 +550,20 @@
             series,
         };
 
+        let savedZoom: {start: number; end: number} | null = null;
+        if (chartOptionSet && chartInstance) {
+            const currentOption = chartInstance.getOption() as {
+                dataZoom?: Array<{start?: unknown; end?: unknown}>;
+            };
+            const currentZoom = currentOption.dataZoom?.[0];
+            if (typeof currentZoom?.start === 'number' && typeof currentZoom.end === 'number') {
+                savedZoom = {
+                    start: currentZoom.start,
+                    end: currentZoom.end,
+                };
+            }
+        }
+
         // Resolution switch: same ECharts tooltip-crash risk as PriceChartFull's line view
         // (full rebuild via setOption(option,true) while an axis-trigger tooltip + mousewheel
         // dataZoom are active) — hide the tooltip first when resolution actually changed.
@@ -513,6 +574,13 @@
         chartInstance.setOption(option, true);
         chartOptionSet = true;
         lastRenderedResolution = resolution;
+        if (savedZoom) {
+            chartInstance.dispatchAction({
+                type: 'dataZoom',
+                start: savedZoom.start,
+                end: savedZoom.end,
+            });
+        }
         updateArrowRotations(chartInstance);
         if (needsInitialLayoutStabilityPass) {
             needsInitialLayoutStabilityPass = false;

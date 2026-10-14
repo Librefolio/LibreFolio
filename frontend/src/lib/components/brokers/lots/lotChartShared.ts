@@ -26,6 +26,7 @@
  */
 
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /**
  * `-0` survives arithmetic and prints as "-0.00" / "-0%", which reads as a loss
@@ -39,6 +40,20 @@ export function normalizeZero(value: number): number {
 /** Constrain `value` to the inclusive `[min, max]` range. */
 export function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * Whether a lot amount row must be shown: an unknown amount (`null`, an FX rate is
+ * missing, shown as «—») or a non-zero one. Only a known zero is hidden; hiding an
+ * unknown would read as zero. Used by the lot charts, the lots table and the custody modal.
+ */
+export function isUnknownOrNonZero(value: number | null | undefined): boolean {
+    return value == null || value !== 0;
+}
+
+/** The sum of two lot amounts, or `null` (unknown) when either is. A known zero is a value. */
+export function addOrNull(left: number | null, right: number | null): number | null {
+    return left == null || right == null ? null : left + right;
 }
 
 /**
@@ -71,11 +86,11 @@ export function withAlpha(color: string, alpha: number): string {
  * would read as a rounded-away difference. `-0` is normalized first so a tick
  * at zero never renders as "-0".
  *
- * `locale` defaults to `undefined` — the machine locale, which is what both
- * charts deliberately use for numbers (as opposed to `$currentLanguage`, which
- * they use for words). Tests pass an explicit locale to stay deterministic.
+ * `locale` defaults to the interface locale (`uiLocale()`, M-18): the figures
+ * follow the interface language like the words around them, never the
+ * browser's locale. Tests pass an explicit locale to stay deterministic.
  */
-export function formatAxisNumber(value: number, locale?: string | string[]): string {
+export function formatAxisNumber(value: number, locale: string | string[] = uiLocale()): string {
     const normalized = normalizeZero(value);
     const abs = Math.abs(normalized);
     if (abs >= 1000) {

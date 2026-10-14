@@ -1,7 +1,7 @@
 ---
 title: "Domain: ASSETS"
 category: domain
-features: [F-024, F-025, F-026, F-027, F-028, F-029, F-030, F-031, F-032, F-033, F-034, F-035, F-036]
+features: [F-024, F-025, F-026, F-027, F-028, F-029, F-030, F-031, F-032, F-033, F-034, F-035, F-036, F-114]
 status: stable
 mkdocs: "developer/backend/assets/architecture.md"
 ---
@@ -22,8 +22,8 @@ The asset detail page is the richest view in LibreFolio: a full price history ch
 
 | Code | Feature | Layer | Role in domain | Status |
 |------|---------|-------|----------------|--------|
-| [[F-024]] | Asset CRUD | fullstack | core — create/list/edit/delete assets | implemented |
-| [[F-025]] | Asset Provider Registry (yfinance, JustETF, CSS Scraper, Scheduled Investment) | backend | core — auto-discovered provider plugins | implemented |
+| [[F-024]] | Asset CRUD | fullstack | core — create/list/edit/delete assets | documented |
+| [[F-025]] | Asset Provider Registry (yfinance, JustETF, CSS Scraper, Scheduled Investment) | backend | core — auto-discovered provider plugins | documented |
 | [[F-026]] | Asset Provider Assignment (dynamic params form) | fullstack | core — assign provider with dynamic config form | implemented |
 | [[F-027]] | Asset Data Sync (price fetch from providers) | fullstack | core — fetch and store OHLCV from providers | implemented |
 | [[F-028]] | Asset Search Autocomplete (multi-provider parallel) | frontend | support — parallel search across providers in add modal | implemented |
@@ -87,6 +87,11 @@ graph TD
 - [[F-094]] Sync Date Range Dialog — let users choose the historical range when syncing.
 - [[F-095]] Asset Delete — Transaction Count Link — show transaction count before delete confirmation.
 - [[F-096]] Scheduled Investment — Decoupled Frequencies + Anchor Day — idea for finer-grained schedule control.
+
+## See also
+
+- [[connections/assets-connections]] — the dependency graph and the cross-layer handoffs of the asset features
+- [[workflows/asset-onboarding-flow]] — an asset end to end, from its database record to provider, sync and view
 
 ## Source files
 

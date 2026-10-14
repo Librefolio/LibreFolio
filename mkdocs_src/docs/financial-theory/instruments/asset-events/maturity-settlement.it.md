@@ -72,7 +72,7 @@ Una volta che un evento di regolamento alla scadenza viene registrato in LibreFo
 !!! note "Eccezione: interessi di mora dopo la scadenza"
 
     Gli asset valorizzati dal provider **Scheduled Investment** possono essere configurati con
-    il **Late Interest**: dopo la fine dell'ultimo periodo programmato, si applica prima un
+    l'**Interesse di Mora**: dopo la fine dell'ultimo periodo programmato, si applica prima un
     periodo di grazia configurabile (in giorni), poi un tasso di penale continua a maturare oltre
     la scadenza fino al regolamento. In quel caso la serie di prezzi non si ferma alla
     scadenza — vedi [provider Scheduled Investment](../../../user/assets/providers/scheduled-investment.md#late-interest).
@@ -104,4 +104,4 @@ $$
 - 📅 **[Panoramica Eventi Asset](index.md)** — Tutti i tipi di eventi
 - 📈 **[Interessi](interest.md)** — Pagamenti periodici di cedole prima della scadenza
 - 📆 **[Convenzioni di Conteggio dei Giorni](../../fundamentals/day-count.md)** — Come viene calcolato il maturato tra le date di cedola
-- 📊 **[Aggiustamento Prezzo](price-adjustment.md)** — Variazioni di valore non monetarie prima della scadenza
+- 📊 **[Rettifica prezzo](price-adjustment.md)** — Variazioni di valore non monetarie prima della scadenza

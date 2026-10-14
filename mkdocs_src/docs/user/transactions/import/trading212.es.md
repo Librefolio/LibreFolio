@@ -6,13 +6,13 @@
 
 ## 📥 Cómo exportar
 
-Para exportar su extracto de transacciones desde Trading212:
+Para exportar tu extracto de transacciones desde Trading212:
 
-1. Inicie sesión en el [Portal del Cliente de Trading212](https://www.trading212.com) (o abra la aplicación en su dispositivo móvil).
-2. Vaya a la sección de menú/perfil y haga clic en **History**.
-3. Haga clic en el botón **Export** (generalmente representado por un icono de exportación o documento en la parte superior de la pestaña de historial).
-4. Seleccione las columnas deseadas (asegúrese de que todos los campos como ticker, fecha, cantidad, precio y moneda estén seleccionados).
-5. Elija **CSV** como formato y haga clic en **Export**. Guarde el archivo en su computadora.
+1. Inicia sesión en el [Portal del Cliente de Trading212](https://www.trading212.com) (o abre la aplicación en tu dispositivo móvil).
+2. Ve a la sección de menú/perfil y haz clic en **History**.
+3. Haz clic en el botón **Export** (generalmente representado por un icono de exportación o documento en la parte superior de la pestaña de historial).
+4. Selecciona las columnas deseadas (asegúrate de que todos los campos como ticker, fecha, cantidad, precio y moneda estén seleccionados).
+5. Elige **CSV** como formato y haz clic en **Export**. Guarda el archivo en tu computadora.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <!-- [Screenshot Placeholder: Trading212 Portal - History and CSV Export modal] -->
@@ -22,7 +22,7 @@ Para exportar su extracto de transacciones desde Trading212:
 
 !!! warning "Transacciones de Pies"
 
-    Trading212 admite "Pies" (cestas de activos gestionados automáticamente). Si opera dentro de un Pie, en la exportación, estas operaciones se registran como transacciones de activos subyacentes independientes. El analizador de BRIM procesa estas operaciones individuales automáticamente, pero asegúrese de que los saldos de sus Pies estén completamente sincronizados en la cuadrícula de preparación antes de confirmar.
+    Trading212 admite "Pies" (cestas de activos gestionados automáticamente). Si operas dentro de un Pie, en la exportación, estas operaciones se registran como transacciones de activos subyacentes independientes. El analizador de BRIM procesa estas operaciones individuales automáticamente, pero asegúrate de que los saldos de tus Pies estén completamente sincronizados en la cuadrícula de preparación antes de confirmar.
 
 ## 📝 Notas
 

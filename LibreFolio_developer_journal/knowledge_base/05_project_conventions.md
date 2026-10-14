@@ -88,17 +88,25 @@ Il dark mode usa variabili CSS in `html.dark` / `[data-md-color-scheme="slate"]`
 
 ## Emoji Bandiera (Windows Fix)
 
-Le emoji bandiera (`🇮🇹`, `🇫🇷`, `🇪🇸`, `🇬🇧`) non funzionano su Windows (Segoe UI Emoji non le supporta). Soluzione: web font `Noto Color Emoji`:
+Le emoji bandiera (`🇮🇹`, `🇫🇷`, `🇪🇸`, `🇬🇧`) su Windows escono come due lettere («EU»): Segoe UI Emoji non ha bandiere. Soluzione (dal 29/09/2026): **una sola faccia globale che disegna solo le bandiere**, `'LF Flags'`, in `frontend/static/lf-flags.css`, linkata da `app.html` e `offline.html` (estratto):
 
 ```css
-@import url('https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap');
+@font-face {
+    font-family: 'LF Flags';
+    src: local('Apple Color Emoji'), local('AppleColorEmoji'), local('Noto Color Emoji'), local('NotoColorEmoji'),
+        url('/fonts/noto-color-emoji/noto-color-emoji.0.woff2') format('woff2');
+    unicode-range: U+1F1E6-1F1FF; /* solo gli indicatori regionali */
+}
 
-.emoji-flag {
-    font-family: 'Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', sans-serif;
+html {
+    font-family: 'LF Flags', Inter, system-ui, sans-serif;
 }
 ```
 
-Applicare `.emoji-flag` SOLO ai container bandiera (language selector, currency flags) — le altre emoji funzionano con i font di sistema.
+- `'LF Flags'` sta in testa a ogni pila: `html`, `@theme --font-sans` e `--font-mono` in `app.css`, le pile di `offline.html`. Per il suo `unicode-range` disegna solo le bandiere: cifre, `#`, `*` e ogni altra emoji restano ai font che vengono dopo (Inter, il monospace, le emoji di sistema).
+- Sui dispositivi Apple le bandiere di Apple (`local()`); altrove il sottoinsieme Noto delle bandiere (~700 KB), scaricato solo se sulla pagina c'è una bandiera. `scripts/update_js_cache.py` tiene solo quel sottoinsieme, come file 0.
+- **Mai un font emoji in una `font-family`**: i font emoji disegnano anche cifre, `#` e `*`. Un componente con una pila sua che può mostrare una bandiera la comincia con `'LF Flags'`, oppure avvolge la bandiera in `.emoji-flag` (`'LF Flags', Inter, system-ui, sans-serif`). Gate: `frontend/src/flagFont.gate.test.ts`.
+- Il testo di ECharts (canvas e tooltip) non passa dalle pile globali: lì le bandiere non sono ancora coperte. Dettagli nella devWiki, `problems/flag-emoji-windows.md`.
 
 ---
 

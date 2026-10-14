@@ -37,6 +37,9 @@ from backend.app.schemas.portfolio import (
     PortfolioReportMetadata,
     PortfolioReportResponse,
     PortfolioSummary,
+    YieldOnCostProvenance,
+    YieldOnCostResult,
+    YieldOnCostStatus,
 )
 from backend.app.services.ai_export.components import broker_concentration_context, broker_cost_efficiency, broker_financial
 from backend.app.services.ai_export.components.broker_concentration_context import ConcentrationComparisonStatus
@@ -113,6 +116,21 @@ def _metadata(scope: BuildScope) -> PortfolioReportMetadata:
     return PortfolioReportMetadata(target_currency=scope.target_currency, generated_at=scope.snapshot_as_of)
 
 
+def _required_yoc() -> YieldOnCostResult:
+    return YieldOnCostResult(
+        status=YieldOnCostStatus.NO_INCOME,
+        value=Decimal("0"),
+        provenance=YieldOnCostProvenance(
+            window_start=date(2025, 1, 1),
+            window_end=date(2025, 12, 31),
+            first_pair_transaction_date=date(2025, 1, 1),
+            gross_income_transaction_count=0,
+            gross_income_per_unit=_money(0),
+            net_zero=False,
+        ),
+    )
+
+
 def _holding(
     asset_id: int,
     *,
@@ -132,6 +150,7 @@ def _holding(
         valuation_effective_currency=native_currency,
         valuation_source=("MISSING" if current_value is None else "MARKET_PRICE"),
         nav_weight_percent=(None if nav_weight_percent is None else Decimal(str(nav_weight_percent))),
+        yield_on_cost=_required_yoc(),
     )
 
 

@@ -4,6 +4,7 @@ import {AiExportChoiceUnavailableError, AiExportClipboardUnavailableError, type 
 import {formatAiExportByteSize, formatAiExportTokenCount} from './aiExportOptions';
 import type {AiExportCatalogCompatibilityResult} from './catalog/compatibility';
 import type {AiExportResponseLanguageDisplayName} from './templates/promptRenderer';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 type AiExportTranslationValue = string | number | boolean | null | undefined;
 export type AiExportTranslate = (key: string, options?: {values?: Record<string, AiExportTranslationValue>}) => string;
@@ -58,9 +59,9 @@ export function buildAiExportMenuLabels(t: AiExportTranslate, compatibility: AiE
             periodLabel: t('aiExport.period'),
             periodHelp: t('aiExport.periodHelp'),
             periodPresetLabels: {
-                '3m': '3M',
-                '6m': '6M',
-                '1y': '1Y',
+                '3m': t('datePicker.presets.months', {values: {n: 3}}),
+                '6m': t('datePicker.presets.months', {values: {n: 6}}),
+                '1y': t('datePicker.presets.years', {values: {n: 1}}),
                 custom: t('aiExport.periodCustom'),
             },
             periodUnitLabels: {
@@ -95,12 +96,9 @@ export function buildAiExportMenuLabels(t: AiExportTranslate, compatibility: AiE
 
 export function getAiExportSuccessMessages(t: AiExportTranslate, result: Pick<PreparedAiExport, 'options' | 'stats'>): AiExportSuccessMessages {
     const detail = t(`aiExport.details.${result.options.detailLevel}`);
-    const locale = {
-        English: 'en',
-        Italian: 'it',
-        French: 'fr',
-        Spanish: 'es',
-    }[result.options.responseLanguage];
+    // The message is in the interface language, and so are its figures (M-18): not in the
+    // language the prompt asks the model to answer in.
+    const locale = uiLocale();
     const tokens = formatAiExportTokenCount(result.stats.finalPrompt.estimatedTokens, locale, t('aiExport.tokenUnit'));
     const bytes = formatAiExportByteSize(result.stats.finalPrompt.byteCountUtf8, locale);
     return {

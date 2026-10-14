@@ -131,8 +131,11 @@ Choose the smallest representative set that tests the changed behavior:
 - FIFO-relevant scope.
 
 Artifact user and scope names are anonymized. Public prompt joins use A#, B#, F#,
-and L# references. The Entity Directory remains the only place that resolves those
-local references to readable names.
+and L# references. The Entity Directory resolves A#, B#, and F# references to
+readable names: Asset display names and identifiers, Broker display names, and the
+FX pair label. L# references have no directory entry: each is the backend-assigned
+`lot_ref` of one FIFO lot row, read in place, and the row links to its opening
+Broker by B# and, in Portfolio and Broker exports, to its Asset by A#.
 
 ## 📏 Metrics
 
@@ -175,6 +178,20 @@ The renderer reports:
 
 Requested/effective/available periods, coverage, and insufficient-history warnings
 remain outside the omitted rows and must stay visible.
+
+Columns have their own rule: a compact table removes a column that is empty or `null`
+in every row (see [Snapshot Data Tables](ai_export_composition.md#snapshot-data-tables)).
+The renderer reports:
+
+- `empty_columns_removed`, every removed column;
+- `empty_parent_columns_removed`, the removed columns that were the parent of nested
+  columns (counted in both).
+
+A `null` therefore stays visible only next to a row with a value; a fact that every
+row could lose belongs in a SUMMARY field, as `unavailable_amount_lot_count` does for
+lot amounts without an FX rate. Both counters are part of each prompt's
+`format_diagnostics`, and the public table audit rejects a prompt that still contains
+an all-empty column.
 
 ## 🏦 Broker Universe Diagnostics
 

@@ -1,5 +1,6 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
+    import {page} from '$app/stores';
     import {Info, Shield, Sliders, User} from 'lucide-svelte';
     import {auth} from '$lib/stores/app/auth';
     import ProfileTab from '$lib/components/settings/tabs/ProfileTab.svelte';
@@ -11,6 +12,19 @@
     type TabId = 'profile' | 'preferences' | 'about' | 'admin';
 
     let activeTab: TabId = 'profile';
+    let appliedTabParam = '';
+
+    function isTabId(value: string | null): value is TabId {
+        return value === 'profile' || value === 'preferences' || value === 'about' || value === 'admin';
+    }
+
+    $: {
+        const tabParam = $page.url.searchParams.get('tab');
+        if (isTabId(tabParam) && tabParam !== appliedTabParam) {
+            appliedTabParam = tabParam;
+            activeTab = tabParam;
+        }
+    }
 
     // Check if user is superuser (for admin tab editing permissions)
     $: isSuperuser = $auth.user?.is_superuser ?? false;

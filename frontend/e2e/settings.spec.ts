@@ -1,6 +1,193 @@
-import {expect, test} from './fixtures/playwright';
+import {type APIRequestContext, expect, type Page, type Request, type Response, test} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
+import {eventSeq, waitForEvent} from './fixtures/app-events';
+import {optionsClosed} from './fixtures/probe';
+import {uniqueSuffix} from './fixtures/unique';
+import {deleteDisposableUser, type DisposableUser, registerDisposableUser, skipDueFlowsExcept} from './fixtures/onboarding-accounts';
+
+test.describe('Runes parity', () => {
+    // The preference case owns its account; the admin case changes only a local
+    // draft. Neither case writes instance-wide settings or repairs shared data.
+    test.setTimeout(45_000);
+
+    async function openPreferences(page: Page) {
+        await navigateTo(page, '/settings');
+        await page.getByTestId('settings-tab-preferences').click();
+        await expect(page.getByTestId('preference-currency').getByRole('combobox')).toBeEnabled({timeout: 10_000});
+    }
+
+    test('preferences save a real value across reload; Reset and Undo only stage changes', async ({page, request}) => {
+        const suffix = uniqueSuffix();
+        const user = {username: `runes_prefs_${suffix}`, email: `runes_prefs_${suffix}@example.com`, password: `Runes9!_${suffix}`};
+        const registered = await request.post('/api/v1/auth/register', {data: user});
+        expect(registered.status(), 'Disposable-account registration must be enabled; do not change global settings to repair it').toBe(201);
+        const {user: created} = (await registered.json()) as {user: {id: number}};
+
+        const puts: unknown[] = [];
+        const recordPut = (req: Request) => {
+            if (req.method() === 'PUT' && new URL(req.url()).pathname === '/api/v1/settings/user') puts.push(req.postDataJSON());
+        };
+        try {
+            await login(page, user);
+            const me = await page.request.get('/api/v1/auth/me');
+            expect(me.ok()).toBe(true);
+            expect((await me.json()).user.id).toBe(created.id);
+
+            // A fresh account is gated on /welcome, and its intro tour would then
+            // make the shell inert on any route. Skip every flow still due, for this
+            // account only, and read it back: skipping welcome, unlike completing
+            // it, writes no user settings (this test's subject). Then enter through
+            // the gate on a full load: /welcome forwards to returnTo only once the
+            // re-read progress says welcome is done, so leaving it is a positive
+            // proof. Landing on /settings directly is not: a gated account briefly
+            // renders the shell there before the bootstrap redirects it.
+            await skipDueFlowsExcept(page, []);
+            await navigateTo(page, '/welcome?returnTo=%2Fsettings');
+            await expect(page).toHaveURL((url) => url.pathname === '/settings', {timeout: 15_000});
+            const shell = page.getByTestId('app-shell');
+            await expect(shell).toBeVisible();
+            await expect(shell).toHaveAttribute('data-guide-inert', 'false');
+
+            const globals = await page.request.get('/api/v1/settings/global');
+            expect(globals.ok()).toBe(true);
+            const {items} = (await globals.json()) as {items: {key: string; value: string}[]};
+            const defaultCurrency = items.find((item) => item.key === 'default_currency')?.value;
+            expect(defaultCurrency, 'The test must read the real default, not assume EUR').toMatch(/^[A-Z]{3}$/);
+            if (!defaultCurrency) throw new Error('default_currency was absent from settings/global');
+            const savedCurrency = defaultCurrency === 'USD' ? 'EUR' : 'USD';
+
+            // Only this disposable account is seeded, before observing UI writes.
+            const seeded = await page.request.put('/api/v1/settings/user', {data: {base_currency: defaultCurrency}});
+            expect(seeded.ok()).toBe(true);
+            await openPreferences(page);
+            const row = page.getByTestId('preference-currency');
+            const select = row.getByRole('combobox');
+            await expect(select).toContainText(defaultCurrency);
+            page.on('request', recordPut);
+
+            await select.click();
+            await page.getByTestId(`search-select-option-${savedCurrency}`).click();
+            await optionsClosed(page);
+            await expect(select).toContainText(savedCurrency);
+            const since = await eventSeq(page);
+            const response = page.waitForResponse((res) => res.request().method() === 'PUT' && new URL(res.url()).pathname === '/api/v1/settings/user');
+            await row.getByTestId('setting-save').click();
+            const saved = await response;
+            expect(saved.request().postDataJSON()).toEqual({base_currency: savedCurrency});
+            expect(saved.ok()).toBe(true);
+            expect((await waitForEvent(page, 'settings.preferences.saved', {since})).detail).toMatchObject({field: 'default_currency', value: savedCurrency});
+            await expect(row.getByTestId('setting-save')).toBeHidden();
+
+            // A new document/mount must display the persisted value, not just a tab.
+            await openPreferences(page);
+            await expect(select).toContainText(savedCurrency);
+            await row.getByTestId('setting-reset').click();
+            await expect(select).toContainText(defaultCurrency);
+            await expect(row.getByTestId('setting-save')).toBeVisible();
+            const afterReset = await page.request.get('/api/v1/settings/user');
+            expect(afterReset.ok()).toBe(true);
+            expect((await afterReset.json()).base_currency).toBe(savedCurrency);
+
+            await row.getByTestId('setting-undo').click();
+            await expect(select).toContainText(savedCurrency);
+            await expect(row.getByTestId('setting-save')).toBeHidden();
+            await openPreferences(page);
+            await expect(select).toContainText(savedCurrency);
+            expect(puts).toEqual([{base_currency: savedCurrency}]);
+        } finally {
+            page.off('request', recordPut);
+            // The isolated API context does not depend on the browser surviving
+            // the assertion. Verify identity before the self-delete endpoint.
+            const loggedIn = await request.post('/api/v1/auth/login', {data: {username: user.username, password: user.password}});
+            expect(loggedIn.ok()).toBe(true);
+            expect((await loggedIn.json()).user.id).toBe(created.id);
+            const removed = await request.delete('/api/v1/auth/users/me');
+            expect(removed.ok()).toBe(true);
+        }
+    });
+
+    test('global lock rejects then accepts discarding a local draft without persisting it', async ({page}) => {
+        await login(page, TEST_ADMIN);
+        await navigateTo(page, '/settings');
+        await page.getByTestId('settings-tab-admin').click();
+        const tab = page.getByTestId('global-settings-tab');
+        await expect(tab).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
+        const field = tab.getByTestId('global-setting-session_ttl_hours').getByRole('spinbutton');
+        await expect(field).toBeDisabled();
+        const baseline = await field.inputValue();
+        expect(baseline).toMatch(/^\d+$/);
+        const draft = String(Number(baseline) + 1);
+        const writes: string[] = [];
+        const nativeDialogs: string[] = [];
+        // Negative sentinel only: none of the tested interactions uses a native
+        // dialog. Dismiss unexpected ones so a regression fails, rather than hangs.
+        page.on('dialog', async (dialog) => {
+            nativeDialogs.push(dialog.type());
+            await dialog.dismiss();
+        });
+        const recordWrite = (req: Request) => {
+            if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method()) && new URL(req.url()).pathname.startsWith('/api/v1/settings/global')) writes.push(req.url());
+        };
+        page.on('request', recordWrite);
+        try {
+            await tab.getByTestId('settings-lock-toggle').click();
+            await expect(field).toBeEnabled();
+            await field.fill(draft);
+            await expect(tab.getByTestId('settings-save-all')).toBeVisible();
+
+            const header = page.getByTestId('global-settings-discard-confirm');
+            const discard = page.getByRole('dialog').filter({has: header});
+            for (const action of ['cancel', 'escape', 'dismiss', 'backdrop'] as const) {
+                await test.step(`keep local draft on modal ${action}`, async () => {
+                    await tab.getByTestId('settings-lock-toggle').click();
+                    await expect(header).toBeVisible();
+                    const confirm = discard.getByTestId('confirm-modal-confirm');
+                    await expect(confirm).toBeEnabled();
+                    // Approved feature assertion, never a class-based selector.
+                    await expect(confirm).toHaveClass(/\bbtn-warning\b/);
+                    await expect(confirm).not.toHaveClass(/\bbtn-danger\b/);
+                    await expect(field).toHaveValue(draft);
+                    if (action === 'cancel') {
+                        await discard.getByTestId('confirm-modal-cancel').click();
+                    } else if (action === 'escape') {
+                        await discard.press('Escape');
+                    } else if (action === 'dismiss') {
+                        await header.getByRole('button').click();
+                    } else {
+                        // ModalBase's padded viewport corner is outside the content.
+                        await discard.click({position: {x: 1, y: 1}});
+                    }
+                    await expect(header).toBeHidden();
+                    await expect(field).toBeEnabled();
+                    await expect(field).toHaveValue(draft);
+                    await expect(tab.getByTestId('settings-save-all')).toBeVisible();
+                    expect(nativeDialogs).toEqual([]);
+                    expect(writes).toEqual([]);
+                });
+            }
+
+            await tab.getByTestId('settings-lock-toggle').click();
+            await expect(header).toBeVisible();
+            await discard.getByTestId('confirm-modal-confirm').click();
+            await expect(header).toBeHidden();
+            await expect(field).toBeDisabled();
+            await expect(field).toHaveValue(baseline);
+            await expect(tab.getByTestId('settings-save-all')).toBeHidden();
+            expect(nativeDialogs).toEqual([]);
+
+            await navigateTo(page, '/settings');
+            await page.getByTestId('settings-tab-admin').click();
+            await expect(tab).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
+            await expect(field).toBeDisabled();
+            await expect(field).toHaveValue(baseline);
+            expect(nativeDialogs).toEqual([]);
+            expect(writes).toEqual([]);
+        } finally {
+            page.off('request', recordWrite);
+        }
+    });
+});
 
 test.describe('Settings', () => {
     test.describe('Settings Page Access', () => {
@@ -329,6 +516,10 @@ test.describe('Settings', () => {
             await login(page, TEST_USER);
             await navigateTo(page, '/settings');
             await page.getByTestId('settings-tab-about').click();
+            // The tab renders its plugin sections only once its parallel reads are all in,
+            // and publishes that on its root. Wait for the state, not for a section to turn
+            // up within the default 3 s, which under four workers it did not.
+            await expect(page.getByTestId('about-tab')).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
         });
 
         test('can switch to about tab', async ({page}) => {
@@ -389,42 +580,111 @@ test.describe('Settings', () => {
     });
 
     test.describe('Preferences Persistence', () => {
-        test('theme preference persists after page reload', async ({page}) => {
-            await login(page, TEST_USER);
-            await navigateTo(page, '/settings');
+        // Theme and language are saved per account, and every later login applies them.
+        // The two writers below used to save them on the shared TEST_USER and never put
+        // them back: one run of the language case left that user Italian for every later
+        // session (layout/connection-security presumes English), while the theme case
+        // clicked its row container and saved nothing at all. Each writer now owns a
+        // disposable account: preferences seeded over the API before the browser signs
+        // in, the account deleted with everything it owns in `finally`.
+        const DARK_CLASS = /(?:^|\s)dark(?:\s|$)/;
+        const isPreferencesPut = (res: Response) => res.request().method() === 'PUT' && new URL(res.url()).pathname === '/api/v1/settings/user';
+
+        type StoredPreferences = {language: string; theme: string};
+
+        /**
+         * Sign the test's own API context in as `user` and set the two preferences under
+         * test, so the starting point is stated rather than inherited from the instance
+         * defaults. Done before the browser signs in, so its login applies them.
+         */
+        async function seedPreferences(request: APIRequestContext, user: DisposableUser, seed: StoredPreferences): Promise<void> {
+            const loggedIn = await request.post('/api/v1/auth/login', {data: {username: user.username, password: user.password}});
+            expect(loggedIn.ok(), 'The seed must authenticate as the account it owns').toBe(true);
+            expect(((await loggedIn.json()) as {user: {id: number}}).user.id).toBe(user.id);
+            const seeded = await request.put('/api/v1/settings/user', {data: seed});
+            expect(seeded.ok(), `Seeding the preferences failed (HTTP ${seeded.status()})`).toBe(true);
+            expect(await seeded.json()).toMatchObject(seed);
+        }
+
+        /** What the server holds for the account `request` is signed in as. */
+        async function readStoredPreferences(request: APIRequestContext): Promise<StoredPreferences> {
+            const response = await request.get('/api/v1/settings/user');
+            expect(response.ok(), `GET /api/v1/settings/user returned ${response.status()}`).toBe(true);
+            return (await response.json()) as StoredPreferences;
+        }
+
+        /** Open the tab; its rows render only once it has read the account's values. */
+        async function openPreferencesTab(page: Page): Promise<void> {
             await page.getByTestId('settings-tab-preferences').click();
-            await expect(page.getByTestId('preference-theme')).toBeVisible();
-
-            // Find current theme and toggle to a different one
-            // Theme buttons are: light, dark, auto
-            const themeContainer = page.getByTestId('preference-theme');
-            const darkButton = themeContainer.locator('button:has-text("Dark"), button[title*="Dark"], [class*="dark"]').first();
-
-            if (await darkButton.isVisible().catch(() => false)) {
-                await darkButton.click();
-            }
-
-            // Save if needed - look for save button and click it
-            const saveButton = themeContainer.locator('button[title*="Save"], [data-testid*="save"]');
-            if (await saveButton.isVisible().catch(() => false)) {
-                await saveButton.click();
-                // The settings tabs now report what they persisted; wait for that
-                // instead of hoping a second is enough before the reload below.
-                await expect(page.locator('[data-testid^="toast-"]').first()).toBeVisible({timeout: 15_000});
-            }
-
-            // Reload the page
-            await page.reload();
-            await page.waitForLoadState('networkidle');
-
-            // Navigate back to preferences
-            await navigateTo(page, '/settings');
-            await page.getByTestId('settings-tab-preferences').click();
-            await expect(page.getByTestId('preference-theme')).toBeVisible();
-
-            // Verify that we're still logged in and preferences tab loads
-            // The actual persistence is verified by the page loading without errors
             await expect(page.getByTestId('settings-tab-preferences')).toHaveAttribute('aria-selected', 'true');
+            await expect(page.getByTestId('settings-layout')).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
+            await expect(page.getByTestId('preference-theme')).toBeVisible();
+            await expect(page.getByTestId('preference-language')).toBeVisible();
+        }
+
+        /**
+         * Sign the browser in as `user` and reach the Preferences tab. A fresh account is
+         * gated on /welcome: skip every flow still due over the API (skipping welcome,
+         * unlike completing it, writes no preference) and enter through the gate on a
+         * full load, which forwards to returnTo only once it has re-read that welcome is
+         * done.
+         */
+        async function enterPreferences(page: Page, user: DisposableUser): Promise<void> {
+            await login(page, user);
+            await skipDueFlowsExcept(page, []);
+            await navigateTo(page, '/welcome?returnTo=%2Fsettings');
+            await expect(page).toHaveURL((url) => url.pathname === '/settings', {timeout: 15_000});
+            const shell = page.getByTestId('app-shell');
+            await expect(shell).toBeVisible();
+            await expect(shell).toHaveAttribute('data-guide-inert', 'false');
+            await openPreferencesTab(page);
+        }
+
+        test('theme preference persists after page reload', async ({page, request}) => {
+            // A disposable account costs a registration, two logins and a skip per due flow.
+            test.setTimeout(45_000);
+            const user = await registerDisposableUser(request, 'theme');
+            try {
+                await seedPreferences(request, user, {language: 'en', theme: 'light'});
+                await enterPreferences(page, user);
+                // `<html class>` is where the app publishes the theme in force: applyTheme()
+                // and app.html's pre-paint script both write it, Tailwind's class strategy
+                // reads it. Here it is the contract, not a styling detail.
+                const html = page.locator('html');
+                const row = page.getByTestId('preference-theme');
+                const dark = row.getByTestId('setting-theme-option-dark');
+                // Precondition, read back: the seeded light theme is the one in force.
+                await expect(row.getByTestId('setting-theme-option-light')).toHaveAttribute('aria-pressed', 'true');
+                await expect(dark).toHaveAttribute('aria-pressed', 'false');
+                await expect(html).not.toHaveClass(DARK_CLASS);
+
+                await dark.click();
+                await expect(dark).toHaveAttribute('aria-pressed', 'true');
+                const since = await eventSeq(page);
+                const put = page.waitForResponse(isPreferencesPut);
+                await row.getByTestId('setting-save').click();
+                const saved = await put;
+                expect(saved.ok(), `PUT /api/v1/settings/user returned ${saved.status()}`).toBe(true);
+                expect(saved.request().postDataJSON()).toEqual({theme: 'dark'});
+                expect((await waitForEvent(page, 'settings.preferences.saved', {since})).detail).toMatchObject({field: 'theme', value: 'dark'});
+                await expect(row.getByTestId('setting-save')).toBeHidden();
+                await expect(html).toHaveClass(DARK_CLASS);
+
+                // Persisted for the account, not just painted on this page.
+                expect(await readStoredPreferences(request)).toMatchObject({theme: 'dark'});
+
+                // A new document: dark from its first paint, and the tab shows the value it
+                // re-reads from the server.
+                await page.reload();
+                await expect(html).toHaveAttribute('data-i18n-ready', 'true', {timeout: 15_000});
+                await expect(html).toHaveClass(DARK_CLASS);
+                await openPreferencesTab(page);
+                await expect(dark).toHaveAttribute('aria-pressed', 'true');
+                await expect(row.getByTestId('setting-theme-option-light')).toHaveAttribute('aria-pressed', 'false');
+                await expect(row.getByTestId('setting-save')).toBeHidden();
+            } finally {
+                await deleteDisposableUser(request, user);
+            }
         });
 
         test('preferences persist after navigating away and back', async ({page}) => {
@@ -451,55 +711,237 @@ test.describe('Settings', () => {
             await expect(page.getByTestId('preference-theme')).toBeVisible();
         });
 
-        test('language change persists after page goto', async ({page}) => {
-            await login(page, TEST_USER);
+        test('language change persists after page goto', async ({page, request}) => {
+            // A disposable account costs a registration, two logins and a skip per due flow.
+            test.setTimeout(45_000);
+            const user = await registerDisposableUser(request, 'lang');
+            try {
+                await seedPreferences(request, user, {language: 'en', theme: 'light'});
+                await enterPreferences(page, user);
+                // `<html lang>` names the language on screen and `data-i18n-ready` says its
+                // dictionary is in (root +layout): the published pair, no text is read.
+                const html = page.locator('html');
+                const row = page.getByTestId('preference-language');
+                const trigger = row.getByRole('combobox');
+                await expect(html, 'precondition: the seeded language is the one on screen').toHaveAttribute('lang', 'en');
 
-            // Go to settings preferences
-            await navigateTo(page, '/settings');
-            await page.getByTestId('settings-tab-preferences').click();
-            await expect(page.getByTestId('preference-language')).toBeVisible();
+                await trigger.click();
+                // Precondition, read back: the seeded language is the selected option.
+                await expect(row.getByTestId('setting-select-option-en')).toHaveAttribute('aria-selected', 'true');
+                await row.getByTestId('setting-select-option-it').click();
+                await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+                const since = await eventSeq(page);
+                const put = page.waitForResponse(isPreferencesPut);
+                await row.getByTestId('setting-save').click();
+                const saved = await put;
+                expect(saved.ok(), `PUT /api/v1/settings/user returned ${saved.status()}`).toBe(true);
+                expect(saved.request().postDataJSON()).toEqual({language: 'it'});
+                expect((await waitForEvent(page, 'settings.preferences.saved', {since})).detail).toMatchObject({field: 'language', value: 'it'});
+                await expect(row.getByTestId('setting-save')).toBeHidden();
+                await expect(html).toHaveAttribute('lang', 'it');
+                await expect(html).toHaveAttribute('data-i18n-ready', 'true');
 
-            // The language selector is within preference-language
-            // Find and click on a different language option
-            const langContainer = page.getByTestId('preference-language');
+                // Persisted for the account, not just switched on this page.
+                expect(await readStoredPreferences(request)).toMatchObject({language: 'it'});
 
-            // Look for a dropdown/select trigger
-            const langTrigger = langContainer.locator('button, [role="combobox"]').first();
-            if (await langTrigger.isVisible().catch(() => false)) {
-                await langTrigger.click();
-
-                // Select Italian if available
-                const italianOption = page
-                    .locator('[role="option"], [class*="option"]')
-                    .filter({hasText: /Italiano|Italian/i})
-                    .first();
-                if (await italianOption.isVisible().catch(() => false)) {
-                    await italianOption.click();
-
-                    // Save if there's a save button
-                    const saveBtn = langContainer.locator('button[title*="Save"], [data-testid*="save"]');
-                    if (await saveBtn.isVisible().catch(() => false)) {
-                        await saveBtn.click();
-                        await expect(page.locator('[data-testid^="toast-"]').first()).toBeVisible({timeout: 15_000});
-                    }
-                }
+                // Away and back with full loads (goto, not the sidebar): each one is a new
+                // document, and each must come up in Italian.
+                await navigateTo(page, '/dashboard');
+                await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 10_000});
+                await expect(html).toHaveAttribute('lang', 'it');
+                await navigateTo(page, '/settings');
+                await expect(html).toHaveAttribute('lang', 'it');
+                await openPreferencesTab(page);
+                await expect(row.getByTestId('setting-save')).toBeHidden();
+                // And the tab shows the value it re-reads from the server.
+                await trigger.click();
+                await expect(row.getByTestId('setting-select-option-it')).toHaveAttribute('aria-selected', 'true');
+                await trigger.press('Escape');
+                await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+            } finally {
+                await deleteDisposableUser(request, user);
             }
-
-            // Navigate to dashboard and back using goto (not clicking sidebar)
-            await page.goto('/dashboard');
-            await page.waitForLoadState('networkidle');
-            await expect(page.getByTestId('dashboard-page')).toBeVisible();
-
-            // Go back to settings and manually select preferences tab
-            await page.goto('/settings');
-            await page.waitForLoadState('networkidle');
-            await expect(page.getByTestId('settings-page')).toBeVisible();
-
-            // Click preferences tab
-            await page.getByTestId('settings-tab-preferences').click();
-
-            // Verify the preferences are visible
-            await expect(page.getByTestId('preference-language')).toBeVisible();
         });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Onboarding replay controls (Preferences tab → OnboardingReplaySection)
+// ---------------------------------------------------------------------------
+//
+// TEST_USER is canonical and grandfathered `completed` on every flow (see
+// populate_mock_data's `_grandfather_onboarding_for_test_users`). "Replay" exists
+// precisely for this account shape: a user who already finished onboarding but
+// wants to see it again. Arming it writes only a client-side localStorage entry
+// (`onboardingGuide`/`onboarding.svelte.ts`'s `startReplay`, keyed per account) —
+// it never calls a `/settings/onboarding/*` transition endpoint, so it can never
+// regress a completed flow back to pending. localStorage is shared by the tabs of
+// one browser profile, not across Playwright browser contexts: every test gets its
+// own context, whose localStorage starts empty (no storageState is loaded) and is
+// isolated from every other context, so two tests sharing TEST_USER in parallel
+// never see each other's armed replay.
+//
+// The Welcome case exercises replay Exit, which only clears this context's replay
+// token. None of these tests submits replay Continue: doing so on the shared
+// canonical account would overwrite its persisted language/currency settings for
+// every other test running against it concurrently. Verifying that explicit
+// preference write therefore requires a disposable terminal account, not this
+// otherwise cheap replay-control block.
+const ONBOARDING_FLOW_IDS = [
+    'welcome',
+    'intro_tour',
+    'transactions_page_guide',
+    'transaction_create_guide',
+    'transaction_bulk_guide',
+    'import_guide',
+    'broker_page_guide',
+    'broker_guide',
+    'broker_detail_guide',
+    'fx_page_guide',
+    'fx_guide',
+    'fx_detail_guide',
+    'asset_page_guide',
+    'asset_guide',
+    'asset_detail_guide',
+] as const;
+const ONBOARDING_STEP_IDS = {
+    transaction_bulk_guide: ['transaction.bulk.workspace', 'transaction.bulk.validation', 'transaction.bulk.selection', 'transaction.bulk.save'],
+    import_guide: ['import.upload', 'import.select', 'import.analyze', 'import.assets', 'import.fix', 'import.duplicates', 'import.review', 'import.gapFix', 'import.bulk'],
+} as const;
+
+test.describe('Onboarding replay controls', () => {
+    async function openOnboardingSection(page: Page) {
+        await navigateTo(page, '/settings');
+        await page.getByTestId('settings-tab-preferences').click();
+        const section = page.getByTestId('onboarding-replay-section');
+        await expect(section).toBeVisible({timeout: 10_000});
+        await expect(page.getByTestId('onboarding-flow-welcome')).toBeVisible({timeout: 10_000});
+        for (const group of ['transactions', 'broker', 'fx', 'asset'] as const) {
+            await section.getByTestId(`onboarding-group-${group}`).evaluate((element) => {
+                (element as HTMLDetailsElement).open = true;
+            });
+        }
+        return section;
+    }
+
+    function trackOnboardingRequests(page: Page): {requests: string[]; stop: () => void} {
+        const requests: string[] = [];
+        const record = (req: Request) => {
+            const path = new URL(req.url()).pathname;
+            if (/^\/api\/v1\/settings\/onboarding(?:\/|$)/.test(path)) requests.push(`${req.method()} ${path}`);
+        };
+        page.on('request', record);
+        return {requests, stop: () => page.off('request', record)};
+    }
+
+    test('shows all 15 terminal onboarding flows and the Import/Bulk step detail', async ({page}) => {
+        await login(page, TEST_USER);
+        await openOnboardingSection(page);
+
+        for (const flow of ONBOARDING_FLOW_IDS) {
+            const row = page.getByTestId(`onboarding-flow-${flow}`);
+            await expect(row).toBeVisible();
+            await expect(row).toHaveAttribute('data-status', 'completed');
+            await expect(row).toHaveAttribute('data-version', /^\d+$/);
+            await expect(row).toHaveAttribute('data-current-version', /^\d+$/);
+            // Grandfathered at the current content version: nothing to update, and
+            // this fresh browser context has armed no replay yet.
+            const [version, currentVersion] = await Promise.all([row.getAttribute('data-version'), row.getAttribute('data-current-version')]);
+            expect(version).toBe(currentVersion);
+            await expect(page.getByTestId(`onboarding-flow-${flow}-update`)).toHaveCount(0);
+            await expect(page.getByTestId(`onboarding-flow-${flow}-armed`)).toHaveCount(0);
+        }
+        for (const [flow, stepIds] of Object.entries(ONBOARDING_STEP_IDS)) {
+            const details = page.getByTestId(`onboarding-flow-${flow}-steps`);
+            await details.evaluate((element) => {
+                (element as HTMLDetailsElement).open = true;
+            });
+            for (const stepId of stepIds) {
+                await expect(page.getByTestId(`onboarding-step-${flow}-${stepId}`)).toBeVisible();
+            }
+        }
+        await expect(page.getByTestId('onboarding-flow-transaction_bulk_validation_guide')).toHaveCount(0);
+        await expect(page.getByTestId('onboarding-flow-transaction_bulk_selection_guide')).toHaveCount(0);
+        await expect(page.getByTestId('onboarding-flow-transaction_bulk_save_guide')).toHaveCount(0);
+    });
+
+    test('replay welcome Exit clears client-side state and returns without a terminal mutation', async ({page}) => {
+        await login(page, TEST_USER);
+        await openOnboardingSection(page);
+        const tracker = trackOnboardingRequests(page);
+
+        try {
+            await page.getByTestId('onboarding-replay-welcome').click();
+            await expect(page).toHaveURL(/\/welcome/, {timeout: 10_000});
+            await expect(page.getByTestId('welcome-shell')).toBeVisible();
+            // The real, pre-filled form — never the "completed"/"skipped" outcome
+            // banner — because this account was never actually re-submitted.
+            await expect(page.getByTestId('welcome-page')).toHaveAttribute('data-outcome', 'pending');
+            await expect(page.getByTestId('welcome-form')).toBeVisible({timeout: 10_000});
+
+            await page.getByTestId('welcome-skip').click();
+            await expect(page).toHaveURL(/\/dashboard(?:[/?#]|$)/, {timeout: 10_000});
+            await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 10_000});
+        } finally {
+            tracker.stop();
+        }
+        expect(tracker.requests, 'Arming and exiting a Welcome replay must call no onboarding endpoint').toEqual([]);
+
+        const section = await openOnboardingSection(page);
+        const welcome = section.getByTestId('onboarding-flow-welcome');
+        await expect(welcome).toHaveAttribute('data-status', 'completed');
+        await expect(page.getByTestId('onboarding-flow-welcome-armed')).toHaveCount(0);
+    });
+
+    test('replay import arms the next import without navigating or mutating anything', async ({page}) => {
+        await login(page, TEST_USER);
+        await openOnboardingSection(page);
+        const tracker = trackOnboardingRequests(page);
+
+        try {
+            await expect(page.getByTestId('onboarding-flow-import_guide-armed')).toHaveCount(0);
+            await page.getByTestId('onboarding-replay-import_guide').click();
+            await expect(page.getByTestId('onboarding-flow-import_guide-armed')).toBeVisible({timeout: 5_000});
+            // Unlike welcome, arming the import guide never navigates: it only
+            // takes effect the next time an Import Wizard is opened.
+            await expect(page).toHaveURL(/\/settings/);
+            await expect(page.getByTestId('onboarding-flow-welcome-armed')).toHaveCount(0);
+            await expect(page.getByTestId('onboarding-flow-intro_tour-armed')).toHaveCount(0);
+        } finally {
+            expect(tracker.requests, 'Arming a replay must never call an onboarding endpoint').toEqual([]);
+            tracker.stop();
+        }
+    });
+
+    test('Replay all starts from a clean 15-flow state and routes to /welcome without a terminal mutation', async ({page}) => {
+        // Seam, stated rather than faked: this proves the button arms *something*
+        // (the observable, safe-to-verify effect — routing to /welcome without a
+        // terminal call) and that all per-flow "-armed" badges are absent
+        // beforehand. Once armed, `resolveDestination` keeps redirecting any route
+        // back to /welcome for as long as the replay stays armed, so there is no
+        // way to return to Settings from inside *this* test and read the
+        // intro_tour/import_guide badges without either (a) actually completing or
+        // skipping welcome — which would overwrite TEST_USER's persisted language/
+        // currency for every other concurrent test — or (b) reaching past the
+        // testid surface into localStorage directly, which this suite's rules
+        // treat as fabrication. The component test verifies every armReplay call
+        // and its source order; this browser case verifies the real navigation
+        // and no-terminal-write boundary.
+        await login(page, TEST_USER);
+        await openOnboardingSection(page);
+        for (const flow of ONBOARDING_FLOW_IDS) {
+            await expect(page.getByTestId(`onboarding-flow-${flow}-armed`)).toHaveCount(0);
+        }
+        const tracker = trackOnboardingRequests(page);
+
+        try {
+            await expect(page.getByTestId('onboarding-replay-all')).toBeEnabled();
+            await page.getByTestId('onboarding-replay-all').click();
+            await expect(page).toHaveURL(/\/welcome/, {timeout: 10_000});
+            await expect(page.getByTestId('welcome-page')).toHaveAttribute('data-outcome', 'pending');
+        } finally {
+            expect(tracker.requests, 'Arming every replay must never call an onboarding endpoint').toEqual([]);
+            tracker.stop();
+        }
     });
 });

@@ -115,15 +115,46 @@ pattern is used across `schemas/signals.py`, `schemas/ai_export_runtime.py`, `sc
 
 ---
 
+## 🗜️ Response Compression
+
+`backend/app/main.py` installs Starlette's `GZipMiddleware` on the whole application
+(`minimum_size=1024`, `compresslevel=6`), so it covers API JSON as well as the SvelteKit
+bundle and the documentation served by the same process.
+
+- A response is compressed only when the request's `Accept-Encoding` header contains `gzip`.
+  Browsers send it and decompress transparently, so frontend code never handles compressed
+  bytes.
+- A compressed response carries `Content-Encoding: gzip`. Its `Content-Length` is the
+  compressed size; a streamed response drops the header.
+- `Vary: Accept-Encoding` is added to every response eligible for compression — 1 KiB or
+  more, or streamed — whether or not the client asked for gzip, so a cache keeps the two
+  variants apart.
+- Left untouched: bodies under 1 KiB sent in one piece, responses that already declare a
+  `Content-Encoding`, `206 Partial Content` range replies, Server-Sent Events
+  (`text/event-stream`, such as `GET /assets/provider/search/stream`), AVIF, GIF, JPEG, PNG,
+  and WebP images, WOFF and WOFF2 fonts, audio, video, and gzip or zip archives. SVG is text
+  and is compressed.
+- A body chunk of 128 KiB or more is compressed in a worker thread, off the event loop.
+
+`curl` sends no `Accept-Encoding` by default and therefore receives the uncompressed body.
+With `--compressed` it asks for gzip and decompresses transparently:
+
+```bash
+# Print the response headers of the compressed variant (Content-Encoding, Vary)
+curl -s --compressed -D - -o /dev/null http://localhost:6040/api/v1/openapi.json
+```
+
+---
+
 ## 📡 Notable Endpoints
 
 ### `POST /api/v1/assets/prices/current` — Bulk Current Price
 
-Returns the **live current price** for a list of asset IDs. The response is designed for the `LiveTicker` frontend component.
+Returns the **current price** of each asset in a list: the assigned provider's latest quote, or the last close stored in the database when no provider answers. The response is designed for the frontend's live-price polling.
 
 **Request body**: `List[int]` — asset IDs.
 
-**Response** (`FACurrentPriceResponse`):
+**Response** (`FACurrentPriceResponse`, a `BaseBulkResponse`): one `results` item per requested ID, in request order; `success_count`, the number of items that carry a `value`; and `errors`, for operation-level errors, which this endpoint leaves empty — a per-asset problem goes in the item's `error`, and a failure of the whole call is an HTTP 500.
 
 ```json
 {
@@ -132,18 +163,41 @@ Returns the **live current price** for a list of asset IDs. The response is desi
       "asset_id": 1,
       "value": "123.45",
       "currency": "EUR",
-      "source": "justetf",
-      "timestamp": "2026-04-10T12:00:00Z",
+      "as_of_date": "2026-04-10",
+      "source": "provider:justetf",
       "error": null
+    },
+    {
+      "asset_id": 2,
+      "value": "98.32",
+      "currency": "USD",
+      "as_of_date": "2026-04-09",
+      "source": "db:last_known",
+      "error": null
+    },
+    {
+      "asset_id": 3,
+      "value": null,
+      "currency": null,
+      "as_of_date": null,
+      "source": null,
+      "error": "No price data available"
     }
-  ]
+  ],
+  "success_count": 2,
+  "errors": []
 }
 ```
 
-**Resolution strategy** (per asset):
+`value` is a decimal string, and `as_of_date` is a date (`YYYY-MM-DD`), not a timestamp.
 
-1. Ask the assigned provider's `get_current_value()` (live quote from JustETF WebSocket, Yahoo Finance `ticker.info`, etc.)
-2. **Fallback**: if the provider fails or has no live feed, return the latest close price from the database.
+**Resolution strategy** (per asset, all assets in parallel — `get_current_prices_bulk` in `backend/app/services/asset_sources/price_query.py`):
 
-This endpoint is used by the `LiveTicker` component in the Dashboard and Asset Detail pages, and by the Asset List page for inline live prices in cards.
+1. If a provider is assigned, ask its `get_current_value()` — at most five calls at a time, ten seconds each — and answer with `source: "provider:<code>"`. A provider answer is cached for two minutes. What "current" means is up to the provider: JustETF answers EUR with a real-time gettex quote, kept up to date by a WebSocket feed per ISIN, and otherwise (other currencies, or no quote) with the latest daily quote of its chart API; Yahoo Finance reads `regularMarketPrice` from `ticker.info` (then `currentPrice` or `previousClose`).
+2. **Fallback**: with no usable provider, or when its call fails or times out, return the latest close stored in `PriceHistory`, with `source: "db:last_known"`.
+3. With no stored price either, `value` is `null` and `error` is `No price data available` (`Asset not found` for an unknown ID).
+
+**Side effect**: the call is not read-only. A provider quote dated today creates today's `PriceHistory` row (open, high, low and close all equal to the quote) or extends it (`high` and `low` widened, `open` set if missing, `close` replaced). A database fallback is never written back.
+
+This endpoint is used by the Assets list (inline live prices on cards and table rows) and by the asset detail page (price summary and chart head) — see [Live Prices](../frontend/components/features/live-ticker.md#polling).
 

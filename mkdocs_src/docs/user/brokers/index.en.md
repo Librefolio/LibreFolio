@@ -1,75 +1,114 @@
 # 🏦 Brokers
 
-A **Broker** in LibreFolio represents a brokerage account — the place where your investments live (e.g., Interactive Brokers, Degiro, a bank account).
-
-All transactions, reports, and import data are tied to a broker. You need at least one broker to start tracking your portfolio.
-
-!!! note "Shared brokers show your share"
-
-    On a broker you co-own, the net worth shown on the broker card (and in the broker's Overview tab) is **scaled by your ownership share** — a 50% Owner sees half of the account's value. Editors and Viewers always see the full amounts. See [Broker Sharing](sharing.md).
+A **broker** is one of your accounts — at a brokerage, a bank or an exchange: the place where your investments and your cash live. Every transaction and every uploaded report belongs to a broker, so you need at least one before you start.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="list" alt="Broker List" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
+The **Brokers** page shows one card per broker, with its value (**NAV**) in the currency chosen in **Currency** at the top of the page. Click a card to open the broker.
+
+**Gain/Loss** is the NAV minus the capital that went into the broker: your deposits minus withdrawals, plus the cost of securities you brought in without cash, plus what you moved in from your other brokers minus what you moved out, each move valued on the day it arrived. So moving money or securities between two of your brokers is not a gain on one card and a loss on the other, and while a transfer is on its way, its value stays on the sending broker's card. Cash held in another currency is valued at the latest exchange rate, so what the rate does to it counts in Gain/Loss, not in the capital. The percentage in brackets is the gain over that capital: it shows 0.00% when that capital is zero or less, for example when the broker has sent out more than it received. → [Internal transfers](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#internal-transfers-broker-lines)
+
+!!! note "Shared brokers show your share"
+
+    On a broker you co-own, the values on its card and in its **Overview** tab are **scaled by your ownership share**: a 50% Owner sees half of the account. Editors and Viewers always see the full amounts. See [Broker Sharing](sharing.md).
+
 ---
 
-## ➕ Creating a Broker
+## ➕ Create a broker
 
-1. Navigate to the **Brokers** page from the sidebar
-2. Click **"Add Broker"**
-3. Fill in the details: name, base currency, and optionally an icon
+1. Open **Brokers** from the sidebar and click **Add Broker**.
+2. Type a **Name** — the only required field — and set the options you need.
     <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
         <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Broker Edit Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
     </div>
 
-4. The broker appears in your list, ready to receive transactions and reports
-    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
-        <img class="gallery-img" data-category="brokers" data-name="detail" alt="Broker Edit Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-    </div>
----
+3. Click **Create**: the broker appears in your list, ready for transactions and reports.
 
-## 🗂️ Broker Detail Layout
+??? info "⚙️ The optional fields — what each one does"
 
-Once you select a broker from the list, the interface is split into four primary tabs:
+    - **Description** — your own notes.
+    - **Default Import Plugin** — the importer that the [Import Wizard](../transactions/import/index.md) proposes for this broker's files.
+    - **Portal URL** — the broker's website, opened from the broker page. The broker's icon is, in this order: your **Custom Icon URL**; the icon of the **Default Import Plugin**, when that importer is made for this broker; the website's icon; the icon of a generic importer such as the Generic CSV; otherwise a briefcase.
+    - **Account Opened** and **Account Active** — when the account was opened, and whether it is still open. A closed broker shows dimmed in the list.
+    - **Trading Options** — **Allow Leveraged Buying** and **Allow Short Selling**, explained in [Trading options](info.md#trading-options).
+    - **Initial Balances** (only when creating) — your starting cash. LibreFolio records one **Deposit** per currency, **dated today**: if the money was there earlier, change the date of those deposits on the [Transactions](../transactions/index.md) page.
 
-1. **Overview**: Display of net worth, return metrics, growth history, and allocation charts scoped exclusively to this broker account (see **[Dashboard Overview](../dashboard/index.md)**).
-2. **Positions**: List of open positions, asset weights, and performance metrics within this broker, with access to the inline FIFO Lots Analysis panel (see **[Dashboard Positions](../dashboard/positions.md)**).
-3. **Transactions**: The ledger of all financial activities, including manual entries, statement imports, and histories (see **[Broker Transactions](import.md)**).
-4. **Info**: Broker metadata, cash overdraft/shorting configurations, AI Export, and inline sharing controls (see **[Configuration & Info](info.md)** and **[Broker AI Export](../ai-export/broker.md)**).
+??? warning "🏷️ “A broker named … already exists” — when it appears"
 
----
+    Broker names are unique on the whole server, across all its users. Choose a different name, or rename the existing broker if it is yours.
 
-## 📈 Overview Tab
-
-The **Overview** tab acts as a local dashboard for the selected broker. It contains the same elements as the main **[Dashboard Overview](../dashboard/index.md)** but scoped exclusively to this broker account:
-
-- **Local KPI Cards**: Net Worth, Period P&L, and Returns specific to this broker. (See **[Dashboard KPI Cards](../dashboard/kpi-cards.md)** for calculation details).
-- **Cash Balances Panel**: Liquid cash held in this broker account, broken down by currency.
-- **Growth Chart**: Historical growth of this account value (see **[Portfolio Growth Chart](../dashboard/charts.md#portfolio-growth-chart)**).
-- **Allocation Panel**: Portfolio composition (by Type, Sector, and Geography) for holdings held at this specific broker (see **[Allocation Panel](../dashboard/charts.md#allocation-panel)**).
+    Brokers of other users that you cannot open are listed under **Other Existing Brokers**. Their share button shows who has access, so you know whom to ask: every signed-in user of this LibreFolio can see it, for any broker.
 
 ---
 
-## 🔍 Positions Tab
+## ✏️ Edit or delete a broker
 
-The **Positions** tab lists all active assets currently held under this broker. It is identical in functionality to the main **[Dashboard Positions](../dashboard/positions.md)** view, but scoped only to this broker:
+- **Edit** — the pencil on the broker card, or **Edit** in the broker's toolbar. Owners and Editors can edit a broker.
+- **Delete** — the bin on the broker card. Only an Owner can delete a broker. If it still holds transactions, LibreFolio says how many and offers **Go to transactions** or **Delete broker and transactions**, which deletes them as well.
 
-<div class="lf-screenshot-carousel" data-carousel="carousel-broker-positions" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
-  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Holdings (Table)" alt="Broker Holdings Table View">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Holdings (Map / Treemap)" alt="Broker Holdings Map View">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Performance (Table)" alt="Broker Performance Table View">
-  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Performance (Map / Chart)" alt="Broker Performance Map View">
+---
+
+## 🗂️ Inside a broker
+
+A broker's card opens its detail page on the **Overview** tab:
+
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="detail" alt="Broker Detail" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
-- **Toggles & Layouts**: You can toggle between **Holdings** (quantities, values, weights) and **Performance** (unrealized P&L, ROI %) metrics, and choose between a **Table** or **Map** (treemap) layout.
-- **FIFO Analysis**: Click on any asset row or card to expand the **FIFO Lots Analysis** panel inline below the list. (See **[FIFO Lots Analysis](../dashboard/positions.md#fifo-lots-analysis)** for detailed matching rules).
+The toolbar at the top applies to every tab:
+
+- the **date range** and the **Currency** of the figures;
+- **Edit**, **Share Broker** (it opens the **Info** tab) and **Refresh**;
+- **AI Export**, which copies a ready-made prompt about this broker to your clipboard — see [Broker AI Export](../ai-export/broker.md).
+
+Below it, five tabs:
+
+1. **Overview** — how the account is doing (below).
+2. **Positions** — what you hold at this broker (below).
+3. **Risk** — the Dashboard's risk analysis, limited to this broker (see [Dashboard Risk Tab](../dashboard/index.md#risk-tab)).
+4. **Transactions** — the broker's ledger, manual entries, imports and uploaded reports (see [Broker Transactions](import.md)).
+5. **Info** — account details, trading options and sharing (see [Configuration & Info](info.md)).
 
 ---
 
-## 📑 In This Section
+## 📈 Overview tab
 
-- 📥 **[Broker Transactions](import.md)** — Record transactions manually scoped to this broker, launch the BRIM bulk-import wizard, and manage uploaded report files.
-- ⚙️ **[Configuration & Info](info.md)** — Metadata settings (overdrafts, shorting), scoped AI Export prompt generator, and the inline broker sharing panel.
-- 🧠 **[Broker AI Export](../ai-export/broker.md)** — Broker-scoped tasks, data coverage, exact sampling, availability, and privacy.
-- 🤝 **[Broker Sharing](sharing.md)** — Detailed guide on role permissions (Owner, Editor, Viewer) and asset percentage settings.
+The **Overview** answers "how is this account doing?" with the same blocks as the [Dashboard Overview](../dashboard/index.md), limited to this broker:
+
+- **KPI cards** — **Period P&L**, **Returns** and **Net Worth** ([KPI Cards](../dashboard/kpi-cards.md)).
+- **Cash Balances** — the cash held here, per currency.
+- **Growth chart** — the **Abs**, **%** and **P&L** views, with P&L as **Line**, **Candles** or **Income** ([Portfolio Growth Chart](../dashboard/charts.md#portfolio-growth-chart), [P&L mode](../dashboard/charts.md#pnl-mode)). The view you pick is shared with the Dashboard.
+- **Allocation** — by type, sector and geography ([Allocation Panel](../dashboard/charts.md#allocation-panel)).
+
+Coming back to a broker you already opened shows its last figures at once, refreshed in the background if something changed ([Coming back and refreshing](../dashboard/index.md#coming-back-and-refreshing)). **Refresh** recalculates on demand, the **Risk** tab and the lots panel included.
+
+---
+
+## 🔍 Positions tab
+
+The **Positions** tab lists what you hold at this broker, in the same panel as the [Dashboard Positions](../dashboard/positions.md):
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-broker-positions" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Portfolio (Table)" alt="Broker Portfolio Table View">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portfolio (Map / Treemap)" alt="Broker Portfolio Map View">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Period (Table)" alt="Broker Period Table View">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Period (Map / Chart)" alt="Broker Period Map View">
+</div>
+
+- **Portfolio** shows your holdings (quantity, value, weight); **Period** shows each position's gains and losses over the selected dates. Both come as a **Table** or a **Map**.
+- The **YOC** column is each holding's [Yield on Cost](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md) at this broker.
+- **Analyze Lots** opens the [FIFO Lots Analysis](../dashboard/positions.md#fifo-lots-analysis) panel below the list: find it in a row's **⋮** menu, or right-click the asset in the table or the map.
+
+---
+
+## 📑 In this section
+
+- 📥 **[Broker Transactions](import.md)** — add transactions to this broker, import statements and manage its uploaded reports.
+- ⚙️ **[Configuration & Info](info.md)** — account details, trading options and the sharing panel.
+- 🧠 **[Broker AI Export](../ai-export/broker.md)** — what a broker export contains, and the analyses you can ask an AI for.
+- 🤝 **[Broker Sharing](sharing.md)** — roles (Owner, Editor, Viewer) and ownership shares.
+
+The Brokers page, the **Add Broker** form and the broker page each have a short contextual guide: replay them from [Settings → Preferences → Onboarding and guides](../settings/preferences.md#onboarding-and-guides).

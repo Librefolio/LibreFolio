@@ -60,6 +60,51 @@ function expectHighlighted(trigger: HTMLElement, value: string) {
     expect(trigger).toHaveAttribute('aria-activedescendant', option(value).id);
 }
 
+/** The k5a contract (D376): one more class for the trigger box, typed here so this file compiles before the prop exists. */
+type TriggerClassProps = Partial<ComponentProps<typeof SimpleSelect>> & {triggerClass?: string};
+
+/**
+ * Today's trigger, token by token, as `SimpleSelect.svelte` writes it at the k5a baseline: what
+ * every existing caller renders. Grouped the way the template composes it.
+ */
+const TRIGGER = {
+    base: ['w-full', 'flex', 'items-center', 'justify-between', 'border', 'rounded-lg', 'transition-all', 'text-left'],
+    regular: ['px-3', 'py-2', 'text-sm'],
+    compact: ['px-1.5', 'py-0.5', 'text-xs'],
+    enabled: ['bg-white', 'dark:bg-slate-700', 'text-gray-900', 'dark:text-gray-100', 'border-gray-300', 'dark:border-slate-600', 'hover:border-gray-400', 'dark:hover:border-slate-500'],
+    unavailable: ['bg-gray-100', 'dark:bg-slate-800', 'text-gray-500', 'dark:text-gray-400', 'cursor-not-allowed', 'border-gray-200', 'dark:border-slate-700'],
+    open: ['ring-2', 'ring-libre-green', 'border-libre-green'],
+};
+
+/** The trigger in each state its classes depend on: size, availability, and whether the list is open. */
+const TRIGGER_STATES: {state: string; props: TriggerClassProps; open: boolean; classes: string[]}[] = [
+    {state: 'closed', props: {}, open: false, classes: [...TRIGGER.base, ...TRIGGER.regular, ...TRIGGER.enabled]},
+    {state: 'compact', props: {compact: true}, open: false, classes: [...TRIGGER.base, ...TRIGGER.compact, ...TRIGGER.enabled]},
+    {state: 'disabled', props: {disabled: true}, open: false, classes: [...TRIGGER.base, ...TRIGGER.regular, ...TRIGGER.unavailable]},
+    {state: 'open', props: {}, open: true, classes: [...TRIGGER.base, ...TRIGGER.regular, ...TRIGGER.enabled, ...TRIGGER.open]},
+];
+
+/** An element's classes as a set, sorted: the order of tokens in `class` changes nothing on screen. */
+function classesOf(element: Element): string[] {
+    return [...element.classList].sort();
+}
+
+/** Every element's classes, in document order: a whole render as a list of class lists. */
+function classMap(root: Element): string[][] {
+    return [root, ...root.querySelectorAll('*')].map(classesOf);
+}
+
+/** Mount in one state; the trigger, the whole render's classes, and where the trigger sits in them. */
+async function mountInState(props: TriggerClassProps, open: boolean) {
+    const utils = mount(props);
+    if (open) {
+        await fireEvent.click(utils.trigger);
+        expect(utils.trigger, 'the list did not open: the state under test was never reached').toHaveAttribute('aria-expanded', 'true');
+    }
+    const elements = [utils.container, ...utils.container.querySelectorAll('*')];
+    return {...utils, classes: classMap(utils.container), triggerIndex: elements.indexOf(utils.trigger)};
+}
+
 describe('SimpleSelect', () => {
     describe('selection', () => {
         it('marks only the current value as selected and reports the new one on change', async () => {
@@ -386,5 +431,46 @@ describe('SimpleSelect', () => {
             await fireEvent.keyDown(trigger, {key: 'Enter'});
             expect(onchange).toHaveBeenCalledExactlyOnceWith('ecb');
         });
+    });
+});
+
+/**
+ * k5a (D376): one more class for the trigger box.
+ *
+ * L4Replay draws its crisis menu at the declared height of the period beside it, so the trigger
+ * takes a class from its caller — `triggerClass`, appended to the trigger and to nothing else.
+ * The prop is additive: every existing caller passes nothing and must keep exactly the trigger it
+ * renders today, so the default path is pinned token by token (`TRIGGER`, transcribed from the
+ * template at the k5a baseline), in each state the classes depend on. A default that adds,
+ * drops or swaps a single token fails here.
+ *
+ * Here, and only here, this file reads classes: the class *is* the contract. Elements are still
+ * found by testid and by their place in the render.
+ */
+describe('SimpleSelect — the caller’s trigger class (k5a)', () => {
+    it.each(TRIGGER_STATES)('renders exactly today’s trigger without it: $state', async ({props, open, classes}) => {
+        await setupI18n();
+        const {trigger, container} = await mountInState(props, open);
+
+        expect(classesOf(trigger), 'the trigger every existing caller renders has changed').toEqual([...classes].sort());
+        // The container around it is today's as well: `relative`, and the caller's `class`, which is empty here.
+        expect(classesOf(screen.getByTestId('fruit')), 'the container of the trigger has changed').toEqual(['relative']);
+        expect(container.querySelectorAll('[data-testid="fruit-button"]')).toHaveLength(1);
+    });
+
+    it.each(TRIGGER_STATES)('appends triggerClass to the trigger, and to nothing else: $state', async ({props, open, classes}) => {
+        await setupI18n();
+        const today = await mountInState(props, open);
+        const baseline = today.classes;
+        today.unmount();
+
+        const withClass: TriggerClassProps = {...props, triggerClass: 'h-8'};
+        const {trigger, classes: rendered, triggerIndex} = await mountInState(withClass, open);
+
+        expect(classesOf(trigger), 'triggerClass did not reach the trigger, or replaced classes it should have joined').toEqual([...classes, 'h-8'].sort());
+        // Nowhere else: the same render, element by element, with the one token on the trigger.
+        expect(rendered, 'the render does not have the same elements with the class as without it').toHaveLength(baseline.length);
+        const changed = rendered.flatMap((tokens, index) => (tokens.join(' ') === baseline[index].join(' ') ? [] : [index]));
+        expect(changed, 'triggerClass changed an element other than the trigger').toEqual([triggerIndex]);
     });
 });

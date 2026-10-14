@@ -46,6 +46,46 @@ The post-login modal announcing a newer release, with current vs latest version 
 
 ---
 
+## 🔒 Security
+
+### 🚦 Connection Indicator
+
+The connection security indicator at the bottom of the sidebar, open on Connection: local network, with the reason for that level and the How to connect securely link.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="security" data-name="connection-indicator" alt="🚦 Connection Indicator">
+</div>
+
+---
+
+## 🧭 Onboarding
+
+### 👋 Welcome Setup
+
+The first-run Welcome page, where a new user confirms language and default currency and can add a profile picture before starting.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="onboarding" data-name="welcome-setup" alt="👋 Welcome Setup">
+</div>
+
+### 🗺️ Core Tour
+
+A step of the guided Core tour highlighting a part of the interface.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="onboarding" data-name="core-tour-step" alt="🗺️ Core Tour">
+</div>
+
+### 🧭 Contextual Guide
+
+A contextual guide bubble on a page (for example the FX page guide).
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="onboarding" data-name="contextual-guide" alt="🧭 Contextual Guide">
+</div>
+
+---
+
 ## 📊 Dashboard
 
 Your portfolio at a glance — key stats, allocation charts, and a clean empty state for new users.
@@ -60,11 +100,14 @@ Period P&L, returns, and net worth — the first thing you see when you land on 
 
 ### 📈 Portfolio Growth
 
-Track your portfolio's growth over time, in absolute or percentage terms.
+Track your portfolio's growth over time, in absolute or percentage terms, or as P&L: the Total P&L line, synthetic candles, and monthly income bars.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-11" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="main" data-title="📈 Absolute" alt="Growth Chart — Absolute">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="main-pct" data-title="📊 Percentage" alt="Growth Chart — Percentage">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="growth-pnl-line" data-title="💹 P&L Line" alt="Growth Chart — P&L Line">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="growth-pnl-candles" data-title="🕯️ P&L Candles" alt="Growth Chart — P&L Candles">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="growth-pnl-income" data-title="🧾 Income" alt="Growth Chart — Income">
 </div>
 
 ### 📊 Asset Allocation
@@ -82,13 +125,13 @@ Breakdown by type, sector, and geography — current snapshot or historical evol
 
 ### 📋 Positions
 
-Switch between Holdings and Performance, then compare data in table or map views — aggregated across your whole portfolio.
+Switch between Portfolio and Period, then compare data in table or map views — aggregated across your whole portfolio.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-13" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
-    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Holdings / Table" alt="Positions — Holdings Table">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Holdings / Map" alt="Positions — Holdings Map">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Performance / Table" alt="Positions — Performance Table">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Performance / Map" alt="Positions — Performance Map">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="positions-holdings-table" data-title="📋 Portfolio / Table" alt="Positions — Portfolio Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-holdings-map" data-title="🗺️ Portfolio / Map" alt="Positions — Portfolio Map">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-table" data-title="📈 Period / Table" alt="Positions — Period Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="dashboard" data-name="positions-performance-map" data-title="📊 Period / Map" alt="Positions — Period Map">
 </div>
 
 ### 💸 Transactions Tab
@@ -128,6 +171,22 @@ When prices or FX rates are missing, the dashboard explains what is stale and li
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="dashboard" data-name="data-quality-banner" alt="🚩 Data-Quality Banner">
+</div>
+
+### 💱 Missing Exchange Rates
+
+The data-quality banner listing missing exchange rates with its Sync rates button.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="dashboard" data-name="data-quality-sync-rates" alt="💱 Missing Exchange Rates">
+</div>
+
+### 🙈 Privacy Mode
+
+The dashboard with privacy mode on — the eye button in the header and every amount shown as •••.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="dashboard" data-name="privacy-masked" alt="🙈 Privacy Mode">
 </div>
 
 ---
@@ -193,8 +252,6 @@ Deleting a transaction that is part of a linked pair (FX trade, transfer) opens 
     <img class="gallery-img" data-category="transactions" data-name="bulk-delete-pair-modal" alt="Bulk delete workspace with a linked pair marked for deletion">
 </div>
 
----
-
 ### 📥 Import
 
 Import transactions from your broker's export files — via the quick modal or the full step-by-step wizard.
@@ -219,6 +276,16 @@ Cloning a row stages a copy — original date preserved — ready to adjust and 
     <img class="gallery-img" data-category="transactions" data-name="clone-flow" alt="🧬 Clone into the Bulk Workspace">
 </div>
 
+### 📝 Todo Banners
+
+The bulk editor banner listing fields to complete or verify, with the row it leads to highlighted.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="transactions" data-name="bulk-todo-banner" alt="📝 Todo Banners">
+</div>
+
+---
+
 ## ⚙️ Settings
 
 ### 🎛️ User Preferences
@@ -227,6 +294,14 @@ Customize language, currency, and theme to your liking.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="settings" data-name="user-preferences" alt="User Preferences">
+</div>
+
+### 🔁 Guide Replay
+
+The Onboarding category of Preferences with each guide's status and its Replay button.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="onboarding-replay" alt="🔁 Guide Replay">
 </div>
 
 ### 🛡️ Global Settings (Admin)
@@ -311,6 +386,30 @@ Per-registry plugin load health: what failed to load and why.
     <img class="gallery-img" data-category="settings" data-name="about-plugin-diagnostics" alt="🧩 Plugin Diagnostics">
 </div>
 
+### 🧰 Tool Diagnostics
+
+The Tool diagnostics panel inside Plugin diagnostics, with the PAC allocator among the loaded tools and its version.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="settings" data-name="about-tool-diagnostics" alt="🧰 Tool Diagnostics">
+</div>
+
+### ☕ Support LibreFolio
+
+The donation popup with the Buy Me a Coffee link and the social share actions.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="support" data-name="donation-popup" alt="☕ Support LibreFolio">
+</div>
+
+### 📣 Share LibreFolio
+
+The share dialog with the platform's suggested message, the hashtags and Copy and go.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="support" data-name="social-share-modal" alt="📣 Share LibreFolio">
+</div>
+
 ---
 
 ## 📁 Files
@@ -337,6 +436,14 @@ Import and manage broker transaction reports.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="files" data-name="brim-tab" alt="BRIM Tab">
+</div>
+
+### 🗂️ Report Sets
+
+The broker reports tab with report-set badges and the Uploaded by filter.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="files" data-name="brim-report-sets" alt="🗂️ Report Sets">
 </div>
 
 ### 👁️ File Preview
@@ -417,13 +524,13 @@ Manage co-ownership and access roles with a visual half-donut chart showing owne
 
 ### 📊 Broker Positions
 
-Switch between Holdings and Performance, then compare data in table or map views.
+Switch between Portfolio and Period, then compare data in table or map views.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-10" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
-    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Holdings / Table" alt="Broker Positions — Holdings Table">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Holdings / Map" alt="Broker Positions — Holdings Map">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Performance / Table" alt="Broker Positions — Performance Table">
-    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Performance / Map" alt="Broker Positions — Performance Map">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Portfolio / Table" alt="Broker Positions — Portfolio Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Portfolio / Map" alt="Broker Positions — Portfolio Map">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Period / Table" alt="Broker Positions — Period Table">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Period / Map" alt="Broker Positions — Period Map">
 </div>
 
 ### ℹ️ Broker Info
@@ -481,6 +588,54 @@ Any number of candidate transactions side by side, with differing fields highlig
     <img class="gallery-img" data-category="brokers" data-name="import-nway-compare" alt="🔍 N-Way Compare">
 </div>
 
+### 🧩 Report Set Card
+
+A Danske Bank report set in Select Files — one table per kind of export, the timeline and the Read as menu.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-card" alt="🧩 Report Set Card">
+</div>
+
+### ⚠️ Missing Export
+
+A report set announcing which export is missing and for which period.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-missing" alt="⚠️ Missing Export">
+</div>
+
+### 📖 Read As
+
+The Read as menu of a report set.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-read-as" alt="📖 Read As">
+</div>
+
+### 🗃️ File Menu
+
+The ⋮ menu of a bank's export inside a report set: preview it, remove it from the set, or delete it.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-file-menu" alt="🗃️ File Menu">
+</div>
+
+### 🔗 Combined File Analysis
+
+The analysis detail of a combined file — trades paired with their cash, rows found in one file only and their reasons.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-report-set-pairing" alt="🔗 Combined File Analysis">
+</div>
+
+### ⚖️ Import Wizard — Align with the Bank
+
+The step comparing LibreFolio with the bank's balance — one card per point and the table of proposed gap_fix movements.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="brokers" data-name="import-wizard-gapfix-step" alt="⚖️ Import Wizard — Align with the Bank">
+</div>
+
 ---
 
 ## 💼 Assets
@@ -509,6 +664,14 @@ Full-size interactive price chart with date range selector and currency toggle. 
 <div class="lf-screenshot-carousel" data-carousel="carousel-desktop-5" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
     <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="detail-chart" data-title="📈 Line chart" alt="Asset Detail Chart — Line">
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="detail-chart-candlestick" data-title="🕯️ Candlestick chart" alt="Asset Detail Chart — Candlestick">
+</div>
+
+### 🗓️ Rolling Return
+
+The asset chart in Rolling Return mode with a 1Y window and one comparison asset.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="detail-chart-rolling-return" alt="🗓️ Rolling Return">
 </div>
 
 ### 📡 Signals Overlay
@@ -557,6 +720,30 @@ Create a new asset with name, type, currency, identifiers, provider, and classif
     <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="create-wizard-modal" data-title="🧙 From Import Wizard (pre-filled)" alt="Create Asset from Import Wizard">
 </div>
 
+### 🧬 Asset Type Picker
+
+The searchable two-level type menu open, with the ETF family expanded and composite icons.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="type-picker-open" alt="🧬 Asset Type Picker">
+</div>
+
+### 🔍 Provider Data Comparison
+
+The comparison between the asset and the provider's data after the ISIN choice.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="assets" data-name="create-provider-compare" alt="🔍 Provider Data Comparison">
+</div>
+
+### 🗺️ Sector & Geographic Distribution
+
+The Edit Asset modal at Classification: Sector Distribution and Geographic Distribution, each a table whose rows carry a weight bar, a Weight % value and an Actions menu, with the Import CSV, Add sector / Add country and Ask Provider links above and the Total at 100.00% below.
+
+<div class="lf-screenshot-carousel" data-carousel="carousel-desktop-distribution-editors" data-carousel-interval="6000" data-show-titles="true" style="margin: 1rem 0 2rem 0;">
+    <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="assets" data-name="distribution-editor-sector" data-title="🏭 Sector Distribution" alt="Sector distribution editor in the asset modal">
+    <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="assets" data-name="distribution-editor-geographic" data-title="🌍 Geographic Distribution" alt="Geographic distribution editor in the asset modal">
+</div>
 
 ### 🌳 Grouped Indicator Search
 
@@ -592,6 +779,105 @@ Corporate events appear as colored markers on the chart; hovering reveals the de
 
 ---
 
+## 📉 Risk Analysis
+
+### 📉 How Much Can It Hurt?
+
+The Risk tab of the Dashboard — what your portfolio really went through: the A bad day, A bad month and The worst fall cards, the time spent below the peak, and the distribution of daily returns.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-hurt" alt="📉 How Much Can It Hurt?">
+</div>
+
+### 🧩 Am I as Diversified as I Think?
+
+Which holdings really carry your risk: the three cards, each holding's weight and risk contribution with its two-sided bar, and the matrix of which ones are the same bet.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-diversification" alt="🧩 Am I as Diversified as I Think?">
+</div>
+
+### ⚖️ Am I Being Paid for This Risk?
+
+The return of your portfolio and of each holding against its swings, compared with a benchmark: the table opened by the Portfolio and benchmark rows, and the risk/return chart with the dashed line.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-paid" alt="⚖️ Am I Being Paid for This Risk?">
+</div>
+
+### 🔮 What If…?
+
+A real past period applied to the portfolio you hold today: the Historical replay with a crisis preset, the holding left out, the total, and what each holding contributed.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="dashboard" data-name="risk-whatif" alt="🔮 What If…?">
+</div>
+
+### 🎲 Simulation
+
+The What if…? simulation step with its beta notice.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="risk" data-name="whatif-simulation" alt="🎲 Simulation">
+</div>
+
+### 🔗 Correlation Matrix
+
+The Correlation tab of the Assets page — the correlation matrix and the lists of the most alike and offsetting pairs.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="risk" data-name="lab-correlation" alt="🔗 Correlation Matrix">
+</div>
+
+### ➕ Lab Asset Picker
+
+The + panel with type and currency filters and the assets that cannot be analysed listed apart.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="risk" data-name="lab-asset-picker" alt="➕ Lab Asset Picker">
+</div>
+
+### 📉 How Much Did Each of These Hurt?
+
+The loss comparison table of the selected assets.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="risk" data-name="lab-hurt-table" alt="📉 How Much Did Each of These Hurt?">
+</div>
+
+### 🎯 Paid for Its Risk?
+
+The risk/return table with the benchmark row and the chart with the benchmark diamond and the dashed line.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="risk" data-name="lab-risk-return" alt="🎯 Paid for Its Risk?">
+</div>
+
+### 🧭 Benchmark Picker
+
+The Compared with picker listing apart the assets that cannot be measured over the period.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="risk" data-name="lab-benchmark-picker" alt="🧭 Benchmark Picker">
+</div>
+
+### 🚩 Partial Results Notice
+
+The notice above the sections and a level banner explaining what could not be measured.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="risk" data-name="lab-notice" alt="🚩 Partial Results Notice">
+</div>
+
+### 🕰️ Historical Replay
+
+The replay table with the left-out assets as badges and the common-period button.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="risk" data-name="lab-replay" alt="🕰️ Historical Replay">
+</div>
+
+---
 
 ## 💱 FX Rates
 
@@ -635,8 +921,6 @@ Configure provider priority and conversion routes for a currency pair.
 <div class="screenshot-container">
     <img class="gallery-img" data-category="fx" data-name="provider-config" alt="Provider Config Modal">
 </div>
-
----
 
 <style>
 .screenshot-container {
@@ -739,4 +1023,88 @@ Global and per-chart settings for aesthetics and signal overlay configuration.
 
 <div class="screenshot-container">
     <img class="gallery-img" data-category="fx" data-name="chart-settings" alt="Chart Settings Modal">
+</div>
+
+---
+
+## 🧰 Tools
+
+### 🗂️ Tools Hub
+
+The Tools catalogue with the PAC allocator card, its version pair and the Documentation and Reload buttons.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="tools" data-name="hub" alt="🗂️ Tools Hub">
+</div>
+
+### 💶 PAC — Liquidity
+
+The Liquidity step with cash from a broker, a new contribution and an external account.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-liquidity" alt="💶 PAC — Liquidity">
+</div>
+
+### 🏦 PAC — Brokers
+
+The broker editor with order mode, increment, fees and conversion mode.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-brokers" alt="🏦 PAC — Brokers">
+</div>
+
+### 💼 PAC — Assets
+
+The Assets step with automatic and manual prices and their origin badges.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-assets" alt="💼 PAC — Assets">
+</div>
+
+### 🔀 PAC — Routing
+
+The Routing step with allow/exclude, minimum/required/maximum purchases and priorities.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-routing" alt="🔀 PAC — Routing">
+</div>
+
+### 🎯 PAC — Targets
+
+The target weights adding up to 100%, with Balance all and Copy current distribution.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-targets" alt="🎯 PAC — Targets">
+</div>
+
+### ✅ PAC — Review
+
+The review step with the summary of each step, a field still to complete and the Calculate plan button.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="tools" data-name="pac-step-review" alt="✅ PAC — Review">
+</div>
+
+### 📊 PAC — Result
+
+The outcome header with its badges, and the key figures with the Calculation box.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="tools" data-name="pac-result" alt="📊 PAC — Result">
+</div>
+
+### 🧾 PAC — Operational Plan
+
+The numbered cash and currency exchange steps, then the orders of a broker with their fees.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="tools" data-name="pac-result-plan" alt="🧾 PAC — Operational Plan">
+</div>
+
+### 🔬 PAC — Proof and Solver
+
+The proof behind the outcome and the solver details.
+
+<div class="screenshot-container">
+    <img class="gallery-img" data-category="tools" data-name="pac-result-proof" alt="🔬 PAC — Proof and Solver">
 </div>

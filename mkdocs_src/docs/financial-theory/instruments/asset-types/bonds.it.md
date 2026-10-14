@@ -13,7 +13,7 @@ Un'**obbligazione** è un titolo a reddito fisso che rappresenta un prestito da 
 | **Valuta** | Denominata nella valuta di emissione |
 | **Cedole** | Tasso fisso o variabile, pagate semestralmente o annualmente |
 | **Scadenza** | Data fissa in cui il capitale viene restituito |
-| **Provider tipici** | Yahoo Finance, Scheduled Investment, Manuale |
+| **Provider tipici** | Yahoo Finance, Borsa Italiana, Scheduled Investment, o prezzi inseriti manualmente nell'[editor dati](../../../user/assets/detail/data-editor.md) |
 
 ---
 
@@ -69,5 +69,5 @@ Ciò accade perché le obbligazioni esistenti con cedole più basse diventano me
 
 - 📈 **[Eventi di Interesse](../asset-events/interest.md)** — Pagamenti delle cedole e maturazione
 - 🏁 **[Regolamento a Scadenza](../asset-events/maturity-settlement.md)** — Restituzione del capitale a fine vita
-- 📊 **[Aggiustamento del Prezzo](../asset-events/price-adjustment.md)** — Mark-to-market e svalutazioni
+- 📊 **[Rettifica prezzo](../asset-events/price-adjustment.md)** — Mark-to-market e svalutazioni
 - 📅 **[Convenzioni di Conteggio dei Giorni](../../fundamentals/day-count.md)** — Come viene calcolato l'interesse maturato

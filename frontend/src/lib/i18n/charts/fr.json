@@ -1,0 +1,223 @@
+{
+  "chart": {
+    "tooltip": {
+      "stale": "Périmé : {days} jour(s)",
+      "fxStale": "Taux FX : {days}j",
+      "percentNote": "% par rapport à la date de début",
+      "upper": "Supérieure",
+      "lower": "Inférieure",
+      "weekRange": "Semaine {start} – {end}",
+      "monthLabel": "{month}",
+      "valueAt": "Valeur au {date}",
+      "eventsInPeriod": "Événements sur la période :",
+      "partialBucket": "Partiel : {days} sur {total} jours",
+      "currentBucket": "En cours : {days} sur {total} jours",
+      "originalValue": "orig. {value}",
+      "fxRateDate": "change au {date}",
+      "fxDaysBack": "({days}j avant)"
+    },
+    "resolution": {
+      "weekly": "Hebdomadaire",
+      "monthly": "Mensuel"
+    },
+    "marketPrice": "Prix du marché",
+    "showPercentage": "Afficher le pourcentage",
+    "showAbsolute": "Afficher l'absolu"
+  },
+  "chartSettings": {
+    "title": "Paramètres du Graphique",
+    "titleLocal": "Paramètres du Graphique (Local)",
+    "globalWarning": "Ces paramètres remplaceront toutes les personnalisations par carte.",
+    "baselineColors": "Couleurs de Référence",
+    "baselineColorsDesc": "Vert au-dessus / Rouge en-dessous",
+    "areaFill": "Remplissage",
+    "areaFillDesc": "Dégradé sous la ligne",
+    "gridLines": "Lignes de Grille",
+    "gridLinesDesc": "Grille horizontale en pointillés",
+    "staleGradient": "Dégradé données obsolètes",
+    "staleGradientDesc": "Estomper les anciennes données",
+    "overlaySignals": "Signaux Superposés",
+    "noSignals": "Aucun signal superposé configuré. Ajoutez-en un ci-dessous.",
+    "style": {
+      "color": "Couleur",
+      "width": "Épaisseur",
+      "lineType": "Style"
+    },
+    "discardTitle": "Rejeter les modifications ?",
+    "discardMessage": "Vous avez des modifications non enregistrées. Les rejeter ?",
+    "discard": "Rejeter",
+    "removeSignal": "Supprimer le signal",
+    "dataMissingBefore": "Les données commencent après la plage du graphique — premier point au {date}. Essayez de synchroniser pour obtenir des données antérieures.",
+    "badgePoints": "{n} points de prix chargés",
+    "badgeDividend": "{n} événements dividende",
+    "badgeInterest": "{n} événements intérêt",
+    "badgePriceAdjustment": "{n} événements ajustement de prix",
+    "badgeMaturitySettlement": "{n} événements échéance/règlement",
+    "badgeSplit": "{n} événements split",
+    "previewDescGlobal": "Données synthétiques — montre comment les paramètres affectent tous les graphiques",
+    "previewDescPair": "Aperçu en direct avec les données réelles de la paire et les signaux overlay",
+    "categories": {
+      "indicator": "Indicateurs Techniques",
+      "comparison": "Comparaison de Données",
+      "benchmark": "Benchmarks Synthétiques"
+    },
+    "signals": {
+      "linear": "Croissance Linéaire",
+      "compound": "Croissance Composée",
+      "sine": "Onde Sinusoïdale",
+      "fxPair": "Paire FX",
+      "linearDesc": "$y(t) = y_0 \\cdot (1 + r \\cdot t)$",
+      "compoundDesc": "$y(t) = y_0 \\cdot (1 + r)^t$",
+      "sineDesc": "$y(t) = A \\sin(2\\pi t / T) + y_0$",
+      "assetComparison": "Comparaison d'actif",
+      "assetComparisonFull": "Superposition du prix d'actif",
+      "assetComparisonDesc": "Superposer le prix d'un autre actif sur ce graphique pour comparaison",
+      "fxPairFull": "Superposition du taux FX",
+      "fxPairDesc": "Superposer le taux d'une paire FX sur ce graphique pour comparaison",
+      "linearLabel": "Linéaire {rate}/an",
+      "compoundLabel": "Composée {rate}/an",
+      "sineLabel": "Sinusoïde ±{amplitude} / {period}j",
+      "assetFallback": "Actif n° {id}"
+    },
+    "params": {
+      "annualRate": "Taux Annuel",
+      "amplitude": "Amplitude",
+      "period": "Période",
+      "offset": "Décalage",
+      "currencyPair": "Paire de Devises",
+      "fastPeriod": "Période Rapide",
+      "slowPeriod": "Période Lente",
+      "signalPeriod": "Période du Signal",
+      "multiplier": "Multiplicateur",
+      "overbought": "Suracheté",
+      "oversold": "Survendu",
+      "histogramScale": "Échelle Histogramme",
+      "riskFreeAnnualRate": "Taux annuel sans risque",
+      "comparisonAsset": "Actif de comparaison",
+      "window": "Fenêtre",
+      "fullHistory": "Historique complet"
+    },
+    "yAxisScale": "Échelle Axe Y",
+    "yAxisScaleDesc": "Contrôle de la plage de l'axe primaire",
+    "yAxisInclude0": "Inclure 0",
+    "tooltips": {
+      "annualRate": "Taux de croissance annuel en pourcentage. Appliqué linéairement ou exponentiellement selon le type de signal.",
+      "amplitude": "Plage d'oscillation crête-à-crête en pourcentage de la valeur de base.",
+      "period": "Longueur de la mémoire du filtre en jours. Valeurs plus élevées = plus lisse mais réponse plus lente.",
+      "offset": "Décalage vertical en pourcentage de la valeur de base. Déplace le signal vers le haut ou le bas.",
+      "emaPeriod": "Fenêtre de recul en séances, les jours avec une cotation. Correspond au coefficient $\\alpha = 2/(N+1)$. Plus court = réaction rapide, plus long = plus lisse.",
+      "fastPeriod": "Fenêtre EMA court terme pour la ligne rapide du MACD. Standard : 12 séances. Des valeurs plus basses réagissent plus vite.",
+      "slowPeriod": "Fenêtre EMA long terme pour la ligne lente du MACD. Standard : 26 séances. Des valeurs plus hautes capturent la tendance de fond.",
+      "signalPeriod": "Lissage EMA appliqué à la ligne MACD. Standard : 9 séances. Réduit le bruit dans les signaux de croisement.",
+      "multiplier": "Nombre d'écarts-types ($k \\cdot \\sigma$). $k=2$ couvre ~95% des valeurs en distribution normale.",
+      "overbought": "Niveau au-dessus duquel l'actif est considéré suracheté. Standard : 70. Valeurs proches de 100 indiquent une forte pression d'achat.",
+      "oversold": "Niveau en dessous duquel l'actif est considéré survendu. Standard : 30. Valeurs proches de 0 indiquent une forte pression de vente.",
+      "assetComparison": "Sélectionnez un actif pour superposer son prix sur ce graphique. En mode pourcentage, les deux courbes commencent à 0%.",
+      "fxPair": "Sélectionnez une paire FX pour superposer son taux sur ce graphique. En mode pourcentage, les deux courbes commencent à 0%.",
+      "sessionPeriod": "Fenêtre de recul en séances, les jours avec une cotation. Valeurs plus élevées = plus lisse mais réponse plus lente."
+    },
+    "macdLineColor": "Couleur Ligne MACD",
+    "noDataAvailable": "Aucune donnée disponible. Essayez de synchroniser cet actif/paire.",
+    "conversionFailed": "Conversion de devise échouée — données non affichées (paire FX non configurée)",
+    "backendPreviewRealTarget": "L'aperçu des indicateurs techniques est disponible sur un actif ou une paire de devises réelle.",
+    "backendPreviewApply": "L'aperçu des indicateurs backend affiche les derniers réglages appliqués. Appliquez les modifications pour le mettre à jour.",
+    "backendPreviewUnavailable": "L'aperçu des indicateurs backend apparaît après le chargement des résultats pour cet actif ou cette paire.",
+    "signalCatalogUnavailable": "Le catalogue des signaux techniques est indisponible. Les comparaisons et benchmarks locaux restent disponibles.",
+    "signalResultsUnavailable": "Les signaux techniques n'ont pas pu être mis à jour. Les données de prix restent disponibles.",
+    "signalProblems": {
+      "missingInputFields": "Champs de prix requis manquants : {fields}. Les dates existantes ne suffisent pas ; synchronisez avec un fournisseur qui fournit ces valeurs OHLCV.",
+      "incompleteInputCoverage": "Les champs de prix requis sont incomplets : {fields}. Points utilisables : {available}/{requested}.",
+      "insufficientHistory": "Historique exploitable insuffisant pour ces paramètres : {available} points disponibles, {required} nécessaires.",
+      "incompleteWarmup": "Le signal est exploitable mais pas entièrement stabilisé : {used}/{required} points de préchauffage disponibles.",
+      "dataGaps": "L'historique requis contient des lacunes : {missing} points sur {requested} sont manquants (couverture {coverage} %).",
+      "missingEvents": "Événements requis manquants : {events}.",
+      "incompatibleDomain": "Cet indicateur n'est pas compatible avec ce graphique.",
+      "calculationFailed": "Échec du calcul du signal : {message}",
+      "resultMissing": "Le backend n'a renvoyé aucun résultat pour ce signal. Relancez la requête des signaux.",
+      "partialResult": "Ce signal n'est que partiellement disponible avec les données actuelles.",
+      "unavailable": "Ce signal ne peut pas être calculé avec les données disponibles.",
+      "partialContiguousSegment": "Signal calculé sur le segment contigu complet {start}–{end}. {excluded} points chargés ont été exclus car des dates ou champs requis étaient incomplets. Entrée complète : {available}/{requested} ({coverage} %, préchauffage inclus). Plus longue séquence manquante : {consecutive} points."
+    },
+    "axes": {
+      "exchangeRate": "Axe du taux de change ({pair})",
+      "percentage": "Axe des pourcentages",
+      "price": "Axe des prix ({currency})",
+      "signal": "Axe {name}",
+      "volume": "Axe des volumes"
+    },
+    "yAxisAuto": "Auto"
+  },
+  "measure": {
+    "pending": "Début: {startDate} ({startValue}) — cliquez sur le graphique pour le point final",
+    "empty": "Aucune mesure. Cliquez sur l'icône 📏 règle du graphique pour en ajouter une.",
+    "active": "Active — cliquez sur le graphique",
+    "table": {
+      "signal": "Signal",
+      "deltaAbs": "Δ Abs",
+      "deltaPct": "Δ %",
+      "annualized": "Δ%/an"
+    },
+    "days": "{days}j"
+  },
+  "signals": {
+    "groups": {
+      "trend": "Tendance",
+      "momentum": "Momentum",
+      "volatility": "Volatilité",
+      "volume": "Volume",
+      "risk": "Risque"
+    },
+    "dataUsed": "Données",
+    "dataFields": {
+      "open": "Ouverture",
+      "high": "Plus haut",
+      "low": "Plus bas",
+      "close": "Clôture",
+      "volume": "Volume"
+    },
+    "selector": {
+      "searchPlaceholder": "Rechercher des indicateurs",
+      "noMatches": "Aucun indicateur correspondant"
+    },
+    "dataShownPerIndicator": "Les données requises sont indiquées pour chaque indicateur",
+    "params": {
+      "dPeriod": "Période %D"
+    },
+    "tooltips": {
+      "stochRsiPeriod": "Période du RSI et fenêtre stochastique. Elle modifie %K et donc aussi la ligne %D dérivée.",
+      "dPeriod": "Période de lissage appliquée à %K pour produire %D. Elle modifie uniquement %D.",
+      "riskWindow": "Nombre d’observations préparées des rendements quotidiens dans chaque fenêtre glissante.",
+      "riskFreeAnnualRate": "Taux annuel effectif sans risque utilisé uniquement pour calculer le Sharpe.",
+      "comparisonAsset": "Actif enregistré utilisé comme série de comparaison réelle pour le bêta.",
+      "riskFullHistory": "Mesure le repli par rapport au pic le plus haut de tout l'historique disponible, pas seulement la fenêtre visible. Désactivez pour une vue plus rapide relative à la fenêtre."
+    },
+    "units": {
+      "days": "jours",
+      "sessions": "séances",
+      "percentPerYear": "%/an"
+    },
+    "visual": {
+      "components": "Composants",
+      "zonesFor": "Zones {component}",
+      "affects": "Affecte"
+    },
+    "reference": {
+      "zero": "Zéro"
+    },
+    "regions": {
+      "oversoldDescription": "Extrême inférieur sous le seuil configuré.",
+      "neutralDescription": "Plage centrale entre les seuils configurés.",
+      "overboughtDescription": "Extrême supérieur au-dessus du seuil configuré."
+    },
+    "comparisonAsset": {
+      "placeholder": "Sélectionner l’actif de comparaison",
+      "loadError": "Impossible de charger les actifs."
+    },
+    "riskRollingReturn": {
+      "name": "Rendement glissant",
+      "description": "Rendement composé du prix seul sur une fenêtre glissante.",
+      "output": "Rendement",
+      "outputDescription": "Rendement composé de la période de détention, en points de pourcentage."
+    }
+  }
+}

@@ -31,8 +31,46 @@ interface BucketGroup {
     startIndex: number;
 }
 
-const HIGH_DENSITY_THRESHOLD = 1.3;
-const LOW_DENSITY_THRESHOLD = 0.8;
+/**
+ * Which visual grammar a chart renders in. It decides how narrow a bucket slot may get
+ * before the resolution escalates — NOT how buckets are computed, which is identical for
+ * every grammar.
+ */
+export type ChartGrammar = 'line' | 'candle';
+
+const LINE_HIGH_DENSITY_THRESHOLD = 1.3;
+const LINE_LOW_DENSITY_THRESHOLD = 0.8;
+
+/**
+ * PROVISIONAL (2026-09-21) — a legibility judgement, not a measurement.
+ *
+ * A line is continuous, so sub-pixel bucket density is harmless: the line grammar tolerates
+ * 1.3 buckets/px, which lets a slot shrink to ~0.77px. A candle cannot live there — it has
+ * to render a body with two visible edges plus a wick, or it degenerates into a vertical
+ * stroke, which is exactly the reported symptom.
+ *
+ * 8px is derived from "body + 2 edges + inter-candle gap", NOT from measuring a real
+ * rendering. Change it by looking at candles on screen rather than by reasoning about
+ * pixels. Marked explicitly so it cannot become permanent by inertia.
+ *
+ * Exported precisely BECAUSE it is provisional: its regression test asserts that every
+ * candle resolution clears this floor, and a test carrying its own copy of the number would
+ * keep guarding the old floor — silently — the moment this one is adjusted.
+ */
+export const CANDLE_MIN_SLOT_PX = 8;
+
+/**
+ * The de-escalation threshold is deliberately NOT independently chosen: it is the high
+ * threshold scaled by the line grammar's own ratio (0.8 / 1.3), so the hysteresis band keeps
+ * the same relative width in every grammar. One number is a judgement; two would have been
+ * two judgements.
+ */
+const HYSTERESIS_RATIO = LINE_LOW_DENSITY_THRESHOLD / LINE_HIGH_DENSITY_THRESHOLD;
+
+const DENSITY_THRESHOLDS: Record<ChartGrammar, {high: number; low: number}> = {
+    line: {high: LINE_HIGH_DENSITY_THRESHOLD, low: LINE_LOW_DENSITY_THRESHOLD},
+    candle: {high: 1 / CANDLE_MIN_SLOT_PX, low: (1 / CANDLE_MIN_SLOT_PX) * HYSTERESIS_RATIO},
+};
 
 /** Parse ISO YYYY-MM-DD into UTC Date at midnight. */
 function parseDate(iso: string): Date {
@@ -139,6 +177,34 @@ export function aggregateLineSeries(points: LineDataPoint[], resolution: ChartRe
             resolution,
             sourcePointCount: group.points.length,
         });
+    });
+}
+
+/**
+ * Aggregate sparse economic-flow series (e.g. signed DIVIDEND/INTEREST buckets, G1c)
+ * by SUMMING every point that falls in a bucket — never end-of-period/last-value
+ * semantics (that would silently drop every day but the last one's flow). Distinct
+ * from aggregateLineSeries (cumulative running totals: NAV, P&L) and aggregateOHLCV
+ * (already-composed daily candles: first/max/min/last) — a flow value has no
+ * "current balance" to read at the end of a bucket, only a sum of what occurred in it.
+ * Daily path returns original array by reference.
+ */
+export function aggregateSumSeries(points: LineDataPoint[], resolution: ChartResolution): LineDataPoint[] {
+    if (resolution === 'daily') return points;
+    if (points.length === 0) return [];
+
+    return groupPointsByBucket(points, resolution).map((group) => {
+        const sum = group.points.reduce((total, point) => total + point.value, 0);
+        const lastPoint = group.points[group.points.length - 1];
+        return withBucketMeta(
+            {...lastPoint, value: sum},
+            {
+                bucketStart: group.bucketStart,
+                bucketEnd: group.bucketEnd,
+                resolution,
+                sourcePointCount: group.points.length,
+            },
+        );
     });
 }
 
@@ -408,24 +474,31 @@ export function computeDensity(bucketCount: number, plotWidthPx: number): number
     return bucketCount / plotWidthPx;
 }
 
-/** Choose chart resolution using shared hysteresis thresholds. */
-export function chooseResolution(current: ChartResolution, counts: {dailyCount: number; weeklyCount: number; monthlyCount: number}, plotWidthPx: number): ChartResolution {
+/**
+ * Choose chart resolution using shared hysteresis thresholds.
+ *
+ * `grammar` defaults to 'line', so every existing caller keeps its exact previous behavior
+ * by construction rather than by remembering to pass the old value.
+ */
+export function chooseResolution(current: ChartResolution, counts: {dailyCount: number; weeklyCount: number; monthlyCount: number}, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
+    const {high, low} = DENSITY_THRESHOLDS[grammar];
+
     if (current === 'daily') {
         const densityDaily = computeDensity(counts.dailyCount, plotWidthPx);
-        return densityDaily > HIGH_DENSITY_THRESHOLD ? 'weekly' : 'daily';
+        return densityDaily > high ? 'weekly' : 'daily';
     }
 
     if (current === 'weekly') {
         const densityDaily = computeDensity(counts.dailyCount, plotWidthPx);
         const densityWeekly = computeDensity(counts.weeklyCount, plotWidthPx);
 
-        if (densityDaily < LOW_DENSITY_THRESHOLD) return 'daily';
-        if (densityWeekly > HIGH_DENSITY_THRESHOLD) return 'monthly';
+        if (densityDaily < low) return 'daily';
+        if (densityWeekly > high) return 'monthly';
         return 'weekly';
     }
 
     const densityWeekly = computeDensity(counts.weeklyCount, plotWidthPx);
-    return densityWeekly < LOW_DENSITY_THRESHOLD ? 'weekly' : 'monthly';
+    return densityWeekly < low ? 'weekly' : 'monthly';
 }
 
 /**
@@ -447,11 +520,11 @@ export function chooseResolution(current: ChartResolution, counts: {dailyCount: 
  * correct answer depends on where you came from — cascading from the real `current`
  * preserves that "stay put" memory, it only closes the gap for multi-tier jumps.
  */
-export function cascadeResolution(current: ChartResolution, counts: {dailyCount: number; weeklyCount: number; monthlyCount: number}, plotWidthPx: number): ChartResolution {
+export function cascadeResolution(current: ChartResolution, counts: {dailyCount: number; weeklyCount: number; monthlyCount: number}, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
     let resolution = current;
     // At most 2 hops (daily->weekly->monthly, or the reverse) can ever be needed; loop defensively.
     for (let i = 0; i < 3; i++) {
-        const next = chooseResolution(resolution, counts, plotWidthPx);
+        const next = chooseResolution(resolution, counts, plotWidthPx, grammar);
         if (next === resolution) break;
         resolution = next;
     }
@@ -463,8 +536,8 @@ export function cascadeResolution(current: ChartResolution, counts: {dailyCount:
  * resolution to be hysteretic about (e.g. first paint, or the visible range just reset
  * to the dataset's full span). Equivalent to cascading from 'daily'.
  */
-export function chooseInitialResolution(counts: {dailyCount: number; weeklyCount: number; monthlyCount: number}, plotWidthPx: number): ChartResolution {
-    return cascadeResolution('daily', counts, plotWidthPx);
+export function chooseInitialResolution(counts: {dailyCount: number; weeklyCount: number; monthlyCount: number}, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
+    return cascadeResolution('daily', counts, plotWidthPx, grammar);
 }
 
 /** Group event markers by rendered bucket end date. */

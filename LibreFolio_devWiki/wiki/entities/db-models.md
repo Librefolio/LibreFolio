@@ -35,7 +35,7 @@ All SQLModel ORM models for LibreFolio live in `backend/app/db/models.py`. They 
 
 | Enum | Values |
 |------|--------|
-| `AssetType` | `STOCK, ETF, BOND, CRYPTO, FUND, CROWDFUND_LOAN, HOLD, INDEX, OTHER` |
+| `AssetType` | `STOCK, ETF, BOND, CRYPTO, FUND, CROWDFUND, HOLD, COMMODITY, REAL_ESTATE, INDEX, OTHER` + subtypes `ETF_STOCK, ETF_BOND, ETF_COMMODITY, ETF_REAL_ESTATE, ETF_CRYPTO, ETF_MONETARY, CROWDFUND_REAL_ESTATE` (`CROWDFUND` was `CROWDFUND_LOAN` until 2026-07-06; see [[decisions/asset-type-two-level-taxonomy]]) |
 | `AssetEventType` | `DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT, MATURITY_SETTLEMENT` |
 | `TransactionType` | `BUY, SELL, DIVIDEND, INTEREST, FEE, TAX, TRANSFER_IN, TRANSFER_OUT, SPLIT, OTHER` |
 | `UserRole` | `admin, user` |

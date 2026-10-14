@@ -12,7 +12,10 @@
   It publishes the same handles as the three production specializations
   (`sync-result-row` + `data-row-id`/`data-status`, `sync-retry-row`), so a spec
   reads the base and its wrappers the same way. The extra `data-syncing` mirrors
-  the second snippet argument, which is otherwise invisible from outside.
+  the second snippet argument, which is otherwise invisible from outside, and
+  `data-message` carries the row's message — the sentence the base writes when it
+  turns a rejected call into failed rows — so a spec can check its language
+  without rendering the production row.
 
   Lives under `src/__tests__/`, which `vitest.config.ts` excludes from coverage:
   the harness must never inflate the numbers it exists to improve.
@@ -59,7 +62,7 @@
 <SyncModalBase bind:open bind:this={base} {dateEnd} {dateStart} description="harness description" {onclose} {onsynced} {sections} testId="harness-sync-modal" title="harness title"></SyncModalBase>
 
 {#snippet row(item: SyncResult, syncing: boolean)}
-    <div data-changed={item.points_changed} data-fetched={item.points_fetched} data-row-id={item.id} data-status={item.status} data-syncing={syncing ? 'true' : 'false'} data-testid="sync-result-row">
+    <div data-changed={item.points_changed} data-fetched={item.points_fetched} data-message={item.message ?? ''} data-row-id={item.id} data-status={item.status} data-syncing={syncing ? 'true' : 'false'} data-testid="sync-result-row">
         <button data-testid="sync-retry-row" onclick={() => base?.handleRetrySingle(item.id)} type="button">retry</button>
     </div>
 {/snippet}

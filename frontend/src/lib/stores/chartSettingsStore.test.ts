@@ -3,8 +3,14 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 // The shared `$app/environment` mock reports `browser: false`, which makes every
 // storage path in this store a no-op. Nothing below would run against it.
 vi.mock('$app/environment', () => ({browser: true}));
+const apiTransportCall = vi.hoisted(() => vi.fn());
+vi.mock('$lib/api', () => ({
+    zodiosApi: new Proxy({}, {get: () => apiTransportCall}),
+    axiosInstance: new Proxy({}, {get: () => apiTransportCall}),
+}));
 
 import {transitionClientSession} from '$lib/stores/app/clientSession';
+import type {SignalConfig} from '$lib/charts/signals';
 
 import {DEFAULT_CHART_SETTINGS, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setPairSettings, type ChartSettings} from './chartSettingsStore.svelte';
 
@@ -22,6 +28,7 @@ const WRITE_DELAY_MS = 250;
 let backing = new Map<string, string>();
 let getItem = vi.fn((key: string) => backing.get(key) ?? null);
 let setItem = vi.fn((key: string, value: string) => void backing.set(key, value));
+let fetchMock = vi.fn();
 
 let userSeq = 0;
 
@@ -52,7 +59,46 @@ function flushWrite(): void {
 }
 
 function settings(overrides: Partial<ChartSettings> = {}): ChartSettings {
-    return {...DEFAULT_CHART_SETTINGS, ...overrides};
+    return {
+        ...DEFAULT_CHART_SETTINGS,
+        axisScales: {
+            absolute: {...DEFAULT_CHART_SETTINGS.axisScales.absolute},
+            percentage: {...DEFAULT_CHART_SETTINGS.axisScales.percentage},
+            secondary: {...DEFAULT_CHART_SETTINGS.axisScales.secondary},
+        },
+        calendarReturnWindow: {...DEFAULT_CHART_SETTINGS.calendarReturnWindow},
+        signals: [...DEFAULT_CHART_SETTINGS.signals],
+        ...overrides,
+    };
+}
+
+function legacySettings(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+        colorByBaseline: true,
+        areaFill: true,
+        gridLines: true,
+        staleGradient: true,
+        yAxisMode: 'auto',
+        yAxisMin: null,
+        yAxisMax: null,
+        signals: [],
+        ...overrides,
+    };
+}
+
+function comparisonSignal(id: string, params: Record<string, unknown>): SignalConfig {
+    return {
+        id,
+        signalType: 'asset-comparison',
+        params,
+        style: {
+            color: '#2563eb',
+            lineWidth: 2,
+            lineType: 'solid',
+            markerStart: null,
+            markerEnd: null,
+        },
+    };
 }
 
 beforeEach(() => {
@@ -69,34 +115,202 @@ beforeEach(() => {
             clear: () => backing.clear(),
         },
     });
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    apiTransportCall.mockReset();
     vi.useFakeTimers();
 });
 
 afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
 });
 
 describe('chartSettingsStore — hydration', () => {
     it('reads the payload stored under the current account', () => {
         const user = `chart-settings-u${userSeq + 1}`;
         seed(user, {
-            version: 1,
-            globalSettings: settings({areaFill: false, yAxisMode: 'custom', yAxisMin: -5, yAxisMax: 42}),
+            version: 2,
+            globalSettings: settings({
+                areaFill: false,
+                axisScales: {
+                    absolute: {mode: 'custom', min: -5, max: 42},
+                    percentage: {mode: 'include0'},
+                    secondary: {},
+                },
+            }),
             pairOverrides: [['EUR-USD', settings({gridLines: false})]],
         });
         expect(freshUser()).toBe(user);
 
         const global = getGlobalSettings();
         expect(global.areaFill).toBe(false);
-        expect(global.yAxisMode).toBe('custom');
-        expect(global.yAxisMin).toBe(-5);
-        expect(global.yAxisMax).toBe(42);
+        expect(global.axisScales.absolute).toEqual({mode: 'custom', min: -5, max: 42});
+        expect(global.axisScales.percentage).toEqual({mode: 'include0'});
         expect(getSettingsForPair('EUR-USD').gridLines).toBe(false);
+    });
+
+    it('migrates each v1 legacy Y-axis setting into both primary axis modes', () => {
+        const user = `chart-settings-u${userSeq + 1}`;
+        seed(user, {
+            version: 1,
+            globalSettings: legacySettings({areaFill: false, yAxisMode: 'custom', yAxisMin: -5, yAxisMax: 42}),
+            pairOverrides: [['EUR-USD', legacySettings({gridLines: false, yAxisMode: 'include0'})]],
+        });
+        expect(freshUser()).toBe(user);
+
+        expect(getGlobalSettings().axisScales).toEqual({
+            absolute: {mode: 'custom', min: -5, max: 42},
+            percentage: {mode: 'custom', min: -5, max: 42},
+            secondary: {},
+        });
+        expect(getSettingsForPair('EUR-USD').axisScales).toEqual({
+            absolute: {mode: 'include0'},
+            percentage: {mode: 'include0'},
+            secondary: {},
+        });
+    });
+
+    it('migrates and immediately rewrites a v1 runtime-bearing payload under only the active account key', () => {
+        const user = `chart-settings-u${userSeq + 1}`;
+        const untouchedUser = `chart-settings-u${userSeq + 2}`;
+        const durableSignal = comparisonSignal('legacy-v1-comparison', {
+            assetId: '77',
+            _assetDisplayName: 'Durable comparison label',
+            lookback: 63,
+        });
+        const storedSignal = {
+            ...durableSignal,
+            params: {
+                ...durableSignal.params,
+                _resolvedData: [{date: '2026-01-02', value: 14.5, source: 'legacy-runtime'}],
+            },
+        };
+        seed(user, {
+            version: 1,
+            globalSettings: legacySettings({
+                areaFill: false,
+                yAxisMode: 'custom',
+                yAxisMin: -5,
+                yAxisMax: 42,
+                signals: [storedSignal],
+            }),
+            pairOverrides: [
+                ['__global_assets__', legacySettings({gridLines: false, yAxisMode: 'include0', signals: [storedSignal]})],
+                ['asset-7', legacySettings({colorByBaseline: false, yAxisMode: 'custom', yAxisMin: 0, yAxisMax: 100, signals: [storedSignal]})],
+            ],
+        });
+        seed(untouchedUser, {
+            version: 2,
+            globalSettings: settings({staleGradient: false}),
+            pairOverrides: [],
+        });
+        const untouchedRaw = backing.get(storageKeyFor(untouchedUser));
+
+        expect(freshUser()).toBe(user);
+        expect(setItem).toHaveBeenCalledTimes(1);
+        expect(setItem.mock.calls[0]?.[0]).toBe(storageKeyFor(user));
+
+        const migratedGlobal = getGlobalSettings();
+        expect(migratedGlobal).toMatchObject({
+            areaFill: false,
+            axisScales: {
+                absolute: {mode: 'custom', min: -5, max: 42},
+                percentage: {mode: 'custom', min: -5, max: 42},
+                secondary: {},
+            },
+        });
+        expect(migratedGlobal.signals).toEqual([durableSignal]);
+
+        const migratedAssetScope = getGlobalSettings('assets');
+        expect(migratedAssetScope).toMatchObject({
+            gridLines: false,
+            axisScales: {
+                absolute: {mode: 'include0'},
+                percentage: {mode: 'include0'},
+                secondary: {},
+            },
+        });
+        expect(migratedAssetScope.signals).toEqual([durableSignal]);
+
+        const migratedAsset = getSettingsForPair('asset-7', 'assets');
+        expect(migratedAsset).toMatchObject({
+            colorByBaseline: false,
+            axisScales: {
+                absolute: {mode: 'custom', min: 0, max: 100},
+                percentage: {mode: 'custom', min: 0, max: 100},
+                secondary: {},
+            },
+        });
+        expect(migratedAsset.signals).toEqual([durableSignal]);
+        expect(getSettingsForPair('asset-unconfigured', 'assets').gridLines).toBe(false);
+
+        const rewrittenRaw = backing.get(storageKeyFor(user));
+        expect(rewrittenRaw).toBeDefined();
+        expect(rewrittenRaw).not.toContain('"_resolvedData"');
+        expect(rewrittenRaw).not.toContain('legacy-runtime');
+        const rewritten = persistedFor(user);
+        expect(rewritten?.version).toBe(2);
+        expect(rewritten?.globalSettings.signals).toEqual([durableSignal]);
+        const rewrittenOverrides = new Map(rewritten?.pairOverrides);
+        expect(rewrittenOverrides.get('__global_assets__')?.signals).toEqual([durableSignal]);
+        expect(rewrittenOverrides.get('asset-7')?.signals).toEqual([durableSignal]);
+        expect(backing.get(storageKeyFor(untouchedUser))).toBe(untouchedRaw);
+        expect(setItem).toHaveBeenCalledTimes(1);
+        expect(setItem).toHaveBeenCalledWith(storageKeyFor(user), expect.any(String));
+
+        // Hydration itself performs the rewrite; no later settings write or
+        // debounce flush is needed to remove the legacy runtime cache.
+        flushWrite();
+        expect(setItem).toHaveBeenCalledTimes(1);
+    });
+
+    it('immediately scrubs runtime data from an otherwise-current v2 payload', () => {
+        const user = `chart-settings-u${userSeq + 1}`;
+        const durableSignal = comparisonSignal('legacy-v2-comparison', {
+            assetId: '88',
+            _assetDisplayName: 'Current-version comparison label',
+            enabled: true,
+        });
+        const storedSignal = {
+            ...durableSignal,
+            params: {
+                ...durableSignal.params,
+                _resolvedData: [{date: '2026-02-03', value: 22.25, source: 'v2-runtime'}],
+            },
+        };
+        seed(user, {
+            version: 2,
+            globalSettings: settings({signals: [storedSignal]}),
+            pairOverrides: [['EUR-USD', settings({areaFill: false, signals: [storedSignal]})]],
+        });
+
+        expect(freshUser()).toBe(user);
+        expect(setItem).toHaveBeenCalledTimes(1);
+        expect(setItem.mock.calls[0]?.[0]).toBe(storageKeyFor(user));
+
+        expect(getGlobalSettings().signals).toEqual([durableSignal]);
+        const hydratedPair = getSettingsForPair('EUR-USD', 'fx');
+        expect(hydratedPair.areaFill).toBe(false);
+        expect(hydratedPair.signals).toEqual([durableSignal]);
+        const rewrittenRaw = backing.get(storageKeyFor(user));
+        expect(rewrittenRaw).toBeDefined();
+        expect(rewrittenRaw).not.toContain('"_resolvedData"');
+        expect(rewrittenRaw).not.toContain('v2-runtime');
+        const rewritten = persistedFor(user);
+        expect(rewritten?.version).toBe(2);
+        expect(rewritten?.globalSettings.signals).toEqual([durableSignal]);
+        expect(new Map(rewritten?.pairOverrides).get('EUR-USD')?.signals).toEqual([durableSignal]);
+        expect(setItem).toHaveBeenCalledTimes(1);
+        expect(setItem).toHaveBeenCalledWith(storageKeyFor(user), expect.any(String));
+
+        flushWrite();
+        expect(setItem).toHaveBeenCalledTimes(1);
     });
 
     it('keeps one account out of another account\u2019s settings', () => {
         const first = `chart-settings-u${userSeq + 1}`;
-        seed(first, {version: 1, globalSettings: settings({colorByBaseline: false}), pairOverrides: [['EUR-USD', settings({areaFill: false})]]});
+        seed(first, {version: 2, globalSettings: settings({colorByBaseline: false}), pairOverrides: [['EUR-USD', settings({areaFill: false})]]});
         freshUser();
         expect(getGlobalSettings().colorByBaseline).toBe(false);
 
@@ -120,7 +334,7 @@ describe('chartSettingsStore — hydration', () => {
     });
 
     it('falls back to defaults for a payload written by another storage version', () => {
-        seed(`chart-settings-u${userSeq + 1}`, {version: 2, globalSettings: settings({areaFill: false}), pairOverrides: []});
+        seed(`chart-settings-u${userSeq + 1}`, {version: 3, globalSettings: settings({areaFill: false}), pairOverrides: []});
         freshUser();
 
         expect(getGlobalSettings().areaFill).toBe(true);
@@ -144,7 +358,18 @@ describe('chartSettingsStore — hydration', () => {
         });
         freshUser();
 
-        expect(getGlobalSettings()).toMatchObject({colorByBaseline: true, areaFill: true, gridLines: true, staleGradient: true, yAxisMode: 'auto', signals: []});
+        expect(getGlobalSettings()).toMatchObject({
+            colorByBaseline: true,
+            areaFill: true,
+            gridLines: true,
+            staleGradient: true,
+            axisScales: {
+                absolute: {mode: 'auto'},
+                percentage: {mode: 'include0'},
+                secondary: {},
+            },
+            signals: [],
+        });
     });
 
     it('reads storage once per account instead of on every call', () => {
@@ -162,7 +387,7 @@ describe('chartSettingsStore — hydration', () => {
 describe('chartSettingsStore — sanitising a stored payload', () => {
     it('replaces every non-boolean flag with its shipped default', () => {
         seed(`chart-settings-u${userSeq + 1}`, {
-            version: 1,
+            version: 2,
             globalSettings: {colorByBaseline: 'yes', areaFill: 1, gridLines: null, staleGradient: undefined, signals: []},
             pairOverrides: [],
         });
@@ -172,13 +397,13 @@ describe('chartSettingsStore — sanitising a stored payload', () => {
     });
 
     it('keeps a stored false rather than treating it as missing', () => {
-        seed(`chart-settings-u${userSeq + 1}`, {version: 1, globalSettings: {colorByBaseline: false, areaFill: false, gridLines: false, staleGradient: false, signals: []}, pairOverrides: []});
+        seed(`chart-settings-u${userSeq + 1}`, {version: 2, globalSettings: {colorByBaseline: false, areaFill: false, gridLines: false, staleGradient: false, signals: []}, pairOverrides: []});
         freshUser();
 
         expect(getGlobalSettings()).toMatchObject({colorByBaseline: false, areaFill: false, gridLines: false, staleGradient: false});
     });
 
-    it('accepts only the two named y-axis modes and defaults the rest to auto', () => {
+    it('accepts only the two named legacy Y-axis modes and defaults the rest to auto', () => {
         const modes: Array<[unknown, string]> = [
             ['include0', 'include0'],
             ['custom', 'custom'],
@@ -188,32 +413,58 @@ describe('chartSettingsStore — sanitising a stored payload', () => {
         ];
 
         for (const [stored, expected] of modes) {
-            seed(`chart-settings-u${userSeq + 1}`, {version: 1, globalSettings: {...DEFAULT_CHART_SETTINGS, yAxisMode: stored}, pairOverrides: []});
+            seed(`chart-settings-u${userSeq + 1}`, {version: 1, globalSettings: legacySettings({yAxisMode: stored}), pairOverrides: []});
             freshUser();
-            expect(getGlobalSettings().yAxisMode).toBe(expected);
+            expect(getGlobalSettings().axisScales.absolute.mode).toBe(expected);
+            expect(getGlobalSettings().axisScales.percentage.mode).toBe(expected);
         }
     });
 
-    it('drops y-axis bounds that are not finite numbers', () => {
-        seed(`chart-settings-u${userSeq + 1}`, {version: 1, globalSettings: {...DEFAULT_CHART_SETTINGS, yAxisMode: 'custom', yAxisMin: '12', yAxisMax: null}, pairOverrides: []});
+    it('drops legacy Y-axis bounds that are not finite numbers', () => {
+        seed(`chart-settings-u${userSeq + 1}`, {version: 1, globalSettings: legacySettings({yAxisMode: 'custom', yAxisMin: '12', yAxisMax: null}), pairOverrides: []});
         freshUser();
 
-        const global = getGlobalSettings();
-        expect(global.yAxisMode).toBe('custom');
-        expect(global.yAxisMin).toBeUndefined();
-        expect(global.yAxisMax).toBeUndefined();
+        expect(getGlobalSettings().axisScales.absolute).toEqual({mode: 'custom'});
+        expect(getGlobalSettings().axisScales.percentage).toEqual({mode: 'custom'});
     });
 
-    it('keeps a zero bound, which is falsy but perfectly valid', () => {
-        seed(`chart-settings-u${userSeq + 1}`, {version: 1, globalSettings: {...DEFAULT_CHART_SETTINGS, yAxisMode: 'custom', yAxisMin: 0, yAxisMax: 0}, pairOverrides: []});
+    it('keeps a zero legacy bound, which is falsy but perfectly valid', () => {
+        seed(`chart-settings-u${userSeq + 1}`, {version: 1, globalSettings: legacySettings({yAxisMode: 'custom', yAxisMin: 0, yAxisMax: 0}), pairOverrides: []});
         freshUser();
 
-        expect(getGlobalSettings().yAxisMin).toBe(0);
-        expect(getGlobalSettings().yAxisMax).toBe(0);
+        expect(getGlobalSettings().axisScales.absolute).toEqual({mode: 'custom', min: 0, max: 0});
+        expect(getGlobalSettings().axisScales.percentage).toEqual({mode: 'custom', min: 0, max: 0});
+    });
+
+    it('sanitises semantic secondary-axis entries without one malformed entry poisoning its neighbours', () => {
+        seed(`chart-settings-u${userSeq + 1}`, {
+            version: 2,
+            globalSettings: {
+                ...settings(),
+                axisScales: {
+                    absolute: {mode: 'auto'},
+                    percentage: {mode: 'include0'},
+                    secondary: {
+                        'independent:rsi': {mode: 'custom', min: 100, max: 0},
+                        'volume:turnover': {mode: 'include0', min: -20, max: 80},
+                        'independent:malformed': 'not-an-axis-setting',
+                        '   ': {mode: 'custom', min: 1, max: 2},
+                    },
+                },
+            },
+            pairOverrides: [],
+        });
+        freshUser();
+
+        expect(getGlobalSettings().axisScales.secondary).toEqual({
+            'independent:rsi': {mode: 'custom', min: 0, max: 100},
+            'volume:turnover': {mode: 'include0'},
+            'independent:malformed': {mode: 'auto'},
+        });
     });
 
     it('replaces a non-array signal list with an empty one', () => {
-        seed(`chart-settings-u${userSeq + 1}`, {version: 1, globalSettings: {...DEFAULT_CHART_SETTINGS, signals: {id: 'not-a-list'}}, pairOverrides: []});
+        seed(`chart-settings-u${userSeq + 1}`, {version: 2, globalSettings: {...DEFAULT_CHART_SETTINGS, signals: {id: 'not-a-list'}}, pairOverrides: []});
         freshUser();
 
         expect(getGlobalSettings().signals).toEqual([]);
@@ -221,22 +472,22 @@ describe('chartSettingsStore — sanitising a stored payload', () => {
 
     it('carries a stored signal list through untouched', () => {
         const signal = {id: 'ema-1', signalType: 'ema', params: {period: 20}, style: {color: '#3b82f6', lineWidth: 1, lineType: 'dotted', markerStart: null, markerEnd: null}};
-        seed(`chart-settings-u${userSeq + 1}`, {version: 1, globalSettings: {...DEFAULT_CHART_SETTINGS, signals: [signal]}, pairOverrides: []});
+        seed(`chart-settings-u${userSeq + 1}`, {version: 2, globalSettings: {...DEFAULT_CHART_SETTINGS, signals: [signal]}, pairOverrides: []});
         freshUser();
 
         expect(getGlobalSettings().signals).toEqual([signal]);
     });
 
     it('replaces a globalSettings that is not a record with the full defaults', () => {
-        seed(`chart-settings-u${userSeq + 1}`, {version: 1, globalSettings: 'corrupted', pairOverrides: []});
+        seed(`chart-settings-u${userSeq + 1}`, {version: 2, globalSettings: 'corrupted', pairOverrides: []});
         freshUser();
 
-        expect(getGlobalSettings()).toMatchObject({colorByBaseline: true, areaFill: true, gridLines: true, staleGradient: true, yAxisMode: 'auto', signals: []});
+        expect(getGlobalSettings()).toEqual(DEFAULT_CHART_SETTINGS);
     });
 
     it('skips malformed override entries and keeps the well-formed ones', () => {
         seed(`chart-settings-u${userSeq + 1}`, {
-            version: 1,
+            version: 2,
             globalSettings: settings(),
             pairOverrides: [
                 'EUR-USD', // not a tuple
@@ -253,7 +504,7 @@ describe('chartSettingsStore — sanitising a stored payload', () => {
     });
 
     it('ignores a pairOverrides field that is not a list', () => {
-        seed(`chart-settings-u${userSeq + 1}`, {version: 1, globalSettings: settings({gridLines: false}), pairOverrides: {'EUR-USD': settings()}});
+        seed(`chart-settings-u${userSeq + 1}`, {version: 2, globalSettings: settings({gridLines: false}), pairOverrides: {'EUR-USD': settings()}});
         freshUser();
 
         expect(getGlobalSettings().gridLines).toBe(false);
@@ -262,6 +513,17 @@ describe('chartSettingsStore — sanitising a stored payload', () => {
 });
 
 describe('chartSettingsStore — read fallbacks', () => {
+    it('defaults a fresh percentage axis to Include0 while the absolute axis stays Auto', () => {
+        freshUser();
+
+        expect(getGlobalSettings().axisScales).toEqual({
+            absolute: {mode: 'auto'},
+            percentage: {mode: 'include0'},
+            secondary: {},
+        });
+        expect(getSettingsForPair('asset-unconfigured', 'assets').axisScales.percentage).toEqual({mode: 'include0'});
+    });
+
     it('prefers the pair override, then the scoped global, then the base global', () => {
         freshUser();
         setGlobalSettings(settings({areaFill: false, gridLines: false, staleGradient: false}));
@@ -271,6 +533,57 @@ describe('chartSettingsStore — read fallbacks', () => {
         expect(getSettingsForPair('asset-7', 'assets').gridLines).toBe(true);
         expect(getSettingsForPair('asset-9', 'assets')).toMatchObject({areaFill: true, gridLines: false});
         expect(getSettingsForPair('asset-9')).toMatchObject({areaFill: false, gridLines: false});
+    });
+
+    it('isolates axis settings across accounts, base globals, scoped globals, and pairs', () => {
+        const firstUser = freshUser();
+        setGlobalSettings(
+            settings({
+                axisScales: {
+                    absolute: {mode: 'custom', min: 10, max: 20},
+                    percentage: {mode: 'include0'},
+                    secondary: {},
+                },
+            }),
+        );
+        setGlobalSettings(
+            settings({
+                axisScales: {
+                    absolute: {mode: 'auto'},
+                    percentage: {mode: 'custom', min: -5, max: 5},
+                    secondary: {},
+                },
+            }),
+            'assets',
+        );
+        setPairSettings(
+            'asset-7',
+            settings({
+                axisScales: {
+                    absolute: {mode: 'include0'},
+                    percentage: {mode: 'auto'},
+                    secondary: {'independent:rsi': {mode: 'custom', min: 20, max: 80}},
+                },
+            }),
+        );
+        flushWrite();
+
+        expect(getGlobalSettings().axisScales.absolute).toEqual({mode: 'custom', min: 10, max: 20});
+        expect(getGlobalSettings('assets').axisScales.percentage).toEqual({mode: 'custom', min: -5, max: 5});
+        expect(getSettingsForPair('asset-7', 'assets').axisScales.secondary).toEqual({'independent:rsi': {mode: 'custom', min: 20, max: 80}});
+        expect(getSettingsForPair('asset-9', 'assets').axisScales.percentage).toEqual({mode: 'custom', min: -5, max: 5});
+        expect(getSettingsForPair('EUR-USD', 'fx').axisScales.absolute).toEqual({mode: 'custom', min: 10, max: 20});
+
+        const secondUser = freshUser();
+        expect(getGlobalSettings().axisScales).toEqual(DEFAULT_CHART_SETTINGS.axisScales);
+        expect(getSettingsForPair('asset-7', 'assets').axisScales).toEqual(DEFAULT_CHART_SETTINGS.axisScales);
+
+        transitionClientSession(firstUser);
+        expect(getSettingsForPair('asset-7', 'assets').axisScales.secondary).toEqual({'independent:rsi': {mode: 'custom', min: 20, max: 80}});
+        expect(new Set(setItem.mock.calls.map(([key]) => key))).toEqual(new Set([storageKeyFor(firstUser)]));
+        expect(backing.has(storageKeyFor(secondUser))).toBe(false);
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(apiTransportCall).not.toHaveBeenCalled();
     });
 
     it('serves the base global when the requested scope has no override', () => {
@@ -297,10 +610,12 @@ describe('chartSettingsStore — read fallbacks', () => {
 
         const copy = getSettingsForPair('EUR-USD');
         copy.gridLines = false;
-        copy.signals[0].params.period = 99;
+        const copiedSignal = copy.signals.find((signal) => signal.id === 's1');
+        expect(copiedSignal).toBeDefined();
+        copiedSignal!.params.period = 99;
 
         expect(getSettingsForPair('EUR-USD').gridLines).toBe(true);
-        expect(getSettingsForPair('EUR-USD').signals[0].params).toEqual({});
+        expect(getSettingsForPair('EUR-USD').signals.find((signal) => signal.id === 's1')?.params).toEqual({});
     });
 
     it('does not alias the object handed in to setPairSettings', () => {
@@ -413,12 +728,259 @@ describe('chartSettingsStore — persistence', () => {
         flushWrite();
 
         const payload = persistedFor(user);
-        expect(payload?.version).toBe(1);
+        expect(payload?.version).toBe(2);
         expect(payload?.globalSettings).toMatchObject({colorByBaseline: false});
         expect(Object.fromEntries(payload!.pairOverrides)).toMatchObject({
             __global_assets__: expect.objectContaining({gridLines: false}),
         });
-        expect(setItem.mock.calls[0][0]).toBe(storageKeyFor(user));
+        expect(setItem).toHaveBeenCalledWith(storageKeyFor(user), expect.any(String));
+    });
+
+    it('scrubs comparison runtime data from storage without mutating live pair settings', () => {
+        const user = freshUser();
+        const persistentParams = {
+            assetId: '77',
+            _assetDisplayName: 'Persistence Asset',
+            lookback: 63,
+            enabled: true,
+            nested: {
+                thresholds: [0.1, 0.25, 0.5],
+                presentation: {
+                    mode: 'relative',
+                    labels: ['short', 'medium', 'long'],
+                },
+                windows: [
+                    {kind: 'rolling', amount: 12},
+                    {kind: 'calendar', amount: 3},
+                ],
+            },
+        };
+        const runtimePayloadMarker = 'runtime-only-resolved-cache';
+        const largeResolvedData = Array.from({length: 256}, (_, index) => ({
+            date: `resolved-${index}`,
+            value: index / 10,
+            diagnostics: {
+                samples: Array.from({length: 6}, (_, sample) => ({
+                    sample,
+                    value: index + sample / 10,
+                })),
+                source: {
+                    provider: runtimePayloadMarker,
+                    path: ['asset', index, 'close'],
+                },
+            },
+            metadata: {
+                asset: {id: 77, symbol: 'PERSIST'},
+                requestedRange: {start: '2020-01-01', end: '2026-01-01'},
+                aggregations: {
+                    daily: {count: 2_192, complete: true},
+                    monthly: {count: 72, complete: true},
+                },
+            },
+        }));
+        const transientSignal: SignalConfig = {
+            id: 'persistence-sanitizer',
+            signalType: 'asset-comparison',
+            params: {
+                ...persistentParams,
+                _resolvedData: largeResolvedData,
+            },
+            style: {
+                color: '#123456',
+                lineWidth: 4,
+                lineType: 'dashed',
+                markerStart: 'diamond',
+                markerEnd: 'pin',
+            },
+            componentStyles: {
+                return: {
+                    color: '#abcdef',
+                    lineWidth: 3,
+                    lineType: 'dotted',
+                    markerStart: 'circle',
+                    markerEnd: null,
+                },
+                baseline: {
+                    color: '#fedcba',
+                    lineWidth: 2,
+                    lineType: 'solid',
+                    markerStart: null,
+                    markerEnd: 'arrow',
+                },
+            },
+            partitionStyles: {
+                positive: {
+                    color: '#16a34a',
+                    lineWidth: 2,
+                    lineType: 'solid',
+                    markerStart: null,
+                    markerEnd: null,
+                },
+                negative: {
+                    color: '#dc2626',
+                    lineWidth: 1,
+                    lineType: 'dashed',
+                    markerStart: 'rect',
+                    markerEnd: null,
+                },
+            },
+        };
+        const updatedPercentageAxis = {
+            mode: 'custom',
+            min: -25,
+            max: 75,
+        } satisfies ChartSettings['axisScales']['percentage'];
+        const updatedComparisonStyle: SignalConfig['style'] = {
+            ...transientSignal.style,
+            color: '#654321',
+            lineWidth: 5,
+        };
+        const expectedStoredSignal: SignalConfig = {
+            ...transientSignal,
+            params: persistentParams,
+        };
+        const expectedEditedStoredSignal: SignalConfig = {
+            ...expectedStoredSignal,
+            style: updatedComparisonStyle,
+        };
+
+        setPairSettings('EUR-USD', settings({signals: [transientSignal]}));
+        setGlobalSettings(settings({signals: [transientSignal]}), 'assets');
+
+        // Reproduce an unrelated settings-modal save after comparison data was
+        // resolved: axis/chart style changes must not evict the live series.
+        const editedPair = getSettingsForPair('EUR-USD', 'fx');
+        editedPair.axisScales.percentage = updatedPercentageAxis;
+        editedPair.areaFill = false;
+        editedPair.signals = editedPair.signals.map((signal) =>
+            signal.id === transientSignal.id
+                ? {
+                      ...signal,
+                      style: updatedComparisonStyle,
+                  }
+                : signal,
+        );
+        setPairSettings('EUR-USD', editedPair);
+        flushWrite();
+
+        const livePair = getSettingsForPair('EUR-USD', 'fx');
+        const liveComparison = livePair.signals.find((signal) => signal.id === transientSignal.id);
+        expect(livePair.axisScales.percentage).toEqual(updatedPercentageAxis);
+        expect(livePair.areaFill).toBe(false);
+        expect(liveComparison).toBeDefined();
+        expect(liveComparison?.style).toEqual(updatedComparisonStyle);
+        expect(liveComparison?.params._resolvedData).toEqual(largeResolvedData);
+
+        const liveAssetScope = getSettingsForPair('asset-unconfigured', 'assets');
+        const scopedComparison = liveAssetScope.signals.find((signal) => signal.id === transientSignal.id);
+        expect(scopedComparison?.params._resolvedData).toEqual(largeResolvedData);
+        expect(getSettingsForPair('GBP-USD', 'fx').signals).toEqual([]);
+
+        const raw = backing.get(storageKeyFor(user));
+        expect(raw).toBeDefined();
+        expect(raw).not.toContain('"_resolvedData"');
+        expect(raw).not.toContain(runtimePayloadMarker);
+        expect(raw).toContain('"_assetDisplayName"');
+
+        const payload = persistedFor(user);
+        expect(payload).not.toBeNull();
+        const persistedOverrides = new Map(payload!.pairOverrides);
+        const persistedPair = persistedOverrides.get('EUR-USD');
+        expect(persistedPair?.axisScales.percentage).toEqual(updatedPercentageAxis);
+        expect(persistedPair?.areaFill).toBe(false);
+        expect(persistedPair?.signals).toEqual([expectedEditedStoredSignal]);
+        expect(persistedOverrides.get('__global_assets__')?.signals).toEqual([expectedStoredSignal]);
+        expect(payload!.globalSettings.signals).toEqual([]);
+
+        const otherUser = freshUser();
+        expect(backing.has(storageKeyFor(otherUser))).toBe(false);
+        expect(getSettingsForPair('EUR-USD', 'fx').signals).toEqual([]);
+        expect(getSettingsForPair('asset-unconfigured', 'assets').signals).toEqual([]);
+        expect(new Set(setItem.mock.calls.map(([key]) => key))).toEqual(new Set([storageKeyFor(user)]));
+
+        // Returning to the first account re-hydrates the deliberately scrubbed
+        // payload; only that boundary removes the transient comparison series.
+        transitionClientSession(user);
+        expect(getSettingsForPair('EUR-USD', 'fx')).toMatchObject({
+            areaFill: false,
+            axisScales: {percentage: updatedPercentageAxis},
+            signals: [expectedEditedStoredSignal],
+        });
+        expect(getSettingsForPair('asset-unconfigured', 'assets').signals).toEqual([expectedStoredSignal]);
+        expect(getSettingsForPair('GBP-USD', 'fx').signals).toEqual([]);
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(apiTransportCall).not.toHaveBeenCalled();
+    });
+
+    it('persists Calendar Return windows independently per account and asset without backend calls', () => {
+        const firstUser = freshUser();
+        setPairSettings(
+            'asset-7',
+            settings({
+                calendarReturnWindow: {
+                    kind: 'custom',
+                    preset: '1m',
+                    customAmount: 2,
+                    customUnit: 'months',
+                },
+            }),
+        );
+        setPairSettings(
+            'asset-8',
+            settings({
+                calendarReturnWindow: {
+                    kind: 'preset',
+                    preset: '1y',
+                    customAmount: 3,
+                    customUnit: 'years',
+                },
+            }),
+        );
+        flushWrite();
+
+        expect(getGlobalSettings('assets').calendarReturnWindow).toEqual(DEFAULT_CHART_SETTINGS.calendarReturnWindow);
+
+        const secondUser = freshUser();
+        setPairSettings(
+            'asset-7',
+            settings({
+                calendarReturnWindow: {
+                    kind: 'preset',
+                    preset: '1w',
+                    customAmount: 3,
+                    customUnit: 'years',
+                },
+            }),
+        );
+        flushWrite();
+
+        expect(getSettingsForPair('asset-7', 'assets').calendarReturnWindow).toEqual({
+            kind: 'preset',
+            preset: '1w',
+            customAmount: 3,
+            customUnit: 'years',
+        });
+        expect(getSettingsForPair('asset-8', 'assets').calendarReturnWindow).toEqual(DEFAULT_CHART_SETTINGS.calendarReturnWindow);
+
+        transitionClientSession(firstUser);
+        expect(getSettingsForPair('asset-7', 'assets').calendarReturnWindow).toEqual({
+            kind: 'custom',
+            preset: '1m',
+            customAmount: 2,
+            customUnit: 'months',
+        });
+        expect(getSettingsForPair('asset-8', 'assets').calendarReturnWindow).toEqual({
+            kind: 'preset',
+            preset: '1y',
+            customAmount: 3,
+            customUnit: 'years',
+        });
+
+        transitionClientSession(secondUser);
+        expect(getSettingsForPair('asset-7', 'assets').calendarReturnWindow.preset).toBe('1w');
+        expect(new Set(setItem.mock.calls.map(([key]) => key))).toEqual(new Set([storageKeyFor(firstUser), storageKeyFor(secondUser)]));
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(apiTransportCall).not.toHaveBeenCalled();
     });
 
     it('keeps working in memory when the browser refuses the write', () => {

@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_cointracking": {
+      "description": "Importe les transactions des exports CSV de CoinTracking. Prend en charge les achats et ventes de cryptos contre monnaie fiduciaire, les transferts, les récompenses de staking et les frais en monnaie fiduciaire.",
+      "name": "CoinTracking"
+    }
+  }
+}

@@ -38,7 +38,7 @@ But `AssetSourceError` exposes the field as `error_code`, not `code`. Reading
 ## Solution
 
 `e.code` → `e.error_code` in the two occurrences (commit landed in
-G-batch6, 2026-04-25, `c943f219`).
+G-batch6, 2026-04-25, `bf0234145`).
 
 ```python
 except AssetSourceError as e:
@@ -87,6 +87,6 @@ Test passes ✅. With this fix the entire `assets.py` file is `e.code`-clean.
 | Role | Path |
 |------|------|
 | Bug location & fix | `backend/app/api/v1/assets.py` (handlers `market_data_summary`, `wipe_market_data`, **and `bulk_upsert_events` — fixed 2026-04-25 post-lint**) |
-| Exception definition | `backend/app/services/asset_source_errors.py` (`AssetSourceError.error_code`) |
+| Exception definition | `backend/app/services/asset_sources/core.py` (`AssetSourceError.error_code`) |
 | Tests that caught it | `backend/test_scripts/test_api/test_market_data_wipe.py` (G-batch6, original 2 sites); `backend/test_scripts/test_api/test_assets_events.py::test_bulk_upsert_events_currency_mismatch_returns_400` (post-lint, residual site) |
 

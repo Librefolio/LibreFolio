@@ -3,9 +3,10 @@
  *
  * Loads once per session from GET /fx/providers/routes and derives:
  *  - the set of currency pair slugs that are configured (backend truth)
- *  - the set of currencies that are "reachable" via a configured route, i.e. every
- *    currency that appears at least once in any leg/step of a configured conversion
- *    (base, quote, or any chain step's `from`/`to`).
+ *  - the set of currencies that are "reachable" via a configured route, i.e. the two
+ *    endpoints (base and quote) of every configured pair. The currency a chain passes
+ *    through is not one of them: syncing a chain stores only the composed rate of its
+ *    own pair, so nothing converts to that currency until it is an endpoint itself.
  *
  * This is the authoritative source of configured pairs/currencies — unlike
  * `fxStoreRegistry.getRegisteredPairs()`, which only reflects the in-memory
@@ -60,11 +61,7 @@ export async function ensureFxRoutesLoaded(): Promise<void> {
         loading = true;
         try {
             const response = await zodiosApi.list_routes_api_v1_fx_providers_routes_get();
-            const items = ((response as any)?.items ?? []) as Array<{
-                base: string;
-                quote: string;
-                chain_steps?: Array<{from: string; to: string; provider: string}> | null;
-            }>;
+            const items = response?.items ?? [];
 
             const currencies = new Set<string>();
             const slugs = new Set<string>();
@@ -72,10 +69,6 @@ export async function ensureFxRoutesLoaded(): Promise<void> {
                 if (item.base) currencies.add(item.base.toUpperCase());
                 if (item.quote) currencies.add(item.quote.toUpperCase());
                 if (item.base && item.quote) slugs.add(createPairSlug(item.base, item.quote));
-                for (const step of item.chain_steps ?? []) {
-                    if (step.from) currencies.add(step.from.toUpperCase());
-                    if (step.to) currencies.add(step.to.toUpperCase());
-                }
             }
 
             configuredCurrencySet = currencies;
@@ -101,7 +94,7 @@ export function invalidateFxRoutes(): void {
     bumpVersion();
 }
 
-/** Set of currencies reachable via a configured route. */
+/** Set of currencies reachable via a configured route: the endpoints of every configured pair. */
 export function getConfiguredCurrencySet(): Set<string> {
     return configuredCurrencySet;
 }

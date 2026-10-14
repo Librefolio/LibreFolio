@@ -2,13 +2,17 @@
 title: "Domain: SCHEDULER"
 category: domain
 features: [F-052, F-053]
-status: planned
-mkdocs: null
+status: implemented
+mkdocs: "developer/backend/scheduler.md"
 ---
 
 # Domain: SCHEDULER
 
-> ⚠️ This domain is under active development (Phase 7). Content reflects design intent, not final implementation.
+> **Corrected 2026-10-09 (checked at `586a4f0ea`).** This page was written as a design ("under active development").
+> The scheduler shipped in Phase 08 ([[sources/phase08-scheduler-backend]], [[entities/market-data-scheduler]]): code in
+> `backend/app/services/scheduler/`, admin endpoints `GET /api/v1/settings/scheduler/state` and `/log`, configuration
+> in the admin Global settings (`SchedulerConfigModal.svelte`). History-sync times are in the configured **scheduler
+> timezone**, not server time ([[decisions/scheduler-converts-at-decision]]). The narrative below is kept.
 
 > Automated market data maintenance — keeps asset prices and FX rates current in the background so users never have to manually trigger syncs.
 
@@ -26,8 +30,8 @@ The admin can configure and monitor the scheduler via the Scheduler Settings UI 
 
 | Code | Feature | Layer | Role in domain | Status |
 |------|---------|-------|----------------|--------|
-| [[F-052]] | Market Data Scheduler (asyncio daemon) | backend | core — background tick dispatcher, leader election | planned |
-| [[F-053]] | Scheduler Settings UI (admin-managed cron config) | frontend | display — admin panel to configure and monitor scheduler | planned |
+| [[F-052]] | Market Data Scheduler (asyncio daemon) | backend | core — background tick dispatcher, leader election | documented |
+| [[F-053]] | Scheduler Settings UI (admin-managed cron config) | frontend | display — admin panel to configure and monitor scheduler | documented |
 
 ## Architecture at a glance
 

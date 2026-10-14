@@ -34,6 +34,9 @@ backend/
 | Asset Providers | `backend-providers-asset.instructions.md` — base class, cache, thread isolation |
 | FX Providers | `backend-providers-fx.instructions.md` — central banks, MANUAL sentinel |
 | BRIM Plugins | `backend-providers-brim.instructions.md` — broker import, fake asset ID flow |
+| Technical Signals | `backend-signals.instructions.md` — plugins, runtime, status and data policy |
+| Risk Engine | `backend-risk.instructions.md` — analytics, DB-free context, workers, i18n keys |
+| Tool Platform | `backend-tools.instructions.md` — Pydantic contracts, isolated jobs, registry |
 | Testing | `backend-testing.instructions.md` — pytest patterns, fixtures, coverage |
 | Lint & Format | skill `lint-format-backend` — ruff + black, rules, workflow |
 | Dead code | skill `lint-format-backend` — `./dev.py lint --dead-code` (vulture), test-only detection |
@@ -44,6 +47,46 @@ backend/
 - Multi-worker: JWT stateless (no session store)
 - First user = automatic admin
 - Broker roles: Owner / Editor / Viewer
+
+## Financial Math — One Home
+
+Every financial calculation — purchase cost, P&L, capital, NAV, returns, FX valuation, yields — has exactly one
+implementation. Its home is `backend/app/services/financial_math/` (developer decision, 2026-10-11). The rules of the
+layer — its boundaries, imports and guards — are in `financial-math.instructions.md`, auto-loaded for that folder.
+
+1. **Search before writing.** Before computing anything financial, look in `financial_math/` and in the table below. If
+   the calculation exists, call it — with parameters when your case differs — instead of deriving it again.
+2. **Add there.** A new calculation goes into `financial_math/`, next to the ones it relates to, with its unit tests.
+3. **No local or partial copies.** A loop over transactions that recomputes cost, capital, NAV or P&L outside these
+   engines is a defect, even when it serves a single card or export: read the engine's output instead.
+4. **Report copies.** Report any copy you meet, old or new, to the coordinator (backlog 38 or the consolidation lot).
+   Before closing work that touched financial math, search the project for copies of what you changed.
+
+| Calculation | Where it lives |
+|---|---|
+| Average purchase cost (WAC), cost-basis steps and conversions | `services/financial_math/average_cost.py` |
+| Cash per broker and currency, its daily value, FX results on cash | `services/financial_math/native_cash.py` |
+| Daily portfolio state: NAV, capital baseline, P&L, per-broker contributions | `services/financial_math/portfolio/` (`daily_state.py`, run by `engine.py`) |
+| FIFO lots and realized gains | `services/financial_math/fifo/` |
+| Lots analysis: lot histories, economic events, average cost lines | `services/financial_math/lots/` |
+| Simple ROI, TWRR, MWRR, annualization | `services/financial_math/returns.py` |
+| Holding value from quantity and price | `services/financial_math/valuation.py` |
+| Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
+| Yield on Cost | `services/financial_math/yield_on_cost.py` |
+| FX conversion | `services/fx.py` (`convert_bulk`) |
+| Technical indicators | `services/signal_plugins/`, `services/signal_runtime.py` |
+| Risk metrics and optimization | `services/risk/quant/` |
+| PAC allocation | `services/pac_allocator/` |
+
+Risk, signals and PAC stay where they are, but take the common math — returns, annualization, conversions, average
+cost, valuation — from `financial_math/`. The frontend computes none of these (`.github/copilot-instructions.md`,
+decision 1).
+
+`utils/` holds leaf functions only: they never import services; anything that needs FX, assets or other services
+belongs to a service layer, such as `financial_math/` (developer decision D-P7, 2026-10-12). Its folders group them by
+type: `utils/asset/` (sectors, geographic areas, identifiers, display-name locale), `utils/fx/` (currencies),
+`utils/runtime/` (version, client network address, TTL caches); `datetime_utils`, `json_utils` and `decimal_utils` stay
+at the root. The truncation to the database precision reads the models, so it lives in `db/precision.py`.
 
 ## Where to Find Things
 
