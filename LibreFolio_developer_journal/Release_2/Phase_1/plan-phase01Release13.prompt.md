@@ -774,3 +774,10 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > - Nel piano di H una tabella nominava l'hotfix: resa neutra prima del commit.
 > - Dalla verifica di A1 è nata la decisione 36, cosa vede un utente dei dati degli altri.
 > - L'ID T-B4 compare due volte nel backlog: il coordinatore colori rinomina la sua voce.
+>
+> **Aggiornamento (00:55)**: entra anche H CP1 (`6a605904c`). Prima l'aggiornamento di base con A1: H ha risolto 6
+> conflitti d'import e rivalidato (`all-backend` uguale alla base). Il CP2 di H si divide:
+> - CP2a: pacchetto `config/`, letture d'ambiente e `api/v1/system/`, senza tagliare `main.py`;
+> - CP2b: il taglio di `main.py`, dopo il commit del coordinatore.
+>
+> Così CP3 (segreti) e CP4 (configurazione pubblica) non aspettano più la release.
