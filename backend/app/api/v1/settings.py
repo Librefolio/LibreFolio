@@ -50,8 +50,8 @@ from backend.app.services.accounts.settings_service import (
     update_global_settings,
     update_user_settings,
 )
-from backend.app.services.scheduler import read_job_log
-from backend.app.services.scheduler.state import load_state
+from backend.app.services.platform.scheduler import read_job_log
+from backend.app.services.platform.scheduler.state import load_state
 from backend.app.utils.runtime.cache import clear_all_caches, clear_cache, list_caches
 
 logger = structlog.get_logger(__name__)
