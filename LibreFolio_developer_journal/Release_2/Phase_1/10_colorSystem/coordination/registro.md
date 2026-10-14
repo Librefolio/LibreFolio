@@ -401,3 +401,61 @@
   - Revisione combinata: `core-unit` 136 file / 4.335 test, `--check` pulito (81 file sotto la registrazione: li stringe
     T), `svelte-check` 0/0, CSS identico al target.
   - T avvisato: la riga di `themeStore.ts` cambierà di nuovo in T-4.
+
+## 23:50 — Checkpoint del codice di G
+
+- **G, checkpoint 1:**
+  - `e23bf842c` `fix(assets): chip names provider on late catalogue` (G-4);
+  - `0076f4269` `test(gallery): deterministic shots, guard to exit`: `galleryShot.ts`, test paths, G-3, G-6 (uscita
+    sicura), `live_price_check.py`, piano 56, backlog G-1…G-8.
+- **Prove dichiarate da G:**
+  - statica pulita; test G-4 verde senza righe live;
+  - promote-merge 4/4; `g-verify2` 64/66, con i 2 rossi rifatti da soli verdi 2/2 (lentezza con carico 40–94 delle
+    corsie della 1.3);
+  - `live_price_check.py` riconosce la run nulla di `g-final-r2`.
+- **Merge di base con `424adb31c`, lasciato aperto per G.** Conflitti:
+  - `BACKLOG` (sezione G accanto a quella di T): si somma;
+  - posizione del piano, che git ha già portato in `10_colorSystem/G-galleryDeterminism/`;
+  - `README` del toolkit: si somma, e gli esempi passano da `python3` a `pipenv run python`.
+
+  G valida la revisione combinata (`--check`, `core-unit`, `front check`, G-4 da solo, `live_price_check`), poi il
+  coordinatore chiude il merge e integra G.
+- **Changelog di G-4**, da girare alla 1.3 dopo l'integrazione: «🐛 Fixed — The asset page now names the data provider
+  (for example «Yahoo Finance») instead of its internal code when the provider list arrives after the asset.»
+- **Misura del 15/10, comandi di G:**
+  1. `dev.py front build`, una volta sola;
+  2. `gallery_snapshot.sh g-final2-r1|r2 --port 6150 --data-dir /tmp/librefolio-r2-main`;
+  3. `live_price_check` su ogni snapshot;
+  4. `gallery_tool diff … --emit-masks` e `stability`.
+
+  Il cancello di R userà `--ignore-masks …/g-final2__r1__vs__r2/masks --stability …/stability.json`.
+- **Per la designer:**
+  - il tooltip «Promuovi coppia» resta sopra il titolo del modale di unione per 30 s;
+  - lo spazio di 8 px del filtro «Caricato da».
+- **Wiki, da proporre al historian:** G-6 (rotte tolte con la pagina viva), `networkidle` che in una SPA si risolve
+  subito, due comportamenti di Playwright 1.61.
+
+## 23:55 — T-2 e G integrati in `dev_release2`
+
+- **T-2 (accesso), checkpoint `a73eb7eda`, 20 file.**
+  - Card, campi, icone `User`/`Mail`/`Lock` (prop `icon` di `PasswordInput`), box dei requisiti sulla famiglia
+    `success`, barra a 3 stati, via il sottotitolo e la chiave `auth.registerTitle` (4 sorgenti).
+  - Pagina 404 e link del caffè sui ruoli. E2E `theme-roles` 8/8; baseline stretta (m1 11.325, m2 1.782).
+  - **Scatti approvati dal developer:** 28 PNG in `review/T2-auth/` della sessione del coordinatore.
+  - **Per la designer, da T:**
+    - in scuro lo sfondo del login è ancora vecchio (T-5, dopo G);
+    - il riquadro terminale di «password dimenticata» resta ardesia (manca un ruolo «codice»);
+    - il caffè in chiaro è `#895000` (5,95:1), più bruno del render;
+    - i controlli in alto cambiano con T-3.
+- **G:** merge di base chiuso dal coordinatore, `d1f98bbfb`. G aveva risolto il backlog, il piano spostato in
+  `G-galleryDeterminism/` e il README con `pipenv run python -m …live_price_check`.
+- **Integrazione:**
+  1. T: merge di base `d672b45da` → `d80b986bf`, albero = simulazione; avanzamento veloce di `dev_release2` a
+     `d80b986bf`.
+  2. G: merge di `d80b986bf` → `60b3f27aa`, albero = simulazione; avanzamento veloce di `dev_release2` a `60b3f27aa`.
+  3. Controllo d'integrazione nella corsia 6150: `core-unit` 130 file, 4.245 test verdi; `--check` pulito.
+- **1.3:** ha sospeso i suoi commit fino alla conferma dello SHA. Da dirle:
+  - T-B4 è nella sezione «T (colori)»;
+  - la riga di changelog di G-4;
+  - FE5 (la pagina dell'asset) ora è libera.
+- **Domani alle 09:00:** misura finale sul `dev_release2` con G (comandi di G, `live_price_check` con pipenv).
