@@ -19,12 +19,15 @@ from backend.app.db.models import (
     FxRate,
     # Enums
     IdentifierType,
+    OnboardingFlow,
+    OnboardingStatus,
     PriceHistory,
     ProviderInputType,
     Transaction,
     TransactionType,
     # Models
     User,
+    UserOnboardingProgress,
     UserRole,
     UserSettings,
 )
@@ -37,10 +40,13 @@ __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting
     "AssetEventType",
     "TransactionType",
     "UserRole",
+    "OnboardingFlow",
+    "OnboardingStatus",
     "ProviderInputType",
     # Models
     "User",
     "UserSettings",
+    "UserOnboardingProgress",
     "Broker",
     "BrokerUserAccess",
     "Asset",

@@ -3,16 +3,38 @@ from __future__ import annotations
 import importlib
 import importlib.util
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Type
 
 from backend.app.config import PROJECT_ROOT
 from backend.app.logging_config import get_logger
-from backend.app.services.risk.base import RiskAnalytic
-from backend.app.services.signal_plugins.base import SignalPlugin
 
 logger = get_logger(__name__)
+
+PLUGIN_MODULE_NAME = "plugin"
+"""A plugin is a folder ``<family>/<name>/``: ``__init__.py`` holds only its docstring and the code is in ``plugin.py``,
+loaded as ``<namespace>.<name>.plugin``."""
+
+_LAZY_PLUGIN_BASES = {
+    "RiskAnalytic": "backend.app.services.risk.base",
+    "SignalPlugin": "backend.app.services.signal_plugins.base",
+}
+
+
+def __getattr__(name: str) -> object:
+    """Preserve existing base-class aliases without eager domain imports."""
+    module_name = _LAZY_PLUGIN_BASES.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(importlib.import_module(module_name), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(set(globals()) | _LAZY_PLUGIN_BASES.keys())
 
 
 class PluginRegistryError(RuntimeError):
@@ -28,6 +50,57 @@ class PluginDiscoveryFailure:
     module_name: str
     error_type: str
     message: str
+
+
+def _plugin_entry_name(entry: Path) -> str:
+    """A plugin's name: its folder name, or the stem of a single-file module."""
+    return entry.stem if entry.suffix == ".py" else entry.name
+
+
+def _load_module_from_file(module_name: str, path: Path):
+    """Execute ``path`` as ``module_name``; on failure nothing is left in ``sys.modules``."""
+    spec = importlib.util.spec_from_file_location(module_name, str(path))
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Unable to create module spec for {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        sys.modules.pop(module_name, None)
+        raise
+    return module
+
+
+def _load_plugin_folder(folder: Path, module_name: str) -> None:
+    """Load ``folder/plugin.py`` as ``module_name``, its package first so that relative imports resolve."""
+    init_file = folder / "__init__.py"
+    plugin_file = folder / f"{PLUGIN_MODULE_NAME}.py"
+    if not init_file.is_file():
+        raise ImportError(f"Plugin folder {folder.name}/ has no __init__.py")
+    if not plugin_file.is_file():
+        raise ImportError(f"Plugin folder {folder.name}/ has no {PLUGIN_MODULE_NAME}.py")
+    package_name = module_name.rsplit(".", 1)[0]
+    package = sys.modules.get(package_name)
+    package_added = package is None
+    if package_added:
+        spec = importlib.util.spec_from_file_location(package_name, str(init_file), submodule_search_locations=[str(folder)])
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Unable to create package spec for {folder}")
+        package = importlib.util.module_from_spec(spec)
+        sys.modules[package_name] = package
+        try:
+            spec.loader.exec_module(package)
+        except Exception:
+            sys.modules.pop(package_name, None)
+            raise
+    try:
+        module = _load_module_from_file(module_name, plugin_file)
+    except Exception:
+        if package_added:
+            sys.modules.pop(package_name, None)
+        raise
+    setattr(package, PLUGIN_MODULE_NAME, module)
 
 
 class PluginDiscoveryError(PluginRegistryError):
@@ -48,6 +121,10 @@ class AbstractPluginRegistry:
         setattr(cls, cls._get_storage_attribute(), {})
         cls._discovery_done = False
         cls._discovery_errors = ()
+        # Serialises the first discovery: callers run on worker threads (asyncio.to_thread), and a
+        # caller arriving mid-discovery must wait for the full catalogue. Re-entrant, so a plugin
+        # module that calls back into its own registry while it is being imported does not block.
+        cls._discovery_lock = threading.RLock()
 
     @classmethod
     def register(cls, plugin_class: Type) -> None:
@@ -93,10 +170,33 @@ class AbstractPluginRegistry:
 
     @classmethod
     def auto_discover(cls) -> None:
-        """Import plugin modules from the registry folder exactly once."""
+        """Import plugin modules from the registry folder exactly once, safely across threads.
+
+        ``_discovery_done`` turns true only after every module has been executed, and the whole
+        discovery runs under the registry's lock: a concurrent caller waits for it instead of
+        skipping the modules another thread has put in ``sys.modules`` but not executed yet, and
+        walking a half-filled catalogue.
+        """
         if cls._discovery_done:
             cls._raise_discovery_errors_if_needed()
             return
+        with cls._discovery_lock:
+            if cls._discovery_done:
+                cls._raise_discovery_errors_if_needed()
+                return
+            cls._discover_modules()
+        cls._raise_discovery_errors_if_needed()
+
+    @classmethod
+    def _discover_modules(cls) -> None:
+        """Import every plugin of the folder; called once, under the discovery lock.
+
+        A plugin is a folder holding ``__init__.py`` and ``plugin.py`` (see ``PLUGIN_MODULE_NAME``). A single
+        ``<name>.py`` module is still loaded, for test fixtures and test registries; the first-party families keep
+        every plugin in a folder (``utils gate-plugin-layout``). A folder with neither file is data (``static/``,
+        ``sample_reports/``) and is skipped. Names starting with ``_`` and the ignored stems are skipped in both
+        forms, and the order is the names' order, whichever the form.
+        """
         target_dir = cls._get_plugin_directory()
 
         if not target_dir.exists():
@@ -104,23 +204,23 @@ class AbstractPluginRegistry:
             return
 
         failures: list[PluginDiscoveryFailure] = []
-        for py in sorted(target_dir.glob("*.py")):
-            if py.name == "__init__.py" or py.name.startswith("_") or py.stem in cls._ignored_module_stems() or not py.is_file():
+        seen: set[str] = set()
+        # By name; for a name that is both ``x.py`` and ``x/``, the module first, so the failure is the same everywhere.
+        for entry in sorted(target_dir.iterdir(), key=lambda path: (_plugin_entry_name(path), path.is_dir())):
+            module_name = cls._plugin_module_name(entry)
+            if module_name is None:
                 continue
-            module_name = f"{cls._get_module_namespace()}.{py.stem}"
+            name = _plugin_entry_name(entry)
             try:
+                if name in seen:
+                    raise ImportError(f"Plugin '{name}' exists both as {name}.py and as {name}/")
+                seen.add(name)
                 if module_name in sys.modules:
                     continue
-                spec = importlib.util.spec_from_file_location(module_name, str(py))
-                if spec is None or spec.loader is None:
-                    raise ImportError(f"Unable to create module spec for {py}")
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[module_name] = module
-                try:
-                    spec.loader.exec_module(module)
-                except Exception:
-                    sys.modules.pop(module_name, None)
-                    raise
+                if entry.is_dir():
+                    _load_plugin_folder(entry, module_name)
+                else:
+                    _load_module_from_file(module_name, entry)
             except Exception as e:
                 failure = PluginDiscoveryFailure(
                     module_name=module_name,
@@ -129,9 +229,23 @@ class AbstractPluginRegistry:
                 )
                 failures.append(failure)
                 logger.exception("Error importing plugin module", module_name=module_name, error_type=failure.error_type, error=failure.message)
-        cls._discovery_done = True
+        # Errors first: a caller that sees the discovery done without the lock also sees its errors.
         cls._discovery_errors = tuple(failures)
-        cls._raise_discovery_errors_if_needed()
+        cls._discovery_done = True
+
+    @classmethod
+    def _plugin_module_name(cls, entry: Path) -> str | None:
+        """The module ``entry`` is loaded as, or None when it is not a plugin of this registry."""
+        name = _plugin_entry_name(entry)
+        if name.startswith("_") or name in cls._ignored_module_stems():
+            return None
+        if entry.is_dir():
+            if not (entry / "__init__.py").exists() and not (entry / f"{PLUGIN_MODULE_NAME}.py").exists():
+                return None
+            return f"{cls._get_module_namespace()}.{name}.{PLUGIN_MODULE_NAME}"
+        if entry.suffix == ".py" and entry.is_file():
+            return f"{cls._get_module_namespace()}.{name}"
+        return None
 
     @classmethod
     def get_discovery_errors(cls) -> tuple[PluginDiscoveryFailure, ...]:
@@ -231,7 +345,7 @@ class AbstractProviderRegistry(AbstractPluginRegistry):
     def list_providers(cls) -> List[Dict[str, str]]:
         providers = []
         cls.auto_discover()
-        for code, provider_class in cls._providers.items():
+        for code, provider_class in list(cls._providers.items()):
             try:
                 instance = provider_class()
                 name = getattr(instance, "provider_name", None) or getattr(instance, "name", code)
@@ -243,7 +357,7 @@ class AbstractProviderRegistry(AbstractPluginRegistry):
     @classmethod
     def shutdown_all_providers(cls) -> None:  # pragma: no cover
         cls.auto_discover()
-        for code, provider_class in cls._providers.items():
+        for code, provider_class in list(cls._providers.items()):
             try:
                 provider_class().shutdown()
             except Exception as e:
@@ -298,6 +412,8 @@ class SignalPluginRegistry(AbstractPluginRegistry):
     @classmethod
     def _validate_plugin_class(cls, plugin_class: Type) -> None:
         super()._validate_plugin_class(plugin_class)
+        from backend.app.services.signal_plugins.base import SignalPlugin  # noqa: PLC0415 - keep the generic registry independent of signal imports
+
         if not issubclass(plugin_class, SignalPlugin):
             raise TypeError("SignalPluginRegistry entries must extend SignalPlugin")
         plugin_class.validate_definition()
@@ -306,7 +422,7 @@ class SignalPluginRegistry(AbstractPluginRegistry):
     def list_definitions(cls):
         """Return stable static catalog definitions sorted by signal code."""
         cls.auto_discover()
-        return [plugin_class.catalog_definition() for _code, plugin_class in sorted(cls._plugins.items())]
+        return [plugin_class.catalog_definition() for _code, plugin_class in sorted(cls._plugins.items()) if plugin_class.catalog_visible]
 
 
 class RiskAnalyticRegistry(AbstractPluginRegistry):
@@ -339,6 +455,8 @@ class RiskAnalyticRegistry(AbstractPluginRegistry):
     @classmethod
     def _validate_plugin_class(cls, plugin_class: Type) -> None:
         super()._validate_plugin_class(plugin_class)
+        from backend.app.services.risk.base import RiskAnalytic  # noqa: PLC0415 - keep the generic registry independent of risk imports
+
         if not issubclass(plugin_class, RiskAnalytic):
             raise TypeError("RiskAnalyticRegistry entries must extend RiskAnalytic")
         plugin_class.validate_definition()
@@ -379,7 +497,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
 
         # Get all plugins with their instances and priorities
         plugins_with_priority = []
-        for code, plugin_cls in cls._providers.items():
+        for code, plugin_cls in list(cls._providers.items()):
             try:
                 instance = plugin_cls()
                 priority = getattr(instance, "detection_priority", 100)
@@ -423,7 +541,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
         """
         cls.auto_discover()
         compatible: list[tuple[str, int]] = []
-        for code, plugin_cls in cls._providers.items():
+        for code, plugin_cls in list(cls._providers.items()):
             try:
                 instance = plugin_cls()
                 if instance.can_parse(file_path):
@@ -443,7 +561,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
         """
         cls.auto_discover()
         result = []
-        for _code, plugin_cls in cls._providers.items():
+        for _code, plugin_cls in list(cls._providers.items()):
             try:
                 instance = plugin_cls()
                 result.append(instance.to_plugin_info())
@@ -483,6 +601,7 @@ def register_plugin(registry_class: Type[AbstractPluginRegistry]):
 
 
 __all__ = [
+    "PLUGIN_MODULE_NAME",
     "AbstractPluginRegistry",
     "AbstractProviderRegistry",
     "AssetProviderRegistry",

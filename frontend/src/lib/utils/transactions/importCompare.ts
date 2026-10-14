@@ -7,13 +7,11 @@
  * render the type cell's HTML. They read only their arguments, so they can be unit-tested
  * without mounting the wizard; the label the type cell shows is passed in by the caller
  * (which owns the `$t` i18n store), keeping this module free of the Svelte runtime.
- *
- * `escHtml` escapes only `& < >` on purpose — it matches the historical inline behaviour
- * and must not be swapped for the stronger 5-char `escapeHtml`, or the rendered markup
- * (and any snapshot of it) would change.
+ * Every value interpolated into markup goes through the shared `escapeHtml`.
  */
 import type {TransactionCreateItem} from '$lib/types';
 import type {TXReadItem} from '$lib/components/transactions/types';
+import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
 /** The neutral shape both a parsed row and a DB row collapse to before cell-building. */
 export interface CmpSource {
@@ -26,18 +24,13 @@ export interface CmpSource {
     description: string;
 }
 
-/** Escape only `& < >` (three chars) — deliberately weaker than the shared `escapeHtml`. */
-export function escHtml(s: string): string {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 /**
  * The compare grid's "type" cell: the transaction-type icon plus its already-translated
  * label. `label` is passed in (the caller resolves it via `$t`) so this stays pure.
  */
 export function compareTypeCellHtml(type: string, label: string): string {
     const slug = type.toLowerCase().replace(/_/g, '-');
-    return `<span class="inline-flex items-center gap-1.5"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.15rem;height:1.15rem" class="shrink-0 object-contain" onerror="this.style.display='none'"/><span>${escHtml(label)}</span></span>`;
+    return `<span class="inline-flex items-center gap-1.5"><img src="/icons/transactions/${slug}.png" alt="" style="width:1.15rem;height:1.15rem" class="shrink-0 object-contain" onerror="this.style.display='none'"/><span>${escapeHtml(label)}</span></span>`;
 }
 
 /** Collapse a freshly-parsed transaction into a `CmpSource`, unwrapping array-wrapped fields. */

@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_cointracking": {
+      "description": "Importa le transazioni dagli export CSV di CoinTracking. Supporta compravendite di cripto in valuta fiat, trasferimenti, ricompense di staking e commissioni in valuta fiat.",
+      "name": "CoinTracking"
+    }
+  }
+}

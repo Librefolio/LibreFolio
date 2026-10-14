@@ -13,7 +13,7 @@ Le **criptovalute** sono asset digitali che utilizzano la tecnologia crittografi
 | **Valuta** | Tipicamente quotate in USD, ma scambiabili contro molte coppie di trading fiat e crypto |
 | **Dividendi** | Assenti per la maggior parte (alcuni token DeFi offrono ricompense di staking) |
 | **Volatilità** | Significativamente più alta rispetto agli asset tradizionali |
-| **Provider tipici** | Yahoo Finance (es. `BTC-USD`), Manuale |
+| **Provider tipici** | Yahoo Finance (es. `BTC-USD`), o prezzi inseriti manualmente nell'[editor dati](../../../user/assets/detail/data-editor.md) |
 
 ---
 

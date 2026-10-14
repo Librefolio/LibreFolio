@@ -2,7 +2,7 @@
 title: "Domain: TECHNICAL ANALYSIS (Signals)"
 category: domain
 features: [F-037, F-038, F-039, F-040, F-041, F-042, F-043, F-044, F-045]
-status: in-progress
+status: stable
 mkdocs: null
 related: [signal-backend-plugin-architecture, openapi-zod-discriminator-type-erasure]
 ---
@@ -23,7 +23,7 @@ The frontend consumes backend catalog JSON Schema to build controls and uses one
 
 | Code | Feature | Layer | Role in domain | Status |
 |------|---------|-------|----------------|--------|
-| [[F-037]] | Signal Library Framework (abstract base + registry) | backend + frontend | core — Python plugin registry/service + schema-driven frontend | in-progress |
+| [[F-037]] | Signal Library Framework (abstract base + registry) | backend + frontend | core — Python plugin registry/service + schema-driven frontend | implemented |
 | [[F-038]] | EMA Signal | backend | core — canonical price-axis line | implemented |
 | [[F-039]] | RSI Signal | backend | core — bounded oscillator + levels/regions | implemented |
 | [[F-040]] | MACD Signal | backend | core — flat 2-line + histogram composite | implemented |
@@ -55,6 +55,8 @@ graph LR
 - Technical controls come from catalog JSON Schema; local `dynamicOptionsKey` remains only for comparison signals.
 - `ok|partial|unavailable|failed` is per instance; one bad plugin never erases prices/rates or sibling signals.
 - [[problems/openapi-zod-discriminator-type-erasure]] — generated discriminated unions require the targeted codegen post-process.
+- [[decisions/drawdown-full-history-warmup]] — drawdown's `full_history` warmup is a toggle on the chart, while AI
+  Export always uses the full history.
 
 ## Known problems / limitations
 

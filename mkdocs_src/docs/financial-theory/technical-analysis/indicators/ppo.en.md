@@ -36,9 +36,9 @@ A €2 MACD reading means something very different for a €10 stock than for a 
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Fast Period | `fastPeriod` | 12 | Short-term EMA window (days). |
-| Slow Period | `slowPeriod` | 26 | Long-term EMA window (days), also the PPO's normalising denominator. |
-| Signal Period | `signalPeriod` | 9 | EMA smoothing applied to the PPO line. |
+| Fast Period | `fastPeriod` | 12 | Short-term EMA window (sessions). |
+| Slow Period | `slowPeriod` | 26 | Long-term EMA window (sessions), also the PPO's normalising denominator. |
+| Signal Period | `signalPeriod` | 9 | EMA smoothing applied to the PPO line (sessions). |
 
 ---
 

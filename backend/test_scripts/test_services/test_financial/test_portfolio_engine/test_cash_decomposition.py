@@ -22,11 +22,11 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 from backend.app.db.models import TransactionType
-from backend.app.services.portfolio_engine import (
-    ClassifiedTransaction,
-    DailyStateBuilder,
-)
-from backend.app.services.price_resolver import build_asset_price_series
+from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
+from backend.app.services.financial_math.price_marks import build_asset_price_series
+from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
+from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 
 # =============================================================================
 # HELPERS
@@ -101,8 +101,8 @@ def _mark_series_from(txs, price_map, asset_currencies, quote_base_map):
 
 
 def _builder(txs, ecfs, **overrides) -> DailyStateBuilder:
-    """Build with cost basis for asset 100 provided implicitly by its BUY tx (WAC is
-    computed inline by the builder — no external wac_series needed anymore)."""
+    """Build with cost basis for asset 100 provided implicitly by its BUY tx (the average
+    costs and the native cash are computed from the transactions, as PortfolioCalculationEngine does)."""
     defaults = {
         "classified_txs": txs,
         "in_transit_intervals": [],
@@ -124,6 +124,22 @@ def _builder(txs, ecfs, **overrides) -> DailyStateBuilder:
             defaults["price_map"],
             defaults["asset_currencies"],
             defaults["quote_base_map"],
+        )
+    if "average_costs" not in defaults:
+        defaults["average_costs"] = engine_average_costs(
+            defaults["classified_txs"],
+            asset_currencies=defaults["asset_currencies"],
+            target_currency=defaults["target_currency"],
+            fx_rate_map=defaults["fx_rate_map"],
+            split_linked_tx_ids=defaults.get("split_linked_tx_ids"),
+            date_to=defaults["date_to"],
+        )
+    if "native_cash" not in defaults:
+        defaults["native_cash"] = engine_native_cash(
+            defaults["classified_txs"],
+            target_currency=defaults["target_currency"],
+            fx_rate_map=defaults["fx_rate_map"],
+            date_to=defaults["date_to"],
         )
     return DailyStateBuilder(**defaults)
 
@@ -164,7 +180,7 @@ class TestExampleA:
             _ctxn(_tx(id=1, dt="2025-01-01", type="DEPOSIT", amount="1000")),
             _ctxn(_tx(id=2, dt="2025-01-01", type="BUY", amount="-1000", quantity="10", asset_id=100)),
         ]
-        ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
         # WAC: BUY 10 units at 100 → WAC = 100 per unit
 
         state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
@@ -192,7 +208,7 @@ class TestExampleB:
             _ctxn(_tx(id=2, dt="2025-01-01", type="BUY", amount="-1000", quantity="10", asset_id=100)),
             _ctxn(_tx(id=3, dt="2025-01-01", type="INTEREST", amount="100")),
         ]
-        ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
 
         state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 
@@ -222,7 +238,7 @@ class TestExampleC:
             _ctxn(_tx(id=2, dt="2025-01-01", type="BUY", amount="-1000", quantity="10", asset_id=100)),
             _ctxn(_tx(id=3, dt="2025-01-01", type="SELL", amount="120", quantity="-1", asset_id=100)),
         ]
-        ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
         # After BUY 10 at 100, then SELL 1: WAC still 100, qty=9 → cost_basis=900
 
         state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
@@ -255,7 +271,7 @@ class TestExampleD:
             _ctxn(_tx(id=2, dt="2025-01-01", type="BUY", amount="-1000", quantity="10", asset_id=100)),
             _ctxn(_tx(id=3, dt="2025-01-01", type="SELL", amount="80", quantity="-1", asset_id=100)),
         ]
-        ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
 
         state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 
@@ -289,7 +305,7 @@ class TestExampleE:
             _ctxn(_tx(id=3, dt="2025-01-01", type="SELL", amount="100", quantity="-1", asset_id=100)),
             _ctxn(_tx(id=4, dt="2025-01-01", type="INTEREST", amount="10")),
         ]
-        ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
 
         state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 
@@ -328,8 +344,8 @@ class TestExampleF:
         ]
         # ECF: +1000 (deposit) -100 (withdrawal) = 900 net
         ecfs = [
-            (date(2025, 1, 1), Decimal("1000"), "EUR"),
-            (date(2025, 1, 1), Decimal("-100"), "EUR"),
+            (date(2025, 1, 1), 10, Decimal("1000"), "EUR"),
+            (date(2025, 1, 1), 10, Decimal("-100"), "EUR"),
         ]
 
         state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
@@ -360,7 +376,7 @@ class TestEdgeCases:
         txs = [
             _ctxn(_tx(id=1, dt="2025-01-01", type="DEPOSIT", amount="5000")),
         ]
-        ecfs = [(date(2025, 1, 1), Decimal("5000"), "EUR")]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("5000"), "EUR")]
 
         state = _last_state(txs, ecfs)
 
@@ -381,7 +397,7 @@ class TestEdgeCases:
             _ctxn(_tx(id=3, dt="2025-01-01", type="INTEREST", amount="50")),
             _ctxn(_tx(id=4, dt="2025-01-01", type="FEE", amount="-10")),
         ]
-        ecfs = [(date(2025, 1, 1), Decimal("1000"), "EUR")]
+        ecfs = [(date(2025, 1, 1), 10, Decimal("1000"), "EUR")]
 
         state = _last_state(txs, ecfs, price_map=_PRICE_MAP_100)
 

@@ -14,6 +14,8 @@ Si LibreFolio vous aide à mieux gérer vos investissements, envisagez de souten
 
 Chaque don — aussi petit soit-il — aide à couvrir les outils de développement, l'infrastructure de test et motive l'amélioration continue.
 
+Dans LibreFolio, le même lien café se trouve à côté de boutons qui partagent le projet sur X, Reddit, Facebook, Instagram et TikTok avec un message prêt à l'emploi : vous les trouvez dans **Paramètres → À propos**, sous **Soutenir LibreFolio**, et dans la pop-up de don qui apparaît de temps en temps après la connexion. Voir [Soutenir LibreFolio dans l'application](../user/settings/about.md#support-librefolio) pour le fonctionnement du partage — rien n'est jamais publié à votre place.
+
 ---
 
 ## :rocket: Contributions à fort impact

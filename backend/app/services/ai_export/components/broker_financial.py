@@ -45,6 +45,7 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
     build_fifo_lot_refs,
     build_performance_bucket_rows,
     build_uniform_performance_buckets,
+    count_unavailable_amount_lots,
     load_lots_results,
     load_portfolio_report,
     lot_is_eligible,
@@ -60,6 +61,7 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
     sort_positions,
     sort_unallocated,
     summarize_fifo_asset_rows,
+    total_fifo_residual_cost_basis,
 )
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
     load_asset_metadata as _load_asset_metadata,
@@ -68,6 +70,7 @@ from backend.app.services.ai_export.components.resources import BROKER_LOTS_RESU
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext
+from backend.app.services.financial_math.native_cash import CONVERSION_DUST
 
 _BROKER_FIFO_ASSET_METADATA_RESOURCE: ResourceKey[Mapping[int, Asset]] = ResourceKey("broker.fifo_asset_metadata", Mapping)
 
@@ -266,7 +269,7 @@ def _build_broker_provenance(context: BuildContext, dependencies: Mapping[str, S
         period_end=scope.period_end,
         engine_source="PortfolioCalculationEngine via a single PortfolioService.get_report call per request, scoped to this broker",
         fifo_methodology="FIFO lots are computed at runtime by FifoLotEngine via LotsAnalysisService; never persisted.",
-        valuation_semantics="wac_per_unit/original_cost/open_cost_basis are Weighted Average Cost; current_value/current_price/open_value are mark-to-market via the valuation hierarchy (MARKET_PRICE > LAST_TRADE_PRICE > MISSING).",
+        valuation_semantics="wac_per_unit and open_cost_basis are the historical Weighted Average Cost in the target currency: each acquisition is converted at the exchange rate of its own date, so the cost does not move with later rates, and an acquisition recorded without a cost basis adds quantity at zero cost; realized P&L compares each sale's proceeds, converted at the sale date, with that cost. FIFO lot original_cost/residual_cost_basis are converted at the lot opening date. current_value/current_price/open_value are mark-to-market via the valuation hierarchy (MARKET_PRICE > LAST_TRADE_PRICE > MISSING) at the valuation date's rate, so unrealized P&L includes the exchange-rate effect.",
         notes=[
             ProvenanceNote(subject="currency", text=f"All monetary amounts are expressed in {scope.target_currency}."),
             ProvenanceNote(subject="period", text=f"Period is inclusive [{scope.period_start.isoformat()}, {scope.period_end.isoformat()}]; snapshot_as_of == period_end."),
@@ -430,7 +433,9 @@ async def _build_broker_reconciliation(context: BuildContext, dependencies: Mapp
         if summary.period_pnl is not None and all(component is not None for component in components):
             residual_amount = summary.period_pnl.amount - (summary.period_unrealized_gain_loss_delta.amount + summary.period_realized_gain_loss.amount + summary.period_income.amount - summary.period_fees_taxes.amount + summary.period_other_result.amount)
             residual = Currency(code=currency_code, amount=residual_amount)
-            reconciled = residual_amount == Decimal("0")
+            # A residual below CONVERSION_DUST is the rounding of Decimal arithmetic on converted
+            # amounts, not a gap: the summary closes the decomposition with period_other_result.
+            reconciled = abs(residual_amount) < CONVERSION_DUST
     return BrokerReconciliationPayload(
         broker_id=scope.broker_id,
         period_start=scope.period_start,
@@ -487,7 +492,7 @@ class BrokerFifoSummaryPayload(PeriodBoundedModel):
     total_open_lots: int
     total_partial_lots: int
     total_closed_lots: int
-    total_residual_cost_basis: Currency
+    total_residual_cost_basis: Currency | None
     assets: list[FifoAssetSummaryRow] = Field(default_factory=list)
 
 
@@ -508,10 +513,7 @@ async def _build_broker_fifo_summary(context: BuildContext, dependencies: Mappin
         total_open_lots=sum(row.open_lot_count for row in rows),
         total_partial_lots=sum(row.partial_lot_count for row in rows),
         total_closed_lots=sum(row.closed_lot_count for row in rows),
-        total_residual_cost_basis=Currency(
-            code=scope.target_currency,
-            amount=sum((row.residual_cost_basis.amount for row in rows), Decimal("0")),
-        ),
+        total_residual_cost_basis=total_fifo_residual_cost_basis(rows, scope.target_currency),
         assets=rows,
     )
 
@@ -522,6 +524,9 @@ class BrokerFifoLotsPayload(PeriodBoundedModel):
     target_currency: CurrencyCode
     cost_allocation_semantics: str
     lot_count: int
+    # Always present, 0 included: a compact table drops a column that is null in every row,
+    # so this count is the trace that those amounts are unavailable (a missing FX rate).
+    unavailable_amount_lot_count: int = Field(..., ge=0)
     lots: list[FifoLotRow] = Field(default_factory=list)
 
 
@@ -535,6 +540,7 @@ async def _build_broker_fifo_lots(context: BuildContext, dependencies: Mapping[s
         target_currency=scope.target_currency,
         cost_allocation_semantics="Lot fees and taxes include only deterministically allocated costs. Broker-level unallocated costs are excluded and must not be interpreted as recorded zero.",
         lot_count=len(rows),
+        unavailable_amount_lot_count=count_unavailable_amount_lots(rows),
         lots=rows,
     )
 
@@ -573,7 +579,7 @@ BROKER_ALLOCATION_CONCENTRATION_COMPONENT = ComponentSpec(
 
 BROKER_PROVENANCE_COMPONENT = ComponentSpec(
     component_id="broker.provenance",
-    version=1,
+    version=2,
     domains=frozenset({Domain.BROKER}),
     output_model=BrokerProvenancePayload,
     builder=_build_broker_provenance,
@@ -600,7 +606,7 @@ BROKER_FLOWS_INCOME_COSTS_COMPONENT = ComponentSpec(
 
 BROKER_RECONCILIATION_COMPONENT = ComponentSpec(
     component_id="broker.reconciliation",
-    version=1,
+    version=2,  # v2 (C-53): reconciled tolerates conversion dust
     domains=frozenset({Domain.BROKER}),
     output_model=BrokerReconciliationPayload,
     builder=_build_broker_reconciliation,
@@ -610,7 +616,7 @@ BROKER_RECONCILIATION_COMPONENT = ComponentSpec(
 
 BROKER_FIFO_SUMMARY_COMPONENT = ComponentSpec(
     component_id="broker.fifo_summary",
-    version=1,
+    version=2,  # v2 (B3b): unvalued lot amounts are null
     domains=frozenset({Domain.BROKER}),
     output_model=BrokerFifoSummaryPayload,
     builder=_build_broker_fifo_summary,
@@ -619,7 +625,7 @@ BROKER_FIFO_SUMMARY_COMPONENT = ComponentSpec(
 
 BROKER_FIFO_LOTS_COMPONENT = ComponentSpec(
     component_id="broker.fifo_lots",
-    version=1,
+    version=2,  # v2 (B3b): unvalued lot amounts are null
     domains=frozenset({Domain.BROKER}),
     output_model=BrokerFifoLotsPayload,
     builder=_build_broker_fifo_lots,

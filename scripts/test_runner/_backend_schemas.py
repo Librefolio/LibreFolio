@@ -62,6 +62,14 @@ def schemas_brokers(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Broker schemas tests", verbose=verbose)
 
 
+def schemas_fx_routes(verbose: bool = False, test_names: list = None) -> bool:
+    """Test FX route request and response metadata contracts."""
+    print_section("Schemas: FX Routes")
+    print_info("Testing: backend/app/schemas/fx.py route input/output separation")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_fx_route_schemas.py", test_names)
+    return run_command(cmd, "FX route schema tests", verbose=verbose)
+
+
 def schemas_signals(verbose: bool = False, test_names: list = None) -> bool:
     """Test library-independent technical signal schemas."""
     print_section("Schemas: Technical Signals")
@@ -80,6 +88,13 @@ def schemas_risk(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Risk schemas tests", verbose=verbose)
 
 
+def schemas_pac_planner(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the strict PAC/Rebalancer v2 planner wire contract."""
+    print_section("Schemas: PAC/Rebalancer Planner")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_pac_planner_schemas.py", test_names)
+    return run_command(cmd, "PAC/Rebalancer planner schema tests", verbose=verbose)
+
+
 def schemas_ai_export(verbose: bool = False, test_names: list = None) -> bool:
     """Test AI Export request, response, and catalog schemas."""
     print_section("Schemas: AI Export")
@@ -90,6 +105,15 @@ def schemas_ai_export(verbose: bool = False, test_names: list = None) -> bool:
         test_names,
     )
     return run_command(cmd, "AI Export schemas tests", verbose=verbose)
+
+
+def schemas_tools(verbose: bool = False, test_names: list = None) -> bool:
+    """Test strict Tool transport contracts with private Pydantic fixtures."""
+    print_section("Schemas: Tools")
+    print_info("Testing: Tool envelopes, discriminators, policies and metrics")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_tools_schemas.py", test_names)
+    return run_command(cmd, "Tool schemas tests", verbose=verbose)
 
 
 def schemas_all(verbose: bool = False) -> bool:
@@ -126,8 +150,25 @@ Tests for Pydantic/SQLModel schema validation:
     add_test(cat, "assets", schemas_assets, name="Asset Schemas", desc="FAGeographicArea, FAInterestRatePeriod")
     add_test(cat, "transactions", schemas_transactions, name="Transaction Schemas", desc="TXCreateItem, TXReadItem")
     add_test(cat, "brokers", schemas_brokers, name="Broker Schemas", desc="BRCreateItem, BRReadItem")
+    add_test(cat, "fx-routes", schemas_fx_routes, name="FX Route Schemas", desc="Request validation and response-only chain/provider membership metadata")
     add_test(cat, "signals", schemas_signals, name="Signal Schemas", desc="Plugin, catalog, canonical output, status and availability contracts")
     add_test(cat, "risk", schemas_risk, name="Risk Schemas", desc="Canonical valuations, returns, metadata and data-quality contracts")
+    add_test(
+        cat,
+        "pac-planner",
+        schemas_pac_planner,
+        name="PAC/Rebalancer Planner Schemas",
+        desc="Strict v2 request/result codecs, exact-number evidence, Option-B wire bounds and fixture roundtrips",
+        isolation="pure",
+    )
     add_test(cat, "ai-export", schemas_ai_export, name="AI Export Schemas", desc="Strict requests, responses, catalog, and typed problem contracts")
+    add_test(
+        cat,
+        "tools",
+        schemas_tools,
+        name="Tool Schemas",
+        desc="Strict transport, required metadata, correlation IDs, resource policies and platform outcomes",
+        isolation="pure",
+    )
     add_test(cat, "all", schemas_all, test_names=False, name="All Schema Tests", desc="Run all schema tests")
     registry["schemas"] = cat

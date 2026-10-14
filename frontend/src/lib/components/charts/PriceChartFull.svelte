@@ -8,6 +8,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
@@ -20,17 +21,20 @@
     import type {RenderedSignal} from '$lib/charts/signals';
     import {buildMainSeries, COLORS, updateArrowRotations} from './lineChartHelpers';
     import {assignOverlaySignalAxes, buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
-    import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
+    import {buildFittedTooltipRow, fitTooltipToWidth, scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from './echartsDataZoomTouchPan';
     import {signalLabelToHtml, type SignalLabelInfo} from '$lib/charts/signalLabel';
     import {truncateName} from '$lib/utils/text';
     import {clearTimer} from '$lib/utils/core/clearTimer';
+    import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ChartLine, ChartCandlestick} from 'lucide-svelte';
     import {aggregateLineSeries, aggregateOHLCV, cascadeResolution, chooseInitialResolution, downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
+    import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
     import {
         buildDeltaHtml,
         buildEventScatterGroups,
         buildStaleTooltipHtml,
+        bucketSpanUpTo,
         computeGhostSeries,
         computeZoomWindow,
         countBuckets,
@@ -40,12 +44,17 @@
         getVisibleDailyPoints,
         resolveActivePointIndex,
         resolveZoomBounds,
+        splitGhostLabel,
         synthesizeDailyOHLC,
         toAbsoluteValue,
         toDisplaySeries,
         type BucketInfo,
+        type CalendarReturnPointContext,
         type LogicalVisibleRange,
     } from './priceChartHelpers';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
 
     // =========================================================================
     // Event Marker types and constants
@@ -105,6 +114,8 @@
         yAxisMode?: 'auto' | 'include0' | 'custom';
         yAxisMin?: number;
         yAxisMax?: number;
+        /** Stable semantic settings for active non-primary axes. */
+        secondaryAxisScales?: Record<string, AxisScaleSettings>;
         /** Measure mode: enables click-to-place measurement points */
         measureMode?: boolean;
         onMeasureClick?: (date: string, value: number) => void;
@@ -144,6 +155,14 @@
         mainCurrencyFlag?: string;
         /** Disable the candlestick toggle (e.g. for FX charts without OHLCV data) */
         disableCandlestick?: boolean;
+        /** Unit of already-normalized primary data. Percentage data is never rebased. */
+        valueUnit?: 'price' | 'percentage';
+        /** Hide the Abs/% control while the parent owns a non-price primary mode. */
+        hideViewModeToggle?: boolean;
+        /** Show the main-series delta from the first visible point in the tooltip. */
+        showMainDelta?: boolean;
+        /** Optional resolved provenance for the primary point shown in the tooltip. */
+        mainPointContext?: ReadonlyMap<string, CalendarReturnPointContext>;
         /** Callback when chart type changes (for external state sync) */
         onChartTypeChange?: (type: ChartType) => void;
         /** Callback when view mode changes (for parent-owned signal/measure state) */
@@ -166,6 +185,7 @@
         yAxisMode = 'auto',
         yAxisMin,
         yAxisMax,
+        secondaryAxisScales = {},
         measureMode = false,
         onMeasureClick,
         onMeasureHover,
@@ -186,6 +206,10 @@
         mainCurrency: mainCurrencyProp,
         mainCurrencyFlag: mainCurrencyFlagProp,
         disableCandlestick = false,
+        valueUnit = 'price',
+        hideViewModeToggle = false,
+        showMainDelta = true,
+        mainPointContext,
         onChartTypeChange: onChartTypeChangeProp,
         onViewModeChange: onViewModeChangeProp,
     }: Props = $props();
@@ -209,6 +233,8 @@
     let lastRawDataRef: LineDataPoint[] | null = null;
     let lastDisplayDataRef: LineDataPoint[] | null = null;
     let lastRenderedResolution: ChartResolution | null = null;
+    let lastRenderedDates: string[] = [];
+    let responsiveXAxisCompact = false;
 
     $effect(() => {
         chartType = externalChartType ?? initialChartType;
@@ -221,7 +247,7 @@
     // Derived data
     // =========================================================================
 
-    let displayData = $derived(toDisplaySeries(data, viewMode));
+    let displayData = $derived(valueUnit === 'percentage' ? data : toDisplaySeries(data, viewMode));
 
     // =========================================================================
     // Lifecycle
@@ -271,11 +297,13 @@
             void yAxisMode;
             void yAxisMin;
             void yAxisMax;
+            void secondaryAxisScales;
             void mainSeriesLabel;
             void eventMarkers;
             void overlaySignalInfoMap;
             void mainIconUrl;
             void mainAssetType;
+            void uiLocale();
             tick().then(renderChart);
         }
     });
@@ -313,16 +341,17 @@
 
     function buildTooltipHeader(date: string, currentResolution: ChartResolution, bucketInfo?: BucketInfo): string {
         if (currentResolution === 'daily') {
-            return `<strong>${date}</strong>`;
+            return `<strong>${formatDay(date)}</strong>`;
         }
 
-        const info = bucketInfo ?? {bucketStart: date, bucketEnd: date};
+        // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
+        const info = bucketSpanUpTo(date, bucketInfo ?? {bucketStart: date, bucketEnd: date});
 
         if (currentResolution === 'weekly') {
-            return `<strong>${$t('chart.tooltip.weekRange', {values: {start: info.bucketStart, end: info.bucketEnd}})}</strong>`;
+            return `<strong>${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</strong>`;
         }
 
-        return `<strong>${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</strong><br/><span style="font-size:11px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: info.bucketEnd}})}</span>`;
+        return `<strong>${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</strong><br/><span style="font-size:11px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</span>`;
     }
 
     function getResolvedSeries(currentResolution: ChartResolution): ResolvedDataCacheEntry {
@@ -423,6 +452,21 @@
                 if (chartOptionSet) {
                     try {
                         chartInstance?.resize();
+                        if (chartInstance && lastRenderedDates.length > 0) {
+                            const policy = buildResponsiveXAxisPolicy({
+                                width: chartContainer?.clientWidth ?? 0,
+                                values: lastRenderedDates,
+                                locale: uiLocale(),
+                                axisType: 'category',
+                            });
+                            const wasCompact = responsiveXAxisCompact;
+                            responsiveXAxisCompact = policy.compact;
+                            if (policy.axisLabel) {
+                                chartInstance.setOption({xAxis: {axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                            } else if (wasCompact) {
+                                renderChart();
+                            }
+                        }
                         if (chartInstance) updateArrowRotations(chartInstance);
                         // Bugfix: resizing the container (e.g. rotating a device, or
                         // shrinking a browser window to a narrow/mobile width) changes
@@ -642,7 +686,7 @@
         }
 
         const isDark = document.documentElement.classList.contains('dark');
-        const isPercentage = viewMode === 'percentage';
+        const isPercentage = valueUnit === 'percentage' || viewMode === 'percentage';
         const baseColor = isDark ? COLORS.lineDark : COLORS.lineLight;
         const greenColor = isDark ? COLORS.greenDark : COLORS.greenLight;
         const redColor = isDark ? COLORS.redDark : COLORS.redLight;
@@ -659,17 +703,18 @@
 
         const {lineData: resolvedLineData} = getResolvedSeries(activeResolution);
         const dates = resolvedLineData.map((point) => point.date);
+        lastRenderedDates = dates;
         const bucketInfoByDate = new Map(dates.map((date, index) => [date, getBucketInfo(resolvedLineData[index], activeResolution)]));
         const useBaselineColoring = colorByBaseline;
         const baselineValue = isPercentage ? 0 : (resolvedLineData[0]?.value ?? 0);
         const staleDaysArr = resolvedLineData.map((point) => point.staleDays ?? 0);
         const mainSeriesName = mainSeriesLabel || currency || 'Value';
         const series: any[] = [];
-        const values = resolvedLineData.map((point) => point.value);
+        const values = resolvedLineData.map((point) => (point.missing ? null : point.value));
         const mainSeriesList = buildMainSeries(values, staleDaysArr, baseColor, greenColor, redColor, isDark, areaFill, 2, mainSeriesName, useBaselineColoring, baselineValue, showGradient);
         series.push(...mainSeriesList);
 
-        const ghostSeriesData = computeGhostSeries(data, isPercentage, activeResolution, mainSeriesLabel);
+        const ghostSeriesData = valueUnit === 'price' ? computeGhostSeries(data, isPercentage, activeResolution, mainSeriesLabel) : null;
         const hasOriginalValues = ghostSeriesData !== null;
         const ghostLabel = ghostSeriesData?.label ?? '';
         if (ghostSeriesData) {
@@ -733,29 +778,29 @@
 
         const formatEventEntry = (marker: EventMarker, eventColor: string, includeDate: boolean): string => {
             const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${eventColor};margin-right:4px;"></span>`;
-            let html = includeDate ? `<span style="font-size:11px;opacity:0.8">${marker.date}</span><br/>${dot}${marker.type}` : `${dot}${marker.type}`;
+            let html = includeDate ? `<span style="font-size:11px;opacity:0.8">${formatDay(marker.date)}</span><br/>${dot}${marker.type}` : `${dot}${marker.type}`;
 
             if (marker.value !== undefined) {
                 const isConverted = marker.originalValue !== undefined && marker.originalCurrency !== undefined;
-                const currBadge = marker.currency ? ` <span style="font-size:10px;opacity:0.7">(${marker.currencyFlag ?? ''} ${marker.currency})${isConverted ? ' 💱' : ''}</span>` : '';
-                html += `<br/>💰 ${marker.value.toFixed(4)}${currBadge}`;
+                const currBadge = marker.currency ? ` <span style="font-size:10px;opacity:0.7">(${marker.currencyFlag ?? ''} ${escapeHtml(marker.currency)})${isConverted ? ' 💱' : ''}</span>` : '';
+                html += `<br/>💰 ${formatFixed(marker.value, 4)}${currBadge}`;
                 if (isConverted) {
-                    const origBadge = ` <span style="font-size:10px;opacity:0.7">(${marker.originalCurrencyFlag ?? ''} ${marker.originalCurrency})</span>`;
-                    html += `<br/><span style="font-size:10px;opacity:0.7">orig. ${marker.originalValue!.toFixed(4)}${origBadge}</span>`;
+                    const origBadge = ` <span style="font-size:10px;opacity:0.7">(${marker.originalCurrencyFlag ?? ''} ${escapeHtml(marker.originalCurrency ?? '')})</span>`;
+                    html += `<br/><span style="font-size:10px;opacity:0.7">${$t('chart.tooltip.originalValue', {values: {value: formatFixed(marker.originalValue!, 4)}})}${origBadge}</span>`;
                     if (marker.fxRateDate) {
-                        const backfillHint = marker.fxDaysBack && marker.fxDaysBack > 0 ? ` (${marker.fxDaysBack}d back)` : '';
-                        html += `<br/><span style="font-size:10px;opacity:0.6">fx @ ${marker.fxRateDate}${backfillHint}</span>`;
+                        const backfillHint = marker.fxDaysBack && marker.fxDaysBack > 0 ? ` ${$t('chart.tooltip.fxDaysBack', {values: {days: formatFixed(marker.fxDaysBack, 0)}})}` : '';
+                        html += `<br/><span style="font-size:10px;opacity:0.6">${$t('chart.tooltip.fxRateDate', {values: {date: formatDay(marker.fxRateDate)}})}${backfillHint}</span>`;
                     }
                 }
             }
 
             if (marker.notes) {
-                html += `<br/>📝 ${marker.notes}`;
+                html += `<br/>📝 ${escapeHtml(marker.notes)}`;
             }
 
             if (marker.assetLabel) {
                 const sigDot = marker.signalColor ? `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${marker.signalColor};margin-right:3px;"></span>` : '';
-                html += `<br/>🔗 ${sigDot}${truncateName(marker.assetLabel)}`;
+                html += `<br/>🔗 ${sigDot}${escapeHtml(truncateName(marker.assetLabel))}`;
             }
 
             return html;
@@ -806,7 +851,7 @@
                             let html = buildTooltipHeader(bucketDate, activeResolution, bucketInfo);
 
                             if (params.data?.bucketValue !== undefined) {
-                                html += `<br/>💰 ${Number(params.data.bucketValue).toFixed(4)}`;
+                                html += `<br/>💰 ${formatFixed(Number(params.data.bucketValue), 4)}`;
                             }
 
                             if (activeResolution === 'daily' && marker) {
@@ -829,7 +874,7 @@
             }
         }
 
-        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(resolvedOverlaySignals, isDark, 0);
+        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(resolvedOverlaySignals, isDark, 0, true, secondaryAxisScales);
         const colors = getChartColors(isDark);
         const staleLookup = new Map<string, number>();
         const fxStaleLookup = new Map<string, number>();
@@ -838,6 +883,13 @@
             if (point.fxStaleDays && point.fxStaleDays > 0) fxStaleLookup.set(point.date, point.fxStaleDays);
         }
         const zoomWindow = computeZoomWindow(resolvedLineData, activeResolution, logicalRange);
+        const xAxisPolicy = buildResponsiveXAxisPolicy({
+            width: rect.width,
+            values: dates,
+            locale: uiLocale(),
+            axisType: 'category',
+        });
+        responsiveXAxisCompact = xAxisPolicy.compact;
 
         const option: echarts.EChartsOption = {
             animation: false,
@@ -848,7 +900,12 @@
                     data: dates,
                     gridIndex: 0,
                     axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
-                    axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 14},
+                    axisLabel: {
+                        color: isDark ? '#94a3b8' : '#6b7280',
+                        fontSize: 14,
+                        formatter: xAxisPolicy.formatter,
+                        ...(xAxisPolicy.axisLabel ?? {}),
+                    },
                     splitLine: {show: false},
                 },
             ],
@@ -883,7 +940,7 @@
                         }
                     }
                     const shownNames = new Set<string>();
-                    const firstValue = resolvedLineData.length > 0 ? resolvedLineData[0].value : null;
+                    const firstValue = resolvedLineData.find((point) => !point.missing)?.value ?? null;
                     const conversionActive = hasOriginalValues && displayCurrencyProp && displayCurrencyFlag;
                     for (const p of items) {
                         if (p.seriesName === 'Pending' || p.seriesName === '__baseline__' || p.seriesName === '__overview__' || p.seriesType === 'scatter' || String(p.seriesName).startsWith('Events: ')) continue;
@@ -898,66 +955,96 @@
                         const axisIdx = isGhost ? 0 : (signalAxisMap.get(p.seriesName) ?? 0);
                         const valueSuffix = axisIdx === 0 ? suffix : '';
                         const axisLabel = signalAxisLabelMap.get(axisIdx);
-                        const axisNote = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${axisLabel}]</span>` : '';
+                        const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${escapeHtml(axisLabel)}]</span>` : '';
 
-                        // Use signalLabelToHtml for proper icon rendering
+                        // Use signalLabelToHtml for proper icon rendering. The label (crown, icon, name)
+                        // gives way on a narrow chart, ending in an ellipsis; the currency travels with
+                        // the value and both stay whole (buildFittedTooltipRow). `&nbsp;`, not a space:
+                        // the value part starts its own flex item, where a leading space collapses.
                         let labelHtml: string;
+                        let currencyHtml = '';
                         let isGhostRow = false;
                         if (isGhost) {
-                            // Ghost label: "💱 Name (flag CUR)" — keep currency suffix visible.
+                            // Ghost label: "💱 Name (flag CUR)" — the name may shrink, the currency stays.
                             const ghostDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
-                            const truncatedGhost = formatTruncatedGhostLabel(ghostLabel);
-                            labelHtml = `${ghostDot}<span title="${ghostLabel}">${truncatedGhost}</span>`;
+                            const ghostParts = splitGhostLabel(formatTruncatedGhostLabel(ghostLabel));
+                            labelHtml = `${ghostDot}<span title="${escapeHtml(ghostLabel)}">${escapeHtml(ghostParts.name)}</span>`;
+                            if (ghostParts.currency) currencyHtml = `&nbsp;${escapeHtml(ghostParts.currency)}`;
                             isGhostRow = true;
                         } else {
                             const sigInfo = overlaySignalInfoMap?.get(p.seriesName);
                             if (sigInfo) {
-                                // Append (flag currency) to overlay signal labels
-                                // Skip for ghost signals — currency is already embedded in their label
-                                const currSuffix = sigInfo.currency && !sigInfo.isGhost ? ` <span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${sigInfo.currency})</span>` : '';
-                                labelHtml = signalLabelToHtml({...sigInfo, label: truncateName(sigInfo.label)}) + currSuffix;
+                                // Append (flag currency) to overlay signal labels. A ghost signal carries
+                                // its currency in its label: split it off, so it stays whole too.
+                                let overlayLabel = truncateName(sigInfo.label);
+                                if (sigInfo.isGhost) {
+                                    const ghostParts = splitGhostLabel(formatTruncatedGhostLabel(sigInfo.label));
+                                    overlayLabel = ghostParts.name;
+                                    if (ghostParts.currency) currencyHtml = `&nbsp;${escapeHtml(ghostParts.currency)}`;
+                                } else if (sigInfo.currency) {
+                                    currencyHtml = `&nbsp;<span style="font-size:10px;opacity:0.7">(${sigInfo.currencyFlag || ''} ${escapeHtml(sigInfo.currency)})</span>`;
+                                }
+                                labelHtml = signalLabelToHtml({...sigInfo, label: overlayLabel}, undefined, {inline: true});
                                 if (sigInfo.isGhost) isGhostRow = true;
                             } else if (p.seriesName === mainSeriesName) {
                                 // Main signal: 💱(flag currency) when conversion active, (flag currency) when not
                                 let mainLabel: string;
-                                let currSuffix = '';
                                 if (conversionActive) {
                                     mainLabel = mainSeriesName;
-                                    currSuffix = ` <span style="font-size:10px">(${displayCurrencyFlag} ${displayCurrencyProp}) 💱</span>`;
+                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${displayCurrencyFlag} ${displayCurrencyProp}) 💱</span>`;
                                 } else if (mainCurrencyProp) {
                                     mainLabel = mainSeriesName;
-                                    currSuffix = ` <span style="font-size:10px">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
+                                    currencyHtml = `&nbsp;<span style="font-size:10px">(${mainCurrencyFlagProp || ''} ${mainCurrencyProp})</span>`;
                                 } else {
                                     mainLabel = mainSeriesName;
                                 }
-                                labelHtml =
-                                    signalLabelToHtml({
+                                labelHtml = signalLabelToHtml(
+                                    {
                                         label: truncateName(mainLabel),
                                         iconUrl: mainIconUrl,
                                         assetType: mainAssetType,
                                         isCrown: true,
-                                    }) + currSuffix;
+                                    },
+                                    undefined,
+                                    {inline: true},
+                                );
                             } else {
                                 const colorDot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${p.color};margin-right:4px;"></span>`;
-                                labelHtml = `${colorDot}${truncateName(String(p.seriesName ?? ''))}`;
+                                labelHtml = `${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}`;
                             }
                         }
-                        let rowHtml = `${labelHtml}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
+                        let rowHtml = buildFittedTooltipRow(labelHtml, `${currencyHtml}: ${formatFixed(Number(value), 4)}${valueSuffix}${axisNoteHtml}`);
+                        if (p.seriesName === mainSeriesName) {
+                            const context = mainPointContext?.get(date);
+                            if (context) {
+                                const referenceObservation = context.referencePriceDate && context.referencePriceDate !== context.referenceTargetDate ? ` · ${$t('chart.tooltip.valueAt', {values: {date: formatDay(context.referencePriceDate)}})}` : '';
+                                rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">↩ ${formatDay(context.referenceTargetDate)}${referenceObservation}</span>`;
+                                if (context.currentPriceDate !== date) {
+                                    rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">📅 ${$t('chart.tooltip.valueAt', {values: {date: formatDay(context.currentPriceDate)}})}</span>`;
+                                }
+                                if (context.currentFxDate || context.referenceFxDate) {
+                                    rowHtml += `<br/><span style="font-size:10px;color:#94a3b8">💱 ${context.currentFxDate ? formatDay(context.currentFxDate) : '—'} / ${context.referenceFxDate ? formatDay(context.referenceFxDate) : '—'}</span>`;
+                                }
+                            }
+                        }
                         const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                         if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
-                            rowHtml += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: representativePoint.representativeDate}})})</span>`;
+                            rowHtml += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
                         }
                         if (isGhostRow) {
                             rowHtml = `<span style="opacity:0.7">${rowHtml}</span>`;
                         }
                         html += `<br/>${rowHtml}`;
                         // Show delta from first visible point for the main axis (yAxisIndex 0)
-                        if (axisIdx === 0 && firstValue !== null && !isGhost) {
+                        if (showMainDelta && axisIdx === 0 && firstValue !== null && !isGhost) {
                             html += buildDeltaHtml(Number(value), firstValue, isPercentage);
                         }
                     }
                     html += buildStaleTooltipHtml(staleLookup.get(date), fxStaleLookup.get(date), staleLabel, fxStaleLabel);
-                    return html;
+                    // No wider than the chart, minus ECharts' padding and tooltipPositionSide's 8 px
+                    // margins: on a phone a long name otherwise pushed the value off-screen.
+                    const chartWidth = chartInstance?.getWidth() ?? 0;
+                    return chartWidth > 0 ? fitTooltipToWidth(html, chartWidth - 32) : html;
                 },
             },
             series,
@@ -1013,7 +1100,7 @@
                     >
                 </div>
             {/if}
-            {#if hideToolbar}
+            {#if hideToolbar && !hideViewModeToggle}
                 <div class="flex rounded-lg border border-gray-200/70 dark:border-slate-600/70 overflow-hidden shadow-sm opacity-75 hover:opacity-100 transition-opacity" data-testid="chart-view-mode-toggle">
                     <button
                         class="px-2.5 py-1 text-xs font-medium transition-colors {viewMode === 'absolute' ? 'bg-libre-green text-white' : 'bg-white/90 dark:bg-slate-800/90 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'}"
@@ -1058,6 +1145,7 @@
                 {yAxisMode}
                 {yAxisMin}
                 {yAxisMax}
+                {secondaryAxisScales}
             />
         {/if}
     </div>

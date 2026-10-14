@@ -10,13 +10,15 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {ArrowLeftRight, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
-    import {displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
+    import {displayFxDelta, displayFxRate, type FxDataPoint} from '$lib/stores/fxStoreRegistry';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {isCardInverted, setCardInverted} from '$lib/stores/fx/fxCardInversionStore';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     // =========================================================================
     // Props
@@ -94,12 +96,7 @@
 
     let deltaPercent = $derived.by(() => {
         if (data.length < 2) return null;
-        const rawFirst = data[0].rate;
-        const rawLast = data[data.length - 1].rate;
-        if (rawFirst === null || rawLast === null || rawFirst === 0 || rawLast === 0) return null;
-        const first = inverted ? 1 / rawFirst : rawFirst;
-        const last = inverted ? 1 / rawLast : rawLast;
-        return ((last - first) / first) * 100;
+        return displayFxDelta(data[0].rate, data[data.length - 1].rate, inverted)?.pct ?? null;
     });
 
     let chartData = $derived.by((): LineDataPoint[] => {
@@ -221,12 +218,12 @@
         {#if lastRate !== null}
             <div class="flex items-baseline gap-2">
                 <span class="text-xl font-mono font-bold text-gray-800 dark:text-gray-100">
-                    {lastRate.toFixed(4)}
+                    {formatFixed(lastRate, 4)}
                 </span>
                 {#if deltaPercent !== null}
                     <span class="text-sm font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
                         {deltaPercent >= 0 ? '▲' : '▼'}
-                        {deltaPercent >= 0 ? '+' : ''}{deltaPercent.toFixed(2)}%
+                        {formatPercent(deltaPercent)}
                     </span>
                 {/if}
             </div>
@@ -240,7 +237,18 @@
     <!-- Mini Chart -->
     <div class="px-4">
         {#if chartData.length > 0}
-            <PriceChartCompact data={chartData} height="80px" viewMode={cardViewMode} areaFill={chartSettings?.areaFill ?? true} colorByBaseline={chartSettings?.colorByBaseline} showGridLines={chartSettings?.gridLines} showGradient={chartSettings?.staleGradient ?? true} {overlaySignals} />
+            <PriceChartCompact
+                axisScale={chartSettings?.axisScales[cardViewMode]}
+                data={chartData}
+                height="80px"
+                viewMode={cardViewMode}
+                areaFill={chartSettings?.areaFill ?? true}
+                colorByBaseline={chartSettings?.colorByBaseline}
+                showGridLines={chartSettings?.gridLines}
+                showGradient={chartSettings?.staleGradient ?? true}
+                {overlaySignals}
+                secondaryAxisScales={chartSettings?.axisScales.secondary}
+            />
         {:else if loading}
             <div class="h-20 flex items-center justify-center">
                 <div class="animate-pulse bg-gray-100 dark:bg-slate-700 rounded w-full h-12"></div>
@@ -272,7 +280,7 @@
                     stop(e);
                     if (!manualOnly) onsync?.({slug, base, quote});
                 }}
-                title={manualOnly ? 'Manual-only pair' : 'Sync rates from provider'}
+                title={manualOnly ? $t('fx.card.manualOnly') : $t('fx.card.syncFromProvider')}
             >
                 <RotateCw class={loading ? 'animate-spin' : ''} size={15} />
             </button>

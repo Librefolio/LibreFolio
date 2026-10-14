@@ -1,6 +1,6 @@
 # 🧭 Trend Indicators
 
-Trend indicators answer the most basic question in technical analysis: *"which way is the price actually going, once the day-to-day noise is filtered out?"* They all act as **low-pass filters** on the price series, smoothing short-term fluctuations to reveal the underlying direction.
+Trend indicators answer the most basic question in technical analysis: *"which way is the price actually going, once the session-to-session noise is filtered out?"* They all act as **low-pass filters** on the price series, smoothing short-term fluctuations to reveal the underlying direction.
 
 ---
 

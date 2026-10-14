@@ -22,15 +22,15 @@ The most architecturally significant feature of this domain is currency triangul
 
 | Code | Feature | Layer | Role in domain | Status |
 |------|---------|-------|----------------|--------|
-| [[F-015]] | FX Provider Registry (ECB, FED, BOE, SNB) | backend | core — four central bank providers auto-discovered | implemented |
-| [[F-016]] | FX Pair CRUD | fullstack | core — create/list/edit/delete currency pairs | implemented |
-| [[F-017]] | FX Rate Sync (fetch from central banks) | fullstack | core — pulls historical rates from configured providers | implemented |
+| [[F-015]] | FX Provider Registry (ECB, FED, BOE, SNB) | backend | core — four central bank providers auto-discovered | documented |
+| [[F-016]] | FX Pair CRUD | fullstack | core — create/list/edit/delete currency pairs | documented |
+| [[F-017]] | FX Rate Sync (fetch from central banks) | fullstack | core — pulls historical rates from configured providers | documented |
 | [[F-018]] | FX Multi-Provider Fallback (priority chain) | backend | core — resilient sync across multiple providers per pair | implemented |
 | [[F-019]] | MANUAL Sentinel Provider (auto-insert/remove) | backend | support — handles exotic pairs with no real provider | implemented |
 | [[F-020]] | FX Currency Conversion Graph (triangulation) | fullstack | core — enables cross-pair conversions via graph traversal | implemented |
 | [[F-021]] | FX List View (dual view: card + table) | frontend | display — card grid + DataTable, toggle persisted | implemented |
 | [[F-022]] | FX Detail Page (rate history, provider mgmt) | frontend | display — full history chart + inline rate editor | implemented |
-| [[F-023]] | FX Chart & Signal Overlay | frontend | display — rate history chart with signal library | implemented |
+| [[F-023]] | FX Chart & Signal Overlay | frontend | display — rate history chart with signal library | documented |
 
 ## Architecture at a glance
 
@@ -69,7 +69,11 @@ No open problems. The FX domain is fully implemented and stable.
 ## What comes next
 
 - [[F-094]] Sync Date Range Dialog — let users choose the historical range when syncing a pair (currently syncs a fixed horizon from the provider's data).
-- [[F-089]] FX Provider Per-Plugin Documentation — dedicated mkdocs pages per central bank provider, including data quality notes and coverage gaps.
+- [[F-089]] FX Provider Per-Plugin Documentation — dedicated mkdocs pages per central bank provider, including data quality notes and coverage gaps. *Delivered on 2026-06-19: `user/fx/providers/` and `developer/backend/fx/providers/` (lint 2026-10-12).*
+
+## See also
+
+- [[connections/fx-connections]] — the dependency graph and the cross-layer handoffs of the FX features
 
 ## Source files
 

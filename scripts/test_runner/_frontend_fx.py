@@ -17,6 +17,8 @@ def front_fx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
         "src/lib/stores/__tests__/EditBuffer.test.ts",
         "src/lib/stores/__tests__/TimeSeriesStore.test.ts",
         "src/lib/stores/__tests__/fxStoreRegistry.test.ts",
+        # K step 12b: one global font rule for flags ('LF Flags'), no emoji font ahead of text.
+        "src/flagFont.gate.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: FX/store Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
@@ -140,6 +142,20 @@ def front_fx_destructive(verbose: bool = False, ui: bool = False, headed: bool =
     return _run_playwright("fx/fx-destructive.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_fx_flag_font(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the flag font E2E tests: which font draws a flag, read through CDP (K step 12b).
+
+    Desktop Chromium only — ``CSS.getPlatformFontsForNode`` is a DevTools call — and host-aware: on a
+    host with Apple Color Emoji the flags must be Apple's with no Noto download, elsewhere the
+    self-hosted Noto flags subset.
+    """
+    print_section("Frontend FX Flag Font Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("fx/fx-flag-font.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_fx(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run all FX tests (unit + E2E)."""
     if _common.nothing_left_to_run("front-fx"):
@@ -162,7 +178,7 @@ def populate_registry(registry: dict) -> None:
     cat = make_category(
         help_text="Frontend FX E2E & unit tests",
         description="""Frontend FX Tests\n\nOptions: --ui, --headed, --debug""")
-    add_test(cat, "fx-unit", front_fx_unit, test_names=False, name="FX Unit Tests", desc="Vitest unit tests: EditBuffer, TimeSeriesStore, fxStoreRegistry", tests="vitest")
+    add_test(cat, "fx-unit", front_fx_unit, test_names=False, name="FX Unit Tests", desc="Vitest unit tests: EditBuffer, TimeSeriesStore, fxStoreRegistry, flag font gate (static/lf-flags.css, LF Flags-first stacks, no emoji family named in src/offline.html)", tests="vitest")
     add_test(cat, "fx-list", front_fx_list, name="FX List Page", desc="List page navigation, cards, filters", tests="fx/fx-list.spec.ts")
     add_test(cat, "fx-detail", front_fx_detail, name="FX Detail Page", desc="Detail page chart, panels, swap", tests="fx/fx-detail.spec.ts")
     add_test(cat, "fx-add-pair", front_fx_add_pair, name="FX Add Pair", desc="Add pair modal, validation", tests="fx/fx-add-pair.spec.ts")
@@ -174,5 +190,6 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "fx-settings", front_fx_settings, name="FX Chart Settings", desc="Chart interval, granularity", tests="fx/fx-chart-settings.spec.ts")
     add_test(cat, "fx-bulk", front_fx_bulk, name="FX Bulk Actions", desc="List-view selection toolbar, bulk sync/invert/delete, second currency filter", tests="fx/fx-bulk.spec.ts")
     add_test(cat, "fx-destructive", front_fx_destructive, name="FX Destructive Routes", desc="Pair delete (single + bulk confirmed), bulk refresh, manual rate delete, swap-while-editing confirm (disposable pairs, self-restoring)", tests="fx/fx-destructive.spec.ts")
+    add_test(cat, "fx-flag-font", front_fx_flag_font, name="FX Flag Font (CDP)", desc="Which font draws a flag, read through CDP: Apple Color Emoji on an Apple host with no Noto download (transactions cash cell, dashboard, FX, offline page), the self-hosted Noto flags elsewhere; digits/#/* never drawn by an emoji font (own broker + deposits, self-cleaning; desktop Chromium)", tests="fx/fx-flag-font.spec.ts")
     add_test(cat, "all", front_fx, test_names=False, name="All FX Tests", desc="Run all FX tests (unit + E2E)")
     registry["front-fx"] = cat

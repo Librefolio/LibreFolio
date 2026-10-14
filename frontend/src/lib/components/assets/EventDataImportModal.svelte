@@ -2,7 +2,7 @@
   EventDataImportModal — Asset event CSV import modal.
 
   Wraps DataImportModal with event-specific columns:
-  - Required: type, amount
+  - Required: type, amount (read from `value` when no `amount` column is present)
   - Optional: currency, notes
 
   Header slot shows an InfoBanner with valid event types and a link to docs.
@@ -31,10 +31,12 @@
     // Column definitions for asset events
     // =========================================================================
 
+    // `value` is the name the events export (`GET /backup/asset/{id}/events`) gives the amount
+    // column: the alias lets an exported file come back in.
     const eventColumns: CsvColumnDef[] = [
         {key: 'currency', label: 'currency', type: 'string', required: false},
         {key: 'type', label: 'type', type: 'string', required: true},
-        {key: 'amount', label: 'amount', type: 'number', required: true},
+        {key: 'amount', label: 'amount', aliases: ['value'], type: 'number', required: true},
         {key: 'notes', label: 'notes', type: 'string', required: false},
     ];
 

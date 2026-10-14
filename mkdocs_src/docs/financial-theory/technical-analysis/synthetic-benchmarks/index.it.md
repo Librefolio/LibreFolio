@@ -24,4 +24,4 @@ Sono preziosi per:
 
 - 📉 **[Indicatori Tecnici](../indicators/index.md)** — Overlay grafici basati sui dati
 - 📈 **[Rendimenti e Tassi di Crescita](../../fundamentals/returns.md)** — Comprendere la misurazione della crescita
-- 💰 **[Tassazione](../../fundamentals/taxation.md)** — Come le tasse influenzano la capitalizzazione
+- 💰 **[Tassazione](../../fundamentals/taxation.md)** — Come le imposte influenzano la capitalizzazione

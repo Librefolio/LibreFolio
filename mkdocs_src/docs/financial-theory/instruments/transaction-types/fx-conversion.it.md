@@ -1,10 +1,10 @@
-# ![](../../../static/icons/transactions/fx-conversion.png){: width="32" style="vertical-align: middle;" } Conversione valutaria
+# ![](../../../static/icons/transactions/fx-conversion.png){: width="32" style="vertical-align: middle;" } Conversione di valuta
 
 <div class="screenshot-container">
- <img class="gallery-img" data-category="transactions" data-name="form-modal-fxconversion" alt="Modulo Transazione — Conversione valutaria">
+ <img class="gallery-img" data-category="transactions" data-name="form-modal-fxconversion" alt="Modulo Transazione — Conversione di valuta">
 </div>
 
-Le **conversioni valutarie** scambiano una valuta con un'altra all'interno dello **stesso conto broker**. Il saldo di una valuta diminuisce mentre quello di un'altra aumenta — non vi è alcun cambiamento di titoli o di broker.
+Le **conversioni di valuta** scambiano una valuta con un'altra all'interno dello **stesso conto broker**. Il saldo di una valuta diminuisce mentre quello di un'altra aumenta — non vi è alcun cambiamento di titoli o di broker.
 
 ---
 
@@ -23,13 +23,13 @@ Le **conversioni valutarie** scambiano una valuta con un'altra all'interno dello
 
 ## 📊 Come Funziona
 
-Una conversione valutaria registra **due registrazioni** sullo stesso broker con **valute diverse**. Il tasso di conversione è implicito negli importi:
+Una conversione di valuta registra **due registrazioni** sullo stesso broker con **valute diverse**. Il tasso di conversione è implicito negli importi:
 
 $$
 FX_{rate} = \frac{\text{Amount}_{target}}{\lvert\text{Amount}_{source}\rvert}
 $$
 
-Le conversioni valutarie possono essere:
+Le conversioni di valuta possono essere:
 
 - **Esplicite**: L'utente converte deliberatamente le valute (ad es. EUR → USD prima di acquistare azioni USA)
 - **Implicite**: Il broker converte automaticamente quando si acquista un asset denominato in valuta estera
@@ -70,12 +70,12 @@ $$
 
 ## 🔀 Relazione con Depositi/Prelievi
 
-Sotto il cofano, una Conversione valutaria è composta da un Prelievo (valuta di origine) e un Deposito (valuta di destinazione). LibreFolio supporta:
+Sotto il cofano, una Conversione di valuta è composta da un Prelievo (valuta di origine) e un Deposito (valuta di destinazione). LibreFolio supporta:
 
 | Operazione | Risultato |
 |-----------|--------|
-| **Split** (scollega) | Conversione valutaria → Prelievo + Deposito indipendenti |
-| **Promote** (collega) | Prelievo + Deposito → Conversione valutaria |
+| **Scollega coppia** | Conversione di valuta → Prelievo + Deposito indipendenti |
+| **Promuovi** (collega) | Prelievo + Deposito → Conversione di valuta |
 
 **Vincoli Promote**: valute diverse, stesso broker.
 
@@ -85,7 +85,7 @@ Sotto il cofano, una Conversione valutaria è composta da un Prelievo (valuta di
 
 - 💵 **[Deposito e Prelievo](deposit-withdrawal.md)** — Movimenti di cassa unilaterali
 - 🔄 **[Trasferimento Asset](transfer.md)** — Spostamento di titoli tra broker
-- 🏦 **[Trasferimento di Cassa](cash-transfer.md)** — Bonifici tra broker
+- 🏦 **[Giroconto](cash-transfer.md)** — Giroconti tra broker
 
 ---
 

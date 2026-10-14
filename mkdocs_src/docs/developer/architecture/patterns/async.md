@@ -44,46 +44,73 @@ async def get_all(session: AsyncSession) -> List[Asset]:
     return result.scalars().all()
 ```
 
-### 🌐 Asynchronous Providers
+### 🌐 Asynchronous Provider Contracts
 
-The provider system for Assets, FX, and BRIM is designed to be asynchronous. Provider methods like `get_current_value` or `fetch_rates` are defined as `async def`, allowing them to
-perform non-blocking HTTP requests to external APIs.
+Asset provider methods such as `get_current_value()`, `get_history_value()`,
+`fetch_asset_metadata()`, `search()`, and `resolve_url()` have asynchronous contracts. The
+service layer can therefore fan out work with `asyncio.gather()` and limit provider concurrency
+with semaphores.
+
+The contract does **not** require every third-party SDK to be async-native. For example,
+`YahooFinanceProvider` calls the synchronous `yfinance` API directly inside its `async def`
+methods. This is safe because the caller moves the entire provider coroutine away from the main
+event loop before it starts.
+
+### 🧵 Canonical Provider Thread Boundary
+
+The single provider isolation helper is
+`backend/app/services/asset_sources/core.py::_run_provider_in_thread()`. Manager operation
+modules and `AssetSearchService` route provider I/O through it. For every call, the helper:
+
+1. starts a worker with `asyncio.to_thread()`;
+2. creates a new event loop inside that worker thread;
+3. runs the provider coroutine to completion on that loop;
+4. closes the loop and applies the caller's timeout with `asyncio.wait_for()`.
+
+The implementation is equivalent to this shortened excerpt:
 
 ```python
-# Example of an async provider method
-class YahooFinanceProvider(AssetSourceProvider):
-    async def get_current_value(self, identifier: str, ...) -> FACurrentValue:
-        # Uses an async HTTP client (e.g., httpx)
-        async with httpx.AsyncClient() as client:
-            response = await client.get(...)
-        # ...
-```
+async def _run_provider_in_thread(coro_factory, *, timeout=60.0):
+    def _sync_runner():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(coro_factory())
+        finally:
+            loop.close()
 
-This allows the system to fetch data from multiple providers in parallel using `asyncio.gather`, significantly speeding up data refresh operations.
-
-### 🧵 Thread Isolation for Synchronous Providers
-
-Some external libraries (notably **yfinance**) are fully synchronous and block the event loop when called directly from an `async` context. This prevents other requests from being handled during the call.
-
-**Solution**: `_run_provider_in_thread()` in `asset_source.py` runs synchronous provider code in a separate thread via `asyncio.get_event_loop().run_in_executor()`:
-
-```python
-async def _run_provider_in_thread(provider, method, *args):
-    """Run a synchronous provider method without blocking the event loop."""
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None,  # uses default ThreadPoolExecutor
-        lambda: getattr(provider, method)(*args)
+    return await asyncio.wait_for(
+        asyncio.to_thread(_sync_runner),
+        timeout=timeout,
     )
 ```
 
+Provider implementations must therefore leave synchronous I/O direct:
+
+```python
+class YahooFinanceProvider(AssetSourceProvider):
+    async def get_current_value(
+        self,
+        identifier: str,
+        identifier_type: IdentifierType,
+        provider_params: dict | None,
+    ) -> FACurrentValue:
+        info = yf.Ticker(identifier).info  # Direct sync call in the provider thread
+        ...
+```
+
+Do not add `asyncio.to_thread()` or `run_in_executor()` inside an asset provider. A nested
+offload is redundant and makes timeout and exception behavior harder to reason about. Async-native
+provider clients remain valid; they simply run on the worker thread's event loop.
+
 !!! warning "Event Loop Blocking Rule"
 
-    **Never call synchronous I/O** (HTTP requests, file reads, `time.sleep()`) directly inside an `async def` endpoint or service method. Always use `run_in_executor()` or an async-native library.
+    Outside the asset-provider boundary, never call synchronous I/O (HTTP requests, file reads,
+    `time.sleep()`) directly inside an `async def` endpoint or service method. Use an
+    async-native library or an explicit service-level offload.
 
     Symptoms of event loop blocking:
-    
+
     - Other API calls hang until the blocking call completes
     - E2E tests time out intermittently
     - Health checks fail during provider sync operations
-

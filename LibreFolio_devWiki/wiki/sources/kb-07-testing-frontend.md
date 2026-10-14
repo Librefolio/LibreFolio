@@ -36,7 +36,7 @@ Complete Playwright E2E testing guide covering: 181+ tests across 7 categories, 
 | Source KB file | `LibreFolio_developer_journal/knowledge_base/07_testing_frontend.md` |
 | Playwright config | `frontend/playwright.config.ts` |
 | Auth helpers | `frontend/e2e/fixtures/auth-helpers.ts` |
-| DB helpers | `frontend/e2e/fixtures/db-helpers.ts` |
+| DB helpers (db-helpers.ts removed 2026-08-05; clean-up now in db-cleanup.ts) | `frontend/e2e/fixtures/db-cleanup.ts` |
 | Test users | `frontend/e2e/fixtures/test-users.ts` |
 | Gallery spec | `frontend/e2e/gallery.spec.ts` |
 | E2E tests directory | `frontend/e2e/` |

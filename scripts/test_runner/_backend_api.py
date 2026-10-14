@@ -126,6 +126,22 @@ def api_ai_export(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "AI Export API tests", verbose=verbose)
 
 
+def api_tools(verbose: bool = False, test_names: list = None) -> bool:
+    """Run Tool platform API tests."""
+    print_section("Tools API Tests")
+    print_info("Testing authenticated catalog, compute, diagnostics, and transport contracts")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_tools_api.py", test_names)
+    return run_command(cmd, "Tools API tests", verbose=verbose)
+
+
+def api_pac_planner_tool(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the PAC planner Tool through the live compute endpoint."""
+    print_section("PAC Planner Tool API Tests")
+    print_info("Testing pac_allocator/plan end to end: plan, needs_input, stale identity, repeats, withdrawn inputs")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_pac_planner_tool_api.py", test_names)
+    return run_command(cmd, "PAC planner Tool API tests", verbose=verbose)
+
+
 def api_risk(verbose: bool = False, test_names: list = None) -> bool:
     """Run deterministic risk catalog, query, and populated-DB tests."""
     print_section("Risk Analysis API Tests")
@@ -231,6 +247,16 @@ def api_system(verbose: bool = False, test_names: list = None) -> bool:
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_system_api.py", test_names)
     return run_command(cmd, "System API tests", verbose=verbose)
+
+
+def api_http_compression(verbose: bool = False, test_names: list = None) -> bool:
+    """Test HTTP compression (GZipMiddleware) on the live backend."""
+    print_section("HTTP Compression Tests")
+    print_info("Testing: GZipMiddleware in main.py on API JSON, SvelteKit chunks, SPA fallback, PNG, SSE")
+    print_info("Tests: gzip + Vary, small bodies untouched, immutable Cache-Control/ETag (304), Range (206), PNG/SSE never encoded")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_http_compression_api.py", test_names)
+    return run_command(cmd, "HTTP compression tests", verbose=verbose)
 
 
 def api_backup(verbose: bool = False, test_names: list = None) -> bool:
@@ -433,6 +459,17 @@ def api_brim(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "BRIM API tests", verbose=verbose)
 
 
+def api_brim_scalable(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the Scalable Capital BRIM API flow tests."""
+    print_section("BRIM Scalable API Tests")
+    print_info("Testing the Scalable Capital plugins end to end: broker account and overnight account")
+    print_info("Tests: upload, parse, commit, promote-suggest, promote, re-import as duplicates, one-broker cash")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_brim_scalable_api.py", test_names)
+    return run_command(cmd, "BRIM Scalable API tests", verbose=verbose)
+
+
 def search2prices_test(verbose: bool = False, test_names: list = None) -> bool:
     """Run E2E API tests: Search → Create → Assign → Metadata → Prices."""
     print_section("E2E API Test search-to-prices")
@@ -526,6 +563,16 @@ def api_broker_access(verbose: bool = False, test_names: list[str] | None = None
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_broker_access_api.py", test_names)
     return run_command(cmd, "Broker Access API tests", verbose=verbose)
+
+
+def api_account_deletion(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run account deletion API tests: the last-owner rule applied to every broker of the account."""
+    print_section("Account Deletion API Tests")
+    print_info("Testing DELETE /auth/users/me: brokers solely owned go with their transactions and files")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_account_deletion_api.py", test_names)
+    return run_command(cmd, "Account deletion API tests", verbose=verbose)
 
 
 def api_broker_multiuser(verbose: bool = False, test_names: list[str] | None = None) -> bool:
@@ -668,7 +715,9 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "signal-request-validation", api_signal_request_validation, name="Signal Request Validation", desc="Asset/FX signal request validation contracts")
     add_test(api, "signal-preview", api_signal_preview, name="Signal Preview", desc="Backend indicator compute on synthetic points (global chart preview)")
     add_test(api, "ai-export", api_ai_export, name="AI Export API", desc="Catalog, snapshots, authorization, and typed problems")
-    add_test(api, "risk", api_risk, name="Risk Analysis API", desc="Catalog, bulk query, isolation, and populated-DB analytics")
+    add_test(api, "tools", api_tools, name="Tools API", desc="Catalog, bulk compute, diagnostics, and authorization")
+    add_test(api, "pac-planner-tool", api_pac_planner_tool, name="PAC Planner Tool API", desc="pac_allocator plan through the live compute endpoint")
+    add_test(api, "risk", api_risk, name="Risk Analysis API", desc="Catalog, bulk query, isolation, and populated-DB analytics, and per-period asset eligibility")
     add_test(api, "assets-provider", api_assets_provider, name="Assets Provider API", desc="Provider assignment endpoints")
     add_test(
         api,
@@ -680,7 +729,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "assets-metadata", api_assets_metadata, name="Assets Metadata API", desc="PATCH metadata, bulk read, refresh")
     add_test(api, "assets-events", api_assets_events, name="Assets Events API", desc="Bulk upsert, delete, query")
     add_test(api, "events-target-currency", api_events_target_currency, name="Events Target Currency", desc="FX conversion on events query (E.8)")
-    add_test(api, "assets-crud", api_assets_crud, name="Assets CRUD API", desc="Create, list, filter, delete assets")
+    add_test(api, "assets-crud", api_assets_crud, name="Assets CRUD API", desc="Create, list, filter, delete assets, and held-now flags in the list")
     add_test(api, "asset-merge", api_asset_merge, name="Asset Merge API", desc="POST /assets/merge: dry-run, execution, identifier union, refusals")
     add_test(api, "utilities", api_utilities, name="Utilities API", desc="Sectors, countries")
     add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps")
@@ -704,6 +753,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "uploads-serve-file", api_uploads_serve_file, name="Uploads Serve File", desc="Preview, download, MIME")
     add_test(api, "brokers", api_brokers, name="Brokers API", desc="CRUD broker endpoints")
     add_test(api, "brim", api_brim, name="BRIM API", desc="Upload, parse, import flow")
+    add_test(api, "brim-scalable", api_brim_scalable, name="BRIM Scalable API", desc="Scalable broker + overnight account: transfers merged and re-imported as duplicates, one-broker cash")
     add_test(api, "auth", api_auth, name="Auth API", desc="Register, login, logout, me", exclusive_because="rewrites global_settings.enable_registration, one row shared by every user: a concurrent unit would register against whatever value this one left behind")
     add_test(api, "profile", api_profile, name="Profile API", desc="Username/email update")
     add_test(api, "settings", api_settings, name="Settings API", desc="User and global settings")
@@ -718,10 +768,21 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "scheduler", api_scheduler, name="Scheduler API", desc="Scheduler state/log endpoints, admin-only auth")
     add_test(api, "uploads", api_uploads, name="Uploads API", desc="Upload, list, download, delete")
     add_test(api, "broker-access", api_broker_access, name="Broker Access API", desc="Access management, roles")
+    add_test(api, "account-deletion", api_account_deletion, name="Account Deletion API", desc="Last-owner rule on every broker of a deleted account, files after commit")
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
     add_test(api, "portfolio", api_portfolio, name="Portfolio API", desc="Summary, history, asset-history, FIFO lots endpoints")
     add_test(api, "portfolio-wac", api_portfolio_wac, name="Portfolio WAC API", desc="POST /portfolio/wac endpoint (A1-A8)")
+    add_test(
+        api,
+        "http-compression",
+        api_http_compression,
+        name="HTTP Compression",
+        desc="GZip Content-Encoding/Vary, immutable assets, 304/206, binaries untouched",
+        # GETs on public resources and on the static build; the one write is the
+        # throwaway user the SSE check needs for a session, deleted before it returns.
+        isolation="write-scoped",
+    )
     add_test(api, "all", api_test, test_names=False, name="All API Tests", desc="Run all API tests")
     registry["api"] = api
 

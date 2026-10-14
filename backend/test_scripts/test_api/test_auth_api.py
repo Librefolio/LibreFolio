@@ -4,19 +4,37 @@ Authentication API Tests
 Tests for login, logout, register, and session management endpoints.
 """
 
+import asyncio
+import contextlib
+import inspect
+import itertools
+import re
+import time
+import uuid
+from collections.abc import AsyncIterator, Callable
+from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
+from types import ModuleType
+from typing import Optional, Union
 
 import httpx
 import pytest
 import pytest_asyncio
+from fastapi import HTTPException, Request, Response
+from pydantic import ValidationError
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from backend.app.api.v1 import auth as auth_api
-from backend.app.config import get_settings
-from backend.app.db.models import GlobalSetting
+from backend.app.config import Settings, get_settings
+from backend.app.db.base import SQLModel  # imports every model: SQLModel.metadata holds the whole schema
+from backend.app.db.models import GlobalSetting, User
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.auth import AuthRegisterRequest
+from backend.app.schemas.auth import AuthLoginRequest, AuthLoginResponse, AuthRegisterRequest, ChangePasswordRequest
+from backend.app.services import auth_service, user_service
+from backend.app.services.global_settings_service import is_registration_enabled
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -181,23 +199,28 @@ class TestRegister:
                 await set_registration_enabled(True)
 
     @pytest.mark.asyncio
-    async def test_register_disabled_allows_bootstrap_when_no_users(self, test_server, monkeypatch):
-        """REG-007: Disabled registration still allows bootstrap when user count is zero."""
+    async def test_register_disabled_allows_bootstrap_when_no_users(self, tmp_path):
+        """REG-007: Disabled registration still allows bootstrap when user count is zero.
+
+        On a private database (a fresh SQLite file under tmp_path with the whole ORM schema), zero
+        users and enable_registration=false are its real state, not a patched counter. The lane's
+        users and global settings are never touched, and the bootstrap administrator no longer
+        stays behind in the shared database.
+        """
         print_section("REG-007: Disabled registration allows bootstrap user")
 
-        async def count_no_users(_session):
-            return 0
-
-        monkeypatch.setattr(auth_api.user_service, "count_users", count_no_users)
-
+        engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'bootstrap.db'}", poolclass=NullPool)
         try:
-            await set_registration_enabled(False)
-
-            timestamp = int(datetime.now().timestamp() * 1000)
-            username = f"bootstrapreg_{timestamp}"
-
-            engine = get_async_engine()
+            async with engine.begin() as connection:
+                await connection.run_sync(SQLModel.metadata.create_all)
             async with AsyncSession(engine) as session:
+                session.add(GlobalSetting(key="enable_registration", value="false", value_type="bool"))
+                await session.commit()
+
+            username = "bootstrapreg"
+            async with AsyncSession(engine, expire_on_commit=False) as session:
+                assert await user_service.count_users(session) == 0, "Precondition: the private database must have no user"
+                assert await is_registration_enabled(session) is False, "Precondition: registration must be disabled"
                 response = await auth_api.register(
                     AuthRegisterRequest(
                         username=username,
@@ -211,7 +234,7 @@ class TestRegister:
             assert response.user.is_superuser is True
             print_success("Disabled registration allowed bootstrap user")
         finally:
-            await set_registration_enabled(True)
+            await engine.dispose()
 
     @pytest.mark.asyncio
     async def test_register_duplicate_username(self, test_server):
@@ -885,3 +908,949 @@ class TestDeleteOwnAccount:
             assert relogin_resp.status_code == 401
 
             print_success("Own account deleted and session invalidated")
+
+
+# ============================================================================
+# THE SESSION COOKIE'S SECURE ATTRIBUTE (plan 34 step 2, §7.3)
+# ============================================================================
+
+#: The lane's server by its IPv4 address, never "localhost": see TestSessionCookieSecure.
+IPV4_API_BASE = f"http://127.0.0.1:{settings.TEST_PORT}/api/v1"
+#: What a reverse proxy terminating TLS on the same host adds to the request it forwards.
+FORWARDED_HTTPS = {"X-Forwarded-Proto": "https"}
+
+
+@dataclass
+class _DisposableUser:
+    """A regular user one test registered; ``deleted`` once the test deleted the account itself."""
+
+    username: str
+    password: str
+    deleted: bool = False
+
+    @property
+    def credentials(self) -> dict[str, str]:
+        return {"username": self.username, "password": self.password}
+
+
+def _session_set_cookie(response: httpx.Response) -> tuple[str, dict[str, str]]:
+    """The response's ``session`` Set-Cookie: its value, and its attributes by lower-cased name ("" for a flag).
+
+    Parsed by name, never by position: the attribute order is http.cookies', not a contract.
+    """
+    cookies: list[tuple[str, dict[str, str]]] = []
+    for header in response.headers.get_list("set-cookie"):
+        pair, *attributes = (part.strip() for part in header.split(";"))
+        name, _, value = pair.partition("=")
+        if name.strip() == auth_api.SESSION_COOKIE_NAME:
+            cookies.append((value, {key.strip().lower(): attribute_value.strip() for key, _, attribute_value in (attribute.partition("=") for attribute in attributes if attribute)}))
+    assert len(cookies) == 1, f"Expected exactly one {auth_api.SESSION_COOKIE_NAME} Set-Cookie, got {response.headers.get_list('set-cookie')}"
+    return cookies[0]
+
+
+async def _login(client: httpx.AsyncClient, user: _DisposableUser, headers: Optional[dict[str, str]] = None) -> httpx.Response:
+    response = await client.post(f"{IPV4_API_BASE}/auth/login", json=user.credentials, headers=headers, timeout=TIMEOUT)
+    assert response.status_code == 200, f"Login as {user.username} failed: {response.status_code} {response.text}"
+    return response
+
+
+def _request(scheme: str, forwarded_proto: Optional[str] = None, client_host: str = "127.0.0.1") -> Request:
+    """A request as uvicorn hands it to the app: ``scheme`` is the one uvicorn left in the scope.
+
+    Like every request uvicorn hands over, the scope carries a Host header and the server address,
+    so request.url is absolute and request.url.scheme is the scheme. ``forwarded_proto`` adds an
+    X-Forwarded-Proto header as received: uvicorn turns it into the scheme only for a client it
+    trusts (FORWARDED_ALLOW_IPS), and leaves the header in the scope either way.
+    """
+    port = 443 if scheme == "https" else 80
+    headers = [(b"host", b"librefolio.example")]
+    if forwarded_proto is not None:
+        headers.append((b"x-forwarded-proto", forwarded_proto.encode("latin-1")))
+    scope = {
+        "type": "http",
+        "scheme": scheme,
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "root_path": "",
+        "query_string": b"",
+        "headers": headers,
+        "client": (client_host, 50000),
+        "server": ("librefolio.example", port),
+    }
+    return Request(scope)
+
+
+class TestSessionCookieSecure:
+    """The session cookie's Secure attribute, on the live test server (plan 34 step 2, §7.3).
+
+    The developer's rule: secure by default, insecure only when turned off explicitly. Under the
+    default SESSION_COOKIE_SECURE=auto, every session Set-Cookie (login, logout, account deletion)
+    is Secure when the request arrived over HTTPS, or when the first value of its X-Forwarded-Proto
+    says https — whoever sent the header, which can only switch Secure on (COOKIE-011).
+
+    These tests reach the server at 127.0.0.1 (IPV4_API_BASE), a client uvicorn trusts by default
+    (FORWARDED_ALLOW_IPS=127.0.0.1): there its proxy-headers handling also turns X-Forwarded-Proto
+    into the request's scheme, so a forwarded request is https by both routes. Neither route is
+    needed alone, and COOKIE-010 and COOKIE-011 pin each one in-process. They depend on the server
+    listening on IPv4 (the runner's 0.0.0.0 with HOST unset, the in-process server's localhost) and
+    on SESSION_COOKIE_SECURE unset or auto (checked, see lane_runs_auto).
+
+    Write-safe: a login test registers a regular user of its own and deletes it at teardown;
+    logout needs no session, the handler clears the cookie unconditionally.
+    """
+
+    @pytest.fixture(autouse=True)
+    def lane_runs_auto(self):
+        """Precondition: the default mode. The server reads the same .env and environment as this process."""
+        mode = auth_api.SESSION_COOKIE_SECURE_MODE
+        assert mode == "auto", f"Precondition: these tests need SESSION_COOKIE_SECURE=auto, the default; this lane runs {mode!r} (set in .env or in the environment)"
+
+    @pytest_asyncio.fixture
+    async def disposable_user(self, test_server):
+        """A regular user of this test only, registered over plain HTTP, deleted at teardown.
+
+        Teardown logs in over plain HTTP and sends the session explicitly, so the deletion works
+        whatever the cookie's Secure says; a test that deleted the account itself marks it deleted.
+        """
+        user = _DisposableUser(username=f"cookiesec_{uuid.uuid4().hex[:12]}", password="cookiepassword123")
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{IPV4_API_BASE}/auth/register", json={**user.credentials, "email": f"{user.username}@example.com"}, timeout=TIMEOUT)
+        assert response.status_code == 201, f"Setup failed: {response.status_code} {response.text}"
+        assert response.json()["user"]["is_superuser"] is False, "Precondition: a regular user (the lane has its administrators), so its account deletion is never refused"
+
+        yield user
+
+        if user.deleted:
+            return
+        async with httpx.AsyncClient() as client:
+            token, _ = _session_set_cookie(await _login(client, user))
+            response = await client.delete(f"{IPV4_API_BASE}/auth/users/me", headers={"Cookie": f"{auth_api.SESSION_COOKIE_NAME}={token}"}, timeout=TIMEOUT)
+        assert response.status_code == 200, f"Cleanup: deleting {user.username} failed: {response.status_code} {response.text}"
+
+    @pytest.mark.asyncio
+    async def test_login_over_plain_http_sets_no_secure_cookie(self, test_server, disposable_user):
+        """COOKIE-001 — GUARD, green today and after: under auto, plain HTTP leaves Secure off.
+
+        Browsers refuse a Secure cookie set by an http:// origin (localhost aside), so a plain-HTTP
+        install (a LAN, a container without TLS) would never stay logged in.
+        """
+        print_section("COOKIE-001: login over plain HTTP sets no Secure cookie")
+        async with httpx.AsyncClient() as client:
+            response = await _login(client, disposable_user)
+
+        token, attributes = _session_set_cookie(response)
+        assert token, f"The login must set a session token: {attributes}"
+        assert "secure" not in attributes, f"Over plain HTTP the session cookie must not be Secure under auto: {attributes}"
+        assert "httponly" in attributes and attributes.get("samesite", "").lower() == "lax", f"The session cookie must stay HttpOnly and SameSite=Lax: {attributes}"
+
+        print_success("✓ Plain HTTP: no Secure; HttpOnly and SameSite=Lax")
+
+    @pytest.mark.asyncio
+    async def test_login_behind_an_https_proxy_sets_a_secure_cookie(self, test_server, disposable_user):
+        """COOKIE-002 — NEW, red today: behind a trusted proxy reporting HTTPS, the login cookie is Secure.
+
+        X-Forwarded-Proto: https from 127.0.0.1 is what a reverse proxy on the same host sends, and
+        uvicorn makes it the request's scheme. HttpOnly and SameSite=Lax stay as they are.
+
+        Today the cookie is never Secure: the red lists its attributes, without "secure".
+        """
+        print_section("COOKIE-002: login behind an HTTPS proxy sets a Secure cookie")
+        async with httpx.AsyncClient() as client:
+            response = await _login(client, disposable_user, headers=FORWARDED_HTTPS)
+
+        token, attributes = _session_set_cookie(response)
+        assert token, f"The login must set a session token: {attributes}"
+        assert "secure" in attributes, f"[new] Behind a trusted proxy reporting HTTPS (X-Forwarded-Proto: https from 127.0.0.1) the session cookie must be Secure under auto, the default: Set-Cookie attributes {attributes}"
+        assert "httponly" in attributes and attributes.get("samesite", "").lower() == "lax", f"The session cookie must stay HttpOnly and SameSite=Lax: {attributes}"
+
+        print_success("✓ HTTPS behind the proxy: Secure, HttpOnly and SameSite=Lax")
+
+    @pytest.mark.asyncio
+    async def test_logout_behind_an_https_proxy_clears_with_a_secure_cookie(self, test_server):
+        """COOKIE-003 — NEW, red today: the Set-Cookie that clears the session is Secure over HTTPS too.
+
+        Every session Set-Cookie written over HTTPS is Secure, the one that deletes it included.
+        Presence barrier first: the response must be the deletion (Max-Age=0).
+        """
+        print_section("COOKIE-003: logout behind an HTTPS proxy clears with a Secure cookie")
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{IPV4_API_BASE}/auth/logout", headers=FORWARDED_HTTPS, timeout=TIMEOUT)
+        assert response.status_code == 200, f"Logout failed: {response.status_code} {response.text}"
+
+        _, attributes = _session_set_cookie(response)
+        assert attributes.get("max-age") == "0", f"The logout must clear the session cookie (Max-Age=0): {attributes}"
+        assert "secure" in attributes, f"[new] Behind a trusted proxy reporting HTTPS the Set-Cookie that clears the session must be Secure under auto: {attributes}"
+
+        print_success("✓ HTTPS behind the proxy: the clearing Set-Cookie is Secure")
+
+    @pytest.mark.asyncio
+    async def test_logout_over_plain_http_clears_without_secure(self, test_server):
+        """COOKIE-004 — GUARD, green today and after: over plain HTTP the clearing Set-Cookie is not Secure."""
+        print_section("COOKIE-004: logout over plain HTTP clears without Secure")
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{IPV4_API_BASE}/auth/logout", timeout=TIMEOUT)
+        assert response.status_code == 200, f"Logout failed: {response.status_code} {response.text}"
+
+        _, attributes = _session_set_cookie(response)
+        assert attributes.get("max-age") == "0", f"The logout must clear the session cookie (Max-Age=0): {attributes}"
+        assert "secure" not in attributes, f"Over plain HTTP the clearing Set-Cookie must not be Secure under auto: {attributes}"
+
+        print_success("✓ Plain HTTP: the clearing Set-Cookie has no Secure")
+
+    @pytest.mark.asyncio
+    async def test_account_deletion_behind_an_https_proxy_clears_with_a_secure_cookie(self, test_server, disposable_user):
+        """COOKIE-005 — NEW, red today: DELETE /auth/users/me, the third session Set-Cookie, is Secure over HTTPS.
+
+        The user logs in over plain HTTP and deletes the account through the proxy, the session
+        sent explicitly. The account goes either way; the red is the clearing Set-Cookie without
+        "secure".
+        """
+        print_section("COOKIE-005: account deletion behind an HTTPS proxy clears with a Secure cookie")
+        async with httpx.AsyncClient() as client:
+            token, _ = _session_set_cookie(await _login(client, disposable_user))
+            response = await client.delete(f"{IPV4_API_BASE}/auth/users/me", headers={**FORWARDED_HTTPS, "Cookie": f"{auth_api.SESSION_COOKIE_NAME}={token}"}, timeout=TIMEOUT)
+        disposable_user.deleted = response.status_code == 200
+        assert response.status_code == 200, f"Account deletion failed: {response.status_code} {response.text}"
+
+        _, attributes = _session_set_cookie(response)
+        assert attributes.get("max-age") == "0", f"The account deletion must clear the session cookie (Max-Age=0): {attributes}"
+        assert "secure" in attributes, f"[new] Behind a trusted proxy reporting HTTPS the Set-Cookie that clears the deleted account's session must be Secure under auto: {attributes}"
+
+        print_success("✓ HTTPS behind the proxy: the account deletion's clearing Set-Cookie is Secure")
+
+
+class TestSessionCookieSecureMode:
+    """auth_api.session_cookie_secure(request), in-process: the mode decides; auto follows the scheme, or the first X-Forwarded-Proto."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("mode", "scheme", "secure"),
+        [
+            pytest.param("always", "http", True, id="always-http"),
+            pytest.param("always", "https", True, id="always-https"),
+            pytest.param("auto", "https", True, id="auto-https"),
+            pytest.param("auto", "http", False, id="auto-http"),
+            pytest.param("never", "https", False, id="never-https"),
+            pytest.param("never", "http", False, id="never-http"),
+        ],
+    )
+    async def test_secure_follows_the_mode_and_the_scheme(self, monkeypatch, mode, scheme, secure):
+        """COOKIE-010 — always → True, never → False, auto → whether the request arrived over https.
+
+        These requests carry no X-Forwarded-Proto (COOKIE-011 covers it). RED today on the three
+        True cases: the stub answers False to everything. The three False cases are guards: auto
+        stays off over plain HTTP, and never is the only way to turn it off over HTTPS.
+        """
+        print_section(f"COOKIE-010: SESSION_COOKIE_SECURE={mode} over {scheme}")
+        monkeypatch.setattr(auth_api, "SESSION_COOKIE_SECURE_MODE", mode)
+        request = _request(scheme)
+        assert request.url.scheme == scheme, f"Precondition: the request must arrive over {scheme}: {request.url}"
+
+        assert auth_api.session_cookie_secure(request) is secure, f"session_cookie_secure() with SESSION_COOKIE_SECURE={mode!r} over {scheme} must be {secure}"
+
+        print_success(f"✓ {mode} over {scheme}: Secure={secure}")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("mode", "scheme", "forwarded_proto", "secure"),
+        [
+            pytest.param("auto", "http", "https", True, id="auto-http-xfp-https"),
+            pytest.param("auto", "http", "http, https", False, id="auto-http-xfp-http-then-https"),
+            pytest.param("never", "http", "https", False, id="never-http-xfp-https"),
+            pytest.param("auto", "http", "HTTPS , http", True, id="auto-http-xfp-first-value-trimmed-any-case"),
+            pytest.param("auto", "https", "http", True, id="auto-https-xfp-http"),
+            pytest.param("always", "http", "http", True, id="always-http-xfp-http"),
+        ],
+    )
+    async def test_auto_also_follows_the_first_forwarded_proto(self, monkeypatch, mode, scheme, forwarded_proto, secure):
+        """COOKIE-011 — in auto, the first X-Forwarded-Proto value, trimmed and in any case, switches Secure on.
+
+        Whoever sent the header: the request comes from 203.0.113.7, an address uvicorn does not
+        trust by default, so the scheme stays as uvicorn left it and only the app's own reading of
+        the header can switch Secure on. Only the first comma-separated value counts. The header
+        never switches Secure off: auto over https stays Secure. always and never ignore it, and
+        never is the documented way out when a proxy claims https to a browser on plain HTTP.
+
+        RED today on the True cases (the stub answers False); the False cases are guards.
+        """
+        print_section(f"COOKIE-011: SESSION_COOKIE_SECURE={mode} over {scheme}, X-Forwarded-Proto: {forwarded_proto}")
+        monkeypatch.setattr(auth_api, "SESSION_COOKIE_SECURE_MODE", mode)
+        request = _request(scheme, forwarded_proto=forwarded_proto, client_host="203.0.113.7")
+        assert request.url.scheme == scheme, f"Precondition: the request must arrive over {scheme}: {request.url}"
+        assert request.headers.get("x-forwarded-proto") == forwarded_proto, f"Precondition: the request must carry X-Forwarded-Proto: {forwarded_proto!r}: {request.headers}"
+
+        assert auth_api.session_cookie_secure(request) is secure, f"session_cookie_secure() with SESSION_COOKIE_SECURE={mode!r} over {scheme} and X-Forwarded-Proto: {forwarded_proto!r} must be {secure}"
+
+        print_success(f"✓ {mode} over {scheme}, X-Forwarded-Proto {forwarded_proto!r}: Secure={secure}")
+
+
+class TestSessionCookieSecureSetting:
+    """Settings.SESSION_COOKIE_SECURE: auto by default, stripped and lower-cased, nothing but auto/always/never (guards).
+
+    Every Settings here is built with _env_file=None: the repo's .env must not decide the outcome.
+    """
+
+    @pytest.mark.asyncio
+    async def test_default_is_auto(self, monkeypatch):
+        """COOKIE-020 — GUARD: unset, the mode is auto (neither .env nor the environment may set it here)."""
+        print_section("COOKIE-020: SESSION_COOKIE_SECURE defaults to auto")
+        monkeypatch.delenv("SESSION_COOKIE_SECURE", raising=False)
+
+        assert Settings(_env_file=None).SESSION_COOKIE_SECURE == "auto"
+
+        print_success("✓ The default is auto")
+
+    @pytest.mark.asyncio
+    async def test_value_is_stripped_and_lower_cased(self, monkeypatch):
+        """COOKIE-021 — GUARD: " ALWAYS " reads as always, passed to Settings or set in the environment (a Docker deployment)."""
+        print_section("COOKIE-021: SESSION_COOKIE_SECURE is stripped and lower-cased")
+        assert Settings(_env_file=None, SESSION_COOKIE_SECURE=" ALWAYS ").SESSION_COOKIE_SECURE == "always"
+
+        monkeypatch.setenv("SESSION_COOKIE_SECURE", " Never ")
+        assert Settings(_env_file=None).SESSION_COOKIE_SECURE == "never"
+
+        print_success("✓ Stripped and lower-cased, from an argument and from the environment")
+
+    @pytest.mark.asyncio
+    async def test_unknown_value_is_rejected(self):
+        """COOKIE-022 — GUARD: anything else is a ValidationError on SESSION_COOKIE_SECURE, so a wrong value stops the start."""
+        print_section("COOKIE-022: an unknown SESSION_COOKIE_SECURE is rejected")
+        with pytest.raises(ValidationError) as rejected:
+            Settings(_env_file=None, SESSION_COOKIE_SECURE="sometimes")
+
+        assert [error["loc"] for error in rejected.value.errors()] == [("SESSION_COOKIE_SECURE",)], f"Only SESSION_COOKIE_SECURE must be rejected: {rejected.value}"
+
+        print_success("✓ 'sometimes' is a ValidationError on SESSION_COOKIE_SECURE")
+
+
+# ============================================================================
+# A LOGIN THAT DOES NOT REVEAL ACCOUNTS (plan 36, §2.5)
+# ============================================================================
+#
+# The password is checked before the account's state. A wrong password gets one answer, status and
+# body, whether the account is unknown, active or disabled; only the right password learns that an
+# account is disabled, with a 403 ACCOUNT_DISABLED. Without an account bcrypt still runs, against a
+# dummy hash of the same cost computed once, so the response time does not tell either (D5). These
+# tests check that bcrypt ran, and against what; they never measure how long anything took.
+
+#: B0: the answer to a wrong password, whether the account is unknown, active or disabled.
+INVALID_CREDENTIALS = {"detail": "Invalid credentials"}
+#: The 403 detail a disabled account gets, and only with the right password (plan 36, §0.1).
+ACCOUNT_DISABLED_DETAIL = {"error_code": "ACCOUNT_DISABLED", "message": "Account is disabled"}
+
+
+def _wrong_password() -> str:
+    """A password no account of this run has."""
+    return f"Wrong-{uuid.uuid4().hex[:12]}"
+
+
+def _session_set_cookies(response: httpx.Response) -> list[str]:
+    """Every Set-Cookie of ``response`` that writes the session cookie, matched by name: [] when there is none."""
+    return [header for header in response.headers.get_list("set-cookie") if header.split(";", 1)[0].partition("=")[0].strip() == auth_api.SESSION_COOKIE_NAME]
+
+
+def _answer(response: httpx.Response) -> tuple[int, str]:
+    """What a login tells its client: the status code and the body, byte for byte."""
+    return response.status_code, response.text
+
+
+async def _post_login(username: str, password: str) -> httpx.Response:
+    """POST /auth/login on the lane's server, from a client with an empty cookie jar; the response whatever its status."""
+    async with httpx.AsyncClient() as client:
+        return await client.post(f"{IPV4_API_BASE}/auth/login", json={"username": username, "password": password}, timeout=TIMEOUT)
+
+
+async def _b0() -> httpx.Response:
+    """B0 as the lane answers it: an unknown username with a wrong password, checked to be the generic 401 without a session."""
+    response = await _post_login(f"nobody_{uuid.uuid4().hex[:12]}", _wrong_password())
+    assert (response.status_code, response.json()) == (401, INVALID_CREDENTIALS), f"B0, the answer to an unknown username, must be 401 {INVALID_CREDENTIALS}: got {response.status_code} {response.text}"
+    assert _session_set_cookies(response) == [], f"A failed login must set no session cookie: {response.headers.get_list('set-cookie')}"
+    return response
+
+
+@dataclass(frozen=True)
+class _LoginAccounts:
+    """An active and a disabled regular account of one test."""
+
+    active: _DisposableUser
+    disabled: _DisposableUser
+
+
+async def _active_flags(user_ids: list[int]) -> dict[int, bool]:
+    """{user id: is_active} of these users of the lane, read in a fresh session."""
+    async with AsyncSession(get_async_engine()) as session:
+        result = await session.execute(select(User.id, User.is_active).where(User.id.in_(user_ids)))
+        return dict(result.tuples().all())
+
+
+async def _delete_users(user_ids: list[int]) -> list[str]:
+    """Delete these users of the lane through user_service.delete_user, each in a session of its own; return what failed."""
+    errors: list[str] = []
+    for user_id in user_ids:
+        async with AsyncSession(get_async_engine()) as session:
+            try:
+                await user_service.delete_user(session, user_id)
+            except Exception as exc:  # every account gets its attempt; the failures are reported together
+                errors.append(f"user {user_id}: {exc!r}")
+    return errors
+
+
+@pytest_asyncio.fixture
+async def login_accounts(test_server) -> AsyncIterator[_LoginAccounts]:
+    """An active and a disabled account of this test only, both deleted at teardown, after a red too.
+
+    Both are registered over HTTP as regular users. The disabled one is then deactivated through
+    user_service.set_user_active on the lane's database, the path of `dev.py user deactivate`, and
+    both states are read back before the test runs: a disabled account that was not disabled would
+    let LOGIN-012 pass for the wrong reason. A disabled account cannot log in to delete itself, so
+    teardown deletes both through user_service.delete_user, the service DELETE /auth/users/me calls.
+    """
+    accounts = _LoginAccounts(
+        active=_DisposableUser(username=f"loginon_{uuid.uuid4().hex[:12]}", password=f"Active-{uuid.uuid4().hex[:12]}"),
+        disabled=_DisposableUser(username=f"loginoff_{uuid.uuid4().hex[:12]}", password=f"Disabled-{uuid.uuid4().hex[:12]}"),
+    )
+    user_ids: list[int] = []
+    try:
+        async with httpx.AsyncClient() as client:
+            for user in (accounts.active, accounts.disabled):
+                response = await client.post(f"{IPV4_API_BASE}/auth/register", json={**user.credentials, "email": f"{user.username}@example.com"}, timeout=TIMEOUT)
+                assert response.status_code == 201, f"Setup: registering {user.username} failed: {response.status_code} {response.text}"
+                user_ids.append(response.json()["user"]["id"])
+                assert response.json()["user"]["is_superuser"] is False, "Precondition: regular users (the lane has its administrators)"
+        async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+            deactivated, error = await user_service.set_user_active(session, accounts.disabled.username, False)
+        assert deactivated, f"Setup: set_user_active({accounts.disabled.username!r}, False) refused: {error}"
+        flags = await _active_flags(user_ids)
+        assert flags == {user_ids[0]: True, user_ids[1]: False}, f"Precondition: {accounts.active.username} active and {accounts.disabled.username} disabled, in the database the server reads: {flags}"
+
+        yield accounts
+    finally:
+        errors = await _delete_users(user_ids)
+        assert not errors, f"Cleanup: {errors}"
+
+
+class TestLoginDoesNotRevealAccounts:
+    """POST /auth/login on the lane's server: a wrong password gets one answer, whoever the account (plan 36, §2.5).
+
+    B0 is the answer to an unknown username, 401 {"detail": "Invalid credentials"}. An active or a
+    disabled account with a wrong password must answer exactly as B0, status and body byte for byte;
+    only the right password learns that an account is disabled (403 ACCOUNT_DISABLED). No failed
+    login sets a session cookie (guard), and the successful one does (LOGIN-014): that is what gives
+    the absences meaning.
+
+    Write-scoped: each test registers its own accounts and deletes them at teardown (login_accounts).
+    """
+
+    @pytest.mark.asyncio
+    async def test_unknown_account_gets_the_generic_answer(self, test_server):
+        """LOGIN-010 — GUARD, green today and after: an unknown username gets B0, 401 {"detail": "Invalid credentials"}, and no session."""
+        print_section("LOGIN-010: an unknown username gets B0, the generic 401")
+        await _b0()
+
+        print_success("✓ Unknown username: 401 Invalid credentials, no session")
+
+    @pytest.mark.asyncio
+    async def test_active_account_with_a_wrong_password_answers_as_an_unknown_one(self, login_accounts):
+        """LOGIN-011 — GUARD, green today and after: an active account with a wrong password answers exactly B0."""
+        print_section("LOGIN-011: an active account with a wrong password answers as an unknown one")
+        b0 = await _b0()
+
+        response = await _post_login(login_accounts.active.username, _wrong_password())
+
+        assert _answer(response) == _answer(b0), f"An active account with a wrong password must answer exactly as an unknown username, B0 {_answer(b0)}: got {_answer(response)}"
+        assert _session_set_cookies(response) == [], f"A failed login must set no session cookie: {response.headers.get_list('set-cookie')}"
+
+        print_success("✓ Active account, wrong password: B0, no session")
+
+    @pytest.mark.asyncio
+    async def test_disabled_account_with_a_wrong_password_answers_as_an_unknown_one(self, login_accounts):
+        """LOGIN-012 — NEW, red today: a disabled account with a wrong password answers exactly B0.
+
+        Today the account's state is checked before the password: anyone learns that the account
+        exists and is disabled, from 401 {"detail": "Account is disabled"}.
+        """
+        print_section("LOGIN-012: a disabled account with a wrong password answers as an unknown one")
+        b0 = await _b0()
+
+        response = await _post_login(login_accounts.disabled.username, _wrong_password())
+
+        assert _answer(response) == _answer(b0), f"[new] A disabled account with a wrong password must answer exactly as an unknown username, B0 {_answer(b0)}: got {_answer(response)}, which tells that the account exists and is disabled"
+        assert _session_set_cookies(response) == [], f"A failed login must set no session cookie: {response.headers.get_list('set-cookie')}"
+
+        print_success("✓ Disabled account, wrong password: B0, no session")
+
+    @pytest.mark.asyncio
+    async def test_disabled_account_with_the_right_password_is_told_it_is_disabled(self, login_accounts):
+        """LOGIN-013 — NEW, red today: only the right password learns that the account is disabled, from a 403 ACCOUNT_DISABLED.
+
+        A 403 says «right credentials, access denied», and its error_code is what the frontend maps
+        to auth.accountDisabled. Today: 401 {"detail": "Account is disabled"}.
+        """
+        print_section("LOGIN-013: a disabled account with the right password gets 403 ACCOUNT_DISABLED")
+        response = await _post_login(login_accounts.disabled.username, login_accounts.disabled.password)
+
+        assert (response.status_code, response.json()) == (403, {"detail": ACCOUNT_DISABLED_DETAIL}), f"[new] A disabled account with the right password must get 403 with detail {ACCOUNT_DISABLED_DETAIL}: got {response.status_code} {response.text}"
+        assert _session_set_cookies(response) == [], f"A disabled account must get no session cookie: {response.headers.get_list('set-cookie')}"
+
+        print_success("✓ Disabled account, right password: 403 ACCOUNT_DISABLED, no session")
+
+    @pytest.mark.asyncio
+    async def test_active_account_with_the_right_password_logs_in(self, login_accounts):
+        """LOGIN-014 — GUARD, green today and after: the active account with its password logs in and gets one session cookie.
+
+        The presence barrier of this class: _session_set_cookies does find the session cookie when
+        there is one, so the absences asserted on every failure are not an artefact of the lookup.
+        """
+        print_section("LOGIN-014: the active account with its password logs in")
+        response = await _post_login(login_accounts.active.username, login_accounts.active.password)
+
+        assert response.status_code == 200, f"The active account with its password must log in: {response.status_code} {response.text}"
+        assert response.json()["user"]["username"] == login_accounts.active.username, f"The login must be the active account's: {response.text}"
+        assert len(_session_set_cookies(response)) == 1, f"A successful login must set exactly one session cookie: {response.headers.get_list('set-cookie')}"
+        token, _ = _session_set_cookie(response)
+        assert token, f"The session cookie must carry a token: {response.headers.get_list('set-cookie')}"
+
+        print_success("✓ Active account, right password: 200 and a session cookie")
+
+
+@dataclass(frozen=True)
+class _PrivateLogin:
+    """A database one test owns entirely, under its tmp_path, with one active and one disabled account."""
+
+    engine: AsyncEngine
+    active: _DisposableUser
+    disabled: _DisposableUser
+
+
+@dataclass
+class _CheckpwCall:
+    """One bcrypt.checkpw call: its arguments as bcrypt received them, and what the real check raised, if anything."""
+
+    password: bytes
+    hashed_password: bytes
+    raised: Optional[BaseException] = None
+
+
+#: A well-formed bcrypt hash: $2a$, $2b$ or $2y$, a two-digit cost, then 53 characters of salt and digest.
+_BCRYPT_HASH = re.compile(rb"\$2[aby]\$(\d{2})\$[./A-Za-z0-9]{53}")
+
+
+def _bcrypt_cost(hashed_password: bytes) -> Optional[int]:
+    """The cost of a well-formed bcrypt hash; None for anything else."""
+    match = _BCRYPT_HASH.fullmatch(hashed_password)
+    return int(match.group(1)) if match else None
+
+
+@pytest_asyncio.fixture
+async def private_login(tmp_path: Path) -> AsyncIterator[_PrivateLogin]:
+    """A fresh SQLite file under tmp_path with the whole ORM schema, an active and a disabled account; disposed at teardown.
+
+    The login handler runs on it in-process, as REG-007 runs registration: unknown, active and
+    disabled are real states there, the bcrypt spy sees every check, and nothing reaches the lane.
+    The accounts are created through user_service.create_user, the disabled one inactive from the
+    start. NullPool as get_async_engine.
+    """
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'login.db'}", poolclass=NullPool)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        instance = _PrivateLogin(engine=engine, active=_DisposableUser("active_user", "ActivePass123!"), disabled=_DisposableUser("disabled_user", "DisabledPass123!"))
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            for user, active in ((instance.active, True), (instance.disabled, False)):
+                created, error = await user_service.create_user(session, username=user.username, email=f"{user.username}@example.com", password=user.password, is_active=active)
+                assert created is not None and created.is_active is active, f"Setup: create_user({user.username!r}, is_active={active}) failed: {error}"
+        yield instance
+    finally:
+        await engine.dispose()
+
+
+@pytest.fixture
+def checkpw_calls(monkeypatch: pytest.MonkeyPatch) -> list[_CheckpwCall]:
+    """Spy on bcrypt.checkpw in the module object auth_service uses: the real check still runs, and every call is recorded.
+
+    Whether bcrypt ran, and against what, is the contract (plan 36, D5); how long it took is never
+    measured.
+    """
+    real_checkpw = auth_service.bcrypt.checkpw
+    calls: list[_CheckpwCall] = []
+
+    def checkpw(password: bytes, hashed_password: bytes) -> bool:
+        call = _CheckpwCall(password=password, hashed_password=hashed_password)
+        calls.append(call)
+        try:
+            return real_checkpw(password, hashed_password)
+        except Exception as exc:
+            call.raised = exc
+            raise
+
+    monkeypatch.setattr(auth_service.bcrypt, "checkpw", checkpw)
+    return calls
+
+
+async def _login_in_process(engine: AsyncEngine, username: str, password: str) -> Union[AuthLoginResponse, HTTPException]:
+    """POST /auth/login's handler called as FastAPI wires it, on a private database; the outcome is returned, never raised."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        try:
+            return await auth_api.login(request=AuthLoginRequest(username=username, password=password), response=Response(), http_request=_request("http"), session=session)
+        except HTTPException as refusal:
+            return refusal
+
+
+def _refusal(outcome: Union[AuthLoginResponse, HTTPException]) -> Optional[tuple[int, object]]:
+    """(status code, detail) of a refused login; None when the login went through."""
+    return (outcome.status_code, outcome.detail) if isinstance(outcome, HTTPException) else None
+
+
+class TestLoginAlwaysRunsBcrypt:
+    """auth_api.login and verify_password_or_dummy in-process, with bcrypt.checkpw spied (plan 36, §2.5 and D5).
+
+    The handler runs on a private database (private_login), and every login costs exactly one
+    bcrypt check, whatever the account: without an account the password is checked against a dummy
+    hash. Nothing here measures time.
+    """
+
+    @pytest.mark.asyncio
+    async def test_unknown_account_is_refused_after_one_bcrypt_check(self, private_login, checkpw_calls):
+        """LOGIN-020 — NEW, red today: an unknown username gets 401 «Invalid credentials» after exactly one bcrypt check.
+
+        Without an account the password is checked against a dummy hash, so an unknown login costs
+        what a wrong password costs. Today bcrypt does not run at all (0 calls), and the response
+        time tells which accounts exist.
+        """
+        print_section("LOGIN-020: an unknown username is refused after one bcrypt check")
+        outcome = await _login_in_process(private_login.engine, "nobody_here", _wrong_password())
+
+        assert _refusal(outcome) == (401, "Invalid credentials"), f"An unknown username must get 401 «Invalid credentials»: got {outcome!r}"
+        assert len(checkpw_calls) == 1, f"[new] An unknown username must still cost one bcrypt check, against a dummy hash: bcrypt.checkpw ran {len(checkpw_calls)} time(s)"
+
+        print_success("✓ Unknown username: 401 Invalid credentials, one bcrypt check")
+
+    @pytest.mark.asyncio
+    async def test_active_account_with_a_wrong_password_is_refused_after_one_bcrypt_check(self, private_login, checkpw_calls):
+        """LOGIN-021 — GUARD, green today and after: an active account with a wrong password gets 401 «Invalid credentials» after one bcrypt check."""
+        print_section("LOGIN-021: an active account with a wrong password is refused after one bcrypt check")
+        outcome = await _login_in_process(private_login.engine, private_login.active.username, _wrong_password())
+
+        assert _refusal(outcome) == (401, "Invalid credentials"), f"An active account with a wrong password must get 401 «Invalid credentials»: got {outcome!r}"
+        assert len(checkpw_calls) == 1, f"A wrong password is one bcrypt check: bcrypt.checkpw ran {len(checkpw_calls)} time(s)"
+
+        print_success("✓ Active account, wrong password: 401 Invalid credentials, one bcrypt check")
+
+    @pytest.mark.asyncio
+    async def test_disabled_account_with_a_wrong_password_is_refused_as_an_unknown_one(self, private_login, checkpw_calls):
+        """LOGIN-022 — NEW, red today: a disabled account with a wrong password gets 401 «Invalid credentials» after one bcrypt check.
+
+        The password is checked before the account's state. Today the state comes first: 401
+        «Account is disabled», and bcrypt never runs.
+        """
+        print_section("LOGIN-022: a disabled account with a wrong password is refused as an unknown one")
+        outcome = await _login_in_process(private_login.engine, private_login.disabled.username, _wrong_password())
+
+        assert _refusal(outcome) == (401, "Invalid credentials"), f"[new] A disabled account with a wrong password must get the 401 «Invalid credentials» an unknown one gets: got {outcome!r}"
+        assert len(checkpw_calls) == 1, f"[new] The password must be checked before the account's state, one bcrypt check: bcrypt.checkpw ran {len(checkpw_calls)} time(s)"
+
+        print_success("✓ Disabled account, wrong password: 401 Invalid credentials, one bcrypt check")
+
+    @pytest.mark.asyncio
+    async def test_disabled_account_with_the_right_password_gets_account_disabled(self, private_login, checkpw_calls):
+        """LOGIN-023 — NEW, red today: a disabled account with the right password gets 403 ACCOUNT_DISABLED, once the password was checked.
+
+        Today: 401 «Account is disabled», before the password is checked.
+        """
+        print_section("LOGIN-023: a disabled account with the right password gets 403 ACCOUNT_DISABLED")
+        outcome = await _login_in_process(private_login.engine, private_login.disabled.username, private_login.disabled.password)
+
+        assert _refusal(outcome) == (403, ACCOUNT_DISABLED_DETAIL), f"[new] A disabled account with the right password must get 403 with detail {ACCOUNT_DISABLED_DETAIL}: got {outcome!r}"
+        assert len(checkpw_calls) == 1, f"[new] «Disabled» is told only once the password was checked, one bcrypt check: bcrypt.checkpw ran {len(checkpw_calls)} time(s)"
+
+        print_success("✓ Disabled account, right password: 403 ACCOUNT_DISABLED, one bcrypt check")
+
+    @pytest.mark.asyncio
+    async def test_no_account_checks_the_password_against_a_dummy_hash(self, checkpw_calls):
+        """LOGIN-024 — NEW, red today: verify_password_or_dummy("x", None) is False after one bcrypt check against a dummy hash of the same cost.
+
+        The same cost: the dummy is a well-formed bcrypt hash of BCRYPT_ROUNDS, and the check runs to
+        the end (an unreadable hash would fail at once, and the time would tell again). Today the
+        stub answers False without running bcrypt.
+        """
+        print_section("LOGIN-024: without an account the password is checked against a dummy hash")
+        assert auth_service.verify_password_or_dummy("x", None) is False, "Without an account the answer must be False"
+
+        assert len(checkpw_calls) == 1, f"[new] Without an account bcrypt must still run once, against a dummy hash: bcrypt.checkpw ran {len(checkpw_calls)} time(s)"
+        dummy = checkpw_calls[0]
+        assert _bcrypt_cost(dummy.hashed_password) == auth_service.BCRYPT_ROUNDS, f"[new] The dummy hash must be a bcrypt hash of the cost every password gets, {auth_service.BCRYPT_ROUNDS}: got {dummy.hashed_password!r}"
+        assert dummy.raised is None, f"[new] The check against the dummy hash must run to the end: bcrypt raised {dummy.raised!r}"
+
+        print_success(f"✓ No account: one bcrypt check against a dummy hash of cost {auth_service.BCRYPT_ROUNDS}, and False")
+
+    @pytest.mark.asyncio
+    async def test_the_dummy_hash_is_computed_once(self, checkpw_calls):
+        """LOGIN-025 — NEW, red today: two checks without an account use the same dummy hash, computed once.
+
+        A dummy hashed anew on every call would add a bcrypt hashing to each unknown login, which would
+        then take about twice a wrong password's time. Today the stub runs no check at all.
+        """
+        print_section("LOGIN-025: the dummy hash is computed once")
+        for password in ("first-unknown-login", "second-unknown-login"):
+            assert auth_service.verify_password_or_dummy(password, None) is False, "Without an account the answer must be False"
+
+        assert len(checkpw_calls) == 2, f"[new] Each check without an account must run bcrypt once: bcrypt.checkpw ran {len(checkpw_calls)} time(s) for two checks"
+        first, second = (call.hashed_password for call in checkpw_calls)
+        assert first == second, f"[new] Both checks must use the one dummy hash, computed once: {first!r}, then {second!r}"
+
+        print_success("✓ Two checks without an account, one dummy hash")
+
+    @pytest.mark.asyncio
+    async def test_a_real_hash_is_checked_as_before(self, checkpw_calls):
+        """LOGIN-026 — GUARD, green today and after: with a real hash, True for the right password and False for a wrong one, one bcrypt check each."""
+        print_section("LOGIN-026: with a real hash, verify_password_or_dummy is verify_password")
+        hashed = auth_service.hash_password("RightPass123!")
+
+        assert auth_service.verify_password_or_dummy("RightPass123!", hashed) is True, "The right password against its own hash must be True"
+        assert auth_service.verify_password_or_dummy("WrongPass123!", hashed) is False, "A wrong password against a real hash must be False"
+        assert len(checkpw_calls) == 2, f"One bcrypt check per verification: bcrypt.checkpw ran {len(checkpw_calls)} time(s) for two"
+
+        print_success("✓ Real hash: True for the right password, False for a wrong one")
+
+
+# ============================================================================
+# PASSWORD WORK OFF THE EVENT LOOP (V-16, plan 46 §12.7)
+# ============================================================================
+#
+# bcrypt costs about a quarter of a second per call (BCRYPT_ROUNDS = 12), and login, register and
+# change-password are `async def` handlers: a bcrypt call made in them holds the worker's event loop,
+# which serves no other request meanwhile. The Async I/O Rule (copilot-instructions) wants the call
+# in `await asyncio.to_thread(...)`. These tests replace the password function a handler calls with
+# a stand-in that holds the thread calling it, as bcrypt does, and keep a heartbeat on the test's
+# event loop while the handler runs in-process on a private database. Called in the loop, the
+# stand-in leaves no heartbeat inside its run: the whole run is one stall, on any machine. Called in
+# a worker thread, it leaves the heartbeat beating. Nothing here measures bcrypt.
+
+#: How long each stand-in holds the thread that calls it: bcrypt's cost (~0.24 s), magnified so that a held loop cannot hide.
+_PASSWORD_WORK_SECONDS = 0.4
+#: The heartbeat's period on the test's event loop.
+_HEARTBEAT_SECONDS = 0.01
+#: The longest the event loop may go without a heartbeat while a stand-in runs: far above the period, well below the stand-in's run.
+_MAX_STALL_SECONDS = 0.15
+
+
+@dataclass
+class _BlockingStandIn:
+    """A password function's stand-in: it holds the thread calling it for _PASSWORD_WORK_SECONDS, as bcrypt does, then answers ``result``.
+
+    Every call is recorded with its arguments bound by name to the real function's signature, so a
+    positional and a keyword call read alike, and a call the real function would refuse fails here
+    too; and with its run, (start, end) in perf_counter seconds, the heartbeat's clock.
+    """
+
+    label: str
+    real: Callable[..., object]
+    result: object
+    calls: list[dict[str, object]] = field(default_factory=list)
+    runs: list[tuple[float, float]] = field(default_factory=list)
+
+    def __call__(self, *args: object, **kwargs: object) -> object:
+        arguments = inspect.signature(self.real).bind(*args, **kwargs).arguments
+        start = time.perf_counter()
+        time.sleep(_PASSWORD_WORK_SECONDS)  # the work itself, not a wait for anything: the thread is held as bcrypt holds it
+        self.runs.append((start, time.perf_counter()))
+        self.calls.append(arguments)
+        return self.result
+
+
+def _block(monkeypatch: pytest.MonkeyPatch, module: ModuleType, name: str, result: object) -> _BlockingStandIn:
+    """Replace ``module.name``, the name the handler calls, with a blocking stand-in answering ``result``; monkeypatch puts it back."""
+    stand_in = _BlockingStandIn(label=f"{module.__name__}.{name}", real=getattr(module, name), result=result)
+    monkeypatch.setattr(module, name, stand_in)
+    return stand_in
+
+
+@contextlib.asynccontextmanager
+async def _heartbeat() -> AsyncIterator[list[float]]:
+    """Beat on the running event loop every _HEARTBEAT_SECONDS while the body runs; the beats, in perf_counter seconds.
+
+    The first beat is taken before the body starts and the last after it ends. The heartbeat is a task
+    of the body's own loop: whatever holds the loop holds the heartbeat too.
+    """
+    ticks: list[float] = []
+    beating = asyncio.Event()
+    stop = asyncio.Event()
+
+    async def beat() -> None:
+        while True:
+            ticks.append(time.perf_counter())
+            beating.set()
+            if stop.is_set():
+                return
+            await asyncio.sleep(_HEARTBEAT_SECONDS)
+
+    task = asyncio.create_task(beat())
+    await beating.wait()
+    try:
+        yield ticks
+    finally:
+        stop.set()
+        await task
+
+
+def _stall(ticks: list[float], run: tuple[float, float]) -> tuple[float, int]:
+    """(the longest the event loop went without a beat during ``run``, the beats inside it).
+
+    Only the run counts: what the loop did before or after the password work (a first SQL compile, an
+    import) cannot make a stall here. A run held in the loop has no beat inside it: its stall is the
+    whole run.
+    """
+    start, end = run
+    inside = [tick for tick in ticks if start < tick < end]
+    return max(later - earlier for earlier, later in itertools.pairwise([start, *inside, end])), len(inside)
+
+
+def _assert_the_loop_kept_beating(handler: str, ticks: list[float], *stand_ins: _BlockingStandIn) -> str:
+    """Assert that during each stand-in's run, one each (the caller checked), the loop never went _MAX_STALL_SECONDS without a beat; return what was measured."""
+    measured = {stand_in.label: _stall(ticks, stand_in.runs[0]) for stand_in in stand_ins}
+    held = {label: stall for label, (stall, _) in measured.items() if stall >= _MAX_STALL_SECONDS}
+    assert not held, (
+        f"{handler} held the event loop: "
+        + "; ".join(f"{stall:.3f} s without a heartbeat while {label} ran" for label, stall in held.items())
+        + f" (limit {_MAX_STALL_SECONDS} s; the stand-in holds its thread {_PASSWORD_WORK_SECONDS} s, as bcrypt does for ~0.24 s). Meanwhile the worker serves no other request: the call belongs in await asyncio.to_thread(...)"
+    )
+    return "; ".join(f"{label}: {beats} beats, longest stall {stall:.3f} s" for label, (stall, beats) in measured.items())
+
+
+@dataclass(frozen=True)
+class _PrivateAccount:
+    """A database one test owns entirely, under its tmp_path, with one active account.
+
+    The stored hash is a marker, not a bcrypt hash: only the stand-ins receive it, and they never read it.
+    """
+
+    engine: AsyncEngine
+    username: str
+    password: str
+    hashed_password: str
+
+
+@pytest_asyncio.fixture
+async def private_account(tmp_path: Path) -> AsyncIterator[_PrivateAccount]:
+    """A fresh SQLite file under tmp_path with the whole ORM schema and one active account, written as a row: no bcrypt runs. Disposed at teardown."""
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'loop.db'}", poolclass=NullPool)
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        account = _PrivateAccount(engine=engine, username="loop_user", password="LoopPass123!", hashed_password="marker-hash-of-loop_user")
+        async with AsyncSession(engine) as session:
+            session.add(User(username=account.username, email=f"{account.username}@example.com", hashed_password=account.hashed_password))
+            await session.commit()
+        yield account
+    finally:
+        await engine.dispose()
+
+
+async def _stored_hash(engine: AsyncEngine, username: str) -> Optional[str]:
+    """The hashed_password the private database holds for ``username``, read in a fresh session; None without such a user."""
+    async with AsyncSession(engine) as session:
+        return (await session.execute(select(User.hashed_password).where(User.username == username))).scalar_one_or_none()
+
+
+class TestPasswordWorkLeavesTheEventLoopFree:
+    """login, register and change-password in-process, their password functions replaced by blocking stand-ins (V-16).
+
+    Each test replaces the name its handler calls (monkeypatch), runs the handler on a private
+    database (private_account) under a heartbeat, and checks, in this order: the handler's outcome
+    (the stand-in's answer was used), the stand-in's calls (the handler did the work, once, with the
+    right arguments), then the heartbeat during the stand-in's run. The stand-in sleeps because it is
+    the work, not to wait for anything: a loop it holds gets no beat at all for the whole run, so the
+    red does not depend on the machine's speed.
+
+    Write-safe: everything a test writes is in its own tmp_path; monkeypatch puts the replaced names back.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_heartbeat_tells_a_free_event_loop_from_a_held_one(self):
+        """LOOP-000 — GUARD, green today and after: the instrument itself, both ways, in the same run.
+
+        A stand-in run in a worker thread leaves the heartbeat beating under the limit; the same
+        stand-in called in the loop gets no beat inside its run, a stall over the limit.
+        """
+        print_section("LOOP-000: the heartbeat tells a free event loop from a held one")
+        in_a_thread = _BlockingStandIn(label="a stand-in in a worker thread", real=auth_service.hash_password, result="hash")
+        in_the_loop = _BlockingStandIn(label="a stand-in in the event loop", real=auth_service.hash_password, result="hash")
+
+        async with _heartbeat() as ticks:
+            assert await asyncio.to_thread(in_a_thread, "password") == "hash", "The stand-in must answer its result from a worker thread"
+            assert in_the_loop("password") == "hash", "The stand-in must answer its result in the loop"
+
+        free = _assert_the_loop_kept_beating("asyncio.to_thread", ticks, in_a_thread)
+        stall, beats = _stall(ticks, in_the_loop.runs[0])
+        assert beats == 0 and stall >= _MAX_STALL_SECONDS, f"A stand-in called in the loop must hold it for its whole run: {beats} beats inside it, longest stall {stall:.3f} s (expected 0 beats, a stall of at least {_MAX_STALL_SECONDS} s)"
+
+        print_success(f"✓ In a worker thread: {free}. In the loop: 0 beats, one stall of {stall:.3f} s")
+
+    @pytest.mark.asyncio
+    async def test_login_checks_the_password_off_the_event_loop(self, private_account, monkeypatch):
+        """LOOP-001 — NEW, red today: POST /auth/login checks the password in a worker thread; the event loop keeps beating meanwhile.
+
+        verify_password_or_dummy answers False: the login must be refused with the generic 401, after
+        one check of the typed password against the account's stored hash. Today the check runs in the
+        loop (auth.py, login), and the heartbeat stops for the whole check.
+        """
+        print_section("LOOP-001: login checks the password off the event loop")
+        check = _block(monkeypatch, auth_api, "verify_password_or_dummy", result=False)
+
+        async with _heartbeat() as ticks:
+            outcome = await _login_in_process(private_account.engine, private_account.username, private_account.password)
+
+        assert _refusal(outcome) == (401, "Invalid credentials"), f"With the password check answering False, login must refuse with 401 «Invalid credentials»: got {outcome!r}"
+        assert check.calls == [{"plain_password": private_account.password, "hashed_password": private_account.hashed_password}], f"login must check the typed password against the account's stored hash, once: {check.calls}"
+        measured = _assert_the_loop_kept_beating("login", ticks, check)
+
+        print_success(f"✓ login: 401 after one password check, the loop kept beating ({measured})")
+
+    @pytest.mark.asyncio
+    async def test_register_hashes_the_password_off_the_event_loop(self, private_account, monkeypatch):
+        """LOOP-002 — NEW, red today: POST /auth/register hashes the password in a worker thread; the event loop keeps beating meanwhile.
+
+        The hash is computed by user_service.create_user, which register calls (the CLI too): the
+        stand-in replaces the name create_user calls, and the new user must be stored with the
+        stand-in's hash. Today the hash runs in the loop (user_service.py, create_user).
+        """
+        print_section("LOOP-002: register hashes the password off the event loop")
+        hashing = _block(monkeypatch, user_service, "hash_password", result="stand-in-hash-of-loop_newcomer")
+        username, password = "loop_newcomer", "NewcomerPass123!"
+
+        async with AsyncSession(private_account.engine, expire_on_commit=False) as session, _heartbeat() as ticks:
+            response = await auth_api.register(AuthRegisterRequest(username=username, email=f"{username}@example.com", password=password), session)
+
+        assert response.user.username == username, f"register must answer with the new user: got {response!r}"
+        assert hashing.calls == [{"password": password}], f"register must hash the chosen password, once: {hashing.calls}"
+        stored = await _stored_hash(private_account.engine, username)
+        assert stored == hashing.result, f"The new user must be stored with the hash create_user computed, {hashing.result!r}: got {stored!r}"
+        measured = _assert_the_loop_kept_beating("register", ticks, hashing)
+
+        print_success(f"✓ register: the user stored with the stand-in's hash, the loop kept beating ({measured})")
+
+    @pytest.mark.asyncio
+    async def test_change_password_checks_and_hashes_off_the_event_loop(self, private_account, monkeypatch):
+        """LOOP-003 — NEW, red today: POST /auth/change-password checks the current password and hashes the new one in worker threads; the event loop keeps beating through both.
+
+        verify_password answers True and hash_password a marker: the account must end up stored with
+        that marker. Today both run in the loop (auth.py, change_password), each a stall of its own.
+        """
+        print_section("LOOP-003: change-password checks and hashes off the event loop")
+        check = _block(monkeypatch, auth_api, "verify_password", result=True)
+        hashing = _block(monkeypatch, auth_api, "hash_password", result="stand-in-hash-of-the-new-password")
+        new_password = "ChangedPass123!"
+
+        async with AsyncSession(private_account.engine, expire_on_commit=False) as session:
+            user = await user_service.get_user_by_username(session, private_account.username)
+            assert user is not None, f"Setup: {private_account.username} must be in the private database"
+            async with _heartbeat() as ticks:
+                await auth_api.change_password(request=ChangePasswordRequest(current_password=private_account.password, new_password=new_password), current_user=user, session=session)
+
+        assert check.calls == [{"plain_password": private_account.password, "hashed_password": private_account.hashed_password}], f"change-password must check the current password against the stored hash, once: {check.calls}"
+        assert hashing.calls == [{"password": new_password}], f"change-password must hash the new password, once: {hashing.calls}"
+        stored = await _stored_hash(private_account.engine, private_account.username)
+        assert stored == hashing.result, f"The account must be stored with the new password's hash, {hashing.result!r}: got {stored!r}"
+        measured = _assert_the_loop_kept_beating("change_password", ticks, check, hashing)
+
+        print_success(f"✓ change-password: the new hash stored, the loop kept beating ({measured})")

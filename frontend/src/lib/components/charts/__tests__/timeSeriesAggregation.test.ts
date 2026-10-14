@@ -8,7 +8,23 @@ import {describe, expect, it} from 'vitest';
 import type {RenderedSignal} from '$lib/charts/signals';
 
 import type {LineDataPoint} from '../LineChart.svelte';
-import {aggregateEnvelope, aggregateLineSeries, aggregateOHLCV, bucketEventMarkers, cascadeResolution, chooseInitialResolution, chooseResolution, computeDensity, downsampleRenderedSignal, mapDateToBucket, selectSignalRepresentative, type BucketMeta} from '../timeSeriesAggregation';
+import {
+    CANDLE_MIN_SLOT_PX,
+    aggregateEnvelope,
+    aggregateLineSeries,
+    aggregateOHLCV,
+    aggregateSumSeries,
+    bucketEventMarkers,
+    cascadeResolution,
+    chooseInitialResolution,
+    chooseResolution,
+    computeDensity,
+    downsampleRenderedSignal,
+    mapDateToBucket,
+    selectSignalRepresentative,
+    type BucketMeta,
+    type ChartResolution,
+} from '../timeSeriesAggregation';
 
 type BucketedPoint = LineDataPoint & BucketMeta;
 const sharedAggregationFixture = JSON.parse(readFileSync(new URL('../../../../../../backend/test_scripts/fixtures/signals/aggregation_profiles.v1.json', import.meta.url), 'utf8')) as {
@@ -111,6 +127,116 @@ describe('timeSeriesAggregation', () => {
 
     it('aggregateLineSeries returns empty array for empty input', () => {
         expect(aggregateLineSeries([], 'monthly')).toEqual([]);
+    });
+
+    // =========================================================================
+    // aggregateSumSeries
+    // =========================================================================
+    //
+    // The flow-series counterpart of aggregateLineSeries. It exists because a sparse
+    // economic flow (a dividend, a fee, a deposit, a day's BUY funding) has no "current
+    // balance" to read at the end of a bucket — only a sum of what occurred inside it.
+    // Aggregating a flow with end-of-period semantics silently reports the LAST day's
+    // value as the whole week's, which is both wrong and invisible: the chart still
+    // renders, the bars are just too small. These tests pin the difference explicitly.
+
+    it('aggregateSumSeries returns the ORIGINAL array by reference at daily resolution', () => {
+        const points = [pt('2026-01-05', 10), pt('2026-01-06', 20)];
+
+        expect(aggregateSumSeries(points, 'daily')).toBe(points);
+    });
+
+    it('aggregateSumSeries returns empty array for empty input', () => {
+        expect(aggregateSumSeries([], 'weekly')).toEqual([]);
+        expect(aggregateSumSeries([], 'monthly')).toEqual([]);
+    });
+
+    it('aggregateSumSeries sums every point in a weekly bucket and carries canonical bucket metadata', () => {
+        // ISO weeks: 01-05..01-11 (Mon–Sun) then 01-12..01-18.
+        const points = [pt('2026-01-05', 10), pt('2026-01-06', 20), pt('2026-01-09', 5), pt('2026-01-12', 7)];
+
+        const result = aggregateSumSeries(points, 'weekly');
+
+        expect(result).toHaveLength(2);
+        expect(result[0] as BucketedPoint).toMatchObject({
+            date: '2026-01-09',
+            value: 35, // 10 + 20 + 5 — NOT 5, which end-of-period semantics would give
+            bucketStart: '2026-01-05',
+            bucketEnd: '2026-01-11',
+            resolution: 'weekly',
+            sourcePointCount: 3,
+            representativeDate: '2026-01-09',
+        });
+        expect(result[1] as BucketedPoint).toMatchObject({date: '2026-01-12', value: 7, sourcePointCount: 1});
+    });
+
+    it('aggregateSumSeries differs from aggregateLineSeries on the same input — the whole reason it exists', () => {
+        const points = [pt('2026-01-05', 10), pt('2026-01-06', 20), pt('2026-01-09', 5)];
+
+        expect(aggregateSumSeries(points, 'weekly')[0].value).toBe(35);
+        expect(aggregateLineSeries(points, 'weekly')[0].value).toBe(5);
+    });
+
+    it('aggregateSumSeries sums across a monthly bucket and starts each bucket from zero', () => {
+        const points = [pt('2026-01-05', 100), pt('2026-01-20', 50), pt('2026-02-02', 8), pt('2026-02-27', 2)];
+
+        const result = aggregateSumSeries(points, 'monthly');
+
+        expect(result).toHaveLength(2);
+        expect(result[0] as BucketedPoint).toMatchObject({value: 150, bucketStart: '2026-01-01', bucketEnd: '2026-01-31', sourcePointCount: 2});
+        // February must be 10, not 160 — the accumulator resets per bucket, it does not run cumulatively.
+        expect(result[1] as BucketedPoint).toMatchObject({value: 10, bucketStart: '2026-02-01', bucketEnd: '2026-02-28', sourcePointCount: 2});
+    });
+
+    it('aggregateSumSeries keeps signed values signed and can net a bucket to zero', () => {
+        // Costs are negative, a legacy correction can be positive: the sum is signed
+        // arithmetic, never a magnitude. A bucket that genuinely nets to 0 must report 0
+        // (an event happened and cancelled out), not be dropped.
+        const points = [pt('2026-01-05', -30), pt('2026-01-06', -12), pt('2026-01-07', 42)];
+
+        const result = aggregateSumSeries(points, 'weekly');
+
+        expect(result).toHaveLength(1);
+        expect(result[0].value).toBe(0);
+    });
+
+    it('aggregateSumSeries sums a purely negative bucket without flipping its sign', () => {
+        const points = [pt('2026-03-02', -3), pt('2026-03-03', -9)];
+
+        expect(aggregateSumSeries(points, 'weekly')[0].value).toBe(-12);
+    });
+
+    it('aggregateSumSeries inherits every non-value field from the LAST point of the bucket', () => {
+        // Only `value` is recomputed; the rest of the shape comes from the bucket's last
+        // point (spread first, then overwritten) — the same convention aggregateLineSeries
+        // uses, which is what keeps the two interchangeable at the call site.
+        const points = [pt('2026-01-05', 10, {staleDays: 7, close: 111}), pt('2026-01-06', 20, {staleDays: 1, close: 222})];
+
+        const result = aggregateSumSeries(points, 'weekly');
+
+        expect(result[0]).toMatchObject({value: 30, staleDays: 1, close: 222});
+    });
+
+    it('aggregateSumSeries puts a cross-year ISO week in a single bucket', () => {
+        // 2025-12-29 (Mon) .. 2026-01-04 (Sun) is one ISO week spanning two years.
+        const points = [pt('2025-12-31', 4), pt('2026-01-02', 6), pt('2026-01-05', 1)];
+
+        const result = aggregateSumSeries(points, 'weekly');
+
+        expect(result).toHaveLength(2);
+        expect(result[0] as BucketedPoint).toMatchObject({value: 10, bucketStart: '2025-12-29', bucketEnd: '2026-01-04'});
+        expect(result[1].value).toBe(1);
+    });
+
+    it('aggregateSumSeries preserves total mass: the sum of the buckets equals the sum of the inputs', () => {
+        const values = [3, -7, 11, 0, 25, -1, 4, 9, -12, 6];
+        const points = values.map((v, i) => pt(`2026-01-${String(i + 1).padStart(2, '0')}`, v));
+        const total = values.reduce((a, b) => a + b, 0);
+
+        for (const resolution of ['weekly', 'monthly'] as const) {
+            const bucketed = aggregateSumSeries(points, resolution);
+            expect(bucketed.reduce((a, p) => a + p.value, 0)).toBe(total);
+        }
     });
 
     // =========================================================================
@@ -362,6 +488,211 @@ describe('timeSeriesAggregation', () => {
     it('cascadeResolution matches a single chooseResolution hop when only one tier change is needed', () => {
         const counts = {dailyCount: 131, weeklyCount: 20, monthlyCount: 5};
         expect(cascadeResolution('daily', counts, 100)).toBe('weekly');
+    });
+
+    // =========================================================================
+    // ChartGrammar — per-grammar density thresholds
+    // =========================================================================
+
+    // `CANDLE_MIN_SLOT_PX` is imported, never copied. A local copy would not fail if the
+    // module's PROVISIONAL floor were raised — `slot >= 8` is still satisfied by a 12px
+    // floor — so the test would keep passing while silently guarding a floor that no
+    // longer exists. Importing makes the assertion track the value it is about.
+    /** `DENSITY_THRESHOLDS.candle.high` — a slot may not shrink below CANDLE_MIN_SLOT_PX. */
+    const CANDLE_HIGH_DENSITY = 1 / CANDLE_MIN_SLOT_PX; // 0.125 buckets/px
+    /** `DENSITY_THRESHOLDS.candle.low` — the high one scaled by the line pair's own ratio. */
+    const CANDLE_LOW_DENSITY = CANDLE_HIGH_DENSITY * (0.8 / 1.3); // ~0.0769 buckets/px
+
+    /**
+     * Bucket counts for an N-day window, counted the way the two real consumers count them:
+     * distinct `mapDateToBucket` buckets, not `ceil(days / 7)`. Mirrors
+     * `computeBucketCounts()` in GrowthChart.svelte and `countBuckets()` in
+     * priceChartHelpers.ts, so the densities under test are the ones a chart actually
+     * produces — partial ISO weeks and short months included.
+     */
+    function countsForWindow(days: number): {dailyCount: number; weeklyCount: number; monthlyCount: number} {
+        const weekly = new Set<string>();
+        const monthly = new Set<string>();
+        const startMs = Date.UTC(2023, 0, 2); // a Monday, so the first ISO week starts whole
+
+        for (let i = 0; i < days; i++) {
+            const iso = new Date(startMs + i * 86_400_000).toISOString().slice(0, 10);
+            weekly.add(mapDateToBucket(iso, 'weekly').bucketEnd);
+            monthly.add(mapDateToBucket(iso, 'monthly').bucketEnd);
+        }
+
+        return {dailyCount: days, weeklyCount: weekly.size, monthlyCount: monthly.size};
+    }
+
+    function bucketCountFor(resolution: ChartResolution, counts: {dailyCount: number; weeklyCount: number; monthlyCount: number}): number {
+        if (resolution === 'daily') return counts.dailyCount;
+        return resolution === 'weekly' ? counts.weeklyCount : counts.monthlyCount;
+    }
+
+    it('omitting the grammar argument is identical to passing "line", over a resolution x counts x width matrix', () => {
+        // Guards the module's "every existing caller keeps its previous behavior by
+        // construction" claim by non-constructive means. Note the division of labour: this
+        // pins `default === 'line'`, while what pins `'line' === the historical 1.3/0.8
+        // pair` is the literal-valued 'chooseResolution covers all hysteresis transitions'
+        // test above. The two together close the loop; neither does alone.
+        const currents: ChartResolution[] = ['daily', 'weekly', 'monthly'];
+        const widths = [100, 320, 580, 800, 1280];
+        const countsMatrix = [
+            {dailyCount: 80, weeklyCount: 12, monthlyCount: 3},
+            {dailyCount: 131, weeklyCount: 20, monthlyCount: 5},
+            {dailyCount: 100, weeklyCount: 131, monthlyCount: 20},
+            {dailyCount: 100, weeklyCount: 79, monthlyCount: 20},
+            {dailyCount: 6500, weeklyCount: 1300, monthlyCount: 300},
+            countsForWindow(93),
+            countsForWindow(365),
+            countsForWindow(730),
+            countsForWindow(1825),
+        ];
+
+        const seen = new Set<ChartResolution>();
+
+        for (const counts of countsMatrix) {
+            for (const width of widths) {
+                const label = `counts=${JSON.stringify(counts)} width=${width}`;
+
+                const initial = chooseInitialResolution(counts, width);
+                expect(initial, `chooseInitialResolution ${label}`).toBe(chooseInitialResolution(counts, width, 'line'));
+                seen.add(initial);
+
+                for (const current of currents) {
+                    const chosen = chooseResolution(current, counts, width);
+                    expect(chosen, `chooseResolution('${current}') ${label}`).toBe(chooseResolution(current, counts, width, 'line'));
+                    seen.add(chosen);
+
+                    const cascaded = cascadeResolution(current, counts, width);
+                    expect(cascaded, `cascadeResolution('${current}') ${label}`).toBe(cascadeResolution(current, counts, width, 'line'));
+                    seen.add(cascaded);
+                }
+            }
+        }
+
+        // Non-vacuity: a matrix that only ever produced one resolution would satisfy every
+        // equality above for free.
+        expect([...seen].sort(), 'the matrix must exercise all three tiers').toEqual(['daily', 'monthly', 'weekly']);
+    });
+
+    it('a candle escalates where a line stays put, at the very same density', () => {
+        // ~3 months of daily points in a dashboard-sized plot: 93 buckets / 580px = 0.16
+        // buckets/px, i.e. a 6.2px slot.
+        //   line   (high 1.3)   — nowhere near escalation; a continuous line at 6.2px is fine
+        //   candle (high 0.125) — escalates; 6.2px cannot hold a body with two visible edges
+        //                         plus a wick, which is the reported degeneration into a stroke
+        const counts = countsForWindow(93);
+        const plotWidth = 580;
+
+        expect(chooseResolution('daily', counts, plotWidth, 'line')).toBe('daily');
+        expect(chooseResolution('daily', counts, plotWidth, 'candle')).toBe('weekly');
+
+        expect(cascadeResolution('daily', counts, plotWidth, 'line')).toBe('daily');
+        expect(cascadeResolution('daily', counts, plotWidth, 'candle')).toBe('weekly');
+
+        expect(chooseInitialResolution(counts, plotWidth, 'line')).toBe('daily');
+        expect(chooseInitialResolution(counts, plotWidth, 'candle')).toBe('weekly');
+    });
+
+    it('every resolution the candle grammar chooses clears the minimum slot width', () => {
+        // The property the thresholds exist to produce, stated as a property rather than as
+        // a list of expected tiers: whatever tier is chosen, the slot it implies must be
+        // renderable as a candle.
+        const plotWidth = 580;
+        const windows = [93, 365, 730, 1825]; // ~3 months, then 1 / 2 / 5 years
+        let lineViolations = 0;
+
+        for (const days of windows) {
+            const counts = countsForWindow(days);
+
+            const candle = chooseInitialResolution(counts, plotWidth, 'candle');
+            const candleSlotPx = plotWidth / bucketCountFor(candle, counts);
+            expect(candleSlotPx, `${days}-day window resolved to '${candle}' => ${candleSlotPx.toFixed(2)}px slot`).toBeGreaterThanOrEqual(CANDLE_MIN_SLOT_PX);
+
+            const line = chooseInitialResolution(counts, plotWidth, 'line');
+            if (plotWidth / bucketCountFor(line, counts) < CANDLE_MIN_SLOT_PX) lineViolations++;
+        }
+
+        // Non-vacuity: these windows have to be inside the defect zone, otherwise the
+        // assertion above would hold for any thresholds at all. A statement about the
+        // corpus, NOT a requirement on the line grammar — a line is continuous and is meant
+        // to tolerate sub-pixel slots.
+        expect(lineViolations, 'the chosen windows must be ones where the line thresholds do produce sub-8px slots').toBeGreaterThan(0);
+    });
+
+    it('the candle hysteresis band keeps the current resolution instead of flapping', () => {
+        // 100 buckets / 1000px = 0.1 buckets/px — above the candle low threshold and below
+        // the candle high one, i.e. inside the dead zone. Same inputs, two answers: the band
+        // is the memory of where the chart came from, and it must survive the new parameter
+        // rather than collapse to a single point or invert.
+        const counts = {dailyCount: 100, weeklyCount: 15, monthlyCount: 4};
+        const plotWidth = 1000;
+        const density = counts.dailyCount / plotWidth;
+
+        expect(density, 'fixture must sit above the candle low threshold').toBeGreaterThan(CANDLE_LOW_DENSITY);
+        expect(density, 'fixture must sit below the candle high threshold').toBeLessThan(CANDLE_HIGH_DENSITY);
+
+        expect(chooseResolution('daily', counts, plotWidth, 'candle')).toBe('daily');
+        expect(chooseResolution('weekly', counts, plotWidth, 'candle')).toBe('weekly');
+        expect(cascadeResolution('daily', counts, plotWidth, 'candle')).toBe('daily');
+        expect(cascadeResolution('weekly', counts, plotWidth, 'candle')).toBe('weekly');
+    });
+
+    it('the candle grammar escalates just above its high threshold, and not at it', () => {
+        const plotWidth = 1000;
+        const justAbove = {dailyCount: 126, weeklyCount: 18, monthlyCount: 5}; // 0.126 buckets/px
+        const atThreshold = {dailyCount: 125, weeklyCount: 18, monthlyCount: 5}; // 0.125 exactly
+
+        expect(justAbove.dailyCount / plotWidth).toBeGreaterThan(CANDLE_HIGH_DENSITY);
+        expect(atThreshold.dailyCount / plotWidth).toBe(CANDLE_HIGH_DENSITY);
+
+        expect(chooseResolution('daily', justAbove, plotWidth, 'candle')).toBe('weekly');
+        // The comparison is strict (`> high`), so sitting exactly on the threshold stays put.
+        expect(chooseResolution('daily', atThreshold, plotWidth, 'candle')).toBe('daily');
+        expect(cascadeResolution('daily', justAbove, plotWidth, 'candle')).toBe('weekly');
+    });
+
+    it('the candle grammar de-escalates below its low threshold, not merely below the line one', () => {
+        const plotWidth = 1000;
+        const belowCandleLow = {dailyCount: 76, weeklyCount: 12, monthlyCount: 3}; // 0.076 buckets/px
+        const aboveCandleLow = {dailyCount: 78, weeklyCount: 12, monthlyCount: 3}; // 0.078 buckets/px
+
+        expect(belowCandleLow.dailyCount / plotWidth).toBeLessThan(CANDLE_LOW_DENSITY);
+        expect(aboveCandleLow.dailyCount / plotWidth).toBeGreaterThan(CANDLE_LOW_DENSITY);
+
+        expect(chooseResolution('weekly', belowCandleLow, plotWidth, 'candle')).toBe('daily');
+        expect(cascadeResolution('weekly', belowCandleLow, plotWidth, 'candle')).toBe('daily');
+        // Both densities are far below the LINE low threshold (0.8). Under a single shared
+        // pair this one de-escalated too — the band sitting in the wrong place, which is the
+        // other half of the same defect.
+        expect(chooseResolution('weekly', aboveCandleLow, plotWidth, 'candle')).toBe('weekly');
+    });
+
+    it('cascadeResolution still multi-hops in one call under the candle grammar', () => {
+        // Two years of daily points at 580px: escalating to 'weekly' leaves 105 buckets =
+        // 0.18 buckets/px, still above the candle high threshold, so the settled answer is
+        // two tiers away from 'daily'.
+        const counts = countsForWindow(730);
+        const plotWidth = 580;
+
+        // One hop stops at the intermediate tier — chooseResolution's documented single-hop
+        // contract, which the grammar parameter must not change either.
+        expect(chooseResolution('daily', counts, plotWidth, 'candle')).toBe('weekly');
+
+        // The cascade has to arrive at the final tier in the SAME call, or a chart that gets
+        // exactly one settled evaluation per gesture sticks at 'weekly' until something else
+        // happens to fire.
+        expect(cascadeResolution('daily', counts, plotWidth, 'candle')).toBe('monthly');
+        expect(chooseInitialResolution(counts, plotWidth, 'candle')).toBe('monthly');
+
+        // The mirror: monthly -> weekly -> daily. NOTE this half cannot be red against the
+        // pre-fix code and is therefore not evidence — the candle low threshold is BELOW the
+        // line one, so anything that de-escalates under 'candle' also de-escalated under the
+        // old shared pair. It is pinned because the cascade's contract is symmetric.
+        const sparse = countsForWindow(30);
+        expect(chooseResolution('monthly', sparse, plotWidth, 'candle')).toBe('weekly');
+        expect(cascadeResolution('monthly', sparse, plotWidth, 'candle')).toBe('daily');
     });
 
     // =========================================================================

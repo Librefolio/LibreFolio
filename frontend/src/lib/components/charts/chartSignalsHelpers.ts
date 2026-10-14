@@ -16,6 +16,8 @@
  */
 
 import type {SignalConfig, SignalInputField, SignalProblem} from '$lib/charts/signals';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 
 /** Canonical OHLCV field order used for coverage listings. */
 export const INPUT_FIELD_ORDER: SignalInputField[] = ['open', 'high', 'low', 'close', 'volume'];
@@ -27,9 +29,9 @@ export type SignalProblemTranslate = (key: string, values?: Record<string, strin
 /** Human label for an input field (also injected — it is a translation too). */
 export type SignalFieldLabel = (field: SignalInputField) => string;
 
-/** A nullable count rendered for a message: `'?'` when unknown, else the number. */
+/** A nullable count or percentage rendered for a message, in the interface locale (M-18): `'?'` when unknown. */
 export function problemCount(value: number | null): string {
-    return value === null ? '?' : String(value);
+    return value === null ? '?' : formatFixed(value, 1, {trim: true});
 }
 
 /**
@@ -46,7 +48,7 @@ export function formatSignalProblem(problem: SignalProblem, translate: SignalPro
     })
         .map((field) => {
             const percentage = Math.floor((problem.fieldCoverage[field] ?? 0) * 1000) / 10;
-            return `${fieldLabel(field)} ${percentage}%`;
+            return `${fieldLabel(field)} ${formatPercent(percentage, {digits: 1, signed: false, trim: true})}`;
         })
         .join(', ');
 
@@ -60,10 +62,17 @@ export function formatSignalProblem(problem: SignalProblem, translate: SignalPro
                 requested: problemCount(problem.requestedPoints),
             });
         case 'insufficient_history':
+            if (problem.minimumPoints === 0 && problem.message) return problem.message;
             return translate('chartSettings.signalProblems.insufficientHistory', {
                 available: problemCount(problem.availablePoints),
                 required: problemCount(problem.minimumPoints),
             });
+        case 'fx_conversion_unavailable':
+            return problem.message || translate('chartSettings.signalProblems.unavailable');
+        case 'undefined_metric':
+            return problem.message || translate('chartSettings.signalProblems.unavailable');
+        case 'partial_undefined_metric':
+            return problem.message || translate('chartSettings.signalProblems.partialResult');
         case 'incomplete_warmup':
             return translate('chartSettings.signalProblems.incompleteWarmup', {
                 used: problemCount(problem.warmupUsedPoints),

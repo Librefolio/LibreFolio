@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_xtb": {
+      "description": "Importa le transazioni dall’export CSV di XTB. Supporta azioni, ETF, dividendi, movimenti di cassa, imposte, commissioni e interessi.",
+      "name": "XTB"
+    }
+  }
+}

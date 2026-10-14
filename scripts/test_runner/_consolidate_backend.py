@@ -111,7 +111,9 @@ def _junit_results(report: Path, known: list) -> dict:
     except (OSError, ET.ParseError):
         return {}
 
-    # Units can be directories, which own every module underneath them.
+    # Units can be directories, which own every module underneath them — across a "/" only, so
+    # test_financial/ does not own test_financial_math/ — and the deepest owner wins over its
+    # parents. Without the boundary the verdict depended on the (sorted) order of the units.
     dirs = [k for k in known if k.endswith("/")]
     outcome: dict = {}
     for case in root.iter("testcase"):
@@ -127,8 +129,8 @@ def _junit_results(report: Path, known: list) -> dict:
                 break
             walk = walk[:-1]
         if module is None:
-            dotted = "/".join(parts)
-            module = next((d for d in dirs if dotted.startswith(d.rstrip("/"))), None)
+            dotted = "/".join(parts) + "/"
+            module = max((d for d in dirs if dotted.startswith(d)), key=len, default=None)
         if module is None:
             continue
         # error/failure children mark a red; skipped is not one.
@@ -165,7 +167,7 @@ def _run_group(category: str, paths: list, coverage: bool, verbose: bool) -> dic
     import os
     import shutil
 
-    from backend.test_scripts.test_db_config import TEST_DATABASE_URL
+    from backend.test_scripts.test_db_config import get_test_database_url
 
     report = Path(tempfile.mkdtemp(prefix="lf_junit_")) / "report.xml"
     full = [f"backend/test_scripts/{p}" for p in paths]
@@ -179,7 +181,7 @@ def _run_group(category: str, paths: list, coverage: bool, verbose: bool) -> dic
 
     env = os.environ.copy()
     env["LIBREFOLIO_TEST_MODE"] = "1"
-    env["DATABASE_URL"] = TEST_DATABASE_URL
+    env["DATABASE_URL"] = get_test_database_url()
 
     # Same copy-in/copy-out of the accumulated database that run_command does:
     # pytest-cov appends to ./.coverage, and the per-source accumulation lives

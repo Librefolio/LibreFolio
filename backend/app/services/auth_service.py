@@ -4,6 +4,7 @@ Authentication Service
 Provides password hashing/verification and JWT token management.
 """
 
+import functools
 import os
 import secrets
 from datetime import timedelta
@@ -62,6 +63,25 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     except Exception as e:
         logger.warning("Password verification failed", error=str(e))
         return False
+
+
+@functools.cache
+def _dummy_password_hash() -> str:
+    """A bcrypt hash of a random password, of the cost every password gets: computed once, never matched."""
+    return hash_password(secrets.token_urlsafe(32))
+
+
+def verify_password_or_dummy(plain_password: str, hashed_password: str | None) -> bool:
+    """Verify a password even when there is no account to check it against.
+
+    Without an account (``hashed_password`` is None) the password is checked against a dummy hash
+    of the same cost and the answer is False: an unknown login takes as long as a wrong password,
+    so the response time does not tell which accounts exist.
+    """
+    if hashed_password is None:
+        verify_password(plain_password, _dummy_password_hash())
+        return False
+    return verify_password(plain_password, hashed_password)
 
 
 # =============================================================================

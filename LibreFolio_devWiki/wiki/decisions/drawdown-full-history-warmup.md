@@ -37,12 +37,15 @@ exports never get the shortened variant.
   "why not just pre-query the max" lives here so nobody re-opens it.
 - The discriminating test: absolute peak BEFORE the visible range → first
   visible point must measure against it (`test_risk_signal_plugins.py`).
+- The first live run with the full-history load (02/09) exposed a quadratic
+  deduplication of FX errors in `get_prices_bulk`, not a drawdown defect:
+  [[problems/fx-error-dedup-went-quadratic-under-full-history]].
 
 ## Source files
 
 | Role | Path |
 |------|------|
-| Signal param + warmup | `backend/app/services/signal_plugins/drawdown.py` |
+| Signal param + warmup | `backend/app/services/signal_plugins/drawdown/plugin.py` |
 | Warmup contract | `backend/app/schemas/signals.py` (`SignalWarmupRequirement.full_history`) |
 | Plan aggregation | `backend/app/services/signal_service.py` (`requires_full_history`) |
 | Fetch window | `backend/app/services/asset_source.py` (`get_prices_bulk`) |

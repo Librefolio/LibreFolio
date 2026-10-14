@@ -4,7 +4,9 @@
      */
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
-    import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
+    import {uiLocaleStore} from '$lib/stores/app/uiLocale';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import CurrencyAmount from '$lib/components/ui/display/CurrencyAmount.svelte';
     import {Crown, ExternalLink, Eye, Pencil, Share2, Trash2, Wallet} from 'lucide-svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
@@ -143,7 +145,7 @@
                 <span class="text-gray-500 dark:text-gray-400">{$_('brokers.nav')}</span>
                 <span class="font-medium text-gray-800 dark:text-gray-100">
                     {#if summary}
-                        {@html formatCurrencyAmountHtml(toNumber(summary.net_worth.amount), summary.net_worth.code)}
+                        <CurrencyAmount amount={toNumber(summary.net_worth.amount)} code={summary.net_worth.code} />
                     {:else}
                         —
                     {/if}
@@ -153,8 +155,8 @@
                 <span class="text-gray-500 dark:text-gray-400">{$_('brokers.gainLoss')}</span>
                 <span class="font-medium {summary && toNumber(summary.gain_loss.amount) < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}">
                     {#if summary}
-                        {@html formatCurrencyAmountHtml(toNumber(summary.gain_loss.amount), targetCurrency, {showSign: true})}
-                        <span class="ml-1 text-xs">({(toNumber(summary.gain_loss_percent) * 100).toFixed(2)}%)</span>
+                        <CurrencyAmount amount={toNumber(summary.gain_loss.amount)} code={targetCurrency} options={{showSign: true}} />
+                        <span class="ml-1 text-xs">({formatPercent(toNumber(summary.gain_loss_percent), {scale: 100, signed: false, locale: $uiLocaleStore})})</span>
                     {:else}
                         <span class="text-gray-800 dark:text-gray-100">—</span>
                     {/if}
@@ -171,7 +173,7 @@
             <div class="flex flex-wrap gap-2">
                 {#each [...summary.cash_balances].sort((a, b) => toNumber(b.amount) - toNumber(a.amount)) as balance}
                     <span class="inline-flex items-center px-3 py-1.5 bg-gray-50 dark:bg-slate-700 rounded-lg text-sm font-medium text-gray-800 dark:text-gray-100">
-                        {@html formatCurrencyAmountHtml(toNumber(balance.amount), balance.code)}
+                        <CurrencyAmount amount={toNumber(balance.amount)} code={balance.code} />
                     </span>
                 {/each}
             </div>

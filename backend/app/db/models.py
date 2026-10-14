@@ -25,14 +25,15 @@ from sqlalchemy import (
     Index,
     Integer,
     Numeric,
+    String,
     Text,
     UniqueConstraint,
     event,
 )
 from sqlmodel import Field, Relationship, SQLModel
 
+from backend.app.utils.asset.identifier import normalize_other_identifiers
 from backend.app.utils.datetime_utils import utcnow
-from backend.app.utils.identifier_utils import normalize_other_identifiers
 
 # =============================================================================
 # CURRENCY VALIDATION HELPER
@@ -149,23 +150,38 @@ class AssetType(StrEnum):
     Usage: Categorize assets by their nature for reporting and analysis.
 
     - STOCK: Individual company shares (e.g., Apple, Microsoft)
-    - ETF: Exchange Traded Fund (e.g., VWCE, SPY)
+    - ETF: Exchange Traded Fund with mixed or unstated content (e.g., balanced, multi-asset)
     - BOND: Fixed income securities (government or corporate bonds)
     - CRYPTO: Cryptocurrencies (e.g., Bitcoin, Ethereum)
     - FUND: Mutual funds or investment funds
-    - HOLD: Assets without automatic market pricing (real estate, art, collectibles, unlisted companies)
-    - CROWDFUND: Peer-to-peer lending or crowdfunding loans (e.g., Recrowd, Mintos)
+    - HOLD: Assets without automatic market pricing (art, collectibles, unlisted companies)
+    - CROWDFUND: Peer-to-peer or business crowdfunding loans (e.g., Mintos); the residual of its family
+    - COMMODITY: Physical goods and their direct exposures (gold, oil, agricultural)
+    - REAL_ESTATE: Property exposure (REITs, listed real estate vehicles)
     - INDEX: Market indices and benchmarks (e.g., S&P 500, MSCI World) — no transactions allowed
     - OTHER: Any other asset type not listed above
 
+    Subtypes answer a single question: *which base type does this instrument contain?*
+    The second level is therefore not a parallel taxonomy — it is the set of base types.
+    Two families have one, ETF and CROWDFUND; their plain values stay the residual for
+    mixed or unstated content.
+
+    - ETF_STOCK / ETF_BOND / ETF_COMMODITY / ETF_REAL_ESTATE / ETF_CRYPTO: named after
+      the base type they hold; plain ETF remains the residual for mixed content.
+    - ETF_MONETARY: money-market funds. The one subtype with **no** base-type counterpart,
+      because cash itself is an account balance, not an asset that is bought.
+    - CROWDFUND_REAL_ESTATE: crowdfunding loans backed by property projects (e.g., Recrowd).
+      It contains REAL_ESTATE, but it is shocked in stress scenarios as the loan it is.
+
     Impact:
-    - Affects default valuation_model:
-      - CROWDFUND -> SCHEDULED_YIELD
-      - HOLD -> MANUAL
-      - INDEX -> MARKET_PRICE (read-only benchmark, no transactions)
-      - Others -> MARKET_PRICE
-    - Used for portfolio breakdown and allocation analysis
-    - May influence available data plugins (e.g., crypto uses different sources)
+    - INDEX forbids transactions (see transaction_batch_stages); every other value is
+      behaviourally inert in the backend.
+    - Drives portfolio breakdown and allocation analysis, where subtypes roll up to the
+      base type they contain rather than to their family.
+    - Supplies the `asset_class` buckets of stress scenarios. A type absent from a
+      scenario's bucket_shocks is shocked by zero **silently**, which is why the enum and
+      those tables are guarded by a dedicated coverage test.
+    - Selects the icon and the localized label in the UI.
     """
 
     STOCK = "STOCK"
@@ -175,8 +191,19 @@ class AssetType(StrEnum):
     FUND = "FUND"
     CROWDFUND = "CROWDFUND"
     HOLD = "HOLD"
+    COMMODITY = "COMMODITY"
+    REAL_ESTATE = "REAL_ESTATE"
     INDEX = "INDEX"
     OTHER = "OTHER"
+
+    ETF_STOCK = "ETF_STOCK"
+    ETF_BOND = "ETF_BOND"
+    ETF_COMMODITY = "ETF_COMMODITY"
+    ETF_REAL_ESTATE = "ETF_REAL_ESTATE"
+    ETF_CRYPTO = "ETF_CRYPTO"
+    ETF_MONETARY = "ETF_MONETARY"
+
+    CROWDFUND_REAL_ESTATE = "CROWDFUND_REAL_ESTATE"
 
 
 class AssetEventType(StrEnum):
@@ -295,6 +322,34 @@ class UserRole(StrEnum):
     VIEWER = "VIEWER"
 
 
+class OnboardingFlow(StrEnum):
+    """Independent onboarding flows tracked per user."""
+
+    WELCOME = "welcome"
+    INTRO_TOUR = "intro_tour"
+    TRANSACTIONS_PAGE_GUIDE = "transactions_page_guide"
+    TRANSACTION_CREATE_GUIDE = "transaction_create_guide"
+    TRANSACTION_BULK_GUIDE = "transaction_bulk_guide"
+    IMPORT_GUIDE = "import_guide"
+    BROKER_PAGE_GUIDE = "broker_page_guide"
+    BROKER_GUIDE = "broker_guide"
+    BROKER_DETAIL_GUIDE = "broker_detail_guide"
+    FX_PAGE_GUIDE = "fx_page_guide"
+    FX_GUIDE = "fx_guide"
+    FX_DETAIL_GUIDE = "fx_detail_guide"
+    ASSET_PAGE_GUIDE = "asset_page_guide"
+    ASSET_GUIDE = "asset_guide"
+    ASSET_DETAIL_GUIDE = "asset_detail_guide"
+
+
+class OnboardingStatus(StrEnum):
+    """Persisted lifecycle state for one onboarding flow."""
+
+    PENDING = "pending"
+    COMPLETED = "completed"
+    SKIPPED = "skipped"
+
+
 # ============================================================================
 # USER MODELS
 # ============================================================================
@@ -308,6 +363,7 @@ class User(SQLModel, table=True):
     """
 
     __tablename__ = "users"
+    __table_args__ = {"sqlite_autoincrement": True}  # ids leave the backend: never reuse one (plan 34)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(unique=True, index=True, nullable=False, min_length=3, max_length=50)
@@ -355,6 +411,86 @@ class UserSettings(SQLModel, table=True):
         return _validate_currency_field(v)
 
 
+class UserOnboardingProgress(SQLModel, table=True):
+    """Versioned onboarding state for one user and one independent flow."""
+
+    __tablename__ = "user_onboarding_progress"
+    __table_args__ = (
+        UniqueConstraint("user_id", "flow", name="uq_user_onboarding_progress_user_flow"),
+        CheckConstraint(
+            "status IN ('pending', 'completed', 'skipped')",
+            name="ck_user_onboarding_progress_status",
+        ),
+        CheckConstraint(
+            "version >= 1",
+            name="ck_user_onboarding_progress_version",
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    flow: OnboardingFlow = Field(sa_column=Column(String(50), nullable=False))
+    status: OnboardingStatus = Field(
+        default=OnboardingStatus.PENDING,
+        sa_column=Column(String(20), nullable=False),
+    )
+    version: int = Field(default=1, ge=1, nullable=False)
+
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+    completed_at: Optional[datetime] = Field(default=None, nullable=True)
+    skipped_at: Optional[datetime] = Field(default=None, nullable=True)
+
+
+class UserOnboardingStepProgress(SQLModel, table=True):
+    """Versioned onboarding state for one step inside a step-managed flow."""
+
+    __tablename__ = "user_onboarding_step_progress"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "flow",
+            "step_id",
+            name="uq_user_onboarding_step_progress_user_flow_step",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'completed', 'skipped')",
+            name="ck_user_onboarding_step_progress_status",
+        ),
+        CheckConstraint(
+            "version >= 1",
+            name="ck_user_onboarding_step_progress_version",
+        ),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(
+        sa_column=Column(
+            Integer,
+            ForeignKey("users.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    flow: OnboardingFlow = Field(sa_column=Column(String(50), nullable=False))
+    step_id: str = Field(sa_column=Column(String(100), nullable=False))
+    status: OnboardingStatus = Field(
+        default=OnboardingStatus.PENDING,
+        sa_column=Column(String(20), nullable=False),
+    )
+    version: int = Field(default=1, ge=1, nullable=False)
+
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+    completed_at: Optional[datetime] = Field(default=None, nullable=True)
+    skipped_at: Optional[datetime] = Field(default=None, nullable=True)
+
+
 class GlobalSetting(SQLModel, table=True):
     """
     System-wide settings.
@@ -396,6 +532,7 @@ class Broker(SQLModel, table=True):
     """
 
     __tablename__ = "brokers"
+    __table_args__ = {"sqlite_autoincrement": True}  # ids leave the backend: never reuse one (plan 34)
 
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(unique=True, index=True, nullable=False)
@@ -492,6 +629,7 @@ class Asset(SQLModel, table=True):
         UniqueConstraint("display_name", name="uq_assets_display_name"),
         Index("ix_assets_identifier_isin", "identifier_isin"),
         Index("ix_assets_identifier_ticker", "identifier_ticker"),
+        {"sqlite_autoincrement": True},  # ids leave the backend: never reuse one (plan 34)
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -506,6 +644,10 @@ class Asset(SQLModel, table=True):
     quote_base_quantity: Optional[int] = Field(default=1, description="How many units the raw market quote refers to (e.g. 100 for bonds quoted on base 100)")
 
     active: bool = Field(default=True)
+    is_benchmark: bool = Field(
+        default=False,
+        description="Asset is offered as a comparison benchmark in risk and chart selectors. Shared across users; independent from asset_type, so any asset can serve as a benchmark and INDEX assets are not forced to",
+    )
     user_url: Optional[str] = Field(default=None, description="User-defined URL (notes, external dashboard, etc.)")
 
     # Identifier columns - one per IdentifierType enum value
@@ -600,6 +742,7 @@ class Transaction(SQLModel, table=True):
         Index("idx_transactions_asset_date", "asset_id", "date"),
         Index("idx_transactions_related", "related_transaction_id"),
         Index("idx_transactions_asset_event", "asset_event_id"),
+        {"sqlite_autoincrement": True},  # ids leave the backend: never reuse one (plan 34)
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -773,6 +916,7 @@ class AssetEvent(SQLModel, table=True):
         Index("idx_asset_event_asset_date", "asset_id", "date"),
         Index("idx_asset_event_asset_type_date", "asset_id", "type", "date"),
         Index("idx_asset_event_provider_assignment", "provider_assignment_id"),
+        {"sqlite_autoincrement": True},  # ids leave the backend: never reuse one (plan 34)
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -872,6 +1016,7 @@ class FxConversionRoute(SQLModel, table=True):
         UniqueConstraint("base", "quote", "priority", name="uq_route_base_quote_priority"),
         CheckConstraint("base < quote", name="ck_route_base_less_than_quote"),
         Index("idx_route_base_quote", "base", "quote"),
+        {"sqlite_autoincrement": True},  # ids leave the backend: never reuse one (plan 34)
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -907,7 +1052,7 @@ class FxConversionRoute(SQLModel, table=True):
 
     @property
     def providers_used(self) -> set[str]:
-        """Set of provider codes used in this route's chain."""
+        """Configured provider membership, including MANUAL; not ordered fetch provenance."""
         return {step["provider"] for step in self.parsed_steps}
 
 

@@ -1,5 +1,5 @@
 """
-Unit tests for backend/app/utils/financial/roi_utils.py.
+Unit tests for backend/app/services/financial_math/returns.py.
 
 Pure math tests — no server, no DB, no async.
 All expected values verified analytically.
@@ -10,7 +10,7 @@ from decimal import Decimal
 
 import pytest
 
-from backend.app.utils.financial.roi_utils import (
+from backend.app.services.financial_math.returns import (
     CashFlowInput,
     MWRRPoint,
     NAVSnapshot,

@@ -10,6 +10,7 @@ Reference: backend/app/services/broker_service.py
 import sys
 from datetime import date
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -24,7 +25,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
@@ -32,6 +33,8 @@ from backend.app.db.models import (
     AssetType,
     Broker,
     BrokerUserAccess,
+    FxConversionRoute,
+    FxRate,
     PriceHistory,
     Transaction,
     TransactionType,
@@ -40,12 +43,15 @@ from backend.app.db.models import (
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import (
+    BRAssetHolding,
     BRCreateItem,
     BRDeleteItem,
+    BRSummary,
     BRUpdateItem,
 )
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
+from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.broker_service import BrokerService
 from backend.app.services.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
@@ -593,6 +599,214 @@ class TestGetSummary:
         summary = await service.get_summary(999999, user_id=test_user.id)
 
         assert summary is None
+
+
+# ============================================================================
+# 4.4b GET_SUMMARY — HOLDING COST = AVERAGE COST IN THE ASSET CURRENCY (#32)
+# ============================================================================
+#
+# get_summary computes each holding's total_cost with financial_math.average_cost, in the asset
+# currency: every purchase converted at its own date, every sale removing its share of the
+# average cost, transfers and adjustments in at their cost_basis_override. When part of the cost
+# cannot be known (no rate for a purchase, an acquisition without cost basis) total_cost,
+# average_cost_per_unit and the unrealized P&L are None, and a missing pair is listed with the
+# purchase dates that needed it.
+#
+# Rows are written straight into the session — no balance validation, these brokers hold no
+# cash on purpose — and never committed: the session fixture rolls back. FX: the only rates
+# written here are EUR/MUR, after proving nobody stores a MUR rate or route; the "missing rate"
+# case uses PYG, proven absent the same way.
+
+
+async def _assert_no_fx_data(session: AsyncSession, currency: str, other: str = "EUR") -> None:
+    """Precondition: no rate and no route for {currency}/{other} exist, committed by anyone."""
+    base, quote = sorted((currency, other))
+    rates = (await session.execute(select(func.count()).select_from(FxRate).where(FxRate.base == base, FxRate.quote == quote))).scalar_one()
+    routes = (await session.execute(select(func.count()).select_from(FxConversionRoute).where(or_(and_(FxConversionRoute.base == base, FxConversionRoute.quote == quote), and_(FxConversionRoute.base == quote, FxConversionRoute.quote == base))))).scalar_one()
+    assert (rates, routes) == (0, 0), f"precondition broken: {base}/{quote} has {rates} rate(s) and {routes} route(s) — this case needs a pair nobody stores"
+
+
+async def _owned_broker(session: AsyncSession, user: User, label: str) -> int:
+    """A broker the user owns, created through the service (OWNER access, no cash)."""
+    response = await BrokerService(session).create_bulk([BRCreateItem(name=f"{label} {uuid4().hex[:12]}")], user_id=user.id)
+    assert response.success_count == 1, response.errors
+    return response.results[0].broker_id
+
+
+async def _own_asset(session: AsyncSession, currency: str) -> Asset:
+    asset = Asset(display_name=f"Holding cost {currency} {uuid4().hex[:12]}", asset_type=AssetType.STOCK, currency=currency)
+    session.add(asset)
+    await session.flush()
+    return asset
+
+
+def _row(broker_id: int, asset: Asset, tx_type: TransactionType, day: date, quantity: str, amount: str = "0", currency: str | None = None, *, cbo: str | None = None) -> Transaction:
+    return Transaction(
+        broker_id=broker_id,
+        asset_id=asset.id,
+        type=tx_type,
+        date=day,
+        quantity=Decimal(quantity),
+        amount=Decimal(amount),
+        currency=currency,
+        cost_basis_override=None if cbo is None else Decimal(cbo),
+        cost_basis_currency=None if cbo is None else asset.currency,
+    )
+
+
+async def _add(session: AsyncSession, *rows) -> None:
+    session.add_all(rows)
+    await session.flush()
+
+
+def _price(asset: Asset, day: date, close: str) -> PriceHistory:
+    return PriceHistory(asset_id=asset.id, date=day, close=Decimal(close), currency=asset.currency, source_plugin_key="holding_cost_test")
+
+
+def _only_holding(summary: BRSummary | None, asset: Asset) -> BRAssetHolding:
+    """The holding of ``asset``; the broker belongs to the test, so it is the only one."""
+    assert summary is not None
+    assert [holding.asset_id for holding in summary.holdings] == [asset.id]
+    return summary.holdings[0]
+
+
+def _cost_view(holding: BRAssetHolding) -> dict:
+    return {
+        "quantity": holding.quantity,
+        "total_cost": holding.total_cost,
+        "average_cost_per_unit": holding.average_cost_per_unit,
+        "current_value": holding.current_value,
+        "unrealized_pnl": holding.unrealized_pnl,
+        "unrealized_pnl_percent": holding.unrealized_pnl_percent,
+    }
+
+
+class TestGetSummaryHoldingCost:
+    """Holding cost through financial_math.average_cost, in the asset currency."""
+
+    @pytest.mark.asyncio
+    async def test_get_summary_holding_cost_is_the_average_cost_of_the_quantity_held(self, session, test_user):
+        """BR-U-036: 10 @ 100 + 10 @ 200, 5 sold → 15 held at 150 = 2250 (the deleted sum of BUY amounts gave 3000)."""
+        broker_id = await _owned_broker(session, test_user, "Holding cost sale")
+        asset = await _own_asset(session, "EUR")
+        await _add(
+            session,
+            _row(broker_id, asset, TransactionType.BUY, date(2019, 4, 1), "10", "-1000", "EUR"),
+            _row(broker_id, asset, TransactionType.BUY, date(2019, 4, 8), "10", "-2000", "EUR"),
+            _row(broker_id, asset, TransactionType.SELL, date(2019, 4, 15), "-5", "1100", "EUR"),
+            _price(asset, date(2019, 4, 16), "180"),
+        )
+
+        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
+
+        assert _cost_view(_only_holding(summary, asset)) == {
+            "quantity": Decimal("15"),
+            "total_cost": Currency(code="EUR", amount=Decimal("2250")),
+            "average_cost_per_unit": Decimal("150"),
+            "current_value": Currency(code="EUR", amount=Decimal("2700")),
+            "unrealized_pnl": Currency(code="EUR", amount=Decimal("450")),
+            "unrealized_pnl_percent": Decimal("20.00"),
+        }
+        assert summary.missing_fx_pairs == []
+
+    @pytest.mark.asyncio
+    async def test_get_summary_converts_a_purchase_paid_in_another_currency_at_its_own_date(self, session, test_user):
+        """BR-U-037: MUR asset; 10 bought for 100 EUR on 1 Feb (45 MUR that day, 40 the day before, 50 later) + 5 for 3000 MUR."""
+        await _assert_no_fx_data(session, "MUR")
+        broker_id = await _owned_broker(session, test_user, "Holding cost FX")
+        asset = await _own_asset(session, "MUR")
+        await _add(
+            session,
+            *(FxRate(date=day, base="EUR", quote="MUR", rate=Decimal(rate), source="TEST_HOLDING_COST") for day, rate in ((date(2019, 1, 31), "40"), (date(2019, 2, 1), "45"), (date(2019, 2, 5), "50"))),
+            _row(broker_id, asset, TransactionType.BUY, date(2019, 2, 1), "10", "-100", "EUR"),
+            _row(broker_id, asset, TransactionType.BUY, date(2019, 2, 4), "5", "-3000", "MUR"),
+            _price(asset, date(2019, 2, 5), "520"),
+        )
+
+        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
+
+        # 100 EUR × 45 = 4500 MUR, + 3000 MUR = 7500 MUR for 15 units.
+        assert _cost_view(_only_holding(summary, asset)) == {
+            "quantity": Decimal("15"),
+            "total_cost": Currency(code="MUR", amount=Decimal("7500")),
+            "average_cost_per_unit": Decimal("500"),
+            "current_value": Currency(code="MUR", amount=Decimal("7800")),
+            "unrealized_pnl": Currency(code="MUR", amount=Decimal("300")),
+            "unrealized_pnl_percent": Decimal("4.00"),
+        }
+        assert summary.missing_fx_pairs == []
+
+    @pytest.mark.asyncio
+    async def test_get_summary_holding_cost_is_unknown_when_a_purchase_cannot_be_converted(self, session, test_user):
+        """BR-U-038: EUR asset; 10 bought for 100 EUR + 10 for 50000 PYG (no PYG rate anywhere) → no cost, no P&L, PYG/EUR listed."""
+        await _assert_no_fx_data(session, "PYG")
+        broker_id = await _owned_broker(session, test_user, "Holding cost missing FX")
+        asset = await _own_asset(session, "EUR")
+        await _add(
+            session,
+            _row(broker_id, asset, TransactionType.BUY, date(2019, 6, 3), "10", "-100", "EUR"),
+            _row(broker_id, asset, TransactionType.BUY, date(2019, 6, 10), "10", "-50000", "PYG"),
+            _price(asset, date(2019, 6, 11), "12"),
+        )
+
+        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
+
+        assert _cost_view(_only_holding(summary, asset)) == {
+            "quantity": Decimal("20"),
+            "total_cost": None,
+            "average_cost_per_unit": None,
+            "current_value": Currency(code="EUR", amount=Decimal("240")),  # the valuation itself is complete
+            "unrealized_pnl": None,
+            "unrealized_pnl_percent": None,
+        }
+        assert summary.missing_fx_pairs == [WACMissingPairInfo(pair="PYG/EUR", dates=[date(2019, 6, 10)])]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("in_type", "cbo", "expected_cost"),
+        [
+            pytest.param(TransactionType.TRANSFER, None, None, id="transfer-in-without-cost-basis"),
+            pytest.param(TransactionType.ADJUSTMENT, None, None, id="adjustment-in-without-cost-basis"),
+            pytest.param(TransactionType.ADJUSTMENT, "130", ("1650", "110", "150", "9.09"), id="control-adjustment-in-with-cost-basis"),
+        ],
+    )
+    async def test_get_summary_holding_cost_is_unknown_after_an_acquisition_without_cost_basis(self, session, test_user, in_type, cbo, expected_cost):
+        """BR-U-039: 10 bought for 1000 EUR, then 5 in without a cost basis → no cost, no P&L; with 130 EUR each → 1650."""
+        broker_id = await _owned_broker(session, test_user, "Holding cost unknown basis")
+        asset = await _own_asset(session, "EUR")
+        arrival = _row(broker_id, asset, in_type, date(2019, 7, 8), "5", cbo=cbo)
+        await _add(
+            session,
+            _row(broker_id, asset, TransactionType.BUY, date(2019, 7, 1), "10", "-1000", "EUR"),
+            arrival,
+            _price(asset, date(2019, 7, 9), "120"),
+        )
+        if in_type == TransactionType.TRANSFER:
+            # A real transfer: the 5 units leave another broker (not the user's), linked both ways.
+            source = Broker(name=f"Holding cost source {uuid4().hex[:12]}")
+            session.add(source)
+            await session.flush()
+            departure = _row(source.id, asset, TransactionType.TRANSFER, date(2019, 7, 8), "-5")
+            await _add(session, _row(source.id, asset, TransactionType.BUY, date(2019, 7, 1), "5", "-500", "EUR"), departure)
+            departure.related_transaction_id = arrival.id
+            arrival.related_transaction_id = departure.id
+            await session.flush()
+
+        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
+
+        expected_view = {"quantity": Decimal("15"), "current_value": Currency(code="EUR", amount=Decimal("1800"))}
+        if expected_cost is None:
+            expected_view |= {"total_cost": None, "average_cost_per_unit": None, "unrealized_pnl": None, "unrealized_pnl_percent": None}
+        else:
+            total, average, pnl, percent = expected_cost
+            expected_view |= {
+                "total_cost": Currency(code="EUR", amount=Decimal(total)),
+                "average_cost_per_unit": Decimal(average),
+                "unrealized_pnl": Currency(code="EUR", amount=Decimal(pnl)),
+                "unrealized_pnl_percent": Decimal(percent),
+            }
+        assert _cost_view(_only_holding(summary, asset)) == expected_view
+        assert summary.missing_fx_pairs == [], "an unknown cost basis is not a missing rate"
 
 
 # ============================================================================

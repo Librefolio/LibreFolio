@@ -165,7 +165,9 @@
 
             <!-- Username Input -->
             <div>
+                <label class="sr-only" for="register-username">{$_('auth.username')}</label>
                 <input
+                    autocapitalize="none"
                     autocomplete="username"
                     bind:value={username}
                     class="w-full px-4 py-3 rounded-lg border bg-transparent text-libre-dark placeholder-gray-500 focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
@@ -178,8 +180,10 @@
                     data-testid="register-username"
                     disabled={loading}
                     id="register-username"
+                    name="username"
                     on:blur={validateUsername}
                     placeholder={$_('auth.username')}
+                    spellcheck="false"
                     type="text"
                 />
                 {#if usernameError}
@@ -189,6 +193,7 @@
 
             <!-- Email Input -->
             <div>
+                <label class="sr-only" for="register-email">{$_('auth.email')}</label>
                 <input
                     autocomplete="email"
                     bind:value={email}
@@ -202,6 +207,7 @@
                     data-testid="register-email"
                     disabled={loading}
                     id="register-email"
+                    name="email"
                     on:blur={validateEmail}
                     placeholder={$_('auth.email')}
                     type="email"
@@ -213,7 +219,8 @@
 
             <!-- Password Input -->
             <div>
-                <PasswordInput autocomplete="new-password" bind:value={password} disabled={loading} hasError={!!passwordError} on:blur={validatePassword} placeholder={$_('auth.password')} testId="register-password" />
+                <label class="sr-only" for="register-password">{$_('auth.password')}</label>
+                <PasswordInput autocomplete="new-password" bind:value={password} disabled={loading} hasError={!!passwordError} id="register-password" name="new-password" on:blur={validatePassword} placeholder={$_('auth.password')} testId="register-password" />
                 <PasswordStrength {password} />
                 {#if passwordError}
                     <p class="text-red-600 text-xs mt-1">{passwordError}</p>
@@ -222,7 +229,18 @@
 
             <!-- Confirm Password Input -->
             <div>
-                <PasswordInput autocomplete="new-password" bind:value={confirmPassword} disabled={loading} hasError={!!confirmPasswordError} on:blur={validateConfirmPassword} placeholder={$_('auth.confirmPassword')} testId="register-confirm-password" />
+                <label class="sr-only" for="register-confirm-password">{$_('auth.confirmPassword')}</label>
+                <PasswordInput
+                    autocomplete="new-password"
+                    bind:value={confirmPassword}
+                    disabled={loading}
+                    hasError={!!confirmPasswordError}
+                    id="register-confirm-password"
+                    name="confirm-password"
+                    on:blur={validateConfirmPassword}
+                    placeholder={$_('auth.confirmPassword')}
+                    testId="register-confirm-password"
+                />
                 {#if confirmPasswordError}
                     <p class="text-red-600 text-xs mt-1">{confirmPasswordError}</p>
                 {/if}

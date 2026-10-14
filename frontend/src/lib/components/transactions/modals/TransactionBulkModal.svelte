@@ -25,7 +25,7 @@
 -->
 <script lang="ts">
     import {todayIso} from '$lib/utils/dateOnly';
-    import {onDestroy, untrack} from 'svelte';
+    import {onDestroy, tick, untrack} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
     import {X, Plus, Pencil, Copy, Trash2, Check, Undo2, Save, Unlink, Link2, Lightbulb, Upload, ChevronDown, ChevronRight} from 'lucide-svelte';
@@ -33,6 +33,8 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import BrimEvidenceTable from '$lib/components/transactions/import/BrimEvidenceTable.svelte';
+    import {remainingTodos} from '$lib/utils/transactions/bulkTodos';
+    import {resolveBrimTodoMessage} from '$lib/utils/transactions/resolveBrimNotice';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import TransactionResultBanner from '../shared/TransactionResultBanner.svelte';
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
@@ -48,11 +50,29 @@
     import {type TransactionTypeCode, getTypeRule, isDraftReadyForValidation, ensureTypesLoaded, isTypesLoaded, getTransactionTypeIconUrl, getCostBasisRule} from '$lib/stores/transactions/transactionTypeStore';
     import {findPromoteMatch, type PromoteContext} from '$lib/stores/transactions/transactionTypeStore';
     import PromoteMergeModal from './PromoteMergeModal.svelte';
+    import PromoteAllModal, {type PromoteAllStrategy} from './PromoteAllModal.svelte';
     import {createValidateScheduler} from '$lib/utils/transactions/useValidateScheduler.svelte';
     import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
-    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, upgradeAutoToDetail, type TxFields, type TxOriginal, type ResolvedOp, type ImportTodo} from '$lib/utils/transactions/txPayloadHelpers';
-    import {cashAmountsCancel} from '$lib/utils/transactions/promoteHelpers';
+    import {buildCreatePayload, buildUpdateDiff, buildBatchPayload, diffDualItem, applySignRules, upgradeAutoToDetail, type TxFields, type TxOriginal, type ImportTodo} from '$lib/utils/transactions/txPayloadHelpers';
+    import {
+        buildBulkOperationIndex,
+        buildBulkRowLabels,
+        createBulkDateComparator,
+        isBulkBalanceIssue,
+        resolveBulkIssueRows,
+        serializeOps,
+        settleBulkIssueSnapshot,
+        type BulkBatchResult,
+        type BulkIssueRow,
+        type BulkIssueSnapshotEntry,
+        type BulkOperationIndex,
+        type IdentifiedBulkOp,
+    } from '$lib/utils/transactions/bulkDisplay';
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {cashAmountsCancel, mergeStrings, mergeTagSets} from '$lib/utils/transactions/promoteHelpers';
+    import {assetQuantitiesCancel, importableSuggestions as importableFromResults, mixedPromotePairs, newRowSuggestId} from '$lib/utils/transactions/promoteSuggest';
     import {resolveIssueMessage, type ResolverContext} from '$lib/utils/transactions/resolveValidationMessage';
+    import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {formatCurrencyAmountHtml, formatCurrencyCodeHtml} from '$lib/utils/currency/currencyFormat';
     import {getStringColor} from '$lib/utils/colors';
@@ -65,9 +85,15 @@
     import ImportWizardModal from './ImportWizardModal.svelte';
     import {txStoreGet, txStoreCount} from '$lib/stores/transactions/txStore.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
+    import {TRANSACTION_BULK_STEP_IDS, type TransactionBulkStepId} from '$lib/features/onboarding/onboardingGuideCatalog';
     import {resolveFormItemsFromOps, type FormModalItems} from '../shared/resolveFormItems';
     import type {TXReadItem, ValidationIssue} from '../types';
     import type {TransactionCreateItem} from '$lib/types';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Types
@@ -102,6 +128,8 @@
      *  `link_uuid` is the shared pairing UUID for backend payloads (WAC, commit). */
     type PendingOp = ({op: 'create'} | {op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean}) & {
         tempId: string;
+        /** Stamped at creation (`nextCreatedSeq`): keeps new rows of the same day in the order they were added. */
+        createdSeq: number;
         fields: DraftFields;
         pairedWith?: string;
         link_uuid?: string | null;
@@ -187,9 +215,15 @@
         };
     }
 
+    /** Monotonic creation stamp for new rows. Their tempId is a random UUID, so it cannot order them. */
+    let createdSeqCounter = 0;
+    function nextCreatedSeq(): number {
+        return createdSeqCounter++;
+    }
+
     /** Create an empty 'create' PendingOp. */
     function createOpEmpty(): PendingOp {
-        return {op: 'create', tempId: generateUUID(), fields: defaultFields(), link_uuid: null};
+        return {op: 'create', tempId: generateUUID(), createdSeq: nextCreatedSeq(), fields: defaultFields(), link_uuid: null};
     }
 
     /** Extract display-ready DraftFields from a TXReadItem (auto-sign applied). */
@@ -235,7 +269,7 @@
     /** Create 'edit' PendingOp from DB transaction (reads txStore, zero copies). */
     function editOpFromTx(txId: number, opts?: {markedDelete?: boolean; addedViaPicker?: boolean}): PendingOp {
         const tx = txStoreGet(txId)!;
-        return {op: 'edit', tempId: generateUUID(), txId, fields: fieldsFromTx(tx), markedDelete: opts?.markedDelete ?? false, addedViaPicker: opts?.addedViaPicker};
+        return {op: 'edit', tempId: generateUUID(), createdSeq: nextCreatedSeq(), txId, fields: fieldsFromTx(tx), markedDelete: opts?.markedDelete ?? false, addedViaPicker: opts?.addedViaPicker};
     }
 
     /** Create 'create' PendingOp by cloning from a TXReadItem. */
@@ -244,7 +278,7 @@
         // T3: keep the source date — clone is the correction workflow, not "same op today".
         const rule = getTypeRule(tx.type);
         if (rule.quantityRule === 'zero') fields.quantity = '0';
-        return {op: 'create', tempId: generateUUID(), fields, link_uuid: linkUuid ?? null};
+        return {op: 'create', tempId: generateUUID(), createdSeq: nextCreatedSeq(), fields, link_uuid: linkUuid ?? null};
     }
 
     /** Get DB id from PendingOp (undefined for creates). */
@@ -257,15 +291,25 @@
     // =========================================================================
 
     let ops = $state<PendingOp[]>([]);
-    /** Visible ops: excludes hidden partner ops (pairedWith set). Used by DataTable. */
-    let visibleOps = $derived(ops.filter((o) => !o.pairedWith));
+    let dateSortDirection = $state<'asc' | 'desc'>('asc');
+    let compareBulkDates = $derived(createBulkDateComparator(ops));
+    /** Sort display groups only. The ledger and payload retain their original order. */
+    let visibleOps = $derived(ops.filter((o) => !o.pairedWith).sort((a, b) => (dateSortDirection === 'asc' ? 1 : -1) * compareBulkDates(a, b)));
+    let visualRowLabels = $derived(buildBulkRowLabels(ops, visibleOps));
     /** Find the hidden partner op for a given main op's tempId. */
     function getPartnerOp(mainTempId: string): PendingOp | undefined {
         return ops.find((o) => o.pairedWith === mainTempId);
     }
     let issues = $state<ValidationIssue[]>([]);
-    /** Maps "operation:index" (from backend) → tempId. Built after each validate. */
-    let lastOpsIndexMap = $state<Map<string, string>>(new Map());
+    /** API-array indices map to stable op IDs, never to display/file row numbers. */
+    let lastOpsIndexMap = $state<BulkOperationIndex>(new Map());
+    let lastIssueRows = $state<BulkIssueRow[]>([]);
+    let lastBalanceRows = $state<BulkIssueRow[]>([]);
+    let lastIssueDraftKey = $state('');
+    let lastDraftKey = $state('');
+    let activeIssue = $state<ValidationIssue | null>(null);
+    let activeIssueRows = $derived(activeIssue && lastIssueDraftKey === lastDraftKey ? getIssueRows(activeIssue) : []);
+    let highlightedIssueIds = $derived(new Set(activeIssueRows.map((row) => row.pairedWith ?? row.tempId)));
     let formError = $state<string | null>(null);
     let commitFailed = $state(false);
     let committing = $state(false);
@@ -291,6 +335,8 @@
     let suggestTimer: ReturnType<typeof setTimeout> | null = null;
     /** Last JSON key sent to promote-suggest — avoids redundant calls. */
     let lastSuggestKey = '';
+    /** The question the rows ask promote-suggest right now ('' when none): an answer to an older one is dropped. */
+    let suggestAskedKey = '';
 
     /** Snapshot of `ops` at modal-open time, used to detect unsaved changes
      *  for the close-confirmation guard (Bugfix-3 §C11). */
@@ -301,6 +347,16 @@
     let confirmEditDeleteRow = $state<PendingOp | null>(null);
     /** Gate: confirm Save when auto-derived "fields to verify" (warning todos) are still un-acknowledged. */
     let confirmWarningsOpen = $state(false);
+    /**
+     * Save gate for merge suggestions nobody looked at: the saved counterparts behind the lightbulb
+     * and the banner of complementary rows. Opening the lightbulb, or touching the banner, once is
+     * enough; «Save anyway» counts as a look too.
+     */
+    let suggestPickerSeen = $state(false);
+    let promoteBannerSeen = $state(false);
+    let confirmSuggestionsOpen = $state(false);
+    /** «Merge all» of the banner: one answer for every suggested pair. */
+    let promoteAllOpen = $state(false);
 
     // =========================================================================
     // WAC results — populated from validate response (Phase C: inline WAC)
@@ -372,14 +428,24 @@
                 // T3 (02/09): the original date is PRESERVED on clone — duplication is
                 // how users fix a misclassified historical row, and resetting to
                 // today destroyed exactly the field they needed to keep.
-                // Generate shared link_uuid for paired clones
-                const sharedLinkUuid = resolved.length === 2 && resolved[0].type === resolved[1].type ? generateUUID() : null;
+                // A pair of the ledger is cloned as a pair: one fresh link_uuid for each pair whose two halves are
+                // both selected. A single row gets none, whatever the type of the rows beside it.
+                const selectedIds = new Set(resolved.map((r) => r.id));
+                const cloneLinks = new Map<number, string>();
+                for (const r of resolved) {
+                    const partnerId = r.related_transaction_id;
+                    if (partnerId == null || !selectedIds.has(partnerId) || cloneLinks.has(r.id)) continue;
+                    const link = generateUUID();
+                    cloneLinks.set(r.id, link);
+                    cloneLinks.set(partnerId, link);
+                }
                 const cloned = resolved.map((r) => {
                     const c = {...r, id: 0, related_transaction_id: null} as TXReadItem;
                     // Bug6-fix: reset quantity when the type requires qty=0 (e.g. INTEREST)
                     const rule = getTypeRule(r.type);
                     if (rule.quantityRule === 'zero') c.quantity = '0';
-                    if (sharedLinkUuid) (c as any).link_uuid = sharedLinkUuid;
+                    const link = cloneLinks.get(r.id);
+                    if (link) (c as any).link_uuid = link;
                     return c;
                 });
                 return {rows: cloned, autoForm: cloned.length === 1 ? 'create' : null};
@@ -397,6 +463,11 @@
         const {rows, status: initSt, autoForm} = resolveInitialRows();
         untrack(() => {
             issues = [];
+            lastOpsIndexMap = new Map();
+            lastIssueRows = [];
+            lastBalanceRows = [];
+            lastIssueDraftKey = '';
+            activeIssue = null;
             formError = null;
             commitFailed = false;
             confirmCloseOpen = false;
@@ -404,6 +475,10 @@
             pendingPromotes = [];
             promoteMergeOpen = false;
             promoteMergeData = null;
+            promoteAllOpen = false;
+            suggestPickerSeen = false;
+            promoteBannerSeen = false;
+            confirmSuggestionsOpen = false;
             suggestFromDB = new Map();
             lastSuggestKey = '';
             if (suggestTimer) {
@@ -437,7 +512,9 @@
                 // Slow path: keep ops empty so DataTable doesn't render
                 // with FALLBACK_RULE. Ops will be assigned after Promise.all.
                 ops = [];
-                initialOpsKey = '';
+                // The snapshot of what is on screen: no rows. Without initial rows it is never taken again, and an
+                // empty key would make an untouched editor ask to discard.
+                initialOpsKey = serializeOps(ops);
                 if (rows.length === 0 && intent?.action !== 'import') {
                     queueMicrotask(() => {
                         formOpen = true;
@@ -495,19 +572,6 @@
                 importWizardOpen = true;
             });
         }
-    }
-
-    /** Stable, comparison-friendly serialization of the drafts array (drops
-     *  the volatile `tempId` so newly seeded rows compare equal to the
-     *  original snapshot). */
-    function serializeOps(rows: PendingOp[]): string {
-        return JSON.stringify(
-            rows.map((d) => {
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const {tempId: _tempId, ...rest} = d;
-                return rest;
-            }),
-        );
     }
 
     function hasUnsavedChanges(): boolean {
@@ -652,6 +716,7 @@
                         txId: relId,
                         markedDelete: false,
                         tempId: generateUUID(),
+                        createdSeq: nextCreatedSeq(),
                         fields: {type: mainTx.type, broker_id: pBrokerId, date: mainTx.date} as any,
                         pairedWith: d.tempId,
                         link_uuid: sharedUuid,
@@ -669,6 +734,7 @@
                 txId: relId,
                 markedDelete: false,
                 tempId: generateUUID(),
+                createdSeq: nextCreatedSeq(),
                 fields: fieldsFromTx(partnerTx),
                 pairedWith: d.tempId,
                 link_uuid: sharedUuid,
@@ -756,10 +822,7 @@
             }
             // Auto-clear todos whose field has now been filled
             if (merged.todos?.length) {
-                merged.todos = merged.todos.filter((todo) => {
-                    const val = merged.fields[todo.field as keyof DraftFields];
-                    return val == null || val === '';
-                });
+                merged.todos = remainingTodos(merged.todos, merged.fields);
                 if (merged.todos.length === 0) delete merged.todos;
             }
             return merged;
@@ -813,7 +876,8 @@
     // =========================================================================
 
     function removeRow(tempId: string) {
-        ops = ops.filter((d) => d.tempId !== tempId);
+        // A pair is one row on screen and two ops: its hidden half leaves the batch with it.
+        ops = ops.filter((d) => d.tempId !== tempId && d.pairedWith !== tempId);
     }
 
     /** Mark an existing row for deletion (toggle). */
@@ -833,6 +897,7 @@
         const clone: PendingOp = {
             op: 'create',
             tempId: generateUUID(),
+            createdSeq: nextCreatedSeq(),
             fields: {...src.fields},
             link_uuid: getTypeRule(src.fields.type as TransactionTypeCode)?.requiresPair ? generateUUID() : null,
         };
@@ -842,6 +907,7 @@
             const partnerClone: PendingOp = {
                 op: 'create',
                 tempId: generateUUID(),
+                createdSeq: nextCreatedSeq(),
                 fields: {...srcPartner.fields},
                 link_uuid: clone.link_uuid, // share link_uuid
                 pairedWith: clone.tempId,
@@ -853,8 +919,11 @@
     }
 
     function resetRow(tempId: string) {
+        // A saved pair is one row on screen: its hidden half is reset with it, in place, or an edit made through the
+        // pair's form would stay on it. A W4b placeholder has nothing to reset: its half is not in the store.
+        const partnerTempId = getPartnerOp(tempId)?.tempId;
         ops = ops.map((d) => {
-            if (d.tempId !== tempId || d.op !== 'edit') return d;
+            if ((d.tempId !== tempId && d.tempId !== partnerTempId) || d.op !== 'edit' || d.inaccessible) return d;
             const reset = editOpFromTx(d.txId, {addedViaPicker: d.addedViaPicker});
             return reset;
         });
@@ -1001,11 +1070,11 @@
      * Resolve all PendingOps into ResolvedOp[] for batch payload building.
      * Handles split-queued type stripping and promote-queued row skipping.
      */
-    function resolveOps(opts?: {excludeTempId?: string | null; splitTxIds?: Set<number>; promoteTxIds?: Set<number>}): ResolvedOp[] {
+    function resolveOps(opts?: {excludeTempId?: string | null; splitTxIds?: Set<number>; promoteTxIds?: Set<number>}): IdentifiedBulkOp[] {
         const excludeTempId = opts?.excludeTempId ?? null;
         const splitTxIds = opts?.splitTxIds ?? new Set<number>();
         const promoteTxIds = opts?.promoteTxIds ?? new Set<number>();
-        const resolved: ResolvedOp[] = [];
+        const resolved: IdentifiedBulkOp[] = [];
 
         for (const d of ops) {
             if (d.pairedWith) continue; // hidden partners are handled via their main op
@@ -1027,7 +1096,7 @@
             if (d.op === 'edit' && promoteTxIds.has((d as any).txId)) {
                 const hidden = getPartnerOp(d.tempId);
                 if (hidden && hidden.op === 'create') {
-                    resolved.push({intent: 'create', payload: collectCreate(hidden), partnerPayload: null});
+                    resolved.push({intent: 'create', tempId: hidden.tempId, payload: collectCreate(hidden), partnerPayload: null});
                 }
                 continue;
             }
@@ -1043,7 +1112,7 @@
                 if (pOp && pOp.op === 'create') {
                     partnerPayload = collectCreate(pOp);
                 }
-                resolved.push({intent: 'create', payload: collectCreate(d), partnerPayload});
+                resolved.push({intent: 'create', tempId: d.tempId, partnerTempId: pOp?.tempId, payload: collectCreate(d), partnerPayload});
             } else if (st === 'edited') {
                 const upd = collectUpdate(d);
                 // For split-queued rows, strip type (split handles type change)
@@ -1060,11 +1129,13 @@
                     }
                 }
                 if (payload || partnerPayload) {
-                    resolved.push({intent: 'update', payload: payload ?? undefined, partnerPayload});
+                    resolved.push({intent: 'update', tempId: d.tempId, partnerTempId: pOp?.tempId, payload: payload ?? undefined, partnerPayload});
                 }
             } else if (st === 'delete' && d.op === 'edit') {
                 resolved.push({
                     intent: 'delete',
+                    tempId: d.tempId,
+                    partnerTempId: pOp?.tempId,
                     deleteId: d.txId,
                     partnerDeleteId: pOp?.op === 'edit' ? pOp.txId : null,
                 });
@@ -1115,57 +1186,66 @@
     // Validate scheduler
     // =========================================================================
 
-    /** Map a ResolvedOp back to the tempId of the PendingOp that produced it.
-     *  Uses the resolved ops array to find the source PendingOp by intent match.
-     *  `resolvedIdx` is the index within the `resolved` array. */
-    function buildOpsIndexMap(resolved: ResolvedOp[]): Map<string, string> {
-        // Replicate buildBatchPayload ordering to map "operation:index" → tempId.
-        // The resolved array mirrors ops ordering (pairedWith skipped, same filter).
-        const opsMap = new Map<string, string>(); // "create:0" → tempId
-        let createIdx = 0;
-        let updateIdx = 0;
+    function buildOpsIndexMap(resolved: IdentifiedBulkOp[]): BulkOperationIndex {
+        return buildBulkOperationIndex(resolved, {
+            splits: pendingSplits.map((split) => ops.filter((op) => op.op === 'edit' && (op.txId === split.id_a || op.txId === split.id_b)).map((op) => op.tempId)),
+            promotes: pendingPromotes.map((promote) => ops.filter((op) => (op.op === 'edit' && (op.txId === promote.id_a || op.txId === promote.id_b)) || (op.op === 'create' && !!op.link_uuid && (op.link_uuid === promote.link_uuid_a || op.link_uuid === promote.link_uuid_b))).map((op) => op.tempId)),
+        });
+    }
 
-        // Track which resolved op came from which visible PendingOp.
-        // resolveOps iterates ops in order, skipping pairedWith. We do the same.
-        const splitTxIds = new Set(pendingSplits.flatMap((s) => [s.id_a, s.id_b]));
-        const promoteTxIds = new Set(pendingPromotes.flatMap((p) => [p.id_a, p.id_b].filter(Boolean) as number[]));
-        let resolvedI = 0;
+    function toIssueRow(op: PendingOp, fields: Pick<TxFields, 'type' | 'broker_id' | 'date' | 'quantity' | 'asset_id' | 'cash'>): BulkIssueRow {
+        const {signedQty, signedCash} = applySignRules(fields.quantity, fields.cash, getTypeRule(fields.type));
+        return {
+            tempId: op.tempId,
+            pairedWith: op.pairedWith,
+            txId: opTxId(op),
+            inaccessible: op.inaccessible,
+            fields: {type: fields.type, broker_id: fields.broker_id, date: fields.date, asset_id: fields.asset_id ?? null, quantity: signedQty, cash: signedCash},
+        };
+    }
 
-        for (const d of ops) {
-            if (d.pairedWith) continue;
-            const st = deriveStatus(d);
-            // Same skip logic as resolveOps
-            if (d.op === 'edit' && splitTxIds.has((d as any).txId) && st !== 'edited') continue;
-            if (d.op === 'edit' && promoteTxIds.has((d as any).txId)) continue;
-
-            if (resolvedI >= resolved.length) break;
-            const rOp = resolved[resolvedI];
-
-            if (st === 'new' && rOp.intent === 'create') {
-                opsMap.set(`create:${createIdx}`, d.tempId);
-                createIdx++;
-                const pOp = getPartnerOp(d.tempId);
-                if (rOp.partnerPayload && pOp) {
-                    opsMap.set(`create:${createIdx}`, pOp.tempId);
-                    createIdx++;
-                }
-                resolvedI++;
-            } else if (st === 'edited' && rOp.intent === 'update') {
-                opsMap.set(`update:${updateIdx}`, d.tempId);
-                updateIdx++;
-                const pOp = getPartnerOp(d.tempId);
-                if (rOp.partnerPayload && pOp) {
-                    opsMap.set(`update:${updateIdx}`, pOp.tempId);
-                    updateIdx++;
-                }
-                resolvedI++;
-            } else if (st === 'delete' && rOp.intent === 'delete') {
-                resolvedI++;
-            } else {
-                // Mismatch — skip this op (original/no-change)
-            }
+    /** Capture the state actually sent. Failed operations fall back to their saved row;
+     *  successful deletes disappear from balance groups, but retain field-issue links. */
+    function captureIssueSnapshot(resolved: IdentifiedBulkOp[], indexMap: BulkOperationIndex): BulkIssueSnapshotEntry[] {
+        const payloads = new Map<string, Record<string, unknown>>();
+        const deleted = new Set<string>();
+        for (const op of resolved) {
+            if (op.payload) payloads.set(op.tempId, op.payload);
+            if (op.partnerPayload && op.partnerTempId) payloads.set(op.partnerTempId, op.partnerPayload);
+            if (op.deleteId != null) deleted.add(op.tempId);
+            if (op.partnerDeleteId != null && op.partnerTempId) deleted.add(op.partnerTempId);
         }
-        return opsMap;
+        const keysById = new Map<string, string[]>();
+        for (const [key, ids] of indexMap) {
+            for (const id of ids) keysById.set(id, [...(keysById.get(id) ?? []), key]);
+        }
+        return ops.map((op) => {
+            const original = op.op === 'edit' ? txStoreGet(op.txId) : undefined;
+            const draft = toIssueRow(op, opToTxFields(op));
+            const before = original ? toIssueRow(op, original) : null;
+            const operationKeys = keysById.get(op.tempId) ?? [];
+            const atomic = operationKeys.some((key) => key.startsWith('split:') || key.startsWith('promote:'));
+            const fields = {...(original ?? opToTxFields(op)), ...payloads.get(op.tempId)};
+            const ordinaryAfter = deleted.has(op.tempId) ? null : toIssueRow(op, fields);
+            let atomicFallback = before;
+            if (before && operationKeys.some((key) => key.startsWith('split:'))) {
+                const types = SPLIT_TYPE_MAP[before.fields.type];
+                if (types) {
+                    const sender = Number(before.fields.quantity) < 0 || Number(before.fields.cash?.amount ?? 0) < 0;
+                    atomicFallback = toIssueRow(op, {...before.fields, type: types[sender ? 0 : 1]});
+                }
+            }
+            return {before, after: atomic ? toIssueRow(op, op.fields) : ordinaryAfter, ordinaryAfter, atomicFallback, draft, operationKeys};
+        });
+    }
+
+    function applyIssueSnapshot(snapshot: BulkIssueSnapshotEntry[], indexMap: BulkOperationIndex, rawResponse: unknown, sentKey: string) {
+        lastOpsIndexMap = indexMap;
+        lastIssueRows = snapshot.map((entry) => entry.draft);
+        const results = (rawResponse as {results?: BulkBatchResult[]} | null)?.results ?? [];
+        lastBalanceRows = settleBulkIssueSnapshot(snapshot, results);
+        lastIssueDraftKey = sentKey;
+        activeIssue = null;
     }
 
     const scheduler = createValidateScheduler({
@@ -1189,26 +1269,19 @@
                 return {issuesCount: 0};
             }
             const splitTxIds = new Set(pendingSplits.flatMap((s) => [s.id_a, s.id_b]));
-            // `promoteTxIds` has to be here for the same reason it is in commit():
-            // `buildOpsIndexMap` below derives it from `pendingPromotes` regardless
-            // and skips those rows *without advancing its cursor*. Leaving it out
-            // here made `resolveOps` keep them, so the two walked the same list at
-            // different speeds and every entry after a queued promote mapped to the
-            // wrong row — which is what `lastOpsIndexMap` is then read through to
-            // attach WAC previews and validation issues. The user saw the preview
-            // pinned to a neighbouring transaction.
-            //
-            // It also validated rows the commit will not send, which is the wrong
-            // question to ask: a preview should simulate the commit, not something
-            // adjacent to it.
+            // Resolve the same CUD and atomic commands as commit: indices and balance
+            // groups must describe the ledger that Save will actually submit.
             const promoteTxIds = new Set(pendingPromotes.flatMap((p) => [p.id_a, p.id_b].filter(Boolean) as number[]));
             const resolved = resolveOps({splitTxIds, promoteTxIds});
             const payload = buildBatchPayload({
                 ops: resolved,
                 splits: pendingSplits.length > 0 ? pendingSplits.map((s) => ({id_a: s.id_a, id_b: s.id_b})) : undefined,
+                promotes: pendingPromotes.length > 0 ? pendingPromotes : undefined,
             });
             upgradeAutoToDetail(payload);
             const sentKey = lastDraftKey;
+            const opsMap = buildOpsIndexMap(resolved);
+            const issueSnapshot = captureIssueSnapshot(resolved, opsMap);
             const result = await validateTransactions(payload, {fallback: $t('transactions.bulk.saveFailed')});
             // A response that lands after the draft moved on describes a state
             // that no longer exists: applying it overwrites fresher numbers
@@ -1217,12 +1290,13 @@
             // run, so dropping this one loses nothing.
             if (lastDraftKey !== sentKey) return {issuesCount: issues.length};
             if (result.networkError) {
-                issues = [{operation: 'create', index: 0, error: result.networkError}];
+                issues = [{operation: 'create', index: -1, error: result.networkError}];
             } else {
                 issues = result.issues as unknown as ValidationIssue[];
             }
             lastValidatedDraftKey = sentKey;
             issuesDismissed = false;
+            applyIssueSnapshot(issueSnapshot, opsMap, result.rawResponse, sentKey);
 
             // ── Phase C: extract wac_results from validate response ──
             const rawResp = result.rawResponse as Record<string, unknown> | null;
@@ -1236,10 +1310,6 @@
             }
             if (pendingIdOps.size > 0) pendingTxIds = new Set(pendingIdOps.keys());
 
-            // Always build the ops index map (needed for issue row mapping + WAC)
-            const opsMap = buildOpsIndexMap(resolved);
-            lastOpsIndexMap = opsMap;
-
             const rawWacResults = (rawResp?.wac_results as Array<Record<string, unknown>> | null | undefined) ?? null;
             if (rawWacResults && rawWacResults.length > 0) {
                 // Map wac_results to tempIds using the opsMap
@@ -1249,7 +1319,7 @@
                     const idx = wr.index as number | null;
                     if (op == null || idx == null) continue;
                     const key = `${op}:${idx}`;
-                    const tempId = opsMap.get(key);
+                    const tempId = opsMap.get(key)?.[0];
                     if (!tempId) continue;
                     const wacVal = (wr.wac as {code: string; amount: string} | null) ?? null;
                     // Annotate qualifying_txs entries that belong to this batch (pending)
@@ -1323,9 +1393,12 @@
     onDestroy(() => {
         scheduler.dispose();
         if (suggestTimer) clearTimeout(suggestTimer);
+        if (onboardingGuide.active?.flow === 'transaction_bulk_guide') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
+        onboardingGuide.clearQueued('transaction_bulk_guide');
     });
 
-    let lastDraftKey = $state('');
     /** Bugfix-4 §U16: track which draft state we last validated, so the UI
      *  can show a "fresh" valid banner only when no edits happened since. */
     let lastValidatedDraftKey = $state('');
@@ -1334,9 +1407,8 @@
 
     let isFreshlyValid = $derived(scheduler.state.lastValidatedAt != null && issues.length === 0 && lastValidatedDraftKey === lastDraftKey && lastDraftKey !== '');
     let showIssuesBanner = $derived(issues.length > 0 && !issuesDismissed);
-    const BALANCE_CODES = new Set(['balanceAssetNegative', 'balanceCashNegative']);
-    let fieldIssues = $derived(issues.filter((i) => !BALANCE_CODES.has(i.code ?? '')));
-    let balanceIssues = $derived(issues.filter((i) => BALANCE_CODES.has(i.code ?? '')));
+    let fieldIssues = $derived(issues.filter((i) => !isBulkBalanceIssue(i)));
+    let balanceIssues = $derived(issues.filter(isBulkBalanceIssue));
     let hasWacFxIssues = $derived(fieldIssues.some((i) => i.code === 'wacFxUnavailable'));
 
     /** Sync FX rates for missing pairs referenced in issues, then re-validate. */
@@ -1351,7 +1423,7 @@
         const dates: string[] = [];
         for (const issue of fxIssues) {
             const key = `${issue.operation}:${issue.index}`;
-            const tempId = lastOpsIndexMap.get(key);
+            const tempId = lastOpsIndexMap.get(key)?.[0];
             const op = tempId ? ops.find((o) => o.tempId === tempId) : null;
             if (op?.fields.date) dates.push(op.fields.date);
         }
@@ -1393,6 +1465,7 @@
         if (key === lastDraftKey) return;
         lastDraftKey = key;
         commitFailed = false;
+        activeIssue = null;
         scheduler.trigger('change');
     });
 
@@ -1407,6 +1480,15 @@
      * user is prompted to look (e.g. matured-bond nominal quantities) instead of silently saving.
      */
     function requestCommit() {
+        if (unseenSuggestionCount > 0) {
+            confirmSuggestionsOpen = true;
+            return;
+        }
+        requestCommitPastSuggestions();
+    }
+
+    /** The rest of the save gate, once the suggestions are seen or waived: the fields to verify, then the commit. */
+    function requestCommitPastSuggestions() {
         if (todoWarningRowCount > 0) {
             confirmWarningsOpen = true;
             return;
@@ -1442,6 +1524,8 @@
                 promotes: pendingPromotes.length > 0 ? pendingPromotes : undefined,
             });
 
+            const opsMap = buildOpsIndexMap(resolved);
+            const issueSnapshot = captureIssueSnapshot(resolved, opsMap);
             const result = await commitTransactions(payload, {fallback: $t('transactions.bulk.saveFailed')});
             if (result.networkError) {
                 formError = result.networkError;
@@ -1450,8 +1534,7 @@
             }
             if (!result.committed) {
                 issues = result.issues as unknown as ValidationIssue[];
-                // Rebuild index map for the commit payload (same resolved ops)
-                lastOpsIndexMap = buildOpsIndexMap(resolved);
+                applyIssueSnapshot(issueSnapshot, opsMap, result.rawResponse, currentKey);
                 issuesDismissed = false;
                 commitFailed = true;
                 return;
@@ -1520,8 +1603,8 @@
         const name = info?.display_name ?? `#${assetId}`;
         // Bug11-fix: use asset type icon as fallback when icon_url is null
         const iconUrl = info?.icon_url ?? (info?.asset_type ? getAssetTypeIconUrl(info.asset_type) : null);
-        const iconHtml = iconUrl ? `<img src="${iconUrl}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
-        return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${name}</span>`;
+        const iconHtml = iconUrl ? `<img src="${escapeHtml(iconUrl)}" alt="" class="w-4 h-4 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />` : '';
+        return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${escapeHtml(name)}</span>`;
     }
 
     /** H1-fix: Broker name with favicon icon for readonly cells. */
@@ -1532,11 +1615,27 @@
             height: 16,
             className: 'w-4 h-4 rounded-full object-contain shrink-0',
         });
-        return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${name}</span>`;
+        return `<span class="inline-flex items-center gap-1.5 text-sm truncate">${iconHtml}${escapeHtml(name)}</span>`;
     }
 
     let columns = $derived.by<ColumnDef<PendingOp>[]>(() => {
         return [
+            {
+                id: 'workspace_row',
+                header: () => $t('common.rowN', {values: {n: ''}}).trim(),
+                displayName: () => $t('common.rowN', {values: {n: ''}}).trim(),
+                headerTooltip: () => $t('transactions.bulk.workspaceRowHint'),
+                type: 'text',
+                width: 70,
+                sortable: false,
+                filterable: false,
+                cell: (row): CellContent => {
+                    const partner = getPartnerOp(row.tempId);
+                    const label = visualRowLabels.get(row.tempId) ?? '—';
+                    const content = partner ? renderDualHtml(label, visualRowLabels.get(partner.tempId) ?? '—') : label;
+                    return {type: 'html', html: `<div data-testid="tx-bulk-row-label" data-row-id="${row.tempId}" data-issue-highlighted="${highlightedIssueIds.has(row.tempId)}">${content}</div>`};
+                },
+            },
             {
                 id: 'status',
                 header: () => $t('common.status'),
@@ -1551,18 +1650,18 @@
                     const st = deriveStatus(row);
                     // B5: split-queued badge takes priority
                     if (row.op === 'edit' && splitTxIdsSet.has((row as any).txId)) {
-                        return {type: 'html', html: '<span class="px-1.5 py-0.5 text-[10px] rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">✂️ split</span>'};
+                        return {type: 'html', html: '<span data-testid="tx-bulk-row-status" data-status="split" class="px-1.5 py-0.5 text-[10px] rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">✂️ split</span>'};
                     }
                     return {
                         type: 'html',
                         html:
                             st === 'new'
-                                ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">new</span>'
+                                ? '<span data-testid="tx-bulk-row-status" data-status="new" class="px-1.5 py-0.5 text-[10px] rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400">new</span>'
                                 : st === 'edited'
-                                  ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">edit</span>'
+                                  ? '<span data-testid="tx-bulk-row-status" data-status="edited" class="px-1.5 py-0.5 text-[10px] rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">edit</span>'
                                   : st === 'delete'
-                                    ? '<span class="px-1.5 py-0.5 text-[10px] rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">🔴 del</span>'
-                                    : '<span class="text-gray-300 dark:text-gray-600">·</span>',
+                                    ? '<span data-testid="tx-bulk-row-status" data-status="delete" class="px-1.5 py-0.5 text-[10px] rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">🔴 del</span>'
+                                    : '<span data-testid="tx-bulk-row-status" data-status="original" class="text-gray-300 dark:text-gray-600">·</span>',
                     };
                 },
             },
@@ -1589,16 +1688,16 @@
                 header: () => $t('common.date'),
                 type: 'text',
                 width: 140,
-                sortable: false,
+                sortable: true,
                 filterable: false,
+                getValue: (row) => row.fields.date,
+                sortFn: compareBulkDates,
+                headerTooltip: () => bulkDisplayText('transactions.bulk.dateSortHint', 'Date is primary. Pairs stay together, ordered by earliest leg date, then latest leg date and stable row ID.'),
                 cell: (row): CellContent => {
-                    const rule = getTypeRule(row.fields.type);
                     // Paired rows with different dates → Da:/A:
                     const pOp = getPartnerOp(row.tempId);
-                    if (rule.requiresPair && pOp && pOp.fields.date !== row.fields.date) {
-                        return {type: 'html', html: renderDualHtml(row.fields.date, pOp.fields.date)};
-                    }
-                    return {type: 'html', html: `<span class="font-mono text-sm text-gray-700 dark:text-gray-200">${row.fields.date}</span>`};
+                    const content = pOp && pOp.fields.date !== row.fields.date ? renderDualHtml(row.fields.date, pOp.fields.date) : `<span class="font-mono text-sm text-gray-700 dark:text-gray-200">${escapeHtml(row.fields.date)}</span>`;
+                    return {type: 'html', html: `<div data-testid="tx-bulk-date" data-row-id="${row.tempId}" data-date="${escapeHtml(row.fields.date)}" data-partner-date="${escapeHtml(pOp?.fields.date ?? '')}">${content}</div>`};
                 },
             },
             {
@@ -1801,21 +1900,21 @@
                     if (!ev) return {type: 'html', html: `<span class="font-mono text-xs">#${row.fields.asset_event_id}</span>`};
                     const emojiMap: Record<string, string> = {DIVIDEND: '💰', INTEREST: '🏦', SPLIT: '✂️', PRICE_ADJUSTMENT: '📊', MATURITY_SETTLEMENT: '📅'};
                     const emoji = emojiMap[ev.type] ?? '📋';
-                    const shortDate = new Date(ev.date).toLocaleDateString(undefined, {day: 'numeric', month: 'short'});
-                    const fullDate = new Date(ev.date).toLocaleDateString(undefined, {day: 'numeric', month: 'long', year: 'numeric'});
+                    const shortDate = new Date(ev.date).toLocaleDateString(uiLocale(), {day: 'numeric', month: 'short'});
+                    const fullDate = new Date(ev.date).toLocaleDateString(uiLocale(), {day: 'numeric', month: 'long', year: 'numeric'});
                     const amt = parseFloat(ev.amount);
                     let fmtAmt = '';
                     if (amt !== 0) {
                         const ci = getCurrencyInfo(ev.code);
                         const sym = ci.symbol && ci.symbol !== ev.code ? `${ci.symbol} ` : '';
                         const flag = ci.flag_emoji && ci.flag_emoji !== '🏳️' ? `<span class="emoji-flag">${ci.flag_emoji}</span> ` : '';
-                        fmtAmt = `${Number.isInteger(amt) ? amt.toString() : amt.toFixed(2)} ${sym}${flag}${ev.code}`;
+                        fmtAmt = `${formatFixed(amt, Number.isInteger(amt) ? 0 : 2)} ${sym}${flag}${ev.code}`;
                     }
                     // Build rich HTML tooltip
                     const typeLabel = $t(`assetDetail.eventType.${ev.type}`) || ev.type.replace(/_/g, ' ');
                     let tooltipHtml = `<strong>${emoji} ${typeLabel}</strong><br>${fullDate}`;
-                    if (amt !== 0) tooltipHtml += `<br>${$t('transactions.bulk.eventTooltipAmount')}: <span style="font-family:monospace">${amt.toFixed(4)} ${ev.code}</span>`;
-                    if (ev.notes) tooltipHtml += `<br>📝 ${$t('common.notes')}: ${ev.notes}`;
+                    if (amt !== 0) tooltipHtml += `<br>${$t('transactions.bulk.eventTooltipAmount')}: <span style="font-family:monospace">${formatFixed(amt, 4)} ${ev.code}</span>`;
+                    if (ev.notes) tooltipHtml += `<br>📝 ${$t('common.notes')}: ${escapeHtml(ev.notes)}`;
                     return {
                         type: 'html',
                         html: `<span class="inline-flex items-center gap-1 text-xs"><span class="text-sm">${emoji}</span><span class="text-gray-600 dark:text-gray-400">${shortDate}</span>${fmtAmt ? `<span class="font-mono text-gray-500">${fmtAmt}</span>` : ''}</span>`,
@@ -1967,11 +2066,10 @@
             label: () => $t('transactions.bulk.suggestLightbulb') || 'Import suggestion',
             onClick: (row: PendingOp) => {
                 // BUG-C7: open suggest picker filtered to this row's importable candidates
-                const txId = (row as any).txId as number;
-                const entry = importableSuggestions.find((s) => s.txId === txId);
+                const entry = importableSuggestions.find((s) => s.tempId === row.tempId);
                 if (entry && entry.candidates.length > 0) {
                     // Open picker filtered to just this row's candidates
-                    suggestPickerOpen = true;
+                    openSuggestPicker();
                 } else {
                     // Fallback: scroll to banner
                     const banner = document.querySelector('[data-testid="promote-suggest-banner"]');
@@ -1984,9 +2082,8 @@
             },
             visible: (row: PendingOp) => {
                 if (getPartnerOp(row.tempId)) return false;
-                const txId = (row as any).txId;
-                // Show if this row has importable DB candidates OR is in banner suggestions
-                return importableSuggestions.some((s) => s.txId === txId) || bannerSuggestions.some((s) => s.tempIdA === row.tempId || s.tempIdB === row.tempId);
+                // Show if this row (saved or new) has importable DB candidates OR is in banner suggestions
+                return importableSuggestions.some((s) => s.tempId === row.tempId) || bannerSuggestions.some((s) => s.tempIdA === row.tempId || s.tempIdB === row.tempId);
             },
         },
         {
@@ -2024,20 +2121,54 @@
     // Issue → row navigation
     // =========================================================================
 
-    function jumpToIssue(issue: ValidationIssue) {
-        if (issue.index < 0) return; // broker-level error, no specific row
-        const key = `${issue.operation}:${issue.index}`;
-        const tempId = lastOpsIndexMap.get(key);
-        if (!tempId) {
-            // Fallback: try direct ops index
-            const draft = ops[issue.index];
-            if (draft) tableRef?.navigateToRowId(draft.tempId);
+    function bulkDisplayText(key: string, fallback: string, values?: Record<string, string | number>): string {
+        const translated = $t(key, {values});
+        return translated === key ? fallback : translated;
+    }
+
+    function getIssueRows(issue: ValidationIssue): BulkIssueRow[] {
+        const rows = resolveBulkIssueRows(issue, isBulkBalanceIssue(issue) ? lastBalanceRows : lastIssueRows, lastOpsIndexMap);
+        const positions = new Map([...visualRowLabels.keys()].map((id, index) => [id, index]));
+        return rows.filter((row) => positions.has(row.tempId)).sort((a, b) => positions.get(a.tempId)! - positions.get(b.tempId)!);
+    }
+
+    function issueRowsLabel(issue: ValidationIssue): string {
+        const rows = getIssueRows(issue)
+            .map((row) => visualRowLabels.get(row.tempId)!)
+            .join(', ');
+        return bulkDisplayText('transactions.bulk.workspaceRows', `Workspace rows: ${rows}`, {rows});
+    }
+
+    /** Page the grid to the row of a todo and highlight it, as a validation issue does.
+     *  `rowId` is the visible row: a hidden partner's todo leads to its paired row. */
+    function jumpToTodoRow(rowId: string) {
+        if (!tableRef?.getSortedRowIds().includes(rowId)) {
+            notify({
+                name: 'tx.bulk.todo.row-hidden',
+                detail: {rowIds: [rowId]},
+                toast: {variant: 'warning', message: $t('transactions.bulk.issueRowsHidden')},
+            });
             return;
         }
-        // If this is a partner (hidden), navigate to its main row
-        const op = ops.find((o) => o.tempId === tempId);
-        const mainTempId = op?.pairedWith ?? tempId;
-        tableRef?.navigateToRowId(mainTempId);
+        tableRef.navigateToRowId(rowId);
+    }
+
+    function jumpToIssue(issue: ValidationIssue) {
+        if (lastIssueDraftKey !== lastDraftKey) return;
+        const rows = getIssueRows(issue);
+        if (rows.length === 0) return;
+        const affectedIds = new Set(rows.map((row) => row.pairedWith ?? row.tempId));
+        activeIssue = isBulkBalanceIssue(issue) ? issue : null;
+        const firstVisibleId = tableRef?.getSortedRowIds().find((id) => affectedIds.has(id));
+        if (!firstVisibleId) {
+            notify({
+                name: 'tx.bulk.issue.rows-hidden',
+                detail: {code: issue.code, rowIds: [...affectedIds]},
+                toast: {variant: 'warning', message: $t('transactions.bulk.issueRowsHidden')},
+            });
+            return;
+        }
+        tableRef?.navigateToRowId(firstVisibleId);
     }
 
     /** Get visual row label for an issue (e.g. "3", "5a", "5b"). */
@@ -2050,19 +2181,11 @@
             }
             return '⚠️';
         }
-        const key = `${issue.operation}:${issue.index}`;
-        const tempId = lastOpsIndexMap.get(key);
-        if (!tempId) return String(issue.index + 1); // fallback
-        const op = ops.find((o) => o.tempId === tempId);
-        // Determine main row (for visual position) and suffix
-        const isPartner = !!op?.pairedWith;
-        const mainTempId = isPartner ? op.pairedWith! : tempId;
-        const visIdx = visibleOps.findIndex((o) => o.tempId === mainTempId);
-        const rowNum = visIdx >= 0 ? visIdx + 1 : issue.index + 1;
-        // Suffix: "a" if main of a pair, "b" if partner
-        const hasPair = isPartner || getPartnerOp(tempId) != null;
-        const suffix = hasPair ? (isPartner ? 'b' : 'a') : '';
-        return `${rowNum}${suffix}`;
+        return (
+            getIssueRows(issue)
+                .map((row) => visualRowLabels.get(row.tempId))
+                .join(', ') || '—'
+        );
     }
 
     // =========================================================================
@@ -2081,13 +2204,16 @@
     let hasTodoBlockers = $derived(ops.some((op) => op.todos?.some((t) => t.severity === 'blocker')));
     /** Blocker todos with their row position, so the banner can name the offending rows.
      *  Without this the user only sees a red row and a disabled Save, never the reason. */
-    let todoBlockerEntries = $derived(ops.flatMap((op, rowIdx) => (op.todos ?? []).filter((t) => t.severity === 'blocker').map((todo) => ({rowNumber: rowIdx + 1, date: op.fields.date, todo}))));
+    let todoBlockerEntries = $derived(ops.flatMap((op) => (op.todos ?? []).filter((t) => t.severity === 'blocker').map((todo) => ({rowId: op.pairedWith ?? op.tempId, rowNumber: visualRowLabels.get(op.tempId) ?? '—', date: op.fields.date, todo}))));
+    /** Warning todos with their row, so the banner can lead to each of them (D4). */
+    let todoWarningEntries = $derived(ops.flatMap((op) => (op.todos ?? []).filter((t) => t.severity === 'warning').map((todo) => ({rowId: op.pairedWith ?? op.tempId, rowNumber: visualRowLabels.get(op.tempId) ?? '—', todo}))));
+    let todoWarningsExpanded = $state(false);
     // Folded by default: with evidence tables attached, an expanded banner can be taller
     // than the viewport and push the grid — the thing the user has to fix — off-screen.
     let todoBlockersExpanded = $state(false);
     let todoWarningRowCount = $derived(ops.filter((op) => op.todos?.some((t) => t.severity === 'warning')).length);
     /** Human-readable list of the auto-derived fields still awaiting verification (for the Save-gate dialog). */
-    let todoWarningItems = $derived(ops.flatMap((op) => (op.todos ?? []).filter((t) => t.severity === 'warning').map((t) => t.message || t.field)));
+    let todoWarningItems = $derived(ops.flatMap((op) => (op.todos ?? []).filter((todo) => todo.severity === 'warning').map((todo) => resolveBrimTodoMessage(todo, $t) || todo.field)));
     let commitDisabled = $derived(committing || ops.length === 0 || actionCount === 0 || hasTodoBlockers);
     let commitLabel = $derived(committing ? $t('common.saving') : $t('common.saveAll'));
 
@@ -2113,6 +2239,14 @@
     // ImportWizardModal (Phase 07 Part 5 v5 M1→M4): BRIM Import Wizard → BulkModal bridge.
     // -------------------------------------------------------------------------
     let importWizardOpen = $state(false);
+    let guideBulkObservedOpen = false;
+    let nestedGuideHostObserved = false;
+    let bulkGuideAttemptedForOpen = new Set<TransactionBulkStepId>();
+    let bulkValidationObserved = false;
+    let bulkSelectionObserved = false;
+    let bulkSaveObserved = false;
+    let importGuideBulkReady = $state(false);
+    let importGuideBulkProgress = $state<{current: number; total: number} | undefined>(undefined);
     let pendingCreateTransactions = $derived.by<TransactionCreateItem[]>(() =>
         ops.flatMap((op) => {
             if (op.op !== 'create') return [];
@@ -2162,6 +2296,7 @@
         return {
             op: 'create',
             tempId: generateUUID(),
+            createdSeq: nextCreatedSeq(),
             link_uuid: linkUuid,
             fields: {
                 broker_id: tx.broker_id,
@@ -2197,7 +2332,7 @@
         return newOps;
     }
 
-    function onImportBatch(creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>) {
+    function onImportBatch(creates: Array<{tx: TransactionCreateItem; todos: ImportTodo[]}>, guideProgress?: {current: number; total: number}) {
         const newOps = creates.map((item) => {
             const op = txCreateItemToPendingOp(item.tx);
             if (item.todos.length > 0) op.todos = item.todos;
@@ -2205,15 +2340,20 @@
         });
         const linked = linkPairedImportOps(newOps);
         ops = [...ops, ...linked];
+        importGuideBulkReady = true;
+        importGuideBulkProgress = guideProgress;
         importWizardOpen = false;
         toasts.success($t('importWizard.importedCount', {values: {n: creates.length}}));
-        scheduler.trigger('change');
+        // Every hand-over is validated once, whatever its size (D5): above the auto threshold the
+        // editor would otherwise say nothing until "Validate now". Later edits follow the usual rules.
+        scheduler.trigger('manual');
     }
 
     // BUG-C7: Suggest picker — opens PickerModal filtered to importable candidates
     let suggestPickerOpen = $state(false);
     function openSuggestPicker() {
         suggestPickerOpen = true;
+        suggestPickerSeen = true;
     }
 
     function openPicker() {
@@ -2367,10 +2507,7 @@
             if (sharedUuid) merged.link_uuid = sharedUuid;
             // Auto-clear todos whose field has now been filled
             if (merged.todos?.length) {
-                merged.todos = merged.todos.filter((todo) => {
-                    const val = merged.fields[todo.field as keyof DraftFields];
-                    return val == null || val === '';
-                });
+                merged.todos = remainingTodos(merged.todos, merged.fields);
                 if (merged.todos.length === 0) delete merged.todos;
             }
             return merged;
@@ -2411,12 +2548,13 @@
     /** Row background tint by status for immediate visual recognition.
      *  Color is purely status-based — paired nature is visible from Da:/A: rendering. */
     function getRowClass(row: PendingOp): string {
-        if (row.todos?.some((t) => t.severity === 'blocker')) return 'row-todo-blocker';
+        const highlight = highlightedIssueIds.has(row.tempId) ? 'highlighted ' : '';
+        if (row.todos?.some((t) => t.severity === 'blocker')) return `${highlight}row-todo-blocker`;
         const st = deriveStatus(row);
-        if (st === 'delete') return 'row-deleted';
-        if (st === 'new') return 'row-appended';
-        if (st === 'edited') return 'row-edited';
-        return '';
+        if (st === 'delete') return `${highlight}row-deleted`;
+        if (st === 'new') return `${highlight}row-appended`;
+        if (st === 'edited') return `${highlight}row-edited`;
+        return highlight;
     }
 
     /** Bulk actions for selected rows. */
@@ -2451,6 +2589,8 @@
             assetB: b.fields.asset_id,
             qtyA: Number(a.fields.quantity ?? 0),
             qtyB: Number(b.fields.quantity ?? 0),
+            eventA: a.fields.asset_event_id ?? null,
+            eventB: b.fields.asset_event_id ?? null,
         };
     }
 
@@ -2470,8 +2610,11 @@
         const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
         if (!match) return null;
         // For CASH_TRANSFER: require exact cash cancel (same currency, opposite sign).
+        // For TRANSFER: the same asset by exactly opposite quantities, compared as decimals like
+        // the banner and the backend do (findPromoteMatch compares JavaScript numbers).
         // For FX_CONVERSION: amounts are in different currencies — no cancel check.
         if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) return null;
+        if (match.targetType === 'TRANSFER' && !assetQuantitiesCancel(a, b, getTypeRule)) return null;
         return {...match, opA: a, opB: b};
     });
 
@@ -2541,10 +2684,16 @@
         } else if (opA.op === 'create' && opB.op === 'create') {
             // 2 new → local transformation (assign shared link_uuid)
             const sharedUuid = generateUUID();
-            opA.link_uuid = sharedUuid;
-            opB.link_uuid = sharedUuid;
-            opA.fields.type = match.targetType as TransactionTypeCode;
-            opB.fields.type = match.targetType as TransactionTypeCode;
+            for (const op of [opA, opB]) {
+                // The editor shows a magnitude and lets the type carry the sign (txCreateItemToPendingOp,
+                // the form). The target type is free-sign (CASH_TRANSFER, FX_CONVERSION), so the sign has
+                // to move into the amount before the type changes, or the withdrawal leaves as a deposit.
+                const {signedQty, signedCash} = applySignRules(op.fields.quantity, op.fields.cash, getTypeRule(op.fields.type));
+                op.fields.quantity = signedQty;
+                op.fields.cash = signedCash;
+                op.link_uuid = sharedUuid;
+                op.fields.type = match.targetType as TransactionTypeCode;
+            }
         } else {
             // 1 saved + 1 new (mixed)
             const savedOp = opA.op === 'edit' ? opA : opB;
@@ -2584,22 +2733,46 @@
     // C6 — Promote Suggest: DB candidates ($effect + debounce) + local candidates ($derived)
     // =========================================================================
 
+    /** The id a row is asked under in promote-suggest: its transaction id when saved, a negative id when new. */
+    function suggestKeyOf(op: PendingOp): number {
+        return op.op === 'edit' ? ((op as any).txId as number) : newRowSuggestId(op.createdSeq);
+    }
+
+    /**
+     * The rows the database search is asked about: standalone saved rows not marked for deletion, and
+     * new rows not linked to anything that can be compared (type, broker, date, and an amount or a
+     * quantity: without them the backend skips the "opposite amounts" check and every deposit or
+     * withdrawal of the window would come back). A new row's other side may already be saved — the
+     * overnight account imported a month after the broker account.
+     */
+    function isSuggestable(op: PendingOp): boolean {
+        if (op.pairedWith || getPartnerOp(op.tempId)) return false;
+        if (op.op === 'edit') return !(op as any).markedDelete;
+        const measured = Number(op.fields.cash?.amount ?? 0) !== 0 || Number(op.fields.quantity ?? 0) !== 0;
+        return !op.link_uuid && !!op.fields.type && Number(op.fields.broker_id) > 0 && !!op.fields.date && measured;
+    }
+
     /** Reactive effect: when ops change, debounce-call promote-suggest API for
-     *  standalone edit ops (saved rows without partner). */
+     *  standalone rows, saved and new. */
     $effect(() => {
         if (!open) return;
-        const editStandalone = ops.filter((o) => o.op === 'edit' && !o.pairedWith && !getPartnerOp(o.tempId) && !(o as any).markedDelete);
-        if (editStandalone.length === 0) {
+        const asked = ops.filter(isSuggestable);
+        if (asked.length === 0) {
             untrack(() => {
+                suggestAskedKey = '';
+                if (suggestTimer) {
+                    clearTimeout(suggestTimer);
+                    suggestTimer = null;
+                }
                 suggestFromDB = new Map();
             });
             return;
         }
-        const inputs = editStandalone.map((o) => {
+        const inputs = asked.map((o) => {
             const rule = getTypeRule(o.fields.type);
             const {signedQty, signedCash} = applySignRules(o.fields.quantity, o.fields.cash, rule);
             return {
-                id: (o as any).txId as number,
+                id: suggestKeyOf(o),
                 type: o.fields.type,
                 broker_id: o.fields.broker_id,
                 date: o.fields.date,
@@ -2607,15 +2780,21 @@
                 asset_id: o.fields.asset_id,
                 amount: Number(signedCash?.amount ?? 0) || null,
                 quantity: Number(signedQty ?? 0) || null,
+                asset_event_id: o.fields.asset_event_id ?? null,
             };
         });
-        const key = JSON.stringify(inputs);
+        // The window is part of the search: moving the Max Δ days slider asks again.
+        const toleranceDays = maxDeltaDays;
+        const key = JSON.stringify({inputs, toleranceDays});
         untrack(() => {
+            suggestAskedKey = key;
             if (key === lastSuggestKey) return;
             if (suggestTimer) clearTimeout(suggestTimer);
             suggestTimer = setTimeout(async () => {
                 try {
-                    const resp = await zodiosApi.promote_suggest_api_v1_transactions_promote_suggest_post(inputs as never, {queries: {tolerance_days: maxDeltaDays}});
+                    const resp = await zodiosApi.promote_suggest_api_v1_transactions_promote_suggest_post(inputs as never, {queries: {tolerance_days: toleranceDays}});
+                    // The rows changed while the request was out (a promote, an edit): this answer is stale.
+                    if (key !== suggestAskedKey) return;
                     const raw = (resp as any).results ?? {};
                     const result = new Map(Object.entries(raw).map(([k, v]) => [Number(k), v as Array<{id: number; broker_id: number; date: string; type: string}>]));
                     // BUG-C7 fix: do NOT filter here — bannerSuggestions and importableSuggestions
@@ -2629,6 +2808,93 @@
         });
     });
 
+    $effect(() => {
+        if (!importWizardOpen) return;
+        importGuideBulkReady = false;
+        importGuideBulkProgress = undefined;
+    });
+
+    $effect(() => {
+        const isOpen = open;
+        if (isOpen && onboardingGuide.active?.flow === 'import_guide' && onboardingGuide.active.stepId === 'import.bulk') {
+            guideBulkObservedOpen = true;
+            return;
+        }
+        if (!isOpen && guideBulkObservedOpen && onboardingGuide.active?.flow === 'import_guide' && onboardingGuide.active.stepId === 'import.bulk') {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+        }
+        if (!isOpen) guideBulkObservedOpen = false;
+    });
+
+    $effect(() => {
+        const isOpen = open;
+        const nestedOpen = formOpen || importWizardOpen || pickerOpen || suggestPickerOpen || promoteMergeOpen;
+        const validationReady = scheduler.state.validateRuns > 0 && !scheduler.state.isPending && !scheduler.state.isValidating;
+        const selectionReady = bulkTableSelectedRows.length > 0;
+        const saveReady = visibleOps.length > 0 && !commitDisabled;
+        if (!isOpen) {
+            if (onboardingGuide.active?.flow === 'transaction_bulk_guide') {
+                onboardingGuide.dismissHost({restartAtFirst: true});
+            }
+            onboardingGuide.clearQueued('transaction_bulk_guide');
+            nestedGuideHostObserved = false;
+            bulkGuideAttemptedForOpen = new Set();
+            bulkValidationObserved = false;
+            bulkSelectionObserved = false;
+            bulkSaveObserved = false;
+            importGuideBulkReady = false;
+            importGuideBulkProgress = undefined;
+            return;
+        }
+        if (validationReady) bulkValidationObserved = true;
+        if (selectionReady) bulkSelectionObserved = true;
+        if (saveReady) bulkSaveObserved = true;
+        if (nestedOpen) {
+            nestedGuideHostObserved = true;
+            return;
+        }
+        const bridgeIntent = intent?.action === 'create' || intent?.action === 'import';
+        const overviewReady = !bridgeIntent || nestedGuideHostObserved;
+        if (!onboardingGuide.active && importGuideBulkReady) {
+            const started = onboardingGuide.startImportAt('import.bulk', importGuideBulkProgress);
+            importGuideBulkReady = false;
+            importGuideBulkProgress = undefined;
+            if (started) return;
+        }
+        const availability: Record<TransactionBulkStepId, boolean> = {
+            'transaction.bulk.workspace': overviewReady,
+            'transaction.bulk.validation': bulkValidationObserved && validationReady,
+            'transaction.bulk.selection': bulkSelectionObserved && selectionReady,
+            'transaction.bulk.save': bulkSaveObserved && saveReady,
+        };
+        for (const stepId of TRANSACTION_BULK_STEP_IDS) {
+            if (availability[stepId] && !bulkGuideAttemptedForOpen.has(stepId)) {
+                onboardingGuide.queueContextual('transaction_bulk_guide', stepId);
+            } else if (!availability[stepId] && !(onboardingGuide.active?.flow === 'transaction_bulk_guide' && onboardingGuide.active.stepId === stepId)) {
+                onboardingGuide.clearQueued('transaction_bulk_guide', stepId);
+            }
+        }
+        const activeFlow = onboardingGuide.active?.flow;
+        const activeStep = onboardingGuide.active?.stepId;
+        if (activeFlow === 'transaction_bulk_guide' && activeStep === 'transaction.bulk.selection' && !selectionReady) {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+            bulkGuideAttemptedForOpen.delete('transaction.bulk.selection');
+            return;
+        }
+        if (activeFlow === 'transaction_bulk_guide' && activeStep === 'transaction.bulk.save' && !saveReady) {
+            onboardingGuide.dismissHost({restartAtFirst: true});
+            bulkGuideAttemptedForOpen.delete('transaction.bulk.save');
+            return;
+        }
+        if (onboardingGuide.active) return;
+        for (const stepId of TRANSACTION_BULK_STEP_IDS) {
+            if (!availability[stepId] || !onboardingGuide.queuedGuides.some((queued) => queued.flow === 'transaction_bulk_guide' && queued.stepId === stepId)) continue;
+            onboardingGuide.maybeStartQueued('transaction_bulk_guide', stepId);
+            bulkGuideAttemptedForOpen.add(stepId);
+            break;
+        }
+    });
+
     /** Local promote suggestions: match new standalone ops against each other. */
     let localSuggestions = $derived.by(() => {
         const newStandalone = ops.filter((o) => o.op === 'create' && !o.pairedWith && !getPartnerOp(o.tempId) && !o.link_uuid);
@@ -2640,7 +2906,7 @@
                 const delta = daysDiff(dA, dB);
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(newStandalone[i].fields.type, newStandalone[j].fields.type, $t, buildPromoteCtx(newStandalone[i], newStandalone[j]));
-                if (match && (match.targetType !== 'CASH_TRANSFER' || cashAmountsCancel(newStandalone[i], newStandalone[j], getTypeRule))) {
+                if (match && (match.targetType !== 'CASH_TRANSFER' || cashAmountsCancel(newStandalone[i], newStandalone[j], getTypeRule)) && (match.targetType !== 'TRANSFER' || assetQuantitiesCancel(newStandalone[i], newStandalone[j], getTypeRule))) {
                     results.push({
                         tempIdA: newStandalone[i].tempId,
                         tempIdB: newStandalone[j].tempId,
@@ -2675,8 +2941,9 @@
                 if (delta > maxDeltaDays) continue;
                 const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
                 if (!match) continue;
-                // CASH_TRANSFER: amounts must cancel. FX_CONVERSION: different currencies, no cancel check.
+                // CASH_TRANSFER: amounts must cancel. TRANSFER: same asset, quantities must cancel. FX_CONVERSION: different currencies, no cancel check.
                 if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) continue;
+                if (match.targetType === 'TRANSFER' && !assetQuantitiesCancel(a, b, getTypeRule)) continue;
                 const pairKey = `${(a as any).txId}-${(b as any).txId}`;
                 if (seenPairs.has(pairKey)) continue;
                 seenPairs.add(pairKey);
@@ -2690,25 +2957,62 @@
             }
         }
 
+        // New + saved: a side imported now whose other side was saved earlier, both in the editor.
+        // The mixed branch of executePromote links the saved id to the new row's link_uuid.
+        const newStandalone = ops.filter((o) => o.op === 'create' && !o.pairedWith && !getPartnerOp(o.tempId) && !o.link_uuid);
+        const mixed = mixedPromotePairs(newStandalone, editStandalone, {
+            keyOf: (o) => o.tempId,
+            daysBetween: (a, b) => daysDiff(a.fields.date, b.fields.date),
+            maxDeltaDays,
+            match: (a, b) => {
+                const match = findPromoteMatch(a.fields.type, b.fields.type, $t, buildPromoteCtx(a, b));
+                if (!match) return null;
+                if (match.targetType === 'CASH_TRANSFER' && !cashAmountsCancel(a, b, getTypeRule)) return null;
+                if (match.targetType === 'TRANSFER' && !assetQuantitiesCancel(a, b, getTypeRule)) return null;
+                return match.targetType;
+            },
+        });
+        for (const pair of mixed) combined.push({tempIdA: pair.newTempId, tempIdB: pair.savedTempId, targetType: pair.targetType});
+
         return combined;
     });
 
-    /** Importable suggestions: DB candidates NOT yet in ops (for 💡 button) */
+    /** The pairs «Merge all» merges: the banner's, in its order, without a pair that shares a row with an earlier one. */
+    let mergeAllPairs = $derived.by(() => {
+        const used = new Set<string>();
+        return bannerSuggestions.filter((sug) => {
+            if (used.has(sug.tempIdA) || used.has(sug.tempIdB)) return false;
+            used.add(sug.tempIdA);
+            used.add(sug.tempIdB);
+            return true;
+        });
+    });
+
+    /**
+     * Importable suggestions: DB candidates NOT yet in ops, for saved and new rows (for 💡 button).
+     * Only rows that would still be asked count: a row merged meanwhile has no counterpart to import.
+     */
     let importableSuggestions = $derived.by(() => {
-        const result: Array<{txId: number; tempId: string; candidates: Array<{id: number; type: string; broker_id: number; date: string}>}> = [];
         const opsEditIds = new Set(ops.filter((o) => o.op === 'edit').map((o) => (o as any).txId as number));
-        for (const [txId, candidates] of suggestFromDB) {
-            const op = ops.find((o) => o.op === 'edit' && (o as any).txId === txId);
-            if (!op) continue;
-            const importable = candidates.filter((c) => !opsEditIds.has(c.id));
-            if (importable.length > 0) {
-                result.push({txId, tempId: op.tempId, candidates: importable});
-            }
-        }
-        return result;
+        const tempIdByKey = new Map(ops.filter(isSuggestable).map((o) => [suggestKeyOf(o), o.tempId]));
+        return importableFromResults(suggestFromDB, (key) => tempIdByKey.get(key), opsEditIds);
     });
 
     let suggestPickerIncludeIds = $derived(new Set(importableSuggestions.flatMap((s) => s.candidates.map((c) => c.id))));
+
+    /** Suggestions the save gate asks about: the lightbulb's candidates until it is opened, the banner's pairs until it is touched. */
+    let unseenSuggestionCount = $derived((suggestPickerSeen ? 0 : importableSuggestions.reduce((n, s) => n + s.candidates.length, 0)) + (promoteBannerSeen ? 0 : bannerSuggestions.length));
+
+    /** «Show the suggestions» of the save gate: the lightbulb's picker if it was never opened, the banner otherwise. */
+    function reviewSuggestions() {
+        confirmSuggestionsOpen = false;
+        if (!suggestPickerSeen && importableSuggestions.length > 0) {
+            openSuggestPicker();
+            return;
+        }
+        promoteBannerSeen = true;
+        document.querySelector('[data-testid="promote-suggest-banner"]')?.scrollIntoView({behavior: 'smooth', block: 'center'});
+    }
 
     // =========================================================================
     // FX Implied Rate — reactive market cache for FX_CONVERSION suggestions
@@ -2756,70 +3060,91 @@
         tableRef?.navigateToRowId(tempIdOrDbRef);
     }
 
+    /** The two rows of a suggestion; a saved counterpart joins the grid first when it is not there yet. Null when a row is gone. */
+    function suggestionOps(sug: (typeof allSuggestions)[number]): {opA: PendingOp; opB: PendingOp} | null {
+        const opA = ops.find((o) => o.tempId === sug.tempIdA);
+        if (!opA) return null;
+        if (!sug.isDB) {
+            const opB = ops.find((o) => o.tempId === sug.tempIdB);
+            return opB ? {opA, opB} : null;
+        }
+        if (!sug.dbCandidateId) return null;
+        // DB suggestion: edit → DB candidate. Check if DB candidate is already in ops
+        let opB = ops.find((o) => o.op === 'edit' && (o as any).txId === sug.dbCandidateId);
+        if (!opB) {
+            // Add DB candidate to ops via picker
+            const tx = txStoreGet(sug.dbCandidateId);
+            if (!tx) return null; // TX not in store — can't proceed
+            opB = editOpFromTx(sug.dbCandidateId, {addedViaPicker: true});
+            ops = [...ops, opB];
+        }
+        return {opA, opB};
+    }
+
     /** Trigger promote from a suggestion line (auto-select both ops + invoke handler). */
     function triggerPromoteFromSuggestion(sug: (typeof allSuggestions)[number]) {
-        if (!sug.isDB) {
-            // Local new+new: find both ops by tempId, select them, then promote
-            const opA = ops.find((o) => o.tempId === sug.tempIdA);
-            const opB = ops.find((o) => o.tempId === sug.tempIdB);
-            if (!opA || !opB) return;
-            // Directly execute promote (no need to simulate DataTable selection)
-            const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB));
-            if (!match) return;
-            // Check divergence
-            const descA = opA.fields.description,
-                descB = opB.fields.description;
-            const tagsA = opA.fields.tags,
-                tagsB = opB.fields.tags;
-            const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB);
-            if (diverges) {
-                const labelA = opA.fields.type;
-                const labelB = opB.fields.type;
-                promoteMergeData = {
-                    txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date},
-                    txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date},
-                    targetTypeLabel: match.targetLabel,
-                    opA,
-                    opB,
-                };
-                promoteMergeOpen = true;
-            } else {
-                executePromote(opA, opB, {});
-            }
+        const pair = suggestionOps(sug);
+        if (!pair) return;
+        const {opA, opB} = pair;
+        // Directly execute promote (no need to simulate DataTable selection)
+        const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB));
+        if (!match) return;
+        // Check divergence
+        const descA = opA.fields.description,
+            descB = opB.fields.description;
+        const tagsA = opA.fields.tags,
+            tagsB = opB.fields.tags;
+        const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB);
+        if (diverges) {
+            const labelA = sug.isDB ? `#${(opA as any).txId ?? ''} ${opA.fields.type}` : opA.fields.type;
+            const labelB = sug.isDB ? `#${(opB as any).txId ?? ''} ${opB.fields.type}` : opB.fields.type;
+            promoteMergeData = {
+                txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date},
+                txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date},
+                targetTypeLabel: match.targetLabel,
+                opA,
+                opB,
+            };
+            promoteMergeOpen = true;
         } else {
-            // DB suggestion: edit → DB candidate
-            const opA = ops.find((o) => o.tempId === sug.tempIdA);
-            if (!opA || !sug.dbCandidateId) return;
-            // Check if DB candidate is already in ops
-            let opB = ops.find((o) => o.op === 'edit' && (o as any).txId === sug.dbCandidateId);
-            if (!opB) {
-                // Add DB candidate to ops via picker
-                const tx = txStoreGet(sug.dbCandidateId);
-                if (!tx) return; // TX not in store — can't proceed
-                opB = editOpFromTx(sug.dbCandidateId, {addedViaPicker: true});
-                ops = [...ops, opB];
-            }
-            const match = findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB));
-            if (!match) return;
-            const descA = opA.fields.description,
-                descB = opB.fields.description;
-            const tagsA = opA.fields.tags,
-                tagsB = opB.fields.tags;
-            const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB);
+            executePromote(opA, opB, {});
+        }
+    }
+
+    /** A row already merged with another: a second suggestion on it must not promote it again. */
+    function isPaired(op: PendingOp): boolean {
+        return !!op.pairedWith || !!getPartnerOp(op.tempId);
+    }
+
+    /**
+     * «Merge all» of the banner: every suggested pair at once. Where the two rows of a pair differ in
+     * description or tags, one answer settles all of them: the left row's (the one the banner lists
+     * first), the right row's, or both combined — PromoteMergeModal's default.
+     */
+    function mergeAllSuggestions(strategy: PromoteAllStrategy) {
+        promoteAllOpen = false;
+        for (const sug of [...mergeAllPairs]) {
+            const rawA = ops.find((o) => o.tempId === sug.tempIdA);
+            if (!rawA || isPaired(rawA)) continue;
+            const rawB = ops.find((o) => o.tempId === sug.tempIdB);
+            if (rawB && isPaired(rawB)) continue;
+            // The banner's own order: the negative-cash row first when both rows carry cash.
+            const swapped = !!(rawB && rawA.fields.cash && rawB.fields.cash && Number(rawA.fields.cash.amount) > 0 && Number(rawB.fields.cash.amount) < 0);
+            const pair = suggestionOps(sug);
+            if (!pair || isPaired(pair.opB)) continue;
+            const {opA, opB} = pair;
+            if (!findPromoteMatch(opA.fields.type, opB.fields.type, $t, buildPromoteCtx(opA, opB))) continue;
+            const [left, right] = swapped ? [opB, opA] : [opA, opB];
+            const leftTags = left.fields.tags ?? [];
+            const rightTags = right.fields.tags ?? [];
+            const diverges = left.fields.description !== right.fields.description || JSON.stringify(leftTags) !== JSON.stringify(rightTags);
+            let resolved: Record<string, unknown> = {};
             if (diverges) {
-                const labelA = `#${(opA as any).txId ?? ''} ${opA.fields.type}`;
-                const labelB = `#${(opB as any).txId ?? ''} ${opB.fields.type}`;
-                promoteMergeData = {
-                    txA: {label: labelA, description: descA, tags: tagsA, date: opA.fields.date},
-                    txB: {label: labelB, description: descB, tags: tagsB, date: opB.fields.date},
-                    targetTypeLabel: match.targetLabel,
-                    opA,
-                    opB,
-                };
-                promoteMergeOpen = true;
-            } else {
-                executePromote(opA, opB, {});
+                if (strategy === 'left') resolved = {description: left.fields.description, tags: [...leftTags]};
+                else if (strategy === 'right') resolved = {description: right.fields.description, tags: [...rightTags]};
+                else resolved = {description: mergeStrings(left.fields.description ?? '', right.fields.description ?? ''), tags: mergeTagSets(leftTags, rightTags)};
             }
+            executePromote(opA, opB, resolved);
         }
     }
 
@@ -2845,7 +3170,7 @@
     <div class="flex flex-col max-h-[90vh] min-h-[50vh]" data-testid="tx-bulk-modal-root" data-busy={scheduler.state.isPending || scheduler.state.isValidating || committing} data-validate-runs={scheduler.state.validateRuns}>
         <!-- Header -->
         <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
-            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-bulk-title">
+            <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100" data-testid="tx-bulk-title" use:guideAnchor={'transaction.bulk.workspace'}>
                 📋 {$t('transactions.bulk.title', {values: {total: visibleOps.length}})}
                 {#if actionCount > 0}
                     <span class="text-sm font-normal text-gray-500 dark:text-gray-400">
@@ -2884,7 +3209,7 @@
                                     <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
                                         {#if issue.index < 0}{getVisualRowLabel(issue)}:
                                         {:else}{$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}:
-                                        {/if}{@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                        {/if}{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}
                                     </button>
                                 </li>
                             {/each}
@@ -2892,15 +3217,16 @@
                     {/if}
                     {#if balanceIssues.length > 0}
                         <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
-                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left">
+                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-balance-issues">
                             {#each balanceIssues as issue}
-                                <li>
-                                    {#if issue.index >= 0}
-                                        <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)}>
-                                            {$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                <li data-testid="tx-bulk-balance-issue">
+                                    {@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}
+                                    {#if getIssueRows(issue).length > 0}
+                                        <button type="button" class="block underline hover:opacity-80 text-left disabled:opacity-50" disabled={lastIssueDraftKey !== lastDraftKey} onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-balance-rows">
+                                            {issueRowsLabel(issue)}
                                         </button>
                                     {:else}
-                                        {getVisualRowLabel(issue)}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                        <span class="block text-xs">{bulkDisplayText('transactions.bulk.balanceGroupOutsideWorkspace', "No contributing rows from this workspace match this group. Check the broker's history.")}</span>
                                     {/if}
                                 </li>
                             {/each}
@@ -2924,7 +3250,7 @@
                                     <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue">
                                         {#if issue.index < 0}{getVisualRowLabel(issue)}:
                                         {:else}{$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}:
-                                        {/if}{@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                        {/if}{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}
                                     </button>
                                 </li>
                             {/each}
@@ -2932,15 +3258,16 @@
                     {/if}
                     {#if balanceIssues.length > 0}
                         <p class="font-semibold text-sm {fieldIssues.length > 0 ? 'mt-2' : ''} mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
-                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left">
+                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-balance-issues">
                             {#each balanceIssues as issue}
-                                <li>
-                                    {#if issue.index >= 0}
-                                        <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)}>
-                                            {$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                <li data-testid="tx-bulk-balance-issue">
+                                    {@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}
+                                    {#if getIssueRows(issue).length > 0}
+                                        <button type="button" class="block underline hover:opacity-80 text-left disabled:opacity-50" disabled={lastIssueDraftKey !== lastDraftKey} onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-balance-rows">
+                                            {issueRowsLabel(issue)}
                                         </button>
                                     {:else}
-                                        {getVisualRowLabel(issue)}: {@html resolveIssueMessage(issue, $t, resolverCtx)}
+                                        <span class="block text-xs">{bulkDisplayText('transactions.bulk.balanceGroupOutsideWorkspace', "No contributing rows from this workspace match this group. Check the broker's history.")}</span>
                                     {/if}
                                 </li>
                             {/each}
@@ -2972,10 +3299,10 @@
                         <ul class="max-h-72 space-y-2 overflow-y-auto px-3 pb-3">
                             {#each todoBlockerEntries as entry}
                                 <li class="space-y-1.5">
-                                    <p class="text-red-700 dark:text-red-300 leading-relaxed">
+                                    <button type="button" class="block w-full text-left text-red-700 dark:text-red-300 leading-relaxed hover:underline" onclick={() => jumpToTodoRow(entry.rowId)} title={$t('importWizard.todoGoto')} data-testid="tx-bulk-todo-goto" data-row-id={entry.rowId}>
                                         <span class="font-mono opacity-70">#{entry.rowNumber}</span>
-                                        {entry.todo.message}
-                                    </p>
+                                        {resolveBrimTodoMessage(entry.todo, $t)}
+                                    </button>
                                     {#each entry.todo.evidence ?? [] as evidence}
                                         <BrimEvidenceTable {evidence} tone="blocker" collapsible />
                                     {/each}
@@ -2987,12 +3314,41 @@
             {/if}
             {#if todoWarningRowCount > 0}
                 <InfoBanner variant="warning">
-                    <p data-testid="tx-bulk-todo-warnings">🔧 {$t('importWizard.todoWarningVerifyHint', {values: {n: todoWarningRowCount}})}</p>
+                    <div data-testid="tx-bulk-todo-warnings">
+                        <button type="button" class="flex w-full items-center gap-1.5 text-left" onclick={() => (todoWarningsExpanded = !todoWarningsExpanded)} data-testid="tx-bulk-todo-warnings-toggle">
+                            {#if todoWarningsExpanded}
+                                <ChevronDown size={14} class="shrink-0" />
+                            {:else}
+                                <ChevronRight size={14} class="shrink-0" />
+                            {/if}
+                            <span class="min-w-0 flex-1">🔧 {$t('importWizard.todoWarningVerifyHint', {values: {n: todoWarningRowCount}})}</span>
+                        </button>
+                        {#if todoWarningsExpanded}
+                            <ul class="mt-1.5 max-h-48 space-y-1 overflow-y-auto">
+                                {#each todoWarningEntries as entry}
+                                    <li>
+                                        <button type="button" class="block w-full text-left leading-relaxed hover:underline" onclick={() => jumpToTodoRow(entry.rowId)} title={$t('importWizard.todoGoto')} data-testid="tx-bulk-todo-goto" data-row-id={entry.rowId}>
+                                            <span class="font-mono opacity-70">#{entry.rowNumber}</span>
+                                            {resolveBrimTodoMessage(entry.todo, $t) || entry.todo.field}
+                                        </button>
+                                    </li>
+                                {/each}
+                            </ul>
+                        {/if}
+                    </div>
                 </InfoBanner>
             {/if}
             {#if bannerSuggestions.length > 0}
-                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-xs" data-testid="promote-suggest-banner">
-                    <div class="font-medium text-green-800 dark:text-green-200 mb-1.5">{$t('transactions.promoteSuggest.detected')}</div>
+                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-xs" data-testid="promote-suggest-banner" onclickcapture={() => (promoteBannerSeen = true)}>
+                    <div class="flex items-center gap-2 mb-1.5">
+                        <span class="font-medium text-green-800 dark:text-green-200">{$t('transactions.promoteSuggest.detected')}</span>
+                        {#if mergeAllPairs.length > 1}
+                            <button type="button" class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded bg-libre-green text-white hover:bg-libre-green/90 font-medium" onclick={() => (promoteAllOpen = true)} data-testid="promote-suggest-merge-all">
+                                <Link2 size={12} />
+                                {$t('transactions.promoteSuggest.mergeAll', {values: {n: mergeAllPairs.length}})}
+                            </button>
+                        {/if}
+                    </div>
                     <ul class="space-y-1.5">
                         {#each bannerSuggestions.slice(0, 5) as sug, idx}
                             {@const rawA = ops.find((o) => o.tempId === sug.tempIdA)}
@@ -3076,7 +3432,7 @@
                                                     {@html formatCurrencyCodeHtml(fxInfo.base)}
                                                     <span>→</span>
                                                     {@html formatCurrencyCodeHtml(fxInfo.quote)}
-                                                    <span class="font-mono">@ {fxInfo.impliedRate.toFixed(4)}</span>
+                                                    <span class="font-mono">@ {formatFixed(fxInfo.impliedRate, 4)}</span>
                                                     {#if tooltipData.staleDays != null && tooltipData.staleDays > 0}
                                                         <span class="text-amber-500">⚠️</span>
                                                     {/if}
@@ -3101,7 +3457,7 @@
              TransactionFormModal that pushes its draft into the grid (no
              commit) so the user gets the structured single-row UX while
              staying in the bulk batch. -->
-        <div class="flex items-center gap-2 px-5 py-3 border-b border-gray-100 dark:border-slate-800 text-xs shrink-0">
+        <div class="flex items-center gap-2 px-5 py-3 border-b border-gray-100 dark:border-slate-800 text-xs shrink-0" use:guideAnchor={'transaction.bulk.add_import'}>
             <!-- Left: search & add -->
             {#if txStoreCount() > 0}
                 <button
@@ -3158,7 +3514,7 @@
                 {/if}
                 <ColumnVisibilityToggle tableRef={tableRefForToggle} />
                 {#if bulkTableSelectedRows.length > 0}
-                    <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-2" use:guideAnchor={'transaction.bulk.selection'}>
                         <button
                             type="button"
                             class="inline-flex items-center gap-1 px-2 py-1 rounded text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-[11px]"
@@ -3182,7 +3538,13 @@
                                 <Undo2 size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.resetSelected') || 'Reset'}</span>
                             </button>
                         {/if}
-                        <button type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-[11px]" onclick={executeBulkDeleteOnSelected} title={$t('transactions.bulk.deleteSelected') || 'Delete selected'}>
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-1 px-2 py-1 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-[11px]"
+                            onclick={executeBulkDeleteOnSelected}
+                            title={$t('transactions.bulk.deleteSelected') || 'Delete selected'}
+                            data-testid="tx-bulk-delete-selected"
+                        >
                             <Trash2 size={12} /> <span class="hidden sm:inline">{$t('common.delete') || 'Delete'}</span>
                         </button>
                         {#if selectedForPromote}
@@ -3215,7 +3577,8 @@
                 alwaysShowPagination={true}
                 defaultPageSize={25}
                 pageSizeOptions={[5, 10, 25, 50, 0]}
-                enableSorting={false}
+                enableSorting={true}
+                onSortChange={(sort) => (dateSortDirection = sort?.direction ?? 'asc')}
                 enableColumnVisibility={true}
                 enableActions={true}
                 actionsColumnWidth="64px"
@@ -3232,7 +3595,7 @@
              /issue-count — the green/warning banners above are the single
              source of truth for validate state). -->
         <div class="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 dark:border-slate-700 shrink-0 text-xs">
-            <div class="flex items-center gap-2 flex-wrap">
+            <div class="flex items-center gap-2 flex-wrap" use:guideAnchor={'transaction.bulk.validation'}>
                 <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={() => scheduler.trigger('manual')} data-testid="tx-bulk-validate-now" title={$t('transactions.validate.now')}>
                     ⚡ <span class="hidden sm:inline">{$t('transactions.validate.now')}</span>
                 </button>
@@ -3254,6 +3617,7 @@
                     class="px-4 py-2 text-sm rounded-lg text-white bg-libre-green hover:bg-libre-green/90 disabled:opacity-50 inline-flex items-center gap-1.5"
                     disabled={commitDisabled}
                     onclick={requestCommit}
+                    use:guideAnchor={['import.bulk.save-all', 'transaction.bulk.save']}
                     data-testid="tx-bulk-commit"
                     title={hasTodoBlockers ? $t('importWizard.todoBlockerCommitHint') : commitLabel}
                 >
@@ -3282,6 +3646,29 @@
     onCancel={() => (confirmWarningsOpen = false)}
     zIndex={70}
 />
+
+<!-- Save gate: merge suggestions nobody looked at (the lightbulb never opened, the banner never
+     touched). «Save anyway» goes on to the fields to verify; the other answer shows them. -->
+<ConfirmModal
+    open={confirmSuggestionsOpen}
+    title={$t('transactions.bulk.unseenSuggestionsTitle')}
+    message={$t('transactions.bulk.unseenSuggestionsMessage', {values: {n: unseenSuggestionCount}})}
+    confirmText={$t('importWizard.todoWarningConfirmProceed')}
+    cancelText={$t('transactions.bulk.unseenSuggestionsReview')}
+    warning
+    testId="tx-bulk-unseen-suggestions"
+    onConfirm={() => {
+        confirmSuggestionsOpen = false;
+        suggestPickerSeen = true;
+        promoteBannerSeen = true;
+        requestCommitPastSuggestions();
+    }}
+    onCancel={reviewSuggestions}
+    zIndex={70}
+/>
+
+<!-- «Merge all» of the banner: one answer for every suggested pair. -->
+<PromoteAllModal open={promoteAllOpen} count={mergeAllPairs.length} onConfirm={mergeAllSuggestions} onCancel={() => (promoteAllOpen = false)} />
 
 <!-- Bugfix-3 §C11: confirm dialog when closing with unsaved changes. -->
 <ConfirmModal

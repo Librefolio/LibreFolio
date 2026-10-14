@@ -1,0 +1,308 @@
+{
+  "aiExport": {
+    "panelLabel": "Opzioni AI Export",
+    "category": "Tipo di esportazione",
+    "exportData": "Esporta dati",
+    "requestAnalysis": "Richiedi analisi",
+    "exportDataHelp": "Copia soltanto i fatti LibreFolio selezionati, senza domanda né istruzioni di risposta per l’AI.",
+    "requestAnalysisHelp": "Copia i dati necessari insieme a una domanda precisa, regole di verifica e struttura della risposta.",
+    "selection": "Dataset o analisi",
+    "detailLevel": "Livello di dettaglio",
+    "detailLevelHelp": {
+      "compact": "Stesso universo dati, con bucket temporali fino a 30 giorni per i prezzi e fino a 84 giorni per gli indicatori più lenti.",
+      "standard": "Stesso universo dati, con bucket temporali fino a 14 giorni per i prezzi e fino a 28 giorni per gli indicatori più lenti.",
+      "full": "Stesso universo dati, con bucket temporali fino a 7 giorni per i prezzi e fino a 14 giorni per gli indicatori più lenti."
+    },
+    "details": {
+      "compact": "Compatto",
+      "standard": "Standard",
+      "full": "Completo"
+    },
+    "period": "Periodo AI",
+    "periodHelp": "Periodo di esportazione indipendente che termina alla data dello snapshot.",
+    "periodCustom": "Personalizzato",
+    "userNotes": "Note per l’AI",
+    "userNotesPlaceholder": "Aggiungi contesto o domande facoltative…",
+    "payloadStats": "Dimensione prompt finale",
+    "payloadStatsHelp": "Stima del testo che verrà effettivamente copiato negli appunti.",
+    "tokenSeverity": {
+      "normal": "La dimensione del prompt è nella norma.",
+      "warning": "Prompt grande: alcuni strumenti AI potrebbero troncarlo.",
+      "large": "Prompt molto grande: potrebbe superare i limiti dello strumento AI."
+    },
+    "copy": "Copia AI Export",
+    "preparing": "Preparazione esportazione…",
+    "copyAnyway": "Copia comunque",
+    "useCompact": "Usa Compatto",
+    "copied": "AI Export copiato negli appunti:\n• {tokens} (💾 {bytes})\n• dettaglio: {detail}",
+    "privacyNotice": "Livello di dettaglio: {detail}. L’esportazione può contenere dati finanziari sensibili: rivedila prima di condividerla.",
+    "catalogUnavailable": "AI Export non è disponibile. Aggiorna e riprova.",
+    "contractMismatch": "AI Export non è sincronizzato col server. Aggiorna e riprova.",
+    "selectionNotApplicable": "Questa selezione non è applicabile ai dati correnti.",
+    "entityNotFound": "I dati finanziari richiesti non sono disponibili.",
+    "sourceUnavailable": "Una fonte dati necessaria non è disponibile. Riprova più tardi.",
+    "validationFailed": "I dati AI Export non sono validi. Aggiorna e riprova.",
+    "networkFailed": "Impossibile raggiungere il server. Controlla la connessione e riprova.",
+    "clipboardUnavailable": "Accesso agli appunti non disponibile. Controlla i permessi del browser.",
+    "genericFailed": "AI Export non riuscito. Riprova.",
+    "analysis": {
+      "portfolio": {
+        "pac_planning": {
+          "display": "Pianificazione PAC",
+          "description": "Pianifica investimenti ricorrenti condizionali usando dati del portafoglio, contesto di mercato, vincoli e decisioni utente mancanti."
+        },
+        "rebalancing": {
+          "display": "Ribilanciamento portafoglio",
+          "description": "Confronta la composizione attuale con i target forniti dall'utente e inquadra percorsi condizionali di ribilanciamento."
+        },
+        "performance_market_drivers": {
+          "display": "Performance e cause di mercato",
+          "description": "Spiega la performance del portafoglio e ricerca cause di mercato datate per ogni Asset detenuto."
+        },
+        "fiscal_lots": {
+          "display": "Strategie per compensare minusvalenze",
+          "description": "Valuta come usare minusvalenze disponibili o in scadenza contro plusvalenze potenzialmente compensabili, partendo dai lotti FIFO economici e chiarendo cassetto fiscale, paese, regime, scadenze e regole applicabili."
+        }
+      },
+      "broker": {
+        "review": {
+          "display": "Revisione broker",
+          "description": "Esamina posizioni, liquidità, concentrazione, performance, costi, FIFO economico e contesto di mercato compatto."
+        },
+        "performance_market_drivers": {
+          "display": "Performance e cause di mercato",
+          "description": "Spiega la performance del Broker selezionato e ricerca cause di mercato datate per ogni Asset detenuto."
+        },
+        "fiscal_lots": {
+          "display": "Strategie per compensare minusvalenze",
+          "description": "Valuta come usare minusvalenze disponibili o in scadenza contro plusvalenze potenzialmente compensabili, partendo dai lotti FIFO economici del Broker e chiarendo cassetto fiscale, paese, regime, scadenze e regole applicabili."
+        }
+      },
+      "asset": {
+        "position_review": {
+          "display": "Revisione posizione",
+          "description": "Esamina valore, costo, P&L, perimetro Broker, lotti economici e contesto di mercato mirato della posizione."
+        },
+        "market_analysis": {
+          "display": "Analisi dell'Asset",
+          "description": "Analizza storico prezzi, rendimenti, trend, momentum, volatilità, Drawdown, eventi e copertura."
+        }
+      },
+      "fx": {
+        "exposure_impact": {
+          "display": "Impatto esposizione FX",
+          "description": "Descrive i collegamenti diretti di liquidità e posizioni con la coppia valutaria usando contesto di mercato e limiti espliciti."
+        },
+        "pair_analysis": {
+          "display": "Analisi della coppia FX",
+          "description": "Analizza direzione, rendimenti, trend, momentum, volatilità, eventi, copertura e contesto macro datato della coppia."
+        }
+      }
+    },
+    "additionalData": {
+      "heading": "Altri dati LibreFolio",
+      "intro": "Richiedi questi export soltanto quando migliorano materialmente l'analisi.",
+      "none": "Non è consigliato alcun export LibreFolio aggiuntivo.",
+      "what": "Che cosa contiene",
+      "why": "Perché può essere utile",
+      "necessityLabel": "Necessità",
+      "path": "Percorso LibreFolio",
+      "recommended": "Parametri consigliati",
+      "steps": {
+        "openLibreFolio": "Apri LibreFolio",
+        "page": "Pagina",
+        "feature": "Funzione",
+        "exportType": "Tipo di export",
+        "dataset": "Dataset",
+        "period": "Periodo",
+        "detail": "Dettaglio"
+      },
+      "period": {
+        "3m": "3 mesi",
+        "6m": "6 mesi",
+        "1y": "1 anno",
+        "maximum_available": "Periodo massimo disponibile"
+      },
+      "necessity": {
+        "required": "Obbligatorio",
+        "optional": "Facoltativo"
+      },
+      "reason": {
+        "deeperTechnical": "Usalo quando servono realmente la history tecnica completa e tutti i Signal disponibili.",
+        "positionContext": "Usalo quando contano posizione reale, costo, valore, P&L, scope Broker o ruolo FIFO dell'Asset.",
+        "directExposure": "Usalo quando è rilevante l'esposizione diretta di cassa o posizione alla coppia FX."
+      }
+    },
+    "tokenUnit": "token",
+    "dataset": {
+      "portfolio": {
+        "overview_and_history": {
+          "display": "Portafoglio e andamento",
+          "description": "Composizione, posizioni, liquidità, performance, flussi, redditi, costi registrati, sintesi FIFO economica, contesto di mercato compatto per Asset, Drawdown e provenienza."
+        },
+        "asset_history": {
+          "display": "Storico Asset del portafoglio",
+          "description": "Prezzi, rendimenti, indicatori, stati, eventi, ampiezza, copertura e provenienza dettagliati per Asset."
+        },
+        "overview": {
+          "display": "Panoramica portafoglio",
+          "description": "Riepilogo, tutte le posizioni, allocazioni, liquidità, semantica e provenienza."
+        },
+        "performance_flows": {
+          "display": "Performance e flussi portafoglio",
+          "description": "Performance, contributori, flussi, redditi, commissioni, imposte e riconciliazione."
+        },
+        "technical_summary": {
+          "display": "Sintesi tecnica portafoglio",
+          "description": "Copertura tecnica, breadth aggregata e sintesi degli eventi recenti senza la cronologia completa per Asset."
+        },
+        "asset_snapshot": {
+          "display": "Sintesi Asset del portafoglio",
+          "description": "Piccola sintesi uniforme per Asset con rendimenti recenti, trend, momentum, volatilità e ultimo evento."
+        },
+        "asset_comparison": {
+          "display": "Confronto Asset del portafoglio",
+          "description": "Confronto di mercato uniforme per Asset con copertura, breadth ed eventi strutturali selezionati."
+        },
+        "drawdown_context": {
+          "display": "Contesto di Drawdown del Portafoglio",
+          "description": "Drawdown corrente e massimo rispetto al picco, deterministico, con date dell'episodio, stato di recupero, base di calcolo e copertura per l'intero portafoglio (TWRR)."
+        },
+        "income_evidence": {
+          "display": "Prove di reddito portafoglio",
+          "description": "Cronologia datata dei redditi registrati con copertura di conversione per valuta; nessuna previsione di cedole o ratei futuri."
+        },
+        "technical": {
+          "display": "Dati tecnici portafoglio",
+          "description": "Prezzi, rendimenti, indicatori, ampiezza, stati ed eventi per tutte le posizioni idonee."
+        },
+        "fifo": {
+          "display": "Lotti FIFO portafoglio",
+          "description": "Riepilogo FIFO, tutti i lotti aperti/parziali e quelli chiusi nel periodo AI."
+        },
+        "all_data": {
+          "display": "Tutti i dati portafoglio",
+          "description": "Unione deduplicata di tutti i dataset applicabili al portafoglio."
+        }
+      },
+      "broker": {
+        "overview_and_history": {
+          "display": "Broker e andamento",
+          "description": "Posizioni, liquidità, concentrazione, performance, flussi, costi, sintesi FIFO economica, contesto di mercato compatto per Asset, Drawdown e provenienza del Broker."
+        },
+        "asset_history": {
+          "display": "Storico Asset del Broker",
+          "description": "Prezzi, rendimenti, indicatori, stati, eventi, ampiezza, copertura e provenienza dettagliati per gli Asset del Broker."
+        },
+        "overview": {
+          "display": "Panoramica broker",
+          "description": "Riepilogo broker, tutte le posizioni, allocazione, concentrazione e provenienza."
+        },
+        "performance_flows": {
+          "display": "Performance e flussi broker",
+          "description": "Performance, contributori, flussi, redditi, costi e riconciliazione."
+        },
+        "technical_summary": {
+          "display": "Sintesi tecnica Broker",
+          "description": "Solo copertura tecnica e breadth aggregata nello scope del Broker."
+        },
+        "asset_comparison": {
+          "display": "Confronto Asset del Broker",
+          "description": "Confronto uniforme degli Asset del Broker con contesto di mercato, breadth ed eventi strutturali."
+        },
+        "drawdown_context": {
+          "display": "Contesto di Drawdown del Broker",
+          "description": "Drawdown corrente e massimo rispetto al picco, deterministico, con date dell'episodio, stato di recupero, base di calcolo e copertura per lo scope del broker selezionato (TWRR)."
+        },
+        "concentration_evidence": {
+          "display": "Prove di concentrazione broker",
+          "description": "Concentrazione per posizione, tipo di attività, settore, area geografica e valuta, con confronto opzionale sull’intero portafoglio; copertura e liquidità sconosciute sono dichiarate, non presunte."
+        },
+        "cost_efficiency_evidence": {
+          "display": "Prove di efficienza costi broker",
+          "description": "Stato delle commissioni registrate con denominatori di turnover e attività corretti per la quota e disponibilità dei rapporti; i dati mancanti restano non disponibili, mai zero."
+        },
+        "technical": {
+          "display": "Dati tecnici broker",
+          "description": "Indicatori, ampiezza, stati ed eventi limitati al broker."
+        },
+        "fifo": {
+          "display": "Lotti FIFO broker",
+          "description": "Tutti i lotti FIFO applicabili nel broker selezionato."
+        },
+        "all_data": {
+          "display": "Tutti i dati broker",
+          "description": "Unione deduplicata di tutti i dataset applicabili al broker."
+        }
+      },
+      "asset": {
+        "position_and_history": {
+          "display": "Posizione e andamento (completo)",
+          "description": "Le tue posizioni su questo asset — costo, valore, P&L, performance, lotti economici — più contesto di mercato compatto, Drawdown e provenienza. L'export completo."
+        },
+        "market_history": {
+          "display": "Solo andamento di mercato (senza posizioni)",
+          "description": "Prezzi, rendimenti, indicatori, stati, eventi, Drawdown, copertura e provenienza — solo dati di mercato, senza posizioni. L'export leggero."
+        },
+        "overview": {
+          "display": "Panoramica asset",
+          "description": "Identità, snapshot di mercato corrente, ambito posizione e provenienza."
+        },
+        "position_performance": {
+          "display": "Performance posizione asset",
+          "description": "Posizioni per broker, costo, valore, P&L, performance e dettagli lotti applicabili."
+        },
+        "position_context": {
+          "display": "Contesto posizione Asset",
+          "description": "Contesto di mercato mirato della posizione con history limitata, stati tecnici, volatilità ed eventi recenti."
+        },
+        "drawdown_context": {
+          "display": "Contesto di Drawdown dello Strumento",
+          "description": "Drawdown corrente e massimo rispetto al picco, deterministico, con date dell'episodio, stato di recupero e copertura, calcolato nella valuta di prezzo nativa dello strumento (base solo prezzo)."
+        },
+        "market_technical": {
+          "display": "Dati di mercato e tecnici asset",
+          "description": "Bucket OHLC/rendimento, indicatori, stati ed eventi."
+        },
+        "all_data": {
+          "display": "Tutti i dati asset",
+          "description": "Unione deduplicata di tutti i dataset applicabili all’asset."
+        }
+      },
+      "fx": {
+        "market_and_exposure": {
+          "display": "Cambio, andamento ed esposizione",
+          "description": "Dati correnti della coppia, contesto compatto di mercato e timing, esposizione diretta e provenienza."
+        },
+        "market_history": {
+          "display": "Storico e dati tecnici del cambio",
+          "description": "OHLC del tasso, rendimenti, volatilità, indicatori, stati, eventi, copertura e provenienza della conversione."
+        },
+        "overview": {
+          "display": "Panoramica coppia FX",
+          "description": "Identità coppia, tasso corrente, percorso di conversione e provenienza."
+        },
+        "market_context": {
+          "display": "Contesto di mercato FX",
+          "description": "Contesto mirato di tasso, rendimento, volatilità, trend, eventi e copertura della storia sorgente."
+        },
+        "conversion_timing_context": {
+          "display": "Contesto tempistica conversione FX",
+          "description": "Contesto di tempistica non predittivo: posizione nell’intervallo osservato, rendimenti osservati e volatilità realizzata, copertura o obsolescenza della fonte; importo, scadenza, spread e commissioni non sono inclusi e non si effettuano previsioni."
+        },
+        "market_technical": {
+          "display": "Dati di mercato e tecnici FX",
+          "description": "OHLC tasso, rendimenti, volatilità, indicatori, stati ed eventi."
+        },
+        "direct_exposure": {
+          "display": "Esposizione FX diretta",
+          "description": "Collegamenti diretti base/quote a liquidità e posizioni con provenienza conversioni."
+        },
+        "all_data": {
+          "display": "Tutti i dati FX",
+          "description": "Unione deduplicata di tutti i dataset FX applicabili."
+        }
+      }
+    }
+  }
+}

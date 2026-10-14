@@ -1,5 +1,16 @@
-import {describe, expect, it} from 'vitest';
-import {formatPercent} from '../formatPercent';
+import {afterEach, describe, expect, it, vi} from 'vitest';
+
+// The default locale is the UI language regionalised by `navigator.language` (M-18, last block). Node's tag
+// follows the host's ICU locale (`LANG=it_CH.UTF-8` gives `it-CH`), so it is pinned to en-US — jsdom's own —
+// before any import.
+vi.hoisted(() => {
+    vi.stubGlobal('navigator', {language: 'en-US', languages: ['en-US']});
+});
+
+import {waitLocale} from 'svelte-i18n';
+import {currentLanguage} from '$lib/stores/app/language';
+import {formatFixed} from '../formatFixed';
+import {formatPercent, type FormatPercentOptions} from '../formatPercent';
 
 /**
  * These pin the five behaviours that used to live in five private copies, because
@@ -102,5 +113,343 @@ describe('formatPercent', () => {
             expect(formatPercent(1.005)).toBe('+1.00%');
             expect(formatPercent(1.2345, {digits: 3})).toBe('+1.234%');
         });
+    });
+
+    describe('suffix', () => {
+        it('writes a percent sign unless told otherwise', () => {
+            // The default is the whole safety of this option: every caller that
+            // existed before it keeps printing exactly what it printed.
+            expect(formatPercent(1.5)).toBe('+1.50%');
+            expect(formatPercent(0.015, {scale: 100})).toBe('+1.50%');
+        });
+
+        it('writes percentage points when the value is a difference of percentages', () => {
+            // A holding weighing 20% and producing 80% of the risk differs by 60
+            // POINTS, not by 60 percent. The two units read alike and are not.
+            //
+            // The numbers are round and invented deliberately: a measured pair
+            // would integrate over the window that produced it, and a fixture
+            // copied from a measurement gets read later as a reference value.
+            expect(formatPercent(0.6, {scale: 100, digits: 1, suffix: 'pp'})).toBe('+60.0pp');
+            expect(formatPercent(-0.3, {scale: 100, digits: 1, suffix: 'pp'})).toBe('-30.0pp');
+        });
+
+        it('drops the unit entirely when asked', () => {
+            expect(formatPercent(7.25, {signed: false, suffix: ''})).toBe('7.25');
+        });
+
+        it('leaves the placeholder alone', () => {
+            // The unit belongs to a number. Appending it to "—" would produce
+            // "—pp", which claims a missing measurement has a unit.
+            expect(formatPercent(null, {suffix: 'pp'})).toBe('—');
+            expect(formatPercent(NaN, {suffix: 'pp', empty: 'n/a'})).toBe('n/a');
+        });
+
+        it('keeps the sign and the negative-zero guard', () => {
+            // The guard lives before the suffix, so switching units cannot
+            // resurrect the "-0.00" that this function exists to prevent.
+            expect(formatPercent(-0, {suffix: 'pp'})).toBe('0.00pp');
+            expect(formatPercent(0, {suffix: 'pp'})).toBe('0.00pp');
+        });
+    });
+
+    /**
+     * `locale` is the option DistributionEditor needs: its total badge prints
+     * `toFixed(2)` and a `%`, so a French screen reads "100.00%" where French writes
+     * the number with a decimal comma and a no-break space before the sign.
+     *
+     * What these cases pin:
+     * - `locale` with the default `%` suffix: `Intl.NumberFormat(locale, {style:
+     *   'percent'})` with `digits` fraction digits, applied to `value * scale / 100`;
+     * - `locale` with another suffix: `toLocaleString(locale)` with the same digits,
+     *   then the suffix as written;
+     * - `signed`, `empty` and the `-0` guard keep their meaning;
+     * - no `locale`: the interface locale, `uiLocale()` (M-18). With the English UI and
+     *   the en-US browser pinned at the top of the file, that is today's text below a
+     *   thousand; the last block of the file pins the other languages.
+     *
+     * Every expected string comes from `Intl` at run time, never typed here. The
+     * separators are ICU data — which no-break space precedes a French `%` has
+     * changed between releases — so a typed copy would pin one ICU, not the rule.
+     */
+    describe('locale', () => {
+        /** `locale` typed in, so this block type-checks before FormatPercentOptions declares it. */
+        const localised = (value: number | null | undefined, options: FormatPercentOptions & {locale?: string}) => formatPercent(value, options);
+        const intlPercent = (locale: string, fraction: number) => new Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: 2, maximumFractionDigits: 2}).format(fraction);
+        const intlNumber = (locale: string, value: number) => value.toLocaleString(locale, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        it.each(['fr', 'it', 'es'])('writes a share the way %s does, decimal comma included', (locale) => {
+            const written = localised(12.5, {signed: false, locale});
+            expect(written).toBe(intlPercent(locale, 0.125));
+            // Also proves this runtime carries the locale's ICU data: without it Intl
+            // falls back to English and both sides would agree on "12.50%".
+            expect(written).toContain(',');
+        });
+
+        it('puts the plus of a signed positive in front of the localised text', () => {
+            const written = localised(12.5, {signed: true, locale: 'fr'});
+            expect(written.startsWith('+')).toBe(true);
+            expect(written).toBe(`+${intlPercent('fr', 0.125)}`);
+        });
+
+        it('agrees with itself across the two scales', () => {
+            const fromFraction = localised(0.125, {scale: 100, signed: false, locale: 'fr'});
+            expect(fromFraction).toBe(intlPercent('fr', 0.125));
+            expect(fromFraction).toBe(localised(12.5, {signed: false, locale: 'fr'}));
+        });
+
+        it('localises the number and leaves a percentage-point suffix as written', () => {
+            const written = localised(12.5, {signed: false, suffix: 'pp', locale: 'fr'});
+            expect(written).toBe(`${intlNumber('fr', 12.5)}pp`);
+            expect(written).toContain(',');
+        });
+
+        // ---- controls: green before `locale` exists, and must stay green after ----
+
+        it('writes English the way Intl does, which is also what it printed before', () => {
+            expect(localised(12.5, {signed: false, locale: 'en'})).toBe(intlPercent('en', 0.125));
+        });
+
+        it('without a locale, writes the interface locale: today’s text for an English UI on an en-US browser', () => {
+            expect(formatPercent(2.5)).toBe('+2.50%');
+            expect(formatPercent(0.6, {scale: 100, digits: 1, suffix: 'pp'})).toBe('+60.0pp');
+        });
+
+        it('prints the placeholder for a missing value, whatever the locale', () => {
+            expect(localised(null, {locale: 'fr'})).toBe('—');
+            expect(localised(undefined, {locale: 'fr', empty: 'n/a'})).toBe('n/a');
+            expect(localised(NaN, {locale: 'fr', suffix: 'pp'})).toBe('—');
+        });
+
+        it('never prints a negative zero in French either', () => {
+            // Intl prints a minus on -0 ("-0,00 %"), so the guard has to run before
+            // the number reaches it, on every route through the formatter.
+            for (const written of [localised(-0, {locale: 'fr'}), localised(-0, {scale: 100, locale: 'fr'}), localised(-0, {suffix: 'pp', locale: 'fr'})]) {
+                expect(written).toMatch(/^0\D00/);
+                expect(written).not.toMatch(/[-\u2212]/);
+            }
+        });
+    });
+});
+
+/**
+ * M-18 CP1 — without `locale`, the UI language.
+ *
+ * Numbers follow the UI language (the developer's rule of 2026-10-12), so `locale` now defaults to
+ * `uiLocale()`: the UI language, regionalised by the browser when the two agree. The fixed `12.50%`
+ * shape is gone. A French UI reads `+12,50 %` out of `formatPercent(12.5)` with nothing passed by the
+ * caller, which is what lets the calls without `locale` follow the language untouched. What stays: `%`
+ * through `Intl.NumberFormat(locale, {style: 'percent'})`, any other unit after the localized number,
+ * an explicit `locale` winning over the default, the placeholder and the `-0` guard.
+ *
+ * English. The UI starts in English and the browser here is en-US (pinned at the top of the file), so
+ * English output is today's text but for one thing: thousands are grouped.
+ *
+ * Expectations come from Intl in this runtime and are never typed, as in the `locale` block above;
+ * English is typed where it is today's exact text.
+ *
+ * Language. `currentLanguage.set`, as LanguageSelector does; module-level state, put back to English
+ * after every test.
+ */
+describe('formatPercent — without a locale, the UI language (M-18)', () => {
+    type UiLanguage = 'en' | 'it' | 'fr' | 'es';
+
+    const intlPercent = (locale: string, fraction: number, digits = 2) => new Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: digits, maximumFractionDigits: digits}).format(fraction);
+    const intlNumber = (locale: string, value: number, digits = 2) => new Intl.NumberFormat(locale, {minimumFractionDigits: digits, maximumFractionDigits: digits}).format(value);
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: UiLanguage): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        await uiLanguage('en');
+    });
+
+    it.each(['fr', 'it', 'es'] as const)('%s UI: a share in that language’s notation, with its sign, from a call that passes no locale', async (lang) => {
+        await uiLanguage(lang);
+        // Control: the notation really differs from English in this runtime.
+        expect(intlPercent(lang, 0.125)).not.toBe(intlPercent('en', 0.125));
+
+        expect(formatPercent(12.5)).toBe(`+${intlPercent(lang, 0.125)}`);
+        expect(formatPercent(0.125, {scale: 100, signed: false})).toBe(intlPercent(lang, 0.125));
+        expect(formatPercent(-3.21, {digits: 1})).toBe(intlPercent(lang, -0.0321, 1));
+    });
+
+    it('Italian UI, another unit: the number in Italian notation, the unit as written', async () => {
+        await uiLanguage('it');
+
+        expect(formatPercent(0.6, {scale: 100, digits: 1, suffix: 'pp'})).toBe(`+${intlNumber('it', 60, 1)}pp`);
+        expect(formatPercent(7.25, {signed: false, suffix: ''})).toBe(intlNumber('it', 7.25));
+    });
+
+    it('English UI on an en-US browser: today’s text, except that thousands are grouped', async () => {
+        await uiLanguage('en');
+
+        expect(formatPercent(2.5), 'control: below a thousand, today’s text').toBe('+2.50%');
+        expect(formatPercent(1234.5, {signed: false})).toBe(intlPercent('en-US', 12.345));
+        expect(formatPercent(1234.5, {signed: false})).toBe('1,234.50%');
+        expect(formatPercent(1234.5, {signed: false, suffix: 'pp'})).toBe('1,234.50pp');
+    });
+
+    it('follows the UI language from one call to the next: fr → it → en', async () => {
+        const written: Record<string, string> = {};
+        for (const lang of ['fr', 'it', 'en'] as const) {
+            await uiLanguage(lang);
+            written[lang] = formatPercent(12.5, {signed: false});
+        }
+
+        expect(written).toEqual({fr: intlPercent('fr', 0.125), it: intlPercent('it', 0.125), en: '12.50%'});
+    });
+
+    it('an explicit locale still wins over the UI language (control: green before the default exists)', async () => {
+        await uiLanguage('fr');
+
+        expect(formatPercent(12.5, {signed: false, locale: 'it'})).toBe(intlPercent('it', 0.125));
+        expect(formatPercent(12.5, {signed: false, locale: 'en'})).toBe('12.50%');
+    });
+
+    it('French UI: -0 is a plain zero on every route, and a missing value keeps its placeholder', async () => {
+        await uiLanguage('fr');
+
+        expect(formatPercent(-0)).toBe(intlPercent('fr', 0));
+        expect(formatPercent(-0, {scale: 100})).toBe(intlPercent('fr', 0));
+        expect(formatPercent(-0, {suffix: 'pp'})).toBe(`${intlNumber('fr', 0)}pp`);
+        expect(formatPercent(null)).toBe('—');
+        expect(formatPercent(NaN, {suffix: 'pp', empty: 'n/a'})).toBe('n/a');
+    });
+});
+
+/**
+ * M-18 CP2 — `trim`: the decimals the figure has, up to `digits`.
+ *
+ * Four charts print a percentage by interpolating the number itself — `${params.value}%` in the
+ * allocation pie and the geography map, `${value}%` on the allocation history's y axis, `${percentage}%`
+ * in a signal's coverage — so a French reader gets `44.5%`, and each figure carries only the decimals it
+ * has: `44.5%`, `24%`. Written with fixed digits they would read `44,50 %` and `24,00 %`, which changes
+ * what the chart says, not only how. `trim` keeps the shape and moves only the notation: `digits` becomes
+ * a maximum, and the trailing zeros go.
+ *
+ *   - `%`: `Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: 0, maximumFractionDigits:
+ *     digits})`, after the same `toFixed(digits)` pre-rounding as without `trim`;
+ *   - another suffix: `formatFixed(value, digits, {trim: true, locale})`, then the suffix as written;
+ *   - `signed`, the `-0` guard and the placeholder keep their meaning; `trim` defaults to `false`, and
+ *     without it nothing changes.
+ *
+ * Expectations come from `Intl` in this runtime, or from `formatFixed` with `trim`, never typed but for
+ * English, which is typed where it is today's text or the trimmed text of the rule. `trim` is typed in
+ * through `trimmed`, as `locale` once was in its own block, so the file type-checks before
+ * `FormatPercentOptions` declares the option.
+ */
+describe('formatPercent — trim (M-18 CP2)', () => {
+    /** `trim` typed in, so this block type-checks before FormatPercentOptions declares it. */
+    const trimmed = (value: number | null | undefined, options: FormatPercentOptions & {trim?: boolean}) => formatPercent(value, options);
+
+    /** A percentage as Intl writes it with at most `digits` decimals, after `toFixed(digits)` has rounded it: what `trim` must print. */
+    const intlTrimmed = (locale: string, value: number, digits = 2) => new Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: digits}).format(Number(value.toFixed(digits)) / 100);
+
+    /** `value` as JSON with its no-break spaces spelled out, so a message tells U+00A0 and U+202F from a space. */
+    function spelled(value: unknown): string {
+        return JSON.stringify(value).replace(/[\u00a0\u202f]/g, (space) => `\\u${space.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    }
+
+    /** Change the UI language as LanguageSelector does; svelte-i18n settles before the next step. */
+    async function uiLanguage(lang: 'en' | 'fr'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+    }
+
+    afterEach(async () => {
+        await uiLanguage('en');
+    });
+
+    it('without trim (guard): the fixed digits of today, trailing zeros included', () => {
+        expect(formatPercent(44.5, {digits: 2, signed: false})).toBe('44.50%');
+        expect(formatPercent(44, {digits: 2, signed: false})).toBe('44.00%');
+        expect(trimmed(44.5, {digits: 2, signed: false, trim: false}), 'trim: false is the default').toBe('44.50%');
+    });
+
+    it('English UI on an en-US browser: the decimals the figure has, up to digits', () => {
+        const written = {
+            half: trimmed(44.5, {digits: 2, signed: false, trim: true}),
+            whole: trimmed(44, {digits: 2, signed: false, trim: true}),
+            two: trimmed(12.35, {digits: 2, signed: false, trim: true}),
+            capped: trimmed(12.3456, {digits: 2, signed: false, trim: true}),
+            oneDigit: trimmed(87.6, {digits: 1, signed: false, trim: true}),
+        };
+
+        expect(written).toEqual({half: '44.5%', whole: '44%', two: '12.35%', capped: '12.35%', oneDigit: '87.6%'});
+    });
+
+    it('rounds as without trim — toFixed’s digits, not Intl’s — then drops the trailing zeros', () => {
+        // Controls: on these figures Intl's own rounding would land elsewhere (2.675 → 2.68, 1.2345 → 1.235),
+        // so the case tells the two roundings apart.
+        expect(new Intl.NumberFormat('en-US', {style: 'percent', maximumFractionDigits: 2}).format(2.675 / 100)).toBe('2.68%');
+        expect(new Intl.NumberFormat('en-US', {style: 'percent', maximumFractionDigits: 3}).format(1.2345 / 100)).toBe('1.235%');
+
+        expect({
+            roundsToWhole: trimmed(44.999, {digits: 2, signed: false, trim: true}),
+            roundsToTenth: trimmed(1.005, {digits: 2, signed: false, trim: true}),
+            tie2: trimmed(2.675, {digits: 2, signed: false, trim: true}),
+            tie3: trimmed(1.2345, {digits: 3, signed: false, trim: true}),
+        }).toEqual({roundsToWhole: '45%', roundsToTenth: '1%', tie2: '2.67%', tie3: '1.234%'});
+    });
+
+    it('keeps the + of a signed positive, gives a zero no sign, and a negative its own minus', () => {
+        expect({
+            gain: trimmed(44.5, {digits: 2, trim: true}),
+            zero: trimmed(0, {digits: 2, trim: true}),
+            negativeZero: trimmed(-0, {digits: 2, trim: true}),
+            loss: trimmed(-3.2, {digits: 2, trim: true}),
+        }).toEqual({gain: '+44.5%', zero: '0%', negativeZero: '0%', loss: '-3.2%'});
+    });
+
+    it('an explicit French locale: French notation, with the decimals the figure has', () => {
+        const expected = {half: intlTrimmed('fr', 44.5), whole: intlTrimmed('fr', 44), signed: `+${intlTrimmed('fr', 44.5)}`, zero: intlTrimmed('fr', 0)};
+        // Control: this runtime carries French data, so the French text is not the English one.
+        expect(expected.half, 'French differs from English').not.toBe('44.5%');
+
+        const written = {
+            half: trimmed(44.5, {digits: 2, signed: false, trim: true, locale: 'fr'}),
+            whole: trimmed(44, {digits: 2, signed: false, trim: true, locale: 'fr'}),
+            signed: trimmed(44.5, {digits: 2, trim: true, locale: 'fr'}),
+            zero: trimmed(0, {digits: 2, trim: true, locale: 'fr'}),
+        };
+        expect(written, spelled(expected)).toEqual(expected);
+    });
+
+    it('French UI, no locale passed: the interface locale, trimmed', async () => {
+        await uiLanguage('fr');
+        const expected = {half: intlTrimmed('fr', 44.5), whole: intlTrimmed('fr', 44), twelve: intlTrimmed('fr', 12.35)};
+
+        const written = {
+            half: trimmed(44.5, {digits: 2, signed: false, trim: true}),
+            whole: trimmed(44, {digits: 2, signed: false, trim: true}),
+            twelve: trimmed(12.35, {digits: 2, signed: false, trim: true}),
+        };
+        expect(written, spelled(expected)).toEqual(expected);
+    });
+
+    it('another suffix: the number trimmed by formatFixed, then the suffix as written', () => {
+        const expected = {
+            en: `${formatFixed(44.5, 2, {trim: true, locale: 'en-US'})}pp`,
+            whole: `${formatFixed(44, 2, {trim: true, locale: 'en-US'})}pp`,
+            fr: `${formatFixed(44.5, 2, {trim: true, locale: 'fr'})}pp`,
+        };
+        // Control: the trimmed English text is what the rule says.
+        expect({en: expected.en, whole: expected.whole}).toEqual({en: '44.5pp', whole: '44pp'});
+
+        const written = {
+            en: trimmed(44.5, {digits: 2, signed: false, trim: true, suffix: 'pp'}),
+            whole: trimmed(44, {digits: 2, signed: false, trim: true, suffix: 'pp'}),
+            fr: trimmed(44.5, {digits: 2, signed: false, trim: true, suffix: 'pp', locale: 'fr'}),
+        };
+        expect(written, spelled(expected)).toEqual(expected);
+    });
+
+    it('a missing value keeps its placeholder (guard)', () => {
+        expect(trimmed(null, {digits: 2, trim: true})).toBe('—');
+        expect(trimmed(NaN, {digits: 2, trim: true, empty: 'n/a'})).toBe('n/a');
     });
 });

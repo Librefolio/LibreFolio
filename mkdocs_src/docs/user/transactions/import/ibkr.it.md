@@ -2,43 +2,35 @@
 
 !!! info "Beta"
 
-    Questo plugin è in versione **Beta** — testato con file di esempio, ma potrebbero esserci casi limite.
+    Questo plugin è in **Beta** — testato con file di esempio, ma potrebbero esistere casi limite.
 
-## 📥 Come Esportare
+## 📥 Come esportare
 
-Per esportare le tue transazioni da Interactive Brokers, segui questi passaggi:
+LibreFolio legge le operazioni di una **Activity Flex Query** esportata come CSV. L'
+**Activity Statement** standard non è supportato.
 
-1. Accedi al [Client Portal di Interactive Brokers](https://www.interactivebrokers.com).
-2. Naviga su **Reports** nel menu superiore, quindi seleziona **Statements**.
-3. Nella sezione **Activity**, clicca sulla scheda **Activity Statement**.
-4. Seleziona il **Date Range** desiderato (es. Year to Date, Custom) e scegli **CSV** come formato.
-5. Clicca su **Run** o scarica il report CSV generato sul tuo computer.
+1. Accedi al [Portale Clienti Interactive Brokers](https://www.interactivebrokers.com) e apri
+   **Flex Queries**, nel menu dei report.
+2. Crea una **Activity Flex Query** con solo la sezione **Trades**, e seleziona i campi che
+   forniscono queste colonne: `Buy/Sell`, `TradeDate`, `ISIN`, `Quantity`, `TradeMoney`,
+   `CurrencyPrimary`, `IBCommission`, `IBCommissionCurrency`.
+3. Scegli **CSV** come formato e `yyyyMMdd` come formato data (ad esempio `20240315`), poi
+   salva la query.
+4. Eseguila per il periodo desiderato e scarica il file.
 
-<div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
- <!-- [Screenshot Placeholder: Interactive Brokers Portal - Statements & Reports menu] -->
-</div>
+## ⚠️ Insidie comuni
 
-### ⚙️ Utilizzo delle Flex Queries (Consigliato)
+- **La prima riga deve contenere i nomi delle colonne.** LibreFolio riconosce il file dalle
+  intestazioni tra virgolette `Buy/Sell`, `TradeDate`, `ISIN` e `IBCommission` sulla sua prima
+  riga: mantieni attive le intestazioni delle colonne e lascia disattivati i record di intestazione e chiusura e i codici di sezione.
+- **Solo CSV**: le esportazioni PDF e XML non vengono lette.
 
-Per portafogli più avanzati, puoi configurare una **Flex Query** per esportare dati specifici:
+## 📝 Cosa viene importato
 
-1. Sotto **Reports**, vai su **Flex Queries** e clicca sul pulsante **+ (Create)**.
-2. Seleziona **Activity Flex Query**.
-3. Aggiungi **Trades**, **Cash Transactions** (per dividendi e commissioni) e **Corporate Actions** alla query.
-4. Imposta il formato su **CSV** e salva la query. Puoi eseguire questa query personalizzata in qualsiasi momento.
-
-## ⚠️ Errori Comuni
-
-!!! warning "Formato File"
-
-    Assicurati di esportare come file **CSV**. Gli estratti conto in PDF non sono supportati dal parser e il caricamento fallirà.
-
-!!! warning "Impostazioni Lingua"
-
-    Il parser è progettato per le intestazioni CSV in inglese. Assicurati che la lingua del Client Portal di IBKR sia impostata su inglese prima di eseguire l'esportazione.
-
-## 📝 Note
-
-- Supporta i report di attività standard di IBKR (transazioni, dividendi, ritenute fiscali, commissioni, depositi, prelievi).
-- Sono supportati i conti multi-valuta.
-- Le azioni societarie (frazionamenti, fusioni) potrebbero richiedere regolazioni manuali all'interno della griglia di staging.
+- **Acquisti e vendite** di strumenti con un ISIN, nella valuta dell'operazione (`CurrencyPrimary`;
+  USD quando la colonna è vuota).
+- **Commissioni**, ciascuna come **commissione** separata sullo stesso asset e alla stessa data, in
+  `IBCommissionCurrency` (o nella valuta dell'operazione quando quella colonna è vuota).
+- **Non importati**: dividendi, interessi, imposte, depositi e prelievi, conversioni di valuta
+  (le righe senza un ISIN vengono saltate con un avviso) e operazioni societarie. Aggiungili
+  manualmente, oppure con un file [CSV generico](generic-csv.md).

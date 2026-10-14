@@ -6,13 +6,13 @@
 
 ## 📥 Cómo Exportar
 
-Para exportar su estado de transacciones desde Freetrade:
+Para exportar tu estado de transacciones desde Freetrade:
 
-1. Abra la **aplicación Freetrade** en su dispositivo móvil (o acceda al portal web si está disponible).
-2. Toque el icono de **Cuenta** en la esquina superior.
-3. Desplácese hacia abajo y seleccione **Actividad**.
-4. Toque el botón de **Exportar** (generalmente representado por un icono de descarga o compartir en la esquina superior).
-5. Seleccione **CSV** como formato, elija el rango de fechas y exporte el archivo. Envíelo a su ordenador.
+1. Abre la **aplicación Freetrade** en tu dispositivo móvil (o accede al portal web si está disponible).
+2. Toca el icono de **Cuenta** en la esquina superior.
+3. Desplázate hacia abajo y selecciona **Actividad**.
+4. Toca el botón de **Exportar** (generalmente representado por un icono de descarga o compartir en la esquina superior).
+5. Selecciona **CSV** como formato, elige el rango de fechas y exporta el archivo. Envíalo a tu ordenador.
 
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
  <!-- [Screenshot Placeholder: Freetrade App - Account Activity Export CSV view] -->
@@ -22,7 +22,7 @@ Para exportar su estado de transacciones desde Freetrade:
 
 !!! warning "Export Format"
 
-    Asegúrese de solicitar la exportación en **CSV** sin procesar. Los archivos PDF o capturas de pantalla de las transacciones no pasarán la validación.
+    Asegúrate de solicitar la exportación en **CSV** sin procesar. Los archivos PDF o capturas de pantalla de las transacciones no pasarán la validación.
 
 ## 📝 Notas
 

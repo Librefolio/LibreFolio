@@ -294,6 +294,9 @@ export interface ColumnDef<T> {
     /** Optional URL — clicking the info icon navigates to this documentation page */
     headerTooltipUrl?: string | (() => string);
 
+    /** How the documentation trigger opens its URL. Default: direct link. */
+    headerTooltipLinkMode?: 'direct' | 'gesture';
+
     /** For number columns: force integer-only filter (step=1, round slider). Default: false. */
     integerOnly?: boolean;
 

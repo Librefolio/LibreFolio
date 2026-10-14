@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "adx": {
+      "name": "ADX",
+      "description": "Force de la tendance",
+      "adx": "ADX",
+      "adxDescription": "Force de la tendance, indépendamment de sa direction.",
+      "plusDi": "+DI",
+      "plusDiDescription": "Pression directionnelle positive.",
+      "minusDi": "−DI",
+      "minusDiDescription": "Pression directionnelle négative."
+    }
+  }
+}

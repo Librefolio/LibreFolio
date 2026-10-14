@@ -1,96 +1,96 @@
-# ❓ Domande Frequenti (FAQ)
+# ❓ Domande frequenti (FAQ)
 
-Benvenuti nelle FAQ di LibreFolio. Qui troverete le risposte alle domande più comuni.
+Benvenuto nelle FAQ di LibreFolio. Qui troverai le risposte alle domande più comuni.
 
-## 💬 Domande Generali
+## 💬 Domande generali
 
 ### 🤔 Cos'è LibreFolio?
 
-LibreFolio è un tracker di portafoglio open-source che vi offre una visione completa e privata di tutti i vostri investimenti. Potenti strumenti di analisi trasformano i vostri dati in informazioni strategiche, permettendovi di prendere decisioni informate con piena fiducia e pieno controllo.
+LibreFolio è un tracker di portafoglio open-source che ti offre una visione completa e privata di tutti i tuoi investimenti. Potenti strumenti di analisi trasformano i tuoi dati in insight operativi — così puoi prendere decisioni informate con piena fiducia e pieno controllo.
 
 ### 💰 LibreFolio è gratuito?
 
-Sì! LibreFolio è completamente gratuito e open-source sotto la [licenza AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html). Potete installarlo sul vostro server e gestire tutto autonomamente senza alcun costo.
+Sì! LibreFolio è completamente gratuito e open-source con licenza [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html). Puoi installarlo sul tuo server e gestire tutto da solo, senza alcun costo.
 
 !!! info "Prossimamente: piattaforma hosted ☁️"
 
-    Stiamo lavorando a una piattaforma online per coloro che non hanno il tempo, l'interesse o le competenze tecniche per il self-hosted. La versione hosted offrirà tutte le funzionalità con installazione zero, aggiornamenti automatici e supporto dedicato — disponibile tramite abbonamento a pagamento.
+    Stiamo lavorando a una piattaforma online per chi non ha il tempo, l'interesse o le competenze tecniche per il self-hosting. La versione hosted offrirà tutte le funzionalità senza alcuna configurazione, aggiornamenti automatici e supporto dedicato — disponibile come abbonamento a pagamento.
 
-### 🤖 Sono previste funzionalità di AI?
+### 🤖 Posso usare LibreFolio con un assistente AI?
 
-Sì! La nostra roadmap include **assistenti basati su AI** per aiutarvi ad analizzare il vostro portafoglio, individuare trend e prendere decisioni meglio informate.
+Sì. **[AI Export](../user/ai-export/index.md)** copia i tuoi dati come testo pronto da incollare, con una domanda mirata se ne vuoi una, così puoi chiedere all'assistente AI che preferisci informazioni sul tuo portafoglio, un broker, un asset o una coppia di valute. LibreFolio stesso non contatta mai un servizio AI.
 
-- **Self-hosted**: potete collegare i vostri modelli di AI e gestire tutto in modo indipendente
-- **Piattaforma hosted**: gli assistenti AI saranno completamente integrati — pronti all'uso senza necessità di configurazione, insieme a un supporto premium
+Sulla prossima piattaforma hosted, gli assistenti AI saranno completamente integrati: pronti all'uso senza configurazione, con supporto premium.
 
 ### 📊 Quali asset posso monitorare?
 
 LibreFolio supporta:
 
-- **Azioni & ETF** — Prezzi recuperati automaticamente tramite provider di dati (es. yfinance)
-- **Cripto asset** — Tracciati come asset di portafoglio nell'UI; non sono Forex e non fanno parte del selettore di valute fiat
-- **Obbligazioni** — Supportato l'inserimento manuale
-- **P2P Lending** — Asset con investimento programmato
-- **Liquidità & Depositi** — Monitorate la vostra liquidità
+- **Azioni, ETF e fondi** — prezzi recuperati automaticamente da provider di dati (ad es., yfinance)
+- **Obbligazioni** — prezzi da un provider, oppure inseriti manualmente
+- **Asset cripto** — monitorati come asset di portafoglio, non come valute
+- **Crowdfunding e prestiti P2P** — valutati con un rendimento programmato
+- **Materie prime, immobili** e asset senza prezzo di mercato (arte, oggetti da collezione, azioni non quotate)
+- **Liquidità** — il saldo di ogni broker, in ogni valuta
+
+L'elenco completo è in [Tipi di asset](../financial-theory/instruments/asset-types/index.md).
 
 !!! tip "Manca qualcosa? 💡"
 
-    Se c'è una classe di asset o una funzionalità che vorreste vedere e a cui non abbiamo ancora pensato, ci piacerebbe saperlo! Aprite una [richiesta di funzionalità su GitHub](https://github.com/Librefolio/LibreFolio/issues/new?labels=enhancement) e fatecelo sapere.
+    Se c'è una classe di asset o una funzionalità che vorresti vedere e a cui non abbiamo ancora pensato, ci piacerebbe sentirti! Apri una [richiesta di funzionalità su GitHub](https://github.com/Librefolio/LibreFolio/issues/new?labels=enhancement) e faccelo sapere.
 
-## 🚀 Guida Rapida
+## 🚀 Per iniziare
 
 ### 📦 Come installo LibreFolio?
 
-Consulta la nostra [Guida all'Installazione su Host](../admin/host_installation.md) o la [Guida all'Installazione con Docker](../user/installation.md) per istruzioni dettagliate.
+Segui la [Guida all'installazione Docker](../user/installation.md), il metodo consigliato, oppure la [Guida all'installazione su host](../admin/host_installation.md) per eseguirlo con Pipenv.
 
 ### 👤 Come creo un account?
 
-1. Navigate alla pagina di login
-2. Cliccate su "Registrati"
-3. Inserite i vostri dati
-4. Il vostro account è pronto all'uso!
+1. Apri la pagina di accesso.
+2. Fai clic su **Registrati qui**, accanto a *Non hai un account?*
+3. Compila i tuoi dati: il tuo account è pronto all'uso.
 
-### 🔑 Ho dimenticato la password, cosa devo fare?
+Su una nuova istanza, il primo account creato diventa l'amministratore. Dopodiché, la registrazione funziona solo finché l'amministratore mantiene **Abilita registrazione** attivo nelle [Impostazioni globali](../admin/settings.md); altrimenti, chiedi all'amministratore di crearti un account.
 
-Al momento, il reset della password viene effettuato tramite CLI. Contattate l'amministratore della vostra istanza o eseguite:
+### 🔑 Ho dimenticato la password, cosa faccio?
 
-```bash
-./dev.py user reset <username> <new_password>
-```
+Il recupero via e-mail non è ancora disponibile: chiedi all'amministratore della tua istanza, che può impostare una nuova password dalla riga di comando ([Reimpostare una password](../admin/cli_tools.md#reset-a-password-or-lock-an-account)).
 
-## 🔧 Risoluzione dei Problemi
+## 🔧 Risoluzione dei problemi
 
 ### 📉 I prezzi dei miei asset non si aggiornano
 
-Verificate che:
+Verifica che:
 
-1. La sincronizzazione automatica dei prezzi sia abilitata nelle impostazioni globali
-2. I vostri asset abbiano ISIN o simboli validi riconosciuti dal **provider** configurato (es. [yfinance](https://pypi.org/project/yfinance/) per azioni ed ETF)
-3. Il servizio del provider sia disponibile (controllate i log del server per eventuali errori)
+1. **Scheduler abilitato** sia attivo nelle [Impostazioni globali](../admin/settings.md#market-data-scheduler): esegue gli aggiornamenti automatici
+2. I tuoi asset abbiano ISIN o simboli validi riconosciuti dal **provider di dati** configurato (ad es., [yfinance](https://pypi.org/project/yfinance/) per azioni ed ETF)
+3. Il servizio del provider sia disponibile (controlla i log del server per errori)
 
-### 💱 I miei tassi di cambio non si aggiornano
+### 💱 I miei tassi FX non si aggiornano
 
-Verificate che:
+Verifica che:
 
-1. La coppia di valute abbia almeno un [provider configurato](../user/fx/detail/provider.md)
-2. L'API del provider sia raggiungibile (ECB, FED, BOE, SNB)
-3. Abbiate eseguito una [sincronizzazione](../user/fx/sync.md) per l'intervallo di date desiderato
-4. Controllate la [gerarchia dei provider](../user/fx/detail/provider.md) per le opzioni di fallback
+1. **Scheduler abilitato** sia attivo nelle [Impostazioni globali](../admin/settings.md#market-data-scheduler)
+2. La coppia di valute abbia almeno un [provider di dati configurato](../user/fx/detail/provider.md)
+3. L'API del provider sia raggiungibile (ECB, FED, BOE, SNB)
+4. Hai eseguito una [sincronizzazione](../user/fx/sync.md) per l'intervallo di date desiderato
+5. Controlla la [catena di fornitura del provider](../user/fx/detail/provider.md) per opzioni di fallback
 
-### 🔐 Non riesco a effettuare il login
+### 🔐 Non riesco ad accedere
 
-- Verificate username e password
-- Controllate se il vostro account è attivato
-- Cancellate i cookie del browser e riprovate
+- Verifica il tuo nome utente e la password
+- Con una password errata ricevi sempre lo stesso messaggio *Nome utente o password non validi*, indipendentemente dal fatto che l'account esista o meno; con la password corretta, se l'account è disabilitato ti viene segnalato: chiedi all'amministratore di riabilitarlo
+- Cancella i cookie del browser e riprova
 
 ### 📱 Posso usare LibreFolio come app mobile?
 
-Sì! LibreFolio supporta l'installazione come **PWA (Progressive Web App)**. Potete aggiungerlo alla schermata home su Android, iOS o desktop per un'esperienza a schermo intero simile a un'app — senza bisogno di app store.
+Sì! LibreFolio supporta l'installazione come **PWA (Progressive Web App)**. Puoi aggiungerla alla schermata Home su Android, iOS o desktop per un'esperienza a schermo intero, simile a un'app — senza bisogno di un app store.
 
-Consultate la guida [Installa come App (PWA)](../user/pwa.md) per le istruzioni passo dopo passo.
+Consulta la guida [Installa come app (PWA)](../user/pwa.md) per istruzioni passo passo.
 
 ## 🆘 Serve altro aiuto?
 
-- [Documentazione Completa](../index.md)
-- [Segnala un Bug](https://github.com/Librefolio/LibreFolio/issues)
-- [GitHub Discussions](https://github.com/Librefolio/LibreFolio/discussions)
+- [Documentazione completa](../index.md)
+- [Segnala un bug](https://github.com/Librefolio/LibreFolio/issues)
+- [Discussioni GitHub](https://github.com/Librefolio/LibreFolio/discussions)

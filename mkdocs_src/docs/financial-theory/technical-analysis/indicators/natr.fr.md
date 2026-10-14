@@ -26,7 +26,7 @@ Comme $ATR_t$ est toujours non négatif, $NATR_t \ge 0$, sans limite théorique 
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 14 | Fenêtre de lissage appliquée au True Range sous-jacent (identique à l'ATR). |
+| Période ($N$) | `period` | 14 | Fenêtre de lissage appliquée au True Range sous-jacent (identique à l'ATR), en séances. |
 
 ---
 
@@ -36,12 +36,12 @@ Là où l'ATR est une enveloppe rectifiée et lissée de la fourchette de prix, 
 
 ```mermaid
 flowchart LR
- HLC["📈 High / Low / Close"] --> TR["🌡️ True Range"]
- TR --> ATRN["🔁 SMMA(N) → ATR"]
- ATRN --> DIV["➗ ÷ Close"]
- C["💹 Close"] --> DIV
- DIV --> SCALE["✖️ ×100"]
- SCALE --> NATR["📐 NATR(t)"]
+    HLC["📈 High / Low / Close"] --> TR["🌡️ True Range"]
+    TR --> ATRN["🔁 SMMA(N) → ATR"]
+    ATRN --> DIV["➗ ÷ Close"]
+    C["💹 Close"] --> DIV
+    DIV --> SCALE["✖️ ×100"]
+    SCALE --> NATR["📐 NATR(t)"]
 ```
 
 !!! note "Choisir entre ATR et NATR"

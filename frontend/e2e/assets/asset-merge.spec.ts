@@ -23,7 +23,7 @@ import {uniqueToken} from '../fixtures/unique';
 
 test.setTimeout(120_000);
 
-const API = 'http://localhost:6041/api/v1';
+const API = `http://localhost:${process.env.TEST_PORT || '6041'}/api/v1`;
 
 interface Pair {
     sourceId: number;

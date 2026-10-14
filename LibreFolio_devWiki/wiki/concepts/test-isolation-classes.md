@@ -4,7 +4,7 @@ category: concept
 date: 2026-08-31
 tags: [testing, test-runner, parallelism, infrastructure, isolation]
 related: [concepts/derived-test-inventory, concepts/playwright-run-consolidation, concepts/backend-test-isolation, decisions/test-runner-package-split]
-related_problems: [conftest-autouse-write-breaks-pure-class, playwright-route-stub-is-per-context, registered-but-unreachable-test-actions]
+related_problems: [e2e-writes-leaked-into-shared-state, conftest-autouse-write-breaks-pure-class, playwright-route-stub-is-per-context, registered-but-unreachable-test-actions]
 ---
 
 # Concept: the four isolation classes
@@ -96,6 +96,11 @@ stronger than the promise.
   swings the database deliberately — `db` populates, `services` empties, `api`
   repopulates — so there is no instant at which every category's precondition
   holds at once.
+  - ⚠️ The repopulation belongs to the **category** run. A single `api` action
+    launched by hand after `services` in the same lane finds the empty database:
+    on 24/09 `api risk` gave 10 passed and 3 failed, all three in the
+    `fixture_user_id()` precondition ("user 'e2e_test_user' is missing"). Run
+    `test db populate --force` in the lane first; afterwards: 13/13.
 - Under `all` / `all-backend`, `_parallel_classes` returns **`(PURE,)` only**:
   `READ` and `WRITE_SCOPED` require naming a single category, because only then
   is the precondition stable.
@@ -109,7 +114,7 @@ resources**.
 
 | Resource | Before | After | Needed by |
 |---|---|---|---|
-| `COVERAGE_FILE` | one global file, copied in/out of `.coverage` | `.coverage_data/parts/.coverage.wN` | **every** worker |
+| `COVERAGE_FILE` | one global file, copied in/out of `.coverage` | `.coverage_data/parts/run-<stamp>-<pid>/.coverage.p<pass>.wN`, one directory per run (see [[problems/coverage-combine-race-renamed-part]]) | **every** worker |
 | `DATABASE_URL` | one shared `app.db` | `app_wN.db` | `WRITE_GLOBAL` |
 | `TEST_PORT` | fixed `settings.TEST_PORT` | `TEST_PORT + N` | in-process backend workers |
 | E2E user | everyone used `e2e_test_user` | one of the eight, per worker | `WRITE_SCOPED` |
@@ -140,6 +145,25 @@ worker**, and the same 1 red at four workers.
 
 Which means the isolation work had to be done anyway, even if the decision had
 been never to parallelise anything.
+
+- The first time this bit, `test all` could not pass by construction: the services category recreated an empty
+  database before the API category, and only the clean audit's last step (`b45f5afbb`, August 2026) gave the API run
+  its own populate — [[sources/phase00-clean-audit-2026-08]].
+
+## E2E: a write to shared state belongs to its test (2026-10-12)
+
+The classes above are the backend's. On the Playwright side, workstream V's audit (plan 46, work 3) mapped how an E2E
+write spreads: inside a category tests run in parallel, so a temporary write on a shared user breaks its neighbours;
+categories run in sequence on a database populated once per invocation, so a permanent leftover reaches every later
+category; and the automatic clean-ups run only at one worker. The cures of train 64 set the rules — a disposable
+account, a reserved MOCKFX pair, or global keys read and restored in `finally`, with writers of the same keys in
+sequence: [[problems/e2e-writes-leaked-into-shared-state]].
+
+## A fixture for tests that delete (2026-10-13)
+
+A transaction test that deletes owns what it deletes: `frontend/e2e/fixtures/owned-pair.ts` creates the pair for the
+test and removes it afterwards, so `tx-delete` no longer consumes seed rows (V-25) —
+[[problems/e2e-writes-leaked-into-shared-state]].
 
 ## Source files
 

@@ -44,12 +44,17 @@ frontend/
 | Lint & Format | skill `lint-format-frontend` — Prettier + svelte-check, config, workflow |
 | Dead code | skill `lint-format-frontend` — `./dev.py lint --dead-code` (knip), unused files/exports/deps |
 
+## Financial numbers
+
+The frontend computes no financial quantity — cost, P&L, capital, NAV, returns, FX value, yields: it shows the fields the backend computes in `backend/app/services/financial_math/`; interactive measures (the measuring tool, what-if) are the only exceptions, and each must be declared where it lives.
+
 ## Design System
 
 - **Tailwind CSS 4**: config via `@theme {}` in `app.css` (no TS config file)
 - **Brand colors**: `#1a4031` (libre-green), `#f5f4ef` (libre-beige)
 - **Full dark mode**: CSS variables in `html.dark`
-- **Font**: Inter, system-ui, sans-serif + `Noto Color Emoji` for flags
+- **Font**: `'LF Flags', Inter, system-ui, sans-serif` (`html`, `@theme --font-sans`; `--font-mono` also starts with `'LF Flags'`)
+- **Flags**: `'LF Flags'` (`static/lf-flags.css`, linked by `app.html` and `offline.html`) draws only the flags (`unicode-range: U+1F1E6-1F1FF`) — Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere. Never name an emoji font in a `font-family`: emoji fonts also draw digits, `#` and `*`. A component with its own stack starts it with `'LF Flags'` or wraps the flag in `.emoji-flag`. Gate: `src/flagFont.gate.test.ts`; ECharts text is not covered yet
 - **Icons**: lucide-svelte
 
 ## Stores (`lib/stores/`)
@@ -68,6 +73,23 @@ frontend/
 | `auth`, `settings`, `language`, `globalSettings` | `.ts` | Writable | Global app state |
 
 **Pattern**: `.svelte.ts` = Svelte 5 runes; `.ts` = Svelte 4 writable or plain class.
+
+## Privacy masking
+
+Privacy hides the **number**, never the currency or the sign (`€•••`, `-••• CHF`); an absent `—`
+stays `—`. Render money only through `lib/utils/currency/currencyFormat.ts` with an explicit
+`sensitivity` (`personal` = wealth; `public` = prices, WAC, rates, percentages) or the primitives
+in `lib/utils/privacy/maskable.ts`; mask held quantities with `maskableQuantity()` **at the call
+site** (positions and lots masked, transactions visible).
+
+- A **legacy** (non-runes) component that calls a formatter inside its template freezes that
+  output at mount: the call compiles into `$.untrack`, so the privacy flag is never tracked.
+  Render through `ui/display/CurrencyAmount.svelte` instead.
+- ECharts formatters run outside effect tracking: the render `$effect` must read
+  `isPrivacyEnabled()`, or the chart keeps the state it was drawn with.
+- The gate `utils/privacy/moneyRenderSites.test.ts` sees only source lines with a currency
+  token: axes without one, a `public` marking and legacy freezing need their own tests (a
+  component test that toggles privacy in place, both ways).
 
 ## Telling the user (and the machine) that something happened
 
@@ -149,9 +171,13 @@ Naming: `area.thing.past-tense` — `asset.saved`, `fx.rates.synced`,
 ## i18n
 
 - **Library**: svelte-i18n
-- **Languages**: EN, IT, FR, ES (840+ keys per language)
-- **Files**: `lib/i18n/{en,it,fr,es}.json`
-- **CLI**: `./dev.py i18n audit|add|remove|update|search|tree` (see skill `devpy-i18n`)
+- **Languages**: EN, IT, FR, ES (read the live key count from `./dev.py i18n audit`)
+- **Generated catalogue**: `lib/i18n/{en,it,fr,es}.json`, built by `scripts/i18n_catalog.py`, ignored by git and
+  read-only — never edit it (a hand edit stops the build). The npm pre-hooks, Vitest and `./dev.py front build` write it
+- **Sources** (edit these, or better use the CLI): `lib/i18n/base/` (the generic vocabulary), one folder per subsystem
+  `lib/i18n/<subsystem>/` with its `prefixes.txt`, and each plugin's `backend/app/services/<family>/<plugin>/i18n/`
+- **CLI**: `./dev.py i18n where|add|update|remove|search|tree|audit|check|build|move|split|absorb` — `add` writes to the
+  source that owns the key (see skill `devpy-i18n`)
 
 ## Where to Find Things
 
@@ -164,5 +190,5 @@ Naming: `area.thing.past-tense` — `asset.saved`, `fx.rates.synced`,
 | Asset components | `frontend/src/lib/components/assets/` |
 | Stores | `frontend/src/lib/stores/` |
 | API Client (Zodios) | `frontend/src/lib/api/` |
-| Translations | `frontend/src/lib/i18n/{en,it,fr,es}.json` |
+| Translations (sources) | `frontend/src/lib/i18n/base/`, `frontend/src/lib/i18n/<subsystem>/`, plugins' `i18n/` |
 | E2E Tests | `frontend/e2e/` |

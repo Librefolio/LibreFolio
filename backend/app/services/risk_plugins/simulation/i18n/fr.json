@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "simulation": {
+        "name": "Simulation",
+        "description": "Simule les percentiles de rendement d'un GBM conditionnel à partir d'estimations historiques de dérive et de covariance."
+      }
+    }
+  }
+}

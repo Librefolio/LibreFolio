@@ -1,8 +1,9 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 
+import {waitForSettled} from '../fixtures/app-events';
 import {login, logout, navigateTo, openMobileMenu, setLanguage} from '../fixtures/auth-helpers';
-import {TEST_USER, TEST_USER_2} from '../fixtures/test-users';
-import {configureCustomPeriod, expectCustomPeriod, exportCurrentSelection, gotoDashboard, gotoFirstAsset, gotoFirstBroker, gotoFx, openAiExportPanel, selectAiExportSelection, setupAiExportPage, waitForClipboard} from './helpers';
+import {TEST_ADMIN, TEST_USER, TEST_USER_2} from '../fixtures/test-users';
+import {API_TIMEOUT, configureCustomPeriod, expectCustomPeriod, exportCurrentSelection, gotoDashboard, gotoFirstAsset, gotoFirstBroker, gotoFx, openAiExportPanel, selectAiExportSelection, setupAiExportPage, waitForClipboard} from './helpers';
 
 interface DraftExpectation {
     readonly kind: 'dataset' | 'analysis';
@@ -114,26 +115,63 @@ test.describe('AI Export contextual memory', () => {
             notes: 'USER_ONE_AI_EXPORT_MEMORY',
             period: '1y',
         };
-        const userTwoDraft: DraftExpectation = {
+        const adminDraft: DraftExpectation = {
             kind: 'analysis',
             id: 'portfolio.performance_market_drivers',
             label: 'Portfolio Performance & Market Drivers',
             detail: 'compact',
-            notes: 'USER_TWO_AI_EXPORT_MEMORY',
+            notes: 'ADMIN_AI_EXPORT_MEMORY',
             period: '6m',
+        };
+        // The brokers the Dashboard aggregates, for whoever is logged in on the page (`page.request` carries its
+        // cookies): OWNER with a share unset or above zero, as `getOwnedBrokers()` keeps them (brokerStore.ts).
+        const ownedBrokerIds = async (): Promise<number[]> => {
+            const listed = await page.request.get('/api/v1/brokers');
+            expect(listed.ok(), `GET /api/v1/brokers → HTTP ${listed.status()}`).toBe(true);
+            const {items} = (await listed.json()) as {items?: {id: number; user_role?: string | null; user_share_percentage?: string | number | null}[]};
+            return (items ?? []).filter((broker) => broker.user_role === 'OWNER' && (broker.user_share_percentage == null || Number.parseFloat(String(broker.user_share_percentage)) > 0)).map((broker) => broker.id);
         };
 
         await gotoDashboard(page);
         await saveDraft(page, userOneDraft);
 
+        // F2: the Dashboard's AI Export opens only on the brokers the user owns — a portfolio export without them is
+        // widened by the backend to every broker the user can see. TEST_USER_2 owns none, so once the page has settled
+        // its trigger must still be disabled. Settled means both things the trigger waits for are in: the broker list
+        // (`data-busy="false"`) and the AI-export catalogue, which a cold load always asks for. Nothing on the page
+        // publishes "catalogue applied": the catalogue response having finished is the nearest signal there is. The
+        // login left a live Dashboard behind; it is unloaded first, so its own catalogue request cannot pass for the
+        // new document's.
         await switchUser(page, TEST_USER_2);
+        const ownedByUserTwo = await ownedBrokerIds();
+        if (ownedByUserTwo.length > 0) throw new Error(`${TEST_USER_2.username} owns broker(s) [${ownedByUserTwo.join(', ')}] with a share above zero, but this step needs a user who owns none (seeded VIEWER at 0%). Check populate_mock_data.py seeding.`);
+        await page.goto('about:blank');
+        const catalogAnswered = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/v1/ai-export/catalog', {timeout: API_TIMEOUT});
+        // Awaited below; the empty catch only keeps a failure in between from also surfacing as an unhandled rejection.
+        void catalogAnswered.catch(() => undefined);
         await gotoDashboard(page);
-        const userTwoDefault = await openAiExportPanel(page);
+        const catalog = await catalogAnswered;
+        expect(catalog.status(), catalog.status() === 200 ? '' : await catalog.text()).toBe(200);
+        expect(await catalog.finished(), 'the AI-export catalogue never finished loading').toBeNull();
+        await waitForSettled(page.getByTestId('dashboard-page'));
+        await expect(page.getByTestId('sync-button')).toBeEnabled();
+        const trigger = page.getByTestId('ai-export-button');
+        await expect(trigger).toBeVisible();
+        await expect(trigger, `AI Export is enabled for ${TEST_USER_2.username}, who owns no broker: its export would leave without broker_ids, and the backend would widen it to every broker the user can see (F2)`).toBeDisabled();
+
+        // The second session needs a user who can export: TEST_ADMIN owns every seeded broker. After login an admin's
+        // browser asks GitHub for a newer release (updateCheck.ts) and, when there is one, opens a modal over the
+        // page: the third party stays out of the test, and the probe fails closed, in silence.
+        await page.route('https://api.github.com/**', (route) => route.abort());
+        await switchUser(page, TEST_ADMIN);
+        if ((await ownedBrokerIds()).length === 0) throw new Error(`${TEST_ADMIN.username} owns no broker with a share above zero, so its Dashboard cannot export. Check populate_mock_data.py seeding.`);
+        await gotoDashboard(page);
+        const adminDefault = await openAiExportPanel(page);
         await expect(page.getByTestId('ai-export-selection-button')).toContainText('Recurring Investment Plan', {timeout: 2_000});
         await expect(page.getByTestId('ai-export-user-notes')).toHaveValue('');
         await page.keyboard.press('Escape');
-        await expect(userTwoDefault.menu).toBeHidden({timeout: 2_000});
-        await saveDraft(page, userTwoDraft);
+        await expect(adminDefault.menu).toBeHidden({timeout: 2_000});
+        await saveDraft(page, adminDraft);
 
         await switchUser(page, TEST_USER);
         await gotoDashboard(page);

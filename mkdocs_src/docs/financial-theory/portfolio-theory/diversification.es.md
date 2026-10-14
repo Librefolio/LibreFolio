@@ -86,4 +86,4 @@ $$
 
 - ⚖️ **[Asignación de Activos](asset-allocation.md)** — Cómo elegir los pesos de la cartera
 - 📊 **[Volatilidad](../technical-analysis/risk-metrics/volatility.md)** — Medir el riesgo que la diversificación reduce
-- 📈 **[Máximo Drawdown](../technical-analysis/risk-metrics/max-drawdown.md)** — La métrica del peor escenario posible
+- 📈 **[Caída máxima](../technical-analysis/risk-metrics/max-drawdown.md)** — La métrica del peor escenario posible

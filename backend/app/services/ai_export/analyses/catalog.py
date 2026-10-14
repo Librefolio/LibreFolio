@@ -16,6 +16,7 @@ from backend.app.services.ai_export.analyses.spec import (
     AdditionalExportPeriod,
     AdditionalExportSuggestion,
     AnalysisRegistry,
+    AnalysisRegistryError,
     AnalysisSpec,
 )
 from backend.app.services.ai_export.catalog_visibility import CatalogVisibility
@@ -238,7 +239,8 @@ PUBLIC_ANALYSES: tuple[AnalysisSpec, ...] = (
     ),
 )
 
-assert len(PUBLIC_ANALYSES) == EXPECTED_ANALYSIS_COUNT
+if len(PUBLIC_ANALYSES) != EXPECTED_ANALYSIS_COUNT:
+    raise AnalysisRegistryError(f"PUBLIC_ANALYSES must contain exactly {EXPECTED_ANALYSIS_COUNT} analyses, got {len(PUBLIC_ANALYSES)}")
 
 
 def build_analysis_registry(

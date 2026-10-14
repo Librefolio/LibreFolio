@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_xtb": {
+      "description": "Import transactions from XTB CSV export. Supports stocks, ETFs, dividends, cash movements, taxes, fees, and interest.",
+      "name": "XTB"
+    }
+  }
+}

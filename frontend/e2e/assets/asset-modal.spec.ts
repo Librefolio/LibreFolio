@@ -8,15 +8,93 @@
  * - Database populated (./dev.py test db populate --force)
  */
 
-import {expect, test} from '../fixtures/playwright';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
-import {goToAssetDetailPage, goToAssetsPage, openCreateAssetModal, openEditAssetModal} from './assets-helpers';
-import {uniqueToken} from '../fixtures/unique';
+import {waitForSettled} from '../fixtures/app-events';
+import {API_BASE, goToAssetDetailPage, goToAssetsPage, openCreateAssetModal, openEditAssetModal} from './assets-helpers';
+import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
+
+/**
+ * Every asset a test saved, by the unique name it gave it: its id once the create response has
+ * named it, `null` until then — a save whose answer never came back is still findable by name.
+ */
+type OwnedAssets = Map<string, number | null>;
+type HttpResponse = {status(): number; json(): Promise<unknown>};
+type CreateBody = {results?: Array<{asset_id?: number | null; display_name?: string; success?: boolean; message?: string | null}>};
+type DeleteBody = {results?: Array<{asset_id: number; success: boolean; message?: string | null}>};
+
+/**
+ * Click Save on the open create modal and record the id of the asset it creates, read from the
+ * POST /assets response — the moment the asset exists, before anything that follows can fail.
+ */
+async function saveAndRecordCreated(page: Page, owned: OwnedAssets, name: string, save: () => Promise<void>): Promise<number> {
+    owned.set(name, null);
+    const [response] = await Promise.all([page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === `${API_BASE}/assets`, {timeout: 15_000}), save()]);
+    return recordCreated(response, owned, name);
+}
+
+/** A plain EUR stock of the test's own, created over the API and recorded the moment it exists. */
+async function createOwnedAsset(page: Page, owned: OwnedAssets, name: string): Promise<number> {
+    owned.set(name, null);
+    const response = await page.request.post(`${API_BASE}/assets`, {data: [{display_name: name, currency: 'EUR', asset_type: 'STOCK'}]});
+    return recordCreated(response, owned, name);
+}
+
+/** Read a POST /assets answer: record the id it gives `name`, then require that the create succeeded. */
+async function recordCreated(response: HttpResponse, owned: OwnedAssets, name: string): Promise<number> {
+    const body = (await response.json().catch(() => null)) as CreateBody | null;
+    const result = body?.results?.find((item) => item.display_name === name);
+    // Recorded before any assertion can throw: whatever was created gets deleted.
+    if (typeof result?.asset_id === 'number') owned.set(name, result.asset_id);
+    expect(response.status(), `POST ${API_BASE}/assets creates "${name}": ${JSON.stringify(body)}`).toBe(201);
+    if (!result?.success || typeof result.asset_id !== 'number') throw new Error(`"${name}" was not created: ${JSON.stringify(body)}`);
+    return result.asset_id;
+}
+
+/** The ids of the assets carrying exactly `name` — a unique name, so only ever the test's own. */
+async function assetIdsNamed(page: Page, name: string): Promise<number[]> {
+    const response = await page.request.get(`${API_BASE}/assets/query?search=${encodeURIComponent(name)}`);
+    if (!response.ok()) throw new Error(`asset query answered ${response.status()}: ${await response.text()}`);
+    return ((await response.json()) as Array<{id: number; display_name: string}>).filter((asset) => asset.display_name === name).map((asset) => asset.id);
+}
+
+/**
+ * Delete what the test created, by id: the id each create response named, or — for a save whose
+ * answer never arrived — the asset found by the unique name it was given. Every asset is tried
+ * whatever happened to the previous one, and every failure is named.
+ */
+async function deleteOwnedAssets(page: Page, owned: OwnedAssets): Promise<void> {
+    const failures: string[] = [];
+    for (const [name, recordedId] of owned) {
+        try {
+            const ids = recordedId !== null ? [recordedId] : await assetIdsNamed(page, name);
+            for (const id of ids) {
+                const response = await page.request.delete(`${API_BASE}/assets?asset_ids=${id}`);
+                const body = (await response.json().catch(() => null)) as DeleteBody | null;
+                if (!response.ok() || body?.results?.find((result) => result.asset_id === id)?.success !== true) failures.push(`asset ${id} "${name}": HTTP ${response.status()} ${JSON.stringify(body)}`);
+            }
+        } catch (error) {
+            failures.push(`"${name}": ${String(error)}`);
+        }
+    }
+    expect(failures, 'cleanup deletes every asset this test created').toEqual([]);
+}
 
 test.describe('Asset Modal', () => {
+    // Tests 4 and 5 each own one asset: its id is recorded the moment it exists, and the
+    // afterEach deletes exactly that asset, by id. The other tests save nothing.
+    let owned: OwnedAssets = new Map();
+
     test.beforeEach(async ({page}) => {
+        owned = new Map();
         await login(page, TEST_USER);
+    });
+
+    // afterEach, not `finally`: it runs after a timeout too, while the page can still reach the
+    // API, and an error of its own is reported beside the test's instead of replacing it.
+    test.afterEach(async ({page}) => {
+        await deleteOwnedAssets(page, owned);
     });
 
     // ========================================================================
@@ -61,44 +139,56 @@ test.describe('Asset Modal', () => {
     // ========================================================================
     test('can create basic asset with name and currency', async ({page}) => {
         await goToAssetsPage(page);
-        const countBefore = await page.getByTestId('assets-count-badge').textContent();
+        // Checked below on this test's own card, never on a count of everyone's assets. Cards are
+        // the grid's — the default view, driven to rather than assumed, since the view is remembered.
+        await page.getByTestId('view-mode-grid').click();
 
         await openCreateAssetModal(page);
+        const name = `E2E Test Asset ${uniqueSuffix()}`;
         const nameInput = page.getByTestId('asset-modal-display-name');
-        await nameInput.fill(`E2E Test Asset ${Date.now()}`);
+        await nameInput.fill(name);
 
-        // Save
+        // Save — the create response names the new asset's id, recorded for the afterEach
         const saveBtn = page.getByTestId('asset-modal-save');
         await expect(saveBtn).toBeEnabled({timeout: 3000});
-        await saveBtn.click();
+        const assetId = await saveAndRecordCreated(page, owned, name, () => saveBtn.click());
 
         // Modal should close
         await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 10_000});
 
-        // Page should still be visible
+        // Page should still be visible, and list the asset this test created
         await expect(page.getByTestId('assets-page')).toBeVisible();
+        await expect(page.getByTestId(`asset-card-${assetId}`), 'the asset this test created must reach the list').toBeVisible({timeout: 15_000});
     });
 
     // ========================================================================
     // Test 5: Edit modal shows pre-populated fields
     // ========================================================================
     test('edit modal shows pre-populated display name', async ({page}) => {
+        // An asset of the test's own, created before the list loads: the card is opened by its
+        // id, never by position — a neighbour's asset may sort first — and the name the form
+        // must show is the one this test gave it.
+        const name = `E2E Prefill ${uniqueSuffix()}`;
+        const assetId = await createOwnedAsset(page, owned, name);
+
         await goToAssetsPage(page);
-        // Navigate to first asset detail
-        const firstCard = page.locator('[data-testid^="asset-card-"]').first();
-        await expect(firstCard).toBeVisible({timeout: 5_000});
-        await firstCard.click();
+        // Cards are the grid's: the default view, driven to rather than assumed.
+        await page.getByTestId('view-mode-grid').click();
+        // Navigate to this test's asset detail
+        const card = page.getByTestId(`asset-card-${assetId}`);
+        await expect(card).toBeVisible({timeout: 5_000});
+        await card.click();
         await expect(page.getByTestId('asset-detail-page')).toBeVisible({timeout: 10_000});
 
         // Open edit modal
         await page.getByTestId('asset-detail-edit-btn').click();
         await expect(page.getByTestId('asset-modal-form')).toBeVisible({timeout: 5000});
 
-        // Display name should be pre-filled (not empty). populateFromEditData() runs
-        // inside an $effect after mount, so use a retrying assertion instead of a
-        // one-shot inputValue() read (avoids a race with the effect's async timing).
+        // Display name should be pre-filled with this asset's name. populateFromEditData() runs
+        // inside an $effect after mount, so use a retrying assertion instead of a one-shot
+        // inputValue() read (avoids a race with the effect's async timing).
         const nameInput = page.getByTestId('asset-modal-display-name');
-        await expect(nameInput).not.toHaveValue('', {timeout: 3000});
+        await expect(nameInput).toHaveValue(name, {timeout: 3000});
 
         // Close
         await page.getByTestId('asset-modal-cancel').click();
@@ -193,9 +283,20 @@ test.describe('Asset Modal', () => {
         const form = page.getByTestId('asset-modal-form');
         await expect(form).toBeVisible();
 
-        // Form should have overflow-y-auto (scrollable when content exceeds max-height)
-        const overflowY = await form.evaluate((el) => getComputedStyle(el).overflowY);
-        expect(overflowY).toBe('auto');
+        // The form scrolls in a box capped at 70vh, inside the modal. The box is looked up — the first scroll container
+        // from the form up, the form included — not assumed: K step 17 item 15 moved it off the fieldset onto a wrapper.
+        const scrollBox = await form.evaluate((el) => {
+            let box: Element | null = el;
+            while (box && !['auto', 'scroll'].includes(getComputedStyle(box).overflowY)) box = box.parentElement;
+            if (!box) return null;
+            const modal = el.closest('[data-testid="asset-modal"]');
+            const testId = box.getAttribute('data-testid');
+            return {element: `<${box.tagName.toLowerCase()}${testId ? ` data-testid="${testId}"` : ''}>`, insideModal: modal !== null && modal !== box && modal.contains(box), maxHeight: getComputedStyle(box).maxHeight, innerHeight: window.innerHeight};
+        });
+        if (!scrollBox) throw new Error('no scroll container from the form up, the form included: the form cannot scroll');
+        expect(scrollBox.insideModal, `the form's scroll box ${scrollBox.element} lies inside [data-testid="asset-modal"]`).toBe(true);
+        const capPx = 0.7 * scrollBox.innerHeight;
+        expect(Math.abs(parseFloat(scrollBox.maxHeight) - capPx), `the form's scroll box ${scrollBox.element} is capped at 70vh: max-height ${scrollBox.maxHeight}, 0.7 × innerHeight ${scrollBox.innerHeight} = ${capPx.toFixed(1)}px`).toBeLessThanOrEqual(1);
 
         await page.getByTestId('asset-modal-cancel').click();
     });
@@ -208,29 +309,41 @@ test.describe('Asset Modal', () => {
 test.describe('NR — Currency default from userSettings (Bug G)', () => {
     const API = '/api/v1';
 
-    // This block mutates a *shared* global: `base_currency` belongs to the test user,
-    // and every worker logs in as that same user. It is tolerable only because the
-    // window is a few seconds and no neighbour asserts on the base currency — if one
-    // ever does, this test needs its own user, not a longer timeout.
+    // The user's base currency is GBP in this browser only: `GET /settings/user` is fetched from the backend and its
+    // `base_currency` rewritten before the page sees it; any other method on that URL goes through untouched. Nothing is
+    // written to the server, so nothing needs restoring. The block used to `PUT` GBP on TEST_USER, whom every worker
+    // shares, and restore EUR afterwards — tolerable only while no neighbour read the base currency. Every page now
+    // starts from it (R2 / N), so a neighbour's Dashboard opened in that window would have started in GBP.
 
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
     });
 
-    test.afterEach(async ({page}) => {
-        // Always restore EUR so other tests are not affected
-        await page.request.put(`${API}/settings/user`, {data: {base_currency: 'EUR'}});
-    });
-
     test('create modal defaults currency to user base_currency', async ({page}) => {
-        // Set base_currency to a non-default value
-        const r = await page.request.put(`${API}/settings/user`, {data: {base_currency: 'GBP'}});
-        expect(r.ok()).toBeTruthy();
+        // Registered before the navigation, so the settings load of the page under test is answered here.
+        await page.route(`**${API}/settings/user`, async (route, request) => {
+            if (request.method() !== 'GET') {
+                await route.fallback();
+                return;
+            }
+            // Nobody awaits a route callback, so it must not throw: `route.fetch()` rejects once the context closes, and
+            // the rejection would land on whatever runs next. A read left unanswered fails this test on the wait below.
+            try {
+                const response = await route.fetch();
+                if (!response.ok()) {
+                    await route.fulfill({response});
+                    return;
+                }
+                const body = (await response.json()) as Record<string, unknown>;
+                await route.fulfill({response, json: {...body, base_currency: 'GBP'}});
+            } catch (error) {
+                console.warn(`[asset-modal] left ${request.method()} ${request.url()} unanswered: ${String(error)}`);
+            }
+        });
 
-        // The PUT went through the API context; the browser still holds the value it
-        // cached at login (`auth.ts` → `userSettings.setDirect`). A reload refetches it,
-        // but the modal reads the currency once when it opens, so opening before the
-        // GET lands captures the stale EUR. Arm the wait first, then navigate.
+        // The browser still holds the settings cached at login (`auth.ts` → `userSettings.setDirect`); the full load
+        // reads them again, through the route above, and the modal reads the currency once when it opens. Armed before
+        // the navigation, a GBP answer proves the route above is what answered that read.
         const settingsReloaded = page.waitForResponse(async (res) => res.url().includes('/settings/user') && res.request().method() === 'GET' && res.ok() && (await res.json().catch(() => ({})))?.base_currency === 'GBP', {timeout: 20_000});
         await goToAssetsPage(page);
         await settingsReloaded;
@@ -636,5 +749,183 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
         await expect(page.getByTestId('confirm-modal-confirm')).toBeVisible();
         await page.getByTestId('confirm-modal-confirm').click();
         await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 10_000});
+    });
+
+    // ========================================================================
+    // Mandate B: the benchmark switch. `assets.is_benchmark` is a new column,
+    // and the only thing that makes it real for a user is that the switch they
+    // flipped is still flipped the next time they open the asset.
+    //
+    // The two directions are asserted separately on purpose. "The flag reached
+    // the database" and "the flag came back into the form" are different
+    // failures with different fixes, and a single end-to-end assertion cannot
+    // tell them apart — it would just say "the toggle is off" and leave the
+    // reader to guess which half broke.
+    //
+    // The switch is a role="switch" with aria-checked, so its state is readable
+    // without touching a CSS class or a translated label, and toHaveAttribute
+    // retries — no probe, no sleep.
+    // ========================================================================
+    test('the benchmark toggle reaches the backend and comes back', async ({page}) => {
+        const name = `E2E Benchmark ${uniqueToken(6)}`;
+        let assetId: number | null = null;
+
+        try {
+            // ---- create through the modal, with the switch on -------------
+            await goToAssetsPage(page);
+            await openCreateAssetModal(page);
+            const nameInput = page.getByTestId('asset-modal-display-name');
+            await nameInput.fill(name);
+            await expect(nameInput).toHaveValue(name);
+
+            const toggle = page.getByTestId('asset-benchmark-toggle');
+            // Assert the starting state instead of assuming it: on a toggle, a
+            // blind click is only a *change*, and if a create ever opened with
+            // the flag already on, the click below would be turning it off and
+            // everything after it would be testing the opposite claim.
+            await expect(toggle, 'a create must start from "not a benchmark"').toHaveAttribute('aria-checked', 'false');
+            await toggle.click();
+            await expect(toggle).toHaveAttribute('aria-checked', 'true');
+
+            const saveBtn = page.getByTestId('asset-modal-save');
+            await expect(saveBtn).toBeEnabled();
+            await saveBtn.click();
+            await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 15_000});
+
+            // ---- half one: the flag reached the database ------------------
+            // Found by the unique name this test owns, never by position: the
+            // query is a shared surface and a neighbour may have written to it
+            // between the save and this read.
+            const res = await page.request.get(`/api/v1/assets/query?search=${encodeURIComponent(name)}`);
+            expect(res.ok(), `the asset query must answer: ${res.status()} ${await res.text()}`).toBeTruthy();
+            const row = ((await res.json()) as Array<{id: number; display_name: string; is_benchmark?: boolean}>).find((a) => a.display_name === name);
+            expect(row, 'the asset the modal just created must be queryable by its unique name').toBeTruthy();
+            assetId = row!.id;
+            expect(row!.is_benchmark, 'the create payload must carry is_benchmark all the way to the database').toBe(true);
+
+            // ---- half two: …and comes back on a fresh load ----------------
+            // goToAssetDetailPage() is a real page.goto(), so nothing survives
+            // from the create above except what the backend stored.
+            await goToAssetDetailPage(page, String(assetId));
+            await openEditAssetModal(page);
+            await expect(
+                page.getByTestId('asset-benchmark-toggle'),
+                'the edit form must reopen with the stored flag. AssetModal.loadAssetData() already reads `data.is_benchmark`, so an "off" here means the CALLER never put the field into editData — neither buildEditData() in routes/(app)/assets/[id]/+page.svelte nor loadAssetEditData() in lib/components/assets/assetEditData.ts copies it. That is not cosmetic: saveEdit() sends `is_benchmark: isBenchmark` on every PATCH, so editing anything at all about a benchmark asset silently un-benchmarks it.',
+            ).toHaveAttribute('aria-checked', 'true');
+        } finally {
+            // The id is only known once half one has read it back, so a failure
+            // before that point would otherwise leave the row behind. Resolve it
+            // by the unique name instead — still scoped to what this test wrote.
+            if (assetId === null) {
+                assetId = await page.request
+                    .get(`/api/v1/assets/query?search=${encodeURIComponent(name)}`)
+                    .then(async (r) => (r.ok() ? (((await r.json()) as Array<{id: number; display_name: string}>).find((a) => a.display_name === name)?.id ?? null) : null))
+                    .catch(() => null);
+            }
+            if (assetId !== null) await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
+        }
+    });
+});
+
+// ============================================================================
+// R14–R16: the type field is a two-level searchable select (TreeSelect). A
+// subtype is chosen inside its family, stored as itself, and drawn everywhere
+// with its composite icon — the ETF tag with the stock pastille — which is what
+// the select previewed. `AssetTypeSelect.test.ts` pins the component; this is
+// the path a user takes, through the dialog, the API and the grid.
+//
+// Everything is read from test ids, ARIA state and image `src`: no label of the
+// select is ever read, so the locale of the run does not matter.
+// ============================================================================
+test.describe('Asset type select (R14–R16)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('an ETF subtype is picked inside its family, stored as such, and drawn with its composite icon', async ({page}) => {
+        const name = `E2E Type Tree ${uniqueToken(6)}`;
+        const composite = '/icons/asset-types/etf-stock.png';
+        let assetId: number | null = null;
+
+        try {
+            await goToAssetsPage(page);
+            await openCreateAssetModal(page);
+            const nameInput = page.getByTestId('asset-modal-display-name');
+            await nameInput.fill(name);
+            await expect(nameInput).toHaveValue(name);
+
+            // ---- pick ETF_STOCK inside the ETF family ---------------------
+            // Rows are looked up inside the field: TreeSelect renders its dropdown
+            // within its own container, and `asset-type-tree-*` names a kind of row.
+            const field = page.getByTestId('asset-modal-type');
+            const trigger = page.getByTestId('asset-modal-type-button');
+            // Presence barrier for the negative below: the closed field shows *a*
+            // type's picture — and not yet the one this test is about to pick,
+            // or the post-condition would prove nothing.
+            await expect(trigger.locator('img').first()).toBeVisible();
+            await expect(trigger.locator(`img[src="${composite}"]`)).toHaveCount(0);
+
+            await trigger.click();
+            await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+            const etfFamily = field.getByTestId('asset-type-tree-group-ETF');
+            await expect(etfFamily).toBeVisible();
+            // A group row is a toggle, and it opens by itself when the value is
+            // already an ETF: ask for its state, act only if it is not there yet.
+            if ((await etfFamily.getAttribute('aria-expanded')) !== 'true') await etfFamily.click();
+            await expect(etfFamily).toHaveAttribute('aria-expanded', 'true');
+
+            const etfStock = field.getByTestId('asset-type-tree-option-ETF_STOCK');
+            await expect(etfStock.locator(`img[src="${composite}"]`), 'the row must preview the composite the rest of the app will draw').toBeVisible();
+            await etfStock.click();
+
+            // The helper-style post-condition: the dropdown is gone, and the
+            // closed field now shows the composite of the chosen subtype.
+            await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+            await expect(etfStock).toHaveCount(0);
+            await expect(trigger.locator(`img[src="${composite}"]`)).toBeVisible();
+
+            // ---- save: the create response names the row this test owns ---
+            const saveBtn = page.getByTestId('asset-modal-save');
+            await expect(saveBtn).toBeEnabled();
+            const createResponse = page.waitForResponse((r) => r.url().endsWith('/api/v1/assets') && r.request().method() === 'POST');
+            await saveBtn.click();
+            const created = (await (await createResponse).json()) as {results?: Array<{asset_id?: number | null; display_name?: string}>};
+            assetId = created.results?.find((r) => r.display_name === name)?.asset_id ?? null;
+            expect(assetId, `the create response must carry the id of "${name}"`).not.toBeNull();
+            await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 15_000});
+
+            // ---- the backend stored the subtype, not its family -----------
+            const res = await page.request.get(`/api/v1/assets/query?search=${encodeURIComponent(name)}`);
+            expect(res.ok(), `the asset query must answer: ${res.status()} ${await res.text()}`).toBeTruthy();
+            const stored = ((await res.json()) as Array<{id: number; asset_type: string | null}>).find((a) => a.id === assetId);
+            expect(stored, 'the asset the dialog just created must come back from /assets/query').toBeTruthy();
+            expect(stored!.asset_type, 'the dialog must save the subtype picked inside the family — not the family, not the default').toBe('ETF_STOCK');
+
+            // ---- the card of this very asset draws the composite ----------
+            await goToAssetsPage(page);
+            // Grid is the default view, but ViewModeToggle remembers the last
+            // choice per user in localStorage — drive to the end state.
+            await page.getByTestId('view-mode-grid').click();
+            await page.getByTestId('assets-search-input').fill(name);
+            await waitForSettled(page.getByTestId('assets-page'), 20_000);
+            const card = page.getByTestId(`asset-card-${assetId}`);
+            // Retrying on purpose: the search box is debounced and `data-busy`
+            // does not cover the debounce.
+            await expect(card, 'the asset this test created must reach the grid').toBeVisible({timeout: 15_000});
+            // `.first()` on a locator already scoped to this card: the card paints
+            // the type picture twice (round avatar and type badge).
+            await expect(card.locator(`img[src="${composite}"]`).first(), 'ETF_STOCK must be drawn with its composite, etf-stock.png').toBeVisible();
+            await expect(card.locator('img[src="/icons/asset-types/other.png"]'), 'ETF_STOCK fell through to the silent other.png fallback').toHaveCount(0);
+        } finally {
+            // Scoped to what this test wrote: by the id of its own create response,
+            // or — if the run died before reading it — by its unique name.
+            if (assetId === null) {
+                assetId = await page.request
+                    .get(`/api/v1/assets/query?search=${encodeURIComponent(name)}`)
+                    .then(async (r) => (r.ok() ? (((await r.json()) as Array<{id: number; display_name: string}>).find((a) => a.display_name === name)?.id ?? null) : null))
+                    .catch(() => null);
+            }
+            if (assetId !== null) await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
+        }
     });
 });

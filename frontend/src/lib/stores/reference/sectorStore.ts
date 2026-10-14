@@ -88,6 +88,8 @@ export function getSectorEmoji(key: string): string {
         'Consumer Staples': '🛒',
         Telecommunication: '📡',
         Utilities: '💡',
+        'Corporate Bonds': '🏢',
+        'Government Bonds': '🏛️',
         Other: '📦',
         Liquidity: '💰',
         Unknown: '❓',

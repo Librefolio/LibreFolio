@@ -10,7 +10,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
     import {get} from 'svelte/store';
-    import type {SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
+    import type {SyncRequestOptions, SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
     import {DEFAULT_PROVIDER_COLOR, formatSyncDetail, getFxProviderIconUrl, parseProviderChain, PROVIDER_COLORS} from '$lib/utils/providerHelpers';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
@@ -35,14 +35,14 @@
         if (open) getCurrencyGraph();
     });
 
-    async function doSyncFn(targetIds: string[]): Promise<SyncResult[]> {
+    async function doSyncFn(targetIds: string[], options: SyncRequestOptions): Promise<SyncResult[]> {
         const response = await zodiosApi.sync_rates_api_v1_fx_currencies_sync_post(
             {
                 pairs: targetIds,
                 start: dateStart,
                 end: dateEnd,
             },
-            {timeout: 120 * 1000},
+            {timeout: options.timeoutMs},
         );
         const r = response as any;
         return (r.results ?? []).map(

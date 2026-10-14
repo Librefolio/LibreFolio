@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_trading212": {
+      "description": "Importe les transactions de l’export CSV de Trading212. Prend en charge les actions, les ETF, les dividendes et les intérêts.",
+      "name": "Trading212"
+    }
+  }
+}

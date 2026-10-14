@@ -17,7 +17,30 @@
  * positive value gets a `+`, what to print when the value is missing, and how
  * many decimals. The `-0` guard was in only two of the copies and is now in all
  * of them — a negative zero prints as "-0.00%", which no user has ever wanted.
+ *
+ * ## Why `suffix` exists
+ *
+ * Because the unit is not always `%`. A *difference* between two percentages is
+ * measured in **percentage points**: a holding weighing 20% of a portfolio and
+ * producing 80% of its risk differs by `+60pp`, and writing that `+60%` states
+ * a different quantity. The two units look alike and are not, which is the same
+ * shape of trap as `scale` above.
+ *
+ * The illustration is round and invented on purpose. A real weight or risk
+ * share integrates over the query window that produced it, so a measured pair
+ * written here would go on reading as a fact long after it stopped being one —
+ * and this file is generic, so nobody arriving in it has the context to doubt it.
+ *
+ * Before this option the callers that needed `pp` had no way to ask for it, so
+ * they hand-rolled `toFixed` and lost the `-0` guard, the missing-value
+ * placeholder and the sign rule along with it. The alternative on offer was
+ * `formatPercent(...).replace('%', 'pp')`, which is worse than the problem: it
+ * rewrites a *formatted* string, so it also mangles any placeholder or future
+ * separator that happens to contain a `%`.
  */
+
+import {uiLocale} from '$lib/stores/app/uiLocale';
+import {formatFixed} from './formatFixed';
 
 export interface FormatPercentOptions {
     /** Multiplier applied before formatting: 1 when the value is already a
@@ -30,14 +53,40 @@ export interface FormatPercentOptions {
     empty?: string;
     /** Digits after the decimal point. */
     digits?: number;
+    /**
+     * Make `digits` a maximum: insignificant trailing zeros are dropped (`44.5%`, `44%`).
+     * For a value already rounded upstream, written with the digits it has.
+     */
+    trim?: boolean;
+    /**
+     * Unit written after the number. Defaults to `%`.
+     *
+     * Pass `'pp'` for a difference between two percentages, and `''` for a bare
+     * number. `empty` is returned untouched, so the placeholder never acquires a
+     * unit it cannot carry.
+     */
+    suffix?: string;
+    /**
+     * Locale to write the number in. Defaults to the interface locale (`uiLocale()`,
+     * `$lib/stores/app/uiLocale`), so the number reads the way the interface
+     * language writes numbers — `12.50%` in English, `12,50 %` in French, decimal
+     * comma and a no-break space before the sign — through `Intl` for `%`,
+     * and through `formatFixed` before any other suffix. A legacy component passes
+     * `$uiLocaleStore` here, read in its template, so a language switch reaches it.
+     */
+    locale?: string;
 }
 
-export function formatPercent(value: number | null | undefined, {scale = 1, signed = true, empty = '—', digits = 2}: FormatPercentOptions = {}): string {
+export function formatPercent(value: number | null | undefined, {scale = 1, signed = true, empty = '—', digits = 2, suffix = '%', trim = false, locale = uiLocale()}: FormatPercentOptions = {}): string {
     if (value == null || !Number.isFinite(value)) return empty;
     const scaled = value * scale;
     // `-0` survives arithmetic and prints as "-0.00%", which reads as a loss that
     // is not there. Two of the five copies guarded against it; now all do.
     const normalized = Object.is(scaled, -0) ? 0 : scaled;
     const sign = signed && normalized > 0 ? '+' : '';
-    return `${sign}${normalized.toFixed(digits)}%`;
+    // Rounded first, as `toFixed` rounds the value itself: dividing by 100 before Intl rounds
+    // would move a figure sitting on a tie (`1.2345` at three digits) to the other side. A tiny
+    // negative keeps its minus (`-0.00%`), as it did with `toFixed`.
+    if (suffix === '%') return sign + new Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: trim ? 0 : digits, maximumFractionDigits: digits}).format(Number(normalized.toFixed(digits)) / 100);
+    return `${sign}${formatFixed(normalized, digits, {locale, trim})}${suffix}`;
 }

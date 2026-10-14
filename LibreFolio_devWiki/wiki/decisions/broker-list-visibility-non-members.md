@@ -54,3 +54,5 @@ and `GET /brokers/{id}/access` 404'd outright for non-members.
 - [[domains/brokers]]
 - [[decisions/broker-card-aggregation-no-n-plus-one]] — same redesign, companion decision on per-card metrics
 - Source: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_3/plan_ui_broker_overview.md`, `impl_plan_broker_overview.md`
+- [[problems/brlistresponse-contract-drift]] — `GET /brokers` changed shape, from a bare list to
+  `BRListResponse{items, inaccessible}`

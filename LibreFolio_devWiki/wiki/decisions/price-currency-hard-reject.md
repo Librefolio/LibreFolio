@@ -55,7 +55,7 @@ In both cases, failing loudly is better than silently skipping rows.
 **User must**: DELETE all prices first (via bulk delete or DataEditor clear), then PATCH currency.
 
 **Or accept the destructive path** — Phase 7 Part 3 Closure Batch 3 added
-[[decisions/policy-d-currency-wipe]] (commit `8fc018ab`): when the user explicitly
+[[decisions/policy-d-currency-wipe]] (commit `c7cf528c4`): when the user explicitly
 confirms in `AssetCurrencyChangeModal`, the PATCH proceeds with a server-side
 symmetric wipe of prices + events (transactions preserved with
 `asset_event_id = NULL`). The 409 + Policy D pair is the canonical flow:

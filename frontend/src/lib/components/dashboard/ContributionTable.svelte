@@ -24,6 +24,7 @@
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     type NumericLike = string | (string | null)[] | null;
     type PositionStatus = 'open_at_period_end' | 'closed_by_period_end';
@@ -168,7 +169,7 @@
         const classes = value > 0 ? 'text-green-600 dark:text-green-400' : value < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400';
         return {
             type: 'html' as const,
-            html: `<span class="font-medium tabular-nums ${classes}">${formatCurrencyAmountPlain(value, displayCurrency, {showSign: value !== 0})}</span>`,
+            html: `<span class="font-medium tabular-nums ${classes}">${escapeHtml(formatCurrencyAmountPlain(value, displayCurrency, {showSign: value !== 0}))}</span>`,
         };
     }
 
@@ -176,7 +177,7 @@
         if (value == null) return '—';
         return {
             type: 'html' as const,
-            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${formatCurrencyAmountPlain(value, displayCurrency)}</span>`,
+            html: `<span class="font-medium tabular-nums text-gray-700 dark:text-gray-200">${escapeHtml(formatCurrencyAmountPlain(value, displayCurrency))}</span>`,
         };
     }
 
@@ -185,7 +186,7 @@
         const classes = value >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
         return {
             type: 'html' as const,
-            html: `<span class="font-medium tabular-nums ${classes}">${value >= 0 ? '+' : ''}${(value * 100).toFixed(2)}%</span>`,
+            html: `<span class="font-medium tabular-nums ${classes}">${formatPercent(value, {scale: 100})}</span>`,
         };
     }
 
@@ -250,13 +251,13 @@
                 getValue: (row) => row.assetName,
                 cell: (row) => {
                     const iconSrc = assetIconSrc(row);
-                    const name = escapeHtml(row.assetName);
+                    const nameHtml = escapeHtml(row.assetName);
                     const iconHtml = iconSrc
                         ? `<img src="${escapeHtml(iconSrc)}" alt="" class="w-5 h-5 rounded-full object-cover shrink-0" onerror="this.style.display='none'" />`
                         : `<div class="w-5 h-5 rounded-full bg-libre-green/10 flex items-center justify-center shrink-0 text-[10px] text-libre-green font-bold">${escapeHtml((row.assetName ?? '?')[0]?.toUpperCase() ?? '?')}</div>`;
                     return {
                         type: 'html',
-                        html: `<div class="flex items-center gap-1.5 min-w-0"><span class="shrink-0">${iconHtml}</span><span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-gray-700 dark:text-gray-200" title="${name}">${name}</span></div>`,
+                        html: `<div class="flex items-center gap-1.5 min-w-0"><span class="shrink-0">${iconHtml}</span><span class="flex-1 min-w-0 ${overflowScrollTextClass} font-medium text-gray-700 dark:text-gray-200" title="${nameHtml}">${nameHtml}</span></div>`,
                     };
                 },
             },

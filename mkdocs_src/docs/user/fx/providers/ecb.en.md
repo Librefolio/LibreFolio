@@ -1,6 +1,6 @@
 # <img src="https://www.ecb.europa.eu/favicon-32.png" alt=""> European Central Bank (ECB)
 
-The **European Central Bank (ECB)** is the primary reference rate provider for European portfolios. It publishes daily exchange rates for the Euro against approximately 45 major and emerging currencies.
+The **European Central Bank (ECB)** is the primary reference rate provider for European portfolios. It publishes daily reference rates for the euro against about 30 currencies.
 
 ## 📊 Capabilities
 
@@ -16,11 +16,13 @@ The **European Central Bank (ECB)** is the primary reference rate provider for E
 
 ## 💰 Supported Currencies
 
-The ECB supports a wide range of currencies, including:
+The ECB publishes a rate every business day for about 30 currencies, including:
 
 - **Major**: USD 🇺🇸, GBP 🇬🇧, JPY 🇯🇵, CHF 🇨🇭, CAD 🇨🇦, AUD 🇦🇺, NZD 🇳🇿
-- **European/Regional**: SEK 🇸🇪, NOK 🇳🇴, DKK 🇩🇰, PLN 🇵🇱, CZK 🇨🇿, HUF 🇭🇺, RON 🇷🇴, BGN 🇧🇬, TRY 🇹🇷
+- **European/Regional**: SEK 🇸🇪, NOK 🇳🇴, DKK 🇩🇰, ISK 🇮🇸, PLN 🇵🇱, CZK 🇨🇿, HUF 🇭🇺, RON 🇷🇴, TRY 🇹🇷
 - **Global / Emerging**: CNY 🇨🇳, HKD 🇭🇰, SGD 🇸🇬, KRW 🇰🇷, INR 🇮🇳, BRL 🇧🇷, MXN 🇲🇽, ZAR 🇿🇦
+
+Currencies the ECB no longer publishes, such as the Bulgarian lev (BGN, replaced by the euro in 2026), the Croatian kuna (HRK) or the Russian rouble (RUB), keep their past rates: a sync still downloads their history, and no new rates arrive.
 
 ## 📝 Important Notes
 

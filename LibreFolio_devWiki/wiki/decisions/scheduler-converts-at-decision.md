@@ -95,7 +95,7 @@ and asserts the local hour does not move.
 | Decision logic | `backend/app/services/scheduler/scheduler.py` — `due_history_sync` |
 | Settings parsing | `backend/app/services/scheduler/settings.py` |
 | Key descriptions | `backend/app/schemas/settings.py` (~114-133) |
-| Migration | `backend/alembic/versions/5b1333fa6b07_scheduler_times_use_configured_timezone.py` |
+| Migration (revision `5b1333fa6b07`, file renamed in the 2026-09-22 consolidation) | `backend/alembic/versions/003_scheduler_timezone.py` |
 | Modal | `frontend/src/lib/components/settings/SchedulerConfigModal.svelte` |
 | Tests | `backend/test_scripts/test_services/test_scheduler_due.py`, `test_scheduler_settings.py` |
 

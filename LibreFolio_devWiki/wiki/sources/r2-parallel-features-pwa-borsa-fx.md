@@ -24,7 +24,7 @@ Four independent features/fixes developed in a parallel terminal without formal 
 
 ## 1. PWA Support (Progressive Web App)
 
-**Commits**: `b0bfde60`, `f6023a73`, `6db90b73`, `2b0142f0`
+**Commits**: `daf95a904`, `75d72f601`, `6871dc38f`, `9ab32912c`
 **Plan file**: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Standalone/plan-pwa-mobile-optimizations.prompt.md`
 **Status**: ✅ Completed (2026-05-26)
 
@@ -63,7 +63,7 @@ Four independent features/fixes developed in a parallel terminal without formal 
 
 ## 2. Port 60/40 Scheme
 
-**Commit**: `a7b30d52`
+**Commit**: `432d8642a`
 **Status**: ✅ Completed
 
 ### What was done
@@ -98,7 +98,7 @@ Migrated all port defaults from `8000/8001/8002` to `6040/6041/6042`.
 
 ## 3. Borsa Italiana Provider
 
-**Commit**: `7fd9c6df`
+**Commit**: `9b9fcbb65`
 **Status**: ✅ Completed
 
 ### What was done
@@ -124,7 +124,7 @@ Uses the `borsa-italiana-scraping` library (optional dependency). Follows the st
 ### Source files
 | Role | Path |
 |------|------|
-| Provider implementation | `backend/app/services/asset_source_providers/borsa_italiana.py` |
+| Provider implementation | `backend/app/services/asset_source_providers/borsa_italiana/plugin.py` |
 | Provider schema (enum) | `backend/app/schemas/provider.py` |
 | Service registry | `backend/app/services/asset_source.py` |
 | Frontend search integration | `frontend/src/lib/components/assets/AssetSearchAutocomplete.svelte` |
@@ -135,7 +135,7 @@ Uses the `borsa-italiana-scraping` library (optional dependency). Follows the st
 
 ## 4. FX Provider Removal Fix
 
-**Commit**: `0d7607e8`
+**Commit**: `e82346802`
 **Status**: ✅ Completed
 
 ### What was done
@@ -164,6 +164,6 @@ Fixed FX provider removal flow + added UX improvements to the FX detail page edi
 ## Cross-cutting observations
 
 1. **Provider pattern consistency**: Borsa Italiana follows the exact same `@register_provider` + `AssetSourceProvider` ABC pattern as yfinance, JustETF, CSS Scraper. The pattern is now proven across 5+ providers.
-2. **FX MANUAL sentinel reliability**: the removal fix confirms the sentinel auto-insert/remove logic (F-019) handles all edge cases including bulk-delete scenarios.
+2. **FX MANUAL sentinel reliability**: the removal fix confirms the sentinel auto-insert/remove logic ([[F-019]]) handles all edge cases including bulk-delete scenarios.
 3. **PWA as infrastructure**: PWA support is infrastructure (not a feature users "configure") — once installed, it's invisible. No backend changes needed.
 4. **Port mnemonic**: choosing domain-meaningful port numbers improves developer ergonomics with zero runtime cost.

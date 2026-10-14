@@ -11,7 +11,7 @@
   - Dark mode support
 -->
 <script generics="T" lang="ts">
-    import {onMount, untrack} from 'svelte';
+    import {onDestroy, onMount, untrack} from 'svelte';
     import {t} from '$lib/i18n';
     import {formatBytes} from '$lib/utils/files/upload';
     import {getUserStorageKey} from '$lib/utils/storage';
@@ -26,6 +26,7 @@
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import type {BulkAction, ColumnDef, ColumnWidthsState, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
     import {compareRowsByColumn, formatCellDate, getColumnMinMax, getCurrencyMinMaxByCode, getCurrencyOptions, getEnumOptionsWithCounts, getMultiEnumOptions, getMultiEnumOptionsWithCounts, matchesColumnFilter} from './dataTableLogic';
+    import {clearTimer} from '$lib/utils/core/clearTimer';
 
     interface Props {
         data: T[];
@@ -85,6 +86,12 @@
          * sort is active).
          */
         onSortChange?: (state: SortState | null) => void;
+        /**
+         * Called with the row ids in display order — after "show selected only", the column
+         * filters and the sort, across every page — once after mount and again whenever that
+         * order changes (not on a page change, a resize, or new data in the same order).
+         */
+        onRowOrderChange?: (rowIds: string[]) => void;
         /**
          * Called whenever the internal "show selected only" toggle changes.
          * Consumers with external pagination can react to this to adjust
@@ -154,6 +161,7 @@
         stickyHeader = true,
         enableContextMenu = true,
         onSortChange,
+        onRowOrderChange,
         onShowSelectedOnlyChange,
         fullData,
         onColumnResize,
@@ -378,6 +386,19 @@
         return sortedData.slice(start, start + pagination.pageSize);
     });
 
+    // Report the display order (every page) when it changes. The last report is a plain variable:
+    // it is only compared, never rendered, and must not make this effect depend on itself.
+    let lastReportedRowOrder: string | null = null;
+    $effect(() => {
+        if (!onRowOrderChange) return;
+        const rowIds = sortedData.map((row) => getRowId(row));
+        const key = JSON.stringify(rowIds);
+        if (key === lastReportedRowOrder) return;
+        lastReportedRowOrder = key;
+        const report = onRowOrderChange;
+        untrack(() => report(rowIds));
+    });
+
     // Selected rows
     let selectedRows = $derived(
         Object.keys(rowSelection)
@@ -427,6 +448,47 @@
     function getColumnTooltipUrl(col: ColumnDef<T>): string | null {
         if (!col.headerTooltipUrl) return null;
         return typeof col.headerTooltipUrl === 'function' ? col.headerTooltipUrl() : col.headerTooltipUrl;
+    }
+
+    let headerTooltipLongPressTimer: ReturnType<typeof setTimeout> | null = null;
+    let suppressHeaderTooltipClick = false;
+
+    function openHeaderTooltipDoc(url: string) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+    }
+
+    function handleHeaderTooltipDblClick(event: MouseEvent, url: string) {
+        event.preventDefault();
+        event.stopPropagation();
+        openHeaderTooltipDoc(url);
+    }
+
+    function handleHeaderTooltipKeydown(event: KeyboardEvent, url: string) {
+        if (event.key !== 'Enter' || !event.shiftKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openHeaderTooltipDoc(url);
+    }
+
+    function handleHeaderTooltipTouchStart(url: string) {
+        suppressHeaderTooltipClick = false;
+        headerTooltipLongPressTimer = clearTimer(headerTooltipLongPressTimer);
+        headerTooltipLongPressTimer = setTimeout(() => {
+            headerTooltipLongPressTimer = null;
+            suppressHeaderTooltipClick = true;
+            openHeaderTooltipDoc(url);
+        }, 500);
+    }
+
+    function cancelHeaderTooltipLongPress() {
+        headerTooltipLongPressTimer = clearTimer(headerTooltipLongPressTimer);
+    }
+
+    function handleHeaderTooltipGestureClick(event: MouseEvent) {
+        if (!suppressHeaderTooltipClick) return;
+        event.preventDefault();
+        event.stopPropagation();
+        suppressHeaderTooltipClick = false;
     }
 
     /** Handle image load error — hide image and show fallback */
@@ -723,6 +785,8 @@
         }
     });
 
+    onDestroy(cancelHeaderTooltipLongPress);
+
     // Notify parent when filters change (for URL sync)
     $effect(() => {
         // Only call if handler provided and we have some filter activity
@@ -887,6 +951,11 @@
     export function getPageRowIds(): string[] {
         return paginatedData.map((row) => getRowId(row));
     }
+
+    /** All matching row IDs in display order, before pagination. */
+    export function getSortedRowIds(): string[] {
+        return sortedData.map((row) => getRowId(row));
+    }
 </script>
 
 <div class="datatable-container" bind:this={containerEl}>
@@ -994,12 +1063,33 @@
                                 <!-- Header tooltip info icon (only when no emoji/text tooltip) -->
                                 {#if getColumnTooltip(column) && getColumnTooltipUrl(column)}
                                     {@const tooltipText = getColumnTooltip(column) ?? ''}
-                                    {@const tooltipUrl = getColumnTooltipUrl(column)}
-                                    <Tooltip text={tooltipText} position="top" math={tooltipText.includes('$')}>
-                                        <a href={tooltipUrl} target="_blank" rel="noopener noreferrer" class="header-tooltip-icon header-tooltip-link" onclick={(e) => e.stopPropagation()}>
-                                            <Info size={12} />
-                                        </a>
-                                    </Tooltip>
+                                    {@const tooltipUrl = getColumnTooltipUrl(column) ?? ''}
+                                    {#if column.headerTooltipLinkMode === 'gesture'}
+                                        <Tooltip text={tooltipText} position="top" math={tooltipText.includes('$')} interactiveChild={true}>
+                                            <button
+                                                type="button"
+                                                class="header-tooltip-icon header-tooltip-gesture"
+                                                aria-label={tooltipText}
+                                                aria-keyshortcuts="Shift+Enter"
+                                                data-testid={`dt-header-tooltip-${column.id}`}
+                                                onclick={handleHeaderTooltipGestureClick}
+                                                ondblclick={(event) => handleHeaderTooltipDblClick(event, tooltipUrl)}
+                                                onkeydown={(event) => handleHeaderTooltipKeydown(event, tooltipUrl)}
+                                                ontouchstart={() => handleHeaderTooltipTouchStart(tooltipUrl)}
+                                                ontouchend={cancelHeaderTooltipLongPress}
+                                                ontouchmove={cancelHeaderTooltipLongPress}
+                                                ontouchcancel={cancelHeaderTooltipLongPress}
+                                            >
+                                                <Info size={12} />
+                                            </button>
+                                        </Tooltip>
+                                    {:else}
+                                        <Tooltip text={tooltipText} position="top" math={tooltipText.includes('$')}>
+                                            <a href={tooltipUrl} target="_blank" rel="noopener noreferrer" class="header-tooltip-icon header-tooltip-link" data-testid={`dt-header-tooltip-${column.id}`} onclick={(e) => e.stopPropagation()}>
+                                                <Info size={12} />
+                                            </a>
+                                        </Tooltip>
+                                    {/if}
                                 {/if}
 
                                 <!-- Filter button -->
@@ -1156,7 +1246,13 @@
                             <!-- Data cells -->
                             {#each visibleColumns as column}
                                 {@const cellContent = column.cell(row)}
-                                <td class="td-data" class:td-fixed={column.pinned != null} class:td-pinned-right={column.pinned === 'right'} style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}">
+                                <td
+                                    class="td-data"
+                                    class:td-fixed={column.pinned != null}
+                                    class:td-pinned-right={column.pinned === 'right'}
+                                    style="{column.pinned === 'left' ? 'left: 0;' : column.pinned === 'right' ? 'right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
+                                    data-column-id={column.id}
+                                >
                                     {#if typeof cellContent === 'string' || typeof cellContent === 'number'}
                                         {cellContent}
                                     {:else if cellContent && typeof cellContent === 'object' && 'type' in cellContent}
@@ -1561,9 +1657,12 @@
     }
 
     .th-actions {
-        right: 0;
         text-align: center;
         text-transform: none !important;
+    }
+
+    .th-actions.th-fixed {
+        right: 0;
     }
 
     .th-data.sortable {
@@ -1622,11 +1721,20 @@
         transition: color 0.15s;
     }
 
-    .header-tooltip-link:hover {
+    .header-tooltip-gesture {
+        padding: 0;
+        border: 0;
+        background: transparent;
+        transition: color 0.15s;
+    }
+
+    .header-tooltip-link:hover,
+    .header-tooltip-gesture:hover {
         color: #1a4031;
     }
 
-    :global(.dark) .header-tooltip-link:hover {
+    :global(.dark) .header-tooltip-link:hover,
+    :global(.dark) .header-tooltip-gesture:hover {
         color: #4ade80;
     }
 
@@ -1915,8 +2023,7 @@
         border-radius: 0.25rem;
         background: #f1f5f9;
         flex-shrink: 0;
-        /* Fixed size ensures text labels align in a column */
-        min-width: 32px;
+        min-width: 0;
     }
 
     .cell-image.circle {

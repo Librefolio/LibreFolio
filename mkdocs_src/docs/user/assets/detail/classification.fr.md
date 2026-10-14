@@ -3,14 +3,14 @@
 Le panneau de Classification affiche la répartition **sectorielle** et **géographique** de l'actif, lorsque ces données ont été configurées pour l'actif (manuellement ou récupérées via un fournisseur).
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Asset Classification Panel" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+ <img class="gallery-img" data-category="assets" data-name="detail-classification" alt="Panneau de classification de l'actif" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
 
 ---
 
 ## 📊 Répartition Sectorielle
 
-Un **graphique circulaire** montrant la ventilation par secteur d'activité (ex: Technologie 35%, Santé 20%, Finance 15%...). C'est particulièrement utile pour les ETF et les fonds diversifiés afin de comprendre l'allocation sectorielle sous-jacente.
+Un **graphique circulaire** montrant la ventilation par secteur d'activité (ex. : Technologie 35 %, Santé 20 %, Finance 15 %...). C'est particulièrement utile pour les ETF et les fonds diversifiés afin de comprendre l'allocation sectorielle sous-jacente.
 
 ## 🌍 Répartition Géographique
 
@@ -20,7 +20,7 @@ Une **carte du monde interactive** où les pays sont colorés selon le poids de 
 
 ### Country par Pays
 
-Un **graphique circulaire** montrant la ventilation en pourcentage par pays ou région (ex: États-Unis 60%, Europe 25%, Asie 15%...).
+Un **graphique circulaire** montrant la ventilation en pourcentage par pays ou région (ex. : États-Unis 60 %, Europe 25 %, Asie 15 %...).
 
 ---
 

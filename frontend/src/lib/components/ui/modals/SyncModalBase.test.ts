@@ -22,7 +22,9 @@
  *   - translated text. The footer button says Close or Cancel depending on
  *     `isTimeout`, the summary says "Synced 3/4" around a translated verb, the
  *     section titles come from the catalogue. Everything is read from
- *     `data-testid`/`data-*` or from values the test itself injected.
+ *     `data-testid`/`data-*` or from values the test itself injected. Wording is
+ *     read once, and only negatively: in Italian, the sentences the base writes
+ *     itself must not come out in English ("its own sentences", at the end).
  *   - CSS classes. `allFailuresPartial` only softens the retry button's accent from
  *     red to amber; both of its arms are executed here, neither is asserted, because
  *     a colour is not a contract.
@@ -30,17 +32,19 @@
  *     its own unit test; what is asserted here is `data-remaining`, the number.
  *
  * A few tests below pin behaviour that is deliberate rather than obvious: the
- * timeout is a display and not a limit (it measures the user's patience, not the
- * server's), `onsynced` fires even when every item failed, and closing the modal
- * does not cancel the request — it only makes the modal stop listening. They are
- * written as descriptions of a decision, so that changing the decision shows up
- * here first.
+ * countdown is a display and the base never cuts a request itself (the cut is the
+ * request limit it hands each section, which the wrappers give to axios),
+ * `onsynced` fires even when every item failed, and closing the modal does not
+ * cancel the request — it only makes the modal stop listening. They are written as
+ * descriptions of a decision, so that changing the decision shows up here first.
  */
 import {beforeAll, describe, expect, it, vi} from 'vitest';
 import type {Mock} from 'vitest';
 import {tick} from 'svelte';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import type {SyncResult, SyncStatus} from '$lib/utils/sync/syncHelpers';
+import enCatalogue from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
 import Harness from '$test/harness/SyncModalBaseHarness.svelte';
 
 // =========================================================================
@@ -160,6 +164,43 @@ async function flush(times = 5) {
     for (let i = 0; i < times; i++) await tick();
 }
 
+/** The arguments of a section's n-th call (1-based), or a failure that says how many calls there were. */
+function callOf(fn: {mock: {calls: unknown[][]}}, call: number): unknown[] {
+    const args = fn.mock.calls[call - 1];
+    if (!args) throw new Error(`doSyncFn has no call #${call}: it was called ${fn.mock.calls.length} time(s)`);
+    return args;
+}
+
+/**
+ * The ids a section was asked about on its n-th call.
+ *
+ * Only the first argument: the second is the request limit, which has tests of
+ * its own ("the request limit"). An id assertion that matched the whole argument
+ * list would turn red on any change to the limit and say nothing about the ids.
+ */
+function idsAsked(fn: {mock: {calls: unknown[][]}}, call = 1): unknown {
+    return callOf(fn, call)[0];
+}
+
+/** What the base told a section about its n-th request: the second argument of `doSyncFn`. */
+function requestOf(fn: {mock: {calls: unknown[][]}}, call = 1): unknown {
+    return callOf(fn, call)[1];
+}
+
+/** Types a value into the Timeout field the way a user does. */
+async function setTimeoutField(seconds: number) {
+    const field = screen.getByTestId('sync-modal-timeout');
+    await fireEvent.input(field, {target: {value: String(seconds)}});
+    expect(field).toHaveValue(seconds);
+}
+
+/** The leaf behind a dotted key, read from the catalogue file itself. */
+function leaf(catalogue: unknown, key: string): string {
+    const value = key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+    if (typeof value !== 'string') throw new Error(`${key} is not a sentence in the catalogue`);
+    return value;
+}
+
 beforeAll(async () => {
     // Before any fake timer is installed: register() resolves the catalogues
     // through dynamic import, and a faked clock is not the place to await one.
@@ -232,8 +273,8 @@ describe('SyncModalBase — several sections at once', () => {
         await fireEvent.click(startButton());
         await settled();
 
-        expect(alpha).toHaveBeenCalledWith(['a1', 'a2']);
-        expect(beta).toHaveBeenCalledWith(['b1']);
+        expect(idsAsked(alpha)).toEqual(['a1', 'a2']);
+        expect(idsAsked(beta)).toEqual(['b1']);
         // Each section shows its own rows and only its own.
         expect(rowIds(sectionOf('alpha')).sort()).toEqual(['a1', 'a2']);
         expect(rowIds(sectionOf('beta'))).toEqual(['b1']);
@@ -396,7 +437,7 @@ describe('SyncModalBase — retry', () => {
         await fireEvent.click(within(rowOf('a1')).getByTestId('sync-retry-row'));
         await waitFor(() => expect(statusOf('a1')).toBe('ok'));
 
-        expect(fn).toHaveBeenNthCalledWith(2, ['a1']);
+        expect(idsAsked(fn, 2)).toEqual(['a1']);
         // The untouched row keeps its result rather than being re-fetched.
         expect(statusOf('a2')).toBe('ok');
         expect(summary()).toMatchObject({success: 2, total: 2, failed: 0});
@@ -437,7 +478,7 @@ describe('SyncModalBase — retry', () => {
         await fireEvent.click(screen.getByTestId('sync-modal-retry-failed'));
         await waitFor(() => expect(statusOf('a1')).toBe('ok'));
 
-        expect(fn).toHaveBeenNthCalledWith(2, ['a1']);
+        expect(idsAsked(fn, 2)).toEqual(['a1']);
         expect(statusOf('a2')).toBe('failed');
     });
 
@@ -496,8 +537,8 @@ describe('SyncModalBase — retry', () => {
         await fireEvent.click(screen.getByTestId('sync-modal-retry-failed'));
         await waitFor(() => expect(summary().failed).toBe(0));
 
-        expect(alpha).toHaveBeenNthCalledWith(2, ['a1', 'a2']);
-        expect(beta).toHaveBeenNthCalledWith(2, ['b1']);
+        expect(idsAsked(alpha, 2)).toEqual(['a1', 'a2']);
+        expect(idsAsked(beta, 2)).toEqual(['b1']);
         expect(summary()).toMatchObject({success: 4, total: 4});
     });
 
@@ -528,7 +569,7 @@ describe('SyncModalBase — retry', () => {
         // asks for the one failure rather than the whole set again.
         await fireEvent.click(startButton());
         await waitFor(() => expect(statusOf('a1')).toBe('ok'));
-        expect(fn).toHaveBeenNthCalledWith(2, ['a1']);
+        expect(idsAsked(fn, 2)).toEqual(['a1']);
     });
 
     it('hides the retry controls while a retry is in flight', async () => {
@@ -581,7 +622,7 @@ describe('SyncModalBase — reopening', () => {
         expect(bodyState('data-timeout')).toBe('false');
         await fireEvent.click(startButton());
         await settled();
-        expect(fn).toHaveBeenNthCalledWith(2, ['a1', 'a2']);
+        expect(idsAsked(fn, 2)).toEqual(['a1', 'a2']);
     });
 
     it('recomputes the timeout floor from the item count of the new run', async () => {
@@ -629,13 +670,14 @@ describe('SyncModalBase — countdown', () => {
     /**
      * Deliberate, and pinned so that changing it has to be a decision.
      *
-     * `timeoutSec` drives the countdown and nothing else: there is no timer that
-     * aborts, and the wrappers pass a hardcoded 120s to axios regardless of what
-     * the user typed. Past the deadline the counter sits at 0, the bar is full, and
-     * the modal stays busy for as long as the backend cares to take — because the
-     * number measures the user's patience, not the server's.
+     * The base has no timer that aborts. What cuts a request is the limit it hands
+     * each section (`{timeoutMs}`, see "the request limit" below), which the
+     * wrappers give to axios: never under 120 s, and 5 s past the field above that,
+     * so the countdown always reaches 0 before the cut — at the default 20 s, a long
+     * way before. Past the deadline the counter sits at 0, the bar is full, and the
+     * modal stays busy until the section answers or gives up.
      */
-    it('keeps waiting after the countdown reaches zero: the timeout is a display, not a limit', async () => {
+    it('keeps waiting after the countdown reaches zero: the base never cuts a request itself', async () => {
         vi.useFakeTimers();
         try {
             const never = deferred<SyncResult[]>();
@@ -804,7 +846,7 @@ describe('SyncModalBase — items the answer does not cover', () => {
         await fireEvent.click(startButton());
         await idle();
 
-        expect(partialAnswer).toHaveBeenCalledWith(['a1', 'a2']);
+        expect(idsAsked(partialAnswer)).toEqual(['a1', 'a2']);
         // Both ids are on screen, and the one nobody spoke about is a failure.
         expect(rowIds().sort()).toEqual(['a1', 'a2']);
         expect(statusOf('a1')).toBe('ok');
@@ -835,7 +877,7 @@ describe('SyncModalBase — items the answer does not cover', () => {
         await fireEvent.click(startButton());
         await waitFor(() => expect(statusOf('a2')).toBe('ok'));
 
-        expect(fn).toHaveBeenNthCalledWith(2, ['a2']);
+        expect(idsAsked(fn, 2)).toEqual(['a2']);
         expect(summary()).toMatchObject({success: 2, total: 2, failed: 0});
     });
 
@@ -856,7 +898,7 @@ describe('SyncModalBase — items the answer does not cover', () => {
         await waitFor(() => expect(fn).toHaveBeenCalledTimes(2));
         await idle();
 
-        expect(fn).toHaveBeenNthCalledWith(2, ['a1', 'a2']);
+        expect(idsAsked(fn, 2)).toEqual(['a1', 'a2']);
         // Nothing was erased, nothing was invented, and the way out is still there.
         expect(rowIds().sort()).toEqual(['a1', 'a2']);
         expect(statusOf('a1')).toBe('failed');
@@ -880,7 +922,7 @@ describe('SyncModalBase — items the answer does not cover', () => {
         await fireEvent.click(startButton());
         await waitFor(() => expect(statusOf('a2')).toBe('ok'));
 
-        expect(fn).toHaveBeenNthCalledWith(2, ['a2']);
+        expect(idsAsked(fn, 2)).toEqual(['a2']);
         expect(statusOf('a1')).toBe('ok');
         expect(rowIds().sort()).toEqual(['a1', 'a2']);
         expect(summary()).toMatchObject({success: 2, total: 2, failed: 0});
@@ -963,5 +1005,196 @@ describe('SyncModalBase — sessions', () => {
         await idle();
         expect(statusOf('a1')).toBe('partial');
         expect(onsynced).toHaveBeenCalledTimes(1);
+    });
+});
+
+// =========================================================================
+// The request limit: what the user agreed to wait is what a request may take
+// =========================================================================
+
+/**
+ * The Timeout field is the user's patience, and the requests used to ignore it:
+ * the wrappers capped every call at 120 s whatever was typed, so a field raised to
+ * 300 s bought a countdown that kept running after the request had been cut.
+ *
+ * The base now hands each section the limit its request may take, as the second
+ * argument of `doSyncFn` — `{timeoutMs}`: never under the old 120 s floor, and 5 s
+ * past the field above it, so the countdown reaches 0 before the cut and never
+ * after. The wrappers give it to axios; their own tests check that leg.
+ */
+describe('SyncModalBase — the request limit it hands each section', () => {
+    it('gives every section 120 s while the field sits at its default', async () => {
+        const alpha = answersWith('ok');
+        const beta = answersWith('ok');
+        mount([
+            {id: 'alpha', targetIds: ['a1'], doSyncFn: alpha},
+            {id: 'beta', targetIds: ['b1'], doSyncFn: beta},
+        ]);
+        // Precondition, read rather than assumed: the default is far under the floor.
+        expect(screen.getByTestId('sync-modal-timeout')).toHaveValue(20);
+
+        await fireEvent.click(startButton());
+        await settled();
+
+        expect(idsAsked(alpha)).toEqual(['a1']);
+        expect.soft(requestOf(alpha), 'section alpha').toEqual(expect.objectContaining({timeoutMs: 120_000}));
+        expect.soft(requestOf(beta), 'section beta').toEqual(expect.objectContaining({timeoutMs: 120_000}));
+    });
+
+    it.each([
+        // The floor still wins up to 115 s: 115 s and its 5 s of grace are exactly 120 s.
+        [110, 120_000],
+        [115, 120_000],
+        // Past it the field leads, 5 s ahead of the countdown.
+        [116, 121_000],
+        [300, 305_000],
+    ])('turns a field of %i s into a %i ms limit', async (seconds, limitMs) => {
+        const fn = answersWith('ok');
+        mount([{id: 'alpha', targetIds: ['a1'], doSyncFn: fn}]);
+
+        await setTimeoutField(seconds);
+        await fireEvent.click(startButton());
+        await settled();
+
+        expect(requestOf(fn)).toEqual(expect.objectContaining({timeoutMs: limitMs}));
+    });
+
+    /**
+     * The field stays editable after a failure precisely so the user can raise it
+     * and retry. The limit must therefore be read when each request leaves — by all
+     * three doors: the first run, the bulk retry and a single row's retry.
+     */
+    it('reads the field each time a request leaves, retries included', async () => {
+        const fn = answersFrom({a1: 'failed', a2: 'failed'}, {a1: 'failed', a2: 'failed'}, {a1: 'ok'});
+        mount([{id: 'alpha', targetIds: ['a1', 'a2'], doSyncFn: fn}]);
+
+        await fireEvent.click(startButton());
+        await settled();
+        expect.soft(requestOf(fn, 1), 'first run').toEqual(expect.objectContaining({timeoutMs: 120_000}));
+
+        // Raised after the failure, then everything failed is retried…
+        await setTimeoutField(300);
+        await fireEvent.click(screen.getByTestId('sync-modal-retry-failed'));
+        await waitFor(() => expect(fn).toHaveBeenCalledTimes(2));
+        await idle();
+        expect(idsAsked(fn, 2)).toEqual(['a1', 'a2']);
+        expect.soft(requestOf(fn, 2), 'bulk retry').toEqual(expect.objectContaining({timeoutMs: 305_000}));
+
+        // …raised again, then one row is retried on its own.
+        await setTimeoutField(400);
+        await fireEvent.click(within(rowOf('a1')).getByTestId('sync-retry-row'));
+        await waitFor(() => expect(statusOf('a1')).toBe('ok'));
+        expect(idsAsked(fn, 3)).toEqual(['a1']);
+        expect.soft(requestOf(fn, 3), 'single-row retry').toEqual(expect.objectContaining({timeoutMs: 405_000}));
+    });
+
+    /**
+     * "Timed out after 20 s" over a request that was given 120 s is a false
+     * statement, and it points the user at the wrong fix. The banner names the
+     * limit that was applied. Asserted as numbers — the sentence is the
+     * catalogue's, the figure is not.
+     */
+    it.each([
+        [20, 120],
+        [300, 305],
+    ])('names the applied limit, not the field, when the request times out (field %i s, limit %i s)', async (fieldSec, appliedSec) => {
+        mount([{id: 'alpha', targetIds: ['a1'], doSyncFn: vi.fn().mockRejectedValue({code: 'ECONNABORTED', message: 'aborted'})}]);
+        await setTimeoutField(fieldSec);
+
+        await fireEvent.click(startButton());
+        await settled();
+        expect(bodyState('data-timeout')).toBe('true');
+
+        const said = errorBanner()?.textContent ?? '';
+        // Digit boundaries, not word boundaries: "120s" must count as citing 120,
+        // and the 20 inside "120" must not count as citing the field.
+        expect.soft(said, 'the applied limit is named').toMatch(new RegExp(`(?<!\\d)${appliedSec}(?!\\d)`));
+        expect.soft(said, 'the field is not').not.toMatch(new RegExp(`(?<!\\d)${fieldSec}(?!\\d)`));
+    });
+});
+
+// =========================================================================
+// The sentences the base writes itself
+// =========================================================================
+
+/**
+ * Most of what the modal says is the catalogue's already. A handful of sentences
+ * were written straight into the component in English — the bulk retry button, the
+ * "{n} failed" half of the footer button, the timeout banner and the row message
+ * beside it, the last-resort error — and they stay English in Italian.
+ *
+ * Read in Italian and asserted as the *absence* of the English: the keys that will
+ * carry these sentences do not exist yet, so there is no translation to compare
+ * against, only a leak to rule out. The positive control is a sentence the base
+ * already takes from the catalogue, read in the same tree: it proves Italian is
+ * really on screen, so an English word found next to it is a hard-coded one.
+ */
+describe('SyncModalBase — its own sentences come from the catalogue', () => {
+    async function inItalian(body: () => Promise<void>): Promise<void> {
+        await setupI18n('it');
+        try {
+            await body();
+        } finally {
+            await setupI18n('en');
+        }
+    }
+
+    function expectItalianOnScreen() {
+        // The control only discriminates if the two catalogues disagree on it.
+        expect(leaf(itCatalogue, 'fx.sync.start')).not.toBe(leaf(enCatalogue, 'fx.sync.start'));
+        expect(startButton()).toHaveTextContent(leaf(itCatalogue, 'fx.sync.start'));
+    }
+
+    it('counts the failures on both retry controls without an English "failed"', async () => {
+        await inItalian(async () => {
+            mount([{id: 'alpha', targetIds: ['a1', 'a2'], doSyncFn: answersWith('failed')}]);
+            expectItalianOnScreen();
+
+            await fireEvent.click(startButton());
+            await settled();
+            expect(summary().failed).toBe(2);
+
+            // The count survives the rewording: it is the one part this test created.
+            const bulk = screen.getByTestId('sync-modal-retry-failed').textContent ?? '';
+            expect(bulk).toMatch(/(?<!\d)2(?!\d)/);
+            expect.soft(bulk, 'bulk retry button').not.toMatch(/\bRetry\b/);
+            expect.soft(bulk, 'bulk retry button').not.toMatch(/\bfailed\b/i);
+
+            const footer = startButton().textContent ?? '';
+            expect(footer).toMatch(/(?<!\d)2(?!\d)/);
+            expect.soft(footer, 'footer button in retry mode').not.toMatch(/\bfailed\b/i);
+        });
+    });
+
+    it('words the timeout banner and the timed-out row from the catalogue', async () => {
+        await inItalian(async () => {
+            mount([{id: 'alpha', targetIds: ['a1'], doSyncFn: vi.fn().mockRejectedValue({code: 'ECONNABORTED', message: 'aborted'})}]);
+            expectItalianOnScreen();
+
+            await fireEvent.click(startButton());
+            await settled();
+            expect(bodyState('data-timeout')).toBe('true');
+
+            const banner = errorBanner()?.textContent ?? '';
+            expect(banner.trim()).not.toBe('');
+            expect.soft(banner, 'timeout banner').not.toMatch(/Request timed out|Increase the timeout/);
+            expect.soft(rowOf('a1').getAttribute('data-message') ?? '', 'timed-out row').not.toMatch(/Timeout after/);
+        });
+    });
+
+    it('falls back to a catalogue sentence when a failure carries no message at all', async () => {
+        await inItalian(async () => {
+            mount([{id: 'alpha', targetIds: ['a1'], doSyncFn: vi.fn().mockRejectedValue({})}]);
+            expectItalianOnScreen();
+
+            await fireEvent.click(startButton());
+            await settled();
+            expect(statusOf('a1')).toBe('failed');
+
+            const banner = errorBanner()?.textContent ?? '';
+            expect(banner.trim()).not.toBe('');
+            expect.soft(banner, 'error banner').not.toMatch(/Sync failed/);
+            expect.soft(rowOf('a1').getAttribute('data-message') ?? '', 'failed row').not.toMatch(/Sync failed/);
+        });
     });
 });

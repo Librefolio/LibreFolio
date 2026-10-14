@@ -30,7 +30,7 @@
         affected_asset_ids?: number[];
         affected_asset_names?: string[];
         affected_fx_pairs?: string[];
-        /** CTA intent: 'add_fx_pair' | 'sync_fx_pair' | 'navigate_asset' | 'navigate_fx' */
+        /** CTA intent: 'add_fx_pair' | 'sync_fx_pair' | 'sync_asset_prices' | 'navigate_asset' | 'navigate_fx' */
         cta_action?: string | null;
         /** Target identifier — asset_id string or fx pair slug */
         cta_target?: string | null;
@@ -113,7 +113,7 @@
     /** Select CTA icon based on action type */
     function getCtaIcon(action: string | null | undefined) {
         if (action === 'add_fx_pair') return Coins;
-        if (action === 'sync_fx_pair') return RefreshCw;
+        if (action === 'sync_fx_pair' || action === 'sync_asset_prices') return RefreshCw;
         return ArrowUpRight;
     }
 

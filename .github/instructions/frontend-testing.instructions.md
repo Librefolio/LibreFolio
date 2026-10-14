@@ -52,6 +52,9 @@ frontend/e2e/
 # All frontend at once
 ./dev.py test all-frontend
 
+# Isolated worktree lane (global options stay before the category)
+./dev.py test --test-port 6152 --data-dir /tmp/librefolio-r2-c front-asset all
+
 # Options: --ui (Playwright UI), --headed (visible browser), --debug (debug mode)
 ./dev.py test front-transaction tx-broker-access --headed
 ```
@@ -94,7 +97,8 @@ Tests are organized **per concern**, not monolithically per page. Each spec file
 ## Conventions
 
 - **Always use `data-testid`** — never CSS classes or text (fragile with i18n)
-- **Explicit timeouts**: `{timeout: N}` on expect/waitFor — keep tight (localhost is fast, 15s per test)
+- **Explicit timeouts**: `{timeout: N}` on expect/waitFor — tight for an element already on screen (the `expect`
+  default is 3 s), a navigation budget for what follows a route change or a round trip (the test itself has 30 s)
 - **Never skip for missing mock data**: if data is needed, it must exist in `populate_mock_data.py`. Use `throw new Error(...)` pointing to the seeding script instead.
 - **Reserve `test.skip()` only for infrastructure conditions** (e.g. mobile-only test on desktop project)
 - **Mobile awareness**: handle hamburger menu with `openMobileMenu()`
@@ -419,7 +423,13 @@ was a defect in a spec or in the product — none was a genuine write conflict.
 - 2 projects: `desktop` (1280×720) + `mobile` (iPhone 14 Pro Max viewport)
 - Both use Chromium (WebKit has stability issues on Linux)
 - Workers: 1 (sequential — shared DB state)
-- Web Server auto-start: `./dev.py server --test --force`
+- Web Server is owned by the test runner and started without `--force` on the lane's
+  `TEST_PORT` and `LIBREFOLIO_TEST_DATA_DIR`
+
+Two Playwright invocations may coexist only in different lanes: both
+`--test-port` and `--data-dir` must be unique. Within one lane, Playwright still
+shares the backend, database and users; never launch a second invocation there.
+An occupied lane fails closed instead of reusing or terminating its listener.
 
 ## Test Runner Architecture (`scripts/test_runner/`)
 
@@ -470,4 +480,3 @@ scripts/test_runner/
 | `_ensure_frontend_build()` | `_frontend_common.py` | Builds frontend if stale |
 | `add_test(cat, action, func, ...)` | `_common.py` | Registers a test in the category dict |
 | `_run_test_suite(tests, ...)` | `_common.py` | Runs a list of tests with summary |
-

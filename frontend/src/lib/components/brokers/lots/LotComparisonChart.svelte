@@ -5,7 +5,6 @@
     import {z} from 'zod';
     import {schemas} from '$lib/api';
     import {_} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {CHART_ANIMATION_CONFIG, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {buildDataZoom, getChartZoomWindow} from '$lib/components/charts/chartCoreHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
@@ -17,32 +16,45 @@
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
-    import {formatAxisDate, parseDisplayDate} from '$lib/utils/core/formatAxisDate';
+    import {parseDisplayDate} from '$lib/utils/core/formatAxisDate';
+    import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
+    import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
-    import {formatAxisNumber as sharedFormatAxisNumber, normalizeZero, resolveBrokerName, withAlpha} from './lotChartShared';
+    import {resolveBrokerName, withAlpha} from './lotChartShared';
     import {
+        aggregateReturnPoints as aggregateReturnPointsOf,
+        aggregateValuePoints,
         buildBucketInfos,
+        comprehensiveValue,
         buildZoomWindowForRange as sharedBuildZoomWindowForRange,
         computeAutoYAxisRange,
         computeBucketCounts as sharedComputeBucketCounts,
         findPointAtOrBefore,
+        formatAxisAmount,
+        formatAxisCurrency as sharedFormatAxisCurrency,
         formatAxisPercent,
         incomeEventColor as sharedIncomeEventColor,
         logicalRangeFromBuckets,
         lotColor as sharedLotColor,
         lotIdFromSeriesId,
-        parseRequiredNumber,
         parseTimeMs,
+        parseValueSeriesPoint,
+        pnlWithIncome,
         pointKey,
         safeValueSource,
         seriesValue,
+        tooltipBucketInfo,
         tooltipRawDate,
         tooltipTimestamp,
         tooltipXValue,
-        type BucketInfo,
+        type AggregateReturnPoint,
+        type AggregatedValuePoint,
+        type LotValueSeriesPoint,
     } from './lotComparisonChartHelpers';
+    import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotValueHistoryPoint = z.infer<typeof schemas.LotValueHistoryPoint>;
@@ -55,7 +67,8 @@
         type: 'DIVIDEND' | 'INTEREST';
         date: string;
         broker_id: number | null;
-        amount: string;
+        /** `null` when the income has no rate to the target currency. */
+        amount: string | null;
         lot_ids: number[];
     };
 
@@ -75,34 +88,10 @@
         valueSource: LotValueSource | null;
     }
 
-    interface LotValueSeriesPoint {
-        date: string;
-        proceeds: number;
-        openValue: number;
-        originalCost: number;
-        pnl: number;
-        income: number;
-    }
-
     interface LotReturnSeriesPoint {
         date: string;
         totalReturn: number | null;
         relativeReturn: number | null;
-    }
-
-    interface AggregatedValuePoint {
-        date: string;
-        openValue: number;
-        proceeds: number;
-        originalCost: number;
-        income: number;
-    }
-
-    interface AggregateReturnPoint {
-        date: string;
-        totalReturn: number | null;
-        openingValue: number;
-        pnlWithIncome: number;
     }
 
     type ChartSeriesPoint = ReturnType<typeof namedPoint> & {
@@ -175,6 +164,10 @@
     let currentResolution: ChartResolution = $state('daily');
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
+    // Up only while chartInstance holds a full option (the LineChart guard). init() and clear() leave a model
+    // without a grid, and the lazy x-axis patch merged into it throws on `axisBuilder` in ECharts' next frame.
+    let chartOptionSet = false;
+    let responsiveXAxisCompact = false;
     let resizeAnimationFrame: number | null = null;
     let lastObservedChartSize: {width: number; height: number} | null = null;
     // The one caller that reads the entry: it thresholds sub-pixel jitter off the
@@ -196,6 +189,14 @@
             resizeAnimationFrame = null;
             if (!chartInstance || !lastObservedChartSize) return;
             chartInstance.resize(lastObservedChartSize);
+            const policy = buildLotXAxisPolicy();
+            const wasCompact = responsiveXAxisCompact;
+            responsiveXAxisCompact = policy.compact;
+            if (policy.axisLabel) {
+                if (chartOptionSet) chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+            } else if (wasCompact) {
+                renderChart();
+            }
             scheduleResolutionSync();
         });
     });
@@ -226,36 +227,20 @@
     function formatShortDate(value: string): string {
         const date = parseDisplayDate(value);
         if (!date) return value;
-        return date.toLocaleDateString($currentLanguage || undefined, {day: '2-digit', month: '2-digit', year: '2-digit'});
+        return date.toLocaleDateString(uiLocale(), {day: '2-digit', month: '2-digit', year: '2-digit'});
     }
 
     function formatLongDate(value: number | string): string {
         const date = parseDisplayDate(value);
         if (!date) return String(value);
-        return date.toLocaleDateString($currentLanguage || undefined, {year: 'numeric', month: 'short', day: 'numeric'});
+        return date.toLocaleDateString(uiLocale(), {year: 'numeric', month: 'short', day: 'numeric'});
     }
 
     /** This chart's numbers are already percentages, hence scale 1 (the default). */
     const formatPercent = (value: number): string => sharedFormatPercent(value);
 
-    /** Machine locale for numbers (as opposed to `$currentLanguage` for words),
-     *  matching the original inline formatter. */
-    const formatAxisNumber = (value: number): string => sharedFormatAxisNumber(value);
-
-    function formatAxisCurrency(value: number): string {
-        const normalized = normalizeZero(value);
-        try {
-            return new Intl.NumberFormat(undefined, {
-                style: 'currency',
-                currency,
-                currencyDisplay: 'narrowSymbol',
-                notation: 'compact',
-                maximumFractionDigits: 1,
-            }).format(normalized);
-        } catch (_) {
-            return `${formatAxisNumber(normalized)} ${currency}`;
-        }
-    }
+    /** Money for the absolute-return axis; masks the number under privacy, keeps the currency. */
+    const formatAxisCurrency = (value: number): string => sharedFormatAxisCurrency(value, currency);
 
     /** Wrapper: passes the reactive `isDark` to the shared deterministic lot color. */
     const lotColor = (lotId: number): string => sharedLotColor(lotId, isDark);
@@ -397,36 +382,26 @@
 
     function formatTooltipMonth(date: string): string {
         const [year, month] = date.split('-').map(Number);
-        return new Intl.DateTimeFormat($currentLanguage || undefined, {
+        return new Intl.DateTimeFormat(uiLocale(), {
             month: 'long',
             year: 'numeric',
             timeZone: 'UTC',
         }).format(new Date(Date.UTC(year, month - 1, 1)));
     }
 
-    function tooltipBucketInfo(params: any[]): BucketInfo | null {
-        for (const param of params) {
-            const data = param?.data;
-            if (!data || typeof data !== 'object') continue;
-            const bucketStart = typeof data.bucketStart === 'string' ? data.bucketStart : null;
-            const bucketEnd = typeof data.bucketEnd === 'string' ? data.bucketEnd : null;
-            const resolution = data.resolution === 'weekly' || data.resolution === 'monthly' || data.resolution === 'daily' ? data.resolution : null;
-            if (bucketStart && bucketEnd && resolution) return {date: bucketEnd, bucketStart, bucketEnd, resolution};
-        }
-        return null;
-    }
-
     function buildTooltipBucketHeader(params: any[], fallbackDate: number | string, theme: ReturnType<typeof buildTooltipTheme>): string {
         const bucket = tooltipBucketInfo(params);
         if (!bucket || bucket.resolution === 'daily') return buildTooltipHeader(escapeHtml(formatLongDate(fallbackDate)), theme.textColor);
 
-        const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${escapeHtml($_('chart.tooltip.valueAt', {values: {date: formatLongDate(bucket.bucketEnd)}}))}</div>`;
+        // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
+        const span = bucketSpanUpTo(bucket.date, bucket);
+        const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${escapeHtml($_('chart.tooltip.valueAt', {values: {date: formatLongDate(span.bucketEnd)}}))}</div>`;
         if (bucket.resolution === 'weekly') {
-            const label = $_('chart.tooltip.weekRange', {values: {start: formatLongDate(bucket.bucketStart), end: formatLongDate(bucket.bucketEnd)}});
+            const label = $_('chart.tooltip.weekRange', {values: {start: formatLongDate(span.bucketStart), end: formatLongDate(span.bucketEnd)}});
             return `${buildTooltipHeader(escapeHtml(label), theme.textColor)}${contextLine}`;
         }
 
-        const month = formatTooltipMonth(bucket.bucketEnd);
+        const month = formatTooltipMonth(span.bucketEnd);
         const label = $_('chart.tooltip.monthLabel', {values: {month}});
         return `${buildTooltipHeader(escapeHtml(label), theme.textColor)}${contextLine}`;
     }
@@ -444,7 +419,7 @@
         aggregateOpeningValue: translateOr($_, 'brokers.lots.aggregateOpeningValue', 'Opening value'),
         aggregateReturn: translateOr($_, 'brokers.lots.aggregateReturn', 'Aggregate return'),
         fifoPnl: translateOr($_, 'brokers.lots.fifoPnl', 'FIFO P&L'),
-        totalPnl: translateOr($_, 'brokers.lots.tooltip.totalPnl', 'Total P&L'),
+        totalPnl: translateOr($_, 'brokers.lots.totalPnl', 'Total P&L'),
         totalReturn: translateOr($_, 'brokers.lots.totalReturn', 'Total return'),
         yAuto: translateOr($_, 'brokers.lots.yAxisAuto', 'Auto'),
         yFromZero: translateOr($_, 'brokers.lots.yAxisFromZero', 'From 0'),
@@ -496,14 +471,7 @@
         const grouped = new Map<number, LotValueSeriesPoint[]>();
         for (const point of valueHistory) {
             const existing = grouped.get(point.lot_id);
-            const datum = {
-                date: point.date,
-                proceeds: parseRequiredNumber(point.proceeds),
-                openValue: parseRequiredNumber(point.open_value),
-                originalCost: parseRequiredNumber(point.original_cost),
-                pnl: parseRequiredNumber(point.pnl),
-                income: parseRequiredNumber(point.income),
-            } satisfies LotValueSeriesPoint;
+            const datum: LotValueSeriesPoint = parseValueSeriesPoint(point);
             if (existing) existing.push(datum);
             else grouped.set(point.lot_id, [datum]);
         }
@@ -523,26 +491,12 @@
         return byLotDate;
     });
 
-    const aggregatedValuePoints = $derived.by(() => {
-        const totals = new Map<string, AggregatedValuePoint>();
-        for (const lot of visibleLots) {
-            for (const point of valuePointsByLotId.get(lot.lotId) ?? []) {
-                const current = totals.get(point.date) ?? {
-                    date: point.date,
-                    openValue: 0,
-                    proceeds: 0,
-                    originalCost: 0,
-                    income: 0,
-                };
-                current.openValue += point.openValue;
-                current.proceeds += point.proceeds;
-                current.originalCost += point.originalCost;
-                current.income += point.income;
-                totals.set(point.date, current);
-            }
-        }
-        return Array.from(totals.values()).sort((left, right) => left.date.localeCompare(right.date));
-    });
+    const aggregatedValuePoints = $derived.by((): AggregatedValuePoint[] =>
+        aggregateValuePoints(
+            visibleLots.map((lot) => lot.lotId),
+            valuePointsByLotId,
+        ),
+    );
 
     const returnPointsByLotId = $derived.by(() => {
         const grouped = new Map<number, LotReturnSeriesPoint[]>();
@@ -589,31 +543,13 @@
 
     const activeReturnLotsWithData = $derived.by(() => (returnUnit === 'pct' ? returnPctLotsWithData : returnAbsLotsWithData));
 
-    const aggregateReturnPoints = $derived.by(() => {
-        if (returnAbsLotsWithData.length < 1 && returnPctLotsWithData.length < 1) return [] satisfies AggregateReturnPoint[];
-
-        const pctEligibleLotIds = new Set(returnPctLotsWithData.map((lot) => lot.lotId));
-        const totals = new Map<string, {date: string; pnlWithIncome: number; pctPnlWithIncome: number; pctOpeningValue: number}>();
-        for (const lot of returnAbsLotsWithData) {
-            for (const point of valuePointsByLotId.get(lot.lotId) ?? []) {
-                const current = totals.get(point.date) ?? {date: point.date, pnlWithIncome: 0, pctPnlWithIncome: 0, pctOpeningValue: 0};
-                current.pnlWithIncome += point.pnl + point.income;
-                if (pctEligibleLotIds.has(lot.lotId) && point.originalCost > 0) {
-                    current.pctPnlWithIncome += point.pnl + point.income;
-                    current.pctOpeningValue += point.originalCost;
-                }
-                totals.set(point.date, current);
-            }
-        }
-
-        return Array.from(totals.values())
-            .map((point) => ({
-                date: point.date,
-                totalReturn: point.pctOpeningValue > 0 ? point.pctPnlWithIncome / point.pctOpeningValue : null,
-                openingValue: point.pctOpeningValue,
-                pnlWithIncome: point.pnlWithIncome,
-            }))
-            .sort((left, right) => left.date.localeCompare(right.date)) satisfies AggregateReturnPoint[];
+    const aggregateReturnPoints = $derived.by((): AggregateReturnPoint[] => {
+        if (returnAbsLotsWithData.length < 1 && returnPctLotsWithData.length < 1) return [];
+        return aggregateReturnPointsOf(
+            returnAbsLotsWithData.map((lot) => lot.lotId),
+            new Set(returnPctLotsWithData.map((lot) => lot.lotId)),
+            valuePointsByLotId,
+        );
     });
 
     const aggregateReturnSeriesPoints = $derived.by(() => aggregateReturnPoints.map((point) => lineDataPoint(point.date, returnUnit === 'pct' ? (point.totalReturn == null ? null : point.totalReturn * 100) : point.pnlWithIncome)).filter((point): point is LineDataPoint => point != null));
@@ -666,6 +602,12 @@
         return type === 'DIVIDEND' ? modeLabels.incomeDividend : modeLabels.incomeInterest;
     }
 
+    /** A distribution's total; «—» when it has no rate to the target currency. */
+    function formatIncomeEventAmount(amount: string | null): string {
+        const parsed = parseNumber(amount);
+        return parsed == null ? '—' : formatCurrencyAmountPlain(parsed, currency, {showSign: true});
+    }
+
     function buildIncomeEventTooltip(event: LotIncomeEvent | null): string {
         if (!event) return '';
         const theme = buildTooltipTheme(isDark);
@@ -673,7 +615,7 @@
             buildTooltipRow(escapeHtml(modeLabels.incomeType), escapeHtml(incomeEventTypeLabel(event.type)), incomeEventColor(event.type)),
             buildTooltipRow(escapeHtml(modeLabels.incomeDate), escapeHtml(formatLongDate(event.date))),
             buildTooltipRow(escapeHtml(modeLabels.incomeBroker), escapeHtml(brokerName(event.broker_id))),
-            buildTooltipRow(escapeHtml(modeLabels.incomeAmount), escapeHtml(formatCurrencyAmountPlain(parseRequiredNumber(event.amount), currency, {showSign: true}))),
+            buildTooltipRow(escapeHtml(modeLabels.incomeAmount), escapeHtml(formatIncomeEventAmount(event.amount))),
             buildTooltipRow(escapeHtml(modeLabels.incomeLotCount), escapeHtml(String(event.lot_ids?.length ?? 0))),
         ];
         return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(incomeEventTypeLabel(event.type)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
@@ -699,7 +641,7 @@
         }
 
         const point = findPointAtOrBefore(valuePointsByLotId.get(lotId) ?? [], timestampMs);
-        return point ? point.pnl + point.income : null;
+        return point ? pnlWithIncome(point) : null;
     }
 
     /** Income "|" markers (rect 2×16px) sitting on the relevant line at each distribution date:
@@ -714,7 +656,8 @@
             const color = incomeEventColor(event.type);
             if (mode === 'value') {
                 const agg = findPointAtOrBefore(aggregatedValuePoints, timestamp);
-                if (agg) data.push({value: [event.date, agg.openValue + agg.proceeds + agg.income], incomeEvent: event, itemStyle: {color, opacity: 0.95}});
+                const y = agg ? comprehensiveValue(agg) : null;
+                if (y != null) data.push({value: [event.date, y], incomeEvent: event, itemStyle: {color, opacity: 0.95}});
             } else if (mode === 'return') {
                 for (const lotId of event.lot_ids ?? []) {
                     if (!visibleLots.some((lot) => lot.lotId === lotId)) continue;
@@ -936,7 +879,7 @@
         const residualData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.openValue)).filter((point): point is LineDataPoint => point != null));
         const proceedsData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.proceeds)).filter((point): point is LineDataPoint => point != null));
         const incomeData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.income)).filter((point): point is LineDataPoint => point != null));
-        const comprehensiveData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.openValue + point.proceeds + point.income)).filter((point): point is LineDataPoint => point != null));
+        const comprehensiveData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, comprehensiveValue(point))).filter((point): point is LineDataPoint => point != null));
         const openingData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.originalCost)).filter((point): point is LineDataPoint => point != null));
 
         const series: echarts.SeriesOption[] = [
@@ -1061,7 +1004,7 @@
                 const data =
                     returnUnit === 'pct'
                         ? toChartSeriesPoints((returnPointsByLotId.get(lot.lotId) ?? []).map((point) => lineDataPoint(point.date, point.totalReturn == null ? null : point.totalReturn * 100)).filter((point): point is LineDataPoint => point != null))
-                        : toChartSeriesPoints((valuePointsByLotId.get(lot.lotId) ?? []).map((point) => lineDataPoint(point.date, point.pnl + point.income)).filter((point): point is LineDataPoint => point != null));
+                        : toChartSeriesPoints((valuePointsByLotId.get(lot.lotId) ?? []).map((point) => lineDataPoint(point.date, pnlWithIncome(point))).filter((point): point is LineDataPoint => point != null));
                 series.push({
                     id: `return-${lot.lotId}`,
                     name: returnSeriesName(lot.label),
@@ -1149,14 +1092,26 @@
         const legendData = baseSeries.map((item) => (item as {name?: unknown}).name).filter((name): name is string => typeof name === 'string' && name !== AXIS_TRIGGER_ANCHOR_ID && name !== PER_LOT_HOVER_DOTS_ID && name !== LOT_INCOME_MARKER_SERIES_ID);
         const axisFallbackRange = seriesDataDateRange(baseSeries);
         const axisDateRange = xAxisRange ?? (axisFallbackRange ? {min: axisFallbackRange[0], max: axisFallbackRange[1]} : null);
-        const multiYearAxis = !!axisDateRange && new Date(axisDateRange.min).getFullYear() !== new Date(axisDateRange.max).getFullYear();
+        const xAxisPolicy = buildLotXAxisPolicy(axisDateRange);
+        responsiveXAxisCompact = xAxisPolicy.compact;
         return {
             ...CHART_ANIMATION_CONFIG,
+            // With `containLabel: true`, `left` is only the empty inset BEFORE the y labels
+            // (ECharts adds the label width itself). 24 px left a visible empty strip on a phone
+            // (developer review, 2026-09-29): 10 px keeps the labels off the card edge. `right` holds
+            // half the widest time label past the last tick (plan 52): a px base does not follow the
+            // width, so the resize leaves it alone.
             grid: {
                 top: 62,
-                right: 18,
+                right: timeAxisGridRight({
+                    width: chartContainer?.clientWidth ?? 0,
+                    values: axisDateRange ? [axisDateRange.min, axisDateRange.max] : [],
+                    locale: uiLocale(),
+                    base: 18,
+                    measure: axisLabelMeasure(chartInstance, 12),
+                }),
                 bottom: 34,
-                left: 24,
+                left: 10,
                 containLabel: true,
             },
             legend: {
@@ -1196,13 +1151,15 @@
             xAxis: {
                 type: 'time',
                 ...(xAxisRange ? {min: xAxisRange.min, max: xAxisRange.max} : {}),
+                ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
                 axisLine: {lineStyle: {color: gridColors.gridColor}},
                 axisTick: {show: false},
                 splitLine: {show: false},
                 axisLabel: {
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatAxisDate($currentLanguage, value, multiYearAxis),
+                    formatter: xAxisPolicy.formatter,
+                    ...(xAxisPolicy.axisLabel ?? {}),
                 },
             },
             yAxis: {
@@ -1219,12 +1176,22 @@
                 splitLine: {lineStyle: {color: gridColors.gridColor}},
                 axisLabel: {
                     color: gridColors.textColor,
-                    formatter: (value: number) => (mode === 'return' ? (returnUnit === 'pct' ? formatAxisPercent(value) : formatAxisCurrency(value)) : formatAxisNumber(value)),
+                    formatter: (value: number) => (mode === 'return' ? (returnUnit === 'pct' ? formatAxisPercent(value) : formatAxisCurrency(value)) : formatAxisAmount(value)),
                 },
             },
             series: [...baseSeries, emptyHoverDotsSeries()],
             dataZoom: buildDataZoom([0]).map((zoom) => (zoomWindow ? {...zoom, start: zoomWindow.start, end: zoomWindow.end} : zoom)),
         };
+    }
+
+    function buildLotXAxisPolicy(range: {min: number | string; max: number | string} | null = xAxisRange): ReturnType<typeof buildResponsiveXAxisPolicy> {
+        return buildResponsiveXAxisPolicy({
+            width: chartContainer?.clientWidth ?? 0,
+            values: range ? [range.min, range.max] : [],
+            locale: uiLocale(),
+            axisType: 'time',
+            horizontalPadding: 42,
+        });
     }
 
     function resetResizeObserverState() {
@@ -1259,6 +1226,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartOptionSet = false;
             attachChartReady(chartInstance, chartContainer, 'lot-comparison');
             needsInitialLayoutStabilityPass = true;
             setupResizeObserver();
@@ -1274,10 +1242,12 @@
         const option = buildOption();
         if (!option) {
             chartInstance.clear();
+            chartOptionSet = false;
             return;
         }
 
         chartInstance.setOption(option, LOT_COMPARISON_SET_OPTION_OPTS);
+        chartOptionSet = true;
         if (needsInitialLayoutStabilityPass) {
             needsInitialLayoutStabilityPass = false;
             scheduleFirstRenderStabilityFix(chartInstance, chartContainer);
@@ -1341,7 +1311,10 @@
         void resolutionSourceDates;
         void resolutionSourceSignature;
         void emptyMessage;
-        void $currentLanguage;
+        void uiLocale();
+        // ECharts calls the axis formatters outside this effect, so the privacy flag they read
+        // is not tracked there: read it here, or toggling privacy leaves the axis as it was.
+        void isPrivacyEnabled();
 
         if (resolutionSourceSignature !== lastResolutionSourceSignature) {
             lastResolutionSourceSignature = resolutionSourceSignature;

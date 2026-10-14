@@ -1,12 +1,14 @@
 # 🧬 FIFO Lot Engine
 
-`backend/app/services/fifo_lot_engine.py` contains LibreFolio's **pure, event-sourced FIFO engine** for one asset across many brokers. Unlike [`wac.md`](wac.md), which computes an aggregated **per-position** weighted average cost, `FifoLotEngine` keeps **individual lots** alive through buys, sells, splits, transfers, and adjustments so the "FIFO Lots Analysis" panel can explain **which lot moved where, when, and why**.
+The package `backend/app/services/financial_math/fifo/` contains LibreFolio's **pure, event-sourced FIFO engine** for one asset across many brokers. Unlike [`wac.md`](wac.md), which computes an aggregated **per-position** weighted average cost, `FifoLotEngine` keeps **individual lots** alive through buys, sells, splits, transfers, and adjustments so the "FIFO Lots Analysis" panel can explain **which lot moved where, when, and why**.
+
+The package belongs to the [financial math layer](../financial_math.md) and re-exports nothing: import each name from the module that defines it — the data types (input transactions, events, lots, fragments, closures, economic allocations, `FifoEngineResult`) from `models.py`, `eligible_income_quantity()` from `eligibility.py`, `FifoLotEngine` and `run_fifo_lot_engine()` from `engine.py`.
 
 !!! info "Use this vs WAC"
 
     `FifoLotEngine` answers **lot-level lifecycle** questions: FIFO matching, realized P&L per lot, custody fragments, transfer transit, split-adjusted quantities, and lot history for charts/modals.
 
-    `portfolio_service.compute_wac_iterative()` plus `utils/financial/wac_utils.py` answer **position-level cost basis** questions: one running WAC per `(broker, asset)` scope, suitable for transaction validation and broker summaries.
+    `portfolio_service.compute_wac_iterative()` plus `services/financial_math/average_cost.py` answer **position-level cost basis** questions: one running WAC per `(broker, asset)` scope, suitable for transaction validation and broker summaries.
 
 ---
 
@@ -28,7 +30,10 @@ def run_fifo_lot_engine(
     broker_shorting: dict[int, bool],
     *,
     split_ratios_by_tx_id: dict[int, Decimal] | None = None,
+    split_event_ids_by_tx_id: dict[int, int] | None = None,
     reference_price_lookup: ReferencePriceLookup | None = None,
+    economic_events: Sequence[EconomicEvent] = (),
+    target_currency: str = "",
 ) -> FifoEngineResult:
 ```
 
@@ -39,7 +44,10 @@ def run_fifo_lot_engine(
 | `transactions` | Chronological asset transactions for **one asset only**. |
 | `broker_shorting` | Per-broker flag controlling whether a `SELL` remainder may open a `SHORT` lot. |
 | `split_ratios_by_tx_id` | Split transaction ID → ratio used to synthesize `SPLIT` events. |
+| `split_event_ids_by_tx_id` | Split transaction ID → its `SPLIT` `AssetEvent` id, carried by the synthesized event as `asset_event_id`. Yield on Cost passes it; the lots analysis does not. |
 | `reference_price_lookup` | Optional pure lookup used by current implementation when `ADJUSTMENT_IN` opens a new LONG lot. |
+| `economic_events` | Asset-linked `DIVIDEND` / `INTEREST` / `FEE` / `TAX` as `EconomicEvent`s, each with its native amount and the target-currency amount its caller resolved; consumed by the [economic allocation stage](#economic-allocation-stage). |
+| `target_currency` | The caller's report currency; each `EconomicEvent` also carries its own `target_currency`. |
 
 ### 📤 Output
 
@@ -54,7 +62,7 @@ def run_fifo_lot_engine(
 
 !!! warning "The engine does not compute market valuation"
 
-    `FifoEngineResult` intentionally exposes **no** market-valuation helper. Market value (`open_quantity / quote_base_quantity * market_price`), target-currency FX, and estimated-at-cost fallback are presentation concerns owned by `LotsAnalysisService`, not this engine. Keeping them out of the engine avoids a latent ×`quote_base_quantity` valuation bug.
+    `FifoEngineResult` intentionally exposes **no** market-valuation helper. Market value (`open_quantity / quote_base_quantity * market_price`), target-currency FX, and estimated-at-cost fallback are presentation concerns owned by the lots analysis — `LotsAnalysisService` and its functions in `financial_math/lots/` — not this engine. Keeping them out of the engine avoids a latent ×`quote_base_quantity` valuation bug.
 
 ---
 
@@ -83,7 +91,7 @@ One FIFO lot. Usually opened by a `BUY`, by the remainder of an `ADJUSTMENT_IN`,
 | `reference_unit_price` | Optional reference price the engine resolves for a lot (e.g. when an `ADJUSTMENT_IN` opens a new LONG lot), consumed downstream by `LotsAnalysisService`. |
 | `reference_price_source` | `"exact"`, `"fallback"`, `"unavailable"`, or `None`. |
 
-`reference_unit_price` is stored on the market/`quote_base_quantity` axis when the resolver supplies one. If no opening quote is available, `LotsAnalysisService._opening_reference_price()` falls back to `lot.opening_unit_price * quote_base_quantity` before computing `relative_return`; the engine itself does not know `quote_base_quantity`.
+`reference_unit_price` is stored on the market/`quote_base_quantity` axis when the resolver supplies one. If no opening quote is available, `opening_reference_price()` (`financial_math/lots/prices.py`) falls back to `lot.opening_unit_price * quote_base_quantity` before the lots analysis computes `relative_return`; the engine itself does not know `quote_base_quantity`.
 
 ### 🧩 `FragmentInterval`
 
@@ -138,7 +146,7 @@ Returned snapshot of complete run.
 
 Useful helpers on result:
 
-- `analysis_status`: `"FAILED"` if any issue is a non-isolable quantitative-replay error (see `_QUANTITATIVE_FAILURE_CODES`), else `"DEGRADED"` if `issues` is non-empty, else `"COMPLETE"`
+- `analysis_status`: `"FAILED"` if any issue is a non-isolable quantitative-replay error (see `_QUANTITATIVE_FAILURE_CODES` in `models.py`), else `"DEGRADED"` if `issues` is non-empty, else `"COMPLETE"`
 - `get_lot_states(lot_id)`: derives `LONG`/`SHORT`, `OPEN`/`PARTIALLY_CLOSED`/`CLOSED`, plus `IN_TRANSIT`, `DISTRIBUTED`, `DEGRADED`
 - `active_fragments(...)`: filter live custody fragments
 
@@ -327,9 +335,10 @@ per-lot accumulators, an audit trail, and asset-level orphans.
 `(broker, date, economic_type, native_currency, target_currency)` and allocates it to eligible lots:
 
 - **Eligibility = D-1**: a lot is eligible if it has open **LONG** quantity as of `date - 1`
-  (`_eligible_income_quantity(...)`), **scoped to the paying broker** (including quantity that left that
+  (`eligible_income_quantity(...)`, `eligibility.py`), **scoped to the paying broker** (including quantity that left that
   broker as `IN_TRANSIT`). A BUY made on the income date is therefore not eligible; a lot already closed by
-  end of `date - 1` is not either.
+  end of `date - 1` is not either. It is the shared D-1 eligibility seam: transaction-ledger Yield on Cost
+  (`backend/app/services/financial_math/yield_on_cost.py`) counts eligible quantity with the same public function.
 - weight `w_i = EligibleQty_i / Σ EligibleQty_j`, distributed with a running remainder so the pool total is
   conserved exactly;
 - **no eligible lot** → the whole pool becomes `asset_orphan_income`, with an `ASSET_INCOME_NO_ELIGIBLE_LOTS`
@@ -402,5 +411,6 @@ The engine returns realized P&L plus economic accumulators; `LotsAnalysisService
 
 - 🧮 **[Lots Analysis Service](lots_analysis_service.md)** — Service layer that adds FX, `quote_base_quantity`, income allocation, and DTO building on top of engine output
 - ⚖️ **[WAC & Cost Basis](wac.md)** — Complementary per-position cost-basis engine
+- 🧮 **[Financial Math Layer](../financial_math.md)** — The layer this package belongs to: rules, package map, guards
 - 🧬 **[FIFO Engine Theory](../../../financial-theory/technical-analysis/performance-metrics/fifo-engine/index.md)** — Theoretical mirror of this page: lot lifecycle, matching, splits, transfers in financial terms
 - 📖 **[FIFO Lot Analysis Theory](../../../financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md)** — Financial meaning of lot-level FIFO analysis

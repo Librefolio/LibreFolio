@@ -1,0 +1,1 @@
+../../../../../../../mkdocs_src/docs/financial-theory/technical-analysis/risk-metrics/sharpe-ratio.en.md

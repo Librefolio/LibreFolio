@@ -758,3 +758,231 @@ class TestDuplicateDetection:
         finally:
             await async_session.delete(existing_tx)
             await async_session.commit()
+
+
+# =============================================================================
+# CATEGORY 4b: DUPLICATES OF A MERGED PAIR (DD-011 … DD-017)
+# =============================================================================
+#
+# A WITHDRAWAL and a DEPOSIT merged by a promote become the two legs of a CASH_TRANSFER (two brokers) or of an
+# FX_CONVERSION (two currencies), each leg carrying both descriptions joined by a newline (promoteHelpers.mergeStrings).
+# An export "since the last one" re-delivers the last day it covered, so the same movement comes back as a plain
+# DEPOSIT or WITHDRAWAL: found on its merged leg it is a duplicate; missed, it is offered back as new and the cash
+# doubles (plan 37, §9). Red while candidates had to share the incoming type, except DD-016, the guard of the
+# same-type rule, which is green on both sides of the change.
+
+TRANSFER_OUT_TEXT = "Interner Übertrag · id SYNTHC0000000000000005"  # the sending account's side, as its export writes it
+TRANSFER_IN_TEXT = "Interner Übertrag · id synthD0000000000000003"  # the receiving account's side
+MERGED_TRANSFER_TEXT = f"{TRANSFER_OUT_TEXT}\n{TRANSFER_IN_TEXT}"  # what a merge leaves on both legs
+
+
+def _cash_item(broker_id: int, tx_type: TransactionType, day: date, amount: str, description: str | None, currency: str = "EUR") -> TXCreateItem:
+    """A parsed cash row without an instrument, as a plugin hands it to the duplicate check."""
+    return TXCreateItem(broker_id=broker_id, asset_id=None, type=tx_type, date=day, quantity=Decimal("0"), cash=Currency(code=currency, amount=Decimal(amount)), description=description)
+
+
+async def _save_merged_pair(session: AsyncSession, tx_type: TransactionType, day: date, legs: List[tuple]) -> List[int]:
+    """Two saved legs of ``tx_type`` pointing at each other, as a promote leaves a merged pair; returns their ids.
+
+    ``legs`` holds two ``(broker_id, amount, currency, description)``. Both links are written before the commit: the
+    foreign key of ``related_transaction_id`` is deferred.
+    """
+    rows = [Transaction(broker_id=broker_id, asset_id=None, type=tx_type, date=day, quantity=Decimal("0"), amount=Decimal(amount), currency=currency, description=description, tags="import,scalable") for broker_id, amount, currency, description in legs]
+    session.add_all(rows)
+    await session.flush()
+    rows[0].related_transaction_id, rows[1].related_transaction_id = rows[1].id, rows[0].id
+    ids = [row.id for row in rows]  # read before the commit expires the instances
+    await session.commit()
+    return ids
+
+
+async def _save_merged_transfer(session: AsyncSession, broker_id: int, partner_id: int, day: date, amount: str, description: str = MERGED_TRANSFER_TEXT) -> List[int]:
+    """A merged CASH_TRANSFER: ``amount`` EUR on ``broker_id``, the opposite on ``partner_id``; returns [its leg, the partner's leg]."""
+    return await _save_merged_pair(session, TransactionType.CASH_TRANSFER, day, [(broker_id, amount, "EUR", description), (partner_id, str(-Decimal(amount)), "EUR", description)])
+
+
+async def _delete_transactions(session: AsyncSession, ids: List[int]) -> None:
+    """Whoever writes cleans up: the links first, then the rows."""
+    from sqlalchemy import delete, update  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+    await session.execute(update(Transaction).where(Transaction.id.in_(ids)).values(related_transaction_id=None))
+    await session.execute(delete(Transaction).where(Transaction.id.in_(ids)))
+    await session.commit()
+
+
+def _matches(candidate) -> list:
+    """``(existing id, its type, level)`` of every saved row a parsed row was matched with."""
+    return [(match.existing_tx_id, match.tx_type, match.match_level) for match in candidate.tx_existing_matches]
+
+
+def _verdicts(report) -> dict:
+    """``{row index: (category, matches)}`` for every row of a duplicate report: the whole verdict, in one comparable value."""
+    verdicts = {index: ("unique", []) for index in report.tx_unique_indices}
+    verdicts.update({candidate.tx_row_index: ("possible", _matches(candidate)) for candidate in report.tx_possible_duplicates})
+    verdicts.update({candidate.tx_row_index: ("likely", _matches(candidate)) for candidate in report.tx_likely_duplicates})
+    return verdicts
+
+
+class TestMergedPairDuplicates:
+    """A deposit or a withdrawal imported again after a promote merged it into a pair (plan 37, §9)."""
+
+    @pytest_asyncio.fixture
+    async def partner_broker(self, async_session: AsyncSession) -> int:
+        """The other broker of a cash transfer, where the leg that is not on ``test_broker`` lives."""
+        import uuid  # noqa: PLC0415 — test setup — imports after sys.path/db config
+
+        broker = Broker(name=f"Partner Broker BRIM {uuid.uuid4().hex[:8]}", description="The other side of a cash transfer")
+        async_session.add(broker)
+        await async_session.commit()
+        await async_session.refresh(broker)
+        broker_id = broker.id
+        yield broker_id
+        leftover = await async_session.get(Broker, broker_id)
+        if leftover:
+            await async_session.delete(leftover)
+            await async_session.commit()
+
+    @pytest.mark.asyncio
+    async def test_each_side_is_a_likely_duplicate_of_its_merged_cash_transfer_leg(self, async_session: AsyncSession, test_broker: int, partner_broker: int, test_date: date):
+        """DD-011: the two sides of a merged transfer, exported again, each on its own broker.
+
+        The withdrawal comes back on the broker the money left, with the first text of the merged description; the
+        deposit on the broker it reached, with the second. Each finds its own leg, and only it, as LIKELY: the text it
+        brings is contained in the joined one.
+        """
+        out_id, in_id = await _save_merged_transfer(async_session, test_broker, partner_broker, test_date, "-1000")
+        try:
+            sent = await detect_tx_duplicates(transactions=[_cash_item(test_broker, TransactionType.WITHDRAWAL, test_date, "-1000", TRANSFER_OUT_TEXT)], broker_id=test_broker, session=async_session)
+            received = await detect_tx_duplicates(transactions=[_cash_item(partner_broker, TransactionType.DEPOSIT, test_date, "1000", TRANSFER_IN_TEXT)], broker_id=partner_broker, session=async_session)
+
+            assert _verdicts(sent) == {0: ("likely", [(out_id, TransactionType.CASH_TRANSFER, BRIMDuplicateLevel.LIKELY)])}
+            assert _verdicts(received) == {0: ("likely", [(in_id, TransactionType.CASH_TRANSFER, BRIMDuplicateLevel.LIKELY)])}
+        finally:
+            await _delete_transactions(async_session, [out_id, in_id])
+
+    @pytest.mark.asyncio
+    async def test_a_merged_leg_whose_text_was_rewritten_is_only_a_possible_duplicate(self, async_session: AsyncSession, test_broker: int, partner_broker: int, test_date: date):
+        """DD-012: the user rewrote the merged description. Day, amount and sign still match, the text no longer does:
+        POSSIBLE — still flagged, no longer certain."""
+        rewritten = "Transfer to the overnight account"
+        out_id, in_id = await _save_merged_transfer(async_session, test_broker, partner_broker, test_date, "-1000", rewritten)
+        try:
+            report = await detect_tx_duplicates(transactions=[_cash_item(test_broker, TransactionType.WITHDRAWAL, test_date, "-1000", TRANSFER_OUT_TEXT)], broker_id=test_broker, session=async_session)
+
+            assert _verdicts(report) == {0: ("possible", [(out_id, TransactionType.CASH_TRANSFER, BRIMDuplicateLevel.POSSIBLE)])}
+        finally:
+            await _delete_transactions(async_session, [out_id, in_id])
+
+    @pytest.mark.asyncio
+    async def test_a_deposit_never_matches_a_merged_leg_of_the_opposite_sign(self, async_session: AsyncSession, test_broker: int, partner_broker: int, test_date: date):
+        """DD-013: +1000 coming in is not the −1000 that left, whatever its text.
+
+        Row 1, the withdrawal of that same −1000, is the presence barrier: it proves the leg is within the check's
+        reach, so row 0 is new because of its sign alone. (The +1000 leg exists — on the other broker.)
+        """
+        out_id, in_id = await _save_merged_transfer(async_session, test_broker, partner_broker, test_date, "-1000")
+        try:
+            report = await detect_tx_duplicates(
+                transactions=[
+                    _cash_item(test_broker, TransactionType.DEPOSIT, test_date, "1000", TRANSFER_OUT_TEXT),
+                    _cash_item(test_broker, TransactionType.WITHDRAWAL, test_date, "-1000", TRANSFER_OUT_TEXT),
+                ],
+                broker_id=test_broker,
+                session=async_session,
+            )
+
+            assert _verdicts(report) == {0: ("unique", []), 1: ("likely", [(out_id, TransactionType.CASH_TRANSFER, BRIMDuplicateLevel.LIKELY)])}
+        finally:
+            await _delete_transactions(async_session, [out_id, in_id])
+
+    @pytest.mark.asyncio
+    async def test_both_sides_of_a_merged_fx_conversion_find_their_own_leg(self, async_session: AsyncSession, test_broker: int, test_date: date):
+        """DD-014: a conversion merged from a EUR withdrawal and a USD deposit of one broker, exported again.
+
+        The deposit finds the USD leg, the withdrawal the EUR one: currency and amount pick the leg, the joined text
+        makes each LIKELY.
+        """
+        sold, bought = "Currency exchange EUR/USD · id FX0001", "Currency exchange EUR/USD · id FX0002"
+        merged = f"{sold}\n{bought}"
+        eur_id, usd_id = await _save_merged_pair(async_session, TransactionType.FX_CONVERSION, test_date, [(test_broker, "-920", "EUR", merged), (test_broker, "1000", "USD", merged)])
+        try:
+            report = await detect_tx_duplicates(
+                transactions=[
+                    _cash_item(test_broker, TransactionType.DEPOSIT, test_date, "1000", bought, currency="USD"),
+                    _cash_item(test_broker, TransactionType.WITHDRAWAL, test_date, "-920", sold),
+                ],
+                broker_id=test_broker,
+                session=async_session,
+            )
+
+            assert _verdicts(report) == {
+                0: ("likely", [(usd_id, TransactionType.FX_CONVERSION, BRIMDuplicateLevel.LIKELY)]),
+                1: ("likely", [(eur_id, TransactionType.FX_CONVERSION, BRIMDuplicateLevel.LIKELY)]),
+            }
+        finally:
+            await _delete_transactions(async_session, [eur_id, usd_id])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("other_type", "amount", "same_movement"),
+        [
+            (TransactionType.FEE, "-1000", TransactionType.WITHDRAWAL),
+            (TransactionType.TAX, "-1000", TransactionType.WITHDRAWAL),
+            (TransactionType.INTEREST, "1000", TransactionType.DEPOSIT),
+        ],
+        ids=["fee", "tax", "interest"],
+    )
+    async def test_other_cash_types_do_not_look_at_merged_legs(self, async_session: AsyncSession, test_broker: int, partner_broker: int, test_date: date, other_type: TransactionType, amount: str, same_movement: TransactionType):
+        """DD-015: only a deposit or a withdrawal can be the re-export of a merged leg; every other type is unchanged.
+
+        A fee, a tax or an interest of the leg's amount, day and text stays new. Row 1, the deposit or withdrawal of
+        that amount, is the presence barrier. A BUY or a SELL needs no case: it moves a quantity, which a leg never has.
+        """
+        leg_id, partner_leg_id = await _save_merged_transfer(async_session, test_broker, partner_broker, test_date, amount)
+        try:
+            report = await detect_tx_duplicates(
+                transactions=[
+                    _cash_item(test_broker, other_type, test_date, amount, TRANSFER_OUT_TEXT),
+                    _cash_item(test_broker, same_movement, test_date, amount, TRANSFER_OUT_TEXT),
+                ],
+                broker_id=test_broker,
+                session=async_session,
+            )
+
+            assert _verdicts(report) == {0: ("unique", []), 1: ("likely", [(leg_id, TransactionType.CASH_TRANSFER, BRIMDuplicateLevel.LIKELY)])}
+        finally:
+            await _delete_transactions(async_session, [leg_id, partner_leg_id])
+
+    @pytest.mark.asyncio
+    async def test_the_same_type_still_needs_the_same_text(self, async_session: AsyncSession, test_broker: int, test_date: date):
+        """DD-016 — regression guard, green before and after the change: containment is for merged legs only.
+
+        A plain DEPOSIT whose text merely contains the incoming one stays a POSSIBLE duplicate: between rows of the
+        same type, only the same text (whitespace and case aside) makes a LIKELY one.
+        """
+        saved = Transaction(broker_id=test_broker, asset_id=None, type=TransactionType.DEPOSIT, date=test_date, quantity=Decimal("0"), amount=Decimal("1000"), currency="EUR", description=MERGED_TRANSFER_TEXT)
+        async_session.add(saved)
+        await async_session.flush()
+        saved_id = saved.id  # read before the commit expires the instance
+        await async_session.commit()
+        try:
+            report = await detect_tx_duplicates(transactions=[_cash_item(test_broker, TransactionType.DEPOSIT, test_date, "1000", TRANSFER_IN_TEXT)], broker_id=test_broker, session=async_session)
+
+            assert _verdicts(report) == {0: ("possible", [(saved_id, TransactionType.DEPOSIT, BRIMDuplicateLevel.POSSIBLE)])}
+        finally:
+            await _delete_transactions(async_session, [saved_id])
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("description", [None, "", " \n "], ids=["none", "empty", "blank"])
+    async def test_a_row_without_text_is_never_a_likely_duplicate_of_a_merged_leg(self, async_session: AsyncSession, test_broker: int, partner_broker: int, test_date: date, description: str | None):
+        """DD-017: an empty text is contained in every text, so it must not make a LIKELY duplicate of every merged leg.
+
+        DD-007's rule, on a merged leg: no text, no certainty. The key fields still make it POSSIBLE.
+        """
+        out_id, in_id = await _save_merged_transfer(async_session, test_broker, partner_broker, test_date, "-1000")
+        try:
+            report = await detect_tx_duplicates(transactions=[_cash_item(test_broker, TransactionType.WITHDRAWAL, test_date, "-1000", description)], broker_id=test_broker, session=async_session)
+
+            assert _verdicts(report) == {0: ("possible", [(out_id, TransactionType.CASH_TRANSFER, BRIMDuplicateLevel.POSSIBLE)])}
+        finally:
+            await _delete_transactions(async_session, [out_id, in_id])

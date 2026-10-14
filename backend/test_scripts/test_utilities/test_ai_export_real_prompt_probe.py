@@ -30,6 +30,7 @@ from backend.test_scripts.diagnostics.ai_export_real_prompt_probe import (
     build_period_detail_matrix,
     build_probe_svgs,
     build_prompt_filename,
+    build_quality_summary,
     build_retained_prompt_manifest,
     build_user_scopes,
     classify_http_failure,
@@ -1439,6 +1440,166 @@ def test_public_semantics_audit_reconciles_hhi_weights_fifo_and_unit_price():
 
     raw_scope_audit = audit_snapshot_semantics(snapshot, prompt.replace("|1|B1|", "|1|5|"), render_result)
     assert "forbidden public prompt pattern raw_scope_numeric_value: 1" in raw_scope_audit["violations"]
+
+
+_CONCENTRATION_COMPONENT_IDS = ("broker.allocation_concentration", "broker.concentration_context", "portfolio.allocations_cash")
+
+
+def _concentration_payload(component_id: str, *, position_count: int, largest_weight: str | None, hhi_points: str | None) -> dict[str, object]:
+    """Abridged lane payload of a concentration component: all three carry both concentration fields, the rest is empty-scope filler."""
+    eur_zero = {"amount": "0", "code": "EUR"}
+    coverage = {"valued_market_value": eur_zero, "position_count": position_count}
+    component_fields: dict[str, dict[str, object]] = {
+        "broker.allocation_concentration": {"broker_id": 7, "market_value": eur_zero, "cash_total": eur_zero, "cash_balances": []},
+        "broker.concentration_context": {"broker_id": 7, "market_value": eur_zero, "allocation_by_type": [], "allocation_by_currency": [], "currency_coverage": coverage},
+        "portfolio.allocations_cash": {"market_value": eur_zero, "by_type": [], "by_currency": [], "currency_coverage": coverage, "cash_total": eur_zero, "cash_balances": []},
+    }
+    return {
+        "as_of": "2026-10-12",
+        "target_currency": "EUR",
+        "position_count": position_count,
+        "largest_position_weight_percent": largest_weight,
+        "herfindahl_index_points": hhi_points,
+        **component_fields[component_id],
+    }
+
+
+def _concentration_prompt(component_ids: tuple[str, ...], *, position_count: int, largest_weight: str, hhi_points: str) -> str:
+    """Public prompt shape: one ``COMPONENT`` block with a ``|field|value|`` table per component; cells are passed as rendered."""
+    rows = (f"|position_count|{position_count}|", f"|largest_position_weight_percent|{largest_weight}|", f"|herfindahl_index_points|{hhi_points}|")
+    return "\n".join(line for component_id in component_ids for line in (f"COMPONENT {component_id}", "|field|value|", *rows))
+
+
+def _audit_concentration(payloads: dict[str, dict[str, object]], prompt: str) -> dict[str, object]:
+    snapshot = {"sections": [{"component_id": component_id, "payload": payload} for component_id, payload in payloads.items()]}
+    return audit_snapshot_semantics(snapshot, prompt, {"breakdown": {"format_diagnostics": {}}})
+
+
+def test_public_semantics_audit_counts_null_hhi_of_empty_concentration_scopes_as_unavailable():
+    # No weighted position means no concentration to measure: the backend emits null for both
+    # fields (an HHI of 0 would claim perfect diversification) and the prompt legend reads null as
+    # explicitly unavailable, so the audit must count the case instead of rejecting it.
+    payloads = {component_id: _concentration_payload(component_id, position_count=0, largest_weight=None, hhi_points=None) for component_id in _CONCENTRATION_COMPONENT_IDS}
+    prompt = _concentration_prompt(_CONCENTRATION_COMPONENT_IDS, position_count=0, largest_weight="null", hhi_points="null")
+
+    audit = _audit_concentration(payloads, prompt)
+
+    assert audit["violations"] == []
+    assert audit["hhi"] == {"checks": 3, "values": [], "unavailable": 3, "violations": 0}
+
+
+@pytest.mark.parametrize("component_id", _CONCENTRATION_COMPONENT_IDS)
+def test_public_semantics_audit_counts_null_hhi_of_unweighted_positions_as_unavailable(component_id: str):
+    # Positions exist but none carries a weight: the same honest null pair, not an empty scope.
+    payload = _concentration_payload(component_id, position_count=2, largest_weight=None, hhi_points=None)
+    prompt = _concentration_prompt((component_id,), position_count=2, largest_weight="null", hhi_points="null")
+
+    audit = _audit_concentration({component_id: payload}, prompt)
+
+    assert audit["violations"] == []
+    assert audit["hhi"] == {"checks": 1, "values": [], "unavailable": 1, "violations": 0}
+
+
+def test_public_semantics_audit_flags_null_hhi_next_to_a_valued_largest_weight():
+    payload = _concentration_payload("broker.allocation_concentration", position_count=2, largest_weight="62.5", hhi_points=None)
+    prompt = _concentration_prompt(("broker.allocation_concentration",), position_count=2, largest_weight="62.5%", hhi_points="null")
+
+    audit = _audit_concentration({"broker.allocation_concentration": payload}, prompt)
+
+    assert audit["violations"] == ["broker.allocation_concentration: invalid HHI points"]
+    assert audit["hhi"]["violations"] == 1
+    assert audit["hhi"]["values"] == []
+
+
+def test_public_semantics_audit_flags_null_hhi_without_a_largest_weight_field():
+    payload = _concentration_payload("broker.allocation_concentration", position_count=0, largest_weight=None, hhi_points=None)
+    del payload["largest_position_weight_percent"]
+    prompt = "\n".join(["COMPONENT broker.allocation_concentration", "|field|value|", "|position_count|0|", "|herfindahl_index_points|null|"])
+
+    audit = _audit_concentration({"broker.allocation_concentration": payload}, prompt)
+
+    assert audit["violations"] == ["broker.allocation_concentration: invalid HHI points"]
+    assert audit["hhi"]["violations"] == 1
+    assert audit["hhi"]["values"] == []
+
+
+def test_public_semantics_audit_flags_null_hhi_whose_null_largest_weight_sits_on_another_record():
+    # The null weight sits on the parent record, the null HHI on a nested one: no exemption.
+    payload = {"position_count": 0, "largest_position_weight_percent": None, "detail": {"herfindahl_index_points": None}}
+    prompt = "\n".join(["COMPONENT broker.allocation_concentration", "|field|value|", "|position_count|0|", "|largest_position_weight_percent|null|", "|detail.herfindahl_index_points|null|"])
+
+    audit = _audit_concentration({"broker.allocation_concentration": payload}, prompt)
+
+    assert audit["violations"] == ["broker.allocation_concentration: invalid HHI points"]
+    assert audit["hhi"]["violations"] == 1
+    assert audit["hhi"]["values"] == []
+
+
+@pytest.mark.parametrize(
+    "hhi_points",
+    ["-1", "10000.01", "abc", "NaN"],
+    ids=["negative", "above_10000", "non_numeric", "non_finite"],
+)
+def test_public_semantics_audit_flags_invalid_hhi_points_even_next_to_a_null_largest_weight(hhi_points: str):
+    # Only a null HHI is exempted by a null weight: a present but invalid value stays a defect.
+    payload = _concentration_payload("broker.allocation_concentration", position_count=2, largest_weight=None, hhi_points=hhi_points)
+    prompt = _concentration_prompt(("broker.allocation_concentration",), position_count=2, largest_weight="null", hhi_points=hhi_points)
+
+    audit = _audit_concentration({"broker.allocation_concentration": payload}, prompt)
+
+    assert audit["violations"] == ["broker.allocation_concentration: invalid HHI points"]
+    assert audit["hhi"]["violations"] == 1
+    assert audit["hhi"]["values"] == []
+
+
+@pytest.mark.parametrize(
+    ("hhi_points", "largest_weight", "largest_weight_cell"),
+    [("0", "0", "0%"), ("0", None, "null"), ("10000", "100", "100%")],
+    ids=["zero_next_to_zero_weight", "zero_next_to_null_weight", "single_full_position"],
+)
+def test_public_semantics_audit_keeps_boundary_hhi_points_as_values(hhi_points: str, largest_weight: str | None, largest_weight_cell: str):
+    payload = _concentration_payload("broker.allocation_concentration", position_count=1, largest_weight=largest_weight, hhi_points=hhi_points)
+    prompt = _concentration_prompt(("broker.allocation_concentration",), position_count=1, largest_weight=largest_weight_cell, hhi_points=hhi_points)
+
+    audit = _audit_concentration({"broker.allocation_concentration": payload}, prompt)
+
+    assert audit["violations"] == []
+    assert audit["hhi"]["violations"] == 0
+    assert audit["hhi"]["values"] == [hhi_points]
+
+
+def test_public_semantics_audit_flags_hhi_points_rendered_as_percent():
+    payloads = {"broker.allocation_concentration": _concentration_payload("broker.allocation_concentration", position_count=3, largest_weight="24.5", hhi_points="944.2335")}
+
+    clean = _audit_concentration(payloads, _concentration_prompt(("broker.allocation_concentration",), position_count=3, largest_weight="24.5%", hhi_points="944.2335"))
+    audit = _audit_concentration(payloads, _concentration_prompt(("broker.allocation_concentration",), position_count=3, largest_weight="24.5%", hhi_points="944.2335%"))
+
+    assert clean["violations"] == []
+    assert audit["violations"] == ["HHI points rendered as percent"]
+    assert audit["hhi"]["violations"] == 1
+    assert audit["hhi"]["values"] == ["944.2335"]
+
+
+def _quality_entry(status: str, hhi: dict[str, object]) -> dict[str, object]:
+    return {"status": status, "renderer_equivalence": {"exact_string_match": True, "utf8_bytes_match": True}, "public_output_checks": {"hhi": hhi, "violations": []}}
+
+
+def test_quality_summary_totals_unavailable_hhi_over_successful_entries_only():
+    summary = build_quality_summary(
+        [
+            _quality_entry("ok", {"checks": 2, "values": [], "unavailable": 2, "violations": 0}),
+            _quality_entry("ok", {"checks": 2, "values": ["944.2335"], "unavailable": 1, "violations": 0}),
+            # An hhi block without the counter (written before it existed) contributes 0.
+            _quality_entry("ok", {"checks": 1, "values": ["2500"], "violations": 0}),
+            _quality_entry("failed", {"checks": 5, "values": [], "unavailable": 5, "violations": 0}),
+        ]
+    )
+
+    assert summary["prompt_sample"] == 3
+    assert summary["hhi_checks"] == 5
+    assert summary["hhi_violations"] == 0
+    assert summary["renderer_equivalence_violations"] == 0
+    assert summary["hhi_unavailable"] == 3
 
 
 def test_nearest_rank_distribution_and_nearest_key_are_deterministic():

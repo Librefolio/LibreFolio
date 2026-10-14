@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetKpi": {
+        "name": "Per-asset risk KPIs",
+        "description": "Volatility, deepest fall and risk-adjusted ratios, measured for each selected asset over one shared window."
+      }
+    }
+  }
+}

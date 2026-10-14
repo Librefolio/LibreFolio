@@ -1,4 +1,4 @@
-# ![](../../../static/icons/asset-types/hold.png){: width="32" style="vertical-align: middle;" } Matières premières
+# ![](../../../static/icons/asset-types/commodity.png){: width="32" style="vertical-align: middle;" } Matières premières
 
 Les **matières premières** sont des actifs physiques — ressources brutes ou biens primaires — détenus pour la préservation de la valeur à long terme ou comme couverture contre l'inflation. Dans LibreFolio, cette catégorie couvre les métaux précieux, l'énergie et d'autres réserves de valeur tangibles.
 
@@ -8,12 +8,12 @@ Les **matières premières** sont des actifs physiques — ressources brutes ou 
 
 | Propriété | Détail |
 |----------|--------|
-| **Code dans LibreFolio** | `HOLD` |
+| **Code dans LibreFolio** | `COMMODITY` |
 | **Prix** | Prix spot des bourses de matières premières, ou évaluation manuelle |
 | **Devise** | Généralement cotées en USD (or, pétrole) mais peuvent être libellées dans n'importe quelle devise |
 | **Dividendes** | Aucun — les matières premières ne génèrent pas de revenus |
 | **Stockage** | Les matières premières physiques peuvent engendrer des coûts de stockage/assurance |
-| **Fournisseurs typiques** | Yahoo Finance (ex: `GC=F` pour les contrats à terme sur l'or), Manuel |
+| **Fournisseurs typiques** | Yahoo Finance (ex. : `GC=F` pour les contrats à terme sur l'or), ou prix saisis manuellement dans l'[éditeur de données](../../../user/assets/detail/data-editor.md) |
 
 ---
 

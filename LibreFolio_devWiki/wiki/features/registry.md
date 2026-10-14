@@ -2,7 +2,7 @@
 
 > Authoritative list of all LibreFolio features with permanent codes.
 > Codes are assigned at first mention and **never change** even if the feature is renamed/split/superseded.
-> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress)
+> Updated: 2026-04-24 (bootstrap from codebase analysis, phases 0–7 in progress); 2026-10-09 (Release 2 archive: F-100–F-104 added, F-052/F-053/F-055/F-088/F-095 statuses corrected against the code); 2026-10-12 (lint: F-050/F-089/F-092 documented, F-075 superseded, verified on the code and in git); 2026-10-12 (step B5: F-105 guided onboarding; step B6a: F-106 Tool platform; step B6b: F-107 PAC allocator, F-108 Rebalancer planned; step C: F-078 implemented); 2026-10-12 (step B8: F-109 in-app changelog, localized by chapter); 2026-10-12 (folder 02, step R0: F-110–F-113 Risk); 2026-10-12 (C-64, status check: F-048 documented; the planned and idea rows checked against the code, unchanged); 2026-10-13 (the pages checked against the 1.2.0 CHANGELOG: F-114 Benchmark assets added)
 >
 > **Macro-level navigation**: for product-level domain narratives (what each domain does, how features cluster, data-flow diagrams), see [`wiki/domains/`](../domains/) — 11 domain pages covering all features.
 
@@ -24,8 +24,9 @@
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
 | [[F-001]] | User Authentication & Sessions | fullstack | `implemented` | [`dev/arch/access_control.md`](developer/architecture/access_control.md) |
-| [[F-002]] | User Management (admin CRUD) | fullstack | `implemented` | [`dev/arch/database/users_access.md`](developer/architecture/database/users_access.md) |
-| [[F-003]] | Multi-User Role System (admin/user) | fullstack | `implemented` | [`dev/arch/access_control.md`](developer/architecture/access_control.md) |
+| [[F-002]] | User Management (administration through the CLI; self-service account deletion) | fullstack | `implemented` | [`dev/arch/database/users_access.md`](developer/architecture/database/users_access.md) |
+| [[F-003]] | Multi-User Role System (admin/user; last-active-admin guard) | fullstack | `implemented` | [`dev/arch/access_control.md`](developer/architecture/access_control.md) |
+| [[F-102]] | Connection Security Indicator (+ login without account enumeration) | fullstack | `documented` | `user/connection-security.en.md` |
 
 ---
 
@@ -37,7 +38,11 @@
 | [[F-005]] | User Settings (language, theme) | fullstack | `implemented` | [`dev/fe/components/settings.md`](developer/frontend/components/settings.md) |
 | [[F-006]] | Global Settings (admin-managed app config) | fullstack | `implemented` | [`dev/arch/settings.md`](developer/architecture/settings.md) |
 | [[F-007]] | Theme System (dark/light/auto) | frontend | `implemented` | — |
-| [[F-008]] | i18n System (EN/IT/FR/ES, 840+ keys) | frontend | `implemented` | [`dev/fe/i18n.md`](developer/frontend/i18n.md) |
+| [[F-008]] | i18n System (EN/IT/FR/ES, 4 215 keys) | frontend | `implemented` | [`dev/fe/i18n.md`](developer/frontend/i18n.md) |
+| [[F-101]] | Global Privacy Mode (hide values) | frontend | `documented` | `user/settings/preferences.en.md` |
+| [[F-104]] | Recommend LibreFolio (social share, copy and go) | frontend | `documented` | `user/settings/about.en.md` |
+| [[F-105]] | Guided onboarding (Welcome, intro tour, contextual guides) | fullstack | `documented` | [`dev/fe/onboarding.md`](developer/frontend/onboarding.md) |
+| [[F-109]] | In-app changelog (sidebar version → modal; each release in the UI language when translated) | frontend | `documented` | `user/settings/about.en.md` |
 
 ---
 
@@ -49,8 +54,9 @@
 | [[F-010]] | Broker Sharing (Owner/Editor/Viewer roles) | fullstack | `documented` | `user/brokers/sharing.en.md` |
 | [[F-011]] | File Management (upload/list/delete broker reports) | fullstack | `documented` | `user/files/index.en.md` |
 | [[F-012]] | BRIM Framework (broker report import pipeline) | fullstack | `implemented` | [`dev/be/brim/architecture.md`](developer/backend/brim/architecture.md) |
-| [[F-013]] | BRIM Plugins (11 broker parsers) | backend | `implemented` | [`dev/be/brim/providers_list.md`](developer/backend/brim/providers_list.md) |
+| [[F-013]] | BRIM Broker Parser Plugins | backend | `documented` | [`dev/be/brim/providers_list.md`](developer/backend/brim/providers_list.md) |
 | [[F-014]] | Image Upload & Crop (broker icon) | fullstack | `implemented` | — |
+| [[F-103]] | BRIM Report Sets (one import from several exports; gap fix) | fullstack | `documented` | [`dev/be/brim/architecture.md`](developer/backend/brim/architecture.md) |
 
 ---
 
@@ -87,6 +93,7 @@
 | [[F-034]] | Scheduled Investment Provider (synthetic yield) | backend | `implemented` | `user/assets/providers/` |
 | [[F-035]] | CSS Scraper Provider (arbitrary web scraping) | backend | `implemented` | `user/assets/providers/` |
 | [[F-036]] | Provider Comparison Modal (diff provider vs DB) | frontend | `implemented` | — |
+| [[F-114]] | Benchmark assets — a switch that offers an asset as a comparison benchmark | fullstack | `implemented` | — |
 
 ---
 
@@ -112,9 +119,9 @@
 |------|-------|-------|--------|--------|
 | [[F-046]] | Transaction Model & Unified Batch API (validate + commit) | fullstack | `implemented` | [`dev/arch/database/brokers_transactions.md`](developer/architecture/database/brokers_transactions.md) |
 | [[F-047]] | Transaction List Page (DataTable + filters + dual-form modals) | frontend | `implemented` | — |
-| [[F-048]] | Transaction Modals — Form / Bulk / Delete / Promote / Split (mode-less, Round 6 Plan D done) | fullstack | `in-progress` | — |
-| [[F-049]] | BRIM Import UI (asset matching wizard, bulk commit) | frontend | `in-progress` | — |
-| [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | `planned` | — |
+| [[F-048]] | Transaction Modals — Form / Bulk / Delete / Promote / Split (mode-less, Round 6 Plan D done) | fullstack | `documented` | `user/transactions/index.en.md` |
+| [[F-049]] | BRIM Import UI (asset matching and review wizard) | fullstack | `documented` | [`dev/fe/import-wizard.md`](developer/frontend/components/features/import-wizard.md) |
+| [[F-050]] | File Preview System (image/text/table/md/code) | fullstack | `documented` | `user/files/index.en.md` |
 | [[F-051]] | Transaction ↔ AssetEvent Link | backend | `implemented` | — |
 
 ---
@@ -123,8 +130,8 @@
 
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
-| [[F-052]] | Market Data Scheduler (APScheduler daemon) | backend | `planned` | — |
-| [[F-053]] | Scheduler Settings UI (admin-managed cron config) | frontend | `planned` | — |
+| [[F-052]] | Market Data Scheduler (embedded asyncio daemon) | backend | `documented` | [`dev/be/scheduler.md`](developer/backend/scheduler.md) |
+| [[F-053]] | Scheduler Settings UI (admin Global settings) | frontend | `documented` | `admin/settings.en.md` |
 
 ---
 
@@ -133,7 +140,11 @@
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
 | [[F-054]] | Dashboard KPI & Overview | fullstack | `implemented` | — |
-| [[F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart, Allocation) | frontend | `implemented` | — |
+| [[F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart with P&L modes, Allocation) | frontend | `documented` | `user/dashboard/charts.en.md` |
+| [[F-100]] | Yield on Cost (YOC) per position | fullstack | `documented` | `user/dashboard/positions.en.md` |
+| [[F-111]] | Risk tab of the Dashboard and broker pages (four levels L1–L4) | frontend | `documented` | `user/dashboard/risk.en.md` |
+| [[F-112]] | Risk Lab of Asset Global (correlation, losses, risk–return, replay) | frontend | `documented` | `user/assets/correlation.en.md` |
+| [[F-113]] | Risk tab of Asset Detail (legacy panel, beta) | frontend | `implemented` | — |
 
 ---
 
@@ -144,6 +155,8 @@
 | [[F-056]] | FIFO at Runtime (on-demand cost basis) | backend | `implemented` | `fifo-lot-analysis.en.md` |
 | [[F-057]] | Currency Conversion (triangulation via FX graph) | backend | `implemented` | — |
 | [[F-058]] | ROI Calculations (TWRR + MWRR) | backend | `implemented` | — |
+| [[F-107]] | PAC allocator (purchase planner: SCIP search, exact replay, broker increments) | fullstack | `documented` | `user/tools/pac-allocator/index.en.md` |
+| [[F-110]] | Risk engine (analytic plugins, quant libraries in spawned processes) | backend | `documented` | [`dev/be/risk/architecture.md`](developer/backend/risk/architecture.md) |
 
 ---
 
@@ -167,6 +180,7 @@
 | [[F-072]] | TimeSeriesStore Pattern (delta-fetching client cache) | frontend | `implemented` | [`dev/fe/state/index.md`](developer/frontend/state/index.md) |
 | [[F-073]] | Backup & Restore | fullstack | `implemented` | — |
 | [[F-074]] | E2E Test Gallery (auto-screenshots for docs) | infra | `implemented` | — |
+| [[F-106]] | Tool platform (atomic Tool plugins, an owned process per item, compiled renderers) | fullstack | `documented` | [`dev/arch/patterns/tool_plugins.en.md`](developer/architecture/patterns/tool_plugins.en.md) |
 
 ---
 
@@ -174,51 +188,61 @@
 
 | Code | Title | Layer | Status | mkdocs |
 |------|-------|-------|--------|--------|
-| [[F-075]] | TanStack Table v9 Migration | frontend | `planned` | — |
+| [[F-075]] | TanStack Table v9 Migration | frontend | `superseded` | — |
 | [[F-076]] | Log Level Policy & TRACE Level | backend | `implemented` | — |
 | [[F-077]] | Mobile DataTable Touch Drag Column Reorder | frontend | `planned` | — |
-| [[F-078]] | User Filter in Files Page | fullstack | `planned` | — |
+| [[F-078]] | User Filter in Files Page (an uploader column filter, for every user) | fullstack | `implemented` | — |
 | [[F-079]] | GDPR Broker Access Compliance | fullstack | `planned` | — |
 | [[F-080]] | Candlestick Chart / Volume Bars | frontend | `implemented` | — |
 | [[F-081]] | Fiscal Sale Method (FIFO/LIFO/PMC/SelectID) | fullstack | `planned` | — |
 | [[F-082]] | Cash Split Transactions | fullstack | `planned` | — |
-| [[F-083]] | Multi-File Multi-Broker Import | fullstack | `planned` | — |
+| [[F-083]] | Multi-File Multi-Broker Import | fullstack | `documented` | [`dev/fe/import-wizard.md`](developer/frontend/components/features/import-wizard.md) |
 | [[F-084]] | Transaction Gain Chart | frontend | `planned` | — |
 | [[F-085]] | QuarkAI AI Assistant | fullstack | `idea` | — |
 | [[F-086]] | Client-side Image Preview Cache (LazyImage) | frontend | `implemented` | — |
 | [[F-087]] | Smooth Signal Line Style | frontend | `planned` | — |
-| [[F-088]] | Return-over-N Chart | frontend | `planned` | — |
-| [[F-089]] | FX Provider Per-Plugin Documentation | infra | `planned` | — |
+| [[F-088]] | Rolling (Return-over-N) Return chart mode | fullstack | `documented` | `user/assets/detail/chart.en.md` |
+| [[F-089]] | FX Provider Per-Plugin Documentation | infra | `documented` | `user/fx/providers/index.en.md` |
 | [[F-090]] | AssetEvent → Transaction Link (Enrichment) | backend | `planned` | — |
 | [[F-091]] | Multi-Worker Cache Server | backend | `planned` | — |
-| [[F-092]] | Default Language/Currency for New Users | backend | `planned` | — |
+| [[F-092]] | Default Language/Currency for New Users | backend | `documented` | `admin/settings.en.md` |
 | [[F-093]] | Coupon Policy Field | backend | `idea` | — |
 | [[F-094]] | Sync Date Range Dialog | frontend | `planned` | — |
-| [[F-095]] | Asset Delete — Transaction Count Link | fullstack | `planned` | — |
+| [[F-095]] | Asset Delete — Transaction Count Link | fullstack | `documented` | `user/assets/index.en.md` |
 | [[F-096]] | Scheduled Investment — Decoupled Frequencies + Anchor Day | backend | `idea` | — |
-| [[F-097]] | WAC — Weighted Average Cost (cross-currency, auto-calc on TRANSFER) | fullstack | `in-progress` | — |
+| [[F-097]] | WAC — Weighted Average Cost (cross-currency, auto-calc on TRANSFER) | fullstack | `documented` | [`dev/be/transactions/wac.md`](developer/backend/transactions/wac.md) |
 | [[F-098]] | Progressive Web App (PWA) | frontend | `implemented` | `user/pwa.en.md` |
 | [[F-099]] | Borsa Italiana Asset Provider | fullstack | `implemented` | `developer/backend/assets/provider_borsa_italiana.md` |
+| [[F-108]] | Portfolio Rebalancer (PAC engine with existing positions, sales and taxes) | fullstack | `planned` | — |
 
 ---
 
 ## Statistics
 
-| Domain | Total | implemented/documented | in-progress | planned |
-|--------|-------|----------------------|-------------|---------|
-| AUTH | 3 | 3 | 0 | 0 |
-| LAYOUT | 5 | 5 | 0 | 0 |
-| BROKERS | 6 | 6 | 0 | 0 |
-| FX | 9 | 9 | 0 | 0 |
-| ASSETS | 13 | 13 | 0 | 0 |
-| SIGNALS | 9 | 9 | 0 | 0 |
-| TRANSACTIONS | 6 | 3 | 1 | 2 |
-| SCHEDULER | 2 | 0 | 0 | 2 |
-| DASHBOARD | 2 | 0 | 0 | 2 |
-| CALCULATIONS | 3 | 2 | 0 | 1 |
-| INFRASTRUCTURE | 16 | 15 | 0 | 1 |
-| PLANNED/IDEA | 22 | 0 | 0 | 22 |
-| **TOTAL** | **96** | **63** | **2** | **31** |
+> Recomputed from the rows above on 2026-10-09 (the previous table still counted 96 features and listed F-052/F-053
+> as planned), and again on 2026-10-12 after the lint (F-050, F-089, F-092 shipped; F-075 superseded) and after
+> steps B5, B6a and B6b (F-105 to F-108 added), step B8 (F-109), and step R0 of folder 02 (F-110–F-113, Risk). "PLANNED / IDEA" is the section where a feature was first
+> registered, not its status: twelve of its rows have shipped (F-078 recognised in step C) and one is superseded.
+> **C-64, the status check of 2026-10-12**: F-048 had shipped in 1.0.0 and is `documented`. The ten `planned` rows and
+> the three `idea` rows were checked against the code and stay as they are: none is in 1.2 (F-108 has its contract
+> only; F-090 has parts built under F-051, its provider-change modal and reverse lookup are not — C-65; F-094's sync
+> dialogs exist, the warning on existing data is C-66).
+
+| Domain | Total | implemented/documented | in-progress | planned | idea | superseded |
+|--------|-------|----------------------|-------------|---------|------|------------|
+| AUTH | 4 | 4 | 0 | 0 | 0 | 0 |
+| LAYOUT & SETTINGS | 9 | 9 | 0 | 0 | 0 | 0 |
+| BROKERS | 7 | 7 | 0 | 0 | 0 | 0 |
+| FX | 9 | 9 | 0 | 0 | 0 | 0 |
+| ASSETS | 14 | 14 | 0 | 0 | 0 | 0 |
+| SIGNALS | 9 | 9 | 0 | 0 | 0 | 0 |
+| TRANSACTIONS | 6 | 6 | 0 | 0 | 0 | 0 |
+| SCHEDULER | 2 | 2 | 0 | 0 | 0 | 0 |
+| DASHBOARD | 6 | 6 | 0 | 0 | 0 | 0 |
+| CALCULATIONS | 5 | 5 | 0 | 0 | 0 | 0 |
+| INFRASTRUCTURE | 17 | 17 | 0 | 0 | 0 | 0 |
+| PLANNED/IDEA (first registered) | 26 | 12 | 0 | 10 | 3 | 1 |
+| **TOTAL** | **114** | **100** | **0** | **10** | **3** | **1** |
 
 ## Key source files
 

@@ -15,50 +15,69 @@ LibreFolio's frontend is built with:
 ## 📂 Directory Structure
 
 ```
-frontend/src/
-├── routes/           # SvelteKit pages and routing
-│   ├── (app)/        # Authenticated app routes (Dashboard, Brokers, etc.)
-│   │   ├── dashboard/
-│   │   ├── brokers/
-│   │   │   └── [id]/    # Broker detail page
-│   │   ├── assets/
-│   │   ├── transactions/
-│   │   ├── fx/
-│   │   ├── files/
-│   │   └── settings/
-│   └── +page.svelte  # Login page (Public)
-├── lib/
-│   ├── api/          # API client (Zodios, generated from OpenAPI)
-│   ├── components/   # Reusable components
-│   │   ├── auth/     # LoginCard, RegisterCard, ForgotPasswordCard
-│   │   ├── brokers/  # Broker cards, forms, icon, import
-│   │   ├── files/    # FilesTable with DataTable
-│   │   ├── layout/   # Sidebar, Header, LanguageSelector, LiveTicker
-│   │   ├── settings/ # Settings tabs (Profile, Preferences, Global, About)
-│   │   ├── table/    # DataTable suite (ModalBase, ConfirmModal, etc.)
-│   │   └── ui/       # Generic UI atoms
-│   │       ├── input/    # PasswordInput, PasswordStrength
-│   │       ├── media/    # ImageCropper, ImageEditModal, AssetPickerModal, FileEditModal
-│   │       ├── select/   # SimpleSelect, SearchSelect + specialized selects
-│   │       ├── tabs/     # TabBar (used standalone and by PageToolbar)
-│   │       └── toolbar/  # PageToolbar — shared responsive shell (see Toolbar & Responsive Layout)
-│   ├── i18n/         # Internationalization (EN, IT, FR, ES)
-│   ├── stores/       # Store Client System (State Management)
-│   │   ├── app/          # Auth, Theme, Settings, DateRange
-│   │   ├── core/         # EntityStore, EditBuffer, TimeSeriesStore
-│   │   ├── reference/    # brokerStore, assetStore, currencyStore
-│   │   ├── domain/       # portfolioStore, txStore, fxStore
-│   │   └── registries/   # AssetPriceStoreRegistry, FxStoreRegistry
-│   ├── types/        # TypeScript type definitions
-│   └── utils/        # Utilities (imageCrop, upload, urlFilters)
-│       └── layout/       # responsiveLayout.svelte.ts, labelShrink.ts, dropdownPosition.ts
-├── e2e/              # Playwright E2E tests (7 suites, 109+ tests)
-└── static/           # Static assets
+frontend/
+├── src/
+│   ├── routes/           # SvelteKit pages and routing
+│   │   ├── (app)/        # Authenticated app routes (Dashboard, Brokers, etc.)
+│   │   │   ├── dashboard/
+│   │   │   ├── brokers/
+│   │   │   │   └── [id]/    # Broker detail page
+│   │   │   ├── assets/
+│   │   │   ├── transactions/
+│   │   │   ├── fx/
+│   │   │   ├── files/
+│   │   │   └── settings/
+│   │   └── +page.svelte  # Login page (Public)
+│   └── lib/
+│       ├── api/          # API client (Zodios, generated from OpenAPI)
+│       ├── components/   # Reusable components
+│       │   ├── auth/     # LoginCard, RegisterCard, ForgotPasswordCard
+│       │   ├── brokers/  # Broker cards, forms, icon, import
+│       │   ├── files/    # FilesTable with DataTable
+│       │   ├── layout/   # Sidebar, Header, LanguageSelector
+│       │   ├── settings/ # Settings tabs (Profile, Preferences, Global, About)
+│       │   ├── table/    # DataTable suite (DataTable, toolbar, pagination, column filter, SelectionBar)
+│       │   └── ui/       # Generic UI atoms
+│       │       ├── input/    # PasswordInput, PasswordStrength
+│       │       ├── media/    # ImageCropper, ImageEditModal, AssetPickerModal, FileEditModal
+│       │       ├── modals/   # ModalBase, ConfirmModal
+│       │       ├── select/   # SimpleSelect, SearchSelect + specialized selects
+│       │       ├── tabs/     # TabBar (used standalone and by PageToolbar)
+│       │       └── toolbar/  # PageToolbar — shared responsive shell (see Toolbar & Responsive Layout)
+│       ├── i18n/         # Internationalization (EN, IT, FR, ES)
+│       ├── stores/       # Store Client System (State Management)
+│       │   ├── app/          # auth, clientSession, settings, globalSettings, themeStore, language, privacyStore, toastStore, …
+│       │   ├── core/         # EntityStore, EditBuffer, TimeSeriesStore
+│       │   ├── reference/    # brokerStore, assetStore, currencyStore, countryStore, sectorStore, fxRoutesStore
+│       │   ├── portfolio/    # portfolioStore (report cache), portfolioMutation, lotsAnalysisStore, dashboardViewStore
+│       │   ├── risk/         # riskStore, riskBenchmarkStore, riskPanelController
+│       │   ├── transactions/ # txStore, transactionTypeStore
+│       │   ├── fx/           # fxCardInversionStore
+│       │   ├── files/        # imagePreviewCache
+│       │   ├── assetPriceStoreRegistry.ts     # Registry: price series per asset and currency
+│       │   ├── fxStoreRegistry.ts             # Registry: rate series per FX pair
+│       │   ├── dateRangeStore.svelte.ts       # Date range shared by the pages
+│       │   ├── dateRangeController.svelte.ts  # Per-page wiring of that date range
+│       │   ├── chartSettingsStore.svelte.ts   # Chart aesthetics and signal configs (localStorage)
+│       │   ├── currencyGraphStore.ts          # FX currency graph (session cache)
+│       │   └── signalCatalogStore.svelte.ts   # Signal catalog per domain (asset, FX)
+│       ├── types/        # TypeScript type definitions
+│       └── utils/        # Utilities (urlFilters, chartUtils, …)
+│           ├── files/        # imageCrop.ts, upload.ts
+│           └── layout/       # responsiveLayout.svelte.ts, labelShrink.ts, dropdownPosition.ts
+├── e2e/                  # Playwright E2E tests
+└── static/               # Static assets
 ```
 
 ## ⚡ Svelte 5 Runes
 
-LibreFolio fully embraces Svelte 5's **Runes** for reactivity, replacing the legacy `let` and `$` syntax.
+New components use Svelte 5's **Runes** for reactivity, but a minority of older components use no
+rune at all, so Svelte compiles them in **legacy** mode (`export let` props, `$:` statements). The
+one consequence to know: in a legacy component, a function call inside a template expression
+compiles into `$.untrack(…)`, so runes state read inside that function is not tracked — that is
+why the Brokers page stopped following the privacy toggle (R20). Render such a value through a
+runes child (e.g. `lib/components/ui/display/CurrencyAmount.svelte`) or migrate the component; see
+[Legacy components freeze masked output](state/app-state.md#privacy-legacy-freeze).
 
 ### 🔑 Key Runes Used
 
@@ -86,6 +105,7 @@ LibreFolio fully embraces Svelte 5's **Runes** for reactivity, replacing the leg
 - [Components](components/index.md) - Reusable UI components
 - [FX Chain Algorithm](fx-chain-algorithm.md) - DFS pathfinding for currency conversion chains
 - [Pages](pages/index.md) - Application pages and routing
+- [Onboarding Guides](onboarding.md) - Welcome setup, intro tour and contextual guides
 - [Store Client System](state/index.md) - Stores and reactive state
 - [Internationalization](i18n.md) - Multi-language support
 - [Styling](styling.md) - Tailwind CSS and theming

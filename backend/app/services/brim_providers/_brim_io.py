@@ -8,7 +8,9 @@ must read the *same* logical export from either **CSV** or **XLSX**.
 
 Responsibilities:
 - Read a tabular file (CSV or XLSX) into a uniform ``list[list[cell]]``.
-  * CSV cells are always ``str``.
+  * CSV cells are always ``str``. CSV text is decoded by the base class
+    (``BRIMProvider._read_text``: UTF-8, then Windows-1252, then Latin-1), so every
+    plugin shares one encoding fallback and one delimiter sniffer.
   * XLSX cells keep their native openpyxl type (``str`` / ``int`` / ``float`` /
     ``datetime`` / ``None``) because different exports store numbers either as
     native floats (Intesa *lista*) or as Italian-formatted text (Intesa
@@ -34,6 +36,8 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
+from backend.app.services.brim_provider import BRIMProvider
+
 try:
     import openpyxl
 except ImportError as exc:
@@ -41,9 +45,6 @@ except ImportError as exc:
 
 XLSX_EXTENSIONS = {".xlsx", ".xlsm"}
 CSV_EXTENSIONS = {".csv", ".txt"}
-
-# Encodings tried in order when reading CSV/text (Windows exports often ship BOM).
-_TEXT_ENCODINGS = ("utf-8-sig", "utf-8", "latin-1", "cp1252")
 
 # Symbols stripped before numeric parsing.
 _CURRENCY_SYMBOLS = ("€", "$", "£", "%", "'")
@@ -74,17 +75,10 @@ def read_rows(file_path: Path, *, delimiter: Optional[str] = None) -> List[List[
 def _read_csv_rows(file_path: Path, *, delimiter: Optional[str]) -> List[List[Any]]:
     if delimiter is None:
         delimiter = detect_delimiter(file_path)
-    last_err: Optional[Exception] = None
-    for enc in _TEXT_ENCODINGS:
-        try:
-            with open(file_path, encoding=enc, newline="") as f:
-                return [list(row) for row in csv.reader(f, delimiter=delimiter)]
-        except UnicodeDecodeError as exc:  # try next encoding
-            last_err = exc
-            continue
-    if last_err is not None:
-        raise last_err
-    return []
+    # newline="" keeps line endings verbatim, as the csv module requires, so a CRLF
+    # inside a quoted cell survives unchanged.
+    with BRIMProvider._open_text(file_path, newline="") as f:
+        return [list(row) for row in csv.reader(f, delimiter=delimiter)]
 
 
 def _read_xlsx_rows(file_path: Path) -> List[List[Any]]:
@@ -112,23 +106,12 @@ def _pick_worksheet(workbook: Any) -> Any:
 
 
 def detect_delimiter(file_path: Path, lines_to_read: int = 15) -> str:
-    """Sniff the CSV delimiter (``,`` / ``;`` / tab) with a safe fallback."""
-    sample = ""
-    for enc in _TEXT_ENCODINGS:
-        try:
-            with open(file_path, encoding=enc) as f:
-                for i, line in enumerate(f):
-                    if i >= lines_to_read:
-                        break
-                    sample += line
-            break
-        except UnicodeDecodeError:
-            sample = ""
-            continue
-    try:
-        return csv.Sniffer().sniff(sample, delimiters=[",", ";", "\t"]).delimiter
-    except Exception:
-        return ";" if sample.count(";") > sample.count(",") else ","
+    """Sniff the CSV delimiter (``,`` / ``;`` / tab) with a safe fallback.
+
+    Delegates to ``BRIMProvider.detect_csv_delimiter``: one implementation, one
+    encoding fallback for every plugin.
+    """
+    return BRIMProvider.detect_csv_delimiter(file_path, lines_to_read=lines_to_read)
 
 
 # ---------------------------------------------------------------------------

@@ -7,20 +7,39 @@
 
   Props:
   - value: The target numeric value
-  - format: Formatter function (value → display string). Default: 2 decimal places.
+  - format: Formatter function (value → display string). Default: 2 decimal places, in the interface locale.
   - duration: Animation duration in ms (default: 600)
   - loading: When true, shows a skeleton pulse instead of the value
   - class: Additional CSS classes for the value element
 
   Usage:
     <TweenedValue value={navAmount} format={(v) => formatMoney('EUR', v)} />
-    <TweenedValue value={percentValue} format={(v) => `${v.toFixed(2)}%`} duration={800} />
+    <TweenedValue value={percentValue} format={(v) => formatPercent(v)} duration={800} />
+
+  A value counts up from 0 when it first appears. A page that already knows its figures — served
+  from the cache, or kept from an earlier load — calls `setTweenHydration(isHydrated)` during its
+  init: every TweenedValue below it that mounts while `isHydrated()` is true starts at its value,
+  and still tweens from old to new on later changes (page cache, phase 1).
 
   Pattern: Svelte 5 Runes, no popup effect.
 -->
+<script module lang="ts">
+    import {setContext} from 'svelte';
+
+    /** Context key of the hydration getter set by `setTweenHydration`. */
+    export const TWEEN_HYDRATION_CONTEXT = Symbol('librefolio.tweenHydration');
+
+    /** Call during a component's init: the TweenedValues below it start at their value while `isHydrated()` is true. */
+    export function setTweenHydration(isHydrated: () => boolean): void {
+        setContext(TWEEN_HYDRATION_CONTEXT, isHydrated);
+    }
+</script>
+
 <script lang="ts">
+    import {getContext, untrack} from 'svelte';
     import {tweened} from 'svelte/motion';
     import {cubicOut} from 'svelte/easing';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
 
     interface Props {
         /** Target numeric value to animate to */
@@ -35,9 +54,10 @@
         class?: string;
     }
 
-    let {value, format = (v: number) => v.toFixed(2), duration = 900, loading = false, class: className = ''}: Props = $props();
+    let {value, format = (v: number) => formatFixed(v, 2), duration = 900, loading = false, class: className = ''}: Props = $props();
 
-    const displayValue = tweened(0, {duration: 900, easing: cubicOut});
+    const isHydrated = getContext<(() => boolean) | undefined>(TWEEN_HYDRATION_CONTEXT);
+    const displayValue = tweened(isHydrated?.() === true ? untrack(() => value) : 0, {duration: 900, easing: cubicOut});
 
     $effect(() => {
         displayValue.set(value, {duration});

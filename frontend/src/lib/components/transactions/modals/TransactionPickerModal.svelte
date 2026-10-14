@@ -10,6 +10,7 @@
   Svelte 5 runes, dark mode, data-testid.
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {_ as t} from '$lib/i18n';
     import {Search, X, Plus} from 'lucide-svelte';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
@@ -86,7 +87,7 @@
         });
         const currentRoleSvg = getRoleSvgHtml(currentRole);
         const requiredRoleSvg = getRoleSvgHtml('EDITOR');
-        return `${brokerIconHtml}<strong>${bName}</strong> ${currentRoleSvg} ${roleLabelCurrent}<br>${$t('transactions.picker.requiredRole') || 'required'} ${requiredRoleSvg} Editor`;
+        return `${brokerIconHtml}<strong>${escapeHtml(bName)}</strong> ${currentRoleSvg} ${roleLabelCurrent}<br>${$t('transactions.picker.requiredRole') || 'required'} ${requiredRoleSvg} Editor`;
     }
 
     /** TableRef for dblclick toggle selection. */

@@ -1,1 +1,1 @@
-/Users/ea_enel/Documents/00_My/LibreFolio/mkdocs_src/docs/financial-theory/technical-analysis/indicators/ema.en.md
+../../../../../../../mkdocs_src/docs/financial-theory/technical-analysis/indicators/ema.en.md

@@ -1,1 +1,1 @@
-/Users/ea_enel/Documents/00_My/LibreFolio/mkdocs_src/docs/user/getting-started.en.md
+../../../../../mkdocs_src/docs/user/getting-started.en.md

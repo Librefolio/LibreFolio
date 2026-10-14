@@ -9,6 +9,7 @@
  */
 
 import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+import {escapeHtml} from '$lib/utils/core/escapeHtml';
 
 // =============================================================================
 // Types
@@ -51,8 +52,13 @@ export interface SignalLabelInfo {
  * 2. Color dot `●` if `color` is set (always shown — additive with icon)
  * 3. Icon: `iconUrl` → `<img>` (custom) or `assetType` → PNG fallback
  * 4. Label text
+ *
+ * `options.inline` renders the label text as a plain inline box, so an enclosing box that
+ * ellipsizes decides where it ends. The default box caps itself at `calc(100% - 40px)`, which
+ * suits a table cell but clips a shrink-to-fit parent even when there is room (the tooltip row
+ * built by `buildFittedTooltipRow`).
  */
-export function signalLabelToHtml(info: SignalLabelInfo, truncateAt?: number): string {
+export function signalLabelToHtml(info: SignalLabelInfo, truncateAt?: number, options?: {inline?: boolean}): string {
     const parts: string[] = [];
 
     // Crown prefix (fixed-width slot — matches dot slot width for table alignment)
@@ -68,15 +74,16 @@ export function signalLabelToHtml(info: SignalLabelInfo, truncateAt?: number): s
 
     // Icon (priority chain: custom icon_url → asset type PNG)
     if (info.iconUrl) {
-        parts.push(`<img src="${info.iconUrl}" alt="" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:3px;display:inline-block;" />`);
+        parts.push(`<img src="${escapeHtml(info.iconUrl)}" alt="" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:3px;display:inline-block;" />`);
     } else if (info.assetType) {
         const url = getAssetTypeIconUrl(info.assetType);
-        parts.push(`<img src="${url}" alt="" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:3px;display:inline-block;" />`);
+        parts.push(`<img src="${escapeHtml(url)}" alt="" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;margin-right:3px;display:inline-block;" />`);
     }
 
     // Label text — optionally truncated (tooltip uses truncateAt=15, tables rely on CSS overflow)
     const displayLabel = truncateAt && info.label.length > truncateAt ? info.label.slice(0, truncateAt) + '…' : info.label;
-    parts.push(`<span style="vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:calc(100% - 40px);min-width:0;flex-shrink:1" title="${info.label}">${displayLabel}</span>`);
+    const labelStyle = options?.inline ? 'vertical-align:middle;white-space:nowrap' : 'vertical-align:middle;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;max-width:calc(100% - 40px);min-width:0;flex-shrink:1';
+    parts.push(`<span style="${labelStyle}" title="${escapeHtml(info.label)}">${escapeHtml(displayLabel)}</span>`);
 
     // Non-truncatable suffix (e.g. currency badge) — always visible
     if (info.suffix) {

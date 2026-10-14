@@ -1,19 +1,23 @@
 """
 Test: Provider Core Cache & Thread Isolation.
 
-Tests the core-level infrastructure in asset_source.py:
+Tests the canonical asset-source core and legacy facade contracts:
 - _run_provider_in_thread(): thread isolation, timeout, exception propagation
 - _asset_history_cache: smart range with per-date granularity
 - _asset_current_cache: simple TTL cache for current values
 - _asset_metadata_cache: simple TTL cache for metadata
 - _search_query_cache: Layer 2 exact query cache
+- _search_result_cache: Layer 1 individual-result cache
 - probe_provider_config bypasses cache
 """
 
 import asyncio
-import inspect
+import subprocess
 import sys
+import textwrap
 import time
+from datetime import date, timedelta
+from decimal import Decimal
 
 import pytest
 
@@ -25,15 +29,44 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
+from backend.app.db import IdentifierType
+from backend.app.db.models import ProviderInputType
+from backend.app.schemas.assets import FAAssetPatchItem, FACurrentValue, FAHistoricalData, FAPricePoint
+from backend.app.schemas.provider import FAProviderConfigBase, ProbeOperation
+from backend.app.services import asset_source as legacy_asset_source
+from backend.app.services import asset_sources as canonical_asset_sources
 from backend.app.services.asset_source import (
+    AssetCRUDService,
+    AssetSearchService,
     AssetSourceError,
     AssetSourceManager,
+    AssetSourceProvider,
+)
+from backend.app.services.asset_sources import core as asset_source_core
+from backend.app.services.asset_sources import metadata as metadata_operations
+from backend.app.services.asset_sources import price_query as price_query_operations
+from backend.app.services.asset_sources import price_store as price_store_operations
+from backend.app.services.asset_sources import provider_management as provider_management_operations
+from backend.app.services.asset_sources import refresh as refresh_operations
+from backend.app.services.asset_sources import search as search_operations
+from backend.app.services.asset_sources.core import (
+    AssetSourceError as CanonicalAssetSourceError,
+)
+from backend.app.services.asset_sources.core import (
+    AssetSourceProvider as CanonicalAssetSourceProvider,
+)
+from backend.app.services.asset_sources.core import (
     _asset_current_cache,
     _asset_history_cache,
     _asset_metadata_cache,
     _run_provider_in_thread,
     _search_query_cache,
+    _search_result_cache,
 )
+from backend.app.services.asset_sources.crud import AssetCRUDService as CanonicalAssetCRUDService
+from backend.app.services.asset_sources.manager import AssetSourceManager as CanonicalAssetSourceManager
+from backend.app.services.asset_sources.search import AssetSearchService as CanonicalAssetSearchService
+from backend.app.services.provider_registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import print_section, print_success
 
 # ============================================================================
@@ -44,11 +77,148 @@ from backend.test_scripts.test_utils import print_section, print_success
 @pytest.fixture(autouse=True)
 def _clear_caches():
     """Clear all core caches before each test."""
-    _asset_history_cache.clear()
-    _asset_current_cache.clear()
-    _asset_metadata_cache.clear()
-    _search_query_cache.clear()
+    caches = (
+        _asset_history_cache,
+        _asset_current_cache,
+        _asset_metadata_cache,
+        _search_query_cache,
+        _search_result_cache,
+    )
+    for cache in caches:
+        cache.clear()
     yield
+    for cache in caches:
+        cache.clear()
+
+
+# ============================================================================
+# Canonical Modules & Legacy Compatibility
+# ============================================================================
+
+
+@pytest.mark.parametrize(
+    ("symbol_name", "legacy_symbol", "canonical_symbol"),
+    [
+        ("AssetSourceProvider", AssetSourceProvider, CanonicalAssetSourceProvider),
+        ("AssetSourceError", AssetSourceError, CanonicalAssetSourceError),
+        ("AssetSourceManager", AssetSourceManager, CanonicalAssetSourceManager),
+        ("AssetCRUDService", AssetCRUDService, CanonicalAssetCRUDService),
+        ("AssetSearchService", AssetSearchService, CanonicalAssetSearchService),
+    ],
+)
+def test_legacy_and_canonical_public_symbols_share_identity(symbol_name, legacy_symbol, canonical_symbol):
+    """The legacy facade and canonical package must expose the same objects."""
+    assert legacy_symbol is canonical_symbol
+    assert getattr(legacy_asset_source, symbol_name) is canonical_symbol
+    assert getattr(canonical_asset_sources, symbol_name) is canonical_symbol
+
+
+@pytest.mark.parametrize(
+    ("operation_module", "core_object_names"),
+    [
+        (metadata_operations, ("_asset_metadata_cache", "_run_provider_in_thread")),
+        (
+            refresh_operations,
+            (
+                "_asset_history_cache",
+                "_asset_current_cache",
+                "_run_provider_in_thread",
+            ),
+        ),
+        (
+            search_operations,
+            (
+                "_search_query_cache",
+                "_search_result_cache",
+                "_run_provider_in_thread",
+            ),
+        ),
+        (
+            provider_management_operations,
+            (
+                "_asset_history_cache",
+                "_asset_current_cache",
+                "_run_provider_in_thread",
+            ),
+        ),
+        (price_query_operations, ("_asset_current_cache", "_run_provider_in_thread")),
+        (price_store_operations, ("_asset_history_cache", "_asset_current_cache")),
+    ],
+    ids=[
+        "metadata",
+        "refresh",
+        "search",
+        "provider-management",
+        "price-query",
+        "price-store",
+    ],
+)
+def test_operation_modules_share_canonical_core_objects(operation_module, core_object_names):
+    """Operation modules must resolve caches and the thread boundary from core."""
+    assert operation_module.core is asset_source_core
+    for object_name in core_object_names:
+        assert getattr(operation_module.core, object_name) is getattr(asset_source_core, object_name)
+
+
+def _registered_provider_instances(registry):
+    provider_codes = [item["code"] for item in registry.list_providers()]
+    instances = [registry.get_provider_instance(code) for code in provider_codes]
+    assert instances, "Asset provider discovery returned no providers"
+    assert all(instance is not None for instance in instances)
+    return instances
+
+
+def test_normal_and_cold_discovery_keep_provider_base_identity():
+    """Warm and fresh-interpreter discovery must use one provider base class."""
+    AssetProviderRegistry.auto_discover()
+    normal_instances = _registered_provider_instances(AssetProviderRegistry)
+    assert all(isinstance(provider, AssetSourceProvider) for provider in normal_instances)
+    assert all(isinstance(provider, CanonicalAssetSourceProvider) for provider in normal_instances)
+
+    cold_probe = textwrap.dedent("""
+        from backend.app.services.provider_registry import AssetProviderRegistry
+
+        AssetProviderRegistry.auto_discover()
+
+        from backend.app.services.asset_source import AssetSourceProvider as LegacyProvider
+        from backend.app.services.asset_sources.core import AssetSourceProvider as CanonicalProvider
+
+        providers = [
+            AssetProviderRegistry.get_provider_instance(item["code"])
+            for item in AssetProviderRegistry.list_providers()
+        ]
+        assert providers
+        assert LegacyProvider is CanonicalProvider
+        assert all(isinstance(provider, CanonicalProvider) for provider in providers)
+        assert all(isinstance(provider, LegacyProvider) for provider in providers)
+        """)
+    completed = subprocess.run(
+        [sys.executable, "-c", cold_probe],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert completed.returncode == 0, "Cold AssetProviderRegistry discovery failed without touching the parent " f"registry:\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
+
+
+def test_concrete_history_method_has_exactly_one_ohlc_guard():
+    """A concrete history implementation must not lose or duplicate its guard."""
+    provider = AssetProviderRegistry.get_provider_instance("mockprov")
+    assert provider is not None
+
+    current = type(provider).get_history_value
+    seen = set()
+    guard_count = 0
+    while current is not None:
+        current_id = id(current)
+        assert current_id not in seen, "Cycle detected in get_history_value wrappers"
+        seen.add(current_id)
+        guard_count += int(getattr(current, "_ohlc_guarded", False))
+        current = getattr(current, "__wrapped__", None)
+
+    assert guard_count == 1
 
 
 # ============================================================================
@@ -370,27 +540,149 @@ class TestSearchQueryCache:
 class TestProbeBypassesCache:
     """Tests that probe operations should NOT use cache."""
 
-    def test_probe_callsite_does_not_check_cache(self):
-        """
-        Verify that probe_provider_config uses _run_provider_in_thread
-        directly (no cache get/set). We test this by verifying that
-        populating the current cache does NOT affect what probe would call.
+    @pytest.mark.asyncio
+    async def test_probe_bypasses_all_core_caches_and_executes_each_operation_through_thread_boundary(self, monkeypatch):
+        """Seeded cache data cannot replace any live probe operation."""
+        print_section("Probe: bypasses all caches through thread boundary")
 
-        This is a design verification test: probe should ALWAYS call the
-        provider, even if the cache has data for the same identifier.
-        """
-        print_section("Probe: bypasses cache (design check)")
-        # Populate current cache
-        cache_key = ("yfinance", "AAPL", "TICKER")
-        _asset_current_cache.set(cache_key, {"value": 999.0, "currency": "CACHED"})
+        class FakeProbeProvider:
+            def __init__(self):
+                self.validated_params = []
+                self.current_calls = []
+                self.history_calls = []
+                self.metadata_calls = []
 
-        # The cache has data, but probe_provider_config in asset_source.py
-        # calls _run_provider_in_thread directly without checking cache.
-        # We verify this by checking the probe code does NOT reference cache.
+            def validate_params(self, params):
+                self.validated_params.append(params)
 
-        source = inspect.getsource(AssetSourceManager.probe_provider_config)
-        assert "_asset_current_cache" not in source, "Probe should NOT use current cache"
-        assert "_asset_history_cache" not in source, "Probe should NOT use history cache"
-        assert "_asset_metadata_cache" not in source, "Probe should NOT use metadata cache"
-        assert "_run_provider_in_thread" in source, "Probe should use thread isolation"
-        print_success("Probe bypasses all caches, uses thread isolation only")
+            def get_asset_url(self, identifier, identifier_type=None, provider_params=None):
+                return f"https://probe.invalid/{identifier}"
+
+            async def get_current_value(self, identifier, identifier_type, provider_params):
+                self.current_calls.append((identifier, identifier_type, provider_params))
+                return FACurrentValue(
+                    value=Decimal("123.45"),
+                    currency="EUR",
+                    as_of_date=date(2026, 9, 11),
+                    source="fake-probe",
+                )
+
+            async def get_history_value(self, identifier, identifier_type, provider_params, start_date, end_date):
+                self.history_calls.append((identifier, identifier_type, provider_params, start_date, end_date))
+                return FAHistoricalData(
+                    prices=[
+                        FAPricePoint(
+                            date=date(2026, 9, 10),
+                            close=Decimal("120.25"),
+                            currency="EUR",
+                        )
+                    ],
+                    currency="EUR",
+                    source="fake-probe",
+                )
+
+            async def fetch_asset_metadata(self, identifier, identifier_type, provider_params):
+                self.metadata_calls.append((identifier, identifier_type, provider_params))
+                return FAAssetPatchItem(
+                    asset_id=0,
+                    display_name="Fresh provider metadata",
+                    currency="EUR",
+                )
+
+        provider = FakeProbeProvider()
+        monkeypatch.setattr(
+            provider_management_operations.AssetProviderRegistry,
+            "get_provider_instance",
+            classmethod(lambda cls, code, **kwargs: provider),
+        )
+
+        boundary_calls = []
+
+        async def fake_run_provider_in_thread(coro_factory, *, timeout):
+            boundary_calls.append((coro_factory, timeout))
+            return await coro_factory()
+
+        monkeypatch.setattr(asset_source_core, "_run_provider_in_thread", fake_run_provider_in_thread)
+
+        provider_params = None
+        config = FAProviderConfigBase(
+            provider_code="cache-probe",
+            identifier="CACHE-PROBE",
+            identifier_type=ProviderInputType.TICKER.value,
+            provider_params=provider_params,
+        )
+
+        seeded_caches = [
+            (
+                _asset_history_cache,
+                ("cache-probe", "CACHE-PROBE", ProviderInputType.TICKER.value, "none"),
+                {"sentinel": "history"},
+            ),
+            (
+                _asset_current_cache,
+                ("cache-probe", "CACHE-PROBE", ProviderInputType.TICKER.value, "none"),
+                {"sentinel": "current"},
+            ),
+            (
+                _asset_metadata_cache,
+                ("cache-probe", "CACHE-PROBE", ProviderInputType.TICKER.value),
+                {"sentinel": "metadata"},
+            ),
+            (
+                _search_query_cache,
+                ("cache-probe", "cache-probe"),
+                [{"sentinel": "search-query"}],
+            ),
+            (
+                _search_result_cache,
+                ("cache-probe", "CACHE-PROBE"),
+                {"sentinel": "search-result"},
+            ),
+        ]
+        for cache, key, sentinel in seeded_caches:
+            cache.set(key, sentinel)
+
+        response = await AssetSourceManager.probe_provider_config(
+            config,
+            [
+                ProbeOperation.CURRENT_PRICE,
+                ProbeOperation.HISTORY,
+                ProbeOperation.METADATA,
+            ],
+        )
+
+        assert provider.validated_params == [provider_params]
+        assert provider.current_calls == [("CACHE-PROBE", IdentifierType.TICKER, {})]
+        assert provider.metadata_calls == [("CACHE-PROBE", IdentifierType.TICKER, {})]
+        assert len(provider.history_calls) == 1
+        history_identifier, history_identifier_type, history_params, history_start, history_end = provider.history_calls[0]
+        assert history_identifier == "CACHE-PROBE"
+        assert history_identifier_type == IdentifierType.TICKER
+        assert history_params == {}
+        assert history_end - history_start == timedelta(days=7)
+
+        assert len(boundary_calls) == 3
+        assert all(callable(coro_factory) for coro_factory, _timeout in boundary_calls)
+        assert [timeout for _coro_factory, timeout in boundary_calls] == [15.0, 15.0, 15.0]
+
+        assert response.provider_url == "https://probe.invalid/CACHE-PROBE"
+        assert response.current_price is not None
+        assert response.current_price.success is True
+        assert response.current_price.value == Decimal("123.45")
+        assert response.current_price.currency == "EUR"
+        assert response.history is not None
+        assert response.history.success is True
+        assert response.history.points_count == 1
+        assert response.history.date_range == "2026-09-10 → 2026-09-10"
+        assert response.history.sample_prices == [{"date": "2026-09-10", "close": 120.25}]
+        assert response.metadata is not None
+        assert response.metadata.success is True
+        assert response.metadata.patch_data["display_name"] == "Fresh provider metadata"
+        assert response.metadata.patch_data["currency"] == "EUR"
+
+        for cache, key, sentinel in seeded_caches:
+            cached, ok = cache.get(key)
+            assert ok is True
+            assert cached == sentinel
+
+        print_success("Probe ignored all seeded cache sentinels and used the thread boundary")

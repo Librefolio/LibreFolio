@@ -1,10 +1,10 @@
-# ![](../../../static/icons/transactions/cash-transfer.png){: width="32" style="vertical-align: middle;" } Trasferimento di Liquidità
+# ![](../../../static/icons/transactions/cash-transfer.png){: width="32" style="vertical-align: middle;" } Giroconto
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-category="transactions" data-name="form-modal-cash-transfer" alt="Transaction Form — Cash Transfer">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-cash-transfer" alt="Modulo della transazione — Giroconto">
 </div>
 
-I **trasferimenti di liquidità** (bonifici) spostano denaro tra conti di broker. Il saldo diminuisce alla fonte e aumenta alla destinazione — non sono coinvolti asset.
+I **giroconti** (bonifici) spostano denaro tra conti di broker. Il saldo diminuisce alla fonte e aumenta alla destinazione — non sono coinvolti asset.
 
 ---
 
@@ -23,7 +23,7 @@ I **trasferimenti di liquidità** (bonifici) spostano denaro tra conti di broker
 
 ## 📊 Come Funziona
 
-Un trasferimento di liquidità registra **due voci**: un prelievo presso il broker di origine e un deposito presso il broker di destinazione. Entrambi condividono la stessa valuta con importi speculari. I due lati possono avere **date differenti** — ad esempio, un bonifico inviato lunedì potrebbe arrivare mercoledì.
+Un giroconto registra **due voci**: un prelievo presso il broker di origine e un deposito presso il broker di destinazione. Entrambi condividono la stessa valuta con importi speculari. I due lati possono avere **date differenti** — ad esempio, un bonifico inviato lunedì potrebbe arrivare mercoledì.
 
 Scenari comuni:
 
@@ -39,12 +39,12 @@ Scenari comuni:
 
 ## 🔀 Relazione con Depositi/Prelievi
 
-Sotto il cofano, un Trasferimento di Liquidità è composto da un Prelievo e un Deposito. LibreFolio supporta:
+Sotto il cofano, un Giroconto è composto da un Prelievo e un Deposito. LibreFolio supporta:
 
 | Operazione | Risultato |
 |-----------|--------|
-| **Frazionamento** (scollegamento) | Trasferimento Liquidità → Prelievo + Deposito indipendenti |
-| **Promote** (collegamento) | Prelievo + Deposito → Trasferimento Liquidità |
+| **Scollega coppia** | Giroconto → Prelievo + Deposito indipendenti |
+| **Promuovi** (collegamento) | Prelievo + Deposito → Giroconto |
 
 **Vincoli di promozione**: stessa valuta, broker differenti, importi di liquidità con segno opposto.
 

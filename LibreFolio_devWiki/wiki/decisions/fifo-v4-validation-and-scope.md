@@ -65,4 +65,4 @@ same release.
 | PE deferral rationale | `.../v4-fee_tax_integration/implementation-recap-v5.md` §1, §5; `post-implementation-review-v5.md` §4, §9; `review-checklist-v5.md` R1 |
 | Validator | `backend/app/schemas/transactions.py`, `backend/app/services/transaction_service.py` |
 | Audit script | `backend/test_scripts/test_db/audit_transaction_signs.py` |
-| Portfolio Engine | `backend/app/services/portfolio_engine.py` |
+| Portfolio Engine | `backend/app/services/financial_math/portfolio/engine.py` |

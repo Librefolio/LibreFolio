@@ -42,6 +42,10 @@ from backend.app.services.ai_export.components.catalog import (
     FoundationComponentPayload,
     build_component_registry,
 )
+from backend.app.services.ai_export.components.portfolio_broker_registry import PORTFOLIO_BROKER_COMPONENTS
+from backend.app.services.ai_export.components.portfolio_broker_registry import (
+    validate_replacements_against_placeholders as validate_portfolio_broker_replacements,
+)
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import ALL_DETAIL_LEVELS, DetailLevel, Domain, PeriodBehavior
@@ -199,6 +203,35 @@ class TestIntegratedComponentCatalog:
             assert real.period_behavior == placeholder.period_behavior
             assert real.aggregator == placeholder.aggregator
             assert real.builder is not placeholder.builder
+
+    @pytest.mark.parametrize("component_id", ["portfolio.provenance", "broker.provenance"])
+    def test_provenance_components_are_version_2_on_both_sides_of_the_catalog(
+        self,
+        component_registry: ComponentRegistry,
+        component_id: str,
+    ):
+        """D12(a), issue #32: the provenance semantics moved to the single average cost, so the
+        component version is 2 — on the real spec AND on its frozen placeholder, which the
+        replacement validation requires to be equal. The payload shape does not change:
+        schema_version stays 1. Pins the numbers, so a bump on one side only cannot stay green."""
+        placeholder = next(spec for spec in ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
+        real = next(spec for spec in ALL_REAL_COMPONENTS if spec.component_id == component_id)
+        registered = component_registry.get(component_id)
+
+        # The integrated catalog still validates with the new numbers.
+        validate_portfolio_broker_replacements(PORTFOLIO_BROKER_COMPONENTS, placeholders=ALL_FOUNDATION_COMPONENTS)
+        assert registered is real
+        assert {
+            "placeholder version": placeholder.version,
+            "real version": real.version,
+            "registered version": registered.version,
+            "schema_version": real.schema_version,
+        } == {
+            "placeholder version": 2,
+            "real version": 2,
+            "registered version": 2,
+            "schema_version": 1,
+        }
 
 
 class TestAnalysisCatalog:

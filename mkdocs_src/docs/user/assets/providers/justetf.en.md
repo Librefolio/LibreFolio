@@ -1,60 +1,45 @@
 # <img src="https://www.justetf.com/android-chrome-144x144.png?v2" alt=""> justETF
 
-justETF provides detailed data for European ETFs, including current prices and historical data with multi-currency support.
+justETF prices European ETFs by their ISIN, in euros, US dollars, Swiss francs or British pounds.
+It also brings each fund's description and its country and sector breakdowns.
 
-## 📊 Capabilities
+## 🔍 What It Offers
 
-- ✅ **Current Price**: Real-time gettex quotes (EUR only)
-- ✅ **History**: Historical price data in EUR, USD, CHF, or GBP
-- ✅ **Events**: May emit `DIVIDEND` events from chart data when dividend series are present
-- ✅ **Search**: Full-text search across 3000+ European ETFs
+- **Current price**: in EUR, the live price from the gettex exchange; when there is none — and
+  always in USD, CHF and GBP — the latest daily price.
+- **History**: daily closing prices in the currency you choose.
+- **Dividends**: the distributions shown in the fund's chart become dividend events.
+- **Search**: by name, ticker, WKN or ISIN, among the ETFs listed on justETF.
+- **Details**: a description with the TER and the distribution policy, the country and sector
+  breakdowns, the ISIN and the ticker.
 
-## 💱 Currency Selection
+## ✏️ Set It Up
 
-justETF supports fetching prices in **4 currencies**: EUR, USD, CHF, GBP.
+**Search Online** sets it up for you. By hand, in **Provider Assignment**:
 
-When you search for an ETF, results appear with currency flags:
+1. Choose **JustETF** as **Provider**.
+2. Type the fund's **ISIN**, for example `IE00B4L5Y983` (iShares Core MSCI World).
+3. In `currency`, pick `EUR` (the default), `USD`, `CHF` or `GBP`: every price of the asset is
+   stored in that currency.
 
-| Flag | Meaning |
-|------|---------|
-| 🇪🇺 | Euro prices |
-| 🇺🇸 | US Dollar prices |
-| 🇨🇭 | Swiss Franc prices |
-| 🇬🇧 | British Pound prices |
-| 👑 | Fund's native NAV currency (shown alongside the flag) |
+### 💱 Pick the Currency in Search
 
-!!! note "Currency Conversion"
+Each ETF appears four times in the results, once per currency: 🇪🇺 EUR, 🇺🇸 USD, 🇨🇭 CHF and
+🇬🇧 GBP. 👑 marks the fund's own currency, the one its NAV is computed in — not necessarily the one
+you trade in.
 
-    JustETF performs the conversion server-side using their own FX rates.
-    For currencies not in the supported list (JPY, SEK, etc.), use LibreFolio's built-in FX conversion system.
+justETF converts the USD, CHF and GBP prices with its own exchange rates. Is your reporting
+currency another one? Pick any of the four: LibreFolio converts with its own
+[exchange rates](../../fx/index.md).
 
-## ⚠️ Limitations
+## ⚠️ Limits
 
-!!! warning "Current Price Fallbacks"
+- ISIN only: for a ticker, use [Yahoo Finance](yahoo-finance.md).
+- Only the EUR price is live.
+- LibreFolio reads justETF's website: a change on their side can stop the prices until LibreFolio
+  is updated.
 
-    Current value first tries the real-time **EUR** gettex quote.
+## 🔗 Related
 
-    If that live quote is unavailable, LibreFolio falls back to the daily `latestQuote` from the performance-chart API for **EUR, USD, CHF, and GBP**.
-
-    Historical data remains available for all supported currencies.
-
-## 🔧 Configuration
-
-- **Identifier**: ISIN code (e.g., `IE00BK5BQT80`)
-- **Identifier Type**: `ISIN`
-- **Parameters**:
-    - `currency`: Price currency — EUR (default), USD, CHF, or GBP
-
-## 💡 Examples
-
-| Asset | ISIN | Suggested Currency |
-|-------|------|--------------------|
-| Vanguard FTSE All-World | `IE00BK5BQT80` | EUR or USD 👑 |
-| iShares Core MSCI World | `IE00B4L5Y983` | EUR or USD 👑 |
-| Xtrackers MSCI Emerging Markets | `IE00BTJRMP35` | EUR or USD 👑 |
-
-## 📝 Notes
-
-- Best suited for European-domiciled ETFs listed on justETF
-- Uses the ISIN as the primary identifier
-- The 👑 in search results indicates the fund's native NAV denomination — this is the currency the fund manager uses internally, not necessarily the currency you trade in
+- 🔌 **[Asset Providers](index.md)** — Compare the providers
+- 🛠️ **For developers: [JustETF Provider](../../../developer/backend/assets/provider_justetf.md)** — Live quotes, charts and caching

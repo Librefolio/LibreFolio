@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_rabobank": {
+      "description": "Importe les transactions de l’export CSV néerlandais de Rabobank. Prend en charge les fonds, les dividendes, les dépôts, les retraits, les frais et les intérêts.",
+      "name": "Rabobank"
+    }
+  }
+}

@@ -5,19 +5,27 @@ Provides system information, version data, and runtime details.
 """
 
 import json
+import os
 import platform
 import re
+import secrets
 import sys
 from importlib.metadata import version as pkg_version
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 
-from backend.app.config import PROJECT_ROOT
+from backend.app.api.v1.auth import get_current_user, session_cookie_secure
+from backend.app.config import PROJECT_ROOT, TEST_LANE_HEADER, is_test_mode
+from backend.app.db.models import User
 from backend.app.logging_config import get_logger
-from backend.app.schemas.system import DependencyInfo, HealthCheckResponse, PluginDiagnosticsResponse, PluginDiscoveryFailureInfo, SystemInfoResponse
+from backend.app.schemas.system import ConnectionSecurityResponse, ContainerImageStatusResponse, DependencyInfo, HealthCheckResponse, PluginDiagnosticsResponse, PluginDiscoveryFailureInfo, SystemInfoResponse
+from backend.app.services.container_registry import probe_container_image
 from backend.app.services.provider_registry import AssetProviderRegistry, BRIMProviderRegistry, FXProviderRegistry, SignalPluginRegistry
-from backend.app.utils.version import get_git_version
+from backend.app.utils.runtime.network import classify_ip, client_address
+from backend.app.utils.runtime.version import get_git_version
 
 router = APIRouter(prefix="/system", tags=["System"])
 logger = get_logger(__name__)
@@ -183,8 +191,13 @@ def _plugin_discovery_failures(system: str, registry) -> list[PluginDiscoveryFai
 
 
 @router.get("/plugin-diagnostics", response_model=PluginDiagnosticsResponse)
-def get_plugin_diagnostics() -> PluginDiagnosticsResponse:
-    """Return plugin discovery import failures for all plugin registries."""
+def get_plugin_diagnostics(
+    _current_user: Annotated[User, Depends(get_current_user)],
+) -> PluginDiagnosticsResponse:
+    """Return plugin discovery import failures for all plugin registries.
+
+    Requires a session: the failures carry exception text that can name internal paths.
+    """
     return PluginDiagnosticsResponse(
         [
             *_plugin_discovery_failures("asset", AssetProviderRegistry),
@@ -192,6 +205,35 @@ def get_plugin_diagnostics() -> PluginDiagnosticsResponse:
             *_plugin_discovery_failures("brim", BRIMProviderRegistry),
             *_plugin_discovery_failures("signals", SignalPluginRegistry),
         ]
+    )
+
+
+@router.get("/container-image-status", response_model=ContainerImageStatusResponse)
+async def get_container_image_status(
+    tag: Annotated[str, Query(pattern=r"^\d+\.\d+\.\d+$", description="Normalized stable image tag, without a leading v")],
+    _current_user: Annotated[User, Depends(get_current_user)],
+) -> ContainerImageStatusResponse:
+    """Check whether a stable LibreFolio image tag is pullable from GHCR."""
+    return await probe_container_image(tag)
+
+
+@router.get("/connection", response_model=ConnectionSecurityResponse)
+async def get_connection_security(
+    request: Request,
+    _current_user: Annotated[User, Depends(get_current_user)],
+) -> ConnectionSecurityResponse:
+    """How the server sees this request, for the connection-security indicator.
+
+    The client address is classified, never returned or logged. The class reads the last
+    X-Forwarded-For value when there is one, else the TCP peer: advisory only, since a forged
+    header misleads just the sender's own indicator. ``cookie_secure`` is the decision the session
+    cookie gets on this very request.
+    """
+    forwarded_for = ", ".join(request.headers.getlist("x-forwarded-for")) or None
+    peer = request.client.host if request.client else None
+    return ConnectionSecurityResponse(
+        client_class=classify_ip(client_address(forwarded_for, peer)),
+        cookie_secure=session_cookie_secure(request),
     )
 
 
@@ -204,3 +246,21 @@ async def health_check():
         dict: Status message with "ok" status
     """
     return {"status": "ok"}
+
+
+@router.get(
+    "/test-lane-health",
+    response_model=HealthCheckResponse,
+    include_in_schema=False,
+)
+def test_lane_health(
+    token: Annotated[str, Query(min_length=16, max_length=128)],
+) -> JSONResponse:
+    """Confirm readiness only for the test process tree that owns this server."""
+    expected = os.environ.get("LIBREFOLIO_TEST_LANE_ID")
+    if not is_test_mode() or not expected or not secrets.compare_digest(token, expected):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return JSONResponse(
+        content={"status": "ok"},
+        headers={TEST_LANE_HEADER: expected},
+    )

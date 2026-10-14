@@ -166,7 +166,6 @@ class FXConversionResult(BaseModel):
         return parse_ISO_date(v)
 
 
-
 class FXSignalQueryResult(BaseModel):
     """Signal results for one original (pre-daily-expansion) FX request."""
 
@@ -423,7 +422,20 @@ class FXConversionRouteItem(BaseModel):
         return self
 
 
-class FXConversionRoutesResponse(BaseListResponse[FXConversionRouteItem]):
+class FXConversionRouteReadItem(FXConversionRouteItem):
+    """Configured route with derived, response-only routing metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    is_chain: bool = Field(..., description="Whether the configured route contains more than one step", json_schema_extra={"readOnly": True})
+    providers_used: list[str] = Field(
+        ...,
+        description="Sorted unique provider codes configured in the route, including MANUAL; membership only, not ordered traversal or successful-fetch provenance",
+        json_schema_extra={"readOnly": True, "uniqueItems": True},
+    )
+
+
+class FXConversionRoutesResponse(BaseListResponse[FXConversionRouteReadItem]):
     """Response model for listing conversion routes."""
 
 
@@ -435,6 +447,12 @@ class FXConversionRouteResult(BaseModel):
     quote: str = Field(..., description="Quote currency")
     priority: int = Field(..., description="Priority level")
     chain_steps: list[FXRouteStep] = Field(..., description="Chain steps configured")
+    is_chain: bool = Field(..., description="Whether the configured route contains more than one step", json_schema_extra={"readOnly": True})
+    providers_used: list[str] = Field(
+        ...,
+        description="Sorted unique provider codes in the submitted configuration, including MANUAL and unknown codes in failed results; not successful-fetch provenance",
+        json_schema_extra={"readOnly": True, "uniqueItems": True},
+    )
     action: str = Field(..., description="Action taken: 'created' or 'updated'")
     message: Optional[str] = Field(None, description="Additional info/warning")
 

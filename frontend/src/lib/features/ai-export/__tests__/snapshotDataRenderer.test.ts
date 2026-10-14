@@ -561,6 +561,720 @@ describe('AI Export compact Snapshot Data renderer', () => {
         expect(rendered.content.endsWith('  abc\n\n')).toBe(true);
     });
 
+    /**
+     * D12(a), issue #32: `portfolio.provenance` and `broker.provenance` move to component version 2
+     * (their WAC semantics now name the single average cost) with an unchanged payload shape
+     * (schema version 1). The renderer knows that shape, so v2 renders compactly — through the same
+     * generic renderer as v1, hence the very same text — while every other version it does not know
+     * keeps falling back to YAML. No prompt wording is frozen: the texts below are placeholders.
+     */
+    describe('provenance v2 (D12)', () => {
+        type ProvenanceId = 'portfolio.provenance' | 'broker.provenance';
+        const directory = {
+            assets: [],
+            brokers: [
+                {broker_id: 5, display_name: 'First Broker'},
+                {broker_id: 7, display_name: 'Second Broker'},
+            ],
+            fx_pairs: [],
+        };
+
+        function provenanceSection(componentId: ProvenanceId, componentVersion: number, schemaVersion = 1) {
+            const portfolio = componentId === 'portfolio.provenance';
+            return {
+                component_id: componentId,
+                component_version: componentVersion,
+                schema_id: componentId,
+                schema_version: schemaVersion,
+                payload: {
+                    period_start: '2026-01-01',
+                    period_end: '2026-03-31',
+                    domain: portfolio ? 'portfolio' : 'broker',
+                    ...(portfolio ? {scoped_broker_count: 2, broker_scope: [5, 7]} : {broker_id: 5}),
+                    target_currency: 'EUR',
+                    engine_source: 'engine source placeholder',
+                    fifo_methodology: 'fifo methodology placeholder',
+                    valuation_semantics: 'valuation semantics placeholder',
+                    notes: [{subject: 'currency', text: 'currency note placeholder'}],
+                },
+            };
+        }
+
+        const targetOf = (componentId: ProvenanceId) => (componentId === 'portfolio.provenance' ? {kind: 'portfolio'} : {kind: 'broker', broker_id: 5});
+
+        it.each(['portfolio.provenance', 'broker.provenance'] as const)('renders %s v2 (schema 1) compactly, exactly as its v1', (componentId) => {
+            const v1 = renderSnapshotDataText([provenanceSection(componentId, 1)], targetOf(componentId), directory).content;
+            const v2 = renderSnapshotDataText([provenanceSection(componentId, 2)], targetOf(componentId), directory).content;
+
+            // Control: v1 is today's compact generic rendering of this payload.
+            expect(v1).toContain(`COMPONENT ${componentId}`);
+            expect(v1).not.toContain('PAYLOAD YAML FALLBACK');
+            // Subject: v2 is rendered by the same generic renderer — the same text, line for line.
+            expect(v2).not.toContain('PAYLOAD YAML FALLBACK');
+            expect(v2).toBe(v1);
+        });
+
+        it.each([
+            ['portfolio.provenance v3', provenanceSection('portfolio.provenance', 3)],
+            ['broker.provenance v3', provenanceSection('broker.provenance', 3)],
+            ['portfolio.provenance v2 with schema 2', provenanceSection('portfolio.provenance', 2, 2)],
+            ['portfolio.summary v2 with schema 1', {component_id: 'portfolio.summary', component_version: 2, schema_id: 'portfolio.summary', schema_version: 1, payload: {total: 10, future_field: {must_survive: true}}}],
+        ])('still falls back to YAML for %s', (_label, section) => {
+            const rendered = renderSnapshotDataText([section], {kind: 'portfolio'}, directory).content;
+
+            expect(rendered).toContain(`COMPONENT ${section.component_id}`);
+            expect(rendered).toContain('PAYLOAD YAML FALLBACK');
+        });
+    });
+
+    /**
+     * B3b (workstream T): a lot amount whose FX rate is missing is now unknown — `null` — rather than a
+     * figure in the wrong currency, and the lot components move version with it: `asset.lot_detail`
+     * 2 → 3, `portfolio.fifo_lots`/`broker.fifo_lots` and `portfolio.fifo_summary`/`broker.fifo_summary`
+     * 1 → 2. `asset.lot_detail` v2 (F6, v1.1.0) was never known to this renderer, so it has silently
+     * fallen back to YAML ever since. Each of those versions keeps the schema-1 payload shape the generic
+     * renderer knows, so each renders compactly — the very same text as its v1 — and an unknown amount
+     * stays the literal `null` the format preamble declares (`null=explicitly unavailable`): never `0`,
+     * never YAML. Versions the renderer does not know keep falling back to YAML. No prompt wording is
+     * frozen: texts are placeholders and cells are read by column header.
+     */
+    describe('unknown lot amounts (B3b)', () => {
+        type FifoLotsId = 'portfolio.fifo_lots' | 'broker.fifo_lots';
+        type FifoSummaryId = 'portfolio.fifo_summary' | 'broker.fifo_summary';
+        type LotComponentId = 'asset.lot_detail' | FifoLotsId | FifoSummaryId;
+        const directory = {
+            assets: [
+                {asset_id: 42, display_name: 'First Asset'},
+                {asset_id: 43, display_name: 'Second Asset'},
+            ],
+            brokers: [{broker_id: 5, display_name: 'Named Broker'}],
+            fx_pairs: [],
+        };
+        // A target-currency amount, keys in the order the backend `Currency` serializes them.
+        const eur = (amount: string) => ({code: 'EUR', amount});
+        const NUMBER = /^-?\d+(?:\.\d+)?$/;
+
+        // What each unknown row cannot know, a rate it needs being missing. Lot detail amounts are plain
+        // decimals (one column each); FIFO amounts are currency objects, read in `<field>.amount`.
+        const UNKNOWN_LOT_DETAIL_AMOUNTS = ['opening_unit_price', 'original_cost', 'unrealized_pnl', 'total_pnl', 'net_total_pnl', 'income', 'allocated_fees', 'allocated_taxes'] as const;
+        const UNKNOWN_FIFO_LOT_AMOUNTS = ['opening_unit_price', 'original_cost', 'residual_cost_basis', 'cumulative_proceeds', 'realized_pnl', 'unrealized_pnl', 'total_pnl', 'net_total_pnl', 'income', 'fees', 'taxes'] as const;
+        const UNKNOWN_FIFO_ASSET_AMOUNTS = ['original_cost', 'residual_cost_basis', 'cumulative_proceeds', 'realized_pnl', 'unrealized_pnl', 'potential_gain', 'potential_loss', 'total_pnl', 'net_total_pnl', 'income', 'fees', 'taxes'] as const;
+        // A lot detail lot that also sold on a date without a rate cannot know its realized figures either.
+        const LONE_UNKNOWN_LOT_DETAIL_AMOUNTS = [...UNKNOWN_LOT_DETAIL_AMOUNTS, 'cumulative_proceeds', 'realized_pnl'] as const;
+
+        // Lot detail rows. L1 is fully known. L2 opened on a date without a rate and has sold nothing yet, so
+        // its realized figures are true zeros. LOT_DETAIL_LONE_UNKNOWN stands alone in its payload and also
+        // sold part of its quantity on a date without a rate: every B3b amount it carries is null.
+        const LOT_DETAIL_KNOWN = {
+            lot_ref: 'L1',
+            opening_broker_id: 5,
+            opening_date: '2025-06-02',
+            opening_unit_price: '100.00',
+            original_quantity: '10',
+            original_cost: '1000.00',
+            open_quantity: '6',
+            realized_quantity: '4',
+            cumulative_proceeds: '480.00',
+            realized_pnl: '80.00',
+            open_value: '690.00',
+            unrealized_pnl: '90.00',
+            total_pnl: '182.00',
+            net_total_pnl: '158.50',
+            income: '12.00',
+            allocated_fees: '2.50',
+            allocated_taxes: '21.00',
+            value_source: 'MARKET_PRICE',
+            net_metrics_status: 'AVAILABLE',
+            states: ['PARTIALLY_CLOSED'],
+            closing_date: null,
+            current_custody: [{broker_id: 5, custody_type: 'BROKER', quantity: '6'}],
+        };
+        const LOT_DETAIL_UNKNOWN = {
+            lot_ref: 'L2',
+            opening_broker_id: 5,
+            opening_date: '2025-09-15',
+            opening_unit_price: null,
+            original_quantity: '5',
+            original_cost: null,
+            open_quantity: '5',
+            realized_quantity: '0',
+            cumulative_proceeds: '0.00',
+            realized_pnl: '0.00',
+            open_value: '575.00',
+            unrealized_pnl: null,
+            total_pnl: null,
+            net_total_pnl: null,
+            income: null,
+            allocated_fees: null,
+            allocated_taxes: null,
+            value_source: 'MARKET_PRICE',
+            net_metrics_status: 'UNAVAILABLE',
+            states: ['OPEN'],
+            closing_date: null,
+            current_custody: [{broker_id: 5, custody_type: 'BROKER', quantity: '5'}],
+        };
+        const LOT_DETAIL_LONE_UNKNOWN = {
+            lot_ref: 'L1',
+            opening_broker_id: 5,
+            opening_date: '2025-09-15',
+            opening_unit_price: null,
+            original_quantity: '5',
+            original_cost: null,
+            open_quantity: '3',
+            realized_quantity: '2',
+            cumulative_proceeds: null,
+            realized_pnl: null,
+            open_value: '345.00',
+            unrealized_pnl: null,
+            total_pnl: null,
+            net_total_pnl: null,
+            income: null,
+            allocated_fees: null,
+            allocated_taxes: null,
+            value_source: 'MARKET_PRICE',
+            net_metrics_status: 'UNAVAILABLE',
+            states: ['PARTIALLY_CLOSED'],
+            closing_date: null,
+            current_custody: [{broker_id: 5, custody_type: 'BROKER', quantity: '3'}],
+        };
+
+        // FIFO lot rows. L1 is fully known; L2 opened and partly sold on dates without a rate, so every B3b
+        // amount it carries is null.
+        const FIFO_KNOWN_LOT = {
+            lot_ref: 'L1',
+            asset_id: 42,
+            asset_name: 'First Asset',
+            asset_ticker: null,
+            opening_broker_id: 5,
+            direction: 'LONG',
+            status: 'PARTIAL',
+            opening_date: '2025-06-02',
+            closing_date: null,
+            opening_unit_price: eur('100.00'),
+            original_quantity: '10',
+            open_quantity: '6',
+            realized_quantity: '4',
+            original_cost: eur('1000.00'),
+            residual_cost_basis: eur('600.00'),
+            cumulative_proceeds: eur('480.00'),
+            open_value: eur('690.00'),
+            realized_pnl: eur('80.00'),
+            unrealized_pnl: eur('90.00'),
+            total_pnl: eur('182.00'),
+            net_total_pnl: eur('158.50'),
+            income: eur('12.00'),
+            fees: eur('2.50'),
+            taxes: eur('21.00'),
+            value_source: 'MARKET_PRICE',
+            net_metrics_status: 'AVAILABLE',
+            states: ['PARTIALLY_CLOSED'],
+            current_custody: [{broker_id: 5, custody_type: 'BROKER', quantity: '6'}],
+        };
+        const FIFO_UNKNOWN_LOT = {
+            lot_ref: 'L2',
+            asset_id: 43,
+            asset_name: 'Second Asset',
+            asset_ticker: null,
+            opening_broker_id: 5,
+            direction: 'LONG',
+            status: 'PARTIAL',
+            opening_date: '2025-09-15',
+            closing_date: null,
+            opening_unit_price: null,
+            original_quantity: '5',
+            open_quantity: '3',
+            realized_quantity: '2',
+            original_cost: null,
+            residual_cost_basis: null,
+            cumulative_proceeds: null,
+            open_value: eur('345.00'),
+            realized_pnl: null,
+            unrealized_pnl: null,
+            total_pnl: null,
+            net_total_pnl: null,
+            income: null,
+            fees: null,
+            taxes: null,
+            value_source: 'MARKET_PRICE',
+            net_metrics_status: 'UNAVAILABLE',
+            states: ['PARTIALLY_CLOSED'],
+            current_custody: [{broker_id: 5, custody_type: 'BROKER', quantity: '3'}],
+        };
+
+        interface LotsPayloadOptions {
+            readonly schemaVersion?: number;
+            readonly lots?: readonly Record<string, unknown>[];
+            // Lots with at least one amount that cannot be valued in the target currency.
+            readonly unavailableAmountLotCount?: number;
+        }
+
+        function lotDetailSection(componentVersion: number, {schemaVersion = 1, lots = [LOT_DETAIL_KNOWN, LOT_DETAIL_UNKNOWN], unavailableAmountLotCount = 1}: LotsPayloadOptions = {}) {
+            return {
+                component_id: 'asset.lot_detail',
+                component_version: componentVersion,
+                schema_id: 'asset.lot_detail',
+                schema_version: schemaVersion,
+                payload: {
+                    asset_id: 42,
+                    period: {start: '2026-01-01', end: '2026-03-31'},
+                    target_currency: 'EUR',
+                    cost_allocation_semantics: 'cost allocation semantics placeholder',
+                    lots,
+                    omitted_degraded_lot_count: 0,
+                    unavailable_amount_lot_count: unavailableAmountLotCount,
+                },
+            };
+        }
+
+        function fifoLotsSection(componentId: FifoLotsId, componentVersion: number, {schemaVersion = 1, lots = [FIFO_KNOWN_LOT, FIFO_UNKNOWN_LOT], unavailableAmountLotCount = 1}: LotsPayloadOptions = {}) {
+            return {
+                component_id: componentId,
+                component_version: componentVersion,
+                schema_id: componentId,
+                schema_version: schemaVersion,
+                payload: {
+                    period_start: '2026-01-01',
+                    period_end: '2026-03-31',
+                    ...(componentId === 'broker.fifo_lots' ? {broker_id: 5} : {}),
+                    target_currency: 'EUR',
+                    cost_allocation_semantics: 'cost allocation semantics placeholder',
+                    lot_count: lots.length,
+                    unavailable_amount_lot_count: unavailableAmountLotCount,
+                    lots,
+                },
+            };
+        }
+
+        function fifoSummarySection(componentId: FifoSummaryId, componentVersion: number, schemaVersion = 1) {
+            return {
+                component_id: componentId,
+                component_version: componentVersion,
+                schema_id: componentId,
+                schema_version: schemaVersion,
+                payload: {
+                    period_start: '2026-01-01',
+                    period_end: '2026-03-31',
+                    ...(componentId === 'broker.fifo_summary' ? {broker_id: 5} : {}),
+                    target_currency: 'EUR',
+                    cost_allocation_semantics: 'cost allocation semantics placeholder',
+                    asset_count: 2,
+                    total_open_lots: 0,
+                    total_partial_lots: 2,
+                    total_closed_lots: 0,
+                    total_residual_cost_basis: null,
+                    assets: [
+                        {
+                            asset_id: 42,
+                            asset_name: 'First Asset',
+                            asset_ticker: null,
+                            open_lot_count: 0,
+                            partial_lot_count: 1,
+                            closed_lot_count: 0,
+                            has_open_position: true,
+                            original_quantity: '10',
+                            open_quantity: '6',
+                            realized_quantity: '4',
+                            original_cost: eur('1000.00'),
+                            residual_cost_basis: eur('600.00'),
+                            cumulative_proceeds: eur('480.00'),
+                            realized_pnl: eur('80.00'),
+                            open_value: eur('690.00'),
+                            unrealized_pnl: eur('90.00'),
+                            potential_gain: eur('90.00'),
+                            potential_loss: eur('0.00'),
+                            total_pnl: eur('182.00'),
+                            net_total_pnl: eur('158.50'),
+                            income: eur('12.00'),
+                            fees: eur('2.50'),
+                            taxes: eur('21.00'),
+                            valued_open_lot_count: 1,
+                            unavailable_open_lot_count: 0,
+                            value_coverage_status: 'complete',
+                            net_metrics_status: 'AVAILABLE',
+                            broker_ids: [5],
+                            custody_types: ['BROKER'],
+                            states: ['PARTIALLY_CLOSED'],
+                            has_in_transit_custody: false,
+                        },
+                        {
+                            asset_id: 43,
+                            asset_name: 'Second Asset',
+                            asset_ticker: null,
+                            open_lot_count: 0,
+                            partial_lot_count: 1,
+                            closed_lot_count: 0,
+                            has_open_position: true,
+                            original_quantity: '5',
+                            open_quantity: '3',
+                            realized_quantity: '2',
+                            original_cost: null,
+                            residual_cost_basis: null,
+                            cumulative_proceeds: null,
+                            realized_pnl: null,
+                            open_value: eur('345.00'),
+                            unrealized_pnl: null,
+                            potential_gain: null,
+                            potential_loss: null,
+                            total_pnl: null,
+                            net_total_pnl: null,
+                            income: null,
+                            fees: null,
+                            taxes: null,
+                            valued_open_lot_count: 0,
+                            unavailable_open_lot_count: 1,
+                            value_coverage_status: 'unavailable',
+                            net_metrics_status: 'UNAVAILABLE',
+                            broker_ids: [5],
+                            custody_types: ['BROKER'],
+                            states: ['PARTIALLY_CLOSED'],
+                            has_in_transit_custody: false,
+                        },
+                    ],
+                },
+            };
+        }
+
+        function render(componentId: LotComponentId, componentVersion: number, options: LotsPayloadOptions = {}) {
+            const section =
+                componentId === 'asset.lot_detail'
+                    ? lotDetailSection(componentVersion, options)
+                    : componentId === 'portfolio.fifo_lots' || componentId === 'broker.fifo_lots'
+                      ? fifoLotsSection(componentId, componentVersion, options)
+                      : fifoSummarySection(componentId, componentVersion, options.schemaVersion);
+            const target = componentId === 'asset.lot_detail' ? {kind: 'asset', asset_id: 42} : componentId.startsWith('broker.') ? {kind: 'broker', broker_id: 5} : {kind: 'portfolio'};
+            return renderSnapshotDataText([section], target, directory);
+        }
+
+        /** The pipe table on the lines right after `marker`: its header, and one header-keyed map per data row. */
+        function pipeTableAfter(content: string, marker: string): {readonly header: readonly string[]; readonly rows: Map<string, string>[]} {
+            const lines = content.split('\n');
+            const start = lines.indexOf(marker);
+            expect(start, `a "${marker}" line`).toBeGreaterThanOrEqual(0);
+            const table: string[][] = [];
+            for (const line of lines.slice(start + 1)) {
+                if (!line.startsWith('|')) break;
+                table.push(line.slice(1, -1).split(/(?<!\\)\|/));
+            }
+            const [header = [], ...rows] = table;
+            return {header, rows: rows.map((cells) => new Map(header.map((column, index): [string, string] => [column, cells[index]])))};
+        }
+
+        function tableAfter(content: string, marker: string): Map<string, string>[] {
+            return pipeTableAfter(content, marker).rows;
+        }
+
+        /** The columns a payload field occupies: its own, or those flattened from it (`<field>.code`, `<field>.amount`). */
+        function columnsOf(header: readonly string[], field: string): string[] {
+            return header.filter((column) => column === field || column.startsWith(`${field}.`));
+        }
+
+        /** The cells a row holds for a payload field, across every column the field occupies. */
+        function cellsOf(row: Map<string, string>, field: string): (string | undefined)[] {
+            return columnsOf([...row.keys()], field).map((column) => row.get(column));
+        }
+
+        /** The one row whose `column` reads `value`: rows are found by what they hold, never by position. */
+        function rowWhere(rows: readonly Map<string, string>[], column: string, value: string): Map<string, string> {
+            const matches = rows.filter((row) => row.get(column) === value);
+            expect(matches, `rows whose ${column} is ${value}`).toHaveLength(1);
+            return matches[0];
+        }
+
+        /** An asset's prompt ref, resolved through the ENTITY DIRECTORY as a reader of the prompt would. */
+        function assetRef(entityDirectory: string, displayName: string): string {
+            const ref = rowWhere(tableAfter(entityDirectory, 'ASSETS'), 'display_name', displayName).get('ref');
+            if (ref === undefined) throw new Error(`the ENTITY DIRECTORY has no ref for ${displayName}`);
+            return ref;
+        }
+
+        it.each([1, 2, 3])('renders asset.lot_detail v%i (schema 1) compactly, an unknown lot amount as null', (version) => {
+            const rendered = render('asset.lot_detail', version).content;
+
+            expect(rendered).toContain('COMPONENT asset.lot_detail');
+            expect(rendered).not.toContain('PAYLOAD YAML FALLBACK');
+            const lots = tableAfter(rendered, 'TABLE lots');
+            const known = rowWhere(lots, 'lot_ref', 'L1');
+            const unknown = rowWhere(lots, 'lot_ref', 'L2');
+            for (const field of UNKNOWN_LOT_DETAIL_AMOUNTS) {
+                // One column per amount: the known lot fills it with its figure ...
+                expect(known.get(field), `L1 ${field}`).toMatch(NUMBER);
+                // ... and the unknown lot reads null in it, never a 0 standing in for the missing figure.
+                expect(unknown.get(field), `L2 ${field}`).toBe('null');
+            }
+            // Control: the zeros the unknown lot really has (nothing sold yet) stay 0 — two states, never one.
+            expect(unknown.get('realized_pnl')).toBe('0');
+            expect(unknown.get('cumulative_proceeds')).toBe('0');
+        });
+
+        it.each([
+            ['portfolio.fifo_lots', 1],
+            ['portfolio.fifo_lots', 2],
+            ['broker.fifo_lots', 1],
+            ['broker.fifo_lots', 2],
+        ] as const)('renders %s v%i (schema 1) compactly, an unknown lot amount as null', (componentId, version) => {
+            const rendered = render(componentId, version).content;
+
+            expect(rendered).toContain(`COMPONENT ${componentId}`);
+            expect(rendered).not.toContain('PAYLOAD YAML FALLBACK');
+            const lots = tableAfter(rendered, 'TABLE lots');
+            const known = rowWhere(lots, 'lot_ref', 'L1');
+            const unknown = rowWhere(lots, 'lot_ref', 'L2');
+            for (const field of UNKNOWN_FIFO_LOT_AMOUNTS) {
+                expect(known.get(`${field}.amount`), `L1 ${field}.amount`).toMatch(NUMBER);
+                expect(unknown.get(`${field}.amount`), `L2 ${field}.amount`).toBe('null');
+            }
+            // Control: what the unknown lot does know is still printed — the row is not nulled wholesale.
+            expect(unknown.get('open_value.amount')).toMatch(NUMBER);
+        });
+
+        it.each([
+            ['portfolio.fifo_summary', 1],
+            ['portfolio.fifo_summary', 2],
+            ['broker.fifo_summary', 1],
+            ['broker.fifo_summary', 2],
+        ] as const)('renders %s v%i (schema 1) compactly, an unknown asset amount and total as null', (componentId, version) => {
+            const rendered = render(componentId, version);
+
+            expect(rendered.content).toContain(`COMPONENT ${componentId}`);
+            expect(rendered.content).not.toContain('PAYLOAD YAML FALLBACK');
+            // One unknown asset makes the scope total unknown: the SUMMARY reads null, never 0.
+            expect(rowWhere(tableAfter(rendered.content, 'SUMMARY'), 'field', 'total_residual_cost_basis').get('value')).toBe('null');
+            const assets = tableAfter(rendered.content, 'TABLE assets');
+            const known = rowWhere(assets, 'asset_ref', assetRef(rendered.entityDirectory, 'First Asset'));
+            const unknown = rowWhere(assets, 'asset_ref', assetRef(rendered.entityDirectory, 'Second Asset'));
+            for (const field of UNKNOWN_FIFO_ASSET_AMOUNTS) {
+                expect(known.get(`${field}.amount`), `First Asset ${field}.amount`).toMatch(NUMBER);
+                expect(unknown.get(`${field}.amount`), `Second Asset ${field}.amount`).toBe('null');
+            }
+        });
+
+        it.each([
+            ['asset.lot_detail', 2],
+            ['asset.lot_detail', 3],
+            ['portfolio.fifo_lots', 2],
+            ['broker.fifo_lots', 2],
+            ['portfolio.fifo_summary', 2],
+            ['broker.fifo_summary', 2],
+        ] as const)('renders %s v%i (schema 1) as the very same text as its v1', (componentId, version) => {
+            const v1 = render(componentId, 1).content;
+            const bumped = render(componentId, version).content;
+
+            // Control: v1 is today's compact generic rendering of this payload.
+            expect(v1).toContain(`COMPONENT ${componentId}`);
+            expect(v1).not.toContain('PAYLOAD YAML FALLBACK');
+            // Subject: the bumped version goes through the same generic renderer — the same text, line for line.
+            expect(bumped).not.toContain('PAYLOAD YAML FALLBACK');
+            expect(bumped).toBe(v1);
+        });
+
+        it.each([
+            ['asset.lot_detail v4', 'asset.lot_detail', 4, 1],
+            ['portfolio.fifo_lots v3', 'portfolio.fifo_lots', 3, 1],
+            ['broker.fifo_summary v3', 'broker.fifo_summary', 3, 1],
+            ['asset.lot_detail v3 with schema 2', 'asset.lot_detail', 3, 2],
+        ] as const)('still falls back to YAML for %s', (_label, componentId, version, schemaVersion) => {
+            const rendered = render(componentId, version, {schemaVersion}).content;
+
+            expect(rendered).toContain(`COMPONENT ${componentId}`);
+            expect(rendered).toContain('PAYLOAD YAML FALLBACK');
+        });
+
+        /*
+         * `unavailable_amount_lot_count`: the lots with at least one amount that cannot be valued in the target
+         * currency, a root scalar of `asset.lot_detail` v3 and `portfolio.fifo_lots`/`broker.fifo_lots` v2, so the
+         * generic renderer lists it in the SUMMARY. It must always be visible, 0 included, because the table
+         * cannot always say it: an amount null in every lot has no column at all (the existing all-empty column
+         * rule, see 'removes all-empty generic columns and parent columns…'). There the counter is what is left.
+         */
+        const COUNTED_LOT_COMPONENTS = [
+            ['asset.lot_detail', 3],
+            ['portfolio.fifo_lots', 2],
+            ['broker.fifo_lots', 2],
+        ] as const;
+        type CountedLotComponentId = (typeof COUNTED_LOT_COMPONENTS)[number][0];
+
+        /** A counted component's lots: one fully known, one unknown beside it, one unknown and alone (L1). */
+        function countedLots(componentId: CountedLotComponentId) {
+            return componentId === 'asset.lot_detail'
+                ? {knownLot: LOT_DETAIL_KNOWN, unknownLot: LOT_DETAIL_UNKNOWN, unknownLotAmounts: UNKNOWN_LOT_DETAIL_AMOUNTS, loneUnknownLot: LOT_DETAIL_LONE_UNKNOWN, loneUnknownLotAmounts: LONE_UNKNOWN_LOT_DETAIL_AMOUNTS}
+                : {knownLot: FIFO_KNOWN_LOT, unknownLot: FIFO_UNKNOWN_LOT, unknownLotAmounts: UNKNOWN_FIFO_LOT_AMOUNTS, loneUnknownLot: {...FIFO_UNKNOWN_LOT, lot_ref: 'L1'}, loneUnknownLotAmounts: UNKNOWN_FIFO_LOT_AMOUNTS};
+        }
+
+        /** The value cell of the SUMMARY row for `field`, the row found by its field name. */
+        function summaryValue(content: string, field: string): string | undefined {
+            return rowWhere(tableAfter(content, 'SUMMARY'), 'field', field).get('value');
+        }
+
+        it.each(COUNTED_LOT_COMPONENTS)('renders %s v%i with every lot known: unavailable_amount_lot_count reads 0 in the SUMMARY', (componentId, version) => {
+            const rendered = render(componentId, version, {lots: [countedLots(componentId).knownLot], unavailableAmountLotCount: 0}).content;
+
+            expect(rendered).toContain(`COMPONENT ${componentId}`);
+            expect(rendered).not.toContain('PAYLOAD YAML FALLBACK');
+            // 0 is a count, not an absence: the row is there and its value cell reads 0 — not removed, not empty.
+            expect(summaryValue(rendered, 'unavailable_amount_lot_count')).toBe('0');
+        });
+
+        it.each(COUNTED_LOT_COMPONENTS)('renders %s v%i with its only lot unknown: the null-only amount columns are removed, unavailable_amount_lot_count reads 1', (componentId, version) => {
+            const {loneUnknownLot, loneUnknownLotAmounts} = countedLots(componentId);
+            const rendered = render(componentId, version, {lots: [loneUnknownLot], unavailableAmountLotCount: 1});
+
+            expect(rendered.content).toContain(`COMPONENT ${componentId}`);
+            expect(rendered.content).not.toContain('PAYLOAD YAML FALLBACK');
+            const {header, rows} = pipeTableAfter(rendered.content, 'TABLE lots');
+            // Presence barrier: the lot is in the table, with what it still knows ...
+            expect(rows.map((row) => row.get('lot_ref'))).toEqual(['L1']);
+            expect(columnsOf(header, 'open_value')).not.toHaveLength(0);
+            // ... but an amount null in its only row has no column: the existing all-empty column rule, and
+            // every column it removes is counted in the diagnostics.
+            for (const field of loneUnknownLotAmounts) {
+                expect(columnsOf(header, field), `columns of ${field}`).toEqual([]);
+            }
+            expect(rendered.formatDiagnostics.empty_columns_removed).toBeGreaterThanOrEqual(loneUnknownLotAmounts.length);
+            // What the table no longer says, the counter does.
+            expect(summaryValue(rendered.content, 'unavailable_amount_lot_count')).toBe('1');
+        });
+
+        it.each(COUNTED_LOT_COMPONENTS)('renders %s v%i with a known and an unknown lot: the unknown lot reads null, unavailable_amount_lot_count reads 1', (componentId, version) => {
+            const {knownLot, unknownLot, unknownLotAmounts} = countedLots(componentId);
+            const rendered = render(componentId, version, {lots: [knownLot, unknownLot], unavailableAmountLotCount: 1}).content;
+
+            expect(rendered).toContain(`COMPONENT ${componentId}`);
+            expect(rendered).not.toContain('PAYLOAD YAML FALLBACK');
+            const unknownRow = rowWhere(tableAfter(rendered, 'TABLE lots'), 'lot_ref', 'L2');
+            for (const field of unknownLotAmounts) {
+                // The known lot keeps the field's columns; in every one of them the unknown lot reads null.
+                const cells = cellsOf(unknownRow, field);
+                expect(cells, `L2 ${field}`).not.toHaveLength(0);
+                expect(
+                    cells.filter((cell) => cell !== 'null'),
+                    `L2 ${field}`,
+                ).toEqual([]);
+            }
+            expect(summaryValue(rendered, 'unavailable_amount_lot_count')).toBe('1');
+        });
+    });
+
+    /**
+     * C-53: `reconciled` now tolerates a residual below CONVERSION_DUST — the Decimal rounding of the engine's
+     * own closing term, not a reconciliation gap — so `portfolio.reconciliation`/`broker.reconciliation` move
+     * 1 → 2 with an unchanged payload shape (schema 1). v2 renders compactly, as the very same text as its v1,
+     * while versions the renderer does not know keep falling back to YAML. No prompt wording is frozen: cells
+     * are read by field name.
+     */
+    describe('reconciliation dust (C-53)', () => {
+        type ReconciliationId = 'portfolio.reconciliation' | 'broker.reconciliation';
+        const directory = {
+            assets: [],
+            brokers: [{broker_id: 5, display_name: 'Named Broker'}],
+            fx_pairs: [],
+        };
+        // A target-currency amount, keys in the order the backend `Currency` serializes them.
+        const eur = (amount: string) => ({code: 'EUR', amount});
+
+        // A reconciliation payload as the backend serializes it. Every amount was converted to EUR at 1.09, and
+        // `period_other_result` is the engine's closing term of the decomposition: re-adding the terms rounds
+        // differently and leaves 1E-24 — rounding, which v2 reports as reconciled, its residual still exact.
+        function reconciliationSection(componentId: ReconciliationId, componentVersion: number, schemaVersion = 1) {
+            return {
+                component_id: componentId,
+                component_version: componentVersion,
+                schema_id: componentId,
+                schema_version: schemaVersion,
+                payload: {
+                    period_start: '2026-01-01',
+                    period_end: '2026-03-31',
+                    ...(componentId === 'broker.reconciliation' ? {broker_id: 5} : {}),
+                    target_currency: 'EUR',
+                    period_pnl: eur('2293.577981651376146788990826'),
+                    period_unrealized_gain_loss_delta: eur('1376.146788990825688073394495'),
+                    period_realized_gain_loss: eur('642.2018348623853211009174312'),
+                    period_income: eur('366.9724770642201834862385321'),
+                    period_fees_taxes: eur('137.6146788990825688073394495'),
+                    period_other_result: eur('45.8715596330275229357798172'),
+                    reconciled: true,
+                    residual: eur('0.000000000000000000000001'),
+                },
+            };
+        }
+
+        function render(componentId: ReconciliationId, componentVersion: number, schemaVersion = 1) {
+            const target = componentId === 'broker.reconciliation' ? {kind: 'broker', broker_id: 5} : {kind: 'portfolio'};
+            return renderSnapshotDataText([reconciliationSection(componentId, componentVersion, schemaVersion)], target, directory);
+        }
+
+        /** The pipe table on the lines right after `marker`: one header-keyed map per data row. */
+        function tableAfter(content: string, marker: string): Map<string, string>[] {
+            const lines = content.split('\n');
+            const start = lines.indexOf(marker);
+            expect(start, `a "${marker}" line`).toBeGreaterThanOrEqual(0);
+            const table: string[][] = [];
+            for (const line of lines.slice(start + 1)) {
+                if (!line.startsWith('|')) break;
+                table.push(line.slice(1, -1).split(/(?<!\\)\|/));
+            }
+            const [header = [], ...rows] = table;
+            return rows.map((cells) => new Map(header.map((column, index): [string, string] => [column, cells[index]])));
+        }
+
+        /** The one row whose `column` reads `value`: rows are found by what they hold, never by position. */
+        function rowWhere(rows: readonly Map<string, string>[], column: string, value: string): Map<string, string> {
+            const matches = rows.filter((row) => row.get(column) === value);
+            expect(matches, `rows whose ${column} is ${value}`).toHaveLength(1);
+            return matches[0];
+        }
+
+        /** The value cell of the SUMMARY row for `field`, the row found by its field name. */
+        function summaryValue(content: string, field: string): string | undefined {
+            return rowWhere(tableAfter(content, 'SUMMARY'), 'field', field).get('value');
+        }
+
+        it.each([
+            ['portfolio.reconciliation', 2],
+            ['broker.reconciliation', 2],
+        ] as const)('renders %s v%i (schema 1) as the very same text as its v1', (componentId, version) => {
+            const v1 = render(componentId, 1).content;
+            const bumped = render(componentId, version).content;
+
+            // Control: v1 is today's compact generic rendering of this payload.
+            expect(v1).toContain(`COMPONENT ${componentId}`);
+            expect(v1).not.toContain('PAYLOAD YAML FALLBACK');
+            // Subject: the bumped version goes through the same generic renderer — the same text, line for line.
+            expect(bumped).not.toContain('PAYLOAD YAML FALLBACK');
+            expect(bumped).toBe(v1);
+        });
+
+        it.each([
+            ['portfolio.reconciliation v3', 'portfolio.reconciliation', 3, 1],
+            ['broker.reconciliation v3', 'broker.reconciliation', 3, 1],
+            ['portfolio.reconciliation v2 with schema 2', 'portfolio.reconciliation', 2, 2],
+        ] as const)('still falls back to YAML for %s', (_label, componentId, version, schemaVersion) => {
+            const rendered = render(componentId, version, schemaVersion).content;
+
+            expect(rendered).toContain(`COMPONENT ${componentId}`);
+            expect(rendered).toContain('PAYLOAD YAML FALLBACK');
+        });
+
+        /*
+         * What the prompt says: the 1E-24 residual prints as `0` — below the euro's minor unit, the existing
+         * monetary-residual rule (see 'zeros sub-minor-unit reconciliation effects…'). v1 put `reconciled: false`
+         * beside that `0`, a gap of nothing; v2 reports the rounding as reconciled, so the flag and the figure
+         * agree. The v1 rows are the renderer's control: it prints this very payload compactly either way.
+         */
+        it.each([
+            ['portfolio.reconciliation', 1],
+            ['portfolio.reconciliation', 2],
+            ['broker.reconciliation', 1],
+            ['broker.reconciliation', 2],
+        ] as const)('renders %s v%i reconciled within the dust: reconciled reads true beside a residual amount of 0', (componentId, version) => {
+            const rendered = render(componentId, version).content;
+
+            expect(rendered).toContain(`COMPONENT ${componentId}`);
+            expect(rendered).not.toContain('PAYLOAD YAML FALLBACK');
+            expect(summaryValue(rendered, 'reconciled')).toBe('true');
+            expect(summaryValue(rendered, 'residual.amount')).toBe('0');
+        });
+    });
+
     it('normalizes decimal presentation without collapsing tiny nonzero values', () => {
         expect(formatPromptNumber('15000.000000000000')).toBe('15000');
         expect(formatPromptNumber('91.30339554862304')).toBe('91.3034');
@@ -1145,5 +1859,196 @@ describe('AI Export compact Snapshot Data renderer', () => {
 
         expect(rendered.length).toBeLessThan(yaml.length * 0.45);
         expect(rendered).toContain('f:29@s;l:30@e;n:28@s;x:31@e;c:2');
+    });
+
+    /**
+     * C-50 (workstream T): the generic renderer publishes a ratio field under its public percent name
+     * (`PUBLIC_RATIO_FIELD_NAMES`: the SUMMARY row `portfolio_role.portfolio_weight_ratio` reads
+     * `portfolio_role.portfolio_weight_percent`), but a payload value that names a field is printed raw. So
+     * `asset.position_scope` lists `portfolio_weight_ratio` in its `portfolio_role.unavailable` table — a field the
+     * prompt never shows — and the real-prompt probe's public check `raw_ratio_weight_name` fails on it. A field
+     * reference (a `field` leaf, an item of `missing_fields`) goes through the same map as the column it names; a
+     * name the map does not know, and free text such as `reason`, are printed as they are. The payload stays
+     * canonical: the fixtures are the backend's own shapes. No prompt wording is frozen: tables are found by their
+     * `TABLE <path>` marker, cells are read by column header, rows by what they hold.
+     */
+    describe('field references use the public field names (C-50)', () => {
+        const directory = {
+            assets: [{asset_id: 42, display_name: 'Held Asset'}],
+            brokers: [
+                {broker_id: 5, display_name: 'Valued Broker'},
+                {broker_id: 7, display_name: 'Unvalued Broker'},
+            ],
+            fx_pairs: [],
+        };
+        const target = {kind: 'asset', asset_id: 42};
+        // The real-prompt probe's `raw_ratio_weight_name` pattern, verbatim (backend/test_scripts/diagnostics/ai_export_real_prompt_probe.py).
+        const RAW_RATIO_WEIGHT_NAME =
+            /\b(?:portfolio_weight_ratio|technical_normalized_weight_ratio|eligible_portfolio_weight_ratio|covered_portfolio_weight_ratio|covered_weight_ratio|eligible_current_scope_weight_ratio|covered_current_scope_weight_ratio|excluded_current_scope_weight_ratio|coverage_ratio|return_1m_ratio|return_3m_ratio|return_30d_ratio|return_91d_ratio|return_period_ratio|daily_return_volatility_ratio)\b/;
+        // The backend's own reasons (`_build_portfolio_role`) when the asset is valued and another portfolio leg is not.
+        const DENOMINATOR_REASON = '1 of 2 scoped portfolio open-position leg(s) have no current_value; the gross absolute denominator is incomplete.';
+        const RATIO_REASON = 'Ratio requires both the asset gross absolute value and the portfolio gross absolute denominator; at least one is unavailable.';
+
+        interface UnavailableRow {
+            readonly field: string;
+            readonly reason: string;
+        }
+
+        /** `asset.position_scope` v1: the asset is valued, another portfolio leg is not, so the denominator and the ratio are null. */
+        function positionScopeSection(unavailable: readonly UnavailableRow[]) {
+            return {
+                component_id: 'asset.position_scope',
+                component_version: 1,
+                schema_id: 'asset.position_scope',
+                schema_version: 1,
+                payload: {
+                    asset_id: 42,
+                    as_of_date: '2026-03-31',
+                    target_currency: 'EUR',
+                    brokers: [{broker_id: 5, broker_name: 'Valued Broker', quantity: '10'}],
+                    total_quantity: '10',
+                    broker_count: 1,
+                    portfolio_role: {
+                        target_currency: 'EUR',
+                        valuation_basis: 'current_market_value',
+                        denominator_basis: 'gross_absolute_open_position_value',
+                        broker_scope_mode: 'WHOLE_ACCESSIBLE_PORTFOLIO',
+                        asset_market_value: '500',
+                        asset_gross_absolute_value: '500',
+                        portfolio_gross_absolute_value: null,
+                        portfolio_weight_ratio: null,
+                        position_leg_count: 1,
+                        broker_count: 1,
+                        unavailable,
+                    },
+                },
+            };
+        }
+
+        /**
+         * `asset.cost_value_pl` v1: one broker valued, one without a price, which the backend omits for `current_value`
+         * and `unrealized_gain_loss`. `coverage_ratio` stands for a renamed field: no backend `missing_fields` names one
+         * today, and the rule keeps the next one from reaching the prompt raw.
+         */
+        function costValuePlSection() {
+            return {
+                component_id: 'asset.cost_value_pl',
+                component_version: 1,
+                schema_id: 'asset.cost_value_pl',
+                schema_version: 1,
+                payload: {
+                    asset_id: 42,
+                    as_of_date: '2026-03-31',
+                    target_currency: 'EUR',
+                    brokers: [
+                        {broker_id: 5, broker_name: 'Valued Broker', quantity: '10', wac_per_unit: '40', cost_basis: '400', current_value: '500', unrealized_gain_loss: '100', unrealized_gain_loss_percent: '0.25'},
+                        {broker_id: 7, broker_name: 'Unvalued Broker', quantity: '4', wac_per_unit: '45', cost_basis: '180', current_value: null, unrealized_gain_loss: null, unrealized_gain_loss_percent: null},
+                    ],
+                    coverage: {
+                        total_broker_count: 2,
+                        valued_broker_count: 1,
+                        omitted: [{broker_id: 7, missing_fields: ['current_value', 'unrealized_gain_loss', 'coverage_ratio']}],
+                        is_complete: false,
+                    },
+                    total_cost_basis: '400',
+                    total_current_value: '500',
+                    total_unrealized_gain_loss: '100',
+                },
+            };
+        }
+
+        function render(section: unknown) {
+            return renderSnapshotDataText([section], target, directory);
+        }
+
+        /** The pipe table on the lines right after `marker`: one header-keyed map per data row. */
+        function tableAfter(content: string, marker: string): Map<string, string>[] {
+            const lines = content.split('\n');
+            const start = lines.indexOf(marker);
+            expect(start, `a "${marker}" line`).toBeGreaterThanOrEqual(0);
+            const table: string[][] = [];
+            for (const line of lines.slice(start + 1)) {
+                if (!line.startsWith('|')) break;
+                table.push(line.slice(1, -1).split(/(?<!\\)\|/));
+            }
+            const [header = [], ...rows] = table;
+            return rows.map((cells) => new Map(header.map((column, index): [string, string] => [column, cells[index]])));
+        }
+
+        /** The one row whose `column` reads `value`: rows are found by what they hold, never by position. */
+        function rowWhere(rows: readonly Map<string, string>[], column: string, value: string): Map<string, string> {
+            const matches = rows.filter((row) => row.get(column) === value);
+            expect(matches, `rows whose ${column} is ${value}`).toHaveLength(1);
+            return matches[0];
+        }
+
+        /** A broker's prompt ref, resolved through the ENTITY DIRECTORY as a reader of the prompt would. */
+        function brokerRef(entityDirectory: string, displayName: string): string {
+            const ref = rowWhere(tableAfter(entityDirectory, 'BROKERS'), 'display_name', displayName).get('ref');
+            if (ref === undefined) throw new Error(`the ENTITY DIRECTORY has no ref for ${displayName}`);
+            return ref;
+        }
+
+        /** The lines of rendered text the probe's `raw_ratio_weight_name` check flags. */
+        function rawRatioNameLines(content: string): string[] {
+            return content.split('\n').filter((line) => RAW_RATIO_WEIGHT_NAME.test(line));
+        }
+
+        it('names the ratio in the asset.position_scope portfolio_role.unavailable table by its public name, portfolio_weight_percent', () => {
+            const rendered = render(
+                positionScopeSection([
+                    {field: 'portfolio_gross_absolute_value', reason: DENOMINATOR_REASON},
+                    {field: 'portfolio_weight_ratio', reason: RATIO_REASON},
+                ]),
+            ).content;
+
+            expect(rendered).toContain('COMPONENT asset.position_scope');
+            expect(rendered).not.toContain('PAYLOAD YAML FALLBACK');
+            // Presence barrier: the prompt shows the ratio under its public name, the name a reference to it must use.
+            const summary = tableAfter(rendered, 'SUMMARY');
+            expect(rowWhere(summary, 'field', 'portfolio_role.portfolio_weight_percent').get('value')).toBe('null');
+            // Rows are found by their reason, free text printed as it is.
+            const unavailable = tableAfter(rendered, 'TABLE portfolio_role.unavailable');
+            // Control: a field the map does not rename is named as the payload names it.
+            expect(rowWhere(unavailable, 'reason', DENOMINATOR_REASON).get('field')).toBe('portfolio_gross_absolute_value');
+            // Subject: the ratio is named by its public name.
+            expect(rowWhere(unavailable, 'reason', RATIO_REASON).get('field')).toBe('portfolio_weight_percent');
+            // Every reference names a field the SUMMARY shows ...
+            const shown = summary.map((row) => row.get('field'));
+            expect(
+                unavailable.map((row) => `portfolio_role.${row.get('field')}`).filter((name) => !shown.includes(name)),
+                'unavailable fields the SUMMARY does not show',
+            ).toEqual([]);
+            // ... and no line of the prompt carries a raw ratio name: the probe's public check.
+            expect(rawRatioNameLines(rendered)).toEqual([]);
+        });
+
+        it('names a renamed field among the asset.cost_value_pl coverage.omitted missing_fields by its public name, coverage_percent', () => {
+            const rendered = render(costValuePlSection());
+
+            expect(rendered.content).toContain('COMPONENT asset.cost_value_pl');
+            expect(rendered.content).not.toContain('PAYLOAD YAML FALLBACK');
+            const omission = rowWhere(tableAfter(rendered.content, 'TABLE coverage.omitted'), 'broker_ref', brokerRef(rendered.entityDirectory, 'Unvalued Broker'));
+            // The list keeps its items in order: the names the map does not know as they are, the renamed one by its public name.
+            expect(JSON.parse(omission.get('missing_fields') ?? 'null')).toEqual(['current_value', 'unrealized_gain_loss', 'coverage_percent']);
+            expect(rawRatioNameLines(rendered.content)).toEqual([]);
+        });
+
+        it.each([
+            ['a sentence naming the ratio', '1 of 2 scoped portfolio open-position leg(s) have no current_value, so portfolio_weight_ratio has no denominator.'],
+            ['nothing but the ratio name', 'portfolio_weight_ratio'],
+        ] as const)('control: prints a free-text reason as it is, even when it is %s', (_label, reason) => {
+            const rendered = render(
+                positionScopeSection([
+                    {field: 'portfolio_gross_absolute_value', reason},
+                    {field: 'portfolio_weight_ratio', reason: RATIO_REASON},
+                ]),
+            ).content;
+
+            // The row is found by a field the map does not rename: the same row before and after the rule.
+            const row = rowWhere(tableAfter(rendered, 'TABLE portfolio_role.unavailable'), 'field', 'portfolio_gross_absolute_value');
+            // Only a reference key is renamed: the reason is free text and keeps the raw name.
+            expect(row.get('reason')).toBe(reason);
+        });
     });
 });

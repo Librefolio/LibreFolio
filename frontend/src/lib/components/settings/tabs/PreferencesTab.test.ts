@@ -34,6 +34,7 @@
  *     part PreferencesTab owns.
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
+import {tick} from 'svelte';
 import {readable, writable} from 'svelte/store';
 import {fireEvent, render, screen, waitFor, within} from '$test/component';
 
@@ -100,7 +101,13 @@ const setLanguage = vi.fn();
 vi.mock('$lib/stores/app/language', () => {
     const store = writable('en');
     return {
-        currentLanguage: {subscribe: store.subscribe, set: (v: string) => setLanguage(v)},
+        currentLanguage: {
+            subscribe: store.subscribe,
+            set: (v: string) => {
+                store.set(v);
+                setLanguage(v);
+            },
+        },
         // The real module re-exports LANGUAGE_OPTIONS as availableLanguages.
         availableLanguages: [
             {code: 'en', name: 'English', flag: 'EN'},
@@ -110,7 +117,10 @@ vi.mock('$lib/stores/app/language', () => {
 });
 
 const setDirect = vi.fn();
-vi.mock('$lib/stores/app/settings', () => ({userSettings: {setDirect: (...a: unknown[]) => setDirect(...a), get: () => null}}));
+// What the store already holds when the tab writes to it. Null (the store before its
+// first load) unless a test says otherwise: see `beforeEach`.
+const storedSettings = vi.fn<() => Record<string, unknown> | null>();
+vi.mock('$lib/stores/app/settings', () => ({userSettings: {setDirect: (...a: unknown[]) => setDirect(...a), get: () => storedSettings()}}));
 
 // The currency dropdown fetches its own catalogue; stub it with two entries so
 // the row is drivable without any network, and inert everywhere else.
@@ -132,8 +142,19 @@ vi.mock('$lib/stores/reference/fxRoutesStore', () => ({
     invalidateFxRoutes: vi.fn(),
 }));
 
+// OnboardingReplaySection has its own full behavioural coverage in
+// OnboardingReplaySection.test.ts (replay/busy/error/armed-badge). Here it
+// would otherwise drag in the onboarding controller, guide and appBootstrap
+// singletons just to prove *placement*, so it is replaced with a one-testid
+// probe — see the harness file's own doc comment.
+vi.mock('$lib/features/onboarding/components/OnboardingReplaySection.svelte', async () => ({
+    default: (await import('$test/harness/OnboardingReplaySectionProbe.svelte')).default,
+}));
+
 import PreferencesTab from './PreferencesTab.svelte';
 import {zodiosApi} from '$lib/api';
+import {locale} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
 
 // --- Helpers ------------------------------------------------------------
 
@@ -212,7 +233,11 @@ function banner(): HTMLElement | null {
 }
 
 beforeEach(() => {
+    currentLanguage.set('en');
+    locale.set('en');
     vi.clearAllMocks();
+    // clearAllMocks keeps implementations, so a stored record one test programmed would leak.
+    storedSettings.mockReturnValue(null);
     globalGet().mockResolvedValue(globalItems() as never);
     userGet().mockResolvedValue({language: 'en', base_currency: 'EUR', theme: 'auto'} as never);
     userPut().mockResolvedValue({} as never);
@@ -449,6 +474,51 @@ describe('PreferencesTab — what a single-field save puts on the wire', () => {
 
         // originalValues moves to the saved value, so the row is no longer modified.
         await waitFor(() => expect(rowButton(themeRow(), 'save')).toBeNull());
+    });
+});
+
+// =========================================================================
+describe('PreferencesTab — the settings store keeps what a save does not own', () => {
+    // The store holds the user's whole settings record, and the sidebar reads the avatar
+    // from it. A preference save owns three of its fields: handing `setDirect` those three
+    // alone replaces the record, and the avatar is gone from the sidebar until the next
+    // reload. `future_field` stands for any field this tab has never heard of.
+    const STORED = {language: 'en', base_currency: 'EUR', theme: 'auto', avatar_url: 'https://example.test/me.png', future_field: 'kept'};
+
+    const cases: [string, () => Promise<void>, () => HTMLElement, Record<string, string>][] = [
+        ['theme', () => chooseTheme('dark'), themeRow, {theme: 'dark'}],
+        ['language', () => chooseLanguage('Italiano'), languageRow, {language: 'it'}],
+        ['base currency', () => chooseCurrency('USD'), currencyRow, {base_currency: 'USD'}],
+    ];
+
+    it.each(cases)('saving the %s keeps the avatar and every other stored field', async (_field, choose, row, saved) => {
+        storedSettings.mockReturnValue({...STORED});
+        await mount();
+        await choose();
+
+        await fireEvent.click(rowButton(row(), 'save')!);
+
+        await waitFor(() => expect(setDirect).toHaveBeenCalledTimes(1));
+        const handed = setDirect.mock.calls[0][0];
+        expect(handed, 'the avatar the sidebar reads is still in the store').toHaveProperty('avatar_url', STORED.avatar_url);
+        expect(handed, 'a field the tab knows nothing about is still in the store').toHaveProperty('future_field', 'kept');
+        expect(handed, 'the store carries the value just saved, and the rest as it was').toEqual({...STORED, ...saved});
+    });
+
+    it('keeps them through save all too', async () => {
+        // The bulk path writes the store from its own call site, once, after the loop.
+        storedSettings.mockReturnValue({...STORED});
+        await mount();
+        await chooseTheme('dark');
+        await chooseLanguage('Italiano');
+        await chooseCurrency('USD');
+
+        await fireEvent.click(screen.getByTestId('settings-save-all'));
+
+        await waitFor(() => expect(setDirect).toHaveBeenCalledTimes(1));
+        const handed = setDirect.mock.calls[0][0];
+        expect(handed, 'the avatar the sidebar reads is still in the store').toHaveProperty('avatar_url', STORED.avatar_url);
+        expect(handed, 'the store carries the three values just saved, and the rest as it was').toEqual({...STORED, language: 'it', base_currency: 'USD', theme: 'dark'});
     });
 });
 
@@ -772,5 +842,152 @@ describe('PreferencesTab — the category filter', () => {
         // editedValues is not rebuilt by the filter: the pending change survives.
         await waitFor(() => expect(screen.queryByTestId('preference-theme')).not.toBeNull());
         expect(rowButton(themeRow(), 'save')).not.toBeNull();
+    });
+});
+
+// =========================================================================
+describe('PreferencesTab — onboarding replay section placement', () => {
+    /** The desktop category nav renders one button per category, labelled by key. */
+    const navButton = (key: string) => screen.getAllByRole('button', {name: key})[0];
+    const onboardingProbe = () => screen.queryByTestId('onboarding-replay-section-probe');
+
+    it('appears under the default (no category selected, i.e. "All")', async () => {
+        await mount();
+
+        expect(onboardingProbe()).not.toBeNull();
+    });
+
+    it.each(['settings.categoryDisplay', 'settings.categoryCurrency', 'settings.categoryAppearance'])('disappears under %s', async (categoryKey) => {
+        await mount();
+
+        await fireEvent.click(navButton(categoryKey));
+
+        await waitFor(() => expect(onboardingProbe()).toBeNull());
+    });
+
+    it('appears alone (no preference row) under the onboarding category', async () => {
+        await mount();
+
+        await fireEvent.click(navButton('onboarding.settings.category'));
+
+        await waitFor(() => expect(onboardingProbe()).not.toBeNull());
+        expect(screen.queryByTestId('preference-language')).toBeNull();
+        expect(screen.queryByTestId('preference-currency')).toBeNull();
+        expect(screen.queryByTestId('preference-theme')).toBeNull();
+    });
+});
+
+// =========================================================================
+describe('PreferencesTab — Runes read boundaries', () => {
+    // The layout root contains only the desktop navigation. The mobile trigger
+    // lives outside it, so even the selected category has one matching button.
+    const category = (key: string) => within(within(screen.getByTestId('settings-layout')).getByRole('navigation')).getByRole('button', {name: key});
+
+    const expectInitialReadsOnly = () => {
+        expect(globalGet().mock.calls).toEqual([[]]);
+        expect(userGet().mock.calls).toEqual([[]]);
+    };
+
+    it('keeps exactly the two initial GETs across draft, category and live locale changes', async () => {
+        await mount();
+        await tick();
+        expectInitialReadsOnly();
+
+        await chooseLanguage('Italiano');
+        await chooseCurrency('USD');
+        await chooseTheme('dark');
+        expect(screen.getByTestId('settings-save-all')).toBeEnabled();
+        expectInitialReadsOnly();
+
+        await fireEvent.click(category('settings.categoryDisplay'));
+        expect(languageRow()).toBeInTheDocument();
+        expect(screen.queryByTestId('preference-theme')).not.toBeInTheDocument();
+        expectInitialReadsOnly();
+
+        currentLanguage.set('it');
+        locale.set('it');
+        await tick();
+        expect(within(languageRow()).getByRole('combobox')).toHaveTextContent('Italiano');
+        expect(within(languageRow()).getByTestId('setting-save')).toBeEnabled();
+        expectInitialReadsOnly();
+
+        await fireEvent.click(category('settings.categoryAppearance'));
+        expect(within(themeRow()).getByTestId('setting-save')).toBeEnabled();
+        await fireEvent.click(category('settings.all'));
+        expect(within(currencyRow()).getByRole('combobox')).toHaveTextContent('USD');
+        expect(within(themeRow()).getByTestId('setting-save')).toBeEnabled();
+        expectInitialReadsOnly();
+        expect(userPut()).not.toHaveBeenCalled();
+        expect(applyTheme).not.toHaveBeenCalled();
+        expect(setDirect).not.toHaveBeenCalled();
+    });
+
+    it('does not let late global defaults overwrite a draft made after the user GET', async () => {
+        const globals = deferred<ReturnType<typeof globalItems>>();
+        const user = deferred<{language: string; base_currency: string; theme: string}>();
+        globalGet().mockReturnValue(globals.promise);
+        userGet().mockReturnValue(user.promise);
+        render(PreferencesTab);
+
+        await waitFor(expectInitialReadsOnly);
+        user.resolve({language: 'en', base_currency: 'EUR', theme: 'auto'});
+        await waitFor(() => expect(languageRow()).toBeInTheDocument());
+        // The user GET, not Promise.all, owns the loading gate.
+        expect(screen.getByTestId('settings-layout')).toHaveAttribute('data-busy', 'false');
+        await chooseLanguage('Italiano');
+        await chooseCurrency('USD');
+        await chooseTheme('dark');
+        expect(within(languageRow()).queryByTestId('setting-reset')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('settings-reset-all')).not.toBeInTheDocument();
+
+        globals.resolve(globalItems({default_language: 'it', default_currency: 'USD', default_theme: 'light'}));
+        // Bulk Reset depends on the persisted values versus the global defaults
+        // and remains available while dirty. Its appearance proves the late
+        // response was consumed; per-field Reset is intentionally hidden until
+        // that field is no longer modified.
+        await waitFor(() => expect(screen.getByTestId('settings-reset-all')).toBeEnabled());
+        expect(within(languageRow()).getByRole('combobox')).toHaveTextContent('Italiano');
+        expect(within(currencyRow()).getByRole('combobox')).toHaveTextContent('USD');
+        for (const row of [languageRow(), currencyRow(), themeRow()]) {
+            expect(within(row).getByTestId('setting-save')).toBeEnabled();
+        }
+        expect(userPut()).not.toHaveBeenCalled();
+        expectInitialReadsOnly();
+
+        // Theme has no semantic selected-value attribute. Observe the retained
+        // draft at its existing write boundary, not through styling or a new seam.
+        await fireEvent.click(screen.getByTestId('settings-save-all'));
+        await waitFor(() =>
+            expect(notify).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    name: 'settings.preferences.saved',
+                    detail: expect.objectContaining({fields: 3, saved: ['language', 'default_currency', 'theme'], failed: [], language: 'it', currency: 'USD', theme: 'dark'}),
+                    toast: expect.objectContaining({variant: 'success'}),
+                }),
+            ),
+        );
+        expect(userPut().mock.calls).toEqual([[{language: 'it'}], [{base_currency: 'USD'}], [{theme: 'dark'}]]);
+        expect(setLanguage).toHaveBeenCalledWith('it');
+        expect(applyTheme).toHaveBeenCalledWith('dark');
+        expect(setDirect).toHaveBeenCalledWith({language: 'it', base_currency: 'USD', theme: 'dark'});
+        expectInitialReadsOnly();
+    });
+
+    it('starts exactly the same two reads on remount and discards only the old local draft', async () => {
+        const first = await mount();
+        await chooseLanguage('Italiano');
+        expect(within(languageRow()).getByTestId('setting-save')).toBeEnabled();
+        expectInitialReadsOnly();
+
+        first.unmount();
+        expect(screen.queryByTestId('preference-language')).not.toBeInTheDocument();
+        await mount();
+        await tick();
+
+        expect(within(languageRow()).getByRole('combobox')).toHaveTextContent('English');
+        expect(within(languageRow()).queryByTestId('setting-save')).not.toBeInTheDocument();
+        expect(globalGet().mock.calls).toEqual([[], []]);
+        expect(userGet().mock.calls).toEqual([[], []]);
+        expect(userPut()).not.toHaveBeenCalled();
     });
 });

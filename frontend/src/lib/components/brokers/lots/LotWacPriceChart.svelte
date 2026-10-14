@@ -5,7 +5,6 @@
     import {z} from 'zod';
     import {schemas} from '$lib/api';
     import {_} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
     import {buildDataZoom} from '$lib/components/charts/chartCoreHelpers';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
@@ -16,11 +15,13 @@
     import {buildGridColors, buildTooltipDivider, buildTooltipHeader, buildTooltipRow, buildTooltipTheme, scheduleFirstRenderStabilityFix, setupTooltipAutoHide, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
     import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
-    import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
+    import {maskableQuantity} from '$lib/utils/privacy/maskable';
+    import {formatExactDecimal} from '$lib/utils/core/formatFixed';
     import {lotDisplayState, lotStateColor, lotStateSymbol, type LotDisplayState} from './lotStateVisual';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
+    import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal, safeNumber, safeScalar, safeString} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
@@ -49,6 +50,7 @@
         sortDates,
         toPercentSeries,
     } from './lotWacPriceChartHelpers';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
@@ -124,7 +126,8 @@
         type: 'DIVIDEND' | 'INTEREST';
         date: string;
         broker_id: number | null;
-        amount: string;
+        /** `null` when the income has no rate to the target currency. */
+        amount: string | null;
         lot_ids: number[];
     };
 
@@ -223,8 +226,22 @@
     let wrapperEl: HTMLDivElement | undefined = $state(undefined);
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
+    // Up only while chartInstance holds a full option (the LineChart guard). init() and clear() leave a model
+    // without a grid, and the lazy x-axis patch merged into it throws on `axisBuilder` in ECharts' next frame.
+    let chartOptionSet = false;
+    let responsiveXAxisCompact = false;
     const resizeWatcher = createResizeWatcher(() => {
         chartInstance?.resize();
+        if (chartInstance) {
+            const policy = buildLotXAxisPolicy();
+            const wasCompact = responsiveXAxisCompact;
+            responsiveXAxisCompact = policy.compact;
+            if (policy.axisLabel) {
+                if (chartOptionSet) chartInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+            } else if (wasCompact) {
+                renderChart();
+            }
+        }
         scheduleResolutionSync();
     });
     let darkModeObserver: MutationObserver | null = null;
@@ -261,18 +278,20 @@
      *  copies went through `safeString`, which answers `null` for a value that
      *  is already a number. */
     const parseNumber = (value: unknown): number | null => safeDecimal(value);
+    /** Clamp a known amount at 0 for the bubble metrics; an unknown one stays `null`. */
+    const nonNegativeOrNull = (value: number | null): number | null => (value == null ? null : Math.max(0, value));
 
     /** The chart's date labels are exactly the shared axis formatter's with-year
      *  long form; delegating keeps its ~8 call sites untouched. */
     function formatDate(value: number | string): string {
-        return formatAxisDate($currentLanguage, value, true);
+        return formatAxisDate(uiLocale(), value, true);
     }
 
     /** This chart's numbers are already percentages, hence scale 1 (the default). */
     const formatPercent = (value: number): string => sharedFormatPercent(value);
 
-    /** The chart uses the machine locale for numbers (not `$currentLanguage`), so
-     *  the shared formatter is called with no locale argument. */
+    /** Figures follow the interface locale (M-18): the shared formatter's default,
+     *  so it is called with no locale argument. */
     const formatAxisNumber = (value: number): string => sharedFormatAxisNumber(value);
 
     const lineSeriesDates = $derived.by(() => {
@@ -465,8 +484,9 @@
         return labels.eventType[kind];
     }
 
+    /** Every quantity this chart renders goes through here; masked under privacy (D5′). */
     function formatQuantityValue(value: number): string {
-        return formatDecimalForDisplay(Math.abs(value), {minFrac: 0, maxFrac: 8});
+        return maskableQuantity(formatExactDecimal(Math.abs(value), {minFrac: 0, maxFrac: 8}));
     }
 
     function formatSignedQuantityValue(value: number): string {
@@ -481,6 +501,15 @@
 
     function formatMaybeMoney(value: number | null): string {
         return value == null ? '—' : formatCurrencyAmountPlain(value, currency);
+    }
+
+    /**
+     * A price per unit — WAC, market, purchase, sale. Public: a price is not patrimony and the
+     * WAC is admissible (product owner, 2026-09-22); the axis already shows these prices, and
+     * with quantities masked (D5′) price × quantity rebuilds nothing. Totals keep `formatMaybeMoney`.
+     */
+    function formatMaybePrice(value: number | null): string {
+        return value == null ? '—' : formatCurrencyAmountPlain(value, currency, {sensitivity: 'public'});
     }
 
     function eventQuantityText(event: LotTimelineEventSchema): string | null {
@@ -838,12 +867,12 @@
     function buildIncomeEventTooltip(event: LotIncomeEvent | null): string {
         if (!event) return '';
         const theme = buildTooltipTheme(isDark);
-        const amount = Number.parseFloat(event.amount);
+        const amount = parseNumber(event.amount);
         const rows = [
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerType')), escapeHtml(incomeEventTypeLabel(event.type)), incomeMarkerColor()),
-            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerDate')), escapeHtml(formatAxisDate($currentLanguage, event.date))),
+            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerDate')), escapeHtml(formatAxisDate(uiLocale(), event.date))),
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerBroker')), escapeHtml(brokerName(event.broker_id))),
-            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerAmount')), escapeHtml(Number.isFinite(amount) ? formatCurrencyAmountPlain(amount, currency) : String(event.amount))),
+            buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerAmount')), escapeHtml(amount == null ? '—' : formatCurrencyAmountPlain(amount, currency))),
             buildTooltipRow(escapeHtml($_('brokers.lots.incomeMarkerLotCount')), escapeHtml(String(event.lot_ids?.length ?? 0))),
         ];
         return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(incomeEventTypeLabel(event.type)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
@@ -923,11 +952,12 @@
         priceAtOpening: number | null;
         openingUnitPrice: number | null;
         totalReturn: number | null;
-        totalPnl: number;
+        /** `null` when unknown (an FX rate is missing): shown as «—», never as 0. */
+        totalPnl: number | null;
         openQuantity: number;
         originalQuantity: number;
-        openingValue: number;
-        assetIncome: number;
+        openingValue: number | null;
+        assetIncome: number | null;
         estimatedAtCost: boolean;
         state: LotDisplayState;
         active: boolean;
@@ -987,11 +1017,11 @@
                 priceAtOpening,
                 openingUnitPrice: parseNumber(lot.opening_unit_price),
                 totalReturn: parseNumber(lot.total_return),
-                totalPnl: parseNumber(lot.total_pnl) ?? 0,
+                totalPnl: parseNumber(lot.total_pnl),
                 openQuantity,
                 originalQuantity,
-                openingValue: Math.max(0, parseNumber(lot.original_cost) ?? 0),
-                assetIncome: parseNumber(lot.asset_income) ?? 0,
+                openingValue: nonNegativeOrNull(parseNumber(lot.original_cost)),
+                assetIncome: parseNumber(lot.asset_income),
                 estimatedAtCost: safeString(lot.value_source) === 'ESTIMATED_AT_COST',
                 state: lotDisplayState(openQuantity, originalQuantity),
                 active: lotSelectionSet.size === 0 || lotSelectionSet.has(lot.lot_id),
@@ -1012,12 +1042,12 @@
             buildTooltipRow(escapeHtml(labels.bubbleOpeningDate), escapeHtml(formatDate(point.openingDate))),
             buildTooltipRow(escapeHtml(labels.broker), escapeHtml(point.brokerName), point.fillColor),
             buildTooltipRow(escapeHtml(labels.bubbleState), escapeHtml(lotBubbleStateLabel(point.state)), lotStateColor(point.state, isDark)),
-            buildTooltipRow(escapeHtml(labels.bubbleOpeningValue), escapeHtml(formatCurrencyAmountPlain(point.openingValue, currency))),
-            buildTooltipRow(escapeHtml(labels.bubbleTotalPnl), `<span style="color:${lotBubbleSignColor(point.totalPnl)}">${escapeHtml(formatCurrencyAmountPlain(point.totalPnl, currency))}</span>`),
+            buildTooltipRow(escapeHtml(labels.bubbleOpeningValue), escapeHtml(point.openingValue == null ? '—' : formatCurrencyAmountPlain(point.openingValue, currency))),
+            buildTooltipRow(escapeHtml(labels.bubbleTotalPnl), point.totalPnl == null ? '—' : `<span style="color:${lotBubbleSignColor(point.totalPnl)}">${escapeHtml(formatCurrencyAmountPlain(point.totalPnl, currency))}</span>`),
             buildTooltipRow(escapeHtml(labels.bubbleTotalReturn), point.totalReturn == null ? '—' : `<span style="color:${lotBubbleSignColor(point.totalReturn)}">${escapeHtml(formatPercent(point.totalReturn * 100))}</span>`),
         ];
-        if (point.assetIncome > 0) {
-            rows.push(buildTooltipRow(escapeHtml(labels.bubbleAssetIncome), escapeHtml(formatCurrencyAmountPlain(point.assetIncome, currency))));
+        if (point.assetIncome == null || point.assetIncome > 0) {
+            rows.push(buildTooltipRow(escapeHtml(labels.bubbleAssetIncome), escapeHtml(point.assetIncome == null ? '—' : formatCurrencyAmountPlain(point.assetIncome, currency))));
         }
         if (point.estimatedAtCost) {
             rows.push(buildTooltipRow(escapeHtml(labels.bubbleEstimatedAtCost), escapeHtml('•'), point.fillColor));
@@ -1052,7 +1082,7 @@
                     const connectorBaseY = point.priceAtOpening ?? baseY;
                     return {point, baseY, connectorBaseY, yValue: baseY * (1 + point.totalReturn), metric};
                 }
-                return {point, baseY: 0, connectorBaseY: 0, yValue: point.totalReturn * 100, metric: point.openingValue};
+                return {point, baseY: 0, connectorBaseY: 0, yValue: point.totalReturn * 100, metric: point.openingValue ?? 0};
             })
             .filter((entry): entry is {point: LotBubblePoint; baseY: number; connectorBaseY: number; yValue: number; metric: number} => entry != null);
 
@@ -1327,7 +1357,7 @@
 
     function splitRatioText(event: LotTimelineEventSchema): string | null {
         const ratio = parseNumber(event.ratio);
-        return ratio == null ? null : `${formatDecimalForDisplay(ratio, {minFrac: 0, maxFrac: 8})}:1`;
+        return ratio == null ? null : `${formatExactDecimal(ratio, {minFrac: 0, maxFrac: 8})}:1`;
     }
 
     function saleHeaderLabel(snapshot: EventStateSnapshot | null): string {
@@ -1378,7 +1408,7 @@
             const unitPrice = parseNumber(event.unit_price);
             const openingValue = quantity != null && unitPrice != null ? Math.abs(quantity) * unitPrice : null;
             rows.push(markerTooltipRow(labels.quantity, quantity == null ? '—' : formatQuantityValue(quantity)));
-            rows.push(markerTooltipRow(labels.unitPrice, formatMaybeMoney(unitPrice)));
+            rows.push(markerTooltipRow(labels.unitPrice, formatMaybePrice(unitPrice)));
             rows.push(markerTooltipRow(labels.openingValue, formatMaybeMoney(openingValue)));
             rows.push(markerTooltipRow(labels.broker, brokerName(safeNumber(event.broker_id))));
         } else if (event.kind === 'SELL') {
@@ -1391,7 +1421,7 @@
             if (residualQuantity != null && Math.abs(residualQuantity) > LOT_BUBBLE_ZERO_EPS) {
                 rows.push(markerTooltipRow(labels.residualQuantity, formatQuantityValue(residualQuantity)));
             }
-            rows.push(markerTooltipRow(labels.salePrice, formatMaybeMoney(salePrice)));
+            rows.push(markerTooltipRow(labels.salePrice, formatMaybePrice(salePrice)));
             rows.push(markerTooltipRow(labels.proceeds, formatMaybeMoney(proceeds)));
             rows.push(markerTooltipRow(labels.realizedPnl, formatMaybeMoney(realizedPnl)));
         } else if (event.kind === 'TRANSFER_DEPART' || event.kind === 'TRANSFER_ARRIVE') {
@@ -1415,8 +1445,8 @@
             const nextPrice = snapshot?.unitPriceAfter ?? (previousPrice != null && ratio != null && ratio !== 0 ? previousPrice / ratio : null);
             rows.push(markerTooltipRow(labels.previousQuantity, formatMaybeQuantity(previousQuantity)));
             rows.push(markerTooltipRow(labels.nextQuantity, formatMaybeQuantity(nextQuantity)));
-            rows.push(markerTooltipRow(labels.previousPrice, formatMaybeMoney(previousPrice)));
-            rows.push(markerTooltipRow(labels.nextPrice, formatMaybeMoney(nextPrice)));
+            rows.push(markerTooltipRow(labels.previousPrice, formatMaybePrice(previousPrice)));
+            rows.push(markerTooltipRow(labels.nextPrice, formatMaybePrice(nextPrice)));
             rows.push(markerTooltipRow(labels.totalCost, labels.unchanged));
         }
 
@@ -1439,7 +1469,8 @@
                 if (rawValue == null || rawValue === '') return null;
                 const value = Number(rawValue);
                 if (!Number.isFinite(value)) return null;
-                const formatted = displayMode === 'absolute' ? formatCurrencyAmountPlain(value, currency) : formatPercent(value);
+                // The line series are WAC and market price, both per unit: public, like the axis beside them.
+                const formatted = displayMode === 'absolute' ? formatCurrencyAmountPlain(value, currency, {sensitivity: 'public'}) : formatPercent(value);
                 return buildTooltipRow(escapeHtml(String(param.seriesName ?? '')), escapeHtml(formatted), typeof param.color === 'string' ? param.color : undefined);
             })
             .filter((row): row is string => row != null);
@@ -1469,10 +1500,11 @@
         const gridColors = buildGridColors(isDark);
         const series = attachIncomeMarkers(buildSeries());
         const rawXBounds = getXAxisBounds();
-        // Derive the multi-year flag from the *raw* bounds so the horizontal bubble padding below can't
-        // nudge an edge across a year boundary and spuriously flip the axis to the year-labelled format.
-        const multiYearAxis = !!rawXBounds && new Date(rawXBounds.min).getFullYear() !== new Date(rawXBounds.max).getFullYear();
         const xAxisBounds = padXBoundsForBubbles(rawXBounds);
+        // Build the axis policy from the *raw* bounds, so the horizontal bubble padding can't nudge an
+        // edge across a year boundary and add the year to the edge labels.
+        const xAxisPolicy = buildLotXAxisPolicy(rawXBounds);
+        responsiveXAxisCompact = xAxisPolicy.compact;
         const autoYBounds = computeAutoYAxisBounds(displayMode === 'absolute' ? 'absolute' : 'percent');
         const yAxisMin = displayMode === 'percentage' ? (autoYBounds ? Math.min(0, autoYBounds.min) : (value: {min: number}) => Math.min(0, value.min)) : absYFromZero ? 0 : ((autoYBounds?.min ?? null) as unknown as number);
         const yAxisMax = displayMode === 'percentage' ? (autoYBounds ? Math.max(0, autoYBounds.max) : (value: {max: number}) => Math.max(0, value.max)) : ((autoYBounds?.max ?? null) as unknown as number);
@@ -1542,6 +1574,7 @@
             xAxis: {
                 type: 'time',
                 ...(xAxisBounds ? {min: xAxisBounds.min, max: xAxisBounds.max} : {}),
+                ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
                 axisLine: {
                     lineStyle: {color: gridColors.gridColor},
                 },
@@ -1550,7 +1583,8 @@
                 axisLabel: {
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatAxisDate($currentLanguage, value, multiYearAxis),
+                    formatter: xAxisPolicy.formatter,
+                    ...(xAxisPolicy.axisLabel ?? {}),
                 },
             },
             yAxis: {
@@ -1570,7 +1604,7 @@
                 },
                 axisLabel: {
                     color: gridColors.textColor,
-                    formatter: (value: number) => (displayMode === 'absolute' ? formatAxisNumber(value) : `${normalizeZero(value).toFixed(0)}%`),
+                    formatter: (value: number) => (displayMode === 'absolute' ? formatAxisNumber(value) : sharedFormatPercent(normalizeZero(value), {digits: 0, signed: false})),
                 },
             },
             series,
@@ -1580,6 +1614,16 @@
             // x-axis in sync; setOption does not re-emit a 'dataZoom' event, so no ping-pong.
             dataZoom: applySharedZoomWindow(buildDataZoom([0])),
         };
+    }
+
+    function buildLotXAxisPolicy(range: {min: number | string; max: number | string} | null = getXAxisBounds()): ReturnType<typeof buildResponsiveXAxisPolicy> {
+        return buildResponsiveXAxisPolicy({
+            width: chartContainer?.clientWidth ?? 0,
+            values: range ? [range.min, range.max] : [],
+            locale: uiLocale(),
+            axisType: 'time',
+            horizontalPadding: 42,
+        });
     }
 
     function applySharedZoomWindow<T extends {start?: number; end?: number}>(zooms: T[]): T[] {
@@ -1612,6 +1656,7 @@
 
         if (!chartInstance) {
             chartInstance = echarts.init(chartContainer, undefined, {renderer: 'canvas'});
+            chartOptionSet = false;
             attachChartReady(chartInstance, chartContainer, 'lot-wac-price');
             needsInitialLayoutStabilityPass = true;
             setupResizeObserver();
@@ -1641,6 +1686,7 @@
             currentResolution = 'daily';
             shouldPickInitialResolution = true;
             chartInstance.clear();
+            chartOptionSet = false;
             return;
         }
 
@@ -1652,7 +1698,11 @@
             (option as {animation?: boolean}).animation = false;
             (option as {animationDurationUpdate?: number}).animationDurationUpdate = 0;
         }
-        chartInstance.setOption(option, CHART_SET_OPTION_OPTS);
+        chartInstance.setOption(option, {
+            ...CHART_SET_OPTION_OPTS,
+            replaceMerge: [...CHART_SET_OPTION_OPTS.replaceMerge, 'xAxis'],
+        });
+        chartOptionSet = true;
         if (needsInitialLayoutStabilityPass) {
             needsInitialLayoutStabilityPass = false;
             scheduleFirstRenderStabilityFix(chartInstance, chartContainer);
@@ -1692,7 +1742,7 @@
 
     let prevRenderDeps: unknown[] = [];
     $effect(() => {
-        const renderDeps: unknown[] = [groupedChartData, displayMode, absYFromZero, currency, labels, $currentLanguage, brokers, xAxisRange, eventStateSnapshots, lotBubblePoints];
+        const renderDeps: unknown[] = [groupedChartData, displayMode, absYFromZero, currency, labels, uiLocale(), brokers, xAxisRange, eventStateSnapshots, lotBubblePoints];
         void selectedLotIds;
 
         // Selection-only re-renders leave every geometry input referentially identical (the $derived

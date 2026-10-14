@@ -40,6 +40,8 @@ server and reproduced in jsdom with a parent-loop harness.
 > `await tooltip.isVisible({timeout: 2000}).catch(() => false)` silently became
 > always-false the day `Tooltip` gained a 500ms hover-open delay (T2). Use
 > `waitFor({state: 'visible', timeout})` / retrying `expect` for time-dependent UI.
+> The same trap skipped 8 gallery shots in a green run in October 2026; `isEnabled({timeout})` has a twin of it —
+> [[problems/playwright-probes-ignore-timeout]].
 
 ## Source files
 

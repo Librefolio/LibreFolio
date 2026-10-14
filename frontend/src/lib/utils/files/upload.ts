@@ -7,6 +7,8 @@
 import {axiosInstance} from '$lib/api';
 import {get} from 'svelte/store';
 import {_} from '$lib/i18n';
+import {formatFixed} from '$lib/utils/core/formatFixed';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /**
  * Upload a file to the backend static uploads endpoint.
@@ -39,19 +41,24 @@ export async function uploadFile(file: File, description?: string): Promise<stri
  * Uses svelte-i18n translation keys: common.bytes, common.kilobytes, common.megabytes, common.gigabytes.
  * Works both inside and outside Svelte components via get() from svelte/store.
  *
+ * `get()` is a one-off read that no effect tracks: a template that must follow a language change passes its own
+ * `$t`, which the template does track.
+ *
  * @param bytes - Size in bytes
- * @returns Formatted string (e.g. "1.5 MB" in EN, "1.5 Mo" in FR)
+ * @param translate - The translator to read the units with; defaults to the current one
+ * @param locale - The locale to write the number in; defaults to the interface locale
+ * @returns Formatted string (e.g. "1.5 MB" in EN, "1,5 Mo" in FR)
  */
-export function formatBytes(bytes: number): string {
-    const t = get(_);
+export function formatBytes(bytes: number, translate: (key: string) => string = get(_), locale: string = uiLocale()): string {
+    const t = translate;
     const b = t('common.bytes') || 'B';
     const kb = t('common.kilobytes') || 'KB';
     const mb = t('common.megabytes') || 'MB';
     const gb = t('common.gigabytes') || 'GB';
 
     if (bytes === 0) return `0 ${b}`;
-    if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} ${gb}`;
-    if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} ${mb}`;
-    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} ${kb}`;
+    if (bytes >= 1024 * 1024 * 1024) return `${formatFixed(bytes / (1024 * 1024 * 1024), 1, {locale})} ${gb}`;
+    if (bytes >= 1024 * 1024) return `${formatFixed(bytes / (1024 * 1024), 1, {locale})} ${mb}`;
+    if (bytes >= 1024) return `${formatFixed(bytes / 1024, 1, {locale})} ${kb}`;
     return `${bytes} ${b}`;
 }

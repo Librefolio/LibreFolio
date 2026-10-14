@@ -1,6 +1,6 @@
-# ⚙️ Broker Configuration & AI Export
+# ⚙️ Broker Configuration & Info
 
-The **Info** tab houses metadata configuration, safety controls, the scoped AI Export tool, and the sharing configuration panel.
+The **Info** tab of a broker shows the account's details on the left and who can access it on the right.
 
 <div class="screenshot-container" style="max-width: 700px; margin: 1.5rem auto 2rem auto;">
     <img class="gallery-img" data-category="brokers" data-name="info-tab" alt="Broker Info and Sharing View">
@@ -8,43 +8,59 @@ The **Info** tab houses metadata configuration, safety controls, the scoped AI E
 
 ---
 
-## ⚙️ Metadata & Settings
+## 📋 Account details
 
-The left column of the Info tab displays key properties and validation rules for this broker:
+The **Details** card lists:
 
-- **Broker Status**: Shows whether the account is currently `Active`. Inactive brokers are hidden from list drop-downs but their historical values are preserved in charts.
-- **Dates**: Renders when the account was opened and when it was created in LibreFolio.
-- **Base Currency**: The base currency of the account (all transactions and valuations are internally converted using historical FX rates to this currency for local reporting).
-- **Allow Cash Overdraft**: A toggle to bypass negative balance errors. When disabled, LibreFolio blocks transactions (like purchases or withdrawals) that would result in a negative cash balance.
-- **Allow Short Positions**: A toggle to authorize negative asset quantities. When disabled, selling more than your current open position size is blocked.
+- **Account Active** — **✓ Active**, or **✗ Closed** for an account you no longer use. A closed broker keeps its history in your charts.
+- **Account Opened** — when you opened the account, if you set it.
+- **Allow Leveraged Buying** and **Allow Short Selling** — the two trading options, explained below.
+- **Created in System** — when the broker was added to LibreFolio.
 
----
-
-## 🧠 Scoped AI Export
-
-At the top right of the broker toolbar, **AI Export** (:material-brain:) opens
-three dedicated Broker tasks—not filtered Portfolio prompts:
-
-- **Broker Review**
-- **Broker Performance & Market Drivers**
-- **Capital-Loss Offset Strategies**
-
-The backend snapshot is limited to the selected broker and can include its cash,
-holdings, activity, performance, costs, concentration, and FIFO lots according
-to the selected task. Server-side access checks prevent exporting a broker the
-current user cannot access. LibreFolio only copies the result to the clipboard;
-review sensitive financial data before sharing it. See
-[Broker AI Export](../ai-export/broker.md) or the
-[AI Export overview](../ai-export/index.md).
+To change them, click **Edit** in the broker's toolbar (Owners and Editors).
 
 ---
 
-## 🤝 Access Sharing Panel
+## 🛡️ Trading options {: #trading-options }
 
-The right column of the Info tab houses the inline **Broker Sharing** manager. Here you can:
+Both options are off for a new broker, and LibreFolio then guards you against impossible balances:
 
-- Invite other users by their email or username.
-- Define their role permission (Owner, Editor, Viewer).
-- Configure ownership percentages.
+- with **Allow Leveraged Buying** off, a save is refused if it would leave the cash of a currency below zero;
+- with **Allow Short Selling** off, a save is refused if it would leave the quantity of an asset below zero.
 
-For a detailed explanation of sharing rules, roles, and percentage logic, please refer to the dedicated **[Broker Sharing](sharing.md)** page.
+Turn an option on for a margin account, or to record short sales.
+
+??? note "📅 How balances are checked — when a save is refused"
+
+    For each currency $c$ and each asset $i$ of the broker, LibreFolio looks at the balance at the **end of every day** $d$, after all of that day's transactions:
+
+    $$
+    C_c(d) = \sum_{\text{date}_t \le d} a_t \ge 0 \qquad\qquad Q_i(d) = \sum_{\text{date}_t \le d} q_t \ge 0
+    $$
+
+    Here $a_t$ is the cash amount of each transaction $t$ in currency $c$, and $q_t$ the quantity of each transaction of asset $i$. Money in and out on the same day nets out, but a deposit made later does not fix a day that already closed below zero.
+
+    A refused save shows in the workspace under *This configuration causes data inconsistencies*, with the currency or asset, the date, and links to the workspace rows involved.
+
+---
+
+## 🤝 Share the broker
+
+The right column holds the **Share Broker** panel; **Share Broker** in the toolbar brings you here too. Only an Owner can change it: everyone else sees it read-only.
+
+To give someone access:
+
+1. Click **+** (**Add User**) under the ownership chart and find the person **by username**.
+2. Choose the **Role** — **Viewer** by default, **Editor** or **Owner** — and, for an Owner, the **Ownership %**. Then click **Add User**.
+3. Click **Save Configuration**: nothing changes before you do.
+
+Save before you switch tab: on the Info tab, unsaved changes are dropped without asking.
+
+Under **Your access** you can also **Leave broker**, or **Switch to viewer** if you are an Editor. Roles and ownership shares are explained in [Broker Sharing](sharing.md).
+
+---
+
+## 🔗 Related
+
+- 🧠 **[Broker AI Export](../ai-export/broker.md)** — **AI Export** sits in the broker's toolbar and works from every tab.
+- 🏦 **[Brokers](index.md)** — creating a broker and its optional fields.

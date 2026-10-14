@@ -1,5 +1,6 @@
-import {describe, expect, it} from 'vitest';
+import {beforeAll, describe, expect, it} from 'vitest';
 
+import {setupI18n} from '$test/component';
 import {AssetComparisonSignal} from '../AssetComparisonSignal';
 import {DEFAULT_SIGNAL_COLORS, type SignalDefinition} from '../ChartSignal';
 import {LinearSignal} from '../LinearSignal';
@@ -19,6 +20,14 @@ import {createSignal, createSignalConfig, getLocalSignalDefinitions, signalFromC
  */
 
 const [BLUE, AMBER, VIOLET, PINK, CYAN, LIME] = DEFAULT_SIGNAL_COLORS;
+
+/**
+ * A benchmark's label is a catalogue message (T-EN2), and svelte-i18n throws when it formats one before it is
+ * initialised: boot it in English, the app's fallback, for the label pinned below.
+ */
+beforeAll(async () => {
+    await setupI18n('en');
+});
 
 function definitionFor(type: string): SignalDefinition {
     const definition = getLocalSignalDefinitions().find((candidate) => candidate.type === type);

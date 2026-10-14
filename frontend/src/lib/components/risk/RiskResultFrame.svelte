@@ -6,6 +6,10 @@
     import {riskMetadata, singleValue} from '$lib/risk/riskTypes';
     import type {RiskAnalyticResult} from '$lib/stores/risk/riskStore.svelte';
 
+    import {errorDisplayCode, warningSentence, type RiskResultWarning} from './levels/levelHelpers';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+
     interface Props {
         title: string;
         description?: string;
@@ -19,23 +23,31 @@
     let {title, description = '', result = null, loading = false, refreshing = false, testId, children}: Props = $props();
 
     let metadata = $derived(riskMetadata(result));
-    let errorCode = $derived(singleValue(result?.error)?.code ?? null);
+    // A size limit is worded by the remedy it names, like the levels' errors (D379).
+    let errorCode = $derived(errorDisplayCode(singleValue(result?.error)));
     let canRender = $derived(Boolean(result && (result.status === 'ok' || result.status === 'partial') && result.output));
 
-    function translatedCode(prefix: 'errors' | 'warnings', code: string | null | undefined, fallbackKey: string): string {
+    function translatedCode(prefix: 'errors', code: string | null | undefined, fallbackKey: string): string {
         if (!code) return $t(fallbackKey);
         const key = `risk.${prefix}.${code}`;
         const translated = $t(key);
         return translated === key ? $t(fallbackKey) : translated;
     }
 
+    // A warning is read through the key and the values the backend sends, never
+    // through a key built from its code: a code-named key with ICU arguments,
+    // looked up without values, shows its braces on screen.
+    function warningText(warning: RiskResultWarning): string {
+        return warningSentence(warning, $t) || $t('risk.states.warning');
+    }
+
     function percent(value: number | null | undefined): string {
-        return value == null ? '—' : `${(value * 100).toFixed(1)}%`;
+        return value == null ? '—' : formatPercent(value, {scale: 100, signed: false, digits: 1});
     }
 
     function fixed(value: number | readonly (number | null)[] | null | undefined): string {
         const scalar = singleValue(value);
-        return scalar == null ? '—' : scalar.toFixed(2);
+        return scalar == null ? '—' : formatFixed(scalar, 2);
     }
 </script>
 
@@ -78,7 +90,7 @@
         <div class="mt-3 space-y-1" data-testid="{testId}-warnings">
             {#each result.warnings as warning}
                 <p class="text-xs text-amber-600 dark:text-amber-400">
-                    {translatedCode('warnings', warning.code, 'risk.states.warning')}
+                    {warningText(warning)}
                 </p>
             {/each}
         </div>

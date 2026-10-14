@@ -2,13 +2,17 @@
 title: "Lots Analysis Service"
 category: entity
 type: service
-tags: [backend, fifo, lots, orchestration, fx]
+updated: 2026-10-12
+tags: [backend, fifo, lots, orchestration, fx, wac, average-cost, data-quality, financial-math]
 related:
   - entities/fifo-lot-engine
   - entities/portfolio-engine
   - decisions/fifo-v4-engine-architecture
   - decisions/fifo-v4-gross-net-status-model
+  - decisions/financial-math-single-average-cost
+  - decisions/financial-math-one-home
   - problems/fifo-income-silently-dropped-after-full-close
+  - problems/zero-purchase-cost-foreign-asset-paid-in-report-currency
   - concepts/fifo-lot-tracking
 ---
 
@@ -21,9 +25,20 @@ economic input objects, invokes the engine, and maps its output back into the pu
 income breakdowns, net summary and history series, status). As of v4 it is **no longer the allocator of
 record** for income — that logic moved into the engine itself (see [[decisions/fifo-v4-engine-architecture]]).
 
+Since 2026-10-07 it also no longer computes the **WAC lines** (per broker and cumulative) itself: they come from the
+single average-cost function of the `financial_math` layer ([[decisions/financial-math-single-average-cost]]). FIFO
+stays here only to create the lots.
+
+Since 2026-10-12 its pure math is not here either. Workstream T's T-1 (step B3, `a57a43fbd`) turned every pure method of
+`LotsAnalysisService` into a function of `backend/app/services/financial_math/lots/` — `prices`, `conversions`,
+`economic_events`, `histories`, `average_cost_lines` — with the same bodies; names read across modules became public
+(`FxRateResolver`, `WithheldEconomics`, `ALL_BROKERS`, …). The service keeps the orchestration, the database loading,
+the DTOs (summaries, Gantt, event rows) and the lots data-quality report ([[decisions/financial-math-one-home]]).
+
 ## Location
 
-`backend/app/services/lots_analysis_service.py` (~1980 lines)
+`backend/app/services/lots_analysis_service.py` (~1980 lines at the v4 ingest; 2 032 lines on 2026-10-07; 2 274 before
+T-1's cut, 1 172 at `5d0585595`), plus its math in `backend/app/services/financial_math/lots/`.
 
 ## Key Interfaces
 
@@ -33,6 +48,17 @@ record** for income — that logic moved into the engine itself (see [[decisions
   the public DTO's inline 3-level audit shape (`backend/app/schemas/portfolio.py`).
 - Computes net summary and net history series from the engine's per-lot economic accumulators.
 - Maps internal `analysis_status` (`COMPLETE|DEGRADED|FAILED`) to the public `calculation_status` field.
+- **WAC lines (since 2026-10-07):** `_compute_average_cost_lines()` makes **one** `compute_average_costs()` call — one
+  position per broker plus `"__all__"` (every broker in scope pooled), in the analysis target currency,
+  `asset_leg=False`. `average_cost_points()` (`financial_math/lots/average_cost_lines.py` since 2026-10-12, before a
+  private method of the service) samples each line with `state_at(date)`: O(D log N) instead of the old
+  per-date recomputation, O(D×N). A date on which the pool lacks part of its cost has **no point** — never a guessed
+  average.
+- **Gaps (since 2026-10-07):** `_report_gaps()` (named `_report_average_cost_gaps()` until 2026-10-11) puts the missing
+  report-currency conversions in `data_quality.missing_fx_pairs` (pair + dates) with the FX issues classified as on the
+  portfolio banner (configured / real-provider pairs from `load_configured_fx_pair_sets()`), and an acquisition with no
+  known cost in a `MISSING_COST_BASIS` issue; either one turns a `COMPLETE` analysis into `DEGRADED`. Since 2026-10-11
+  it also merges, per pair, the conversions the FX resolver could not make (`missing_pairs()`).
 
 ## Design Notes
 
@@ -44,14 +70,32 @@ record** for income — that logic moved into the engine itself (see [[decisions
   no lot was open, losing that income with no trace. See
   [[problems/fifo-income-silently-dropped-after-full-close]] for the specific behavior fixed.
 - Still the right layer for FX resolution — the engine deliberately stays FX-mechanism-agnostic and pure; this
-  service is where `_FxRateResolver` actually gets called.
+  service is where the FX resolver (`FxRateResolver`, in `financial_math/lots/conversions.py` since 2026-10-12, before
+  the private `_FxRateResolver`) actually gets called.
+  Since 2026-10-07 this holds for the FIFO lots only: the WAC lines' conversions are made inside
+  `compute_average_costs()`, which calls the FX service itself, at each acquisition's date.
+- **Replaced 2026-10-07:** the WAC rows were built by `_build_wac_context` / `_build_wac_row` / `_compute_wac_series`
+  over `compute_wac_from_txlist()`; a missing rate made a row fall back to the **unconverted** cost.
+  That was one of the four average-cost implementations retired by
+  [[decisions/financial-math-single-average-cost]].
+- ~~**Known limit (outside workstream P):** the FIFO lot figures still fall back to the unconverted amount when a rate
+  is missing — e.g. `fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date) or lot.original_cost` in
+  `_build_value_history()` and `_build_return_history()`, and the same `… or <unconverted>` shape for closure
+  proceeds.~~ *Resolved 2026-10-11* by workstream T, B3a (`82c1d3ab9`): a price, a cost or closure proceeds without a
+  rate are unavailable (`None`) from that date, the analysis turns `DEGRADED` and the pair is reported; never the
+  native amount. The remaining fallbacks (summary fields, the Gantt `unit_price`, economic events, trade weights) were
+  closed in B3b the same day (`59a7c3e2f`, "withhold pools without a rate").
 
 ## Source files
 
 | Role | Path |
 |------|------|
 | Service | `backend/app/services/lots_analysis_service.py` |
-| Engine it orchestrates | `backend/app/services/fifo_lot_engine.py` |
+| Lots math (since 2026-10-12) | `backend/app/services/financial_math/lots/histories.py`, `backend/app/services/financial_math/lots/economic_events.py`, `backend/app/services/financial_math/lots/conversions.py`, `backend/app/services/financial_math/lots/prices.py`, `backend/app/services/financial_math/lots/average_cost_lines.py` |
+| Engine it orchestrates | `backend/app/services/financial_math/fifo/engine.py` |
+| WAC lines (since 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
 | Public DTO | `backend/app/schemas/portfolio.py` |
 | Service-level tests | `backend/test_scripts/test_services/test_financial/test_lots_analysis_service.py` |
+| Pure tests (WAC lines and their gaps) | `backend/test_scripts/test_services/test_lots_analysis_pure.py` |
+| Lots WAC lines of the #32 case (L1–L3) | `backend/test_scripts/test_services/test_financial/test_portfolio_cost_currency.py` |
 | Developer docs | `mkdocs_src/docs/developer/backend/transactions/lots_analysis_service.md` |

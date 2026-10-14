@@ -39,6 +39,12 @@ Frontend handles legacy mismatched data by concatenating descriptions with `[aut
 - Enables future Promote wizard to require resolution before commit
 - 4 backend tests (`TestPairDescriptionTagsValidation`) verify create, update, and bulk scenarios
 
+## Links
+
+- [[decisions/transfer-pair-same-asset-opposite-quantity]] — since lot 42 (2026-10-10), a TRANSFER pair must also be one
+  asset in exactly opposite quantities. An API update that changes the quantity of one leg of a saved TRANSFER is still
+  unchecked: `validate_updated_pairs` looks only at description and tags (backlog C-42).
+
 ## Source files
 
 | Role | Path |

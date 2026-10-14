@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_bux": {
+      "description": "Import transactions from BUX CSV export. Supports trades, SEPA deposits/withdrawals, dividends, and fees.",
+      "name": "BUX"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "risk": {
+    "analytics": {
+      "assetSetDrawdown": {
+        "name": "Replis par actif",
+        "description": "De combien chaque actif sélectionné a chuté depuis son sommet, pendant combien de temps, et s'il s'en est remis."
+      }
+    }
+  }
+}

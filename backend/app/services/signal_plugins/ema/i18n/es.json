@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "ema": {
+      "name": "EMA",
+      "description": "Tendencia ponderada por precios recientes",
+      "output": "EMA"
+    }
+  }
+}

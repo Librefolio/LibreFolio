@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "cci": {
+      "name": "CCI",
+      "description": "Scostamento dal prezzo medio",
+      "output": "CCI",
+      "oversold": "Ipervenduto",
+      "overbought": "Ipercomprato",
+      "oversoldRegion": "Ipervenduto",
+      "neutralRegion": "Neutrale",
+      "overboughtRegion": "Ipercomprato"
+    }
+  }
+}

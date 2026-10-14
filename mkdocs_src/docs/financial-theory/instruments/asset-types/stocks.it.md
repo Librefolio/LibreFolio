@@ -13,7 +13,7 @@ Un'**azione** (o quota / equity) rappresenta la proprietà parziale di una socie
 | **Valuta** | Denominata in valuta locale della borsa |
 | **Dividendi** | Molte azioni pagano dividendi periodici in contanti (trimestrali negli USA, semestrali in Europa) |
 | **Split** | Le società possono frazionare le azioni (es. 4:1) per abbassare il prezzo per azione |
-| **Provider tipici** | Yahoo Finance, CSS Scraper |
+| **Provider tipici** | Yahoo Finance, Borsa Italiana, CSS Scraper |
 
 ---
 

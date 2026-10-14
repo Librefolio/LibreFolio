@@ -1,0 +1,41 @@
+{
+  "dataQuality": {
+    "headerInfoOnly": "Data quality note",
+    "headerErrors": "{errors} error(s)",
+    "headerWarnings": "{warnings} warning(s)",
+    "missingPrice": "{count} asset(s) have no market price — excluded from NAV",
+    "transactionImplied": "{count} asset(s) valued at their last transaction price — no market price available for over 2 weeks (as of {as_of_date})",
+    "currentPriceAssumedAtCost": "Current price unavailable — open value estimated at cost, market P&L excluded",
+    "currentPriceAssumedAtCostRange": "No market price available between {date_from} and {date_to} — open value estimated at cost, market P&L excluded",
+    "affectedLots": "Affected lots:",
+    "stalePrice": "{count} asset(s) have outdated prices",
+    "missingFx": "Missing FX rates for {count} pair(s) — totals may be incomplete",
+    "navIncomplete": "NAV incomplete for {count} day(s) between {date_from} and {date_to}",
+    "mwrrNotAvailable": "MWRR cannot be calculated for this period",
+    "mwrrSeriesUnreliable": "MWRR chart unavailable: series diverged by {divergence_pp}pp from expected {summary_cum}% (first at {first_bad_date})",
+    "archivedAsset": "This asset is archived — not updated by scheduler",
+    "rangeBeforeData": "Data available from {date}",
+    "fxPairMissing": "FX pair not configured — conversion not available",
+    "fxPairNoData": "No rate data available",
+    "fxPairPartialGap": "Partial gap in rates — data from {date}",
+    "cta": {
+      "navigate_asset": "View asset",
+      "navigate_fx": "View FX",
+      "add_fx_pair": "Add FX pair",
+      "sync_fx_pair": "Sync rates",
+      "sync_asset_prices": "Sync prices"
+    },
+    "referencePriceFallback": "Lot opening price unavailable on the exact date — using last known price {reference_price} as reference for relative return",
+    "referencePriceUnavailable": "No reference price available for a lot opening — relative return cannot be computed",
+    "shortTransferNotSupported": "Transfer of a short position is not supported yet (broker {broker_id})",
+    "shortAdjustmentNotSupported": "Adjustment cannot open or close a short position yet (broker {broker_id})",
+    "fifoSourceQuantityMissing": "Transaction exceeds available quantity by {missing_quantity} (broker {broker_id})",
+    "transferPairMissing": "A transfer is missing its paired transaction, or the pair is invalid",
+    "missingFxRates": "FX rates missing for {count} pair(s) between {date_from} and {date_to} ({dates_count} date(s)) — sync to complete totals",
+    "missingFxRatesManual": "FX rates missing for {count} manual pair(s) — add rates manually",
+    "assetIncomeNoEligibleLots": "No open lot eligible for {economic_type} of {target_amount} {target_currency} on {as_of_date} — income left unallocated",
+    "assetCostNoEligibleLots": "No lot eligible for {economic_type} of {target_amount} {target_currency} on {as_of_date} — cost left unallocated",
+    "missingFxRatesAfterSync": "FX rates are still missing for {pairs} between {date_from} and {date_to} ({dates_count} date(s)): the provider returned none for those dates. Enter them by hand on the pair’s page.",
+    "missingCostBasis": "{count} asset(s) have an acquisition without a purchase cost — counted at zero until you set it"
+  }
+}

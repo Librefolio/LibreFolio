@@ -1,0 +1,9 @@
+{
+  "signals": {
+    "sma": {
+      "name": "SMA",
+      "description": "Moyenne simple des clôtures",
+      "output": "SMA"
+    }
+  }
+}

@@ -52,6 +52,21 @@ Empirically it was no longer needed there: 216/216 and 298/298 green without it.
 > to protect tests from each other's leftovers, which interleaving already makes
 > undecidable.
 
+## Why not a rollback fixture (D-3.3)
+
+The test-runner migration (`plan-phase00TestRunnerMigration`, 3.3) chose the rule **«chi committa, ripulisce»** —
+whoever commits cleans up — over a transactional fixture with rollback. The data of its step 3.1 decided it:
+
+| | Rollback fixture | Whoever commits cleans up |
+|---|---|---|
+| Files to touch | 56 | only those that really commit, few and identifiable |
+| Covers the E2E side | no: the browser writes through the API, there is no session to roll back | yes, one rule for both sides |
+| Risk | rewrites fixtures that work today | none for tests that do not write |
+
+Every backend `session` fixture already flushed and rolled back, so the only possible culprits were fixtures that
+commit on purpose. The first implementation (`78a0103ae`, 2026-08-13) deleted by id difference; the definition that
+replaced it is the next section.
+
 ## The correct successor definition
 
 `db-cleanup.ts` defines ownership as the **intersection of two facts**:

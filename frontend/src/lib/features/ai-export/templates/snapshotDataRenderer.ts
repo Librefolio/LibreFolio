@@ -1160,6 +1160,9 @@ const NORMALIZED_RATIO_FIELDS = new Set([
 const SIGNED_NORMALIZED_RATIO_FIELDS = new Set(['current_drawdown_ratio', 'maximum_drawdown_ratio']);
 const UNBOUNDED_NORMALIZED_RATIO_FIELDS = new Set(['remaining_to_peak_ratio', 'distance_to_min_ratio', 'distance_to_max_ratio']);
 const MONETARY_RESIDUAL_FIELDS = new Set(['period_other_result', 'reconciliation_diff', 'residual']);
+/** Leaves whose value names a payload field (`unavailable[].field`, `missing_fields`), not free text. */
+const FIELD_REFERENCE_KEYS: ReadonlySet<string> = new Set(['field', 'missing_fields']);
+
 const PUBLIC_RATIO_FIELD_NAMES: Readonly<Record<string, string>> = {
     portfolio_weight_ratio: 'portfolio_weight_percent',
     technical_normalized_weight_ratio: 'technical_normalized_weight_percent',
@@ -1243,6 +1246,8 @@ function isMonetaryResidualPath(path: string): boolean {
 
 function genericLeaf(path: string, value: unknown, directory: EntityDirectory, diagnostics: MutableSnapshotFormatDiagnostics, semantics: PromptNumberSemantics = {}): string {
     const key = finalPathKey(path);
+    // A field reference names a column by the same public name the column is printed with.
+    if (FIELD_REFERENCE_KEYS.has(key) && typeof value === 'string' && PUBLIC_RATIO_FIELD_NAMES[value]) return PUBLIC_RATIO_FIELD_NAMES[value];
     if (key === 'asset_id' || key.endsWith('_asset_id')) return assetRef(value, directory);
     if (key === 'broker_id' || key.endsWith('_broker_id')) return brokerRef(value, directory);
     if (key === 'asset_ids') return assetRef(value, directory);
@@ -1432,10 +1437,32 @@ function technicalPayload(
     return undefined;
 }
 
+// Component versions whose schema-1 payload the compact renderer knows. A version bump that changes
+// only semantics text keeps the payload shape, so that version renders exactly like its v1. The lot
+// and FIFO bumps (B3b) only make amounts nullable, which the generic renderer already prints as `null`; the
+// reconciliation bump (C-53) only changes what `reconciled` means for a rounding-size residual.
+const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new Map([
+    ['portfolio.provenance', new Set([1, 2])],
+    ['broker.provenance', new Set([1, 2])],
+    ['asset.lot_detail', new Set([1, 2, 3])],
+    ['portfolio.fifo_lots', new Set([1, 2])],
+    ['broker.fifo_lots', new Set([1, 2])],
+    ['portfolio.fifo_summary', new Set([1, 2])],
+    ['broker.fifo_summary', new Set([1, 2])],
+    ['portfolio.reconciliation', new Set([1, 2])],
+    ['broker.reconciliation', new Set([1, 2])],
+]);
+const DEFAULT_COMPACT_VERSIONS: ReadonlySet<number> = new Set([1]);
+
+function isCompactVersion(componentId: string, section: JsonRecord): boolean {
+    if (section.schema_version !== 1 || typeof section.component_version !== 'number') return false;
+    return (COMPACT_COMPONENT_VERSIONS.get(componentId) ?? DEFAULT_COMPACT_VERSIONS).has(section.component_version);
+}
+
 function renderComponent(section: JsonRecord, target: unknown, directory: EntityDirectory, samplingByInstance: ReadonlyMap<string, IndicatorSampling>, historyLimit: number | undefined, signalMetrics: SnapshotSignalMetric[], diagnostics: MutableSnapshotFormatDiagnostics): string {
     const componentId = scalar(section.component_id);
     const payload = isRecord(section.payload) ? section.payload : undefined;
-    const compactVersion = section.component_version === 1 && section.schema_version === 1;
+    const compactVersion = isCompactVersion(componentId, section);
     const technical = compactVersion && payload ? technicalPayload(componentId, payload, target, directory, samplingByInstance, historyLimit, signalMetrics, diagnostics) : undefined;
     if (technical) return `${componentHeader(section)}\n${technical.content}`;
     if (compactVersion && payload) return `${componentHeader(section)}\n${renderGenericPayload(payload, directory, diagnostics)}`;

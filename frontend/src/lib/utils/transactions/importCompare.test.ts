@@ -2,23 +2,10 @@
 import {describe, it, expect} from 'vitest';
 import type {TransactionCreateItem} from '$lib/types';
 import type {TXReadItem} from '$lib/components/transactions/types';
-import {escHtml, compareTypeCellHtml, cmpSourceFromTx, cmpSourceFromExisting} from './importCompare';
+import {compareTypeCellHtml, cmpSourceFromTx, cmpSourceFromExisting} from './importCompare';
 
 const tx = (t: Record<string, unknown>): TransactionCreateItem => t as unknown as TransactionCreateItem;
 const existing = (t: Record<string, unknown>): TXReadItem => t as unknown as TXReadItem;
-
-describe('escHtml', () => {
-    it('escapes only the three markup characters, leaving quotes intact', () => {
-        expect(escHtml('1 < 2 & 3 > 4')).toBe('1 &lt; 2 &amp; 3 &gt; 4');
-        expect(escHtml('say "hi" it\'s ok')).toBe('say "hi" it\'s ok');
-    });
-
-    it('escapes the ampersand first so it does not double-escape the others', () => {
-        expect(escHtml('<')).toBe('&lt;');
-        // A literal "&lt;" must not collapse into a real "<": the & is escaped, the rest kept.
-        expect(escHtml('&lt;')).toBe('&amp;lt;');
-    });
-});
 
 describe('compareTypeCellHtml', () => {
     it('derives the icon slug from the type (lowercased, underscores to dashes)', () => {

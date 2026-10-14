@@ -125,26 +125,23 @@ def test_broker_id(test_server) -> int:
 
 
 @pytest.fixture(scope="module")
-def test_asset_id(test_server) -> int:
-    """Create a test asset and return its ID (using existing asset or create one)."""
+def test_asset_id(test_server):
+    """Create an asset owned by this module, yield its ID, delete it at teardown.
+
+    Assets are global rows: the fixture never borrows an existing one. DELETE
+    /assets refuses an asset that still has transactions, so every test using
+    this fixture must delete the transactions it creates on it.
+    """
     import asyncio  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
-    async def get_or_create_asset():
+    async def create_asset() -> tuple[int, str]:
         async with httpx.AsyncClient() as client:
-            # First authenticate
-            await create_test_user(client)
+            _, _, session_cookie = await create_test_user(client)
+            assert session_cookie, "Could not authenticate the fixture user"
 
-            # Try to get existing assets first
-            response = await client.get(f"{API_BASE}/assets", timeout=TIMEOUT)
-            if response.status_code == 200:
-                assets = response.json()
-                if assets:
-                    return assets[0]["id"]
-
-            # Create a new asset
             payload = [
                 {
-                    "display_name": f"API Test Stock {date.today().isoformat()}",
+                    "display_name": f"API Test Stock {uuid.uuid4().hex[:8]}",
                     "asset_type": "STOCK",
                     "currency": "EUR",
                 }
@@ -154,12 +151,28 @@ def test_asset_id(test_server) -> int:
                 json=payload,
                 timeout=TIMEOUT,
             )
-            if response.status_code == 200:
-                return response.json()["results"][0]["asset_id"]
+            assert response.status_code == 201, f"Failed to create asset: {response.status_code} {response.text}"
+            result = response.json()["results"][0]
+            assert result["success"], f"Could not create test asset: {result}"
+            return result["asset_id"], session_cookie
 
-            pytest.skip("Could not create test asset")
+    async def delete_asset(asset_id: int, session_cookie: str) -> None:
+        async with httpx.AsyncClient() as client:
+            # Same user that created it: any authenticated user may delete an asset
+            client.cookies.set("session", session_cookie)
+            response = await client.delete(
+                f"{API_BASE}/assets",
+                params={"asset_ids": [asset_id]},
+                timeout=TIMEOUT,
+            )
+            assert response.status_code == 200, f"Failed to delete asset {asset_id}: {response.status_code} {response.text}"
+            results = response.json()["results"]
+            assert [item["asset_id"] for item in results] == [asset_id], f"Unexpected delete results: {results}"
+            assert all(item["success"] for item in results), f"Could not delete test asset {asset_id}: {results}"
 
-    return asyncio.run(get_or_create_asset())
+    asset_id, session_cookie = asyncio.run(create_asset())
+    yield asset_id
+    asyncio.run(delete_asset(asset_id, session_cookie))
 
 
 # ============================================================================
@@ -959,7 +972,7 @@ async def test_delete_transactions(test_server, test_broker_id):
 
 
 @pytest.mark.asyncio
-async def test_delete_linked_without_pair(test_server, test_broker_id, test_asset_id):
+async def test_delete_linked_without_pair(test_server, test_asset_id):
     """TX-A-031: DELETE only one of linked pair fails."""
     print_section("Test TX-A-031: DELETE /transactions - linked without pair")
 
@@ -967,105 +980,115 @@ async def test_delete_linked_without_pair(test_server, test_broker_id, test_asse
         # Authenticate first
         await create_test_user(client)
 
-        # Create source broker
-        unique_name = f"TX Link Source Broker {uuid.uuid4().hex[:8]}"
+        # Create source and target brokers for the transfer
+        source_name = f"TX Link Source Broker {uuid.uuid4().hex[:8]}"
+        target_name = f"TX Link Target Broker {uuid.uuid4().hex[:8]}"
         br_resp = await client.post(
             f"{API_BASE}/brokers",
-            json=[{"name": unique_name, "allow_cash_overdraft": True}],
+            json=[
+                {"name": source_name, "allow_cash_overdraft": True},
+                {"name": target_name, "allow_cash_overdraft": True},
+            ],
             timeout=TIMEOUT,
         )
-        assert br_resp.status_code == 200
-        source_broker_id = br_resp.json()["results"][0]["broker_id"]
+        assert br_resp.status_code == 200, f"Failed to create brokers: {br_resp.status_code} {br_resp.text}"
+        brokers = {result["name"]: result for result in br_resp.json()["results"]}
+        assert all(brokers.get(name, {}).get("success") for name in (source_name, target_name)), f"Broker creation failed: {br_resp.text}"
+        source_broker_id = brokers[source_name]["broker_id"]
+        target_broker_id = brokers[target_name]["broker_id"]
 
-        # Create target broker for transfer
-        ts = date.today().isoformat()
-        broker_payload = [{"name": f"Transfer Target {ts}", "allow_cash_overdraft": True}]
-        broker_resp = await client.post(
-            f"{API_BASE}/brokers",
-            json=broker_payload,
-            timeout=TIMEOUT,
-        )
-        target_broker_id = broker_resp.json()["results"][0]["broker_id"]
+        # Everything this test commits on the module's asset: deleted in `finally`,
+        # so that the fixture can delete the asset at teardown.
+        created_tx_ids: list[int] = []
+        try:
+            # First add some asset to source broker via ADJUSTMENT
+            # (qty > 0 requires a cost basis, like the receiving TRANSFER leg below)
+            adj_payload = [
+                {
+                    "broker_id": source_broker_id,
+                    "asset_id": test_asset_id,
+                    "type": "ADJUSTMENT",
+                    "date": (date.today() - timedelta(days=1)).isoformat(),
+                    "quantity": "100",
+                    "cost_basis_override": {"code": "EUR", "amount": "10"},
+                }
+            ]
+            adj_resp = await client.post(f"{API_BASE}/transactions/commit", json={"creates": adj_payload}, timeout=TIMEOUT)
+            assert adj_resp.status_code == 200, f"ADJUSTMENT commit failed: {adj_resp.status_code} {adj_resp.text}"
+            adj_data = adj_resp.json()
+            assert adj_data["committed"] is True, f"ADJUSTMENT not committed: {adj_data['issues']}"
+            created_tx_ids.extend(tx_id for result in adj_data["results"] for tx_id in result["ids"])
 
-        # First get or create an asset
-        assets_resp = await client.get(f"{API_BASE}/assets", timeout=TIMEOUT)
-        if assets_resp.status_code == 200 and assets_resp.json():
-            asset_id = assets_resp.json()[0]["id"]
-        else:
-            # Create asset
-            asset_resp = await client.post(
-                f"{API_BASE}/assets",
-                json={
-                    "display_name": f"Test Asset {uuid.uuid4().hex[:8]}",
-                    "asset_type": "STOCK",
-                    "currency": "EUR",
+            # Create linked transfer
+            link_uuid = f"test-link-api-{uuid.uuid4().hex[:8]}"
+            transfer_payload = [
+                {
+                    "broker_id": source_broker_id,
+                    "asset_id": test_asset_id,
+                    "type": "TRANSFER",
+                    "date": date.today().isoformat(),
+                    "quantity": "-10",
+                    "link_uuid": link_uuid,
                 },
+                {
+                    "broker_id": target_broker_id,
+                    "asset_id": test_asset_id,
+                    "type": "TRANSFER",
+                    "date": date.today().isoformat(),
+                    "quantity": "10",
+                    "link_uuid": link_uuid,
+                    "cost_basis_override": {"code": "EUR", "amount": "10"},
+                },
+            ]
+            create_resp = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={"creates": transfer_payload},
                 timeout=TIMEOUT,
             )
-            asset_id = asset_resp.json()["id"]
+            assert create_resp.status_code == 200, f"TRANSFER commit failed: {create_resp.status_code} {create_resp.text}"
+            create_data = create_resp.json()
+            assert create_data["committed"] is True, f"TRANSFER pair not committed: {create_data['issues']}"
+            # Legs in request order (`index`): tx_ids[0] = source leg, tx_ids[1] = target leg
+            legs = sorted(create_data["results"], key=lambda item: item["index"])
+            tx_ids = [tx_id for leg in legs for tx_id in leg["ids"]]
+            created_tx_ids.extend(tx_ids)
+            assert len(tx_ids) == 2, f"Expected the two legs of the pair, got {create_data['results']}"
 
-        # First add some asset to source broker via ADJUSTMENT
-        adj_payload = [
-            {
-                "broker_id": source_broker_id,
-                "asset_id": asset_id,
-                "type": "ADJUSTMENT",
-                "date": (date.today() - timedelta(days=1)).isoformat(),
-                "quantity": "100",
-            }
-        ]
-        await client.post(f"{API_BASE}/transactions/commit", json={"creates": adj_payload}, timeout=TIMEOUT)
+            # Try to delete only the first one
+            response = await client.post(
+                f"{API_BASE}/transactions/commit",
+                json={"deletes": [tx_ids[0]]},
+                timeout=TIMEOUT,
+            )
 
-        # Create linked transfer
-        link_uuid = f"test-link-api-{uuid.uuid4().hex[:8]}"
-        transfer_payload = [
-            {
-                "broker_id": source_broker_id,
-                "asset_id": asset_id,
-                "type": "TRANSFER",
-                "date": date.today().isoformat(),
-                "quantity": "-10",
-                "link_uuid": link_uuid,
-            },
-            {
-                "broker_id": target_broker_id,
-                "asset_id": asset_id,
-                "type": "TRANSFER",
-                "date": date.today().isoformat(),
-                "quantity": "10",
-                "link_uuid": link_uuid,
-            },
-        ]
-        create_resp = await client.post(
-            f"{API_BASE}/transactions/commit",
-            json={"creates": transfer_payload},
-            timeout=TIMEOUT,
-        )
-        tx_ids = [r["ids"][0] for r in create_resp.json()["results"]]
+            assert response.status_code == 200
+            data = response.json()
+            # Should fail because pair is missing
+            assert data["committed"] is False
+            assert len(data.get("issues", [])) > 0
+            assert any("pair" in issue.get("error", "").lower() for issue in data["issues"])
 
-        # Try to delete only the first one
-        response = await client.post(
-            f"{API_BASE}/transactions/commit",
-            json={"deletes": [tx_ids[0]]},
-            timeout=TIMEOUT,
-        )
+            # T4: the wire contract the frontend localizes on is the structured
+            # code + params, not the English text — the bulk workspace resolves
+            # `transactions.errors.pairDeleteIncomplete` from these. Pin them.
+            pair_issues = [i for i in data["issues"] if i.get("code") == "pairDeleteIncomplete"]
+            assert pair_issues, f"expected a pairDeleteIncomplete issue, got {data['issues']}"
+            assert pair_issues[0].get("params", {}).get("id") == tx_ids[0]
+            assert pair_issues[0].get("params", {}).get("partnerId") == tx_ids[1]
 
-        assert response.status_code == 200
-        data = response.json()
-        # Should fail because pair is missing
-        assert data["committed"] is False
-        assert len(data.get("issues", [])) > 0
-        assert any("pair" in issue.get("error", "").lower() for issue in data["issues"])
-
-        # T4: the wire contract the frontend localizes on is the structured
-        # code + params, not the English text — the bulk workspace resolves
-        # `transactions.errors.pairDeleteIncomplete` from these. Pin them.
-        pair_issues = [i for i in data["issues"] if i.get("code") == "pairDeleteIncomplete"]
-        assert pair_issues, f"expected a pairDeleteIncomplete issue, got {data['issues']}"
-        assert pair_issues[0].get("params", {}).get("id") == tx_ids[0]
-        assert pair_issues[0].get("params", {}).get("partnerId") == tx_ids[1]
-
-        print_success("✓ Got error when trying to delete only one of linked pair")
+            print_success("✓ Got error when trying to delete only one of linked pair")
+        finally:
+            # Both legs of the pair together (one alone is refused, as asserted
+            # above) plus the ADJUSTMENT, in one batch.
+            if created_tx_ids:
+                cleanup_resp = await client.post(
+                    f"{API_BASE}/transactions/commit",
+                    json={"deletes": created_tx_ids},
+                    timeout=TIMEOUT,
+                )
+                assert cleanup_resp.status_code == 200, f"Cleanup failed: {cleanup_resp.status_code} {cleanup_resp.text}"
+                cleanup_data = cleanup_resp.json()
+                assert cleanup_data["committed"] is True, f"Cleanup not committed: {cleanup_data['issues']}"
 
 
 # ============================================================================

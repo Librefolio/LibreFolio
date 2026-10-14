@@ -18,6 +18,14 @@
  * `IdentifierPrimaryChooser`. Its default and its override both have to survive the
  * trip into the `resolutions` map, and both are exercised below.
  *
+ * The *asset type* row is the one string row not drawn as passed in (K17): each value
+ * box shows the type as the badge of the asset cards — its icon and its catalogue
+ * name — because a raw `ETF_STOCK` in monospace tells the user deciding nothing. The
+ * badge is found by `comparison-type-badge` and identified by `data-type`, its picture
+ * by `src`. The name it must show is read from the loaded i18n store (`get(_)`), never
+ * written here: the claim is "the badge shows the catalogue's name for this key", not
+ * any word of it. Every other string row keeps the raw, truncated value.
+ *
  * What it deliberately does NOT assert:
  *   - translated text. Section titles, the apply-button label and the value-box
  *     captions all come from the four-language catalogue. Groups are addressed by
@@ -29,10 +37,26 @@
  *   - the sector label's localisation. `formatDistKey` runs `$t` for `sector_area`;
  *     the test asserts the stable `data-dist-key`/`data-dist-pct`, never the
  *     rendered sector name, which is a translation.
+ *
+ * **`data-dist-pct` is a handle, not a rendering** (M-18 follow-up, 13/10/2026). Since M-18 the
+ * share shown beside a distribution key is written in the interface locale (`formatPercent`:
+ * `60,00%` in Italian, `60,00 %` in French); the attribute must not follow it. It carries the
+ * machine form — the value × 100, two decimals, a point, no space: `60.00%` — in every language,
+ * which is what these tests and the gallery fixture (`e2e/fixtures/galleryProviderCompare.ts`, a
+ * shot taken in four languages) read. The English cases cannot tell the two forms apart, because
+ * in English they coincide: the cases under «a share in another UI language» run in Italian and
+ * French, the visible share computed with `formatPercent` in that locale, the attribute with the
+ * contract's own formula.
  */
 import {describe, expect, it, vi} from 'vitest';
 import type {Mock} from 'vitest';
+import {get} from 'svelte/store';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {_} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
+import {uiLocale} from '$lib/stores/app/uiLocale';
+import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import ProviderComparisonModal, {type DiffItem} from './ProviderComparisonModal.svelte';
 
 /** A plain string-valued difference. `label` is arbitrary — never asserted on. */
@@ -72,6 +96,35 @@ function card(field: string): HTMLElement {
 
 function sectionOrder(): string[] {
     return [...document.querySelectorAll<HTMLElement>('[data-testid="comparison-group"]')].map((g) => g.getAttribute('data-section') ?? '');
+}
+
+/** The catalogue's name for a type, read from the loaded i18n store — never a translation written here. */
+function typeLabel(type: string): string {
+    const key = `assets.types.${type}`;
+    const label = get(_)(key);
+    expect(label, `${key} does not resolve: the catalogue is not loaded, or the key is gone`).not.toBe(key);
+    // Barrier for "the box no longer prints the raw code": a label spelling its own code could not tell the two apart.
+    expect(label, `the ${key} label contains the raw code itself, so this test could not tell the badge from the code`).not.toContain(type);
+    return label;
+}
+
+/** The type badges inside one value box. */
+function typeBadges(box: HTMLElement): HTMLElement[] {
+    return within(box).queryAllByTestId('comparison-type-badge');
+}
+
+/** The one type badge of a value box. */
+function onlyTypeBadge(box: HTMLElement): HTMLElement {
+    const badges = typeBadges(box);
+    expect(badges, `${box.getAttribute('data-testid')} holds ${badges.length} comparison-type-badge instead of one: an asset type is drawn as the badge of the asset cards — its icon and its catalogue name — not as the raw enum code`).toHaveLength(1);
+    return badges[0];
+}
+
+/** The one picture a type badge shows. */
+function pictureOf(badge: HTMLElement): string | null {
+    const images = badge.querySelectorAll('img');
+    expect(images, 'a type badge shows exactly one picture').toHaveLength(1);
+    return images[0].getAttribute('src');
 }
 
 describe('ProviderComparisonModal — grouping', () => {
@@ -224,6 +277,157 @@ describe('ProviderComparisonModal — value rendering', () => {
         const entries = within(screen.getByTestId('comparison-current-sector_area')).getAllByTestId('comparison-dist-entry');
         expect(entries.map((e) => e.getAttribute('data-dist-key'))).toEqual(['TECHNOLOGY', 'ENERGY']);
         expect(entries.map((e) => e.getAttribute('data-dist-pct'))).toEqual(['70.00%', '30.00%']);
+    });
+
+    it('draws an asset_type value as the badge of the asset cards: its icon and its catalogue name, not the raw code (K17)', async () => {
+        await setupI18n();
+        const sides = [
+            {side: 'current', type: 'ETF_STOCK', label: typeLabel('ETF_STOCK')},
+            {side: 'provider', type: 'ETF_BOND', label: typeLabel('ETF_BOND')},
+        ];
+        mount([stringDiff('asset_type', 'ETF_STOCK', 'ETF_BOND')]);
+        await settled();
+
+        for (const {side, type, label} of sides) {
+            const box = screen.getByTestId(`comparison-${side}-asset_type`);
+            const badge = onlyTypeBadge(box);
+            expect(badge).toHaveAttribute('data-type', type);
+            expect(pictureOf(badge)).toBe(getAssetTypeIconUrl(type));
+            expect(badge).toHaveTextContent(label);
+            expect(box.textContent, `comparison-${side}-asset_type still prints the raw code ${type}`).not.toContain(type);
+        }
+    });
+
+    it('falls back to the raw code, inside the badge, for a type the catalogue does not name (K17)', async () => {
+        await setupI18n();
+        const unknown = 'NOT_A_REAL_TYPE';
+        // Barrier: the key genuinely misses — svelte-i18n answers a missing key with the key itself.
+        expect(get(_)(`assets.types.${unknown}`), `assets.types.${unknown} resolves: this case needs a code the catalogue does not name`).toBe(`assets.types.${unknown}`);
+        mount([stringDiff('asset_type', unknown, 'ETF_STOCK')]);
+        await settled();
+
+        const box = screen.getByTestId('comparison-current-asset_type');
+        const badge = onlyTypeBadge(box);
+        expect(badge).toHaveAttribute('data-type', unknown);
+        expect(pictureOf(badge)).toBe(getAssetTypeIconUrl(unknown));
+        expect(badge).toHaveTextContent(unknown);
+        // svelte-i18n hands back the key for a missing name, so `$t(key) || code` would print the path, not the code.
+        expect(box.textContent, 'the badge prints the i18n path of the missing name instead of the raw code').not.toContain('assets.types.');
+    });
+
+    it.each([
+        {empty: 'current', filled: 'provider', current: null, provider: 'ETF_STOCK'},
+        {empty: 'provider', filled: 'current', current: 'ETF_STOCK', provider: null},
+    ])('shows a dash and no badge for a null $empty type, beside the badge of the $filled one (K17)', async ({empty, filled, current, provider}) => {
+        await setupI18n();
+        mount([stringDiff('asset_type', current, provider)]);
+        await settled();
+
+        // Presence barrier: the badge is drawn on this very row, so its absence next door is a decision, not a late mount.
+        expect(onlyTypeBadge(screen.getByTestId(`comparison-${filled}-asset_type`))).toHaveAttribute('data-type', 'ETF_STOCK');
+        const box = screen.getByTestId(`comparison-${empty}-asset_type`);
+        expect(box).toHaveTextContent('—');
+        expect(typeBadges(box), `comparison-${empty}-asset_type draws a badge for a null type: there is no type to draw`).toHaveLength(0);
+        expect(box.querySelector('img'), `comparison-${empty}-asset_type draws a picture for a null type: other.png would claim a type nobody set`).toBeNull();
+    });
+
+    it('keeps every other string row as raw text with no type badge, even when its value spells a type code (K17 guard)', async () => {
+        await setupI18n();
+        // The display name spells type codes on purpose: the badge belongs to the asset_type field, never to what a value looks like.
+        const rows = [
+            {field: 'currency', current: 'USD', provider: 'EUR'},
+            {field: 'display_name', current: 'ETF_STOCK', provider: 'ETF_BOND'},
+        ];
+        mount(rows.map(({field, current, provider}) => stringDiff(field, current, provider)));
+        await settled();
+
+        for (const {field, current, provider} of rows) {
+            for (const [side, value] of [
+                ['current', current],
+                ['provider', provider],
+            ]) {
+                const box = screen.getByTestId(`comparison-${side}-${field}`);
+                expect(box).toHaveTextContent(value);
+                expect(typeBadges(box), `comparison-${side}-${field} draws a type badge: only the asset_type row does`).toHaveLength(0);
+            }
+        }
+    });
+});
+
+// =========================================================================
+// A share in another UI language (M-18 follow-up) — see the header
+// =========================================================================
+
+type UiLanguage = 'it' | 'fr';
+type Box = 'current' | 'provider';
+
+/** The machine form the contract writes in `data-dist-pct`, in every language: two decimals, a point, no space. */
+function machinePct(value: number): string {
+    return `${(value * 100).toFixed(2)}%`;
+}
+
+/** The shares these cases pass in, by box: distinct, so the order is the weights'; 87.5% and 12.5% need their second decimal padded. */
+const SHARES: Readonly<Record<Box, Readonly<Record<string, number>>>> = {current: {US: 0.6, EU: 0.4}, provider: {IT: 0.875, DE: 0.125}};
+
+/** What a box must list, heaviest first: each key with the value passed in for it. */
+function sharesOf(box: Box): Array<[string, number]> {
+    return Object.entries(SHARES[box]).sort(([, a], [, b]) => b - a);
+}
+
+/**
+ * One box's entries as drawn: each key, its `data-dist-pct`, and the share it shows. A
+ * `geographic_area` key is drawn verbatim, so the share is the entry's other element.
+ */
+function drawnShares(box: Box): Array<{key: string; attribute: string | null; shown: string}> {
+    return within(screen.getByTestId(`comparison-${box}-geographic_area`))
+        .getAllByTestId('comparison-dist-entry')
+        .map((entry) => {
+            const key = entry.getAttribute('data-dist-key') ?? '';
+            const others = [...entry.children].map((child) => (child.textContent ?? '').trim()).filter((text) => text !== key);
+            return {key, attribute: entry.getAttribute('data-dist-pct'), shown: others.join(' | ')};
+        });
+}
+
+/** Run a case with the UI in `language` — the catalogue and the app language together, as the language selector sets them — and put English back after it. */
+async function inLanguage(language: UiLanguage, body: () => Promise<void>): Promise<void> {
+    await setupI18n(language);
+    currentLanguage.set(language);
+    try {
+        await body();
+    } finally {
+        currentLanguage.set('en');
+        await setupI18n('en');
+    }
+}
+
+describe('ProviderComparisonModal — a share in another UI language (M-18 follow-up)', () => {
+    it.each(['it', 'fr'] as const)('keeps data-dist-pct in the machine form — 60.00%, a point and no space — with the UI in %s', async (language) => {
+        await inLanguage(language, async () => {
+            // Premise: in this language the share on screen is written otherwise, so the attribute can be told from it.
+            expect(formatPercent(0.6, {scale: 100, signed: false, locale: language}), `premise: ${language} writes 60% as the machine form does`).not.toBe(machinePct(0.6));
+            mount([distDiff('geographic_area', SHARES.current, SHARES.provider)]);
+            await settled();
+
+            const boxes = ['current', 'provider'] as const;
+            expect(Object.fromEntries(boxes.map((box) => [box, drawnShares(box).map(({key, attribute}) => [key, attribute])])), `data-dist-pct follows the UI language (${language}); it is a handle, and reads the machine form in every language`).toEqual(
+                Object.fromEntries(boxes.map((box) => [box, sharesOf(box).map(([key, value]) => [key, machinePct(value)])])),
+            );
+        });
+    });
+
+    it.each(['it', 'fr'] as const)('shows each share as the interface writes it in %s, through formatPercent (guard)', async (language) => {
+        await inLanguage(language, async () => {
+            // jsdom's browser is en-US, which lends Italian or French no region: the interface locale is the bare language.
+            expect(uiLocale(), 'premise: the interface locale is not the language the UI was set to').toBe(language);
+            expect(formatPercent(0.6, {scale: 100, signed: false, locale: language}), `premise: ${language} writes 60% as the machine form does`).not.toBe(machinePct(0.6));
+            mount([distDiff('geographic_area', SHARES.current, SHARES.provider)]);
+            await settled();
+
+            const boxes = ['current', 'provider'] as const;
+            expect(Object.fromEntries(boxes.map((box) => [box, drawnShares(box).map(({key, shown}) => [key, shown])])), `a share on screen is not written as formatPercent writes it in ${language}`).toEqual(
+                Object.fromEntries(boxes.map((box) => [box, sharesOf(box).map(([key, value]) => [key, formatPercent(value, {scale: 100, signed: false, locale: language})])])),
+            );
+        });
     });
 });
 

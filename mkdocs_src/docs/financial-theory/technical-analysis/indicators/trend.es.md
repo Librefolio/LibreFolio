@@ -1,6 +1,6 @@
 # 🧭 Indicadores de Tendencia
 
-Los indicadores de tendencia responden a la pregunta más básica del análisis técnico: *"¿hacia dónde se dirige realmente el precio, una vez que se filtra el ruido diario?"* Todos actúan como **filtros de paso bajo** sobre la serie de precios, suavizando las fluctuaciones a corto plazo para revelar la dirección subyacente.
+Los indicadores de tendencia responden a la pregunta más básica del análisis técnico: *"¿hacia dónde se dirige realmente el precio, una vez que se filtra el ruido de una sesión a otra?"* Todos actúan como **filtros de paso bajo** sobre la serie de precios, suavizando las fluctuaciones a corto plazo para revelar la dirección subyacente.
 
 ---
 
@@ -44,13 +44,13 @@ Un indicador de tendencia estima la **media local** del proceso de precios (o, p
 
 ```mermaid
 flowchart LR
- P["💹 Serie de Precios / OHLC"] --> EMA["📉 EMA"]
- P --> SMA["📏 SMA"]
- P --> KAMA["🛣️ KAMA"]
- P --> ADX["💹 ADX (+DI/-DI)"]
- P --> AROON["⏱️ Aroon"]
- EMA & SMA & KAMA --> DIR["🧭 Estimación de dirección"]
- ADX & AROON --> STR["💪 Estimación de fuerza / oportunidad"]
+    P["💹 Serie de Precios / OHLC"] --> EMA["📉 EMA"]
+    P --> SMA["📏 SMA"]
+    P --> KAMA["🛣️ KAMA"]
+    P --> ADX["💹 ADX (+DI/-DI)"]
+    P --> AROON["⏱️ Aroon"]
+    EMA & SMA & KAMA --> DIR["🧭 Estimación de dirección"]
+    ADX & AROON --> STR["💪 Estimación de fuerza / oportunidad"]
 ```
 
 !!! info "Dirección vs fuerza"

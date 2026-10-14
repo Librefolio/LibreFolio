@@ -1,6 +1,8 @@
 # 🔌 FX Providers
 
-LibreFolio automatically synchronizes exchange rates using official central bank feeds. Each currency pair you configure can have a prioritized list of sources, creating a robust fallback system if one service goes down.
+LibreFolio downloads exchange rates from central banks — free, and without an API key. A currency
+pair can have several sources in priority order: if the first one fails during a sync, the next
+one takes over.
 
 <div class="grid cards" style="margin-top: 1.5rem; margin-bottom: 2rem;">
     <a href="ecb/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
@@ -42,18 +44,34 @@ LibreFolio automatically synchronizes exchange rates using official central bank
 
 ## 📊 Provider Comparison
 
-| <span style="min-width: 320px;">Provider</span> | Base Currency | Supported Currencies | <span style="min-width: 220px;">Update Frequency</span> | API Key | Notes |
-|:---|:---:|:---:|:---:|:---:|:---|
-| <img src="https://www.ecb.europa.eu/favicon-32.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **ECB** (European Central Bank) | EUR 🇪🇺 | ~45 | Daily, ~16:00 CET | Not required | Primary provider for Euro-based pairs and major world currencies. |
-| <img src="https://fred.stlouisfed.org/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **FED** (Federal Reserve FRED) | USD 🇺🇸 | ~20 | Daily, US business days | Not required | Best fallback for US Dollar-based pairs. |
-| <img src="https://www.bankofengland.co.uk/favicon.svg?ver=2c06d" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BOE** (Bank of England) | GBP 🇬🇧 | ~15 | Daily, UK business days | Not required | Good coverage for Sterling-based pairs. |
-| <img src="https://data.snb.ch/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **SNB** (Swiss National Bank) | CHF 🇨🇭 | ~25 | Monthly averages (no daily data) | Not required | Highly stable quotes for Swiss Franc pairs. |
+Each central bank quotes other currencies against its own, the **base currency**.
+
+| <span style="min-width: 320px;">Provider</span> | Base Currency | <span style="min-width: 220px;">Update Frequency</span> | Good for |
+|:---|:---:|:---|:---|
+| <img src="https://www.ecb.europa.eu/favicon-32.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **ECB** (European Central Bank) | EUR 🇪🇺 | Daily, around 16:00 CET on ECB working days | Euro pairs and the main world currencies |
+| <img src="https://fred.stlouisfed.org/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **FED** (Federal Reserve FRED) | USD 🇺🇸 | Daily, on US business days | US-dollar pairs |
+| <img src="https://www.bankofengland.co.uk/favicon.svg?ver=2c06d" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **BOE** (Bank of England) | GBP 🇬🇧 | Daily, on UK business days | Sterling pairs |
+| <img src="https://data.snb.ch/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **SNB** (Swiss National Bank) | CHF 🇨🇭 | Monthly averages, one value per month | Swiss-franc pairs, when a monthly rate is enough |
 
 ## 🎯 How Routing & Fallback Works
 
-LibreFolio doesn't restrict you to a single source. When managing exchange rates:
+1. 🛤️ **Direct route**: one central bank quotes the pair — e.g. EUR/USD from the ECB.
+2. 🔀 **Chain route**: no bank quotes the pair, so LibreFolio combines steps — e.g. RON/USD as
+   RON → EUR → USD, both steps from the ECB. A chain gets a rate only on days when every step has
+   one.
+3. 🔄 **Fallback**: with several routes, a sync tries them in priority order and uses the first
+   one that works.
+4. ✍️ **Manual**: no route for your pair? Save it without a provider and enter the rates yourself
+   in the [Data Editor](../detail/data-editor.md).
 
-1. 🛤️ **Direct Routes**: If a direct rate exists (e.g., EUR/USD via ECB), LibreFolio fetches it.
-2. 🔀 **Chain Routes**: If no direct provider supports your pair (e.g., EUR/RON), LibreFolio can convert it through a chain (e.g., EUR → USD → RON) automatically.
-3. 🔄 **Auto Fallback**: If your primary provider fails during sync (e.g., network timeout), LibreFolio automatically tries the next configured provider.
-4. ✍️ **Manual Sentinel**: For currency pairs that are not supported by any central bank, you can set the provider to `MANUAL` to input rates yourself.
+You choose the routes when you [add a pair](../add-pair.md), and change them later with the
+pair's [Providers](../detail/provider.md) button.
+
+!!! warning "SNB: one rate per month"
+
+    The SNB publishes monthly averages, dated the 1st of each month. A pair that uses it gets one
+    rate per month, and a chain through the SNB has rates only on those days.
+
+## 🔗 Related
+
+- 🛠️ **For developers: [FX Providers](../../../developer/backend/fx/providers/index.md)** — APIs, series and quotation formats

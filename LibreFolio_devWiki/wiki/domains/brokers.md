@@ -32,11 +32,11 @@ layer over the existing FIFO engine, no engine changes.
 
 | Code | Feature | Layer | Role in domain | Status |
 |------|---------|-------|----------------|--------|
-| [[F-009]] | Broker CRUD | fullstack | core — create/list/edit/delete broker accounts | implemented |
-| [[F-010]] | Broker Sharing (Owner/Editor/Viewer roles) | fullstack | core — multi-user access control per broker | implemented |
-| [[F-011]] | File Management (upload/list/delete broker reports) | fullstack | core — file store for import reports | implemented |
+| [[F-009]] | Broker CRUD | fullstack | core — create/list/edit/delete broker accounts | documented |
+| [[F-010]] | Broker Sharing (Owner/Editor/Viewer roles) | fullstack | core — multi-user access control per broker | documented |
+| [[F-011]] | File Management (upload/list/delete broker reports) | fullstack | core — file store for import reports | documented |
 | [[F-012]] | BRIM Framework (broker report import pipeline) | fullstack | core — abstract pipeline: detect→parse→stage→commit | implemented |
-| [[F-013]] | BRIM Plugins (11 broker parsers) | backend | core — concrete parsers for each broker format | implemented |
+| [[F-013]] | BRIM Plugins (11 broker parsers) | backend | core — concrete parsers for each broker format | documented |
 | [[F-014]] | Image Upload & Crop (broker icon) | fullstack | support — custom icon per broker | implemented |
 
 ## Architecture at a glance
@@ -47,8 +47,8 @@ graph TD
     User -->|POST /brokers/:id/files/upload| FileStore[(UploadedFile)]
     FileStore -->|POST /brokers/import/files/:id/parse| BRIMFw[BRIM Framework<br/>brim_provider.py]
     BRIMFw -->|auto-detect| PluginRegistry[BRIMProviderRegistry<br/>11 plugins]
-    PluginRegistry --> IBKR[broker_ibkr.py]
-    PluginRegistry --> Degiro[broker_degiro.py]
+    PluginRegistry --> IBKR[broker_ibkr/plugin.py]
+    PluginRegistry --> Degiro[broker_degiro/plugin.py]
     PluginRegistry --> Other[9 other parsers]
     IBKR -->|parse_file| ParseResult[transactions + warnings<br/>+ extracted_assets]
     Degiro --> ParseResult
@@ -71,13 +71,14 @@ No open problems in the implemented features.
 Pending gaps (Phase 7, see [[connections/transactions-connections]]):
 - F-013: plugins lack `plugin_version` tracking for cache invalidation — if a plugin is updated, previously parsed files are not automatically re-parsed.
 - F-049 BRIM Import UI: asset matching wizard is in-progress; the metadata preview columns are not yet dynamically driven by plugin metadata.
-- F-050 File Preview System: planned — inline preview of uploaded files (image, CSV, text) before parsing.
+- F-050 File Preview System: planned — inline preview of uploaded files (image, CSV, text) before parsing. *Delivered on 2026-06-04 ([[F-050]]; lint 2026-10-12).*
 
 ## What comes next
 
 - [[F-048]] Staging Modal — manual `create-many`/`edit-many` modes done (Phase 7 Part 4); BRIM `create-brim` mode arriving in Part 5.
+  *Delivered: the import wizard hands its rows to the bulk workspace, in 1.0.0 (C-64, 2026-10-12).*
 - [[F-049]] BRIM Import UI — the asset matching wizard (in-progress in Phase 7).
-- [[F-050]] File Preview System — inline preview panel for uploaded broker report files.
+- [[F-050]] File Preview System — inline preview panel for uploaded broker report files. *Delivered on 2026-06-04 (lint 2026-10-12).*
 - [[F-083]] Multi-File Multi-Broker Import — batch-import multiple files from multiple brokers in one workflow.
 
 Broker List/Detail UI v2 (Phase 9 Milestone 3) is done — see

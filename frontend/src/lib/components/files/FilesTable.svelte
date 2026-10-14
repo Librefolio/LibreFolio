@@ -9,20 +9,29 @@
   - Use onFiltersChange to sync filter changes back to URL
 -->
 <script lang="ts">
+    import {onDestroy, onMount, untrack} from 'svelte';
     import {t} from '$lib/i18n';
+    import {zodiosApi} from '$lib/api';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {notify} from '$lib/stores/app/notify.svelte';
+    import {clientSessionUserId, getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {type BulkAction, type ColumnDef, DataTable, type FilterValue, type RowAction} from '$lib/components/table';
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
-    import {Download, Eye, File as FileIcon, FileArchive, FileAudio, FileCode, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Image as ImageIcon, Link, Trash2} from 'lucide-svelte';
+    import {Download, Eye, File as FileIcon, FileArchive, FileAudio, FileCode, FileJson, FileSpreadsheet, FileText, FileType, FileVideo, Image as ImageIcon, Link, Trash2, UserRound} from 'lucide-svelte';
     import type {BrimFile, BrokerInfo, FileData, UploadedFile} from '$lib/types';
-    import {safeNumber} from '$lib/types';
+    import {safeNumber, safeString} from '$lib/types';
     // Generate a consistent color based on broker id for visual distinction
     // Uses shared golden-ratio color utility
-    import {getIndexColor} from '$lib/utils/colors';
+    import {getIndexColor, getStringColor} from '$lib/utils/colors';
     import {getBrokerIconCandidates} from '$lib/utils/broker/brokerHelpers';
     import {canPreviewFileData} from '$lib/utils/files/filePreview';
     import {getCachedPreview} from '$lib/stores/files/imagePreviewCache';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
+    import {writeTextToClipboard} from '$lib/utils/clipboard';
+    import FileSetBadges from '$lib/components/files/FileSetBadges.svelte';
+    import {getCachedPlugins, setCachedPlugins} from '$lib/components/ui/select/ImportPluginSelect.svelte';
+    import {fileSetBadges, setRequest, setsOfFiles, type FileSetBadgeContext, type ReportSetGroup, type SetPluginInfo, type SetPreviewState} from '$lib/utils/transactions/importReportSets';
+    import type {BrimPlugin, BrimSetPreview} from '$lib/types';
 
     interface Props {
         files: FileData[];
@@ -44,8 +53,88 @@
 
     let {files, type, onDelete, onPreview, onDeleteMultiple, brokers, showBrokerColumn = true, initialFilters, onFiltersChange, onSelectionChange}: Props = $props();
 
+    interface SearchUser {
+        id: number;
+        username: string;
+        avatar_url: string | null;
+    }
+
+    interface UploaderDisplay {
+        key: string;
+        label: string;
+        searchText: string;
+        avatarCandidates: string[];
+        sortLabel: string;
+    }
+
     // Internal DataTable reference (for external column visibility control)
     let dataTableRef: DataTable<FileData> | undefined = $state(undefined);
+    let userLookup = $state(new Map<number, SearchUser>());
+    let userLookupState = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
+    let alive = true;
+
+    // Report-set badges (BRIM files only, design §5). The plugin catalogue tells which plugins read
+    // sets; each set's preview tells whether it is incomplete. A failed request only leaves the
+    // badge out: the table never waits for them.
+    let setPlugins = $state<SetPluginInfo[]>([]);
+    let setPreviews = $state(new Map<string, SetPreviewState>());
+    /** Set key → the member ids its preview was asked for: a set whose files change is asked again. */
+    const requestedPreviews = new Map<string, string>();
+    let fileSets = $derived(type === 'brim' && setPlugins.length > 0 ? setsOfFiles(files as BrimFile[], setPlugins) : new Map<string, ReportSetGroup>());
+    let badgeContext = $derived<FileSetBadgeContext>({sets: fileSets, files: type === 'brim' ? (files as BrimFile[]) : [], previews: setPreviews});
+
+    $effect(() => {
+        if (type !== 'brim') return;
+        void loadSetPlugins();
+    });
+
+    $effect(() => {
+        const sets = fileSets;
+        untrack(() => requestSetPreviews(sets));
+    });
+
+    async function loadSetPlugins() {
+        const generation = getClientSessionGeneration();
+        try {
+            let plugins = getCachedPlugins();
+            if (!plugins) {
+                plugins = ((await zodiosApi.list_plugins_api_v1_brokers_import_plugins_get()) as BrimPlugin[] | undefined) ?? [];
+                setCachedPlugins(plugins);
+            }
+            if (!alive || !isClientSessionCurrent(generation)) return;
+            setPlugins = plugins as unknown as SetPluginInfo[];
+        } catch {
+            // No catalogue, no set badges: the table itself is unaffected.
+        }
+    }
+
+    function requestSetPreviews(sets: ReadonlyMap<string, ReportSetGroup>) {
+        const unique = new Map<string, ReportSetGroup>();
+        for (const set of sets.values()) unique.set(set.key, set);
+        for (const set of unique.values()) {
+            const members = set.files
+                .map((file) => file.file_id)
+                .sort()
+                .join(',');
+            if (requestedPreviews.get(set.key) === members) continue;
+            requestedPreviews.set(set.key, members);
+            void previewSet(set, members);
+        }
+    }
+
+    async function previewSet(set: ReportSetGroup, members: string) {
+        const generation = getClientSessionGeneration();
+        let state: SetPreviewState;
+        try {
+            // The originals left out of the set by the last analysis are named, so the server previews the same set.
+            const preview = (await zodiosApi.preview_report_set_api_v1_brokers_import_sets_preview_post(setRequest(set, files as BrimFile[]))) as BrimSetPreview;
+            state = {status: 'ready', preview};
+        } catch (error) {
+            state = {status: 'error', error: error instanceof Error ? error.message : 'request-failed'};
+        }
+        if (!alive || !isClientSessionCurrent(generation) || requestedPreviews.get(set.key) !== members) return;
+        setPreviews = new Map(setPreviews).set(set.key, state);
+    }
 
     /** Expose the internal DataTable ref for ColumnVisibilityToggle */
     export function getTableRef() {
@@ -55,6 +144,87 @@
     /** Clear all selected rows */
     export function clearSelection() {
         dataTableRef?.clearSelection();
+    }
+
+    onMount(() => {
+        return clientSessionUserId.subscribe((userId) => {
+            userLookup = new Map();
+            userLookupState = userId === null ? 'idle' : 'loading';
+            if (userId !== null) void loadUsers();
+        });
+    });
+    onDestroy(() => {
+        alive = false;
+    });
+
+    async function loadUsers() {
+        const generation = getClientSessionGeneration();
+        try {
+            const response = await zodiosApi.search_users_endpoint_api_v1_users_search_get({queries: {q: ''}});
+            if (!alive || !isClientSessionCurrent(generation)) return;
+            userLookup = new Map((response.items ?? []).map((user) => [user.id, {id: user.id, username: user.username, avatar_url: safeString(user.avatar_url)}]));
+            userLookupState = 'ready';
+        } catch (error) {
+            if (!alive || !isClientSessionCurrent(generation)) return;
+            userLookupState = 'error';
+            notify({
+                name: 'files.uploaders.failed',
+                detail: {reason: error instanceof Error ? error.message : 'request-failed'},
+                toast: {variant: 'warning', message: $t('uploads.uploaderLookupFailed')},
+            });
+        }
+    }
+
+    function appendPreviewSuffix(url: string, size: string): string {
+        return url.includes('?') ? `${url}&img_preview=${size}` : `${url}?img_preview=${size}`;
+    }
+
+    function buildAvatarDataUrl(label: string, seed: string): string {
+        const initial = (label.trim().charAt(0) || '?').toUpperCase();
+        const bg = getStringColor(seed).text;
+        const fg = '#ffffff';
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="16" fill="${bg}"/><text x="16" y="21" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700" fill="${fg}">${escapeHtml(initial)}</text></svg>`;
+        return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    }
+
+    function getUploaderId(file: FileData): number | null {
+        return safeNumber(file.uploaded_by_user_id);
+    }
+
+    function getUploaderDisplay(file: FileData): UploaderDisplay {
+        const uploaderId = getUploaderId(file);
+        if (uploaderId === null) {
+            const label = $t('uploads.noUploader');
+            return {
+                key: '__none__',
+                label,
+                searchText: label,
+                avatarCandidates: [buildAvatarDataUrl(label, 'uploader:none')],
+                sortLabel: label,
+            };
+        }
+
+        const uploader = userLookup.get(uploaderId);
+        const label = uploader?.username ?? `${$t('common.user')} #${uploaderId}`;
+        const avatarCandidates = uploader?.avatar_url ? [appendPreviewSuffix(uploader.avatar_url, '32x32'), buildAvatarDataUrl(label, `uploader:${uploaderId}`)] : [buildAvatarDataUrl(label, `uploader:${uploaderId}`)];
+        return {
+            key: String(uploaderId),
+            label,
+            searchText: `${label} ${uploaderId}`,
+            avatarCandidates,
+            sortLabel: label,
+        };
+    }
+
+    function getUploaderOptions(): UploaderDisplay[] {
+        const seen = new Map<string, UploaderDisplay>();
+        for (const file of files) {
+            const uploader = getUploaderDisplay(file);
+            if (!seen.has(uploader.key)) {
+                seen.set(uploader.key, uploader);
+            }
+        }
+        return [...seen.values()].sort((a, b) => a.sortLabel.localeCompare(b.sortLabel, undefined, {numeric: true, sensitivity: 'base'}));
     }
 
     // Helper functions
@@ -196,6 +366,7 @@
 
     // Column definitions
     function getColumns(): ColumnDef<FileData>[] {
+        const uploaderOptions = getUploaderOptions();
         const cols: ColumnDef<FileData>[] = [
             {
                 id: 'filename',
@@ -223,6 +394,26 @@
                 type: 'text',
                 width: 250,
                 getValue: (row) => getFileName(row),
+            },
+            {
+                id: 'uploader',
+                urlKey: 'uploader',
+                header: () => $t('uploads.uploader'),
+                headerTooltip: () => $t('uploads.uploaderHint'),
+                cell: (row) => {
+                    const uploader = getUploaderDisplay(row);
+                    return {type: 'image', src: uploader.avatarCandidates[0], alt: '', text: uploader.label, fallbackIcon: UserRound, size: 20, circle: true};
+                },
+                type: 'enum',
+                enumOptions: uploaderOptions.map((uploader) => ({
+                    value: uploader.key,
+                    label: uploader.label,
+                    searchText: uploader.searchText,
+                    iconCandidates: uploader.avatarCandidates,
+                })),
+                width: 190,
+                sortFn: (a, b) => getUploaderDisplay(a).sortLabel.localeCompare(getUploaderDisplay(b).sortLabel, undefined, {numeric: true, sensitivity: 'base'}),
+                getValue: (row) => getUploaderDisplay(row).key,
             },
         ];
 
@@ -278,6 +469,24 @@
                 width: 100,
                 getValue: (row) => (row as BrimFile).status,
             });
+
+            cols.push({
+                id: 'reportSet',
+                urlKey: 'reportSet',
+                header: () => $t('importWizard.reportSet.badge.column'),
+                cell: (row) => {
+                    const badges = fileSetBadges(row as BrimFile, badgeContext);
+                    return badges.length === 0 ? '' : {type: 'custom' as const, component: FileSetBadges, props: {badges}};
+                },
+                type: 'custom',
+                sortable: false,
+                filterable: false,
+                width: 200,
+                getValue: (row) =>
+                    fileSetBadges(row as BrimFile, badgeContext)
+                        .map((badge) => badge.kind)
+                        .join(' '),
+            });
         }
 
         cols.push(
@@ -311,37 +520,6 @@
         return cols;
     }
 
-    // Helper to copy to clipboard with fallback
-    async function copyToClipboard(text: string): Promise<boolean> {
-        // Try modern clipboard API first
-        if (navigator.clipboard && window.isSecureContext) {
-            try {
-                await navigator.clipboard.writeText(text);
-                return true;
-            } catch (err) {
-                console.warn('Clipboard API failed:', err);
-            }
-        }
-
-        // Fallback for HTTP or older browsers
-        try {
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed';
-            textArea.style.left = '-9999px';
-            textArea.style.top = '-9999px';
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            const success = document.execCommand('copy');
-            document.body.removeChild(textArea);
-            return success;
-        } catch (err) {
-            console.error('Fallback copy failed:', err);
-            return false;
-        }
-    }
-
     // Row actions
     function getRowActions(): RowAction<FileData>[] {
         const actions: RowAction<FileData>[] = [];
@@ -363,12 +541,13 @@
                 onClick: async (file) => {
                     const staticFile = file as UploadedFile;
                     const url = staticFile.url;
-                    const success = await copyToClipboard(url);
-                    if (success) {
-                        toasts.success($t('common.copied') || 'Copied!');
-                    } else {
-                        toasts.error('Copy failed');
+                    try {
+                        await writeTextToClipboard(url);
+                    } catch {
+                        toasts.error($t('support.clipboardUnavailable'));
+                        return;
                     }
+                    toasts.success($t('common.copied') || 'Copied!');
                 },
             });
         }
@@ -451,7 +630,7 @@
     let bulkActions = $derived(getBulkActions());
 </script>
 
-<div data-testid="files-table-{type}">
+<div data-testid="files-table-{type}" data-users-state={userLookupState} data-busy={userLookupState === 'loading'} aria-busy={userLookupState === 'loading'}>
     <DataTable
         bind:this={dataTableRef}
         {bulkActions}

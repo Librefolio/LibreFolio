@@ -31,7 +31,7 @@ The supporting analysis documents (`ARCHITECTURE_CURRENT_STATE.md`, `ARCH_ANALYS
 - **Pre-frame/frame separation**: transactions before t0 run through the pre-frame loop (updates qty, WAC, cash, K/R/W; no market eval). The frame [t0,t1] runs full daily evaluation.
 - **Blob cache**: fingerprint-keyed, range-aware. A cache hit is valid if the stored range _contains_ the requested range (not just equality). Supports range extension for partial misses.
 - **+612 lines** in `portfolio_service.py`, new test file `test_portfolio_engine_vnext.py` (20 unit tests).
-- **Remaining gaps** (RESOLVED 2026-07-06, commit `78aaa0a3` — see [[sources/phase09-m1-m2-archive-2026-07]]):
+- **Remaining gaps** (RESOLVED 2026-07-06, commit `13052a006` — see [[sources/phase09-m1-m2-archive-2026-07]]):
   - ~~`get_summary()` wiring to new engine incomplete~~ — fixed, now reads `position_states_end` directly (see [[decisions/portfolio-summary-direct-wiring]])
   - ~~GrowthChart stacked area not yet done~~ — fixed, ABS stacked area + rich tooltip implemented
   - ~~allocation-history frontend missing~~ — fixed, `AllocationHistoryChart.svelte` + Now/History toggle implemented
@@ -57,6 +57,6 @@ The supporting analysis documents (`ARCHITECTURE_CURRENT_STATE.md`, `ARCH_ANALYS
 | MWRR analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/mwrr_analysis_report.md` |
 | P&L breakdown analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_2/portfolio_engine/pnl_breakdown_analysis.md` |
 | Asset contribution gap analysis | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/report_asset_level_contribution_gap_analysis.md` |
-| Engine implementation | `backend/app/services/portfolio_engine.py` |
+| Engine implementation | `backend/app/services/financial_math/portfolio/daily_state.py`, `backend/app/services/financial_math/portfolio/engine.py` |
 | Service implementation | `backend/app/services/portfolio_service.py` |
 | vNext unit tests | `backend/test_scripts/test_services/test_portfolio_engine_vnext.py` |

@@ -93,7 +93,9 @@ type PendingOp = (
 4. **Factory functions** (replaced `fromTx()`):
    - `fieldsFromTx(tx)` — pure field extraction with auto-sign
    - `editOpFromTx(txId)` — creates edit op, reads from txStore
-   - `createOpFromClone(tx)` — creates create op with today's date
+   - `createOpFromClone(tx)` — creates a create op that **keeps the source row's date**: a clone is the correction
+     workflow, not «the same operation today» (beta finding T3, `59087c74a`, 2026-09-03; it used to reset the date to
+     today, in three places of the bulk modal)
 
 **Status derivation** (never set manually):
 - `op.op === 'create'` → `new`

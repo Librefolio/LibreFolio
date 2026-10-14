@@ -11,10 +11,18 @@
  * the component: their output is styling, not logic, and asserting on it would
  * couple the tests to the theme.
  *
+ * Two formatters are not pure: `formatLotQuantityMasked` and `formatLotQuantityCell`
+ * read the privacy flag (decision D5′), so their output follows the toggle. They are
+ * here anyway, because the rule they carry — partial lots keep their open share under
+ * privacy — is logic worth a unit test.
+ *
  * @module brokers/lots/unifiedLotsTableHelpers
  */
 
 import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+import {formatPercent} from '$lib/utils/core/formatPercent';
+import {maskableQuantity, PRIVACY_PLACEHOLDER, shouldMaskAmount} from '$lib/utils/privacy/maskable';
+import {uiLocale} from '$lib/stores/app/uiLocale';
 
 /** Every state a FIFO lot can carry. */
 export type LotState = 'OPEN' | 'PARTIALLY_CLOSED' | 'CLOSED' | 'DISTRIBUTED' | 'IN_TRANSIT' | 'DEGRADED';
@@ -49,11 +57,36 @@ export function filterStates(stateList: readonly string[]): LotState[] {
 
 /**
  * Format a quantity with up to six fraction digits, or an em dash when absent.
- * `locale` is exposed for deterministic tests; it defaults to the machine locale,
- * matching the component.
+ * `locale` is exposed for deterministic tests; it defaults to the interface locale
+ * (`uiLocale()`, M-18), so the table, which passes none, follows the interface.
  */
-export function formatLotQuantity(value: number | null, locale?: string): string {
+export function formatLotQuantity(value: number | null, locale: string = uiLocale()): string {
     return value == null ? '—' : value.toLocaleString(locale, {minimumFractionDigits: 0, maximumFractionDigits: 6});
+}
+
+/**
+ * A lot quantity as the table renders it: masked under privacy (decision D5′ — a quantity
+ * next to a price is what the user owns), and still an em dash when absent, because masking
+ * an absence would claim a quantity the lot does not have.
+ */
+export function formatLotQuantityMasked(value: number | null, locale: string = uiLocale()): string {
+    return value == null ? '—' : maskableQuantity(formatLotQuantity(value, locale));
+}
+
+/**
+ * The quantity cell of a lot row: the open quantity, or `open / original` for a partially
+ * closed lot.
+ *
+ * Under privacy a partially closed lot keeps its reading key as the open share — `••• (60%)`
+ * (decision Q8). Telling a partial lot from a whole one was the reason D5 kept quantities
+ * visible; the share discloses no quantity, and percentages stay visible by D6. Without an
+ * original to divide by, the cell is the placeholder alone.
+ */
+export function formatLotQuantityCell(open: number | null, original: number | null, partial: boolean, locale: string = uiLocale()): string {
+    if (!partial) return formatLotQuantityMasked(open, locale);
+    if (!shouldMaskAmount()) return `${formatLotQuantity(open, locale)} / ${formatLotQuantity(original, locale)}`;
+    const share = ratioOrNull(open, original);
+    return share == null ? PRIVACY_PLACEHOLDER : `${PRIVACY_PLACEHOLDER} (${formatPercent(share, {scale: 100, signed: false, digits: 0})})`;
 }
 
 /** Find a broker by id, or `null` when the id is absent or not in the list. */
@@ -87,6 +120,22 @@ export function sumNumeric<T>(footerRows: readonly T[], getValue: (row: T) => nu
 }
 
 /**
+ * Sum a column only when every row has a finite value; `null` (shown as «—") as soon
+ * as one is unknown, or for no rows. A footer total that skipped an unknown lot (a
+ * missing FX rate) would read as complete.
+ */
+export function sumCompleteOrNull<T>(footerRows: readonly T[], getValue: (row: T) => number | null): number | null {
+    if (footerRows.length === 0) return null;
+    let total = 0;
+    for (const row of footerRows) {
+        const value = getValue(row);
+        if (value == null || !Number.isFinite(value)) return null;
+        total += value;
+    }
+    return total;
+}
+
+/**
  * Value-weighted average of a column, weighting by the absolute value of a second
  * column. Rows with a missing/non-finite value or weight, or a zero weight, are
  * skipped. Returns `null` when the total weight is zero.
@@ -98,6 +147,26 @@ export function weightedAverage<T>(footerRows: readonly T[], getValue: (row: T) 
         const value = getValue(row);
         const weight = getWeight(row);
         if (value == null || weight == null || !Number.isFinite(value) || !Number.isFinite(weight) || weight === 0) continue;
+        const absWeight = Math.abs(weight);
+        numerator += value * absWeight;
+        denominator += absWeight;
+    }
+    return denominator > 0 ? numerator / denominator : null;
+}
+
+/**
+ * {@link weightedAverage}, but `null` (shown as «—») as soon as a row that takes part in
+ * the average — a finite, non-zero weight — has an unknown or non-finite value. An
+ * average that silently dropped a weighted lot (a missing FX rate) would read as complete.
+ */
+export function weightedAverageCompleteOrNull<T>(footerRows: readonly T[], getValue: (row: T) => number | null, getWeight: (row: T) => number | null): number | null {
+    let numerator = 0;
+    let denominator = 0;
+    for (const row of footerRows) {
+        const weight = getWeight(row);
+        if (weight == null || !Number.isFinite(weight) || weight === 0) continue;
+        const value = getValue(row);
+        if (value == null || !Number.isFinite(value)) return null;
         const absWeight = Math.abs(weight);
         numerator += value * absWeight;
         denominator += absWeight;

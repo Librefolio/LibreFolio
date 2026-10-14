@@ -36,8 +36,8 @@ Plain RSI can drift in the 40–60 zone for long stretches without ever reaching
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Stochastic Period ($N$) | `period` | 14 | Shared lookback for the underlying RSI and its stochastic %K range. |
-| D Period ($d$) | `dPeriod` | 3 | SMA window applied to %K to produce %D. |
+| Stochastic Period ($N$) | `period` | 14 | Shared lookback for the underlying RSI and its stochastic %K range, in sessions. |
+| D Period ($d$) | `dPeriod` | 3 | SMA window applied to %K to produce %D, in sessions. |
 | Overbought | `overbought` | 80 | Threshold for the overbought zone. |
 | Oversold | `oversold` | 20 | Threshold for the oversold zone. |
 

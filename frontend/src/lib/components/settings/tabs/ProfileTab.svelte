@@ -1,4 +1,5 @@
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {_} from '$lib/i18n';
     import {auth, currentUser} from '$lib/stores/app/auth';
     import {userSettings} from '$lib/stores/app/settings';
@@ -12,12 +13,14 @@
     import {notify} from '$lib/stores/app/notify.svelte';
     import {ImagePickerWrapper} from '$lib/components/ui/media';
     import {onMount} from 'svelte';
+    import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
-    // Format date for display
-    function formatDate(dateStr: string | undefined): string {
+    // Format date for display, in the interface locale (M-18). The template passes it: read there, the
+    // store is tracked, and the date follows a language change.
+    function formatDate(dateStr: string | undefined, locale: string): string {
         if (!dateStr) return '-';
         const date = new Date(dateStr);
-        return date.toLocaleDateString(undefined, {
+        return date.toLocaleDateString(locale, {
             year: 'numeric',
             month: 'long',
             day: 'numeric',
@@ -124,7 +127,7 @@
             notify({
                 name: 'settings.profile.saved',
                 detail: {fields: 1, field: fieldName},
-                toast: {variant: 'success', message: `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${[fieldName].map((l) => `<li>${l}</li>`).join('')}</ul>`},
+                toast: {variant: 'success', message: `${$_('settings.savedSuccessfully')}:<ul class="mt-1 list-inside list-disc">${[fieldName].map((l) => `<li>${escapeHtml(l)}</li>`).join('')}</ul>`},
             });
         } catch (e: unknown) {
             debug.error('ProfileTab', 'saveField failed', e);
@@ -474,7 +477,7 @@
 
             <!-- Right: Value -->
             <div class="text-sm text-gray-600 dark:text-gray-300 sm:text-right">
-                {formatDate($currentUser?.created_at)}
+                {formatDate($currentUser?.created_at, $uiLocaleStore)}
             </div>
         </div>
     </div>
@@ -564,6 +567,7 @@
                 </label>
                 <input
                     id="delete-confirm-input"
+                    data-testid="profile-delete-confirm-input"
                     type="text"
                     bind:value={deleteConfirmText}
                     class="w-full px-3 py-2 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-red-500 focus:border-transparent"
@@ -572,10 +576,10 @@
             </div>
 
             <div class="flex justify-end gap-3">
-                <button on:click={closeDeleteModal} class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
+                <button on:click={closeDeleteModal} data-testid="profile-delete-cancel" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors">
                     {$_('common.cancel')}
                 </button>
-                <button on:click={handleDeleteAccount} disabled={!canDelete || deleting} class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                <button on:click={handleDeleteAccount} disabled={!canDelete || deleting} data-testid="profile-delete-confirm" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     {#if deleting}
                         {$_('common.deleting')}
                     {:else}

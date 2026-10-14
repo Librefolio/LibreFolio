@@ -53,6 +53,6 @@ This is the complete v5 redesign of the BRIM Import Wizard, superseding the v4 "
 | Import Wizard Modal | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
 | BulkModal (recipient) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | BRIM providers dir | `backend/app/services/brim_providers/` |
-| Schwab plugin | `backend/app/services/brim_providers/broker_schwab.py` |
-| Coinbase plugin (fixed) | `backend/app/services/brim_providers/broker_coinbase.py` |
-| BRIM API | `backend/app/api/v1/brim.py` |
+| Schwab plugin | `backend/app/services/brim_providers/broker_schwab/plugin.py` |
+| Coinbase plugin (fixed) | `backend/app/services/brim_providers/broker_coinbase/plugin.py` |
+| BRIM API (`brim_router`, mounted under `/brokers/import`) | `backend/app/api/v1/brokers.py` |

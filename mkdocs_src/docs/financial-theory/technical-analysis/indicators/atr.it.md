@@ -30,7 +30,7 @@ Un semplice intervallo massimo-meno-minimo ignora i movimenti overnight o i gap;
 
 | Parametro | Chiave | Default | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 14 | Finestra di smoothing applicata all'Intervallo Vero. |
+| Periodo ($N$) | `period` | 14 | Finestra di smoothing applicata all'Intervallo Vero, in sedute. |
 
 ---
 
@@ -40,11 +40,11 @@ Prendere il $\max(\cdot)$ di tre candidati di differenza assoluta è una forma d
 
 ```mermaid
 flowchart LR
- H["📈 Massimo"] --> TR["🌡️ Intervallo Vero = max(H−L, |H−C_prev|, |L−C_prev|)"]
- L["📉 Minimo"] --> TR
- Cp["💹 Chiusura Precedente"] --> TR
- TR --> SMMA["🔁 SMMA(N)"]
- SMMA --> ATR["🌡️ ATR(t)"]
+    H["📈 Massimo"] --> TR["🌡️ Intervallo Vero = max(H−L, |H−C_prev|, |L−C_prev|)"]
+    L["📉 Minimo"] --> TR
+    Cp["💹 Chiusura Precedente"] --> TR
+    TR --> SMMA["🔁 SMMA(N)"]
+    SMMA --> ATR["🌡️ ATR(t)"]
 ```
 
 !!! tip "ATR non ha un limite superiore"

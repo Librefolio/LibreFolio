@@ -2,6 +2,7 @@
 
 > Dependencies and relationships between FX domain features.
 > See [[connections/dependency-graph]] for the full project view.
+> The domain narrative is [[domains/fx]].
 
 ---
 

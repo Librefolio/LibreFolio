@@ -19,16 +19,16 @@ from backend.app.schemas.utilities import (
     SectorItem,
     SectorListResponse,
 )
-from backend.app.utils.currency_utils import (
-    list_currencies as list_currencies_util,
-)
-from backend.app.utils.currency_utils import (
-    normalize_currency,
-)
-from backend.app.utils.geo_utils import (
+from backend.app.utils.asset.geo import (
     list_countries as list_countries_util,
 )
-from backend.app.utils.sector_fin_utils import FinancialSector
+from backend.app.utils.asset.sector import FinancialSector
+from backend.app.utils.fx.currency import (
+    list_currencies as list_currencies_util,
+)
+from backend.app.utils.fx.currency import (
+    normalize_currency,
+)
 
 router = APIRouter(prefix="/utilities", tags=["Utilities"])
 
@@ -80,6 +80,8 @@ async def list_sectors(include_other: bool = Query(True, description="Include 'O
         "Consumer Staples": "🛒",
         "Telecommunication": "📡",
         "Utilities": "💡",
+        "Corporate Bonds": "🏢",
+        "Government Bonds": "🏛️",
         "Other": "📦",
         "Liquidity": "💰",
         "Unknown": "❓",

@@ -1,0 +1,58 @@
+{
+  "auth": {
+    "login": "Connexion",
+    "logout": "Déconnexion",
+    "register": "S'inscrire",
+    "username": "Nom d'utilisateur",
+    "email": "Email",
+    "password": "Mot de passe",
+    "confirmPassword": "Confirmer le mot de passe",
+    "forgotPassword": "Mot de passe oublié ?",
+    "registerTitle": "Créer un compte",
+    "noAccount": "Vous n'avez pas de compte ?",
+    "hasAccount": "Vous avez déjà un compte ?",
+    "registerHere": "Inscrivez-vous ici",
+    "loginHere": "Connectez-vous",
+    "usernameOrEmail": "Nom d'utilisateur ou Email",
+    "accountCreated": "Compte créé avec succès ! Veuillez vous connecter.",
+    "registrationFailed": "L'inscription a échoué. Veuillez réessayer.",
+    "registrationDisabled": "L'inscription de nouveaux utilisateurs est actuellement désactivée par l'administrateur.",
+    "passwordRecovery": "Récupération du mot de passe",
+    "emailRecoveryNotAvailable": "La récupération par email n'est pas encore disponible. Veuillez utiliser le terminal du serveur pour réinitialiser votre mot de passe.",
+    "serverTerminalInstructions": "Exécutez cette commande sur le serveur :",
+    "contactAdministrator": "Contactez votre administrateur système si vous n'avez pas accès au serveur.",
+    "backToLogin": "Retour à la connexion",
+    "validation": {
+      "usernameMinLength": "Le nom d'utilisateur doit comporter au moins 3 caractères",
+      "passwordsNoMatch": "Les mots de passe ne correspondent pas",
+      "invalidEmail": "Veuillez entrer une adresse email valide",
+      "invalidEmailDomain": "Le domaine email n'est pas valide ou ne peut pas être utilisé",
+      "usernameTaken": "Ce nom d'utilisateur est déjà pris",
+      "emailTaken": "Cet email est déjà enregistré",
+      "passwordTooWeak": "Le mot de passe ne répond pas aux exigences de sécurité"
+    },
+    "passwordStrength": {
+      "veryWeak": "Très Faible",
+      "weak": "Faible",
+      "fair": "Passable",
+      "strong": "Fort",
+      "veryStrong": "Très Fort",
+      "requirements": "Exigences du mot de passe :",
+      "rules": {
+        "minLength": "Au moins 8 caractères",
+        "hasUppercase": "Une lettre majuscule",
+        "hasLowercase": "Une lettre minuscule",
+        "hasNumber": "Un chiffre",
+        "hasSpecial": "Un caractère spécial"
+      }
+    },
+    "serverUnreachable": {
+      "title": "Le serveur ne répond pas",
+      "body": "Cette page reste ouverte et votre session n'a pas été fermée. Réessayez dans un instant."
+    },
+    "invalidCredentials": "Nom d'utilisateur ou mot de passe incorrect",
+    "invalidInput": "Données non valides",
+    "loginFailed": "La connexion a échoué",
+    "accountDisabled": "Ce compte est désactivé : demandez à un administrateur de le réactiver."
+  }
+}

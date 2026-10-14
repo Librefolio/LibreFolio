@@ -1,6 +1,6 @@
 # 💪 RSI — Relative Strength Index
 
-L'RSI misura se i compratori o i venditori hanno dominato *recentemente*. Risponde alla domanda: *"Negli ultimi $N$ giorni, quanta parte del movimento totale del prezzo è stata verso l'alto rispetto a quella verso il basso?"*
+L'RSI misura se i compratori o i venditori hanno dominato *recentemente*. Risponde alla domanda: *"Nelle ultime $N$ sedute, quanta parte del movimento totale del prezzo è stata verso l'alto rispetto a quella verso il basso?"*
 
 ---
 
@@ -15,7 +15,7 @@ Il risultato è compresso in un intervallo tra 0 e 100:
 
 ## 🔢 Formule Matematiche
 
-1. **Scomponi** le variazioni giornaliere in guadagni e perdite:
+1. **Scomponi** la variazione da una seduta alla successiva in guadagni e perdite:
 
     $$
     U_t = \max(P_t - P_{t-1},\; 0), \qquad
@@ -44,7 +44,7 @@ La normalizzazione $100 - 100/(1+RS)$ è una sigmoide monotonicamente crescente 
 
 | Parametro | Chiave | Predefinito | Descrizione |
 |---|---|---|---|
-| Periodo ($N$) | `period` | 14 | Finestra di osservazione per la SMMA. |
+| Periodo ($N$) | `period` | 14 | Finestra di osservazione per la SMMA, in sedute. |
 | Ipercomprato | `overbought` | 70 | Soglia per la zona di ipercomprato. |
 | Ipervenduto | `oversold` | 30 | Soglia per la zona di ipervenduto. |
 

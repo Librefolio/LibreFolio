@@ -1,7 +1,7 @@
 ---
 title: "Domain: DASHBOARD"
 category: domain
-features: [F-054, F-055]
+features: [F-054, F-055, F-100, F-111, F-112, F-113]
 status: implemented
 mkdocs: null
 ---
@@ -38,7 +38,11 @@ are surfaced via `DataQualityBanner`, reading the now-populated `data_quality` f
 | Code | Feature | Layer | Role in domain | Status |
 |------|---------|-------|----------------|--------|
 | [[F-054]] | Dashboard KPI & Overview | fullstack | core — KPI cards + unified `/portfolio/report` fetch | implemented |
-| [[F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart, Allocation) | frontend | display — GrowthChart, AllocationHistoryChart, Holdings/Performance panel | implemented |
+| [[F-055]] | Portfolio Charts (Holdings/Performance panel, GrowthChart, Allocation) | frontend | display — GrowthChart, AllocationHistoryChart, Holdings/Performance panel | documented |
+| [[F-100]] | Yield on Cost (YOC) per position | fullstack | display — trailing-year income per eligible unit in the positions | documented |
+| [[F-111]] | Risk tab of the Dashboard and broker pages (L1–L4) | frontend | display — four progressive risk questions; the simulation rung stays beta | documented |
+| [[F-112]] | Risk Lab of Asset Global | frontend | display — compares a selection of assets | documented |
+| [[F-113]] | Risk tab of Asset Detail (legacy, beta) | frontend | display — one asset's risk; to be rebuilt after 1.2 | implemented |
 
 ## Architecture at a glance
 
@@ -102,8 +106,8 @@ Later ideas:
 | Dashboard page | `frontend/src/routes/(app)/dashboard/+page.svelte` |
 | API endpoint | `backend/app/api/v1/portfolio_api.py` |
 | Service | `backend/app/services/portfolio_service.py` |
-| Engine | `backend/app/services/portfolio_engine.py` |
-| ROI utilities | `backend/app/utils/financial/roi_utils.py` |
+| Engine | `backend/app/services/financial_math/portfolio/engine.py` |
+| ROI utilities | `backend/app/services/financial_math/returns.py` |
 | Frontend store | `frontend/src/lib/stores/portfolio/portfolioStore.svelte.ts` |
 | Positions panel | `frontend/src/lib/components/dashboard/PositionsPanel.svelte` |
 | Archived M1/M2 plans | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/` |

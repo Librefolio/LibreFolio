@@ -14,10 +14,14 @@
 #   2. Start:           docker compose up -d
 #   3. Access:          http://localhost:${PORT:-6040}
 #
-# Test mode (optional):
-#   ./dev.py docker exec server --test            # start test server on :6041
-#   ./dev.py docker exec test db populate --force --with-static
-#   Access:  http://localhost:${TEST_PORT:-6041}
+# Commands inside the running container (./dev.py docker exec <cmd>):
+#   ./dev.py docker exec user list                # user, db and info work
+#   ./dev.py docker exec db current
+#   The image has no test runner, frontend sources or Node: `test …` answers
+#   "not available" and `server --test` cannot start. Run test mode from a
+#   source checkout instead (./dev.py server --test, ./dev.py test …).
+#   Migrations need no command: the server applies them at every start.
+#   See docs: admin/docker_advanced (docker exec).
 #
 # Light variant: to run the light image via compose, set in .env:
 #   LIBREFOLIO_IMAGE=librefolio:latest-light

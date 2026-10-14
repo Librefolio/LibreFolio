@@ -8,9 +8,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 from backend.app.db.models import TransactionType
-from backend.app.services.portfolio_engine import (
-    ScopeAwareTransactionClassifier,
-)
+from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 
 # =============================================================================
 # HELPERS — Mock Transaction builder
@@ -64,7 +62,7 @@ class TestUnlinkedTransactions:
         assert len(result.classified) == 1
         assert result.classified[0].classification == "normal"
         assert len(result.external_cash_flows) == 1
-        assert result.external_cash_flows[0] == (date(2025, 1, 1), Decimal("1000"), "EUR")
+        assert result.external_cash_flows[0] == (date(2025, 1, 1), 10, Decimal("1000"), "EUR")
 
     def test_unlinked_withdrawal(self):
         """WITHDRAWAL → normal + external cash flow (negative)."""
@@ -73,7 +71,7 @@ class TestUnlinkedTransactions:
         result = c.classify()
 
         assert result.classified[0].classification == "normal"
-        assert result.external_cash_flows[0][1] == Decimal("-500")
+        assert result.external_cash_flows[0][2] == Decimal("-500")
 
     def test_unlinked_buy(self):
         """BUY → normal, no external cash flow (internal capital movement)."""
@@ -287,7 +285,7 @@ class TestLinkedExternal:
         assert len(result.classified) == 1
         assert result.classified[0].classification == "linked_external_outflow"
         assert len(result.external_cash_flows) == 1
-        assert result.external_cash_flows[0][1] == Decimal("-3000")
+        assert result.external_cash_flows[0][2] == Decimal("-3000")
 
     def test_external_inflow(self):
         """CASH_TRANSFER: only inflow leg in scope → linked_external_inflow."""
@@ -302,7 +300,7 @@ class TestLinkedExternal:
         result = c.classify(external_paired={70: tx_out})
 
         assert result.classified[0].classification == "linked_external_inflow"
-        assert result.external_cash_flows[0][1] == Decimal("3000")
+        assert result.external_cash_flows[0][2] == Decimal("3000")
 
     def test_asset_transfer_external_inflow(self):
         """TRANSFER: asset arrives from outside scope → linked_external_inflow."""
@@ -333,7 +331,8 @@ class TestLinkedExternal:
         result = c.classify(external_paired={80: tx_out})
 
         assert result.classified[0].classification == "linked_external_inflow"
-        # No cash flow for asset transfer (amount=0)
+        # No cash flow for an asset transfer (amount=0): the capital of this leg is booked by
+        # DailyStateBuilder at market value on the leg's own date (lot 41, D2), not here.
         assert len(result.external_cash_flows) == 0
 
 
@@ -380,7 +379,7 @@ class TestEdgeCases:
         )
         result = c.classify()
 
-        assert result.external_cash_flows[0][1] == Decimal("1000")
+        assert result.external_cash_flows[0][2] == Decimal("1000")
         assert result.classified[0].share == Decimal("0.5")
 
     def test_get_needed_paired_ids(self):
@@ -440,3 +439,69 @@ class TestNoExternalCashFlowForInternalTransfers:
         result = c.classify()
 
         assert len(result.external_cash_flows) == 0
+
+
+class TestOrphanLinkedTypes:
+    """Lot 41, D5: a linked type with no related_transaction_id at all (an orphan).
+
+    A CASH_TRANSFER or FX_CONVERSION orphan with an amount moves money across the scope
+    boundary like a DEPOSIT / WITHDRAWAL, so it is an external cash flow at the broker's
+    share. An orphan TRANSFER has amount 0: the classifier gives it no cash flow, and its
+    capital is booked by DailyStateBuilder at market value (D2).
+    """
+
+    def test_orphan_cash_transfer_is_external_cash_flow(self):
+        """Today: no external cash flow (unlinked, only DEPOSIT / WITHDRAWAL get one)."""
+        tx = _tx(id=300, broker_id=20, type="CASH_TRANSFER", dt="2025-05-01", amount="1000")
+        c = ScopeAwareTransactionClassifier(
+            scope_broker_ids={20},
+            all_transactions=[tx],
+            broker_shares={20: Decimal("0.5")},
+        )
+        result = c.classify()
+
+        assert result.classified[0].classification == "normal"
+        assert result.external_cash_flows == [(date(2025, 5, 1), 20, Decimal("500"), "EUR")]
+
+    def test_orphan_fx_conversion_is_external_cash_flow(self):
+        """Today: no external cash flow (unlinked, only DEPOSIT / WITHDRAWAL get one)."""
+        tx = _tx(id=301, broker_id=10, type="FX_CONVERSION", dt="2025-05-02", amount="-1000", currency="USD")
+        c = ScopeAwareTransactionClassifier(
+            scope_broker_ids={10},
+            all_transactions=[tx],
+            broker_shares={10: Decimal("1")},
+        )
+        result = c.classify()
+
+        assert result.classified[0].classification == "normal"
+        assert result.external_cash_flows == [(date(2025, 5, 2), 10, Decimal("-1000"), "USD")]
+
+    def test_orphan_transfer_has_no_external_cash_flow(self):
+        """Guard: an orphan TRANSFER (asset, amount 0) gets no cash flow from the classifier."""
+        tx = _tx(id=302, broker_id=10, type="TRANSFER", dt="2025-05-03", currency=None, quantity="10", asset_id=500)
+        c = ScopeAwareTransactionClassifier(
+            scope_broker_ids={10},
+            all_transactions=[tx],
+            broker_shares={10: Decimal("1")},
+        )
+        result = c.classify()
+
+        assert result.classified[0].classification == "normal"
+        assert result.warnings == []
+        assert result.external_cash_flows == []
+
+    def test_dangling_transfer_has_no_external_cash_flow(self):
+        """Guard: a TRANSFER whose partner (999) is not found is 'normal' with a warning, and
+        still gets no cash flow from the classifier (amount 0)."""
+        tx = _tx(id=303, broker_id=10, type="TRANSFER", dt="2025-05-04", currency=None, quantity="10", asset_id=500, related_id=999)
+        c = ScopeAwareTransactionClassifier(
+            scope_broker_ids={10},
+            all_transactions=[tx],
+            broker_shares={10: Decimal("1")},
+        )
+        result = c.classify()
+
+        assert result.classified[0].classification == "normal"
+        assert len(result.warnings) == 1
+        assert "999" in result.warnings[0]
+        assert result.external_cash_flows == []

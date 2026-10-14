@@ -20,6 +20,13 @@ A `ComponentSpec` is the smallest declarative runtime unit. It defines:
 - required component dependencies;
 - period behavior and optional temporal aggregator metadata.
 
+The version is the implementation's: it moves when the builder or payload changes (a
+field added or made nullable, a flag computed differently), not when new values reach
+an unchanged builder, and at most once (+1) per release. A bump updates together the
+`ComponentSpec`, its frozen placeholder in `components/catalog.py` (checked at import)
+and [`COMPACT_COMPONENT_VERSIONS`](#snapshot-data-tables), or the component silently
+falls back to YAML (devWiki: `decisions/ai-export-version-bump-once-per-release`).
+
 Dependencies are always required for the dependent component itself. Whether a
 top-level failure is fatal depends on whether the dataset requested that component
 as required or optional.
@@ -184,6 +191,12 @@ matches the technical `price_only` / `price_only_close` semantics rather than
 blindly using the portfolio target currency. When no native observation exists
 the component returns an explicit `unavailable` payload, never an approximation.
 
+The three `*.drawdown_summary` components ignore the requested period start and run
+over the full available history up to the snapshot date: the Asset scope loads from
+the first stored price (`date.min`), and the Portfolio and Broker scopes from the
+earliest accessible transaction in their Broker scope (or the period start when that
+is earlier). A short AI period therefore still carries the true historical peak.
+
 There is deliberately **no FX-pair drawdown** dataset (an FX rate is not a
 peer-relative wealth path), and a dedicated recovery-focused analysis remains
 **deferred**: the current output already publishes
@@ -200,6 +213,11 @@ Portfolio's already-loaded observed native-price series and the canonical
 current Drawdown, maximum Drawdown, maximum-episode recovery status,
 remaining-to-peak, basis, observation count, available range, coverage, and
 data-quality status. It exports no Drawdown history.
+
+Unlike the `*.drawdown_summary` sections, this snapshot is window-relative: it reads
+only genuine observed prices (backward-filled points excluded) inside the requested
+AI period, reports coverage against the requested days, and is `partial` when the
+observations do not span the whole period.
 
 ## 🧾 Task-specific Evidence Datasets
 
@@ -242,6 +260,16 @@ Forward-looking tasks use a shared Scenario Thesis. Market-driver Analyses requi
 dated per-Asset research and causal confidence labels. Fiscal Analyses separate
 economic FIFO evidence from jurisdiction-dependent legal tax treatment.
 
+The Scenario Thesis gives every material scenario its horizon, supplied evidence,
+assumptions, expected mechanism, trade-offs, trigger and invalidation conditions,
+and missing user decisions, and keeps it conditional. Its response-contract section
+is mandatory for PAC Planning, Rebalancing, and both Capital-Loss Offset Analyses;
+the other Analyses apply the shared rule only when they introduce conditional future
+paths. Market-driver links are labelled exactly `supported`, `plausible`,
+`inferred`, `speculative`, or `unexplained`. When the receiving AI has no web
+access, it must state that the research could not be completed and never fabricate
+sources (`templates/sharedInstructions.ts`, `templates/responseContracts.ts`).
+
 ### 📅 PAC Planning Contract
 
 PAC Planning uses supplied facts first and asks only for missing user inputs that
@@ -254,6 +282,13 @@ It never invents budget, targets, risk tolerance, liquidity needs, exclusions, o
 operating constraints. Portfolio/Asset Drawdown, trend, momentum, volatility, and
 events are historical subordinate evidence, not forecasts or standalone purchase
 signals.
+
+Its timing gate compares immediate and staged deployment. Conditional waiting is
+allowed only when the supplied evidence shows a broad, persistent decline across the
+Portfolio, never isolated Asset weakness or a single indicator, and must state the
+evidence, horizon, trigger, and invalidation conditions. The AI asks for the user's
+timing preference before choosing a concrete path and presents two or three
+conditional scenarios when feasible.
 
 ### 🧾 Capital-Loss Offset Contract
 
@@ -345,6 +380,67 @@ Analysis selections produce `full_prompt` in this exact order:
 Trusted frontend templates provide instructions. Metadata/manifests use safe YAML;
 Snapshot Data uses deterministic compact text/pipe tables with a safe YAML fallback
 for unknown component versions. User notes remain safely serialized untrusted data.
+
+Snapshot Data joins its tables through prompt-local references. Its Entity Directory
+resolves A# (Assets, with display name and identifiers), B# (Brokers), and F# (FX
+pairs); L# lot references are assigned by the backend in public lot order
+(`lot_ref`, pattern `^L[1-9]\d*$`) and exist only as rows of the FIFO tables. The
+shared verification instructions tell the receiving AI that these codes are lookup
+references and that its answer must use display names. Domain Notes are fixed per
+domain (`AI_EXPORT_DOMAIN_NOTES`): for example, FX rates are quote currency per one
+unit of base currency, and direct FX exposure is not look-through exposure.
+
+### 🗂️ Snapshot Data Tables {: #snapshot-data-tables }
+
+`snapshotDataRenderer.ts` renders a component compactly when its envelope has schema
+version 1 and its component version is listed for it in `COMPACT_COMPONENT_VERSIONS`
+(version 1 alone for a component without an entry); any other version renders as
+`PAYLOAD YAML FALLBACK`. A backend version bump whose payload the compact renderer
+still prints must be added to that map in the same change, or the component silently
+falls back to YAML.
+
+The generic compact renderer (`renderGenericPayload()`), used by every component
+without a dedicated technical renderer — the lot and FIFO components included —
+prints a `null` leaf as the literal `null`, which the format preamble declares as
+`null=explicitly unavailable`. A table column that is empty or `null` in every row is
+removed, and the renderer diagnostics count it in `empty_columns_removed`, and also in
+`empty_parent_columns_removed` when it is the parent of nested columns: an amount
+object that is `null` in some rows sits next to the `.code` / `.amount` columns of
+the rows that have it, and those columns read `null` in the other rows. A `null` is
+therefore visible only when another row of the same table has a value. SUMMARY rows —
+the payload's scalar fields outside its tables, in a `field|value` table — are never
+removed, so a fact that must survive a table whose values are all `null` belongs in a
+scalar field.
+
+That is the role of `unavailable_amount_lot_count` in `asset.lot_detail`,
+`portfolio.fifo_lots` and `broker.fifo_lots`: always present, 0 included, it counts
+the lots with at least one amount that cannot be valued in the target currency (a
+missing FX rate). Those amounts are `null` — never 0, never the native amount. When
+every lot's amount is unknown, its column is removed and the count is the trace.
+
+The FIFO summaries (`portfolio.fifo_summary`, `broker.fifo_summary`) are strict too:
+an Asset's original cost, residual cost basis, proceeds, realized P&L, income, fees,
+taxes, total P&L and net total P&L are `null` as soon as one lot's part is unknown (a
+missing FX rate, or no market value), and so is `total_residual_cost_basis`. Only the
+market-value totals — open value, unrealized P&L, potential gain and loss — keep
+summing the open lots that have them, with their coverage stated in
+`value_coverage_status`, `valued_open_lot_count` and `unavailable_open_lot_count`.
+
+`portfolio.reconciliation` and `broker.reconciliation` state `residual`, the exact
+period P&L minus its components, and `reconciled`: `null` if a term is missing, true
+below `CONVERSION_DUST` (`1e-9`) in absolute value, since `period_other_result` closes
+the decomposition up to `Decimal` rounding. A residual under the currency's minor unit
+prints as `0` (`monetary_residuals_zeroed`), so `reconciled` true beside `0` is normal.
+
+The generic compact renderer prints ratio fields under public names:
+`PUBLIC_RATIO_FIELD_NAMES`, applied by `genericFieldName()` to SUMMARY rows and table
+columns, turns `portfolio_weight_ratio` into `portfolio_weight_percent`,
+`coverage_ratio` into `coverage_percent`, and so on. A value that references a payload
+field — a key in `FIELD_REFERENCE_KEYS`: a `field` leaf, as in `asset.position_scope`
+`portfolio_role.unavailable[].field`, or an item of `missing_fields`, as in
+`coverage.omitted[].missing_fields` — goes through the same map, so it names the
+column as the prompt shows it; free text such as `reason` is never rewritten, and the
+backend payload keeps the canonical codes.
 
 ## 📋 Manifests
 
@@ -442,6 +538,40 @@ decision metric is always the content reread from the final rendered prompt file
 Canonical payload files are not retained by default; use `--keep-canonical` only
 when debugging a specific case.
 
+## 🛑 Validation Errors
+
+AI Export validates its structural definitions with explicit `if … raise` checks that raise
+typed exceptions, never with `assert`. Python strips `assert` statements when it runs with
+optimizations (`python -O`), so an `assert` guard would vanish exactly where a corrupted
+catalog must still be stopped. The typed guards stay active in both modes. The default
+registries are built when `runtime_service.py` is imported, so an invalid definition stops
+the import of the API application before any request is served.
+
+Paths below are relative to `backend/app/services/ai_export/`.
+
+| Definition | Typed error (subclasses) | Source |
+| ---------- | ------------------------ | ------ |
+| Component declarations and registry: duplicate IDs, unknown or cyclic dependencies, declared catalog size | `ComponentSpecError`; `ComponentRegistryError` (`DuplicateComponentIdError`, `UnknownComponentError`, `ComponentDependencyCycleError`) | `components/spec.py`, `components/registry.py`, `components/catalog.py` |
+| Domain component fragments: Portfolio/Broker and Asset/FX sizes, placeholder replacement, unique Asset/FX IDs | `PortfolioBrokerRegistryError`, `AssetFxRegistryError` (each with `DuplicateReplacementComponentIdError`, `MissingPlaceholderComponentError`, `PlaceholderMetadataMismatchError`) | `components/portfolio_broker_registry.py`, `components/asset_fx_registry.py` |
+| Dataset declarations and registry: duplicates, unknown datasets or components, domain mismatches, public and total dataset counts | `DatasetSpecError`; `DatasetRegistryError` (`DuplicateDatasetIdError`, `UnknownDatasetError`, `UnknownDatasetComponentError`, `DatasetComponentDomainMismatchError`) | `datasets/spec.py`, `datasets/catalog.py` |
+| Analysis declarations and registry: duplicates, unknown datasets, domain mismatches, suggestion visibility, public analysis count | `AnalysisSpecError`; `AnalysisRegistryError` (`DuplicateAnalysisIdError`, `UnknownAnalysisError`, `UnknownAnalysisDatasetError`, `AnalysisDatasetDomainMismatchError`, `AnalysisSuggestionVisibilityError`) | `analyses/spec.py`, `analyses/catalog.py` |
+| Indicator temporal policy: one row per bucket detail level, each covering every Signal temporal class | `IndicatorPolicyError` | `temporal/policy.py` |
+| Detail-level mapping: `DetailLevel` to `BucketDetailLevel`, total in both directions | `DetailLevelMappingError` | `dependencies.py` |
+
+Composition applies the same discipline per request. `Composer` (`composer.py`) raises
+`UnsupportedDetailLevelError` for a detail level a dataset does not support, and
+`DatasetVersionMismatchError` or `AnalysisVersionMismatchError` for an explicit version that
+differs from the registry; all three derive from `ComposerError`. The runtime maps the version
+errors to `409 version_mismatch` and the detail-level error to `422 selection_not_applicable`
+with `reason_code` `unsupported_detail_level`. A `BuildContext` whose bucket plan does not match
+its scope raises `BuildContextScopeError` (`dependencies.py`).
+
+The guards add no identity of their own: component, dataset, and analysis IDs, their versions,
+and the canonical catalog ordering stay as declared. `./dev.py test services ai-export` runs
+`test_ai_export_structural_invariants.py`, which breaks the catalog-size, unique Asset/FX ID,
+indicator-policy, and detail-level-mapping guards one at a time in a fresh interpreter, with
+and without `-O`, and expects the typed error each time.
+
 ## 🚨 Failure and Partial-Success Semantics
 
 | Situation                                         | Result                                                                                                             |
@@ -475,6 +605,41 @@ Frontend flow:
 Clipboard transport changes only how the same final prompt is copied. It never
 switches builders, serializers, financial logic, sampling, or contract versions.
 No network request to an AI provider occurs.
+
+The options panel decides what is requested and when the copy happens
+(`AiExportMenu.svelte`, `AiExportOptionsPanel.svelte`, `aiExportOptions.ts`,
+`aiExportMemory.ts`):
+
+- **Request context**: each page sends the end of its own date range as
+  `snapshotAsOf`, and `resolveAiExportPeriod` counts the AI period back from it
+  (`3m`/`6m`/`1y` subtract calendar months, clamped to the month end; Custom takes a
+  positive number of days, weeks, months, or years). The Dashboard always sends its
+  explicit owned-Broker set (`getOwnedBrokers`: `OWNER` role with a share above 0 or
+  unset, narrowed by the Broker filter), so the backend never widens a Portfolio
+  request. The Broker page sends its `broker_id`. Asset and FX pages send no
+  `broker_ids`, so the backend scopes them to every Broker the user can access
+  (`BrokerUserAccess`, any role).
+- **Defaults**: Dashboard `portfolio.pac_planning`, Broker `broker.review`, Asset
+  `asset.market_analysis`, FX `fx.pair_analysis`; detail `standard` when the
+  selection supports it (`resolveDefaultDetailLevel`); period `3m`.
+- **Response language** follows the interface locale
+  (`aiExportResponseLanguageFromLocale`: English, Italian, French, or Spanish); the
+  panel has no language control.
+- **Applicability** is not pre-checked: the panel lists every compatible selection of
+  the domain, and a runtime `422 selection_not_applicable` surfaces as an error toast.
+- **Size gate**: the estimate is `ceil(UTF-16 code units / 4)`. Above 20,000 the
+  severity is `warning`, from 60,000 `large` (`AI_EXPORT_TOKEN_WARNING_THRESHOLD`,
+  `AI_EXPORT_TOKEN_LARGE_THRESHOLD`). A `normal` prompt is copied at once; otherwise
+  the panel shows the final size with **Use Compact** (hidden on Compact) and
+  **Copy Anyway**. Copy Anyway stores the options fingerprint, so the same options
+  copy without asking while the draft lives.
+- **Draft memory**: options, the notes draft, and that fingerprint are kept per
+  memory key (`portfolio`, `broker:<id>`, `asset:<id>`, `fx:<slug>`) in an in-memory
+  cache mirrored to `sessionStorage` (`lf_<userId>_ai_export_session_<key>`) for 10
+  minutes (`AI_EXPORT_MEMORY_TTL_MS`). A client-session transition (logout or a new
+  login) clears them together with any legacy `localStorage` draft; an expired
+  draft, or one the current catalog or domain no longer accepts, falls back to the
+  defaults.
 
 ## 🧭 Localized Additional Data Guidance
 

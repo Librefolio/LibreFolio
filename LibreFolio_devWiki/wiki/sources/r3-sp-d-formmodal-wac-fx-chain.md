@@ -1,6 +1,6 @@
 # Source: R3-SP-D Plan Chain — FormModal Props + Event Picker + WAC FX Feedback + Bugfixes
 
-> **Ingested**: 2026-06-04 @ `61cc81e5`
+> **Ingested**: 2026-06-04 @ `4e5e500c0`
 > **Status**: ✅ ALL DONE (2026-06-01 → 2026-06-04)
 > **Origin**: `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/`
 
@@ -100,13 +100,13 @@
 | Role | Path |
 |------|------|
 | Root plan (SP-D) | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/plan-R3-SP-D-FormModalEventPickerWacFx.prompt.md` |
-| BugfixRound1 | `…/Round6/Bugfix-SPD/plan-R3-SP-D-BugfixRound1.prompt.md` |
-| BugfixRound2 | `…/Round6/Bugfix-SPD/plan-R3-SP-D-BugfixRound2.prompt.md` |
-| WacCurrency | `…/Round6/Bugfix-SPD/plan-R3-SP-D-WacCurrency.prompt.md` |
-| WacCurrencyFix | `…/Round6/Bugfix-SPD/plan-R3-SP-D-WacCurrencyFix.prompt.md` |
-| WacFxEnrich | `…/Round6/Bugfix-SPD/plan-R3-SP-D-WacFxEnrich.prompt.md` |
-| WAC service | `backend/app/services/wac_service.py` |
-| Financial utils | `backend/app/utils/financial_utils.py` |
+| BugfixRound1 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-BugfixRound1.prompt.md` |
+| BugfixRound2 | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-BugfixRound2.prompt.md` |
+| WacCurrency | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacCurrency.prompt.md` |
+| WacCurrencyFix | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacCurrencyFix.prompt.md` |
+| WacFxEnrich | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacFxEnrich.prompt.md` |
+| WAC service (wac_service.py was git-mv'd into the portfolio service on 2026-06-10) | `backend/app/services/portfolio_service.py` |
+| Financial utils (financial_utils.py → wac_utils.py on 2026-06-10 → the average-cost function on 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
 | Transaction service | `backend/app/services/transaction_service.py` |
 | FormModal | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
 | WacPreviewSection | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |

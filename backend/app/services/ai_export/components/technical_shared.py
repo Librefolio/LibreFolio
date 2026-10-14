@@ -653,7 +653,7 @@ def _fx_warmup_days(scope: BuildScope) -> int:
         context,
         list(build_fx_annotation_requests()),
     )
-    warmup_days = plan.max_history_points_before_visible
+    warmup_days = plan.max_history_days_before_visible
     return min(warmup_days, (scope.period_start - date.min).days)
 
 

@@ -9,11 +9,11 @@ Un **bono** es un valor de renta fija que representa un préstamo de un inversor
 | Propiedad | Detalle |
 |----------|--------|
 | **Código en LibreFolio** | `BOND` |
-| **Cotización** | Cotizado como porcentaje del valor nominal (ej. 98.50 = 98.5% del valor nominal) |
+| **Cotización** | Cotizado como porcentaje del valor nominal (ej. 98,50 = 98,5% del valor nominal) |
 | **Moneda** | Denominado en la moneda de emisión |
 | **Cupones** | Tasa fija o flotante, pagados semestral o anualmente |
 | **Vencimiento** | Fecha fija en la que se devuelve el principal |
-| **Proveedores típicos** | Yahoo Finance, Scheduled Investment, Manual |
+| **Proveedores típicos** | Yahoo Finance, Borsa Italiana, Scheduled Investment, o precios introducidos a mano en el [Editor de datos](../../../user/assets/detail/data-editor.md) |
 
 ---
 
@@ -21,7 +21,7 @@ Un **bono** es un valor de renta fija que representa un préstamo de un inversor
 
 ### 💵 Valor Nominal (Par)
 
-La cantidad que el emisor devolverá al vencimiento — típicamente $1,000 o €1,000 por bono.
+La cantidad que el emisor devolverá al vencimiento — típicamente $1.000 o €1.000 por bono.
 
 ### 📈 Tasa de Cupón
 

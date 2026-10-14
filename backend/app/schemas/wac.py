@@ -29,7 +29,7 @@ class WACQualifyingTX(StrictModel):
     quantity: SafeDecimal
     unit_cost: Optional[SafeDecimal] = None
     currency: Optional[str] = None
-    effect: str = Field(..., description="add | reduce | add_zero_cost")
+    effect: str = Field(..., description="add | add_zero_cost (also an acquisition of unknown cost) | reduce | split_rescale")
     fx_info: Optional[FxBackwardFillInfo] = None
     running_wac: Optional[SafeDecimal] = Field(None, description="Running WAC per unit after this TX")
     original_unit_cost: Optional[SafeDecimal] = Field(None, description="Unit cost in original currency (before FX)")

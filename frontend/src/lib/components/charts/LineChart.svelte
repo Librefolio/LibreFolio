@@ -15,16 +15,23 @@
   Used by: PriceChartCompact, PriceChartFull (line mode)
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
+    import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
     import {assignOverlaySignalAxes, buildSecondaryYAxes, computeRightMargin} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
     import {aggregateLineSeries, computeDensity, downsampleRenderedSignal, mapDateToBucket, type ChartResolution} from './timeSeriesAggregation';
     import {truncateName} from '$lib/utils/text';
+    import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
+    import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
 
     // =========================================================================
     // Types
@@ -95,6 +102,8 @@
         yAxisMax?: number;
         /** Overlay signals to render as additional line series */
         overlaySignals?: RenderedSignal[];
+        /** Stable semantic settings for active non-primary axes. */
+        secondaryAxisScales?: Record<string, AxisScaleSettings>;
     }
 
     let {
@@ -117,6 +126,7 @@
         yAxisMin,
         yAxisMax,
         overlaySignals = [],
+        secondaryAxisScales = {},
     }: Props = $props();
 
     // Default colors — imported from lineChartHelpers
@@ -138,6 +148,7 @@
     let chartOptionSet = false;
     let needsInitialLayoutStabilityPass = false;
     let currentRenderedData: LineDataPoint[] = [];
+    let responsiveXAxisCompact = false;
 
     const COMPACT_DENSITY_THRESHOLD = 1.3;
     const COMPACT_RESIZE_EPSILON_PX = 4;
@@ -186,6 +197,8 @@
             void yAxisMode;
             void yAxisMin;
             void yAxisMax;
+            void secondaryAxisScales;
+            void uiLocale();
             tick().then(renderChart);
         }
     });
@@ -252,6 +265,21 @@
     function resizeChartOnly() {
         try {
             chartInstance?.resize();
+            if (chartInstance && !compact && currentRenderedData.length > 0) {
+                const policy = buildResponsiveXAxisPolicy({
+                    width: chartContainer.clientWidth,
+                    values: currentRenderedData.map((point) => point.date),
+                    locale: uiLocale(),
+                    axisType: 'category',
+                });
+                const wasCompact = responsiveXAxisCompact;
+                responsiveXAxisCompact = policy.compact;
+                if (policy.axisLabel) {
+                    chartInstance.setOption({xAxis: {axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                } else if (wasCompact) {
+                    renderChart();
+                }
+            }
             if (chartInstance) updateArrowRotations(chartInstance);
         } catch (_) {
             /* ignore coord errors during resize */
@@ -559,7 +587,7 @@
 
         // Grid configuration
         const showYAxis = !compact || showMiniAxis;
-        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(activeOverlaySignals, isDark, 0, !compact);
+        const {axes: secondaryAxes, extraAxesCount} = buildSecondaryYAxes(activeOverlaySignals, isDark, 0, !compact, secondaryAxisScales);
 
         const gridConfig = compact
             ? {
@@ -582,6 +610,13 @@
         for (const d of renderedData) {
             if (d.staleDays && d.staleDays > 0) staleLookup.set(d.date, d.staleDays);
         }
+        const xAxisPolicy = buildResponsiveXAxisPolicy({
+            width: rect.width,
+            values: dates,
+            locale: uiLocale(),
+            axisType: 'category',
+        });
+        responsiveXAxisCompact = xAxisPolicy.compact;
 
         const option: echarts.EChartsOption = {
             animation: false,
@@ -602,7 +637,12 @@
                 data: dates,
                 show: !compact,
                 axisLine: {lineStyle: {color: isDark ? '#475569' : '#d1d5db'}},
-                axisLabel: {color: isDark ? '#94a3b8' : '#6b7280', fontSize: 11},
+                axisLabel: {
+                    color: isDark ? '#94a3b8' : '#6b7280',
+                    fontSize: 11,
+                    formatter: xAxisPolicy.formatter,
+                    ...(xAxisPolicy.axisLabel ?? {}),
+                },
                 splitLine: {show: false},
             },
             yAxis: [
@@ -634,11 +674,11 @@
                             color: isDark ? '#94a3b8' : '#6b7280',
                             fontSize: compact && showMiniAxis ? 9 : 11,
                             formatter: isPercentage
-                                ? (v: number) => `${v.toFixed(1)}%`
+                                ? (v: number) => formatPercent(v, {digits: 1, signed: false})
                                 : (v: number) => {
-                                      if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
-                                      if (Math.abs(v) >= 1) return v.toFixed(2);
-                                      return v.toFixed(4).replace(/\.?0+$/, '');
+                                      if (Math.abs(v) >= 1000) return `${formatFixed(v / 1000, 1)}k`;
+                                      if (Math.abs(v) >= 1) return formatFixed(v, 2);
+                                      return formatFixed(v, 4, {trim: true});
                                   },
                         },
                         splitLine: {
@@ -668,7 +708,7 @@
                           const items = Array.isArray(params) ? params : [params];
                           if (!items.length) return '';
                           const date = items[0].axisValue || items[0].name;
-                          let html = `<strong>${date}</strong>`;
+                          let html = `<strong>${formatDay(String(date))}</strong>`;
 
                           // Build a set of band helper series names to skip in tooltip
                           const bandHelperNames = new Set<string>();
@@ -717,11 +757,11 @@
                               // Signals on non-primary axes have their own scale — show without % suffix
                               const valueSuffix = axisIdx === 0 ? suffix : '';
                               const axisLabel = signalAxisLabelMap.get(axisIdx);
-                              const axisNote = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${axisLabel}]</span>` : '';
-                              html += `<br/>${colorDot}${truncateName(String(p.seriesName ?? ''))}: ${Number(value).toFixed(4)}${valueSuffix}${axisNote}`;
+                              const axisNoteHtml = axisLabel ? ` <span style="font-size:10px;color:#94a3b8">[${escapeHtml(axisLabel)}]</span>` : '';
+                              html += `<br/>${colorDot}${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${formatFixed(Number(value), 4)}${valueSuffix}${axisNoteHtml}`;
                               const representativePoint = overlayPointMeta.get(`${p.seriesName}|${date}`);
                               if (representativePoint?.representativeDate && representativePoint.representativeDate !== date) {
-                                  html += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: representativePoint.representativeDate}})})</span>`;
+                                  html += ` <span style="font-size:10px;color:#94a3b8">(${$t('chart.tooltip.valueAt', {values: {date: formatDay(representativePoint.representativeDate)}})})</span>`;
                               }
 
                               // For band signals, also show upper/lower in the tooltip
@@ -729,7 +769,7 @@
                               if (bandSignal?.bandData) {
                                   const dataIdx = bandSignal.data.findIndex((d) => d.date === date);
                                   if (dataIdx >= 0) {
-                                      html += `<br/><span style="padding-left:12px;font-size:11px;color:#94a3b8">${$t('chart.tooltip.upper')}: ${bandSignal.bandData.upper[dataIdx].toFixed(4)}${suffix} · ${$t('chart.tooltip.lower')}: ${bandSignal.bandData.lower[dataIdx].toFixed(4)}${suffix}</span>`;
+                                      html += `<br/><span style="padding-left:12px;font-size:11px;color:#94a3b8">${$t('chart.tooltip.upper')}: ${formatFixed(bandSignal.bandData.upper[dataIdx], 4)}${suffix} · ${$t('chart.tooltip.lower')}: ${formatFixed(bandSignal.bandData.lower[dataIdx], 4)}${suffix}</span>`;
                                   }
                               }
                           }

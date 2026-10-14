@@ -24,7 +24,8 @@
  * untested. The dictionary is owned by this file and deliberately partial, so both
  * arms are reachable. Assertions therefore name either a key (untranslated) or a
  * value this file put in the dictionary — never a phrase from the product
- * catalogue.
+ * catalogue. One block reads the real catalogues, for whether a key is there and
+ * never for its wording: "every row it renders is named in the four catalogues".
  *
  * What it deliberately does NOT assert:
  *   - `SettingToggle` / `SettingNumber` internals — another lane owns them; here
@@ -32,11 +33,12 @@
  *     box) and only the tab's reaction is asserted.
  *   - the scheduler modals' contents. Opening them is asserted, their behaviour is
  *     their own.
- *   - the mobile dropdown's click-outside listener, which is a document-level
- *     concern of `clickOutside`.
+ *   - clickOutside's detection algorithm. The Runes cases below exercise only
+ *     this tab's listener lifetime and its bound mobile dropdown reference.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {readable, writable} from 'svelte/store';
+import {tick} from 'svelte';
+import {get, readable, writable, type Writable} from 'svelte/store';
 import {fireEvent, render, screen, waitFor, within} from '$test/component';
 
 // --- Mocks --------------------------------------------------------------
@@ -59,7 +61,7 @@ const DICT: Record<string, string> = {
 };
 
 vi.mock('$lib/i18n', () => {
-    const dictionary = readable((key: string) => DICT[key] ?? key);
+    const dictionary = writable((key: string) => DICT[key] ?? key);
     return {
         _: dictionary,
         t: dictionary,
@@ -80,6 +82,10 @@ vi.mock('$lib/i18n', () => {
         saveLocalePreference: () => undefined,
     };
 });
+
+// Independent stores let a regression distinguish the explicit locale dependency
+// from a translator replacement; changing both at once would hide either gap.
+vi.mock('$lib/stores/app/language', () => ({currentLanguage: writable('en')}));
 
 const axiosGet = vi.fn(async (_url: string) => ({data: null}) as {data: unknown});
 const axiosPatch = vi.fn(async (_url: string, _body?: unknown) => ({data: null}) as {data: unknown});
@@ -121,6 +127,15 @@ vi.mock('$lib/stores/reference/currencyStore', () => ({
 
 import GlobalSettingsTab from './GlobalSettingsTab.svelte';
 import {zodiosApi} from '$lib/api';
+import {_, locale, type SupportedLocale} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
+import * as clickOutside from '$lib/utils/core/clickOutside';
+// The real catalogues, read only by the naming invariant below: the rest of the
+// file keeps its own dictionary.
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
 
 // --- Fixtures & helpers -------------------------------------------------
 
@@ -129,6 +144,9 @@ type Fixture = {key: string; value: string; value_type: string; updated_at?: str
 const listFn = () => vi.mocked(zodiosApi.list_global_settings_api_v1_settings_global_get as never) as ReturnType<typeof vi.fn>;
 
 const setting = (key: string, value: string, value_type = 'string', extra: Partial<Fixture> = {}): Fixture => ({key, value, value_type, updated_at: null, ...extra});
+const translator = _ as unknown as Writable<(key: string) => string>;
+const SCHEDULER_STATE = '/api/v1/settings/scheduler/state';
+const schedulerReads = () => axiosGet.mock.calls.filter(([url]) => url === SCHEDULER_STATE);
 
 /** An axios-shaped rejection with a status. */
 function axiosError(status: number, message = `Request failed with status code ${status}`): Error {
@@ -152,7 +170,7 @@ async function mount(items: Fixture[], props: {canEdit?: boolean} = {}) {
     // copy of the rows it asked for.
     listFn().mockResolvedValue({items: items.map((item) => ({...item}))} as never);
     const utils = render(GlobalSettingsTab, {props: {canEdit: true, ...props}});
-    await waitFor(() => expect(screen.queryByTestId('global-settings-tab')).not.toBeNull());
+    await waitFor(() => expect(screen.getByTestId('global-settings-tab')).toHaveAttribute('data-busy', 'false'));
     await waitFor(() => expect(listFn()).toHaveBeenCalled());
     return utils;
 }
@@ -181,7 +199,13 @@ const lastPatchBody = () => axiosPatch.mock.calls.at(-1)?.[1] as {items: {key: s
 
 const textInput = (key: string) => document.getElementById(key) as HTMLInputElement;
 
+/** Text collapsed the way jest-dom collapses what it reads: Intl may separate with U+00A0 or U+202F. */
+const squash = (text: string): string => text.replace(/\s+/g, ' ').trim();
+
 beforeEach(() => {
+    currentLanguage.set('en');
+    locale.set('en');
+    translator.set((key: string) => DICT[key] ?? key);
     vi.clearAllMocks();
     axiosGet.mockResolvedValue({data: {server_tz: 'Europe/Rome'}} as never);
     axiosPatch.mockResolvedValue({data: null} as never);
@@ -229,38 +253,113 @@ describe('GlobalSettingsTab — who is allowed to touch it', () => {
 
 // =========================================================================
 describe('GlobalSettingsTab — closing the lock over pending edits', () => {
+    const discardHeader = () => screen.getByTestId('global-settings-discard-confirm');
+    const editedNumber = () => within(screen.getByTestId('global-setting-session_ttl_hours')).getByRole('spinbutton');
+
+    async function requestDiscard() {
+        await fireEvent.click(lockToggle());
+        const header = await screen.findByTestId('global-settings-discard-confirm');
+        const dialog = header.closest<HTMLElement>('[role="dialog"]');
+        expect(dialog).not.toBeNull();
+        expect(window.confirm).not.toHaveBeenCalled();
+        return dialog!;
+    }
+
     it('closes without asking when nothing was changed', async () => {
         await mountUnlocked([setting('session_ttl_hours', '24', 'int')]);
+        expect(editedNumber()).toBeEnabled();
+        expect(screen.queryByTestId('global-settings-discard-confirm')).not.toBeInTheDocument();
 
         await fireEvent.click(lockToggle());
 
-        await waitFor(() => expect(screen.getByRole('spinbutton')).toBeDisabled());
+        await waitFor(() => expect(editedNumber()).toBeDisabled());
+        expect(screen.queryByTestId('global-settings-discard-confirm')).not.toBeInTheDocument();
+        await fireEvent.click(lockToggle());
+        expect(editedNumber()).toBeEnabled();
+        expect(editedNumber()).toHaveValue(24);
+        expect(screen.queryByTestId('global-settings-discard-confirm')).not.toBeInTheDocument();
         expect(window.confirm).not.toHaveBeenCalled();
-    });
-
-    it('asks, and throws the edit away when the answer is yes', async () => {
-        await mountUnlocked([setting('session_ttl_hours', '24', 'int')]);
-        await fireEvent.input(screen.getByRole('spinbutton'), {target: {value: '48'}});
-        await waitFor(() => expect(screen.queryByTitle('common.save')).not.toBeNull());
-
-        await fireEvent.click(lockToggle());
-
-        expect(window.confirm).toHaveBeenCalledTimes(1);
-        await waitFor(() => expect(screen.getByRole('spinbutton')).toHaveValue(24));
-        expect(screen.getByRole('spinbutton')).toBeDisabled();
         expect(axiosPatch).not.toHaveBeenCalled();
     });
 
-    it('keeps the edit and stays unlocked when the answer is no', async () => {
-        vi.mocked(window.confirm).mockReturnValue(false);
-        await mountUnlocked([setting('session_ttl_hours', '24', 'int')]);
-        await fireEvent.input(screen.getByRole('spinbutton'), {target: {value: '48'}});
-        await waitFor(() => expect(screen.queryByTitle('common.save')).not.toBeNull());
+    it('asks in the amber modal and discards all edits only after confirmation', async () => {
+        await mountUnlocked([setting('session_ttl_hours', '24', 'int'), setting('max_file_upload_mb', '10', 'int')]);
+        const uploadLimit = within(screen.getByTestId('global-setting-max_file_upload_mb')).getByRole('spinbutton');
+        await fireEvent.input(editedNumber(), {target: {value: '48'}});
+        await fireEvent.input(uploadLimit, {target: {value: '20'}});
+        expect(screen.getByTestId('settings-save-all')).toBeEnabled();
 
+        const dialog = await requestDiscard();
+        const confirm = within(dialog).getByTestId('confirm-modal-confirm');
+        // These are keys from this file's mock translator, not catalogue text.
+        expect(discardHeader()).toHaveTextContent('common.discardChanges');
+        expect(within(dialog).getByTestId('confirm-modal-message')).toHaveTextContent('settings.discardChangesConfirm');
+        expect(within(dialog).getByTestId('confirm-modal-cancel')).toHaveTextContent('common.cancel');
+        expect(confirm).toHaveTextContent('common.discard');
+        // Approved feature assertion: selection uses testid; amber is the subject.
+        expect(confirm).toHaveClass('btn-warning');
+        expect(confirm).not.toHaveClass('btn-danger');
+        expect(confirm).not.toHaveClass('btn-primary');
+        expect(editedNumber()).toHaveValue(48);
+        expect(uploadLimit).toHaveValue(20);
+        expect(editedNumber()).toBeEnabled();
+        expect(axiosPatch).not.toHaveBeenCalled();
+
+        await fireEvent.click(confirm);
+        await waitFor(() => expect(screen.queryByTestId('global-settings-discard-confirm')).not.toBeInTheDocument());
+        expect(editedNumber()).toHaveValue(24);
+        expect(uploadLimit).toHaveValue(10);
+        expect(editedNumber()).toBeDisabled();
+        expect(uploadLimit).toBeDisabled();
+        expect(screen.queryByTestId('settings-save-all')).not.toBeInTheDocument();
+        expect(window.confirm).not.toHaveBeenCalled();
+        expect(axiosPatch).not.toHaveBeenCalled();
+        expect(setGlobalDirect).not.toHaveBeenCalled();
+
+        // Undo restored the baseline, rather than merely hiding dirty controls.
         await fireEvent.click(lockToggle());
+        expect(editedNumber()).toBeEnabled();
+        expect(editedNumber()).toHaveValue(24);
+        expect(uploadLimit).toHaveValue(10);
+        expect(screen.queryByTestId('settings-save-all')).not.toBeInTheDocument();
+    });
 
-        expect(screen.getByRole('spinbutton')).toHaveValue(48);
-        expect(screen.getByRole('spinbutton')).toBeEnabled();
+    it.each(['cancel', 'escape', 'dismiss', 'backdrop'] as const)('keeps the edit and stays unlocked on modal %s', async (action) => {
+        await mountUnlocked([setting('session_ttl_hours', '24', 'int')]);
+        await fireEvent.input(editedNumber(), {target: {value: '48'}});
+        expect(screen.getByTestId('settings-save-all')).toBeEnabled();
+
+        const dialog = await requestDiscard();
+        if (action === 'cancel') {
+            await fireEvent.click(within(dialog).getByTestId('confirm-modal-cancel'));
+        } else if (action === 'escape') {
+            await fireEvent.keyDown(dialog, {key: 'Escape'});
+        } else if (action === 'dismiss') {
+            // The testid identifies this confirmation's header; its sole button
+            // is the close control, independent of its accessible translation.
+            await fireEvent.click(within(discardHeader()).getByRole('button'));
+        } else {
+            // ModalBase requires both press and release to start on the backdrop.
+            await fireEvent.mouseDown(dialog);
+            await fireEvent.click(dialog);
+        }
+
+        await waitFor(() => expect(screen.queryByTestId('global-settings-discard-confirm')).not.toBeInTheDocument());
+        expect(editedNumber()).toHaveValue(48);
+        expect(editedNumber()).toBeEnabled();
+        expect(screen.getByTestId('settings-save-all')).toBeEnabled();
+        expect(window.confirm).not.toHaveBeenCalled();
+        expect(axiosPatch).not.toHaveBeenCalled();
+        expect(setGlobalDirect).not.toHaveBeenCalled();
+
+        // The next lock request must still see that same unsaved draft.
+        const reopened = await requestDiscard();
+        expect(editedNumber()).toHaveValue(48);
+        await fireEvent.click(within(reopened).getByTestId('confirm-modal-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('global-settings-discard-confirm')).not.toBeInTheDocument());
+        expect(editedNumber()).toBeEnabled();
+        expect(editedNumber()).toHaveValue(48);
+        expect(axiosPatch).not.toHaveBeenCalled();
     });
 });
 
@@ -344,11 +443,14 @@ describe('GlobalSettingsTab — how a value type chooses its control', () => {
         expect(screen.getByRole('button', {name: 'settings.themeAuto'})).toBeInTheDocument();
     });
 
-    it('shows when a setting was last written, and stays quiet when it never was', async () => {
-        await mount([setting('custom_banner', 'hello', 'string', {updated_at: '2024-06-01T08:00:00Z'}), setting('other_banner', 'hi', 'string')]);
+    it('shows when a setting was last written — common.updated, then the date in the interface locale — and stays quiet when it never was', async () => {
+        const UPDATED_AT = '2024-06-01T08:00:00Z';
+        await mount([setting('custom_banner', 'hello', 'string', {updated_at: UPDATED_AT}), setting('other_banner', 'hi', 'string')]);
 
-        expect(textInput('custom_banner').closest('div.bg-gray-50')).toHaveTextContent('Last updated:');
-        expect(textInput('other_banner').closest('div.bg-gray-50')).not.toHaveTextContent('Last updated:');
+        // M-17, M-18 CP2: no more hard-coded "Last updated:". This file's dictionary has no `common.updated`, so
+        // the key reads as itself; the English UI on jsdom's en-US browser writes the date en-US.
+        expect(screen.getByTestId('global-setting-custom_banner')).toHaveTextContent(squash(`common.updated: ${new Date(UPDATED_AT).toLocaleString('en-US')}`));
+        expect(screen.getByTestId('global-setting-other_banner')).not.toHaveTextContent('common.updated');
     });
 });
 
@@ -397,6 +499,115 @@ describe('GlobalSettingsTab — how a setting is labelled', () => {
         // neither: the id, capitalised
         expect(screen.getByTestId('global-settings-category-sync')).toHaveTextContent('Sync');
         expect(screen.getByTestId('global-settings-category-defaults')).toHaveTextContent('Defaults');
+    });
+});
+
+// =========================================================================
+/**
+ * Every row the tab renders is named in the four catalogues (O, step 21, finding 6).
+ *
+ * `getSettingLabel` names a row from `SETTING_LABEL_OVERRIDES` (today only
+ * `default_currency`, whose name already lives at `settings.defaultCurrency`),
+ * else from `settings.globalSettingNames.<key>`; when the catalogue has neither it
+ * de-slugs the key, in English, whatever the language. That last resort is meant
+ * for a key the frontend does not know yet. `scheduler_enabled`, the row of the
+ * Sync category, had no name in any catalogue: every administrator read
+ * "Scheduler Enabled".
+ *
+ * The invariant: no setting row the tab renders falls back to its humanized key —
+ * every rendered row is in the label override map, or has
+ * `settings.globalSettingNames.<key>` in en, it, fr and es.
+ *
+ * How it is observed, without copying the override map or the de-slugging here.
+ * For these cases the file's dictionary gives way to the real catalogues, seen
+ * through a translator that records every key it is asked for: a key present in
+ * all four comes back marked, `⟦key⟧`; a key missing from any comes back
+ * unchanged, which is how the tab learns there is no translation. The tab asks
+ * for `settings.globalSettingNames.<key>` exactly for the rows it renders outside
+ * the override map; a name it asked for that a catalogue lacks is a row that falls
+ * back.
+ *
+ * The first case is the control, in both halves: a named row passes and shows its
+ * name, the override row and a key the tab hides are exempt, a key no catalogue
+ * names is reported. Red today: `scheduler_enabled`, absent from all four
+ * catalogues.
+ */
+describe('GlobalSettingsTab — every row it renders is named in the four catalogues', () => {
+    const CATALOGUES: Record<SupportedLocale, unknown> = {en, it: itCatalogue, fr, es};
+    const NAME = 'settings.globalSettingNames.';
+    /** A key no catalogue will ever name: the row the control must see reported. */
+    const UNNAMED = 'lf_test_setting_with_no_name';
+    /** What the instance sends: every key of the backend's `GLOBAL_SETTINGS_DEFAULTS` (`schemas/settings.py`), at its default. */
+    const SERVER_LIST: Fixture[] = [
+        setting('session_ttl_hours', '24', 'int'),
+        setting('enable_registration', 'true', 'bool'),
+        setting('require_email_verification', 'false', 'bool'),
+        setting('max_file_upload_mb', '10', 'int'),
+        setting('scheduler_enabled', 'true', 'bool'),
+        setting('scheduler_current_price_frequency_minutes', '10', 'int'),
+        setting('scheduler_history_sync_times', '06:00,23:00', 'str'),
+        setting('scheduler_history_sync_days', 'mon,tue,wed,thu,fri,sat', 'str'),
+        setting('scheduler_history_sync_horizon_days', '14', 'int'),
+        setting('scheduler_timezone', 'UTC', 'str'),
+        setting('default_currency', 'EUR', 'str'),
+        setting('default_language', 'en', 'str'),
+        setting('default_theme', 'auto', 'str'),
+    ];
+
+    /** The leaf behind a dotted key, read from the catalogue file itself. */
+    const leaf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+    /** The catalogues that have no sentence for `key`. */
+    const missingFrom = (key: string): string[] =>
+        Object.entries(CATALOGUES)
+            .filter(([, catalogue]) => typeof leaf(catalogue, key) !== 'string')
+            .map(([lang]) => lang);
+    const marked = (key: string): string => `⟦${key}⟧`;
+
+    /** Every key the tab asked the translator for, in this case. */
+    let asked: Set<string>;
+
+    beforeEach(() => {
+        asked = new Set();
+        translator.set((key: string) => {
+            asked.add(key);
+            return missingFrom(key).length === 0 ? marked(key) : key;
+        });
+    });
+
+    /** The rows the tab named by the catalogue convention: every row it renders outside the override map. */
+    const conventionRows = (): string[] => [...asked].filter((key) => key.startsWith(NAME)).map((key) => key.slice(NAME.length));
+    /** Those of them whose name a catalogue lacks, with the catalogues that lack it: the rows that fall back to their humanized key. */
+    function fallingBack(): {row: string; missingFrom: string[]}[] {
+        const rows = conventionRows().map((row) => ({row, missingFrom: missingFrom(NAME + row)}));
+        return rows.filter((entry) => entry.missingFrom.length > 0);
+    }
+
+    it('the check, in both halves: a named row passes, the override row and a hidden key are exempt, a row no catalogue names is reported', async () => {
+        await mount([setting('session_ttl_hours', '24', 'int'), setting('default_currency', 'EUR', 'str'), setting('scheduler_timezone', 'UTC', 'str'), setting(UNNAMED, 'x', 'str')]);
+
+        expect(screen.getByText(marked(`${NAME}session_ttl_hours`)), 'a row named in all four catalogues shows that name').toBeInTheDocument();
+        expect(screen.getByText(marked('settings.defaultCurrency')), 'the override row shows the name it borrows').toBeInTheDocument();
+        expect(conventionRows(), 'the tab asks the catalogue name of every row it renders outside the override map').toEqual(expect.arrayContaining(['session_ttl_hours', UNNAMED]));
+        expect(conventionRows(), 'the override row is never asked for by the convention').not.toContain('default_currency');
+        expect(conventionRows(), 'a key the scheduler modal owns is no row of the tab, so it is never asked for (nor does any catalogue name it)').not.toContain('scheduler_timezone');
+        expect(fallingBack(), 'only the row no catalogue names is reported, from all four catalogues').toEqual([{row: UNNAMED, missingFrom: ['en', 'it', 'fr', 'es']}]);
+    });
+
+    it('names every row of the instance’s full list in all four catalogues — the Sync row scheduler_enabled included', async () => {
+        await mount(SERVER_LIST);
+
+        expect(conventionRows(), 'premise: the scheduler_enabled row (category Sync) is rendered and named by the catalogue convention').toContain('scheduler_enabled');
+        expect(fallingBack(), 'no setting row the tab renders falls back to its humanized key: every rendered row is in the label override map or has settings.globalSettingNames.<key> in en, it, fr and es').toEqual([]);
+    });
+
+    it('shows the scheduler switch of the Sync category under its catalogue name', async () => {
+        await mount(SERVER_LIST);
+
+        await fireEvent.click(screen.getByTestId('global-settings-category-sync'));
+
+        // The Sync category claims one setting, `scheduler_enabled`: its switch is the only one left.
+        await waitFor(() => expect(screen.getAllByTestId('setting-toggle-switch'), 'premise: the Sync category shows one setting switch, scheduler_enabled').toHaveLength(1));
+        expect(screen.queryByText(marked(`${NAME}scheduler_enabled`)), 'the Sync row is named from the catalogue, not de-slugged from its key').not.toBeNull();
     });
 });
 
@@ -939,6 +1150,108 @@ describe('GlobalSettingsTab — the scheduler rows', () => {
 });
 
 // =========================================================================
+/**
+ * M-17, M-18 CP2 — the tab's dates in the interface language.
+ *
+ * Two dates: when a setting was last written (inside `global-setting-{key}`: a hard-coded English
+ * `Last updated:` and `toLocaleString()`), and when the scheduler last ran (`scheduler-status-row`:
+ * `settings.global.scheduler.status.lastRun` and `toLocaleString()`). Both were written in the browser's
+ * notation, the first with an English label in every language (M-17). The rule (the developer's,
+ * 2026-10-12): every figure in the interface language. The cure: `common.updated` of the UI language, then
+ * `: ` and the date in `uiLocale()`; the last run's date in `uiLocale()` too.
+ *
+ * The labels are read from the shipped catalogues: for these cases the translator is the catalogue of the
+ * language the step sets, a plain message read as svelte-i18n's `$_` reads it, and replaced when the
+ * language changes, as svelte-i18n replaces it. The dates are Intl's output for the interface locale,
+ * never typed: jsdom's browser is en-US, so the English UI writes en-US. Both sides are collapsed the way
+ * jest-dom collapses the text it reads. The scheduler's state arrives after the list: its label is the
+ * barrier before its date is read.
+ */
+describe('GlobalSettingsTab — the dates in the interface language (M-17, M-18 CP2)', () => {
+    type UiLanguage = 'en' | 'it';
+    const CATALOGUES: Record<UiLanguage, unknown> = {en, it: itCatalogue};
+    /** The interface locale of each language: jsdom's browser is en-US. */
+    const LOCALE_OF: Record<UiLanguage, string> = {en: 'en-US', it: 'it'};
+    const LAST_RUN = 'settings.global.scheduler.status.lastRun';
+    const UPDATED_AT = '2024-06-01T08:00:00Z';
+    const LAST_RUN_AT = '2024-06-02T16:30:00Z';
+
+    const leaf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+    /** `key` in the shipped catalogue of `lang`; the key itself where the catalogue has none, as svelte-i18n falls back. */
+    const inCatalogue = (lang: UiLanguage, key: string): string => {
+        const value = leaf(CATALOGUES[lang], key);
+        return typeof value === 'string' ? value : key;
+    };
+    /** `label: date`, the label from the catalogue of `lang`, the date in its interface locale. */
+    const dated = (lang: UiLanguage, key: string, instant: string): string => squash(`${inCatalogue(lang, key)}: ${new Date(instant).toLocaleString(LOCALE_OF[lang])}`);
+
+    const settingRow = () => screen.getByTestId('global-setting-custom_banner');
+    const schedulerRow = () => screen.getByTestId('scheduler-status-row');
+
+    /** Change the UI language as the app does: the language, svelte-i18n's locale, and the translator it hands out. */
+    async function useLanguage(lang: UiLanguage): Promise<void> {
+        currentLanguage.set(lang);
+        locale.set(lang);
+        translator.set((key: string) => inCatalogue(lang, key));
+        await tick();
+    }
+
+    /** One string setting written once, and a scheduler that ran: both dates on screen once the state has landed. */
+    async function mountWithDates(lang: UiLanguage): Promise<void> {
+        axiosGet.mockResolvedValue({data: {server_tz: 'Europe/Rome', current_price: {last_run_at: LAST_RUN_AT, last_status: 'ok'}}} as never);
+        await mount([setting('custom_banner', 'hello', 'string', {updated_at: UPDATED_AT})]);
+        await waitFor(() => expect(schedulerRow(), 'premise: the scheduler state has landed').toHaveTextContent(inCatalogue(lang, LAST_RUN)));
+    }
+
+    beforeEach(() => {
+        // Controls: the catalogues have both labels, and Italian writes them and the dates otherwise than English.
+        for (const key of ['common.updated', LAST_RUN]) {
+            expect(inCatalogue('it', key), `control: the Italian catalogue has ${key}`).not.toBe(key);
+            expect(inCatalogue('it', key), `control: ${key} reads otherwise in Italian`).not.toBe(inCatalogue('en', key));
+        }
+        expect(new Date(UPDATED_AT).toLocaleString('it'), 'control: Italian writes the date otherwise').not.toBe(new Date(UPDATED_AT).toLocaleString('en-US'));
+    });
+
+    afterEach(() => {
+        // The language is module-level state shared by every test of the file (the translator is reset by the file's beforeEach).
+        currentLanguage.set('en');
+        locale.set('en');
+    });
+
+    it.each(['en', 'it'] as const)('a setting written once reads common.updated of the UI language, then its date in the interface locale (%s)', async (lang) => {
+        await useLanguage(lang);
+
+        await mountWithDates(lang);
+
+        expect(settingRow()).toHaveTextContent(dated(lang, 'common.updated', UPDATED_AT));
+    });
+
+    it.each(['en', 'it'] as const)('the scheduler’s last run reads its date in the interface locale (%s)', async (lang) => {
+        await useLanguage(lang);
+
+        await mountWithDates(lang);
+
+        expect(schedulerRow()).toHaveTextContent(dated(lang, LAST_RUN, LAST_RUN_AT));
+    });
+
+    it('follows an in-place switch of the UI language, en → it: both dates', async () => {
+        await useLanguage('en');
+        await mountWithDates('en');
+        // Soft: a label still hard-coded at mount must not hide whether the dates follow the switch.
+        expect.soft(settingRow(), 'en, mount').toHaveTextContent(dated('en', 'common.updated', UPDATED_AT));
+        expect.soft(schedulerRow(), 'en, mount').toHaveTextContent(dated('en', LAST_RUN, LAST_RUN_AT));
+
+        await useLanguage('it');
+
+        await waitFor(() => expect(schedulerRow(), 'premise: the label followed the switch').toHaveTextContent(inCatalogue('it', LAST_RUN)));
+        expect({updated: squash(settingRow().textContent ?? ''), lastRun: squash(schedulerRow().textContent ?? '')}).toEqual({
+            updated: expect.stringContaining(dated('it', 'common.updated', UPDATED_AT)),
+            lastRun: expect.stringContaining(dated('it', LAST_RUN, LAST_RUN_AT)),
+        });
+    });
+});
+
+// =========================================================================
 describe('GlobalSettingsTab — the mobile category dropdown', () => {
     const ITEMS = [setting('session_ttl_hours', '24', 'int'), setting('enable_registration', 'true', 'bool')];
 
@@ -985,5 +1298,207 @@ describe('GlobalSettingsTab — the mobile category dropdown', () => {
         await fireEvent.click(within(mobileSection()).getByRole('button', {name: /^All/}));
 
         await waitFor(() => expect(screen.queryByRole('spinbutton')).not.toBeNull());
+    });
+});
+
+// =========================================================================
+describe('GlobalSettingsTab — Runes reactive and lifecycle boundaries', () => {
+    const mobileTrigger = () => screen.getByTestId('global-settings-mobile-category-trigger');
+    const mobileMenu = () => screen.getByTestId('global-settings-mobile-category-menu');
+    const mobileOption = (id: string) => within(mobileMenu()).getByTestId(`global-settings-mobile-category-${id}`);
+    const row = (key: string) => screen.getByTestId(`global-setting-${key}`);
+
+    it('updates desktop and open mobile labels on locale-only and translator-only changes without GETs', async () => {
+        // The translator function stays identical during the first change.
+        // Only the explicit $currentLanguage dependency can invalidate the map.
+        translator.set((key: string) => `RUNES-${get(currentLanguage)}-${key}`);
+        await mount([setting('session_ttl_hours', '24', 'int')]);
+        await waitFor(() => expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]));
+        await fireEvent.click(screen.getByTestId('global-settings-category-session'));
+        await fireEvent.click(mobileTrigger());
+        expect(mobileMenu()).toBeInTheDocument();
+
+        const expectLabels = (prefix: string) => {
+            expect(screen.getByTestId('global-settings-category-session')).toHaveTextContent(`${prefix}-settings.globalSettingCategories.session`);
+            expect(screen.getByTestId('global-settings-category-security')).toHaveTextContent(`${prefix}-settings.security`);
+            expect(mobileTrigger()).toHaveTextContent(`${prefix}-settings.globalSettingCategories.session`);
+            expect(mobileOption('session')).toHaveTextContent(`${prefix}-settings.globalSettingCategories.session`);
+            expect(mobileOption('security')).toHaveTextContent(`${prefix}-settings.security`);
+            expect(mobileOption('all')).toHaveTextContent(`${prefix}-settings.all`);
+        };
+        expectLabels('RUNES-en');
+        const initialGets = axiosGet.mock.calls.map(([url]) => url);
+
+        currentLanguage.set('it');
+        locale.set('it');
+        await tick();
+        expectLabels('RUNES-it');
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(axiosGet.mock.calls.map(([url]) => url)).toEqual(initialGets);
+
+        // Now replace only the translator. Locale and category do not change.
+        translator.set((key: string) => `REPLACED-${key}`);
+        await tick();
+        expect(get(currentLanguage)).toBe('it');
+        expectLabels('REPLACED');
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(axiosGet.mock.calls.map(([url]) => url)).toEqual(initialGets);
+        expect(axiosPatch).not.toHaveBeenCalled();
+
+        await fireEvent.click(mobileOption('security'));
+        await waitFor(() => expect(screen.queryByTestId('global-settings-mobile-category-menu')).not.toBeInTheDocument());
+        expect(mobileTrigger()).toHaveTextContent('REPLACED-settings.security');
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(axiosGet.mock.calls.map(([url]) => url)).toEqual(initialGets);
+    });
+
+    it('tracks nested draft edits independently and keeps bulk dirty until the last edited field is restored', async () => {
+        await mountUnlocked([setting('session_ttl_hours', '24', 'int'), setting('default_language', 'en')]);
+        await waitFor(() => expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]));
+        const initialGets = axiosGet.mock.calls.map(([url]) => url);
+        const number = within(row('session_ttl_hours')).getByRole('spinbutton');
+        const language = within(row('default_language')).getByRole('combobox');
+
+        expect(screen.queryByTestId('settings-save-all')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('settings-reset-all')).not.toBeInTheDocument();
+        await fireEvent.input(number, {target: {value: '48'}});
+        expect(within(row('session_ttl_hours')).getByTestId('setting-save')).toBeEnabled();
+        expect(screen.getByTestId('settings-reset-all')).toBeEnabled();
+
+        await fireEvent.click(language);
+        await fireEvent.click(await within(row('default_language')).findByRole('option', {name: /Italiano/}));
+        expect(within(row('default_language')).getByTestId('setting-save')).toBeEnabled();
+
+        // Editing back, not an undo helper, exercises two nested record writes.
+        await fireEvent.input(number, {target: {value: '24'}});
+        expect(number).toHaveValue(24);
+        expect(within(row('session_ttl_hours')).queryByTestId('setting-save')).not.toBeInTheDocument();
+        expect(screen.getByTestId('settings-save-all')).toBeEnabled();
+        expect(screen.getByTestId('settings-reset-all')).toBeEnabled();
+
+        await fireEvent.click(language);
+        await fireEvent.click(await within(row('default_language')).findByRole('option', {name: /English/}));
+        expect(language).toHaveTextContent('English');
+        expect(within(row('default_language')).queryByTestId('setting-save')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('settings-save-all')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('settings-reset-all')).not.toBeInTheDocument();
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(axiosGet.mock.calls.map(([url]) => url)).toEqual(initialGets);
+        expect(axiosPatch).not.toHaveBeenCalled();
+    });
+
+    it('owns one clickoutside listener per mount and removes it on destroy', async () => {
+        const outside = vi.spyOn(clickOutside, 'isOutsideClick');
+        // Empty settings exclude child picker/cache listeners from this test.
+        const first = await mount([]);
+        await fireEvent.click(mobileTrigger());
+        expect(mobileMenu()).toBeInTheDocument();
+        await fireEvent.click(mobileMenu());
+        expect(mobileMenu()).toBeInTheDocument(); // bind:this recognises an inside click
+
+        outside.mockClear();
+        await fireEvent.click(document.body);
+        expect(outside).toHaveBeenCalledTimes(1);
+        expect(screen.queryByTestId('global-settings-mobile-category-menu')).not.toBeInTheDocument();
+
+        first.unmount();
+        expect(screen.queryByTestId('global-settings-tab')).not.toBeInTheDocument();
+        outside.mockClear();
+        await fireEvent.click(document.body);
+        expect(outside).not.toHaveBeenCalled();
+
+        const second = await mount([]);
+        await fireEvent.click(mobileTrigger());
+        expect(mobileMenu()).toBeInTheDocument();
+        outside.mockClear();
+        await fireEvent.click(document.body);
+        expect(outside).toHaveBeenCalledTimes(1); // no listener retained from mount one
+        expect(screen.queryByTestId('global-settings-mobile-category-menu')).not.toBeInTheDocument();
+
+        second.unmount();
+        outside.mockClear();
+        await fireEvent.click(document.body);
+        expect(outside).not.toHaveBeenCalled();
+    });
+
+    it('waits for the initial settings read before requesting scheduler state', async () => {
+        const settings = deferred<{items: Fixture[]}>();
+        const scheduler = deferred<{data: unknown}>();
+        const order: string[] = [];
+        listFn().mockImplementation(() => {
+            order.push('settings');
+            return settings.promise;
+        });
+        axiosGet.mockImplementation(async (url: string) => {
+            if (url === SCHEDULER_STATE) {
+                order.push('scheduler');
+                return scheduler.promise;
+            }
+            return {data: null};
+        });
+        render(GlobalSettingsTab, {canEdit: true});
+        await tick();
+
+        expect(screen.getByTestId('global-settings-tab')).toHaveAttribute('data-busy', 'true');
+        expect(order).toEqual(['settings']);
+        expect(schedulerReads()).toEqual([]);
+
+        settings.resolve({items: [setting('session_ttl_hours', '24', 'int')]});
+        await waitFor(() => expect(order).toEqual(['settings', 'scheduler']));
+        expect(screen.getByTestId('global-settings-tab')).toHaveAttribute('data-busy', 'false');
+        scheduler.resolve({data: {server_tz: 'UTC', current_price: {last_run_at: '2024-06-01T08:00:00Z', last_status: 'ok'}}});
+        await waitFor(() => expect(screen.getByTestId('scheduler-status-row')).toHaveTextContent('settings.global.scheduler.status.lastRun'));
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]);
+    });
+
+    it('reloads settings only after scheduler save succeeds, not on open, edit or cancel', async () => {
+        const items = [setting('session_ttl_hours', '24', 'int'), setting('scheduler_current_price_frequency_minutes', '17')];
+        await mountUnlocked(items);
+        await waitFor(() => expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]));
+        await fireEvent.click(screen.getByTestId('scheduler-config-btn'));
+        expect(await screen.findByTestId('scheduler-config-modal')).toBeInTheDocument();
+        await fireEvent.click(screen.getByTestId('scheduler-config-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('scheduler-config-modal')).not.toBeInTheDocument());
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]);
+
+        await fireEvent.click(screen.getByTestId('scheduler-config-btn'));
+        const frequency = within(await screen.findByTestId('scheduler-config-frequency')).getByRole('spinbutton');
+        expect(frequency).toHaveValue(17);
+        await fireEvent.input(frequency, {target: {value: '23'}});
+        expect(frequency).toHaveValue(23);
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(screen.getByTestId('scheduler-config-save')).toBeEnabled();
+
+        const saveFlight = deferred<{data: null}>();
+        const reload = deferred<{items: Fixture[]}>();
+        axiosPatch.mockReturnValueOnce(saveFlight.promise);
+        listFn().mockReturnValueOnce(reload.promise);
+        await fireEvent.click(screen.getByTestId('scheduler-config-save'));
+        expect(axiosPatch).toHaveBeenCalledTimes(1);
+        expect(lastPatchBody().items).toContainEqual({key: 'scheduler_current_price_frequency_minutes', value: '23'});
+        expect(screen.getByTestId('scheduler-config-save')).toBeDisabled();
+        expect(listFn().mock.calls).toEqual([[]]);
+        expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]);
+
+        saveFlight.resolve({data: null});
+        await waitFor(() => expect(listFn().mock.calls).toEqual([[], []]));
+        await waitFor(() => expect(screen.queryByTestId('scheduler-config-modal')).not.toBeInTheDocument());
+        expect(screen.getByTestId('global-settings-tab')).toHaveAttribute('data-busy', 'true');
+        expect(setGlobalDirect).not.toHaveBeenCalled();
+        // Baseline onsave calls loadSettings + syncGlobalSettingsStore, NOT
+        // loadSchedulerState. Keep those explicit triggers distinct.
+        expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]);
+
+        reload.resolve({items: [setting('session_ttl_hours', '24', 'int'), setting('scheduler_current_price_frequency_minutes', '23')]});
+        await waitFor(() => expect(setGlobalDirect).toHaveBeenCalledWith(expect.objectContaining({scheduler_current_price_frequency_minutes: 23})));
+        expect(screen.getByTestId('global-settings-tab')).toHaveAttribute('data-busy', 'false');
+        await fireEvent.click(screen.getByTestId('scheduler-config-btn'));
+        expect(within(await screen.findByTestId('scheduler-config-frequency')).getByRole('spinbutton')).toHaveValue(23);
+        await fireEvent.click(screen.getByTestId('scheduler-config-cancel'));
+        await waitFor(() => expect(screen.queryByTestId('scheduler-config-modal')).not.toBeInTheDocument());
+        expect(listFn().mock.calls).toEqual([[], []]);
+        expect(schedulerReads()).toEqual([[SCHEDULER_STATE]]);
     });
 });

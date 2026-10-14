@@ -4,10 +4,13 @@ import {execSync} from 'child_process';
 import istanbul from 'vite-plugin-istanbul';
 
 /**
- * Get git version from git describe.
- * Returns format like 'v1.2.3' or 'v1.2.3-5-gabcdef-dirty'.
+ * The version the app shows (sidebar, changelog): LF_APP_VERSION when it is set, otherwise git describe.
+ * The release workflow freezes LF_APP_VERSION from VERSION right after the checkout, so no later step of the job — one
+ * that writes a tracked file — can stamp this build `-dirty`. Returns format like 'v1.2.3' or 'v1.2.3-5-gabcdef-dirty'.
  */
-function getGitVersion(): string {
+function getAppVersion(): string {
+    const frozen = process.env.LF_APP_VERSION?.trim();
+    if (frozen) return frozen;
     try {
         return execSync('git describe --tags --always --dirty').toString().trim();
     } catch {
@@ -82,7 +85,7 @@ export default defineConfig(({mode}) => ({
     customLogger: logger,
     // Inject version at build time
     define: {
-        __APP_VERSION__: JSON.stringify(getGitVersion()),
+        __APP_VERSION__: JSON.stringify(getAppVersion()),
     },
     build: {
         // Debug mode: sourcemaps + no minify for easy debugging

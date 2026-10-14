@@ -1,4 +1,4 @@
-# ![](../../../static/icons/asset-types/hold.png){: width="32" style="vertical-align: middle;" } Materias Primas
+# ![](../../../static/icons/asset-types/commodity.png){: width="32" style="vertical-align: middle;" } Materias Primas
 
 Las **Materias Primas** son activos físicos —materias primas o bienes primarios— mantenidos para la preservación del valor a largo plazo o como cobertura contra la inflación. En LibreFolio, esta categoría cubre metales preciosos, energía y otras reservas tangibles de valor.
 
@@ -8,12 +8,12 @@ Las **Materias Primas** son activos físicos —materias primas o bienes primari
 
 | Propiedad | Detalle |
 |----------|--------|
-| **Código en LibreFolio** | `HOLD` |
+| **Código en LibreFolio** | `COMMODITY` |
 | **Precios** | Precios spot de bolsas de materias primas, o valoración manual |
 | **Moneda** | Generalmente cotizadas en USD (oro, petróleo), pero pueden expresarse en cualquier moneda |
 | **Dividendos** | Ninguno — las materias primas no generan ingresos |
 | **Almacenamiento** | Las materias primas físicas pueden incurrir en costes de almacenamiento/seguro |
-| **Proveedores típicos** | Yahoo Finance (ej. `GC=F` para futuros de oro), Manual |
+| **Proveedores típicos** | Yahoo Finance (ej. `GC=F` para futuros de oro), o precios introducidos a mano en el [Editor de datos](../../../user/assets/detail/data-editor.md) |
 
 ---
 

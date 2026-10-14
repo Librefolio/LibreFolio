@@ -33,6 +33,7 @@ from backend.app.schemas.common import (
     SafeDecimal,
     StrictModel,
 )
+from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.utils.datetime_utils import UTCDateTime
 
 # =============================================================================
@@ -154,9 +155,12 @@ class BRAssetHolding(StrictModel):
 
     quantity: SafeDecimal = Field(..., description="Current quantity held")
 
-    # Cost basis (total spent to acquire)
-    total_cost: Currency = Field(..., description="Total amount spent to acquire (FIFO)")
-    average_cost_per_unit: SafeDecimal = Field(..., description="Average cost per unit")
+    # Cost basis: historical cost of the quantity held, in the asset currency (average cost)
+    total_cost: Optional[Currency] = Field(
+        default=None,
+        description="Historical cost of the quantity held, in the asset currency: each purchase converted at its own date, sales removing their share of the average cost. None when part of it is unknown (see missing_fx_pairs, or a transfer without cost basis).",
+    )
+    average_cost_per_unit: Optional[SafeDecimal] = Field(default=None, description="total_cost per unit held; None when total_cost is unknown")
 
     # Current valuation (if price available)
     current_price: Optional[SafeDecimal] = Field(default=None, description="Latest price per unit")
@@ -183,6 +187,9 @@ class BRSummary(BRReadItem):
 
     # Asset holdings with full details
     holdings: List[BRAssetHolding] = Field(default_factory=list, description="Current asset holdings with cost basis and market value")
+
+    # Conversions the holdings' cost needed and could not get (pair "FROM/TO" with the dates)
+    missing_fx_pairs: List[WACMissingPairInfo] = Field(default_factory=list, description="FX pairs missing for the holdings' cost, with the purchase dates that needed them")
 
     # Optional: Total portfolio value in user's base currency
     total_value_base_currency: Optional[Currency] = Field(default=None, description="Total portfolio value in base currency (cash + holdings)")

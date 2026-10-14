@@ -40,22 +40,29 @@ export interface MergeResult {
     assetMap: Map<number, AssetResolution>;
     /** Which file each global fake id came from — the grouping layer needs the provenance. */
     fileIdOfFake: Map<number, string>;
+    /**
+     * Per file: the plugin's fake asset id → the global fake id its rows were remapped to. Only the
+     * ids that appear in rows are here: the gap-fix maps a report set's truth positions through it,
+     * and plugin and global fakes share one range, so an id missing here must never be read as global.
+     */
+    fakeRemapByFile: Map<string, Map<number, number>>;
 }
 
-/** If exactly one candidate is an exact match, its asset id — else null. Used to auto-bind. */
-export function uniqueExactCandidateId(candidates: AssetResolution['candidates']): number | null {
-    const exact = (candidates ?? []).filter((c) => String(c.match_confidence).toLowerCase() === 'exact');
-    return exact.length === 1 ? exact[0].asset_id : null;
+/** Mirror BRIM selection: one distinct candidate; conflicting aliases remain unresolved. */
+export function uniqueCandidateId(candidates: AssetResolution['candidates']): number | null {
+    const ids = new Set((candidates ?? []).map((candidate) => candidate.asset_id));
+    return ids.size === 1 ? (ids.values().next().value ?? null) : null;
 }
 
 /** Union two candidate lists, keeping the strongest confidence per asset id, sorted strongest-first. */
 export function mergeCandidates(a: AssetResolution['candidates'], b: AssetResolution['candidates']): AssetResolution['candidates'] {
+    const rank = (confidence: string) => CONF_ORDER[confidence.toLowerCase()] ?? 9;
     const byId = new Map<number, AssetResolution['candidates'][number]>();
     for (const candidate of [...a, ...b]) {
         const existing = byId.get(candidate.asset_id);
-        if (!existing || (CONF_ORDER[candidate.match_confidence] ?? 9) < (CONF_ORDER[existing.match_confidence] ?? 9)) byId.set(candidate.asset_id, candidate);
+        if (!existing || rank(candidate.match_confidence) < rank(existing.match_confidence)) byId.set(candidate.asset_id, candidate);
     }
-    return [...byId.values()].sort((x, y) => (CONF_ORDER[x.match_confidence] ?? 9) - (CONF_ORDER[y.match_confidence] ?? 9));
+    return [...byId.values()].sort((x, y) => rank(x.match_confidence) - rank(y.match_confidence));
 }
 
 /**
@@ -70,6 +77,7 @@ export function buildMergedTransactions(parseResults: MergeSourceResult[], broke
     const assetMap = new Map<number, AssetResolution>();
     /** Which file each global fake id came from — the grouping layer needs the provenance. */
     const fileIdOfFake = new Map<number, string>();
+    const fakeRemapByFile = new Map<string, Map<number, number>>();
     let globalIndex = 0;
     // Global unique fake-id allocator. Each source file's plugin emits fake ids from the
     // same FAKE_ASSET_ID_BASE downward, so ids collide across files. Re-map every file's
@@ -83,6 +91,7 @@ export function buildMergedTransactions(parseResults: MergeSourceResult[], broke
         const resp = result.response!;
         // Per-file map: original plugin fake id → globally-unique fake id.
         const fakeRemap = new Map<number, number>();
+        fakeRemapByFile.set(result.fileId, fakeRemap);
         // Build todos map by tx_index
         const todosMap = new Map<number, ImportTodo[]>();
         for (const ft of resp.field_todos ?? []) {
@@ -131,6 +140,9 @@ export function buildMergedTransactions(parseResults: MergeSourceResult[], broke
             // already rules out a nullish date. Istanbul flags that `?? ''` as a half-covered
             // branch; it is dead by short-circuit, not an untested state. Left intentionally.
             const beforeOpening = openedAt != null && String(tx.date ?? '') !== '' && String(tx.date ?? '') < openedAt;
+            // A report set's rows before H0 are already represented in LibreFolio: never selected.
+            const historyStart = resp.history_start ? String(resp.history_start).slice(0, 10) : null;
+            const beforeHistory = historyStart !== null && String(tx.date ?? '') !== '' && String(tx.date ?? '').slice(0, 10) < historyStart;
 
             // Clone so re-mapping the fake asset id never mutates the stored parse result
             // (mergeAllTransactions may run again after a broker/opening edit).
@@ -152,8 +164,8 @@ export function buildMergedTransactions(parseResults: MergeSourceResult[], broke
                             extractedIsin: (mapping.extracted_isin as string | null) ?? null,
                             extractedName: (mapping.extracted_name as string | null) ?? null,
                             candidates,
-                            // Auto-bind an exact-ISIN match even if the backend left it unselected.
-                            resolvedAssetId: selected ?? uniqueExactCandidateId(candidates),
+                            resolvedAssetId: selected ?? uniqueCandidateId(candidates),
+                            selectionOrigin: 'automatic',
                             txCount: 0,
                             sourceFiles: [],
                             notices: ((mapping.notices ?? []) as Array<{kind?: string; reason?: string}>).map((n) => ({kind: String(n.kind ?? ''), reason: String(n.reason ?? '')})),
@@ -175,13 +187,14 @@ export function buildMergedTransactions(parseResults: MergeSourceResult[], broke
                 index: globalIndex++,
                 sourceFileId: result.fileId,
                 tx: txClone,
-                selected: !beforeOpening && duplicateStatusAllowsAutoSelect(dupStatus),
+                selected: !beforeOpening && !beforeHistory && duplicateStatusAllowsAutoSelect(dupStatus),
                 duplicateStatus: dupStatus,
+                dbDuplicateStatus: dupStatus === 'likely' || dupStatus === 'possible' ? dupStatus : undefined,
                 dupMatches: dupMatchesMap.get(txIdx) ?? [],
                 todos: todosMap.get(txIdx) ?? [],
             });
         }
     }
 
-    return {txArr, assetMap, fileIdOfFake};
+    return {txArr, assetMap, fileIdOfFake, fakeRemapByFile};
 }

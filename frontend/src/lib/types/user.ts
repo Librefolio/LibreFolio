@@ -57,6 +57,15 @@ export type UpdateProfileResponse = z.infer<typeof schemas.UpdateProfileResponse
 // FRONTEND-ONLY TYPES
 // =============================================================================
 
+/** Catalogue keys of the sign-in failures the login card translates. */
+export type AuthErrorKey = 'auth.invalidCredentials' | 'auth.invalidInput' | 'auth.loginFailed' | 'auth.accountDisabled';
+
+/**
+ * Why the last sign-in failed: a catalogue key, translated where it is drawn so it follows
+ * the language, or the transport's own message, shown as it came.
+ */
+export type AuthError = {key: AuthErrorKey} | {message: string};
+
 /**
  * Authentication state for the auth store.
  */
@@ -65,8 +74,8 @@ export interface AuthState {
     user: AuthUser | null;
     /** Whether an auth operation is in progress */
     isLoading: boolean;
-    /** Error message from last failed operation */
-    error: string | null;
+    /** Why the last sign-in failed, or null */
+    error: AuthError | null;
     /** Whether initial auth check has completed */
     isInitialized: boolean;
 }

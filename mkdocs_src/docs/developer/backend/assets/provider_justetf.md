@@ -18,26 +18,25 @@ The provider supports 4 currencies via JustETF's chart API (`load_chart(isin, cu
 
 | Currency | Current Value | History | Notes |
 |----------|:---:|:---:|---|
-| EUR | ✅ | ✅ | Gettex live + chart |
-| USD | ❌ | ✅ | Chart only (converted) |
-| CHF | ❌ | ✅ | Chart only (converted) |
-| GBP | ❌ | ✅ | Chart only (converted) |
+| EUR | ✅ | ✅ | gettex live quote, falling back to the daily `latestQuote`; chart |
+| USD | ✅ | ✅ | Daily `latestQuote` only + chart (converted by JustETF) |
+| CHF | ✅ | ✅ | Daily `latestQuote` only + chart (converted by JustETF) |
+| GBP | ✅ | ✅ | Daily `latestQuote` only + chart (converted by JustETF) |
 
 **Key distinction**: `fundCurrency` (from overview API) = NAV denomination ≠ trading currency. A USD-denominated fund (e.g., MSCI World) trades in EUR on European exchanges.
 
 ### 💰 Current Value (`get_current_value`)
 
-- **EUR only** — raises `NOT_SUPPORTED` for other currencies.
-- Uses `get_gettex_quote(isin)` to fetch real-time data from the Gettex exchange WebSocket.
-- Extracts `last` price (or `mid` as fallback).
-- Timestamp is parsed from the WebSocket response.
+1. **EUR — live gettex quote.** `_ensure_live_feed(isin)` starts (or reuses) the persistent feed, then the quote is read from `_live_quote_store`, else fetched once with `load_live_quote(isin)`. The market-maker `mid` is preferred over `last`, which stays stuck at the opening-auction level all day on thinly traded ETFs. The date comes from the quote timestamp.
+2. **Any currency — daily fallback.** When no live price is found (and always for USD/CHF/GBP), `load_raw_chart(isin, currency)["latestQuote"]["raw"]`, dated `latestQuoteDate`. This is how USD, CHF and GBP get a current value.
+3. Neither available → `NOT_FOUND`; any other exception → `FETCH_ERROR`.
 
 ### 📈 Historical Data (`get_history_value`)
 
 - Uses `load_chart(isin, currency, add_current)` from justetf-scraping.
 - `currency` read from `provider_params` (default EUR).
 - `add_current=True` only if `end_date >= today` AND `currency == "EUR"` — gettex quotes are EUR-only.
-- Returns `close` prices only (no OHLV data).
+- Returns `close` prices. Only today's EUR point (with `add_current`) is enriched with intraday open/high/low from `load_intraday_ohlc(isin)`, when the installed library provides it.
 - Date range filtering is done in-memory after fetching the full chart.
 - Cache key includes currency: `chart_{isin}_{currency}_{add_current}`.
 
@@ -70,9 +69,9 @@ Returns `https://www.justetf.com/en/etf-profile.html?isin={identifier}`.
 The JustETF provider maintains persistent **WebSocket connections** to the Gettex exchange for real-time price feeds:
 
 - **`iterate_live_quote(isin)`** opens a WebSocket stream and yields price updates as they arrive.
-- A background **daemon thread** per ISIN keeps the connection alive with exponential backoff on disconnection.
+- A background **daemon thread** per ISIN keeps the connection alive, reconnecting with exponential backoff (1 s, doubling, capped at 60 s).
 - Prices are stored in a module-level `_live_quote_store` dictionary.
-- **`get_current_value()`** fast-path: checks `_live_quote_store` first, falls back to a one-shot `get_gettex_quote()`, then optionally starts a persistent feed.
+- **`get_current_value()`** (EUR only): ensures the persistent feed first (`_ensure_live_feed`), then reads `_live_quote_store`, falling back to a one-shot `load_live_quote()`.
 - **`shutdown_live_feeds()`** stops all daemon threads (called from the provider's `shutdown()` method at app teardown).
 
 ### 📅 Asset Events
@@ -86,11 +85,10 @@ During sync, the provider parses dividend data from `load_chart()` and generates
 | Cache | Key | TTL | Max Size | Purpose |
 |---|---|---|---|---|
 | **ETF list** | `"etf_list"` | 1 hour | 100 | Avoid reloading the full overview DataFrame for each search |
-| **Chart data** | `chart_{isin}_{add_current}` | 1 hour | 500 | Cache historical chart per ISIN |
-| **Gettex quote** | `gettex_{isin}` | 30 sec | 200 | Short-lived cache for real-time quotes |
+| **Chart data** | `chart_{isin}_{currency}_{add_current}` | 1 hour | 500 | Cache historical chart per ISIN and currency |
 | **Overview** | `overview_{isin}` | 1 hour | 500 | Cache ETF profile/metadata per ISIN |
 
-All caches are global (module-level) TTL caches via `get_ttl_cache()`. They are populated lazily and cleared on server restart.
+All caches are global (module-level) TTL caches via `get_ttl_cache()`. They are populated lazily and cleared on server restart. Live gettex quotes are not TTL-cached: they sit in `_live_quote_store`, refreshed by the feed threads.
 
 !!! info "Pre-warm"
 
@@ -110,7 +108,7 @@ All caches are global (module-level) TTL caches via `get_ttl_cache()`. They are 
 ## ⚠️ Limitations
 
 - **ISIN only**: Does not accept tickers — use Yahoo Finance for ticker-based search.
-- **EUR-centric**: Chart data is always in EUR. Multi-currency support depends on justetf.com availability.
+- **Live price in EUR only**: the gettex feed is EUR; USD/CHF/GBP current values are the daily `latestQuote`, converted by justETF.
 - **Scraping fragility**: The library scrapes justetf.com HTML. Site layout changes may break it.
 - **Blocking I/O**: All justetf-scraping calls are synchronous — wrapped in `asyncio.to_thread()` to avoid blocking the event loop.
 

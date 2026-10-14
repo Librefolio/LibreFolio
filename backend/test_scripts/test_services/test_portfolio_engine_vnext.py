@@ -2,11 +2,11 @@
 Portfolio Engine vNext — Integration tests.
 
 Validates the core architectural invariants:
-1. Inline WAC correctness (BUY/SELL/multi-broker)
+1. WAC replayed from the average costs (BUY/SELL/multi-broker)
 2. Valuation hierarchy and transaction-reference propagation
 3. 3-pool event-driven (K, R, W)
 4. Position states emission (start + end snapshots)
-5. Period accumulators (realized, income, fees)
+5. Realized sales (proceeds and historical cost)
 6. Pre-frame / frame separation
 """
 
@@ -15,19 +15,15 @@ from decimal import Decimal
 
 import pytest
 
-import backend.app.services.portfolio_engine as portfolio_engine_module
-from backend.app.db.models import Transaction
+import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
+from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.services.portfolio_engine import (
-    ClassifiedTransaction,
-    DailyStateBuilder,
-    InTransitInterval,
-    PortfolioCalculationEngine,
-    SplitRecord,
-    TransactionType,
-    ValuationSource,
-)
-from backend.app.services.price_resolver import build_asset_price_series
+from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
+from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, SplitRecord, ValuationSource
+from backend.app.services.financial_math.price_marks import build_asset_price_series
+from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
+from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 
 
 def _tx(*, tx_id=1, broker_id=1, asset_id=1, tx_type=TransactionType.BUY, dt=date(2025, 1, 2), quantity=Decimal("0"), amount=None, currency="EUR", cbo=None, cbo_ccy=None):
@@ -105,6 +101,8 @@ def _build(
         asset_classifications={},
         asset_types={1: "ETF", 2: "ETF"},
         asset_currencies=resolved_currencies,
+        average_costs=engine_average_costs(txs, asset_currencies=resolved_currencies, target_currency="EUR", fx_rate_map=fx_rate_map or {}, split_linked_tx_ids=split_linked_tx_ids, date_to=date_to),
+        native_cash=engine_native_cash(txs, target_currency="EUR", fx_rate_map=fx_rate_map or {}, date_to=date_to),
         target_currency="EUR",
         date_from=date_from,
         date_to=date_to,
@@ -121,7 +119,7 @@ def _build(
 
 
 class TestInlineWAC:
-    """Verify WAC is computed correctly inline during daily loop."""
+    """Verify the WAC the daily loop replays from ``average_costs`` (per unit, target currency)."""
 
     def test_simple_buy(self):
         """Single BUY → WAC = unit cost."""
@@ -235,6 +233,8 @@ class TestResolverValuation:
             asset_classifications={},
             asset_types={1: "ETF"},
             asset_currencies={1: "EUR"},
+            average_costs=engine_average_costs([], asset_currencies={1: "EUR"}, target_currency="EUR", fx_rate_map={}),
+            native_cash=engine_native_cash([], target_currency="EUR", fx_rate_map={}, date_to=date(2025, 1, 15)),
             target_currency="EUR",
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 15),
@@ -264,6 +264,8 @@ class TestResolverValuation:
             asset_classifications={},
             asset_types={1: "BOND"},
             asset_currencies={1: "EUR"},
+            average_costs=engine_average_costs([], asset_currencies={1: "EUR"}, target_currency="EUR", fx_rate_map={}),
+            native_cash=engine_native_cash([], target_currency="EUR", fx_rate_map={}, date_to=date(2025, 1, 5)),
             target_currency="EUR",
             date_from=date(2025, 1, 1),
             date_to=date(2025, 1, 5),
@@ -650,42 +652,28 @@ class TestPositionStates:
 
 
 # =============================================================================
-# 5. PERIOD ACCUMULATORS
+# 5. REALIZED SALES
 # =============================================================================
 
 
-class TestPeriodAccumulators:
-    """Verify realized, income, fees accumulation during frame."""
+class TestRealizedSales:
+    """Verify a SELL in the frame is replayed as a ``RealizedSale``: its proceeds and the historical cost it took from the pool."""
 
     def test_sell_realized(self):
-        """SELL in frame → per_realized accumulated."""
+        """SELL in frame → one RealizedSale for the position, realized gain = proceeds - cost."""
         txs = [
             _c(_tx(tx_id=1, quantity=Decimal("10"), amount=Decimal("-1000"), dt=date(2025, 1, 2))),
             _c(_tx(tx_id=2, tx_type=TransactionType.SELL, quantity=Decimal("-5"), amount=Decimal("750"), dt=date(2025, 1, 5))),
         ]
         result = _build(txs)
         # Realized = proceeds(750) - cost_basis(5 * WAC=100 = 500) = 250
-        key = (1, 1)
-        assert key in result.per_realized
-        assert result.per_realized[key] == Decimal("250")
-
-    def test_income_attributed(self):
-        """DIVIDEND with asset_id → per_income."""
-        txs = [
-            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, tx_type=TransactionType.DIVIDEND, asset_id=1, quantity=Decimal("0"), amount=Decimal("50"), dt=date(2025, 1, 5))),
-        ]
-        result = _build(txs)
-        assert result.per_income.get((1, 1)) == Decimal("50")
-
-    def test_unallocated_fees(self):
-        """FEE without asset_id → unalloc_fees."""
-        txs = [
-            _c(_tx(tx_id=1, tx_type=TransactionType.DEPOSIT, asset_id=None, quantity=Decimal("0"), amount=Decimal("1000"), dt=date(2025, 1, 2))),
-            _c(_tx(tx_id=2, tx_type=TransactionType.FEE, asset_id=None, quantity=Decimal("0"), amount=Decimal("-10"), dt=date(2025, 1, 5))),
-        ]
-        result = _build(txs)
-        assert result.unalloc_fees.get(1) == Decimal("10")
+        sales = [s for s in result.realized_sales if s.asset_id == 1 and s.broker_id == 1]
+        assert len(sales) == 1, sales
+        sale = sales[0]
+        assert sale.date == date(2025, 1, 5)
+        assert sale.proceeds == Decimal("750")
+        assert sale.cost == Decimal("500")
+        assert sale.proceeds - sale.cost == Decimal("250")
 
 
 # =============================================================================
@@ -787,6 +775,19 @@ class TestPreloadFxRates:
     @pytest.mark.asyncio
     async def test_preload_fx_rates_collects_all_main_sources(self, monkeypatch):
         txs = [
+            # BUY of the JPY asset before the range, paid in the target currency: its cost is
+            # converted by compute_average_costs, so the preload must not ask a JPY rate at its date.
+            _c(
+                _tx(
+                    tx_id=2,
+                    asset_id=1,
+                    tx_type=TransactionType.BUY,
+                    dt=date(2024, 12, 30),
+                    quantity=Decimal("1"),
+                    amount=Decimal("-40"),
+                    currency="EUR",
+                )
+            ),
             _c(
                 _tx(
                     tx_id=1,
@@ -878,7 +879,7 @@ class TestPreloadFxRates:
         fx_map = await PortfolioCalculationEngine(db)._preload_fx_rates(
             classified_txs=txs,
             in_transit_intervals=intervals,
-            external_cash_flows=[(date(2025, 1, 3), Decimal("50"), "GBP")],
+            external_cash_flows=[(date(2025, 1, 3), 1, Decimal("50"), "GBP")],
             price_map={
                 1: [(date(2025, 1, 1), Decimal("10"), "USD")],
                 2: [(date(2025, 1, 1), Decimal("20"), "CHF")],
@@ -902,8 +903,9 @@ class TestPreloadFxRates:
             ("GBP", "EUR", date(2025, 1, 3)),
             ("CAD", "EUR", date(2025, 1, 2)),
             ("CAD", "EUR", date(2025, 1, 3)),
-            ("AUD", "EUR", date(2025, 1, 1)),
-            ("AUD", "EUR", date(2025, 1, 2)),
+            # D6: the in-transit cost is historical, converted once at the arrival date (2025-01-04),
+            # no longer on every transit day (was 2025-01-01 and 2025-01-02).
+            ("AUD", "EUR", date(2025, 1, 4)),
         }
 
         assert captured["db"] is db
@@ -911,3 +913,5 @@ class TestPreloadFxRates:
         assert {(item[0].code, item[1], item[2]) for item in captured["bulk_items"]} == expected_keys
         assert set(fx_map.keys()) == expected_keys
         assert set(fx_map.values()) == {Decimal("1")}
+        # Asset currencies only over the range: no rate at a BUY date before it (was requested for the inline WAC).
+        assert ("JPY", "EUR", date(2024, 12, 30)) not in fx_map

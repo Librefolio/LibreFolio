@@ -8,12 +8,15 @@
 import {expect} from '../fixtures/playwright';
 import {navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
+import {optionsClosed} from '../fixtures/probe';
 
 /**
  * Navigate to FX page and wait for content to load.
+ * `search` is the URL query, the page's own state — e.g. its period `{start, end}`; empty, the URL is plain `/fx`.
  */
-export async function goToFxPage(page: import('@playwright/test').Page) {
-    await navigateTo(page, '/fx');
+export async function goToFxPage(page: import('@playwright/test').Page, search: Record<string, string> = {}) {
+    const query = new URLSearchParams(search).toString();
+    await navigateTo(page, query ? `/fx?${query}` : '/fx');
     await page.waitForSelector('[data-testid="fx-page"]', {timeout: 15_000});
     // The page loads in two waves — pair list, then rates per pair — and says so via `data-busy`.
     await page.waitForSelector('[data-testid="fx-page"][data-busy="false"]', {timeout: 20_000});
@@ -42,13 +45,15 @@ export async function selectCurrency(page: import('@playwright/test').Page, cont
     await searchInput.fill(currencyCode);
 
     // Click the matching option in the listbox
-    const listbox = page.locator('[role="listbox"]');
+    const listbox = container.locator('[role="listbox"]');
     await expect(listbox).toBeVisible({timeout: 3000});
     await expect(listbox).toHaveAttribute('aria-busy', 'false', {timeout: 10_000});
 
-    // Find option that contains the currency code
-    const option = listbox.locator('[role="option"]').filter({hasText: currencyCode}).first();
+    // SearchSelect options are buttons identified by their stable value testid.
+    const option = listbox.getByTestId(`search-select-option-${currencyCode}`);
+    await expect(option).toBeVisible({timeout: 3000});
     await option.click();
+    await optionsClosed(page);
 }
 
 /**

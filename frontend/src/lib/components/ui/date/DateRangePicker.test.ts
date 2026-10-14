@@ -23,10 +23,22 @@
  * testing the rule the day it slips by — and the oracle cannot agree with the
  * component by making the same mistake.
  */
-import {beforeAll, describe, expect, it, vi} from 'vitest';
-import {tick} from 'svelte';
-import {fireEvent, render, screen, waitFor} from '$test/component';
-import DateRangePicker from './DateRangePicker.svelte';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
+import type {ComponentProps} from 'svelte';
+import {flushSync, tick} from 'svelte';
+import {createSubscriber} from 'svelte/reactivity';
+import {get} from 'svelte/store';
+import {addMessages, waitLocale} from 'svelte-i18n';
+import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import type {SelectOption} from '$lib/components/ui/select/types';
+import {_ as t} from '$lib/i18n';
+import {currentLanguage} from '$lib/stores/app/language';
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
+import CompactDurationBadge from './CompactDurationBadge.svelte';
+import DateRangePicker, {type QuickPreset} from './DateRangePicker.svelte';
 
 /** A date safely in the past, so no cell is disabled by the future guard. */
 const DEF_START = '2024-01-15';
@@ -65,6 +77,124 @@ function setup(overrides: Record<string, unknown> = {}) {
         endInput: screen.getByTestId('date-range-input-end') as HTMLInputElement,
         root: screen.getByTestId('date-range-picker-root'),
     };
+}
+
+const DURATION_CASES = [
+    {unit: 'days', label: 'D'},
+    {unit: 'weeks', label: 'W'},
+    {unit: 'months', label: 'M'},
+    {unit: 'years', label: 'Y'},
+] as const;
+
+const DURATION_OPTIONS: SelectOption[] = DURATION_CASES.map(({unit, label}) => ({
+    value: unit,
+    label,
+}));
+
+type DurationUnit = (typeof DURATION_CASES)[number]['unit'];
+
+/**
+ * A tiny reactive cell for props passed through Testing Library's direct-render
+ * harness. Accessor props are the parent-side half of `bind:`; the subscriber
+ * makes their setters invalidate the child exactly as a real Svelte parent would.
+ */
+function boundState<T>(initial: T) {
+    let current = initial;
+    let update = () => {};
+    const subscribe = createSubscriber((notify) => {
+        update = notify;
+        return () => {
+            update = () => {};
+        };
+    });
+    return {
+        get value(): T {
+            subscribe();
+            return current;
+        },
+        set value(next: T) {
+            if (Object.is(current, next)) return;
+            current = next;
+            update();
+        },
+    };
+}
+
+function setupCompactDurationBadge(overrides: Partial<ComponentProps<typeof CompactDurationBadge>> = {}) {
+    const onapply = vi.fn();
+    const boundAmount = boundState(overrides.amount ?? 3);
+    const boundUnit = boundState<DurationUnit>(overrides.unit ?? 'years');
+    const boundEditing = boundState(overrides.editing ?? false);
+    const props: ComponentProps<typeof CompactDurationBadge> & {amount: number; unit: DurationUnit; editing: boolean} = {
+        options: DURATION_OPTIONS,
+        customLabel: 'Test custom',
+        buttonTestId: 'compact-duration',
+        amountTestId: 'compact-duration-amount',
+        unitTestId: 'compact-duration-unit',
+        ...overrides,
+        onapply,
+        get amount() {
+            return boundAmount.value;
+        },
+        set amount(next: number) {
+            boundAmount.value = next;
+        },
+        get unit() {
+            return boundUnit.value;
+        },
+        set unit(next: DurationUnit) {
+            boundUnit.value = next;
+        },
+        get editing() {
+            return boundEditing.value;
+        },
+        set editing(next: boolean) {
+            boundEditing.value = next;
+        },
+    };
+    const utils = render(CompactDurationBadge, props);
+    const state = {
+        get amount() {
+            return boundAmount.value;
+        },
+        get unit() {
+            return boundUnit.value;
+        },
+        get editing() {
+            return boundEditing.value;
+        },
+    };
+    return {onapply, state, ...utils};
+}
+
+/** Enters the invalid zero draft without publishing it to the bound state. */
+async function enterInvalidZeroDurationDraft(): Promise<HTMLInputElement> {
+    const amount = screen.getByTestId('compact-duration-amount') as HTMLInputElement;
+    await fireEvent.input(amount, {target: {value: '0'}});
+    await tick();
+
+    expect(amount).toHaveAttribute('aria-invalid', 'true');
+    return amount;
+}
+
+async function selectYearsDurationDraft(): Promise<void> {
+    const unit = screen.getByTestId('compact-duration-unit-button');
+    await fireEvent.click(unit);
+    expect(unit).toHaveAttribute('aria-expanded', 'true');
+
+    await fireEvent.keyDown(unit, {key: 'End'});
+    expect(unit.getAttribute('aria-activedescendant')).toMatch(/-option-years$/);
+
+    await fireEvent.keyDown(unit, {key: 'Enter'});
+    expect(unit).toHaveAttribute('aria-expanded', 'false');
+}
+
+function addOutsideDurationTarget(container: HTMLElement): HTMLElement {
+    const outside = document.createElement('button');
+    outside.type = 'button';
+    outside.dataset.testid = 'compact-duration-outside';
+    container.append(outside);
+    return screen.getByTestId('compact-duration-outside');
 }
 
 /** Types into a field without committing — commit is blur, Enter or an arrow, deliberately. */
@@ -434,6 +564,30 @@ describe('DateRangePicker — a range that matches a preset window lights it up'
 // ---------------------------------------------------------------------------
 
 describe('DateRangePicker — the custom "N units back" window', () => {
+    it('keeps the custom trigger and amount selectors stable across editor mode', async () => {
+        setup();
+        const trigger = screen.getByTestId('date-preset-custom');
+
+        await fireEvent.click(trigger);
+
+        expect(screen.queryByTestId('date-preset-custom')).toBeNull();
+        expect(screen.getByTestId('date-range-custom-amount')).toBeInTheDocument();
+    });
+
+    it('applies the initial 3-year window as soon as the editor opens', async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2024, 5, 14, 12));
+        try {
+            const {onchange} = setup();
+
+            await fireEvent.click(screen.getByTestId('date-preset-custom'));
+
+            expect(onchange).toHaveBeenCalledExactlyOnceWith('2021-06-14', '2024-06-14');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
     it('opening the custom window publishes a range that ends today and starts in the past', async () => {
         const {onchange} = setup();
         await fireEvent.click(screen.getByTestId('date-preset-custom'));
@@ -461,6 +615,36 @@ describe('DateRangePicker — the custom "N units back" window', () => {
         expect(screen.getByTestId('date-range-custom-amount')).toBeInTheDocument(); // still editing
     });
 
+    it('accepts 999 as the maximum and refuses a larger amount', async () => {
+        const {onchange} = setup();
+        await fireEvent.click(screen.getByTestId('date-preset-custom'));
+        onchange.mockClear();
+        const amount = screen.getByTestId('date-range-custom-amount');
+
+        expect(amount).toHaveAttribute('min', '1');
+        expect(amount).toHaveAttribute('max', '999');
+
+        await fireEvent.input(amount, {target: {value: '1000'}});
+        await tick();
+        expect(amount).toHaveAttribute('aria-invalid', 'true');
+        expect(onchange).not.toHaveBeenCalled();
+
+        await fireEvent.input(amount, {target: {value: '999'}});
+        await waitFor(() => expect(onchange).toHaveBeenCalled());
+        expect(amount).toHaveAttribute('aria-invalid', 'false');
+    });
+
+    it('clicking outside leaves the custom editor and restores its trigger', async () => {
+        setup();
+        await fireEvent.click(screen.getByTestId('date-preset-custom'));
+
+        await fireEvent.click(document.body);
+        await tick();
+
+        expect(screen.queryByTestId('date-range-custom-amount')).toBeNull();
+        expect(screen.getByTestId('date-preset-custom')).toBeInTheDocument();
+    });
+
     it('Escape leaves the custom editor and restores the plain button', async () => {
         setup();
         await fireEvent.click(screen.getByTestId('date-preset-custom'));
@@ -471,6 +655,141 @@ describe('DateRangePicker — the custom "N units back" window', () => {
     });
 });
 
+describe('CompactDurationBadge', () => {
+    it.each(DURATION_CASES)('applies positive integer amounts in $label units', async ({unit, label}) => {
+        const {onapply} = setupCompactDurationBadge({amount: 2, unit});
+
+        await fireEvent.click(screen.getByTestId('compact-duration'));
+
+        expect(onapply).toHaveBeenCalledExactlyOnceWith(2, unit);
+        expect(screen.getByTestId('compact-duration-unit-button')).toHaveTextContent(label);
+    });
+
+    it('renders only the configured allowed unit subset', async () => {
+        const allowed = DURATION_OPTIONS.filter((option) => option.value !== 'days');
+        setupCompactDurationBadge({options: allowed});
+        await fireEvent.click(screen.getByTestId('compact-duration'));
+
+        await fireEvent.click(screen.getByTestId('compact-duration-unit-button'));
+        const dropdown = screen.getByTestId('compact-duration-unit-dropdown');
+
+        expect(within(dropdown).queryByRole('option', {name: 'D'})).toBeNull();
+        for (const label of ['W', 'M', 'Y']) {
+            expect(within(dropdown).getByRole('option', {name: label})).toBeInTheDocument();
+        }
+    });
+
+    it('has no implicit maximum when the caller does not provide one', async () => {
+        const {onapply} = setupCompactDurationBadge({amount: 1000});
+
+        await fireEvent.click(screen.getByTestId('compact-duration'));
+
+        const amount = screen.getByTestId('compact-duration-amount');
+        expect(amount).not.toHaveAttribute('max');
+        expect(amount).toHaveAttribute('aria-invalid', 'false');
+        expect(onapply).toHaveBeenCalledExactlyOnceWith(1000, 'years');
+    });
+
+    it('applies only positive safe integers', async () => {
+        const {onapply} = setupCompactDurationBadge({editing: true});
+        const amount = screen.getByTestId('compact-duration-amount');
+
+        for (const invalid of ['0', '-2', '1.5', String(Number.MAX_SAFE_INTEGER + 1)]) {
+            await fireEvent.input(amount, {target: {value: invalid}});
+            await tick();
+            expect(amount).toHaveAttribute('aria-invalid', 'true');
+            expect(onapply).not.toHaveBeenCalled();
+        }
+
+        await fireEvent.input(amount, {target: {value: '2'}});
+        await waitFor(() => expect(onapply).toHaveBeenCalledExactlyOnceWith(2, 'years'));
+        expect(amount).toHaveAttribute('aria-invalid', 'false');
+    });
+
+    it('keeps the committed amount and unit when draft zero is invalid', async () => {
+        const {onapply, state} = setupCompactDurationBadge({amount: 8, unit: 'months', editing: true});
+
+        await enterInvalidZeroDurationDraft();
+        await selectYearsDurationDraft();
+
+        expect(state.amount).toBe(8);
+        expect(state.unit).toBe('months');
+        expect(state.editing).toBe(true);
+        expect(onapply).not.toHaveBeenCalled();
+    });
+
+    it('lets the caller reject a safe amount whose converted product overflows without committing it', async () => {
+        const overflowAmount = Math.floor(Number.MAX_SAFE_INTEGER / 12) + 1;
+        const isAllowed = vi.fn((amount: number, unit: DurationUnit) => unit !== 'years' || Number.isSafeInteger(amount * 12));
+        const {onapply, state} = setupCompactDurationBadge({amount: 8, unit: 'months', editing: true, isAllowed});
+        const amount = screen.getByTestId('compact-duration-amount');
+
+        expect(Number.isSafeInteger(overflowAmount)).toBe(true);
+        expect(Number.isSafeInteger(overflowAmount * 12)).toBe(false);
+        expect(amount).not.toHaveAttribute('max');
+
+        await enterInvalidZeroDurationDraft();
+        await selectYearsDurationDraft();
+        await fireEvent.input(amount, {target: {value: String(overflowAmount)}});
+        await tick();
+
+        expect(amount).toHaveAttribute('aria-invalid', 'true');
+        expect(isAllowed).toHaveBeenLastCalledWith(overflowAmount, 'years');
+        expect(state.amount).toBe(8);
+        expect(state.unit).toBe('months');
+        expect(state.editing).toBe(true);
+        expect(onapply).not.toHaveBeenCalled();
+    });
+
+    it('Escape restores the last committed compact label and bound state after an invalid draft', async () => {
+        const {onapply, state} = setupCompactDurationBadge({active: true, amount: 8, unit: 'months'});
+        await fireEvent.click(screen.getByTestId('compact-duration'));
+        onapply.mockClear();
+        const amount = await enterInvalidZeroDurationDraft();
+        await selectYearsDurationDraft();
+
+        await fireEvent.keyDown(amount, {key: 'Escape'});
+        await tick();
+
+        expect(screen.queryByTestId('compact-duration-amount')).toBeNull();
+        const trigger = screen.getByTestId('compact-duration');
+        expect(trigger).toHaveAttribute('data-active', 'true');
+        expect(trigger).toHaveTextContent('8M');
+        expect(state.amount).toBe(8);
+        expect(state.unit).toBe('months');
+        expect(state.editing).toBe(false);
+        expect(onapply).not.toHaveBeenCalled();
+    });
+
+    it('an outside click restores the last committed compact label and bound state after an invalid draft', async () => {
+        const {container, onapply, state} = setupCompactDurationBadge({active: true, amount: 8, unit: 'months'});
+        await fireEvent.click(screen.getByTestId('compact-duration'));
+        onapply.mockClear();
+        await enterInvalidZeroDurationDraft();
+        await selectYearsDurationDraft();
+
+        await fireEvent.click(addOutsideDurationTarget(container));
+        await tick();
+
+        expect(screen.queryByTestId('compact-duration-amount')).toBeNull();
+        const trigger = screen.getByTestId('compact-duration');
+        expect(trigger).toHaveAttribute('data-active', 'true');
+        expect(trigger).toHaveTextContent('8M');
+        expect(state.amount).toBe(8);
+        expect(state.unit).toBe('months');
+        expect(state.editing).toBe(false);
+        expect(onapply).not.toHaveBeenCalled();
+    });
+
+    it('shows the compact amount and caller-provided unit label when active', () => {
+        setupCompactDurationBadge({active: true, amount: 12, unit: 'weeks'});
+
+        const trigger = screen.getByTestId('compact-duration');
+        expect(trigger).toHaveAttribute('data-active', 'true');
+        expect(trigger).toHaveTextContent('12W');
+    });
+});
+
 describe('DateRangePicker — compact fields show the raw ISO', () => {
     it('renders the stored dates as YYYY-MM-DD when compact, not a localised label', () => {
         // compact is the narrow-cell variant: the field text is the ISO the test supplied,
@@ -478,6 +797,87 @@ describe('DateRangePicker — compact fields show the raw ISO', () => {
         const {startInput, endInput} = setup({compact: true, start: '2024-01-15', end: '2024-02-20'});
         expect(startInput).toHaveValue('2024-01-15');
         expect(endInput).toHaveValue('2024-02-20');
+    });
+});
+
+/**
+ * M-17, M-18 CP2 — a blurred field writes its date in the interface language.
+ *
+ * Blurred, each field shows its date formatted for reading (`displayDate`), and that format was pinned to
+ * English — `toLocaleDateString('en', {day: '2-digit', month: 'short', year: 'numeric'})` — so an Italian UI
+ * read `Jan 15, 2024` in every range field (M-17). Every figure follows the UI language (the developer's
+ * rule of 2026-10-12): the cure writes it in `uiLocale()`. Two things do not move, and are guarded here: a
+ * compact picker shows the ISO date, which fits narrow cells, and a focused field shows the ISO date,
+ * because that is what can be edited.
+ *
+ * Expectations are Intl's output for the locale with the component's options, never typed; jsdom's browser
+ * is en-US, so the English UI writes en-US — the text `'en'` wrote. The language is switched as
+ * LanguageSelector does (`currentLanguage.set`, which also moves svelte-i18n) and put back after each test.
+ * DateRangePicker is a runes component: the in-place test proves the fields read the language reactively.
+ */
+describe('DateRangePicker — a blurred field writes its date in the interface language (M-17, M-18 CP2)', () => {
+    const FIELD_DATE: Intl.DateTimeFormatOptions = {day: '2-digit', month: 'short', year: 'numeric'};
+    /** An ISO day as a blurred field writes it in `locale`. */
+    const fieldDateIn = (iso: string, locale: string): string => new Date(iso + 'T00:00:00').toLocaleDateString(locale, FIELD_DATE);
+    /** Both fields of the default range in `locale`. */
+    const fieldsIn = (locale: string) => ({start: fieldDateIn(DEF_START, locale), end: fieldDateIn(DEF_END, locale)});
+
+    /** Change the UI language as LanguageSelector does, then flush. */
+    async function switchLanguage(lang: 'en' | 'it'): Promise<void> {
+        currentLanguage.set(lang);
+        await waitLocale(lang);
+        flushSync();
+        await tick();
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await switchLanguage('en');
+    });
+
+    it('English UI on an en-US browser (control): today’s text', () => {
+        const {startInput, endInput} = setup();
+
+        expect({start: startInput.value, end: endInput.value}).toEqual(fieldsIn('en-US'));
+    });
+
+    it('mounted with the UI in Italian: both fields write the Italian date', async () => {
+        await switchLanguage('it');
+        const italian = fieldsIn('it');
+        expect(italian, 'control: the Italian dates differ from the English ones').not.toEqual(fieldsIn('en-US'));
+
+        const {startInput, endInput} = setup();
+
+        expect({start: startInput.value, end: endInput.value}).toEqual(italian);
+    });
+
+    it('follows an in-place switch of the UI language, en → it → en', async () => {
+        const {startInput, endInput} = setup();
+        const read = () => ({start: startInput.value, end: endInput.value});
+        expect(read(), 'en, mount — today’s text').toEqual(fieldsIn('en-US'));
+
+        await switchLanguage('it');
+        expect(read(), 'en → it in place — the Italian dates').toEqual(fieldsIn('it'));
+
+        await switchLanguage('en');
+        expect(read(), 'it → en in place — today’s text again').toEqual(fieldsIn('en-US'));
+    });
+
+    it('a compact picker still shows the ISO dates in an Italian UI (control)', async () => {
+        await switchLanguage('it');
+
+        const {startInput, endInput} = setup({compact: true});
+
+        expect({start: startInput.value, end: endInput.value}).toEqual({start: DEF_START, end: DEF_END});
+    });
+
+    it('a focused field still shows its ISO date in an Italian UI (control)', async () => {
+        await switchLanguage('it');
+        const {startInput} = setup();
+
+        await fireEvent.focus(startInput);
+
+        expect(startInput).toHaveValue(DEF_START);
     });
 });
 
@@ -519,5 +919,358 @@ describe('DateRangePicker — zoom-guard exemption (F17)', () => {
         expect(selectors).toContain('input:not(.zoom-guard-exempt)');
         expect(selectors).toContain('select:not(.zoom-guard-exempt)');
         expect(selectors).toContain('textarea:not(.zoom-guard-exempt)');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// k5a (D376): two additive props, for the historical replay's period.
+//
+// `fieldsClass` adds a class to the frame around the two date fields — L4Replay
+// gives it the declared height of the crisis menu beside it — and
+// `excludePresets` leaves quick ranges out of the row: the replay cannot ask
+// about "all of history", so it drops MAX, whose min/max sentinels it has no
+// way to resolve. Both are additive. Every existing caller passes neither and
+// must keep exactly the picker it renders today, so the default paths are
+// pinned: the frame token by token (`FRAME`, transcribed from the template at
+// the k5a baseline) in each state its classes depend on, and the row button by
+// button in each layout a caller mounts.
+//
+// As in the F17 block above, the class is the contract here, so it is read;
+// elements are still found by testid and by their place in the render. Date is
+// frozen (Date alone, the timers stay real) wherever two renders are compared,
+// so "today" is the same day for both.
+// ---------------------------------------------------------------------------
+
+/** The k5a contract, typed here so this file compiles before the props exist. */
+type K5aProps = {fieldsClass?: string; excludePresets?: readonly QuickPreset[]};
+
+/** Today's frame around the two fields, token by token, as the template composes it at the k5a baseline. */
+const FRAME = {
+    base: ['w-full', 'flex', 'items-center', 'gap-0', 'bg-white', 'dark:bg-slate-800', 'rounded-xl', 'border', 'border-gray-200', 'dark:border-slate-600', 'overflow-hidden', 'hover:border-libre-green/50', 'transition-colors'],
+    /** Every size but compact. */
+    shadow: ['shadow-sm'],
+    stacked: ['flex-col'],
+    /** While the calendar is open. */
+    open: ['ring-1', 'ring-libre-green', 'border-libre-green'],
+};
+
+/** The frame in each state its classes depend on: size, stacking, and whether the calendar is open. */
+const FRAME_STATES: {state: string; props: Record<string, unknown>; open: boolean; classes: string[]}[] = [
+    {state: 'regular', props: {}, open: false, classes: [...FRAME.base, ...FRAME.shadow]},
+    {state: 'compact', props: {compact: true}, open: false, classes: [...FRAME.base]},
+    {state: 'stacked', props: {stacked: true}, open: false, classes: [...FRAME.base, ...FRAME.stacked, ...FRAME.shadow]},
+    {state: 'calendar open', props: {}, open: true, classes: [...FRAME.base, ...FRAME.shadow, ...FRAME.open]},
+];
+
+/** Today's quick-range row, in drawing order: the centred row and the toolbar's alike, since jsdom measures no room for the "jolly" fill. */
+const QUICK_ROW = ['1w', '1m', '3m', '6m', '1y', '2y', 'ytd', 'max', 'custom'].map((key) => `date-preset-${key}`);
+
+/** The layouts the existing callers mount: centred (the default), the page toolbars', and the one without the custom window. */
+const QUICK_LAYOUTS: {layout: string; props: Record<string, unknown>; row: string[]}[] = [
+    {layout: 'centred, by default', props: {}, row: QUICK_ROW},
+    {layout: 'a page toolbar', props: {align: 'start', compact: true}, row: QUICK_ROW},
+    {layout: 'without the custom window', props: {showCustomWindow: false}, row: QUICK_ROW.filter((id) => id !== 'date-preset-custom')},
+];
+
+/** A day far from either midnight, for the cases that compare two renders. */
+const FROZEN_NOW = new Date(2024, 5, 14, 12);
+
+/** An element's classes as a sorted set: the order of tokens in `class` changes nothing on screen. */
+function classesOf(element: Element): string[] {
+    return [...element.classList].sort();
+}
+
+/** Every element's classes, in document order: a whole render as a list of class lists. */
+function classMap(root: Element): string[][] {
+    return [root, ...root.querySelectorAll('*')].map(classesOf);
+}
+
+/** Like `setup`, but scoped to its own container, so two renders can be compared within one case. */
+function mountPicker(overrides: Record<string, unknown> & K5aProps = {}) {
+    const onchange = vi.fn();
+    const {container, unmount} = render(DateRangePicker, {props: {start: DEF_START, end: DEF_END, onchange, ...overrides}});
+    const view = within(container);
+    return {onchange, container, unmount, view, startInput: view.getByTestId('date-range-input-start'), endInput: view.getByTestId('date-range-input-end'), root: view.getByTestId('date-range-picker-root')};
+}
+
+/** The frame around the two date fields: their nearest common ancestor. */
+function fieldsFrame(startInput: HTMLElement, endInput: HTMLElement): HTMLElement {
+    for (let node = startInput.parentElement; node; node = node.parentElement) if (node.contains(endInput)) return node;
+    throw new Error('the two date fields share no frame');
+}
+
+/** Mount in one state: the frame, the whole render's classes, and where the frame sits in them. */
+async function frameInState(props: Record<string, unknown> & K5aProps, open: boolean) {
+    const picker = mountPicker(props);
+    if (open) {
+        await fireEvent.focus(picker.startInput);
+        expect(picker.root, 'the calendar did not open: the state under test was never reached').toHaveAttribute('data-open', 'true');
+    }
+    const frame = fieldsFrame(picker.startInput, picker.endInput);
+    return {...picker, frame, classes: classMap(picker.container), frameIndex: [picker.container, ...picker.container.querySelectorAll('*')].indexOf(frame)};
+}
+
+/** The quick-range buttons on the row, in drawing order. */
+function quickRow(container: HTMLElement): string[] {
+    return [...container.querySelectorAll('[data-testid^="date-preset-"]')].map((node) => node.getAttribute('data-testid') ?? '');
+}
+
+/** Mount, click each quick range on the row once — the custom window aside, which opens an editor — and note what each published, and how the row groups them. */
+async function quickRanges(props: Record<string, unknown> & K5aProps) {
+    const {onchange, container, unmount, view} = mountPicker(props);
+    const row = quickRow(container);
+    // The row's groups, in drawing order: the buttons that share a parent. The toolbar draws its
+    // groups as lines, so a button that changes group changes line.
+    const parents = [...new Set(row.map((testId) => view.getByTestId(testId).parentElement))];
+    const groups = parents.map((parent) => row.filter((testId) => view.getByTestId(testId).parentElement === parent));
+    const published: Record<string, unknown[][]> = {};
+    for (const testId of row.filter((id) => id !== 'date-preset-custom')) {
+        onchange.mockClear();
+        await fireEvent.click(view.getByTestId(testId));
+        published[testId] = onchange.mock.calls.map((call) => [...call]);
+    }
+    unmount();
+    return {row, groups, published};
+}
+
+describe('DateRangePicker — the caller’s class for the fields’ frame (k5a)', () => {
+    it.each(FRAME_STATES)('frames the fields exactly as today without it: $state', async ({props, open, classes}) => {
+        const {frame, root} = await frameInState(props, open);
+
+        expect(classesOf(frame), 'the frame every existing caller renders has changed').toEqual([...classes].sort());
+        // The frame is still the box right inside the trigger wrapper, as today.
+        expect(frame.parentElement?.classList.contains('drp-trigger'), 'the frame moved').toBe(true);
+        expect(root.contains(frame)).toBe(true);
+    });
+
+    it.each(FRAME_STATES)('appends fieldsClass to the frame, and to nothing else: $state', async ({props, open, classes}) => {
+        vi.setSystemTime(FROZEN_NOW);
+        try {
+            const today = await frameInState(props, open);
+            const baseline = today.classes;
+            today.unmount();
+
+            const {frame, classes: rendered, frameIndex} = await frameInState({...props, fieldsClass: 'h-7'}, open);
+
+            expect(classesOf(frame), 'fieldsClass did not reach the frame, or replaced classes it should have joined').toEqual([...classes, 'h-7'].sort());
+            // Nowhere else: the same render, element by element, with the one token on the frame.
+            expect(rendered, 'the render does not have the same elements with the class as without it').toHaveLength(baseline.length);
+            const changed = rendered.flatMap((tokens, index) => (tokens.join(' ') === baseline[index].join(' ') ? [] : [index]));
+            expect(changed, 'fieldsClass changed an element other than the frame').toEqual([frameIndex]);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});
+
+describe('DateRangePicker — quick ranges a caller leaves out (k5a)', () => {
+    it.each(QUICK_LAYOUTS)('draws every quick range it draws today when none is left out: $layout', ({props, row}) => {
+        const {container} = mountPicker(props);
+
+        expect(quickRow(container), 'the quick ranges every existing caller draws have changed').toEqual(row);
+    });
+
+    it.each(QUICK_LAYOUTS)('leaves MAX out when asked, and every other range publishes the window it publishes today: $layout', async ({props, row}) => {
+        vi.setSystemTime(FROZEN_NOW);
+        try {
+            const today = await quickRanges(props);
+            // The premise: today the row is whole, and MAX publishes the sentinels the replay cannot resolve.
+            expect(today.row).toEqual(row);
+            expect(today.published['date-preset-max']).toEqual([['min', 'max']]);
+
+            const excludePresets: readonly QuickPreset[] = ['MAX'];
+            const withoutMax = await quickRanges({...props, excludePresets});
+
+            expect(withoutMax.row, 'MAX is still drawn, or another range went with it').toEqual(row.filter((id) => id !== 'date-preset-max'));
+            expect(withoutMax.groups, 'a range that stayed changed group').toEqual(today.groups.map((group) => group.filter((id) => id !== 'date-preset-max')).filter((group) => group.length > 0));
+            const others = Object.fromEntries(Object.entries(today.published).filter(([id]) => id !== 'date-preset-max'));
+            expect(withoutMax.published, 'a range that stayed publishes another window than it does today').toEqual(others);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('leaves out every range it is given, from the leading group and the trailing one alike, and moves none of the others', async () => {
+        // 1W leads the row and MAX trails it: the two are drawn by different parts of the
+        // template, so a list that reaches only one of them fails here. YTD stays, beside where
+        // MAX was: leaving a range out must not pull another into the group before it — in the
+        // toolbar a group is a line.
+        vi.setSystemTime(FROZEN_NOW);
+        try {
+            const today = await quickRanges({});
+            const excludePresets: readonly QuickPreset[] = ['1W', 'MAX'];
+            const gone = new Set(['date-preset-1w', 'date-preset-max']);
+
+            const trimmed = await quickRanges({excludePresets});
+
+            expect(trimmed.row, 'the row does not leave out exactly the ranges it was given').toEqual(QUICK_ROW.filter((id) => !gone.has(id)));
+            expect(trimmed.groups, 'a range that stayed changed group').toEqual(today.groups.map((group) => group.filter((id) => !gone.has(id))).filter((group) => group.length > 0));
+            expect(trimmed.published, 'a range that stayed publishes another window than it does today').toEqual(Object.fromEntries(Object.entries(today.published).filter(([id]) => !gone.has(id))));
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+});
+
+// ---------------------------------------------------------------------------
+// P, mini-lot after train 37, item 8. The count presets are English written in
+// the code — '1W', '1M', '3M', '6M', '1Y', '2Y' on the row, '3Y', '5Y', '10Y'
+// among the jolly presets the toolbar adds when it has room — while YTD and MAX
+// beside them come from the catalogue; Italian, French and Spanish write a week
+// S and a year A. The contract: a count preset reads `datePicker.presets.weeks`,
+// `.months` or `.years`, a message with an `{n}` placeholder, called with
+// `{values: {n}}` — on the row and on the jolly presets alike. The preset KEYS
+// do not change: they name the testids, and a click hands the key to
+// `activePreset`, which the pages bind into their URL state.
+//
+// Observed without reading a language, in a marker locale: every key of the
+// English catalogue, and each key the cure adds, reads as a marker of itself —
+// `⟦datePicker.presets.weeks n=1⟧` for the weeks message given n = 1 — so a
+// label taken from the catalogue reads its marker and a literal reads as
+// itself. The locale is set before mounting: the picker reads its preset labels
+// once, when it is created. YTD and MAX (MTD, QTD and WTD among the jolly
+// presets) are the control: they already come from the catalogue, and must read
+// their markers. Red today: every count preset reads its key, and no catalogue
+// has `datePicker.presets.weeks`, `.months` or `.years`.
+// ---------------------------------------------------------------------------
+
+describe('DateRangePicker — the count presets are labelled from the catalogues (P, item 8)', () => {
+    /** A private-use language (BCP 47 reserves qaa–qtz): Intl accepts it, and it is none of the app's catalogues. */
+    const MARKER_LOCALE = 'qaa';
+    const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+
+    /** How a label reads in the marker locale: `⟦key⟧`, or `⟦key n=3⟧` for a message given values. */
+    const marked = (key: string, values: Record<string, string | number> = {}): string => `⟦${[key, ...Object.entries(values).map(([name, value]) => `${name}=${value}`)].join(' ')}⟧`;
+
+    /** The value behind a dotted key of a catalogue, if any. */
+    const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+
+    /** Every dotted key of a catalogue that holds a string. */
+    function stringKeysOf(node: unknown, prefix = ''): string[] {
+        if (typeof node === 'string') return [prefix];
+        if (node === null || typeof node !== 'object') return [];
+        return Object.entries(node).flatMap(([part, child]) => stringKeysOf(child, prefix ? `${prefix}.${part}` : part));
+    }
+
+    /** Each of `keys` that some catalogue has no string for, with those catalogues: `{}` when all four have all of them. */
+    function catalogueGaps(keys: readonly string[]): Record<string, string[]> {
+        const gaps = keys.map((key) => [key, Object.entries(CATALOGUES).flatMap(([lang, catalogue]) => (typeof leafOf(catalogue, key) === 'string' ? [] : [lang]))] as const);
+        return Object.fromEntries(gaps.filter(([, langs]) => langs.length > 0));
+    }
+
+    /** Switch svelte-i18n to the marker locale: every key of the English catalogue reads as its marker, and so does every key of `added` — a key the cure adds, with the names of its values. */
+    async function useMarkerLocale(added: Record<string, readonly string[]>): Promise<void> {
+        const messages: Record<string, string> = Object.fromEntries(stringKeysOf(en).map((key) => [key, marked(key)]));
+        for (const [key, names] of Object.entries(added)) messages[key] = marked(key, Object.fromEntries(names.map((name) => [name, `{${name}}`])));
+        addMessages(MARKER_LOCALE, messages);
+        await setupI18n(MARKER_LOCALE);
+    }
+
+    type CountPreset = {key: QuickPreset; unit: 'weeks' | 'months' | 'years'; n: number};
+    /** The count presets of the row: the key — the testid's name, and what `activePreset` carries — its unit and its count. */
+    const ROW_COUNTS: readonly CountPreset[] = [
+        {key: '1W', unit: 'weeks', n: 1},
+        {key: '1M', unit: 'months', n: 1},
+        {key: '3M', unit: 'months', n: 3},
+        {key: '6M', unit: 'months', n: 6},
+        {key: '1Y', unit: 'years', n: 1},
+        {key: '2Y', unit: 'years', n: 2},
+    ];
+    /** The count presets among the jolly ones. */
+    const JOLLY_COUNTS: readonly CountPreset[] = [
+        {key: '3Y', unit: 'years', n: 3},
+        {key: '5Y', unit: 'years', n: 5},
+        {key: '10Y', unit: 'years', n: 10},
+    ];
+    /** The other jolly presets, already labelled from the catalogue. */
+    const PERIOD_JOLLIES: readonly QuickPreset[] = ['MTD', 'QTD', 'WTD'];
+    const UNIT_KEYS = ['datePicker.presets.weeks', 'datePicker.presets.months', 'datePicker.presets.years'];
+
+    /** A preset's testid: its key, lowercased. */
+    const testIdOf = (key: QuickPreset): string => `date-preset-${key.toLowerCase()}`;
+    /** How a count preset reads in the marker locale. */
+    const countLabel = ({unit, n}: CountPreset): string => marked(`datePicker.presets.${unit}`, {n});
+
+    beforeEach(async () => {
+        await useMarkerLocale(Object.fromEntries(UNIT_KEYS.map((key) => [key, ['n']])));
+    });
+
+    afterEach(async () => {
+        await setupI18n('en');
+    });
+
+    /** Mount with `activePreset` bound, as the pages do: `preset.value` is what they would write to their URL. */
+    function mountBound(props: Record<string, unknown> = {}) {
+        const preset = boundState<QuickPreset | 'custom' | null>(null);
+        const view = render(DateRangePicker, {
+            props: {
+                start: DEF_START,
+                end: DEF_END,
+                onchange: vi.fn(),
+                ...props,
+                get activePreset() {
+                    return preset.value;
+                },
+                set activePreset(next: QuickPreset | 'custom' | null) {
+                    preset.value = next;
+                },
+            },
+        });
+        return {preset, ...view};
+    }
+
+    /** Click each preset in turn, noting the key it hands to `activePreset`. */
+    async function keysCarried(presets: readonly CountPreset[], preset: {value: QuickPreset | 'custom' | null}): Promise<Record<string, unknown>> {
+        const carried: Record<string, unknown> = {};
+        for (const {key} of presets) {
+            await fireEvent.click(screen.getByTestId(testIdOf(key)));
+            carried[key] = preset.value;
+        }
+        return carried;
+    }
+
+    it('the four catalogues have weeks, months and years, each showing its count through {n}', () => {
+        expect(catalogueGaps(UNIT_KEYS), 'key → the catalogues with no string for it').toEqual({});
+        const countless = UNIT_KEYS.flatMap((key) => Object.entries(CATALOGUES).flatMap(([lang, catalogue]) => (String(leafOf(catalogue, key)).includes('{n}') ? [] : [`${lang}: ${key}`])));
+        expect(countless, 'a count message without its {n}').toEqual([]);
+    });
+
+    it('labels each count preset of the row from the catalogue, its count as n, beside YTD and MAX — testids and keys unchanged', async () => {
+        expect(get(t)('datePicker.presets.weeks', {values: {n: 1}}), 'control: the marker locale reads a count message called as the contract says').toBe(marked('datePicker.presets.weeks', {n: 1}));
+        const {preset, container} = mountBound();
+        const labels = Object.fromEntries(quickRow(container).flatMap((id) => (id === 'date-preset-custom' ? [] : [[id, screen.getByTestId(id).textContent?.trim()]])));
+
+        expect(await keysCarried(ROW_COUNTS, preset), 'a count preset no longer hands its own key to activePreset').toEqual(Object.fromEntries(ROW_COUNTS.map(({key}) => [key, key])));
+        expect(labels).toEqual({
+            ...Object.fromEntries(ROW_COUNTS.map((count) => [testIdOf(count.key), countLabel(count)])),
+            'date-preset-ytd': marked('datePicker.presets.ytd'),
+            'date-preset-max': marked('datePicker.presets.max'),
+        });
+    });
+
+    it('labels the jolly year presets the toolbar adds the same way, and measures the labels it draws', async () => {
+        // jsdom has no layout: every box measures zero, the toolbar finds no room and draws no jolly
+        // preset. Here a button is 40px wide and anything else 2000px: room for all six.
+        const room = vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+            const width = this.tagName === 'BUTTON' ? 40 : 2000;
+            return {x: 0, y: 0, top: 0, left: 0, right: width, bottom: 20, width, height: 20, toJSON: () => ({})} as DOMRect;
+        });
+        try {
+            const {preset, container} = mountBound({align: 'start', compact: true});
+            const jollies = [...JOLLY_COUNTS.map(({key}) => key), ...PERIOD_JOLLIES].map(testIdOf);
+            await waitFor(() => expect(quickRow(container), 'premise: given room, the toolbar draws every jolly preset').toEqual(expect.arrayContaining(jollies)));
+            const drawn = Object.fromEntries(jollies.map((id) => [id, screen.getByTestId(id).textContent?.trim() ?? '']));
+
+            // The toolbar sizes its jolly presets from a hidden copy of them: it must measure what it draws.
+            const measured = [...container.querySelectorAll('[aria-hidden="true"] button')].map((button) => button.textContent?.trim() ?? '');
+            expect(measured.sort(), 'the toolbar measures other labels than the jolly presets it draws').toEqual(Object.values(drawn).sort());
+            expect(await keysCarried(JOLLY_COUNTS, preset), 'a jolly preset no longer hands its own key to activePreset').toEqual(Object.fromEntries(JOLLY_COUNTS.map(({key}) => [key, key])));
+            expect(drawn).toEqual({
+                ...Object.fromEntries(JOLLY_COUNTS.map((count) => [testIdOf(count.key), countLabel(count)])),
+                ...Object.fromEntries(PERIOD_JOLLIES.map((key) => [testIdOf(key), marked(`datePicker.presets.${key.toLowerCase()}`)])),
+            });
+        } finally {
+            room.mockRestore();
+        }
     });
 });

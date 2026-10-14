@@ -80,7 +80,7 @@ second, uninstrumented path does not fail — **it goes quiet**.
 | `EXCLUDED_SPECS = {"gallery.spec.ts"}` | `scripts/test_runner/_inventory.py` (~L55) |
 | `all` derivation from the registry | `scripts/test_runner/_common.py` — `_get_category_tests_for_all()` (~L322) |
 | Registry assembly | `scripts/test_runner/_registry.py` |
-| Frontend action definitions | `scripts/test_runner/_frontend_transaction.py`, `_frontend_utility.py`, `_frontend_user.py`, `_frontend_fx.py` (one module per category — there is no `actions/` package) |
+| Frontend action definitions | `scripts/test_runner/_frontend_transaction.py`, `_frontend_utility.py`, `_frontend_user.py`, `_frontend_fx.py` (one module per category — there is no actions package) |
 
 > **Path note (2026-09-01)**: this table previously cited `scripts/test_runner/_orphans.py`
 > and `scripts/test_runner/actions/frontend.py`. Neither has ever existed; both were

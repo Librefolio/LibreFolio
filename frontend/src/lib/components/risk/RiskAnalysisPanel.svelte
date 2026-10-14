@@ -9,6 +9,8 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import type {RenderedSignal} from '$lib/charts/signals';
     import SignalAssetParamControl from '$lib/components/charts/SignalAssetParamControl.svelte';
+    import BenchmarkSelect from '$lib/components/risk/BenchmarkSelect.svelte';
+    import type {RiskBenchmarkState} from '$lib/stores/risk/riskBenchmarkStore.svelte';
     import LineChart, {type LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import KpiCard from '$lib/components/dashboard/KpiCard.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
@@ -16,27 +18,14 @@
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
-    import {buildHistoricalReplayParameters, buildHypotheticalShockParameters, buildRiskAnalyticRequest, buildRiskQueryRequest, buildSimulationParameters, type RiskScenarioDimension, type SimulationView} from '$lib/risk/riskRequest';
+    import {buildHistoricalReplayParameters, buildHypotheticalShockParameters, buildSimulationParameters, STRESS_ASSET_CLASSES, uniformAssetClassShocks, type RiskScenarioDimension, type SimulationView} from '$lib/risk/riskRequest';
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {ensureCountriesLoaded, getAllCountries, getCountryInfo} from '$lib/stores/reference/countryStore';
     import {ensureFxRoutesLoaded, fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
     import {ensureSectorsLoaded, getSectorEmoji, getSectorKeys} from '$lib/stores/reference/sectorStore';
-    import {
-        fetchRiskCatalog,
-        fetchRiskScenarioCatalog,
-        getRiskDefinition,
-        hasRiskCapability,
-        invalidateRisk,
-        queryRisk,
-        type RiskAnalyticResult,
-        type RiskCatalogResponse,
-        type RiskMode,
-        type RiskQueryRequest,
-        type RiskScenarioCatalogResponse,
-        type RiskScope,
-    } from '$lib/stores/risk/riskStore.svelte';
+    import {getRiskDefinition, hasRiskCapability, type RiskAnalyticResult, type RiskScope} from '$lib/stores/risk/riskStore.svelte';
+    import {createRiskPanelController} from '$lib/stores/risk/riskPanelController.svelte';
     import {riskDataQuality, riskMetadata, riskOutput, singleValue, type RiskDataQualityReport} from '$lib/risk/riskTypes';
-    import {sectorI18nKey} from '$lib/utils/assetTypes';
     import CorrelationHeatmap from './CorrelationHeatmap.svelte';
     import RiskBetaBanner from './RiskBetaBanner.svelte';
     import RiskResultFrame from './RiskResultFrame.svelte';
@@ -44,6 +33,8 @@
     import {numericArrows} from '$lib/actions/numericArrows';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import * as riskHelpers from './riskAnalysisHelpers';
+    import {stressBucketLabel as bucketLabel} from './stressBucketLabel';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
     interface Props {
         scope: RiskScope;
         dateStart: string;
@@ -59,36 +50,47 @@
         refreshVersion?: number;
         showHeaderActions?: boolean;
         showBetaBanner?: boolean;
-        onsynced?: () => void | Promise<void>;
+        onsynced?: (detail: {accepted: boolean}) => void | Promise<void>;
     }
 
     let {scope, dateStart, dateEnd, targetCurrency, assetIds = [], title = '', subtitle = '', internalSubset = false, assetClass = null, sectorExposure = null, geographyExposure = null, refreshVersion = 0, showHeaderActions = true, showBetaBanner = true, onsynced}: Props = $props();
 
-    let catalog = $state<RiskCatalogResponse | null>(null);
-    let scenarioCatalog = $state<RiskScenarioCatalogResponse | null>(null);
-    let scenarioCatalogLoading = $state(false);
-    let historicalResults = $state<RiskAnalyticResult[]>([]);
-    let currentResults = $state<RiskAnalyticResult[]>([]);
-    let comparisonResult = $state<RiskAnalyticResult | null>(null);
-    let stressResult = $state<RiskAnalyticResult | null>(null);
-    let replayResult = $state<RiskAnalyticResult | null>(null);
-    let simulationResult = $state<RiskAnalyticResult | null>(null);
-    let initialLoading = $state(true);
-    let refreshing = $state(false);
-    let loadError = $state(false);
-    let requestGeneration = 0;
-    let comparisonGeneration = 0;
-    let stressGeneration = 0;
-    let replayGeneration = 0;
-    let simulationGeneration = 0;
-    let lastBaseSignature = '';
-    let lastRefreshVersion = untrack(() => refreshVersion);
+    // Every fetch, generation guard and invalidation rule lives in the controller;
+    // this component owns only what the user can see and touch. The aliases below
+    // are read-only views, so the markup keeps reading the names it always read.
+    const controller = createRiskPanelController(() => ({scope, dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, refreshVersion}), {scenarioCatalogLoaded: initializeScenarioEditors});
 
-    let comparisonAssetId = $state<number | undefined>(undefined);
-    let comparisonLoading = $state(false);
-    let stressLoading = $state(false);
-    let replayLoading = $state(false);
-    let simulationLoading = $state(false);
+    let catalog = $derived(controller.catalog);
+    let scenarioCatalog = $derived(controller.scenarioCatalog);
+    let historicalResults = $derived(controller.historicalResults);
+    let currentResults = $derived(controller.currentResults);
+    let comparisonResult = $derived(controller.comparisonResult);
+    let stressResult = $derived(controller.stressResult);
+    let replayResult = $derived(controller.replayResult);
+    let simulationResult = $derived(controller.simulationResult);
+    let initialLoading = $derived(controller.initialLoading);
+    let refreshing = $derived(controller.refreshing);
+    let loadError = $derived(controller.loadError);
+    let comparisonLoading = $derived(controller.comparisonLoading);
+    let stressLoading = $derived(controller.stressLoading);
+    let replayLoading = $derived(controller.replayLoading);
+    let simulationLoading = $derived(controller.simulationLoading);
+
+    // The shared benchmark (D370): `BenchmarkSelect` opens on it and writes it back. The asset
+    // itself can be the shared choice — chosen on another page — and is then shown and
+    // flagged, but never compared: an asset is not its own yardstick.
+    let comparisonAssetId = $state<number | null>(null);
+    /** The picker's word on the choice: a comparison is asked on `set` only, never on a `blocked` one (D378). */
+    let comparisonState = $state<RiskBenchmarkState>('none');
+    let comparisonUsable = $derived(comparisonAssetId !== null && comparisonState === 'set' && !(scope.kind === 'asset' && comparisonAssetId === scope.asset_id));
+
+    // Without these four the controller would have nothing to re-issue, and the
+    // `discard-the-answer-not-the-question` fix would be silently gone while every
+    // test stayed green. Registration happens before the first effect runs.
+    controller.registerLauncher('comparison', runComparison);
+    controller.registerLauncher('stress', runStress);
+    controller.registerLauncher('replay', runReplay);
+    controller.registerLauncher('simulation', runSimulation);
     let stressClientError = $state(false);
     let stressPercent = $state(-10);
     let stressPresetId = $state('');
@@ -118,8 +120,7 @@
         {value: 'mc', label: 'MC'},
         {value: 'qmc', label: 'QMC'},
     ];
-    const pathOptions = [1024, 2048, 4096, 8192, 16384].map((value) => ({value: String(value), label: value.toLocaleString()}));
-    const stressAssetClasses = ['STOCK', 'ETF', 'BOND', 'CRYPTO', 'FUND', 'CROWDFUND', 'HOLD', 'INDEX', 'OTHER'] as const;
+    const pathOptions = $derived([1024, 2048, 4096, 8192, 16384].map((value) => ({value: String(value), label: value.toLocaleString(uiLocale())})));
     const simulationTabs = $derived([
         {id: 'evolution', label: $t('risk.simulation.evolution'), testId: 'risk-simulation-view-evolution'},
         {id: 'terminal_distribution', label: $t('risk.simulation.terminalDistribution'), testId: 'risk-simulation-view-terminal'},
@@ -177,7 +178,7 @@
     let stressAllBuckets = $derived.by(() => {
         void referenceLabelsVersion;
         const buckets = new Set([...stressPresentBuckets, ...Object.keys(stressBucketShocks)]);
-        if (stressDimension === 'asset_class') stressAssetClasses.forEach((bucket) => buckets.add(bucket));
+        if (stressDimension === 'asset_class') STRESS_ASSET_CLASSES.forEach((bucket) => buckets.add(bucket));
         if (stressDimension === 'sector') getSectorKeys().forEach((bucket) => buckets.add(bucket));
         if (stressDimension === 'geography') {
             getAllCountries().forEach((country) => buckets.add(country.iso3));
@@ -322,57 +323,6 @@
     });
 
     $effect(() => {
-        const signature = JSON.stringify({
-            scope,
-            dateStart,
-            dateEnd,
-            targetCurrency,
-            appliedRiskFreePercent,
-        });
-        if (signature === lastBaseSignature) return;
-        lastBaseSignature = signature;
-        // A run the user already asked for has to survive a late-arriving parameter.
-        // The asset page resolves `dateStart` from the first price response and
-        // `targetCurrency` from the asset payload, so on a slow link the signature
-        // moves *after* the button was pressed. Dropping the in-flight answer is
-        // right — it was computed for parameters that no longer hold — but dropping
-        // the request with it leaves the user with no chart, no spinner and no
-        // error, and nothing that says to press again. Re-issue instead.
-        const rerun = untrack(() => ({
-            comparison: comparisonLoading,
-            stress: stressLoading,
-            replay: replayLoading,
-            simulation: simulationLoading,
-        }));
-        comparisonGeneration += 1;
-        stressGeneration += 1;
-        replayGeneration += 1;
-        simulationGeneration += 1;
-        comparisonResult = null;
-        stressResult = null;
-        replayResult = null;
-        simulationResult = null;
-        comparisonLoading = false;
-        stressLoading = false;
-        replayLoading = false;
-        simulationLoading = false;
-        untrack(() => {
-            void loadBase(false);
-            if (rerun.comparison) void runComparison();
-            if (rerun.stress) void runStress();
-            if (rerun.replay) void runReplay();
-            if (rerun.simulation) void runSimulation();
-        });
-    });
-
-    $effect(() => {
-        const version = refreshVersion;
-        if (version === lastRefreshVersion) return;
-        lastRefreshVersion = version;
-        untrack(() => void loadBase(true));
-    });
-
-    $effect(() => {
         untrack(() => {
             void Promise.all([ensureAssetsLoaded(), ensureFxRoutesLoaded()]);
             if (scope.kind === 'asset') void loadScenarioCatalog();
@@ -406,12 +356,7 @@
 
     function stressBucketLabel(bucket: string, dimension: RiskScenarioDimension): string {
         void referenceLabelsVersion;
-        if (bucket === 'Other') return $t('common.other');
-        if (bucket === 'european_union') return $t('risk.stress.europeanUnion');
-        if (dimension === 'asset_class') return $t(`assets.types.${bucket}`);
-        if (dimension === 'sector') return `${getSectorEmoji(bucket)} ${$t(`sectors.${sectorI18nKey(bucket)}`)}`;
-        const country = getCountryInfo(bucket);
-        return `${country.flag_emoji} ${country.name}`;
+        return bucketLabel(bucket, dimension, {translate: $t, sectorEmoji: getSectorEmoji, country: getCountryInfo});
     }
 
     function stressImpactDimension(value: unknown): RiskScenarioDimension {
@@ -423,8 +368,7 @@
         replayStart = scalarString(scenario.defaults.start) ?? dateStart;
         replayEnd = scalarString(scenario.defaults.end) ?? dateEnd;
         replayPresetInitialized = true;
-        replayResult = null;
-        replayGeneration += 1;
+        controller.resetAnalysis('replay');
     }
 
     function applyStressPreset(scenario: HypotheticalShockScenario): void {
@@ -435,8 +379,7 @@
         stressEditedBuckets = new Set();
         stressShowAllBuckets = false;
         stressPresetInitialized = true;
-        stressResult = null;
-        stressGeneration += 1;
+        controller.resetAnalysis('stress');
     }
 
     function initializeScenarioEditors(): void {
@@ -461,16 +404,7 @@
     }
 
     async function loadScenarioCatalog(): Promise<void> {
-        if (scenarioCatalog || scenarioCatalogLoading) return;
-        scenarioCatalogLoading = true;
-        try {
-            scenarioCatalog = await fetchRiskScenarioCatalog();
-        } catch (error) {
-            console.error('[Risk] Failed to load scenario catalog:', error);
-        } finally {
-            scenarioCatalogLoading = false;
-            initializeScenarioEditors();
-        }
+        await controller.loadScenarioCatalog();
     }
 
     function selectReplayPreset(presetId: string): void {
@@ -490,15 +424,13 @@
         if (dimension !== 'asset_class' && stressBucketShocks.Other === undefined) stressBucketShocks = {...stressBucketShocks, Other: 0};
         stressEditedBuckets = new Set();
         stressShowAllBuckets = false;
-        stressResult = null;
-        stressGeneration += 1;
+        controller.resetAnalysis('stress');
     }
 
     function updateStressBucket(bucket: string, percentage: number): void {
         stressBucketShocks = {...stressBucketShocks, [bucket]: percentage / 100};
         stressEditedBuckets = new Set(stressEditedBuckets).add(bucket);
-        stressResult = null;
-        stressGeneration += 1;
+        controller.resetAnalysis('stress');
     }
 
     function resultByCode(results: RiskAnalyticResult[], analyticCode: string): RiskAnalyticResult | null {
@@ -519,198 +451,81 @@
         return key ? $t(key) : '';
     }
 
-    function buildBaseAnalytics(mode: RiskMode): RiskQueryRequest['analytics'] {
-        return riskHelpers.buildBaseAnalytics(mode, {
-            appliedRiskFreePercent,
-            hasCapability: (code, capabilityMode) => hasRiskCapability(catalog, code, scope.kind, capabilityMode),
-        });
-    }
-
     async function loadBase(force: boolean): Promise<void> {
-        const generation = ++requestGeneration;
-        const hadResults = historicalResults.length > 0 || currentResults.length > 0;
-        initialLoading = !hadResults;
-        refreshing = hadResults;
-        loadError = false;
-
-        try {
-            catalog = await fetchRiskCatalog();
-            if (generation !== requestGeneration) return;
-            // A null catalog is a *failure* to load, not a slow load: without this
-            // the panel would sit at data-catalog="pending" forever and every gated
-            // section would silently look "not supported".
-            if (!catalog) {
-                loadError = true;
-                return;
-            }
-
-            const historicalAnalytics = buildBaseAnalytics('historical');
-            const currentAnalytics = buildBaseAnalytics('current_composition');
-            const [historical, current] = await Promise.all([
-                historicalAnalytics.length > 0
-                    ? queryRisk(
-                          buildRiskQueryRequest({
-                              scope,
-                              dateStart,
-                              dateEnd,
-                              targetCurrency,
-                              mode: 'historical',
-                              analytics: historicalAnalytics,
-                          }),
-                          force,
-                      )
-                    : null,
-                currentAnalytics.length > 0
-                    ? queryRisk(
-                          buildRiskQueryRequest({
-                              scope,
-                              dateStart,
-                              dateEnd,
-                              targetCurrency,
-                              mode: 'current_composition',
-                              compositionPolicy: 'current_buy_and_hold',
-                              analytics: currentAnalytics,
-                          }),
-                          force,
-                      )
-                    : null,
-            ]);
-
-            if (generation !== requestGeneration) return;
-            historicalResults = historical?.items ?? [];
-            currentResults = current?.items ?? [];
-        } catch (error) {
-            console.error('[Risk] Failed to load base analytics:', error);
-            if (generation === requestGeneration) loadError = true;
-        } finally {
-            if (generation === requestGeneration) {
-                initialLoading = false;
-                refreshing = false;
-            }
-        }
-    }
-
-    async function runSingle(code: string, mode: RiskMode, parameters: RiskQueryRequest['analytics'][number]['parameters']): Promise<RiskAnalyticResult | null> {
-        if (!hasRiskCapability(catalog, code, scope.kind, mode)) return null;
-        const response = await queryRisk(
-            buildRiskQueryRequest({
-                scope,
-                dateStart,
-                dateEnd,
-                targetCurrency,
-                mode,
-                compositionPolicy: mode === 'current_composition' ? 'current_buy_and_hold' : undefined,
-                analytics: [buildRiskAnalyticRequest(`single-${code}`, code, parameters)],
-            }),
-        );
-        return response?.items?.[0] ?? null;
+        await controller.loadBase(force);
     }
 
     async function runComparison(): Promise<void> {
-        if (!comparisonAssetId) return;
-        const generation = ++comparisonGeneration;
-        comparisonLoading = true;
-        try {
-            const result = await runSingle('comparison', 'historical', {comparison_asset_id: comparisonAssetId});
-            if (generation === comparisonGeneration) comparisonResult = result;
-        } catch (error) {
-            console.error('[Risk] Comparison failed:', error);
-            if (generation === comparisonGeneration) comparisonResult = null;
-        } finally {
-            if (generation === comparisonGeneration) comparisonLoading = false;
-        }
+        await controller.runGuarded('comparison', () => (comparisonUsable ? {code: 'comparison', mode: 'historical', parameters: {comparison_asset_id: comparisonAssetId}} : null));
     }
 
     async function runStress(): Promise<void> {
         stressClientError = scopeAssetIds.length === 0;
         if (stressClientError) return;
-        const generation = ++stressGeneration;
-        stressLoading = true;
-        try {
+        await controller.runGuarded('stress', () => {
             const assetBucketShocks = Object.keys(stressBucketShocks).length > 0 ? stressBucketShocks : {[presentStressBuckets('asset_class')[0]]: stressPercent / 100};
-            const result = await runSingle(
-                'stress',
-                'current_composition',
-                scope.kind === 'asset'
-                    ? buildHypotheticalShockParameters({
-                          dimension: stressDimension,
-                          bucketShocks: assetBucketShocks,
-                      })
-                    : buildHypotheticalShockParameters({
-                          dimension: 'asset_class',
-                          bucketShocks: Object.fromEntries(stressAssetClasses.map((assetType) => [assetType, stressPercent / 100])),
-                      }),
-            );
-            if (generation === stressGeneration) stressResult = result;
-        } catch (error) {
-            console.error('[Risk] Stress failed:', error);
-            if (generation === stressGeneration) stressResult = null;
-        } finally {
-            if (generation === stressGeneration) stressLoading = false;
-        }
+            return {
+                code: 'stress',
+                mode: 'current_composition',
+                parameters:
+                    scope.kind === 'asset'
+                        ? buildHypotheticalShockParameters({dimension: stressDimension, bucketShocks: assetBucketShocks})
+                        : buildHypotheticalShockParameters({
+                              dimension: 'asset_class',
+                              bucketShocks: uniformAssetClassShocks(stressPercent / 100),
+                          }),
+            };
+        });
     }
 
     async function runReplay(): Promise<void> {
-        if (scope.kind !== 'asset') return;
-        const generation = ++replayGeneration;
-        replayLoading = true;
-        try {
-            const result = await runSingle(
-                'stress',
-                'current_composition',
-                buildHistoricalReplayParameters({
-                    start: replayStart,
-                    end: replayEnd,
-                    missingHistoryPolicy: 'manual_proxy_or_exclude',
-                    proxyAssets: replayProxyAssetId && !replayExcludeAsset ? [{asset_id: scope.asset_id, proxy_asset_id: replayProxyAssetId}] : [],
-                    excludedAssetIds: replayExcludeAsset ? [scope.asset_id] : [],
-                }),
-            );
-            if (generation === replayGeneration) replayResult = result;
-        } catch (error) {
-            console.error('[Risk] Historical replay failed:', error);
-            if (generation === replayGeneration) replayResult = null;
-        } finally {
-            if (generation === replayGeneration) replayLoading = false;
-        }
+        await controller.runGuarded('replay', () =>
+            scope.kind !== 'asset'
+                ? null
+                : {
+                      code: 'stress',
+                      mode: 'current_composition',
+                      parameters: buildHistoricalReplayParameters({
+                          start: replayStart,
+                          end: replayEnd,
+                          missingHistoryPolicy: 'manual_proxy_or_exclude',
+                          proxyAssets: replayProxyAssetId && !replayExcludeAsset ? [{asset_id: scope.asset_id, proxy_asset_id: replayProxyAssetId}] : [],
+                          excludedAssetIds: replayExcludeAsset ? [scope.asset_id] : [],
+                      }),
+                  },
+        );
     }
 
     async function runSimulation(): Promise<void> {
-        const generation = ++simulationGeneration;
-        simulationLoading = true;
-        try {
-            const result = await runSingle(
-                'simulation',
-                'current_composition',
-                buildSimulationParameters({
-                    samplingMethod: simulationSampling,
-                    horizonDays: simulationHorizonDays,
-                    pathCount: simulationPaths,
-                    randomSeed: simulationRandomSeed,
-                    sobolStartIndex: simulationSobolStartIndex,
-                }),
-            );
-            if (generation === simulationGeneration) simulationResult = result;
-        } catch (error) {
-            console.error('[Risk] Simulation failed:', error);
-            if (generation === simulationGeneration) simulationResult = null;
-        } finally {
-            if (generation === simulationGeneration) simulationLoading = false;
-        }
+        await controller.runGuarded('simulation', () => ({
+            code: 'simulation',
+            mode: 'current_composition',
+            parameters: buildSimulationParameters({
+                // This surface still prints the fixed `risk.simulation.assumptions`
+                // caption (:1058) and renders no provenance block, so it describes a
+                // lognormal process whatever the engine did. Moving it to the
+                // resampled default would put honest numbers under a caption that
+                // misdescribes them — which is the case `simulation.py:118-138`
+                // names when it keeps pre-resampler callers on the parametric
+                // engine. The mode selector lives on L4, and so does the default.
+                process: 'gbm',
+                regime: 'none',
+                samplingMethod: simulationSampling,
+                horizonDays: simulationHorizonDays,
+                pathCount: simulationPaths,
+                randomSeed: simulationRandomSeed,
+                sobolStartIndex: simulationSobolStartIndex,
+            }),
+        }));
     }
 
-    async function handleSynced(): Promise<void> {
-        invalidateRisk();
-        comparisonGeneration += 1;
-        stressGeneration += 1;
-        replayGeneration += 1;
-        simulationGeneration += 1;
-        comparisonResult = null;
-        stressResult = null;
-        replayResult = null;
-        simulationResult = null;
-        await loadBase(true);
-        await onsynced?.();
+    // The detail reaches the parent from here, not from the controller hook: the
+    // controller's `onsynced` carries no argument, so leaving both wired would
+    // have called the parent twice — once bare, once with the detail — and the
+    // source contract in riskAnalysisHelpers.test.ts only reads this body.
+    async function handleSynced(detail: {accepted: boolean}): Promise<void> {
+        await controller.handleSynced();
+        await onsynced?.(detail);
     }
 
     function handleQualityAction(action: string, target: string | null): void {
@@ -734,7 +549,7 @@
     }
 
     function formatAmount(value: string | readonly (string | null)[] | null | undefined): string {
-        return riskHelpers.formatCurrencyAmount(value, targetCurrency);
+        return riskHelpers.formatScopedCurrencyAmount(value, targetCurrency, scope.kind);
     }
 
     function addDays(baseDate: string, days: number): string {
@@ -888,18 +703,20 @@
             <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-200">{analyticTitle('comparison', 'risk.analytics.comparison.name')}</h3>
             <p class="text-xs text-gray-400 dark:text-gray-500">{analyticDescription('comparison')}</p>
             <div class="mt-3 flex flex-wrap items-end gap-2">
-                <SignalAssetParamControl
-                    value={comparisonAssetId}
-                    excludeAssetIds={scope.kind === 'asset' ? [scope.asset_id] : []}
-                    testId="risk-comparison-asset-select"
-                    onchange={(assetId) => {
-                        comparisonGeneration += 1;
-                        comparisonAssetId = assetId;
-                        comparisonResult = null;
-                        comparisonLoading = false;
+                <BenchmarkSelect
+                    bind:value={comparisonAssetId}
+                    bind:state={comparisonState}
+                    measuredAssetIds={scope.kind === 'asset' ? [scope.asset_id] : []}
+                    period={{start: dateStart, end: dateEnd}}
+                    currency={targetCurrency}
+                    testid="risk-comparison-asset-select"
+                    placeholder={$t('signals.comparisonAsset.placeholder')}
+                    onchange={() => {
+                        controller.bumpGeneration('comparison');
+                        controller.resetAnalysis('comparison');
                     }}
                 />
-                <button class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" onclick={runComparison} disabled={!comparisonAssetId || comparisonLoading} data-testid="risk-comparison-run">
+                <button class="flex items-center gap-1.5 rounded-lg bg-libre-green px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50" onclick={runComparison} disabled={!comparisonUsable || comparisonLoading} data-testid="risk-comparison-run">
                     <Play size={13} />
                     {$t('risk.actions.compare')}
                 </button>
@@ -1093,10 +910,10 @@
                             excludeAssetIds={[scope.asset_id]}
                             testId="risk-replay-proxy-select"
                             onchange={(assetId) => {
-                                replayGeneration += 1;
+                                controller.bumpGeneration('replay');
                                 replayProxyAssetId = assetId;
                                 if (assetId) replayExcludeAsset = false;
-                                replayResult = null;
+                                controller.setResult('replay', null);
                             }}
                         />
                     </div>
@@ -1106,10 +923,10 @@
                             checked={replayExcludeAsset}
                             data-testid="risk-replay-exclude"
                             onchange={(event) => {
-                                replayGeneration += 1;
+                                controller.bumpGeneration('replay');
                                 replayExcludeAsset = event.currentTarget.checked;
                                 if (replayExcludeAsset) replayProxyAssetId = undefined;
-                                replayResult = null;
+                                controller.setResult('replay', null);
                             }}
                         />
                         {$t('risk.replay.exclude')}

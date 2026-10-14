@@ -3,9 +3,11 @@
  *
  * Priority for all icon lookups (matches `brokerIconChain.svelte.ts`):
  *  1. icon_url — explicitly uploaded by the user (most reliable)
- *  2. portal_url → origin + `/favicon.ico` (external heuristic)
- *  3. default_import_plugin → cached plugin icon (app-hosted, async)
- *  4. caller UI fallback (usually system briefcase icon)
+ *  2. default_import_plugin → cached plugin icon, when the plugin is made for a broker
+ *  3. portal_url → origin + `/favicon.ico` (external heuristic)
+ *  4. default_import_plugin → cached plugin icon, when the plugin is a generic fallback
+ *     (`isFallbackPlugin`: the generic CSV's icon is the same for every broker)
+ *  5. caller UI fallback (usually system briefcase icon)
  *
  * For reactive multi-URL fallback with load-error retry, use
  * `createBrokerIconChain` from `brokerIconChain.svelte.ts`.
@@ -16,6 +18,7 @@
 import type {BrokerLike} from './brokerColors';
 import {zodiosApi} from '$lib/api';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
+import {isFallbackPlugin} from '$lib/utils/brim/pluginKind';
 
 /** Minimal shape for broker icon resolution (subset of BrokerLike). */
 export interface BrokerIconSource {
@@ -41,6 +44,8 @@ export interface BrokerIconHtmlOptions {
 // ============================================================================
 
 let _pluginIconCache: Map<string, string> | null = null;
+/** Generic fallback plugins (`isFallbackPlugin`): their icon comes after the portal's favicon. */
+let _fallbackPluginCodes = new Set<string>();
 let _pluginIconLoading: Promise<void> | null = null;
 
 /** Ensure plugin icon cache is populated. Safe to call multiple times. */
@@ -51,9 +56,11 @@ export async function ensurePluginIconsLoaded(): Promise<void> {
         try {
             const plugins = await zodiosApi.list_plugins_api_v1_brokers_import_plugins_get();
             _pluginIconCache = new Map();
+            _fallbackPluginCodes = new Set();
             for (const p of plugins) {
                 const rawIcon = p?.icon_url as string | null | undefined;
                 if (rawIcon && p.code) _pluginIconCache.set(p.code, rawIcon);
+                if (p?.code && isFallbackPlugin(p)) _fallbackPluginCodes.add(p.code);
             }
         } catch {
             _pluginIconCache = new Map(); // don't retry on error
@@ -73,6 +80,12 @@ export function getPluginIconUrl(pluginCode: string | null | undefined): string 
     const normalizedCode = normalizeBrokerIconField(pluginCode);
     if (!normalizedCode || !_pluginIconCache) return null;
     return _pluginIconCache.get(normalizedCode) ?? null;
+}
+
+/** Sync lookup — whether a plugin is a generic fallback, once the plugin icon cache is loaded. */
+export function isFallbackPluginCode(pluginCode: string | null | undefined): boolean {
+    const normalizedCode = normalizeBrokerIconField(pluginCode);
+    return !!normalizedCode && _fallbackPluginCodes.has(normalizedCode);
 }
 
 export function normalizeBrokerIconField(value: unknown): string | null {
@@ -118,8 +131,9 @@ function buildBriefcaseFallbackHtml({width = 16, height = 16, className, style, 
  * Build the ordered list of candidate icon URLs for a broker.
  * Priority matches the reactive chain in `brokerIconChain.svelte.ts`:
  *   1. icon_url (custom, most reliable)
- *   2. portal_url/favicon.ico (external heuristic)
- *   3. default_import_plugin → cached plugin icon (app-hosted, async-loaded)
+ *   2. default_import_plugin → cached plugin icon, when the plugin is made for a broker
+ *   3. portal_url/favicon.ico (external heuristic)
+ *   4. default_import_plugin → cached plugin icon, when the plugin is a generic fallback
  *
  * For non-reactive contexts (inline HTML renderers). For full fallback
  * chain with load-error retry use `createBrokerIconChain` in components.
@@ -129,7 +143,10 @@ export function getBrokerIconCandidates(broker: BrokerIconSource | null | undefi
     const urls: string[] = [];
     const iconUrl = normalizeBrokerIconField(broker.icon_url);
     const portalUrl = normalizeBrokerIconField(broker.portal_url);
+    const pluginIcon = getPluginIconUrl(broker.default_import_plugin);
+    const genericPlugin = isFallbackPluginCode(broker.default_import_plugin);
     if (iconUrl) urls.push(iconUrl);
+    if (pluginIcon && !genericPlugin) urls.push(pluginIcon);
     if (portalUrl) {
         try {
             urls.push(new URL(portalUrl).origin + '/favicon.ico');
@@ -137,8 +154,7 @@ export function getBrokerIconCandidates(broker: BrokerIconSource | null | undefi
             /* invalid URL — skip */
         }
     }
-    const pluginIcon = getPluginIconUrl(broker.default_import_plugin);
-    if (pluginIcon) urls.push(pluginIcon);
+    if (pluginIcon && genericPlugin) urls.push(pluginIcon);
     return urls;
 }
 

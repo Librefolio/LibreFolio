@@ -17,5 +17,6 @@ export {default as CountrySearchSelect} from './CountrySearchSelect.svelte';
 export {default as SectorSearchSelect} from './SectorSearchSelect.svelte';
 export {default as UserSearchSelect} from './UserSearchSelect.svelte';
 export {default as FxProviderSelect} from './FxProviderSelect.svelte';
+export {default as AssetTypeSelect} from './AssetTypeSelect.svelte';
 
 export * from './types';

@@ -403,7 +403,6 @@ class BackwardFillInfo(BaseModel):
         return parse_ISO_date(v)
 
 
-
 class FxBackwardFillInfo(BaseModel):
     """
     FX-specific backward-fill staleness, decoupled from price backward-fill.

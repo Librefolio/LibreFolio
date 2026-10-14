@@ -20,7 +20,7 @@
     import type {SignRule} from '$lib/stores/transactions/transactionTypeStore';
     import CurrencySearchSelect from '../select/CurrencySearchSelect.svelte';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+    import {decimalArrowStep, filterDecimalInput, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {computeSignHint} from '$lib/utils/transactions/signHintColor';
 
     interface CashValue {
@@ -103,7 +103,9 @@
     }
 
     function handleAmountInput(e: Event) {
-        amountStr = (e.currentTarget as HTMLInputElement).value;
+        const input = e.currentTarget as HTMLInputElement;
+        amountStr = filterDecimalInput(input.value, true);
+        if (input.value !== amountStr) input.value = amountStr;
         emit();
     }
 

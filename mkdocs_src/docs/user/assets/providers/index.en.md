@@ -1,6 +1,9 @@
 # 🔌 Providers
 
-LibreFolio supports multiple pricing providers to automatically fetch current prices and historical data for your assets.
+A provider keeps an asset's prices up to date for you: today's price, its history and, for some,
+details such as the type or the sector. Each asset has at most one provider: pick a
+**Search Online** result to connect it, or set it up yourself in **Provider Assignment** — see
+[Create & Edit](../create-edit.md).
 
 <div class="grid cards" style="margin-top: 1.5rem; margin-bottom: 2rem;">
     <a href="yahoo-finance/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
@@ -8,7 +11,7 @@ LibreFolio supports multiple pricing providers to automatically fetch current pr
             <img src="https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Yahoo Finance favicon">
             <span class="card-title" style="margin: 0;">Yahoo Finance</span>
         </div>
-        <span class="card-desc">Default provider for global stocks, ETFs, and mutual funds.</span>
+        <span class="card-desc">Stocks, ETFs, funds and crypto from exchanges worldwide.</span>
     </a>
     <a href="justetf/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -22,7 +25,7 @@ LibreFolio supports multiple pricing providers to automatically fetch current pr
             <img src="https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico" width="24" height="24" style="object-fit: contain; border-radius: 4px;" alt="Borsa Italiana favicon">
             <span class="card-title" style="margin: 0;">Borsa Italiana</span>
         </div>
-        <span class="card-desc">Italian stocks, bonds, ETFs, and funds with smart URL search.</span>
+        <span class="card-desc">Italian stocks, bonds, ETFs and funds, in Italian or English.</span>
     </a>
     <a href="css-scraper/" class="card-link" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -49,17 +52,29 @@ LibreFolio supports multiple pricing providers to automatically fetch current pr
 
 ## 📊 Provider Comparison
 
-| Provider | Current Price | History | Search | Identifier | Notes |
-|----------|:---:|:---:|:---:|---|---|
-| <img src="https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Yahoo Finance** | ✅ | ✅ | ✅ | Ticker (e.g., `AAPL`, `VWCE.DE`) | Best for stocks, ETFs, mutual funds |
-| <img src="https://www.justetf.com/android-chrome-144x144.png?v2" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **justETF** | ✅ (EUR) | ✅ | ✅ | ISIN (e.g., `IE00BK5BQT80`) | European ETFs, multi-currency |
-| <img src="https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Borsa Italiana** | ✅ | ✅ | ✅ | ISIN; funds use internal code | Italian stocks, bonds, ETFs, and funds. Fund NAV current value only when dated today; history is one NAV point at its real date. |
-| <img src="../../../static/cssscraper.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CSS Scraper** | ✅ | ❌ | ❌ | URL | Scrape any web page for price data |
-| <img src="../../../static/scheduled_investment.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Scheduled Investment** | ✅ | ✅ | ❌ | Auto-generated | Fixed-income instruments with interest schedules |
+| Provider | Current price | History | Search | Details | Identifier | Best for |
+|----------|:---:|:---:|:---:|:---:|---|---|
+| <img src="https://s.yimg.com/cv/apiv2/myc/finance/Finance_icon_0919_250x252.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Yahoo Finance** | ✅ | ✅ | ✅ | ✅ | Ticker (`AAPL`, `VWCE.DE`) or ISIN | Stocks, ETFs, funds and crypto worldwide |
+| <img src="https://www.justetf.com/android-chrome-144x144.png?v2" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **justETF** | ✅ | ✅ | ✅ | ✅ | ISIN (`IE00B4L5Y983`) | European ETFs, priced in EUR, USD, CHF or GBP |
+| <img src="https://www.borsaitaliana.it/media-rwd/assets/images/favicon.ico" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Borsa Italiana** | ✅ | ✅ | ✅ | ✅ | ISIN (`IT0003128367`) | Instruments listed in Milan, Italian mutual funds |
+| <img src="../../../static/cssscraper.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **CSS Scraper** | ✅ | ❌ | ❌ | ❌ | Page URL | A price shown on any public web page |
+| <img src="../../../static/scheduled_investment.png" width="16" height="16" style="vertical-align: middle; margin-right: 6px; border-radius: 2px;"> **Scheduled Investment** | ✅ | ✅ | ❌ | ❌ | None — created for you | Deposits, loans and bonds valued by their interest |
+
+**Details** are the type, currency, description and similar data that LibreFolio offers to fill
+in for you. Some providers also record [asset events](../detail/events.md): dividends (Yahoo
+Finance, justETF), splits (Yahoo Finance), interest payouts and maturity (Scheduled Investment).
 
 ## 🎯 Choosing a Provider
 
-- **Stocks & ETFs**: Use **Yahoo Finance** — widest coverage, supports search
-- **European ETFs**: Use **justETF** for more detailed European ETF data
-- **Borsa Italiana**: Use Borsa Italiana directly for Euronext Milano stocks, bonds, ETFs, and funds. Smart Search can also resolve supported Borsa provider URLs and capture fund pricing parameters automatically.
-- **Savings accounts / Fixed deposits**: Use **Scheduled Investment** with interest rate schedules
+- **Stocks, ETFs or crypto on any exchange** → **Yahoo Finance**.
+- **A European ETF**, or ETF prices in USD, CHF or GBP → **justETF**.
+- **Stocks, bonds, ETFs or funds traded in Milan**, and Italian mutual funds → **Borsa Italiana**.
+- **A price that only a web page shows** → **CSS Scraper**.
+- **A savings account, term deposit, P2P loan or bond followed by its interest** →
+  **Scheduled Investment**.
+- **Nothing fits?** Tick **No Provider** and enter the prices yourself in the
+  [Data Editor](../detail/data-editor.md).
+
+## 🔗 Related
+
+- 🛠️ **For developers: [Asset Providers](../../../developer/backend/assets/system_providers.md)** — How each provider works inside

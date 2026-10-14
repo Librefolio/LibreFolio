@@ -4,6 +4,35 @@
 > Format: `## [YYYY-MM-DD] {operation} | {title}`
 > Parse: `grep "^## \[" log.md | tail -10`
 
+## [2026-10-07] update | CI/CD Release Pipeline
+Realigned the concept page with the real release.yml after R12 (workstream M): no screenshot cache,
+no `force_gallery`, no test stage; the gallery is now a release gate (soft on dev) with failure
+evidence kept; Docker tags follow the user guide (latest = light, X.Y.Z full, X.Y.Z-light, no v,
+no latest-light) with per-variant push guards; the light image is pushed before the full one so the
+update prompt's image gate (plain X.Y.Z) fires only once `latest` moved; cache keys carry the runner
+image ahead of the ubuntu-latest → 26.04 move; dashboard gallery fixture + its Vitest guard.
+Updated: [[concepts/ci-release-pipeline]].
+Graph not updated: graphify-out/graph.json and .graphify_python are absent in this worktree (ignored
+artifacts); queued for the next graphify --update on the main checkout.
+
+## [2026-09-10] file | SQLite savepoint without an outer write transaction commits on release
+Recorded the deferred-BEGIN trap found by the asset deletion commit-failure
+regression and the no-op-write fix that restores real outer rollback semantics.
+Filed: [[problems/sqlite-savepoint-without-write-begins-as-transaction]].
+
+## [2026-09-09] file | Browser GHCR image probe could not complete the anonymous Bearer flow
+Filed the integrated update-check lesson: stable release metadata and image
+pullability are separate probes; GHCR's anonymous challenge is completed by a
+fixed-target authenticated same-origin endpoint with strict trust validation,
+explicit pending/error mapping, and a fail-closed frontend.
+Filed: [[problems/ghcr-browser-cors-auth-flow]].
+Updated: [[concepts/ci-release-pipeline]].
+Graph updated with a scoped incremental pass over those two pages: +28 nodes,
++35 edges, 3 hyperedges total, and 169 recomputed communities. The manifest
+was stamped only for the two target pages; unrelated dirty corpus files were
+not extracted. Source-path validation remained at the same 43 missing paths /
+65 occurrences present before this filing, with no new failure from this work.
+
 ## [2026-09-02] file | MWRR pole when the period starts on a data-less day
 Filed the beta-reported MWRR cumulative pole (+9.94% on a −1.5% period): deposit on the first NAV day double-counted when the start date had no data. Fixed in the period re-basing (flows embedded in the first snapshot are no longer re-added).
 Filed: [[problems/mwrr-pole-dataless-period-start]].
@@ -2061,3 +2090,1357 @@ mid-typing (`12,` → `12`); fix = confronto numerico normalizzato. Include la t
 Filed: [[problems/compactcashcell-decimal-separator-feedback-loop]].
 
 2026-09-03 — P1 audit wave executed (all 18 tasks): C901 gate@10 (199 sites triaged: 173 flat noqa, 26 TODO-refactor), TRY400 55/55, dead code backend+frontend, i18n -25 keys, currency-graph dead machinery removed (user hypothesis confirmed), response_model ×6 + TS discriminator fix (enum extra + post-processor list), spawn-worker coverage via sitecustomize. Filed: [[problems/sitecustomize-shadows-homebrew-python]] (PYTHONPATH sitecustomize shadowing Homebrew's → pipenv broken; chain-exec fix). WS-H migration proof: published 1.0.1 image → current image on same volume, both data migrations verified correct.
+
+## [2026-09-09] update | Group E import and bulk UX reconciliation
+Reconciled the broker-scoped upload decision and import knowledge against the integrated
+code after Group E. Corrected the multipart upload route, single-broker-per-file Generic
+CSV boundary, positive high fake IDs, explicit asset resolution, full inspector PATCH
+semantics, final duplicate recheck, guarded bulk handoff, and E7/E8 stable-row diagnostics
+with display-only chronological sorting.
+Updated: [[decisions/brim-broker-scoped]], [[decisions/brim-fake-asset-id]],
+[[decisions/brim-parser-only]], [[entities/import-wizard-modal]],
+[[workflows/brim-import-flow]], [[features/F-012]], [[features/F-049]],
+[[features/F-083]], [[decisions/import-wizard-v5-paradigm]], and
+[[features/F-011]], [[features/F-013]], [[concepts/import-todo-signals]],
+[[domains/transactions]], and [[features/registry]].
+
+## [2026-09-05] file | Asset Global laboratory — the no-money rule and three verified traps
+
+Mandate F of the Risk Analysis replan rewrote the Asset Global correlation surface.
+`wiki-search` found **zero** prior pages on Asset Global, correlation or the heatmap,
+so the session's findings had no home to be added to.
+
+Filed the governing invariant — no position, exposure or portfolio impact in money on
+a page whose subject has no weights — together with the reason its obvious test is
+worthless: the euro there is *latent, not present*, so "assert no `€` on screen" passes
+because the backend sends no numbers and would keep passing with every guard deleted.
+The guard is a net that stubs money **in**.
+
+Also filed three traps verified against code, not inherited from the plan: `front check`
+is blind to `e2e/**` and born red without `api sync`; the generated client's TS type for
+`RiskMatrixCell.value` contradicts its own Zod validator; and the ASSET_SET scope has no
+primary series, which cancelled a planned KPI-column deliverable rather than faking it.
+
+Filed: [[decisions/asset-global-page-shows-no-money]],
+[[problems/front-check-does-not-check-what-you-think]],
+[[problems/generated-client-widens-nullable-scalar]],
+[[problems/asset-set-scope-has-no-primary-series]].
+
+## [2026-09-18] file | Risk request ordering and test-id grep false negatives
+Mandate F's E2E round produced two failures whose causes were both *the observer*, not the code: a
+correlation stub indexed by chip order while `riskRequest.ts` canonicalises `asset_ids` ascending, and a
+`grep -c` on a composed test id reported a selector deleted when the primitive still emits it.
+Filed: [[problems/risk-request-sorts-asset-ids]], [[problems/testid-grep-false-negative]].
+
+## [2026-09-23] file | Workstream F — the R2-101 debt, and three pages the code had overtaken
+Workstream F (Asset Global laboratory) paid the devWiki debt S5 declared in R2-101 — three pages
+deferred on 18/09 rather than reopen a frozen tree — and updated three pages that the code had
+overtaken. Sources: `REGISTRO.md` (R2-62, R2-66, R2-96, R2-98, R2-100, R2-101, R2-112), S5's and F's
+plans, the 22/09 sheets 08 §8.8 and 09 §1.6/§3.11/§3.12/§9.1/§9.2; every claim re-checked against
+`f1047f766`.
+Filed: [[problems/discarded-risk-answer-read-as-empty]] (R2-101's boot identity–query race: the
+three-outcome defect and its fix hold; the recorded boot trigger — "the `(app)` layout has no auth
+guard" — is contradicted by the layout, so the page says so), [[concepts/span-as-a-detector]],
+[[problems/tab-writes-after-the-look]].
+Updated: [[decisions/asset-global-page-shows-no-money]] (frontend guards since 18–21/09; the net is
+blind under global privacy and is pinned off until J repairs the risk formatter),
+[[problems/asset-set-scope-has-no-primary-series]] (per-asset analytics delivered 21/09 by `d3afb92b6`
+and `032b86959`; open → resolved), [[problems/testid-grep-false-negative]] (recurrence on 23/09;
+resolved → recurs).
+Graph: the graphify `--update` is **deferred** — `graphify-out/graph.json` and `.graphify_python` do not
+exist in this worktree. `check_source_paths.py`: 0 missing paths on the six pages.
+
+## [2026-09-25] file | Workstream F — the lab redesign (F-3b): eligibility, heatmap emphasis, three gotchas
+Lessons from the four-hands redesign of the Asset Global laboratory and the Risk → F merge (`2c02ff070`).
+Filed: [[decisions/lab-eligibility-from-risk-engine]] (the verdict is Risk's; parked chips; the two meanings of
+"mine"), [[decisions/heatmap-emphasis-is-hue-free]], [[problems/echarts-canvas-mismeasures-emoji-labels]],
+[[problems/tooltip-click-pins-over-modal]], [[problems/popover-pointerdown-swallows-click]] (red first, then fixed).
+Updated: [[concepts/mkdocs-suffix-i18n]] (an app link's anchor must exist in all four languages; the risk-metrics
+index anchors exist in English only), [[concepts/portfolio-report-unified]] (holdings-only callers ask for the light
+report), [[concepts/test-isolation-classes]] (a single `api` action after `services` finds the lane empty),
+[[decisions/asset-global-page-shows-no-money]] (the redesigned card keeps the rule).
+Graph: the graphify `--update` is **deferred** — `graphify-out/graph.json` and `.graphify_python` do not exist in this
+worktree. `check_source_paths.py`: 0 missing paths on these nine pages (60 pre-existing elsewhere).
+
+## [2026-09-29] file | Flag emoji on Windows — the global flags-only face
+The developer turned the per-container `.emoji-flag` rule into one global face, `'LF Flags'`, whose unicode-range
+covers only the regional indicators: Apple flags on Apple devices, the self-hosted Noto flags subset elsewhere,
+every other character on its usual font. The page records the new solution, why the old "not globally" rule fell,
+and how to verify it without Windows.
+Filed: [[problems/flag-emoji-windows]] (updated); [[domains/layout-settings]] (its known-problems line aligned).
+
+## [2026-10-07] file | Workstream O — the i18n audit, and the svelte-i18n formatter cache
+The Release 2 i18n audit found the usage audit wrong in both directions (118 live keys reported dead, the whole
+`risk.*` namespace absolved by a single-literal parameter type, tests counted as evidence) and a svelte-i18n
+4.0.1 cache keyed on message text only, which leaks plural rules across locales after an in-place switch. Both
+fixes are filed with their gates; the catalogue went from 4 356 to 4 186 keys per language.
+Filed: [[problems/i18n-audit-false-dead-and-false-used]], [[problems/svelte-i18n-formatter-cache-ignores-locale]].
+Graph: the graphify `--update` is **deferred** — `graphify-out/graph.json` and `.graphify_python` do not exist in this
+worktree.
+
+## [2026-10-07] update | Workstream O — the i18n audit, second pass on the release tip
+On `d07412899` (dashboard and risk work merged) the audit still read 78 live keys as «not verified» and let a
+component nobody imported prove five keys. Five rules closed that: one import hop for narrow families, reachability
+from the SvelteKit entries (keys only unreferenced sources keep alive are listed under 📦), generated API clients
+out of the walk, backend codes in any spelling or starting with a digit, and multi-slot template shapes. Result:
+0 dead and 3 not verified, all live; a fourth (`onboarding.settings.groups.contextual`) only a per-key check
+proved dead, and it was removed with the batch.
+Updated: [[problems/i18n-audit-false-dead-and-false-used]].
+Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.
+
+## [2026-10-07] file | Workstream P — one average-cost function in a financial_math layer (decision)
+Release 2 workstream P answered issue #32 without a patch. The developer chose one generic average-cost function,
+`compute_average_costs()`, in a new service layer `backend/app/services/financial_math/` whose rule is that a
+calculation owns its whole problem and calls the services it needs (the FX service) instead of receiving values its
+caller prepared. Historical cost in the report currency — each acquisition at its own date, the cost in the asset
+currency kept alongside; a missing rate or cost always surfaces (pair + dates, `MISSING_COST_BASIS`), never a silent
+zero; four implementations retired (engine pools, `wac_utils.py`, the lots WAC rows, `get_cost_basis`). The page keeps
+the rejected alternatives (identity-rate patch, pool in the asset currency revalued daily, cross rates), the
+behaviour changes (FX effect now inside the unrealized change, with its per-currency tooltip; oversell; in-transit
+cost at arrival; AI Export provenance v2) and the known limits (FIFO lot conversions still fall back to unconverted
+amounts; `oversold_movement_ids` not surfaced).
+Filed: [[decisions/financial-math-single-average-cost]].
+
+## [2026-10-07] file | Issue #32 — zero purchase cost for a foreign asset paid in the report currency (problem)
+The engine kept its pools in the asset currency; with the purchase paid in the report currency, `_buy_unit_cost`
+needed the identity key `(T, T, d)`, which `_preload_fx_rates` never loads, and its `None` became "add at the current
+average cost" — 0 for an empty pool, with no trace. The page records the same-root twins (a cost basis in the report
+currency, which also inflated total P&L; a cost basis in a third currency), the other silent fallbacks found by the
+same analysis, the fix and the regression tests.
+Filed: [[problems/zero-purchase-cost-foreign-asset-paid-in-report-currency]].
+
+## [2026-10-07] update | Workstream P — the average-cost pages realigned
+Updated, keeping their history and marking what the change superseded:
+[[concepts/inline-wac-computation]] (superseded in part: the replay now follows a precomputed `compute_average_costs()`
+timeline in the report currency), [[entities/portfolio-engine]] (new "Average Cost" section, required `average_costs`,
+gotcha on the test construction outside the engine selectors, history row, dead source paths remapped),
+[[entities/portfolio-service]] (facade, realized P&L and boundary costs from the engine, breakdown rows; known issue 3
+closed), [[entities/lots-analysis-service]] (WAC lines on the function, gaps → `DEGRADED`; FIFO lot fallback recorded as
+a known limit), [[features/F-097]] (implemented → documented, mkdocs `developer/backend/transactions/wac.md`, stale
+names annotated, three dead source paths remapped) and its row in [[features/registry]] (`in-progress` → `documented`),
+[[decisions/wac-target-currency-last-acquisition]] (scope note: the rule now governs only the facade's callers — preview
+/ automatic cost basis and `POST /portfolio/wac`; the PAC passes the report currency; Dashboard, engine and lots use the
+report currency; the broker summary the asset currency), [[problems/test-transaction-implied-constructor-mismatch]]
+("Recurrence 2026-10-07"; its index row said `open`, the page has said `resolved` since 2026-07-13 — aligned).
+Reviewed and left unchanged: [[decisions/cost-basis-currency-object]] — nothing in it became false.
+Drift flagged in passing, not realigned (valuation was not part of P): the engine page's LAST_BUY_PRICE section and the
+service page's TRANSACTION_IMPLIED item describe valuation designs replaced by the unified price resolver on 2026-07-31
+(`1c5082f81`).
+Still contradicting P's outcome, outside this filing's page list: [[problems/wac-feedback-loop]] (presents `add_at_wac`
+as the backend mechanism — it was unreachable and is deleted), [[concepts/3-pool-cash-model]] and
+[[concepts/pre-frame-frame-separation]] (sold cost / cost basis "× FX" at the valuation or sale date), [[features/F-058]]
+(cites the deleted `wac_utils.py` and `fifo_utils.py`), [[domains/calculations]] (FIFO presented as the core cost-basis
+algorithm), [[features/F-048]] (`compute_weighted_avg_cost`).
+State at filing time: the plan's step P9 was still open — `dashboard.unrealizedAssetEffect`,
+`dashboard.unrealizedFxEffect`, `dashboard.unrealizedUnsplit` and `dataQuality.missingCostBasis` were in none of the
+four i18n catalogues, so until they land the tooltip rows and the new banner issue show key ids; the IT/FR/ES
+translations of the updated docs are translation debt (P11).
+Graph: the graphify `--update` is **deferred** — `graphify-out/graph.json` and `.graphify_python` do not exist in this
+worktree. `check_source_paths.py`: 0 missing paths on the ten pages created or edited; elsewhere 64 distinct missing
+paths remain (90 occurrences in 53 pages, down from 99 in 59 before this filing).
+
+## [2026-10-07] update | Workstream P — four more pages realigned with the single average cost
+Follow-up to the entries above: only the statements workstream P made false, annotated or marked superseded, history
+kept. [[problems/wac-feedback-loop]]: historical note on solution item 1 — `add_at_wac` was unreachable in production
+and is deleted with `wac_utils.py`; the auto receiver's cost basis comes from the WAC facade at `/validate` and
+`/commit`; the math-engine path now cites `financial_math/average_cost.py`. [[concepts/3-pool-cash-model]]: the sold
+cost C leaves at its historical cost in the report currency, with no rate (old formula kept, marked "until
+2026-10-07"); the caveat's per-SELL `get_summary()` sentence is marked superseded — the KPI realized P&L comes from the
+engine's `realized_sales`. [[concepts/pre-frame-frame-separation]]: `cost_basis` is historical in T with no rate (old
+line kept, marked), plus a one-line note that the pre-frame's step 3 now advances precomputed steps.
+[[features/F-058]]: the WAC row points to `financial_math/average_cost.py`, with a note on `wac_utils.py`; the
+`fifo_utils.py` row is left as it is — it was deleted on 2026-09-03, before P.
+Older drift deliberately left for the coordinator: [[domains/calculations]], [[features/F-048]], the LAST_BUY_PRICE and
+TRANSACTION_IMPLIED descriptions.
+Index: no summary changed. Graph: the graphify `--update` is **deferred** (graphify unavailable in this worktree).
+`check_source_paths.py`: 0 missing paths on three of the four pages; [[features/F-058]] keeps its one pre-P miss
+(`fifo_utils.py`); overall 64 distinct missing paths, 88 occurrences in 52 pages.
+
+## [2026-10-07] file | A slow language switch tore the whole app down
+Triage of the auth 3a coverage red: both layouts unmounted the app on every svelte-i18n `isLoading`, so a
+Welcome language preview whose catalogue took more than 200 ms was rebuilt back to the persisted language.
+Fixed with a first-dictionary latch; regression E2E 3c and a layout unit case.
+Filed: [[problems/i18n-loading-gate-remounts-app]].
+Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.
+
+## [2026-10-08] file | Two parallel passes lost all their coverage: a part renamed under `coverage combine`
+Analysis and fix of the 2026-10-07 coverage-combine failure (backend read 36.8 % in a green run). The resource
+tracker's part was renamed between the runner's listing and coverage's start, and coverage aborted the combine.
+The runner now combines the directory, keeps one parts directory per run and turns the pass red on a failed
+combine. The first real pass also found empty parts left by a SIGTERM during coverage's own save; these are
+removed and named. The causes are in the backlog.
+Filed: [[problems/coverage-combine-race-renamed-part]]. Updated: [[concepts/test-isolation-classes]] (the
+`COVERAGE_FILE` row).
+Graph: the graphify `--update` is **deferred** (graphify unavailable in this worktree).
+
+## [2026-10-08] update | Import Todo Signals: todos reach the bulk editor, worded like notices
+The concept page still said todos never leave the wizard and that `message` is an English fallback. Todos travel
+with their rows into the bulk editor (blockers gate Save All, warnings feed the save gate); `message` is the
+plugin's wording in the file's language, and `resolveBrimTodoMessage` now words them on every surface,
+the bulk editor included (workstream O, S19).
+Updated: [[concepts/import-todo-signals]].
+Graph: the graphify `--update` is still **deferred** — no `graphify-out/graph.json` in this worktree.
+
+## [2026-10-09] ingest | Release 2 archive, batch 1 — 28 FX in the Dashboard, 30 WAC unification, 29 i18n audit
+Nineteen work-stream folders moved today from `Release_2/Phase_0/` to `Release_2/phases/` (train 25, `586a4f0ea`).
+This batch covers the three whose knowledge was already partly in the wiki. `wiki-search` found the 2026-10-07/08
+filings (WAC decision and #32 problem, three i18n problems, the coverage-combine race) and nothing on FX in the
+Dashboard, the page cache, the display currency, `db <path>` or the settings bulk write. Every claim below was
+checked against the code at `586a4f0ea`; where the plans and an explore pass disagreed with the code, the code was
+written (the D6 scenario, the D7 percentage rule, the origin of `GLOBAL_SETTINGS_CONSTRAINTS`).
+Created: [[problems/fx-backward-fill-unbounded-stale-rates]] (**backlog N-9**: the page D6 promised — `convert_bulk`
+fills without a maximum age; Risk and Signals flag FX carried forward > 7 days, the engine's `_preload_fx_rates`
+discards the flag, so the Dashboard never does), [[concepts/stale-while-revalidate-page-cache]],
+[[problems/db-path-argument-ignored-by-alembic]], [[problems/global-settings-bulk-saved-unvalidated-values]],
+[[sources/phase00-fx-dashboard-sync-2026-10]], [[sources/phase00-wac-unification-2026-10]],
+[[sources/phase00-i18n-audit-2026-10]].
+Updated: [[features/F-016]] (auto-sync on creation, full history; dead `FxProviderConfig.svelte` row removed),
+[[features/F-008]] (840+ → 4 215 keys; audit tool and library traps), [[decisions/settings-write-path-contract]]
+(server-side all-or-nothing bulk write).
+Graph: not updated (decision of the coordinator: no graphify run in this session).
+
+## [2026-10-09] ingest | Release 2 archive, batch 2 — 20 performance charts, 19 Yield on Cost, 24 global privacy
+`wiki-search` found nothing citing these folders; F-088 still said "planned, client-side", F-055 knew nothing of
+the P&L modes, and [[decisions/asset-global-page-shows-no-money]] still waited for a formatter repair that landed on
+2026-09-24 (`176f19707`). The two largest plans of the archive (~5 700 and ~6 700 lines) were read through status
+headers, decisions and closing checks. Code wins over plan: the rolling-return window is preset **or custom** (the
+plan's "fixed windows, no custom input" is outdated); privacy has a user doc (Preferences → Privacy mode).
+Created: [[decisions/portfolio-pnl-series-contracts]] (additive broker lines in one replay; candles composed per day
+then bucketed; income from the ledger), [[concepts/echarts-chart-gotchas]], [[problems/asset-event-edit-delete-reinsert]],
+[[decisions/yield-on-cost-definition]], [[features/F-100]] (Yield on Cost), [[decisions/privacy-mask-at-the-formatter]],
+[[concepts/premise-gate-keyed-by-content]], [[features/F-101]] (global privacy mode),
+[[sources/phase00-performance-charts-2026-09]], [[sources/phase00-yield-on-cost-2026-09]],
+[[sources/phase00-privacy-global-2026-09]].
+Updated: [[features/F-088]] (planned → documented, rewritten to the backend calendar signal), [[features/F-055]]
+(P&L modes; implemented → documented), [[concepts/discard-the-answer-not-the-question]] (case 5, events on a cache
+hit; dead route path remapped), [[decisions/asset-global-page-shows-no-money]] (update note).
+Product defect confirmed in passing (backlog I-09, report only): `FAAssetEventPoint.type` is a free `str`, so an
+unknown event type is written and every later read of the row fails.
+
+## [2026-10-09] ingest | Release 2 archive, batch 3 — 36 connection security, 34 account deletion and id reuse
+`wiki-search`: nothing on the indicator, enumeration, account deletion, id reuse or the last admin. Reading the code
+to check the plans exposed three auth pages that had never matched it: [[features/F-002]] described an admin CRUD API
+and a Settings tab that do not exist (administration is `dev.py user …`), [[features/F-003]] called `UserRole`
+admin/user (it is the broker role; admin is `is_superuser`) and cited a `get_admin_user` that does not exist
+(`require_admin`), and [[features/F-065]] said Secure=False, UUID ids and passlib. All corrected, history kept.
+Created: [[problems/login-account-enumeration-before-password]] (pre-fix code read at `01da03047^1`: disabled checked
+before the password, no bcrypt for unknown users), [[decisions/connection-security-server-never-upgrades]],
+[[features/F-102]] (connection security indicator), [[problems/account-deletion-orphaned-brokers]],
+[[problems/reused-ids-after-delete]] (post-migration fix subsystem), [[sources/phase00-connection-security-2026-10]],
+[[sources/phase00-account-and-id-reuse-2026-10]].
+Updated: [[features/F-001]], [[features/F-002]], [[features/F-003]], [[features/F-065]] (blank `JWT_SECRET`,
+`SESSION_COOKIE_SECURE`), [[decisions/broker-last-owner-guard]] (second caller of the rule),
+[[concepts/single-migration-strategy]] (marked superseded: incremental migrations since the release; rule of record
+in `.github/instructions/backend-db.instructions.md`).
+Deliberately not written: plan 34 §0 B1 carries an instruction of the developer that one aspect of the id fix stays
+only in the plan; this wiki records the models, the schema test and the post-migration subsystem, nothing more.
+
+## [2026-10-09] ingest | Release 2 archive, batch 4 — 26 Danske Bank / report sets, 31 DEGIRO, 18 BRIM targeted, 33 E2E import infra
+`wiki-search`: only [[concepts/import-todo-signals]] mentioned Danske; nothing on report sets, the encoding chain,
+plugin re-detection or the stale-frontend fix. [[features/F-013]] still described a `detected()` method (detection is
+`can_parse`, plus `detect_role` for sets) and Generic CSV as "the fallback" (it is not a catch-all), and
+[[decisions/brim-broker-scoped]] lacked `batch_id`. Code wins over an explore pass once more: the damaged-workbook
+error family does include `IndexError` and `struct.error` (`file_preview.py`).
+Created: [[decisions/brim-report-sets]], [[features/F-103]] (BRIM report sets), [[problems/brim-text-exports-hardcoded-utf8]],
+[[problems/brim-compatible-plugins-frozen-at-upload]] (with the per-broker sidecar lock),
+[[problems/stale-frontend-after-update-html-cached]], [[sources/phase00-brim-danske-bank-2026-10]],
+[[sources/phase00-brim-degiro-2026-10]], [[sources/phase00-brim-targeted-2026-09]],
+[[sources/phase00-e2e-import-infra-2026-10]].
+Updated: [[features/F-013]] (31 modules, detection, encoding rule, DEGIRO/Danske/eToro/Crédit Agricole notes;
+implemented → documented, matching its registry row), [[decisions/brim-broker-scoped]] (report-set upload contract).
+Confirmed still present (backlog L10, report only): a stale `TODO(P2-refactor)` comment in `broker_credit_agricole.py`.
+
+## [2026-10-09] ingest | Release 2 archive, batch 5 — 11 contracts and Runes, 14 urgent import feedback, 15 runtime lanes, 35 dev.py in the image
+`wiki-search`: only [[problems/ghcr-browser-cors-auth-flow]] (14, Round 5) was filed. [[entities/devpy-cli]] said
+~1 050 lines (2 714), an 18-module runner (30) and "pre-build first" (`docker build` rebuilds stale assets itself);
+[[features/F-063]] said `./dev.py test gallery` (it is `mkdocs gallery`) and "no incremental migrations".
+Created: [[concepts/runtime-lanes]], [[problems/devpy-unusable-in-docker-image]] (with the HEALTHCHECK on 6040),
+[[problems/asset-classification-wiped-by-partial-save]] (absent vs `null` in a PATCH; `exclude_none` vs
+`exclude_unset`), [[features/F-104]] (recommend LibreFolio — copy and go), [[sources/phase00-feedback-contracts-runes-2026-09]],
+[[sources/phase00-feedback-import-urgent-2026-09]], [[sources/phase00-parallel-runtime-isolation-2026-09]],
+[[sources/phase00-dev-cli-image-2026-10]].
+Updated: [[entities/devpy-cli]] (lanes, image stubs, `db <path>`, venv gotcha, stale numbers), [[features/F-063]],
+[[features/F-062]] (HEALTHCHECK, CLI in the container, HTML revalidation).
+Docstring drift reported, not fixed: `AssetCRUDService` bulk patch docstring says `exclude_none` for
+`classification_params`, the code uses `exclude_unset` (`backend/app/services/asset_sources/crud.py`).
+
+## [2026-10-09] ingest | Release 2 archive, batch 6 — 17 asset data operations, 22 SP08 asset pricing, 23 SP16 transaction batch
+`wiki-search`: nothing on bond categories, the distributions CSV, the `asset_sources/` package or the batch stages;
+[[features/F-095]] was still `planned`, and [[concepts/prices-current-side-effect]] pointed at functions of the
+monolithic `asset_source.py`, now a facade.
+Created: [[entities/asset-sources-package]], [[entities/transaction-batch-pipeline]],
+[[sources/phase00-asset-data-operations-2026-09]], [[sources/phase00-asset-pricing-refactor-2026-09]],
+[[sources/phase00-transaction-batch-refactor-2026-09]].
+Updated: [[features/F-095]] (planned → documented: global transaction count + filtered link, per-item savepoints),
+[[decisions/unified-batch-pipeline]] (SP16 stages), [[concepts/prices-current-side-effect]] (moved functions).
+All nineteen archived folders now have a source page.
+
+## [2026-10-09] lint | Health check after the Release 2 archive ingest
+Graph: 1 650 nodes, 2 432 edges, 169 communities — `graph.json` of 2026-09-09, `GRAPH_REPORT.md` of 2026-09-22; **stale,
+not rebuilt** (no graphify run in this session, by instruction). God nodes unchanged (Feature Registry 99 edges, F-048 78,
+F-046 46, F-047 32, Domain TRANSACTIONS 27); the five surprising INFERRED edges are AI Export pairs, plausible. Every
+graph query was confirmed with `grep` over `wiki/`, `index.md`, `log.md` and the registry.
+Issues found: 14 (7 high, 4 medium, 3 low).
+- 🔴 H1 backlog N-9: the backward-fill page promised by D6 was never written → written
+  ([[problems/fx-backward-fill-unbounded-stale-rates]]).
+- 🔴 H2 `raw/ingest-registry.md`: 158 of the 181 rows dated up to 2026-08-31 carry commit hashes that are **not in this
+  repository's history** (only 2 resolve; the 14 `(blob)` rows still match), so `git diff {hash} HEAD` cannot measure
+  their drift; 64 rows name moved paths, 7 renamed Plan D files → documented with a path map at the top of the
+  registry; re-baselining deferred (it would assert that the derived pages were re-read).
+- 🔴 H3 `check_source_paths.py`: 59 missing paths / 80 occurrences / 47 pages on disk at session start (69 / 96 / 58 in
+  a clean worktree, where git-ignored artefacts do not exist) → **1 / 1 / 1** on disk and 11 / 17 / 12 clean; 58 paths
+  remapped to their successor (archived Risk plans, Plan R3 SP-D full paths, `phases/` moves, renamed modules,
+  backend signal plugins, `trySave.ts`, `sw.js`, `003_scheduler_timezone.py`, `TransactionBulkModal.svelte`…) or
+  turned into dated "removed" notes. Left: `backend/app/api/v1/admin.py` (F-078, a planned file "to create") and ten
+  git-ignored artefacts cited on purpose (generated API client, build/coverage outputs, the prod data directory).
+- 🔴 H4 feature catalogue: F-052/F-053 `planned` (the scheduler shipped in Phase 08), F-055 implemented, F-088 and F-095
+  `planned` (both shipped) → corrected; five shipped features had no code → F-100…F-104; statistics recomputed
+  (96 → 104).
+- 🔴 H5 pages contradicting the code → corrected with history kept: [[features/F-001]], [[features/F-002]] (no admin
+  CRUD API or tab), [[features/F-003]], [[features/F-065]], [[features/F-008]], [[features/F-013]],
+  [[features/F-063]], [[entities/devpy-cli]], [[concepts/single-migration-strategy]] (superseded),
+  [[domains/scheduler]], [[decisions/asset-global-page-shows-no-money]], [[decisions/brim-broker-scoped]],
+  [[concepts/prices-current-side-effect]].
+- 🔴 H6 tooling: `detect_incremental(Path('corpus/'))`, the SCHEMA's "is the graph up to date?" check, scans **0**
+  files with the installed graphify (the corpus roots are symlinks resolving outside the scan root) and would report
+  "up to date" → reported, not fixed (SCHEMA is outside this session's write scope). Measured instead from
+  `graphify-out/manifest.json`: 177 wiki pages changed since their semantic extraction + 112 wiki pages new = 289 to
+  re-extract (714 with the roadmap and mkdocs-en sub-corpora, whose manifest keys no longer match); 162 wiki pages are
+  newer than `graph.json`. The Release 2 plans are not in the corpus at all (`corpus/roadmap` → `RoadmapV4_UI`).
+- 🔴 H7 privacy: a page quoted a machine hostname containing a person's name → redacted to `<hostname>`.
+- 🟡 M1 15 of the 19 archived folders had no wiki coverage → six ingest batches above.
+- 🟡 M2 orphans: 91 → 84 (59 are source pages linked only from the index, by convention).
+- 🟡 M3 concept debt → [[concepts/echarts-chart-gotchas]], [[concepts/runtime-lanes]],
+  [[concepts/stale-while-revalidate-page-cache]], [[concepts/premise-gate-keyed-by-content]].
+- 🟡 M4 P-6 (graph step for the #32 pages) still open: those pages, and the 47 created today, are not in the graph.
+- 🟢 L1 broken wikilinks: 8 targets in historical `log.md` entries and 1 in a registry row
+  (`sources/knowledge-base-overview`) — left as history; none in pages or the index.
+- 🟢 L2 index: 57 feature pages are not listed one by one — by design (the registry is the catalogue); no other page
+  is missing.
+- 🟢 L3 code facts reported, not fixed: I-09 (free-text asset event type → 500 on read), L10 (stale TODO in the Crédit
+  Agricole parser), the `patch_assets_bulk` docstring (says `exclude_none`, code uses `exclude_unset`), and the
+  Dashboard path that discards FX staleness (part of N-9).
+Repaired: H1, H3, H4, H5, H7, M1, M3, part of M2. Deferred: H2 (re-baseline), H6 (SCHEMA snippet), M4 (graph run).
+Next recommended: a graphify semantic `--update` over `wiki/` (289 pages) once the cost is approved — it closes P-6;
+then fix the corpus symlink scan so the incremental check stops reporting "up to date" on an unscanned corpus.
+
+## [2026-10-09] file | P-1 closed without code — Auto cost basis without a position (folder 39)
+Second pass, HEAD `083ed26dc` (train 26). `phases/39_autoCostNoPosition/` holds one plan of workstream P, written and
+closed today. The developer's decision, verbatim: «no chat, non facciamolo e segnamo la decisione, se i dati mancano
+lo 0 come fallback per auto è corretto. se bisogna cambiare sarà l'utente ad andare su quella transazione e
+correggere.» P's draft note was used as input and every claim re-checked on the code (the zero WAC on an empty pool,
+`ADD_ZERO_COST`, `if wac_result.wac:` in the inline WAC, the batch's Auto indices, the form default `'auto'`, the
+existing test `test_wacp27_empty_pool_wac_zero`); the draft's "enter the field and leave it = 0" gesture does not exist
+in the code and is recorded as the developer's first direction, superseded.
+Created: [[decisions/auto-cost-basis-zero-without-position]], [[sources/phase00-auto-cost-no-position-2026-10]].
+Updated: [[decisions/wac-inline-validate-commit]] (`'auto'` on an empty pool → 0 by decision),
+[[decisions/financial-math-single-average-cost]] ("never a silent zero" does not cover Auto's known 0),
+[[sources/phase00-wac-unification-2026-10]] (P-1 residual closed).
+Graph: not updated (deferred to after 1.2 by the developer; P-6 and C-29 stay in the backlog).
+
+## [2026-10-09] file | PAC allocator — rounding against the plan (D's notes, merge `b81b92fd1`)
+No PAC page existed (folder 13 is still active, no feature code yet). Filed from
+`Phase_0/13_pacAllocator/implementation/plan-phase00PacRoundingDirectionFix.prompt.md`, checked against
+`services/pac_allocator/` at `083ed26dc`: rule (a) — one table `_PLAN_ROUNDING` in `ledger.py` (credits `fx_credit`,
+`gross_sell_credit` floor; debits `buy_debit`, `buy_fee`, `sell_fee`, `broker_withheld_tax`, `self_reserved_tax`
+ceiling) and the same direction in the SCIP rows; the band `rounding_bound` = one minor unit per rounded posting with
+the strict per-posting check `_validate_posting`; C-FXPOS (row and evaluator fact) with its residual SCIP tolerance →
+`execution_failed`; B1 (β = h·Σ1/Rᵢ on the three stored rates, h = half a unit of the tenth decimal of
+`Numeric(24, 10)`; planning rate `min(spot·(1−s), val(origin)/val(destination))`; beyond it
+`allocation.fx_rate_inconsistent`); the lesson (the principle lives in MathCore §7.3, not TargetDesign §4.4; no test
+states it literally — the tests pin its halves).
+Created: [[decisions/pac-rounding-against-the-plan]]. Updated: [[concepts/backend-only-calculations]] (scope link).
+Graph: not updated (deferred).
+
+## [2026-10-09] file | Backlog K-25 — the four devWiki pages of workstream K
+Written from steps 13 and 14 of `phases/25_taxonomySelect/`, every claim checked on the code:
+[[problems/svelte5-teardown-reads-stale-state-timers]] (Tooltip and TreeSelect; residuals K-12, C-13),
+[[decisions/html-escape-at-the-source]] (escape rules and the two gates; `escapeHtml` is defined **three** times at
+HEAD — the canonical helper, the KaTeX variant, a local copy in `CorrelationHeatmap.svelte` — so
+[[features/F-047]]'s "× 4 copies cleanup (deferred)" was corrected to done-with-two-left),
+[[problems/stale-price-banner-never-emitted]] (`valuation_stale` also flags trade-derived marks; rule D8; `/assets`
+writes today's price), and [[concepts/responsive-4mode-layout]] rewritten from the code (four tiers per page,
+thresholds measured in four languages, the gutter rule) — none of the four was already covered.
+Cross-links: [[concepts/premise-gate-keyed-by-content]], [[concepts/echarts-chart-gotchas]] (K-15; tooltip width on
+phones), [[problems/fx-backward-fill-unbounded-stale-rates]], [[features/F-054]].
+Graph: not updated (deferred).
+
+## [2026-10-09] ingest | Release 2 archive, folder 25 — workstream K, taxonomy and selects (steps 1–23)
+One analysis and 18 plans; `wiki-search` found only [[problems/flag-emoji-windows]] citing the folder (step 12) and
+nothing on the taxonomy, the import-duplicate keeper, the request loop, the bulk guards, app start or Escape layering.
+Code over plan: D-K3 expected real-estate crowdfunding inside the Real-estate slice of the allocation pie, but the
+charts now group by family (workstream I, D15); [[features/F-048]]'s "JSON snapshot comparison" is still true for the
+form modal — only the bulk editor's guard became canonical (`serializeOps`); the `AssetType` docstring's "subtypes roll
+up to the base type they contain" is not what the backend's `allocation_by_type` does (reported, not fixed).
+Created: [[sources/phase00-taxonomy-select-2026-10]], [[decisions/asset-type-two-level-taxonomy]],
+[[problems/broker-icon-fields-request-loop]], [[problems/modal-layers-escape-and-backdrop]],
+[[problems/fixture-skip-hid-api-test]].
+Updated: [[features/F-001]] (app start: only a 401 signs out, `?redirect=` through `safeInternalPath`, register link),
+[[features/F-008]] (missing ICU argument shows raw text; the argument guard), [[features/F-024]] and
+[[entities/db-models]] (the `AssetType` list was stale since July: `CROWDFUND_LOAN` → `CROWDFUND`, subtypes),
+[[features/F-032]] (stored XSS fixed, type filter), [[features/F-033]] (‹ n/N › browsing, phone tooltip),
+[[features/F-048]] (creation order, canonical close guard, cloning pairs, K-1 … K-4), [[features/F-098]] (opaque and
+maskable PWA icons; the old Apple-first flag stack marked superseded), [[features/F-099]] (metadata currency from the
+price API; K-16), [[entities/import-wizard-modal]] (C1/C2/C6), [[concepts/entity-store-pattern]] (K-11),
+[[concepts/svelte5-runes]] (known traps), [[problems/testid-grep-false-negative]] (`testIdPrefix`),
+[[problems/flag-emoji-windows]] (K-13/K-14).
+Not filed (nothing durable beyond the source page): the app-title guard, the selection cleared after a save, the
+avatar merge in `PreferencesTab`, the AssetModal footer on phones, the date and size formats of step 22 (C-10/C-11).
+Registry: 22 rows at `083ed26dc` (19 for folder 25, 1 for folder 39, 2 for the PAC plans).
+Graph: not updated (deferred).
+
+## [2026-10-09] lint | Second-pass checks
+- `check_source_paths.py`: 1 missing path (1 occurrence) of 2 757 cited, in 1 page — `backend/app/api/v1/admin.py`
+  in [[features/F-078]], unchanged from the first pass; every path cited by the 11 new and 24 updated pages is
+  tracked in git at `083ed26dc`.
+- Wikilinks: 0 broken in pages and in the index; every new page has inbound links besides the index.
+- Privacy: no absolute paths, e-mails, IBANs, IPs, venv names or `/tmp` logs in the added text.
+- Feature registry: no new code needed — K's lots extend F-001, F-008, F-024, F-032, F-033, F-048, F-054, F-098,
+  F-099, whose statuses stand; the PAC allocator still has no code (to assign when folder 13 is archived).
+- Reported, not fixed: the `AssetType` docstring vs the backend allocation (above); `test_settings_api.py` skips five
+  checks on a 404 from endpoints that exist (latent false green, [[problems/fixture-skip-hid-api-test]]); the mkdocs
+  data-quality page still says "All 5 codes" (K-24, assigned).
+- Graph debt grows by the 11 new pages; P-6 and C-29 stay in the backlog by the developer's decision.
+
+## [2026-10-12] ingest | Lot 41 — F (native cash), the broker lines at transfers, the cards (H)
+Source: `Release_2/Phase_0/41_brokerPnlFlows/plan-phase00BrokerPnlFlows.prompt.md` @ git:`f10fcd04a` (§0–§4, §13–§17),
+backlog section I, base `5d0585595`. Step 3 of the historian, decided by the developer on 2026-10-12 («Adesso, in
+parallelo»). Every claim checked on the code: `native_cash.py` (`compute_native_cash`, `NativeCash`,
+`exchange_results`, `CONVERSION_DUST`), `_revalue_foreign_cash` (R first, then K), step 10c, the rate-change days in
+pre-frame and frame, `_internal_transfer_flows` / `_transfer_leg_capital`, the cards in `get_summary`, the «FX on
+cash» row; the lot's commits placed on the history (trains 32, 35, 42). Not in the journal, recorded as «developer,
+2026-10-12, via the coordinator»: F-AI (b) after 1.2 with a typed code (section I still lists it as open), and the
+Scalable confirmation («come me lo aspettavo»). The plan's §13 G1a text, addressed to the historian on 2026-10-10 and
+never applied, is now in [[decisions/portfolio-pnl-series-contracts]].
+Drift found on the way: [[concepts/3-pool-cash-model]] described a `reconciliation_delta` flag that the code never had
+— the display values rescale the summed pools since 2026-06-25 (`7aa1f7772`); also documented the per-broker pools,
+the internal-leg approximation (B3) and the pre-frame SELL approximation.
+Created: [[decisions/native-cash-daily-revaluation]], [[entities/native-cash]], [[problems/foreign-cash-never-revalued]],
+[[problems/dirty-days-ignore-fx-only-moves]], [[sources/phase00-broker-pnl-flows-2026-10]].
+Updated: [[concepts/3-pool-cash-model]], [[entities/portfolio-engine]], [[concepts/pre-frame-frame-separation]],
+[[entities/portfolio-service]], [[decisions/portfolio-pnl-series-contracts]],
+[[decisions/broker-card-aggregation-no-n-plus-one]] (also its first «Source files» table),
+[[problems/ai-export-cash-fx-valuation-basis-mismatch]], [[features/F-054]], [[features/F-055]], [[domains/calculations]].
+
+## [2026-10-12] ingest | T-1 — one home for financial math, D-P7 on utils/, the AI Export version rule, C-53
+Source: `Release_2/Phase_0/43_financialMathHome/plan-phase00FinancialMathHome.prompt.md` @ git:`25e358eb0` (§1, §3, §4,
+§8, §10 from «T-1» to «BU1 e BU2»), backlog sections C and T, backlog 38 C-53. T-1's two commits checked on the
+history: the rename `1cc9cd8f5` keeps `git log --follow` of `financial_math/portfolio/engine.py` back to 2026-06-19
+(39 commits); the modules cut by `a57a43fbd` start there. The version rule («+1 rispetto alla 1.1») checked on the
+catalogue: the nine components moved in the cycle are each exactly +1 over `v1.1.0`. BU1 and BU2 written as planned,
+not delivered; the BU1 folder is `utils/runtime/` (the developer's choice, via the coordinator; `platform/` in the plan
+was the earlier proposal).
+Drift: the «Known limits» of [[decisions/financial-math-single-average-cost]] — the lots' native fallback was closed on
+2026-10-11 (`82c1d3ab9`, `59a7c3e2f`), `roi_utils`/`valuation_utils` moved by T-1.
+Created: [[decisions/financial-math-one-home]], [[decisions/utils-leaf-functions-only]],
+[[decisions/ai-export-version-bump-once-per-release]], [[problems/ai-export-reconciled-false-on-rounding-dust]],
+[[sources/phase00-financial-math-home-2026-10]].
+Updated: [[decisions/financial-math-single-average-cost]], [[entities/fifo-lot-engine]],
+[[entities/lots-analysis-service]], [[entities/ai-export-snapshot-service]].
+
+## [2026-10-12] ingest | M — notes b12–b15 (translations) and batch 19 (gallery probes, M-13)
+Sources: M's four devWiki notes, kept outside the repository with M's release-pipeline files (untracked), and
+`Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` @ git:`62526ede4` (§9.3, §10, §11).
+The notes were filed nearly as written; every path, symbol and number was checked against the code and the journal,
+and the two notes without a «Source files» table got one. Commits placed on the history rather than taken from the
+journal: the French typography hook (`a965956ab`) was built on train 37 but reached `dev_release2` with train 38
+(`9245ffb6f`). M-14 (the gallery's browser locale) is in progress: only its diagnosis is written.
+Created: [[problems/stamps-hide-stale-translations]], [[decisions/docs-anchors-from-the-render]],
+[[problems/raw-html-paths-in-translations]], [[decisions/fr-typography-at-build-time]],
+[[problems/playwright-probes-ignore-timeout]], [[sources/phase00-translation-round12-2026-10]].
+Updated: [[concepts/mkdocs-suffix-i18n]] — its two wrong «Conventions» lines (never edit translations by hand; the
+cache stores every language's MD5) corrected as note b12 asked. Cross-links to the probes page from the two pages that
+already named the trap: [[problems/compactcashcell-decimal-separator-feedback-loop]],
+[[sources/phase00-e2e-import-infra-2026-10]].
+
+## [2026-10-12] update | T-W1 — old module paths in the prose, after T-1
+Backlog T-W1: T-1 repointed only the 58 «Source files» rows (`09c089147`). A scan of the prose (outside those tables)
+found 57 mentions of the pre-T-1 homes in 27 files with this ingest's filter (T counted 50 in 28 with another). Rule
+agreed with the coordinator: a present-tense claim moves to the new module; dated history stays as written, with a
+«since 2026-10-12» pointer only where a reader would be stranded; line numbers become symbol names. About 27 mentions
+in 18 pages changed — among them the «Location» of [[entities/portfolio-engine]] and [[entities/fifo-lot-engine]],
+[[features/F-054]], [[features/F-056]], [[features/F-058]], [[features/F-100]], [[decisions/mwrr-solver-newton-cap]],
+[[decisions/yield-on-cost-definition]], [[problems/fx-backward-fill-unbounded-stale-rates]] (line numbers → symbols)
+and [[domains/calculations]], whose diagram and «Source files» placed the FIFO engine in `transaction_service.py`.
+Left on purpose: dated history (status-history rows, «as it was before 2026-10-07», the `wac_utils.py` deletion,
+source summaries) and contract identifiers such as `"valuation_source": "portfolio_engine"`.
+Checks: `check_source_paths.py` — the same 11 missing paths before and after in the worktree (`admin.py` of
+[[features/F-078]] plus 10 generated artifacts a fresh worktree does not have; on the main checkout, per the
+coordinator, only `admin.py`); 2 931 paths cited, 163 more than before, all present; 0 broken wikilinks in the added
+text; every new page has at least three inbound links besides the index. Graph: not updated (P-6, after release 1.2).
+
+## [2026-10-12] update | BU1 — the utils/ paths after the typed folders
+Base `bdc078efc` (train 50): BU1 (`346b7e292`, journal `390ba7d9a`) moved `sector_fin_utils`, `geo_utils`,
+`identifier_utils`, `translation_utils` to `utils/asset/`, `currency_utils` to `utils/fx/currency.py`, and `version`,
+`network_utils`, `cache_utils` to `utils/runtime/`; `decimal_utils` stays until BU2. `check_source_paths.py` on the
+new base: 16 missing (28 occurrences), the baseline's 11 plus 5 moved modules cited by 11 «Source files» rows in 10
+pages — one of them [[decisions/utils-leaf-functions-only]], written by the step-3 ingest. All 11 repointed. Prose,
+with the T-W1 rule: 6 present-tense mentions in 5 pages changed ([[features/F-061]], [[features/F-102]],
+[[problems/babel-currency-symbol-locale]], [[problems/docker-system-info-missing-deps]], [[domains/calculations]]);
+symptoms, source summaries and the audit line of [[features/F-076]] left as written. The test files keep their names.
+[[decisions/utils-leaf-functions-only]] now records BU1 as delivered and BU2 as planned, with a near-miss from the
+journal: `utils/runtime/version.py` computed the project root with four `.parent` written for its old place, so the
+image would have read `/app/backend/VERSION` and shown version `unknown`; fixed in the same commit with
+`_project_root()` from the module's dotted name, two tests, and the lesson «in a rename, search the paths a file
+computes from its own location». The same note went into [[problems/docker-system-info-missing-deps]].
+Registry: plan 43 re-read at `390ba7d9a` (the BU1 record).
+Checks: `check_source_paths.py` back to the baseline set — 11 missing (17 occurrences) in the worktree, the same paths
+as before BU1; 0 broken wikilinks in the added text; `git diff --check` clean. Graph: not updated (P-6).
+
+## [2026-10-12] update | BU2 — DB precision out of utils/, and the version rule written down
+Base `f0f3de0d9` (train 53): BU2 (`8dae5cc6e`, journal `f038ce39a`) moved `get_model_column_precision`,
+`truncate_to_db_precision`, `truncate_priceHistory` and `truncate_fx_rate`, unchanged, from `utils/decimal_utils.py`
+to `backend/app/db/precision.py`; `decimal_utils.py` keeps only `parse_decimal_value`. The lazy `clear_cache` imports
+of `fx.py` and the lazy `get_git_version` import of `config.py` became top-level: none broke a cycle. In the wiki only
+one present-tense mention of the truncation existed, in [[features/F-017]] — repointed; no «Source files» row cited
+`decimal_utils` except [[decisions/utils-leaf-functions-only]]'s own, now split into the new module and the reduced
+one. That page records BU2 as delivered: every `utils` module is a leaf.
+The AI Export version rule, flagged by step 3 as living only in the journal, is now written (`4388db8df`): a
+«Versions» section in `.github/instructions/ai-development.instructions.md` and a paragraph in «ComponentSpec» of
+`ai_export_composition.md`, both citing [[decisions/ai-export-version-bump-once-per-release]], which now lists them.
+Correction carried back from the docs-writer's code check: the spec/placeholder version parity is checked at import by
+`catalog.py`, not by "the registry", as the page had copied from the journal.
+Registry: plan 43 re-read at `f038ce39a` (the BU2 record).
+Checks: `check_source_paths.py` — the same 11 missing paths (17 occurrences) as the reference set; 0 broken wikilinks
+in the added text; `git diff --check` clean. Graph: not updated (P-6).
+
+## [2026-10-12] update | M-14 closed — the gallery shoots each language in its own browser locale
+Base `9e31ea2ba`. At step 3 [[problems/playwright-probes-ignore-timeout]] recorded only M-14's diagnosis, since the fix
+was in progress; batch 20 of M closed it the same day (`51b581636`, journal `63b3e5971` §11, train 52 `d33fca26f`), on
+the developer's decision «impostiamo il locale in playwright sin da ora». Checked on the code:
+`frontend/e2e/fixtures/galleryLocale.ts` (`setBrowserLocale` → Chromium's `Emulation.setLocaleOverride` from the page's
+CDP session, `stampDocumentLocale`, `expectDrawnUnder`), 76 `setBrowserLocale(page, lang)` in `gallery.spec.ts`, the
+gallery's describe yielding `undefined` for Playwright's `locale` fixture (the default `en-US` would make Chromium refuse
+the override). The page now describes the fix, its guard and its proof. M-16 — the wizard's «Next» before the broker
+list — moves among the closed items: fixed by I in train 48 (`3cd25af4f`, `trackBrokerLoad` and `Promise.allSettled`,
+checked on the code). M-17 and M-18, found by M-14, are planned in release 1.2 and assigned to I (the coordinator's and
+the developer's decisions); M-15 stays open after 1.2. The index row followed.
+[[sources/phase00-translation-round12-2026-10]] stays as written: it is the snapshot of the step-3 ingest.
+Registry: plan 27 round 12 re-read at `63b3e5971` (§11); plan 44 (`Phase_0/44_importWizardBrokerGate/`) read at
+`8339b0a06`.
+Checks: `check_source_paths.py` on the reference set; 0 broken wikilinks in the added text; `git diff --check` clean.
+
+## [2026-10-12] ingest | Plan 46 (V) — data-quality warnings proved on real data
+Source: `Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` @ git:`b44b28f3d`, backlog section V,
+base `e7d698c4d` (train 56; code `15bfcf1e8`, tests `2f0b06346`). Checked on the code: the specs and their runner
+actions, the helper's guards (`setup_test_database`, `verify_test_database`, exits 2 and 3), the MOCKFX provider, the
+`refreshVersion += 1` in `syncMissingFxRates` and its two listeners (`LotsAnalysisPanel`, `RiskLevelsPanel`).
+Created: [[decisions/data-quality-proved-on-real-data]] (items 21–23, D1 «(c) Entrambe», MOCKFX, the legacy-row helper,
+V-1…V-7), [[problems/open-panels-stale-after-fx-sync]] (D2), [[sources/phase00-data-quality-e2e-2026-10]].
+Updated: [[features/F-054]] (status history).
+
+## [2026-10-12] file | C-55 — the probe rejected the unavailable HHI of an empty broker
+Sources: plan 43 «C-55 — analisi» to «Checkpoint C-55» @ git:`d5497e40a`, backlog 38 C-55 @ git:`17c50ab50`, commit
+`9e495c305` (train 56). The defect was the probe's, not the product's: HHI and largest weight are `null` together on an
+empty set, by contract. Created: [[problems/ai-export-probe-rejected-unavailable-hhi]]. Updated:
+[[decisions/ai-export-version-bump-once-per-release]] (a third no-bump case), [[entities/ai-export-snapshot-service]]
+(history).
+
+## [2026-10-12] file | U — plugins as folders, i18n catalogues split by subsystem (planned)
+Not in the code at `e7d698c4d`, and U's plan 45 is not in the target: the decisions D-1, D-4, D-A, D-B and D-C of
+2026-10-12 (D-1 taken by the coordinator on the developer's delegation), quoted verbatim by the coordinator from his
+diary (not in the repository), and the origin, item 28 of the developer's server checklist. Recorded as planned, as
+the D-P7 page was before BU1. Created:
+[[decisions/plugin-folders-and-split-i18n]]. Cross-links from [[decisions/provider-registry-decision]],
+[[decisions/signal-backend-plugin-architecture]], [[decisions/i18n-key-rationalization]]. When U lands, about 84
+plugin-path citations in 47 pages will need realigning (to be assigned).
+
+## [2026-10-12] update | The connection-security guide — cross-links only
+M rewrote the user guide and added the admin page «Checking Connection Security» (`3eee17616`, train 56). Rows and a
+status-history line in [[features/F-102]], a link and a row in [[decisions/connection-security-server-never-upgrades]].
+Checks for the four entries: `check_source_paths.py` on the reference set; 0 broken wikilinks in the added text; every
+new page has inbound links besides the index; `git diff --check` clean. Graph: not updated (P-6).
+
+## [2026-10-12] lint | Health check, step A (base `37304d716`, train 57)
+Graph: not consulted (P-6, after 1.2). File-based checks only; every status below was checked on the code or in git.
+Issues found: 11 high (8 statuses checked — 7 corrected, 1 kept `open` — and 3 stale claims), 4 medium groups (24 pages without a link from another page,
+4 dead targets, 7 missing statuses, 16 drifted table cells), 4 low groups; 8 judgments reported. The full report went to
+the coordinator.
+- 🔴 H1 stale statuses → corrected, history kept:
+  - [[problems/import-wizard-identifier-prompt]] was fixed in `7bae73b74` on the day it was filed;
+  - [[problems/broker-icon-race-condition]] stays `open`: forms A and B were fixed where they were seen in June
+    (`7bae73b74`, `ddffb5273`), but the developer saw the symptom again on 2026-10-12 — the large icon on a broker's
+    page, the Dashboard's selector — because `BrokerIcon`'s chain reads only its props (the coordinator's correction
+    and diagnosis); assigned to I;
+  - [[problems/docker-entrypoint-gid20-collision]] was fixed another way, with numeric ids, in `f32e460ca`;
+  - [[problems/tanstack-svelte5-incompatibility]] was resolved by removal in `52c8d0d70`;
+  - [[F-050]] (`5b887dd3a`), [[F-089]] (`d30c35966`) and [[F-092]] (`2a8e5bf1c`) → documented, and [[F-075]] →
+    superseded. The registry rows and statistics were recomputed (89 / 1 / 10 / 3 / 1 of 104), and notes added to the
+    domain pages that listed them as planned.
+- 🔴 H2 stale prose: [[decisions/yield-on-cost-definition]] and [[F-088]] (I-08 closed on 2026-10-12),
+  [[problems/stale-price-banner-never-emitted]] (K-24 closed on 2026-10-09).
+- 🟡 M1 24 pages that only the index or the log linked to → one inbound link each, from the page they declared in
+  `related:` or the one that cites the same code. Source pages linked only from the index stay, by convention (59).
+- 🟡 M2 4 dead `related:` targets, pages never written → repointed: [[decisions/zodios-api-client]],
+  [[entities/test-runner]], and [[sources/phase07-part4-round6-planc2-bugfix-pair-validation]] for the A4 race.
+- 🟡 M3 7 problems without `status`, verified fixed in the code → `status: resolved`.
+- 🟡 M4 table drift: [[F-055]] in the index; 15 cells of the domain tables aligned to [[features/registry]].
+- 🟢 L1 `Resolved` → `resolved` (2). L2 5 plain feature codes linked. L3 5 broken links in historical rows of
+  `log.md` and the registry: left as history. L4 7 pages without frontmatter: left.
+Reported, not changed — left for a lint after 1.2 (coordinator, 2026-10-12):
+- `domains/signals` says `in-progress`, the index `stable`;
+- `domains/transactions` and [[F-048]] are `in-progress` since April; the brokers and transactions domain pages are
+  stuck in the Phase 7 era;
+- [[F-094]] is half delivered: the dialog exists, the overwrite warning does not;
+- [[decisions/broker-last-owner-guard]] went another way in the code (`987df6805`, `3e3f9c41f`);
+- [[problems/generated-client-widens-nullable-scalar]]: `open` or `workaround`?
+- the `accepted`/`active`/`open` vocabulary against the SCHEMA;
+- [[problems/datatable-column-resize-noop]] and [[problems/bulk-modal-sticky-z-index]] cannot be verified without the
+  app;
+- two dated source pages say «planned» or «in progress».
+
+Checks after the repairs:
+- `check_source_paths.py`: the reference set, 11 / 17 / 12;
+- wikilinks: 0 broken in pages and in the index, 0 dead frontmatter targets, 0 non-source pages without an inbound
+  link, 0 plain feature codes;
+- the registry agrees with every page;
+- privacy clean; `git diff --check` clean.
+
+## [2026-10-12] ingest | Step B1 — plan 37 (S): the Scalable importers; the exporter's recap; M's batch 21
+Sources: plan 37 @ git:`4d878e545`, the exporter's recap @ git:`305b80202`, M's journal §12 @ git:`0ebf86178`; base
+`573f7c5c7`. First of the order proposed by the audit of step B. Checked on the code at HEAD:
+- the two plugins and `_scalable.py`: four refusal codes, twelve notices, the id in the description, the tags;
+- `cannot_parse_detail`, `check_file_with_plugin`, the `plugin-check` endpoint;
+- `_MERGED_LEG_TYPES` and the «probable» rule;
+- `defaultPluginCheck.ts`, `ImportBrokerMismatchModal`, `promoteSuggest.ts`, `PromoteAllModal`, `pluginKind.ts` (50);
+- the icons, the docs and the tests.
+
+The commits of the five checkpoints and of batch 21 are all in HEAD. `cashAmountsCancel` has been exact since P's lot 42
+(`7f8233c47`, train 34), so S's reports to P are recorded as closed.
+Created:
+- [[sources/phase00-brim-scalable-2026-10]];
+- [[decisions/scalable-two-accounts-two-plugins]], [[decisions/import-wizard-default-plugin-check]],
+  [[decisions/broker-icon-order-dedicated-plugin-first]], [[decisions/bulk-pairs-new-with-saved]];
+- [[problems/merged-transfer-not-seen-as-duplicate]];
+- [[concepts/brim-texts-translated-by-code]].
+
+Updated: [[features/F-012]], [[features/F-013]], [[features/F-048]], [[features/F-049]] (status history, Source files),
+[[entities/import-wizard-modal]].
+Not yet in the target: M's batch 23, a second rewrite of the Scalable page. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B2 — plan 44 (I): the import wizard waits for the broker list (M-16)
+Source: `Release_2/Phase_0/44_importWizardBrokerGate/plan-phase00ImportWizardBrokerGate.prompt.md` @ git:`8339b0a06`;
+base `d3c6e55c5`. Checked on the code at HEAD:
+- `brokerLoadsInFlight`, a plain variable, and `trackBrokerLoad`;
+- `Promise.allSettled` in `loadBrokers`;
+- the guard in `goNext`;
+- `brokersLoading` in «Next»'s `disabled` and spinner;
+- the `oncreated` refresh through the counter;
+- V1–V4b and E1;
+- the gallery's `waitForSettled(import-wizard-step1)`.
+
+`3cd25af4f`, `8339b0a06`, the train-48 merge `a94de23e2` and `51b581636` are all in HEAD.
+Created: [[problems/import-wizard-next-before-brokers-loaded]], [[sources/phase00-import-wizard-broker-gate-2026-10]].
+Updated:
+- [[problems/playwright-probes-ignore-timeout]] (M-16 links its page);
+- [[problems/svelte5-effect-read-write-loop]] (the rule applied before the code);
+- [[decisions/import-wizard-default-plugin-check]] (the gate also protects the check);
+- [[decisions/native-cash-daily-revaluation]] (F-AI (b) is a backlog row since `8339b0a06`);
+- [[features/F-049]], [[entities/import-wizard-modal]].
+
+Plan 41's registry row refreshed to `8339b0a06`: bookkeeping only since `f10fcd04a`. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B3 — plan 40 (P): the cost of transfers in Auto and of promotes
+Source: `Release_2/phases/40_transferCostBasis/plan-phase00TransferCostBasis.prompt.md` @ git:`fa109eaa7`; base
+`5350c8e24`. The folder was archived on 2026-10-10, after the archive ingest of 09/10, so the audit found it never
+ingested. Checked on the code at HEAD:
+- `_auto_cost_source()`: the partner's broker, its date, the two exclusions;
+- `_resolve_source_broker_from_link`: gone;
+- `_check_result_create_cost_basis` and `_check_promoted_saved_cost_basis`;
+- tests P30–P35 and G1/G2 by name;
+- the three developer pages, and the theory sentence in all four languages, so the plan's translation residue is
+  closed.
+
+`d7c148564`, the train-28 merge `2a5c15c3c` and `fa109eaa7` are all in HEAD.
+Created: [[decisions/transfer-auto-cost-from-sending-broker]], [[problems/promote-skipped-cost-basis-check]],
+[[sources/phase00-transfer-cost-basis-2026-10]].
+Updated:
+- [[entities/transaction-batch-pipeline]];
+- [[features/F-048]] (a dated note under the Plan D auto-calc: `compute_weighted_avg_cost` no longer exists);
+- [[features/F-097]];
+- [[decisions/financial-math-single-average-cost]], [[decisions/bulk-pairs-new-with-saved]].
+
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B4 — plan 42 (P): the checks of promoted pairs, C-46…C-48, the localisation mini-lot
+Source: `Release_2/Phase_0/42_promotePairChecks/plan-phase00PromotePairChecks.prompt.md` @ git:`6c32f4aff`; base
+`94abcf380`. Checked on the code at HEAD:
+- `pairAssetMismatch` and `pairQuantityMismatch` in `_validate_linked_pair`, and both keys in the four catalogues;
+- `_promoted_state_issues`;
+- `TXPromoteSuggestInput.asset_event_id`;
+- `costBasisValue` in `fieldEq`;
+- `findPromoteMatch`'s exact opposite and `eventA`/`eventB`;
+- the selection bar's `assetQuantitiesCancel`;
+- `tolerance_days` with `ge=0`, and the window in the 💡's key;
+- the marker locale `qaa` in `DataEditor.test.ts`;
+- `$currentLanguage` in the broker card's and sharing panel's template expressions.
+
+The four commits and their merges (trains 32, 34, 37, 38) are in HEAD. Two paths read in the plan's notes were corrected
+to the tree: `components/charts/calendarReturnWindow.ts` and `utils/__tests__/txPayloadHelpers.test.ts`.
+Created:
+- [[decisions/transfer-pair-same-asset-opposite-quantity]], [[decisions/promote-respects-asset-event-link]];
+- [[problems/bulk-cost-basis-compared-by-reference]], [[problems/legacy-component-language-untracked]];
+- [[concepts/marker-locale-for-catalogue-labels]];
+- [[sources/phase00-promote-pair-checks-2026-10]].
+
+Updated: [[decisions/bulk-pairs-new-with-saved]] (C-47), [[decisions/pair-description-tags-validation]] (C-42, the
+single-leg update), [[decisions/cash-transfer-split-promote]], [[entities/transaction-batch-pipeline]],
+[[problems/promote-skipped-cost-basis-check]], [[concepts/svelte5-runes]], [[concepts/assert-on-identity-not-prose]],
+[[features/F-048]].
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B5 — the onboarding (J, folder 21): F-105, six decisions, three problems
+Source: `Release_2/Phase_0/21_onboarding/` — the main plan, Rounds 1–8 and the review dossier (ten files, ~313 KB) at
+the commits of the registry section; base `c7261618d`. Checked on the code at HEAD:
+- the fifteen flows and their versions (`ONBOARDING_FLOW_VERSIONS`, all 1) and the two step lists
+  (`ONBOARDING_FLOW_STEPS`, nine Import steps with `import.gapFix`, four Bulk steps);
+- the tables and the grandfathering in `004_release_1_2_0_schema.py` (docstring §3), and the consolidation `22fa0aed7`;
+- the nine intro step ids (`CORE_TOUR_STEP_IDS`) against the eight `onboarding.tour.steps` keys;
+- `GUIDE_STALL_MS` and `PANEL_FADE_MS` (3 s), `isRendered()` with `checkVisibility`, the motion root
+  `.modal-content, nav`, `onstallend`;
+- the key `lf_{userId}_onboarding_replay_{flow}_v{version}`, `createReplayStorageListener` → `dismissHost()`;
+- `toStore(() => appBootstrap.ready)` in `(app)/+layout.svelte`, and `inert` on the shell during `intro_tour`;
+- `DeferredAppPopups` (requested update first, nothing during a guide, donation before update), identical in
+  `580bd504f` except the requested branch;
+- `startImportAt()`/`setStep()` in the wizard, `handOffToEditor()`, `releaseCreateGuideHost()`;
+- the commits `8d9761db1`, `8a8e686f0`, `580bd504f` (in `dev_release2` with the PAC merge `3913fe217`), `1982c254b`,
+  `64d78e244`, `5e7ae336e`, `cc20b8288`, `f2abf9b47`, `208296923`, `8bd933834`, `93e023f2e`, `020c762e0`.
+
+Corrections against the sources: the dossier's popup lane («suppressed entirely, not queued-and-shown-after») already
+held the prompts and showed them afterwards in the code it reviewed (`580bd504f`); the it/fr/es user pages that Round 8
+found without onboarding sections have them today.
+Created:
+- [[features/F-105]] (registry: 105 features, LAYOUT & SETTINGS 8);
+- [[decisions/onboarding-versioned-progress-per-flow]], [[decisions/onboarding-existing-users-seeded-skipped]],
+  [[decisions/onboarding-guide-observes-never-acts]], [[decisions/onboarding-positions-in-browser-per-account]],
+  [[decisions/guide-text-never-announces-another-guide]], [[decisions/automatic-popups-wait-for-guides]];
+- [[problems/guide-anchor-never-resolves]], [[problems/coachmark-measured-mid-modal-transition]],
+  [[problems/legacy-layout-gate-missed-runes-state]];
+- [[sources/phase00-onboarding-2026-09]].
+
+Updated: [[features/registry]], [[domains/layout-settings]] (F-101, F-104 and F-105 in the cluster table, aligned to
+the registry), [[features/F-004]], [[features/F-005]], [[features/F-008]], [[features/F-092]], [[features/F-101]]
+(R20, the legacy trap of the privacy switch), [[features/F-104]], [[entities/import-wizard-modal]],
+[[concepts/svelte5-runes]], [[problems/legacy-component-language-untracked]] (two earlier instances),
+[[problems/i18n-loading-gate-remounts-app]].
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B6a — the Tool platform (C, folder 16): F-106, three decisions
+Source: `Release_2/Phase_0/16_toolPlatform/` (plan, integration manifest, review dossier, hand-off to D) and the
+capacity round `13_pacAllocator/implementation/plan-phase00Step1Round1-ToolPlatformCapacity.prompt.md`, at the
+commits of the registry section; base `8abce8e87`. Step B6 is split in two: the PAC (folder 13) follows as B6b.
+Checked on the code at HEAD:
+- `ToolPlatformPolicy` defaults (1–4 items, 2 lanes, 8 pending, 4 per user, engine 30 s, 1 GiB) and the operation
+  defaults (engine 4 s); `catalog_version` "2"; `_MAX_SERVICES_PER_PLUGIN = 16`; `duplicate_code` and
+  `import_failed` quarantine;
+- `get_current_user` on the three routes; the `spawn` context, `setsid`, the `ready` frame and the `\x00` ACK,
+  `OwnedProcessTree`, `cgroup_v2_hard` and `process_tree_observed`, `claim_engine_window()`;
+- `@register_plugin(ToolPluginRegistry)` on `PacAllocatorTool`, contract and implementation `1.0.0`;
+  `defineToolRenderer('pac_allocator', '1.0.0', …)` in `registry.ts`;
+- the commits `1656aff69`, `bb0cdc334`, `8e7259ecc`, `570beb386`, `4a38b9061`, `3913fe217`, `b82e59ffa`,
+  `0210f9848`.
+
+The dossier's risks of 2026-09-11, re-checked: the old budgets are gone from the user page (fixed); no screen shows
+the memory mode, and `contracts.ts` still waits the platform's client timeout (both still true, recorded in
+[[features/F-106]]). The generated codec files are git-ignored, so no page cites them.
+Created:
+- [[features/F-106]] (registry: 106 features, INFRASTRUCTURE 17);
+- [[decisions/tool-calculation-without-authority]], [[decisions/tool-item-runs-in-owned-process]],
+  [[decisions/tool-contract-from-pydantic-compiled-renderer]];
+- [[sources/phase00-tool-platform-2026-09]].
+
+Updated: [[features/registry]], [[domains/infrastructure]], [[features/F-059]], [[features/F-105]] (the unused
+`tools.hub` anchor), [[decisions/provider-registry-decision]], [[decisions/plugin-folders-and-split-i18n]],
+[[concepts/backend-only-calculations]].
+
+Also: [[decisions/onboarding-existing-users-seeded-skipped]] records the developer's decision of 2026-10-12, relayed by
+the coordinator — the `import.gapFix` coachmark that older accounts meet once is accepted, not a defect («Va bene così:
+lo step è una novità della 1.2 e il coachmark la presenta una volta sola»); migration 004 does not change.
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B6b — the PAC allocator (D, folder 13): F-107, F-108 planned, six decisions, seven problems
+Source: `Release_2/Phase_0/13_pacAllocator/` — the five designs, `review/`, the fifteen `drafts/` (characterised, not
+re-told) and eighteen plans of `implementation/` (Step 1, Round 1 went with B6a), at the commits of the registry
+section; base `96fd88fec`. Read through eight digests of the plans, then checked on the code at HEAD:
+- `pyscipopt = "==6.2.1"` in the `Pipfile`; the seven `result_state` values; `policy: Literal["proportional"]` for
+  the PAC; the Rebalancer requests in the schema with no service, `normalize_rebalancer_plan` reached only by tests;
+- the plugin's `claim_engine_window(post_engine_reserve_ms=_POST_ENGINE_RESERVE_MS)` (2,000 ms) and
+  `solver_time_budget_seconds=window.timeout_ms / 1000`; the 3.5 s fallback marked «Not the product budget»;
+- `STAGE_PIN_RELATIVE_SLACK = 1e-12`, `_flag_contradicted_bounds`, `SolverInfeasibilityContradictedError`,
+  `_published_gap`; `_fee_clamp_upper`, `_fee_cap_excess`; `_require_credit_tie_free` gone;
+- `validate_fx_coherence`, `allocation.fx_rate_inconsistent`, `allocation.exposure_total_exceeds_one`; `rounding_delta`
+  as `ExactNumber` (`ratio_to_exact_number`); `conversion_mode` («It changes no figure of the plan»),
+  `PlannerConversion`, `NoOrderCap`; `currency_specs` gone; `json_schema_serialization_defaults_required=True`, no
+  `default_factory`, the `~zero~` fee instances;
+- the copies endpoint (owner-only, 403, `no-store`), `POST /portfolio/wac` behind `get_current_user`,
+  `refreshCopiedFacts()`; `{' '}` at the routing intro; the `DataTable` sticky-header and actions selectors;
+- the regression tests named on the pages, among them `test_exhaustive_oracle_is_test_only`; the 47 commit hashes on the
+  pages touched by this step, all ancestors of HEAD.
+
+Corrections against the sources: the README calls the Remediation's §5 «sette decisioni del developer» — they are
+seven questions for the developer, one answered later (Q-C0-4); the compaction's «Il fingerprint cambia una volta,
+qui» held for that slice only — the FX fix and the rounding fix moved the `1.0.0` fingerprint again; the README's note
+«Il P1 rimosso il 24/09» dates a removal committed on 2026-09-21 (`b82e59ffa`).
+Created:
+- [[features/F-107]] (CALCULATIONS) and [[features/F-108]] (`planned`); registry at 108 features;
+- [[decisions/pac-scip-searches-exact-replay-certifies]], [[decisions/pac-lexicographic-fixed-l2-objective]],
+  [[decisions/pac-fx-one-rate-map-direct-conversions]], [[decisions/pac-draft-copies-from-owned-data]],
+  [[decisions/pac-contract-compacted-before-release]], [[decisions/pac-p1-prototype-removed]];
+- [[problems/pac-solver-ran-on-default-budget]], [[problems/pac-scip-tolerance-misreported-proof]],
+  [[problems/pac-fee-floor-and-cap-misread]], [[problems/pac-foreign-funding-calculation-failed]],
+  [[problems/pac-tool-error-instead-of-plan]], [[problems/svelte5-trims-leading-space-in-tag]],
+  [[problems/datatable-actions-column-on-mobile]] (open, a hypothesis);
+- [[sources/phase00-pac-rebalancer-design-2026-09]], [[sources/phase00-pac-implementation-2026-10]].
+
+Updated: [[features/registry]], [[domains/calculations]], [[features/F-106]], [[features/F-097]],
+[[decisions/pac-rounding-against-the-plan]], [[decisions/tool-calculation-without-authority]],
+[[decisions/wac-target-currency-last-acquisition]], [[decisions/financial-math-one-home]],
+[[decisions/html-escape-at-the-source]], [[concepts/backend-only-calculations]], [[concepts/svelte5-runes]],
+[[problems/svelte-i18n-formatter-cache-ignores-locale]], [[problems/bulk-modal-sticky-z-index]],
+[[problems/datatable-column-resize-noop]], [[sources/phase00-tool-platform-2026-09]].
+
+Note for step D: the B6a and B6b pages cite `backend/app/services/tool_plugins/pac_allocator.py`, which U-1 moved to
+`tool_plugins/pac_allocator/plugin.py` in the target (train 61); they follow the map with the other plugin paths.
+Graph: not updated (P-6).
+
+## [2026-10-12] lint | Steps D and C — the plugin paths after U-1, and F-078
+Base `145502a39` (train 62). U-1 is `2eed3d26c` («one folder per plugin», train 61 `bd8ee8e4d`): the 84 first-party
+plugins moved with `git mv` to `<family>/<name>/plugin.py` (82 renames at 100 %, 2 at 99 %), each beside an
+`__init__.py` that is only its docstring; discovery loads `plugin.py` (`PLUGIN_MODULE_NAME` in
+`provider_registry.py`), the family helpers stay at the family root, and `test_plugin_layout_gate.py` guards the
+layout, the imports and the strings. `frontend/src/lib/i18n/` still holds one catalogue per language: U-2 and U-3 are
+later steps of plan 45.
+
+**Before**: `check_source_paths` gave 54 missing paths in this worktree (104 occurrences, 63 pages) — on the target 44: 42
+plugin modules (BRIM 16, risk 8, signal 6, FX 6, asset 6), `tool_plugins/pac_allocator.py` cited by steps B6a and
+B6b, and the old `admin.py` of F-078; the other 10 are git-ignored artifacts that a worktree does not have.
+
+**D — the map** (delivered with the checkpoint, outside the repository): 120 citations — 99 paths, 20 bare file
+names, one dotted import — in 56 pages. 112 moved to `<name>/plugin.py` in 54 pages, every new path checked with `git ls-files`; by
+hand, [[features/F-013]]'s layer sentence and a note on the convention in [[features/F-059]]. 8 left as written, being
+history: five in this log, the old import quoted as the problem of [[decisions/provider-shutdown-generic]], a past-tense
+account in [[sources/beta-testing-2026-08-05]] and a dated residual in [[sources/phase00-brim-targeted-2026-09]].
+[[decisions/plugin-folders-and-split-i18n]] now records U-1 as delivered and the translations as still planned.
+
+**C — F-078**: [[features/F-078]] (`planned`) was delivered in another form on 2026-09-09 (`ef722b552`, U4 of the urgent
+import and UX fixes, [[sources/phase00-feedback-import-urgent-2026-09]]): a sortable uploader column with an avatar and
+name filter, kept in the URL, for every user rather than admins only, with names from the existing
+`GET /api/v1/users/search`. `backend/app/api/v1/admin.py` never existed (`git log --all` is empty), so its row gave way
+to the files that do; `get_upload_by_user()` is still called only by its tests. F-078 → `implemented`; registry: 93
+implemented or documented, 10 planned.
+
+**After**: 10 missing in this worktree, all git-ignored artifacts; on main the check should reach 0.
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B7 — folder 27 (release images, gallery) and folder 32 (the English docs for 1.2)
+Base `3f9de8bdb` (train 63). Sources: three plans of workstream M in `27_releaseImages/` — the release images
+(`742e381ec`), the translated code blocks (`5fa0cf12a`), the release pipeline with its gallery, R12 and batches 5–12
+(`5983714f5`) — and the plan of workstream Q in `32_docsEnglish12/` (`425cb26d5`). The fourth plan of folder 27, the
+translation round, already has [[sources/phase00-translation-round12-2026-10]]; its batches 23–24 are left to step B8.
+Every symbol, path and commit was checked on this tree; every cited commit is an ancestor of HEAD.
+
+**Created (11)**: [[problems/release-images-shipped-debug-frontend]] (a debug frontend in both images, and full = light
+because the site was built before the gallery; full − light = 2,961,040 bytes, the PNGs), [[decisions/release-image-tags-latest-light]]
+(«è corretto che la latest punti anche alla light…»; `-rc.N` prereleases, the symmetric tag check),
+[[decisions/http-gzip-in-the-app]] (level 6, −63 % cold, −84 % warm), [[problems/translation-cleanup-flattened-code-indent]]
+(`_clean_translation` step 7 on the whole document; `code_blocks.py`, ERROR `code-block-indent`),
+[[decisions/gallery-is-a-release-gate-with-real-data]] (D1–D4, disposable accounts, the offline guard, reduced motion,
+tall screens), [[problems/playwright-favicon-aborted-by-routes]] (`_isFavicon` + any route; `?lf-gallery`),
+[[decisions/pdf-preview-viewer-only-local-assets]] (`1028a1978`; the fallback loop from `5b887dd3a`),
+[[decisions/user-docs-plain-dev-manual-technical]], [[problems/docs-claimed-what-the-code-did-not-do]] (nine drifts, each
+with its fixing commit), [[sources/phase00-release-images-and-gallery-2026-10]], [[sources/phase00-docs-english-12-2026-10]].
+
+**Updated**: [[features/F-074]] (1.2 gallery rules, fixtures, status row), [[features/F-062]] (variants, frontend guard,
+gzip), [[features/F-050]] (the 1.2 PDF preview), [[features/F-070]] (code-block indentation), [[features/F-069]] (the
+1.2 English alignment, anchorless links from English-only pages, the serve fallback), [[concepts/ci-release-pipeline]]
+(prerelease rules, links), [[decisions/docs-anchors-from-the-render]] (English-only pages link without anchors),
+[[decisions/single-docker-image]] (links), [[problems/playwright-probes-ignore-timeout]] (sibling link). No feature
+changed status.
+
+**Corrections to the plans' wording, from the code**: `dev.py` no longer imports the translation commands inside
+`except ImportError` — since `5dca6e2cf` (2026-10-08) it checks `_has()` first, so the reason given for a stdlib-only
+`code_blocks.py` is recorded as history; the session cookie described as never `Secure` on 2026-10-08 follows
+`SESSION_COOKIE_SECURE` since `11be06988`; the Tools pages Q found English-only are translated today.
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Step B8 — M's batches 23–24, T's CL, I's plan 47, the backlog of 12/10, V-19
+Base `35c4242f3` (B7 on train 63). Sources: the translation round's journal from `0ebf86178` to `dfd8284f3` (batch 23,
+two pages reviewed in a live preview; batch 24, M-19); plan 43 from `d5497e40a` to `fba291f53` (CL, the localized
+changelog frontend); plan 47 of I (`ace3455e2`); the backlog at `bf831ef10` (C-56…C-58, D-T1…D-T3, T-SG, T-DI, M-19…M-21),
+read for ids and status. Every cited commit is an ancestor of HEAD.
+
+**Created (8)**: [[features/F-109]] (the in-app changelog, registered: `3e3f9c41f` on 2026-09-01, localized by
+`8f67f89de`), [[decisions/changelog-translated-by-chapter]] (M's file contract, lazy chunks per language, a merge keyed
+on the version, the «Not translated yet» pill, one DOMPurify path; no translated file exists yet),
+[[problems/docs-mathjax-looked-in-the-page-folder]] (M-19, since 1.0; `8d47c28c0`; M-21 still open),
+[[problems/copy-buttons-without-http-fallback]] (M-20, open, five call sites checked at HEAD),
+[[problems/mkdocs-material-tables-resist-styling]] (three CSS traps, `11339afa6`),
+[[problems/line-chart-axes-lost-the-day]] (`4c05c1d85`, `8682f0bbd`; item 47-1 open),
+[[problems/pnl-lines-kept-removed-brokers]] (`e72b0b56e`), [[sources/phase00-chart-axis-day-labels-2026-10]].
+
+**Updated**: [[features/F-102]] (the guide as pros-and-cons tables, the Tailscale-over-HTTP warning, the admin
+pointers), [[features/F-069]], [[features/F-062]] (formulas offline in the full image), [[features/F-055]] (plan 47),
+[[features/F-106]] («Still open» now carries D-T1…D-T3), [[concepts/echarts-chart-gotchas]] (two rows: partial updates
+merge by position; default labels never meet the app's language), [[concepts/responsive-4mode-layout]] (a translation
+can expire the calibration: `7c66234a7` turned the Spanish `aiExport` into «Exportación IA», the sweep went red on two
+bars in `denseRow`; backlog V-19; the cure planned in I's plan 48, 950 → 990 and 850 → 890, to be linked when the plan
+enters the target), [[problems/broker-icon-race-condition]] (C-56, C-57), [[problems/playwright-probes-ignore-timeout]]
+(T-DI beside M-18), [[sources/phase00-translation-round12-2026-10]] (batches 23–24),
+[[sources/phase00-brim-scalable-2026-10]] (batch 23 in the target, the page approved),
+[[sources/phase00-financial-math-home-2026-10]] (the CL section), [[domains/layout-settings]], the registry (109
+features, 94 implemented or documented).
+
+**Not filed**: C-58 (a broker-detail test past 30 s under load: a test budget to triage, no durable knowledge yet); T-SG
+(the loose modules of `services/` grouped by domain, after 1.2). V-19 is in the target's backlog since train 64, not yet on
+this branch: cited by id only.
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Trains 58 and 64 — V's batch 2 and work 3 (plan 46 §11–§12)
+Base `d04b87c0f` (train 65). The coordinator asked for train 64 (V's step 2a: §12.3–§12.5, V-15…V-20, cures A1–A3).
+The same plan also carried V's part of train 58 (`0596e8d08`: §11, batch 2, and §12.1–§12.2), never ingested, and the
+wiki still called V-1 open: both are included, so the registry row at `262515898` is true for the whole plan.
+
+**Created (3)**: [[problems/e2e-writes-leaked-into-shared-state]] (how a write spreads — parallel inside a category,
+one populate per invocation, clean-ups at one worker only; A1–A7; damage proved on the lane's database before each cure;
+2a delivered in `495fb9e86`, `6d62171e3`, `e6333930c`; 2b open), [[problems/bcrypt-blocks-the-event-loop]] (V-16,
+checked in `auth.py`, `auth_service.py`, `user_service.py`), [[decisions/e2e-gaps-of-1-2-before-release]] (planned:
+nothing of it is in the code).
+
+**Updated**: [[problems/open-panels-stale-after-fx-sync]] (V-1 closed, `a0722f755`), [[decisions/data-quality-proved-on-real-data]]
+(the left-after list: V-1, V-5…V-7, V-9, V-10 closed), [[sources/phase00-data-quality-e2e-2026-10]] (batch 2 and work 3;
+open after train 64: V-2…V-4, V-8, V-11…V-20), [[features/F-054]] (status row), [[concepts/test-isolation-classes]]
+(the E2E rule), [[concepts/async-io-rule]] (the known violation). V-19 was already filed in step B8.
+
+**Checked against the code**: `fullyParallel: true` in `playwright.config.ts` (a comment above it still says «off»;
+not ours to change); the reserved quotes TTD/JMD and GTQ/HNL; `describe('Saving')` serial; the About tab's
+`data-busy`; the disposable-account helpers in `fixtures/onboarding-accounts.ts`.
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 66 — V-16, M's batch 25, the ✨ changelog line
+Base `b91d6d902`. Sources: plan 46 §12.7 (V-16, `3aabf0916`); M's plan of batch 25,
+`27_releaseImages/plan-phase00ChangelogTranslation.prompt.md` (`81e221f4e`), with M's note for the devWiki (outside the
+repository); the ✨ line of `CHANGELOG.md` (`b91d6d902`). Every claim of the note checked on the code.
+
+**Created (3)**: [[decisions/changelog-translated-by-heading-pieces]] (`2aecd5a6f`, `e63cfb074`, `4325e03d4`; four
+chapter lines identical in the four files), [[problems/mathjax-fonts-missing-from-local-copy]] (`92fb9c83e`; 22 fonts as
+companions of the cached script; the M-19 spec, extended to the font faces, still waits outside the repository; M-22
+open), [[problems/fast-forward-blocked-by-a-dirty-file]] (the fast-forward to `0afac8e14` over M's backlog edit).
+
+**Updated**: [[problems/bcrypt-blocks-the-event-loop]] → resolved (`a9e0fe4d9`; the heartbeat tests of `0d6aee67c`, red
+first; `reset_password`, CLI only, unchanged), [[concepts/async-io-rule]], [[decisions/changelog-translated-by-chapter]]
+(**corrected**: it said no translated file existed — true at `35c4242f3`, false since `4325e03d4`; the gallery word is
+`Docker`, `416faf60d`), [[features/F-109]], [[features/F-070]], [[features/F-069]],
+[[problems/docs-mathjax-looked-in-the-page-folder]] (the follow-up), [[problems/e2e-writes-leaked-into-shared-state]]
+(A7's damage proved; IWR-009 passes in silence).
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 67 — M's batch 26: the first append, and M-23
+Base `0c8412745`. Source: step 10 of `27_releaseImages/plan-phase00ChangelogTranslation.prompt.md` (`872d42107`) and
+the backlog's M-23. The ✨ line of `b91d6d902` was ported by hand into `CHANGELOG.{it,fr,es}.md` and stamped
+(`98fe9ce1d`) instead of re-translating a 16.8 KB piece three times.
+
+**Updated**: [[decisions/changelog-translated-by-heading-pieces]] (the first append, by hand), [[decisions/fr-typography-at-build-time]]
+(what the build-time hook cannot reach: M-23, open, planned in 1.2 by the coordinator), [[features/F-109]] (still open:
+M-23). Checked on the code: `changelog.ts` and `ChangelogModal.svelte` apply no French spacing rule.
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R0 — the features and the map
+Base `551d8cbb4`. Plan approved by the coordinator: R0 → R6, trains first; three UI features in DASHBOARD, the engine
+in CALCULATIONS, no new domain; open items as «paused, after 1.2» (D382). Source of this step: the folder's README
+(`107098edf`), whose code map was checked path by path on this tree.
+
+**Created (5)**: [[features/F-110]] (engine: `services/risk/`, fifteen plugins, four endpoints, documented),
+[[features/F-111]] (four levels on the Dashboard and broker pages; only the simulation rung stays beta),
+[[features/F-112]] (the Lab of Asset Global), [[features/F-113]] (the legacy Asset Detail tab, beta, implemented),
+[[sources/phase00-risk-integration-2026-09]] (the folder, its parts, D382).
+
+**Updated**: the registry (113 features, 98 implemented or documented), [[domains/calculations]], [[domains/dashboard]]
+(F-100 added too: it was in the registry's DASHBOARD rows but missing from the domain page).
+Next: R1, the open items. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 68 — M-18 CP1 (T)
+Base `8730f949c` (the target merged into this branch by the coordinator). Source: plan 43, «M-18» sections (`d00c06685`),
+and the code of `5b2aad5c4`. **Created**: [[decisions/figures-in-the-interface-language]] (the developer's rule, CP1
+delivered, CP2 pending). **Updated**: [[problems/playwright-probes-ignore-timeout]] (M-18 moved to T, CP1),
+[[features/F-008]] (status row). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R1 — the open items
+Base `86de5e903`. Source: the README's lists «Lavoro pianificato e non fatto», «Buchi veri», «Difetti noti», «Buchi nei
+test», «Domande mai decise», the backlog-38 family and the `TODO_FUTURI.md` deferrals (`107098edf`, verified by their
+authors on 2026-10-10). Re-checked on the code: A6, C-22 (D381 clamp; Sturges only for a zero IQR), C4, B7, B8 and
+`HurtRow.secondaryLoss`. **Updated**: [[features/F-110]], [[features/F-111]], [[features/F-112]] («Still open (paused,
+after 1.2 — D382)»); F-113 already carried A2 and T-DI. No problem page: every item is paused by the developer's D382,
+and the README stays its single home. The post-integration review `08` is the first round's history: steps R3/R4.
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R2 — the decisions that bind
+Base `e3a55b85f`. Sources: the README's «Decisioni che vincolano il lavoro» (`107098edf`) and the thesis
+`01-tesi-e-quattro-domande.md` (`245aabf97`). **Created**: [[decisions/risk-answers-four-questions]],
+[[concepts/risk-binding-decisions]] (D374 and D380–D381 checked on the code). **Updated**: F-110…F-112 (a link). The
+full records of `04` (1,076 lines) stay in the journal; individual pages come only where a later step needs one.
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 69 — M-23 resolved (M's batch 27)
+Base `d877a4e14`. Source: step 11 of `27_releaseImages/plan-phase00ChangelogTranslation.prompt.md` (`1ed372534`) and
+the code of `99aa2f4ec`, `53673ae9f`. **Updated**: [[decisions/fr-typography-at-build-time]] and [[features/F-109]]
+(M-23 open → resolved in 1.2: `typesetFrench()` in `changelog.ts`). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R3a — implementation_2, the contract and the levels
+Base `4549376b8`. Sources: `implementation_2/` top files (00, A, F1, F2, PRIMITIVE, S1–S5, `_comune`, REGISTRO,
+R5-tempo2), digested by an explore agent and checked here (quotes by grep; hashes and paths verified). **Created**:
+[[decisions/asset-set-one-preparation-not-fan-out]], [[decisions/l3-reads-current-composition]],
+[[problems/runner-catalog-merge-not-line-union]]. **Updated**: [[features/F-111]], [[features/F-112]],
+[[sources/phase00-risk-integration-2026-09]]. Overtaken in the journal, noted on the pages: the contract's table of
+`ASSET_SET` plugins. Next: R3b, the post-merge review R5 and the progress logs. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R3b — the post-merge review R5
+Base `e050cc142`. Source: `implementation_2/R5-post-merge-e-review.md` (`107098edf`), digested by an explore agent
+(sections around the «⚠️ Fuori pista» markers; the four big progress logs were not read — their history is covered by
+the review and the code). Quotes kept only where grep found them verbatim. **Created**:
+[[problems/risk-stress-buckets-hand-listed]], [[problems/replay-baseline-shortened-by-late-starter]],
+[[problems/echarts-stacked-band-null-base]]. **Updated**: [[concepts/echarts-chart-gotchas]], F-110, F-113, the folder
+source. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R4 — the first round, implementation/
+Base `97eecde84`. Sources: `implementation/` (README, contracts K1–K9, streams, the A progress log), digested by an
+explore agent; quotes re-found by grep, hashes and paths verified. **Created**: [[concepts/risk-contracts-k1-k9]],
+[[decisions/histogram-grid-pinned-to-var-cut]], [[problems/annualization-factor-not-coverage]] (no delivering commit
+isolated for the observed factor: cited by its code). **Updated**: [[features/F-110]], the folder source.
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R5 — the analysis documents
+Base `b4acfb250`. Sources: `00`, `02`, `03`, `05`, `06`, `07`, digested by an explore agent; quotes re-found by grep.
+**Created**: [[decisions/risk-tool-verdicts]] (with today's departures: TE and IR still in the contracts and on the
+legacy panel, optimization delivered as a plugin), [[decisions/risk-library-versus-own-maths]] (coherent CVaR and
+vectorised rolling checked in the code). The visual grammar of `05` and the plans `03`, `07` left in the journal: the
+levels pages and the features already carry what shipped. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 02 (Risk), step R6 — the archive G0–G6; folder 02 covered
+Base `843c9a9d2`. Source: `_archive-backendFirst-G0G6/README.md` (`33d5a599b`) and the archive's history since the July
+ingest: archived on 2026-09-16 (`245aabf97`), aligned once on 2026-10-09 (`33d5a599b`, 4 files). **Updated**:
+[[sources/phase00-risk-analysis-backend]] (what still holds, what is superseded), [[sources/phase00-risk-integration-2026-09]].
+Folder 02 is now covered by steps R0–R6: 4 features, 6 decisions, 2 concepts, 5 problems and 1 source, with the open
+items as «paused, after 1.2 (D382)». Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 09, step F0 — the feedback jobs
+Base `dc00cbe9f`. Plan approved by the coordinator: F0 → F2, then H1 → H5 (`Ai_ideas`: a source page only, linked to
+`TODO_FUTURI.md` themes). Sources: `09_feedbackJobs/README.md` and `06_piano_sprint.md` (`d614daed9`), digested by an
+explore agent; the hashes verified as ancestors, the README's open items rewritten with today's paths (BU1, U-1).
+**Created**: [[sources/phase00-feedback-jobs-2026-09]]. **Updated**: [[sources/phase00-feedback-import-urgent-2026-09]]
+(a link). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 09, step F1 — the structural backlog P4 and the static analysis
+Base `7ff48ac9b`. Sources: `00_backlog_strutturale_P4.md` and `09_reperti_analisi_statica_20260922.md` (`d614daed9`),
+digested by an explore agent; hashes verified, the two fixes re-read in the code. **Created**:
+[[problems/privacy-gate-blind-to-formatter-consumers]], [[problems/missing-event-detail-read-as-consent]]. **Updated**:
+[[sources/phase00-feedback-jobs-2026-09]] (the F1 statuses). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Folder 09, step F2 — the areas and the visual review; folder 09 covered
+Base `5c82d9bd4`. Sources: `01`–`05`, `07`, `08` of `09_feedbackJobs/` (`d614daed9`), digested by an explore agent
+that grepped the wiki for each topic; only R2 was missing. **Created**: [[problems/stale-version-file-shadows-git-describe]]
+(open; the mechanism checked in `utils/runtime/version.py` and `dev.py`). **Updated**: [[sources/phase00-feedback-jobs-2026-09]],
+[[features/F-062]]. Folder 09 covered by F0–F2. Next: the historical folders H1–H5. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folder H1 — 01_signalMigration (drift and gaps)
+Base `62471add2`. The four rows ingested in July (`02_aiExport/`, hash `untracked`, old `Phase_0/` path) are re-based
+on `8da24ef22` and the `phases/` path; 32 files were never ingested — mostly the AI Export reports, whose outcomes the
+AI Export pages already carry. Gaps found by an explore agent and checked in the code: **Created**
+[[decisions/signal-indicator-warmup-sizing]], [[problems/spa-logout-cross-user-cache-leak]]. **Updated**
+[[decisions/signal-backend-plugin-architecture]], [[features/F-001]]. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folder H2 — 05_cleanAudit
+Base `42fc4dd7f`. Source: `phases/05_cleanAudit/` (`8da24ef22`; never ingested), digested by an explore agent that
+grepped the wiki before naming a gap. **Created**: [[sources/phase00-clean-audit-2026-08]],
+[[problems/asset-events-lost-on-price-cache-hit]] (`b45f5afbb`; the journal cites, for the cause, a hash that does
+not resolve in this repository — `git log -S` points to `5b9dddb45`). **Updated**: [[concepts/test-isolation-classes]] (the
+first `test all` that could not pass). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folder H3 — 08_newCleanAndDocumentation_audit
+Base `61f7c970b`. Source: `phases/08_newCleanAndDocumentation_audit/` (`a9138140a`; never ingested), digested by an
+explore agent. **Created**: [[problems/base-currency-setting-silently-defaulted-eur]] (`08b99c3ac`; the helper and its
+callers checked in the code). **Updated**: [[sources/phase00-clean-audit-2026-08]] (the second audit), [[features/F-092]].
+Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folders H4 — 03_brokerImportRecovery and 04_webSearchEngine
+Base `63121ee78`. Sources: both folders (never ingested), digested by an explore agent. 03 (the Intesa and Crédit
+Agricole recovery, `0e07359b4`) is already covered by [[decisions/credit-agricole-securities-only-cash-neutral-brim]]
+and the BRIM pages; its ISIN auto-binding note was too thin for a page of its own. **Created**
+[[decisions/web-link-finder-ddgs]] (`ae417b9ab`; the engine settings checked in `web_link_finder.py`). **Updated**
+[[features/F-028]]. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folder H5 — Ai_ideas; the historical folders covered
+Base `b899903db`. Source: `Release_2/Ai_ideas/` (four files, 2026-07-20 → 08-05; never ingested). By the coordinator's
+rule a source page only, no `idea` features: **Created** [[sources/release2-ai-ideas-2026-07]] (what held — signals,
+then risk, the rolling chart — and the MCP assistant deferred to `TODO_FUTURI.md`, «QuarkAI»). **Updated**
+[[decisions/signal-backend-plugin-architecture]] (a link). With H5, the plan of folder 09 and the historical folders
+(F0–F2, H1–H5) is complete. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Historical folder H6 — 06_betaTestingReportAndFixing (drift)
+Base `6e3d1368c`. The four July rows (hashes that no longer resolve, old `Phase_0/` path) re-based on `91e88b8d1` and
+the `phases/` path; three reports moved unchanged, `INDEX.md` edited. Eleven files never ingested, listed on
+[[sources/beta-testing-2026-08-05]]; their topics already have pages, so no new page — a content check of the ten plans
+stays a candidate for a later lint. Graph: not updated (P-6).
+
+## [2026-10-12] lint | Follow-up of the read-only lint — two open problems re-checked
+Base `4d0cedec7`. The coordinator's decisions on the lint: re-check the two stale open problems against today's E2E;
+M-20 waits for I's plan 48 (FileGrid and FilesTable will be C-63); the unchecked areas become C-64. An explore agent
+read the specs. **Updated**: [[problems/bulk-modal-sticky-z-index]] (not covered → open, re-test after 1.2, C-61),
+[[problems/datatable-column-resize-noop]] (resize proved on the Risk Lab L1° table, `f55b2e42a`; others untested → open,
+C-62). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 70 — M's batch 28: the M-19 spec registered, the gallery's price guard after M-18
+Base `afd7d4821` (the target `b063b16ca` merged into W). Source: M's journal of round 12, §16.7 and §17 (batch 28),
+with the code of `0fe5195e8` and `e8d5a5668`, and T's CP1 note that found the guard (`43_financialMathHome`, before the
+STOP). **Created** [[problems/gallery-price-guard-expected-tofixed-text]] (resolved: red in English on prices over
+1,000, unseen because the runner excludes the gallery; the first control could not fail). **Updated**
+[[problems/docs-mathjax-looked-in-the-page-folder]] and [[problems/mathjax-fonts-missing-from-local-copy]] (the spec is
+in the repository, `front-utility docs-offline-math`), [[decisions/figures-in-the-interface-language]] (a consequence
+for tests), [[decisions/gallery-is-a-release-gate-with-real-data]], [[features/F-069]],
+[[sources/phase00-translation-round12-2026-10]] (batch 28; its stale «M-14 still in progress» line corrected). Graph:
+not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 1 — the unfinished features against today's code
+Base `0bd1a8368`. Asked by the coordinator before the tag, so that the wiki says what 1.2 really contains. Two explore
+agents read the code and the history of the 14 features not `implemented` or `documented`; F-048's findings were
+re-checked by hand, on the code and on the trees of `v1.0.0` and `v1.1.0`. **Updated** [[features/F-048]]
+(`in-progress` → `documented`: its four open items were delivered and shipped in 1.0.0, `dce60a5ee`; residuals K-1 …
+K-4 in backlog 38), [[features/registry]] (row, note, statistics: 99 shipped, none in progress),
+[[domains/transactions]], [[domains/brokers]], `index.md` (Domains row). Unchanged after the check: F-077, F-079,
+F-081, F-082, F-084, F-087, F-091, F-094 and F-108 (contract only) stay `planned`; F-085, F-093 and F-096 stay `idea`.
+Listed to the coordinator, not touched: F-090 (parts built under F-051, the provider-change modal and the reverse
+lookup not), F-094 (borderline), page drift on F-082, F-090 and F-096. Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 1 — the coordinator's decisions on F-090, F-094 and three page defects
+Base `f83a1486d` (C-65 and C-66 in the backlog). **Updated** [[features/F-090]]: stays `planned`; what was built under
+[[F-051]] is listed with its paths (the `RESTRICT` FK, `delete_events_bulk` with an outcome per id, the link field and
+rule 9, the event picker), the 409 it promised is gone, and the rest — the provider-change modal, the reverse lookup —
+points to C-65, with the `TODO_FUTURI.md` entry on suggested links as a neighbour. [[features/F-094]]: stays
+`planned`; the three sync dialogs on `SyncModalBase` sync the page's range, the warning on existing data is C-66.
+Page defects fixed: [[features/F-082]] (the staging modal's path), [[features/F-096]] (its two tables separated, the
+editor's path), [[domains/signals]] (`status: stable`, as in the index and the registry). [[features/registry]]: the
+C-64 note cites C-65 and C-66. `index.md`: F-048's row in «Individual Feature Pages» still said `in-progress`, missed
+in part 1 — now `documented`. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 71 — U-2 (the catalogue built from its sources), M's batch 29, a merge that died on a lock
+Base `c57acf510` (train 71, gates green). Sources: plan 45 §10 (U-2) and the code of `1b31f9057`; backlog U-B6; M's
+journal of round 12, §18 (batch 29, `18e872872`); the coordinator's report on train 71, with the mechanism checked in
+Git's own sources at v2.53.0. **Created** [[problems/git-merge-stash-failed-on-locked-index]] (Git 2.53 runs
+`git stash create` before every real merge; an IDE or a watcher holding `index.lock` killed it before it started;
+workaround: the train retries up to 5 times). **Updated** [[decisions/plugin-folders-and-split-i18n]] (U-2 delivered:
+generated catalogue, sources in `base/`, read-only and stamped, hooks, gate `utils gate-i18n-catalog`; U-3 and U-B6
+open), [[features/F-008]], [[sources/phase00-translation-round12-2026-10]] (batch 29),
+[[problems/fast-forward-blocked-by-a-dirty-file]] (see also). **Paths**: U-2 moved the four catalogues, so 28
+citations of `frontend/src/lib/i18n/<lang>.json` in 13 pages and 5 written as `{en,it,fr,es}` now point to `base/`;
+`$lib/i18n/en.json` imports stay (they name the generated file). Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 72 — I's plan 48 (UI polish) and V's step 2b (the E2E cleanup)
+Base `0071b9703` (train 72, gates green). Sources: plan 48 and plan 46 §2b, digested by two explore agents, with the
+quotes, paths and figures re-checked on the files and the code. **Created** [[sources/phase00-ui-polish-2026-10]],
+[[problems/late-img-error-marked-the-visible-icon-failed]] (`2412c3fe4`), [[problems/test-passed-only-on-leftovers-of-other-tests]]
+(WB5, `1ea16aace`, linked to the isolation classes), [[problems/toolbar-measurements-differed-by-the-scrollbar-gutter]]
+(V-19, `7f8febd9d`), [[decisions/clipboard-through-one-helper-with-a-gate]] (M-20 and C-63, `65d20910e`),
+[[decisions/security-details-close-after-30-seconds]] (`5e9eff52d`). **Updated** [[problems/broker-icon-race-condition]]
+(the October symptoms had another cause; C-56, C-57 open), [[problems/copy-buttons-without-http-fallback]] (resolved),
+[[concepts/responsive-4mode-layout]] (the cure delivered), [[problems/e2e-writes-leaked-into-shared-state]] (checkpoint
+2b; V-21, V-17, V-18 still open), [[sources/phase00-data-quality-e2e-2026-10]], [[features/F-102]],
+[[decisions/plugin-folders-and-split-i18n]] (I's batch reached `base/` through the rename). Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 2 — dates and hashes in conflict between pages
+Base `fef272b65`. A script compared each of the 1 567 backticked hashes with the date written beside it and with Git;
+two explore agents compared trains, versions, archive dates, backlog and decision IDs, feature status events and
+batches across pages. **No real conflict**: every date that differs from a commit's own belongs to another event (the
+decision's date in the index's Date column, a report, an archive, a range such as `2026-06-08/09`); the two commits
+with one subject, `3e3f9c41f` and `f32e460ca`, are a parent and its follow-up, each cited for its own change; every
+dated train has one date. **A history rewrite**: 98 cited 7–8-character hashes resolve to nothing in today's
+repository (5b1333fa6b07 is an Alembic revision, not a commit). Six were matched to today's commit by subject and
+date and replaced in the pages (17 citations): 615a52eb → `c9f840680`, 78aaa0a3 → `13052a006`, ddb1fcfb →
+`93a88be2c`, a688bcb9 → `dadcc4de2`, b5a0bf9 → `82c9224d5`, a7b30d52 → `432d8642a`. Left: 23 in the pages,
+whose match is ambiguous (F-098's four, 3184a969/1a734008, …), and the citations in this log and in the ingest
+registry, kept as written. Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 2 — the history rewrite of 2026-09-04, remapped exactly
+Base `d88e10d15`. The repository's history was rewritten with `git filter-repo` on 2026-09-04: every older commit got
+a new hash, so the hashes written before that day — in this log, the ingest registry and some pages — resolve to
+nothing. With the rewrite's commit map (1 125 old → new pairs, a copy provided by the coordinator), 74 such hashes were
+mapped to today's commits, each unique and an ancestor of HEAD: 48 citations in the pages and the index, 165 in
+[raw/ingest-registry.md](raw/ingest-registry.md), whose drift check works again. The six matched earlier by subject
+and date agree with the map. This log keeps its old hashes as written: look them up in the map. Not a commit, left
+as is: an Alembic revision id. Graph: not updated (P-6).
+
+## [2026-10-12] lint | C-64, part 2 — the dates the remap brought to light
+Base `8ba2db509`. The coordinator's decisions: beside a hash goes its commit's date. `c7cf528c4` (Policy D, the backup
+router) is dated 2026-04-24, its commit's date, in [[decisions/policy-d-currency-wipe]], [[entities/backup-router]]
+(twice) and [[sources/phase07-part3-closure]] — all four sentences describe the commit itself; [[features/F-099]]'s
+status row goes to 2026-05-30, the date of `9b9fcbb65`. In the ingest registry, the knowledge-base overview's row
+linked a page that never existed: it now names the two concepts that draw on that source. Graph: not updated (P-6).
+
+## [2026-10-12] ingest | Train 74 — U-3 (the catalogue split), M's batches 30–32
+Base `bcd502912` (fast-forward). Sources: plan 45 §10 (U-3), checked on the code (18 folders under
+`frontend/src/lib/i18n/`, 71 plugin fragments, the new gate); M's journal of round 12, §19–§21; the backlog. **Updated**
+[[decisions/plugin-folders-and-split-i18n]] (U-3 delivered: `base/` 288 keys, 17 subsystems with 3 844, 71 fragments
+with 219, the merged catalogue identical; the coordinator's D-U3-1 and D-U3-2; gate `utils gate-plugin-i18n-ownership`,
+R1–R4; U-4 and U-5 to come), [[features/F-008]], [[sources/phase00-translation-round12-2026-10]] (batches 30–32),
+[[problems/gallery-price-guard-expected-tofixed-text]] (the header of `galleryLocale.ts` rewritten, `172211a89`),
+[[decisions/security-details-close-after-30-seconds]] (I5 prepared), [[decisions/figures-in-the-interface-language]]
+(the CHANGELOG announces the whole rule ahead of CP2 and CP3), [[decisions/clipboard-through-one-helper-with-a-gate]]
+and [[problems/toolbar-measurements-differed-by-the-scrollbar-gutter]] (C-63, M-20, V-19 closed, `2166eeb90`). No path
+broke: `base/` stays. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Trains 75 and 76 — M-18 closed (T's CP2, CP3), the seven E2E gaps of 1.2 (V)
+Base `986e99bd3` (fast-forward). Sources: plan 43 (M-18 CP2, CP3a, CP3b) and plan 46 §12.9, digested by two explore
+agents, with the paths, the hashes and the figures (−175 EUR, WAC 150, en-GB, `formatExactDecimal`) re-checked on the
+code. **Updated** [[decisions/figures-in-the-interface-language]] (delivered: amounts, dates, axes, exact decimals;
+M-17 resolved; what is left for after 1.2), [[features/F-008]] (its rows of 2026-10-12 put in order),
+[[problems/playwright-probes-ignore-timeout]] (M-17, M-18), [[decisions/e2e-gaps-of-1-2-before-release]] (delivered,
+the seven specs and their figures), [[problems/e2e-writes-leaked-into-shared-state]] (the files spec cleans up; V-25
+open), [[sources/phase00-data-quality-e2e-2026-10]]. The M-18 lines of the CHANGELOG (`e7bfa342f`), noted in train 74
+as ahead of the code, now describe it. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Trains 77 and 78 — I's lot 49, M's batch 33, U-4; a dirty version in the release shots
+Base `1c710c7a8` (fast-forward). Sources: plan 49, M's journal of round 12 (batch 33, M-24), plan 45 (U-4), the backlog,
+and the coordinator's report on the release shots; every claim checked on the code. **Created**
+[[problems/request-counter-read-before-the-handler-counted]] (`waitForRequest` resolves before the route handler
+counts; `waitForCountedRequest`, `6a1d95d85`) and [[problems/release-shots-show-dirty-version]] (open: Vite's
+`git describe --dirty` after the workflow writes tracked files; cure in M's lot 34). **Updated**
+[[decisions/plugin-folders-and-split-i18n]] (U-4 delivered, U-B7, U-5 left), [[features/F-008]],
+[[decisions/security-details-close-after-30-seconds]] (I5 applied, `2d0ca1660`), [[problems/playwright-probes-ignore-timeout]]
+(M-24), [[sources/phase00-ui-polish-2026-10]], [[sources/phase00-translation-round12-2026-10]]. U-B5's devWiki part
+was done in step D. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Train 79 — T-EN1 and T-EN2
+Base `b1a17b49b`. Sources: plan 43 («T-EN»), the backlog, the code of `f31bd6cfd` and the CHANGELOG line `4e11c2f83`.
+**Updated** [[decisions/figures-in-the-interface-language]] (T-EN1, T-EN2 closed; `ChartSignal`'s tracked catalogue;
+T-ISO and T-FB for after 1.2), [[decisions/plugin-folders-and-split-i18n]] (the first `i18n add` after U-3, routed to
+`charts` and `assets`), [[features/F-008]]. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Train 80 — U-5 and plan 45 closed; M's batch 34 (the dirty version)
+Base `cea8a478d`. Sources: plan 45 §10 (U-5 and the detours of U-2 and U-3), M's journal of round 12 (batch 34), the
+backlog, the code of `741310647`, `428bf27d1` and `b816adc6c`. **Created**
+[[problems/shared-server-rebuilt-the-frontend-past-its-startup-timeout]] and
+[[problems/editing-a-running-bash-script-corrupts-its-run]]. **Updated** [[decisions/plugin-folders-and-split-i18n]]
+(U-1 to U-5 delivered, plan 45 closed, its four findings; U-B5 closed, U-B2 after 1.2),
+[[problems/release-shots-show-dirty-version]] (resolved in the code: `LF_APP_VERSION`, the tree checks, the icons by
+the logo's hash; to verify on the first nightly; M-25), [[sources/phase00-translation-round12-2026-10]]. Graph: not
+updated (P-6).
+
+## [2026-10-13] ingest | Train 81 (I's lot 50) and R's full run with coverage
+Base `5b169189d` (train 81 and the coordinator's `588223c6f`). Sources: plan 50 and the code of `c58d48a6a`; R's
+report, archived in the post-1.2 backlog folder (§0, §3.2, §3.3). **Created** [[sources/r-full-run-coverage-2026-10-12]],
+[[problems/jscoverage-teardown-spends-the-test-budget]] (open), [[problems/login-returns-before-the-app-has-started]]
+(open, V-27), [[problems/broker-detail-tests-over-budget-under-load]] (C-58, resolved). Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Train 82 — V's §12.10: V-29, V-25, V-21 in part, V-26
+Base `273b188ea` (fast-forward). Sources: plan 46 §12.10, the backlog, the code of `e6019f349` and `5d5c7caed`.
+**Created** [[problems/hidden-pair-half-survived-row-removal]] (V-29: `removeRow` left the hidden partner, a false
+«Discard changes?» since 1.1.0). **Updated** [[problems/e2e-writes-leaked-into-shared-state]] (V-25 cured, V-21 in
+part, the calendar-driven seed rates), [[concepts/test-isolation-classes]] (the owned-pair fixture),
+[[problems/login-returns-before-the-app-has-started]] (V-27 now in the backlog; V-26 closed), [[features/F-048]],
+[[sources/phase00-data-quality-e2e-2026-10]]. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Train 83 — the 1.2 CHANGELOG reviewed line by line; M's full gallery
+Base `9686ee1f2`. Sources: the chapter [1.2.0] after `60f734e08`, the summaries of T's and I's review reports (working
+files outside the repository), the backlog (`b2a21bb4a`), M's gallery report of I5 part two (outside the repository),
+V's correction on the jsCoverage teardown; the code checked for the WAC endpoint, the fixture and `data-dist-pct`.
+**Created** [[decisions/changelog-entry-rules]], [[problems/portfolio-wac-endpoint-answered-anyone]] (resolved),
+[[problems/schwab-favicon-blocked-by-orb]] (open). **Updated** [[problems/jscoverage-teardown-spends-the-test-budget]]
+(the teardown counts against the after-hooks slot, not the body; V-28), [[decisions/figures-in-the-interface-language]]
+(`data-dist-pct`). Graph: not updated (P-6).
+
+## [2026-10-13] lint | The feature pages against the verified 1.2.0 CHANGELOG
+Base `34b9593c6`. An explore agent mapped the 46 items of the chapter [1.2.0] — 43 under ✨ Added, sub-items included,
+and three under 🔄 Changed (Risk out of beta, the purchase cost, the figures) — to the feature pages; every match and
+every commit cited was checked. **Updated**: 23 feature pages each gained a row dated 2026-10-13 that names the
+CHANGELOG line by section and beginning, with the commit or the train. No page had a lagging status. **Created**
+[[features/F-114]] (Benchmark assets, `00d8c735b`), with the registry (114 features), the ASSETS domain and the index.
+Left: five items whose commit is not identified (asset types, allocation families, the ‹ › arrows, the FX route
+metadata, the banners that lead to their rows); the Scalable importers have no page of their own (F-013 and a
+decision cover them); the plans of `phases/06_betaTestingReportAndFixing` (C-64's last part). Graph: not updated (P-6).
+
+## [2026-10-13] lint | C-64 closed: the plans of phases/06_betaTestingReportAndFixing against the wiki
+Base `fa93b1777`. Three read-only agents read the ten plans and the F1–F17 classification in full; every gap and every
+commit was re-checked on the code and on git history (one claimed contradiction, the drawdown default, was false:
+`DrawdownParams.full_history` is `True`). **Corrected**, pages that contradicted the code: [[features/F-083]]
+(parsing is concurrent since `d1e04b2b8`), [[concepts/txstore-pattern]] (a clone keeps its date, `59087c74a`),
+[[entities/portfolio-engine]] (the blob cache key has no dates and carries the access fingerprint; a hit needs the
+exact end). **Created** [[decisions/asset-identity-quoted-code-leads]] (D1–D11), [[decisions/import-row-split-legs-sum-to-the-row]]
+(B5-lite), [[problems/fx-error-dedup-went-quadratic-under-full-history]], [[problems/asset-merge-cascade-deleted-the-migrated-events]],
+[[problems/portfolio-cache-ignored-role-and-share]]. **Updated** [[features/F-024]] (merge, inactive assets),
+[[features/F-049]], [[features/F-062]] (F13, the 2 GB image), [[concepts/transaction-hygiene-fixture]] (D-3.3),
+[[concepts/derived-test-inventory]] (detour 15), [[decisions/drawdown-full-history-warmup]] and
+[[sources/beta-testing-2026-08-05]] (the check, and the smaller findings listed but not paged). Found on the way: the
+[1.1.0] CHANGELOG line «Wizard rework» puts corrections before unification, while `v1.1.0` already had `assets`
+before `fix`. With this part, C-64 is complete. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | The release page of 1.2.0, in draft
+Base `2b1734e76`. **Created** [[sources/release-1.2.0]], status draft, «tag date: pending». From the verified chapter
+[1.2.0] of `CHANGELOG.md` (`60f734e08`: 25 ✨ with 27 sub-items, 149 🐛 in 13 groups, 32 🔄, 7 ⚠️), the feature pages
+that carry a 1.2.0 row (24, grouped by area), the 60 decision pages dated 2026-09-07 → 2026-10-13 (grouped by theme),
+the problem pages still open, workaround or recurring (14) with their backlog ids, and the checks already on record:
+R's full run ([[sources/r-full-run-coverage-2026-10-12]]) and M's full gallery of 2026-10-13 (242 passed, 9 failed,
+1 skipped). Left to fill at the tag: the tag date, R's final run, the gates and the gallery at the tagged commit, the
+first nightly after the push (M-25) and the final CHANGELOG counts. Inbound links from
+[[decisions/changelog-entry-rules]] and the R source page. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Trains 84–91 — M's lots 35–38, T's last fixes, V's budgets, I's lot 51
+Base `fa6299689`; three read-only digests of the journals, every claim re-checked on the code and on git.
+**M** (lots 35–38): [[sources/phase00-translation-round12-2026-10]] — the [1.2.0] chapter re-translated with 136
+fixes from the catalogues, the two sync buttons, M-26 to M-29, «tipo de cambio»; [[problems/schwab-favicon-blocked-by-orb]]
+corrected: the gallery's four reds were also our own favicon mark (`6bb79fecd`), and Schwab falls to the plugin's
+generic icon; still open (U-B3). **T**: [[sources/phase00-financial-math-home-2026-10]], [[features/F-111]] (the shock
+table), [[decisions/figures-in-the-interface-language]] (T-ISO and T-FB pulled into 1.2 and delivered); created
+[[problems/test-hooks-read-the-localized-text]]. **V** (train 87): resolved [[problems/jscoverage-teardown-spends-the-test-budget]]
+(V-28, title corrected) and [[problems/login-returns-before-the-app-has-started]] (V-27);
+[[problems/e2e-writes-leaked-into-shared-state]] (`fx-destructive`, the asset specs); [[sources/phase00-data-quality-e2e-2026-10]].
+**I** (lot 51): created [[problems/event-markers-lost-in-the-last-partial-period]] (R-5); [[concepts/echarts-chart-gotchas]]
+gained the time-axis label rule. [[concepts/responsive-4mode-layout]] was updated by workstream I in `437e74066` (the
+width sweep in four languages, the phone pill): recorded here, and checked against the code — `pillWidthClass`, the
+pill test in `toolbar-width-sweep.spec.ts`, `3e5313d3e` after `v1.1.0`, the measures of plan 51. Also
+[[sources/release-1.2.0]] (two problems resolved, R-5 among the released defects, the gallery's group A corrected).
+Not filed: V-35, which has no record in the tree yet. Graph: not updated (P-6).
+
+## [2026-10-13] ingest | Trains 92–93, the coordinator's commits, C-60 and V-3 decided
+Base `9313f81ee`. **V** (train 92): V-36 closed (`fccf0bee1`, `setLanguage` waits for the dictionary) — recorded on
+[[problems/login-returns-before-the-app-has-started]]; V-35 under observation, with `aria-expanded` and a panel log
+(`a67f89661`, `84cdf6dbb`) — [[sources/phase00-data-quality-e2e-2026-10]]. **T** (train 93): the open period's
+tooltip (`341c77811`, `bucketSpanUpTo`) and T-EVW closed — [[problems/event-markers-lost-in-the-last-partial-period]]
+(its 🐛 line now in the chapter, `fcc4ac96f`, `ef666fdee`), [[sources/phase00-financial-math-home-2026-10]].
+**Coordinator**: the risk API stable from 1.2 except the simulation (`4de042cfe`) — [[features/F-110]],
+[[sources/release-1.2.0]]; V-8 and V-22 after 1.2; C-72, whose wiki part was this lot's to do:
+[[problems/svelte-template-branches-not-instrumented]] corrected — the empty `branchMap` was V8's, and `2e104b919`
+(2026-08-30, in 1.1.0) already counted the template's branches with istanbul; status accepted → resolved. The stash
+rule is in `.github/agents/release-coordinator.agent.md` (`6e1a2ef3e`): [[problems/git-merge-stash-failed-on-locked-index]]
+links it (ask the developer first) without copying its seven steps. **Created** [[decisions/python-stays-on-3-13]]
+(C-60; the 12/10 report as the baseline of the next comparison) and [[decisions/orphan-transfer-becomes-an-adjustment]]
+(V-3; not in the code, after 1.2), linked from [[decisions/single-docker-image]], [[features/F-062]] (whose
+dependency line was also corrected: the toolchain lives in the builder stage), [[decisions/transfer-pair-same-asset-opposite-quantity]]
+and [[decisions/data-quality-proved-on-real-data]]. Graph: not updated (P-6).
+
+## [2026-10-14] ingest | Trains 94–99 and the coordinator's commits
+Base `bae15c3cf`; four read-only digests, every claim re-checked on the code and on git. **C-59** (`ce09c6ac4`):
+uvicorn's extras in the lock — [[decisions/single-docker-image]], [[decisions/python-stays-on-3-13]]. **U-6/U-6b**:
+the bundled Schwab logo undone by the developer — [[problems/schwab-favicon-blocked-by-orb]] now *accepted*, with his
+hypothesis (our bursts of requests); Scalable without exporter 1.0.0 and D4 «Tagesgeld» on
+[[decisions/scalable-two-accounts-two-plugins]]. **V** (trains 94–96): created [[problems/transaction-form-saved-a-refused-date]]
+(V-37, since v1.1.0; V-37b after 1.2); T1, T4, V-38 on [[sources/phase00-data-quality-e2e-2026-10]]. **I, lot 52**:
+three rows in [[concepts/echarts-chart-gotchas]] (`containLabel` and the unrounded time extent, `outerBounds` before
+`hideOverlap` — a3, not (a) — and `dataZoom` linear in time, Z2); the running period on every chart on
+[[problems/event-markers-lost-in-the-last-partial-period]]. **I-M30, plan 54**: created
+[[problems/gallery-fixture-normalizer-scaled-ratios]] — no numbers, no detail of the scale; linked from
+[[concepts/ci-release-pipeline]] and [[decisions/gallery-is-a-release-gate-with-real-data]]. **T-PAC, plan 53**:
+[[features/F-107]] and [[decisions/pac-rounding-against-the-plan]] (the margin is in the computation). **M**: batches
+39–42 and the final gallery on [[sources/phase00-translation-round12-2026-10]]; [[features/F-106]] (Tools stable).
+**The dirty version** verified on pipeline run 77 — [[problems/release-shots-show-dirty-version]]. And
+[[sources/release-1.2.0]]. Graph: not updated (P-6).
+
+## [2026-10-14] ingest | Release day — the release page of 1.2.0 ready for the tag
+Base `a28beed92` (the chapter's introduction and date). [[sources/release-1.2.0]]: status `ready-for-tag`, the date
+2026-10-14, the approved introduction quoted as it stands in the chapter (checked identical), the counts at
+`a28beed92` (25 ✨ with 27 sub-items, 152 🐛 in 13 groups, 32 🔄, 7 ⚠️), R's final run on `10e646f79` (0 reds;
+pytest 12 936, vitest 11 515, Playwright 1 221; backend 91.54 %, frontend 71.17 %, a lower bound for its E2E part),
+the green gallery (251/0/1, then 20/0 and, after I-M30, 10/0), the gates, the developer's decision on the gallery
+fixture (option (a), published as it is — no figure of the fixture anywhere), and the backlog C-79…C-84 with M-33. The
+table «To fill at the tag» is filled except two rows that exist only after publication — the tagged commit and the
+release pipeline's run — which the next ingest fills. Also [[problems/gallery-fixture-normalizer-scaled-ratios]] (the
+decision), [[sources/r-full-run-coverage-2026-10-12]] (a pointer to the final run), and a C-82 note on
+[[problems/jscoverage-teardown-spends-the-test-budget]] and [[problems/login-returns-before-the-app-has-started]].
+Graph: not updated (P-6).

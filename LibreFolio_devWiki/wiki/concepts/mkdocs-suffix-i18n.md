@@ -1,8 +1,15 @@
 ---
 title: "MkDocs Suffix-based i18n Strategy"
 category: concept
-tags: [mkdocs, i18n, documentation, aphra]
+updated: 2026-10-12
+tags: [mkdocs, i18n, documentation, aphra, translation, anchors]
 related_features: [F-069, F-070]
+related:
+  - problems/stamps-hide-stale-translations
+  - decisions/docs-anchors-from-the-render
+  - problems/raw-html-paths-in-translations
+  - decisions/fr-typography-at-build-time
+  - sources/phase00-translation-round12-2026-10
 ---
 
 # Concept: MkDocs Suffix-based i18n Strategy
@@ -79,9 +86,49 @@ The suffix strategy is **required** for Aphra integration:
 
 ## Conventions
 
-- **Source file**: always `.en.md` — never modify `.it.md`/`.fr.md`/`.es.md` by hand
+- **Source file**: always `.en.md`. A small English change is ported **by hand** into the three translations, then the
+  page is stamped (`./dev.py mkdocs translate-stamp`, see the devpy-mkdocs skill, «Manual Edits → Stamp»); anything
+  larger goes through the pipeline. A stamp without the port hides a stale translation from every check —
+  [[problems/stamps-hide-stale-translations]].
 - **Link normalization**: translated files use `.md` (not `.it.md`) — plugin handles resolution
-- **Cache tracking**: `.translate-hashes.json` stores MD5 of `.en.md` + all `.XX.md` — skip re-translation if unchanged
+- **Cache tracking**: `mkdocs_src/aphra-pipeline/.translate-hashes.json` stores, per page, only the English MD5, with
+  per-language records (`translated_at`, `stamped_at`, failure keys) and `langs_done`; the translated files never enter
+  the skip decision. An entry's MD5 is the English version its `langs_done` were translated or stamped from: a changed
+  MD5 empties `langs_done`, and a failure never marks a language done (since 2026-10-10, `a516e4e73`).
+
+> *Corrected 2026-10-12*, from workstream M's note on stamps: the first line used to say «never modify
+> `.it.md`/`.fr.md`/`.es.md` by hand», and the third that the cache stores the MD5 of `.en.md` and of every `.XX.md`.
+> Both were wrong.
+
+## Build-time rules for translated pages (2026-10-11)
+
+- **Raw HTML is one folder deeper**: a translated page is built under `site/<lang>/…`, and MkDocs does not rewrite raw
+  HTML paths, so every raw-HTML relative path that climbs to the site root needs one more `../` in each translation.
+  The build fails on a broken asset URL and `translate-validate` reports a copied path (`html-asset-depth`) —
+  [[problems/raw-html-paths-in-translations]].
+- **French typography** (no-break spaces before `: ; ? ! %`, inside `« »`) is applied by a build hook to the French
+  pages, never written into the sources — [[decisions/fr-typography-at-build-time]].
+
+## Anchors in links from the app (2026-09-24)
+
+A link from the app to the docs is served in the reader's language, so its anchor must exist in **every** language.
+`dev.py mkdocs check-links` checks exactly that, and fails with "anchor … resolves in English but is missing in: it, fr,
+es — the translated heading produces a different slug".
+
+Two ways to hit it:
+- **A translated heading**: the slug comes from the heading text, which differs per language. Give the heading an
+  explicit id (`## Title {: #my-id }`) in the English source, and make sure the translations keep it.
+- **An English page rewritten and not translated yet**: the section does not exist in the other languages at all.
+  On 24/09 the risk-metrics index had the four-questions sections (`#how-much-can-it-hurt`,
+  `#am-i-paid-for-the-risk`) in English only: it had been rewritten on 18/09 (`b35a8581e`) and not translated. The
+  lab's L1/L3 icons point at the page root until the translation lands.
+
+`MKDOCS_ANCHOR_EXCEPTIONS` may only shrink: it is not the place to park a new anchor. Check an anchor in all four
+`.XX.md` files before handing it to anyone; the coordinator's own map missed it by looking at English only.
+
+Since 2026-10-11 both anchor checks — `check-links` and `translate-validate`'s `anchor-missing` — read a page's ids
+from its own MkDocs render instead of re-implementing the slugs: a heading with an explicit id has **only** that id
+([[decisions/docs-anchors-from-the-render]]).
 
 ## Source files
 
@@ -89,6 +136,10 @@ The suffix strategy is **required** for Aphra integration:
 |------|------|
 | mkdocs config | `mkdocs_src/mkdocs.yml` |
 | Translation script | `mkdocs_src/aphra-pipeline/translate_docs.py` |
+| Translation validator (`anchor-missing`, `inline-code-missing`, `html-asset-depth`) | `mkdocs_src/aphra-pipeline/validate_translations.py` |
+| Rendered anchors | `mkdocs_src/aphra-pipeline/page_anchors.py` |
+| French typography hook | `mkdocs_src/hooks/fr_typography.py` |
 | Source KB file | `LibreFolio_developer_journal/knowledge_base/03_documentation.md` |
 | Developer doc | `mkdocs_src/docs/developer/docs/translation-pipeline.md` |
+| Cross-boundary link check, `MKDOCS_ANCHOR_EXCEPTIONS` | `dev.py` |
 | i18n plugin docs | [mkdocs-static-i18n GitHub](https://github.com/ultrabug/mkdocs-static-i18n) |

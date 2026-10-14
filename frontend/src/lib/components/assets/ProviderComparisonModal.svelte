@@ -19,8 +19,9 @@
     import {_ as t} from '$lib/i18n';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {X} from 'lucide-svelte';
-    import {sectorI18nKey} from '$lib/utils/assetTypes';
+    import {assetTypeBadgeClass, getAssetTypeIconUrl, sectorI18nKey} from '$lib/utils/assetTypes';
     import IdentifierPrimaryChooser, {type IdentifierChoice} from './IdentifierPrimaryChooser.svelte';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
 
     // =========================================================================
     // Types
@@ -95,6 +96,7 @@
         differences: DiffItem[];
         /** Asset name, used by the inline identifier chooser. */
         assetName?: string;
+        zIndex?: number;
         /**
          * Applied fields, plus the resolved identifier decisions.
          * `resolutions` is keyed by field name and only carries `identifier_*` rows.
@@ -103,7 +105,7 @@
         oncancel?: () => void;
     }
 
-    let {open = $bindable(false), differences = [], assetName = '', onapply, oncancel}: Props = $props();
+    let {open = $bindable(false), differences = [], assetName = '', zIndex = 70, onapply, oncancel}: Props = $props();
 
     // =========================================================================
     // State — local copy for checkbox management
@@ -218,13 +220,19 @@
     // Helpers
     // =========================================================================
 
-    function formatDistribution(dist: Record<string, number> | null | undefined): Array<{key: string; pct: string}> {
+    /**
+     * Each entry twice: `pct` as the reader sees it, in the interface language, and `hook`, the
+     * `data-dist-pct` that tests and the gallery read — `60.00%` in every language, so a check
+     * written once holds in all four.
+     */
+    function formatDistribution(dist: Record<string, number> | null | undefined): Array<{key: string; pct: string; hook: string}> {
         if (!dist) return [];
         return Object.entries(dist)
             .sort(([, a], [, b]) => (b as number) - (a as number))
             .map(([key, val]) => ({
                 key,
-                pct: ((val as number) * 100).toFixed(2) + '%',
+                pct: formatPercent(val as number, {scale: 100, signed: false}),
+                hook: `${((val as number) * 100).toFixed(2)}%`,
             }));
     }
 
@@ -243,9 +251,28 @@
         }
         return key;
     }
+
+    /** The localized name of an asset type; the raw code when the catalogue has none (`$t` echoes a missing key). */
+    function typeLabel(type: string): string {
+        const i18nKey = `assets.types.${type}`;
+        const localized = $t(i18nKey);
+        return localized !== i18nKey ? localized : type;
+    }
 </script>
 
-<ModalBase {open} maxWidth="2xl" onRequestClose={handleCancel} zIndex={70} testId="comparison-modal">
+<!-- The asset type as the asset cards draw it: badge colour, icon and localized name. -->
+{#snippet typeBadge(type: string | null | undefined)}
+    {#if type}
+        <span class="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-medium rounded {assetTypeBadgeClass(type)}" data-testid="comparison-type-badge" data-type={type}>
+            <img src={getAssetTypeIconUrl(type)} alt="" class="w-4 h-4 object-contain" />
+            {typeLabel(type)}
+        </span>
+    {:else}
+        <span class="text-xs text-gray-400 italic">—</span>
+    {/if}
+{/snippet}
+
+<ModalBase {open} maxWidth="2xl" onRequestClose={handleCancel} {zIndex} testId="comparison-modal">
     <!-- Header -->
     <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-slate-700">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -301,7 +328,7 @@
                                 {#if item.type === 'distribution'}
                                     <div class="text-xs space-y-0.5">
                                         {#each formatDistribution(item.currentValue?.distribution ?? item.currentValue) as entry}
-                                            <div class="flex justify-between" data-testid="comparison-dist-entry" data-dist-key={entry.key} data-dist-pct={entry.pct}>
+                                            <div class="flex justify-between" data-testid="comparison-dist-entry" data-dist-key={entry.key} data-dist-pct={entry.hook}>
                                                 <span class="text-gray-600 dark:text-gray-400">{formatDistKey(entry.key, item.field)}</span>
                                                 <span class="font-mono text-gray-700 dark:text-gray-300">{entry.pct}</span>
                                             </div>
@@ -309,6 +336,8 @@
                                             <span class="text-gray-400 italic">—</span>
                                         {/each}
                                     </div>
+                                {:else if item.field === 'asset_type'}
+                                    {@render typeBadge(item.currentValue)}
                                 {:else}
                                     <div class="text-xs font-mono text-gray-600 dark:text-gray-400">{truncate(item.currentValue)}</div>
                                 {/if}
@@ -325,7 +354,7 @@
                                 {#if item.type === 'distribution'}
                                     <div class="text-xs space-y-0.5">
                                         {#each formatDistribution(item.providerValue?.distribution ?? item.providerValue) as entry}
-                                            <div class="flex justify-between" data-testid="comparison-dist-entry" data-dist-key={entry.key} data-dist-pct={entry.pct}>
+                                            <div class="flex justify-between" data-testid="comparison-dist-entry" data-dist-key={entry.key} data-dist-pct={entry.hook}>
                                                 <span class="text-gray-600 dark:text-gray-400">{formatDistKey(entry.key, item.field)}</span>
                                                 <span class="font-mono text-libre-green dark:text-green-400">{entry.pct}</span>
                                             </div>
@@ -333,6 +362,8 @@
                                             <span class="text-gray-400 italic">—</span>
                                         {/each}
                                     </div>
+                                {:else if item.field === 'asset_type'}
+                                    {@render typeBadge(item.providerValue)}
                                 {:else}
                                     <div class="text-xs font-mono text-libre-green dark:text-green-400">{truncate(item.providerValue)}</div>
                                 {/if}

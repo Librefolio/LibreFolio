@@ -125,8 +125,10 @@ The parent is intentionally thin in business logic and heavy in orchestration:
 This chart is the **price / cost-basis** view of the selected asset.
 
 - draws broker WAC lines, cumulative WAC, market price, transaction markers, income markers, and lot performance bubbles;
+- draws the cumulative line (**Combined**, dashed) only when `broker_wac_history` spans two or more brokers and `cumulative_wac_history` is not empty;
 - applies `quoteBaseQuantity` scaling so WAC and opening-unit-price values align with market quotes on bond-like assets;
-- supports **ABS / %** mode and **Auto / From 0** Y-axis behavior in absolute mode;
+- supports **Abs / %** mode and **Auto / From 0** Y-axis behavior in absolute mode; the toggle labels come from `dashboard.abs` (`Abs`) and `dashboard.pct` (`%`), and the uppercase `ABS` in the source is only the fallback for a missing key;
+- sizes each bubble by a mode-dependent metric: in **Abs** the lot's `open_quantity`, or its `original_quantity` once closed; in **%** its opening value (`original_cost`). `lotBubbleRadius()` maps the square root of that metric, between the smallest and the largest rendered bubble, onto `LOT_BUBBLE_MIN_RADIUS`–`LOT_BUBBLE_MAX_RADIUS` (7–22 px), and uses the midpoint when every bubble has the same metric;
 - uses bubble click for lot selection and marker double-click for cross-component selection jumps.
 
 ### `LotGanttChart`
@@ -147,7 +149,8 @@ The table is the **inspection and action hub**.
 - exposes custody cells as clickable drill-down entry points;
 - offers row actions for lot detail, Gantt focus, opening transaction navigation, and lot-id copy;
 - adds four **net columns** (`allocated_fees`, `allocated_taxes`, `net P&L`, `net return`) shown by default
-  only when **any visible row** carries allocated FEE/TAX (`hasNetCosts`); otherwise they stay hidden.
+  only when **any visible row** carries allocated FEE/TAX or a fee or tax the API could not value — `null`,
+  shown as `—` (`hasNetCosts`, through `isUnknownOrNonZero()`); otherwise they stay hidden.
   Visibility follows the `DataTable` override policy: the dynamic default applies until the user explicitly
   toggles a column, and **Reset layout** clears that override and re-applies the dynamic default.
 
@@ -166,9 +169,11 @@ The modal is the **deep audit view** for one lot.
 
 It shows summary metrics, current custody fragments, and a clickable chronology built from `EVENT_HISTORY`, with navigation to the active transaction when available.
 
-When the lot carries allocated FEE/TAX, it also renders a **net breakdown** block: gross total P&L → `− fees`
-→ `− taxes` → **net total P&L** and **net return**. Only the numeric breakdown is shown today; the cost
-provenance (pool / rule / source transactions) is available in the DTO but not yet surfaced here.
+When the lot carries allocated FEE/TAX — or its fees or taxes could not be valued (`null`, shown as `—`) — it
+also renders a **net breakdown** block: gross total P&L → `− fees` → `− taxes` → **net total P&L** and
+**net return**, the net figures shown as `—` when `net_metrics_status` is `UNAVAILABLE`. Only the numeric
+breakdown is shown today; the cost provenance (pool / rule / source transactions) is available in the DTO but
+not yet surfaced here.
 
 ---
 
@@ -183,7 +188,7 @@ The list below reflects the literal `data-testid` strings present in the compone
 | `LotGanttChart` | `lot-gantt-chart`, `lot-gantt-state-filter`, `lot-gantt-filter-open`, `lot-gantt-filter-closed`, `lot-gantt-scroll`, `lot-gantt-echart`, `lot-gantt-segment-{lotId}`, `lot-gantt-sticky-axis`, `lot-gantt-legend`, `lot-gantt-legend-broker-{brokerId}`, `lot-gantt-legend-transit` |
 | `UnifiedLotsTable` | `unified-lots-table`, `unified-lots-custody-{lotId}` |
 | `LotComparisonChart` | `lot-comparison-chart`, `lot-comparison-value-yaxis-toggle`, `lot-comparison-value-yaxis-auto`, `lot-comparison-value-yaxis-zero`, `lot-comparison-mode-toggle`, `lot-comparison-mode-value`, `lot-comparison-mode-return`, `lot-comparison-empty`, `lot-comparison-echart`, `lot-comparison-estimated-at-cost-legend` |
-| `LotCustodyModal` | `lot-custody-modal-title`, `lot-custody-modal-lot-id`, `lot-custody-modal-close`, `lot-custody-modal-summary`, `lot-custody-modal-value-source`, `lot-custody-modal-asset-income`, `lot-custody-modal-market-pnl`, `lot-custody-modal-total-pnl`, `lot-custody-modal-total-return`, `lot-custody-modal-cash-yield`, `lot-custody-modal-states`, `lot-custody-modal-current-custody`, `lot-custody-modal-absolute-quantity-info`, `lot-custody-modal-custody-summary`, `lot-custody-modal-custody-summary-row-{index}`, `lot-custody-modal-custody-fragments-label`, `lot-custody-modal-custody-row-{index}`, `lot-custody-modal-current-custody-empty`, `lot-custody-modal-history`, `lot-custody-modal-history-row-{index}`, `lot-custody-modal-history-details-{index}`, `lot-custody-modal-history-empty`, `lot-custody-modal-footer-close`, `lot-custody-modal-footer-goto-transaction` |
+| `LotCustodyModal` | `lot-custody-modal-title`, `lot-custody-modal-lot-id`, `lot-custody-modal-close`, `lot-custody-modal-summary`, `lot-custody-modal-value-source`, `lot-custody-modal-asset-income`, `lot-custody-modal-market-pnl`, `lot-custody-modal-total-pnl`, `lot-custody-modal-total-return`, `lot-custody-modal-net-breakdown`, `lot-custody-modal-allocated-fees`, `lot-custody-modal-allocated-taxes`, `lot-custody-modal-net-total-pnl`, `lot-custody-modal-net-total-return`, `lot-custody-modal-cash-yield`, `lot-custody-modal-states`, `lot-custody-modal-current-custody`, `lot-custody-modal-absolute-quantity-info`, `lot-custody-modal-custody-summary`, `lot-custody-modal-custody-summary-row-{index}`, `lot-custody-modal-custody-fragments-label`, `lot-custody-modal-custody-row-{index}`, `lot-custody-modal-current-custody-empty`, `lot-custody-modal-history`, `lot-custody-modal-history-row-{index}`, `lot-custody-modal-history-details-{index}`, `lot-custody-modal-history-empty`, `lot-custody-modal-footer-close`, `lot-custody-modal-footer-goto-transaction` |
 
 !!! note "Testing nuance"
 

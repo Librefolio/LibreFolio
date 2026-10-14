@@ -2,6 +2,10 @@
 
 The **Generic CSV Provider** (`broker_generic_csv`) is the fallback import plugin for BRIM. It accepts any CSV file that follows the column conventions below — even if it does not come from a specifically supported broker.
 
+!!! warning "One file per broker"
+
+    Generic CSV must use one separate file per broker. Each file is assigned exactly one broker; never combine multiple brokers into one flat CSV. The wizard still allows multiple files and brokers, and multiple currencies for a single broker are valid — this is not one file per currency. This reflects the current parser flow, where `broker_id` is passed per file/parse, not a new restriction on monthly files.
+
 ---
 
 ## 🤖 Tip: Use an LLM to write your conversion script
@@ -44,6 +48,11 @@ The fastest way to import data from an unsupported source is to **paste this ent
 |--------|----------|-------------|
 | **`date`** | ✅ Always | Transaction date. Accepts `2023-12-31`, `31/12/2023`, etc. |
 | **`type`** | ✅ Always | One of: `BUY`, `SELL`, `DIVIDEND`, `INTEREST`, `DEPOSIT`, `WITHDRAWAL`, `FEE`, `TAX`, `ADJUSTMENT` |
+| **`quantity`** | Depends on type | Number of units. See [Sign Conventions](#sign-conventions). |
+| **`amount`** | Depends on type | Net cash impact. See [Sign Conventions](#sign-conventions). |
+| **`currency`** | Optional | ISO 4217 code (`EUR`, `USD`). Defaults to `EUR`. |
+| **`asset`** | Depends on type | Asset identifier. See [Asset Identifier](#asset-identifier). |
+| **`description`** | Optional | Free text. Used as fallback for asset name resolution when no identifier is available. |
 
 !!! warning "TRANSFER, FX_CONVERSION and CASH_TRANSFER are rejected"
 
@@ -51,11 +60,6 @@ The fastest way to import data from an unsupported source is to **paste this ent
     transactions linked by `link_uuid`, which a flat CSV cannot express. The
     parser raises `Unknown transaction type` (or an explicit pairing error) for
     them. Use manual entry or a broker-specific plugin for paired movements.
-| **`quantity`** | Depends on type | Number of units. See [Sign Conventions](#sign-conventions). |
-| **`amount`** | Depends on type | Net cash impact. See [Sign Conventions](#sign-conventions). |
-| **`currency`** | Optional | ISO 4217 code (`EUR`, `USD`). Defaults to `EUR`. |
-| **`asset`** | Depends on type | Asset identifier. See [Asset Identifier](#asset-identifier). |
-| **`description`** | Optional | Free text. Used as fallback for asset name resolution when no identifier is available. |
 
 ---
 
@@ -104,6 +108,10 @@ The `asset` column accepts:
 - **Ticker** (e.g. `AAPL`, `VWCE`) — for exchange-listed securities
 - **ISIN** (e.g. `US0378331005`) — preferred when available; unambiguous across exchanges
 - **Name / description** (e.g. `VIA SILONE`, `MARINA DI SCARLINO`) — for non-listed assets such as P2P loans, real estate, or anything without a market code
+
+!!! info "First import and asset matching"
+
+    CSV import does not create assets or choose a provider automatically. Create a missing asset explicitly (a provider is optional); an existing asset can be selected manually or matched automatically when its saved identifiers give a unique match. An issuance/CUM ISIN can differ from the traded ISIN, and tickers can be ambiguous. Keep the appropriate primary and alternate identifiers on the asset so later imports can recognize it.
 
 !!! tip "Non-listed assets (P2P loans, crowdfunding, real estate)"
 
@@ -198,6 +206,15 @@ HEADER_MAPPINGS = {
 }
 ```
 
+Each header is trimmed and lower-cased before the lookup (`csv_col.lower().strip()`). Headers that
+match no synonym are ignored, and when two headers map to the same field the leftmost wins.
+
+The same map drives detection: `can_parse` — through `cannot_parse_reason` — accepts a `.csv`
+only when both `date` and `type` are mapped, so the wizard offers the plugin only for such files.
+If the user forces it on another file, `parse_file` refuses it with
+`Plugin 'broker_generic_csv' cannot parse file '<name>': required column 'date' not found in the CSV header`
+(HTTP 400), and the file moves to failed.
+
 ### 2️⃣ Row Parsing (`_parse_row`)
 
 1. **Extract Values** via `column_map`
@@ -205,6 +222,16 @@ HEADER_MAPPINGS = {
 3. **Parse Type** — looks up lowercase string in `TYPE_MAPPINGS`
 4. **Parse Numbers** — handles US and European decimal formats
 5. **Handle Assets** — classifies identifier as ticker/ISIN/name; assigns consistent fake asset IDs for batch mapping in BRIM review
+
+**Errors.** An exception raised for a row — an empty or unreadable date, an unknown type, a
+`TRANSFER` (refused: it needs a `link_uuid` pair), a currency code that fails the ISO 4217 check —
+becomes the warning `Row N: <message>` (the header is row 1) and the row is skipped. A row that
+parses but breaks a business rule (signs, missing cash; see `validate_transaction_business_rules`)
+is not created either: `_create_transaction` records it in `validation_issues`. An asset-required
+type with an empty `asset` gets the placeholder identifier `UNKNOWN_ROW_<n>`, to be mapped in the
+review. The `EUR` default applies only when no `currency` column is mapped: with the column
+present, an empty cell on a row with an `amount` fails the ISO 4217 check, so that row is skipped.
+A file that yields no transaction adds the warning `No valid transactions found in file`.
 
 ### 📐 3. The "Gold Standard" Example
 

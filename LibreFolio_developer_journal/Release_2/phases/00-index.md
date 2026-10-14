@@ -1,7 +1,7 @@
 # Phase 0 — Archived Sub-Plans Index
 
 > Completed work-streams of Release 2, archived here once done. Active work stays in
-> `Phase_0/`: `02_riskfolioIntegration` (paused, beta). Archiviata il 03/09: `06_betaTestingReportAndFixing` (beta feedback consolidation, chiusa).
+> `Phase_0/` (list at the bottom; until 2026-10-09 only `02_riskfolioIntegration`, paused in beta). Archiviata il 03/09: `06_betaTestingReportAndFixing` (beta feedback consolidation, chiusa).
 > `Phase_0/04_webSearchEngine/` was fully archived on 2026-09-02 (ddgs suffices; SearXNG dropped). When a phase completes entirely, its folder moves under
 > `phases/Phase_N/`.
 
@@ -12,7 +12,48 @@
 | `04_webSearchEngine/` | Web link-finder transport: raw DDG scraper → `ddgs` metasearch (+ SearXNG plan, not needed) | ✅ ddgs Steps 1–6; SearXNG dropped |
 | `05_cleanAudit/` | Systematic dead-code/optimization audit (17 reports) + stabilization | ✅ Suite stabilized |
 | `07_coverageAndConsolidationCampaign/` | Test runner parallelization, JS/Svelte coverage, 16 defects closed | ✅ Suite 15/15 green, 78% lines |
+| `06_betaTestingReportAndFixing/` | Beta feedback consolidation (F1–F17, piani P1–P8) | ✅ Tutti i task eseguiti — archiviata il 03/09 (07/09: i residui P8 erano una scelta deliberata — le scritture restano seriali per la validità dei test; voce TODO rimossa) |
+| `08_newCleanAndDocumentation_audit/` | Riverifica integrale dell'audit di agosto + esecuzione backlog (P0→P3), ondata docs/gallery/traduzioni, report 50 (gap v1.0.1→HEAD) | ✅ P0/P1/P2/P3 tutti chiusi e validati a zero; **residuo**: 8 task strutturali P4 → `Phase_0/09_feedbackJobs/` — archiviata il 07/09 |
+| `11_feedbackContractsRunes/` | Gruppo B del feedback: contratti API e componenti Runes (SP04-SP05), `fxCreationSync`, `entityLink`, la riga compatta dei toast | ✅ B00-B10 e R1-01…06 integrati (`514582a47`, `00c469c3f`); residui → 38 (O-19, O-20) — archiviata il 09/10 |
+| `14_feedbackImportUrgent/` | Feedback urgenti sull'import: piano incrementale e 5 round (review, condivisione, feedback social, confini social, autenticazione GHCR) | ✅ completata il 10/09 — archiviata il 09/10 |
+| `15_parallelRuntimeIsolation/` | Corsie di runtime isolate (`--test-port`, `--data-dir`) per sviluppo e test paralleli | ✅ `916f12bdd` (10/09); il limite noto della gallery è scritto nel piano — archiviata il 09/10 |
+| `17_assetDataOperations/` | Dati degli asset: classificazione dei bond, CSV delle distribuzioni, link nella modale di cancellazione | ✅ `e50d66408`, `cc57b6a38` (10-11/09) — archiviata il 09/10 |
+| `18_brimTargeted/` | BRIM mirato: rifiniture degli import Crédit Agricole ed eToro | ✅ `ebba209c5`, merge `5c2a711f3` (10/09); residuo → 38 (L10) — archiviata il 09/10 |
+| `19_yieldOnCost/` | Yield on Cost dal ledger delle transazioni (U3, SP06) | ✅ `74afcebce` (11/09); residuo → 38 (I-08) — archiviata il 09/10 |
+| `20_performanceCharts/` | Grafici di performance (SP06 G3/G1c, SP07 G1a/G1b), eventi degli asset, colori e asse dei proventi | ✅ integrata; residui → 38 (I-01…I-04, I-06…I-12) — archiviata il 09/10 |
+| `22_assetPricingRefactor/` | SP08: prezzi degli asset e confini del servizio | ✅ `3c85866dd` (11/09) — archiviata il 09/10 |
+| `23_transactionBatchRefactor/` | SP16: scomposizione del batch delle transazioni | ✅ `846aefb24` (11/09) — archiviata il 09/10 |
+| `24_privacyGlobal/` | Privacy globale, «nascondi valori» (U2, SP15), con la correzione della review d'uso del 22/09 | ✅ integrata; residuo → 38 (I-05) — archiviata il 09/10 |
+| `26_brimDanskeBank/` | BRIM Danske Bank: pilota multi-report (report set) e codifica dei CSV | ✅ passi 4–9 integrati; residui → 38 (L1–L9) — archiviata il 09/10 |
+| `28_fxDashboardSync/` | Lotti di N (06–09/10): FX in Dashboard, cache fra le pagine, banner di qualità dei dati, valuta di visualizzazione, `db <path>`, combine della coverage | ✅ 7 piani integrati; residui → 38 (N-1…N-9) — archiviata il 09/10 |
+| `29_i18nAudit/` | Audit i18n: chiavi inutilizzate, doppioni, plurali, strumento | ✅ S0-S22; 4215 chiavi, 0 morte; residui → 38 (O-1…O-18) — archiviata il 09/10 |
+| `30_wacUnification/` | Costo medio unico (issue #32) e validazione in blocco delle impostazioni globali | ✅ P0–P12 integrati; residui → 38 (P-1…P-9) — archiviata il 09/10 |
+| `31_brimDegiro/` | Plugin DEGIRO (issue #35): lettura per posizione, in ogni lingua | ✅ merge `2cecf5a00` (treno 9) — archiviata il 09/10 |
+| `33_e2eImportInfra/` | Infrastruttura dei test E2E dell'import | ✅ treno 10; residuo → 38 (L11) — archiviata il 09/10 |
+| `34_accountAndIdReuse/` | Cancellazione dell'account, id che si riusano, ultimo admin | ✅ treni 12 e 22; residuo → 38 (L12) — archiviata il 09/10 |
+| `35_devCliImage/` | `dev.py` dentro l'immagine Docker | ✅ merge `cdde3bc4d` (treno 19) — archiviata il 09/10 |
+| `36_connectionSecurity/` | Indicatore di sicurezza della connessione e login senza enumerazione degli account | ✅ merge `01da03047` (treno 24) — archiviata il 09/10 |
+| `25_taxonomySelect/` | K: tassonomia degli asset, select, Esc nelle modali, Bulk e correzioni (step 1–23) | ✅ step 1–23 integrati, l'ultimo nel treno 25; residui → 38 (K-1…K-26) — archiviata il 09/10 |
+| `39_autoCostNoPosition/` | P-1 (P): il costo Auto salvato a 0 quando il broker d'origine non ha quote — analisi | ✅ chiusa senza codice per decisione del developer (09/10): lo 0 è il ripiego voluto di Auto, l'utente corregge la transazione; P-10, P-11 → 38 |
+| `40_transferCostBasis/` | Costo dei trasferimenti in Auto e controllo del costo nei promote (P; C-33) | ✅ `d7c148564`, merge `2a5c15c3c` (treno 28); debito IT/FR/ES della pagina teorica del WAC → lotto 11 di M — archiviata il 10/10 |
 
 **Not archived (still active / paused):**
-- `../Phase_0/02_riskfolioIntegration/` — Risk Analysis subsystem, paused in beta per user decision.
-- `06_betaTestingReportAndFixing/` — beta feedback consolidation (F1–F17, piani P1–P8); **archiviata il 03/09**: tutti i task eseguiti, residui veri tracciati in TODO_FUTURI (P8: tappe 5.1–5.3).
+
+> **L'indice unico del backlog dopo la 1.2** è [`../Phase_0/BACKLOG_POST_1.2.md`](../Phase_0/BACKLOG_POST_1.2.md)
+> (dall'11/10): una riga per voce col rimando ai dettagli. Lo popolano il coordinatore e i workstream, ognuno nella sua
+> sezione, e il coordinatore lo riconcilia a ogni treno.
+
+> Regola del developer (10/10, nella pulizia delle chat prima della 1.2): «non voglio archiviare i loro plan in
+> …/Phase_0/ voglio solo archiviare le chat». Le cartelle qui sotto restano in `Phase_0` anche da chiuse.
+- `../Phase_0/02_riskfolioIntegration/` — Risk Analysis: resta in `Phase_0` per decisione del developer (D382, 09/10); il suo README elenca il lavoro aperto (A1–A6, B1–B3, B6–B8; chiuse A7, B4, B5) e, dal treno 31, la guida «Ripartire da qui» per la prossima release.
+- `../Phase_0/09_feedbackJobs/` — backlog strutturale P4 ereditato dall'audit 08, reperti e review visiva (attivo: si pesca da lì al prossimo round).
+- `../Phase_0/13_pacAllocator/` — allocatore PAC (workstream D), in chiusura per la 1.2.
+- `../Phase_0/16_toolPlatform/` — piattaforma dei Tool, insieme alla 13.
+- `../Phase_0/21_onboarding/` — onboarding: la review manuale C7 è chiusa (developer, 11/10; treno 36). Restano le voci 2–7 di «Cosa resta aperto», per dopo la 1.2; la cartella resta per decisione del developer (09/10).
+- `../Phase_0/27_releaseImages/` — immagini di rilascio, gallery e pipeline (workstream M): il lotto 14, parte A (terzo giro, immagini delle traduzioni, controlli della build e del validatore, audit della guida tradotta), è nel treno 37; la parte B e il giro finale dopo F sono per la 1.2.
+- `../Phase_0/32_docsEnglish12/` — documentazione inglese della 1.2 (workstream Q): chiusa con S24 (treno 31); le traduzioni sono nel lotto 11 di M, gli 8 scatti dei portali nel 38 (C-43).
+- `../Phase_0/37_brimScalable/` — plugin BRIM Scalable Capital (workstream S): integrato nel treno 30, piano chiuso nel treno 31; restano le traduzioni delle sue pagine (secondo giro di M).
+- `../Phase_0/38_postReleaseBacklog/` — backlog dopo la 1.2: i residui delle cartelle archiviate il 09/10 e il backlog del coordinatore.
+- `../Phase_0/41_brokerPnlFlows/` — P&L per broker senza salti ai trasferimenti (workstream I): l'engine è entrato nel treno 32, le card dei broker (H) nel treno 35; la rivalutazione della cassa in valuta (F) è approvata (11/10) e in corso per la 1.2.
+- `../Phase_0/42_promotePairChecks/` — i controlli delle coppie promosse (workstream P): chiuso, integrato nel treno 34; il compito a lato `DistributionEditor` nel treno 32; C-46…C-48 nel treno 37; le voci rimaste nella sezione P dell'indice post-1.2.
+- `../Phase_0/43_financialMathHome/` — casa unica della matematica finanziaria e riordino del codice (workstream T): il piano e B1, B2, B3a nel treno 37; per la 1.2 B3b, PL3, BU1, FE1 e T-1 dopo F.

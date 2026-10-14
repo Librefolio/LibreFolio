@@ -16,6 +16,7 @@ Provides RESTful endpoints for broker report file management and parsing:
 - GET /import/files: List uploaded/parsed/failed files
 - GET /import/files/{file_id}: Get file details
 - DELETE /import/files/{file_id}: Delete a file
+- GET /import/files/{file_id}/plugin-check: Ask one plugin whether it reads a file, and why not
 - POST /import/files/{file_id}/parse: Parse file (auto-moves to parsed/failed)
 - GET /import/plugins: List available import plugins
 
@@ -28,7 +29,9 @@ Provides RESTful endpoints for broker report file management and parsing:
 
 import asyncio
 import mimetypes
-from typing import Annotated, List, Optional
+import uuid
+from datetime import date
+from typing import Annotated, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -43,13 +46,22 @@ from backend.app.schemas.brim import (
     BRIMAssetCandidate,
     BRIMAssetCandidatesRequest,
     BRIMAssetMapping,
+    BRIMCheckpoint,
     BRIMDuplicateCheckRequest,
     BRIMDuplicateReport,
     BRIMFileInfo,
     BRIMFileStatus,
+    BRIMGapFixRequest,
+    BRIMGapFixResponse,
+    BRIMParseOutput,
     BRIMParseRequest,
     BRIMParseResponse,
+    BRIMPluginCheck,
     BRIMPluginInfo,
+    BRIMSetCombineResponse,
+    BRIMSetPreview,
+    BRIMSetRequest,
+    BRIMVerification,
 )
 from backend.app.schemas.brokers import (
     BRAccessBulkItem,
@@ -69,10 +81,11 @@ from backend.app.schemas.brokers import (
     BRUpdateItem,
 )
 from backend.app.schemas.uploads import FilePreviewResponse
-from backend.app.services import brim_provider
+from backend.app.services import brim_gap_fix, brim_provider, brim_report_sets
 from backend.app.services.brim_parse_pool import parse_file_offloaded
-from backend.app.services.brim_provider import BRIMParseError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
-from backend.app.services.broker_service import BrokerService
+from backend.app.services.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
+from backend.app.services.brim_report_sets import BRIMSetError, BRIMSetIncomplete
+from backend.app.services.broker_service import BROKER_NAME_RECOVERY, BrokerService
 from backend.app.services.file_preview import (
     FilePreviewLinks,
     UnsupportedPreviewError,
@@ -89,29 +102,6 @@ broker_router = APIRouter(prefix="/brokers", tags=["BR (Broker)"])
 brim_router = APIRouter(prefix="/import", tags=["BR Import"])
 
 
-def _delete_brim_files_for_brokers(broker_ids: List[int]) -> int:
-    """Delete every BRIM import file that belongs to the given brokers.
-
-    BRIM files live on the filesystem (not the DB), so the ORM cascade that removes a
-    broker and its transactions never touches them. This best-effort helper removes the
-    now-orphaned files after their broker has been deleted. Only files whose
-    ``target_broker_id`` matches exactly are removed — legacy files with no broker
-    (``None``) are left untouched.
-
-    Returns the number of files removed. Performs synchronous filesystem I/O, so callers
-    in async endpoints must invoke it via ``asyncio.to_thread``.
-    """
-    removed = 0
-    for broker_id in broker_ids:
-        try:
-            for file_info in brim_provider.list_files(broker_ids=[broker_id]):
-                if file_info.target_broker_id == broker_id and brim_provider.delete_file(file_info.file_id):
-                    removed += 1
-        except Exception as exc:  # best-effort: the broker is already deleted
-            logger.warning("Failed to clean BRIM files for deleted broker", broker_id=broker_id, error=str(exc))
-    return removed
-
-
 async def _get_brim_file_with_access(
     file_id: str,
     current_user: User,
@@ -121,7 +111,8 @@ async def _get_brim_file_with_access(
     denied_detail: str = "Access denied",
 ) -> BRIMFileInfo:
     """Load a BRIM file and validate broker access when needed."""
-    file_info = brim_provider.get_file_info(file_id)
+    # Off the event loop: reading a sidecar may detect the file's plugins again (item 8), which reads the file.
+    file_info = await asyncio.to_thread(brim_provider.get_file_info, file_id)
     if not file_info:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -180,7 +171,7 @@ async def create_brokers(
             logger.warning("Broker creation lost a uniqueness race", user_id=user_id)
             raise HTTPException(
                 status_code=409,
-                detail="A broker with that name already exists. Choose a different name.",
+                detail=f"A broker with that name already exists. {BROKER_NAME_RECOVERY}",
             ) from None
         logger.info(f"Created {response.success_count} brokers successfully", user_id=user_id)
     else:
@@ -400,7 +391,7 @@ async def delete_brokers(
         # deleted (files are on the filesystem, so the ORM cascade misses them). Done
         # post-commit and best-effort so a filesystem hiccup never fails the delete.
         deleted_broker_ids = [r.id for r in response.results if r.success]
-        files_removed = await asyncio.to_thread(_delete_brim_files_for_brokers, deleted_broker_ids)
+        files_removed = await asyncio.to_thread(brim_provider.delete_files_for_brokers, deleted_broker_ids)
         logger.info(f"Deleted {response.total_deleted} brokers successfully", user_id=user_id, brim_files_removed=files_removed)
     else:
         await session.rollback()
@@ -549,7 +540,7 @@ async def leave_broker_access(
 
     if broker_deleted:
         # Same orphaned-BRIM-file cleanup as the bulk delete endpoint
-        files_removed = await asyncio.to_thread(_delete_brim_files_for_brokers, [broker_id])
+        files_removed = await asyncio.to_thread(brim_provider.delete_files_for_brokers, [broker_id])
         logger.info(f"Broker {broker_id} cascade-deleted: last owner left", user_id=current_user.id, brim_files_removed=files_removed)
     else:
         logger.info(f"User left broker {broker_id}", user_id=current_user.id)
@@ -572,6 +563,7 @@ async def upload_file(
     file: UploadFile = File(..., description="Broker report file to upload"),
     broker_id: int = Form(..., description="Target broker ID for this report"),
     custom_filename: Optional[str] = Form(None, description="Override filename (user-renamed)"),
+    batch_id: Optional[str] = Form(None, description="Upload batch (UUID): files uploaded together form a report set"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session_generator),
 ) -> BRIMFileInfo:
@@ -591,6 +583,12 @@ async def upload_file(
 
     if not current_user.is_superuser and role is None:
         raise HTTPException(status_code=403, detail="EDITOR or OWNER access required to upload files to this broker")
+
+    if batch_id is not None:
+        try:
+            batch_id = str(uuid.UUID(batch_id))
+        except ValueError:
+            raise HTTPException(status_code=422, detail="batch_id must be a UUID") from None
 
     max_mb = await get_max_upload_mb(session)
     max_bytes = max_mb * 1024 * 1024
@@ -620,6 +618,7 @@ async def upload_file(
         filename,
         user_id=current_user.id,
         broker_id=broker_id,
+        batch_id=batch_id,
     )
 
     logger.info(
@@ -665,7 +664,8 @@ async def list_files(
             # Use all accessible
             accessible_broker_ids = user_broker_ids
 
-    return brim_provider.list_files(status=status, broker_ids=accessible_broker_ids)
+    # Off the event loop: listing reads every sidecar and may detect old files' plugins again (item 8).
+    return await asyncio.to_thread(brim_provider.list_files, status=status, broker_ids=accessible_broker_ids)
 
 
 @brim_router.get("/files/{file_id}", response_model=BRIMFileInfo)
@@ -740,7 +740,8 @@ async def delete_file(
         min_role=UserRole.EDITOR,
         denied_detail="EDITOR or OWNER access required to delete files",
     )
-    deleted = brim_provider.delete_file(file_id)
+    # Off the event loop: the delete holds the broker's metadata lock, which a combine may be holding.
+    deleted = await asyncio.to_thread(brim_provider.delete_file, file_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -793,9 +794,59 @@ async def get_last_parse_result(
     return file_info.last_parse_result
 
 
+@brim_router.get("/files/{file_id}/plugin-check", response_model=BRIMPluginCheck)
+async def check_file_plugin(
+    file_id: str,
+    plugin_code: str = Query(..., min_length=1, description="Plugin to ask, e.g. the broker's default import plugin"),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+) -> BRIMPluginCheck:
+    """
+    Ask one plugin whether it reads an uploaded file and, if not, why.
+
+    The import wizard calls it right after an upload, for the broker's default plugin: a
+    refusal comes with the plugin's English reason and, when the plugin gives one, a stable
+    code the frontend translates. Nothing is parsed and the file does not change status.
+
+    Any user with access to the file's broker can ask (VIEWER+). 404 for an unknown file
+    or plugin.
+    """
+    await _get_brim_file_with_access(file_id, current_user, session)
+    plugin = BRIMProviderRegistry.get_provider_instance(plugin_code)
+    if plugin is None:
+        raise HTTPException(status_code=404, detail=f"Plugin '{plugin_code}' not found")
+    # Off the event loop: the plugin reads the file.
+    check = await asyncio.to_thread(brim_provider.check_file_with_plugin, file_id, plugin)
+    if check is None:
+        raise HTTPException(status_code=404, detail="File content not found")
+    return check
+
+
 # =============================================================================
 # PARSING & IMPORT
 # =============================================================================
+
+
+def _set_required_http_error(error: BRIMSetRequiredError) -> HTTPException:
+    return HTTPException(status_code=422, detail={"code": "set_required", "message": error.message, "missing_roles": error.missing_roles})
+
+
+def _refuse_report_set_member(plugin_code: str, file_info: BRIMFileInfo) -> Optional[BRIMProvider]:
+    """The plugin instance; a report-set member alone answers 422 and is NOT moved to failed."""
+    plugin = BRIMProviderRegistry.get_provider_instance(plugin_code)
+    if plugin is not None:
+        try:
+            brim_report_sets.ensure_parseable(plugin, file_info)
+        except BRIMSetRequiredError as e:
+            raise _set_required_http_error(e) from e
+    return plugin
+
+
+async def _report_set_truth(session: AsyncSession, plugin: Optional[BRIMProvider], broker_id: int, parse_output: BRIMParseOutput) -> Tuple[List[BRIMCheckpoint], List[BRIMVerification], Optional[date]]:
+    """Checkpoints, verifications and history start of a combined report-set file; empty otherwise."""
+    if plugin is None or not plugin.is_report_set_plugin:
+        return [], [], None
+    return await brim_report_sets.apply_history(session, broker_id=broker_id, plugin=plugin, output=parse_output)
 
 
 @brim_router.post("/files/{file_id}/parse", response_model=BRIMParseResponse)
@@ -827,7 +878,7 @@ async def parse_file(
     not in the plugin. Plugins only parse the file format.
     """
     # Get file info and check permissions
-    await _get_brim_file_with_access(
+    file_info = await _get_brim_file_with_access(
         file_id,
         current_user,
         session,
@@ -853,6 +904,8 @@ async def parse_file(
             plugin_code = "broker_generic_csv"
             logger.info("No specific plugin detected, using generic CSV", file_id=file_id)
 
+    plugin = _refuse_report_set_member(plugin_code, file_info)
+
     try:
         # 1. Parse file using plugin (plugin only reads file format)
         parse_output = await parse_file_offloaded(file_id, plugin_code, request.broker_id)
@@ -861,6 +914,7 @@ async def parse_file(
         validation_issues = parse_output.validation_issues
         field_todos = parse_output.field_todos
         extracted_assets = parse_output.extracted_assets
+        checkpoints, verifications, history_start = await _report_set_truth(session, plugin, request.broker_id, parse_output)
 
         # 2. Build asset mappings (CORE responsibility)
         # Search DB for candidates for each extracted asset
@@ -916,14 +970,18 @@ async def parse_file(
             warnings=warnings,
             validation_issues=validation_issues,
             field_todos=field_todos,
+            checkpoints=checkpoints,
+            verifications=verifications,
+            history_start=history_start,
         )
 
         # Cache the parse result in file metadata for later retrieval.
         # The current plugin_version is resolved by save_parse_result via
         # the registry (single source of truth) and persisted alongside
         # plugin_code so BRIMFileInfo can compute parse_is_stale if the
-        # plugin is bumped later.
-        brim_provider.save_parse_result(
+        # plugin is bumped later. Off the event loop: the write holds the broker's metadata lock.
+        await asyncio.to_thread(
+            brim_provider.save_parse_result,
             file_id,
             response.model_dump(mode="json"),
             plugin_code=plugin_code,
@@ -945,6 +1003,10 @@ async def parse_file(
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="File not found") from None
 
+    except BRIMSetRequiredError as e:
+        # A valid export that belongs to a set: never a failure of the file.
+        raise _set_required_http_error(e) from e
+
     except ValueError as e:
         # Parse failed - move to failed folder
         await asyncio.to_thread(brim_provider.move_to_failed, file_id, str(e))
@@ -954,6 +1016,89 @@ async def parse_file(
         # Parse failed - move to failed folder
         await asyncio.to_thread(brim_provider.move_to_failed, file_id, e.message)
         raise HTTPException(status_code=400, detail=f"Parse error: {e.message}") from e
+
+
+# =============================================================================
+# REPORT SETS
+# =============================================================================
+
+
+async def _require_broker_editor(broker_id: int, current_user: User, session: AsyncSession) -> None:
+    """EDITOR or OWNER access on the broker, as for uploads and parses."""
+    if current_user.is_superuser:
+        return
+    role = await BrokerService(session)._check_user_access(broker_id, current_user.id, min_role=UserRole.EDITOR)
+    if role is None:
+        raise HTTPException(status_code=403, detail="EDITOR or OWNER access required on this broker")
+
+
+def _set_error_detail(error: BRIMSetError) -> dict:
+    detail = {"code": error.code, "message": error.message}
+    if isinstance(error, BRIMSetIncomplete):
+        detail["missing_roles"] = error.missing_roles
+    return detail
+
+
+@brim_router.post("/sets/preview", response_model=BRIMSetPreview)
+async def preview_report_set(
+    request: BRIMSetRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+) -> BRIMSetPreview:
+    """
+    Preview a report set: the files uploaded together for a broker and read by one plugin.
+
+    Returns each file's role and coverage, the roles still missing (with the period
+    their export must cover), segments, gaps, the broker history already in
+    LibreFolio and warnings with stable codes. Writes nothing. The files listed in
+    ``exclude_file_ids`` (originals of the upload the user left out) are no members.
+    """
+    await _require_broker_editor(request.broker_id, current_user, session)
+    try:
+        return await brim_report_sets.preview_set(session, broker_id=request.broker_id, plugin_code=request.plugin_code, batch_id=request.batch_id, exclude_file_ids=request.exclude_file_ids)
+    except BRIMSetError as e:
+        raise HTTPException(status_code=e.status_code, detail=_set_error_detail(e)) from e
+
+
+@brim_router.post("/sets/combine", response_model=BRIMSetCombineResponse)
+async def combine_report_set(
+    request: BRIMSetRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+) -> BRIMSetCombineResponse:
+    """
+    Combine a complete report set into its combined file, or reuse the identical one.
+
+    The combined file is saved next to the originals and parsed like any other file.
+    An incomplete set answers 422 with the missing roles.
+    """
+    await _require_broker_editor(request.broker_id, current_user, session)
+    try:
+        return await brim_report_sets.combine_set(session, broker_id=request.broker_id, plugin_code=request.plugin_code, batch_id=request.batch_id, user_id=current_user.id, exclude_file_ids=request.exclude_file_ids)
+    except BRIMSetError as e:
+        raise HTTPException(status_code=e.status_code, detail=_set_error_detail(e)) from e
+
+
+@brim_router.post("/gap-fix", response_model=BRIMGapFixResponse)
+async def gap_fix(
+    request: BRIMGapFixRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session_generator),
+) -> BRIMGapFixResponse:
+    """
+    Compare the bank's truth points with what LibreFolio will know, and propose the corrections.
+
+    For each checkpoint, in date order, LibreFolio's state is the saved transactions
+    (minus the ones the editor is deleting) plus the editor's unsaved rows, the
+    wizard's selection and the corrections of the earlier checkpoints. Only the
+    differences are proposed, as transactions tagged ``gap_fix``. Verifications are
+    compared, never corrected. Writes nothing.
+    """
+    await _require_broker_editor(request.broker_id, current_user, session)
+    try:
+        return await brim_gap_fix.compute_gap_fix(session, request)
+    except BRIMSetError as e:
+        raise HTTPException(status_code=e.status_code, detail=_set_error_detail(e)) from e
 
 
 @brim_router.post("/duplicates", response_model=BRIMDuplicateReport)

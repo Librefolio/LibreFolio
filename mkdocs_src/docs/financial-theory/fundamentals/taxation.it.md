@@ -1,6 +1,6 @@
 # 💰 Tassazione ed Efficienza Fiscale
 
-Comprendere la tassazione è essenziale per massimizzare i rendimenti degli investimenti a lungo termine. Questa pagina copre le basi teoriche — **non le regole specifiche di una singola giurisdizione** — di come le tasse interagiscono con la crescita del portafoglio.
+Comprendere la tassazione è essenziale per massimizzare i rendimenti degli investimenti a lungo termine. Questa pagina copre le basi teoriche — **non le regole specifiche di una singola giurisdizione** — di come le imposte interagiscono con la crescita del portafoglio.
 
 !!! warning "Non è un consiglio finanziario"
 
@@ -86,11 +86,11 @@ Con $P = 10{,}000$, $r = 7\%$, $\tau = 26\%$, $n = 20$ anni:
 
 | Scenario | Valore Finale | Rendimento Effettivo |
 |----------|------------|-----------------|
-| Tassazione annuale | €28,398 | 5.18% p.a. |
-| Tassazione finale | €31,616 | 5.93% p.a. |
-| **Vantaggio del differimento** | **+€3,218** | **+0.75% p.a.** |
+| Tassazione annuale | €28.398 | 5,18% p.a. |
+| Tassazione finale | €31.616 | 5,93% p.a. |
+| **Vantaggio del differimento** | **+€3.218** | **+0,75% p.a.** |
 
-Il vantaggio cresce esponenzialmente con il tempo — su 30 anni, il divario si allarga a oltre €8,000 sullo stesso investimento di €10,000.
+Il vantaggio cresce esponenzialmente con il tempo — su 30 anni, il divario si allarga a oltre €8.000 sullo stesso investimento di €10.000.
 
 ---
 
@@ -102,7 +102,7 @@ Questo vantaggio del differimento si manifesta direttamente nella scelta tra vei
 
 - I dividendi sono **reinvestiti internamente** dal fondo
 - **Nessun evento tassabile** fino alla vendita delle quote del fondo
-- Pieno beneficio della [crescita composta](../technical-analysis/synthetic-benchmarks/compound.md) sull'importo pre-tasse
+- Pieno beneficio della [crescita composta](../technical-analysis/synthetic-benchmarks/compound.md) sull'importo al lordo delle imposte
 - Ideale per investitori a lungo termine che cercano la massima crescita
 
 ### 💵 Distribuzione (es. ETF Dist)

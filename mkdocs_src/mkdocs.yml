@@ -6,6 +6,24 @@ repo_name: Librefolio/LibreFolio
 exclude_docs: |
   POC_UX/**
 
+# Anchor validation — one half of a two-part partition, not a duplicate.
+#
+#   MkDocs (here)  owns links *inside* the docs tree (markdown → markdown). It resolves
+#                  `page.md#anchor` against every translated file, so it catches an
+#                  anchor that dies because the translated heading produced a different
+#                  slug. It cannot see anything outside this tree.
+#   dev.py         owns links that *cross the boundary* — frontend .svelte/.ts and
+#                  backend provider docs_url. Those live outside mkdocs_src/ and are
+#                  structurally invisible here, so MkDocs will never validate them.
+#
+# The two link sets are disjoint. Neither validator replaces the other, and retiring
+# either one leaves its side of the boundary unwatched.
+#
+# `warn` is deliberate: combined with the `--strict` that `dev.py mkdocs build` passes,
+# a dead anchor is a build failure, while a plain `mkdocs serve` stays usable.
+validation:
+  anchors: warn
+
 theme:
   name: material
   custom_dir: overrides
@@ -82,7 +100,10 @@ plugins:
             Getting Started: Per Iniziare
             Installation (Docker): Installazione (Docker)
             Install as App (PWA): Installa come App (PWA)
-            "🧠 AI Export": "🧠 Esportazione AI"
+            Connection Security: Sicurezza della connessione
+            "🧠 AI Export": "🧠 AI Export"
+            "🧰 Tools": "🧰 Strumenti"
+            PAC allocator: Allocatore PAC
             "🏦 Brokers": "🏦 Broker"
             Broker Sharing: Condivisione Broker
             Broker Transactions: Transazioni del broker
@@ -153,23 +174,25 @@ plugins:
             Generic CSV: CSV Generico
             "📊 Dashboard": "📊 Dashboard"
             Positions & Analysis: Posizioni & Analisi
+            Risk: Rischio
             "⚙️ Settings": "⚙️ Impostazioni"
             Profile: Profilo
             User Preferences: Preferenze Utente
             About: Informazioni
             "🛠️ Admin Manual": "🛠️ Manuale Admin"
-            CLI Tools: Strumenti CLI
+            "CLI Admin Tools": "Strumenti CLI di amministrazione"
             Global Settings: Impostazioni Globali
             Filesystem Structure: Struttura Filesystem
             Advanced Docker: Docker Avanzato
             Host Installation: Installazione su Host
             Expose Securely: Esporre in Sicurezza
+            Check Connection Security: Verificare la Sicurezza della Connessione
             "📚 Financial Theory": "📚 Teoria Finanziaria"
             "🏷️ Asset Types": "🏷️ Tipi di Asset"
             "🔄 Transaction Types": "🔄 Tipi di Transazione"
             "📅 Asset Events": "📅 Eventi Asset"
             "Dividend & Interest": "Dividendo & Interesse"
-            Split: Frazionamento
+            Split: Split
             Price Adjustment: Rettifica Prezzo
             Maturity Settlement: Rimborso a Scadenza
             "🗃️ Instruments": "🗃️ Strumenti"
@@ -177,19 +200,19 @@ plugins:
             ETFs: ETF
             Bonds: Obbligazioni
             Crypto: Crypto
-            "P2P / Crowdfunding": "Immobiliare & P2P"
+            "P2P / Crowdfunding": "P2P / Crowdfunding"
             Mutual Fund: Fondi Comuni
             Commodities: Materie Prime
             Other: Altro
             "Index & Benchmark": "Indici & Benchmark"
             "Buy & Sell": "Acquisto & Vendita"
             "Deposit & Withdrawal": "Deposito & Prelievo"
-            "Fee & Tax": "Commissioni & Tasse"
-            Asset Transfer: Trasferimento Titoli
-            Cash Transfer: Bonifico
-            FX Conversion: Cambio Valuta
+            "Fee & Tax": "Commissioni & Imposte"
+            "Asset Transfer": "Trasferimento asset"
+            Cash Transfer: Giroconto
+            FX Conversion: Conversione di Valuta
             Adjustment: Rettifica
-            Single: Singole
+            "1️⃣ Single": "1️⃣ Singole"
             "🔢 Composite": "🔢 Composite"
             "📉 Technical Analysis": "📉 Analisi Tecnica"
             "📐 Indicators": "📐 Indicatori"
@@ -229,16 +252,79 @@ plugins:
             Diversification: Diversificazione
             Asset Allocation: Allocazione degli Asset
             "⚠️ Risk Metrics": "⚠️ Metriche di Rischio"
+            "📉 How Much Can It Hurt?": "📉 Quanto Può Fare Male?"
             Sharpe Ratio: Indice di Sharpe
             Sortino Ratio: Indice di Sortino
-            Max Drawdown: Massimo Drawdown
+            Max Drawdown: Drawdown Massimo
             Volatility: Volatilità
-            Weighted Average Cost: Costo Medio Ponderato
+            "Current Drawdown": "Drawdown attuale"
+            Worst Realization: Peggior Realizzazione
+            "🧩 Am I Diversified?": "🧩 Sono Diversificato?"
+            Correlation: Correlazione
+            Risk Contribution: Contributo al Rischio
+            Concentration: Concentrazione
+            "⚖️ Am I Paid for the Risk?": "⚖️ Sono Pagato per il Rischio?"
+            "Beta & Active Return": "Beta & Rendimento Attivo"
+            Benchmark Selection: Scelta del Benchmark
+            "🎲 What If…?": "🎲 Cosa Succede Se…?"
+            Historical Replay: Replica Storica
+            Hypothetical Shock: Shock Ipotetico
+            Simulation — What the Model Assumes: Simulazione — Cosa Assume il Modello
+            "🔧 Method": "🔧 Metodo"
+            Observed Annualization: Annualizzazione Osservata
+            Data Quality: Qualità dei Dati
+            Weighted Average Cost: Prezzo Medio di Carico
             FIFO Lot Analysis: Analisi Lotti FIFO
-            NAV / Net Worth: NAV / Net Worth
+            NAV / Net Worth: NAV / Patrimonio Netto
             Book Value: Valore Contabile
-            Period P&L: P&L del Periodo
+            "Period P&L": "P&L periodo"
             Timing Effect: Effetto Timing
+            "Avanza": "Avanza"
+            "Disnat": "Disnat"
+            "InvestEngine": "InvestEngine"
+            "Scalable Capital": "Scalable Capital"
+            "Trade Republic": "Trade Republic"
+            "XTB": "XTB"
+            "Saxo": "Saxo"
+            "Swissquote": "Swissquote"
+            "Investimental": "Investimental"
+            "Intesa Sanpaolo": "Intesa Sanpaolo"
+            "Crédit Agricole": "Crédit Agricole"
+            "Danske Bank": "Danske Bank"
+            "BUX": "BUX"
+            "Rabobank": "Rabobank"
+            "Bitvavo": "Bitvavo"
+            "Crypto.com": "Crypto.com"
+            "Relai": "Relai"
+            "CoinTracking": "CoinTracking"
+            "Delta": "Delta"
+            "Parqet": "Parqet"
+            "ROI": "ROI"
+            "TWRR": "TWRR"
+            "MWRR": "MWRR"
+            "FX": "FX"
+            "KPI Cards": "Schede KPI"
+            "Charts": "Grafici"
+            "🔎 Asset Detail": "🔎 Dettaglio Asset"
+            "Classification": "Classificazione"
+            "Portfolio": "Portafoglio"
+            "Broker": "Broker"
+            "Asset": "Asset"
+            "🐳 Deployment & Exposure": "🐳 Installazione ed esposizione"
+            "⚙️ System Configuration": "⚙️ Configurazione di sistema"
+            "Environment Variables": "Variabili d'ambiente"
+            "🧹 Maintenance & Operations": "🧹 Manutenzione e operazioni"
+            "Dividend": "Dividendo"
+            "Interest": "Interessi"
+            "Price Resolution": "Risoluzione dei prezzi"
+            "Deposited Capital & Total P&L": "Capitale versato & P&L totale"
+            "Net Annualized Return": "Rendimento annualizzato netto"
+            "Yield on Cost": "Rendimento sul costo"
+            "Drawdown at Risk": "Drawdown a rischio"
+            "Conditional Drawdown at Risk": "Drawdown a rischio condizionale"
+            "Ulcer Index": "Indice di Ulcer"
+            "Value at Risk": "Value at Risk"
+            "Conditional Value at Risk": "VaR condizionale"
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             "🖼️ Gallery": "🖼️ Galleria"
             Desktop: Desktop
@@ -254,11 +340,14 @@ plugins:
             Home: Accueil
             FAQ: FAQ
             "📘 User Manual": "📘 Manuel Utilisateur"
-            Overview: Aperçu
+            Overview: "Vue d'ensemble"
             Getting Started: Premiers Pas
             Installation (Docker): Installation (Docker)
             Install as App (PWA): Installer comme App (PWA)
+            Connection Security: Sécurité de la connexion
             "🧠 AI Export": "🧠 Export IA"
+            "🧰 Tools": "🧰 Outils"
+            PAC allocator: Allocateur PAC
             "🏦 Brokers": "🏦 Courtiers"
             Broker Sharing: Partage de Courtier
             Broker Transactions: Transactions du broker
@@ -328,24 +417,26 @@ plugins:
             Generic CSV: CSV Générique
             "📊 Dashboard": "📊 Tableau de Bord"
             Positions & Analysis: Positions & Analyse
+            Risk: Risque
             "⚙️ Settings": "⚙️ Paramètres"
             Profile: Profil
             User Preferences: Préférences Utilisateur
             About: À propos
             Borsa Italiana: Borsa Italiana
             "🛠️ Admin Manual": "🛠️ Manuel Admin"
-            CLI Tools: Outils CLI
+            "CLI Admin Tools": "Outils CLI d'administration"
             Global Settings: Paramètres Globaux
             Filesystem Structure: Structure du Système de Fichiers
             Advanced Docker: Docker Avancé
             Host Installation: Installation sur l'Hôte
             Expose Securely: Exposer en Sécurité
+            Check Connection Security: Vérifier la Sécurité de la Connexion
             "📚 Financial Theory": "📚 Théorie Financière"
             "🏷️ Asset Types": "🏷️ Types d'Actifs"
             "🔄 Transaction Types": "🔄 Types de Transactions"
             "📅 Asset Events": "📅 Événements d'Actifs"
             "Dividend & Interest": "Dividende & Intérêt"
-            Split: Fractionnement
+            Split: Division
             Price Adjustment: Ajustement de Prix
             Maturity Settlement: Règlement à l'Échéance
             "🗃️ Instruments": "🗃️ Instruments"
@@ -353,19 +444,19 @@ plugins:
             ETFs: ETF
             Bonds: Obligations
             Crypto: Crypto
-            "P2P / Crowdfunding": "Immobilier & P2P"
+            "P2P / Crowdfunding": "P2P / Crowdfunding"
             Mutual Fund: Fonds Communs
             Commodities: Matières Premières
             Other: Autre
             "Index & Benchmark": "Indices & Référence"
             "Buy & Sell": "Achat & Vente"
             "Deposit & Withdrawal": "Dépôt & Retrait"
-            "Fee & Tax": "Frais & Taxes"
-            Asset Transfer: Transfert de Titres
+            "Fee & Tax": "Frais & Impôts"
+            "Asset Transfer": "Transfert d'actif"
             Cash Transfer: Virement
-            FX Conversion: Conversion de Devises
+            FX Conversion: Conversion de Devise
             Adjustment: Ajustement
-            Single: Simples
+            "1️⃣ Single": "1️⃣ Simples"
             "🔢 Composite": "🔢 Composites"
             "📉 Technical Analysis": "📉 Analyse Technique"
             "📐 Indicators": "📐 Indicateurs"
@@ -405,16 +496,79 @@ plugins:
             Diversification: Diversification
             Asset Allocation: Allocation d'Actifs
             "⚠️ Risk Metrics": "⚠️ Métriques de Risque"
+            "📉 How Much Can It Hurt?": "📉 Jusqu'où Peut-on Perdre ?"
             Sharpe Ratio: Ratio de Sharpe
             Sortino Ratio: Ratio de Sortino
-            Max Drawdown: Drawdown Maximum
+            Max Drawdown: Perte Maximale
             Volatility: Volatilité
-            Weighted Average Cost: Coût Moyen Pondéré
+            "Current Drawdown": "Repli actuel"
+            Worst Realization: Pire Réalisation
+            "🧩 Am I Diversified?": "🧩 Suis-je Diversifié ?"
+            Correlation: Corrélation
+            Risk Contribution: Contribution au Risque
+            Concentration: Concentration
+            "⚖️ Am I Paid for the Risk?": "⚖️ Suis-je Payé pour le Risque ?"
+            "Beta & Active Return": "Bêta & Rendement Actif"
+            Benchmark Selection: "Choix de l'Indice de Référence"
+            "🎲 What If…?": "🎲 Et Si… ?"
+            Historical Replay: Rejeu Historique
+            Hypothetical Shock: Choc Hypothétique
+            Simulation — What the Model Assumes: Simulation — Ce que Suppose le Modèle
+            "🔧 Method": "🔧 Méthode"
+            Observed Annualization: Annualisation Observée
+            Data Quality: Qualité des Données
+            Weighted Average Cost: Prix de Revient Unitaire
             FIFO Lot Analysis: Analyse des Lots FIFO
-            NAV / Net Worth: NAV / Net Worth
+            NAV / Net Worth: NAV / Valeur Nette
             Book Value: Valeur Comptable
-            Period P&L: P&L de la Période
+            "Period P&L": "P&L période"
             Timing Effect: Effet de timing
+            "Avanza": "Avanza"
+            "Disnat": "Disnat"
+            "InvestEngine": "InvestEngine"
+            "Scalable Capital": "Scalable Capital"
+            "Trade Republic": "Trade Republic"
+            "XTB": "XTB"
+            "Saxo": "Saxo"
+            "Swissquote": "Swissquote"
+            "Investimental": "Investimental"
+            "Intesa Sanpaolo": "Intesa Sanpaolo"
+            "Crédit Agricole": "Crédit Agricole"
+            "Danske Bank": "Danske Bank"
+            "BUX": "BUX"
+            "Rabobank": "Rabobank"
+            "Bitvavo": "Bitvavo"
+            "Crypto.com": "Crypto.com"
+            "Relai": "Relai"
+            "CoinTracking": "CoinTracking"
+            "Delta": "Delta"
+            "Parqet": "Parqet"
+            "ROI": "ROI"
+            "TWRR": "TWRR"
+            "MWRR": "MWRR"
+            "FX": "FX"
+            "KPI Cards": "Cartes KPI"
+            "Charts": "Graphiques"
+            "🔎 Asset Detail": "🔎 Détail de l'actif"
+            "Classification": "Classification"
+            "Portfolio": "Portefeuille"
+            "Broker": "Courtier"
+            "Asset": "Actif"
+            "🐳 Deployment & Exposure": "🐳 Installation et exposition"
+            "⚙️ System Configuration": "⚙️ Configuration du système"
+            "Environment Variables": "Variables d'environnement"
+            "🧹 Maintenance & Operations": "🧹 Maintenance et opérations"
+            "Dividend": "Dividende"
+            "Interest": "Intérêt"
+            "Price Resolution": "Résolution de prix"
+            "Deposited Capital & Total P&L": "Capital versé et P&L total"
+            "Net Annualized Return": "Rendement annualisé net"
+            "Yield on Cost": "Rendement sur coût"
+            "Drawdown at Risk": "Repli à risque"
+            "Conditional Drawdown at Risk": "Repli à risque conditionnel"
+            "Ulcer Index": "Indice d'Ulcer"
+            "Value at Risk": "Valeur à risque"
+            "Conditional Value at Risk": "VaR conditionnelle"
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             "🖼️ Gallery": "🖼️ Galerie"
             Desktop: Bureau
@@ -434,8 +588,11 @@ plugins:
             Getting Started: Primeros Pasos
             Installation (Docker): Instalación (Docker)
             Install as App (PWA): Instalar como App (PWA)
-            "🧠 AI Export": "🧠 Exportación de IA"
-            "🏦 Brokers": "🏦 Brokers"
+            Connection Security: Seguridad de la conexión
+            "🧠 AI Export": "🧠 Exportación IA"
+            "🧰 Tools": "🧰 Herramientas"
+            PAC allocator: Asignador PAC
+            "🏦 Brokers": "🏦 Brókeres"
             Broker Sharing: Compartir Broker
             Broker Transactions: Transacciones del bróker
             Configuration & Info: Configuración e Info
@@ -502,20 +659,22 @@ plugins:
             Finpension: Finpension
             Trading212: Trading212
             Generic CSV: CSV Genérico
-            "📊 Dashboard": "📊 Panel Principal"
+            "📊 Dashboard": "📊 Panel"
             Positions & Analysis: Posiciones y Análisis
+            Risk: Riesgo
             "⚙️ Settings": "⚙️ Configuración"
             Profile: Perfil
             User Preferences: Preferencias de Usuario
             About: Acerca de
             Borsa Italiana: Borsa Italiana
             "🛠️ Admin Manual": "🛠️ Manual de Admin"
-            CLI Tools: Herramientas CLI
+            "CLI Admin Tools": "Herramientas CLI de administración"
             Global Settings: Configuración Global
             Filesystem Structure: Estructura del Sistema de Archivos
             Advanced Docker: Docker Avanzado
             Host Installation: Instalación en Host
             Expose Securely: Exponer en Seguridad
+            Check Connection Security: Comprobar la Seguridad de la Conexión
             "📚 Financial Theory": "📚 Teoría Financiera"
             "🏷️ Asset Types": "🏷️ Tipos de Activos"
             "🔄 Transaction Types": "🔄 Tipos de Transacciones"
@@ -537,11 +696,11 @@ plugins:
             "Buy & Sell": "Compra & Venta"
             "Deposit & Withdrawal": "Depósito & Retiro"
             "Fee & Tax": "Comisiones & Impuestos"
-            Asset Transfer: Transferencia de Títulos
-            Cash Transfer: Transferencia Bancaria
-            FX Conversion: Conversión de Divisas
+            "Asset Transfer": "Transferencia de activos"
+            Cash Transfer: Transferencia de Fondos
+            FX Conversion: Conversión de Divisa
             Adjustment: Ajuste
-            Single: Individuales
+            "1️⃣ Single": "1️⃣ Individuales"
             "🔢 Composite": "🔢 Compuestas"
             "📉 Technical Analysis": "📉 Análisis Técnico"
             "📐 Indicators": "📐 Indicadores"
@@ -581,16 +740,79 @@ plugins:
             Diversification: Diversificación
             Asset Allocation: Asignación de Activos
             "⚠️ Risk Metrics": "⚠️ Métricas de Riesgo"
+            "📉 How Much Can It Hurt?": "📉 ¿Cuánto Puede Doler?"
             Sharpe Ratio: Ratio de Sharpe
             Sortino Ratio: Ratio de Sortino
-            Max Drawdown: Drawdown Máximo
+            Max Drawdown: Caída Máxima
             Volatility: Volatilidad
-            Weighted Average Cost: Coste Medio Ponderado
+            "Current Drawdown": "Caída actual"
+            Worst Realization: Peor Realización
+            "🧩 Am I Diversified?": "🧩 ¿Estoy Diversificado?"
+            Correlation: Correlación
+            Risk Contribution: Contribución al Riesgo
+            Concentration: Concentración
+            "⚖️ Am I Paid for the Risk?": "⚖️ ¿Me Pagan por el Riesgo?"
+            "Beta & Active Return": "Beta & Rentabilidad Activa"
+            Benchmark Selection: Elección del Índice de Referencia
+            "🎲 What If…?": "🎲 ¿Qué Pasa Si…?"
+            Historical Replay: Repetición Histórica
+            Hypothetical Shock: Choque Hipotético
+            Simulation — What the Model Assumes: Simulación — Qué Supone el Modelo
+            "🔧 Method": "🔧 Método"
+            Observed Annualization: Anualización Observada
+            Data Quality: Calidad de los Datos
+            Weighted Average Cost: Precio Medio de Compra
             FIFO Lot Analysis: Análisis de Lotes FIFO
-            NAV / Net Worth: NAV / Net Worth
+            NAV / Net Worth: NAV / Patrimonio Neto
             Book Value: Valor Contable
-            Period P&L: P&L del Periodo
+            "Period P&L": "P&L período"
             Timing Effect: Efecto timing
+            "Avanza": "Avanza"
+            "Disnat": "Disnat"
+            "InvestEngine": "InvestEngine"
+            "Scalable Capital": "Scalable Capital"
+            "Trade Republic": "Trade Republic"
+            "XTB": "XTB"
+            "Saxo": "Saxo"
+            "Swissquote": "Swissquote"
+            "Investimental": "Investimental"
+            "Intesa Sanpaolo": "Intesa Sanpaolo"
+            "Crédit Agricole": "Crédit Agricole"
+            "Danske Bank": "Danske Bank"
+            "BUX": "BUX"
+            "Rabobank": "Rabobank"
+            "Bitvavo": "Bitvavo"
+            "Crypto.com": "Crypto.com"
+            "Relai": "Relai"
+            "CoinTracking": "CoinTracking"
+            "Delta": "Delta"
+            "Parqet": "Parqet"
+            "ROI": "ROI"
+            "TWRR": "TWRR"
+            "MWRR": "MWRR"
+            "FX": "FX"
+            "KPI Cards": "Tarjetas KPI"
+            "Charts": "Gráficos"
+            "🔎 Asset Detail": "🔎 Detalle del activo"
+            "Classification": "Clasificación"
+            "Portfolio": "Cartera"
+            "Broker": "Bróker"
+            "Asset": "Activo"
+            "🐳 Deployment & Exposure": "🐳 Instalación y exposición"
+            "⚙️ System Configuration": "⚙️ Configuración del sistema"
+            "Environment Variables": "Variables de entorno"
+            "🧹 Maintenance & Operations": "🧹 Mantenimiento y operaciones"
+            "Dividend": "Dividendo"
+            "Interest": "Interés"
+            "Price Resolution": "Resolución de precios"
+            "Deposited Capital & Total P&L": "Capital depositado y P&L total"
+            "Net Annualized Return": "Rendimiento neto anualizado"
+            "Yield on Cost": "Rendimiento sobre coste"
+            "Drawdown at Risk": "Caída en riesgo"
+            "Conditional Drawdown at Risk": "Caída en riesgo condicional"
+            "Ulcer Index": "Índice de Ulcer"
+            "Value at Risk": "Valor en riesgo"
+            "Conditional Value at Risk": "VaR condicional"
             # Developer Manual intentionally left in English as it's more technical and likely to be read by an international audience
             "🖼️ Gallery": "🖼️ Galería"
             Desktop: Escritorio
@@ -624,11 +846,13 @@ nav:
       - Getting Started: user/getting-started.md
       - Installation (Docker): user/installation.md
       - Install as App (PWA): user/pwa.md
+      - Connection Security: user/connection-security.md
       - 📊 Dashboard:
           - Overview: user/dashboard/index.md
           - KPI Cards: user/dashboard/kpi-cards.md
           - Charts: user/dashboard/charts.md
           - Positions & Analysis: user/dashboard/positions.md
+          - Risk: user/dashboard/risk.md
       - 🏦 Brokers:
           - Overview: user/brokers/index.md
           - Broker Transactions: user/brokers/import.md
@@ -651,6 +875,7 @@ nav:
                   - Avanza: user/transactions/import/avanza.md
                   - Disnat: user/transactions/import/disnat.md
                   - InvestEngine: user/transactions/import/investengine.md
+                  - Scalable Capital: user/transactions/import/scalable.md
                   - Trade Republic: user/transactions/import/traderepublic.md
                   - XTB: user/transactions/import/xtb.md
                   - Saxo: user/transactions/import/saxo.md
@@ -661,6 +886,7 @@ nav:
                   - Fineco: user/transactions/import/fineco.md
                   - Intesa Sanpaolo: user/transactions/import/intesa.md
                   - Crédit Agricole: user/transactions/import/credit_agricole.md
+                  - Danske Bank: user/transactions/import/danske-bank.md
                   - BUX: user/transactions/import/bux.md
                   - Rabobank: user/transactions/import/rabobank.md
               - 🪙 Crypto:
@@ -674,9 +900,13 @@ nav:
                   - Finpension: user/transactions/import/finpension.md
                   - Parqet: user/transactions/import/parqet.md
                   - Generic CSV: user/transactions/import/generic-csv.md
+      - 🧰 Tools:
+          - Overview: user/tools/index.md
+          - PAC allocator: user/tools/pac-allocator/index.md
       - 📈 Assets:
           - Overview: user/assets/index.md
           - Create & Edit: user/assets/create-edit.md
+          - Correlation: user/assets/correlation.md
           - 🔎 Asset Detail:
               - Overview: user/assets/detail/index.md
               - Interactive Chart: user/assets/detail/chart.md
@@ -731,6 +961,7 @@ nav:
           - Host Installation: admin/host_installation.md
           - Advanced Docker: admin/docker_advanced.md
           - Expose Securely: admin/service_exposure.md
+          - Check Connection Security: admin/connection_checks.md
       - ⚙️ System Configuration:
           - Environment Variables: admin/configuration.md
           - Global Settings: admin/settings.md
@@ -819,16 +1050,39 @@ nav:
                   - TWRR: financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md
                   - MWRR: financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md
                   - Net Annualized Return: financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md
+                  - Yield on Cost: financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost.md
               - 🔬 FIFO Engine:
                   - Overview: financial-theory/technical-analysis/performance-metrics/fifo-engine/index.md
                   - FIFO Lot Analysis: financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.md
               - Weighted Average Cost: financial-theory/technical-analysis/performance-metrics/weighted-average-cost.md
           - ⚠️ Risk Metrics:
               - Overview: financial-theory/technical-analysis/risk-metrics/index.md
-              - Sharpe Ratio: financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md
-              - Sortino Ratio: financial-theory/technical-analysis/risk-metrics/sortino-ratio.md
-              - Max Drawdown: financial-theory/technical-analysis/risk-metrics/max-drawdown.md
-              - Volatility: financial-theory/technical-analysis/risk-metrics/volatility.md
+              - "📉 How Much Can It Hurt?":
+                  - Max Drawdown: financial-theory/technical-analysis/risk-metrics/max-drawdown.md
+                  - Current Drawdown: financial-theory/technical-analysis/risk-metrics/current-drawdown.md
+                  - Drawdown at Risk: financial-theory/technical-analysis/risk-metrics/drawdown-at-risk.md
+                  - Conditional Drawdown at Risk: financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk.md
+                  - Ulcer Index: financial-theory/technical-analysis/risk-metrics/ulcer-index.md
+                  - Value at Risk: financial-theory/technical-analysis/risk-metrics/value-at-risk.md
+                  - Conditional Value at Risk: financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk.md
+                  - Worst Realization: financial-theory/technical-analysis/risk-metrics/worst-realization.md
+              - "🧩 Am I Diversified?":
+                  - Correlation: financial-theory/technical-analysis/risk-metrics/correlation.md
+                  - Risk Contribution: financial-theory/technical-analysis/risk-metrics/risk-contribution.md
+                  - Concentration: financial-theory/technical-analysis/risk-metrics/concentration.md
+              - "⚖️ Am I Paid for the Risk?":
+                  - Volatility: financial-theory/technical-analysis/risk-metrics/volatility.md
+                  - Sharpe Ratio: financial-theory/technical-analysis/risk-metrics/sharpe-ratio.md
+                  - Sortino Ratio: financial-theory/technical-analysis/risk-metrics/sortino-ratio.md
+                  - Beta & Active Return: financial-theory/technical-analysis/risk-metrics/beta-active-return.md
+                  - Benchmark Selection: financial-theory/technical-analysis/risk-metrics/benchmark-selection.md
+              - "🎲 What If…?":
+                  - Historical Replay: financial-theory/technical-analysis/risk-metrics/historical-replay.md
+                  - Hypothetical Shock: financial-theory/technical-analysis/risk-metrics/hypothetical-shock.md
+                  - Simulation — What the Model Assumes: financial-theory/technical-analysis/risk-metrics/simulation-modes.md
+              - 🔧 Method:
+                  - Observed Annualization: financial-theory/technical-analysis/risk-metrics/observed-annualization.md
+                  - Data Quality: financial-theory/technical-analysis/risk-metrics/data-quality.md
       - 📖 Fundamentals:
           - Overview: financial-theory/fundamentals/index.md
           - Day Count Conventions: financial-theory/fundamentals/day-count.md
@@ -852,6 +1106,7 @@ nav:
                   - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
                   - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
                   - Signal Plugin Guide: developer/architecture/patterns/signal_plugin_guide.md
+                  - Tool Plugin Guide: developer/architecture/patterns/tool_plugins.md
               - 🧠 AI Export:
                   - Overview: developer/architecture/patterns/ai_export_snapshot.md
                   - Composition & Prompt: developer/architecture/patterns/ai_export_composition.md
@@ -886,6 +1141,9 @@ nav:
               - 📥 Import (BRIM):
                   - Architecture: developer/backend/brim/architecture.md
                   - Generic CSV Provider: developer/backend/brim/generic_csv.md
+                  - Danske Bank Importer: developer/backend/brim/danske_bank.md
+                  - Crédit Agricole Importer: developer/backend/brim/credit_agricole.md
+                  - Scalable Capital Importers: developer/backend/brim/scalable.md
                   - Providers List: developer/backend/brim/providers_list.md
           - "📈 Assets (Pricing)":
               - Architecture: developer/backend/assets/architecture.md
@@ -908,6 +1166,8 @@ nav:
                   - BOE Tech: developer/backend/fx/providers/boe.md
                   - SNB Tech: developer/backend/fx/providers/snb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
+          - "🧮 Financial Math Layer": developer/backend/financial_math.md
+          - "📉 Risk Engine": developer/backend/risk/architecture.md
       - 🎨 Frontend Development:
           - Overview: developer/frontend/index.md
           - "🧠 Core Architecture & State":
@@ -942,8 +1202,9 @@ nav:
                   - Asset Identity: developer/frontend/components/features/asset-identity.md
                   - Authentication: developer/frontend/components/features/auth.md
                   - Settings: developer/frontend/components/features/settings.md
-                  - Live Ticker: developer/frontend/components/features/live-ticker.md
+                  - Live Prices: developer/frontend/components/features/live-ticker.md
                   - Lots Analysis: developer/frontend/components/features/lots-analysis.md
+                  - Risk UI: developer/frontend/components/features/risk-lab.md
                   - Charts & Animations: developer/frontend/components/charts.md
                   - 🏦 Brokers:
                       - Overview: developer/frontend/components/features/brokers/index.md
@@ -954,6 +1215,7 @@ nav:
               - Internationalization: developer/frontend/i18n.md
               - PWA & Mobile: developer/frontend/pwa.md
           - "🛡️ Data Quality Banner": developer/frontend/data-quality-banner.md
+          - "🧭 Onboarding Guides": developer/frontend/onboarding.md
       - 🧪 Test Walkthrough:
           - Overview: developer/test-walkthrough/index.md
           - Runner Architecture: developer/test-walkthrough/runner_architecture.md
@@ -987,6 +1249,7 @@ nav:
 hooks:
   - hooks/absolute_hreflang.py
   - hooks/jsonld.py
+  - hooks/fr_typography.py
 
 extra_css:
   - static/extra.css

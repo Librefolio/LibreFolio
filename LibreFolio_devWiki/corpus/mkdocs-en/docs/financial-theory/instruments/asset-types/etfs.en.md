@@ -1,1 +1,1 @@
-/Users/ea_enel/Documents/00_My/LibreFolio/mkdocs_src/docs/financial-theory/instruments/asset-types/etfs.en.md
+../../../../../../../mkdocs_src/docs/financial-theory/instruments/asset-types/etfs.en.md

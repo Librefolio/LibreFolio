@@ -42,7 +42,7 @@ frontend/
 - **Tailwind CSS 4**: config via `@theme {}` in `app.css` (no file config TS)
 - **Colori brand**: `#1a4031` (libre-green), `#f5f4ef` (libre-beige)
 - **Dark mode completo**: variabili CSS in `html.dark`
-- **Font**: Inter, system-ui, sans-serif + `Noto Color Emoji` per bandiere
+- **Font**: `'LF Flags', Inter, system-ui, sans-serif` — `'LF Flags'` (`static/lf-flags.css`) disegna solo le bandiere; mai un font emoji in una pila (vedi `05_project_conventions.md`)
 - **Icone**: lucide-svelte
 
 ---
@@ -113,7 +113,7 @@ Registry: `registry.ts` con registrazione automatica dei segnali disponibili.
 - **Lingue**: EN, IT, FR, ES (840+ chiavi per lingua)
 - **File**: `lib/i18n/{en,it,fr,es}.json`
 - **CLI**: `./dev.py i18n audit|add|remove|update|search|tree`
-- **Bandiere**: emoji con web font `Noto Color Emoji` (per compatibilità Windows)
+- **Bandiere**: emoji disegnate dalla faccia globale `'LF Flags'`: le bandiere di Apple sui dispositivi Apple, altrove il sottoinsieme Noto self-hosted (su Windows Segoe UI Emoji non ha bandiere)
 
 ---
 

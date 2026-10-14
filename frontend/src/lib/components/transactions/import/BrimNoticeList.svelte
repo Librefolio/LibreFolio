@@ -20,7 +20,7 @@
     import {AlertTriangle, Info} from 'lucide-svelte';
     import {t} from 'svelte-i18n';
     import BrimEvidenceTable from './BrimEvidenceTable.svelte';
-    import {resolveBrimNoticeMessage} from '$lib/utils/transactions/resolveBrimNotice';
+    import {resolveBrimEvidenceComment, resolveBrimNoticeMessage} from '$lib/utils/transactions/resolveBrimNotice';
     import type {BrimNotice} from '$lib/types';
 
     interface Props {
@@ -54,7 +54,7 @@
                     {resolveBrimNoticeMessage(notice, $t)}
                 </p>
                 {#each notice.evidence ?? [] as evidence}
-                    <BrimEvidenceTable {evidence} tone={severity} collapsible={collapsibleEvidence} {onGotoRow} />
+                    <BrimEvidenceTable evidence={{...evidence, title: evidence.title || $t('importWizard.evidenceRowsTitle'), comment: resolveBrimEvidenceComment(notice, evidence.comment, $t)}} tone={severity} collapsible={collapsibleEvidence} {onGotoRow} />
                 {/each}
             </div>
         </li>

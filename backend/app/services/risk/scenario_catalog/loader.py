@@ -112,12 +112,14 @@ def _built_in_entries(built_in_dir: Path) -> tuple[list[RiskScenarioCatalogEntry
 
     entries: list[RiskScenarioCatalogEntry] = []
     seen_ids: set[str] = set()
+    visited: set[Path] = set()
     for directory_name, expected_kind in (
         ("historical", RiskScenarioKind.HISTORICAL_REPLAY),
         ("hypothetical", RiskScenarioKind.HYPOTHETICAL_SHOCK),
     ):
         directory = built_in_dir / directory_name
         for path in _yaml_files(directory):
+            visited.add(path)
             relative = path.relative_to(built_in_dir).as_posix()
             try:
                 definition = _parse_scenario(path, expected_kind)
@@ -138,6 +140,7 @@ def _built_in_entries(built_in_dir: Path) -> tuple[list[RiskScenarioCatalogEntry
     groups: list[RiskGeographyGroupDefinition] = []
     seen_group_ids: set[str] = set()
     for path in _yaml_files(built_in_dir / "geography"):
+        visited.add(path)
         relative = path.relative_to(built_in_dir).as_posix()
         try:
             group = RiskGeographyGroupDefinition.model_validate(_read_yaml(path))
@@ -148,6 +151,16 @@ def _built_in_entries(built_in_dir: Path) -> tuple[list[RiskScenarioCatalogEntry
             raise RiskScenarioCatalogLoadError(f"Invalid built-in geography group {relative}: {exc}") from exc
         seen_group_ids.add(group.id)
         groups.append(group)
+
+    # A built-in YAML is only reached if it sits under one of the three directories
+    # read above. Anywhere else it was previously neither loaded nor rejected: it
+    # simply vanished, and every check that iterates the *loaded* catalog — including
+    # the asset-type coverage gate — would have been silently blind to it. Built-in
+    # content is ours and ships with the app, so a misplaced file is a packaging bug
+    # and must be loud.
+    stray = [path.relative_to(built_in_dir).as_posix() for path in _yaml_files(built_in_dir) if path not in visited]
+    if stray:
+        raise RiskScenarioCatalogLoadError(f"Built-in scenario catalog contains YAML files outside historical/, hypothetical/ and geography/, which would be ignored: {', '.join(sorted(stray))}")
 
     if not entries:
         raise RiskScenarioCatalogLoadError("Built-in scenario catalog contains no scenarios")

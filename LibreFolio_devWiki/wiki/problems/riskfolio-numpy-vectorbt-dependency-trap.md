@@ -57,5 +57,5 @@ and must not be upgraded without repeating the capability and dependency probes.
 | Dependency manifests | `Pipfile`, `Pipfile.lock` |
 | Riskfolio production engine | `backend/app/services/risk/quant/riskfolio_worker.py` |
 | Optimization tests | `backend/test_scripts/test_services/test_risk_optimization.py` |
-| Library evidence | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/spike-phase01QuantLibraries.md` |
+| Library evidence | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/spike-phase01QuantLibraries.md` |
 | Docker probe | `scripts/spikes/risk/Dockerfile.riskfolio` |

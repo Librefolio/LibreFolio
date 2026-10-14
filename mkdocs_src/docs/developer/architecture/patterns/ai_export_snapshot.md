@@ -69,9 +69,11 @@ The backend builds one request-scoped `BuildContext`. Shared DB reports, prices,
 rates, FIFO results, signal results, and component envelopes are memoized so
 overlapping datasets do not repeat work.
 
-The previous profile/assembler runtime and V1 schema have been removed. The API,
-diagnostic probes, and tests all use this component runtime; there is no legacy
-catalog or fallback execution path.
+The profile/assembler runtime that preceded the component runtime during
+development was removed before release. The first released snapshot schema is V1
+(`AI_EXPORT_SCHEMA_VERSION = 1`), so there is no older schema to accept or migrate.
+The API, diagnostic probes, and tests all use this component runtime; there is no
+legacy catalog or fallback execution path.
 
 ## 🧭 Ownership Boundary
 
@@ -153,6 +155,14 @@ General snapshots also carry dated income, concentration bases, Broker
 cost/turnover, non-predictive FX conversion timing, peak-relative Drawdown,
 economic FIFO summaries, allocated-vs-unallocated cost semantics, and current
 Assets excluded from technical eligibility with reason codes.
+
+Portfolio, Broker, and Asset FIFO payloads declare `cost_allocation_semantics`: lot
+fees and taxes contain only costs deterministically allocated to lots. Unallocated
+costs are excluded from lots (Portfolio payloads point to the fee/tax sections,
+Broker payloads to the flows and cost-efficiency evidence) and must never be read as
+a recorded zero. Conversely, `asset.performance` renders the zero realized P&L,
+income, and fees/taxes that the Portfolio Engine omits from contribution rows
+explicitly as recorded zero (`zero_semantics`).
 
 FX snapshots may succeed with partial source history. The response keeps the
 requested period and separately reports the available period, calendar-day

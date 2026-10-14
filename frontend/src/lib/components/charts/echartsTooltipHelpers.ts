@@ -1,4 +1,6 @@
 import type {ECharts} from 'echarts';
+import {escapeHtml} from '$lib/utils/core/escapeHtml';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 
 /**
  * echartsTooltipHelpers.ts — Shared tooltip and lifecycle utilities for ALL ECharts charts.
@@ -57,6 +59,24 @@ export function buildTooltipRow(label: string, valueHtml: string, dotColor?: str
 }
 
 /**
+ * A tooltip row whose label gives way first: inside a box narrower than the row, the label shrinks
+ * and ends in an ellipsis while the value keeps its whole width. Inline-level, so rows can still be
+ * joined with `<br/>` and followed by inline notes. Both arguments are HTML: the caller escapes.
+ */
+export function buildFittedTooltipRow(labelHtml: string, valueHtml: string): string {
+    return `<span style="display:inline-flex;align-items:baseline;max-width:100%;min-width:0;vertical-align:bottom"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${labelHtml}</span><span style="flex-shrink:0;white-space:nowrap">${valueHtml}</span></span>`;
+}
+
+/**
+ * Cap a tooltip's content at `maxWidthPx`, so a row wider than its chart shrinks (see
+ * `buildFittedTooltipRow`) instead of leaving the screen. ECharts' box is `white-space:nowrap`:
+ * the frame lets the notes between the rows wrap again.
+ */
+export function fitTooltipToWidth(html: string, maxWidthPx: number): string {
+    return `<div style="max-width:${Math.max(0, Math.floor(maxWidthPx))}px;white-space:normal">${html}</div>`;
+}
+
+/**
  * Build a horizontal divider.
  */
 export function buildTooltipDivider(borderColor: string): string {
@@ -70,9 +90,9 @@ export function buildTooltipDivider(borderColor: string): string {
  * @param topN - How many to show individually.
  * @param theme - Tooltip theme for colors.
  * @param otherLabel - Label for the "Other" row (e.g. "Other (5)")
- * @param formatValue - Format a number into display string (default: "X.1%")
+ * @param formatValue - Format a number into display string (default: a one-decimal percentage in the interface locale)
  */
-export function buildTooltipTopN(items: {name: string; value: number; color: string}[], topN: number, theme: TooltipTheme, otherLabel: string, formatValue: (v: number) => string = (v) => `${v.toFixed(1)}%`): string {
+export function buildTooltipTopN(items: {name: string; value: number; color: string}[], topN: number, theme: TooltipTheme, otherLabel: string, formatValue: (v: number) => string = (v) => formatPercent(v, {digits: 1, signed: false})): string {
     if (items.length === 0) return '';
 
     const sorted = [...items].sort((a, b) => b.value - a.value);
@@ -81,13 +101,13 @@ export function buildTooltipTopN(items: {name: string; value: number; color: str
 
     let html = '';
     for (const item of top) {
-        html += buildTooltipRow(item.name, formatValue(item.value), item.color);
+        html += buildTooltipRow(escapeHtml(item.name), formatValue(item.value), item.color);
     }
 
     if (rest.length > 0) {
         const sumValue = rest.reduce((s, r) => s + r.value, 0);
         const label = `${otherLabel} (${rest.length})`;
-        html += buildTooltipRow(label, formatValue(sumValue), theme.mutedColor);
+        html += buildTooltipRow(escapeHtml(label), formatValue(sumValue), theme.mutedColor);
     }
 
     return html;
@@ -104,7 +124,7 @@ export function buildTooltipTopN(items: {name: string; value: number; color: str
  * @param remainingLabel - Label for the grouped row (e.g. "Remaining", "Resto").
  * @param formatValue - Value formatter.
  */
-export function buildTooltipByThreshold(items: {name: string; value: number; color: string}[], threshold: number, theme: TooltipTheme, remainingLabel: string, formatValue: (v: number) => string = (v) => `${v.toFixed(1)}%`): string {
+export function buildTooltipByThreshold(items: {name: string; value: number; color: string}[], threshold: number, theme: TooltipTheme, remainingLabel: string, formatValue: (v: number) => string = (v) => formatPercent(v, {digits: 1, signed: false})): string {
     if (items.length === 0) return '';
 
     const sorted = [...items].sort((a, b) => b.value - a.value);
@@ -113,14 +133,14 @@ export function buildTooltipByThreshold(items: {name: string; value: number; col
 
     let html = '';
     for (const item of visible) {
-        html += buildTooltipRow(item.name, formatValue(item.value), item.color);
+        html += buildTooltipRow(escapeHtml(item.name), formatValue(item.value), item.color);
     }
 
     // Grouped small items — always at the very bottom
     if (grouped.length > 0) {
         const sumValue = grouped.reduce((s, r) => s + r.value, 0);
         const label = `${remainingLabel} (${grouped.length})`;
-        html += buildTooltipRow(label, formatValue(sumValue), theme.mutedColor);
+        html += buildTooltipRow(escapeHtml(label), formatValue(sumValue), theme.mutedColor);
     }
 
     return html;

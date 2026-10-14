@@ -13,24 +13,33 @@ The Borsa Italiana provider fetches financial data from [borsaitaliana.it](https
     - `codice_fondo` — optional Borsa internal fund code (e.g. `2FADB602822`). When present, current/historical value use the **fund NAV path** instead of the market API.
     - `mic` — optional market MIC (e.g. `ETLX` for EuroTLX, `MOTX` for MOT). Auto-filled from the search result's own link; routes the instrument page (`get_asset_url`) and metadata to the right market.
     - `platform` — optional trading platform (e.g. `TLX` for EuroTLX). Required by some markets so the universal `search/scheda.html` URL redirects to the real market page.
+    - `url` — not a form field (absent from `params_schema`): set automatically to the instrument's own page address — the site's search `link`, or the page `resolve_url` actually loaded (`scheda.url_pagina`). `get_asset_url` and metadata prefer it, so a EuroTLX link keeps working even when `platform` is missing (e.g. an asset created while the site search had the ISIN de-indexed).
 
 ### 🧭 Market routing (mic / platform)
 
 Borsa Italiana lists the same instrument families across several markets (MTA, MOT, ExtraMOT, ETFplus, SeDeX, MIV, EuroTLX, GEM). Most resolve through the universal `search/scheda.html?code={ISIN}` URL, **but EuroTLX does not** — it requires `mic=ETLX&platform=TLX` or the URL stays on a dead generic page. The provider takes `mic`/`platform` from the **site's own search `link`** (never a hardcoded map), stores them in `provider_params`, and reuses them everywhere:
 
-- **Search results** carry `provider_params: {language, mic, platform?}` — so the URL and pricing are correct *by construction* for any market, present or future.
+- **Search results** carry `provider_params: {language, mic, platform?, url}` (`url` = the site's own `link`) — so the URL and pricing are correct *by construction* for any market, present or future.
 - **Dead-result filter**: a non-fund result with no parseable `mic` in its link is **skipped** (never emit a result whose URL would be the unresolved `/search/` page). Indices (`Indice`/`Index`) are excluded — they are benchmarks, not purchasable instruments.
 - **History auto-discovery** (library ≥ 0.3.0): the chart API only knows XMIL/ETLX; if an ISIN is unknown to XMIL and no exchange is passed, the library discovers the MIC via the site search and retries. This self-heals legacy assets saved before `mic` was propagated.
 - **`UNSUPPORTED_PAGE`**: when even mic/platform can't resolve a parseable market page (a family we don't handle yet), the provider raises `UNSUPPORTED_PAGE` with a message inviting the user to open a GitHub issue — instead of a cryptic parse error.
 
 ### 💱 Currency
 
-All data is returned in **EUR** — Borsa Italiana is an Italian exchange.
+A listed instrument is priced in its **trading** currency on Borsa Italiana: **EUR** for most listings, but e.g. **USD** for FX-denominated EuroTLX bonds such as the US Treasury `US912810TU25`. One source serves both sides: **the metadata currency is the currency the prices carry**.
+
+- **Prices** (`get_current_value`, `get_history_value`): the currency of the `grafici.borsaitaliana.it` chart-API reply (`ottieni_prezzo_corrente` / `ottieni_storico`), `EUR` when the reply carries none. History goes through `_storico_con_mic_retry`: default route first, then, on `StrumentoNonTrovato`, the stored `mic` as the chart-API exchange.
+- **Metadata and `resolve_url`** (listed instruments): the currency is **not** read from the scheda page. ETF/ETC scheda pages often show only the fund's **denomination** currency («Valuta di Denominazione USD»), while the instrument trades — and is priced — in EUR; read off the scheda, it gave USD metadata over EUR prices (e.g. Invesco Physical Gold ETC `IE00B579F325`, iShares Core MSCI World `IE00B4L5Y983`, iShares Core S&P 500 `IE00B5BMR087`). The module helper `_price_api_currency(identifier, mic)` asks the chart API instead: the same `_storico_con_mic_retry` call, the same `EUR` default.
+- **Currency unknown**: when that chart-API call fails (any exception), `fetch_asset_metadata` leaves `currency` **unset** in the returned `FAAssetPatchItem` (patch contract: present, even if `None` → update/blank; absent → keep), so a metadata refresh keeps the stored asset currency instead of blanking it. `resolve_url` rows carry `currency: None`.
+- **Search**: rows for listed instruments carry `currency: None` — the `cerca` payload has no currency; the metadata fetch fills it.
+- **Funds** (`codice_fondo`): unchanged — the currency comes from the fund page (`DatiFondo.valuta`, default `EUR`).
+
+Note (library ≥ 0.3.2): the scheda parser no longer takes the denomination row for the trading currency — «Valuta» / «Currency» match only as an exact label — and exposes the denomination separately as `SchedaStrumento.valuta_denominazione`, which the plugin does not use. The fix still matters for current prices: `ottieni_prezzo_corrente` falls back to scraping the scheda when its chart-API read fails.
 
 ### 💰 Current Value (`get_current_value`)
 
-- **Funds** (when `provider_params.codice_fondo` is set): returns the fund NAV **only if the published NAV is dated today**. A fund NAV is published once per day with a lag, so exposing a stale NAV as the "current" value would misstate the portfolio. When the NAV date ≠ today, the provider raises `NO_DATA` and the core falls back to the **last recorded buy price** as the unit-value estimate.
-- **Listed instruments**: uses `ottieni_prezzo_corrente(isin)` from the scraping library.
+- **Funds** (when `provider_params.codice_fondo` is set): returns the fund NAV **only if the published NAV is dated today**. A fund NAV is published once per day with a lag, so exposing a stale NAV as the "current" value would misstate the portfolio. When the NAV date ≠ today, the provider raises `NO_DATA`: no price is stored for today, and valuation carries the latest observation forward through the unified price resolver (`backend/app/services/financial_math/price_marks.py`) — the last NAV point, or a more recent trade-derived mark (`LAST_TRADE_PRICE`). There is no separate last-buy fallback.
+- **Listed instruments**: uses `ottieni_prezzo_corrente(isin, mic=…, platform=…)` from the scraping library. If it raises `StrumentoNonRisolto` / `StrumentoNonTrovato` and a `mic` is stored, it retries once with `exchange=mic` (EuroTLX answers under its own exchange code, equal to the MIC).
 - Returns `FACurrentValue` with price, date, currency, and source (`"Borsa Italiana"`).
 
 ### 📈 Historical Data (`get_history_value`)
@@ -63,21 +72,27 @@ The provider captures the internal code into `provider_params.codice_fondo` at a
 
 ### 📋 Metadata (`fetch_asset_metadata`)
 
-- **Listed instruments (ISIN path)**: uses `ottieni_scheda(isin, lingua)` — scrapes the instrument detail page in the configured language.
+- **Listed instruments (ISIN path)**: uses `ottieni_scheda(isin, lingua)` — scrapes the instrument detail page in the configured language, routed by the stored `mic`/`platform`. If that raises `StrumentoNonRisolto` and `provider_params.url` is stored, the scheda is read straight from that page (`url_diretto`).
 - Extracts:
     - **Name**: from `<h1>` tag on the page, appended with language flag emoji (e.g., `"ENEL S.p.A. 🇬🇧"`).
-    - **Type**: mapped from instrument type field (e.g., `obbligazione` → BOND, `azione` → STOCK, `etf` → ETF).
-    - **Currency**: negotiation currency (default EUR).
+    - **Type**: mapped from instrument type field (e.g., `obbligazione` → BOND, `azione` → STOCK, `etf` → ETF). `etc/etn` also maps to ETF, so ETFs, ETCs and ETNs all arrive as plain `ETF` — the frontend provider-data comparison treats a stored ETF subtype (e.g. `ETF_STOCK`) as agreeing with it (`isFamilyOnlyProposal` in `frontend/src/lib/utils/assetTypes.ts`). Fund labels (`fondi comuni`, `fondo chiuso`, `closed-end fund`, …) → FUND; other `obbligazione…` / `bond…` labels fall back to BOND by prefix; unknown labels → no type.
+    - **Currency**: from the chart API that prices the asset, not from the scheda; left unset when unknown — see [Currency](#currency).
     - **Description**: assembled from page description, market, issuer, maturity date, coupon rate, structure, tipology, coupon frequency.
     - **Ticker**: if available on the page (mainly for stocks).
-    - **Geographic Area**: inferred from issuer name (e.g., "Republic of Italy" → `ITA`).
-    - **Sector**: inferred from `settore` (stocks) or `tipologia` (bonds) fields.
+    - **Geographic Area**: inferred from issuer name via `_ISSUER_TO_COUNTRY` (exact match, then substring), e.g. "Republic of Italy" → `ITA`, "United States of America" → `USA`.
+    - **Sector**: inferred from `settore` (stocks) or `tipologia` (bonds) fields. Bond `tipologia` goes through `_TIPOLOGIA_TO_SECTOR` (EN + IT labels): government paper → `Government Bonds`, corporate → `Corporate Bonds`, supranational → `Financials`; an unmapped tipologia yields no sector. The mapping only shapes the metadata offered: values already stored on an asset change only through the provider-data comparison.
 - Bond-specific fields available in the raw data: `cedola_annua`, `scadenza`, `emittente`, `rendimento_lordo`, `struttura_bond`, `frequenza_cedola`.
 - **Funds** (when `provider_params.codice_fondo` is set): funds are not on the XMIL scheda, so metadata is built from the **fund detail page** by internal code instead. The `short_description` is assembled from the fund **name**, the real **ISIN**, and the non-`N.D.` entries scraped from the page's **Caratteristiche**, **Società di Gestione** and **Costi** sections (e.g. `… | ISIN: LU2178929613 | Classe: P | Grado di Rischio: 3 | Categoria Assogestioni: Bilanciati | Costi — Gestione: 1.3 …`). The internal code is persisted in `identifier_other` as a JSON-list entry (`["2FADB…"]`). The section fields are read defensively, so metadata degrades to just *name + ISIN* if the installed scraping library predates the enriched `DatiFondo`.
 
 ### 🔗 `get_asset_url`
 
-For listed instruments, returns `https://www.borsaitaliana.it/borsa/search/scheda.html?code={ISIN}&lang={language}`. For funds with `provider_params.codice_fondo`, returns `/borsa/fondi/dettaglio/{codice_fondo}.html?lang={language}` so the link targets the NAV page keyed by the internal fund code. The `lang` parameter follows the user's `provider_params.language` selection (default `en`).
+Precedence, first match wins:
+
+1. **Funds** with `provider_params.codice_fondo` → `https://www.borsaitaliana.it/borsa/fondi/dettaglio/{codice_fondo}.html?lang={language}`, the NAV page keyed by the internal fund code (the generic scheda page does not resolve a fund by ISIN).
+2. A stored **`provider_params.url`** → that page, with `lang={language}` appended when it is missing. It is a working page by construction.
+3. Otherwise → `https://www.borsaitaliana.it/borsa/search/scheda.html?code={ISIN}&lang={language}`, plus `&mic={mic}` and `&platform={platform}` when stored. Without them the bare URL still resolves for MTA, MOT, ETFplus, SeDeX and MIV, but not for EuroTLX.
+
+The `lang` parameter follows the user's `provider_params.language` selection (default `en`).
 
 ### 🔁 `resolve_url` (inverse of `get_asset_url`)
 
@@ -86,7 +101,7 @@ The provider opts into the generic **URL → search-item** capability:
 - `resolvable_url_domains = ["borsaitaliana.it"]` → `supports_url_resolution` is `True`.
 - `resolve_url(url)` recognises two public page families:
     - **Fund detail pages** (`/borsa/fondi/dettaglio/{code}.html`) — fetches the page and returns the **full canonical set a normal search would emit** for that fund: the **IT + EN pair** (Italian first, with flag in `display_name`), each `{identifier: <ISIN from page> or code, identifier_type, display_name, currency, type: "FUND", provider_params: {codice_fondo, language}}`.
-    - **Stock / bond / ETF scheda pages** (`…/scheda/{ISIN}[-{MIC}].html`) — returns the same IT + EN canonical set, priced by ISIN.
+    - **Stock / bond / ETF scheda pages** (`…/scheda/{ISIN}[-{MIC}].html`) — returns the same IT + EN canonical set, priced by ISIN. The rows' `currency` comes from one chart-API call shared by every row (`None` if it fails), not from the scheda.
 
 It is only a different **entry point** — the orchestration flattens the list and de-dupes by `(identifier, language)`. Anything that is not a recognisable Borsa page (off-domain, no extractable fund code or ISIN path) returns `None`. Best-effort: fetch/parse errors return `None`, never raise.
 
@@ -131,11 +146,11 @@ The provider exposes optional parameters via `params_schema`:
 | Key | Type | Options | Default | Description |
 |-----|------|---------|---------|-------------|
 | `language` | `select` | `en` (🇬🇧 English), `it` (🇮🇹 Italiano) | `en` | Language for names and metadata |
-| `codice_fondo` | `text` | — | — | Borsa internal fund code (e.g. `2FADB602822`); when set, current/history use the fund NAV path |
-| `mic` | `text` | — | — | Market MIC (auto-filled from search, e.g. `ETLX` for EuroTLX); routes the instrument page and metadata |
-| `platform` | `text` | — | — | Trading platform (auto-filled from search, e.g. `TLX` for EuroTLX); needed by some markets to resolve the page |
+| `codice_fondo` | `string` | — | — | Borsa internal fund code (e.g. `2FADB602822`); when set, current/history use the fund NAV path |
+| `mic` | `string` | — | — | Market MIC (auto-filled from search, e.g. `ETLX` for EuroTLX); routes the instrument page and metadata |
+| `platform` | `string` | — | — | Trading platform (auto-filled from search, e.g. `TLX` for EuroTLX); needed by some markets to resolve the page |
 
-Uses `option_labels` for human-readable display in the frontend dropdown.
+Uses `option_labels` for human-readable display in the frontend dropdown. Each field also carries a short `label` — the form caption (*Language*, *Fund internal code*, *Market MIC*, *Platform*) — and a longer `description` shown as its tooltip; the frontend translates both under `assets.providerParams.borsa_italiana`.
 
 ### Error Handling
 

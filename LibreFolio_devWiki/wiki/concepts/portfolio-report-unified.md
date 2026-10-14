@@ -62,6 +62,14 @@ cache_key = broker_ids|dateFrom|dateTo|currency|contrib_flag
 
 If the key matches a cached entry, `fetchReport()` returns immediately without hitting the API. Cache invalidated on: any transaction CRUD, manual refresh button.
 
+### Callers that need only the holdings (2026-09-24)
+
+`fetchReport()`'s defaults ask for **`include_history` and `include_allocation_history`**: the whole daily series of
+the period. A caller that reads only `summary.holdings` pays for both. The Asset Global lab's "All mine" command did
+exactly that, and the developer noticed the wait. It now asks for the light report, with both flags `false`, which
+the store caches under its own key suffix (`|nohist|noalloc`). The wait was noticed, not timed: the server log does
+not carry durations.
+
 ## Why Not Separate Endpoints?
 
 The previous `/summary` + `/history` separate calls caused:
@@ -75,7 +83,7 @@ The previous `/summary` + `/history` separate calls caused:
 
 An earlier proposal for a standalone `/allocation-history` endpoint (in early Milestone 2 architecture drafts)
 was never built — superseded by this unified endpoint. As of the Holdings/Performance panel refactor (commit
-`78aaa0a3`), this was explicitly re-confirmed: *"Endpoint `/portfolio/report` confermato come entrypoint
+`13052a006`), this was explicitly re-confirmed: *"Endpoint `/portfolio/report` confermato come entrypoint
 unico — nessun nuovo endpoint creato."* No separate endpoint is planned. See
 [[decisions/portfolio-summary-direct-wiring]] for the full rationale.
 

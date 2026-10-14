@@ -21,7 +21,8 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {tick} from 'svelte';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {tick, untrack} from 'svelte';
     import {goto} from '$app/navigation';
     import {zodiosApi} from '$lib/api';
     import {auth} from '$lib/stores/app/auth';
@@ -40,14 +41,18 @@
     // =========================================================================
     // Props
     // =========================================================================
-    export let brokerId: number;
-    export let readOnly: boolean = false;
-    export let onChanged: (() => void) | undefined = undefined;
-    /** If provided, shows a Cancel/Close button next to Save and is also called
-     *  right after a successful save (modal auto-close use case). Omit for embedding. */
-    export let onCancel: (() => void) | undefined = undefined;
-    /** Bindable — lets a modal wrapper check for unsaved changes before closing. */
-    export let hasChanges: boolean = false;
+    interface Props {
+        brokerId: number;
+        readOnly?: boolean;
+        onChanged?: () => void;
+        /** If provided, shows a Cancel/Close button next to Save and is also called
+         *  right after a successful save (modal auto-close use case). Omit for embedding. */
+        onCancel?: () => void;
+        /** Bindable — lets a modal wrapper check for unsaved changes before closing. */
+        hasChanges?: boolean;
+    }
+
+    let {brokerId, readOnly = false, onChanged, onCancel, hasChanges = $bindable(false)}: Props = $props();
 
     // =========================================================================
     // Types
@@ -70,53 +75,53 @@
     // =========================================================================
     // State
     // =========================================================================
-    let accesses: AccessEntry[] = [];
-    let originalAccesses: AccessEntry[] = [];
-    let loading = true;
-    let saving = false;
-    let error: string | null = null;
-    let errorKey: string | null = null;
-    let accessLoadState: 'loading' | 'ready' | 'error' = 'loading';
+    let accesses: AccessEntry[] = $state([]);
+    let originalAccesses: AccessEntry[] = $state([]);
+    let loading = $state(true);
+    let saving = $state(false);
+    let error: string | null = $state(null);
+    let errorKey: string | null = $state(null);
+    let accessLoadState = $state<'loading' | 'ready' | 'error'>('loading');
 
     // Add user state
-    let showAddModal = false; // Add User as overlay modal
-    let availableUsers: SearchUser[] = [];
-    let loadingUsers = false;
-    let selectedUserId: number | null = null;
-    let newRole: 'OWNER' | 'EDITOR' | 'VIEWER' = 'VIEWER';
-    let newSharePercent: number = 0;
-    let showRoleDropdown = false;
+    let showAddModal = $state(false); // Add User as overlay modal
+    let availableUsers: SearchUser[] = $state([]);
+    let loadingUsers = $state(false);
+    let selectedUserId: number | null = $state(null);
+    let newRole = $state<AccessEntry['role']>('VIEWER');
+    let newSharePercent: number = $state(0);
+    let showRoleDropdown = $state(false);
 
     // Edit state
-    let showEditModal = false;
-    let editingUserId: number | null = null;
-    let editRole: 'OWNER' | 'EDITOR' | 'VIEWER' = 'VIEWER';
-    let editSharePercent: number = 0;
-    let showEditRoleDropdown = false;
-    let editError: string | null = null;
-    let editErrorKey: string | null = null;
+    let showEditModal = $state(false);
+    let editingUserId: number | null = $state(null);
+    let editRole = $state<AccessEntry['role']>('VIEWER');
+    let editSharePercent: number = $state(0);
+    let showEditRoleDropdown = $state(false);
+    let editError: string | null = $state(null);
+    let editErrorKey: string | null = $state(null);
 
     // Confirm dialogs
-    let confirmRemoveOpen = false;
-    let confirmRemoveUsername = '';
-    let confirmRemoveUserId: number | null = null;
+    let confirmRemoveOpen = $state(false);
+    let confirmRemoveUsername = $state('');
+    let confirmRemoveUserId: number | null = $state(null);
 
     // Self-service state (F4): leave broker / self-demote
-    let confirmLeaveOpen = false;
-    let confirmDemoteOpen = false;
-    let selfActionBusy = false;
+    let confirmLeaveOpen = $state(false);
+    let confirmDemoteOpen = $state(false);
+    let selfActionBusy = $state(false);
 
     // =========================================================================
     // Computed
     // =========================================================================
-    $: owners = accesses.filter((a) => a.role === 'OWNER');
-    $: editors = accesses.filter((a) => a.role === 'EDITOR');
-    $: viewers = accesses.filter((a) => a.role === 'VIEWER');
-    $: totalAllocated = owners.reduce((sum, o) => sum + o.share_percentage, 0);
-    $: totalAllocatedPercent = Math.round(totalAllocated * 10000) / 100;
-    $: availablePercent = Math.round((1 - totalAllocated) * 10000) / 100;
-    $: exceedsLimit = totalAllocated > 1.0001; // small epsilon for floating point
-    $: hasChanges =
+    let owners = $derived(accesses.filter((a) => a.role === 'OWNER'));
+    let editors = $derived(accesses.filter((a) => a.role === 'EDITOR'));
+    let viewers = $derived(accesses.filter((a) => a.role === 'VIEWER'));
+    let totalAllocated = $derived(owners.reduce((sum, o) => sum + o.share_percentage, 0));
+    let totalAllocatedPercent = $derived(Math.round(totalAllocated * 10000) / 100);
+    let availablePercent = $derived(Math.round((1 - totalAllocated) * 10000) / 100);
+    let exceedsLimit = $derived(totalAllocated > 1.0001); // small epsilon for floating point
+    let localHasChanges = $derived(
         JSON.stringify(
             accesses.map((a) => ({
                 user_id: a.user_id,
@@ -124,26 +129,32 @@
                 share_percentage: a.share_percentage,
             })),
         ) !==
-        JSON.stringify(
-            originalAccesses.map((a) => ({
-                user_id: a.user_id,
-                role: a.role,
-                share_percentage: a.share_percentage,
-            })),
-        );
-    $: existingUserIds = new Set(accesses.map((a) => a.user_id));
+            JSON.stringify(
+                originalAccesses.map((a) => ({
+                    user_id: a.user_id,
+                    role: a.role,
+                    share_percentage: a.share_percentage,
+                })),
+            ),
+    );
+
+    $effect(() => {
+        hasChanges = localHasChanges;
+    });
+
+    let existingUserIds = $derived(new Set(accesses.map((a) => a.user_id)));
     // Users still addable: exclude anyone already granted access locally.
-    $: selectableUsers = availableUsers.filter((u) => !existingUserIds.has(u.id));
-    $: selectedUser = selectableUsers.find((u) => u.id === selectedUserId) ?? null;
+    let selectableUsers = $derived(availableUsers.filter((u) => !existingUserIds.has(u.id)));
+    let selectedUser = $derived(selectableUsers.find((u) => u.id === selectedUserId) ?? null);
 
     // =========================================================================
     // Self-service (F4): the current user can always leave; an EDITOR can also
     // demote themselves to VIEWER. The last OWNER leaving cascade-deletes the
     // broker (confirmed semantics) — the UI presents that as a danger action.
     // =========================================================================
-    $: currentUserId = $auth.user?.id ?? null;
-    $: selfEntry = currentUserId != null ? (accesses.find((a) => a.user_id === currentUserId) ?? null) : null;
-    $: selfIsLastOwner = selfEntry?.role === 'OWNER' && owners.length <= 1;
+    let currentUserId = $derived($auth.user?.id ?? null);
+    let selfEntry = $derived(currentUserId != null ? (accesses.find((a) => a.user_id === currentUserId) ?? null) : null);
+    let selfIsLastOwner = $derived(selfEntry?.role === 'OWNER' && owners.length <= 1);
 
     async function handleSelfDemote() {
         if (selfActionBusy) return;
@@ -189,30 +200,34 @@
             selfActionBusy = false;
         }
     }
-    $: canEditAccess = !readOnly && accessLoadState === 'ready';
+    let canEditAccess = $derived(!readOnly && accessLoadState === 'ready');
 
     // For add form: max share available
-    $: maxNewShare = newRole === 'OWNER' ? Math.max(0, Math.round((1 - totalAllocated) * 10000) / 100) : 0;
+    let maxNewShare = $derived(newRole === 'OWNER' ? Math.max(0, Math.round((1 - totalAllocated) * 10000) / 100) : 0);
 
     // =========================================================================
     // Lifecycle — (re)load whenever brokerId is set/changes. Also covers the
     // modal use case: ModalBase destroys/recreates children on open/close, so
     // this naturally re-fires on every fresh mount (i.e. every time reopened).
     // =========================================================================
-    $: if (brokerId) {
-        loadAccesses();
-    }
+    $effect(() => {
+        if (brokerId) {
+            untrack(loadAccesses);
+        }
+    });
 
     // =========================================================================
     // Derived: chart data for SemiDonutChart
     // =========================================================================
-    $: chartSlices = owners
-        .filter((o) => Math.round(o.share_percentage * 10000) / 100 > 0)
-        .map((o) => ({
-            name: o.username,
-            percentage: Math.round(o.share_percentage * 10000) / 100,
-            avatarUrl: o.avatar_url ? `${o.avatar_url}?img_preview=64x64` : null,
-        }));
+    let chartSlices = $derived(
+        owners
+            .filter((o) => Math.round(o.share_percentage * 10000) / 100 > 0)
+            .map((o) => ({
+                name: o.username,
+                percentage: Math.round(o.share_percentage * 10000) / 100,
+                avatarUrl: o.avatar_url ? `${o.avatar_url}?img_preview=64x64` : null,
+            })),
+    );
 
     // =========================================================================
     // Data Loading
@@ -426,18 +441,14 @@
         return username ? username.charAt(0).toUpperCase() : '?';
     }
 
-    const roleOptions: Array<{value: 'OWNER' | 'EDITOR' | 'VIEWER'; label: string; shortLabel: string}> = [
-        {value: 'OWNER', label: '', shortLabel: ''},
-        {value: 'EDITOR', label: '', shortLabel: ''},
-        {value: 'VIEWER', label: '', shortLabel: ''},
-    ];
-    // Reactive labels
-    $: roleOptions[0].label = $_('brokers.sharing.roleOwner');
-    $: roleOptions[1].label = $_('brokers.sharing.roleEditor');
-    $: roleOptions[2].label = $_('brokers.sharing.roleViewer');
-    $: roleOptions[0].shortLabel = $_('brokers.sharing.roleOwnerShort');
-    $: roleOptions[1].shortLabel = $_('brokers.sharing.roleEditorShort');
-    $: roleOptions[2].shortLabel = $_('brokers.sharing.roleViewerShort');
+    let roleOptions: Array<{value: 'OWNER' | 'EDITOR' | 'VIEWER'; label: string; shortLabel: string}> = $derived([
+        {value: 'OWNER', label: $_('brokers.sharing.roleOwner'), shortLabel: $_('brokers.sharing.roleOwnerShort')},
+        {value: 'EDITOR', label: $_('brokers.sharing.roleEditor'), shortLabel: $_('brokers.sharing.roleEditorShort')},
+        {value: 'VIEWER', label: $_('brokers.sharing.roleViewer'), shortLabel: $_('brokers.sharing.roleViewerShort')},
+    ]);
+
+    let NewRoleIcon = $derived(getRoleIcon(newRole));
+    let EditRoleIcon = $derived(getRoleIcon(editRole));
 </script>
 
 <div class="space-y-4" data-testid="broker-sharing-panel" data-access-state={accessLoadState} data-error-key={errorKey ?? undefined} aria-busy={loading ? 'true' : 'false'} aria-invalid={accessLoadState === 'error' ? 'true' : undefined}>
@@ -446,11 +457,12 @@
         <div class="flex justify-end">
             <button
                 type="button"
-                on:click={() => {
+                onclick={() => {
                     accesses = JSON.parse(JSON.stringify(originalAccesses));
                 }}
                 class="p-1.5 text-amber-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors"
                 title="Reset"
+                data-testid="sharing-reset-btn"
             >
                 <RotateCcw size={18} />
             </button>
@@ -482,7 +494,7 @@
                 type="button"
                 class="inline-flex items-center gap-1.5 rounded-lg border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-800 dark:text-red-200 dark:hover:bg-red-900/40"
                 data-testid="sharing-retry-load-btn"
-                on:click={loadAccesses}
+                onclick={loadAccesses}
             >
                 <RotateCcw size={14} />
                 {$_('common.retry')}
@@ -502,16 +514,16 @@
             <div class="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none" style="z-index: 1;">
                 <div class="text-center">
                     <div class="text-xs text-gray-500 dark:text-gray-400">
-                        {$_('brokers.sharing.allocated')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{totalAllocatedPercent.toFixed(1)}%</span>
+                        {$_('brokers.sharing.allocated')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{formatPercent(totalAllocatedPercent, {signed: false, digits: 1})}</span>
                     </div>
                     <div class="text-xs text-gray-500 dark:text-gray-400">
-                        {$_('brokers.sharing.available')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{availablePercent.toFixed(1)}%</span>
+                        {$_('brokers.sharing.available')}: <span class="font-semibold text-gray-700 dark:text-gray-200">{formatPercent(availablePercent, {signed: false, digits: 1})}</span>
                     </div>
                     {#if canEditAccess}
                         <button
                             type="button"
                             class="mt-1 pointer-events-auto inline-flex items-center justify-center w-7 h-7 rounded-full bg-libre-green text-white hover:bg-libre-green/90 transition-colors shadow-sm"
-                            on:click={() => {
+                            onclick={() => {
                                 showAddModal = true;
                                 selectedUserId = null;
                                 newRole = 'VIEWER';
@@ -544,7 +556,7 @@
                             class="flex items-center gap-2 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/30'}"
                             data-testid="access-entry-{entry.user_id}"
                             disabled={!canEditAccess}
-                            on:click={() => startEdit(entry)}
+                            onclick={() => startEdit(entry)}
                         >
                             <span class="w-6 h-6 rounded-full overflow-hidden shrink-0 inline-block">
                                 {#if entry.avatar_url}
@@ -558,7 +570,7 @@
                             <div class="min-w-0">
                                 <div class="text-amber-800 dark:text-amber-200 font-medium truncate">{entry.username}</div>
                                 <div class="text-[10px] text-amber-600 dark:text-amber-400">
-                                    {getRoleShortLabel(entry.role)} · {(Math.round(entry.share_percentage * 10000) / 100).toFixed(1)}%
+                                    {getRoleShortLabel(entry.role)} · {formatPercent(Math.round(entry.share_percentage * 10000) / 100, {signed: false, digits: 1})}
                                 </div>
                             </div>
                         </button>
@@ -580,7 +592,7 @@
                             class="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30'}"
                             data-testid="access-entry-{entry.user_id}"
                             disabled={!canEditAccess}
-                            on:click={() => startEdit(entry)}
+                            onclick={() => startEdit(entry)}
                         >
                             <span class="w-6 h-6 rounded-full overflow-hidden shrink-0 inline-block">
                                 {#if entry.avatar_url}
@@ -594,7 +606,7 @@
                             <div class="min-w-0">
                                 <div class="text-blue-800 dark:text-blue-200 font-medium truncate">{entry.username}</div>
                                 <div class="text-[10px] text-blue-600 dark:text-blue-400">
-                                    {getRoleShortLabel(entry.role)} · {(Math.round(entry.share_percentage * 10000) / 100).toFixed(1)}%
+                                    {getRoleShortLabel(entry.role)} · {formatPercent(Math.round(entry.share_percentage * 10000) / 100, {signed: false, digits: 1})}
                                 </div>
                             </div>
                         </button>
@@ -616,7 +628,7 @@
                             class="flex items-center gap-2 px-3 py-1.5 bg-gray-50 dark:bg-slate-700/50 border border-gray-200 dark:border-slate-600 rounded-xl text-sm transition-colors w-fit {readOnly ? 'cursor-default' : 'cursor-pointer hover:bg-gray-100 dark:hover:bg-slate-700'}"
                             data-testid="access-entry-{entry.user_id}"
                             disabled={!canEditAccess}
-                            on:click={() => startEdit(entry)}
+                            onclick={() => startEdit(entry)}
                         >
                             <span class="w-6 h-6 rounded-full overflow-hidden shrink-0 inline-block">
                                 {#if entry.avatar_url}
@@ -630,7 +642,7 @@
                             <div class="min-w-0">
                                 <div class="text-gray-700 dark:text-gray-300 font-medium truncate">{entry.username}</div>
                                 <div class="text-[10px] text-gray-500 dark:text-gray-400">
-                                    {getRoleShortLabel(entry.role)} · {(Math.round(entry.share_percentage * 10000) / 100).toFixed(1)}%
+                                    {getRoleShortLabel(entry.role)} · {formatPercent(Math.round(entry.share_percentage * 10000) / 100, {signed: false, digits: 1})}
                                 </div>
                             </div>
                         </button>
@@ -651,7 +663,7 @@
                             type="button"
                             class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-300 dark:border-slate-500 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 transition-colors disabled:opacity-50"
                             disabled={selfActionBusy}
-                            on:click={() => (confirmDemoteOpen = true)}
+                            onclick={() => (confirmDemoteOpen = true)}
                             data-testid="sharing-self-demote-btn"
                         >
                             <Eye size={13} />
@@ -664,7 +676,7 @@
                             ? 'border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
                             : 'border-gray-300 dark:border-slate-500 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600'}"
                         disabled={selfActionBusy}
-                        on:click={() => (confirmLeaveOpen = true)}
+                        onclick={() => (confirmLeaveOpen = true)}
                         data-testid="sharing-self-leave-btn"
                     >
                         <Trash2 size={13} />
@@ -678,7 +690,7 @@
         {#if !readOnly}
             <div class="flex items-center justify-end gap-3 pt-2 border-t border-gray-100 dark:border-slate-700">
                 {#if onCancel}
-                    <button class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" on:click={onCancel} type="button">
+                    <button class="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" onclick={onCancel} type="button">
                         {$_('common.cancel')}
                     </button>
                 {/if}
@@ -686,7 +698,7 @@
                     class="flex items-center gap-2 px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     data-testid="sharing-save-btn"
                     disabled={!hasChanges || saving || accessLoadState !== 'ready'}
-                    on:click={handleSave}
+                    onclick={handleSave}
                     type="button"
                 >
                     {#if saving}
@@ -737,7 +749,7 @@
                 </h3>
                 <button
                     class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors"
-                    on:click={() => {
+                    onclick={() => {
                         showAddModal = false;
                         selectedUserId = null;
                     }}
@@ -767,11 +779,12 @@
                         <div class="relative">
                             <button
                                 class="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600"
-                                on:click={() => (showRoleDropdown = !showRoleDropdown)}
+                                onclick={() => (showRoleDropdown = !showRoleDropdown)}
                                 type="button"
+                                data-testid="sharing-add-role-trigger"
                             >
                                 <span class={getRoleIconColor(newRole)}>
-                                    <svelte:component this={getRoleIcon(newRole)} size={14} />
+                                    <NewRoleIcon size={14} />
                                 </span>
                                 {getRoleShortLabel(newRole)}
                                 <ChevronDown size={12} />
@@ -779,17 +792,19 @@
                             {#if showRoleDropdown}
                                 <div class="absolute z-10 bottom-full mb-1 left-0 min-w-full w-max bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
                                     {#each roleOptions as opt}
+                                        {@const OptionIcon = getRoleIcon(opt.value)}
                                         <button
                                             type="button"
                                             class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 whitespace-nowrap"
-                                            on:click={() => {
+                                            data-testid="sharing-add-role-option-{opt.value}"
+                                            onclick={() => {
                                                 newRole = opt.value;
                                                 showRoleDropdown = false;
                                                 if (opt.value !== 'OWNER') newSharePercent = 0;
                                             }}
                                         >
                                             <span class={getRoleIconColor(opt.value)}>
-                                                <svelte:component this={getRoleIcon(opt.value)} size={14} />
+                                                <OptionIcon size={14} />
                                             </span>
                                             {opt.shortLabel}
                                         </button>
@@ -810,12 +825,12 @@
                                     max={maxNewShare}
                                     step="0.1"
                                     bind:value={newSharePercent}
-                                    on:keydown={(e) => {
+                                    onkeydown={(e) => {
                                         if (e.key === 'Enter') handleAddUser();
                                     }}
                                     class="w-20 px-2 py-1.5 text-sm text-center border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
                                 />
-                                <span class="text-xs text-gray-500">% (max {maxNewShare.toFixed(1)}%)</span>
+                                <span class="text-xs text-gray-500">% (max {formatPercent(maxNewShare, {signed: false, digits: 1})})</span>
                             </div>
                         </div>
                     {/if}
@@ -826,7 +841,7 @@
             <div class="flex items-center justify-end gap-2 p-4 border-t border-gray-200 dark:border-slate-700 shrink-0">
                 <button
                     class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors"
-                    on:click={() => {
+                    onclick={() => {
                         showAddModal = false;
                         selectedUserId = null;
                     }}
@@ -838,7 +853,7 @@
                     class="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     data-testid="sharing-confirm-add"
                     disabled={!selectedUser}
-                    on:click={handleAddUser}
+                    onclick={handleAddUser}
                     type="button"
                 >
                     <Plus size={16} />
@@ -859,7 +874,7 @@
                         <Pencil size={18} class="text-libre-green" />
                         {$_('common.edit')}: {editEntry.username}
                     </h3>
-                    <button type="button" on:click={cancelEdit} class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors">
+                    <button type="button" onclick={cancelEdit} class="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg transition-colors">
                         <X size={18} />
                     </button>
                 </div>
@@ -890,10 +905,11 @@
                             <button
                                 type="button"
                                 class="flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-600"
-                                on:click={() => (showEditRoleDropdown = !showEditRoleDropdown)}
+                                onclick={() => (showEditRoleDropdown = !showEditRoleDropdown)}
+                                data-testid="sharing-edit-role-trigger"
                             >
                                 <span class={getRoleIconColor(editRole)}>
-                                    <svelte:component this={getRoleIcon(editRole)} size={14} />
+                                    <EditRoleIcon size={14} />
                                 </span>
                                 {getRoleShortLabel(editRole)}
                                 <ChevronDown size={12} />
@@ -901,10 +917,12 @@
                             {#if showEditRoleDropdown}
                                 <div class="absolute z-10 bottom-full mb-1 left-0 min-w-full w-max bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg shadow-lg py-1">
                                     {#each roleOptions as opt}
+                                        {@const OptionIcon = getRoleIcon(opt.value)}
                                         <button
                                             type="button"
                                             class="w-full flex items-center gap-2 text-left px-3 py-2 text-xs hover:bg-gray-100 dark:hover:bg-slate-600 text-gray-700 dark:text-gray-200 whitespace-nowrap"
-                                            on:click={() => {
+                                            data-testid="sharing-edit-role-option-{opt.value}"
+                                            onclick={() => {
                                                 editError = null;
                                                 editErrorKey = null;
                                                 editRole = opt.value;
@@ -913,7 +931,7 @@
                                             }}
                                         >
                                             <span class={getRoleIconColor(opt.value)}>
-                                                <svelte:component this={getRoleIcon(opt.value)} size={14} />
+                                                <OptionIcon size={14} />
                                             </span>
                                             {opt.shortLabel}
                                         </button>
@@ -932,7 +950,7 @@
                                     max="100"
                                     step="0.1"
                                     bind:value={editSharePercent}
-                                    on:keydown={(e) => {
+                                    onkeydown={(e) => {
                                         if (e.key === 'Enter') saveEdit();
                                     }}
                                     class="w-16 px-2 py-1.5 text-sm text-center border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-700 dark:text-gray-200"
@@ -947,7 +965,7 @@
                 <div class="flex items-center justify-between p-4 border-t border-gray-200 dark:border-slate-700 shrink-0">
                     <button
                         type="button"
-                        on:click={() => {
+                        onclick={() => {
                             const entry = editEntry;
                             cancelEdit();
                             if (entry) requestRemove(entry);
@@ -958,10 +976,10 @@
                         {$_('brokers.sharing.remove')}
                     </button>
                     <div class="flex items-center gap-2">
-                        <button type="button" on:click={cancelEdit} class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors">
+                        <button type="button" onclick={cancelEdit} class="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-600 rounded-lg transition-colors">
                             {$_('common.cancel')}
                         </button>
-                        <button type="button" on:click={saveEdit} class="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" data-testid="sharing-confirm-edit">
+                        <button type="button" onclick={saveEdit} class="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors" data-testid="sharing-confirm-edit">
                             <Check size={16} />
                             {$_('common.confirm')}
                         </button>

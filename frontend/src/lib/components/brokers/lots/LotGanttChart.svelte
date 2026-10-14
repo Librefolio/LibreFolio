@@ -5,7 +5,6 @@
     import {z} from 'zod';
     import {schemas} from '$lib/api';
     import {_ as t} from '$lib/i18n';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {buildDataZoom} from '$lib/components/charts/chartCoreHelpers';
     import {attachDataZoomSync, type DataZoomSyncHandle} from '$lib/components/charts/echartsDataZoomSync';
@@ -18,9 +17,10 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {formatAxisDate, parseDisplayDate} from '$lib/utils/core/formatAxisDate';
+    import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
-    import {resolveBrokerName, withAlpha} from './lotChartShared';
+    import {isUnknownOrNonZero, resolveBrokerName, withAlpha} from './lotChartShared';
     import {
         applySharedZoomWindow as sharedApplyZoomWindow,
         branchDepthForLaneKey,
@@ -44,6 +44,10 @@
         thicknessForQuantity,
         type EventMarkerKind,
     } from './lotGanttChartHelpers';
+    import {maskableQuantity} from '$lib/utils/privacy/maskable';
+    import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
+    import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type GanttSegmentSchema = z.infer<typeof schemas.GanttSegmentSchema>;
@@ -94,7 +98,8 @@
         sourceBrokerId: number | null;
         destinationBrokerId: number | null;
         quantity: number;
-        unitPrice: number;
+        /** `null` when the price has no rate to the target currency (shown as «—»). */
+        unitPrice: number | null;
         startDate: string;
         endDate: string | null;
         startMs: number;
@@ -195,11 +200,28 @@
     let axisContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
     let axisInstance: echarts.ECharts | undefined = undefined;
+    // Up only while axisInstance holds a full option (the LineChart guard). init() and clear() leave a model
+    // without a grid, and the lazy x-axis patch merged into it throws on `axisBuilder` in ECharts' next frame.
+    // Only the sticky axis is patched on resize, so the lanes instance needs no flag.
+    let axisOptionSet = false;
+    let responsiveXAxisCompact = false;
     const resizeWatcher = createResizeWatcher(() => {
         syncAxisViewport();
         chartInstance?.resize();
     });
-    const axisResizeWatcher = createResizeWatcher(() => axisInstance?.resize());
+    const axisResizeWatcher = createResizeWatcher(() => {
+        axisInstance?.resize();
+        if (axisInstance) {
+            const policy = buildLotXAxisPolicy();
+            const wasCompact = responsiveXAxisCompact;
+            responsiveXAxisCompact = policy.compact;
+            if (policy.axisLabel) {
+                if (axisOptionSet) axisInstance.setOption({xAxis: {splitNumber: policy.splitNumber, axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+            } else if (wasCompact) {
+                if (axisOptionSet) axisInstance.setOption(buildAxisOption(isDark), true);
+            }
+        }
+    });
     let darkModeObserver: MutationObserver | null = null;
     let tooltipCleanup: (() => void) | null = null;
     let activeTooltipDataIndex: number | null = null;
@@ -234,7 +256,7 @@
     function formatDate(value: string, opts: Intl.DateTimeFormatOptions): string {
         const date = parseDisplayDate(value);
         if (!date) return value;
-        return date.toLocaleDateString($currentLanguage || undefined, opts);
+        return date.toLocaleDateString(uiLocale(), opts);
     }
 
     function formatDateShort(value: string): string {
@@ -258,8 +280,7 @@
     function formatSignedPercentField(value: unknown): string {
         const parsed = parseUnknownNumber(value);
         if (parsed == null) return '—';
-        const sign = parsed > 0 ? '+' : '';
-        return `${sign}${(parsed * 100).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}%`;
+        return formatPercent(parsed, {scale: 100});
     }
 
     function lotLabel(openingDate: string): string {
@@ -308,7 +329,7 @@
         }
 
         const brokerText = brokerName(meta.brokerId);
-        const qtyText = formatQuantity(meta.quantity);
+        const qtyText = maskableQuantity(formatQuantity(meta.quantity));
         const variants = [`${lotWordText()} ${dateText} · ${brokerText} · ${qtyText}`, `${dateText} · ${brokerText} · ${qtyText}`, `${dateText} · ${brokerText}`, dateText];
         for (const variant of variants) {
             if (estimateTextWidthPx(variant) <= availableWidthPx) return variant;
@@ -408,7 +429,7 @@
                 sourceBrokerId: safeNumber(segment.source_broker_id),
                 destinationBrokerId: safeNumber(segment.destination_broker_id),
                 quantity: Math.max(0, parseNumber(segment.quantity)),
-                unitPrice: parseNumber(segment.unit_price),
+                unitPrice: parseUnknownNumber(segment.unit_price),
                 startDate,
                 endDate,
                 startMs,
@@ -677,7 +698,9 @@
         const valueField = isClosedLot ? lotDto?.original_cost : currentValue;
         const valueLabel = isClosedLot ? translateOr($t, 'brokers.lots.tooltip.initialValue', 'Initial value') : translateOr($t, 'brokers.lots.currentValue', 'Current value');
         const assetIncome = parseUnknownNumber(lotDto?.asset_income);
-        const quantityLine = isClosedLot ? `${formatQuantity(originalQuantity)} → 0 ${translateOr($t, 'brokers.lots.tooltip.shares', 'shares')}` : `${formatQuantity(openQuantity)} ${translateOr($t, 'brokers.lots.tooltip.sharesOpenOutOf', 'shares open out of')} ${formatQuantity(originalQuantity)}`;
+        const quantityLine = isClosedLot
+            ? `${maskableQuantity(formatQuantity(originalQuantity))} → 0 ${translateOr($t, 'brokers.lots.tooltip.shares', 'shares')}`
+            : `${maskableQuantity(formatQuantity(openQuantity))} ${translateOr($t, 'brokers.lots.tooltip.sharesOpenOutOf', 'shares open out of')} ${maskableQuantity(formatQuantity(originalQuantity))}`;
         const closeDate = isClosedLot ? (latestLotEndDate(meta.lotId) ?? meta.endDate) : null;
         const footer = isClosedLot ? `${formatDateLong(openingDate)} → ${closeDate ? formatDateLong(closeDate) : '…'}` : `${translateOr($t, 'brokers.lots.tooltip.since', 'Since')} ${formatDateLong(openingDate)}`;
         let html = buildTooltipHeader(escapeHtml(lotLabel(openingDate)), theme.textColor);
@@ -693,21 +716,24 @@
         } else {
             html += buildTooltipRow(escapeHtml(valueLabel), escapeHtml(formatMoneyField(valueField)));
         }
-        if (assetIncome != null && assetIncome !== 0) {
+        // An amount the API could not value (null) is shown as «—», never hidden as if it were zero.
+        if (lotDto != null && isUnknownOrNonZero(assetIncome)) {
             html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.assetIncome', 'Income')), signedColorField(assetIncome, formatSignedMoneyField, themeDark));
         }
-        html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.tooltip.totalPnl', 'Total P&L')), signedColorField(firstPresentUnknown(lotDto?.total_pnl, lotDto?.pnl), formatSignedMoneyField, themeDark));
+        html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.totalPnl', 'Total P&L')), signedColorField(lotDto?.total_pnl, formatSignedMoneyField, themeDark));
         html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.totalReturn', 'Total return')), signedColorField(lotDto?.total_return, formatSignedPercentField, themeDark));
         const allocatedFees = parseUnknownNumber(lotDto?.allocated_fees);
         const allocatedTaxes = parseUnknownNumber(lotDto?.allocated_taxes);
-        const hasCosts = (allocatedFees != null && allocatedFees !== 0) || (allocatedTaxes != null && allocatedTaxes !== 0);
-        if (hasCosts) {
+        const showFees = lotDto != null && isUnknownOrNonZero(allocatedFees);
+        const showTaxes = lotDto != null && isUnknownOrNonZero(allocatedTaxes);
+        if (showFees || showTaxes) {
             const costColor = themeDark ? '#f87171' : '#dc2626';
-            if (allocatedFees != null && allocatedFees !== 0) {
-                html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.allocatedFees', 'Fees')), `<span style="color:${costColor}">\u2212${escapeHtml(formatMoneyField(allocatedFees))}</span>`);
+            const costField = (amount: number | null): string => (amount == null ? escapeHtml('\u2014') : `<span style="color:${costColor}">\u2212${escapeHtml(formatMoneyField(amount))}</span>`);
+            if (showFees) {
+                html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.allocatedFees', 'Fees')), costField(allocatedFees));
             }
-            if (allocatedTaxes != null && allocatedTaxes !== 0) {
-                html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.allocatedTaxes', 'Taxes')), `<span style="color:${costColor}">\u2212${escapeHtml(formatMoneyField(allocatedTaxes))}</span>`);
+            if (showTaxes) {
+                html += buildTooltipRow(escapeHtml(translateOr($t, 'brokers.lots.allocatedTaxes', 'Taxes')), costField(allocatedTaxes));
             }
             const netUnavailable = safeUnknownString(lotDto?.net_metrics_status) === 'UNAVAILABLE';
             const netValue = netUnavailable ? escapeHtml('\u2014') : signedColorField(lotDto?.net_total_pnl, formatSignedMoneyField, themeDark);
@@ -999,7 +1025,7 @@
                     show: false,
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatAxisDate($currentLanguage, value),
+                    formatter: (value: number) => formatAxisDate(uiLocale(), value),
                 },
             },
             yAxis: {
@@ -1041,7 +1067,8 @@
         const gridColors = buildGridColors(themeDark);
         const minMs = axisRangeMs?.minMs ?? Date.now() - DAY_MS;
         const maxMs = axisRangeMs?.maxMs ?? Date.now();
-        const multiYearAxis = new Date(xAxisRange?.min ?? minMs).getFullYear() !== new Date(xAxisRange?.max ?? maxMs).getFullYear();
+        const xAxisPolicy = buildLotXAxisPolicy({min: xAxisRange?.min ?? minMs, max: xAxisRange?.max ?? maxMs});
+        responsiveXAxisCompact = xAxisPolicy.compact;
         return {
             ...CHART_ANIMATION_CONFIG,
             grid: {
@@ -1055,13 +1082,15 @@
                 type: 'time',
                 min: xAxisRange?.min ?? minMs,
                 max: xAxisRange?.max ?? maxMs,
+                ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
                 axisLine: {lineStyle: {color: gridColors.gridColor}},
                 axisTick: {show: true, lineStyle: {color: gridColors.gridColor}},
                 splitLine: {show: false},
                 axisLabel: {
                     color: gridColors.textColor,
                     hideOverlap: true,
-                    formatter: (value: number) => formatAxisDate($currentLanguage, value, multiYearAxis),
+                    formatter: xAxisPolicy.formatter,
+                    ...(xAxisPolicy.axisLabel ?? {}),
                 },
             },
             yAxis: {
@@ -1076,6 +1105,16 @@
             series: [],
             dataZoom: ganttDataZoom(),
         };
+    }
+
+    function buildLotXAxisPolicy(range: {min: number | string; max: number | string} | null = xAxisRange): ReturnType<typeof buildResponsiveXAxisPolicy> {
+        return buildResponsiveXAxisPolicy({
+            width: axisContainer?.clientWidth ?? chartContainer?.clientWidth ?? 0,
+            values: range ? [range.min, range.max] : [],
+            locale: uiLocale(),
+            axisType: 'time',
+            horizontalPadding: GRID_LEFT_PX + GRID_RIGHT_PX,
+        });
     }
 
     function setupResizeObserver() {
@@ -1197,6 +1236,7 @@
         if (!chartContainer) {
             chartInstance?.clear();
             axisInstance?.clear();
+            axisOptionSet = false;
             overlayRects = [];
             return;
         }
@@ -1221,6 +1261,7 @@
             axisDataZoomSyncHandle = null;
             axisInstance.dispose();
             axisInstance = undefined;
+            axisOptionSet = false;
         }
 
         if (!chartInstance) {
@@ -1242,6 +1283,7 @@
         }
         if (axisContainer && !axisInstance) {
             axisInstance = echarts.init(axisContainer, undefined, {renderer: 'canvas'});
+            axisOptionSet = false;
             axisDataZoomTouchPanHandle = attachDataZoomTouchPan(axisInstance, axisContainer);
             axisDataZoomSyncHandle = attachDataZoomSync(axisInstance, (start, end) => onZoomChange?.(start, end));
         }
@@ -1250,13 +1292,17 @@
         if (!chartHasData) {
             chartInstance.clear();
             axisInstance?.clear();
+            axisOptionSet = false;
             overlayRects = [];
             return;
         }
 
         syncAxisViewport();
         chartInstance.setOption(buildOption(isDark), CHART_SET_OPTION_OPTS);
-        axisInstance?.setOption(buildAxisOption(isDark), CHART_SET_OPTION_OPTS);
+        if (axisInstance) {
+            axisInstance.setOption(buildAxisOption(isDark), CHART_SET_OPTION_OPTS);
+            axisOptionSet = true;
+        }
         chartInstance.resize();
         axisInstance?.resize();
         refreshOverlayRects();
@@ -1361,7 +1407,11 @@
         void closedSelected;
         void axisContainer;
         void axisContentWidthPx;
-        void $currentLanguage;
+        void uiLocale();
+        // The bar labels carry the lot quantity, masked under privacy (D5′). ECharts builds them in
+        // renderItem, outside this effect, so the flag is not tracked there: read it here, or
+        // toggling privacy leaves the labels as they were.
+        void isPrivacyEnabled();
 
         tick().then(() => {
             renderChart();

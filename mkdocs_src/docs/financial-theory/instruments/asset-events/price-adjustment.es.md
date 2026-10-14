@@ -53,7 +53,7 @@ $$
 
 ## 📊 Cuándo usar Ajustes de Precio
 
-Use `PRICE_ADJUSTMENT` cuando:
+Usa `PRICE_ADJUSTMENT` cuando:
 
 - ✅ El valor razonable del activo cambie sin una transacción de mercado
 - ✅ Necesite registrar un ajuste a la baja o deterioro
@@ -87,6 +87,6 @@ $$
 
 ## 🔗 Relacionado
 
-- 📅 **[Descripción general de eventos de activos](index.md)** — Todos los tipos de eventos
+- 📅 **[Resumen de eventos de activos](index.md)** — Todos los tipos de eventos
 - 📈 **[Interés](interest.md)** — Pagos de intereses periódicos
 - 🏁 **[Liquidación al vencimiento](maturity-settlement.md)** — Retorno final de capital

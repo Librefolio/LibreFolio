@@ -6,7 +6,7 @@ The SMA is the most literal way to define a "trend": the unweighted average of t
 
 ## 💡 Financial Meaning
 
-Because every observation in the window counts equally, the SMA reacts to new data more slowly than an EMA of the same length, but it also has **zero phase distortion** relative to its window — it is not "biased" toward recent or old prices. Traders use SMA crossovers (e.g. 50/200-day "golden cross") as the textbook long-horizon trend signal.
+Because every observation in the window counts equally, the SMA reacts to new data more slowly than an EMA of the same length, but it also has **zero phase distortion** relative to its window — it is not "biased" toward recent or old prices. Traders use SMA crossovers (e.g. the 50/200-day "golden cross", where a "day" is a trading session) as the textbook long-horizon trend signal.
 
 ---
 
@@ -30,7 +30,7 @@ which shows the SMA is a **finite-memory** filter: the oldest sample is dropped 
 
 | Parameter | Key | Default | Description |
 |---|---|---|---|
-| Period ($N$) | `period` | 20 | Lookback window in days. Higher → smoother, slower. |
+| Period ($N$) | `period` | 20 | Lookback window in sessions. Higher → smoother, slower. |
 
 ---
 

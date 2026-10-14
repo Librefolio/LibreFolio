@@ -1,0 +1,14 @@
+{
+  "signals": {
+    "mfi": {
+      "name": "MFI",
+      "description": "Momentum ponderato per volume",
+      "output": "MFI",
+      "oversold": "Ipervenduto",
+      "overbought": "Ipercomprato",
+      "oversoldRegion": "Ipervenduto",
+      "neutralRegion": "Neutrale",
+      "overboughtRegion": "Ipercomprato"
+    }
+  }
+}

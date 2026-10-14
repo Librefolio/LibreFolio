@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from pydantic import Field, RootModel
+from typing import Literal
+
+from pydantic import Field, RootModel, model_validator
 
 from backend.app.schemas.common import StrictModel
+from backend.app.utils.runtime.network import ClientClass
 
 
 class DependencyInfo(StrictModel):
@@ -43,3 +46,26 @@ class HealthCheckResponse(StrictModel):
     """Health check response."""
 
     status: str = Field(..., description="Service status ('ok' when the service is healthy)")
+
+
+class ContainerImageStatusResponse(StrictModel):
+    """Availability of one normalized LibreFolio container image tag."""
+
+    status: Literal["published", "pending", "error"]
+    reason: Literal["image-auth-request-failed", "image-request-failed"] | None = None
+
+    @model_validator(mode="after")
+    def validate_reason(self) -> ContainerImageStatusResponse:
+        if (self.status == "error") != (self.reason is not None):
+            raise ValueError("reason must be set exactly when status is error")
+        return self
+
+
+class ConnectionSecurityResponse(StrictModel):
+    """How the server sees the current request, for the connection-security indicator."""
+
+    client_class: ClientClass = Field(
+        ...,
+        description="Class of the client address: the last X-Forwarded-For value when present, else the TCP peer. Advisory only; the address itself is never returned",
+    )
+    cookie_secure: bool = Field(..., description="Whether the session cookie set or cleared on this request carries the Secure attribute (SESSION_COOKIE_SECURE)")

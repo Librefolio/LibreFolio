@@ -34,6 +34,7 @@
      */
     import type {Snippet} from 'svelte';
     import {escapeHtml, renderInlineMath} from '$lib/utils/inlineMath';
+    import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {isOutsideClick} from '$lib/utils/core/clickOutside';
 
     interface Props {
@@ -51,10 +52,12 @@
         /** Delay before a plain-hover open (T2). Click/tap/keyboard always open
          *  instantly. Pass 0 to restore the pre-T2 instant hover. */
         showDelayMs?: number;
+        /** `data-testid` on the trigger wrapper, for tests that need to address this tooltip. */
+        testId?: string;
         children?: Snippet;
     }
 
-    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, showDelayMs = 500, children}: Props = $props();
+    let {text = '', html = '', math = false, position = 'top', maxWidth = '400px', wrapperClass = '', interactiveChild = false, showDelayMs = 500, testId = '', children}: Props = $props();
 
     let visible = $state(false);
     let tooltipElement: HTMLDivElement | undefined = $state(undefined);
@@ -99,11 +102,16 @@
     let listenersAttached = $state(false);
 
     /** Single pending-hide timer, shared by both the pinned grace period and
-     *  the plain-hover bridge delay — always cancelled on re-entry. */
-    let pendingHideTimer: ReturnType<typeof setTimeout> | null = $state(null);
+     *  the plain-hover bridge delay — always cancelled on re-entry.
+     *
+     *  The timer handles are plain variables, not `$state`: nothing renders
+     *  them, and a teardown reads `$state` as it was before its latest write
+     *  unless an effect flush has run since — the destroy cleanup below saw
+     *  `null` and left the pending timer running after the tooltip was gone. */
+    let pendingHideTimer: ReturnType<typeof setTimeout> | null = null;
     /** Pending hover-open timer (T2) — cancelled when the pointer leaves before
      *  the delay elapses, and by any explicit open/close path. */
-    let pendingShowTimer: ReturnType<typeof setTimeout> | null = $state(null);
+    let pendingShowTimer: ReturnType<typeof setTimeout> | null = null;
 
     function clearPendingHide() {
         if (pendingHideTimer) {
@@ -244,10 +252,16 @@
         }
     });
 
-    // Clear pending timers on destroy so a removed tooltip can't fire later.
+    // Cancel every pending callback on destroy so a removed tooltip can't fire
+    // later. The position frame too: destroyed before its first re-render, the
+    // tooltip never ran the listeners effect whose teardown cancels it.
     $effect(() => () => {
         clearPendingShow();
         clearPendingHide();
+        if (pendingPositionFrame !== null) {
+            cancelAnimationFrame(pendingPositionFrame);
+            pendingPositionFrame = null;
+        }
     });
 
     /**
@@ -374,6 +388,7 @@
     <div
         bind:this={triggerElement}
         class="tooltip-wrapper {wrapperClass}"
+        data-testid={testId || undefined}
         onclick={(e) => {
             if (!isTouchInteraction) toggle(e);
         }}
@@ -390,6 +405,7 @@
     <div
         bind:this={triggerElement}
         class="tooltip-wrapper {wrapperClass}"
+        data-testid={testId || undefined}
         onclick={(e) => {
             if (!isTouchInteraction) toggle(e);
         }}
@@ -420,7 +436,7 @@
         onmouseleave={handlePointerLeave}
     >
         {#if math || html}
-            {@html renderedContent}
+            {@html sanitizeHtml(renderedContent)}
         {:else}
             <span style="white-space: pre-line">{text}</span>
         {/if}

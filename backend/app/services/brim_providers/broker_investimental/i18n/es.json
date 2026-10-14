@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_investimental": {
+      "description": "Importa las transacciones ejecutadas definitivas de los registros CSV de actualización de órdenes de Investimental. Se omiten las cancelaciones, las solicitudes rechazadas y las órdenes no ejecutadas.",
+      "name": "Investimental"
+    }
+  }
+}

@@ -16,9 +16,13 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 from backend.app.db.models import TransactionType
-from backend.app.services.portfolio_engine import ClassifiedTransaction, DailyStateBuilder, DerivedViewsBuilder
-from backend.app.services.price_resolver import build_asset_price_series
-from backend.app.utils.financial.roi_utils import calculate_simple_roi_series
+from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
+from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction
+from backend.app.services.financial_math.price_marks import build_asset_price_series
+from backend.app.services.financial_math.returns import calculate_simple_roi_series
+from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
+from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 
 
 def _tx(*, id: int, type: str, dt: str, amount: str = "0", currency: str | None = "EUR", quantity: str = "0", asset_id: int | None = None, cost_basis_override: str | None = None, cost_basis_currency: str | None = None) -> MagicMock:
@@ -76,6 +80,8 @@ def _build_states(txs, ecfs, date_from, date_to):
         asset_classifications={},
         asset_types={},
         asset_currencies=asset_currencies,
+        average_costs=engine_average_costs(txs, asset_currencies=asset_currencies, target_currency="EUR", fx_rate_map={}, date_to=date_to),
+        native_cash=engine_native_cash(txs, target_currency="EUR", fx_rate_map={}, date_to=date_to),
         mark_series=_mark_series_from(txs, price_map, asset_currencies),
         target_currency="EUR",
         date_from=date_from,
@@ -92,7 +98,7 @@ class TestPerformanceInputsInKind:
         # NO cash. Plus a tiny 100 EUR cash deposit.
         adj = _tx(id=1, type="ADJUSTMENT", dt="2025-01-01", quantity="100", asset_id=100, cost_basis_override="100", cost_basis_currency="EUR")
         dep = _tx(id=2, type="DEPOSIT", dt="2025-01-01", amount="100", currency="EUR")
-        states = _build_states([_ctxn(adj), _ctxn(dep)], [(date(2025, 1, 1), Decimal("100"), "EUR")], date(2025, 1, 1), date(2025, 1, 1))
+        states = _build_states([_ctxn(adj), _ctxn(dep)], [(date(2025, 1, 1), 10, Decimal("100"), "EUR")], date(2025, 1, 1), date(2025, 1, 1))
 
         _navs, cash_flows = DerivedViewsBuilder(states, "EUR").build_performance_inputs()
 
@@ -104,7 +110,7 @@ class TestPerformanceInputsInKind:
     def test_inkind_seed_does_not_explode_roi(self):
         adj = _tx(id=1, type="ADJUSTMENT", dt="2025-01-01", quantity="100", asset_id=100, cost_basis_override="100", cost_basis_currency="EUR")
         dep = _tx(id=2, type="DEPOSIT", dt="2025-01-01", amount="100", currency="EUR")
-        states = _build_states([_ctxn(adj), _ctxn(dep)], [(date(2025, 1, 1), Decimal("100"), "EUR")], date(2025, 1, 1), date(2025, 1, 1))
+        states = _build_states([_ctxn(adj), _ctxn(dep)], [(date(2025, 1, 1), 10, Decimal("100"), "EUR")], date(2025, 1, 1), date(2025, 1, 1))
 
         navs, cash_flows = DerivedViewsBuilder(states, "EUR").build_performance_inputs()
         roi_series = calculate_simple_roi_series(navs, cash_flows)
@@ -129,13 +135,15 @@ class TestPerformanceInputsInKind:
         builder = DailyStateBuilder(
             classified_txs=classified,
             in_transit_intervals=[],
-            external_cash_flows=[(date(2025, 1, 1), Decimal("10000"), "EUR")],
+            external_cash_flows=[(date(2025, 1, 1), 10, Decimal("10000"), "EUR")],
             price_map=price_map,
             quote_base_map={},
             fx_rate_map={},
             asset_classifications={},
             asset_types={},
             asset_currencies=asset_currencies,
+            average_costs=engine_average_costs(classified, asset_currencies=asset_currencies, target_currency="EUR", fx_rate_map={}, split_linked_tx_ids={3}, date_to=date(2025, 1, 1)),
+            native_cash=engine_native_cash(classified, target_currency="EUR", fx_rate_map={}, date_to=date(2025, 1, 1)),
             mark_series=_mark_series_from(classified, price_map, asset_currencies, split_linked_tx_ids={3}),
             target_currency="EUR",
             date_from=date(2025, 1, 1),

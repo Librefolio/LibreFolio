@@ -80,7 +80,7 @@ i18n keys + balance walk tests (8/8 pass) + FormModal context-aware validate + D
 
 | Role | Path |
 |------|------|
-| MockFX providers | `backend/app/services/fx_providers/mockfx.py` |
+| MockFX providers | `backend/app/services/fx_providers/mockfx/plugin.py` |
 | FX API (filter MOCKFX) | `backend/app/api/v1/fx.py` |
 | Asset source (auto-populate removed) | `backend/app/services/asset_source.py` |
 | DistributionEditor | `frontend/src/lib/components/ui/input/DistributionEditor.svelte` |

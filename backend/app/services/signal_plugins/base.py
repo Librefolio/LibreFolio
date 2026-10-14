@@ -77,6 +77,13 @@ class SignalPlugin(ABC):
     compatible_domains: ClassVar[tuple[SignalDomain, ...]]
     annotation_capabilities: ClassVar[tuple[str, ...]] = ()
     ai_export_temporal_rules: ClassVar[tuple[SignalAiExportTemporalRule, ...]] = ()
+    catalog_visible: ClassVar[bool] = True
+    allows_sparse_output_dates: ClassVar[bool] = False
+    allows_sparse_input_dates: ClassVar[bool] = False
+    # Indicators count sessions (developer's decision of 30/09/2026): the service hands the plugin only
+    # the quote days of its input, so SMA 200 means 200 sessions. False for a plugin whose windows are
+    # calendar spans by definition, and for the prepared-series plugins, already on the quote calendar.
+    computes_on_quote_days: ClassVar[bool] = True
 
     @classmethod
     def validate_params(cls, params: Mapping[str, object] | BaseModel) -> BaseModel:

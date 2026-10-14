@@ -1,6 +1,6 @@
 # 📊 OBV — Volumen en Balance (On-Balance Volume)
 
-El OBV construye un único total acumulado que suma el volumen total de un día cuando el precio cierra al alza, y lo resta cuando el precio cierra a la baja. Es la forma más antigua y sencilla de incorporar la actividad de negociación en una señal direccional.
+El OBV construye un único total acumulado que suma el volumen total de una sesión cuando el precio cierra al alza, y lo resta cuando el precio cierra a la baja. Es la forma más antigua y sencilla de incorporar la actividad de negociación en una señal direccional.
 
 ---
 
@@ -34,7 +34,7 @@ El OBV **no requiere parámetros**. No tiene `period`, umbral ni configuración 
     Matemáticamente, el OBV es una suma acumulativa que comienza desde el inicio
     del historial de un activo, por lo que su nivel absoluto no tiene un significado
     intrínseco. LibreFolio reescala la serie del OBV mostrada para que comience en
-    cero al **inicio del rango del gráfico solicitado actualmente**, de modo que lo
+    cero en la **primera sesión del rango del gráfico solicitado actualmente**, de modo que lo
     que se lee en pantalla es siempre el "volumen firmado neto acumulado desde el
     borde izquierdo del gráfico" — comparable independientemente de cuán atrás
     lleguen los datos subyacentes.
@@ -47,12 +47,12 @@ El OBV es un **integrador** en tiempo discreto (un acumulador, el equivalente di
 
 ```mermaid
 flowchart LR
- C["💹 Cierre"] --> SGN["➕➖0️⃣ signo(ΔCierre)"]
- V["📦 Volumen"] --> MUL["✖️ volumen con signo"]
- SGN --> MUL
- MUL --> ACC["🔁 Suma acumulativa (integrador)"]
- ACC --> OBV["📊 OBV(t)"]
- ACC -.->|"realimentación"| ACC
+    C["💹 Cierre"] --> SGN["➕➖0️⃣ signo(ΔCierre)"]
+    V["📦 Volumen"] --> MUL["✖️ volumen con signo"]
+    SGN --> MUL
+    MUL --> ACC["🔁 Suma acumulativa (integrador)"]
+    ACC --> OBV["📊 OBV(t)"]
+    ACC -.->|"realimentación"| ACC
 ```
 
 :material-link: [Volumen en balance en Wikipedia](https://en.wikipedia.org/wiki/On-balance_volume){ target="_blank" }

@@ -10,12 +10,23 @@ from __future__ import annotations
 import csv
 import io
 import mimetypes
+import struct
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
+from xml.etree.ElementTree import ParseError as XMLParseError
 
 import pandas as pd
 from PIL import Image
+
+try:  # xlrd reads .xls; without it an .xls preview is an UnsupportedPreviewError
+    from xlrd import XLRDError
+    from xlrd.compdoc import CompDocError
+
+    _XLRD_READ_ERRORS: tuple[type[Exception], ...] = (XLRDError, CompDocError)
+except ImportError:  # pragma: no cover - xlrd is optional
+    _XLRD_READ_ERRORS = ()
 
 from backend.app.schemas.uploads import FilePreviewResponse, FilePreviewType
 
@@ -52,6 +63,16 @@ TEXT_MIME_TYPES = {
 
 class UnsupportedPreviewError(ValueError):
     """Raised when a file does not support inline preview."""
+
+
+class UnreadablePreviewError(ValueError):
+    """Raised when a file of a previewable format cannot be read: damaged, truncated or mislabelled."""
+
+
+# What a damaged workbook raises through pandas: openpyxl (.xlsx) fails on the zip or
+# on its XML, xlrd (.xls) on its records. Caught only around the two pandas calls.
+_UNREADABLE_WORKBOOK_ERRORS: tuple[type[Exception], ...] = (zipfile.BadZipFile, KeyError, XMLParseError, IndexError, struct.error, *_XLRD_READ_ERRORS)
+_UNREADABLE_WORKBOOK_MESSAGE = "This file cannot be read as an Excel workbook: it is damaged, truncated or not really an Excel file"
 
 
 @dataclass(frozen=True)
@@ -215,6 +236,8 @@ def _read_excel_preview(file_path: Path, *, sheet_name: Optional[str] = None) ->
         excel_file = pd.ExcelFile(file_path, engine=engine)
     except ImportError as e:
         raise UnsupportedPreviewError(_excel_engine_error_message(ext)) from e
+    except _UNREADABLE_WORKBOOK_ERRORS as e:
+        raise UnreadablePreviewError(_UNREADABLE_WORKBOOK_MESSAGE) from e
 
     sheet_names = [str(name) for name in excel_file.sheet_names]
     active_sheet_name = sheet_name or (sheet_names[0] if sheet_names else None)
@@ -234,6 +257,8 @@ def _read_excel_preview(file_path: Path, *, sheet_name: Optional[str] = None) ->
         )
     except ImportError as e:
         raise UnsupportedPreviewError(_excel_engine_error_message(ext)) from e
+    except _UNREADABLE_WORKBOOK_ERRORS as e:
+        raise UnreadablePreviewError(_UNREADABLE_WORKBOOK_MESSAGE) from e
 
     rows = _dataframe_to_rows(dataframe)
     total_rows = len(rows)

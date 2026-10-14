@@ -42,6 +42,9 @@ backend/test_scripts/
 # With verbose output
 ./dev.py test --verbose api all
 
+# Dedicated lane for a concurrent worktree
+./dev.py test --test-port 6151 --data-dir /tmp/librefolio-r2-b api all
+
 # Filter external providers (useful when a service is down)
 ./dev.py test --exclude-providers yfinance external asset-providers 
 ./dev.py test --exclude-providers yfinance all 
@@ -58,9 +61,21 @@ pipenv run pytest backend/test_scripts/test_api/test_transactions_api.py::test_g
 API tests use `_TestingServerManager` from `test_server_helper.py`:
 
 1. **Server as thread**: uvicorn runs in a thread within pytest process → enables `pytest-cov` coverage tracking
-2. **Test port**: `TEST_PORT` (default 6041)
-3. **Isolated test DB**: `backend/data/test/sqlite/app.db`
+2. **Test port**: `TEST_PORT` (default 6041; set by `--test-port`)
+3. **Isolated test DB**: `backend/data/test/sqlite/app.db` by default, or
+   `<--data-dir>/sqlite/app.db`
 4. **HTTP Client**: `httpx.AsyncClient`
+
+Each active worktree needs its own port and data directory. The runner exports
+both to every child process. Tests inside one lane still share that backend and
+database, so unique ids, cleanup and ownership rules remain unchanged. An
+occupied lane is rejected; the runner never reuses or force-kills an
+unidentified listener.
+
+In an app-managed worktree, select the shared locked environment with
+`PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py ...`.
+Plain `pipenv run` may create an empty venv because the worktree has a different
+filesystem path.
 
 ### Pattern for an API test
 
@@ -84,15 +99,16 @@ async def create_user_and_login(client: httpx.AsyncClient) -> None:
     await client.post(f"{API_BASE}/auth/login",
         json={"username": username, "password": "TestPass123!"}, timeout=TIMEOUT)
 
+@pytest.fixture(scope="module")
+def test_server():
+    with _TestingServerManager() as server_manager:
+        if not server_manager.start_server():
+            pytest.fail("Failed to start test server")
+        yield server_manager
+
 @pytest.mark.asyncio
 class TestFeatureX:
-    @pytest.fixture(autouse=True)
-    def server(self):
-        mgr = _TestingServerManager()
-        mgr.ensure_started()
-        yield
-
-    async def test_create_something(self):
+    async def test_create_something(self, test_server):
         print_section("Create Something")
         async with httpx.AsyncClient() as client:
             await create_user_and_login(client)
@@ -343,7 +359,7 @@ statement (37336 / 3224 / 91.36 %), 38 min 52 s → 31 min 03 s. The parallel pa
 by the serial WRITE-GLOBAL remainder, not by the balancing.
 
 Compare coverage **per file**, not on the total: the two live-network provider modules
-(`asset_source.py`, `borsa_italiana.py`) vary by a handful of statements between runs depending on
+(`asset_source.py`, `borsa_italiana/plugin.py`) vary by a handful of statements between runs depending on
 what the remote site returns, so the total carries ~0.01 % of noise that would otherwise be
 indistinguishable from lost data. Every other module is reproducible exactly.
 
@@ -389,4 +405,3 @@ For a new **category** (not just a new test), create `_backend_{name}.py` with `
 | `add_test(cat, action, func, ...)` | `_common.py` | Registers a named test in a category dict |
 | `make_category(help, desc)` | `_common.py` | Creates `_meta` entry for a new category |
 | `_run_test_suite(tests, ...)` | `_common.py` | Runs tests sequentially with pass/fail summary |
-

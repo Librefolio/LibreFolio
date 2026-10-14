@@ -1,7 +1,7 @@
 # ![](../../../static/icons/transactions/fx-conversion.png){: width="32" style="vertical-align: middle;" } Conversion de devise
 
 <div class="screenshot-container">
-    <img class="gallery-img" data-category="transactions" data-name="form-modal-fxconversion" alt="Transaction Form — FX Conversion">
+    <img class="gallery-img" data-category="transactions" data-name="form-modal-fxconversion" alt="Formulaire de transaction — Conversion FX">
 </div>
 
 **Les conversions de devise** permettent d'échanger une devise contre une autre au sein du **même compte de courtier**. Le solde d'une devise diminue tandis que celui d'une autre augmente — aucun titre ni courtier ne change.
@@ -31,7 +31,7 @@ $$
 
 Les conversions de devise peuvent être :
 
-- **Explicites** : L'utilisateur convertit délibérément des devises (ex: EUR → USD avant d'acheter des actions américaines)
+- **Explicites** : L'utilisateur convertit délibérément des devises (ex. : EUR → USD avant d'acheter des actions américaines)
 - **Implicites** : Le courtier convertit automatiquement lors de l'achat d'un actif libellé dans une devise étrangère
 
 !!! info "FX Implicite et Frais"
@@ -74,8 +74,8 @@ En interne, une conversion de devise est composée d'un Retrait (devise source) 
 
 | Opération | Résultat |
 |-----------|--------|
-| **Division** (délier) | Conversion de devise → Retrait + Dépôt indépendants |
-| **Promote** (lier) | Retrait + Dépôt → Conversion de devise |
+| **Séparer la paire** (délier) | Conversion de devise → Retrait + Dépôt indépendants |
+| **Promouvoir** (lier) | Retrait + Dépôt → Conversion de devise |
 
 **Contraintes de promotion** : devises différentes, même courtier.
 

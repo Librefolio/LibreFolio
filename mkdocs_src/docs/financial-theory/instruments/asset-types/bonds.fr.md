@@ -13,7 +13,7 @@ Une **obligation** est un titre à revenu fixe représentant un prêt d'un inves
 | **Devise** | Libellée dans la devise d'émission |
 | **Coupons** | Taux fixe ou flottant, payés semestriellement ou annuellement |
 | **Échéance** | Date fixe à laquelle le principal est remboursé |
-| **Fournisseurs typiques** | Yahoo Finance, Scheduled Investment, Manuel |
+| **Fournisseurs typiques** | Yahoo Finance, Borsa Italiana, Scheduled Investment, ou prix saisis manuellement dans l'[éditeur de données](../../../user/assets/detail/data-editor.md) |
 
 ---
 

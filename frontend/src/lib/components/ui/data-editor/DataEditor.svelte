@@ -5,7 +5,8 @@
   - Row status tracking: original, edited, deleted, appended
   - DataTable: sorting, pagination, column filters, editable cells, row actions
   - Bulk operations: select multiple rows + mark as deleted
-  - Import CSV via DataImportModal
+  - Import CSV via DataImportModal: a line merges into the row of its date (and of its
+    `importMatchKeys` values, when given), otherwise it is appended
   - Add row (today's date)
   - Configurable columns via ColumnDef[]
   - Dirty row emission for save/preview
@@ -13,13 +14,14 @@
   Uses Svelte 5 runes ($state, $derived, $props, $effect).
 -->
 <script lang="ts">
+    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {tick} from 'svelte';
     import type {Snippet} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {todayIso} from '$lib/utils/dateOnly';
     import {Plus, Trash2, Undo2, Upload, Eye, EyeOff} from 'lucide-svelte';
     import type {ParsedRow} from './CsvEditor.svelte';
-    import type {ColumnDef, DataRow} from './DataEditorTypes';
+    import type {ColumnDef, DataRow, RowStatus} from './DataEditorTypes';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type {ColumnDef as DTColumnDef, RowAction as DTRowAction} from '$lib/components/table/types';
@@ -27,6 +29,7 @@
     import {CurrencySearchSelect} from '$lib/components/ui/select';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import ErasableNumberCell from './ErasableNumberCell.svelte';
+    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Props
@@ -49,9 +52,15 @@
          * Keys not present in ColumnDef are ignored.
          */
         defaultRowValues?: Record<string, unknown>;
+        /**
+         * Value keys an imported row must also match, besides its date, to merge into an
+         * existing row. Empty (default): one row per date, as prices and FX rates have.
+         * The events editor passes `['type']`: one date can hold a DIVIDEND and an INTEREST.
+         */
+        importMatchKeys?: string[];
     }
 
-    let {columns, rows = $bindable([]), readonly: isReadonly = false, importModal, onchange, defaultRowValues = {}}: Props = $props();
+    let {columns, rows = $bindable([]), readonly: isReadonly = false, importModal, onchange, defaultRowValues = {}, importMatchKeys = []}: Props = $props();
 
     // =========================================================================
     // State
@@ -95,7 +104,7 @@
     function weekday(dateStr: string): string {
         try {
             const d = new Date(dateStr + 'T00:00:00Z');
-            return d.toLocaleDateString('en-US', {weekday: 'short', timeZone: 'UTC'});
+            return d.toLocaleDateString(uiLocale(), {weekday: 'short', timeZone: 'UTC'});
         } catch {
             return '';
         }
@@ -131,11 +140,19 @@
     /** Set of all existing dates for duplicate prevention */
     let existingDates = $derived(new Set(rows.map((r) => r.date)));
 
+    /** Catalog keys of the status badges and of the status filter's options: one wording for both. */
+    const STATUS_LABEL_KEYS: Record<RowStatus, string> = {
+        original: 'dataEditor.status.original',
+        edited: 'dataEditor.status.edited',
+        deleted: 'dataEditor.status.deleted',
+        appended: 'dataEditor.status.appended',
+    };
+
     let dtColumns: DTColumnDef<DataRow>[] = $derived.by(() => {
         const cols: DTColumnDef<DataRow>[] = [
             {
                 id: 'date',
-                header: 'Date',
+                header: $t('common.date'),
                 type: 'date',
                 cell: (r) => {
                     // Editable date for appended rows
@@ -151,7 +168,7 @@
                                 label: '',
                                 compact: true,
                                 disabledDates: disabled,
-                                onchange: (newDate: string) => handleDateChange(r.date, newDate),
+                                onchange: (newDate: string) => handleDateChange(r.rowId, newDate),
                             },
                         };
                     }
@@ -160,7 +177,7 @@
                     if (stale > 0) {
                         return {
                             type: 'html',
-                            html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-gray-400 dark:text-gray-500 text-[10px]">${wd}</span> <span class="ml-1 text-[10px] text-amber-600 dark:text-amber-400" title="${stale} days stale">⚠️ ${stale}d</span></span>`,
+                            html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-gray-400 dark:text-gray-500 text-[10px]">${wd}</span> <span class="ml-1 text-[10px] text-amber-600 dark:text-amber-400" title="${escapeHtml($t('chart.tooltip.stale', {values: {days: stale}}))}">⚠️ ${stale}d</span></span>`,
                         };
                     }
                     return {
@@ -186,7 +203,7 @@
                         cell: (r) => {
                             if (r.readonly) {
                                 const val = r.values[col.key];
-                                const display = val != null ? Number(val).toLocaleString(undefined, {maximumFractionDigits: 4}) : '—';
+                                const display = val != null ? Number(val).toLocaleString(uiLocale(), {maximumFractionDigits: 4}) : '—';
                                 return {
                                     type: 'html',
                                     html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${display}</span>`,
@@ -232,7 +249,7 @@
                             if (r.readonly) {
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${r.values[col.key] ?? '—'}</span>`,
+                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
                                 };
                             }
                             return {
@@ -269,14 +286,14 @@
                                     const docsUrl = opt.docsPath ? `/mkdocs/${prefix}${opt.docsPath}/` : '';
                                     return {
                                         type: 'html',
-                                        html: `<span class="text-xs text-gray-600 dark:text-gray-400">${opt.emoji ? `<span class="cursor-help" title="${opt.tooltip}">${opt.emoji}</span> ` : ''}${docsUrl ? `<a href="${docsUrl}" target="_blank" rel="noopener noreferrer" class="hover:underline">${opt.label}</a>` : opt.label}${readonlyBadge}</span>`,
+                                        html: `<span class="text-xs text-gray-600 dark:text-gray-400">${opt.emoji ? `<span class="cursor-help" title="${escapeHtml(opt.tooltip ?? '')}">${opt.emoji}</span> ` : ''}${docsUrl ? `<a href="${escapeHtml(docsUrl)}" target="_blank" rel="noopener noreferrer" class="hover:underline">${opt.label}</a>` : opt.label}${readonlyBadge}</span>`,
                                         tooltip: tooltipMeta,
                                     };
                                 }
                                 const label = opt ? `${opt.emoji ? opt.emoji + ' ' : ''}${opt.label}` : String(r.values[col.key] ?? '—');
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${label}${readonlyBadge}</span>`,
+                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${escapeHtml(label)}${readonlyBadge}</span>`,
                                     tooltip: tooltipMeta,
                                 };
                             }
@@ -301,7 +318,7 @@
                             if (r.readonly) {
                                 return {
                                     type: 'html',
-                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${r.values[col.key] ?? '—'}</span>`,
+                                    html: `<span class="text-xs text-gray-600 dark:text-gray-400">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
                                 };
                             }
                             return {
@@ -328,7 +345,7 @@
                     type: 'number',
                     cell: (r) => ({
                         type: 'html',
-                        html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${r.values[col.key] ?? '—'}</span>`,
+                        html: `<span class="text-xs font-mono text-gray-600 dark:text-gray-400">${escapeHtml(String(r.values[col.key] ?? '—'))}</span>`,
                     }),
                     getValue: (r) => Number(r.values[col.key] ?? 0),
                     sortable: true,
@@ -341,18 +358,13 @@
         // Status column (hidden by default via column visibility)
         cols.push({
             id: 'status',
-            header: 'Status',
+            header: $t('common.status'),
             type: 'enum',
             hiddenByDefault: true,
-            enumOptions: [
-                {value: 'original', label: 'Original'},
-                {value: 'edited', label: 'Edited'},
-                {value: 'deleted', label: 'Deleted'},
-                {value: 'appended', label: 'New'},
-            ],
+            enumOptions: (['original', 'edited', 'deleted', 'appended'] as const).map((status) => ({value: status, label: $t(STATUS_LABEL_KEYS[status])})),
             cell: (r) => ({
                 type: 'badge',
-                text: r.status === 'appended' ? 'New' : r.status.charAt(0).toUpperCase() + r.status.slice(1),
+                text: $t(STATUS_LABEL_KEYS[r.status]),
                 variant: r.status === 'original' ? 'default' : r.status === 'edited' ? 'info' : r.status === 'deleted' ? 'error' : 'success',
             }),
             getValue: (r) => r.status,
@@ -391,14 +403,22 @@
     // Table Edit Handlers
     // =========================================================================
 
+    /** A rowId for a new row on `date`: the date itself, then `date#2`, `date#3`… */
+    function uniqueRowId(date: string): string {
+        const taken = new Set(rows.map((r) => r.rowId));
+        if (!taken.has(date)) return date;
+        let n = 2;
+        while (taken.has(`${date}#${n}`)) n++;
+        return `${date}#${n}`;
+    }
+
     /** Change the date of an appended row (via SingleDatePicker) */
-    function handleDateChange(oldDate: string, newDate: string) {
-        if (oldDate === newDate) return;
-        if (rows.some((r) => r.date === newDate && r.date !== oldDate)) return;
-        const row = rows.find((r) => r.date === oldDate && r.status === 'appended');
-        if (!row) return;
+    function handleDateChange(rowId: string, newDate: string) {
+        const row = rows.find((r) => r.rowId === rowId && r.status === 'appended');
+        if (!row || row.date === newDate) return;
+        if (rows.some((r) => r.date === newDate)) return;
         row.date = newDate;
-        row.rowId = newDate; // keep rowId synced for price rows
+        row.rowId = uniqueRowId(newDate); // the date itself for price rows
         rows = [...rows];
         emitDirty();
     }
@@ -519,10 +539,13 @@
 
     function handleImport(importedRows: ParsedRow[]) {
         for (const pr of importedRows) {
-            const existingIdx = rows.findIndex((r) => r.date === pr.date);
-            if (existingIdx >= 0) {
-                const existing = rows[existingIdx];
-                if (existing.readonly) continue; // skip readonly rows
+            if (pr.kind !== 'dated') continue;
+            const matches = rows.filter((r) => r.date === pr.date && importMatchKeys.every((k) => String(r.values[k] ?? '') === String(pr.values[k] ?? '')));
+            if (matches.length > 0) {
+                // An editable match wins over a readonly one listed first; a line whose
+                // every match is readonly is skipped.
+                const existing = matches.find((r) => !r.readonly);
+                if (!existing) continue;
                 if (existing.originalStatus === 'original') {
                     if (!existing._originalValues) {
                         existing._originalValues = {...existing.values};
@@ -543,7 +566,7 @@
                 }
             } else {
                 rows.push({
-                    rowId: pr.date,
+                    rowId: uniqueRowId(pr.date),
                     date: pr.date,
                     status: 'appended',
                     originalStatus: 'appended',

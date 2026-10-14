@@ -54,6 +54,17 @@ export function displayFxRate(rate: number | null, inverted: boolean): number | 
 }
 
 /**
+ * First→last change of a pair as the user sees it (flipped when `inverted`): the absolute
+ * change of the displayed rate and its percentage. Null without two usable rates.
+ */
+export function displayFxDelta(firstRate: number | null, lastRate: number | null, inverted: boolean): {abs: number; pct: number} | null {
+    const first = displayFxRate(firstRate, inverted);
+    const last = displayFxRate(lastRate, inverted);
+    if (first === null || last === null) return null;
+    return {abs: last - first, pct: ((last - first) / first) * 100};
+}
+
+/**
  * FX pair configuration derived from GET /fx/providers/routes.
  * Represents a unique currency pair with its route configuration.
  */
@@ -66,7 +77,7 @@ export interface FxPairConfig {
     slug: string;
     /** Route configurations ordered by priority */
     providers: Array<{
-        /** Primary provider code (first step's provider, for display) */
+        /** Direct provider code or ordered CHAIN: provider label, including repeated steps */
         providerCode: string;
         priority: number;
         /** Full chain steps — 1 step = direct, 2+ = chain */
@@ -167,14 +178,25 @@ export function getRegisteredPairs(): string[] {
  *
  * @param result - Single conversion result from POST /fx/currencies/convert
  */
-export function apiResultToFxDataPoint(result: {
+type FxApiDataPoint = {
     conversion_date: string;
-    rate?: string | null;
-    backward_fill_info?: {
-        actual_rate_date: string;
-        days_back: number;
-    } | null;
-}): FxDataPoint {
+    rate?: string | null | Array<string | null>;
+    backward_fill_info?:
+        | {
+              actual_rate_date: string;
+              days_back: number;
+          }
+        | null
+        | Array<{
+              actual_rate_date: string;
+              days_back: number;
+          } | null>;
+};
+
+export function apiResultToFxDataPoint(result: FxApiDataPoint): FxDataPoint {
+    if (Array.isArray(result.rate) || Array.isArray(result.backward_fill_info)) {
+        throw new TypeError('Expected one FX conversion result per requested date');
+    }
     return {
         date: result.conversion_date,
         rate: parseFxRate(result.rate),

@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_degiro": {
+      "description": "Importe le relevé de compte de DEGIRO (CSV) dans n’importe quelle langue : achats et ventes, frais, dividendes, impôts, intérêts, dépôts, retraits et conversions de devises, chacun dans sa propre devise.",
+      "name": "DEGIRO"
+    }
+  }
+}

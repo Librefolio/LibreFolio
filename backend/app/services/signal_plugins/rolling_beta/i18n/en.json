@@ -1,0 +1,11 @@
+{
+  "signals": {
+    "riskRollingBeta": {
+      "name": "Rolling Beta",
+      "description": "Rolling sensitivity to a real comparison asset on a joint return calendar.",
+      "output": "Beta",
+      "outputDescription": "Sample covariance divided by comparison-asset sample variance.",
+      "referenceOne": "One-to-one sensitivity"
+    }
+  }
+}

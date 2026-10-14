@@ -47,8 +47,7 @@ delta but three measurement findings and one class of product defect.
 
 | Role | Path |
 |------|------|
-| Sync service | `backend/app/services/sync_service.py` |
-| Sync UI | `frontend/src/lib/components/sync/` |
+| Sync code (the page cited a sync_service module and a components sync folder that never existed — corrected 2026-10-09) | `frontend/src/lib/utils/sync/syncHelpers.ts`, `frontend/src/lib/components/ui/modals/SyncModalBase.svelte` |
 | Table components (`sortFn`) | `frontend/src/lib/components/table/` |
 | Date sentinels and range store | `frontend/src/lib/utils/dateOnly.ts`, `frontend/src/lib/stores/dateRangeStore.svelte.ts` |
 | Spec date helpers | `frontend/e2e/fixtures/dates.ts` |

@@ -38,7 +38,7 @@ Aroon Up monte à 100 dès que le prix établit un nouveau plus haut sur $N$ pé
 
 | Paramètre | Clé | Défaut | Description |
 |---|---|---|---|
-| Période ($N$) | `period` | 14 | Fenêtre d'observation pour localiser le plus haut/plus bas extrême. |
+| Période ($N$) | `period` | 14 | Fenêtre d'observation pour localiser le plus haut/plus bas extrême, en séances. |
 
 ---
 
@@ -48,14 +48,14 @@ Aroon est inhabituel parmi ces indicateurs : ce n'est pas du tout un filtre sur 
 
 ```mermaid
 flowchart LR
- H["📈 Haut"] --> MAXW["🏔️ Maximum glissant sur N barres"]
- MAXW --> AGEH["⏱️ Barres depuis le dernier nouveau haut"]
- AGEH --> UP["⬆️ Aroon Up = 100·(N−age)/N"]
- L["📉 Bas"] --> MINW["🕳️ Minimum glissant sur N barres"]
- MINW --> AGEL["⏱️ Barres depuis le dernier nouveau bas"]
- AGEL --> DOWN["⬇️ Aroon Down = 100·(N−age)/N"]
- UP --> OSC["🔄 Oscillateur = Up − Down"]
- DOWN --> OSC
+    H["📈 Haut"] --> MAXW["🏔️ Maximum glissant sur N barres"]
+    MAXW --> AGEH["⏱️ Barres depuis le dernier nouveau haut"]
+    AGEH --> UP["⬆️ Aroon Up = 100·(N−age)/N"]
+    L["📉 Bas"] --> MINW["🕳️ Minimum glissant sur N barres"]
+    MINW --> AGEL["⏱️ Barres depuis le dernier nouveau bas"]
+    AGEL --> DOWN["⬇️ Aroon Down = 100·(N−age)/N"]
+    UP --> OSC["🔄 Oscillateur = Up − Down"]
+    DOWN --> OSC
 ```
 
 !!! info "Complémentaire à l'ADX"

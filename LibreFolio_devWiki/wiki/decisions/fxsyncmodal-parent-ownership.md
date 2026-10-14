@@ -57,5 +57,5 @@ FormModal (owns FxSyncModal, zIndex = parentZ + 10)
 | WacPreviewSection (prop consumer) | `frontend/src/lib/components/transactions/wac/WacPreviewSection.svelte` |
 | FxSyncModal | `frontend/src/lib/components/fx/FxSyncModal.svelte` |
 | SyncModalBase (zIndex prop) | `frontend/src/lib/components/ui/modals/SyncModalBase.svelte` |
-| Plan | `…/Bugfix-SPD/plan-R3-SP-D-WacFxEnrich.prompt.md` |
+| Plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacFxEnrich.prompt.md` |
 

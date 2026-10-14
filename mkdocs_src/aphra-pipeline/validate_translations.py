@@ -8,6 +8,7 @@ and reports structural discrepancies:
   - Heading level mismatches (different # count)
   - Missing or altered links/URLs
   - Modified code blocks
+  - Code blocks that lost the source indentation (code-block-indent)
   - Artifact remnants (Translator's Notes, <translation> tags, etc.)
   - Missing emojis in headings
   - Abnormal file size ratio
@@ -24,15 +25,25 @@ Usage (via dev.py):
 """
 
 import argparse
+import posixpath
 import re
 import sys
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
+
+# Sibling modules: dev.py and a standalone run both put this directory on sys.path.
+import changelog as cl
+from code_blocks import FencedBlock, code_indent_issues, code_line_mask
+from page_anchors import file_anchors, render_anchors  # MkDocs is imported only when a page renders
 
 # Import shared infrastructure from translate_docs
 from translate_docs import (
     DOCS_DIR,
     _detect_target_languages,
+    _load_hashes,
+    _needs_translation,
     get_translatable_files,
 )
 
@@ -111,6 +122,104 @@ def _extract_links(text: str) -> list[tuple[str, str]]:
     Returns list of (display_text, url).
     """
     return re.findall(r'\[([^\]]*)\]\(([^)]+)\)', text)
+
+
+_INLINE_CODE_SPAN = re.compile(r"(`+)(?!`)(.+?)(?<!`)\1(?!`)")
+_DIGIT_GROUPING = re.compile(r"(?<=\d)[.,\u00a0\u202f ](?=\d)")
+# French and Spanish write a space before % (`16,36 %`, U+202F or U+00A0 in the app): number formatting, as the grouping.
+_PERCENT_SPACE = re.compile(r"(?<=\d)[\u00a0\u202f ](?=%)")
+
+
+def _inline_code_texts(text: str) -> list[str]:
+    """Inline code spans outside fenced blocks, as written."""
+    lines = [line for line, in_code in zip(text.split("\n"), code_line_mask(text), strict=True) if not in_code]
+    return [m.group(2).strip() for line in lines for m in _INLINE_CODE_SPAN.finditer(line)]
+
+
+def _without_digit_grouping(span: str) -> str:
+    return _DIGIT_GROUPING.sub("", _PERCENT_SPACE.sub("", span))
+
+
+def _inline_code_spans(text: str) -> Counter:
+    """Inline code spans outside fenced blocks; digit grouping and the space before % ignored, so `1,000.50` matches the
+    localized `1.000,50` and `+16.36%` the French `+16,36 %`."""
+    return Counter(_without_digit_grouping(span) for span in _inline_code_texts(text))
+
+
+def check_inline_code(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Every inline code span of the source must appear verbatim in the translation.
+
+    Inline code holds identifiers — enum values, API fields, parameters (`MARKET_PRICE`, `total_return`, `period`).
+    Nothing compared them: translations had turned them into `PRECIO_MERCADO`, `rendimento_totale`, `période`, or
+    kept a span the source had since renamed (`asset_id` for `asset_event_id`).
+    """
+    spelling: dict[str, str] = {}
+    for span in _inline_code_texts(source):
+        spelling.setdefault(_without_digit_grouping(span), span)
+    missing = _inline_code_spans(source) - _inline_code_spans(translated)
+    return [
+        Issue(
+            severity=Severity.WARN,
+            file=cache_key, lang=lang,
+            check="inline-code-missing",
+            message=f"`{spelling[span]}`{f' ×{n}' if n > 1 else ''} missing or changed in the translation",
+        )
+        for span, n in sorted(missing.items())
+    ]
+
+
+def check_link_anchors(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Every `page.md#anchor` link of a translation must land on an anchor of the page it opens.
+
+    A translated page links the translated target (mkdocs-static-i18n serves `page.<lang>.md`, falling back to EN),
+    whose headings slug differently from the EN ones. `check_links` only compares URLs with the source, and
+    `mkdocs build --strict` stops at the first language with a warning, so such links surfaced one language at a time.
+    A page's anchors are the ids its MkDocs render records (page_anchors.py), the set the strict build checks.
+    """
+    issues = []
+    page = DOCS_DIR / cache_key
+    own_anchors: frozenset[str] | None = None
+    reported: set[str] = set()
+    for _text, url in _extract_links(_strip_code(translated)):
+        url = url.strip().split()[0] if url.strip() else ""
+        if "#" not in url or re.match(r"^[a-zA-Z][\w+.-]*:", url) or url in reported:
+            continue
+        target, anchor = url.split("#", 1)
+        if not anchor:
+            continue
+        if target:
+            stem = page.parent / target
+            if target.endswith("/"):
+                stem = stem / "index.md"
+            if stem.suffix != ".md":
+                continue
+            stem = stem.with_suffix("")
+            localized = stem.parent / f"{stem.name}.{lang}.md"
+            target_file = localized if localized.exists() else stem.parent / f"{stem.name}.en.md"
+            if not target_file.exists():
+                continue  # a missing page is the links check's and the build's business
+            anchors = file_anchors(target_file)
+            where = target_file.resolve().relative_to(DOCS_DIR.resolve()).as_posix()
+        else:
+            if own_anchors is None:
+                own_anchors = render_anchors(translated)
+            anchors = own_anchors
+            where = "this page"
+        if anchor not in anchors:
+            reported.add(url)
+            issues.append(Issue(
+                severity=Severity.ERROR,
+                file=cache_key, lang=lang,
+                check="anchor-missing",
+                message=f"#{anchor} not found in {where} (link {url})",
+            ))
+    return issues
 
 
 def _extract_code_blocks(text: str) -> list[str]:
@@ -278,12 +387,12 @@ def check_code_blocks(
             for line_idx, (sl, tl) in enumerate(zip(src_lines, tr_lines)):
                 if sl != tl:
                     issues.append(Issue(
-                        severity=Severity.LOCALIZED,  # shell comments translated or alignment stripped
+                        severity=Severity.LOCALIZED,  # code comments translated
                         file=cache_key, lang=lang,
                         check="code-block-modified",
                         message=(
                             f"Code block #{idx + 1}, line {line_idx + 1} altered "
-                            f"(check: comments translated or alignment stripped):\n"
+                            f"(check: comments translated):\n"
                             f"    SRC: {sl[:80]}\n"
                             f"    TRN: {tl[:80]}"
                         ),
@@ -299,6 +408,39 @@ def check_code_blocks(
                             f"({len(src_lines)} vs {len(tr_lines)})",
                 ))
 
+    return issues
+
+
+def _indent_levels(block: FencedBlock) -> list[int]:
+    """Distinct leading-space counts of the block's non-blank lines, relative to the shallowest."""
+    widths = [len(line) - len(line.lstrip()) for line in block.lines if line.strip()]
+    base = min(widths, default=0)
+    return sorted({width - base for width in widths})
+
+
+def check_code_block_indent(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Verify translated code blocks keep the source indentation, line by line (fences included).
+    Blocks pair by content, so a block added or missing on one side does not shift the others.
+    Translation never has a reason to move code: flattened YAML is a different (or invalid)
+    document, and a fence that leaves its list item or content tab breaks the page layout.
+    """
+    issues = []
+    for drift in code_indent_issues(source, translated):
+        block = drift.translated_block
+        issues.append(Issue(
+            severity=Severity.ERROR,
+            file=cache_key, lang=lang,
+            check="code-block-indent",
+            line=drift.lines[0] + 1,
+            message=(
+                f"Code block ({block.lang or 'plain'}, lines {block.start + 1}-{block.end + 1}): "
+                f"indentation differs from the source on {len(drift.lines)} of {len(block.lines)} lines "
+                f"(source levels {_indent_levels(drift.source_block)} vs translation {_indent_levels(block)})"
+            ),
+        ))
     return issues
 
 
@@ -666,8 +808,26 @@ def check_admonitions(
 
 
 def _strip_code_blocks(text: str) -> str:
-    """Remove fenced code blocks from text (for checks that should ignore code)."""
-    return re.sub(r'```\w*\n.*?```', '', text, flags=re.DOTALL)
+    """Remove fenced code blocks from text (for checks that should ignore code).
+
+    Fence-aware (``code_blocks.parse_fenced_blocks``): backtick or tilde fences, at any indentation (lists, admonitions,
+    content tabs), with any info string. The former regex needed the language word to end the line, so a fence with a
+    title or a space left its code in the text.
+    """
+    lines = text.split("\n")
+    return "\n".join(line for line, in_code in zip(lines, code_line_mask(text), strict=True) if not in_code)
+
+
+_INLINE_CODE = re.compile(r"(`+)(?!`).+?(?<!`)\1(?!`)")
+
+
+def _strip_code(text: str) -> str:
+    """Remove fenced code blocks and inline code spans: for the HTML checks, which must read only rendered HTML.
+
+    Inline code such as `EUR<USD` or `<username>` is shown as text, not parsed as a tag; read as HTML it became a
+    ``<usd>`` tag whose "attributes" were the words of the following lines (user/fx/detail/data-editor: 201 warnings).
+    """
+    return _INLINE_CODE.sub("", _strip_code_blocks(text))
 
 
 def check_html_blocks(
@@ -680,9 +840,9 @@ def check_html_blocks(
     """
     issues = []
 
-    # Strip code blocks first to avoid false positives from e.g. <username>
-    src_clean = _strip_code_blocks(source)
-    tr_clean = _strip_code_blocks(translated)
+    # Strip code (fenced and inline) first to avoid false positives from e.g. <username>
+    src_clean = _strip_code(source)
+    tr_clean = _strip_code(translated)
 
     # Extract HTML tags (just opening/closing tag names)
     src_tags = re.findall(r'<(/?\w+)[^>]*>', src_clean)
@@ -771,8 +931,8 @@ def check_html_attrs(
         return tr_val == "../" + src_val
 
     issues = []
-    src_clean = _strip_code_blocks(source)
-    tr_clean = _strip_code_blocks(translated)
+    src_clean = _strip_code(source)
+    tr_clean = _strip_code(translated)
 
     src_tags = _extract_tag_attrs(src_clean)
     tr_tags = _extract_tag_attrs(tr_clean)
@@ -812,6 +972,45 @@ def check_html_attrs(
                     ),
                 ))
 
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Untranslated alt/title text (the counterpart of check_html_attrs)
+# ---------------------------------------------------------------------------
+
+_TEXT_ATTR = re.compile(r"""(?<![\w-])(alt|title|aria-label|data-title)\s*=\s*"([^"]*)\"""")
+_MD_IMAGE_ALT = re.compile(r"!\[([^\]]+)\]\(")
+# Names that stay in the source language on purpose (brand names, product names).
+_UNTRANSLATED_TEXT_OK = frozenset({"Buy Me a Coffee"})
+
+
+def check_untranslated_text_attrs(
+    source: str, translated: str, cache_key: str, lang: str,
+) -> list[Issue]:
+    """
+    Flag image alt text, `title`, `aria-label` and `data-title` (carousel caption) values copied verbatim from the source.
+
+    check_html_attrs skips these attributes because translating them is expected; nothing checked that they were.
+    A value of three words or more that appears unchanged among the source's own values is reported — shorter
+    values are mostly names (ETF, Buy, Revolut) that legitimately stay as they are.
+    """
+    def _values(text: str) -> list[str]:
+        clean = _strip_code(text)
+        found = [m.group(2).strip() for m in _TEXT_ATTR.finditer(clean)]
+        found += [m.group(1).strip() for m in _MD_IMAGE_ALT.finditer(clean)]
+        return [v for v in found if len(re.findall(r"[^\W\d_]{2,}", v)) >= 3 and v not in _UNTRANSLATED_TEXT_OK]
+
+    source_values = set(_values(source))
+    issues = []
+    for value in _values(translated):
+        if value in source_values:
+            issues.append(Issue(
+                severity=Severity.WARN,
+                file=cache_key, lang=lang,
+                check="text-untranslated",
+                message=f"alt/title text left in the source language: {value[:90]!r}",
+            ))
     return issues
 
 
@@ -883,6 +1082,82 @@ def check_html_relative_src(
         _add_issue(m, f"'{m.group(0)}...' hardcodes production base path, breaks in dev (/mkdocs/)")
 
     return issues
+
+
+# ---------------------------------------------------------------------------
+# Raw-HTML file paths copied unchanged from the English (one folder short)
+# ---------------------------------------------------------------------------
+
+_URL_ATTR = re.compile(r"""(?<![\w-])(src|srcset|poster|href)\s*=\s*(?:"([^"]*)"|'([^']*)')""", re.IGNORECASE)
+_FILE_NAME = re.compile(r"\.[A-Za-z0-9]{1,5}$")
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
+def _translated_file_url(url: str, cache_key: str, lang: str) -> str:
+    """The URL that reaches, from the translated page, the file `url` reaches from its English page.
+
+    Pages are built with directory URLs (`x/index.en.md` into `x/`, `x/page.en.md` into `x/page/`) and a translation
+    under `<lang>/` (mkdocs-static-i18n): a path that climbs to the site root needs one more `../`, a shorter one more.
+    """
+    folder, name = posixpath.split(cache_key)
+    stem = name[: -len(".en.md")] if name.endswith(".en.md") else posixpath.splitext(name)[0]
+    english_folder = folder if stem == "index" else posixpath.join(folder, stem)
+    path = urlsplit(url).path
+    target = posixpath.normpath(posixpath.join(english_folder, path))
+    return posixpath.relpath(target, posixpath.join(lang, english_folder)) + url[len(path) :]
+
+
+def _relative_file_urls(text: str) -> list[tuple[int, str]]:
+    """(line, url) of each raw-HTML relative URL of a file: `src`, the `srcset` candidates, `poster`, `href`.
+
+    Code is ignored (fenced blocks and inline spans), and so are HTML comments. A page link (a folder URL, or
+    `.md`/`.html`) is not a file; external, root-absolute and fragment-only URLs are left out.
+    """
+    found = []
+    uncommented = _HTML_COMMENT.sub(lambda m: "\n" * m.group(0).count("\n"), text).split("\n")
+    for number, (line, in_code) in enumerate(zip(uncommented, code_line_mask(text), strict=True), start=1):
+        if in_code:
+            continue
+        for m in _URL_ATTR.finditer(_INLINE_CODE.sub("", line)):
+            attr = m.group(1).lower()
+            value = m.group(2) if m.group(2) is not None else m.group(3)
+            urls = [c.split()[0] for c in value.split(",") if c.strip()] if attr == "srcset" else [value]
+            for url in urls:
+                parts = urlsplit(url)
+                if parts.scheme or parts.netloc or url.startswith(("/", "#")) or not parts.path:
+                    continue
+                if not _FILE_NAME.search(parts.path) or parts.path.lower().endswith((".md", ".html", ".htm")):
+                    continue
+                found.append((number, url))
+    return found
+
+
+def check_html_asset_depth(
+    source: str,
+    translated: str,
+    cache_key: str,
+    lang: str,
+) -> list[Issue]:
+    """
+    Flag a raw-HTML relative path of a file that the translation copied unchanged from the English (ERROR).
+
+    MkDocs rewrites the paths of Markdown images and links, not those of raw HTML. A translated page is built one folder
+    deeper than its English page (site/<lang>/...), and the language folders hold no files, so the English path points
+    under site/<lang>/ and the image is missing. The message gives the path to write: one more `../` for a path that
+    climbs to the site root. Whether a changed path resolves is left to the post-build check of `./dev.py mkdocs build`.
+    """
+    english = {url for _, url in _relative_file_urls(source)}
+    return [
+        Issue(
+            severity=Severity.ERROR,
+            file=cache_key,
+            lang=lang,
+            check="html-asset-depth",
+            message=f"L{number}: `{url}` is the English path; a translated page is built one folder deeper, so it needs `{_translated_file_url(url, cache_key, lang)}`",
+        )
+        for number, url in _relative_file_urls(translated)
+        if url in english
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -1001,12 +1276,12 @@ def check_latex(
                 ),
             ))
 
-    # Inline math ($...$) — avoid display math, currency ($0.25 / 500 $), bash vars (${VAR})
-    # Uses finditer to have access to surrounding context for suffix-currency detection
-    _INLINE_RE = re.compile(r'(?<![\\\$])\$(?!\$)(.+?)(?<![\\\$])\$(?!\$)')
+    # Inline math ($...$) as pymdownx.arithmatex reads it with smart_dollar (the site's default): the
+    # opening $ is not followed by a space, the closing $ not preceded by one, and the content holds no
+    # unescaped $. So "500 $" or "0,25 $ et 1,50 $" never opens a formula, while "day 3 $A$" does: the
+    # former suffix-currency rule (a digit before the $) dropped such formulas from one side only.
+    _INLINE_RE = re.compile(r"(?<![\\$])\$(?![\s$])((?:\\.|[^\\$\n])+?)(?<![\s\\])\$(?!\$)")
     _NON_MATH_CONTENT_RE = re.compile(r'^[\d,.]|^\{')  # prefix currency or bash var
-    # Suffix currency: $ preceded by digit+optional-space (e.g. "500 $" or "500$")
-    _SUFFIX_CURRENCY_CTX_RE = re.compile(r'\d\s?$')
     # Markdown bold/italic markup leaked between two $ signs — not real math
     _MARKDOWN_MARKUP_RE = re.compile(r'\*\*|\*|__')
 
@@ -1017,10 +1292,6 @@ def check_latex(
             content = m.group(1)
             # Filter: content starts with digit/comma (prefix currency like $0.25) or { (bash var)
             if _NON_MATH_CONTENT_RE.match(content.strip()):
-                continue
-            # Filter: text before opening $ ends with digit or digit+space (suffix currency like "500 $")
-            before = text[:m.start()]
-            if _SUFFIX_CURRENCY_CTX_RE.search(before):
                 continue
             # Filter: content contains markdown bold/italic markers (leaked between two currency $ signs)
             if _MARKDOWN_MARKUP_RE.search(content):
@@ -1121,12 +1392,17 @@ def check_math_indentation(
 ALL_CHECKS = [
     ("heading-structure", check_heading_structure, True),   # needs source + translated
     ("links", check_links, True),
+    ("link-anchors", check_link_anchors, True),
     ("code-blocks", check_code_blocks, True),
+    ("code-block-indent", check_code_block_indent, True),   # pairs blocks by content, not position
+    ("inline-code", check_inline_code, True),
     ("list-structure", check_list_structure, True),
     ("admonitions", check_admonitions, True),
     ("html-blocks", check_html_blocks, True),
     ("html-attrs", check_html_attrs, True),
+    ("text-untranslated", check_untranslated_text_attrs, True),
     ("html-relative-src", check_html_relative_src, True),
+    ("html-asset-depth", check_html_asset_depth, True),
     ("front-matter", check_front_matter, True),
     ("latex", check_latex, True),
     ("math-indentation", check_math_indentation, True),     # positional: indented $$ blocks stay indented
@@ -1144,6 +1420,11 @@ def validate_file(
     """Run all checks on a single source/translation pair."""
     source = source_path.read_text(encoding="utf-8")
     translated = trans_path.read_text(encoding="utf-8")
+    return validate_text(source, translated, cache_key, lang)
+
+
+def validate_text(source: str, translated: str, cache_key: str, lang: str) -> list[Issue]:
+    """Run all checks on a source text and its translation (a page, or one chapter of the CHANGELOG)."""
     issues = []
 
     for check_name, check_fn, needs_source in ALL_CHECKS:
@@ -1166,8 +1447,16 @@ def run_validate(args) -> int:
     verbose = getattr(args, "verbose", False)
     hide_localized = getattr(args, "hide_localized", False)
 
-    # Get source files list
+    # CHANGELOG.md: with every page when there is no --file, or when --file names it
+    with_changelog = not file_filter or any(Path(f).name == cl.SOURCE.name for f in file_filter)
     if file_filter:
+        file_filter = [f for f in file_filter if Path(f).name != cl.SOURCE.name]
+        with_changelog = with_changelog and _changelog_source().exists()
+
+    # Get source files list
+    if file_filter == []:
+        sources = []  # only CHANGELOG.md was asked for
+    elif file_filter:
         # Resolve file paths (same logic as translate_docs)
         sources = []
         for f in file_filter:
@@ -1194,7 +1483,7 @@ def run_validate(args) -> int:
         nav_files = get_translatable_files()
         sources = [(rel, DOCS_DIR / rel) for rel in nav_files]
 
-    if not sources:
+    if not sources and not with_changelog:
         print("No translatable files found.")
         return 0
 
@@ -1245,6 +1534,9 @@ def run_validate(args) -> int:
                 if verbose:
                     print(f"  ✅ {cache_key} → {lang}: OK")
 
+    if with_changelog:
+        _validate_changelog(target_langs, result, hide_localized, verbose)
+
     # Summary
     print(f"\n{'=' * 60}")
     print("📊 Validation Summary:")
@@ -1285,6 +1577,106 @@ def run_validate(args) -> int:
         print("\n✅ All translations look good!")
 
     return 1 if result.errors else 0
+
+
+# ---------------------------------------------------------------------------
+# CHANGELOG (changelog.py): the chapters of CHANGELOG.<lang>.md
+# ---------------------------------------------------------------------------
+
+def _changelog_source() -> Path:
+    """CHANGELOG.md, two levels above DOCS_DIR (mkdocs_src/docs/): a run that points DOCS_DIR elsewhere sees no other."""
+    return DOCS_DIR.parent.parent / cl.SOURCE.name
+
+
+def _open(issue: Issue) -> Issue:
+    """The open chapter's finding: information only, until its tag exists."""
+    if issue.severity in (Severity.ERROR, Severity.WARN):
+        return Issue(Severity.INFO, issue.file, issue.lang, issue.check, f"{issue.message} (open chapter)", issue.line)
+    return issue
+
+
+def validate_changelog(lang: str, units: list, released: set[str], hashes: dict, source: Path) -> list[Issue] | None:
+    """The checks of one ``CHANGELOG.<lang>.md``; None when it does not exist and nothing in it has to.
+
+    Every chapter line must be an English one, once, in the English order. Each chapter present goes through the page
+    checks, and its pieces must be done for the current English (the cache). A released chapter (``changelog.released``)
+    that is missing, stale or wrong is an error; the open chapter's findings are information only."""
+    path = cl.translated_path(lang, source)
+    translated_units = [u for u in units if u.pieces]
+    by_name = {u.name: u for u in units}
+    issues: list[Issue] = []
+    if not path.exists():
+        for unit in translated_units:
+            issue = Issue(Severity.ERROR, f"{cl.KEY}#{unit.name}", lang, "changelog-missing",
+                          f"{path.name} does not exist")
+            issues.append(issue if unit.name in released else _open(issue))
+        return issues if any(i.severity == Severity.ERROR for i in issues) else None
+
+    translation = cl.parse_translation(cl.read_text(path))
+    english_order = [u.name for u in units if u.heading]
+    positions = []
+    for name in dict.fromkeys(translation.order):
+        heading = translation.chapters[name][0]
+        unit = by_name.get(name)
+        key = f"{cl.KEY}#{name}"
+        if unit is None or not unit.heading:
+            issues.append(Issue(Severity.ERROR, key, lang, "changelog-chapter", f"«{heading}» is not a chapter of {cl.KEY}"))
+            continue
+        positions.append(english_order.index(name))
+        if heading != unit.heading:
+            issue = Issue(Severity.ERROR, key, lang, "changelog-chapter",
+                          f"chapter line «{heading}» differs from the English «{unit.heading}»")
+            issues.append(issue if name in released else _open(issue))
+    for name in {n for n in translation.order if translation.order.count(n) > 1}:
+        issues.append(Issue(Severity.ERROR, f"{cl.KEY}#{name}", lang, "changelog-chapter", "chapter written more than once"))
+    if positions != sorted(positions):
+        issues.append(Issue(Severity.ERROR, cl.KEY, lang, "changelog-chapter", "chapters not in the English order"))
+
+    for unit in translated_units:
+        key = f"{cl.KEY}#{unit.name}"
+        body = cl.translated_body(unit, translation)
+        found: list[Issue] = []
+        if body is None:
+            found.append(Issue(Severity.ERROR, key, lang, "changelog-missing", "not translated yet"))
+        else:
+            found.extend(validate_text(unit.text(), unit.text(body), key, lang))
+            stale = [p.key.split("#", 1)[1] for p in unit.pieces if _needs_translation(hashes.get(p.key), p.md5, lang)]
+            if stale:
+                found.append(Issue(Severity.ERROR, key, lang, "changelog-stale",
+                                   f"{len(stale)} piece(s) changed since their translation: {', '.join(stale)}"))
+        issues.extend(found if unit.name in released else [_open(i) for i in found])
+    return issues
+
+
+def _validate_changelog(target_langs: list[str], result: ValidationResult, hide_localized: bool, verbose: bool) -> None:
+    source = _changelog_source()
+    units = cl.read_english(source)
+    if not units:
+        return
+    released = cl.released(units, source)
+    hashes = _load_hashes()
+    for lang in target_langs:
+        issues = validate_changelog(lang, units, released, hashes, source)
+        if issues is None:
+            result.files_missing += 1
+            if verbose:
+                print(f"  ⏭️  {cl.KEY} → {lang}: translation not found")
+            continue
+        result.files_checked += 1
+        result.issues.extend(issues)
+        visible = [i for i in issues if not (hide_localized and i.severity == Severity.LOCALIZED)]
+        if visible:
+            has_errors = any(i.severity == Severity.ERROR for i in visible)
+            has_warnings = any(i.severity == Severity.WARN for i in visible)
+            has_localized = any(i.severity == Severity.LOCALIZED for i in visible)
+            status = "❌" if has_errors else ("⚠️ " if has_warnings else ("🌐" if has_localized else "ℹ️ "))
+            print(f"  {status} {cl.KEY} → {lang}:")
+            for issue in visible:
+                print(f"    {issue}")
+        else:
+            result.files_ok += 1
+            if verbose:
+                print(f"  ✅ {cl.KEY} → {lang}: OK")
 
 
 # ---------------------------------------------------------------------------

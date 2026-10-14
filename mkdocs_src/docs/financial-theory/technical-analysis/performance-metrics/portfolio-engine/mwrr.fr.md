@@ -9,7 +9,7 @@ Pour offrir une visibilité complète, LibreFolio distingue deux formes de cet i
 
 ## 📈 MWRR Annualisé vs. MWRR Cumulatif
 
-### 📈 Annualisé {: #annualized-mwrr }
+### 📈 MWRR Annualisé {: #annualized-mwrr }
 Le MWRR Annualisé est le taux annuel composé qui égalise la valeur actuelle de tous les flux de trésorerie (valeur actuelle nette, VAN) avec zéro.
 
 Ce taux composé est mathématiquement équivalent au **CAGR** (Compound Annual Growth Rate - taux de croissance annuel composé) de votre capital réellement investi, représentant le taux de croissance annuel constant nécessaire pour que le capital initial atteigne le solde final, en tenant compte de tous les mouvements intermédiaires.
@@ -21,7 +21,7 @@ $$
 ??? note "🧮 Comment l'équation NPV est déroulée"
 
     #### 1. Formule intuitive de la valeur finale
-    Imaginez projeter votre valeur nette finale (VNI) en faisant croître chaque flux de trésorerie à un taux composé \(r\) :
+    Imaginez projeter votre valeur nette d'inventaire (NAV) finale en faisant croître chaque flux de trésorerie à un taux composé \(r\) :
     
     \[
     VNI_{finale} = CF_0 \times (1 + r)^{\frac{d_0}{365}} + CF_1 \times (1 + r)^{\frac{d_1}{365}} + \dots + CF_n \times (1 + r)^{\frac{d_n}{365}}
@@ -43,7 +43,7 @@ $$
     
     * **Jour 0 :** La valeur initiale du portefeuille est de 1 000 € (représentée comme un dépôt/investissement).
     * **Jour 15 :** Vous déposez 100 €.
-    * **Jour 31 :** La VNI finale du portefeuille est de 1 150 €.
+    * **Jour 31 :** Le NAV final du portefeuille est de 1 150 €.
     
     Tout d'abord, nous construisons le tableau des transactions du point de vue de l'investisseur (l'argent versé dans le portefeuille est négatif, l'argent récupéré est positif) :
     
@@ -51,7 +51,7 @@ $$
     |-------------|--------------|-----------|-----------------------------|
     | 0 | 0 | Solde Initial | **-1 000 €** (Sortie) |
     | 1 | 15 | Dépôt | **-100 €** (Sortie) |
-    | 2 | 31 | Liquidation hypothétique (VNI) | **+1 150 €** (Entrée) |
+    | 2 | 31 | Liquidation hypothétique (NAV) | **+1 150 €** (Entrée) |
     
     Now, nous déployons ces transactions dans la sommation de la VAN :
     
@@ -76,7 +76,7 @@ $$
 * $CF_i$ = Flux de trésorerie du point de vue de l'investisseur :
     * **Flux de trésorerie négatifs ($CF_i < 0$) :** Capital engagé dans le portefeuille (dépôts, achats). Cela représente l'argent sortant du portefeuille personnel de l'investisseur pour être investi.
     * **Flux de trésorerie positifs ($CF_i > 0$) :** Capital restitué à l'investisseur (retraits, dividendes). Cela représente l'argent retournant dans le portefeuille de l'investisseur.
-    * **Valorisation finale ($CF_n > 0$) :** Le Net Asset Value (NAV) ou valeur nette finale (VNI) du portefeuille à la fin de la période, traité comme un afflux positif (une liquidation hypothétique où l'ensemble du portefeuille est converti en liquidités revenant à l'investisseur).
+    * **Valorisation finale ($CF_n > 0$) :** La valeur nette d'inventaire (NAV) finale du portefeuille à la fin de la période, traité comme un afflux positif (une liquidation hypothétique où l'ensemble du portefeuille est converti en liquidités revenant à l'investisseur).
 * $t_i$ = Jours écoulés depuis le début de la période ($t_0 = 0$).
 
 **Concepts clés :**
@@ -85,7 +85,9 @@ $$
 * Il est idéal pour les comparaisons à long terme (ex. comparer votre performance avec un taux d'intérêt bancaire annuel ou le CAGR).
 * **Avertissement sur la volatilité :** Sur des périodes courtes (ex. quelques jours ou semaines), le rendement annualisé peut être très volatile et afficher des pourcentages extrêmes car la formule extrapole le rendement d'une petite période sur une année complète de 365 jours.
 
-### 📊 Cumulatif {: #cumulative-mwrr }
+LibreFolio construit les flux de trésorerie du MWRR à partir des variations de la référence de capital, et non des seules lignes de dépôt en espèces. Le capital d'AJUSTEMENT/TRANSFERT apporté en nature valorisé est donc traité comme du capital versé plutôt que comme une performance soudaine de l'investissement.
+
+### 📊 MWRR Cumulatif {: #cumulative-mwrr }
 Le MWRR Cumulatif représente le rendement total équivalent sur la période sélectionnée, obtenu en capitalisant le taux annualisé sur la durée réelle de cette période.
 
 **Formule Directe (sans racine, utilise directement $r$) :**
@@ -120,29 +122,29 @@ Voyons un scénario sur 10 ans pour comprendre l'impact du timing sur la perform
 
 * **Année 0 :** Vous déposez **10 000 €**.
 * **Année 5 :** Vous déposez **90 000 €** supplémentaires.
-* **Année 10 :** Votre valeur nette finale (VNI) est de **200 000 €**.
+* **Année 10 :** Votre valeur nette d'inventaire (NAV) finale est de **200 000 €**.
 
-### 📉 avec le ROI Simple
+### 📉 Comparaison avec le ROI Simple
 Le ROI simple est calculé uniquement sur les contributions nettes totales :
 
 $$
 ROI = \frac{200\,000 - 100\,000}{100\,000} = +100\ \%
 $$
 
-### ⏱️ du timing sur le MWRR
+### ⏱️ Effet du timing sur le MWRR
 Si la majeure partie de votre capital (90 000 €) a été déposée à l'Année 5, juste avant une forte reprise du marché sur plusieurs années, votre argent a travaillé très efficacement. Parce que la somme la plus importante a été exposée aux années de forte croissance, votre **MWRR Annualisé** sera bien supérieur au TWRR du marché.
 
 En utilisant un solveur VAN pour ce scénario spécifique :
 * Le **MWRR Annualisé ($r$)** est exactement de **13,02 %**.
 
-### 🔁 en MWRR Cumulatif
+### 🔁 Conversion en MWRR Cumulatif
 En capitalisant ce rendement annualisé de 13,02 % sur la période de 10 ans :
 
 $$
 \text{MWRR}_{\text{cumulatif}} = (1 + 0{,}130227)^{10} - 1 \approx +240{,}14\ \%
 $$
 
-### 💡 signifie +240,14 % ?
+### 💡 Que signifie +240,14 % ?
 * Cela ne signifie **pas** que vos 100 000 € de contributions totales sont devenus 340 140 € :
 * Cela signifie qu'un **euro théorique**, investi au tout début de la période de 10 ans et jamais retouché, serait devenu 3,40 €, réalisant un rendement total de 240,14 % en croissant à la même vitesse composée moyenne que vos flux réels.
 
@@ -152,10 +154,10 @@ $$
 
 LibreFolio affiche ces indicateurs de performance à différents endroits du tableau de bord :
 
-### 📊 en pourcentage (`%`)
+### 📊 Graphique en pourcentage (`%`)
 Les courbes tracées utilisent le **MWRR Cumulatif**, le **TWRR Cumulatif** et le **ROI Simple**. Cela permet une comparaison visuelle directe, car les trois courbes commencent à 0 % et représentent la progression totale sur la période sélectionnée.
 
-### 🧾 KPI
+### 🧾 Cartes KPI
 * **ROI Simple** (Indicateur principal pour le rendement absolu).
 * **TWRR Cumulatif** (Indicateur de performance de la stratégie ou de l'allocation d'actifs).
 * **MWRR Cumulatif** (Indicateur principal du timing personnel).

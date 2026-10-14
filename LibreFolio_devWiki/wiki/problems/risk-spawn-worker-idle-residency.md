@@ -59,4 +59,4 @@ and timeout/crash behavior is unchanged.
 | Settings | `backend/app/config.py` |
 | Lifecycle tests | `backend/test_scripts/test_services/test_risk_spawn_worker.py` |
 | Benchmark | `scripts/spikes/risk/run_simulation_scale_benchmark.py` |
-| Audit report | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/report-phase01RiskBackendAuditAndRemediation.md` |
+| Audit report | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/_archive-backendFirst-G0G6/report-phase01RiskBackendAuditAndRemediation.md` |

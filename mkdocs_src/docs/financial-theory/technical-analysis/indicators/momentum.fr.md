@@ -16,7 +16,7 @@ Mathématiquement, la plupart des indicateurs de momentum sont des dérivées di
 |-----------|-------------------|---------|---------|
 | **RSI** | Solde gains/pertes récents | Surachat/survente, retour à la moyenne | [📖](rsi.md) |
 | **MACD** | Accélération de la tendance | Croisements haussiers/baissiers | [📖](macd.md) |
-| **ROC** | Variation en pourcentage du prix sur $N$ jours | Momentum pur, repérage de divergences | [📖](roc.md) |
+| **ROC** | Variation en pourcentage du prix sur $N$ séances | Momentum pur, repérage de divergences | [📖](roc.md) |
 | **Stochastic RSI** | Propres extrêmes surachat/survente du RSI | Signaux de retournement plus rapides et sensibles | [📖](stochastic-rsi.md) |
 | **PPO** | MACD, normalisé par le prix | Comparaison du momentum entre actifs de niveaux de prix différents | [📖](ppo.md) |
 | **CCI** | Écart par rapport à une moyenne de prix typique | Points de retournement cycliques | [📖](cci.md) |
@@ -45,12 +45,12 @@ Mathématiquement, la plupart des indicateurs de momentum sont des dérivées di
 
 ```mermaid
 flowchart LR
- P["💹 Prix de clôture"] --> RSI["💪 RSI"]
- P --> MACD["📊 MACD"]
- P --> ROC["🚀 ROC"]
- RSI --> SRSI["🎛️ Stochastic RSI"]
- MACD -->|"÷ EMA lente"| PPO["📐 PPO"]
- HLC["📈 Haut / Bas / Clôture"] --> CCI["🔄 CCI"]
+    P["💹 Prix de clôture"] --> RSI["💪 RSI"]
+    P --> MACD["📊 MACD"]
+    P --> ROC["🚀 ROC"]
+    RSI --> SRSI["🎛️ Stochastic RSI"]
+    MACD -->|"÷ EMA lente"| PPO["📐 PPO"]
+    HLC["📈 Haut / Bas / Clôture"] --> CCI["🔄 CCI"]
 ```
 
 !!! tip "Oscillateurs bornés vs non bornés"

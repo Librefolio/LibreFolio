@@ -1,0 +1,529 @@
+"""Conditional simulation by historical resampling or correlated GBM."""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from backend.app.schemas.risk import (
+    RiskCompositionPolicy,
+    RiskErrorCode,
+    RiskMode,
+    RiskOutputKind,
+    RiskSamplingStrategy,
+    RiskScopeKind,
+    RiskSimulationBandPoint,
+    RiskSimulationCovarianceEstimator,
+    RiskSimulationDriftEstimator,
+    RiskSimulationOutput,
+    RiskSimulationProcess,
+    RiskSimulationRegime,
+)
+from backend.app.services.provider_registry import (
+    RiskAnalyticRegistry,
+    register_plugin,
+)
+from backend.app.services.risk.base import (
+    RiskAnalytic,
+    RiskComputation,
+    RiskUnavailableError,
+)
+from backend.app.services.risk.metrics import calendar_days_to_observations
+from backend.app.services.risk.quant import (
+    MAX_HISTORY_OBSERVATIONS,
+    MAX_SIMULATION_ASSETS,
+    MAX_SOBOL_DIMENSION,
+    SimulationEngineRequest,
+    SimulationResourceLimitError,
+    align_simple_returns,
+    estimate_drift_uncertainty,
+    estimate_gbm_parameters,
+    historical_returns_digest,
+    run_simulation,
+)
+from backend.app.services.risk.quant.models import DEFAULT_STEPS_PER_YEAR
+from backend.app.services.risk.quant.spawn_worker import (
+    SpawnWorkerQueueFullError,
+    SpawnWorkerRemoteError,
+    SpawnWorkerTimeoutError,
+)
+
+_DEFAULT_SEED = 123456
+
+# D379: every size limit is RESOURCE_LIMIT, and `remedy` names the setting that brings that limit
+# back within reach. One table, because "fewer paths or a shorter horizon" cures only the two path
+# budgets: the history needs a shorter period, the Sobol dimension ignores the paths, and no
+# setting shrinks the number of positions. The frontend turns a remedy it knows into a sentence;
+# a metric missing here still answers RESOURCE_LIMIT, without a remedy nobody has checked.
+_REMEDY_BY_METRIC = {
+    "portfolio_cells": "paths_or_horizon",
+    "stochastic_cells": "paths_or_horizon",
+    "history_cells": "period",
+    "observations": "period",
+    "assets": "positions",
+    "sobol_dimension": "horizon_or_sampling",
+}
+
+
+def _resource_limit(message: str, *, metric: str, actual: int, limit: int, **context: int) -> RiskUnavailableError:
+    details: dict[str, int | str] = {**context, "metric": metric, "actual": actual, "limit": limit}
+    remedy = _REMEDY_BY_METRIC.get(metric)
+    if remedy is not None:
+        details["remedy"] = remedy
+    return RiskUnavailableError(message, code=RiskErrorCode.RESOURCE_LIMIT, details=details)
+
+
+def _refuse_oversized_scope(asset_count: int) -> None:
+    """Refuse a scope the engine request cannot carry, before a request exists.
+
+    The request's own `max_length` fails as a pydantic ValidationError outside the plugin's `try`,
+    which the service can only log and report as EXECUTION_FAILED: "we failed", for a portfolio
+    that is only too big.
+    """
+    if asset_count > MAX_SIMULATION_ASSETS:
+        raise _resource_limit(
+            f"Simulation carries at most {MAX_SIMULATION_ASSETS} positions, and this scope holds {asset_count}",
+            metric="assets",
+            actual=asset_count,
+            limit=MAX_SIMULATION_ASSETS,
+        )
+
+
+class SimulationParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    process: RiskSimulationProcess = RiskSimulationProcess.BLOCK_BOOTSTRAP
+    regime: RiskSimulationRegime = RiskSimulationRegime.NONE
+    sampling_method: RiskSamplingStrategy = RiskSamplingStrategy.MC
+    horizon_days: int = Field(
+        365,
+        ge=1,
+        le=3650,
+        json_schema_extra={
+            "x-i18n-key": "risk.params.horizonDays",
+            "x-control-order": 3,
+            "x-step": 1,
+            "x-suffix": "days",
+        },
+    )
+    path_count: int = Field(
+        8192,
+        ge=256,
+        le=100_000,
+        json_schema_extra={
+            "x-i18n-key": "risk.params.paths",
+            "x-control-order": 4,
+            "x-step": 256,
+        },
+    )
+    random_seed: int | None = Field(None, ge=0, le=2**32 - 1)
+    sobol_start_index: int | None = Field(None, ge=0, le=2**32 - 1)
+    bootstrap_seed: int | None = Field(None, ge=0, le=2**32 - 1)
+    block_length_days: int | None = Field(None, ge=1, le=5_000)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_contract(cls, value):
+        if not isinstance(value, dict):
+            return value
+        data = dict(value)
+        legacy_aliases = {"sampling", "paths", "seed"} & set(data)
+
+        for legacy, canonical in (
+            ("sampling", "sampling_method"),
+            ("paths", "path_count"),
+        ):
+            if legacy not in data:
+                continue
+            legacy_value = data.pop(legacy)
+            if canonical in data and data[canonical] != legacy_value:
+                raise ValueError(f"{legacy} conflicts with {canonical}")
+            data.setdefault(canonical, legacy_value)
+
+        sampling = data.get("sampling_method", RiskSamplingStrategy.MC)
+        sampling_value = sampling.value if isinstance(sampling, RiskSamplingStrategy) else sampling
+        data.setdefault("process", cls._infer_process(data, sampling_value, bool(legacy_aliases)))
+        process = data["process"]
+        process_value = process.value if isinstance(process, RiskSimulationProcess) else process
+
+        if process_value == RiskSimulationProcess.BLOCK_BOOTSTRAP.value:
+            target = "bootstrap_seed"
+        else:
+            target = "sobol_start_index" if sampling_value == RiskSamplingStrategy.QMC.value else "random_seed"
+        if "seed" in data:
+            legacy_seed = data.pop("seed")
+            if legacy_seed is not None:
+                if target in data and data[target] != legacy_seed:
+                    raise ValueError(f"seed conflicts with {target}")
+                data.setdefault(target, legacy_seed)
+        data.setdefault(target, _DEFAULT_SEED)
+        return data
+
+    @staticmethod
+    def _infer_process(data: dict, sampling_value, from_legacy_payload: bool) -> str:
+        """Keep every caller that predates the resampler on the parametric engine.
+
+        Quasi-random sampling and both parametric seeds are meaningless for a
+        resampler, so naming one identifies GBM unambiguously.
+
+        A legacy alias identifies it just as surely. When ``sampling``,
+        ``paths`` and ``seed`` were minted, GBM was the only engine, so a
+        client still using those names also still renders the result under the
+        old labels — a fixed "assumptions" line that describes a lognormal
+        process. Answering it with resampled paths would put honest numbers
+        under a caption that misdescribes them, which is worse than answering
+        with the model its UI actually claims. New clients send the canonical
+        field names and land on the new default.
+        """
+        if from_legacy_payload:
+            return RiskSimulationProcess.GBM.value
+        if sampling_value == RiskSamplingStrategy.QMC.value:
+            return RiskSimulationProcess.GBM.value
+        if data.get("random_seed") is not None or data.get("sobol_start_index") is not None:
+            return RiskSimulationProcess.GBM.value
+        return RiskSimulationProcess.BLOCK_BOOTSTRAP.value
+
+    @model_validator(mode="after")
+    def validate_engine_contract(self) -> SimulationParams:
+        if self.process == RiskSimulationProcess.BLOCK_BOOTSTRAP:
+            self._validate_bootstrap_params()
+        else:
+            self._validate_parametric_params()
+        return self
+
+    def _validate_bootstrap_params(self) -> None:
+        if self.sampling_method != RiskSamplingStrategy.MC:
+            raise ValueError("block bootstrap resampling is pseudo-random and requires mc sampling")
+        if self.random_seed is not None or self.sobol_start_index is not None:
+            raise ValueError("block bootstrap forbids random_seed and sobol_start_index")
+        if self.bootstrap_seed is None:
+            raise ValueError("block bootstrap requires bootstrap_seed")
+
+    def _validate_parametric_params(self) -> None:
+        if self.regime != RiskSimulationRegime.NONE:
+            raise ValueError("prescribed regimes require the block bootstrap process")
+        if self.bootstrap_seed is not None or self.block_length_days is not None:
+            raise ValueError("bootstrap_seed and block_length_days are meaningful only for block bootstrap")
+        if self.sampling_method == RiskSamplingStrategy.MC:
+            if self.random_seed is None or self.sobol_start_index is not None:
+                raise ValueError("MC simulation requires random_seed and forbids sobol_start_index")
+            return
+        if self.sobol_start_index is None or self.random_seed is not None:
+            raise ValueError("QMC simulation requires sobol_start_index and forbids random_seed")
+        if self.path_count & (self.path_count - 1):
+            raise ValueError("QMC paths must be a power of two")
+
+
+@register_plugin(RiskAnalyticRegistry)
+class SimulationAnalytic(RiskAnalytic):
+    analytic_code = "simulation"
+    # 4.0.0 — the bootstrap resamples the observations the history holds in the
+    # calendar horizon (`steps_per_year` = the observed frequency), and the drift
+    # uncertainty compounds over those same observations. 3.x stepped once per
+    # calendar day, so on a weekday series "365 days" simulated 1.45 years.
+    algorithm_version = "4.0.0-bootstrap-quantlib-1.43"
+    name_i18n_key = "risk.analytics.simulation.name"
+    description_i18n_key = "risk.analytics.simulation.description"
+    output_kind = RiskOutputKind.SIMULATION
+    supported_scopes = (
+        RiskScopeKind.ASSET,
+        RiskScopeKind.PORTFOLIO,
+    )
+    supported_modes = (RiskMode.CURRENT_COMPOSITION,)
+    params_model = SimulationParams
+    min_observations = 30
+
+    async def execute(self, params, context):
+        prepared = context.prepared_series
+        if prepared is None or context.annualization_factor is None:
+            raise RiskUnavailableError(
+                "Simulation requires prepared historical asset returns",
+                code=RiskErrorCode.DATA_UNAVAILABLE,
+            )
+        asset_ids = context.scope_asset_ids
+        if not asset_ids:
+            raise RiskUnavailableError(
+                "Simulation has no usable assets",
+                code=RiskErrorCode.DATA_UNAVAILABLE,
+            )
+        prepared_by_asset = {item.returns.asset_id: item for item in prepared.series}
+        returns_by_asset = {asset_id: [float(point.value) for point in prepared_by_asset[asset_id].returns.points] for asset_id in asset_ids}
+        if context.scope_kind == RiskScopeKind.ASSET:
+            weights = [1.0]
+            cash_weight = 0.0
+        else:
+            weights = [
+                context.weights.get(
+                    asset_id,
+                    0.0,
+                )
+                for asset_id in asset_ids
+            ]
+            cash_weight = context.cash_weight
+
+        if params.process == RiskSimulationProcess.BLOCK_BOOTSTRAP:
+            engine_request, observations = self._build_bootstrap_request(
+                params,
+                returns_by_asset,
+                asset_ids,
+                weights,
+                cash_weight,
+                steps_per_year=context.annualization_factor,
+            )
+        else:
+            engine_request, observations = self._build_parametric_request(
+                params,
+                returns_by_asset,
+                weights,
+                cash_weight,
+                annualization_factor=context.annualization_factor,
+            )
+        try:
+            engine_result, _cache_hit, _worker_result = await run_simulation(
+                engine_request,
+                algorithm_version=(f"{self.analytic_code}@" f"{self.algorithm_version}"),
+            )
+        except SimulationResourceLimitError as exc:
+            # A budget refusal is about size, never about the parameters' validity: at the
+            # defaults it refuses the 67th position.
+            raise _resource_limit(
+                str(exc),
+                metric=exc.metric,
+                actual=exc.actual,
+                limit=exc.limit,
+            ) from exc
+        except SpawnWorkerQueueFullError as exc:
+            raise RiskUnavailableError(
+                str(exc),
+                code=RiskErrorCode.WORKER_BUSY,
+            ) from exc
+        except SpawnWorkerTimeoutError as exc:
+            raise RiskUnavailableError(
+                str(exc),
+                code=RiskErrorCode.EXECUTION_TIMEOUT,
+            ) from exc
+        except SpawnWorkerRemoteError as exc:
+            raise RiskUnavailableError(
+                str(exc),
+                code=self._remote_error_code(params, exc.remote_type),
+                details={"remote_type": exc.remote_type},
+            ) from exc
+
+        bands = [
+            RiskSimulationBandPoint(
+                day=day,
+                p05=(engine_result.percentile_paths[0][day]),
+                p50=(engine_result.percentile_paths[1][day]),
+                p95=(engine_result.percentile_paths[2][day]),
+            )
+            for day in range(params.horizon_days + 1)
+        ]
+        bootstrapped = params.process == RiskSimulationProcess.BLOCK_BOOTSTRAP
+        drift_uncertainty = self._drift_uncertainty(
+            returns_by_asset,
+            asset_ids,
+            weights,
+            calendar_days_to_observations(params.horizon_days, context.annualization_factor),
+        )
+        return RiskComputation(
+            output=RiskSimulationOutput(
+                process=params.process,
+                regime=params.regime,
+                sampling_method=params.sampling_method,
+                horizon_days=params.horizon_days,
+                path_count=params.path_count,
+                block_length_days=engine_result.block_length_days,
+                regime_declared_days=engine_result.regime_declared_days,
+                regime_applied_days=engine_result.regime_applied_days,
+                drift_estimator=(RiskSimulationDriftEstimator.EMPIRICAL_RESAMPLED if bootstrapped else RiskSimulationDriftEstimator.HISTORICAL_LOG_MLE),
+                covariance_estimator=(RiskSimulationCovarianceEstimator.NOT_ESTIMATED_JOINT_RESAMPLING if bootstrapped else RiskSimulationCovarianceEstimator.SAMPLE_LOG_RETURNS),
+                aggregation_policy=(RiskCompositionPolicy.CURRENT_BUY_AND_HOLD),
+                percentile_bands=bands,
+                terminal_mean_return=(engine_result.terminal_mean_return),
+                terminal_volatility=(engine_result.terminal_volatility),
+                probability_of_loss=(engine_result.probability_of_loss),
+                drift_uncertainty_factor=(drift_uncertainty[0] if drift_uncertainty else None),
+                drift_uncertainty_observations=(drift_uncertainty[1] if drift_uncertainty else None),
+            ),
+            method=self._method_label(params),
+            n_observations=observations,
+            sampling_method=params.sampling_method,
+            path_count=params.path_count,
+            random_seed=params.random_seed,
+            sobol_start_index=params.sobol_start_index,
+            bootstrap_seed=params.bootstrap_seed,
+        )
+
+    @staticmethod
+    def _remote_error_code(params: SimulationParams, remote_type: str) -> RiskErrorCode:
+        """Name the failure the engine actually had.
+
+        The parametric path rejects a covariance it cannot use. The bootstrap
+        has no covariance to reject: a refusal there means the return history
+        itself was unusable, and calling that "invalid covariance" would send
+        the user looking for a matrix that was never built.
+        """
+        if not remote_type.endswith("ValueError"):
+            return RiskErrorCode.EXECUTION_FAILED
+        if params.process == RiskSimulationProcess.BLOCK_BOOTSTRAP:
+            return RiskErrorCode.DATA_UNAVAILABLE
+        return RiskErrorCode.INVALID_COVARIANCE
+
+    @staticmethod
+    def _method_label(params: SimulationParams) -> str:
+        if params.process != RiskSimulationProcess.BLOCK_BOOTSTRAP:
+            return "quantlib_geometric_brownian_motion_historical_log_mle_sample_covariance"
+        if params.regime == RiskSimulationRegime.NONE:
+            return "numpy_joint_block_bootstrap_empirical_resampling"
+        return f"numpy_joint_block_bootstrap_prescribed_{params.regime.value}"
+
+    @staticmethod
+    def _drift_uncertainty(
+        returns_by_asset,
+        asset_ids,
+        weights,
+        horizon_observations: int,
+    ) -> tuple[float, int] | None:
+        """Qualify the band with the drift's own standard error, or disclose nothing.
+
+        Narrow on purpose: only the estimator's documented ValueError degrades to an
+        absent disclosure, because by this point the engine has already run on these
+        same returns. A broader catch would turn a coding fault into a missing field,
+        which reads exactly like a simulation that had nothing to disclose.
+        """
+        try:
+            return estimate_drift_uncertainty(
+                returns_by_asset,
+                asset_ids,
+                weights,
+                horizon_observations=horizon_observations,
+            )
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _build_bootstrap_request(
+        params: SimulationParams,
+        returns_by_asset,
+        asset_ids,
+        weights,
+        cash_weight,
+        *,
+        steps_per_year: float | None = None,
+    ) -> tuple[SimulationEngineRequest, int]:
+        """Carry the real history across the boundary, and nothing estimated."""
+        _refuse_oversized_scope(len(asset_ids))
+        matrix = align_simple_returns(returns_by_asset, asset_ids)
+        observations = int(matrix.shape[0])
+        # The whole aligned history crosses the process boundary, so its length has the same
+        # ceiling as the request's field. A shorter period holds fewer observations.
+        if observations > MAX_HISTORY_OBSERVATIONS:
+            raise _resource_limit(
+                f"Simulation history holds {observations} observations, above the supported maximum of {MAX_HISTORY_OBSERVATIONS}",
+                metric="observations",
+                actual=observations,
+                limit=MAX_HISTORY_OBSERVATIONS,
+            )
+        # DECLARED, because the engine's identical check cannot be: the engine
+        # raises a bare ValueError, which the service can only report as "we
+        # failed". The refusal below is a refusal of the USER'S CHOICE, so it
+        # has to name that choice.
+        #
+        # It is unreachable by `validate_params`, and not by oversight: the
+        # predicate compares a parameter against the OBSERVATION COUNT, and
+        # parameter validation runs before any series exists. Measured: the same
+        # `block_length_days=900` is accepted against 1000 observations and
+        # refused against 30 -- the payload never changes, only the user's data.
+        # The block is in calendar days and the history in observations, so the
+        # block is converted at the history's own frequency before they meet.
+        #
+        # INVALID_PARAMETERS rather than INSUFFICIENT_HISTORY on purpose. The
+        # latter says "get more history", which the user usually cannot do; the
+        # block length is a control they can simply lower. The code has to name
+        # the action that is actually available.
+        if params.block_length_days is not None:
+            block_length_observations = calendar_days_to_observations(
+                params.block_length_days,
+                DEFAULT_STEPS_PER_YEAR if steps_per_year is None else steps_per_year,
+            )
+            if block_length_observations > observations:
+                raise RiskUnavailableError(
+                    f"block_length_days {params.block_length_days} spans {block_length_observations} observations, more than the {observations} available in the selected range",
+                    code=RiskErrorCode.INVALID_PARAMETERS,
+                    details={
+                        "block_length_days": params.block_length_days,
+                        "block_length_observations": block_length_observations,
+                        "observations": observations,
+                    },
+                )
+        request = SimulationEngineRequest(
+            process=RiskSimulationProcess.BLOCK_BOOTSTRAP,
+            regime=params.regime,
+            sampling_method=RiskSamplingStrategy.MC,
+            asset_ids=list(asset_ids),
+            historical_returns=matrix.tolist(),
+            historical_digest=historical_returns_digest(matrix),
+            block_length_days=params.block_length_days,
+            steps_per_year=steps_per_year,
+            bootstrap_seed=params.bootstrap_seed,
+            weights=weights,
+            cash_weight=cash_weight,
+            horizon_days=params.horizon_days,
+            path_count=params.path_count,
+        )
+        return request, observations
+
+    @staticmethod
+    def _build_parametric_request(
+        params: SimulationParams,
+        returns_by_asset,
+        weights,
+        cash_weight,
+        *,
+        annualization_factor: float,
+    ) -> tuple[SimulationEngineRequest, int]:
+        _refuse_oversized_scope(len(returns_by_asset))
+        estimates = estimate_gbm_parameters(
+            returns_by_asset,
+            annualization_factor=annualization_factor,
+        )
+        # DECLARED for the same reason as the bootstrap guard above, and with a
+        # different code because it is a different refusal.
+        #
+        # The predicate multiplies a parameter (`horizon_days`) by the SIZE OF
+        # THE USER'S SCOPE, which `validate_params` cannot see, so no amount of
+        # parameter validation can move this check earlier. Measured against the
+        # live limit: at the maximum horizon the same request is accepted with 5
+        # assets and refused with 6 -- ordinary portfolios, not a pathological
+        # input.
+        #
+        # RESOURCE_LIMIT -- "This calculation is too large to run." -- because
+        # that is literally the fact. Nothing is wrong with the parameters or
+        # with the data: the requested sequence simply does not fit the
+        # generator. The path count plays no part in the dimension, so the
+        # remedy is a shorter horizon or MC sampling (D379).
+        if params.sampling_method == RiskSamplingStrategy.QMC:
+            dimension = len(estimates.asset_ids) * params.horizon_days
+            if dimension > MAX_SOBOL_DIMENSION:
+                raise _resource_limit(
+                    f"QMC needs {dimension} Sobol dimensions ({len(estimates.asset_ids)} assets x {params.horizon_days} days), above the supported maximum of {MAX_SOBOL_DIMENSION}",
+                    metric="sobol_dimension",
+                    actual=dimension,
+                    limit=MAX_SOBOL_DIMENSION,
+                    required_dimension=dimension,
+                    assets=len(estimates.asset_ids),
+                    horizon_days=params.horizon_days,
+                )
+        request = SimulationEngineRequest(
+            process=params.process,
+            sampling_method=params.sampling_method,
+            asset_ids=list(estimates.asset_ids),
+            annual_drifts=list(estimates.annual_drifts),
+            annual_covariance=[list(row) for row in estimates.annual_covariance],
+            weights=weights,
+            cash_weight=cash_weight,
+            horizon_days=params.horizon_days,
+            path_count=params.path_count,
+            random_seed=params.random_seed,
+            sobol_start_index=params.sobol_start_index,
+        )
+        return request, estimates.observations

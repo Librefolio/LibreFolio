@@ -10,7 +10,7 @@ Ils sont précieux pour :
 
 ---
 
-## 📋 Aperçu des Benchmarks
+## 📋 Vue d'ensemble des benchmarks
 
 | Benchmark | Modèle | Forme sur échelle linéaire | Détails |
 |-----------|-------|----------------------|---------|

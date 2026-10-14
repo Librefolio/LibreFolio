@@ -137,10 +137,14 @@ FX_REAL_COMPONENT_IDS: tuple[str, ...] = tuple(spec.component_id for spec in ASS
 ASSET_REAL_COMPONENT_COUNT = 14
 FX_REAL_COMPONENT_COUNT = 12
 
-assert len(ASSET_FX_COMPONENTS) == ASSET_REAL_COMPONENT_COUNT + FX_REAL_COMPONENT_COUNT, f"ASSET_FX_COMPONENTS must contain exactly {ASSET_REAL_COMPONENT_COUNT + FX_REAL_COMPONENT_COUNT} real component_ids, got {len(ASSET_FX_COMPONENTS)}"
-assert len(ASSET_REAL_COMPONENT_IDS) == ASSET_REAL_COMPONENT_COUNT, f"expected {ASSET_REAL_COMPONENT_COUNT} Asset component_ids, got {len(ASSET_REAL_COMPONENT_IDS)}"
-assert len(FX_REAL_COMPONENT_IDS) == FX_REAL_COMPONENT_COUNT, f"expected {FX_REAL_COMPONENT_COUNT} FX component_ids, got {len(FX_REAL_COMPONENT_IDS)}"
-assert len(set(ASSET_REAL_COMPONENT_IDS) | set(FX_REAL_COMPONENT_IDS)) == ASSET_REAL_COMPONENT_COUNT + FX_REAL_COMPONENT_COUNT, "Asset and FX component_ids must not overlap"
+if len(ASSET_FX_COMPONENTS) != ASSET_REAL_COMPONENT_COUNT + FX_REAL_COMPONENT_COUNT:
+    raise AssetFxRegistryError(f"ASSET_FX_COMPONENTS must contain exactly {ASSET_REAL_COMPONENT_COUNT + FX_REAL_COMPONENT_COUNT} real component_ids, got {len(ASSET_FX_COMPONENTS)}")
+if len(ASSET_REAL_COMPONENT_IDS) != ASSET_REAL_COMPONENT_COUNT:
+    raise AssetFxRegistryError(f"expected {ASSET_REAL_COMPONENT_COUNT} Asset component_ids, got {len(ASSET_REAL_COMPONENT_IDS)}")
+if len(FX_REAL_COMPONENT_IDS) != FX_REAL_COMPONENT_COUNT:
+    raise AssetFxRegistryError(f"expected {FX_REAL_COMPONENT_COUNT} FX component_ids, got {len(FX_REAL_COMPONENT_IDS)}")
+if len(set(ASSET_REAL_COMPONENT_IDS) | set(FX_REAL_COMPONENT_IDS)) != ASSET_REAL_COMPONENT_COUNT + FX_REAL_COMPONENT_COUNT:
+    raise AssetFxRegistryError("Asset and FX component_ids must not overlap")
 
 
 def _default_placeholders() -> Sequence[ComponentSpec]:

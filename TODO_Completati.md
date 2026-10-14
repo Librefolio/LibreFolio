@@ -4,6 +4,88 @@ Questo file documenta i TODO che sono stati completati durante lo sviluppo di Li
 
 ---
 
+## 🔤 L'audit i18n distingue «usata», «morta» e «non verificata» ✅
+
+**Data completamento:** 9 Ottobre 2026
+**Status:** ✅ COMPLETATO — piano `LibreFolio_developer_journal/Release_2/phases/29_i18nAudit/plan-phase00I18nAudit.prompt.md` (workstream O); lotti integrati nei treni 8, 9, 10, 14, 19 e 22, cartella archiviata il 09/10
+
+### Risultato
+
+- Chiusa la voce di `TODO_FUTURI.md` «L'audit i18n non può dire "inutilizzata" su un terzo del catalogo» (S4, 21/09): un'interpolazione al primo segmento (`risk.${prefix}.${code}`) faceva risultare «usata» ogni chiave del namespace, un terzo del catalogo.
+- S2 (R1-R7): l'audit legge le unioni tipizzate dei prefissi, anche con un solo membro (R3), così `risk.*` è verificabile. S12 (R8-R12): i prefissi legacy che non si possono risolvere rendono le chiavi «non verificate», non «usate».
+- Le 4 chiavi morte della voce sono tolte: `risk.simulation.regimeTruncated` (S7c) e `risk.levels.l3.{beta,sharpe,sortino}Help` (`f55b2e42a`).
+- Al 09/10 `./dev.py i18n audit` dà 4215 chiavi, 0 morte e 3 non verificate, con lo stesso insieme di chiavi nelle 4 lingue.
+- I residui sono nel backlog dopo la 1.2: `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/README.md`, voci O-1…O-18.
+
+---
+
+## 🆔 Gli id degli asset (e delle altre tabelle) non si riusano più ✅
+
+**Data completamento:** 8 Ottobre 2026
+**Status:** ✅ COMPLETATO — piano `LibreFolio_developer_journal/Release_2/phases/34_accountAndIdReuse/plan-phase00AccountAndIdReuse.prompt.md` (workstream L); commit `6b66ee306`, `298ed96f3` e `b0740c901`, merge `637c5d105` (treno 12)
+
+### Risultato
+
+- `AUTOINCREMENT` sulle tabelle i cui id escono dal backend e restano salvati (censimento del piano, §1.2, approvato dal developer):
+  `users`, `brokers`, `assets`, `transactions`, `fx_conversion_routes`, `asset_events`. Fuori le tabelle interne e le serie
+  (`price_history`, `fx_rates`).
+- I DB nuovi lo hanno dallo schema; i modelli dichiarano `sqlite_autoincrement`, così anche `create_all` lo produce. Un test di
+  schema fissa il censimento, perché SQLAlchemy non rilegge AUTOINCREMENT e una futura migrazione batch lo perderebbe.
+- I DB esistenti li converte un sottosistema nuovo, i **fix post-migrazione** (`backend/app/db/post_migration/`), all'avvio dopo
+  `alembic upgrade head` e con lo script offline `python -m backend.app.db.post_migration [--dry-run]` a server spento. La
+  conversione evita il rischio annotato qui il 01/10, le chiavi esterne accese durante le migrazioni:
+  - connessione SQLite diretta, chiavi esterne spente fuori dalla transazione;
+  - `integrity_check` prima, poi un backup, che si cancella dopo un fix verificato e resta se qualcosa fallisce;
+  - una transazione con verifiche, e l'avvio che non si blocca mai.
+- Gli id restano identici; da lì un id cancellato non torna più. Le cartelle `broker_<id>` già orfane vanno in quarantena e
+  poi si cancellano, così il primo broker nuovo non eredita i file di uno vecchio.
+- Provato su un DB reale della corsia (7459 righe): dati e indici identici, chiavi esterne pulite, seconda esecuzione senza
+  niente da fare.
+
+### Ancora aperto
+
+- Decidere se `BenchmarkSelect` (Risk) può tornare a cancellare gli id spariti: adesso un id non si riusa più.
+- Il rapporto di fattibilità del motore FIFO
+  (`LibreFolio_developer_journal/RoadmapV4_UI/fifo-engine/v1/high-level-plan_v1-feasibility-report.md:300`) dava la PK per
+  «autoincrementante mai riusata»: adesso per `transactions` è vero.
+
+---
+
+## 🚨 Feedback import e UX urgenti — Gruppo E ✅
+
+**Data completamento tecnico e applicazione al checkout:** 9 Settembre 2026
+**Status:** ✅ COMPLETATO — commit/SHA e archivio in attesa del commit manuale
+
+### Risultato
+
+- Inspector asset del wizard riparato: conferme annidate raggiungibili e lettura
+  completa; edit estranei non cancellano descrizione o distribuzioni.
+- Cambio valuta bulk completo e preciso, con broker nascosto coerente, date
+  distinte preservate e nessun bypass dei controlli finanziari.
+- Matching Generic CSV allineato al backend per identificatori primari/alternativi,
+  refresh e ambiguita'; prima creazione asset resta esplicita.
+- Diagnostica deficit con tutte le righe coinvolte e ordinamento cronologico
+  stabile sotto filtri, senza alterare pairing o ordine del payload.
+- Errori broker duplicato e lifecycle create/reopen localizzati e azionabili.
+- Files con uploader ordinabile e filtro multi-selezione; header auto-hide
+  desktop/mobile; tooltip valuta prezzi; supporto in About/DonationPopup con
+  cinque social e fallback onesti.
+- Controllo aggiornamenti distingue errori/cache/dismissal, mostra la versione
+  remota e verifica l'immagine pubblica con challenge GHCR sul backend same-origin.
+- Guida Generic CSV chiarita: un file piatto per broker, valute multiple ammesse,
+  nessuna generazione FX nel parser.
+
+### Evidenze e confini
+
+- Piano, cinque round, checklist e inventario:
+  [`14_feedbackImportUrgent`](LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/manifest-integrazione-E.md).
+- Tutte le fixture versionate sono sintetiche; ledger, DB, upload, backup e log
+  privati sono esclusi.
+- Restano aperti privacy globale, YOC, onboarding e i tre approfondimenti
+  multicurrency/esposizione in `TODO_FUTURI.md`.
+
+---
+
 ## 📝 Changelog nella UI (click sulla versione) ✅
 
 **Data aggiunta**: (preesistente, sezione orfana in TODO_FUTURI)

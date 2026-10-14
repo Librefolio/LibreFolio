@@ -1,11 +1,19 @@
 """
 Small coverage tests for provider registries.
+
+Two sections pin a contract each: the thread-safety of plugin discovery and catalogue iteration (V1), and the plugin
+folder layout discovery loads (U-1), last.
 """
 
 from __future__ import annotations
 
 import shutil
-from dataclasses import dataclass
+import sys
+import threading
+import traceback
+import types
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass, field
 from importlib.machinery import ModuleSpec
 from pathlib import Path
 from uuid import uuid4
@@ -14,7 +22,7 @@ import pytest
 
 from backend.app.config import DEFAULT_TEST_DATA_DIR
 from backend.app.services import provider_registry as registry_module
-from backend.app.services.provider_registry import AbstractProviderRegistry, BRIMProviderRegistry
+from backend.app.services.provider_registry import AbstractPluginRegistry, AbstractProviderRegistry, BRIMProviderRegistry, PluginDiscoveryFailure, register_provider
 
 
 @dataclass
@@ -204,3 +212,596 @@ def test_brim_list_plugin_info_returns_all_registered_plugins():
         ("low_priority", "Low Priority"),
         ("high_priority", "High Priority"),
     ]
+
+
+# ============================================================================
+# THREAD SAFETY OF DISCOVERY AND ITERATION (V1)
+# plan-phase00BrimDanskeBankStep4Implementation, §19.3 (diagnosis) and §19.6 (contract)
+# ============================================================================
+
+# Every wait below is bounded by this: a regression fails the test, it never hangs the suite.
+_WAIT_SECONDS = 30.0
+
+# How long the race test lets the second caller try to reach the catalogue before concluding that it is waiting for
+# the discovery in progress. It only bounds the chance the DEFECT gets to show itself (an unguarded caller needs a few
+# milliseconds of uncontended work to get there); it never decides the verdict on a fixed registry, where the second
+# caller is parked on the lock, the grace always runs out, and the caller is then released onto the complete
+# catalogue whatever the value. The price is paid once per run, on the green path only.
+_LATE_CALLER_GRACE_SECONDS = 2.0
+
+# Prepended to every lab plugin module: the real plugins' registration path, plus the harness through which the
+# module reaches its throw-away registry and the test's gates.
+_PLUGIN_HEADER = """\
+import threading
+
+from backend.app.services.provider_registry import register_provider
+
+import {harness} as harness
+
+"""
+
+# Imported first (discovery goes in sorted order). When the second caller instantiates it while walking the
+# catalogue, can_parse holds that caller until plugin_b has registered: a live iteration is then bound to see the
+# catalogue change size under it.
+_RACE_PLUGIN_A = """
+@register_provider(harness.registry)
+class RacePluginA:
+    provider_code = "race_a"
+    provider_name = "Race plugin A"
+    detection_priority = 200
+
+    def can_parse(self, file_path) -> bool:
+        gates = harness.gates
+        if threading.current_thread() is gates.late_caller:
+            gates.late_caller_iterating.set()
+            gates.b_registered.wait(timeout=harness.WAIT_SECONDS)
+        return True
+
+
+harness.gates.a_registered.set()
+"""
+
+# The slow plugin: the discovering thread stays inside this module (already in sys.modules, not yet registered)
+# until the test releases it.
+_RACE_PLUGIN_B = """
+harness.gates.b_import_started.set()
+harness.gates.release_b.wait(timeout=harness.WAIT_SECONDS)
+
+
+@register_provider(harness.registry)
+class RacePluginB:
+    provider_code = "race_b"
+    provider_name = "Race plugin B"
+    detection_priority = 100
+
+    def can_parse(self, file_path) -> bool:
+        return True
+
+
+harness.gates.b_registered.set()
+"""
+
+# Imported first: registers, then, still inside discovery and on the discovering thread, asks the registry that is
+# importing it for its catalogue.
+_REENTRANT_PLUGIN = """
+@register_provider(harness.registry)
+class ReentrantPlugin:
+    provider_code = "reentrant"
+    provider_name = "Re-entrant plugin"
+
+
+harness.seen_by_callback = harness.registry.list_plugin_codes()
+"""
+
+_PLUGIN_AFTER_REENTRANT = """
+@register_provider(harness.registry)
+class AfterReentrantPlugin:
+    provider_code = "after_reentrant"
+    provider_name = "Plugin imported after the re-entrant one"
+"""
+
+
+@dataclass
+class _RaceGates:
+    """The events the race test shares with its plugin modules, through the harness module."""
+
+    a_registered: threading.Event = field(default_factory=threading.Event)
+    b_import_started: threading.Event = field(default_factory=threading.Event)
+    release_b: threading.Event = field(default_factory=threading.Event)
+    b_registered: threading.Event = field(default_factory=threading.Event)
+    late_caller_iterating: threading.Event = field(default_factory=threading.Event)
+    late_caller: threading.Thread | None = None
+
+    def release_everything(self) -> None:
+        """Never leave a thread parked on a gate, whatever happened to the test."""
+        self.release_b.set()
+        self.b_registered.set()
+
+
+class _ThreadedCall:
+    """One registry call on its own daemon thread, keeping what it returned or raised."""
+
+    def __init__(self, name: str, call: Callable[[], object]):
+        self._call = call
+        self.result: object = None
+        self.error: Exception | None = None
+        self.trace = ""
+        self.thread = threading.Thread(target=self._run, name=name, daemon=True)
+
+    def _run(self) -> None:
+        try:
+            self.result = self._call()
+        except Exception as exc:  # what the call raised is exactly what the test asserts on
+            self.error = exc
+            self.trace = traceback.format_exc()
+
+    def start(self) -> _ThreadedCall:
+        self.thread.start()
+        return self
+
+    def finish(self, hung: str = "the registry call hung") -> None:
+        """Join with a bound: a stuck call fails the test instead of hanging the suite (the thread is a daemon)."""
+        self.thread.join(timeout=_WAIT_SECONDS)
+        assert not self.thread.is_alive(), f"{self.thread.name} still running after {_WAIT_SECONDS}s: {hung}"
+
+    @property
+    def outcome(self) -> tuple[str, object]:
+        if self.error is not None:
+            return ("raised", f"{type(self.error).__name__}: {self.error}")
+        return ("returned", self.result)
+
+
+@dataclass
+class _PluginLab:
+    """A cold throw-away BRIM registry discovering plugin modules from its own folder, under its own namespace."""
+
+    registry: type[BRIMProviderRegistry]
+    plugin_dir: Path
+    harness: types.ModuleType
+
+    def write_plugin(self, stem: str, source: str) -> None:
+        """Write a plugin module that registers itself through @register_provider, as the real plugins do."""
+        (self.plugin_dir / f"{stem}.py").write_text(_PLUGIN_HEADER.format(harness=self.harness.__name__) + source, encoding="utf-8")
+
+
+@pytest.fixture
+def plugin_lab(tmp_path: Path) -> Iterator[_PluginLab]:
+    """A cold BRIM registry over `tmp_path`; the real registries and their sys.modules entries are never touched.
+
+    It subclasses BRIMProviderRegistry because that is where the live failure happened: `get_compatible_plugins`
+    (from `save_uploaded_file`, in `asyncio.to_thread`) instantiates every plugin inside its loop and calls
+    `can_parse`, which is what lets a test hold a caller exactly mid-iteration. The class is created per test, so
+    `__init_subclass__` gives it empty storage and a cold discovery flag (and, once V1 is fixed, its own lock).
+    Plugin modules reach it, and the test's gates, through a harness module named after the same unique namespace;
+    every module under that namespace leaves sys.modules at teardown.
+    """
+    namespace = f"lf_registry_lab_{uuid4().hex}"
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+
+    class LabBRIMRegistry(BRIMProviderRegistry):
+        @classmethod
+        def _get_provider_folder(cls) -> str:
+            return "registry_lab_unused"
+
+        @classmethod
+        def _get_plugin_directory(cls) -> Path:
+            return plugin_dir
+
+        @classmethod
+        def _get_module_namespace(cls) -> str:
+            return namespace
+
+    harness = types.ModuleType(f"{namespace}_harness")
+    harness.registry = LabBRIMRegistry
+    harness.WAIT_SECONDS = _WAIT_SECONDS
+    sys.modules[harness.__name__] = harness
+    try:
+        yield _PluginLab(registry=LabBRIMRegistry, plugin_dir=plugin_dir, harness=harness)
+    finally:
+        for module_name in list(sys.modules):
+            if module_name.startswith(namespace):
+                sys.modules.pop(module_name, None)
+
+
+def _race_diagnosis(lab: _PluginLab, calls: list[_ThreadedCall], iterated_mid_discovery: bool) -> str:
+    """Why the race test failed: whether the second caller waited, what discovery reported, every traceback."""
+    if iterated_mid_discovery:
+        verdict = "the second caller walked the catalogue while the first was still importing plugin_b: it did not wait for the discovery in progress"
+    else:
+        verdict = f"the second caller did not reach the catalogue within {_LATE_CALLER_GRACE_SECONDS}s: it waited for the discovery in progress"
+    lines = [verdict, f"discovery errors: {lab.registry.get_discovery_errors()!r}"]
+    lines += [f"{call.thread.name} raised:\n{call.trace}" for call in calls if call.error is not None]
+    return "\n".join(lines)
+
+
+def test_concurrent_caller_during_cold_discovery_waits_for_the_full_catalogue(plugin_lab, tmp_path):
+    """V1: a caller arriving while another thread is still discovering waits, then sees every plugin.
+
+    The live HTTP 500: two parallel uploads right after server start, on a cold BRIM catalogue. Here the first
+    caller is inside plugin_b's import (parked on a gate, after plugin_a registered) when the second calls in.
+    Unguarded, the second skips every module already in sys.modules (each is inserted before it runs), declares
+    discovery done and walks the live catalogue while the first is still registering: `RuntimeError: dictionary
+    changed size during iteration` (the 500), or, silently, a partial catalogue (an upload then keeps an incomplete
+    `compatible_plugins` for good). Fixed, it waits on the registry lock and both callers see [A, B].
+    """
+    lab = plugin_lab
+    gates = lab.harness.gates = _RaceGates()
+    lab.write_plugin("plugin_a", _RACE_PLUGIN_A)
+    lab.write_plugin("plugin_b", _RACE_PLUGIN_B)
+    statement = tmp_path / "statement.xlsx"
+    statement.write_bytes(b"never read: every race plugin accepts any file")
+    first = _ThreadedCall("registry-race-first", lambda: lab.registry.get_compatible_plugins(statement))
+    second = _ThreadedCall("registry-race-second", lambda: lab.registry.get_compatible_plugins(statement))
+    gates.late_caller = second.thread
+    try:
+        first.start()
+        assert gates.b_import_started.wait(_WAIT_SECONDS), "the first caller never reached plugin_b: discovery did not run"
+        # Verified, not inferred: discovery is mid-flight, plugin_a registered and plugin_b still importing.
+        assert gates.a_registered.is_set(), "plugin_b is importing but plugin_a never registered"
+        assert not gates.b_registered.is_set(), "plugin_b registered before the test released it"
+        second.start()
+        # Release plugin_b as soon as the second caller is walking the catalogue (the defect), or once the grace runs
+        # out without it getting there (the fix: it is waiting for the discovery in progress).
+        iterated_mid_discovery = gates.late_caller_iterating.wait(timeout=_LATE_CALLER_GRACE_SECONDS)
+        gates.release_b.set()
+        first.finish()
+        second.finish()
+    finally:
+        gates.release_everything()
+
+    full_catalogue = ["race_a", "race_b"]  # get_compatible_plugins orders by detection_priority, descending: 200, 100
+    outcomes = {"first": first.outcome, "second": second.outcome}
+    expected = {"first": ("returned", full_catalogue), "second": ("returned", full_catalogue)}
+    assert outcomes == expected, _race_diagnosis(lab, [first, second], iterated_mid_discovery)
+
+
+def test_plugin_calling_back_into_its_registry_during_discovery_does_not_deadlock(plugin_lab):
+    """Guard for V1: discovery stays re-entrant on its own thread (green before the fix and after it).
+
+    A plugin module that queries its own registry while discovery is importing it re-enters `auto_discover` on the
+    discovering thread. Unlocked, that just works; under a per-registry lock it works only if the lock is re-entrant.
+    Discovery runs on a daemon thread with a bounded join, so a regression fails here instead of hanging the suite.
+    """
+    lab = plugin_lab
+    lab.harness.seen_by_callback = None
+    lab.write_plugin("plugin_a_reentrant", _REENTRANT_PLUGIN)
+    lab.write_plugin("plugin_b_after", _PLUGIN_AFTER_REENTRANT)
+
+    discovery = _ThreadedCall("registry-reentrant-discovery", lab.registry.list_plugin_codes).start()
+    discovery.finish(hung="discovery deadlocked: a plugin calling back into its own registry while being imported never got an answer")
+
+    assert discovery.error is None, discovery.trace
+    errors = lab.registry.get_discovery_errors()
+    assert errors == (), f"a plugin module failed to import: {errors!r}"
+    assert sorted(discovery.result) == ["after_reentrant", "reentrant"]
+    assert "reentrant" in lab.harness.seen_by_callback
+
+
+class _CataloguePlugin:
+    """A plain plugin answering whatever the five catalogue iterations ask of one."""
+
+    provider_code = "unset"
+    provider_name = "unset"
+    detection_priority = 100
+
+    def can_parse(self, file_path: Path) -> bool:
+        return True
+
+    def to_plugin_info(self) -> DummyPluginInfo:
+        return DummyPluginInfo(code=self.provider_code, name=self.provider_name)
+
+    def shutdown(self) -> None:
+        """Nothing to release."""
+
+
+# The five places that walk a registry's catalogue (§19.6); each instantiates every plugin inside its loop.
+_CATALOGUE_ITERATIONS: dict[str, Callable[[type[BRIMProviderRegistry], Path], object]] = {
+    "list_providers": lambda registry, statement: registry.list_providers(),
+    "shutdown_all_providers": lambda registry, statement: registry.shutdown_all_providers(),
+    "auto_detect_plugin": lambda registry, statement: registry.auto_detect_plugin(statement),
+    "get_compatible_plugins": lambda registry, statement: registry.get_compatible_plugins(statement),
+    "list_plugin_info": lambda registry, statement: registry.list_plugin_info(),
+}
+
+
+@pytest.mark.parametrize("site", list(_CATALOGUE_ITERATIONS))
+def test_catalogue_iteration_survives_a_registration_on_another_thread(plugin_lab, tmp_path, site):
+    """V1, the snapshot half: every site that walks the catalogue walks a copy of it.
+
+    After discovery, a plugin registered on another thread while `site` is mid-loop must not break that loop. Today
+    the five sites walk the live storage dict and raise `RuntimeError: dictionary changed size during iteration`.
+    The re-detection of changed plugins chosen in §19.5 will make such a late registration an ordinary event.
+    """
+    lab = plugin_lab
+    lab.registry.auto_discover()  # the plugin folder is empty: discovery is over before the catalogue fills
+    iterating, late_registered = threading.Event(), threading.Event()
+    statement = tmp_path / "statement.csv"
+    iterator = _ThreadedCall(f"registry-iteration-{site}", lambda: _CATALOGUE_ITERATIONS[site](lab.registry, statement))
+
+    @register_provider(lab.registry)
+    class HeldPlugin(_CataloguePlugin):
+        provider_code = "held"
+        provider_name = "Plugin the iteration is holding"
+
+        def __init__(self):
+            # The five sites instantiate each plugin inside their loop: hold the iterating thread right there, once,
+            # until the late plugin has registered (registration instantiates it too, on the test's own thread).
+            if threading.current_thread() is iterator.thread and not iterating.is_set():
+                iterating.set()
+                late_registered.wait(timeout=_WAIT_SECONDS)
+
+    class LatePlugin(_CataloguePlugin):
+        provider_code = "late"
+        provider_name = "Plugin registered mid-iteration"
+
+    try:
+        iterator.start()
+        assert iterating.wait(_WAIT_SECONDS), f"{site} never instantiated a plugin on its own thread"
+        register_provider(lab.registry)(LatePlugin)
+    finally:
+        late_registered.set()
+    iterator.finish()
+
+    assert iterator.error is None, f"{site} walked the live catalogue, and a registration on another thread broke it: {iterator.outcome}\n{iterator.trace}"
+    assert sorted(lab.registry.list_plugin_codes()) == ["held", "late"]
+
+
+# ============================================================================
+# PLUGIN FOLDERS (U-1)
+# A plugin is a folder <name>/: __init__.py holds only its docstring, the code is in plugin.py, loaded as
+# <namespace>.<name>.plugin after its package. A single <name>.py module is still discovered, for fixtures and test
+# registries. Every test writes real plugin files under tmp_path and discovers them with the real loaders.
+# ============================================================================
+
+# Prepended to every plugin.py and single-file plugin of the lab: the real plugins' registration path, plus the harness
+# through which the module reaches its throw-away registry.
+_LAB_HEADER = """\
+from backend.app.services.provider_registry import register_plugin
+
+import {harness} as harness
+
+"""
+
+# A plugin body registering one class, under the code the Python expression `code` evaluates to.
+_REGISTERS = """
+@register_plugin(harness.registry)
+class Plugin:
+    plugin_code = {code}
+"""
+
+# The body of a plugin that must never be imported: importing it would be a discovery failure the test sees.
+_NEVER_IMPORTED = 'raise AssertionError("this plugin must never be imported")\n'
+
+
+@dataclass
+class _FolderLab:
+    """A cold registry discovering `plugin_dir` under a namespace of its own: the throw-away twin of a plugin family."""
+
+    registry: type[AbstractPluginRegistry]
+    plugin_dir: Path
+    namespace: str
+    harness: types.ModuleType
+
+    def module(self, name: str, body: str | None = None) -> None:
+        """``<name>.py``, a single-file plugin registering the code ``name``, unless ``body`` replaces its body."""
+        (self.plugin_dir / f"{name}.py").write_text(self._plugin_source(name, body), encoding="utf-8")
+
+    def folder(self, name: str, *, plugin: str | None = None, init: str | None = None, files: dict[str, str] | None = None, without: tuple[str, ...] = ()) -> Path:
+        """``<name>/``: ``__init__.py`` a docstring and ``plugin.py`` registering the code ``name``, unless replaced.
+
+        ``files`` adds more files, written as given (a ``_helper.py``); ``without`` leaves out any of them.
+        """
+        folder = self.plugin_dir / name
+        folder.mkdir()
+        sources = {
+            "__init__.py": f'"""Plugin {name} of the lab: the code is in plugin.py."""\n' if init is None else init,
+            "plugin.py": self._plugin_source(name, plugin),
+            **(files or {}),
+        }
+        for filename, source in sources.items():
+            if filename not in without:
+                (folder / filename).write_text(source, encoding="utf-8")
+        return folder
+
+    def _plugin_source(self, name: str, body: str | None) -> str:
+        return _LAB_HEADER.format(harness=self.harness.__name__) + (_REGISTERS.format(code=repr(name)) if body is None else body)
+
+    def discover(self) -> tuple[list[str], tuple[PluginDiscoveryFailure, ...]]:
+        """Run discovery: the codes registered, in registration order, and the failures."""
+        return self.registry.list_plugin_codes(), self.registry.get_discovery_errors()
+
+    def loaded(self) -> set[str]:
+        """The modules of the lab's namespace in sys.modules (the harness sits beside the namespace, not under it)."""
+        return {module_name for module_name in sys.modules if module_name.startswith(self.namespace + ".")}
+
+
+@pytest.fixture
+def folder_lab(tmp_path: Path) -> Iterator[_FolderLab]:
+    """A cold plugin registry over a real folder under `tmp_path`, under a namespace of its own.
+
+    The class is created per test, so `__init_subclass__` gives it empty storage and a cold discovery. It ignores the
+    stem ``base``, as the signal and risk registries do, and does not raise on discovery errors, so a test reads them.
+    The plugins reach it through a harness module named after the same namespace; every module of that namespace, the
+    harness included, leaves sys.modules at teardown.
+    """
+    namespace = f"lf_folder_lab_{uuid4().hex}"
+    plugin_dir = tmp_path / "plugins"
+    plugin_dir.mkdir()
+
+    class LabRegistry(AbstractPluginRegistry):
+        @classmethod
+        def _get_plugin_folder(cls) -> str:
+            return "folder_lab_unused"
+
+        @classmethod
+        def _get_plugin_directory(cls) -> Path:
+            return plugin_dir
+
+        @classmethod
+        def _get_module_namespace(cls) -> str:
+            return namespace
+
+        @classmethod
+        def _ignored_module_stems(cls) -> frozenset[str]:
+            return frozenset({"base"})
+
+    harness = types.ModuleType(f"{namespace}_harness")
+    harness.registry = LabRegistry
+    sys.modules[harness.__name__] = harness
+    try:
+        yield _FolderLab(registry=LabRegistry, plugin_dir=plugin_dir, namespace=namespace, harness=harness)
+    finally:
+        for module_name in list(sys.modules):
+            if module_name.startswith(namespace):
+                sys.modules.pop(module_name, None)
+
+
+def test_a_folder_plugin_loads_as_its_plugin_module_after_its_package(folder_lab):
+    """``alpha/`` loads its package from ``__init__.py``, then ``plugin.py`` as ``<ns>.alpha.plugin``, set on the package."""
+    lab = folder_lab
+    folder = lab.folder("alpha")
+
+    codes, failures = lab.discover()
+
+    assert (codes, failures) == (["alpha"], ())
+    package, module = sys.modules[f"{lab.namespace}.alpha"], sys.modules[f"{lab.namespace}.alpha.plugin"]
+    assert lab.registry.get_plugin("alpha").__module__ == module.__name__
+    assert package.plugin is module
+    assert module.__package__ == package.__name__
+    assert module.__file__ == str(folder / "plugin.py")
+    # A real package: its own __init__.py ran, and the folder is its search path, where relative imports resolve.
+    assert package.__file__ == str(folder / "__init__.py")
+    assert package.__doc__ == "Plugin alpha of the lab: the code is in plugin.py."
+    assert list(package.__path__) == [str(folder)]
+    assert lab.loaded() == {package.__name__, module.__name__}
+
+
+def test_a_plugin_module_imports_its_own_sibling_helper_relatively(folder_lab):
+    """``from ._helper import CODE`` in ``plugin.py`` resolves inside the plugin's own folder.
+
+    Two plugins hold a ``_helper.py`` each, same name and a different value: each registers the value of its own.
+    """
+    lab = folder_lab
+    for name in ("alpha", "beta"):
+        lab.folder(name, plugin="from ._helper import CODE\n" + _REGISTERS.format(code="CODE"), files={"_helper.py": f"CODE = {name + '_via_helper'!r}\n"})
+
+    codes, failures = lab.discover()
+
+    assert (codes, failures) == (["alpha_via_helper", "beta_via_helper"], ())
+    for name in ("alpha", "beta"):
+        assert sys.modules[f"{lab.namespace}.{name}._helper"].__file__ == str(lab.plugin_dir / name / "_helper.py")
+
+
+def test_single_file_and_folder_plugins_register_in_name_order(folder_lab):
+    """``a.py``, ``b/`` and ``c.py`` register as a, b, c: by name whichever the form, not files first nor folders first.
+
+    They are written in reverse, so that the order they were created in cannot pass for the order of their names.
+    """
+    lab = folder_lab
+    lab.module("c")
+    lab.folder("b")
+    lab.module("a")
+
+    codes, failures = lab.discover()
+
+    assert (codes, failures) == (["a", "b", "c"], ())
+    assert [lab.registry.get_plugin(code).__module__ for code in codes] == [f"{lab.namespace}.a", f"{lab.namespace}.b.plugin", f"{lab.namespace}.c"]
+
+
+def test_data_folders_and_private_names_are_skipped_without_a_failure(folder_lab):
+    """``static/`` and ``sample_reports/`` hold neither ``__init__.py`` nor ``plugin.py``: data, skipped in silence, the
+    ``.py`` among their files included. ``_private/`` and ``_private_module.py`` are never imported. ``alpha/`` beside
+    them proves that discovery ran."""
+    lab = folder_lab
+    lab.folder("alpha")
+    for data_folder, files in {"static": {"logo.svg": "<svg/>\n"}, "sample_reports": {"statement.csv": "date,amount\n", "make_sample.py": _NEVER_IMPORTED}}.items():
+        (lab.plugin_dir / data_folder).mkdir()
+        for filename, content in files.items():
+            (lab.plugin_dir / data_folder / filename).write_text(content, encoding="utf-8")
+    lab.folder("_private", plugin=_NEVER_IMPORTED)
+    lab.module("_private_module", _NEVER_IMPORTED)
+
+    codes, failures = lab.discover()
+
+    assert (codes, failures) == (["alpha"], ())
+    assert lab.loaded() == {f"{lab.namespace}.alpha", f"{lab.namespace}.alpha.plugin"}
+
+
+def test_a_plugin_folder_missing_one_of_its_files_is_one_failure_naming_it(folder_lab):
+    """``__init__.py`` without ``plugin.py``, and ``plugin.py`` without ``__init__.py``: one failure each, on
+    ``<ns>.<name>.plugin``, naming the folder and the file it lacks. Neither half runs (``no_package/plugin.py`` would
+    register), and ``zulu/``, after both, still loads."""
+    lab = folder_lab
+    lab.folder("no_module", without=("plugin.py",))
+    lab.folder("no_package", without=("__init__.py",))
+    lab.folder("zulu")
+
+    codes, failures = lab.discover()
+
+    assert codes == ["zulu"]
+    messages = {failure.module_name: failure.message for failure in failures}
+    assert len(failures) == 2 and set(messages) == {f"{lab.namespace}.no_module.plugin", f"{lab.namespace}.no_package.plugin"}, failures
+    no_module, no_package = messages[f"{lab.namespace}.no_module.plugin"], messages[f"{lab.namespace}.no_package.plugin"]
+    assert "no_module/" in no_module and "plugin.py" in no_module and "__init__.py" not in no_module, no_module
+    assert "no_package/" in no_package and "__init__.py" in no_package and "plugin.py" not in no_package, no_package
+    assert lab.loaded() == {f"{lab.namespace}.zulu", f"{lab.namespace}.zulu.plugin"}
+
+
+@pytest.mark.parametrize("raising_file", ["plugin.py", "__init__.py"])
+def test_a_plugin_folder_that_raises_is_a_failure_and_leaves_nothing_in_sys_modules(folder_lab, raising_file):
+    """Whichever of its files raises, ``broken/`` is one failure on ``<ns>.broken.plugin``, and neither its package
+    nor its plugin module stays in sys.modules. When the package raises, its ``plugin.py`` (which would register) never
+    runs. ``zulu/``, after it, still loads."""
+    lab = folder_lab
+    message = f"{raising_file} of broken/ raised"
+    if raising_file == "plugin.py":
+        lab.folder("broken", plugin=f"raise RuntimeError({message!r})\n")
+    else:
+        lab.folder("broken", init=f'"""A package that raises."""\nraise RuntimeError({message!r})\n')
+    lab.folder("zulu")
+
+    codes, failures = lab.discover()
+
+    assert codes == ["zulu"]
+    assert [(failure.module_name, failure.error_type, failure.message) for failure in failures] == [(f"{lab.namespace}.broken.plugin", "RuntimeError", message)]
+    assert f"{lab.namespace}.broken" not in sys.modules
+    assert f"{lab.namespace}.broken.plugin" not in sys.modules
+    assert lab.loaded() == {f"{lab.namespace}.zulu", f"{lab.namespace}.zulu.plugin"}
+
+
+@pytest.mark.parametrize("form", ["folder", "module"])
+def test_an_ignored_stem_is_skipped_in_either_form(folder_lab, form):
+    """``base`` is an ignored stem of the lab registry, as of the signal and risk ones: neither ``base/`` nor ``base.py``
+    is imported, and ``alpha/`` beside it loads."""
+    lab = folder_lab
+    if form == "folder":
+        lab.folder("base", plugin=_NEVER_IMPORTED)
+    else:
+        lab.module("base", _NEVER_IMPORTED)
+    lab.folder("alpha")
+
+    codes, failures = lab.discover()
+
+    assert (codes, failures) == (["alpha"], ())
+    assert lab.loaded() == {f"{lab.namespace}.alpha", f"{lab.namespace}.alpha.plugin"}
+
+
+def test_a_name_that_is_both_a_module_and_a_folder_is_a_discovery_failure(folder_lab):
+    """``x.py`` beside ``x/``: one failure saying so, and ``zulu/``, after them, still loads.
+
+    The two names tie, so the folder listing decides which comes first: that one loads, the second is the failure.
+    """
+    lab = folder_lab
+    lab.module("x", _REGISTERS.format(code=repr("x_module")))
+    lab.folder("x", plugin=_REGISTERS.format(code=repr("x_folder")))
+    lab.folder("zulu")
+
+    codes, failures = lab.discover()
+
+    assert len(failures) == 1, failures
+    (clash,) = failures
+    assert "exists both as x.py and as x/" in clash.message, clash
+    loaded_code = {f"{lab.namespace}.x.plugin": "x_module", f"{lab.namespace}.x": "x_folder"}.get(clash.module_name)
+    assert loaded_code is not None, f"the failure is on {clash.module_name}, which is neither x.py nor x/"
+    assert codes == [loaded_code, "zulu"]

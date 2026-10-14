@@ -1,0 +1,8 @@
+{
+  "brimPlugins": {
+    "broker_danske_bank": {
+      "description": "Import a Danske Bank (Finland) equity savings account: the custody transactions (XLSX) and the cash statement (CSV), uploaded together and combined into one import.",
+      "name": "Danske Bank"
+    }
+  }
+}

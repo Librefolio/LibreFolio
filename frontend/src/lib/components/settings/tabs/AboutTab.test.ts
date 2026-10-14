@@ -92,9 +92,15 @@ vi.mock('$lib/charts/signals/catalogMapper', () => ({mapBackendSignalDefinition:
 
 // ChangelogModal pulls the bundled CHANGELOG.md via a `?raw` import that the
 // test environment denies. Mocking the feature module (as ChangelogModal's own
-// tests do) keeps the real modal component loadable without the raw file.
+// tests do) keeps the real modal component loadable without the raw file. The
+// stub answers every export the modal imports — `baseLanguage`,
+// `localizedChangelog`, `CHANGELOG_REMOTE_URL` — because a vitest mock throws on
+// any export it lacks; English and an empty changelog are enough here, where no
+// test opens the modal.
 vi.mock('$lib/features/changelog/changelog', () => ({
     changelogChapters: [],
+    baseLanguage: () => 'en',
+    localizedChangelog: {peek: () => [], load: () => Promise.resolve([])},
     CHANGELOG_REMOTE_URL: 'https://example.invalid/CHANGELOG.md',
 }));
 
@@ -130,6 +136,43 @@ function backendSignal(type: string, extra: Record<string, unknown> = {}) {
 }
 
 const writeText = vi.fn(async (_text: string) => undefined);
+
+/**
+ * The clipboard surface, stubbed per test and put back after it. jsdom has none of
+ * `navigator.clipboard`, `window.isSecureContext`, `document.execCommand`: each stub
+ * is an own property, and `restoreStubs()` (in `afterEach`) deletes it again — or
+ * restores what was there — newest first.
+ */
+const stubbed: {target: object; key: string; before: PropertyDescriptor | undefined}[] = [];
+
+function stubProperty(target: object, key: string, value: unknown) {
+    stubbed.push({target, key, before: Object.getOwnPropertyDescriptor(target, key)});
+    Object.defineProperty(target, key, {value, configurable: true, writable: true});
+}
+
+function restoreStubs() {
+    for (const {target, key, before} of stubbed.splice(0).reverse()) {
+        if (before) Object.defineProperty(target, key, before);
+        else Reflect.deleteProperty(target, key);
+    }
+}
+
+/**
+ * Plain HTTP as Chromium presents it: not a secure context, and no
+ * `navigator.clipboard` at all. The legacy `execCommand('copy')` succeeds and
+ * records what the hidden textarea held at that moment.
+ */
+function onPlainHttp() {
+    const captured: (string | undefined)[] = [];
+    const execCommand = vi.fn((_command: string) => {
+        captured.push(document.querySelector('textarea')?.value);
+        return true;
+    });
+    stubProperty(window, 'isSecureContext', false);
+    stubProperty(navigator, 'clipboard', undefined);
+    stubProperty(document, 'execCommand', execCommand);
+    return {execCommand, captured};
+}
 
 /**
  * A local-storage stand-in. jsdom under this Node build exposes no usable
@@ -174,11 +217,14 @@ beforeEach(() => {
     registeredSignals.mockReturnValue([]);
     storedTheme.mockReturnValue('light');
     resolvedTheme.mockReturnValue('light');
-    Object.defineProperty(navigator, 'clipboard', {value: {writeText}, configurable: true, writable: true});
+    stubProperty(navigator, 'clipboard', {writeText});
+    // The browser exposes `navigator.clipboard` only in a secure context, and says so here.
+    stubProperty(window, 'isSecureContext', true);
 });
 
 afterEach(() => {
     vi.useRealTimers();
+    restoreStubs();
 });
 
 // =========================================================================
@@ -377,6 +423,22 @@ describe('AboutTab — copy for issue', () => {
 
         await vi.advanceTimersByTimeAsync(200);
         await vi.waitFor(() => expect(screen.queryByRole('button', {name: 'settings.copyForIssue'})).not.toBeNull());
+    });
+
+    it('copies the report through the legacy path on plain HTTP, and confirms the copy', async () => {
+        await mount();
+        // No textarea on the page before the click: the one the stub reads can only be the copy's.
+        expect(document.querySelector('textarea')).toBeNull();
+        const http = onPlainHttp();
+
+        await fireEvent.click(screen.getByTestId('about-copy-report'));
+
+        await waitFor(() => expect(http.execCommand).toHaveBeenCalledTimes(1));
+        expect(http.execCommand).toHaveBeenCalledWith('copy');
+        expect(http.captured).toHaveLength(1);
+        expect(http.captured[0]).toContain('App Version: 2.4.1');
+        await waitFor(() => expect(screen.queryByRole('button', {name: 'common.copied'})).not.toBeNull());
+        expect(document.querySelector('textarea')).toBeNull();
     });
 });
 

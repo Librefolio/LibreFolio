@@ -34,6 +34,7 @@
     import {buildAssetSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {extractErrorMessage} from '$lib/utils/trySave';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
 
     interface BlockerInfo {
         assetId: number;
@@ -60,11 +61,12 @@
         blocker: BlockerInfo | null;
         patchPayload: Record<string, unknown> | null;
         providerAssigned: boolean;
+        zIndex?: number;
         onconfirmed?: () => void;
         oncanceled?: () => void;
     }
 
-    let {open = $bindable(), blocker, patchPayload, providerAssigned, onconfirmed, oncanceled}: Props = $props();
+    let {open = $bindable(), blocker, patchPayload, providerAssigned, zIndex = 50, onconfirmed, oncanceled}: Props = $props();
 
     let inProgress = $state(false);
     /** Inline progress step (replaces the old 3-toast progress chain, I-bis #12). */
@@ -115,7 +117,9 @@
 
             // Step 2: retry PATCH (now succeeds — no residual market data).
             progressStep = 'patch';
-            await zodiosApi.patch_assets_bulk_api_v1_assets_patch([patchPayload] as any);
+            const patched = await zodiosApi.patch_assets_bulk_api_v1_assets_patch([patchPayload] as any);
+            const patchResult = patched.results.find((result) => result.asset_id === blocker.assetId);
+            if (!patchResult?.success) throw new Error(patchResult?.message || tr('assetDetail.currencyChange.failed'));
             toasts.success(tr('assetDetail.currencyChange.changedTo', {values: {from: blocker.from, to: blocker.to}}));
 
             // Step 3: auto-sync (only if provider assigned AND we had prices to begin with).
@@ -167,138 +171,130 @@
 </script>
 
 {#if open && blocker}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby="currency-change-title" data-testid="currency-change-modal">
-        <div class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl border-2 border-red-300 dark:border-red-700 max-w-lg w-full mx-4 overflow-hidden">
-            <!-- Header -->
-            <div class="flex items-center gap-3 px-5 py-4 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800">
-                <AlertTriangle class="text-red-600 dark:text-red-400 flex-shrink-0" size={22} />
-                <h2 id="currency-change-title" class="text-base font-semibold text-red-700 dark:text-red-300">
-                    {$t('assetDetail.currencyChange.title', {values: {from: blocker.from, to: blocker.to}})}
-                </h2>
-                <button type="button" class="ml-auto p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50" onclick={handleCancel} disabled={inProgress} aria-label={$t('common.cancel')} data-testid="currency-change-close-x">
-                    <X size={18} />
-                </button>
-            </div>
+    <ModalBase {open} {zIndex} maxWidth="lg" closeOnBackdropClick={false} closeOnEscape={false} testId="currency-change-modal" labelledBy="currency-change-title" contentClass="border-2 border-red-300 dark:border-red-700">
+        <!-- Header -->
+        <div class="flex items-center gap-3 px-5 py-4 bg-red-50 dark:bg-red-900/30 border-b border-red-200 dark:border-red-800">
+            <AlertTriangle class="text-red-600 dark:text-red-400 flex-shrink-0" size={22} />
+            <h2 id="currency-change-title" class="text-base font-semibold text-red-700 dark:text-red-300">
+                {$t('assetDetail.currencyChange.title', {values: {from: blocker.from, to: blocker.to}})}
+            </h2>
+            <button type="button" class="ml-auto p-1 rounded text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors disabled:opacity-50" onclick={handleCancel} disabled={inProgress} aria-label={$t('common.cancel')} data-testid="currency-change-close-x">
+                <X size={18} />
+            </button>
+        </div>
 
-            <!-- Body -->
-            <div class="px-5 py-4 space-y-4 text-sm">
-                <p class="text-gray-700 dark:text-gray-200">
-                    {$t('assetDetail.currencyChange.bodyIntro')}
-                </p>
-                <p class="text-red-700 dark:text-red-300 font-medium">
-                    {$t('assetDetail.currencyChange.bodyCaveat')}
-                </p>
+        <!-- Body -->
+        <div class="px-5 py-4 space-y-4 text-sm overflow-y-auto">
+            <p class="text-gray-700 dark:text-gray-200">
+                {$t('assetDetail.currencyChange.bodyIntro')}
+            </p>
+            <p class="text-red-700 dark:text-red-300 font-medium">
+                {$t('assetDetail.currencyChange.bodyCaveat')}
+            </p>
 
-                <!-- What will be wiped / disconnected (R3-3 Policy D) -->
-                <ul class="text-xs text-slate-700 dark:text-slate-300 bg-red-50/60 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-md p-3 space-y-1 list-disc list-inside">
-                    {#if blocker.prices > 0}
-                        <li data-testid="currency-change-summary-prices">{$t('assetDetail.currencyChange.summaryPrices', {values: {count: blocker.prices, oldest: blocker.oldest, newest: blocker.newest}})}</li>
-                    {/if}
-                    {#if blocker.eventsManual + blocker.eventsProvider > 0}
-                        <li data-testid="currency-change-summary-events">
-                            {$t('assetDetail.currencyChange.summaryEvents', {
-                                values: {manual: blocker.eventsManual, provider: blocker.eventsProvider},
-                            })}
-                        </li>
-                    {/if}
-                    {#if blocker.linkedTx > 0}
-                        <li class="font-medium text-red-700 dark:text-red-300" data-testid="currency-change-summary-linkedtx">
-                            {$t('assetDetail.currencyChange.summaryLinkedTx', {values: {count: blocker.linkedTx}})}
-                        </li>
-                    {/if}
-                </ul>
-
-                {#if providerAssigned && blocker.oldest}
-                    <InfoBanner variant="info">
-                        {$t('assetDetail.currencyChange.autoSyncInfo', {values: {from: blocker.oldest}})}
-                    </InfoBanner>
-                {:else if !providerAssigned}
-                    <InfoBanner variant="warning">
-                        {$t('assetDetail.currencyChange.noProviderInfo')}
-                    </InfoBanner>
+            <!-- What will be wiped / disconnected (R3-3 Policy D) -->
+            <ul class="text-xs text-slate-700 dark:text-slate-300 bg-red-50/60 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-md p-3 space-y-1 list-disc list-inside">
+                {#if blocker.prices > 0}
+                    <li data-testid="currency-change-summary-prices">{$t('assetDetail.currencyChange.summaryPrices', {values: {n: blocker.prices, oldest: blocker.oldest, newest: blocker.newest}})}</li>
                 {/if}
+                {#if blocker.eventsManual + blocker.eventsProvider > 0}
+                    <li data-testid="currency-change-summary-events">
+                        {$t('assetDetail.currencyChange.summaryEvents', {
+                            values: {manual: blocker.eventsManual, provider: blocker.eventsProvider},
+                        })}
+                    </li>
+                {/if}
+                {#if blocker.linkedTx > 0}
+                    <li class="font-medium text-red-700 dark:text-red-300" data-testid="currency-change-summary-linkedtx">
+                        {$t('assetDetail.currencyChange.summaryLinkedTx', {values: {n: blocker.linkedTx}})}
+                    </li>
+                {/if}
+            </ul>
 
-                <!-- Backup section — R3-3b: prices + events -->
-                <div class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
-                    <div class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">
-                        {$t('assetDetail.currencyChange.backupTitle')}
-                    </div>
-                    <div class="flex gap-2 flex-wrap">
-                        {#if blocker.prices > 0}
-                            <button
-                                type="button"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
-                                onclick={() => exportBackup('prices', 'csv')}
-                                disabled={inProgress}
-                                data-testid="currency-change-export-prices-csv"
-                            >
-                                <Download size={13} />
-                                {$t('assetDetail.currencyChange.exportPricesCsv')}
-                            </button>
-                            <button
-                                type="button"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
-                                onclick={() => exportBackup('prices', 'json')}
-                                disabled={inProgress}
-                                data-testid="currency-change-export-prices-json"
-                            >
-                                <Download size={13} />
-                                {$t('assetDetail.currencyChange.exportPricesJson')}
-                            </button>
-                        {/if}
-                        {#if totalEvents > 0}
-                            <button
-                                type="button"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
-                                onclick={() => exportBackup('events', 'csv')}
-                                disabled={inProgress}
-                                data-testid="currency-change-export-events-csv"
-                            >
-                                <Download size={13} />
-                                {$t('assetDetail.currencyChange.exportEventsCsv')}
-                            </button>
-                            <button
-                                type="button"
-                                class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
-                                onclick={() => exportBackup('events', 'json')}
-                                disabled={inProgress}
-                                data-testid="currency-change-export-events-json"
-                            >
-                                <Download size={13} />
-                                {$t('assetDetail.currencyChange.exportEventsJson')}
-                            </button>
-                        {/if}
-                    </div>
+            {#if providerAssigned && blocker.oldest}
+                <InfoBanner variant="info">
+                    {$t('assetDetail.currencyChange.autoSyncInfo', {values: {from: blocker.oldest}})}
+                </InfoBanner>
+            {:else if !providerAssigned}
+                <InfoBanner variant="warning">
+                    {$t('assetDetail.currencyChange.noProviderInfo')}
+                </InfoBanner>
+            {/if}
+
+            <!-- Backup section — R3-3b: prices + events -->
+            <div class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3">
+                <div class="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-2">
+                    {$t('assetDetail.currencyChange.backupTitle')}
+                </div>
+                <div class="flex gap-2 flex-wrap">
+                    {#if blocker.prices > 0}
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
+                            onclick={() => exportBackup('prices', 'csv')}
+                            disabled={inProgress}
+                            data-testid="currency-change-export-prices-csv"
+                        >
+                            <Download size={13} />
+                            {$t('assetDetail.currencyChange.exportPricesCsv')}
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
+                            onclick={() => exportBackup('prices', 'json')}
+                            disabled={inProgress}
+                            data-testid="currency-change-export-prices-json"
+                        >
+                            <Download size={13} />
+                            {$t('assetDetail.currencyChange.exportPricesJson')}
+                        </button>
+                    {/if}
+                    {#if totalEvents > 0}
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
+                            onclick={() => exportBackup('events', 'csv')}
+                            disabled={inProgress}
+                            data-testid="currency-change-export-events-csv"
+                        >
+                            <Download size={13} />
+                            {$t('assetDetail.currencyChange.exportEventsCsv')}
+                        </button>
+                        <button
+                            type="button"
+                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition-colors"
+                            onclick={() => exportBackup('events', 'json')}
+                            disabled={inProgress}
+                            data-testid="currency-change-export-events-json"
+                        >
+                            <Download size={13} />
+                            {$t('assetDetail.currencyChange.exportEventsJson')}
+                        </button>
+                    {/if}
                 </div>
             </div>
-
-            <!-- Footer -->
-            <div class="flex justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30">
-                {#if inProgress && progressStep}
-                    <span class="mr-auto flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300" data-testid="currency-change-progress-step">
-                        <span class="inline-block h-3 w-3 rounded-full border-2 border-slate-400 border-t-transparent animate-spin"></span>
-                        {#if progressStep === 'wipe'}
-                            {$t('assetDetail.currencyChange.progressWipe', {values: {prices: blocker.prices, events: totalEvents, linkedTx: blocker.linkedTx}})}
-                        {:else if progressStep === 'patch'}
-                            {$t('assetDetail.currencyChange.progressPatch')}
-                        {:else if progressStep === 'sync'}
-                            {$t('assetDetail.currencyChange.progressSync', {values: {from: blocker.oldest}})}
-                        {/if}
-                    </span>
-                {/if}
-                <button
-                    type="button"
-                    class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50"
-                    onclick={handleCancel}
-                    disabled={inProgress}
-                    data-testid="currency-change-cancel"
-                >
-                    {$t('common.cancel')}
-                </button>
-                <button type="button" class="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" onclick={handleConfirm} disabled={inProgress} data-testid="currency-change-confirm">
-                    {inProgress ? $t('assetDetail.currencyChange.working') : $t('assetDetail.currencyChange.confirm')}
-                </button>
-            </div>
         </div>
-    </div>
+
+        <!-- Footer -->
+        <div class="flex justify-end gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/30">
+            {#if inProgress && progressStep}
+                <span class="mr-auto flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300" data-testid="currency-change-progress-step">
+                    <span class="inline-block h-3 w-3 rounded-full border-2 border-slate-400 border-t-transparent animate-spin"></span>
+                    {#if progressStep === 'wipe'}
+                        {$t('assetDetail.currencyChange.progressWipe', {values: {prices: blocker.prices, events: totalEvents, linkedTx: blocker.linkedTx}})}
+                    {:else if progressStep === 'patch'}
+                        {$t('assetDetail.currencyChange.progressPatch')}
+                    {:else if progressStep === 'sync'}
+                        {$t('assetDetail.currencyChange.progressSync', {values: {from: blocker.oldest}})}
+                    {/if}
+                </span>
+            {/if}
+            <button type="button" class="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors disabled:opacity-50" onclick={handleCancel} disabled={inProgress} data-testid="currency-change-cancel">
+                {$t('common.cancel')}
+            </button>
+            <button type="button" class="px-4 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed" onclick={handleConfirm} disabled={inProgress} data-testid="currency-change-confirm">
+                {inProgress ? $t('assetDetail.currencyChange.working') : $t('assetDetail.currencyChange.confirm')}
+            </button>
+        </div>
+    </ModalBase>
 {/if}

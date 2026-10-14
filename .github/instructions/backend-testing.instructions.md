@@ -40,6 +40,20 @@ backend/test_scripts/
 **Global flags come BEFORE the category**: `./dev.py test -q --coverage services all`.
 Extra positional args after `<category> <action>` are consumed as a pytest `-k` filter.
 
+### Parallel worktree lanes
+
+Different worktrees may run test commands concurrently only with a unique port
+**and** data root for each lane:
+
+```bash
+./dev.py test --test-port 6151 --data-dir /tmp/librefolio-r2-b api all
+```
+
+The runner propagates both values to pytest, the shared backend, Playwright and
+setup children. Inside that invocation the database/backend are still shared:
+all normal isolation rules remain mandatory. Never run two suites against the
+same lane, and never point `--data-dir` at production data.
+
 ## ⚠️ Coverage: partial runs report falsely LOW
 
 Coverage accumulates across categories in `.coverage_data/backend`. Measuring only the
@@ -88,14 +102,16 @@ settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
 
+@pytest.fixture(scope="module")
+def test_server():
+    with _TestingServerManager() as server_manager:
+        if not server_manager.start_server():
+            pytest.fail("Failed to start test server")
+        yield server_manager
+
 @pytest.mark.asyncio
 class TestFeatureX:
-    @pytest.fixture(autouse=True)
-    def server(self):
-        _TestingServerManager().ensure_started()
-        yield
-
-    async def test_something(self):
+    async def test_something(self, test_server):
         async with httpx.AsyncClient() as client:
             # create_user_and_login(client) → then test
             ...
@@ -111,9 +127,9 @@ class TestFeatureX:
 
 ## ⛔ The three rules — normative
 
-Every backend test runs against **one shared database** and **one shared backend**,
-concurrently with its neighbours. A test that assumes it is alone is not "simpler":
-it is broken, and serialisation was only hiding it.
+Every backend test runs against **one shared database** and **one shared backend
+within its lane**, concurrently with its neighbours. A test that assumes it is
+alone is not "simpler": it is broken, and serialisation was only hiding it.
 
 ### 1. Never identify data by position
 
@@ -267,4 +283,3 @@ The test runner modules (`_backend_api.py`) register **directories**, not indivi
 | `run_command(cmd, description, verbose)` | `_common.py` | Runs subprocess with coverage integration |
 | `add_test(cat, action, func, ...)` | `_common.py` | Registers a test in the category dict |
 | `_run_test_suite(tests, ...)` | `_common.py` | Runs a list of tests with summary |
-
