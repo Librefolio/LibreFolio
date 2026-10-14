@@ -48,8 +48,12 @@ export function hasEffect(state: LabState | null): state is LabState {
     return !!state && !state.suspended && (state.changes.length > 0 || state.cvd !== 'none');
 }
 
-/** The stable id of a change: one per layer, target, scope and (for a single stylesheet occurrence) occurrence. */
-export function changeId(change: Pick<LabChange, 'layer' | 'target' | 'scope' | 'occurrence'>): string {
+/**
+ * The stable id of a change: one per layer, target, scope and (for a single stylesheet occurrence) occurrence. A
+ * specialisation is one per property (and chart colour), scope and selector.
+ */
+export function changeId(change: Pick<LabChange, 'layer' | 'target' | 'scope' | 'occurrence' | 'property' | 'colorKey'>): string {
+    if (change.layer === 'element') return `element:${change.property ?? ''}${change.colorKey ? `:${change.colorKey}` : ''}@${change.scope}~${change.target}`;
     const base = `${change.layer}:${change.target}@${change.scope}`;
     return change.occurrence === undefined ? base : `${base}#${change.occurrence}`;
 }

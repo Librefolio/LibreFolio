@@ -5,18 +5,21 @@
     import {writeTextToClipboard} from '$lib/utils/clipboard';
     import ColorEditor from './ColorEditor.svelte';
     import ContrastPanel from './ContrastPanel.svelte';
+    import PickedElementPanel from './PickedElement.svelte';
     import {appVars, matchesSearch, paletteFamilies, valueGroups, type ValueGroup} from './catalogView';
     import {applyNow} from './client';
     import {contrastRows} from './contrast';
     import {buildExport, downloadText, parseImport, renderMarkdown, renderSummary, type LabExport} from './export';
     import {labLang, labT} from './i18n';
     import {labStyle} from './labTheme';
+    import {markSeen, newPickId, PICK_KEY, readPick, writePick} from './pick';
+    import {pickView} from './pickView';
     import {emptyState, readState, removeChange, STORAGE_KEY, upsertChange, writeState} from './store';
-    import type {ChangeLayer, CvdMode, LabChange, LabSelection, LabState, Layer, Scope} from './types';
+    import type {ChangeLayer, CvdMode, LabChange, LabSelection, LabState, Layer, PickedElement, Scope} from './types';
 
-    type Tab = 'overview' | 'palette' | 'vars' | 'sheets' | 'charts' | 'proposals' | 'changes' | 'contrast' | 'notes';
+    type Tab = 'overview' | 'element' | 'palette' | 'vars' | 'sheets' | 'charts' | 'proposals' | 'changes' | 'contrast' | 'notes';
     type ValueTab = 'sheets' | 'charts' | 'proposals';
-    const TABS: Tab[] = ['overview', 'palette', 'vars', 'sheets', 'charts', 'proposals', 'changes', 'contrast', 'notes'];
+    const TABS: Tab[] = ['overview', 'element', 'palette', 'vars', 'sheets', 'charts', 'proposals', 'changes', 'contrast', 'notes'];
     const SEARCHABLE: Tab[] = ['palette', 'vars', 'sheets', 'charts', 'proposals'];
     const SCOPES: Scope[] = ['light', 'dark', 'both'];
     const CVD: CvdMode[] = ['none', 'protanopia', 'deuteranopia', 'tritanopia', 'achromatopsia'];
@@ -34,6 +37,13 @@
     let revision = $state(0);
     let variantName = $state('');
     let importInput = $state<HTMLInputElement>();
+    /** The pick request this Lab is waiting for; null when not picking. */
+    let picking = $state<string | null>(null);
+    let picked = $state<PickedElement | null>(null);
+    let onlyPicked = $state(false);
+    const view = $derived(picked ? pickView(catalog, picked) : null);
+    /** The lists keep only the picked element's colours when the filter is on. */
+    const pickFilter = $derived(onlyPicked && view ? view.filter : null);
 
     const families = paletteFamilies(catalog);
     const vars = appVars(catalog);
@@ -55,12 +65,54 @@
     }
 
     function commit(next: LabState): void {
-        lab = writeState(next);
+        try {
+            lab = writeState(next);
+        } catch {
+            // Storage refused the write (full, or disabled): the other tabs would never see this state, so keep the last saved one.
+            status = {kind: 'error', text: $labT('storageFailed')};
+            return;
+        }
         void applyNow().then(() => revision++);
     }
 
     function select(layer: ChangeLayer, target: string): void {
         selection = {layer, target};
+    }
+
+    /** Open the editor on a change: its own selection, so a specialisation keeps its property and anchor. */
+    function selectChange(c: LabChange): void {
+        selection = {layer: c.layer, target: c.target, ...(c.occurrence !== undefined ? {occurrence: c.occurrence} : {}), ...(c.property ? {property: c.property, from: c.from} : {}), ...(c.colorKey ? {colorKey: c.colorKey} : {}), ...(c.anchor ? {anchor: c.anchor} : {})};
+    }
+
+    function startPick(): void {
+        const id = newPickId();
+        writePick({op: 'start', id, at: Date.now()});
+        picking = id;
+        status = {kind: 'ok', text: $labT('pickWaiting')};
+    }
+
+    function cancelPick(): void {
+        if (picking) writePick({op: 'cancel', id: picking, at: Date.now()});
+        picking = null;
+        status = null;
+    }
+
+    /** A pick message from an app tab: a result (from this Lab's request or the Alt+Shift+D shortcut), or a cancel. */
+    function onPickMessage(): void {
+        const message = readPick();
+        if (message?.op === 'result') {
+            picked = message.element;
+            picking = null;
+            tab = 'element';
+            status = null;
+            // An editor left on the previous pick's specialisation would edit the wrong element.
+            if (selection?.layer === 'element') selection = null;
+            // Edit the theme the element was picked in (a dark override shows only there), unless both are edited.
+            if (scope !== 'both') scope = message.element.theme;
+        } else if (message?.op === 'cancel' && picking && message.id === picking) {
+            picking = null;
+            status = {kind: 'warn', text: $labT('pickCancelled')};
+        }
     }
 
     function onApply(change: LabChange): void {
@@ -124,6 +176,10 @@
     }
 
     onMount(() => {
+        // Only a browser where the Lab has been opened gets the Alt+Shift+D shortcut in its app tabs.
+        markSeen();
+        const last = readPick();
+        if (last?.op === 'result') picked = last.element;
         const observer = new MutationObserver(() => {
             const d = document.documentElement.classList.contains('dark');
             if (d !== dark) {
@@ -133,15 +189,24 @@
         });
         observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
         const onStorage = (e: StorageEvent) => {
+            if (e.key === PICK_KEY || e.key === null) onPickMessage();
             if (e.key !== STORAGE_KEY && e.key !== null) return;
             lab = readState() ?? emptyState();
             revision++;
         };
         window.addEventListener('storage', onStorage);
+        // Closing the Lab's tab while it waits: the app tabs leave picking mode, and no new tab joins a stale request.
+        const onPageHide = () => {
+            if (picking) writePick({op: 'cancel', id: picking, at: Date.now()});
+        };
+        window.addEventListener('pagehide', onPageHide);
         if (import.meta.hot) import.meta.hot.on('lf-designer-lab:catalog-stale', () => (stale = true));
         return () => {
             observer.disconnect();
             window.removeEventListener('storage', onStorage);
+            window.removeEventListener('pagehide', onPageHide);
+            // Leaving the Lab while it waits: the app tabs leave picking mode too.
+            if (picking) writePick({op: 'cancel', id: picking, at: Date.now()});
         };
     });
 </script>
@@ -154,6 +219,12 @@
             <span class="muted" data-testid="lab-version"><code>{APP_VERSION}</code> · {$labT('catalog')} <code>{catalog.meta.hash.slice(7, 19)}</code></span>
         </div>
         <div class="controls">
+            {#if picking}
+                <button type="button" class="on" onclick={cancelPick} data-testid="lab-pick-cancel">{$labT('pickCancel')}</button>
+            {:else}
+                <button type="button" class="primary" onclick={startPick} data-testid="lab-pick">{$labT('pick')}</button>
+            {/if}
+            <span class="muted">{$labT('pickHint')}</span>
             <label class="inline">
                 {$labT('editing')}
                 <select bind:value={scope} data-testid="lab-scope">
@@ -200,10 +271,19 @@
     <div class="body" class:with-editor={!!selection}>
         <main>
             {#if SEARCHABLE.includes(tab)}
-                <input type="search" class="search" placeholder={$labT('search')} bind:value={query} data-testid="lab-search" />
+                <div class="filters">
+                    <input type="search" class="search" placeholder={$labT('search')} bind:value={query} data-testid="lab-search" />
+                    {#if view}<label class="inline"><input type="checkbox" bind:checked={onlyPicked} data-testid="lab-filter-picked" /> {$labT('element.filter')}</label>{/if}
+                </div>
             {/if}
 
-            {#if tab === 'overview'}
+            {#if tab === 'element'}
+                {#if view}
+                    <PickedElementPanel {catalog} {view} onEdit={(s) => (selection = s)} />
+                {:else}
+                    <p class="hint" data-testid="lab-picked-none">{$labT('element.none')}</p>
+                {/if}
+            {:else if tab === 'overview'}
                 <section data-testid="lab-overview">
                     <p class="hint">{$labT('overview.hint')}</p>
                     <h2>{$labT('overview.layers')}</h2>
@@ -223,7 +303,7 @@
             {:else if tab === 'palette'}
                 <section class="families">
                     {#each families as f (f.family)}
-                        {@const entries = f.entries.filter((e) => matchesSearch(query, [e.var, ...Object.keys(e.classes)]))}
+                        {@const entries = f.entries.filter((e) => (!pickFilter || pickFilter.vars.has(e.var)) && matchesSearch(query, [e.var, ...Object.keys(e.classes)]))}
                         {#if entries.length}
                             <div class="family">
                                 <h3>{f.family}</h3>
@@ -242,7 +322,7 @@
                 </section>
             {:else if tab === 'vars'}
                 <section class="list">
-                    {#each vars.filter((v) => matchesSearch(query, [v.name, ...v.defs.map((d) => `${catalog.files[d.file]} ${d.value}`)])) as v (v.name)}
+                    {#each vars.filter((v) => (!pickFilter || pickFilter.vars.has(v.name)) && matchesSearch(query, [v.name, ...v.defs.map((d) => `${catalog.files[d.file]} ${d.value}`)])) as v (v.name)}
                         {@const scoped = v.defs.every((d) => d.scope === 'scoped')}
                         <button type="button" class="row" class:modified={changed.has(`css-var:${v.name}`)} onclick={() => select('css-var', v.name)} data-testid="lab-item-var-{v.name}">
                             <span class="swatch" style:background={scoped ? v.defs[0].value : `var(${v.name})`}></span>
@@ -255,7 +335,7 @@
             {:else if tab === 'sheets' || tab === 'charts' || tab === 'proposals'}
                 {@const valueTab = tab}
                 <section class="list">
-                    {#each groups[valueTab].filter((g) => matchesSearch(query, [g.search])) as g (g.key)}
+                    {#each groups[valueTab].filter((g) => (!pickFilter || pickFilter.keys.has(g.key)) && matchesSearch(query, [g.search])) as g (g.key)}
                         <button type="button" class="row" class:modified={changed.has(`${VALUE_LAYER[valueTab]}:${g.key}`)} onclick={() => select(VALUE_LAYER[valueTab], g.key)} data-testid="lab-item-value-{VALUE_LAYER[valueTab]}-{g.key}">
                             <span class="swatch" style:background={g.key}></span>
                             <code>{g.key}</code>
@@ -273,7 +353,9 @@
                             <span class="swatch" style:background={c.from || 'transparent'}></span>
                             <span>→</span>
                             <span class="swatch" style:background={c.to}></span>
-                            <button type="button" class="link" onclick={() => (selection = {layer: c.layer, target: c.target})}><code>{c.target}</code></button>
+                            <button type="button" class="link" onclick={() => selectChange(c)}
+                                ><code>{c.target}</code>{#if c.property}&nbsp;<code>{c.property}{c.colorKey ? ` ${c.colorKey}` : ''}</code>{/if}</button
+                            >
                             <span class="badge">{$labT(`layer.${c.layer}`)}</span>
                             <span class="badge">{$labT(`scope.${c.scope}`)}</span>
                             <code class="muted">{c.to}</code>
@@ -300,7 +382,7 @@
 
         {#if selection}
             <aside>
-                {#key `${selection.layer}:${selection.target}`}
+                {#key `${selection.layer}:${selection.target}:${selection.property ?? ''}:${selection.colorKey ?? ''}:${selection.occurrence ?? ''}`}
                     <ColorEditor {catalog} {lab} {selection} {scope} {dark} {revision} {onApply} {onRemove} onClose={() => (selection = null)} />
                 {/key}
             </aside>
@@ -416,6 +498,12 @@
     .search {
         width: 100%;
         max-width: 28rem;
+    }
+    .filters {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        flex-wrap: wrap;
         margin-bottom: 0.75rem;
     }
     .hint {

@@ -12,6 +12,19 @@ import {FRONTEND_DIR, LAB_DIRS, scanColors} from './scan-colors.mjs';
 
 export const VIRTUAL_ID = 'virtual:lf-color-catalog';
 const RESOLVED_ID = '\0' + VIRTUAL_ID;
+/** The test ids of the catalogue alone, for the element picker that runs in the app tabs (`testidIndex`). */
+export const TESTID_INDEX_ID = 'virtual:lf-testid-index';
+const RESOLVED_INDEX_ID = '\0' + TESTID_INDEX_ID;
+
+/**
+ * The picker's test-id index: the static ids, and the prefixes of the templated ones, longest first.
+ * @param {{testids: Record<string, unknown>, testid_prefixes: [string, ...unknown[]][]}} catalog
+ * @returns {{statics: string[], prefixes: string[]}}
+ */
+export function testidIndex(catalog) {
+    const prefixes = [...new Set(catalog.testid_prefixes.map((p) => p[0]))];
+    return {statics: Object.keys(catalog.testids).sort(), prefixes: prefixes.sort((a, b) => b.length - a.length || a.localeCompare(b))};
+}
 
 /** A string every Lab runtime module contains (storage key, channel, style id); a release build must not. */
 export const LAB_MARKER = 'lf-designer-lab';
@@ -53,14 +66,15 @@ export function designerLabPlugin({enabled, appVersion = 'unknown'}) {
     return {
         name: 'lf-designer-lab',
         resolveId(id) {
-            return id === VIRTUAL_ID ? RESOLVED_ID : null;
+            return id === VIRTUAL_ID ? RESOLVED_ID : id === TESTID_INDEX_ID ? RESOLVED_INDEX_ID : null;
         },
         load(id) {
-            if (id !== RESOLVED_ID) return null;
-            if (!enabled) this.error(`${VIRTUAL_ID} was imported by a build without the Designer Lab (release): it must only be reached through an \`if (__LF_DESIGNER_LAB__)\` branch.`);
+            const name = id === RESOLVED_ID ? VIRTUAL_ID : id === RESOLVED_INDEX_ID ? TESTID_INDEX_ID : null;
+            if (!name) return null;
+            if (!enabled) this.error(`${name} was imported by a build without the Designer Lab (release): it must only be reached through an \`if (__LF_DESIGNER_LAB__)\` branch.`);
             catalog ??= scanColors({appVersion: typeof appVersion === 'function' ? appVersion() : appVersion});
             // JSON.parse of a string literal is cheaper to evaluate than an object literal of this size.
-            return `export default JSON.parse(${JSON.stringify(JSON.stringify(catalog))});`;
+            return `export default JSON.parse(${JSON.stringify(JSON.stringify(name === VIRTUAL_ID ? catalog : testidIndex(catalog)))});`;
         },
         configureServer(server) {
             if (!enabled) return;
@@ -69,8 +83,10 @@ export function designerLabPlugin({enabled, appVersion = 'unknown'}) {
                 const rel = file.startsWith(src) ? 'src/' + file.slice(src.length) : null;
                 if (!rel || LAB_DIRS.some((dir) => rel.startsWith(dir)) || !/\.(svelte|ts|js|css)$/.test(rel)) return;
                 catalog = null;
-                const mod = server.moduleGraph.getModuleById(RESOLVED_ID);
-                if (mod) server.moduleGraph.invalidateModule(mod);
+                for (const resolved of [RESOLVED_ID, RESOLVED_INDEX_ID]) {
+                    const mod = server.moduleGraph.getModuleById(resolved);
+                    if (mod) server.moduleGraph.invalidateModule(mod);
+                }
                 server.ws.send({type: 'custom', event: 'lf-designer-lab:catalog-stale', data: {file: rel}});
             });
         },

@@ -1,4 +1,5 @@
 <script lang="ts">
+    import {untrack} from 'svelte';
     import {colorKey, formatOklch, inSrgbGamut, parseColor, rgbaToOklch, toHex} from './color.js';
     import {sourceVarValue} from './catalogView';
     import {literalsOf} from './export';
@@ -24,21 +25,24 @@
 
     const OCC_ROWS = 60;
     const isVar = $derived(selection.layer === 'css-var');
-    const isLiteral = $derived(!isVar);
+    const isElement = $derived(selection.layer === 'element');
+    const isLiteral = $derived(!isVar && !isElement);
 
     function computed(name: string): string {
         void revision;
         return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     }
 
-    /** The occurrence this change is restricted to (`css-literal` only); undefined = every occurrence of the value. */
-    let occurrence = $state<number | undefined>(undefined);
-    const existing = $derived(lab.changes.find((c) => c.id === changeId({layer: selection.layer, target: selection.target, scope, occurrence})));
+    /** The occurrence this change is restricted to (`css-literal` only); undefined = every occurrence of the value. The picked element's rule is preselected. */
+    let occurrence = $state<number | undefined>(untrack(() => (selection.layer === 'css-literal' ? selection.occurrence : undefined)));
+    const existing = $derived(lab.changes.find((c) => c.id === changeId({layer: selection.layer, target: selection.target, scope, occurrence, property: selection.property, colorKey: selection.colorKey})));
     const original = $derived.by(() => {
         if (existing) return existing.from;
+        if (isElement) return selection.from ?? '';
         if (isVar) return sourceVarValue(catalog, selection.target, scope === 'dark' || (scope === 'both' && dark), computed(selection.target));
         return selection.target;
     });
+    const anchor = $derived(selection.anchor ?? existing?.anchor);
 
     let to = $state('');
     let note = $state('');
@@ -56,7 +60,7 @@
         snap = c && /^var\(/.test(c.to) ? c.to.slice(4, -1).trim() : '';
     });
 
-    const varNames = $derived([...catalog.palette.map((p) => p.var), ...catalog.css_vars.filter((v) => v.defs.length).map((v) => v.name)].sort());
+    const varNames = $derived([...new Set([...catalog.palette.map((p) => p.var), ...catalog.css_vars.filter((v) => v.defs.length).map((v) => v.name)])].sort());
     const resolved = $derived.by(() => {
         void revision;
         const ref = /^var\(\s*(--[\w-]+)\s*\)$/.exec(to.trim());
@@ -87,11 +91,15 @@
         if (!valid) return;
         const lit = occurrence === undefined ? undefined : catalog.literals.find((l) => l.id === occurrence);
         const change: LabChange = {id: '', layer: selection.layer, target: selection.target, scope, from: original, to: to.trim()};
-        if (isLiteral) change.alphaVariants = alphaVariants;
+        if (isElement) {
+            change.property = selection.property;
+            if (selection.colorKey) change.colorKey = selection.colorKey;
+        } else if (isLiteral) change.alphaVariants = alphaVariants;
         if (lit) {
             change.occurrence = lit.id;
             change.match = {selector: lit.selector ?? '', property: lit.property ?? null};
         }
+        if (anchor) change.anchor = anchor;
         if (note.trim()) change.note = note.trim();
         const shotList = shots
             .split(/[,\s]+/)
@@ -103,12 +111,19 @@
     }
 </script>
 
-<section class="editor" data-testid="lab-editor" data-layer={selection.layer} data-target={selection.target}>
+<section class="editor" data-testid="lab-editor" data-layer={selection.layer} data-target={selection.target} data-property={selection.property ?? null}>
     <header>
         <h2>{$labT('editor.title')}</h2>
         <button type="button" class="ghost" data-testid="lab-editor-close" onclick={onClose}>{$labT('editor.close')}</button>
     </header>
-    <p class="target"><span class="badge">{$labT(`layer.${selection.layer}`)}</span> <code>{selection.target}</code> · {$labT(`scope.${scope}`)}</p>
+    <p class="target">
+        <span class="badge">{$labT(`layer.${selection.layer}`)}</span> <code>{selection.target}</code>
+        {#if isElement}· <code>{selection.property}</code>{#if selection.colorKey}&nbsp;<code>{selection.colorKey}</code>{/if}{/if} · {$labT(`scope.${scope}`)}
+    </p>
+    {#if isElement}
+        <p class="msg" data-testid="lab-editor-specialise-hint">{$labT('editor.specialiseHint')}</p>
+        {#if anchor}<p class="muted" data-testid="lab-editor-matches" data-matches={anchor.matches}>{anchor.matches === 1 ? $labT('editor.matchesOne') : $labT('editor.matches', {n: anchor.matches})}</p>{/if}
+    {/if}
 
     <div class="swatches">
         <div>
@@ -207,7 +222,7 @@
                 {#each cssVar.defs as d (d.file + ':' + d.line)}<li><code>{catalog.files[d.file]}:{d.line}</code> <code>{d.selector}</code> = <code>{d.value}</code></li>{/each}
             </ul>
         {/if}
-    {:else}
+    {:else if isLiteral}
         <h3>{occurrences.length} {$labT('occurrences')}</h3>
         <ul class="occ" data-testid="lab-editor-occurrences">
             {#each occurrences.slice(0, OCC_ROWS) as l (l.id)}
@@ -222,6 +237,12 @@
         </ul>
         {#if occurrences.length > OCC_ROWS}<p class="muted">{$labT('moreRows', {n: occurrences.length - OCC_ROWS})}</p>{/if}
         <p class="muted"><code>{colorKey(parseColor(selection.target) ?? {r: 0, g: 0, b: 0, alpha: 1})}</code></p>
+    {:else if anchor}
+        <h3>{$labT('element.candidates')}</h3>
+        <ul class="occ" data-testid="lab-editor-candidates">
+            {#each anchor.candidates as c, ci (ci)}<li><code>{c.file}:{c.line}</code> <span class="badge">{c.why}</span> <code class="snippet">{c.needle}</code></li>{/each}
+        </ul>
+        <p class="muted"><code>{anchor.route}</code> · {anchor.testids.join(' ‹ ')}</p>
     {/if}
 </section>
 
