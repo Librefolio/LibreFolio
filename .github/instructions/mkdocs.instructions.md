@@ -33,7 +33,7 @@ mkdocs_src/
 |-----------|----------|
 | Few files or small targeted changes | Use the AI agent to update/create translations directly |
 | Many files or large-scale changes | Work only in English, then run `./dev.py mkdocs translate` |
-| EN-only sections (developer/, POC UX) | No translation needed — **by design**, not an oversight |
+| EN-only section (developer/) | No translation needed — **by design**, not an oversight |
 
 ### Post-Translation Workflow
 After running the Aphra pipeline, check the structural diff report for issues:

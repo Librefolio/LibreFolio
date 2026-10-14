@@ -3,9 +3,6 @@ site_url: https://librefolio.github.io/LibreFolio/
 repo_url: https://github.com/Librefolio/LibreFolio
 repo_name: Librefolio/LibreFolio
 
-exclude_docs: |
-  POC_UX/**
-
 # Anchor validation — one half of a two-part partition, not a duplicate.
 #
 #   MkDocs (here)  owns links *inside* the docs tree (markdown → markdown). It resolves
