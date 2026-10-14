@@ -56,6 +56,13 @@
  * store says closed; open, or the key missing as in an older cache, leaves it.
  * The store is a writable the test holds, reset to open before every test, and
  * `load` is a spy, so every other test mounts the card as on an open instance.
+ *
+ * The last describe pins the field icons of the designer's round 1 (workstream
+ * T, step T-2): a User beside the username and a Lock beside the password, drawn
+ * inside each field. They are decoration — `aria-hidden`, so the `<label for>`
+ * stays each field's only name, as the label tests above still prove with the
+ * icons in place. Their colours are classes, never read here: they are
+ * `e2e/layout/theme-roles.spec.ts`'s.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick} from 'svelte';
@@ -358,5 +365,20 @@ describe('LoginCard — the sign-in error: a key is translated, a message is sho
         signInError.set(null);
         await tick();
         expect(errorBox(), 'a cleared error takes the box away').toBeNull();
+    });
+});
+
+describe('LoginCard — the field icons are decoration', () => {
+    it.each([
+        {icon: 'login-username-icon', input: 'login-username'},
+        {icon: 'login-password-icon', input: 'login-password'},
+    ])('draws $icon inside $input, hidden from assistive technology', ({icon, input}) => {
+        mount();
+        const svg = screen.getByTestId(icon);
+
+        expect(svg.tagName.toLowerCase()).toBe('svg');
+        expect(svg).toHaveAttribute('aria-hidden', 'true');
+        // Inside the field: the positioned wrapper its input sits in.
+        expect(svg.parentElement).toBe(field(input).parentElement);
     });
 });
