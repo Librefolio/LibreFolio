@@ -54,9 +54,9 @@ PRIORITY_MAP = {
     # HIGH — core business logic
     "backend/app/services/assets/": "HIGH",
     "backend/app/services/fx/fx.py": "HIGH",
-    "backend/app/services/broker_service.py": "HIGH",
-    "backend/app/services/user_service.py": "HIGH",
-    "backend/app/services/transaction_service.py": "HIGH",
+    "backend/app/services/brokers/": "HIGH",
+    "backend/app/services/accounts/user_service.py": "HIGH",
+    "backend/app/services/transactions/": "HIGH",
     "backend/app/services/brim_provider.py": "HIGH",
     # MEDIUM — API endpoints
     "backend/app/api/": "MEDIUM",
@@ -66,9 +66,9 @@ PRIORITY_MAP = {
     "backend/app/services/brim_providers/": "MEDIUM",
     # LOW — utilities, infrastructure
     "backend/app/utils/": "LOW",
-    "backend/app/services/global_settings_service.py": "LOW",
-    "backend/app/services/settings_service.py": "LOW",
-    "backend/app/services/static_uploads.py": "LOW",
+    "backend/app/services/accounts/global_settings_service.py": "LOW",
+    "backend/app/services/accounts/settings_service.py": "LOW",
+    "backend/app/services/files/static_uploads.py": "LOW",
     "backend/app/services/provider_registry.py": "LOW",
     "backend/app/schemas/": "LOW",
     # INFRA — not unit-testable
@@ -175,8 +175,8 @@ def classify_category(filepath: str, func_name: str, stmts: int) -> str:  # noqa
 
     # Core services
     if any(svc in filepath for svc in [
-        "services/assets/", "services/fx/fx.py", "broker_service.py",
-        "transaction_service.py", "user_service.py",
+        "services/assets/", "services/fx/fx.py", "services/brokers/",
+        "services/transactions/", "user_service.py",
         "brim_provider.py", "settings_service.py",
     ]):
         return "CORE_SVC"

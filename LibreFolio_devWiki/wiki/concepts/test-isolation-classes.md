@@ -175,4 +175,4 @@ test and removes it afterwards, so `tx-delete` no longer consumes seed rows (V-2
 | Consolidated frontend pass | `scripts/test_runner/_consolidate.py` |
 | Consolidated backend pass | `scripts/test_runner/_consolidate_backend.py` |
 | Coverage combine | `scripts/test_runner/_coverage.py`, `.coveragerc` |
-| Service-level transaction scoping | `backend/app/services/transaction_service.py` — `_get_accessible_broker_ids` |
+| Service-level transaction scoping | `backend/app/services/transactions/access.py` — `_get_accessible_broker_ids` |

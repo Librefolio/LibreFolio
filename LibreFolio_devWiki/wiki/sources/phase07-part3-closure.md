@@ -135,7 +135,7 @@ without requiring a page reload.
 
 | Role | Path |
 |------|------|
-| Transaction service | `backend/app/services/transaction_service.py` |
+| Transaction service | `backend/app/services/transactions/transaction_service.py` |
 | Asset source (wipe logic) | `backend/app/services/assets/price_store.py` |
 | Schemas (common FxBackwardFillInfo) | `backend/app/schemas/common.py` |
 | Scheduled investment provider | `backend/app/services/asset_source_providers/scheduled_investment/plugin.py` |

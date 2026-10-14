@@ -66,7 +66,7 @@ reports partial portfolio results while a filtered asset is stale.
 |------|------|
 | The D8 rule, `stale_prices_dto` | `backend/app/services/portfolio_service.py` |
 | `valuation_stale`, `STALE_PRICE` issue and CTA | `backend/app/services/financial_math/portfolio/daily_state.py`, `backend/app/services/financial_math/portfolio/data_quality.py` |
-| Threshold (7 days) | `backend/app/services/data_quality_thresholds.py` |
+| Threshold (7 days) | `backend/app/services/platform/data_quality_thresholds.py` |
 | `StalePriceAsset`, `DataQualityStatus` derivation | `backend/app/schemas/portfolio.py` |
 | Risk: stale assets → partial results | `backend/app/services/risk/service.py` |
 | Current price write-back | `backend/app/services/assets/price_query.py` |

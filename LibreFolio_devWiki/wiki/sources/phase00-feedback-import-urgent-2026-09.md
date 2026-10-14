@@ -68,4 +68,4 @@ The backlog these jobs came from, and where its other areas went: [[sources/phas
 | Integration manifest | `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/manifest-integrazione-E.md` |
 | Asset PATCH | `backend/app/services/assets/crud.py` |
 | Broker 409 | `backend/app/api/v1/brokers.py` |
-| Share feature | `frontend/src/lib/components/support/SocialShareModal.svelte` |
+| Share feature | `frontend/src/lib/features/support/SocialShareModal.svelte` |

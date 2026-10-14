@@ -44,5 +44,5 @@ Retroactive transaction edits are a first-class use case (users fix import error
 |------|------|
 | FIFO engine (current, since 2026-07 v4) | `backend/app/services/financial_math/fifo/engine.py` |
 | Orchestration service (current) | `backend/app/services/lots_analysis_service.py` |
-| Transaction service (original location, superseded for FIFO logic) | `backend/app/services/transaction_service.py` |
+| Transaction service (original location, superseded for FIFO logic) | `backend/app/services/transactions/transaction_service.py` |
 | DB model (Transaction) | `backend/app/db/models.py` |

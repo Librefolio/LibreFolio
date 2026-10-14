@@ -9,7 +9,7 @@ Test IDs: SS-001..SS-006
 import json
 import sys
 
-import backend.app.services.scheduler.state as state_mod
+import backend.app.services.platform.scheduler.state as state_mod
 from backend.app.config import PROJECT_ROOT
 
 sys.path.insert(0, str(PROJECT_ROOT))
