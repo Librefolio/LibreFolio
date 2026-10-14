@@ -310,7 +310,8 @@ remain in session messages and are not authorization to create production transa
 > TEST database/uploads/sidecars restored at stopped temporary runtime, manual CSVs
 > unchanged, private coherent backup retained. Final R2 build is served on 6041,
 > PID 68600, index SHA256 `ab8b1458c1a49f1b835b3958d745e83e5a44f5d30e7c58d30ed4837941d0a4b6`.
-> Operational checklist: `~/Documents/test-ui-urgenti/REVIEW-E-R2.md`.
+> Operational checklist: `~/Documents/test-ui-urgenti/REVIEW-E-R2.md`, archived on 2026-10-14 in
+> [review-E-notes/REVIEW-E-R2.md](review-E-notes/REVIEW-E-R2.md).
 > No commit/staging/push or production operation; no changes imported from A/B/C/D.
 
 ## Chiusura (verifica del 2026-10-09 su `3cceb4f90`)
