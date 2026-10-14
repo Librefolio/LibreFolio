@@ -27,9 +27,9 @@
 | Lettera | Sessione | Cartella del piano | Corsia (porta + dati) | Stato |
 |---|---|---|---|---|
 | — | coordinatore | questo file | 6150 + `/tmp/librefolio-r2-main` | — |
-| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | piano approvato il 14/10; branch `e-alfy-designer-lab`; spike, poi passi 1–3 |
-| G | `G - Gallery deterministica` | `../56_galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | piano approvato il 14/10; branch `e-alfy-g-gallery-deterministica`; passi 0–2 e correzione G-4 |
-| R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154 + `/tmp/librefolio-r2-r` | piano approvato il 14/10; branch `e-alfy-r-fattorizzazione-colori`; lotto A (W0–W2) nel checkpoint `d80b9e0cd`, base aggiornata con `dev_release2` (`b1fcc3c48`); prosegue con W3, il cancello A aspetta G |
+| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | piano approvato il 14/10; branch `e-alfy-designer-lab`; passi 0–5 `6e967202e`, base allineata (`150f2716a`); passo 5b (selettore di elementi, §5.6 del progetto), poi passo 6 |
+| G | `G - Gallery deterministica` | `../56_galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | piano approvato il 14/10; branch `e-alfy-g-gallery-deterministica`; G-4 corretto, G-3 pronto, t* = 3600 ms (D1, developer); compito B in corso |
+| R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154 + `/tmp/librefolio-r2-r` | piano approvato il 14/10; branch `e-alfy-r-fattorizzazione-colori`; lotto A (W0–W2) `d80b9e0cd`, lotto B (W3–W5) `75c45d923`, base allineata a `dev_release2` (`f53d979ef`); prosegue con il lotto C; i cancelli A e B aspettano G |
 | — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | su richiesta |
 
 Superfici condivise e relativi proprietari:
@@ -43,7 +43,8 @@ Superfici condivise e relativi proprietari:
 | `routes/(app)/assets/[id]/+page.svelte`, solo il nome del provider (G-4) | G |
 | `app.css` | nessuno finché non arriva il report della designer |
 | Catalogo del test runner | `test-author` |
-| Questo piano e le sezioni L, G, R del backlog post-1.2 | coordinatore |
+| Questo piano, l'indice del backlog post-1.2 e la riconciliazione delle sezioni L, G, R | coordinatore |
+| Le righe di stato delle sezioni L, G, R del backlog | il workstream della sezione, nei propri checkpoint |
 | `CHANGELOG.md` `[Unreleased]`, cataloghi i18n | coordinatore della 1.3 |
 
 Integrazione in `dev_release2`, solo per merge del coordinatore; il push lo fa il developer:
