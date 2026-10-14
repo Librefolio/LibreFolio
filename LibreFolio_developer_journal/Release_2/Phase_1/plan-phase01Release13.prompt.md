@@ -527,3 +527,24 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > **Fuori pista**: gli endpoint degli eventi degli asset stanno in `api/v1/assets.py` (di X), ma le
 > voci sugli eventi (I-09…I-12, V-22, C-65) sono di W. Deciso: X mette gli eventi in un modulo proprio
 > quando divide il router e lo integra presto; da lì il modulo è di W (messaggio a X, perimetro di W).
+
+### Sei analisi consegnate ✅ (2026-10-14)
+
+> **Note implementazione**: H, A, X, W, J e Z hanno consegnato l'analisi (testo completo nelle cartelle di sessione) e
+> sono ferme in attesa del via del developer. Le scelte sono raccolte in
+> [decisioni-analisi-20261014.md](decisioni-analisi-20261014.md): 35 decisioni di prodotto con la raccomandazione, più
+> le regole comuni del riordino prese dal coordinatore. Il coordinatore colori ha dato gli elenchi esatti dei lotti
+> A–D: le cartelle di asset, cambi e transazioni si spostano dopo il suo lotto A, quelle dei grafici dopo il lotto B.
+>
+> **Fuori pista**:
+> - Alle 18:10 il developer ha chiesto una pausa; un riavvio dell'app ha poi interrotto tutte le sessioni, riprese
+>   alle 19:13.
+> - Due regole del §6 cambiano con le analisi:
+>   - i file spostati in un pacchetto tengono il loro nome (proposta di A: meno righe toccate, nessun modulo nascosto
+>     da una variabile locale);
+>   - router, schemi e configurazione diventano pacchetti per dominio.
+> - Voci già chiuse trovate dalle analisi:
+>   - C-33, corretta nel treno 28: marcata ✅;
+>   - «📈 Gestione Stock Splits» di `TODO_FUTURI`: il FIFO applica già gli split, marcata superata;
+>   - la voce 5 dell'indice di luglio: la chiude X;
+>   - B12: la verifica J con il lotto dei contributi.
