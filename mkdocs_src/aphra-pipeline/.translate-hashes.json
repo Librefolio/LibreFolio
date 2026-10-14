@@ -11384,5 +11384,31 @@
         "stamped_by": "translate-stamp"
       }
     }
+  },
+  "CHANGELOG.md#1.2.1": {
+    "md5": "70bbf03df74a16214e892cbe16a39022",
+    "langs_done": [
+      "es",
+      "fr",
+      "it"
+    ],
+    "last_translated": "2026-10-14T17:22:03.938430+00:00",
+    "langs": {
+      "it": {
+        "stamped_at": "2026-10-14T17:22:03.938430+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 0
+      },
+      "fr": {
+        "stamped_at": "2026-10-14T17:22:03.938430+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 0
+      },
+      "es": {
+        "stamped_at": "2026-10-14T17:22:03.938430+00:00",
+        "stamped_by": "translate-stamp",
+        "index": 0
+      }
+    }
   }
 }
