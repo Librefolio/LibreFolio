@@ -766,7 +766,7 @@ Via del coordinatore il 15/10 (~00:28), sul mio ramo a `9d895a9c4`. All'handoff 
 > - `docs-writer` segnala la docstring di `assets/manager.py` («Compatibility manager…»), che non torna più ora che la
 >   facciata non c'è. Cambiarla adesso porterebbe il file sotto il 50 %: si aggiorna nel CP2b, che è un lotto di tagli.
 
-### Checkpoint CP2a 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+### Checkpoint CP2a ✅ (2026-10-15) — committato dal coordinatore: `4284c50f3` (codice) e `e8f0b293c` (journal)
 
 - Base `9d895a9c4`. 11 rinomine pure, 2 file tolti, 134 modificati (compresi questo piano e il backlog), nessun file nuovo
   oltre alle rinomine; elenco esplicito in `/tmp/libreFolio_x_cp2a_paths.txt`. Nessun file tagliato: un solo elenco.
@@ -775,3 +775,47 @@ Via del coordinatore il 15/10 (~00:28), sul mio ramo a `9d895a9c4`. All'handoff 
   `.ruff_cache/`, i `__pycache__`, `backend/data/prod/logs/librefolio.log`.
 - Messaggi proposti: `refactor(assets): move asset services, drop shim` per il codice, `docs(journal): X CP2a log, backlog
   X-R2 and W-B9` per il journal.
+
+### Aggiornamento di base: `dev_release2` (A1, A2, H CP1, W1, W2) nel ramo X ✅ (2026-10-15)
+
+Il coordinatore ha aperto il merge (`git merge --no-ff --no-commit e0816ec9c` sul mio `e8f0b293c`; base comune
+`c9bb8f257`), fermo su 35 conflitti, tutti di percorso: i miei (`assets/`, registri per famiglia, `fx/fx.py`) contro quelli
+di A (`accounts/`), H (`platform/`, `platform/scheduler/`, `files/`) e W (`transactions/`, `brokers/`). Il merge commit lo fa
+lui; io risolvo, metto in stage i soli file risolti o corretti, e valido.
+
+- ✅ **Risoluzione dei 35 conflitti**:
+  - 25 file Python con conflitti di soli import (22 in `backend/app`, 3 test): preso il lato in arrivo di ogni blocco (script
+    `/tmp/libreFolio_x_merge_take_theirs.py`, che si ferma se un blocco contiene altro che import), poi rimesse le mie rinomine
+    con i due riscrittori AST del CP1 e del CP2a (28 istruzioni), poi `ruff --select I --fix`. Il confronto con i due genitori
+    lo prova: rispetto al lato in arrivo cambiano solo le mie rinomine, rispetto al mio solo le loro;
+  - riga per riga, tenendo per ogni voce la casa più nuova (script `/tmp/libreFolio_x_merge_manual.py`): le forme sintetiche
+    di `test_layer_boundaries.py` (`brokers.broker_service`; `fx.fx` con `transactions.transaction_service`), 7 pagine della
+    devWiki, i due blocchi di `mkdocs_src/docs/developer/backend/risk/architecture.md` (tabella ed esempio di codice) e i due
+    di `scripts/coverage_analysis.py` (le chiavi di tutti, senza riformattare).
+- ✅ **Rischio semantico** (import verso vecchie case fuori dai conflitti): nessuno nei moduli nuovi di W, H e A. L'unico
+  riferimento fuori dai conflitti era un commento di `scripts/visual_review/live_price_check.py` (nuovo, della galleria G):
+  `asset_sources/price_query.py` → `assets/price_query.py`. I riscrittori, a secco, ora non trovano più nulla.
+- ✅ **Grep dei vecchi percorsi** di X, A, H e W in `backend/`, `scripts/`, `dev.py`, `.github/`,
+  `mkdocs_src/docs/developer/`: zero, tranne le eccezioni note X-R1 (`api/v1/fx.py:767`) e X-R2 (`db/models.py:123`,
+  `schemas/common.py:369`).
+- ✅ **Verifiche sulla revisione combinata** (confronti con `e0816ec9c` estratto con `git archive` in
+  `/tmp/libreFolio_x_theirs_tree`):
+  - `dev.py api schema`: `openapi.json` identico a quello di `e0816ec9c` tranne `info.version`; 113 percorsi e 133
+    `operationId` nello stesso ordine; `tool-contracts.openapi.json` identico;
+  - scoperta dei registri identica (stessi codici, stesso ordine): asset 6, cambi 7, BRIM 33, segnali 23, rischio 15;
+  - `pytest --collect-only`: 12 971 (`e0816ec9c`: 12 976; differenza = i 5 casi della facciata tolti nel CP2a, più l'id
+    rinominato del test delle soglie su `assets/crud.py`);
+  - ruff su `backend/` pulito; `black --check backend/` con i soliti 4 file preesistenti; `lint --dead-code --scope
+    backend`: rispetto a `e0816ec9c` cambiano solo i reperti già spiegati nel CP1 e nel CP2a;
+  - `check_source_paths.py`: i 5 artefatti ignorati preesistenti; `mkdocs build` stretto verde; `check-links` 95 validi;
+  - `dev.py front build --debug` (01:26–01:28): svelte-check 0 errori e 0 avvisi, build vite verde;
+  - `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6183 --data-dir
+    /tmp/librefolio-r13-x --fresh-run all-backend` (01:28–01:48, 19 min 36 s): **7/7 categorie verdi**, 23 riepiloghi
+    identici a quelli del CP2a, **12 960 passati, 28 saltati, 0 falliti**. Porta 6183 libera alla fine.
+- ✅ **Stage**: i 35 file risolti più `live_price_check.py`, nient'altro; `git diff --cached --check` pulito. Il merge
+  messo in stage, rispetto al mio `e8f0b293c`, ha esattamente le modifiche di `e0816ec9c` sulla base (364 file, +13 799
+  −4 787); rispetto a `e0816ec9c`, esattamente le mie (323 file, +1 739 −981) più la riga del commento.
+- Questo piano resta fuori dallo stage: è journal, da committare dopo il merge.
+
+> **Fuori pista**: nessuno. Segnalato al coordinatore, fuori dal mio perimetro: `scripts/coverage_analysis.py` cita
+> `backend/app/uploads.py`, che non esiste (preesistente, già alla base `c9bb8f257`).
