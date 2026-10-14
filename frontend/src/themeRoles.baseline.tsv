@@ -178,7 +178,6 @@ lib/components/transactions/modals/TransactionPickerModal.svelte	20
 lib/components/transactions/shared/TransactionResultBanner.svelte	18
 lib/components/transactions/shared/TransactionTypeSearchSelect.svelte	4
 lib/components/transactions/wac/WacPreviewSection.svelte	96
-lib/components/ui/AnimatedBackground.svelte	0	#00ff9a	#11151c	#1a4031×3	#4ade80	#9caf9c	#f5f4ef
 lib/components/ui/ContextMenu.svelte	0	#1e293b	#334155×4	#450a0a	#dc2626	#e2e8f0×3	#f1f5f9	#f87171	#fef2f2	rgb(0 0 0/0.05)	rgb(0 0 0/0.1)	rgb(0 0 0/0.2)	rgb(0 0 0/0.4)	white
 lib/components/ui/DocsLink.svelte	4
 lib/components/ui/OrderableList.svelte	27
