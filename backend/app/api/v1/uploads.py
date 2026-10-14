@@ -30,13 +30,13 @@ from backend.app.schemas.uploads import (
     UploadListResponse,
     UploadResponse,
 )
+from backend.app.services.accounts.global_settings_service import get_max_upload_mb
 from backend.app.services.file_preview import (
     FilePreviewLinks,
     UnsupportedPreviewError,
     build_image_preview_url,
     build_preview_response,
 )
-from backend.app.services.global_settings_service import get_max_upload_mb
 from backend.app.services.static_uploads import (
     UploadSecurityError,
     delete_upload,

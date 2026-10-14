@@ -21,7 +21,7 @@ from backend.app.schemas.settings import (
     OnboardingStepProgressItem,
     OnboardingWelcomeSettings,
 )
-from backend.app.services.global_settings_service import get_setting_value
+from backend.app.services.accounts.global_settings_service import get_setting_value
 from backend.app.utils.datetime_utils import utcnow
 
 ONBOARDING_FLOW_VERSIONS: Mapping[OnboardingFlow, int] = {
