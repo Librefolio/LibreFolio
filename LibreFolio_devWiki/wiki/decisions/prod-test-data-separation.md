@@ -40,7 +40,7 @@ Configured via environment variable or `get_data_dir(mode)` in `backend/app/conf
 
 | Role | Path |
 |------|------|
-| Config module | `backend/app/config.py` |
+| Config module | `backend/app/config/__init__.py` |
 | Prod data dir | `backend/data/prod/` |
 | Test data dir | `backend/data/test/` |
 | mkdocs | `mkdocs_src/docs/developer/architecture/database/index.md` |
