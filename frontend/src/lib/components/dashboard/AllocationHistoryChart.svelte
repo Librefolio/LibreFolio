@@ -36,6 +36,7 @@
     import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {withHexAlpha} from '$lib/theme/colorAlpha';
 
     interface AllocationComponent {
         name: string;
@@ -713,7 +714,7 @@
                 smooth: false,
                 symbol: 'none',
                 lineStyle: {color, width: 1, opacity: 0.7},
-                areaStyle: {color: color + '88'},
+                areaStyle: {color: withHexAlpha(color, '88')},
                 itemStyle: {color},
                 emphasis: {focus: 'series'},
                 label: showLabel

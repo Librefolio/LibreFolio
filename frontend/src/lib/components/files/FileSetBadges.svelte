@@ -7,6 +7,7 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import {formatIsoDay, type FileSetBadge} from '$lib/utils/transactions/importReportSets';
+    import {STATUS_TONES} from '$lib/theme/toneClasses';
 
     interface Props {
         badges: FileSetBadge[];
@@ -14,13 +15,7 @@
 
     let {badges}: Props = $props();
 
-    const STYLE: Record<FileSetBadge['kind'], string> = {
-        combined: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200',
-        stale: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200',
-        usedInCombined: 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-200',
-        set: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200',
-        incomplete: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200',
-    };
+    const STYLE: Record<FileSetBadge['kind'], string> = STATUS_TONES.fileSet;
 
     function roleName(role: string): string {
         const key = `importWizard.reportSet.roleName.${role}`;

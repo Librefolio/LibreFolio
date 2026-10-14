@@ -1810,6 +1810,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Output identici.
 
   Dettagli: [report 03](55_colorSystem/analysis/03_semantic_dynamic_logic.md), §1–§3.
+  - Stato (R, 14/10): codice nel checkpoint del lotto A (W1–W2): `lib/theme/toneClasses.ts` (`SIGN_TEXT`, `SIGN_BAR`,
+    `POLARITY_TONES`, `STATUS_TONES`, `KIND_TONES`), 42 siti di segno in 20 file e 11 mappe di stato in 9 file; CSS
+    compilato identico alla baseline. Si chiude con il commit del checkpoint e il cancello A.
 - **R-3 · Hex nei `<style>` in variabili CSS con lo stesso valore** (P8: `DataTable*`, modali file e immagini,
   `ConfirmModal`) — medio; coordinatore, 14/10. Dettagli: [report 02](55_colorSystem/analysis/02_ui_components.md), §4.
 - **R-4 · Funzioni fragili e refusi senza effetto visibile** — basso; coordinatore, 14/10.
@@ -1817,6 +1820,14 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - La meta `theme-color` scura è `#156534` invece di `#166534`.
 
   Dettagli: [report 01](55_colorSystem/analysis/01_theme_foundation.md), §6.5; [report 04](55_colorSystem/analysis/04_charts_dataviz.md), §5.
+  - Stato (R, 14/10): codice e test nel checkpoint del lotto A (W0); `lib/theme/colorAlpha.ts`, meta corretta nei tre
+    punti con gate di concordanza. Si chiude con il commit del checkpoint e il cancello A. Piano:
+    [R-colorRefactor](55_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W0».
+- **R-5 · `withAlpha` su `hsl()` con spazi produce un colore non valido** — minimo; R, 14/10.
+  - `hsla(210 68% 44%, a)` mescola le due sintassi; oggi nessun chiamante ci passa (`lotColor` non arriva a `withAlpha`).
+  - Da correggere quando un colore con spazi ci arriverà (fase B), con la gallery.
+
+  Dettagli: piano R, «W0», nota «Fuori pista».
 
 ## G · Gallery deterministica (56)
 

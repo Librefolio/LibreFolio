@@ -20,7 +20,8 @@
     import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal, safeNumber, safeString} from '$lib/types';
-    import {isUnknownOrNonZero, resolveBrokerName, withAlpha} from './lotChartShared';
+    import {isUnknownOrNonZero, resolveBrokerName} from './lotChartShared';
+    import {withAlpha} from '$lib/theme/colorAlpha';
     import {
         applySharedZoomWindow as sharedApplyZoomWindow,
         branchDepthForLaneKey,
