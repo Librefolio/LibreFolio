@@ -357,3 +357,25 @@
   6181–6185, con suite backend complete anche stanotte.
 - **Finestra di domani, 15/10:** dalle 09:00, circa 2 ore (misura finale di G sul `dev_release2` con G, poi candidata di
   R per A+B+C). Conferma alla 1.3 15 minuti prima; poi altre finestre per la A/B di L e i piloti di T.
+
+## 23:20 — T-1 integrato in `dev_release2`
+
+- **T-1 (B1, fondamenta):** checkpoint `2018fd853`, 12 file.
+  - `tokens.css` con i ruoli `--lf-*` e le utility `@theme inline`; correzioni di contrasto D-T6 commentate.
+  - `app.css`: eccezioni `:where` sulle 4 regole strutturali di P1, tolte 2 regole morte, `@source not`.
+  - Scanner `theme-roles.mjs` e baseline TSV: m1 11.435 classi, m2 1.785 letterali, 315 file.
+  - Gate `themeRoles` e `themeTokens` in `core-unit`; istruzioni per gli agenti e skill `theme-roles`.
+  - Prove dichiarate da T: CSS compilato, 22 file su 23 identici, nel ventitreesimo solo variabili, 4 selettori e 2
+    regole morte; `core-unit` 130 file / 4.245 test; dead code identico.
+  - Controllo a campione del coordinatore: gate 50/50, `--check` pulito; esclusioni del Lab (anche la rotta) e dei
+    test verificate.
+- **Merge di base** `793395913` (1.3) → `4e024dfe8`, albero = simulazione.
+- **`dev_release2`:** avanzamento veloce `793395913` → `4e024dfe8`, annunciato prima alla 1.3. Il file non committato
+  della 1.3 non è stato toccato. Alla 1.3 sono state girate la sintassi del taglio dichiarato e la regola di
+  risoluzione dei conflitti.
+- **Conseguenze:**
+  - R, al prossimo merge di base: conflitto additivo atteso in `_frontend_utility.py` (gate di R e di T dopo
+    `clipboardSink`); va ricatturato il CSS compilato di riferimento.
+  - L e G: le loro modifiche sono fuori dal perimetro del cricchetto (Lab esentato, E2E esclusi). G-4 non tocca
+    classi. Va verificato `--check` sull'albero fuso al loro ingresso.
+- **T** riparte con T-2 (accesso); prima dell'integrazione, gli scatti dell'accesso vanno al developer.
