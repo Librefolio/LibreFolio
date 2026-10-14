@@ -32,17 +32,15 @@ from backend.app.schemas.settings import (
     UserSettingsRead,
     UserSettingsUpdate,
 )
-from backend.app.services.global_settings_service import get_setting_value
-from backend.app.services.onboarding_service import (
+from backend.app.services.accounts.global_settings_service import get_setting_value
+from backend.app.services.accounts.onboarding_service import (
     OnboardingVersionMismatchError,
     complete_welcome_onboarding,
     get_onboarding_progress,
     transition_onboarding_progress,
     transition_onboarding_step_progress,
 )
-from backend.app.services.scheduler import read_job_log
-from backend.app.services.scheduler.state import load_state
-from backend.app.services.settings_service import (
+from backend.app.services.accounts.settings_service import (
     GlobalSettingNotFoundError,
     GlobalSettingValueError,
     get_all_global_settings,
@@ -52,6 +50,8 @@ from backend.app.services.settings_service import (
     update_global_settings,
     update_user_settings,
 )
+from backend.app.services.scheduler import read_job_log
+from backend.app.services.scheduler.state import load_state
 from backend.app.utils.runtime.cache import clear_all_caches, clear_cache, list_caches
 
 logger = structlog.get_logger(__name__)

@@ -48,7 +48,7 @@ The JWT signing key (`JWT_SECRET`) is:
 
 How the key is resolved:
 
-- `backend/app/services/auth_service.py` reads `JWT_SECRET` once, at import, straight from
+- `backend/app/services/accounts/auth_service.py` reads `JWT_SECRET` once, at import, straight from
   `os.environ`: it is not a field of the Pydantic `Settings`. Tokens are signed with HS256. When
   the variable is unset or empty, each process falls back to its own
   `secrets.token_urlsafe(64)`.
