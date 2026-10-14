@@ -25,6 +25,17 @@
   riordino del piano 43 (parte 2), backend e frontend, compresi i file più grandi, così
   che le molte sessioni parallele lavorino su cartelle chiare e separate.
 - **Si rilascia quando le ondate 1 e 2 sono complete e verdi** (decisione del developer).
+- **E quando la conversione dei neutri e degli stati è completa** (decisione del developer del 14/10, riportata dal
+  coordinatore colori e da lui precisata alle 22:05). Prima del tag devono essere entrati, del workstream T:
+  - le ondate W1–W6 per neutri e stati: primitivi, aree libere, stati e mappe, cambi/asset/transazioni, portafoglio e
+    grafici, stili propri (tabelle, file, media, dialoghi);
+  - B2 (gli stati diventano ruoli), B4 per i soli neutri e guadagno/perdita dei grafici, B5 (le variabili `--lf-cmp-*`
+    degli stili propri passano ai ruoli);
+  - quindi anche tutti i lotti A–D della fattorizzazione dei colori (R), che quelle ondate aspettano.
+
+  Non bloccano solo le palette per categoria e dei dati, che aspettano un giro della designer. I tagli di file della
+  1.3 su quelle aree (FE5 di X, FE8a di W, FE6 e `DataTable` di Y) vanno prima della conversione quando possibile, ma
+  non bloccano il tag (regola «chi parte prima», §7).
   Nessuna data: le stime del business plan sono prudenti e non vincolano.
 - **Perimetro del backlog** (decisione del developer): errori che toccano numeri,
   sicurezza o dati, e chiarezza per utenti non esperti. I riordini interni sono dentro
@@ -79,12 +90,16 @@ taglio, in due commit; niente shim né barili nuovi; URL, `operationId`, chiavi 
     (FE4), asset con il taglio di `AssetModal` e della pagina dell'asset (FE5),
     transazioni con il wizard di import diviso per passo (FE8), `ui/feedback`,
     `ui/display`, ritocchi in `features/tools`;
-  - dopo il lotto B (grafici): segnali e rischio (FE2), dashboard con `GrowthChart`
-    tagliato (FE6), broker e lotti (FE7);
+  - dopo il lotto B (grafici): segnali e rischio (FE2), dashboard (FE6; il taglio di
+    `GrowthChart` dopo il lotto D, che lo ritocca), broker e lotti (FE7);
   - dopo il lotto C (tabelle, media, file, dialoghi): file (FE3), `DataTable`;
   - dopo il lotto D: la pagina dei file, `ImportBrokerMismatchModal`,
     `BrokerImportFilesModal`, `CompactCashCell`;
-  - per ultimi: utility e store generici (FE9, FE10), suffissi (FE11).
+  - per ultimi: utility e store generici (FE9, FE10), suffissi (FE11);
+  - i tagli di file su cui T aspetta (FE5, FE8a, FE6, `DataTable`) hanno la precedenza nel loro lotto e si annunciano
+    al coordinatore colori: la conversione dei colori di quelle aree, necessaria al rilascio, li aspetta se sono già
+    annunciati (§7). `AssetModal` e le tre modali delle transazioni sono già fuori dai lotti di R: il loro taglio può
+    partire prima del lotto A.
 - **Test speculari al codice (TS1)**: si decide a riordino del backend finito (costo alto).
 
 ### Ondata 1 — Fondamenta per il cloud (bloccano il pannello di controllo)
@@ -200,8 +215,11 @@ Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9.
    tocca tutte le famiglie; asset senza shim (PL6); `fx.py` → `services/fx/` (PL4);
    `services/assets/` raggruppato; `price_store` in tre moduli; router di asset e cambi
    per risorsa e router dei segnali (PL7, dopo PL1 di J); frontend cambi (FE4) e asset
-   con i tagli di `AssetModal` e della pagina dell'asset (FE5): entrambi **dopo il lotto
-   A dei colori** e dopo la pausa degli aggiornamenti di Z su quelle pagine.
+   con i tagli di `AssetModal` e della pagina dell'asset (FE5). Gli spostamenti di cartella vengono **dopo il lotto
+   A dei colori** e dopo la pausa degli aggiornamenti di Z su quelle pagine. Il taglio FE5 ha la precedenza e si
+   annuncia (§7): `AssetModal` è già fuori dai lotti di R, quindi il suo taglio può partire prima del lotto A (dopo la
+   pausa di Z); la pagina dell'asset dopo la riga di G. La conversione dei colori di asset e cambi (W4 di T,
+   necessaria al rilascio) viene dopo; FE4, spostamento puro, si fonde con la conversione in qualunque ordine.
 2. Elenchi dei fornitori permessi (F05, parte X): asset e cambi, scraper spenti di
    default nel profilo gestito.
 3. **Impostazioni dei plugin** (idea «⚙️» di `TODO_FUTURI`, decisione del developer):
@@ -236,9 +254,12 @@ Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9.
 1. Riordino: `brim_provider.py` e i suoi file → `services/brim/` (PL5), con icone e
    report di esempio dentro le cartelle dei plugin (U-B3, U-B4); transazioni (servizio,
    stadi del batch, contesto) → `services/transactions/`; broker → `services/brokers/`;
-   router dei broker per risorsa; schemi delle transazioni; frontend transazioni (FE8),
-   **dopo il lotto A dei colori**: wizard di import diviso per passo, modali Bulk e Form
-   divise per sezione; i 4 file del lotto D dei colori solo dopo quel lotto.
+   router dei broker per risorsa; schemi delle transazioni; frontend transazioni (FE8a): wizard di import diviso per
+   passo, modali Bulk e Form divise per sezione. Lo spostamento della cartella viene **dopo il lotto A dei colori**
+   (`transactions/import/` ne fa parte); le tre modali da tagliare sono già fuori dai lotti di R, quindi i tagli
+   possono partire prima, senza toccare i file del lotto A. I tagli hanno la precedenza e si annunciano (§7): la
+   conversione dei colori delle transazioni (W4 di T, necessaria al rilascio) viene dopo. I 4 file del lotto D dei
+   colori solo dopo quel lotto (FE8b, non serve alla W4: i colori delle due modali passano dal B5 di T).
 2. Integrità e sicurezza: cancellazione di eventi per id fuori dall'asset (I-12), errore
    500 su un tipo di evento non valido (I-09), «+ Nuovo evento» che modifica un evento
    esistente (V-22), bulk editor e broker in sola lettura (V-23), file letti sull'event
@@ -299,14 +320,20 @@ Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9.
 ### Y · Cruscotto e grafici
 
 Parte quando il programma colori integra il suo lotto B: segnali e rischio (FE2),
-dashboard con `GrowthChart` tagliato (FE6), broker e lotti (FE7); frontend di sola
+dashboard (FE6; il taglio di `GrowthChart` dopo il lotto D, che lo ritocca), broker e lotti (FE7); frontend di sola
 presentazione (U8) con i campi del backend di J; indicatore di attesa del server (C-85);
 bandiere nei grafici (K-13); tooltip sanificati (K-15, C-34, C-15); voci dei grafici
 (I-01, I-03, 47-1, 54-1, B10, 48-1, O-16). Dopo il lotto C dei colori: file (FE3),
 `DataTable` tagliata, intestazione Azioni su mobile (C-38 e difetti 2 e 5 del PAC),
-ridimensionamento delle colonne (C-62). Per ultimi FE9, FE10, FE11. **Il riordino delle
-cartelle toccate dai colori non blocca il rilascio**: se i lotti B e C arrivano tardi,
-quella parte passa dopo la 1.3.
+ridimensionamento delle colonne (C-62). Per ultimi FE9, FE10, FE11.
+
+**Il riordino di queste cartelle (grafici, dashboard, rischio, broker, file) non blocca il rilascio; la loro
+conversione dei colori sì** (W5 e W6 di T, §1):
+- il taglio di `DataTable` è il primo lotto di Y dopo il lotto C dei colori, quello di `GrowthChart` (FE6) il primo
+  dopo il lotto D; entrambi si annunciano (§7), così arrivano prima della conversione; se tardano, vale la regola
+  «chi parte prima» (§7);
+- gli spostamenti puri (FE2, FE3, FE7) si fondono con la conversione in qualunque ordine;
+- se al tag il riordino di Y non è finito, il resto passa dopo la 1.3.
 
 ## 5. Schede delle funzioni per il cloud
 
@@ -347,6 +374,37 @@ dall'audit del 14/10: ogni sessione le riverifica nell'analisi.
 - **Integrazione senza conflitti nel checkout condiviso**: prima si aggiorna la base del
   figlio (i conflitti si risolvono nel suo worktree), poi il merge in `dev_release2`.
 
+### Forma comune del riordino (C1–C7, decise dal coordinatore dopo le analisi, 14/10)
+
+- **C1 — Nomi.** Un file che entra in un pacchetto di dominio tiene il suo nome; cambia solo il pacchetto
+  (`services/accounts/auth_service.py`, `services/platform/container_registry.py`). Meno righe toccate, e nessun
+  modulo nascosto da una variabile locale con lo stesso nome (`users` in `scripts/user_cli.py:130`). I moduli nuovi
+  nati da un taglio prendono nomi brevi per tema, senza ripetere il dominio (`services/fx/sync.py`,
+  `services/brim/parsing.py`). Un file esistente si rinomina solo se serve davvero, in un commit a parte con il motivo.
+- **C2 — Router divisi.** Un router diviso diventa il pacchetto `api/v1/<dominio>/`, con un modulo per risorsa.
+  - L'`__init__.py` contiene solo la composizione dei sotto-router e gli oggetti router che `router.py` già usa:
+    `router.py` resta intatto, e una patch su un nome che non c'è fallisce in modo esplicito.
+  - L'ordine di registrazione delle rotte resta quello di oggi.
+  - Prove: `api sync` (o i JSON di `dev.py api schema`, escluso `info.version`) senza differenze, più una verifica
+    che percorsi d'esempio arrivino allo stesso endpoint di prima: un `openapi.json` canonico non prova l'ordine di
+    corrispondenza.
+- **C3 — Schemi divisi.** Un modulo di schemi sopra le ~1 000 righe diventa il pacchetto `schemas/<dominio>/`, con
+  moduli per tema e un `__init__.py` con la sola docstring (niente barile). L'hub `schemas/__init__.py` resta e
+  continua a esportare i nomi pubblici; chi importa una classe la prende dal modulo che la definisce. Nomi di classe
+  invariati, quindi OpenAPI e impronte dei Tool invariati.
+- **C4 — Classi di servizio grandi.** Si tagliano in mixin per tema, composti nella classe del servizio, che resta nel
+  suo file con il suo nome (C1: per esempio `services/transactions/transaction_service.py`); metodi pubblici e patch
+  sui metodi restano invariati. Le funzioni di modulo vanno nei moduli per tema e le patch puntano al
+  modulo che le definisce. Guardia contro le patch mute: uno script AST usa e getta in `/tmp`, oppure un test di
+  `test-author` dove serve.
+- **C5 — `npm ci`.** Permesso a ogni sessione, solo dal lock e solo nel proprio worktree, quando serve a un controllo.
+  Mai `npm install`, `npm update`, `npm audit fix` o `npx`. Per i lotti di solo riordino del backend bastano i JSON
+  di `dev.py api schema`.
+- **C6 — devWiki.** Le tabelle «Source files» le aggiorna la sessione che sposta i file, nello stesso lotto;
+  `check_source_paths.py` non deve peggiorare.
+- **C7 — Migrazioni.** 005 di A (account e inviti), 006 di X (impostazioni dei plugin), poi le correzioni dei dati di
+  W. Chi integra dopo riallinea `down_revision` all'aggiornamento di base.
+
 ### Superfici condivise: un solo scrittore
 
 | Superficie | Scrittore |
@@ -364,6 +422,7 @@ dall'audit del 14/10: ogni sessione le riverifica nell'analisi.
 | Navigazione MkDocs, `CHANGELOG.md` (`[Unreleased]`), piano generale in `Phase_1` | coordinatore (i figli propongono il testo nel loro handoff) |
 | `BACKLOG_POST_1.2.md` | ogni sessione 1.3 scrive solo la propria sezione; le chiusure (✅ con data e commit) delle voci di altre sezioni e i rimandi nei piani d'origine di `Phase_0` li scrive il coordinatore a ogni treno; le sezioni L/R/G sono del coordinatore colori |
 | devWiki | `project-historian` su richiesta; ogni lotto di riordino aggiorna i percorsi nella doc per sviluppatori, nelle istruzioni `.github` e nelle tabelle delle fonti (`check_source_paths.py` non peggiora) |
+| Baseline del cricchetto dei colori (dopo T-1) | T, del programma colori; le sessioni 1.3 la toccano solo con lo script di T, nel commit di un taglio (§6, «Taglio dichiarato») |
 
 ### Regole di ogni lotto di riordino (dal piano 43)
 
@@ -373,14 +432,51 @@ poi backend intera con gli stessi conteggi della base; `ruff`, `black`, codice m
 reperti nuovi; `api sync` senza differenze; `mkdocs build` stretto e `check-links`; le
 rinomine con somiglianza ≥ 95 % in `git diff -M`; i `patch` dei test sui nuovi percorsi.
 
-### Nuove schermate (regole del programma colori, fino ai token)
+**Rinomina e taglio nello stesso commit** (chiarimento del coordinatore, 14/10, caso del PL2 di X). Sono ammessi
+insieme solo se:
+- nessun file è insieme rinominato e tagliato;
+- ogni rinomina resta ≥ 95 % in `git diff --cached -M`, che il coordinatore controlla allo staging;
+- il messaggio di commit elenca a parte le rinomine e i tagli.
 
-Nessun esadecimale nuovo, niente `!important`, nessuna palette nuova; i pattern esistenti
-(card `bg-white dark:bg-slate-800`, bordi `border-gray-200 dark:border-slate-700`, testi
-gray-900/700/500 con il dark, bottone primario `bg-libre-green`); stati e badge con le
-funzioni condivise di R appena entra il suo lotto A; grafici solo da `chartTheme.ts` dopo
-il lotto B; `app.css` non si tocca; ogni schermata nuova entra nella galleria con lo
-scatto assestato di G.
+Altrimenti servono due checkpoint in fila.
+
+**`npm ci` prima della prima run di test**: anche i test del solo backend avviano il server condiviso, che costruisce il
+frontend se manca. Senza `node_modules`, la build chiama `npx` (vietato). Regola C5.
+
+**Taglio dichiarato** (dal programma colori, 14/10). Dopo l'ingresso di T-1, il cricchetto dei colori vuole i file
+nuovi senza classi di palette e tollera solo le rinomine. Un taglio crea file nuovi con le classi del file di
+partenza, quindi:
+- nello stesso commit del taglio, la sessione aggiorna la baseline del cricchetto con lo script di T, che sposta i
+  conteggi dal file vecchio ai nuovi;
+- il totale non deve salire;
+- il coordinatore ne controlla il diff prima del commit.
+
+**Conflitti sulla baseline.** La baseline ha una riga per file e le chiavi ordinate, quindi rami che toccano file
+diversi non vanno in conflitto. Sulla stessa riga:
+- si tiene il valore più stretto, mai il più alto;
+- poi il gate deve passare sull'albero fuso;
+- se non passa, c'è una regressione vera o manca un taglio dichiarato: non si allarga la baseline per farlo passare.
+
+La sintassi esatta dello script arriva dal coordinatore colori con T-1. Le rinomine pure non ne hanno bisogno.
+
+### Nuove schermate (regole del programma colori)
+
+**Decisione del developer (14/10, riportata dal coordinatore colori)**: si va subito ai ruoli `--lf-*` e alle utility
+semantiche, del tipo `bg-card` e `text-primary`, pubblicate dal workstream T dei colori. Le scale di Tailwind non
+vengono ritinte, e un controllo conterà le classi di palette rimaste.
+
+- **Dopo la pubblicazione delle utility di T**: nelle schermate nuove della 1.3 niente classi di palette per fondi,
+  testi e bordi (`bg-white`, `text-gray-*`, `border-slate-*`…), solo le utility dei ruoli. I nomi arrivano con
+  l'analisi di T.
+- **Prima di quella pubblicazione**: si costruisce la logica e si rinvia la parte visiva, oppure si usano i pattern
+  esistenti (card `bg-white dark:bg-slate-800`, bordi `border-gray-200 dark:border-slate-700`, testi gray-900/700/500
+  con il dark, primario `bg-libre-green`), con una voce nel backlog della sessione per migrarli.
+- **Sempre**:
+  - nessun esadecimale nuovo, niente `!important`, nessuna palette nuova;
+  - stati e badge con le funzioni condivise di R (`lib/theme/toneClasses.ts`) appena entra il suo lotto A; grafici
+    solo da `chartTheme.ts` dopo il lotto B;
+  - `app.css` non si tocca;
+  - ogni schermata nuova entra nella galleria con lo scatto assestato di G.
 
 ### Dipendenze Python
 
@@ -416,6 +512,27 @@ fermati all'handoff, porta verificata libera.
 - Se un conflitto nasce comunque (il developer: «aiutalo a risolvere o rimappare»), lo
   risolve la sessione figlia che possiede il file, nel suo worktree, all'aggiornamento di
   base.
+- **Regola «chi parte prima»** (concordata fra i due coordinatori il 14/10 alle 22:05). Serve perché nessun riordino
+  della 1.3 blocchi il tag.
+  - Vale per i tagli di file della 1.3 su un'area che T converte (tabella sotto).
+  - Se il taglio non è iniziato quando T arriva a quel file, T converte il file di oggi; il taglio si fa dopo, sul file
+    convertito, partendo da una base aggiornata.
+  - Se il taglio è iniziato, T lascia quel file per ultimo nella sua ondata.
+  - Mai i due sullo stesso file nello stesso momento.
+  - **«Iniziato» vuol dire annunciato.** Chi inizia a lavorare su uno di questi file lo annuncia all'altro
+    coordinatore, e lo annuncia di nuovo quando il file è entrato in `dev_release2`. Prima di iniziare si controlla che
+    l'altra parte non abbia un annuncio aperto. Nella 1.3 la sessione chiede il via al coordinatore, che controlla e
+    annuncia.
+  - Gli spostamenti puri (`git mv` più import) si fondono con le modifiche di T in qualunque ordine e non si
+    annunciano.
+  - Ogni taglio fatto dopo T-1 è un taglio dichiarato (§6).
+
+  | Taglio | Sessione | File | Fuori dai lotti di R | Annuncio aperto |
+  |---|---|---|---|---|
+  | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | nessuno |
+  | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | nessuno |
+  | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | nessuno |
+  | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | nessuno |
 
 ## 8. Traguardi, in ordine di dipendenza
 
@@ -427,11 +544,13 @@ fermati all'handoff, porta verificata libera.
 | M3 | Primo treno del riordino: registri per famiglia (X), punti d'aggancio e configurazione (H), servizi account (A) | B, la sospensione nel backend (Z), le funzioni di A |
 | M4 | Riordino del backend completato (famiglie, servizi per dominio, file grandi) e cartelle frontend fuori dai colori | impostazioni dei plugin, ricerca, decisione sui test speculari |
 | M5 | Ondata 1 integrata | proposta al developer: passaggio su `dev`, così l'immagine `nightly` serve al pannello di controllo |
-| M6 | Ondata 2 integrata | cancelli di rilascio |
+| M5b | Tagli di asset (X, FE5) e transazioni (W, FE8a) integrati, annunciati e dichiarati; spostamenti di cartella dopo il lotto A dei colori; FE4 in qualunque ordine | l'ondata W4 della conversione dei colori (T), regola «chi parte prima» se tardano |
+| M5c | Lotti B, C e D della fattorizzazione dei colori (R) integrati; tagli di `GrowthChart` (FE6) e `DataTable` di Y, se partiti | le ondate W5 e W6 e i passi B4 e B5 della conversione (T) |
+| M6 | Ondata 2 integrata e conversione dei neutri e degli stati completa (W1–W6, B2, B4 per neutri e guadagno/perdita, B5) | cancelli di rilascio |
 | M7 | Cancelli verdi → 1.3.0 (tag e push del developer) | — |
 
 Indipendenti dai traguardi: il lavoro di J, W e Y, che entra a ogni treno quando è
-pronto, e i lotti frontend legati ai lotti B e C dei colori.
+pronto, e il riordino frontend legato ai lotti B e C dei colori (la loro conversione dei colori, invece, è in M6).
 
 ## 9. Cancelli
 
@@ -440,6 +559,8 @@ pronto, e i lotti frontend legati ai lotti B e C dei colori.
 - **Prima dell'integrazione in `dev_release2`**: aggiornamento di base, validazione della
   revisione combinata, nessun file condiviso scritto da due sessioni.
 - **Rilascio**:
+  - conversione dei neutri e degli stati completa in `dev_release2`: ondate W1–W6 di T, B2, B4 (neutri e
+    guadagno/perdita dei grafici), B5; fuori solo le palette per categoria e dei dati (decisione del developer, §1);
   - run completa con coverage anche sotto carico (4 worker con un'altra corsia attiva,
     C-82);
   - galleria completa (con G, mai insieme a un'altra);
@@ -557,3 +678,60 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >   - «📈 Gestione Stock Splits» di `TODO_FUTURI`: il FIFO applica già gli split, marcata superata;
 >   - la voce 5 dell'indice di luglio: la chiude X;
 >   - B12: la verifica J con il lotto dei contributi.
+
+### Cancello dei colori sul rilascio (2026-10-14)
+
+> **Note implementazione**: il developer ha deciso che la 1.3 non esce con la conversione dei neutri e degli stati a
+> metà. Il coordinatore colori l'ha prima tradotta in «ondate W1–W4 di T» (`e41e0e2b1`), poi l'ha precisata: servono
+> W1–W6, B2, B4 per neutri e guadagno/perdita, B5, e quindi tutti i lotti A–D di R. Per la W4 basta FE8a: le due
+> modali di FE8b passano dal B5. Aggiornati §1, §3, §4 (X, W, Y), §7, §8, §9.
+>
+> **Fuori pista**: la conversione dei colori diventa un secondo percorso critico, parallelo alle ondate 1 e 2 (stima
+> di T: ~11.500 classi in 276 file, 30–40 lotti di sotto-agenti). Per non legarle anche il riordino, il coordinatore
+> 1.3 ha proposto la regola «chi parte prima» (§7). Segnalato al developer in `decisioni-analisi-20261014.md` §3.
+>
+> Alle 22:05 il coordinatore colori ha confermato la regola con due aggiunte:
+> - annuncio fra coordinatori sui quattro file dei tagli (tabella del §7);
+> - taglio dichiarato per il cricchetto di T (§6).
+>
+> Verificando i lotti di R per la tabella:
+> - `GrowthChart` è anche nel lotto D, quindi il taglio FE6 viene dopo quel lotto, non dopo il B;
+> - `AssetModal` e le tre modali delle transazioni sono già fuori dai lotti di R, quindi X e W possono tagliarle
+>   prima del lotto A.
+
+### Via parziale al codice ✅ (2026-10-14, 22:55)
+
+> **Note implementazione**: il developer, a metà lettura delle decisioni (finite le 11 di Account e accessi, con note
+> sue), ha delegato al coordinatore: «vedi tu se aspettare che leggo tutto, o intanto grazie a queste riesci ad avviare
+> qualche lavoro». Partono solo i primi checkpoint, tutti di riordino puro e senza decisioni di prodotto aperte:
+> H CP1 (`platform/`, `files/`), X0 e CP1 (registri per famiglia), A1 (`accounts/`), W0 e W1 (transazioni e broker),
+> J-0 e CP-1 (PAC). Base portata a `c9bb8f257` (regole C1–C7 nel §6) con un fast-forward dei cinque worktree, puliti.
+> Approvazione in modalità interattiva, con le parole del developer alla lettera e le risposte di coordinamento.
+> Z resta fermo: la sua prima parte dipende dalle decisioni 31 e 32.
+>
+> **Fuori pista**: le note del developer cambiano il perimetro di A (registrate nel piano di A alla fine di A1):
+> - D-A16 respinta: l'invito non vincola l'email;
+> - niente `LIBREFOLIO_SUPPORT_URL`;
+> - limite dei tentativi disattivabile solo da variabile, più una zona «controlli di sicurezza» per l'admin;
+> - scheda Utenti confermata.
+>
+> Restano aperti, con una proposta del coordinatore:
+> - scadenza del token di setup;
+> - dove l'admin vede l'abbonamento;
+> - meccanismo delle sessioni;
+> - cancellazione di un utente da parte dell'admin;
+> - `LIBREFOLIO_PUBLIC_URL`.
+>
+> Le note restano nel file delle decisioni, non committate, finché il developer legge.
+>
+> **Fuori pista**: il testo che accompagnava l'approvazione dei piani (parole del developer, perimetro, base, risposte di
+> coordinamento) non è arrivato alle sessioni. L'app consegna solo «piano approvato».
+> - W è rimasto FROZEN, come vuole il protocollo, e ha chiesto il testo.
+> - H, A, X e J sono partiti, credendo a un'approvazione diretta del developer. Il loro perimetro coincideva comunque
+>   con il primo checkpoint, perché lo dicevano già i loro piani.
+> - Il testo è stato rimandato a tutte e cinque come messaggio alle 23:01.
+> - **Regola da qui in poi**: a ogni approvazione di un piano, il testo va mandato anche come messaggio.
+>
+> Programma colori: finestra della galleria domani, 15/10, dalle 09:00, per circa 2 ore. Nella finestra, niente suite
+> complete né build pesanti nelle corsie della 1.3; inizio e fine li conferma il coordinatore colori. G-8 (catalogo dei
+> Tool oltre i 2 s sotto carico, `schemas/tools.py:83`) va a J, dopo il suo primo checkpoint.

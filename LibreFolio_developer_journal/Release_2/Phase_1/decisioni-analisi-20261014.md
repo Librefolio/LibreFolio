@@ -477,6 +477,24 @@ passa dalla suite completa con gli stessi conteggi di prima.
   le versioni.
 - **Colori**: il coordinatore colori ha dato gli elenchi esatti dei suoi lotti. Le cartelle di asset, cambi e
   transazioni si spostano dopo il suo lotto A, quelle dei grafici dopo il lotto B. Tutto il resto è libero subito.
+- **Il tuo cancello dei colori, letto per intero** (precisazione del coordinatore colori, 14/10 alle 22:05). Hai deciso
+  che la 1.3 non esce con la conversione a metà dei neutri (fondi, testi, bordi) e degli stati (successo, avviso,
+  errore, informazione). Questi colori però non stanno solo nelle pagine di cambi, asset e transazioni. Stanno anche
+  nelle tabelle, nei pannelli di dashboard, rischio e broker, e nei grafici.
+  - **Cosa serve prima del tag**: quasi tutta la conversione dei colori. Secondo la stima del workstream dei token (T)
+    sono circa 11.500 classi in 276 file, in 30–40 lotti di sotto-agenti, più i quattro lotti della fattorizzazione
+    dei colori. Restano fuori solo i colori per categoria (tipi di asset, ruoli dei broker) e le palette dei dati nei
+    grafici, che aspettano un giro della designer.
+  - **Le date**: la 1.3 non ha una data fissa, quindi nessuno scontro. Però la conversione dei colori diventa un
+    secondo percorso critico, parallelo alle ondate 1 e 2, e potrebbe diventare il più lungo. La seguo a ogni treno e
+    ti avviso se succede.
+  - **Il riordino del codice resta fuori dal percorso critico**: con il coordinatore colori ho concordato la regola
+    «chi parte prima». Prendiamo un file che la 1.3 deve dividere (per esempio la modale degli asset o il wizard
+    d'import). Se la divisione non è ancora iniziata quando T arriva a convertirlo, T converte il file di oggi e la
+    divisione si fa dopo; se è già iniziata, T lo lascia per ultimo. Mai due sessioni sullo stesso file insieme.
+  - **Alternativa, per una release più corta**: limitare il cancello a primitivi, aree libere, stati, cambi, asset e
+    transazioni (ondate W1–W4). Tabelle, dashboard, rischio e broker resterebbero ai colori vecchi dentro la cornice
+    nuova, cioè proprio l'effetto che la tua decisione vuole evitare. Per questo consiglio la lettura per intero.
 
 ## 4. Cose che servono da te più avanti
 
