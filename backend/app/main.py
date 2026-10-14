@@ -40,8 +40,11 @@ from backend.app.config import (
 from backend.app.db.post_migration import configured_sqlite_path, run_post_migration_fixes
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import configure_logging, get_logger
+from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
+from backend.app.services.files.static_uploads import seed_default_avatars
 from backend.app.services.market_calendar import shutdown_market_holidays, start_market_holiday_prewarm
+from backend.app.services.platform.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.provider_registry import (
     AssetProviderRegistry,
     BRIMProviderRegistry,
@@ -54,10 +57,7 @@ from backend.app.services.risk.quant.workers import (
 from backend.app.services.risk.scenario_catalog import (
     initialize_risk_scenario_catalog,
 )
-from backend.app.services.scheduler import get_shutdown_event, scheduler_loop
-from backend.app.services.settings_service import initialize_global_settings
 from backend.app.services.signal_runtime import validate_signal_runtime
-from backend.app.services.static_uploads import seed_default_avatars
 from backend.app.services.tools.executor import shutdown_tool_executor
 from backend.app.services.tools.registry import ToolPluginRegistry
 from backend.app.utils.runtime.cache import close_all_caches

@@ -48,7 +48,7 @@ The JWT signing key (`JWT_SECRET`) is:
 
 How the key is resolved:
 
-- `backend/app/services/auth_service.py` reads `JWT_SECRET` once, at import, straight from
+- `backend/app/services/accounts/auth_service.py` reads `JWT_SECRET` once, at import, straight from
   `os.environ`: it is not a field of the Pydantic `Settings`. Tokens are signed with HS256. When
   the variable is unset or empty, each process falls back to its own
   `secrets.token_urlsafe(64)`.
@@ -174,7 +174,7 @@ cache and the dismissal, and reports errors.
 The update check reports a new release only once its Docker image can be pulled from GHCR.
 GHCR's anonymous token handshake is not available to browsers through CORS, so the frontend
 calls `GET /api/v1/system/container-image-status?tag=X.Y.Z` (authenticated) and the backend
-performs it (`backend/app/services/container_registry.py`):
+performs it (`backend/app/services/platform/container_registry.py`):
 
 1. Accept only a stable `X.Y.Z` tag; both the route's query pattern and the service check it.
 2. Send an anonymous `HEAD` for the tag's manifest on `ghcr.io/librefolio/librefolio`. Any

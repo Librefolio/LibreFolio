@@ -70,7 +70,7 @@ from backend.app.services.ai_export.components.technical_shared import (
 )
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError
-from backend.app.services.date_sentinel import resolve_date_sentinels
+from backend.app.services.platform.date_sentinel import resolve_date_sentinels
 from backend.app.services.risk.metrics import drawdown_episodes
 from backend.app.services.risk.service import RiskService
 

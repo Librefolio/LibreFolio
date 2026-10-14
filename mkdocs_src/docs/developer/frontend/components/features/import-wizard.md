@@ -911,7 +911,7 @@ one before merging. For a report set it also shows how the exports were matched
 
 The wizard is also one of the two places (with the intro tour) that drives
 `onboardingGuide.svelte.ts` — the `import_guide` flow, one of the fifteen versioned flows in
-`ONBOARDING_FLOW_VERSIONS` (`backend/app/services/onboarding_service.py`). Its nine step ids
+`ONBOARDING_FLOW_VERSIONS` (`backend/app/services/accounts/onboarding_service.py`). Its nine step ids
 (`IMPORT_GUIDE_STEP_IDS`, defined in `lib/features/onboarding/onboardingGuideCatalog.ts` and
 re-exported by `onboardingGuide.svelte.ts`) are `import.upload` / `select` / `analyze` / `assets` /
 `fix` / `duplicates` / `review` / `gapFix` / `bulk` — the first eight mirror `StepId` above 1:1,

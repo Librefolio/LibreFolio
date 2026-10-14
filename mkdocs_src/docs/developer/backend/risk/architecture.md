@@ -52,7 +52,7 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/provider_registry.py` | `RiskAnalyticRegistry` and the `register_plugin` decorator. |
 | `backend/app/services/series_preparation.py` | Joint calendar, target-currency conversion, simple returns, carried points. |
 | `backend/app/services/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
-| `backend/app/services/data_quality_thresholds.py` | Thresholds shared with the portfolio's data-quality banner. |
+| `backend/app/services/platform/data_quality_thresholds.py` | Thresholds shared with the portfolio's data-quality banner. |
 | `backend/app/config.py` | `RISK_SIMULATION_*` and `RISK_OPTIMIZATION_*` worker settings. |
 | `frontend/src/lib/risk/riskRequest.ts` | Request builders and canonicalization. |
 | `frontend/src/lib/stores/risk/` | `riskStore` (session cache), `riskPanelController` (the plumbing behind every panel), `riskBenchmarkStore` (the shared benchmark). |
@@ -342,7 +342,7 @@ and may move; the request side is the contract: `buildBaseAnalytics()` in
 
 ### 📐 Shared Thresholds {: #thresholds }
 
-`backend/app/services/data_quality_thresholds.py` holds the numbers that the portfolio's
+`backend/app/services/platform/data_quality_thresholds.py` holds the numbers that the portfolio's
 data-quality banner, the risk engine and the eligibility check must agree on:
 
 | Constant | Value | Used for |
@@ -713,7 +713,7 @@ flight in the store. The lab never shows an amount of money: an asset set has no
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.risk import RiskMode, RiskOutputKind, RiskScopeKind
-from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
+from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.analytic_helpers import require_primary_returns
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskExecutionContext, RiskSeriesInputs
