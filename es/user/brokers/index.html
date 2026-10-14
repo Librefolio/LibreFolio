@@ -11,7 +11,7 @@
         <link rel="canonical" href="https://librefolio.github.io/LibreFolio/es/user/brokers/">
       
       
-        <link rel="prev" href="../dashboard/positions/">
+        <link rel="prev" href="../dashboard/risk/">
       
       
         <link rel="next" href="import/">
@@ -92,7 +92,7 @@
     {
       "@type": "ListItem",
       "position": 3,
-      "name": "🏦 Brokers",
+      "name": "🏦 Brókeres",
       "item": "https://librefolio.github.io/LibreFolio/es/user/brokers/"
     },
     {
@@ -686,6 +686,34 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../connection-security/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Seguridad de la conexión
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     
     
     
@@ -705,17 +733,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_6" >
         
           
-          <label class="md-nav__link" for="__nav_2_5" id="__nav_2_5_label" tabindex="">
+          <label class="md-nav__link" for="__nav_2_6" id="__nav_2_6_label" tabindex="">
             
   
   
   <span class="md-ellipsis">
     
   
-    📊 Panel Principal
+    📊 Panel
   
 
     
@@ -726,12 +754,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_5">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_6">
             <span class="md-nav__icon md-icon"></span>
             
   
-    📊 Panel Principal
+    📊 Panel
   
 
           </label>
@@ -779,7 +807,7 @@
   <span class="md-ellipsis">
     
   
-    KPI Cards
+    Tarjetas KPI
   
 
     
@@ -807,7 +835,7 @@
   <span class="md-ellipsis">
     
   
-    Charts
+    Gráficos
   
 
     
@@ -836,6 +864,34 @@
     
   
     Posiciones y Análisis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dashboard/risk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Riesgo
   
 
     
@@ -882,17 +938,17 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_6" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_7" checked>
         
           
-          <label class="md-nav__link" for="__nav_2_6" id="__nav_2_6_label" tabindex="">
+          <label class="md-nav__link" for="__nav_2_7" id="__nav_2_7_label" tabindex="">
             
   
   
   <span class="md-ellipsis">
     
   
-    🏦 Brokers
+    🏦 Brókeres
   
 
     
@@ -903,12 +959,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_6_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_2_6">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_7">
             <span class="md-nav__icon md-icon"></span>
             
   
-    🏦 Brokers
+    🏦 Brókeres
   
 
           </label>
@@ -981,10 +1037,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#creando-un-broker" class="md-nav__link">
+  <a href="#crear-un-broker" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ➕ Creando un bróker
+        ➕ Crear un bróker
       
     </span>
   </a>
@@ -992,10 +1048,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#disposicion-de-detalles-del-broker" class="md-nav__link">
+  <a href="#editar-o-eliminar-un-broker" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🗂️ Disposición de detalles del bróker
+        ✏️ Editar o eliminar un bróker
       
     </span>
   </a>
@@ -1003,10 +1059,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#pestana-de-descripcion-general" class="md-nav__link">
+  <a href="#dentro-de-un-broker" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📈 Pestaña de Descripción general
+        🗂️ Dentro de un bróker
       
     </span>
   </a>
@@ -1014,10 +1070,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#pestana-de-posiciones" class="md-nav__link">
+  <a href="#pestana-resumen" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔍 Pestaña de Posiciones
+        📈 Pestaña Resumen
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pestana-posiciones" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔍 Pestaña Posiciones
       
     </span>
   </a>
@@ -1028,7 +1095,7 @@
   <a href="#en-esta-seccion" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📑 En Esta Sección
+        📑 En esta sección
       
     </span>
   </a>
@@ -1161,10 +1228,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_7" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8" >
         
           
-          <label class="md-nav__link" for="__nav_2_7" id="__nav_2_7_label" tabindex="">
+          <label class="md-nav__link" for="__nav_2_8" id="__nav_2_8_label" tabindex="">
             
   
   
@@ -1182,8 +1249,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1271,10 +1338,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_7_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8_3" >
         
           
-          <label class="md-nav__link" for="__nav_2_7_3" id="__nav_2_7_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_8_3" id="__nav_2_8_3_label" tabindex="0">
             
   
   
@@ -1292,8 +1359,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_7_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_7_3">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_8_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1381,10 +1448,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_7_3_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8_3_3" >
         
           
-          <label class="md-nav__link" for="__nav_2_7_3_3" id="__nav_2_7_3_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_8_3_3" id="__nav_2_8_3_3_label" tabindex="0">
             
   
   
@@ -1402,8 +1469,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_2_7_3_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_7_3_3">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_2_8_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8_3_3">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -1700,6 +1767,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../transactions/import/scalable/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scalable Capital
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../transactions/import/traderepublic/" class="md-nav__link">
         
   
@@ -1863,10 +1958,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_7_3_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8_3_4" >
         
           
-          <label class="md-nav__link" for="__nav_2_7_3_4" id="__nav_2_7_3_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_8_3_4" id="__nav_2_8_3_4_label" tabindex="0">
             
   
   
@@ -1884,8 +1979,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_2_7_3_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_7_3_4">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_2_8_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8_3_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2014,6 +2109,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../transactions/import/danske-bank/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Danske Bank
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../transactions/import/bux/" class="md-nav__link">
         
   
@@ -2093,10 +2216,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_7_3_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8_3_5" >
         
           
-          <label class="md-nav__link" for="__nav_2_7_3_5" id="__nav_2_7_3_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_8_3_5" id="__nav_2_8_3_5_label" tabindex="0">
             
   
   
@@ -2114,8 +2237,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_2_7_3_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_7_3_5">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_2_8_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8_3_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2323,10 +2446,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_7_3_6" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8_3_6" >
         
           
-          <label class="md-nav__link" for="__nav_2_7_3_6" id="__nav_2_7_3_6_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_8_3_6" id="__nav_2_8_3_6_label" tabindex="0">
             
   
   
@@ -2344,8 +2467,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_2_7_3_6_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_7_3_6">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_2_8_3_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_8_3_6">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2488,10 +2611,131 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_9" >
         
           
-          <label class="md-nav__link" for="__nav_2_8" id="__nav_2_8_label" tabindex="">
+          <label class="md-nav__link" for="__nav_2_9" id="__nav_2_9_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🧰 Herramientas
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_9_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_9">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🧰 Herramientas
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tools/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resumen
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tools/pac-allocator/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Asignador PAC
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_10" id="__nav_2_10_label" tabindex="">
             
   
   
@@ -2509,8 +2753,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_8_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_8">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_10">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -2582,6 +2826,34 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="../assets/correlation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Correlación
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     
     
     
@@ -2598,17 +2870,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8_3" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_10_4" >
         
           
-          <label class="md-nav__link" for="__nav_2_8_3" id="__nav_2_8_3_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_10_4" id="__nav_2_10_4_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    🔎 Asset Detail
+    🔎 Detalle del activo
   
 
     
@@ -2619,12 +2891,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_8_3_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_8_3">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_10_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_10_4">
             <span class="md-nav__icon md-icon"></span>
             
   
-    🔎 Asset Detail
+    🔎 Detalle del activo
   
 
           </label>
@@ -2756,7 +3028,7 @@
   <span class="md-ellipsis">
     
   
-    Classification
+    Clasificación
   
 
     
@@ -2856,10 +3128,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_8_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_10_5" >
         
           
-          <label class="md-nav__link" for="__nav_2_8_4" id="__nav_2_8_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_10_5" id="__nav_2_10_5_label" tabindex="0">
             
   
   
@@ -2877,8 +3149,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_8_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_8_4">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_10_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_10_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3097,10 +3369,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_9" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_11" >
         
           
-          <label class="md-nav__link" for="__nav_2_9" id="__nav_2_9_label" tabindex="">
+          <label class="md-nav__link" for="__nav_2_11" id="__nav_2_11_label" tabindex="">
             
   
   
@@ -3118,8 +3390,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_9_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_9">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_11">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3235,10 +3507,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_9_4" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_11_4" >
         
           
-          <label class="md-nav__link" for="__nav_2_9_4" id="__nav_2_9_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_11_4" id="__nav_2_11_4_label" tabindex="0">
             
   
   
@@ -3256,8 +3528,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_9_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_9_4">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_11_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_11_4">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3437,10 +3709,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_9_5" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_11_5" >
         
           
-          <label class="md-nav__link" for="__nav_2_9_5" id="__nav_2_9_5_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_2_11_5" id="__nav_2_11_5_label" tabindex="0">
             
   
   
@@ -3458,8 +3730,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_9_5_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_9_5">
+        <nav class="md-nav" data-md-level="3" aria-labelledby="__nav_2_11_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_11_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3706,17 +3978,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_10" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_12" >
         
           
-          <label class="md-nav__link" for="__nav_2_10" id="__nav_2_10_label" tabindex="">
+          <label class="md-nav__link" for="__nav_2_12" id="__nav_2_12_label" tabindex="">
             
   
   
   <span class="md-ellipsis">
     
   
-    🧠 Exportación de IA
+    🧠 Exportación IA
   
 
     
@@ -3727,12 +3999,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_10_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_10">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_12">
             <span class="md-nav__icon md-icon"></span>
             
   
-    🧠 Exportación de IA
+    🧠 Exportación IA
   
 
           </label>
@@ -3780,7 +4052,7 @@
   <span class="md-ellipsis">
     
   
-    Portfolio
+    Cartera
   
 
     
@@ -3808,7 +4080,7 @@
   <span class="md-ellipsis">
     
   
-    Broker
+    Bróker
   
 
     
@@ -3836,7 +4108,7 @@
   <span class="md-ellipsis">
     
   
-    Asset
+    Activo
   
 
     
@@ -3911,10 +4183,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_11" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_13" >
         
           
-          <label class="md-nav__link" for="__nav_2_11" id="__nav_2_11_label" tabindex="">
+          <label class="md-nav__link" for="__nav_2_13" id="__nav_2_13_label" tabindex="">
             
   
   
@@ -3932,8 +4204,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_11_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_11">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_13">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4004,10 +4276,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_12" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_14" >
         
           
-          <label class="md-nav__link" for="__nav_2_12" id="__nav_2_12_label" tabindex="">
+          <label class="md-nav__link" for="__nav_2_14" id="__nav_2_14_label" tabindex="">
             
   
   
@@ -4025,8 +4297,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_12_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_12">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_14">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4181,10 +4453,10 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_13" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2_15" >
         
           
-          <label class="md-nav__link" for="__nav_2_13" id="__nav_2_13_label" tabindex="">
+          <label class="md-nav__link" for="__nav_2_15" id="__nav_2_15_label" tabindex="">
             
   
   
@@ -4202,8 +4474,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_13_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_13">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_15">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -4370,7 +4642,7 @@
   <span class="md-ellipsis">
     
   
-    🐳 Deployment & Exposure
+    🐳 Instalación y exposición
   
 
     
@@ -4386,7 +4658,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    🐳 Deployment & Exposure
+    🐳 Instalación y exposición
   
 
           </label>
@@ -4476,6 +4748,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../admin/connection_checks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Comprobar la Seguridad de la Conexión
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -4516,7 +4816,7 @@
   <span class="md-ellipsis">
     
   
-    ⚙️ System Configuration
+    ⚙️ Configuración del sistema
   
 
     
@@ -4532,7 +4832,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    ⚙️ System Configuration
+    ⚙️ Configuración del sistema
   
 
           </label>
@@ -4552,7 +4852,7 @@
   <span class="md-ellipsis">
     
   
-    Environment Variables
+    Variables de entorno
   
 
     
@@ -4634,7 +4934,7 @@
   <span class="md-ellipsis">
     
   
-    🧹 Maintenance & Operations
+    🧹 Mantenimiento y operaciones
   
 
     
@@ -4650,7 +4950,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    🧹 Maintenance & Operations
+    🧹 Mantenimiento y operaciones
   
 
           </label>
@@ -4670,7 +4970,7 @@
   <span class="md-ellipsis">
     
   
-    CLI Admin Tools
+    Herramientas CLI de administración
   
 
     
@@ -5005,7 +5305,7 @@
   <span class="md-ellipsis">
     
   
-    1️⃣ Single
+    1️⃣ Individuales
   
 
     
@@ -5021,7 +5321,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    1️⃣ Single
+    1️⃣ Individuales
   
 
           </label>
@@ -5243,7 +5543,7 @@
   <span class="md-ellipsis">
     
   
-    Transferencia de Títulos
+    Transferencia de activos
   
 
     
@@ -5271,7 +5571,7 @@
   <span class="md-ellipsis">
     
   
-    Transferencia Bancaria
+    Transferencia de Fondos
   
 
     
@@ -5299,7 +5599,7 @@
   <span class="md-ellipsis">
     
   
-    Conversión de Divisas
+    Conversión de Divisa
   
 
     
@@ -5767,7 +6067,7 @@
   <span class="md-ellipsis">
     
   
-    Dividend
+    Dividendo
   
 
     
@@ -5795,7 +6095,7 @@
   <span class="md-ellipsis">
     
   
-    Interest
+    Interés
   
 
     
@@ -7269,7 +7569,7 @@
   <span class="md-ellipsis">
     
   
-    Price Resolution
+    Resolución de precios
   
 
     
@@ -7297,7 +7597,7 @@
   <span class="md-ellipsis">
     
   
-    NAV / Net Worth
+    NAV / Patrimonio Neto
   
 
     
@@ -7353,7 +7653,7 @@
   <span class="md-ellipsis">
     
   
-    P&L del Periodo
+    P&L período
   
 
     
@@ -7381,7 +7681,7 @@
   <span class="md-ellipsis">
     
   
-    Deposited Capital & Total P&L
+    Capital depositado y P&L total
   
 
     
@@ -7521,7 +7821,35 @@
   <span class="md-ellipsis">
     
   
-    Net Annualized Return
+    Rendimiento neto anualizado
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rendimiento sobre coste
   
 
     
@@ -7675,7 +8003,7 @@
   <span class="md-ellipsis">
     
   
-    Coste Medio Ponderado
+    Precio Medio de Compra
   
 
     
@@ -7785,6 +8113,520 @@
   
   
   
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3_5_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3_5_2" id="__nav_4_3_5_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    📉 ¿Cuánto Puede Doler?
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_4_3_5_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3_5_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    📉 ¿Cuánto Puede Doler?
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/max-drawdown/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caída Máxima
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/current-drawdown/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caída actual
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/drawdown-at-risk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caída en riesgo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/conditional-drawdown-at-risk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Caída en riesgo condicional
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/ulcer-index/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Índice de Ulcer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/value-at-risk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Valor en riesgo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/conditional-value-at-risk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    VaR condicional
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/worst-realization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Peor Realización
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3_5_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3_5_3" id="__nav_4_3_5_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🧩 ¿Estoy Diversificado?
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_4_3_5_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3_5_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🧩 ¿Estoy Diversificado?
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/correlation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Correlación
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/risk-contribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contribución al Riesgo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/concentration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concentración
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3_5_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3_5_4" id="__nav_4_3_5_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ⚖️ ¿Me Pagan por el Riesgo?
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_4_3_5_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3_5_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    ⚖️ ¿Me Pagan por el Riesgo?
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/volatility/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Volatilidad
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     <li class="md-nav__item">
       <a href="../../financial-theory/technical-analysis/risk-metrics/sharpe-ratio/" class="md-nav__link">
         
@@ -7842,14 +8684,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../financial-theory/technical-analysis/risk-metrics/max-drawdown/" class="md-nav__link">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/beta-active-return/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Drawdown Máximo
+    Beta & Rentabilidad Activa
   
 
     
@@ -7870,14 +8712,14 @@
   
   
     <li class="md-nav__item">
-      <a href="../../financial-theory/technical-analysis/risk-metrics/volatility/" class="md-nav__link">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/benchmark-selection/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
     
   
-    Volatilidad
+    Elección del Índice de Referencia
   
 
     
@@ -7886,6 +8728,278 @@
   
 
       </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3_5_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3_5_5" id="__nav_4_3_5_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🎲 ¿Qué Pasa Si…?
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_4_3_5_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3_5_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🎲 ¿Qué Pasa Si…?
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/historical-replay/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Repetición Histórica
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/hypothetical-shock/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choque Hipotético
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/simulation-modes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulación — Qué Supone el Modelo
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4_3_5_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_4_3_5_6" id="__nav_4_3_5_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🔧 Método
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_4_3_5_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_3_5_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    🔧 Método
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/observed-annualization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anualización Observada
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../financial-theory/technical-analysis/risk-metrics/data-quality/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Calidad de los Datos
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
     </li>
   
 
@@ -8730,6 +9844,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/architecture/patterns/tool_plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool Plugin Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -8770,7 +9912,7 @@
   <span class="md-ellipsis">
     
   
-    🧠 Exportación de IA
+    🧠 Exportación IA
   
 
     
@@ -8786,7 +9928,7 @@
             <span class="md-nav__icon md-icon"></span>
             
   
-    🧠 Exportación de IA
+    🧠 Exportación IA
   
 
           </label>
@@ -9927,6 +11069,90 @@
   
   
     <li class="md-nav__item">
+      <a href="../../developer/backend/brim/danske_bank/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Danske Bank Importer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/backend/brim/credit_agricole/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Crédit Agricole Importer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/backend/brim/scalable/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scalable Capital Importers
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../developer/backend/brim/providers_list/" class="md-nav__link">
         
   
@@ -10675,6 +11901,62 @@
     
   
     🕐 Scheduler (Daemon)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/backend/financial_math/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🧮 Financial Math Layer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/backend/risk/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    📉 Risk Engine
   
 
     
@@ -11876,7 +13158,7 @@
   <span class="md-ellipsis">
     
   
-    Live Ticker
+    Live Prices
   
 
     
@@ -11905,6 +13187,34 @@
     
   
     Lots Analysis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/components/features/risk-lab/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Risk UI
   
 
     
@@ -11968,17 +13278,17 @@
         
           
         
-        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_2_11" >
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7_4_2_12" >
         
           
-          <label class="md-nav__link" for="__nav_5_7_4_2_11" id="__nav_5_7_4_2_11_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_5_7_4_2_12" id="__nav_5_7_4_2_12_label" tabindex="0">
             
   
   
   <span class="md-ellipsis">
     
   
-    🏦 Brokers
+    🏦 Brókeres
   
 
     
@@ -11989,12 +13299,12 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_4_2_11_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_5_7_4_2_11">
+        <nav class="md-nav" data-md-level="5" aria-labelledby="__nav_5_7_4_2_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7_4_2_12">
             <span class="md-nav__icon md-icon"></span>
             
   
-    🏦 Brokers
+    🏦 Brókeres
   
 
           </label>
@@ -12269,6 +13579,34 @@
     
   
     🛡️ Data Quality Banner
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/frontend/onboarding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    🧭 Onboarding Guides
   
 
     
@@ -13310,10 +14648,10 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#creando-un-broker" class="md-nav__link">
+  <a href="#crear-un-broker" class="md-nav__link">
     <span class="md-ellipsis">
       
-        ➕ Creando un bróker
+        ➕ Crear un bróker
       
     </span>
   </a>
@@ -13321,10 +14659,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#disposicion-de-detalles-del-broker" class="md-nav__link">
+  <a href="#editar-o-eliminar-un-broker" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🗂️ Disposición de detalles del bróker
+        ✏️ Editar o eliminar un bróker
       
     </span>
   </a>
@@ -13332,10 +14670,10 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#pestana-de-descripcion-general" class="md-nav__link">
+  <a href="#dentro-de-un-broker" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📈 Pestaña de Descripción general
+        🗂️ Dentro de un bróker
       
     </span>
   </a>
@@ -13343,10 +14681,21 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#pestana-de-posiciones" class="md-nav__link">
+  <a href="#pestana-resumen" class="md-nav__link">
     <span class="md-ellipsis">
       
-        🔍 Pestaña de Posiciones
+        📈 Pestaña Resumen
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pestana-posiciones" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🔍 Pestaña Posiciones
       
     </span>
   </a>
@@ -13357,7 +14706,7 @@
   <a href="#en-esta-seccion" class="md-nav__link">
     <span class="md-ellipsis">
       
-        📑 En Esta Sección
+        📑 En esta sección
       
     </span>
   </a>
@@ -13385,77 +14734,108 @@
 
 
 <h1 id="brokeres">🏦 Brókeres</h1>
-<p>Un <strong>bróker</strong> en LibreFolio representa una cuenta de corretaje — el lugar donde residen tus inversiones (por ejemplo, Interactive Brokers, Degiro, una cuenta bancaria).</p>
-<p>Todas las transacciones, informes y datos de importación están vinculados a un bróker. Necesitas al menos un bróker para empezar a rastrear tu cartera.</p>
+<p>Un <strong>bróker</strong> es una de tus cuentas — en una casa de bolsa, un banco o un exchange: el lugar donde viven tus inversiones y tu efectivo. Cada transacción y cada informe subido pertenece a un bróker, así que necesitas al menos uno antes de empezar.</p>
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="list" alt="Lista de brókeres" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+<p>La página <strong>Brókeres</strong> muestra una tarjeta por cada bróker, con su valor (<strong>NAV</strong>) en la divisa elegida en <strong>Divisa</strong> en la parte superior de la página. Haz clic en una tarjeta para abrir el bróker.</p>
+<p><strong>Ganancia/Pérdida</strong> es el NAV menos el capital que entró en el bróker: tus depósitos menos los retiros, más el coste de los títulos que aportaste sin efectivo, más lo que trasladaste desde tus otros brókeres menos lo que trasladaste a ellos, cada movimiento valorado el día en que llegó. Así, mover dinero o títulos entre dos de tus brókeres no es una ganancia en una tarjeta y una pérdida en la otra, y mientras una transferencia está en tránsito, su valor permanece en la tarjeta del bróker que la envió. El efectivo mantenido en otra divisa se valora al último tipo de cambio, así que el efecto del tipo de cambio sobre él cuenta en la Ganancia/Pérdida, no en el capital. El porcentaje entre paréntesis es la ganancia sobre ese capital: muestra 0,00 % cuando ese capital es cero o negativo, por ejemplo cuando el bróker ha enviado más de lo que ha recibido. → <a href="../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital/#internal-transfers-broker-lines">Transferencias internas</a></p>
 <div class="admonition note">
 <p class="admonition-title">Los brókeres compartidos muestran tu participación</p>
-<p>En un bróker que coposees, el patrimonio neto mostrado en la tarjeta del bróker (y en la pestaña Descripción general del bróker) se <strong>escala según tu porcentaje de propiedad</strong> — un Propietario al 50% ve la mitad del valor de la cuenta. Los Editores y Visores siempre ven los importes completos. Consulta <a href="sharing/">Uso compartido del bróker</a>.</p>
+<p>En un bróker del que eres copropietario, los valores de su tarjeta y de su pestaña <strong>Resumen</strong> se <strong>escalan según tu porcentaje de propiedad</strong>: un Propietario con el 50% ve la mitad de la cuenta. Los Editores y los Lectores siempre ven los importes completos. Consulta <a href="sharing/">Compartir brókeres</a>.</p>
 </div>
-<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="list" alt="Lista de brókeres" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
-</div>
-
 <hr />
-<h2 id="creando-un-broker">➕ Creando un bróker</h2>
+<h2 id="crear-un-broker">➕ Crear un bróker</h2>
 <ol>
-<li>Navega a la página de <strong>Brókeres</strong> desde la barra lateral</li>
-<li>Haz clic en <strong>"Agregar Bróker"</strong></li>
+<li>Abre <strong>Brókeres</strong> desde la barra lateral y haz clic en <strong>Agregar Bróker</strong>.</li>
 <li>
-<p>Completa los detalles: nombre, moneda base y, opcionalmente, un ícono
- 
-<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Formulario de edición del bróker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
- </div>
-</p>
+<p>Escribe un <strong>Nombre</strong> — el único campo obligatorio — y configura las opciones que necesites.
+    <div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+        <img class="gallery-img" data-category="brokers" data-name="edit-modal" alt="Formulario de edición del bróker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+    </div></p>
 </li>
 <li>
-<p>El bróker aparece en tu lista, listo para recibir transacciones e informes
- 
-<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
- <img class="gallery-img" data-category="brokers" data-name="detail" alt="Formulario de edición del bróker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
- </div></p>
+<p>Haz clic en <strong>Crear</strong>: el bróker aparece en tu lista, listo para transacciones e informes.</p>
 </li>
 </ol>
-<hr />
-<h2 id="disposicion-de-detalles-del-broker">🗂️ Disposición de detalles del bróker</h2>
-<p>Una vez que seleccionas un bróker de la lista, la interfaz se divide en cuatro pestañas principales:</p>
-<ol>
-<li><strong>Descripción general</strong>: Visualización del patrimonio neto, métricas de rendimiento, historial de crecimiento y gráficos de asignación limitados exclusivamente a esta cuenta de corretaje (ver <strong><a href="../dashboard/">Descripción general del panel de control</a></strong>).</li>
-<li><strong>Posiciones</strong>: Lista de posiciones abiertas, ponderaciones de activos y métricas de rendimiento dentro de este bróker, con acceso al panel en línea de Análisis de Lotes FIFO (ver <strong><a href="../dashboard/positions/">Posiciones del panel de control</a></strong>).</li>
-<li><strong>Transacciones</strong>: El registro de todas las actividades financieras, incluyendo entradas manuales, importaciones de estados de cuenta e historiales (ver <strong><a href="import/">Transacciones del bróker</a></strong>).</li>
-<li><strong>Información</strong>: Metadatos del bróker, configuraciones de sobregiro/venta en corto, Exportación de IA y controles de uso compartido en línea (ver <strong><a href="info/">Configuración e información</a></strong> y <strong><a href="../ai-export/broker/">Broker AI Export</a></strong>).</li>
-</ol>
-<hr />
-<h2 id="pestana-de-descripcion-general">📈 Pestaña de Descripción general</h2>
-<p>La pestaña <strong>Descripción general</strong> actúa como un panel de control local para el bróker seleccionado. Contiene los mismos elementos que la <strong><a href="../dashboard/">Descripción general del panel de control</a></strong> principal, pero limitados exclusivamente a esta cuenta de corretaje:</p>
+<details class="info">
+<summary>⚙️ Los campos opcionales: qué hace cada uno</summary>
 <ul>
-<li><strong>Tarjetas KPI locales</strong>: Patrimonio Neto, Pérdidas y Ganancias del Período y Rendimientos específicos de este bróker. (Ver <strong><a href="../dashboard/kpi-cards/">Tarjetas KPI del panel de control</a></strong> para detalles de cálculo).</li>
-<li><strong>Panel de saldos en efectivo</strong>: Efectivo líquido mantenido en esta cuenta de corretaje, desglosado por moneda.</li>
-<li><strong>Gráfico de crecimiento</strong>: Crecimiento histórico del valor de esta cuenta (ver <strong><a href="../dashboard/charts/#portfolio-growth-chart">Gráfico de crecimiento de la cartera</a></strong>).</li>
-<li><strong>Panel de asignación</strong>: Composición de la cartera (por Tipo, Sector y Geografía) para las posiciones mantenidas en este bróker específico (ver <strong><a href="../dashboard/charts/#allocation-panel">Panel de asignación</a></strong>).</li>
+<li><strong>Descripción</strong> — tus propias notas.</li>
+<li><strong>Plugin de importación predeterminado</strong> — el importador que el <a href="../transactions/import/">Asistente de importación</a> propone para los archivos de este bróker.</li>
+<li><strong>URL del portal</strong> — el sitio web del bróker, que se abre desde la página del bróker. El icono del bróker es, en este orden: tu <strong>URL del Icono Personalizado</strong>; el icono del <strong>Plugin de importación predeterminado</strong>, cuando ese importador está hecho para este bróker; el icono del sitio web; el icono de un importador genérico como el CSV genérico; si no, un maletín.</li>
+<li><strong>Fecha de Apertura de Cuenta</strong> y <strong>Cuenta activa</strong> — cuándo se abrió la cuenta y si sigue abierta. Un bróker cerrado aparece atenuado en la lista.</li>
+<li><strong>Opciones de trading</strong> — <strong>Permitir Compra con Apalancamiento</strong> y <strong>Permitir Venta en Corto (Short)</strong>, explicadas en <a href="info/#trading-options">Opciones de trading</a>.</li>
+<li><strong>Saldos iniciales</strong> (solo al crear) — tu efectivo inicial. LibreFolio registra un <strong>Depósito</strong> por divisa, <strong>con fecha de hoy</strong>: si el dinero ya estaba ahí antes, cambia la fecha de esos depósitos en la página <a href="../transactions/">Transacciones</a>.</li>
+</ul>
+</details>
+<details class="warning">
+<summary>🏷️ “Ya existe un bróker llamado…” — cuándo aparece</summary>
+<p>Los nombres de bróker son únicos en todo el servidor, entre todos sus usuarios. Elige otro nombre o cambia el nombre del bróker existente si es tuyo.</p>
+<p>Los brókeres de otros usuarios que no puedes abrir aparecen en <strong>Otros Brókeres Existentes</strong>. Su botón de compartir muestra quién tiene acceso, para que sepas a quién preguntar: cualquier usuario con sesión iniciada en este LibreFolio puede verlo, para cualquier bróker.</p>
+</details>
+<hr />
+<h2 id="editar-o-eliminar-un-broker">✏️ Editar o eliminar un bróker</h2>
+<ul>
+<li><strong>Editar</strong> — el lápiz de la tarjeta del bróker o <strong>Editar</strong> en la barra de herramientas del bróker. Los Propietarios y los Editores pueden editar un bróker.</li>
+<li><strong>Eliminar</strong> — la papelera de la tarjeta del bróker. Solo un Propietario puede eliminar un bróker. Si aún contiene transacciones, LibreFolio indica cuántas y ofrece <strong>Ir a transacciones</strong> o <strong>Eliminar bróker y transacciones</strong>, que las elimina también.</li>
 </ul>
 <hr />
-<h2 id="pestana-de-posiciones">🔍 Pestaña de Posiciones</h2>
-<p>La pestaña <strong>Posiciones</strong> enumera todos los activos activos actualmente mantenidos bajo este bróker. Es idéntica en funcionalidad a la vista principal de <strong><a href="../dashboard/positions/">Posiciones del panel de control</a></strong>, pero limitada solo a este bróker:</p>
+<h2 id="dentro-de-un-broker">🗂️ Dentro de un bróker</h2>
+<p>La tarjeta de un bróker abre su página de detalle en la pestaña <strong>Resumen</strong>:</p>
+<div class="screenshot-container" style="max-width: 700px; margin: 1rem auto;">
+    <img class="gallery-img" data-category="brokers" data-name="detail" alt="Detalle del bróker" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
+</div>
+
+<p>La barra de herramientas de la parte superior se aplica a todas las pestañas:</p>
+<ul>
+<li>el <strong>rango de fechas</strong> y la <strong>Divisa</strong> de las cifras;</li>
+<li><strong>Editar</strong>, <strong>Compartir bróker</strong> (abre la pestaña <strong>Info</strong>) y <strong>Actualizar</strong>;</li>
+<li><strong>Exportación IA</strong>, que copia al portapapeles un prompt ya preparado sobre este bróker; consulta <a href="../ai-export/broker/">Exportación IA de bróker</a>.</li>
+</ul>
+<p>Debajo, cinco pestañas:</p>
+<ol>
+<li><strong>Resumen</strong> — cómo va la cuenta (más abajo).</li>
+<li><strong>Posiciones</strong> — lo que tienes en este bróker (más abajo).</li>
+<li><strong>Riesgo</strong> — el análisis de riesgos del Panel, limitado a este bróker (consulta <a href="../dashboard/#risk-tab">Pestaña Riesgo del Panel</a>).</li>
+<li><strong>Transacciones</strong> — el libro mayor de este bróker, entradas manuales, importaciones e informes subidos (consulta <a href="import/">Transacciones del bróker</a>).</li>
+<li><strong>Info</strong> — detalles de la cuenta, opciones de trading y uso compartido (consulta <a href="info/">Configuración e información</a>).</li>
+</ol>
+<hr />
+<h2 id="pestana-resumen">📈 Pestaña Resumen</h2>
+<p>La pestaña <strong>Resumen</strong> responde a “¿cómo va esta cuenta?” con los mismos bloques que el <a href="../dashboard/">Resumen del Panel</a>, limitados a este bróker:</p>
+<ul>
+<li><strong>Tarjetas KPI</strong> — <strong>P&amp;L período</strong>, <strong>Rendimientos</strong> y <strong>Patrimonio neto</strong> (<a href="../dashboard/kpi-cards/">Tarjetas KPI</a>).</li>
+<li><strong>Saldos de efectivo</strong> — el efectivo que hay aquí, por divisa.</li>
+<li><strong>Gráfico de crecimiento</strong> — las vistas <strong>Abs</strong>, <strong>%</strong> y <strong>P&amp;L</strong>, con el P&amp;L como <strong>Línea</strong>, <strong>Velas</strong> o <strong>Ingresos</strong> (<a href="../dashboard/charts/#portfolio-growth-chart">Gráfico de crecimiento de la cartera</a>, <a href="../dashboard/charts/#pnl-mode">Modo P&amp;L</a>). La vista que elijas se comparte con el Panel.</li>
+<li><strong>Asignación</strong> — por tipo, sector y zona geográfica (<a href="../dashboard/charts/#allocation-panel">Panel de asignación</a>).</li>
+</ul>
+<p>Volver a un bróker que ya abriste muestra sus últimas cifras al instante, actualizadas en segundo plano si algo cambió (<a href="../dashboard/#coming-back-and-refreshing">Volver y actualizar</a>). <strong>Actualizar</strong> recalcula a petición, incluida la pestaña <strong>Riesgo</strong> y el panel de lotes.</p>
+<hr />
+<h2 id="pestana-posiciones">🔍 Pestaña Posiciones</h2>
+<p>La pestaña <strong>Posiciones</strong> lista lo que tienes en este bróker, en el mismo panel que las <a href="../dashboard/positions/">Posiciones del Panel</a>:</p>
 <div class="lf-screenshot-carousel" data-carousel="carousel-broker-positions" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
- <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Posiciones (Tabla)" alt="Vista de tabla de posiciones del bróker">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Posiciones (Mapa / Treemap)" alt="Vista de mapa de posiciones del bróker">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Rendimiento (Tabla)" alt="Vista de tabla de rendimiento del bróker">
- <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Rendimiento (Mapa / Gráfico)" alt="Vista de mapa de rendimiento del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="brokers" data-name="positions-holdings-table" data-title="📋 Cartera (Tabla)" alt="Vista de tabla de la cartera del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-holdings-map" data-title="🗺️ Cartera (Mapa / Treemap)" alt="Vista de mapa de la cartera del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-table" data-title="📈 Periodo (Tabla)" alt="Vista de tabla del período del bróker">
+  <img class="gallery-img lf-screenshot-carousel-item" loading="lazy" data-category="brokers" data-name="positions-performance-map" data-title="📊 Periodo (Mapa / Gráfico)" alt="Vista de mapa del período del bróker">
 </div>
 
 <ul>
-<li><strong>Interruptores y diseños</strong>: Puedes alternar entre métricas de <strong>Posición</strong> (cantidades, valores, ponderaciones) y <strong>Rendimiento</strong> (P&amp;L no realizado, % ROI), y elegir entre un diseño de <strong>Tabla</strong> o <strong>Mapa</strong> (treemap).</li>
-<li><strong>Análisis FIFO</strong>: Haz clic en cualquier fila o tarjeta de activo para expandir el panel de <strong>Análisis de Lotes FIFO</strong> en línea debajo de la lista. (Ver <strong><a href="../dashboard/positions/#fifo-lots-analysis">Análisis de Lotes FIFO</a></strong> para reglas de coincidencia detalladas).</li>
+<li><strong>Cartera</strong> muestra tus posiciones (cantidad, valor, peso); <strong>Periodo</strong> muestra las ganancias y pérdidas de cada posición en las fechas seleccionadas. Ambos se presentan como <strong>Tabla</strong> o <strong>Mapa</strong>.</li>
+<li>La columna <strong>YOC</strong> muestra el <a href="../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/yield-on-cost/">Rendimiento sobre coste</a> de cada posición en este bróker.</li>
+<li><strong>Analizar lotes</strong> abre el panel de <a href="../dashboard/positions/#fifo-lots-analysis">Análisis de lotes FIFO</a> debajo de la lista: lo encontrarás en el menú <strong>⋮</strong> de una fila, o haz clic con el botón derecho en el activo de la tabla o del mapa.</li>
 </ul>
 <hr />
-<h2 id="en-esta-seccion">📑 En Esta Sección</h2>
+<h2 id="en-esta-seccion">📑 En esta sección</h2>
 <ul>
-<li>📥 <strong><a href="import/">Transacciones del bróker</a></strong> — Registra transacciones manualmente con alcance limitado a este bróker, inicia el asistente de importación masiva BRIM y gestiona los archivos de informes subidos.</li>
-<li>⚙️ <strong><a href="info/">Configuración e información</a></strong> — Ajustes de metadatos (sobregiros, ventas en corto), generador de indicaciones de Exportación de IA limitadas y el panel de uso compartido de bróker en línea.</li>
-<li>🤝 <strong><a href="sharing/">Uso compartido del bróker</a></strong> — Guía detallada sobre permisos de roles (Propietario, Editor, Visor) y configuraciones de porcentaje de activos.</li>
-<li>🧠 <strong><a href="../ai-export/broker/">Broker AI Export</a></strong> — Tareas con alcance de broker, cobertura de datos, muestreo exacto, disponibilidad y privacidad.</li>
+<li>📥 <strong><a href="import/">Transacciones del bróker</a></strong> — añade transacciones a este bróker, importa extractos y gestiona sus informes subidos.</li>
+<li>⚙️ <strong><a href="info/">Configuración e información</a></strong> — detalles de la cuenta, opciones de trading y el panel para compartir.</li>
+<li>🧠 <strong><a href="../ai-export/broker/">Exportación IA de bróker</a></strong> — qué contiene una exportación de bróker y los análisis que puedes pedirle a una IA.</li>
+<li>🤝 <strong><a href="sharing/">Compartir brókeres</a></strong> — roles (Propietario, Editor, Lector) y porcentajes de propiedad.</li>
 </ul>
+<p>La página Brókeres, el formulario <strong>Agregar Bróker</strong> y la página del bróker tienen cada uno una breve guía contextual: puedes repetirlas desde <a href="../settings/preferences/#onboarding-and-guides">Configuración → Preferencias → Introducción y guías</a>.</p>
 
 
 
