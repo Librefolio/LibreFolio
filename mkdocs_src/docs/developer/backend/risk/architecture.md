@@ -53,7 +53,7 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/series_preparation.py` | Joint calendar, target-currency conversion, simple returns, carried points. |
 | `backend/app/services/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
 | `backend/app/services/platform/data_quality_thresholds.py` | Thresholds shared with the portfolio's data-quality banner. |
-| `backend/app/config.py` | `RISK_SIMULATION_*` and `RISK_OPTIMIZATION_*` worker settings. |
+| `backend/app/config/__init__.py` | `RISK_SIMULATION_*` and `RISK_OPTIMIZATION_*` worker settings. |
 | `frontend/src/lib/risk/riskRequest.ts` | Request builders and canonicalization. |
 | `frontend/src/lib/stores/risk/` | `riskStore` (session cache), `riskPanelController` (the plumbing behind every panel), `riskBenchmarkStore` (the shared benchmark). |
 | `frontend/src/lib/components/risk/` | Panels, levels, the lab, `BenchmarkSelect`, eligibility wording. |
@@ -532,7 +532,7 @@ every input that can change the result (for the bootstrap, the history through i
 `analytic_code@algorithm_version`. Pools are created lazily on first use and shut down by the
 application lifespan.
 
-| Setting (`backend/app/config.py`, environment variable of the same name) | Default | Effect |
+| Setting (`backend/app/config/__init__.py`, environment variable of the same name) | Default | Effect |
 |---|---|---|
 | `RISK_SIMULATION_WORKERS`, `RISK_OPTIMIZATION_WORKERS` | 1 (1–8) | Spawned processes per pool. |
 | `RISK_SIMULATION_QUEUE_CAPACITY`, `RISK_OPTIMIZATION_QUEUE_CAPACITY` | 2 (0–64) | Jobs that may wait; beyond workers + queue the answer is `worker_busy`. |

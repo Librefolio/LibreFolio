@@ -109,7 +109,7 @@ ordered layers that use one another.")
 | BU2: the truncation to the database precision | `backend/app/db/precision.py` |
 | BU2: `decimal_utils`, now only `parse_decimal_value` | `backend/app/utils/decimal_utils.py` |
 | BU2: `clear_cache` imported at the top | `backend/app/services/fx.py` |
-| BU2: `get_git_version` imported at the top | `backend/app/config.py` |
+| BU2: `get_git_version` imported at the top | `backend/app/config/__init__.py` |
 | The cache helpers (no service import) | `backend/app/utils/runtime/cache.py` |
 | BU1: the root's docstring (leaf rule and map) | `backend/app/utils/__init__.py` |
 | BU1: the project root from the module's dotted name | `backend/app/utils/runtime/version.py` |
