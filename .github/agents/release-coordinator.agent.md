@@ -39,8 +39,8 @@ remota, quella spetta al dev quando vuole dopo i suoi confronti, il coordinatore
 questo potere per dare i file nei momenti giusti ai worker minimizzando i conflitti e
 permettendogli di lavorare al massimo».
 
-For the release coordinator only, this overrides the general «never run `git commit`»
-rule of `.github/copilot-instructions.md`. Children still never mutate history.
+This is the global rule of `.github/copilot-instructions.md` («Git: local yes, remote
+only the developer») applied to coordination. Children still never mutate history.
 
 **The coordinator may, locally:**
 
