@@ -71,7 +71,7 @@ Promote is the inverse of split.
 | Role | Path |
 |------|------|
 | Transaction schemas | `backend/app/schemas/transactions.py` |
-| Transaction service | `backend/app/services/transaction_service.py` |
+| Transaction service | `backend/app/services/transactions/transaction_service.py` |
 | Transaction API | `backend/app/api/v1/transactions.py` |
 | DB models (enum) | `backend/app/db/models.py` |
 | Frontend type store | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |

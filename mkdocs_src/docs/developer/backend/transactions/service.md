@@ -1,12 +1,22 @@
 # 🧾 Transaction Service Architecture
 
-Transaction batch execution is split across three source modules:
+Transaction batch execution is split across these source modules, in `backend/app/services/transactions/`:
 
 | File | Responsibility |
 |------|----------------|
-| `backend/app/services/transaction_service.py` | Public service methods, shared validation helpers, WAC dispatch, and the `execute_batch()` orchestrator |
-| `backend/app/services/transaction_batch_context.py` | `TransactionBatchContext` and the balance-replay exception shared across stages |
-| `backend/app/services/transaction_batch_stages.py` | Ordered parse, preload/access, mutation, linking, WAC, cost-basis, balance, and response stages |
+| `backend/app/services/transactions/transaction_service.py` | `TransactionService`: the `execute_batch()` orchestrator and `delete_by_broker()`, composed of the mixins below |
+| `backend/app/services/transactions/access.py` | `TransactionAccessMixin`: broker access checks, once per broker a batch touches |
+| `backend/app/services/transactions/validation.py` | `TransactionValidationMixin`: asset event links, the rows that require a cost basis, linked-pair rules |
+| `backend/app/services/transactions/queries.py` | `TransactionQueryMixin`: the transaction query, partner brokers, rows by id |
+| `backend/app/services/transactions/balances.py` | `TransactionBalancesMixin`: the balance replay and the balances at a date |
+| `backend/app/services/transactions/event_suggestions.py` | `TransactionEventSuggestionsMixin`: asset events a transaction can link to |
+| `backend/app/services/transactions/promotion.py` | `TransactionPromotionMixin`: transfer promotion, the split and promote type maps, promote suggestions |
+| `backend/app/services/transactions/auto_cost.py` | `TransactionAutoCostMixin`: WAC dispatch for the Auto cost basis |
+| `backend/app/services/transactions/transaction_batch_context.py` | `TransactionBatchContext` and the balance-replay exception shared across stages |
+| `backend/app/services/transactions/transaction_batch_stages.py` | The stages that open and close a batch: parse, preload/access, balance replay, response |
+| `backend/app/services/transactions/batch_edits.py` | Deletes, splits, updates, and the check of updated linked pairs |
+| `backend/app/services/transactions/batch_creates.py` | Creates, promotes, and the links between the legs of new pairs |
+| `backend/app/services/transactions/batch_costs.py` | WAC and FX issues, and the required cost basis |
 
 The former 637-line `execute_batch()` C901 hotspot has been decomposed. The public
 orchestrator is now approximately 50 source lines and makes the execution order
@@ -20,7 +30,7 @@ explicit.
 |------|---------------|
 | **CRUD and pair helpers** | `TransactionService` |
 | **Batch inputs and cross-stage state** | `TransactionBatchContext` |
-| **Access scope and ordered mutations** | `transaction_batch_stages.py` |
+| **Access scope and ordered mutations** | `transaction_batch_stages.py` (access), `batch_edits.py` and `batch_creates.py` (mutations) |
 | **Linked-pair persistence** | Stage code writes reciprocal `related_transaction_id` values |
 | **WAC** | `_compute_wac_for_auto_items()` delegates to `compute_wac_iterative()` |
 | **Balance validation** | The final mutation stage flushes, then replays each affected broker from its earliest affected date |
