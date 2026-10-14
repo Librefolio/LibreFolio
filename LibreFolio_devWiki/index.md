@@ -506,7 +506,7 @@
 
 | Page | Original | Date Ingested | Tags |
 |------|----------|---------------|------|
-| [[sources/release-1.2.0]] | `CHANGELOG.md` `## [1.2.0]` — **draft, tag date pending**: the features of 1.2.0 linked to their pages, the 62 decisions of the cycle by theme, the open problems and the backlog it leaves, the checks (R's run, the gallery, the gates); the final numbers are filled at the tag | 2026-10-13 | release, release-1.2, changelog |
+| [[sources/release-1.2.0]] | `CHANGELOG.md` `## [1.2.0] - 2026-10-14` — **released 2026-10-14, ready for the tag**: the approved introduction, the features linked to their pages, the 62 decisions of the cycle by theme, the open problems and the backlog it leaves (C-79…C-84), R's final run (0 reds), the green gallery, the gates; the tagged commit and the pipeline run are filled by the next ingest | 2026-10-13 | release, release-1.2, changelog |
 | [[sources/r-full-run-coverage-2026-10-12]] | `Release_2/Phase_0/38_postReleaseBacklog/report-R-full-run-coverage-20261012.md` — R's full run with coverage on train 68: 29 reds (27 load, 2 V-19), backend 91.51 %, JS 71.24 % | 2026-10-13 | testing, coverage, triage |
 | [[sources/phase00-ui-polish-2026-10]] | `Release_2/Phase_0/48_uiPolish/plan-phase00UiPolish.prompt.md` — workstream I's UI polish before the tag: the broker icon, the import mismatch modal, the security details, the copy buttons, the Spanish toolbar | 2026-10-12 | phase0, workstream-i, ui |
 | [[sources/release2-ai-ideas-2026-07]] | `Release_2/Ai_ideas/` — the July brainstorm: signals and risk in the backend first, an AI assistant through MCP later (deferred: `TODO_FUTURI.md`, QuarkAI) | 2026-10-12 | release2, ai, mcp, roadmap |
@@ -646,6 +646,7 @@
 
 | Date | What happened | New pages |
 |------|---------------|-----------|
+| 2026-10-14 | **Release day of 1.2.0.** The release page ready for the tag: the approved introduction, the counts at `a28beed92`, R's final run with 0 reds, the green gallery, the fixture published as it is (the developer, option (a)), C-79…C-84; the tag's commit and the pipeline run left to the next ingest | *(none)* |
 | 2026-10-14 | **Trains 94–99.** uvicorn's extras in the lock (C-59); U-6 and U-6b, Schwab accepted; V-37; I's lot 52 (the time axes' inset, the running period on every chart, Z2); I-M30; T-PAC after 1.2; the dirty version verified on pipeline 77; the final gallery | [[problems/transaction-form-saved-a-refused-date]] *(2 pages — 2 problems; see log)* |
 | 2026-10-13 | **Trains 92–93 and the developer's calls.** V-36 closed, V-35 watched; the open period's tooltip (T-EVW closed); the risk API stable from 1.2 except the simulation; the stash rule in the coordinator's agent; C-60 and V-3 decided; C-72's wiki page corrected | [[decisions/python-stays-on-3-13]] *(2 pages — 2 decisions; see log)* |
 | 2026-10-13 | **Trains 84–91.** M's lots 35–38 (the chapter re-translated, the gallery's favicon mark, the two sync buttons, «tipo de cambio»); T-SHK, T-CL, T-ISO, T-FB; V-27, V-28 and V-33 close two of R's budgets; I's lot 51 (the phone pill, the last axis label, R-5) | [[problems/event-markers-lost-in-the-last-partial-period]] *(2 pages — 2 problems; see log)* |

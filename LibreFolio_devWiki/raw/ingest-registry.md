@@ -811,3 +811,12 @@ are each file's last commit at the base. Paths are relative to the repository ro
 | `LibreFolio_developer_journal/Release_2/Phase_0/53_pacTests/plan-phase00PacTests.prompt.md` | `96ae2f31a` | 2026-10-14 | T-PAC → [[features/F-107]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/54_galleryFixtureShares/plan-phase00GalleryFixtureShares.prompt.md` | `3e99e65b6` | 2026-10-14 | I-M30 → [[problems/gallery-fixture-normalizer-scaled-ratios]] |
 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `bae15c3cf` | 2026-10-14 | C-59, C-73…C-76, U-B3, U-B8, U-B9, M-30…M-32, V-37b, V-38 → the pages above |
+
+## 2026-10-14 — release day (base `a28beed92`)
+
+| Source Path | Git Hash at Ingest | Date | Wiki Page |
+|-------------|-------------------|------|-----------|
+| `CHANGELOG.md` | `a28beed92` | 2026-10-14 | the introduction, the date and the counts → [[sources/release-1.2.0]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/report-R-final-run-coverage-20261013.md` | `40576bdcd` | 2026-10-14 | R's final run → [[sources/release-1.2.0]], [[sources/r-full-run-coverage-2026-10-12]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` | `c44e2b0cd` | 2026-10-14 | C-79…C-84, M-30 closed, M-33 → [[sources/release-1.2.0]] |
+| `LibreFolio_developer_journal/Release_2/Phase_0/27_releaseImages/plan-phase00TranslationRound12.prompt.md` | `7b2cb679b` | 2026-10-14 | batch 45, the allocation re-shots → [[problems/gallery-fixture-normalizer-scaled-ratios]] |

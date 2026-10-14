@@ -3431,3 +3431,16 @@ three rows in [[concepts/echarts-chart-gotchas]] (`containLabel` and the unround
 39–42 and the final gallery on [[sources/phase00-translation-round12-2026-10]]; [[features/F-106]] (Tools stable).
 **The dirty version** verified on pipeline run 77 — [[problems/release-shots-show-dirty-version]]. And
 [[sources/release-1.2.0]]. Graph: not updated (P-6).
+
+## [2026-10-14] ingest | Release day — the release page of 1.2.0 ready for the tag
+Base `a28beed92` (the chapter's introduction and date). [[sources/release-1.2.0]]: status `ready-for-tag`, the date
+2026-10-14, the approved introduction quoted as it stands in the chapter (checked identical), the counts at
+`a28beed92` (25 ✨ with 27 sub-items, 152 🐛 in 13 groups, 32 🔄, 7 ⚠️), R's final run on `10e646f79` (0 reds;
+pytest 12 936, vitest 11 515, Playwright 1 221; backend 91.54 %, frontend 71.17 %, a lower bound for its E2E part),
+the green gallery (251/0/1, then 20/0 and, after I-M30, 10/0), the gates, the developer's decision on the gallery
+fixture (option (a), published as it is — no figure of the fixture anywhere), and the backlog C-79…C-84 with M-33. The
+table «To fill at the tag» is filled except two rows that exist only after publication — the tagged commit and the
+release pipeline's run — which the next ingest fills. Also [[problems/gallery-fixture-normalizer-scaled-ratios]] (the
+decision), [[sources/r-full-run-coverage-2026-10-12]] (a pointer to the final run), and a C-82 note on
+[[problems/jscoverage-teardown-spends-the-test-budget]] and [[problems/login-returns-before-the-app-has-started]].
+Graph: not updated (P-6).
