@@ -615,6 +615,28 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Alternative**: un tempo configurabile, con il default di oggi (nessun limite).
 - **Per chi usa già LibreFolio**: niente di visibile; gli arresti diventano più puliti.
 
+### Nuovo, dalla verifica di Account e accessi (14/10 sera)
+
+#### 36. Cosa vede un utente dei dati degli altri — 🟡 (A-1, A-2)
+- **Oggi**: al punto 10 hai scritto che un utente nuovo vede degli altri solo i nomi dei broker e degli utenti.
+  Account e accessi l'ha verificato, in sola lettura: con il login, un utente vede anche
+  - le email degli admin, dalla ricerca degli utenti;
+  - nome e icona di tutti i broker, anche di quelli non condivisi con lui;
+  - l'elenco, l'anteprima e lo scarico di **tutti i file caricati**, da chiunque: solo la cancellazione controlla il
+    proprietario.
+
+  Senza login, poi, si leggono le impostazioni globali: scheduler, durata della sessione, registrazione.
+- **Proposta**: correggerlo nella 1.3.
+  - Un file caricato lo vede solo chi l'ha caricato, o chi ha accesso al broker a cui appartiene.
+  - Nomi e icone dei broker non condivisi solo per l'admin (prima si verifica dove li usa l'app).
+  - Le email degli admin non escono dalla ricerca.
+  - Le impostazioni globali solo con il login, dopo che la configurazione pubblica di Piattaforma porta fuori quello
+    che serve alla pagina di login.
+  - Chi lo fa: i file Piattaforma, i broker Import e transazioni, ricerca utenti e impostazioni Account e accessi.
+- **Perché**: in un'istanza condivisa (famiglia, amici, cloud) i file possono essere documenti personali.
+- **Alternative**: correggere solo i file e lasciare il resto com'è.
+- **Per chi usa già LibreFolio**: chi condivide l'istanza smette di vedere i file e i broker degli altri.
+
 ## 3. Decisioni di coordinamento (già prese; correggibili)
 
 - **Forma comune del riordino**. Perché: sei sessioni spostano file insieme, e serve una regola sola per non

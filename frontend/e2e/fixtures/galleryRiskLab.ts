@@ -364,12 +364,17 @@ export async function scrollBackToHeader(page: Page): Promise<void> {
 /**
  * Rest the pointer where nothing reacts to it — the right edge of the screen, mid-height, inside the
  * main area's padding — and end on no tooltip being shown: the last click or hover leaves none behind.
+ * With `pinnedTooltip`, for a shot of the one tooltip a click pinned on purpose (galleryShot.ts,
+ * `ShotOptions.pinnedTooltip`): the pointer rests in the same place, and the end state is exactly one
+ * tooltip instead of none.
  */
-export async function parkPointer(page: Page): Promise<void> {
+export async function parkPointer(page: Page, {pinnedTooltip = false}: {pinnedTooltip?: boolean} = {}): Promise<void> {
     const viewport = page.viewportSize();
     if (!viewport) throw new Error('the page has no viewport');
     await page.mouse.move(viewport.width - 2, Math.round(viewport.height / 2));
-    await expect(page.getByTestId('tooltip-content'), 'a tooltip lies over the shot').toHaveCount(0);
+    const tooltips = page.getByTestId('tooltip-content');
+    if (pinnedTooltip) await expect(tooltips, 'the shot shows the one tooltip a click pinned, and no other: exactly one tooltip is on screen').toHaveCount(1);
+    else await expect(tooltips, 'a tooltip lies over the shot').toHaveCount(0);
 }
 
 /** Every image inside `scope` has finished loading (or failed): no icon is caught half-drawn. */
