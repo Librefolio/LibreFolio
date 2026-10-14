@@ -27,7 +27,7 @@ Ramo di integrazione: `dev_release2` (condiviso con il programma colori). Corsie
 | Lettera | Sessione | Corsia | Data-dir | Ramo | HEAD | Stato |
 |---|---|---|---|---|---|---|
 | — | Coordinatore 1.3 (in place) | 6180 | `/tmp/librefolio-r13-main` | `dev_release2` | — | attivo |
-| H | H - Piattaforma | 6181 | `/tmp/librefolio-r13-h` | `e-alfy-h-piattaforma` | `6a605904c` | ✅ CP1 integrato in `dev_release2` (`6a605904c`, 15/10 00:55); CP2 diviso: in corso CP2a (config), poi CP3, CP4; CP2b dopo il commit del coordinatore su `main.py` (sessione `8490facf`) |
+| H | H - Piattaforma | 6181 | `/tmp/librefolio-r13-h` | `e-alfy-h-piattaforma` | `60f8a35ce` | ✅ CP1 (`6a605904c`) e CP2a (`60f8a35ce`, pacchetto `config/`) integrati; in corso CP3, segreti; CP2b dopo il commit del coordinatore su `main.py` (sessione `8490facf`) |
 | A | A - Account e accessi | 6182 | `/tmp/librefolio-r13-a` | `e-alfy-a-account-e-accessi` | `76e61889b` | ✅ A1 (`769cc31cb`) e A2 (`76e61889b`, frontend in `lib/features/`) integrati; in corso A3, registro delle schede (sessione `119ed166`) |
 | X | X - Plugin asset e ricerca | 6183 | `/tmp/librefolio-r13-x` | `e-alfy-x-plugin-asset-e-ricerca` | `9d895a9c4` | CP1 committato (`9426c1bae`, `9d895a9c4`); in corso CP2a; entra dopo H con CP1 e CP2a insieme (sessione `ad5f37c8`) |
 | W | W - Import e transazioni | 6184 | `/tmp/librefolio-r13-w` | `e-alfy-w-import-e-transazioni` | `998fd2701` | ✅ W1 e W2 integrati (`998fd2701`): `services/transactions/` e `services/brokers/` per tema; in corso I1, poi K1 (sessione `e71e0e34`) |
