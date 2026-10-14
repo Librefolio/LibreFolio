@@ -669,7 +669,7 @@ mai riavviando il server della corsia. Il risolutore legge l'ambiente a ogni chi
   categorie verdi**, 23 riepiloghi di pytest **identici alla base uno per uno**: 12 965 passati, 28 saltati, 0 falliti
   (log in `/tmp/libreFolio_x_cp1_allbackend.log`). Porta 6183 libera; `git diff --check` pulito.
 
-### Checkpoint CP1 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+### Checkpoint CP1 ✅ (2026-10-15) — committato dal coordinatore: `9426c1bae` (codice) e `9d895a9c4` (journal)
 
 - Base `c9bb8f257`; un solo commit (opzione 1): 1 rinomina pura (`services/fx.py` → `services/fx/fx.py`), 10 file nuovi
   (9 di codice più questo piano), 218 modificati; elenco esplicito in `/tmp/libreFolio_x_cp1_paths.txt`.
@@ -678,3 +678,100 @@ mai riavviando il server della corsia. Il risolutore legge l'ambiente a ogni chi
   `__pycache__`, il sito mkdocs, `backend/data/prod/logs/librefolio.log` (vuoto, scritto da `dev.py api schema`).
 - Messaggio proposto: `refactor(plugins): one registry per plugin family`, con le due parti (rinomine pure, tagli) nel
   corpo.
+
+### CP2a — gli asset in `services/assets/`, via lo shim e il barile (PL6) ✅ (2026-10-15)
+
+Via del coordinatore il 15/10 (~00:28), sul mio ramo a `9d895a9c4`. All'handoff il coordinatore porta nel ramo
+`dev_release2` (A1 e H CP1); i conflitti d'import li risolvo io, poi entrano CP1 e CP2a insieme.
+
+- ✅ **Spostamento puro (C1)**, con `mv` (lo staging è del coordinatore):
+  `services/asset_sources/{core,crud,manager,metadata,price_query,price_store,provider_management,refresh,search}.py` →
+  `services/assets/`; `services/market_calendar.py` e `services/web_link_finder.py` → `services/assets/` (indicazione del
+  coordinatore). Tolti lo shim `services/asset_source.py` e il barile pigro `services/asset_sources/__init__.py`.
+  `services/assets/__init__.py` resta di sola docstring, ora con la mappa dei moduli, e non riesporta nulla.
+- ✅ **Import**: 93 istruzioni in 48 file, con lo script AST `/tmp/libreFolio_x_cp2a_rewrite.py`. Lo script porta i nomi dello
+  shim e del barile al modulo che li definisce, `asset_sources.<m>` → `assets.<m>`, e `services import
+  web_link_finder|market_calendar` e `import …market_calendar as …` nel pacchetto nuovo. Poi `ruff --select I001 --fix` su
+  16 file: `assets` ordina dopo `asset_source_providers`. Lo script aveva raccolto su una riga sola 6 istruzioni su più
+  righe dei moduli spostati (`manager`, `metadata`, `price_query`, `price_store`, `provider_management`, `refresh`): hanno
+  ripreso la forma di HEAD, e cambia solo il percorso.
+- ✅ **A mano**:
+  - le stringhe che l'AST non vede: `MODULE` e la sonda in sottoprocesso di `test_market_calendar.py`, il percorso in
+    `test_data_quality_thresholds.py`;
+  - docstring e commenti con il vecchio percorso:
+    - 3 in `assets/core.py`, `utils/json_utils.py`, il commento del drawdown in `signal_plugins/`;
+    - 9 docstring di test che citavano le righe del vecchio monolite: tolte le righe, citato il modulo giusto;
+    - i commenti di `test_signal_registry.py` e `test_risk_signal_plugins.py`;
+  - le stampe del runner (`_backend_services.py` ×5, `_backend_utils.py`) e il commento di `_server.py`;
+  - `scripts/coverage_analysis.py`: la voce HIGH dello shim, che non copriva più i servizi veri, diventa il pacchetto
+    `backend/app/services/assets/`; lo stesso per la categoria CORE_SVC;
+  - `.github`: `applyTo` e 3 righe delle istruzioni degli asset, la skill `asset-plugin`, la skill `testing-backend`.
+- ✅ **Test** (`test-author`): `test_provider_core_cache.py` perde il contratto della facciata, che non esiste più. Via
+  `test_legacy_and_canonical_public_symbols_share_identity` (5 casi), gli alias `Canonical*` e i due import rotti; la sonda a
+  freddo verifica la sola base `AssetSourceProvider` di `assets/core.py`. Il file passa da 33 a 28 test.
+- ✅ **Doc per sviluppatori** (`docs-writer`, solo EN, nessuna traduzione): 13 pagine, 40 sostituzioni su 42. Le 2 rimaste
+  sono corrette: un nome di file in un diagramma e un file di test. In `backend/assets/architecture.md` la sezione «Canonical
+  Package and Compatibility» diventa «Package Layout and Imports» (nessun link all'ancora vecchia), e la tabella dei moduli
+  guadagna `registry.py`, `web_link_finder.py` e `market_calendar.py`.
+- ✅ **devWiki (C6)**: 80 sostituzioni in 59 pagine, con lo script `/tmp/libreFolio_x_cp2a_wiki.py`, che lega ogni modifica a
+  pagina e riga.
+  - Le tabelle «Source files» che citavano lo shim puntano ora al modulo che fa la cosa descritta: base, thread e cache →
+    `core.py`; sincronizzazione → `refresh.py`; metadati → `metadata.py`; assegnazione → `provider_management.py`; scritture,
+    eventi e azzeramento → `price_store.py`; letture → `price_query.py`; registro → `registry.py`; la «facciata» del
+    pianificatore → `manager.py`. Le altre tabelle seguono lo spostamento.
+  - Aggiornata la prosa al presente di feature, concetti e problemi; quella storica no.
+  - L'entità `asset-sources-package.md` è riscritta per lo stato nuovo (il nome del file non cambia, per i link).
+  - `check_source_paths.py`: 5 percorsi mancanti, tutti preesistenti e ignorati da git (15 a metà lavoro).
+- ✅ **Verifiche statiche**:
+  - ruff su `backend/` pulito; `black --check backend/` con gli stessi 4 file preesistenti;
+  - sui 4 file di `scripts/` toccati, nessun reperto ruff; `_server.py` e `coverage_analysis.py` erano già fuori da black a
+    HEAD (non riformattati);
+  - `import backend.app.main`; scoperta: asset 6, cambi 7, BRIM 33; i 12 moduli di `services/assets/` si importano, i 4
+    vecchi no;
+  - `pytest --collect-only`: 12 971 test (CP1: 12 976, meno i 5 casi tolti), nessun errore;
+  - `dev.py api schema`: `openapi.json` identico alla base tranne `info.version`; `tool-contracts.openapi.json` identico;
+  - `lint --dead-code`: nessun reperto nuovo (via `__getattr__`/`__dir__` del barile, due reperti con il percorso nuovo);
+  - `mkdocs build` stretto verde; `check-links` 95 validi; `git diff --check` pulito.
+- ✅ **Similarità**, misurata con git in un repo usa e getta (`/tmp/libreFolio_x_cp2a_sim`), senza toccare l'indice del
+  worktree:
+  - 100 %: `market_calendar.py`, `web_link_finder.py`;
+  - 99 %: `core`, `crud`, `price_query`, `price_store`, `provider_management`, `refresh`, `search`; 98 %: `metadata`;
+  - **50 %: `manager.py`**. Il file ha 22 righe, e 8 sono le 6 istruzioni d'import che devono portare il percorso nuovo; il
+    corpo della classe non cambia.
+- ✅ **Grep dei vecchi percorsi** in `backend/`, `scripts/`, `dev.py`, `.github/`, `mkdocs_src/docs/developer/`: zero, tranne
+  le due docstring che finiscono in `openapi.json` (sotto, voce X-R2 del backlog).
+- ✅ **Suite del dominio** sulla corsia 6183, una alla volta (`/tmp/libreFolio_x_cp2a_targeted.sh`, 15/10 00:48–00:51), tutte
+  verdi:
+  - `services`: asset-source 61, asset-source-refresh 12, asset-signals 30, current-price-bootstrap 8,
+    scheduled-investment-param-change 3, asset-sync-counts 1, web-link-finder 24, provider-errors 134, signal-registry 65,
+    risk-all 896;
+  - `utils` provider-core-cache 28; `db` asset-merge 12.
+- ✅ **Backend intera** sull'albero del CP2a: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test
+  --test-port 6183 --data-dir /tmp/librefolio-r13-x all-backend` (15/10 00:52–01:14, 22 min 38 s): **7/7 categorie
+  verdi**. 22 riepiloghi di pytest su 23 sono identici al CP1; il ventitreesimo, l'unità consolidata di `utils`, passa da 2 191
+  a 2 186: sono i 5 casi del test della facciata, tolto. Totale **12 960 passati, 28 saltati, 0 falliti** (CP1: 12 965 e
+  28). Log in `/tmp/libreFolio_x_cp2a_allbackend.log`, righe in `/tmp/libreFolio_x_cp2a_allbackend_counts.txt`. Porta 6183
+  libera alla fine; `git diff --check` pulito.
+- ✅ **Backlog** (la mia sezione di `Phase_0/BACKLOG_POST_1.2.md`): aggiunte X-R2 (le due docstring sotto) e W-B9 (il test dei
+  cambi che chiama dal vivo la BCE, passato a X dal coordinatore il 15/10).
+
+> **Fuori pista**:
+> - Nella prima stesura avevo corretto due docstring che `openapi.json` riporta come descrizioni di schemi: `BackwardFillInfo`,
+>   da `schemas/common.py:369`, e `IdentifierType`, da `db/models.py:123`. Il confronto con la base le ha mostrate come
+>   uniche differenze. Le ho rimesse com'erano, come per X-R1: si correggono in un lotto che cambia comunque l'API (voce
+>   X-R2). Effetto utile: `db/models.py` e `schemas/common.py`, file condivisi, restano intatti.
+> - Lo script degli import raccoglieva su una riga sola le istruzioni su più righe: un cambio di forma, non di percorso, che
+>   abbassava la similarità (`manager.py` al 46 %, sotto la soglia di rinomina di git). Rimesse 6 istruzioni nella forma di
+>   HEAD.
+> - `docs-writer` segnala la docstring di `assets/manager.py` («Compatibility manager…»), che non torna più ora che la
+>   facciata non c'è. Cambiarla adesso porterebbe il file sotto il 50 %: si aggiorna nel CP2b, che è un lotto di tagli.
+
+### Checkpoint CP2a 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+
+- Base `9d895a9c4`. 11 rinomine pure, 2 file tolti, 134 modificati (compresi questo piano e il backlog), nessun file nuovo
+  oltre alle rinomine; elenco esplicito in `/tmp/libreFolio_x_cp2a_paths.txt`. Nessun file tagliato: un solo elenco.
+- Esclusi, ignorati da git: `frontend/src/lib/api/openapi.json` e `tool-contracts.openapi.json` (rigenerati da
+  `dev.py api schema`), il sito mkdocs, `.testLog/` (con `00_archive/test-db_20261015_011424.tar.xz`), `.pytest_cache/`,
+  `.ruff_cache/`, i `__pycache__`, `backend/data/prod/logs/librefolio.log`.
+- Messaggi proposti: `refactor(assets): move asset services, drop shim` per il codice, `docs(journal): X CP2a log, backlog
+  X-R2 and W-B9` per il journal.
