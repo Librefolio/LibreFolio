@@ -17,7 +17,7 @@ tested in test_external/test_brim_scalable.py. Each test logs in a user of its o
 deletes them.
 
 Reference: backend/app/services/brim_provider.py (detect_tx_duplicates), backend/app/services/brim_providers/_scalable.py,
-backend/app/services/transaction_service.py (promote_suggest_bulk)
+backend/app/services/transactions/transaction_service.py (promote_suggest_bulk)
 """
 
 import io
