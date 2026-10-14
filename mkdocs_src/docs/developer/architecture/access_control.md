@@ -84,7 +84,7 @@ If a broker has only one user with the `OWNER` role:
 
 ## 🔧 Implementation Details
 
-The logic is centralized in `backend/app/services/broker_service.py`.
+The logic is centralized in `backend/app/services/brokers/broker_service.py`.
 
 - 🔍 **`_check_user_access(broker_id, user_id, min_role)`**: Core internal method to verify permissions.
 - ➕ **`add_access()`**: Grants access to a new user (OWNER only).

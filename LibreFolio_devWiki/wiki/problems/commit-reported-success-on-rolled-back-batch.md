@@ -62,7 +62,7 @@ the compiler list the seven call sites.
 
 | Role | Path |
 |------|------|
-| Commit/simulate logic and demotion | `backend/app/services/transaction_service.py` |
+| Commit/simulate logic and demotion | `backend/app/services/transactions/transaction_service.py` |
 | Endpoint | `backend/app/api/v1/transactions.py` — `POST /commit` |
 | Consumer that filters on `success` | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | mkdocs | `mkdocs_src/docs/developer/backend/transactions/` |

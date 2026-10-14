@@ -74,5 +74,5 @@ tell them that the five-minute fix was considered and **rejected**, and why.
 | Removal guard | `frontend/src/lib/components/brokers/BrokerSharingPanel.svelte` (~262) |
 | Unguarded role change | `frontend/src/lib/components/brokers/BrokerSharingPanel.svelte` (~245) |
 | Broker delete endpoint (`force`) | `backend/app/api/v1/brokers.py` |
-| Sharing service | `backend/app/services/broker_service.py` |
+| Sharing service | `backend/app/services/brokers/broker_service.py` |
 | mkdocs | `mkdocs_src/docs/user/brokers/index.en.md` |

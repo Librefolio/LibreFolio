@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import BrokerUserAccess, User, UserSettings
 from backend.app.services.auth_service import hash_password
-from backend.app.services.broker_service import BrokerService
+from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.utils.datetime_utils import utcnow
 
 

@@ -168,7 +168,7 @@ Components that display computed data should be **controlled** (props-in, callba
 | FX store registry (lookupFxRate) | `frontend/src/lib/stores/fxStoreRegistry.ts` |
 | TX types (PendingOp, DraftFields) | `frontend/src/lib/components/transactions/types.ts` |
 | TX schemas (WACPreviewItem, etc.) | `backend/app/schemas/transactions.py` |
-| TX service (compute_wac_iterative) | `backend/app/services/transaction_service.py` |
+| TX service (compute_wac_iterative) | `backend/app/services/transactions/transaction_service.py` |
 | Financial utils (WAC math; financial_utils.py → wac_utils.py → the average-cost function, 2026-10-07) | `backend/app/services/financial_math/average_cost.py` |
 | Asset source (get_prices_bulk) | `backend/app/services/asset_source.py` |
 | WAC API tests (test_transactions_wac.py replaced on 2026-05-29) | `backend/test_scripts/test_api/test_wac_inline.py` |

@@ -54,7 +54,7 @@ known in the field: the bug was "one nobody has lived yet", in the developer's w
 | Role | Path |
 |------|------|
 | `delete_user` (last-owner rule per broker, all or nothing) | `backend/app/services/user_service.py` |
-| `leave_broker` | `backend/app/services/broker_service.py` |
+| `leave_broker` | `backend/app/services/brokers/broker_service.py` |
 | `DELETE /auth/users/me` (only-admin refusal, file clean-up) | `backend/app/api/v1/auth.py` |
 | File clean-up | `backend/app/services/brim_provider.py` |
 | Account-deletion API tests | `backend/test_scripts/test_api/test_account_deletion_api.py` |

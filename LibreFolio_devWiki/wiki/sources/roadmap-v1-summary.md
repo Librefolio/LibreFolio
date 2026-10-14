@@ -50,6 +50,6 @@ This document marks the **moment the project was scoped**. The core financial lo
 | Role | Path |
 |------|------|
 | Original RoadMap V1 | `LibreFolio_developer_journal/RoadMapV1/01-Riassunto_generale.md` |
-| Transaction service (FIFO — carried forward) | `backend/app/services/transaction_service.py` |
+| Transaction service (FIFO — carried forward) | `backend/app/services/transactions/transaction_service.py` |
 | Scheduled Investment provider | `backend/app/services/asset_source_providers/scheduled_investment/plugin.py` |
 | CSS Scraper provider | `backend/app/services/asset_source_providers/css_scraper/plugin.py` |

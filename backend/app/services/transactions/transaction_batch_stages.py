@@ -23,14 +23,14 @@ from backend.app.schemas.transactions import (
     tags_to_csv,
     validate_transaction_business_rules,
 )
-from backend.app.services.transaction_batch_context import (
+from backend.app.services.transactions.transaction_batch_context import (
     BalanceValidationError,
     TransactionBatchContext,
 )
 from backend.app.utils.datetime_utils import parse_ISO_date, utcnow
 
 if TYPE_CHECKING:
-    from backend.app.services.transaction_service import TransactionService
+    from backend.app.services.transactions.transaction_service import TransactionService
 
 
 def _loc_to_field(loc: tuple | list) -> Optional[str]:

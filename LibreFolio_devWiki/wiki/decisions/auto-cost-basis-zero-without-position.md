@@ -21,9 +21,9 @@ incoming rows, so the default path produces it. Checked at `083ed26dc`:
   (`backend/app/services/portfolio_service.py`, ~`:185-190`), and a pool emptied by sales has a unit cost of 0
   (`CostStep.unit_cost_report`, `backend/app/services/financial_math/average_cost.py`, ~`:155`);
 - Auto writes that value: `if wac_result.wac:` is true for a `Currency` of amount 0
-  (`_compute_wac_for_auto_items()`, `backend/app/services/transaction_service.py`, ~`:1012-1014`);
+  (`_compute_wac_for_auto_items()`, `backend/app/services/transactions/transaction_service.py`, ~`:1012-1014`);
 - the required-cost-basis check skips Auto rows (`_auto_mode_indices` and its three callers,
-  `backend/app/services/transaction_batch_stages.py`, ~`:875`, `:889`, `:914`, `:935`);
+  `backend/app/services/transactions/transaction_batch_stages.py`, ~`:875`, `:889`, `:914`, `:935`);
 - an explicit 0 is `ADD_ZERO_COST` and raises no `MISSING_COST_BASIS` (`average_cost.py`, ~`:431-432`);
 - Auto is the default in the form (`costBasisMode = $state('auto')`, `TransactionFormModal.svelte`) and for new bulk
   rows that allow a cost basis (`TransactionBulkModal.svelte`);
@@ -80,8 +80,8 @@ incoming rows, so the default path produces it. Checked at `083ed26dc`:
 | Role | Path |
 |------|------|
 | WAC facade — zero WAC without rows | `backend/app/services/portfolio_service.py` |
-| Auto writes the WAC (`_compute_wac_for_auto_items`) | `backend/app/services/transaction_service.py` |
-| Required-cost-basis check, Auto rows skipped | `backend/app/services/transaction_batch_stages.py` |
+| Auto writes the WAC (`_compute_wac_for_auto_items`) | `backend/app/services/transactions/transaction_service.py` |
+| Required-cost-basis check, Auto rows skipped | `backend/app/services/transactions/transaction_batch_stages.py` |
 | `ADD_ZERO_COST`, empty-pool unit cost | `backend/app/services/financial_math/average_cost.py` |
 | Form default (Auto) | `frontend/src/lib/components/transactions/modals/TransactionFormModal.svelte` |
 | Bulk default for new rows (Auto) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |

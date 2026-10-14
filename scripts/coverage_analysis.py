@@ -54,9 +54,9 @@ PRIORITY_MAP = {
     # HIGH — core business logic
     "backend/app/services/asset_source.py": "HIGH",
     "backend/app/services/fx.py": "HIGH",
-    "backend/app/services/broker_service.py": "HIGH",
+    "backend/app/services/brokers/broker_service.py": "HIGH",
     "backend/app/services/user_service.py": "HIGH",
-    "backend/app/services/transaction_service.py": "HIGH",
+    "backend/app/services/transactions/transaction_service.py": "HIGH",
     "backend/app/services/brim_provider.py": "HIGH",
     # MEDIUM — API endpoints
     "backend/app/api/": "MEDIUM",

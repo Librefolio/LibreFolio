@@ -74,7 +74,7 @@ from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services import brim_report_sets
 from backend.app.services.brim_provider import BRIMProvider
 from backend.app.services.provider_registry import BRIMProviderRegistry
-from backend.app.services.transaction_service import TransactionService
+from backend.app.services.transactions.transaction_service import TransactionService
 
 A3 = "A3"
 GAP_FIX_MODULE = "backend.app.services.brim_gap_fix"

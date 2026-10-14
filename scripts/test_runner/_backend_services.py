@@ -402,7 +402,7 @@ def services_synthetic_yield_integration(verbose: bool = False, test_names: list
 def services_transaction(verbose: bool = False, test_names: list = None) -> bool:
     """Test TransactionService CRUD operations, balance validation, and link resolution."""
     print_section("Services: Transaction Service")
-    print_info("Testing: backend/app/services/transaction_service.py")
+    print_info("Testing: backend/app/services/transactions/transaction_service.py")
     print_info("Tests: CRUD, balance validation, link resolution, balance queries")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_service.py", test_names)
@@ -424,7 +424,7 @@ def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> 
 def services_broker(verbose: bool = False, test_names: list = None) -> bool:
     """Test BrokerService CRUD operations, initial balances, and flag validation."""
     print_section("Services: Broker Service")
-    print_info("Testing: backend/app/services/broker_service.py")
+    print_info("Testing: backend/app/services/brokers/broker_service.py")
     print_info("Tests: CRUD, initial deposits, get_summary, flag validation")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_broker_service.py", test_names)

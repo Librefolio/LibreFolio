@@ -4,7 +4,7 @@ Tests for TransactionService.
 Tests CRUD operations, balance validation, and link resolution.
 See checklist: 01_test_broker_transaction_subsystem.md - Category 3
 
-Reference: backend/app/services/transaction_service.py
+Reference: backend/app/services/transactions/transaction_service.py
 """
 
 import sys
@@ -37,7 +37,7 @@ from backend.app.schemas.transactions import (
     TXTransferPromoteRequest,
     TXUpdateItem,
 )
-from backend.app.services.transaction_service import (
+from backend.app.services.transactions.transaction_service import (
     TransactionService,
     _parse_lenient,
 )

@@ -57,6 +57,6 @@ promotes: List[TXPromoteBatchItem] # each has id_a/link_uuid_a + id_b/link_uuid_
 | Role | Path |
 |------|------|
 | Transaction schemas | `backend/app/schemas/transactions.py` |
-| Transaction service | `backend/app/services/transaction_service.py` |
+| Transaction service | `backend/app/services/transactions/transaction_service.py` |
 | TX API endpoints | `backend/app/api/v1/transactions.py` |
 | BulkModal (FE) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
