@@ -409,8 +409,13 @@ partenza, quindi:
 - il totale non deve salire;
 - il coordinatore ne controlla il diff prima del commit.
 
-Sintassi e risoluzione dei conflitti sulla baseline arrivano dal coordinatore colori con T-1. Le rinomine pure non ne
-hanno bisogno.
+**Conflitti sulla baseline.** La baseline ha una riga per file e le chiavi ordinate, quindi rami che toccano file
+diversi non vanno in conflitto. Sulla stessa riga:
+- si tiene il valore più stretto, mai il più alto;
+- poi il gate deve passare sull'albero fuso;
+- se non passa, c'è una regressione vera o manca un taglio dichiarato: non si allarga la baseline per farlo passare.
+
+La sintassi esatta dello script arriva dal coordinatore colori con T-1. Le rinomine pure non ne hanno bisogno.
 
 ### Nuove schermate (regole del programma colori)
 
