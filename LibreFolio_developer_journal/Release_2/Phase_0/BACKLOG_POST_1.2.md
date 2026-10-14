@@ -293,6 +293,39 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   run finale, 89 lock e circa 107 cartelle dei broker temporanei delle spec di import. Nessun file di report resta
   orfano. Cura: la pulizia del file system nella cancellazione del broker (BRIM/import), dopo la 1.2. Dettagli:
   [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md), §3.
+- **C-80 · Backend: i moduli sotto l'80 %** — basso; R, run finale del 13/10 (§4.1). In 1.2 la copertura
+  complessiva è 91,55 %, ma alcuni moduli restano indietro:
+  - `services/scheduler/scheduler.py` 60,18 %;
+  - `brim_providers/broker_cryptocom` 69,86 % e `broker_cointracking` 74,45 %;
+  - `api/v1/assets.py` 75,00 %, fermo dal 03/09 (73,9 % nel report 17);
+  - `fx_providers/fed` 75,18 %, che dipende dalla rete;
+  - `services/tools/resources.py` 75,50 % (run del 12/10).
+
+  Per pacchetto, `brim_providers` ha la quota più grossa di righe mancanti (906, rami al 79,7 %); `fx_providers` ha i
+  rami al 75,4 %. Cura: test mirati, a partire dallo scheduler e da `api/v1/assets.py`. Dettagli: [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md).
+- **C-81 · Frontend: i file mai eseguiti e i grandi scoperti** — basso; R, run del 12/10 e finale (§4.2). Da
+  rimisurare **dopo I1** (C-69): finché la fixture `jsCoverage` perde i contatori, le cifre E2E sono limiti inferiori.
+  - Allo 0 %, fuori dal planner del PAC: `features/tools/ToolDiagnosticsPanel.svelte`,
+    `features/tools/components/ToolExecutionMetrics.svelte`, `routes/+error.svelte`,
+    `components/risk/levels/SimulationProvenance.svelte`, `components/files/FileSetBadges.svelte`,
+    `components/assets/assetEditData.ts`, `hooks.server.ts`.
+  - I più scoperti: `ImportWizardModal.svelte` (1 374 statement, 50,1 %, sceso dal 54,9 %: non attribuibile finché c'è
+    I1), la pagina dell'asset (553), `TransactionBulkModal.svelte` (423), `TransactionFormModal.svelte` (338), la
+    lista degli asset (300), `RiskAnalysisPanel.svelte` (279, rami al 40,1 %), `LotComparisonChart.svelte` (46,8 % il
+    12/10).
+
+  Dettagli: [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md).
+- **C-82 · Le cure da carico sono provate solo a carico normale** — medio-basso; R, run finale. La run finale ha avuto
+  un carico medio di 8,9, contro 37,9 il 12/10: dimostra che le cure di V-27, V-28, V-33 e V-36 reggono a carico
+  normale, non a carico alto. Cura: una run a 4 worker con un'altra corsia attiva, o con un carico sintetico, prima
+  del prossimo rilascio. Dettagli: [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md), §1.2.
+- **C-83 · Le pagine scrivono la barra del giorno in `price_history`** — minimo; R, run finale (§3). Quando una pagina
+  chiede il prezzo corrente, il backend lo salva come barra del giorno (nella run finale +7 righe, poi +3 dopo
+  mezzanotte). Uno spec che contasse le barre di un asset vedrebbe +1 secondo il giorno e l'ordine dei test: un
+  conteggio va scritto relativo, mai assoluto. Dettagli: [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md).
+- **C-84 · Le versioni scritte a mano nei file del progetto** — minimo; coordinatore, 14/10. `pyproject.toml` e
+  `frontend/package.json` dicono ancora 1.1.0, fissate il 05/08; nessuno le legge, perché la versione dell'app viene da
+  `git describe`. Da allineare a ogni rilascio, o da togliere.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6).
 
 ## Risk · Rischio (02)
