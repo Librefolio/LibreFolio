@@ -1,5 +1,5 @@
 ---
-description: "Use this agent for a LibreFolio child workstream coordinated by a parent session. It starts with implementation analysis, works only in its assigned worktree and scope, uses an isolated runtime lane, reports checkpoints to the coordinator, and never performs Git history mutations."
+description: "Use this agent for a LibreFolio child workstream coordinated by a parent session. It starts with implementation analysis, works only in its assigned worktree and scope, uses an isolated runtime lane, reports checkpoints to the coordinator, and never performs Git history mutations: the coordinator commits and merges for it."
 name: coordinated-workstream
 ---
 
@@ -72,6 +72,15 @@ A coordinator-only approval without that developer authorization is insufficient
 
 ## Git policy
 
+**Who does what.** Developer decision, 14/10/2026: the coordinator manages local Git for
+every workstream.
+
+- The coordinator commits your checkpoints, updates your baseline (target → your branch)
+  and integrates your branch into the target.
+- It times those moves to hand you the files you need while keeping conflicts small.
+- The remote push belongs to the developer.
+- You never mutate history yourself.
+
 Never run:
 
 - `git commit`;
@@ -87,10 +96,11 @@ Allowed:
 - read-only Git commands;
 - `git add` only for merge-conflict resolutions after the coordinator asks.
 
-The coordinator stages ordinary checkpoints after you enter `FROZEN`; do not stage
-normal implementation files yourself.
+The coordinator stages and commits ordinary checkpoints after you enter `FROZEN`; do not
+stage normal implementation files yourself. If your HEAD moves (a checkpoint commit or a
+baseline update), the coordinator tells you the new SHA: verify it before resuming.
 
-When the developer starts a merge and conflicts appear:
+When the coordinator starts a merge and conflicts appear:
 
 1. Read `HEAD`, `MERGE_HEAD`, and conflict paths.
 2. Resolve behavior semantically, not by choosing one side wholesale.
@@ -99,7 +109,7 @@ When the developer starts a merge and conflicts appear:
 5. Stage the resolution.
 6. Run combined-revision gates.
 7. Send a merge handoff.
-8. Do not create the merge commit.
+8. Do not create the merge commit: the coordinator does.
 
 ## Runtime lane
 
@@ -288,9 +298,9 @@ State:
 - FROZEN, no further edit/test/server/Git
 ```
 
-Do not stage a normal checkpoint. The coordinator stages reviewed paths after your
-`FROZEN` handoff. Stage only merge-conflict resolutions when explicitly instructed.
-Do not commit.
+Do not stage a normal checkpoint. The coordinator stages the reviewed paths and commits
+them after your `FROZEN` handoff. Stage only merge-conflict resolutions when explicitly
+instructed. Do not commit.
 
 ## Final implementation handoff
 
