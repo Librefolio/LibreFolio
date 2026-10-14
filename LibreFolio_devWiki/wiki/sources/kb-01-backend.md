@@ -62,4 +62,4 @@ None — all major concepts already in wiki. This source consolidates references
 | Asset providers | `backend/app/services/asset_source_providers/` |
 | BRIM providers | `backend/app/services/brim_providers/` |
 | Test suite | `backend/test_scripts/` |
-| Config | `backend/app/config.py` |
+| Config | `backend/app/config/__init__.py` |

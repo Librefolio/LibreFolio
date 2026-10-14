@@ -147,7 +147,7 @@ lengths gets `VARCHAR(32)`.
 
 ## 📂 Data Directory on Disk {: #data-directory }
 
-`get_data_dir()` (`backend/app/config.py`) picks the root: in test mode `LIBREFOLIO_TEST_DATA_DIR`
+`get_data_dir()` (`backend/app/config/__init__.py`) picks the root: in test mode `LIBREFOLIO_TEST_DATA_DIR`
 (default `backend/data/test`), otherwise `LIBREFOLIO_DATA_DIR` (default `backend/data/prod`); a
 relative path resolves from the project root. At every startup `ensure_data_dirs()` creates
 `sqlite/`, `custom-uploads/`, `broker_reports/{uploaded,parsed,failed}/` and `logs/` and, outside
