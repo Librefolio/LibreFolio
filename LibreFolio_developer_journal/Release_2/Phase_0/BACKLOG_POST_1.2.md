@@ -35,6 +35,10 @@
 > sono cancellati, tutti già contenuti in `dev_release2`. Il CHANGELOG ha un capitolo `[Unreleased]` con la sola
 > sezione «🧹 Repository cleanup»: le voci della 1.3.0 vanno lì. Due decisioni aperte del developer: **C-92** qui
 > sotto e il grafo della devWiki («Devwiki e grafo», sezione C).
+>
+> **La 1.3.0 è partita il 14/10** (coordinatore della 1.3): piano e stato vivo in
+> [`Release_2/Phase_1/`](../Phase_1/README.md). Ogni sessione della 1.3 ha la sua sezione in fondo a questo file
+> (H, A, X, W, J, Z, B, E, Y); le voci di queste sezioni chiuse dalla 1.3 le marca ✅ il coordinatore a ogni treno.
 
 1. Questo file, per sapere cosa resta e dove sono i dettagli.
 2. Le regole del progetto: [`.github/copilot-instructions.md`](../../../.github/copilot-instructions.md). La
@@ -77,6 +81,7 @@
 | [README della 09](09_feedbackJobs/README.md) | Backlog strutturale P4 e feedback, «Cosa resta aperto» in cima (09/10) | 7 voci: 6 nella sezione 09, SP14 nella D |
 | [`TODO_FUTURI.md`](../../../TODO_FUTURI.md) | Il futuro deliberato, non backlog | 53 temi |
 | [Indice di luglio](38_postReleaseBacklog/TODO_ProssimeAttivita.md) | `TODO_ProssimeAttivita.md`, già nella radice: l'indice di priorità del 18/07, superato da questo file e dalla 09 | archiviato il 14/10 |
+| [Fase 01, la 1.3.0](../Phase_1/README.md) e il suo [piano generale](../Phase_1/plan-phase01Release13.prompt.md) | Le funzioni per il cloud a ondate, il riordino del piano 43, le sessioni H, A, X, W, J, Z, B, E, Y | aperta il 14/10: sezioni H…Y in fondo |
 
 ---
 
@@ -838,6 +843,9 @@ sezioni «5.9d» e «After 1.2». Righe M-4…M-7 mandate da M l'11/10, trascrit
   sonde della classe C, che oggi falliscono in modo visibile ma sotto carico possono diventare instabili; e lo stesso
   difetto fuori dalla galleria, in `transactions/tx-picker-pagination.spec.ts:161` (`isEnabled({timeout})`). Dettagli:
   [journal del giro 12](27_releaseImages/plan-phase00TranslationRound12.prompt.md), sezioni «10.0» e «10.1».
+  - Stato (coordinatore, 14/10): la parte della galleria passa al workstream G (56), per decisione del developer (D4
+    di G); se ne segue lo stato nella sezione «G · Gallery deterministica». Qui resta solo
+    `transactions/tx-picker-pagination.spec.ts:161`.
 - ✅ **M-16 · Il pulsante di avanzamento del wizard di import prima che arrivino i broker** — chiusa nella 1.2 da I,
   treno 48 (`3cd25af4f`): Avanti disabilitato finché la lista dei broker non arriva. Origine: test-author di M,
   12/10, fuori dal perimetro di M. Al passo 1 «Avanti: Seleziona File» resta abilitato mentre la lista dei broker si
@@ -1859,3 +1867,48 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Il messaggio d'errore non descrive ciò che succede.
 
   Dettagli: README della 56.
+
+---
+
+## Sessioni della 1.3.0 (fase 01)
+
+> Aperte il 14/10 dal coordinatore della 1.3. Piano: [fase 01](../Phase_1/README.md). Ogni sessione scrive solo la
+> propria sezione, qui sotto, nello stesso checkpoint in cui la voce nasce; le voci di altre sezioni chiuse da una
+> sessione della 1.3 le marca ✅ il coordinatore.
+
+## H · Piattaforma (fase 01)
+
+Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
+
+## A · Account e accessi (fase 01)
+
+Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
+
+## X · Plugin, asset e ricerca (fase 01)
+
+Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md).
+
+## W · Import e transazioni (fase 01)
+
+Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md).
+
+## J · Numeri e analisi (fase 01)
+
+Piano: [`05_numbersAnalysis`](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md).
+
+## Z · Sospensione e risveglio (fase 01)
+
+Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md).
+
+## B · Backup e Docker (fase 01)
+
+Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md). Sessione non ancora avviata.
+
+## E · Email (fase 01)
+
+Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione non ancora avviata.
+
+## Y · Cruscotto e grafici (fase 01)
+
+Piano: [`09_dashboardCharts`](../Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md). Sessione non ancora
+avviata.
