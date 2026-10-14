@@ -1883,3 +1883,44 @@ in the privacy normalization; I recomputed them. Gallery only.
 > cure, and their ratio: with that ratio the snapshot's real wealth comes back. The coordinator (14/10) asked for no
 > fixture number in the versioned files. This entry, 33.2 (from batch 42) and M-30 now say «stops short of 100 %» and
 > «the correct shares»; the numbers stay in the report, outside the repo.
+
+### 37. ✅ Batch 46: the [1.2.0] chapter for the release — on `a28beed92`, 2026-10-14
+
+Batch 45 is in the target (train 100). `a28beed92` dates the chapter 2026-10-14, release day. Its «Preparing» line gives
+way to the introduction the developer approved: a sentence and 11 points. Last batch before the tag.
+
+**37.1 ✅ The chapter** (`release-pipeline/scripts/b46_intro.py`)
+> **Note implementazione**:
+> - **The date:** `## [1.2.0] - 2026-10-14` in it, fr and es.
+> - **Italian:** the developer's text, section A.1 of the coordinator's release file. The script reads it as it is;
+>   the chapter's lines are byte-identical to it (same sha1). Not retranslated.
+> - **French and Spanish:** from the English, with the chapter's words:
+>   - Allocateur / Asignador PAC; onglet Risque / pestaña Riesgo; quitte la bêta / sale de beta, as the heading of
+>     the risk section;
+>   - cartes / tarjetas KPI; vue Période / vista Periodo, the Positions switch; mode confidentialité / modo
+>     privacidad;
+>   - graphique Croissance / gráfico Crecimiento; Rendement sur coût / Rendimiento sobre coste; indices / índices de
+>     référence / referencia;
+>   - the pie is the chapter's donut: diagramme en anneau / donut;
+>   - relevés / extractos DEGIRO; mauvais courtier / bróker equivocado; journal des modifications / registro de
+>     cambios; visite rapide / recorrido rápido;
+>   - cross-site scripting as in the security line; points de terminaison / endpoints.
+>   - *vous* and *tú*, as the chapter. The #32 link as in the English.
+> - The four files stay line-aligned: [1.1.0] at line 335 in all four.
+>
+> **Gates** (`release-pipeline/scripts/b46_gates.sh`, 10:35–10:39, load 5–22):
+> - **Stamp:** `1.2.0/intro`, 1 piece × 3. It is the piece's first stamp: the pipeline had translated it on 12/10. So
+>   `stamped_at` and `stamped_by` appear, `md5` changes and `langs_done` is re-sorted; nothing else in the cache.
+> - **Translations:** dry-run empty; `translate-validate --hide-localized` 630 files 0/0. The CHANGELOG alone: 3 files
+>   OK, no INFO; before, each language had `changelog-chapter`, `link-count`, `list-bullet-count` and
+>   `changelog-stale`. `translate-diff` 642 of 642 clean.
+> - **Docs:** strict build 0; `check-links` 95.
+> - **Review scripts:** only the four known quotes and the three intended examples, now at `:230`, `:278` and `:279`
+>   (12 lines lower). No difference in the introduction. The structure check finds the chapter by its headings
+>   (`b46_struct_check.py`), no longer by a fixed range.
+> - **Tests:** the changelog's Vitest 189 passed; `front-utility changelog-locale` (1 worker, lane 6158) 2 passed, on
+>   a debug bundle with `LF_APP_VERSION=v1.2.0`.
+>   - The bundle holds the new introduction in it, fr and es, and no «Preparing» line.
+>   - `v1.2.0` is now only in `APP_VERSION`. The other 8 files of the earlier counts were the «Preparing» lines, in four
+>     languages, chunk and sourcemap.
+> - `git diff --check` clean; ports free.
