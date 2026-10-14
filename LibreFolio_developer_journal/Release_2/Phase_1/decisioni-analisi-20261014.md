@@ -488,10 +488,10 @@ passa dalla suite completa con gli stessi conteggi di prima.
   - **Le date**: la 1.3 non ha una data fissa, quindi nessuno scontro. Però la conversione dei colori diventa un
     secondo percorso critico, parallelo alle ondate 1 e 2, e potrebbe diventare il più lungo. La seguo a ogni treno e
     ti avviso se succede.
-  - **Il riordino del codice resta fuori dal percorso critico**: ho proposto al coordinatore colori la regola «chi parte
-    prima». Prendiamo un file che la 1.3 deve dividere (per esempio la modale degli asset o il wizard d'import). Se la
-    divisione non è ancora iniziata quando T arriva a convertirlo, T converte il file di oggi e la divisione si fa
-    dopo; se è già iniziata, T lo lascia per ultimo. Mai due sessioni sullo stesso file insieme.
+  - **Il riordino del codice resta fuori dal percorso critico**: con il coordinatore colori ho concordato la regola
+    «chi parte prima». Prendiamo un file che la 1.3 deve dividere (per esempio la modale degli asset o il wizard
+    d'import). Se la divisione non è ancora iniziata quando T arriva a convertirlo, T converte il file di oggi e la
+    divisione si fa dopo; se è già iniziata, T lo lascia per ultimo. Mai due sessioni sullo stesso file insieme.
   - **Alternativa, per una release più corta**: limitare il cancello a primitivi, aree libere, stati, cambi, asset e
     transazioni (ondate W1–W4). Tabelle, dashboard, rischio e broker resterebbero ai colori vecchi dentro la cornice
     nuova, cioè proprio l'effetto che la tua decisione vuole evitare. Per questo consiglio la lettura per intero.

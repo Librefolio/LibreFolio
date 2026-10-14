@@ -90,14 +90,16 @@ taglio, in due commit; niente shim né barili nuovi; URL, `operationId`, chiavi 
     (FE4), asset con il taglio di `AssetModal` e della pagina dell'asset (FE5),
     transazioni con il wizard di import diviso per passo (FE8), `ui/feedback`,
     `ui/display`, ritocchi in `features/tools`;
-  - dopo il lotto B (grafici): segnali e rischio (FE2), dashboard con `GrowthChart`
-    tagliato (FE6), broker e lotti (FE7);
+  - dopo il lotto B (grafici): segnali e rischio (FE2), dashboard (FE6; il taglio di
+    `GrowthChart` dopo il lotto D, che lo ritocca), broker e lotti (FE7);
   - dopo il lotto C (tabelle, media, file, dialoghi): file (FE3), `DataTable`;
   - dopo il lotto D: la pagina dei file, `ImportBrokerMismatchModal`,
     `BrokerImportFilesModal`, `CompactCashCell`;
   - per ultimi: utility e store generici (FE9, FE10), suffissi (FE11);
-  - i tagli di file (FE5, FE8a, FE6, `DataTable`) hanno la precedenza nel loro lotto: la conversione dei colori di
-    quelle aree, necessaria al rilascio, li aspetta se sono già partiti (§7).
+  - i tagli di file su cui T aspetta (FE5, FE8a, FE6, `DataTable`) hanno la precedenza nel loro lotto e si annunciano
+    al coordinatore colori: la conversione dei colori di quelle aree, necessaria al rilascio, li aspetta se sono già
+    annunciati (§7). `AssetModal` e le tre modali delle transazioni sono già fuori dai lotti di R: il loro taglio può
+    partire prima del lotto A.
 - **Test speculari al codice (TS1)**: si decide a riordino del backend finito (costo alto).
 
 ### Ondata 1 — Fondamenta per il cloud (bloccano il pannello di controllo)
@@ -213,10 +215,11 @@ Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9.
    tocca tutte le famiglie; asset senza shim (PL6); `fx.py` → `services/fx/` (PL4);
    `services/assets/` raggruppato; `price_store` in tre moduli; router di asset e cambi
    per risorsa e router dei segnali (PL7, dopo PL1 di J); frontend cambi (FE4) e asset
-   con i tagli di `AssetModal` e della pagina dell'asset (FE5): entrambi **dopo il lotto
-   A dei colori** e dopo la pausa degli aggiornamenti di Z su quelle pagine. Appena entra il lotto A, il taglio FE5 ha
-   la precedenza: la conversione dei colori di asset e cambi (W4 di T, necessaria al rilascio) viene dopo; FE4,
-   spostamento puro, si fonde con la conversione in qualunque ordine (§7).
+   con i tagli di `AssetModal` e della pagina dell'asset (FE5). Gli spostamenti di cartella vengono **dopo il lotto
+   A dei colori** e dopo la pausa degli aggiornamenti di Z su quelle pagine. Il taglio FE5 ha la precedenza e si
+   annuncia (§7): `AssetModal` è già fuori dai lotti di R, quindi il suo taglio può partire prima del lotto A (dopo la
+   pausa di Z); la pagina dell'asset dopo la riga di G. La conversione dei colori di asset e cambi (W4 di T,
+   necessaria al rilascio) viene dopo; FE4, spostamento puro, si fonde con la conversione in qualunque ordine.
 2. Elenchi dei fornitori permessi (F05, parte X): asset e cambi, scraper spenti di
    default nel profilo gestito.
 3. **Impostazioni dei plugin** (idea «⚙️» di `TODO_FUTURI`, decisione del developer):
@@ -251,11 +254,12 @@ Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9.
 1. Riordino: `brim_provider.py` e i suoi file → `services/brim/` (PL5), con icone e
    report di esempio dentro le cartelle dei plugin (U-B3, U-B4); transazioni (servizio,
    stadi del batch, contesto) → `services/transactions/`; broker → `services/brokers/`;
-   router dei broker per risorsa; schemi delle transazioni; frontend transazioni (FE8),
-   **dopo il lotto A dei colori**: wizard di import diviso per passo, modali Bulk e Form
-   divise per sezione (FE8a, con la precedenza appena entra il lotto A: la conversione dei colori delle transazioni,
-   W4 di T, necessaria al rilascio, viene dopo, §7); i 4 file del lotto D dei colori solo dopo quel lotto (FE8b, non
-   serve alla W4: i colori delle due modali passano dal B5 di T).
+   router dei broker per risorsa; schemi delle transazioni; frontend transazioni (FE8a): wizard di import diviso per
+   passo, modali Bulk e Form divise per sezione. Lo spostamento della cartella viene **dopo il lotto A dei colori**
+   (`transactions/import/` ne fa parte); le tre modali da tagliare sono già fuori dai lotti di R, quindi i tagli
+   possono partire prima, senza toccare i file del lotto A. I tagli hanno la precedenza e si annunciano (§7): la
+   conversione dei colori delle transazioni (W4 di T, necessaria al rilascio) viene dopo. I 4 file del lotto D dei
+   colori solo dopo quel lotto (FE8b, non serve alla W4: i colori delle due modali passano dal B5 di T).
 2. Integrità e sicurezza: cancellazione di eventi per id fuori dall'asset (I-12), errore
    500 su un tipo di evento non valido (I-09), «+ Nuovo evento» che modifica un evento
    esistente (V-22), bulk editor e broker in sola lettura (V-23), file letti sull'event
@@ -316,7 +320,7 @@ Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9.
 ### Y · Cruscotto e grafici
 
 Parte quando il programma colori integra il suo lotto B: segnali e rischio (FE2),
-dashboard con `GrowthChart` tagliato (FE6), broker e lotti (FE7); frontend di sola
+dashboard (FE6; il taglio di `GrowthChart` dopo il lotto D, che lo ritocca), broker e lotti (FE7); frontend di sola
 presentazione (U8) con i campi del backend di J; indicatore di attesa del server (C-85);
 bandiere nei grafici (K-13); tooltip sanificati (K-15, C-34, C-15); voci dei grafici
 (I-01, I-03, 47-1, 54-1, B10, 48-1, O-16). Dopo il lotto C dei colori: file (FE3),
@@ -325,8 +329,9 @@ ridimensionamento delle colonne (C-62). Per ultimi FE9, FE10, FE11.
 
 **Il riordino di queste cartelle (grafici, dashboard, rischio, broker, file) non blocca il rilascio; la loro
 conversione dei colori sì** (W5 e W6 di T, §1):
-- i tagli di `GrowthChart` (FE6) e di `DataTable` sono i primi lotti di Y, appena entrano rispettivamente i lotti B e
-  C dei colori, così arrivano prima della conversione; se tardano, vale la regola «chi parte prima» (§7);
+- il taglio di `DataTable` è il primo lotto di Y dopo il lotto C dei colori, quello di `GrowthChart` (FE6) il primo
+  dopo il lotto D; entrambi si annunciano (§7), così arrivano prima della conversione; se tardano, vale la regola
+  «chi parte prima» (§7);
 - gli spostamenti puri (FE2, FE3, FE7) si fondono con la conversione in qualunque ordine;
 - se al tag il riordino di Y non è finito, il resto passa dopo la 1.3.
 
@@ -386,6 +391,7 @@ dall'audit del 14/10: ogni sessione le riverifica nell'analisi.
 | Navigazione MkDocs, `CHANGELOG.md` (`[Unreleased]`), piano generale in `Phase_1` | coordinatore (i figli propongono il testo nel loro handoff) |
 | `BACKLOG_POST_1.2.md` | ogni sessione 1.3 scrive solo la propria sezione; le chiusure (✅ con data e commit) delle voci di altre sezioni e i rimandi nei piani d'origine di `Phase_0` li scrive il coordinatore a ogni treno; le sezioni L/R/G sono del coordinatore colori |
 | devWiki | `project-historian` su richiesta; ogni lotto di riordino aggiorna i percorsi nella doc per sviluppatori, nelle istruzioni `.github` e nelle tabelle delle fonti (`check_source_paths.py` non peggiora) |
+| Baseline del cricchetto dei colori (dopo T-1) | T, del programma colori; le sessioni 1.3 la toccano solo con lo script di T, nel commit di un taglio (§6, «Taglio dichiarato») |
 
 ### Regole di ogni lotto di riordino (dal piano 43)
 
@@ -394,6 +400,17 @@ Rinomina e taglio in due commit; niente shim; grep dei vecchi percorsi a zero in
 poi backend intera con gli stessi conteggi della base; `ruff`, `black`, codice morto senza
 reperti nuovi; `api sync` senza differenze; `mkdocs build` stretto e `check-links`; le
 rinomine con somiglianza ≥ 95 % in `git diff -M`; i `patch` dei test sui nuovi percorsi.
+
+**Taglio dichiarato** (dal programma colori, 14/10). Dopo l'ingresso di T-1, il cricchetto dei colori vuole i file
+nuovi senza classi di palette e tollera solo le rinomine. Un taglio crea file nuovi con le classi del file di
+partenza, quindi:
+- nello stesso commit del taglio, la sessione aggiorna la baseline del cricchetto con lo script di T, che sposta i
+  conteggi dal file vecchio ai nuovi;
+- il totale non deve salire;
+- il coordinatore ne controlla il diff prima del commit.
+
+Sintassi e risoluzione dei conflitti sulla baseline arrivano dal coordinatore colori con T-1. Le rinomine pure non ne
+hanno bisogno.
 
 ### Nuove schermate (regole del programma colori)
 
@@ -448,14 +465,27 @@ fermati all'handoff, porta verificata libera.
 - Se un conflitto nasce comunque (il developer: «aiutalo a risolvere o rimappare»), lo
   risolve la sessione figlia che possiede il file, nel suo worktree, all'aggiornamento di
   base.
-- **Regola «chi parte prima»** (proposta del coordinatore 1.3 il 14/10 alle 22:15, in attesa di conferma del
-  coordinatore colori). Serve perché nessun riordino della 1.3 blocchi il tag.
-  - Vale per ogni taglio di file della 1.3 su un'area che T converte: FE5 di X, FE8a di W, FE6 e `DataTable` di Y.
+- **Regola «chi parte prima»** (concordata fra i due coordinatori il 14/10 alle 22:05). Serve perché nessun riordino
+  della 1.3 blocchi il tag.
+  - Vale per i tagli di file della 1.3 su un'area che T converte (tabella sotto).
   - Se il taglio non è iniziato quando T arriva a quel file, T converte il file di oggi; il taglio si fa dopo, sul file
     convertito, partendo da una base aggiornata.
   - Se il taglio è iniziato, T lascia quel file per ultimo nella sua ondata.
-  - Mai i due sullo stesso file nello stesso momento. Gli spostamenti puri (`git mv` più import) si fondono con le
-    modifiche di T in qualunque ordine.
+  - Mai i due sullo stesso file nello stesso momento.
+  - **«Iniziato» vuol dire annunciato.** Chi inizia a lavorare su uno di questi file lo annuncia all'altro
+    coordinatore, e lo annuncia di nuovo quando il file è entrato in `dev_release2`. Prima di iniziare si controlla che
+    l'altra parte non abbia un annuncio aperto. Nella 1.3 la sessione chiede il via al coordinatore, che controlla e
+    annuncia.
+  - Gli spostamenti puri (`git mv` più import) si fondono con le modifiche di T in qualunque ordine e non si
+    annunciano.
+  - Ogni taglio fatto dopo T-1 è un taglio dichiarato (§6).
+
+  | Taglio | Sessione | File | Fuori dai lotti di R | Annuncio aperto |
+  |---|---|---|---|---|
+  | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | nessuno |
+  | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | nessuno |
+  | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | nessuno |
+  | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | nessuno |
 
 ## 8. Traguardi, in ordine di dipendenza
 
@@ -467,7 +497,7 @@ fermati all'handoff, porta verificata libera.
 | M3 | Primo treno del riordino: registri per famiglia (X), punti d'aggancio e configurazione (H), servizi account (A) | B, la sospensione nel backend (Z), le funzioni di A |
 | M4 | Riordino del backend completato (famiglie, servizi per dominio, file grandi) e cartelle frontend fuori dai colori | impostazioni dei plugin, ricerca, decisione sui test speculari |
 | M5 | Ondata 1 integrata | proposta al developer: passaggio su `dev`, così l'immagine `nightly` serve al pannello di controllo |
-| M5b | Dopo il lotto A dei colori: tagli di asset (X, FE5) e transazioni (W, FE8a) integrati; FE4 in qualunque ordine | l'ondata W4 della conversione dei colori (T), regola «chi parte prima» se tardano |
+| M5b | Tagli di asset (X, FE5) e transazioni (W, FE8a) integrati, annunciati e dichiarati; spostamenti di cartella dopo il lotto A dei colori; FE4 in qualunque ordine | l'ondata W4 della conversione dei colori (T), regola «chi parte prima» se tardano |
 | M5c | Lotti B, C e D della fattorizzazione dei colori (R) integrati; tagli di `GrowthChart` (FE6) e `DataTable` di Y, se partiti | le ondate W5 e W6 e i passi B4 e B5 della conversione (T) |
 | M6 | Ondata 2 integrata e conversione dei neutri e degli stati completa (W1–W6, B2, B4 per neutri e guadagno/perdita, B5) | cancelli di rilascio |
 | M7 | Cancelli verdi → 1.3.0 (tag e push del developer) | — |
@@ -612,3 +642,12 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > **Fuori pista**: la conversione dei colori diventa un secondo percorso critico, parallelo alle ondate 1 e 2 (stima
 > di T: ~11.500 classi in 276 file, 30–40 lotti di sotto-agenti). Per non legarle anche il riordino, il coordinatore
 > 1.3 ha proposto la regola «chi parte prima» (§7). Segnalato al developer in `decisioni-analisi-20261014.md` §3.
+>
+> Alle 22:05 il coordinatore colori ha confermato la regola con due aggiunte:
+> - annuncio fra coordinatori sui quattro file dei tagli (tabella del §7);
+> - taglio dichiarato per il cricchetto di T (§6).
+>
+> Verificando i lotti di R per la tabella:
+> - `GrowthChart` è anche nel lotto D, quindi il taglio FE6 viene dopo quel lotto, non dopo il B;
+> - `AssetModal` e le tre modali delle transazioni sono già fuori dai lotti di R, quindi X e W possono tagliarle
+>   prima del lotto A.
