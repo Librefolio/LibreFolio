@@ -145,7 +145,7 @@ Frontend tooltip: `💰 {value} (flag ISO3) 💱` / `orig. {originalValue} (orig
 
 | Role | Path |
 |------|------|
-| Transaction service | `backend/app/services/transaction_service.py` |
+| Transaction service | `backend/app/services/transactions/transaction_service.py` |
 | Transaction API | `backend/app/api/v1/transactions.py` |
 | Asset source (prices, events) | `backend/app/services/assets/` |
 | Assets API | `backend/app/api/v1/assets.py` |

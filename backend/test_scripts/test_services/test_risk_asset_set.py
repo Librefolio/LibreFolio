@@ -94,8 +94,8 @@ from backend.app.schemas.risk import (
     RiskScopeKind,
 )
 from backend.app.schemas.wac import WACMissingPairInfo
-from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, normalize_fx_pair_slug
+from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.risk.base import RiskAnalytic, RiskExecutionContext, RiskUnavailableError
 from backend.app.services.risk.metrics import historical_var_cvar

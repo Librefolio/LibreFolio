@@ -108,5 +108,5 @@ unrelated, still-open bug discovered while verifying this fix (blocks
 | System info endpoint | `backend/app/api/v1/system.py` |
 | VERSION file generation | `dev.py` (`_docker_ensure_assets_built()`) |
 | Docker image build | `Dockerfile` |
-| Frontend display | `frontend/src/lib/components/settings/tabs/AboutTab.svelte` |
+| Frontend display | `frontend/src/lib/features/settings/tabs/AboutTab.svelte` |
 | Regression tests | `backend/test_scripts/test_api/test_system_api.py` |

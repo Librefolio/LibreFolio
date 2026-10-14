@@ -695,8 +695,9 @@ gives them the same `link_uuid`; the batch turns the shared id into reciprocal
 `broker_degiro/plugin.py` is the first plugin to emit pairs (`_pair_fx_legs`, `_fx_pair`): Swissquote
 skips its conversion legs with a warning, and the Generic CSV refuses the paired types.
 
-**What the batch accepts** — `resolve_create_links` in `transaction_batch_stages.py`, with
-`_validate_linked_pair` and `_validate_pair_description_tags` in `transaction_service.py`:
+**What the batch accepts** — `resolve_create_links` in `batch_creates.py`, with
+`_validate_linked_pair` and `_validate_pair_description_tags` in `validation.py` (all in
+`backend/app/services/transactions/`):
 
 - exactly **two** creates per `link_uuid`: a leg alone, or a third one, is `linkUuidPairCount`;
 - the **same type** on both legs (`pairTypeMismatch`);

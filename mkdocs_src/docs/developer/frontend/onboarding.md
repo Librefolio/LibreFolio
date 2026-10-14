@@ -55,7 +55,7 @@ other fourteen are guided flows, declared in `ONBOARDING_GUIDE_CATALOG`
 *Kind* is descriptive. The catalogue itself knows three fields: `trigger` (`automatic` for the
 tour, `contextual` for every other guide), `completionMode: 'steps'` for the two step-managed
 flows, and `navigationMode: 'checkpoint'` for the bulk workspace. Every flow is at **version 1**
-in `ONBOARDING_FLOW_VERSIONS` (`backend/app/services/onboarding_service.py`).
+in `ONBOARDING_FLOW_VERSIONS` (`backend/app/services/accounts/onboarding_service.py`).
 
 ## 🏗️ Architecture {: #architecture }
 
@@ -136,7 +136,7 @@ layout shows `onboarding-redirecting`, never the requested page.
 `routes/(app)/welcome/+page.svelte` renders the form: language, base currency and avatar,
 pre-filled from the user's settings. A new account's settings row is created by its first
 `GET /api/v1/settings/user` (`get_or_create_user_settings` in
-`backend/app/services/settings_service.py`) from the instance defaults `default_language`,
+`backend/app/services/accounts/settings_service.py`) from the instance defaults `default_language`,
 `default_currency` and `default_theme`, so Welcome starts from the administrator's choices, as its
 hint says (`onboarding.welcome.defaultsHint`). Changing the language previews it immediately;
 skipping restores the saved one.
@@ -367,7 +367,7 @@ shown with `updateAvailable.show(release, {requested: true})` — appears at onc
 a modal.
 
 The backend decides the donation prompt at sign-in: `record_login_and_maybe_show_popup()`
-(`backend/app/services/donation_popup_service.py`) counts the login and sets `show_donation_popup`
+(`backend/app/services/accounts/donation_popup_service.py`) counts the login and sets `show_donation_popup`
 in the login response (`backend/app/api/v1/auth.py:112,146`). Counting from the last prompt, or
 from the account's creation if there was none, it fires after `MAX_DAYS_WITHOUT_PROMPT` (60) days,
 or after `MIN_LOGINS_BETWEEN_PROMPTS` (10) sign-ins once `MIN_DAYS_BETWEEN_PROMPTS` (7) days have
@@ -377,7 +377,7 @@ and **Maybe later** dismiss it, and a share button opens the share dialog above 
 
 ## 🗄️ Backend {: #backend }
 
-`backend/app/services/onboarding_service.py` holds the registry and the transitions:
+`backend/app/services/accounts/onboarding_service.py` holds the registry and the transitions:
 
 | Name | Role |
 |---|---|

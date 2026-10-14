@@ -68,7 +68,7 @@ const REPORTS = {
 
 /**
  * The server's step-managed onboarding flows and their steps (ONBOARDING_FLOW_STEPS,
- * backend/app/services/onboarding_service.py): their progress carries one row per step.
+ * backend/app/services/accounts/onboarding_service.py): their progress carries one row per step.
  * The app reads a step it finds no row for as not due, so a step added there and not
  * here could never start a guide over this page.
  */

@@ -13,6 +13,8 @@ backend/
 │   ├── db/models.py           # SQLModel ORM models
 │   ├── schemas/               # Pydantic schemas (I/O validation)
 │   ├── services/              # Business logic
+│   │   ├── platform/                 # scheduler, container registry, date sentinels, data-quality thresholds, backup export
+│   │   ├── files/                    # uploaded static files and their previews
 │   │   ├── asset_source_providers/   # yfinance, JustETF, CSS Scraper, Scheduled Investment
 │   │   ├── fx_providers/             # ECB, FED, BOE, SNB, MANUAL
 │   │   └── brim_providers/           # 11 broker import plugins
@@ -95,6 +97,8 @@ at the root. The truncation to the database precision reads the models, so it li
 | DB Models | `backend/app/db/models.py` |
 | API Schemas | `backend/app/schemas/*.py` |
 | Business Logic | `backend/app/services/*.py` |
+| Platform services (scheduler, data-quality thresholds, backup export) | `backend/app/services/platform/` |
+| Uploads and file previews | `backend/app/services/files/` |
 | API Endpoints | `backend/app/api/v1/*.py` |
 | Config & Data Paths | `backend/app/config.py` |
 | FX Providers | `backend/app/services/fx_providers/` |

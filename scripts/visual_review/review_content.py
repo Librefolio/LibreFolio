@@ -35,7 +35,7 @@ MOBILE_ONLY = {"menu-open"}
 # Per-area hints from the code analysis (Markdown inline: `code`, **bold**, *italic*).
 LOOK = {
     "auth": [
-        "Riquadro bianco del logo identico anche in scuro (`LoginCard.svelte:44`, `RegisterCard.svelte:152`, `ForgotPasswordCard.svelte:16`) — P10.",
+        "Riquadro bianco del logo identico anche in scuro, ora sul ruolo `bg-lf-logo` (`LoginCard.svelte:45`, `RegisterCard.svelte:153`, `ForgotPasswordCard.svelte:16`) — P10.",
         "Indicatore di robustezza password solo con colori chiari, senza varianti scure (`PasswordStrength.svelte`).",
         "Campi in scuro: bordo fisso `#546175`, il verde di focus non compare (P1); contrasto del bordo 2.3:1 (P9).",
         "Bottone primario: `#1a4031` in chiaro; in scuro `#166534` a riposo e `#00d681` al passaggio del mouse (P1, P4).",

@@ -12,7 +12,7 @@ from backend.app.schemas.risk import (
     RiskVarCvarBin,
     RiskVarCvarOutput,
 )
-from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
+from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import require_annualization_factor, require_primary_returns
 from backend.app.services.risk.base import (
