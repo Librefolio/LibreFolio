@@ -3444,3 +3444,11 @@ release pipeline's run — which the next ingest fills. Also [[problems/gallery-
 decision), [[sources/r-full-run-coverage-2026-10-12]] (a pointer to the final run), and a C-82 note on
 [[problems/jscoverage-teardown-spends-the-test-budget]] and [[problems/login-returns-before-the-app-has-started]].
 Graph: not updated (P-6).
+
+## [2026-10-14] file | The promotional video project leaves the repository
+`mkdocs_src/videoClipPrject/` (64 tracked files, ~22 MB) is removed, with `./dev.py mkdocs video` and its skill section:
+the project lives in the business repository since 2026-10-14 (`media/video/`). The history is not rewritten — the
+folder stays in the tags v0.9.0 to v1.2.0. Updated [[entities/video-promo-remotion]]: moved out, and its source files
+are now what the video's asset sync still reads here (the gallery screenshots and `docs/static/`, through
+`LIBREFOLIO_MKDOCS_SRC`). A note on [[sources/source-code-v0.9.0-batch]]. Graph: not updated (P-6) — graphify 0.9.54 no
+longer indexes the corpus's out-of-root symlinks.

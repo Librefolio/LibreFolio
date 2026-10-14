@@ -1,5 +1,8 @@
 # Audit Documentazione: Area "Video Marketing"
 
+> **Nota (14/10/2026)**: il progetto video è uscito dal repo e oggi vive nel repo business del progetto, in
+> `media/video/`. I percorsi qui sotto descrivono giugno 2026.
+
 ## 1. Identificazione della Documentazione Esistente
 Esplorando le directory del progetto `LibreFolio`, è emerso che non vi è una documentazione ufficiale pubblicata per l'area "Video Marketing" (Remotion, promo clip, AI assets) all'interno della cartella sorgente del sito MkDocs (`mkdocs_src/docs/`). L'unica traccia ufficiale è un commento HTML nella pagina principale (`docs/index.en.md`) che indica una sezione video temporaneamente rimossa (`<!-- Video Section: Temporaneamente rimosso (Work in Progress) -->`).
 
