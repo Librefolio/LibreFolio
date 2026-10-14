@@ -21,6 +21,35 @@
   - correzioni di contrasto;
   - palette dei grafici;
   - token per ruolo (fase B).
+- **14/10 sera — il programma si sposta in `Phase_1/10_colorSystem`.** Contiene anche il materiale della designer, i
+  materiali del coordinatore e le analisi dei workstream. Richiesta del developer.
+- **14/10 sera — Sito MkDocs solo alla fine**, a colori definiti: immagini della documentazione, palette del tema MkDocs,
+  pagine sullo stile. Decisione del developer, dettagli nel [README](README.md), «Chiusura del programma».
+
+## 📥 Giro 1 della designer (14/10/2026 sera) → fase B
+
+- **Materiale:**
+  - [`designer-feedback/2026-10-14-round1-auth/`](designer-feedback/2026-10-14-round1-auth/README.md): note originali,
+    due rendering, trascrizione;
+  - [analisi e piano](designer-feedback/2026-10-14-round1-auth/analisi.md).
+- **Richiesta:**
+  - palette chiara «caldo naturale» e scura «Notte nel Bosco», 16 ruoli, per tutto il progetto;
+  - icone nei campi di accesso;
+  - via il sottotitolo «Crea un account»;
+  - box dei requisiti della password leggibile, senza affidarsi al solo colore.
+- **Piano proposto: workstream T (token e tema), a fasi.**
+  1. **B1, fondamenta:** solo `app.css` e il nuovo `lib/theme/tokens.css`. Ruoli `--lf-*`, scale `gray` e `slate`
+     ridefinite sui suoi valori, marchio, strato scuro sui ruoli.
+  2. **B2:** stati.
+  3. **B3:** schermate di accesso.
+  4. **B4:** grafici, dopo il lotto B di R.
+  5. **B5:** stili propri, dopo il lotto C di R.
+  6. **B6:** pulizia di P1 con la migrazione delle pagine.
+
+  Per la designer, il giro 2 si fa nel Designer Lab sulla build di T.
+- **Aperte:**
+  - del developer: D-T1 aprire T adesso, D-T2 la barra laterale avorio, D-T3 il bianco delle card;
+  - della designer: cinque correzioni di contrasto e i ruoli mancanti.
 
 ## 🛤️ Workstream e corsie
 
@@ -41,7 +70,8 @@ Superfici condivise e relativi proprietari:
 | Meta `theme-color` in `app.html`, `static/offline.html`, `themeStore.ts` (D3) | R |
 | `frontend/e2e/gallery.spec.ts` e fixture della gallery | G |
 | `routes/(app)/assets/[id]/+page.svelte`, solo il nome del provider (G-4) | G |
-| `app.css` | nessuno finché non arriva il report della designer |
+| `app.css` | T (workstream token e tema), quando sarà aperto. Finora nessuno: aspettava il report della designer |
+| `lib/theme/tokens.css` (nuovo) | T, unica eccezione alla proprietà di R su `lib/theme/**` |
 | Catalogo del test runner | `test-author` |
 | Questo piano, l'indice del backlog post-1.2 e la riconciliazione delle sezioni L, G, R | coordinatore |
 | Le righe di stato delle sezioni L, G, R del backlog | il workstream della sezione, nei propri checkpoint |
@@ -214,6 +244,7 @@ restano la verifica finale.
 | **B — Architettura a token** | Ruoli e utility semantiche (§2.1); `chartTheme` e `themeRevision`; P8 in variabili; rimozione di P1 a ondate. Valori iniziali = quelli di oggi | nomi dei ruoli dal primo giro con la designer | grande (migrazione di ~10.000 classi a ondate) | Rende vero il «cambio un ruolo → cambia tutto» |
 | **C — Theme Lab completo** | Modifica per ruolo, campionario, contrasto, daltonismo, varianti, export/import, comando apply | B (anche parziale: il Lab vede i ruoli già migrati) | media | Lo strumento richiesto |
 | **D — Accesso senza lo sviluppatore** (opzionale) | Istanza demo con dati di esempio e Lab attivo | C | piccola-media | Lavora in autonomia |
+| **Chiusura — Sito MkDocs** (decisione del 14/10) | A colori definiti e solo alla fine: immagini della documentazione dalla gallery, palette del tema MkDocs Material allineata al marchio, pagine developer sullo stile e sui colori | B completa e approvata dalla designer | piccola-media | La documentazione mostra l'app com'è |
 
 Il codice di A non si butta: diventa la base di C, con l'aggiunta del livello dei ruoli.
 

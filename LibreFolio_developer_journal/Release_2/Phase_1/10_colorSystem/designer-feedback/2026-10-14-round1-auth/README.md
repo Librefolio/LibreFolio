@@ -7,7 +7,7 @@
 > - [`render-accesso-chiaro.png`](render-accesso-chiaro.png) (1600×900) e [`render-accesso-scuro.png`](render-accesso-scuro.png)
 >   (1024×572): rendering di login e registrazione. Sono illustrativi; i valori validi sono quelli scritti nelle note.
 >
-> L'analisi della richiesta e il piano per applicarla vanno in `analisi.md`, in questa cartella.
+> L'analisi della richiesta e il piano per applicarla stanno in [`analisi.md`](analisi.md).
 >
 > Qui sotto c'è la trascrizione ordinata delle note. Dove sembra diversa dall'originale, vale l'originale.
 
