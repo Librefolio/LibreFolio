@@ -11,6 +11,8 @@ Usage:
     ./dev.py backup inspect ARCHIVE            Check an archive and show what it holds
     ./dev.py backup --test-db create           Use the test data directory
 
+A relative PATH or ARCHIVE starts from the project root, like every path given to dev.py.
+
 In Docker: ``docker compose exec librefolio python dev.py backup create``. Run as root, the command works as the owner of
 the data directory, so every file it writes belongs to the server.
 """
@@ -18,6 +20,7 @@ the data directory, so every file it writes belongs to the server.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import shutil
 import sys
@@ -59,16 +62,120 @@ def _drop_root_privileges(data_dir: Path) -> str | None:
     return None
 
 
+def _requested(output: str) -> Path:
+    """``--output`` as an absolute path: ``~`` is the home folder; a relative path starts from the working directory,
+    which ``dev.py`` sets to the project root."""
+    path = Path(output).expanduser()
+    return path if path.is_absolute() else Path.cwd() / path
+
+
 def _output_path(output: str | None, data_dir: Path, name: str) -> Path:
     """Where the archive goes: ``--output`` (a file, or a folder for it), or ``<data dir>/backups/<name>``."""
     from backend.app.services.platform.instance_backup.paths import backups_dir  # noqa: PLC0415 — keep dev.py's start light
 
     if not output:
         return backups_dir(data_dir) / name
-    path = Path(output).expanduser()
-    if not path.is_absolute():
-        path = Path.cwd() / path
+    path = _requested(output)
     return path / name if path.is_dir() else path
+
+
+def _free_path(folder: Path, name: str) -> Path:
+    """``folder/name``, or ``<stem>-2``, ``<stem>-3`` … when a file already holds the name: an archive never replaces one."""
+    candidate = folder / name
+    stem, suffix = Path(name).stem, Path(name).suffix
+    index = 2
+    while candidate.exists() or candidate.is_symlink():
+        candidate = folder / f"{stem}-{index}{suffix}"
+        index += 1
+    return candidate
+
+
+def _check_output(output: str) -> str | None:
+    """Refuse an ``--output`` the archive could not be written to, before any backup runs; a message, or ``None``.
+
+    An existing folder receives the archive under its own name. Any other path is the archive's file: it must not exist
+    yet, and the nearest folder of it that exists must be writable (the missing ones are created with the archive, so a
+    backup that fails leaves no empty folder). The space there is checked once the archive's size is known.
+    """
+    path = _requested(output)
+    if path.is_dir():
+        folder = path
+    else:
+        if path.exists() or path.is_symlink():
+            return f"{path} already exists: choose another name or folder"
+        folder = path.parent
+        while not folder.exists():
+            folder = folder.parent
+        if not folder.is_dir():
+            return f"{folder} is not a folder: choose another path"
+    if not os.access(folder, os.W_OK | os.X_OK):
+        return f"cannot write into {folder}: choose another folder, or run the command as a user who can"
+    return None
+
+
+def _folders_to_create(folder: Path, existing: Path) -> list[Path]:
+    """The folders from ``existing`` (excluded) down to ``folder`` (included), outermost first."""
+    missing: list[Path] = []
+    while folder != existing:
+        missing.append(folder)
+        folder = folder.parent
+    return missing[::-1]
+
+
+def _move_to(source: Path, target: Path) -> str | None:
+    """Move ``source`` to ``target``, creating its missing folders; why it did not get there, or ``None``.
+
+    When ``target`` is on another disk, its free space is checked first. On a failure nothing is left at ``target``, and
+    the folders made for it are removed again (deepest first, when still empty).
+    """
+    created: list[Path] = []
+    try:
+        existing = target.parent
+        while not existing.exists():
+            existing = existing.parent
+        size = source.stat().st_size
+        if os.stat(existing).st_dev != os.stat(source).st_dev and shutil.disk_usage(existing).free < size:
+            return f"not enough free space in {existing} for {_human(size)}"
+        for folder in _folders_to_create(target.parent, existing):
+            folder.mkdir()
+            created.append(folder)
+        shutil.move(str(source), str(target))
+        return None
+    except OSError as exc:
+        if not source.exists() and target.exists():
+            return None  # the archive got there; only the clean-up after the copy failed
+        with contextlib.suppress(OSError):
+            target.unlink(missing_ok=True)
+        for folder in reversed(created):
+            with contextlib.suppress(OSError):
+                folder.rmdir()
+        return f"cannot write {target}: {exc.strerror or exc}"
+
+
+def _place_archive(source: Path, target: Path, data_dir: Path) -> tuple[Path, str | None]:
+    """Move the finished archive to ``target``; when that fails, put it in ``<data dir>/backups/`` instead.
+
+    Returns where the archive is, and why it is not at ``target`` (``None`` when it is). The archive is never lost: a
+    move that fails half-way leaves no partial copy at ``target``, and when ``backups/`` cannot take it either, it stays
+    in its job folder.
+    """
+    from backend.app.services.platform.instance_backup.paths import backups_dir  # noqa: PLC0415
+
+    if target.exists() or target.is_symlink():
+        problem = f"{target} already exists"
+    else:
+        problem = _move_to(source, target)
+        if problem is None:
+            return target, None
+
+    fallback = _free_path(backups_dir(data_dir), source.name)
+    if fallback.parent != target.parent:
+        try:
+            os.replace(source, fallback)  # same file system: the job folder is inside backups/
+            return fallback, problem
+        except OSError:
+            pass
+    return source, problem
 
 
 def _data_dir_for(args) -> Path | None:
@@ -99,23 +206,16 @@ def _print_warnings(job) -> None:
     if "foreign_key_violations" in job.warnings:
         print("⚠️  The database has foreign-key violations: the archive keeps it as it is")
     if job.skipped:
-        print(f"⚠️  Left out ({len(job.skipped)}{'+' if len(job.skipped) >= 50 else ''}): links, special files, or files that changed during the backup:")
+        print(f"⚠️  Left out ({len(job.skipped)}{'+' if len(job.skipped) >= 50 else ''}): links, special files, files or folders that could not be read, or files removed during the backup:")
         for entry in job.skipped:
             print(f"     {entry}")
 
 
-def cmd_create(args) -> int:
-    """Write a backup archive of the instance."""
-    data_dir = _data_dir_for(args)
-    if data_dir is None:
-        return 1
-    if args.output:
-        planned = _output_path(args.output, data_dir, "librefolio-backup.zip")
-        if planned.exists() and not planned.is_dir():
-            print(f"❌ {planned} already exists: choose another name or folder")
-            return 1
-
+def _run_backup(data_dir: Path):
+    """Run the backup in this process, printing its phases: the job's end state and its folder, or ``None`` when the
+    run could not start (another backup runs, ``backups/`` is not a plain folder, it cannot be written)."""
     from backend.app.services.platform.instance_backup import jobs  # noqa: PLC0415 — keep dev.py's start light
+    from backend.app.services.platform.instance_backup.paths import BackupPathError, backups_dir  # noqa: PLC0415
 
     shown: list[str] = []
 
@@ -124,13 +224,34 @@ def cmd_create(args) -> int:
             shown.append(phase)
             print(f"   … {phase}")
 
-    print(f"💾 Backing up {data_dir}")
-    started = time.monotonic()
     try:
-        job, folder = jobs.run_backup(origin="cli", data_dir=data_dir, progress=progress)
+        return jobs.run_backup(origin="cli", data_dir=data_dir, progress=progress)
     except jobs.BackupBusyError:
         print("❌ Another backup is running (from the web interface or another command): try again when it ends")
+    except BackupPathError as exc:
+        print(f"❌ {exc.path} is not a plain folder (a link, or a file): backups are built in a folder of the data directory. Make it a folder; --output puts the archives on another disk.")
+    except OSError as exc:
+        print(f"❌ The backup could not run in {backups_dir(data_dir)}: {exc.strerror or exc}")
+    return None
+
+
+def cmd_create(args) -> int:
+    """Write a backup archive of the instance."""
+    data_dir = _data_dir_for(args)
+    if data_dir is None:
         return 1
+    if args.output:
+        problem = _check_output(args.output)
+        if problem:
+            print(f"❌ {problem}")
+            return 1
+
+    print(f"💾 Backing up {data_dir}")
+    started = time.monotonic()
+    result = _run_backup(data_dir)
+    if result is None:
+        return 1
+    job, folder = result
     if job.status != "done" or job.file_name is None:
         reason = {"backup_no_space": "not enough free space"}.get(job.error_code or "", "the cause is in the log above")
         print(f"❌ Backup failed ({job.error_code}): {reason}")
@@ -138,18 +259,23 @@ def cmd_create(args) -> int:
         return 1
 
     target = _output_path(args.output, data_dir, job.file_name)
-    if target.exists():
-        print(f"❌ {target} already exists: the archive stays in {folder}")
+    if target.name == job.file_name:
+        # A folder receives the archive under its own name: another archive of the same second keeps its own.
+        target = _free_path(target.parent, target.name)
+    placed, problem = _place_archive(folder / job.file_name, target, data_dir)
+    if placed.parent == folder:
+        print(f"❌ {problem}: the archive stays in {placed}. Move it within the hour: the next backup after that removes it.")
         return 1
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(folder / job.file_name), str(target))
     shutil.rmtree(folder, ignore_errors=True)
 
-    print(f"✅ Backup written: {target}")
+    if problem:
+        print(f"⚠️  {problem}: the archive was written to {placed} instead")
+    else:
+        print(f"✅ Backup written: {placed}")
     print(f"   {_human(job.file_size or 0)} in {time.monotonic() - started:.1f} s")
     _print_warnings(job)
     print("🔒 The archive holds every user's data: keep it private.")
-    return 0
+    return 1 if problem else 0
 
 
 def cmd_inspect(args) -> int:
@@ -180,7 +306,7 @@ def cmd_inspect(args) -> int:
             print(f"❌ {len(entries)} entr{'y' if len(entries) == 1 else 'ies'} {label}: {', '.join(entries[:5])}{' …' if len(entries) > 5 else ''}")
     if not check.ok:
         return 1
-    print("✅ Every entry matches the manifest" if check.verified else "ℹ️  Manifest read; entries not verified (--no-verify)")
+    print("✅ Every entry matches the manifest" if check.verified else "ℹ️  The entry names match the manifest; their contents were not read (--no-verify)")
     return 0
 
 
@@ -195,21 +321,23 @@ def register_subparser(parent_subparsers):
 Examples:
   ./dev.py backup create                       Write an archive into <data dir>/backups/
   ./dev.py backup create -o /mnt/nas/          Write it into another folder
-  ./dev.py backup inspect librefolio-backup-20261015-101500.zip
+  ./dev.py backup inspect /mnt/nas/librefolio-backup-20261015-101500.zip
                                                Check an archive and show what it holds
   ./dev.py backup --test-db create             Use the test data directory
+
+A relative path starts from the project root, like every path given to dev.py.
 """,
     )
     parser.add_argument("--test-db", action="store_true", help="Use the test data directory instead of production")
     commands = parser.add_subparsers(dest="backup_cmd", title="Backup commands", metavar="")
 
     create = commands.add_parser("create", help="Write a backup archive of the instance (safe while the server runs)")
-    create.add_argument("--output", "-o", metavar="PATH", help="Archive file, or an existing folder for it (default: <data dir>/backups/)")
+    create.add_argument("--output", "-o", metavar="PATH", help="Archive file, or an existing folder for it (default: <data dir>/backups/); checked before the backup starts")
     create.set_defaults(backup_func=cmd_create)
 
     inspect = commands.add_parser("inspect", help="Check an archive against its manifest and show what it holds")
     inspect.add_argument("archive", help="The backup archive (.zip)")
-    inspect.add_argument("--no-verify", action="store_true", help="Read the manifest only, without checking every entry")
+    inspect.add_argument("--no-verify", action="store_true", help="Compare the entry names with the manifest without reading the entries (faster)")
     inspect.set_defaults(backup_func=cmd_inspect)
 
     parser.set_defaults(func=_dispatch)

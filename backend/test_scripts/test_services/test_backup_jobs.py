@@ -14,7 +14,11 @@ Under test: ``backend/app/services/platform/instance_backup/jobs.py``.
     reads it as failed/``backup_interrupted`` and writes that down. With the lock held, running stays running.
 (d) A build that fails ends the job failed/``backup_failed``, a lack of space failed/``backup_no_space``. Either way
     the work files are removed and the lock released, and in every outcome the final state is on disk before the
-    lock is released, so a finished run never reads as interrupted.
+    lock is released, so a finished run never reads as interrupted. A lack of space is also a build that stops on a
+    full disk or quota after the space check: ``ENOSPC``, ``EDQUOT`` or SQLite's ``SQLITE_FULL``, as the failure or
+    as one of its causes (a ``PartialEntryError`` caused by ``ENOSPC``, the database copy finding the disk full, the
+    archive's own writes failing); a file that fails while it is being archived for any other reason (a read error)
+    is ``backup_failed``. The partial archive such a build leaves is removed: it was there when the cleanup ran.
 (e) ``remove_expired_jobs`` removes what ended more than ``JOB_RETENTION`` (1 h) ago: finished jobs, dead runs, job
     folders whose state cannot be read (by the folder's date). It keeps the rest, a running job whose lock is held
     included, never follows a link and never touches what is not a job folder. The next start removes them as well.
@@ -28,17 +32,25 @@ Under test: ``backend/app/services/platform/instance_backup/jobs.py``.
     left-out entries.
 (h) Without ``fcntl`` (not POSIX) the run lock is a lock of the process: runs are still serialised within it, and a
     running job must still read as running.
+(i) ``_out_of_space``: true for an ``OSError`` with ``errno`` ``ENOSPC`` or ``EDQUOT`` and for an ``sqlite3.Error``
+    whose ``sqlite_errorcode`` is ``SQLITE_FULL`` (SQLite's own, from a database capped by ``max_page_count``), itself
+    or through ``__cause__`` / ``__context__`` up to the eighth exception of the chain; false otherwise: no ``errno``,
+    another ``errno``, another SQLite code, SQLite's message without its code, a plain ``RuntimeError``, a ninth
+    exception of the chain. A cycle of causes or contexts ends the walk.
 
 Pure: every data directory is in ``tmp_path`` and every call is given its ``data_dir``; ``jobs.get_data_dir`` is
 replaced by a guard that fails the test, so the lane's data directory is never reached. ``LF_APP_VERSION`` is set, so
 no git process runs. No lane database, no server, no network. A background run ends before its test does: the test
 waits for the final state, then joins the run's thread, and an autouse fixture fails any test that would leave one
 running. Every wait polls a condition with a deadline; the cases that need a run in progress hold its build at a gate
-(an ``Event`` the test opens) instead of hoping it is slow.
+(an ``Event`` the test opens) instead of hoping it is slow. A failing disk is simulated in this process only: the
+``os`` of ``archive`` is replaced, for one test, by a stand-in that hands out the real files but one, which reads badly
+(``EIO`` after its first block) or is on a disk with a few hundred bytes left (``ENOSPC``).
 """
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import sqlite3
@@ -56,7 +68,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.app.services.platform.instance_backup import archive, jobs
-from backend.app.services.platform.instance_backup.archive import check_archive
+from backend.app.services.platform.instance_backup.archive import PartialEntryError, check_archive
 from backend.app.services.platform.instance_backup.jobs import (
     JOB_RETENTION,
     BackupBusyError,
@@ -291,6 +303,169 @@ def watch_releases(data_dir: Path, monkeypatch) -> list[Release]:
     return seen
 
 
+def watch_cleanup(monkeypatch) -> list[list[str]]:
+    """What a run's folder held each time the run started removing its work files: proof of what was removed."""
+    seen: list[list[str]] = []
+    real_remove = jobs._remove_work_files
+
+    def remove_work_files(folder: Path, keep: str | None) -> None:
+        seen.append(sorted(os.listdir(folder)))
+        real_remove(folder, keep)
+
+    monkeypatch.setattr(jobs, "_remove_work_files", remove_work_files)
+    return seen
+
+
+#: ``EDQUOT`` (quota exceeded) where the platform has it.
+EDQUOT = getattr(errno, "EDQUOT", None)
+needs_edquot = pytest.mark.skipif(EDQUOT is None, reason="this platform has no EDQUOT")
+#: Seconds. The walk of ``_out_of_space`` is a handful of steps: a walk still going by then loops.
+WALK_DEADLINE_S = 10
+
+
+def os_error(code: int) -> OSError:
+    return OSError(code, os.strerror(code))
+
+
+def sqlite_full_error() -> sqlite3.Error:
+    """SQLite's own ``SQLITE_FULL``, as ``VACUUM INTO`` raises it on a full disk: from a database capped at 3 pages."""
+    with closing(sqlite3.connect(":memory:")) as conn:
+        conn.execute("PRAGMA max_page_count=3")
+        conn.execute("CREATE TABLE filler (data BLOB)")
+        try:
+            for _ in range(16):
+                conn.execute("INSERT INTO filler (data) VALUES (?)", (bytes(4096),))
+        except sqlite3.OperationalError as exc:
+            assert exc.sqlite_errorcode == sqlite3.SQLITE_FULL, f"precondition: SQLite reports SQLITE_FULL, not {exc.sqlite_errorname}"
+            return exc
+    pytest.fail("precondition: a database capped at 3 pages never reported itself full")
+
+
+def sqlite_syntax_error() -> sqlite3.Error:
+    """SQLite's own ``SQLITE_ERROR``: an error of SQLite that is not a full disk."""
+    with closing(sqlite3.connect(":memory:")) as conn:
+        try:
+            conn.execute("SELEC 1")
+        except sqlite3.OperationalError as exc:
+            return exc
+    pytest.fail("precondition: SQLite accepted SELEC")
+
+
+def caused_by(cause: BaseException) -> RuntimeError:
+    """A failure raised ``from`` ``cause``."""
+    try:
+        raise RuntimeError("the build failed") from cause
+    except RuntimeError as exc:
+        return exc
+
+
+def raised_while_handling(error: BaseException) -> RuntimeError:
+    """A failure raised while ``error`` was being handled: ``error`` is its ``__context__``, not its cause."""
+    try:
+        try:
+            raise error
+        except BaseException:
+            raise RuntimeError("the cleanup failed too")  # noqa: B904 — on purpose: the context, not a cause, is under test
+    except RuntimeError as exc:
+        return exc
+
+
+def partial_entry(cause: OSError) -> PartialEntryError:
+    """What ``_add_file`` raises when a file fails once its entry has started."""
+    try:
+        raise PartialEntryError("custom-uploads/logo.png") from cause
+    except PartialEntryError as exc:
+        return exc
+
+
+def chain(length: int, root: BaseException) -> BaseException:
+    """``root`` as the ``length``-th exception of a chain: the failure, its cause, the cause of that…"""
+    top = root
+    for index in range(length - 1):
+        wrapper = RuntimeError(f"wrapper {index}")
+        wrapper.__cause__ = top
+        top = wrapper
+    return top
+
+
+class FailingReads:
+    """A file open for reading that gives its first block, then fails as a dying disk does (``EIO``)."""
+
+    def __init__(self, handle):
+        self._handle = handle
+        self.reads = 0
+
+    def read(self, size: int = -1) -> bytes:
+        self.reads += 1
+        if self.reads > 1:
+            raise os_error(errno.EIO)
+        return self._handle.read(size)
+
+    def __getattr__(self, name: str):
+        return getattr(self._handle, name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info) -> bool:
+        self._handle.close()
+        return False
+
+
+class FillingDisk:
+    """A file open for writing on a disk with ``room`` bytes left: the write that does not fit fails with ``ENOSPC``."""
+
+    def __init__(self, handle, room: int):
+        self._handle = handle
+        self._room = room
+
+    def write(self, data) -> int:
+        if len(data) > self._room:
+            raise os_error(errno.ENOSPC)
+        self._room -= len(data)
+        return self._handle.write(data)
+
+    def __getattr__(self, name: str):
+        return getattr(self._handle, name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info) -> bool:
+        self._handle.close()
+        return False
+
+
+class FailingDiskOs:
+    """``archive``'s ``os``, every call the real one, but the file opened from ``reads_badly`` reads badly and the
+    partial archive (``*.part``) is written to a disk with ``room`` bytes left, when they are given."""
+
+    def __init__(self, *, reads_badly: Path | None = None, room: int | None = None):
+        self._reads_badly = reads_badly
+        self._room = room
+        self._failing: dict[int, str] = {}
+
+    def __getattr__(self, name: str):
+        return getattr(os, name)
+
+    def open(self, path, flags, *args, **kwargs) -> int:
+        fd = os.open(path, flags, *args, **kwargs)
+        if self._reads_badly is not None and Path(path) == self._reads_badly:
+            self._failing[fd] = "read"
+        elif self._room is not None and str(path).endswith(".part"):
+            self._failing[fd] = "write"
+        return fd
+
+    def fdopen(self, fd: int, *args, **kwargs):
+        handle = os.fdopen(fd, *args, **kwargs)
+        failing = self._failing.pop(fd, None)
+        if failing == "read":
+            return FailingReads(handle)
+        if failing == "write":
+            return FillingDisk(handle, self._room)
+        return handle
+
+
 # =============================================================================
 # (a) a run, in the background and in the foreground
 # =============================================================================
@@ -473,6 +648,73 @@ def test_the_final_state_is_on_disk_before_the_lock_is_released(data_dir, monkey
     expected = sorted([STATE_FILE, *([job.file_name] if job.file_name else [])])
     assert at_release.listing == {job.job_id: expected}, f"and the work files already removed: {at_release.listing}"
     print_success(f"{outcome}: final state written, then the lock released")
+
+
+@pytest.mark.parametrize(
+    ("cause", "error_code"),
+    [
+        pytest.param(errno.ENOSPC, "backup_no_space", id="ENOSPC"),
+        pytest.param(EDQUOT, "backup_no_space", id="EDQUOT", marks=needs_edquot),
+        pytest.param(errno.EIO, "backup_failed", id="EIO"),
+    ],
+)
+def test_a_file_that_fails_while_archived_ends_the_job_by_its_cause(data_dir, monkeypatch, cause, error_code):
+    """(d) ``PartialEntryError``: a full disk or quota behind it is ``backup_no_space``, any other cause ``backup_failed``."""
+    print_section("A build that stops after the space check")
+    error = os_error(cause)
+
+    def stopped_build(data_dir, work_dir, target, **kwargs):
+        target.with_name(target.name + ".part").write_bytes(b"PK part of an archive")
+        raise PartialEntryError("custom-uploads/logo.png") from error
+
+    monkeypatch.setattr(jobs, "build_archive", stopped_build)
+    cleanup = watch_cleanup(monkeypatch)
+    job, folder = run_backup(data_dir=data_dir)
+    assert (job.status, job.error_code, job.file_name) == ("failed", error_code, None), f"{errno.errorcode[cause]} behind the failure: failed/{error_code}, no archive: {job}"
+    assert cleanup == [sorted([STATE_FILE, archive_name(job.created_at) + ".part"])], f"the partial archive was in the job folder when the cleanup ran: {cleanup}"
+    assert os.listdir(folder) == [STATE_FILE], f"and only the state is left: {os.listdir(folder)}"
+    assert not jobs._run_lock_held(data_dir), "the lock is released"
+    print_success(f"{errno.errorcode[cause]} → {error_code}, partial archive removed")
+
+
+def test_a_file_that_fails_while_it_is_read_ends_the_job_failed_and_its_partial_archive_removed(data_dir, monkeypatch):
+    """(d) A real build: logo.png reads its first block, then fails (``EIO``). Part of it is in the archive already, so
+    the build stops instead of leaving it out; the job ends ``backup_failed`` and the partial archive is removed."""
+    monkeypatch.setattr(archive, "_CHUNK", 256)
+    monkeypatch.setattr(archive, "os", FailingDiskOs(reads_badly=data_dir / "custom-uploads" / "logo.png"))
+    cleanup = watch_cleanup(monkeypatch)
+    job, folder = run_backup(data_dir=data_dir)
+    assert (job.status, job.error_code, job.file_name, job.skipped) == ("failed", "backup_failed", None, ()), f"a file failing half-way stops the backup, it is not left out: {job}"
+    assert cleanup == [sorted([STATE_FILE, archive_name(job.created_at) + ".part"])], f"the build had written part of the archive when it stopped: {cleanup}"
+    assert os.listdir(folder) == [STATE_FILE], f"the partial archive is removed: {os.listdir(folder)}"
+    print_success("read error half-way → backup_failed, partial archive removed")
+
+
+def test_a_disk_that_fills_up_while_the_archive_is_written_ends_the_job_with_backup_no_space(data_dir, monkeypatch):
+    """(d) A real build on a disk with 256 bytes left once the space was checked: the archive's writes fail with
+    ``ENOSPC``, the job ends ``backup_no_space`` (not ``backup_failed``) and the partial archive is removed."""
+    monkeypatch.setattr(archive, "os", FailingDiskOs(room=256))
+    cleanup = watch_cleanup(monkeypatch)
+    job, folder = run_backup(data_dir=data_dir)
+    assert (job.status, job.error_code, job.file_name) == ("failed", "backup_no_space", None), f"a disk full during the build is backup_no_space: {job}"
+    assert len(cleanup) == 1 and archive_name(job.created_at) + ".part" in cleanup[0], f"the build had started the archive when the disk was full: {cleanup}"
+    assert os.listdir(folder) == [STATE_FILE], f"the partial archive and the database copy are removed: {os.listdir(folder)}"
+    assert not jobs._run_lock_held(data_dir), "the lock is released"
+    print_success("disk full while writing → backup_no_space")
+
+
+def test_a_database_copy_that_finds_the_disk_full_ends_the_job_with_backup_no_space(data_dir, monkeypatch):
+    """(d) ``VACUUM INTO`` on a full disk raises SQLite's ``SQLITE_FULL``: a lack of space, not a failure of the build."""
+    full = sqlite_full_error()
+
+    def copy_on_a_full_disk(source: Path, target: Path):
+        raise full
+
+    monkeypatch.setattr(archive, "snapshot_database", copy_on_a_full_disk)
+    job, folder = run_backup(data_dir=data_dir)
+    assert (job.status, job.error_code, job.file_name) == ("failed", "backup_no_space", None), f"SQLITE_FULL from the copy is backup_no_space: {job}"
+    assert os.listdir(folder) == [STATE_FILE], f"nothing but the state in the job folder: {os.listdir(folder)}"
+    print_success("SQLITE_FULL → backup_no_space")
 
 
 # =============================================================================
@@ -795,3 +1037,62 @@ def test_without_fcntl_a_running_job_still_reads_as_running(data_dir, without_fc
     final = get_job(job.job_id, data_dir=data_dir)
     assert during.status == "running", f"a run in progress read as {during.status}/{during.error_code} (written down, then overwritten: it ended {final.status}): _run_lock_held returns False when backups/.jobs/.lock does not exist, and the process-local lock never creates that file"
     print_success("running job reads as running without fcntl")
+
+
+# =============================================================================
+# (i) what counts as a lack of space
+# =============================================================================
+
+
+OUT_OF_SPACE = [
+    pytest.param(lambda: os_error(errno.ENOSPC), id="ENOSPC"),
+    pytest.param(lambda: os_error(EDQUOT), id="EDQUOT", marks=needs_edquot),
+    pytest.param(sqlite_full_error, id="SQLITE_FULL"),
+    pytest.param(lambda: partial_entry(os_error(errno.ENOSPC)), id="partial-entry-caused-by-ENOSPC"),
+    pytest.param(lambda: caused_by(sqlite_full_error()), id="caused-by-SQLITE_FULL"),
+    pytest.param(lambda: raised_while_handling(os_error(errno.ENOSPC)), id="raised-while-handling-ENOSPC"),
+    pytest.param(lambda: caused_by(raised_while_handling(os_error(EDQUOT))), id="context-of-a-cause", marks=needs_edquot),
+    pytest.param(lambda: chain(8, os_error(errno.ENOSPC)), id="eighth-of-the-chain"),
+]
+
+NOT_OUT_OF_SPACE = [
+    pytest.param(lambda: OSError("an error without errno"), id="errno-None"),
+    pytest.param(lambda: os_error(errno.EIO), id="EIO"),
+    pytest.param(lambda: PermissionError(errno.EACCES, os.strerror(errno.EACCES)), id="EACCES"),
+    pytest.param(lambda: RuntimeError("the build failed"), id="RuntimeError"),
+    pytest.param(sqlite_syntax_error, id="SQLITE_ERROR"),
+    pytest.param(lambda: sqlite3.OperationalError("database or disk is full"), id="SQLite-message-without-its-code"),
+    pytest.param(lambda: partial_entry(os_error(errno.EIO)), id="partial-entry-caused-by-EIO"),
+    pytest.param(lambda: chain(9, os_error(errno.ENOSPC)), id="ninth-of-the-chain"),
+]
+
+
+@pytest.mark.parametrize("make", OUT_OF_SPACE)
+def test_a_full_disk_or_quota_is_a_lack_of_space_itself_or_as_a_cause(make):
+    """(i) The file system's full disk or quota, or SQLite's SQLITE_FULL, as the failure or among its 8 first links."""
+    error = make()
+    assert jobs._out_of_space(error) is True, f"{type(error).__name__}: {error} must count as a lack of space"
+    print_success(f"{type(error).__name__} → lack of space")
+
+
+@pytest.mark.parametrize("make", NOT_OUT_OF_SPACE)
+def test_any_other_failure_is_not_a_lack_of_space(make):
+    """(i) Neither another errno nor SQLite's words without its code: those end as backup_failed, with the cause logged."""
+    error = make()
+    assert jobs._out_of_space(error) is False, f"{type(error).__name__}: {error} must not count as a lack of space"
+    print_success(f"{type(error).__name__} → not a lack of space")
+
+
+@pytest.mark.parametrize("link", ["__cause__", "__context__"])
+def test_a_cycle_of_causes_ends_the_walk(link):
+    """(i) Two failures that are each other's cause (or context): the walk ends, and finds no lack of space."""
+    first, second = RuntimeError("first"), RuntimeError("second")
+    setattr(first, link, second)
+    setattr(second, link, first)
+    answers: list[bool] = []
+    walker = threading.Thread(target=lambda: answers.append(jobs._out_of_space(first)), name="out-of-space-walk", daemon=True)
+    walker.start()
+    walker.join(WALK_DEADLINE_S)
+    assert not walker.is_alive(), f"_out_of_space was still walking a cycle of {link} after {WALK_DEADLINE_S}s: the walk must be bounded"
+    assert answers == [False], f"a cycle without a full disk is no lack of space: {answers}"
+    print_success(f"cycle of {link} → walk ended, False")
