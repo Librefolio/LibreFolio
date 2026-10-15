@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A password reset from the command line, a deactivation or a demotion signs the account out of every device; reactivating an account does not bring its old sessions back.
 - Import wizard: when a broker's default plugin, DEGIRO or the Generic CSV, cannot read an uploaded file, the wrong-broker prompt gives the reason in your language.
 - `GET /api/v1/system/info` without a session answers only the app version; signed-in users still get the full report.
+- The list of exchange-rate providers no longer waits for the ECB and the SNB every time it opens: each provider's currency list is kept for a day, and a slow or unreachable provider is given up after 5 seconds, showing the last list it gave.
 
 ### 🧹 Repository cleanup
 
@@ -48,7 +49,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The transaction form lists a cash or quantity shortfall under its own heading, as the bulk editor does, instead of among the field problems.
 - The Tools catalogue and the plugin diagnostics in Settings › About no longer fail with "Tool request deadline exceeded" when the server is busy: their request budget now covers sign-in too.
 - A parse that a plugin refuses names the plugin and the file as you know them, not the plugin code and the stored file id.
+- Asset data editor: an events CSV with events of different types on the same day (a dividend and a split) imports them all, instead of leaving them out as duplicates; a new event can move to a day that holds only an event of another type.
 - In a source checkout the app version follows `git describe` again: a `VERSION` file left by an earlier Docker build no longer hides newer commits.
+
+---
+
+## [1.2.1] - 2026-10-15
+
+A security release: update every 1.2.0 installation, and any older one, as soon as you can.
+
+### 🐛 Fixed
+
+#### 🔒 Security
+
+- The server keeps every file it serves inside the folder it belongs to. A crafted address could make the pages of the app and of the documentation return files from elsewhere on the server, without signing in; this was possible since v0.4.24. The plugin icons, which already had a check, now use the same stricter one.
+- Uploaded files and broker reports open in the browser only as content that cannot run. The text preview of an uploaded file is always plain text, and a broker report opens in place only when it is a PDF, a PNG, JPEG, GIF, WebP or BMP picture, plain text, CSV or JSON; every other type is downloaded. Before, a signed-in user could upload a web page that ran for another user who opened its preview.
+- A `JWT_SECRET` made only of spaces no longer signs sessions. With `docker run --env-file`, a line `JWT_SECRET=   ` became the signing key, and anyone could forge a session; such a value now counts as unset, like an empty one. A real `JWT_SECRET` is used as before, so nobody is signed out.
 
 ---
 

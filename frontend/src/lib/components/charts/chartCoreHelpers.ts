@@ -9,9 +9,12 @@
 import type {RenderedSignal} from '$lib/charts/signals';
 import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
 import type {ECharts} from 'echarts';
-import {buildBandSeries, buildBarSeries, buildSignalReferencePrimitives, COLORS, hexToRgba} from './lineChartHelpers';
+import {buildBandSeries, buildBarSeries, buildSignalReferencePrimitives, COLORS} from './lineChartHelpers';
+import {toRgba} from '$lib/theme/colorAlpha';
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
+import {themed} from '$lib/theme/themePair';
+import {CHART_NEUTRALS} from '$lib/theme/chartTheme';
 
 // =============================================================================
 // Types
@@ -48,9 +51,9 @@ export function getChartColors(dark: boolean): ChartColors {
     return {
         green: dark ? COLORS.greenDark : COLORS.greenLight,
         red: dark ? COLORS.redDark : COLORS.redLight,
-        axis: dark ? '#475569' : '#d1d5db',
-        label: dark ? '#94a3b8' : '#6b7280',
-        gridLine: dark ? '#4b5563' : '#d1d5db',
+        axis: themed(CHART_NEUTRALS.priceAxis.line, dark),
+        label: themed(CHART_NEUTRALS.priceAxis.label, dark),
+        gridLine: themed(CHART_NEUTRALS.priceAxis.gridLine, dark),
     };
 }
 
@@ -231,7 +234,7 @@ export function buildSecondaryYAxes(
     for (let index = 1; index <= maxIndex; index++) {
         const signal = signalByIndex.get(index);
         const active = signal !== undefined;
-        const color = signal?.color ?? (dark ? '#64748b' : '#9ca3af');
+        const color = signal?.color ?? themed(CHART_NEUTRALS.secondaryAxisFallback, dark);
         const label = signal?.axisLabel ?? (index === 1 ? 'RSI' : index === 2 ? 'MACD' : `AXIS ${index}`);
         const settingsKey = signal ? secondaryAxisSettingsKey(signal) : null;
         const scale = signal ? resolveSecondaryAxisScale(signalsByIndex.get(index) ?? [signal], settingsKey ? axisSettings[settingsKey] : undefined) : {min: 0, max: 1, scale: false};
@@ -340,7 +343,7 @@ export function buildOverlaySignalSeries(overlaySignals: RenderedSignal[], dates
             ...(sType === 'area'
                 ? {
                       areaStyle: {
-                          color: hexToRgba(signal.color, signal.fillOpacity ?? 0.2),
+                          color: toRgba(signal.color, signal.fillOpacity ?? 0.2),
                           origin: 0,
                       },
                   }

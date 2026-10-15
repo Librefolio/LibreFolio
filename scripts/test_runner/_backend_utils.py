@@ -70,6 +70,15 @@ def utils_container_registry(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Container registry tests", verbose=verbose)
 
 
+def utils_served_content_types(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that uploaded content reaches the browser only as types that cannot run."""
+    print_section("Utils: Served Content Types")
+    print_info("Testing: backend/app/api/v1/uploads.py (serve_file text preview), backend/app/api/v1/brokers.py (download_file)")
+    print_info("Tests: text preview always text/plain with nosniff; broker reports inline only for safe types with download=false, attachment otherwise; nosniff on every report")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_served_content_types.py", test_names)
+    return run_command(cmd, "Served content type tests", verbose=verbose)
+
+
 def utils_coverage_js_adapter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the JS/Svelte coverage adapter that feeds coverage_analysis."""
     print_section("Utils: JS Coverage Adapter")
@@ -241,6 +250,15 @@ def utils_gate_event_loop_io(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Event loop BRIM I/O gate tests", verbose=verbose)
 
 
+def utils_gate_aiosqlite_leak(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the aiosqlite leak guard the shared conftest runs around every backend test (J-6)."""
+    print_section("Utils: aiosqlite Leak Gate")
+    print_info("Testing: backend/test_scripts/test_aiosqlite_guard.py, the autouse _aiosqlite_leak_guard of backend/test_scripts/conftest.py")
+    print_info("Tests: C-93 shape reported until disposed, closed connections tracked but not reported, other threads untracked, no attribution before a window, exceptions at nodeid boundaries, loud failure without aiosqlite's _connection, a child pytest under the real conftest")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_aiosqlite_leak_gate.py", test_names)
+    return run_command(cmd, "aiosqlite leak gate tests", verbose=verbose)
+
+
 def utils_tools_wire(verbose: bool = False, test_names: list = None) -> bool:
     """Test bounded Tool JSON encoding and sanitized validation errors."""
     print_section("Utils: Tool Wire")
@@ -257,6 +275,33 @@ def utils_runtime_isolation(verbose: bool = False, test_names: list = None) -> b
     print_info("Tests: prod guards, dotenv/Pipenv boundaries, port collisions, symlink escapes, server/test parser shapes")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_runtime_isolation.py", test_names)
     return run_command(cmd, "Runtime isolation tests", verbose=verbose)
+
+
+def utils_confined_path(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a request path joined to a folder never leaves that folder."""
+    print_section("Utils: Confined Path")
+    print_info("Testing: backend/app/utils/runtime/paths.py (confined_path)")
+    print_info("Tests: paths inside returned resolved; parent segments leaving, absolute paths, a sibling folder sharing the name prefix, symlinks pointing outside and a NUL byte refused")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_confined_path.py", test_names)
+    return run_command(cmd, "Confined path tests", verbose=verbose)
+
+
+def utils_static_route_confinement(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the routes serving files by request path never leave their folder."""
+    print_section("Utils: Static Route Confinement")
+    print_info("Testing: backend/app/main.py (frontend_catchall, mkdocs_static), backend/app/api/v1/uploads.py (serve_plugin_static)")
+    print_info("Tests: raw ASGI requests landing outside the served folder → SPA fallback / 404 / 403, never the outside content; the files of each folder still served")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_static_route_confinement.py", test_names)
+    return run_command(cmd, "Static route confinement tests", verbose=verbose)
+
+
+def utils_jwt_secret_blank(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a blank JWT_SECRET never becomes the key that signs session cookies."""
+    print_section("Utils: JWT Secret Blank")
+    print_info("Testing: backend/app/services/accounts/auth_service.py (_JWT_SECRET, decode_jwt_token), backend/app/config/platform.py (configured_jwt_secret)")
+    print_info("Tests: a whitespace-only JWT_SECRET replaced by a random key and tokens signed with it refused; a non-blank secret kept as written; unset or empty still random")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_jwt_secret_blank.py", test_names)
+    return run_command(cmd, "JWT secret blank tests", verbose=verbose)
 
 
 def utils_test_runner_cli(verbose: bool = False, test_names: list = None) -> bool:
@@ -399,6 +444,17 @@ Tests for utility modules and helper functions:
         desc="Trusted GHCR challenge/token flow, result mapping, endpoint guards, secret redaction",
         isolation="pure",
     )
+    add_test(
+        cat,
+        "served-content-types",
+        utils_served_content_types,
+        name="Served Content Types",
+        desc="Uploaded content reaches the browser only as types that cannot run: the text preview of an upload is text/plain; charset=utf-8 with X-Content-Type-Options: nosniff whatever type was stored (a CSV still readable, whole or windowed); a broker report opens inline only with download=false and a type that cannot carry active content (PDF, PNG, CSV, JSON, plain text), while HTML, SVG, XML, XHTML and unknown types are attachments, download=true (the default) is always an attachment, and every answer carries nosniff",
+        # Fresh apps holding the uploads and broker import routers, called through httpx's in-process
+        # ASGI transport; sign-in and session dependencies overridden, storage lookups monkeypatched to
+        # files under tmp_path. No DB, no server, no network.
+        isolation="pure",
+    )
     add_test(cat, "provider-core-cache", utils_provider_core_cache, name="Provider Core Cache", desc="Thread isolation, timeout, caches")
     add_test(cat, "roi-utils", utils_roi_utils, name="ROI Utils", desc="annualized_to_cumulative, calculate_mwrr/_series")
     add_test(cat, "translation-utils", utils_translation_utils, name="Translation Utils", desc="get_babel_locale + English fallback")
@@ -515,6 +571,17 @@ Tests for utility modules and helper functions:
     )
     add_test(
         cat,
+        "gate-aiosqlite-leak",
+        utils_gate_aiosqlite_leak,
+        name="aiosqlite Leak Gate",
+        desc="No backend test leaves open an aiosqlite connection it created: the shared conftest's autouse guard tracks every connection born in the main thread during a test (weak references, creation stack followed across SQLAlchemy's greenlet) and fails that test at its own teardown if one is still open and not excused by the explicit, reasoned AIOSQLITE_LEAK_EXCEPTIONS (empty); proven as presences: the C-93 shape (in-memory engine queried, session closed, engine not disposed) is reported with a stack reaching the test and cleared by dispose; connections closed by async with, dispose or a NullPool session are tracked but not reported; a connection born in another thread is not tracked, one born before a window is not attributed to it; an exception excuses its own nodeid at a boundary only, and an entry without a prefix or a reason is refused; a tracked object without aiosqlite's private _connection fails loudly; install wraps once and the conftest's window surrounds every test; a child pytest loading the real conftest errors the leaking test, and only it, at its teardown",
+        # Private in-memory aiosqlite databases, a worker thread of its own, and a child pytest that loads
+        # the real conftest on a synthetic file under tmp_path: no lane DB beyond the conftest's own session
+        # read (as in every pytest process), no server, no network, no writes outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "tools-wire",
         utils_tools_wire,
         name="Tool Wire",
@@ -529,6 +596,36 @@ Tests for utility modules and helper functions:
         desc="Per-lane port/data propagation, production guards, readiness identity and process ownership",
         # Only monkeypatches os.environ/sys.argv and builds argparse parsers;
         # no DB, no server, no filesystem writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "confined-path",
+        utils_confined_path,
+        name="Confined Path",
+        desc="confined_path keeps a request path inside the folder it is joined to: a file inside, parent segments coming back inside, an empty path (the resolved root), a missing file inside and a symlink pointing inside are returned resolved, also when the root itself sits behind a symlink; parent segments leaving at any depth, an absolute path outside, a sibling folder sharing the root's name prefix, a symlink pointing outside and a NUL byte are refused (None)",
+        # A function over folders built under tmp_path: no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "static-route-confinement",
+        utils_static_route_confinement,
+        name="Static Route Confinement",
+        desc="The frontend catch-all, the documentation and the plugin icon routes serve the files of their own folder only: a path landing outside it (parent segments at several depths, an absolute path, a sibling folder sharing the plugin folder's name prefix) gets the SPA fallback (200.html, else index.html), the documentation's 404 and a 403, never the outside content, and a path the OS rejects gets a 403 from the plugin route; build files, client-side routes, documentation folders, the site index and plugin icons are still served",
+        # Raw ASGI calls on the global app (the lifespan never runs) and on a fresh app holding the
+        # uploads router with sign-in overridden; folders under tmp_path swapped in for the module
+        # globals by monkeypatch. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "jwt-secret-blank",
+        utils_jwt_secret_blank,
+        name="JWT Secret Blank",
+        desc="The JWT_SECRET read at import signs session cookies only when it holds something besides whitespace: a value made only of whitespace (three spaces, tab-space-newline, one space) is replaced by a random URL-safe key of at least 64 characters, new in every process, and a token signed with the blank value is refused by decode_jwt_token; a non-blank value is the key exactly as written, surrounding spaces included, and a token signed with it decodes to its user id; an unset or empty JWT_SECRET gives a random key, new in every process",
+        # Each case imports auth_service in a fresh interpreter run in tmp_path, with a copy of the
+        # environment carrying the case's JWT_SECRET. No DB, no server, no network.
         isolation="pure",
     )
     add_test(

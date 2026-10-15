@@ -1,7 +1,7 @@
 {
   "name": "librefolio-frontend",
   "private": true,
-  "version": "1.1.0",
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "predev": "node scripts/i18n-catalog-build.mjs",

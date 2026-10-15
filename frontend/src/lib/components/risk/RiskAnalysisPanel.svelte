@@ -35,6 +35,8 @@
     import * as riskHelpers from './riskAnalysisHelpers';
     import {stressBucketLabel as bucketLabel} from './stressBucketLabel';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {POLARITY_TONES} from '$lib/theme/toneClasses';
+    import {RISK_OVERLAY_COLORS} from '$lib/theme/chartTheme';
     interface Props {
         scope: RiskScope;
         dateStart: string;
@@ -232,7 +234,7 @@
                 id: 'risk-comparison',
                 label: $t('risk.comparison.comparisonAsset'),
                 data: (comparisonOutput.series ?? []).map((point) => ({date: point.date, value: point.comparison_cumulative_return * 100})),
-                color: '#f59e0b',
+                color: RISK_OVERLAY_COLORS.comparisonAsset,
                 lineWidth: 2,
                 lineType: 'solid',
                 markerStart: null,
@@ -256,7 +258,7 @@
                 id: 'risk-simulation-band',
                 label: $t('risk.simulation.simulated'),
                 data: simulationData,
-                color: '#2563eb',
+                color: RISK_OVERLAY_COLORS.simulation,
                 lineWidth: 2,
                 lineType: 'solid',
                 markerStart: null,
@@ -679,7 +681,7 @@
                             <span class="truncate text-gray-600 dark:text-gray-300" title={row.name}>{row.name}</span>
                             <div class="relative h-5 rounded bg-gray-100 dark:bg-slate-700">
                                 <div class="absolute left-1/2 top-0 h-full w-px bg-gray-400 dark:bg-slate-500"></div>
-                                <div class="absolute top-1/2 h-2 -translate-y-1/2 rounded {row.percentage != null && row.percentage < 0 ? 'right-1/2 bg-red-500' : 'left-1/2 bg-blue-500'}" style={`width: ${row.barWidth}%`}></div>
+                                <div class="absolute top-1/2 h-2 -translate-y-1/2 rounded {row.percentage != null && row.percentage < 0 ? `right-1/2 ${POLARITY_TONES.riskContributionBar.negative}` : `left-1/2 ${POLARITY_TONES.riskContributionBar.positive}`}" style={`width: ${row.barWidth}%`}></div>
                             </div>
                             <span class="text-right font-mono text-gray-700 dark:text-gray-200">{formatPercent(row.percentage, true)}</span>
                         </div>

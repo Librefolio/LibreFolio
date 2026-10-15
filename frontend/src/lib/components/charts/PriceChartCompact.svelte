@@ -10,6 +10,7 @@
     import LineChart from './LineChart.svelte';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {PRICE_SERIES} from '$lib/theme/chartTheme';
 
     interface Props {
         data: LineDataPoint[];
@@ -32,7 +33,7 @@
         secondaryAxisScales?: Record<string, AxisScaleSettings>;
     }
 
-    let {data = [], height = '80px', lineColor = '#1a4031', areaFill = true, viewMode = 'absolute', showMiniAxis = true, colorByBaseline, showGridLines, showGradient = false, overlaySignals = [], axisScale, secondaryAxisScales = {}}: Props = $props();
+    let {data = [], height = '80px', lineColor = PRICE_SERIES.line.light, areaFill = true, viewMode = 'absolute', showMiniAxis = true, colorByBaseline, showGridLines, showGradient = false, overlaySignals = [], axisScale, secondaryAxisScales = {}}: Props = $props();
 
     // Default colorByBaseline to true only in percentage mode
     let effectiveColorByBaseline = $derived(colorByBaseline ?? viewMode === 'percentage');

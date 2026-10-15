@@ -7,6 +7,7 @@ import warnings
 import pytest
 
 from backend.app.config import get_data_dir, is_test_mode
+from backend.test_scripts import test_aiosqlite_guard as aiosqlite_guard
 
 # Matches PRAGMA busy_timeout=30000 in backend/app/db/session.py: this fixture
 # competes for the same write lock as the app, so it waits as long as the app.
@@ -99,6 +100,42 @@ def restore_registration_setting():
             )
     except sqlite3.Error:
         pass
+
+
+# The aiosqlite leak guard (J-6) is installed here, when this conftest is imported: before any test module of the
+# run, and therefore any aiosqlite connection, exists. Idempotent.
+aiosqlite_guard.install()
+
+
+@pytest.fixture(autouse=True)
+def _aiosqlite_leak_guard(request):
+    """Fail, at its own teardown, a test that leaves open an aiosqlite connection it created.
+
+    An open aiosqlite connection that outlives its test is closed later by the garbage collector, and that close
+    can bind to a closed event loop and kill the connection's worker thread: "Event loop is closed", reported as a
+    PytestUnhandledThreadExceptionWarning on whichever unrelated test happens to be running (C-93 had to track
+    seven such leaks down by hand). Checked here, the same leak is an ERROR at the teardown of the test that
+    caused it, with the connection's creation stack — the attribution C-93 lacked.
+
+    The window this fixture opens is the test. Being autouse and function-scoped, it is set up before every other
+    function-scoped fixture and torn down after all of them, so:
+
+    - a fixture that closes its session and disposes its engine in its teardown (``real_db_session``,
+      ``db_session``) has done so before the check runs, and its test is clean;
+    - a connection opened by a module-, class- or session-scoped fixture during its setup was opened before the
+      window, and is not attributed to the test that happened to trigger that setup;
+    - pytest-asyncio's function loop is already closed when the check runs, which costs nothing: the check reads
+      attributes and never touches a loop.
+
+    The rule, what it deliberately leaves alone and the explicit exceptions list live in
+    ``test_aiosqlite_guard.py``; its self-tests are the utils action ``gate-aiosqlite-leak``. The guard only
+    reports: stopping a leaked connection from here could meet a closed current loop itself.
+    """
+    with aiosqlite_guard.leak_window(request.node.nodeid) as window:
+        yield
+    leaks = aiosqlite_guard.find_leaks(window)
+    if leaks:
+        pytest.fail(aiosqlite_guard.format_leak_report(window, leaks), pytrace=False)
 
 
 def pytest_sessionfinish(session, exitstatus):

@@ -21,6 +21,13 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
     the server must not start without it; nothing is logged first, and a blank ``NAME`` beside the file hides nothing. A
     generated key file gone bad, or one that cannot be reached, is logged as an error and the start goes on. Every check
     that is not ok is logged at the level of its severity, in order, with its id and detail; an ok check is not logged.
+(e) The profile and the instance block (CP6). ``check_jwt_secret`` gives a short ``JWT_SECRET`` the severity of the
+    profile: an error in ``managed``, a warning in ``selfhosted``. At startup, in ``managed``, a short key stops the start
+    (``WeakSecretError``, a ``ValueError``) with a message naming its origin and length and never the key, nothing logged
+    first; in ``selfhosted`` it is a warning and the start goes on. A ``LIBREFOLIO_BLOCKED`` or ``LIBREFOLIO_DELETION_DATE``
+    that cannot be read stops the start (``ValueError`` naming the variable), blocked or not, nothing logged first. A
+    blocked instance is logged as a warning carrying the deletion date (ISO, or ``None``) before the checks; an instance
+    that is not blocked logs nothing about the block, a deletion date alone included.
 
 Pure: the data directory is in ``tmp_path``, every variable the checks read is set or removed through ``monkeypatch``
 (environment values win over a ``.env``), and the module's logger is replaced by a recorder. No database, no server, no
@@ -43,7 +50,9 @@ from backend.app.config import SECRET_FILE_MAX_BYTES, SecretFileError
 from backend.app.services.platform import config_audit
 from backend.app.services.platform.config_audit import (
     CONFIG_CHECKS,
+    JWT_SECRET_MIN_LENGTH,
     ConfigCheck,
+    WeakSecretError,
     check_instance_key,
     check_jwt_secret,
     check_log_level,
@@ -111,15 +120,17 @@ class Configuration:
 
 
 def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: bool) -> Configuration:
-    """No secret set either way, cookie ``auto``, log level ``INFO``, no key yet, a data directory in ``tmp_path``."""
+    """No secret set either way, cookie ``auto``, log level ``INFO``, profile ``selfhosted``, not blocked, no key yet, a data directory in ``tmp_path``."""
     for variable in [name for name in os.environ if name.endswith("_FILE") and (name == "JWT_SECRET_FILE" or name.startswith("LIBREFOLIO_"))]:
         monkeypatch.delenv(variable)
-    for variable in ("JWT_SECRET", "LIBREFOLIO_INSTANCE_KEY", "LIBREFOLIO_LOG_LEVEL", "LIBREFOLIO_DATA_DIR", "LIBREFOLIO_TEST_DATA_DIR"):
+    for variable in ("JWT_SECRET", "LIBREFOLIO_INSTANCE_KEY", "LIBREFOLIO_LOG_LEVEL", "LIBREFOLIO_DATA_DIR", "LIBREFOLIO_TEST_DATA_DIR", "LIBREFOLIO_BLOCKED", "LIBREFOLIO_DELETION_DATE"):
         monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "0" if production else "1")
     monkeypatch.setenv("LIBREFOLIO_DATA_DIR" if production else "LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("SESSION_COOKIE_SECURE", "auto")
     monkeypatch.setenv("LOG_LEVEL", "INFO")
+    # Set, not removed: a .env may name a profile, and the environment wins over it
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", "selfhosted")
     configuration = Configuration(monkeypatch, tmp_path, (tmp_path / "data").resolve())
     assert instance_key_path() == configuration.key_file, f"the key file must live in the data directory of this test, not at {instance_key_path()}"
     return configuration
@@ -569,3 +580,147 @@ def test_a_set_variable_wins_over_its_broken_file_at_startup(configuration, logg
     warnings = [fields["detail"] for level, _, fields in logged if level == "warning"]
     assert warnings == [{"variables": variable}], f"{variable} set both ways must be one warning naming it: {logged}"
     print_success(f"{variable} won over its broken file, warned as set twice")
+
+
+# =============================================================================
+# (e) The profile and the instance block
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    ("profile", "jwt_secret", "severity", "message", "detail"),
+    [
+        pytest.param("selfhosted", "x" * 31, "warning", "jwtSecret.short", {"source": "JWT_SECRET", "length": 31, "minimum": 32}, id="selfhosted-31-characters-warning"),
+        pytest.param("managed", "x" * 31, "error", "jwtSecret.short", {"source": "JWT_SECRET", "length": 31, "minimum": 32}, id="managed-31-characters-error"),
+        pytest.param("managed", "x", "error", "jwtSecret.short", {"source": "JWT_SECRET", "length": 1, "minimum": 32}, id="managed-1-character-error"),
+        pytest.param("managed", "x" * 32, "ok", "jwtSecret.ok", {}, id="managed-32-characters-ok"),
+        pytest.param("managed", None, "info", "jwtSecret.ephemeral", {}, id="managed-unset-info"),
+        pytest.param(" MANAGED ", "x" * 31, "error", "jwtSecret.short", {"source": "JWT_SECRET", "length": 31, "minimum": 32}, id="managed-in-any-case-error"),
+    ],
+)
+def test_the_severity_of_a_short_jwt_secret_follows_the_profile(configuration, profile, jwt_secret, severity, message, detail):
+    """(e) The same short key, the same detail: an error in the managed profile, a warning in selfhosted; the profile changes nothing else."""
+    configuration.set(LIBREFOLIO_PROFILE=profile)
+    if jwt_secret is not None:
+        configuration.set(JWT_SECRET=jwt_secret)
+
+    result = check_jwt_secret()
+
+    _assert_check(result, check_jwt_secret, severity, message, detail)
+    print_success(f"LIBREFOLIO_PROFILE={profile!r}, JWT_SECRET of {len(jwt_secret or '')} characters: {severity}")
+
+
+@pytest.mark.parametrize("source", ["variable", "file"])
+def test_startup_stops_on_a_short_jwt_secret_in_the_managed_profile(configuration, logged, source):
+    """(e) Managed: a short key stops the start, nothing logged first; the message names the origin and the length, never the key."""
+    secret = f"jwt-{CANARY}"
+    assert len(secret) < JWT_SECRET_MIN_LENGTH, f"Precondition: the key of this test must be short, it is {len(secret)} characters"
+    configuration.set(LIBREFOLIO_PROFILE="managed")
+    if source == "variable":
+        configuration.set(JWT_SECRET=secret)
+        origin = "JWT_SECRET"
+    else:
+        secret_file = configuration.file("jwt-secret", secret.encode() + b"\n")
+        configuration.set(JWT_SECRET_FILE=str(secret_file))
+        origin = f"JWT_SECRET_FILE ({secret_file})"
+
+    with pytest.raises(WeakSecretError) as raised:
+        log_configuration_audit()
+
+    expected = f"In the managed profile the session signing key from {origin} must be at least 32 characters long; it is {len(secret)}"
+    assert str(raised.value) == expected, f"the startup error must name the origin and the length:\n  expected {expected!r}\n  got      {str(raised.value)!r}"
+    assert isinstance(raised.value, ValueError), "WeakSecretError is a ValueError: a caller stopping on configuration errors stops on it too"
+    shown = "".join(traceback.format_exception(raised.value))
+    assert CANARY not in shown, f"the startup error showed the key: {shown}"
+    assert logged == [], f"nothing is logged before the start is stopped: {logged}"
+    print_success(f"start stopped: {raised.value}")
+
+
+def test_startup_goes_on_with_a_short_jwt_secret_in_the_selfhosted_profile(configuration, logged):
+    """(e) Selfhosted: the same short key is a warning in the log, without the key, and the start goes on."""
+    secret = f"jwt-{CANARY}"
+    configuration.set(LIBREFOLIO_PROFILE="selfhosted", JWT_SECRET=secret)
+
+    log_configuration_audit()
+
+    flagged = [(level, fields["check"], fields["detail"]) for level, _, fields in logged]
+    assert flagged == [("warning", "platform.jwt_secret", {"source": "JWT_SECRET", "length": len(secret), "minimum": 32})], f"a short key in selfhosted must be logged once, as a warning of its check: {logged}"
+    assert CANARY not in repr(logged), f"the startup log showed the key: {logged}"
+    print_success("selfhosted: warned, the start went on")
+
+
+@pytest.mark.parametrize(
+    ("variables", "variable"),
+    [
+        pytest.param({"LIBREFOLIO_BLOCKED": "maybe"}, "LIBREFOLIO_BLOCKED", id="blocked-maybe"),
+        pytest.param({"LIBREFOLIO_BLOCKED": "2"}, "LIBREFOLIO_BLOCKED", id="blocked-2"),
+        pytest.param({"LIBREFOLIO_BLOCKED": "maybe", "LIBREFOLIO_DELETION_DATE": "2026-11-14"}, "LIBREFOLIO_BLOCKED", id="blocked-maybe-with-a-good-date"),
+        pytest.param({"LIBREFOLIO_DELETION_DATE": "14/11/2026"}, "LIBREFOLIO_DELETION_DATE", id="date-day-first-not-blocked"),
+        pytest.param({"LIBREFOLIO_BLOCKED": "false", "LIBREFOLIO_DELETION_DATE": "2026-02-30"}, "LIBREFOLIO_DELETION_DATE", id="date-out-of-range-not-blocked"),
+        pytest.param({"LIBREFOLIO_BLOCKED": "true", "LIBREFOLIO_DELETION_DATE": "next month"}, "LIBREFOLIO_DELETION_DATE", id="date-a-word-blocked"),
+    ],
+)
+def test_startup_stops_on_a_block_variable_that_cannot_be_read(configuration, logged, variables, variable):
+    """(e) A typo in either variable stops the start, blocked or not, before anything is logged: the block is never left to chance."""
+    configuration.set(JWT_SECRET=GOOD_JWT_SECRET, LIBREFOLIO_INSTANCE_KEY=GOOD_INSTANCE_KEY, **variables)
+
+    with pytest.raises(ValueError, match=variable) as raised:
+        log_configuration_audit()
+
+    assert not isinstance(raised.value, WeakSecretError), f"the stop must come from the block variables, not from the key: {raised.value!r}"
+    assert logged == [], f"nothing is logged before the start is stopped: {logged}"
+    print_success(f"start stopped: {raised.value}")
+
+
+@pytest.mark.parametrize(
+    ("blocked", "deletion_date", "logged_date"),
+    [
+        pytest.param("true", "2026-11-14", "2026-11-14", id="blocked-with-a-date"),
+        pytest.param(" ON ", " 2026-11-14 ", "2026-11-14", id="blocked-with-a-date-stripped"),
+        pytest.param("1", None, None, id="blocked-without-a-date"),
+        pytest.param("yes", "   ", None, id="blocked-with-a-blank-date"),
+    ],
+)
+def test_startup_logs_a_blocked_instance_with_its_deletion_date(configuration, logged, blocked, deletion_date, logged_date):
+    """(e) A blocked instance is one warning naming LIBREFOLIO_BLOCKED, with the deletion date in ISO or None; the start goes on."""
+    configuration.set(JWT_SECRET=GOOD_JWT_SECRET, LIBREFOLIO_INSTANCE_KEY=GOOD_INSTANCE_KEY, LIBREFOLIO_BLOCKED=blocked)
+    if deletion_date is not None:
+        configuration.set(LIBREFOLIO_DELETION_DATE=deletion_date)
+    assert all(result.severity == "ok" for result in run_config_checks()), f"Precondition: every check ok, so the block is the only record: {run_config_checks()}"
+
+    log_configuration_audit()
+
+    assert [(level, fields) for level, _, fields in logged] == [("warning", {"deletion_date": logged_date})], f"a blocked instance must be logged once, as a warning with its deletion date: {logged}"
+    assert "LIBREFOLIO_BLOCKED" in logged[0][1], f"the warning must name the variable that blocks: {logged[0][1]!r}"
+    print_success(f"LIBREFOLIO_BLOCKED={blocked!r}: {logged[0][1]} {logged[0][2]}")
+
+
+def test_startup_logs_the_block_before_the_checks(configuration, logged):
+    """(e) The block comes first in the log, then the checks that are not ok, in their order."""
+    configuration.set(LIBREFOLIO_INSTANCE_KEY=GOOD_INSTANCE_KEY, LIBREFOLIO_BLOCKED="true", LIBREFOLIO_DELETION_DATE="2026-11-14")
+
+    log_configuration_audit()
+
+    order = [(level, fields.get("check", "block")) for level, _, fields in logged]
+    assert order == [("warning", "block"), ("info", "platform.jwt_secret")], f"the block, then the unset key's info: {logged}"
+    print_success(f"{order}")
+
+
+@pytest.mark.parametrize(
+    "variables",
+    [
+        pytest.param({}, id="unset"),
+        pytest.param({"LIBREFOLIO_BLOCKED": ""}, id="blank"),
+        pytest.param({"LIBREFOLIO_BLOCKED": "off"}, id="off"),
+        pytest.param({"LIBREFOLIO_BLOCKED": "false", "LIBREFOLIO_DELETION_DATE": "2026-11-14"}, id="false-with-a-date"),
+        pytest.param({"LIBREFOLIO_DELETION_DATE": "2026-11-14"}, id="a-date-alone"),
+    ],
+)
+def test_startup_logs_nothing_about_the_block_when_not_blocked(configuration, logged, variables):
+    """(e) Not blocked: no record about the block, a valid deletion date alone included."""
+    configuration.set(JWT_SECRET=GOOD_JWT_SECRET, LIBREFOLIO_INSTANCE_KEY=GOOD_INSTANCE_KEY, **variables)
+
+    log_configuration_audit()
+
+    assert logged == [], f"an instance that is not blocked logs nothing about the block: {logged}"
+    print_success(f"{variables or 'unset'}: nothing logged")
