@@ -43,7 +43,7 @@ Phase = Literal["preparing", "database", "files", "finalizing"]
 Progress = Callable[[Phase, int, int], None]
 
 #: The warnings of a build, as stable codes: the database failed its integrity check, has foreign-key violations, or
-#: some files could not be read (they changed or vanished during the backup) and were left out.
+#: some files were left out (links, special files, files or folders that could not be read, files removed meanwhile).
 BuildWarning = Literal["database_integrity", "foreign_key_violations", "files_skipped"]
 
 
@@ -54,6 +54,19 @@ class BackupNoSpaceError(RuntimeError):
         super().__init__(f"A backup needs about {needed} bytes free, {free} are")
         self.needed = needed
         self.free = free
+
+
+class PartialEntryError(RuntimeError):
+    """A file failed while its entry was being written: the archive already holds part of it, so the build stops.
+
+    A zip entry cannot be taken back once started, and a part of a file under its name would not match the manifest.
+    A file that fails before its entry starts (removed, unreadable, no longer a regular file) is left out instead. The
+    cause (a read error, or a write error such as a full disk) is the exception's ``__cause__``.
+    """
+
+    def __init__(self, entry: str):
+        super().__init__(f"{entry} failed while it was being archived")
+        self.entry = entry
 
 
 class ArchiveError(RuntimeError):
@@ -202,21 +215,36 @@ def build_archive(data_dir: Path, work_dir: Path, target: Path, *, origin: Backu
 
 
 def _add_file(archive: zipfile.ZipFile, path: Path, entry: str, on_bytes: Callable[[int], None]) -> ManifestFile:
-    """Stream one regular file into the archive, hashing what is written; the source is never followed if a link."""
+    """Stream one regular file into the archive, hashing what is written; the source is never followed if a link.
+
+    An error before the entry starts (the file is gone, unreadable, no longer a regular file) is an ``OSError``, and the
+    caller leaves the file out. Once the entry has started, an error reading the file or writing the archive stops the
+    build with ``PartialEntryError``.
+    """
     digest = hashlib.sha256()
     size = 0
     # O_NONBLOCK: a file replaced by a FIFO since it was collected must not block the run (it is refused below).
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
-    with os.fdopen(os.open(path, flags), "rb") as source:
-        info = os.fstat(source.fileno())
+    fd = os.open(path, flags)
+    try:
+        info = os.fstat(fd)
         if not stat.S_ISREG(info.st_mode):
             raise OSError(f"{entry} is not a regular file")
-        with archive.open(_entry_info(entry, info.st_mtime), "w", force_zip64=True) as target:
-            while chunk := source.read(_CHUNK):
-                digest.update(chunk)
-                target.write(chunk)
-                size += len(chunk)
-                on_bytes(len(chunk))
+        source = os.fdopen(fd, "rb")
+    except BaseException:
+        os.close(fd)  # until the file object owns it, the descriptor is closed here
+        raise
+    with source:
+        try:
+            with archive.open(_entry_info(entry, info.st_mtime), "w", force_zip64=True) as target:
+                while chunk := source.read(_CHUNK):
+                    digest.update(chunk)
+                    target.write(chunk)
+                    size += len(chunk)
+                    on_bytes(len(chunk))
+        except OSError as exc:
+            logger.error("Backup stopped: a file failed while it was being archived", entry=entry, error=f"{type(exc).__name__}: {exc.strerror or exc}")
+            raise PartialEntryError(entry) from exc
     return ManifestFile(path=entry, size=size, sha256=digest.hexdigest())
 
 

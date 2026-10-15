@@ -4,36 +4,71 @@ Instance backup, the command line (workstream B, lot B1): ``scripts/backup_cli.p
 ``dev.py backup`` is registered in a later step: the commands are tested through the module's functions and through
 ``python scripts/backup_cli.py``.
 
-(a) ``_output_path``: no ``--output``, the archive goes to ``<data dir>/backups/<name>``; an existing folder receives
-    it under its own name; any other path is the archive's file; a relative path is relative to the working
-    directory, and ``~`` is the home folder.
+(a) ``_requested`` / ``_output_path``: ``--output`` made absolute (``~`` is the home folder; a relative path starts
+    from the working directory, which ``dev.py`` sets to the project root; an absolute path is kept as it is); no
+    ``--output``, the archive goes to ``<data dir>/backups/<name>``; an existing folder receives it under its own
+    name; any other path is the archive's file.
 (b) ``_drop_root_privileges``: run as root (``docker compose exec`` without a user) on a data directory owned by
     another user, the command drops its supplementary groups, takes the owner's group, then the owner's user, in that
     order (once the user is changed, the group can no longer be). A failure comes back as a message and the command
     stops. Nothing changes when the command is not root, when the owner is root, or without ``os.geteuid``.
 (c) ``_dispatch`` without a subcommand prints how to get help and returns 1.
-(d) ``cmd_inspect``: 0 for an intact archive, and for ``--no-verify``, which reads the manifest only; 1 for a missing
-    file, a file that is not a zip, a zip without manifest, an entry altered or added, and a damaged archive.
-(e) ``cmd_create``: 1 without a data directory, without a database (nothing written), with an ``--output`` file that
-    already exists (nothing run), and when the switch to the owner of the data directory fails; 0 otherwise, with the
-    archive (0600) where it was asked for and the job's folder removed.
+(d) ``cmd_inspect``: 0 for an intact archive; ``--no-verify`` compares the entry names with the manifest without
+    reading the entries: other bytes under the right names exit 0, its closing line saying the contents were not read,
+    and a name the manifest does not list still exits 1. 1 for a missing file, a file that is not a zip, a zip without
+    manifest, an entry altered or added, and a damaged archive.
+(e) ``cmd_create``: 1 without a data directory, without a database (nothing written), and when the switch to the
+    owner of the data directory fails; 0 otherwise, with the archive (0600) where it was asked for and the job's folder
+    removed. An ``--output`` the archive could not be written to (a file or a link already there, dangling or not; a
+    path below a file; a folder it cannot write into) is refused before the backup starts: nothing is run, nothing is
+    created. A backup that fails creates none of the missing folders of ``--output``; one that succeeds creates them
+    with the archive. ``backups/`` or ``backups/.jobs`` a link or a file: 1, a message naming that very folder, nothing
+    written through it, no traceback; an ``OSError`` before the run starts: 1 and the system's reason. An archive that
+    cannot reach ``--output`` lands in ``backups/`` with a ⚠️ and exit 1, the job's folder removed; one that cannot
+    leave its job folder stays there, said with its path and the hour it is kept, exit 1. Backups of the same second
+    into one folder (``backups/``, or an ``--output`` folder) keep their own names, ``-2``, ``-3``, and exit 0.
 (f) The script: ``python scripts/backup_cli.py create``, then ``inspect`` on the archive it wrote, both exit 0;
     without a command, exit 1.
+(g) ``_check_output``: an existing folder is accepted, even one holding a ``librefolio-backup.zip``; a new file path is
+    accepted when the nearest folder of it that exists is a folder this process can write into, and nothing is
+    created. A file, a link to a file or a dangling link at the path: "already exists"; a file where a folder of the
+    path belongs: "is not a folder"; a folder it cannot write into: "cannot write into". A relative path starts from
+    the working directory.
+(h) ``_free_path``: the name, then ``<stem>-2<suffix>``, ``-3`` … past every name taken, by a file, a folder or a link
+    (dangling too); it creates nothing.
+(i) ``_place_archive``: the archive moved to its target, the missing folders created, ``(target, None)``. When the
+    target is taken (a file, a dangling link: never replaced, never followed), when it is on another device that lacks
+    the space (checked on the nearest folder of the target that exists, before any folder is created), or when the move
+    fails (a partial copy at the target removed), the archive goes to ``<data dir>/backups/`` under a free name, with
+    the reason; when that folder is the target's own, or the rename into it fails, the archive stays in its job folder.
+    Wherever it ends, the path returned holds the archive with the bytes it was built with. A move that raises once the
+    archive has left its job folder for the target got there whole: ``(target, None)``, and the target, its only copy,
+    is never removed. The folders created for a target the archive never reached are removed again, deepest first, the
+    folder that existed left as it was (B1 fix 8: "the missing folders are created only when the archive gets there").
+(j) The help: ``--no-verify`` compares the entry names without reading the entries; ``--output`` is checked before the
+    backup starts; a relative path starts from the project root.
 
 Pure: data directories in ``tmp_path``. In this process a command sees a production data directory of the test through
 its environment (``LIBREFOLIO_TEST_MODE`` removed, ``LIBREFOLIO_DATA_DIR`` in ``tmp_path``, set with ``monkeypatch``
 and checked before any command runs). A child process gets this process's environment without ``LIBREFOLIO_*`` and
 ``COVERAGE_*``, plus that ``LIBREFOLIO_DATA_DIR``, and runs in ``tmp_path``. In every root case ``os.geteuid``,
-``os.setgroups``, ``os.setgid`` and ``os.setuid`` are replaced: no test changes the identity of its process.
-``LF_APP_VERSION`` is set, so no git process runs. No lane database, no server, no network.
+``os.setgroups``, ``os.setgid`` and ``os.setuid`` are replaced: no test changes the identity of its process. The cases
+that need a failure replace, for that test only, ``shutil.move``, ``shutil.disk_usage``, ``backup_cli.os`` (a stand-in
+that puts one folder and everything below it on another device, as a disk mounted there), or ``jobs.run_backup``,
+``jobs.archive_name`` and ``jobs.build_archive``;
+the permission cases are skipped as root, which bypasses them. ``LF_APP_VERSION`` is set, so no git process runs. No
+lane database, no server, no network.
 """
 
 from __future__ import annotations
 
 import argparse
+import errno
+import hashlib
 import os
 import re
 import shlex
+import shutil
 import sqlite3
 import stat
 import struct
@@ -47,9 +82,10 @@ from types import SimpleNamespace
 import pytest
 
 from backend.app.config import get_data_dir
+from backend.app.services.platform.instance_backup import jobs
 from backend.app.services.platform.instance_backup.archive import build_archive, check_archive
 from backend.app.services.platform.instance_backup.manifest import BackupManifest
-from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, MANIFEST_ENTRY, backups_dir, jobs_dir
+from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, MANIFEST_ENTRY, backups_dir, ensure_private_dir, job_dir, jobs_dir
 from backend.app.utils.runtime.version import get_git_version
 from backend.test_scripts.test_utils import print_section, print_success
 from scripts import backup_cli
@@ -57,12 +93,20 @@ from scripts import backup_cli
 POSIX = os.name != "nt"
 AS_ROOT = POSIX and os.geteuid() == 0
 needs_posix_modes = pytest.mark.skipif(not POSIX, reason="file modes are POSIX only")
+needs_symlinks = pytest.mark.skipif(not POSIX, reason="symbolic links need a privilege on Windows")
+needs_permission_checks = pytest.mark.skipif(not POSIX or AS_ROOT, reason="needs POSIX permissions, which root bypasses")
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = PROJECT_ROOT / "scripts" / "backup_cli.py"
 APP_VERSION = "v0.0.0-b1-cli-test"
 REVISION = "b1a2c3d4e5f6"
 NAME = "librefolio-backup-20261015-101500.zip"
+#: The names a folder gives to the archives of that same second after NAME: an archive never replaces another.
+SECOND_NAME = "librefolio-backup-20261015-101500-2.zip"
+THIRD_NAME = "librefolio-backup-20261015-101500-3.zip"
+VALID_ID = "0123456789abcdef0123456789abcdef"
+#: The bytes of the archive a placement moves: whatever its path in the end, it must still hold exactly these.
+ARCHIVE_BYTES = b"PK\x03\x04 an archive as a job leaves it " + bytes(range(256)) * 64
 #: Seconds. A child imports the application first, and a loaded parallel run is slow; a hang still ends.
 CLI_TIMEOUT = 120
 #: Characters of a child's output quoted by an assertion message.
@@ -156,6 +200,101 @@ def corrupt(source: Path, target: Path, entry: str) -> Path:
     return target
 
 
+EXPECTED_SHA = hashlib.sha256(ARCHIVE_BYTES).hexdigest()
+#: The closing line of ``inspect --no-verify``: the names were compared, the contents were not read.
+NO_VERIFY_LINE = "ℹ️  The entry names match the manifest; their contents were not read (--no-verify)"
+
+
+def sha256_of(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def job_archive(data: Path) -> Path:
+    """A finished job's archive as ``run_backup`` leaves it: ``<data dir>/backups/.jobs/<id>/<name>``."""
+    data.mkdir(parents=True, exist_ok=True)
+    folder = ensure_private_dir(job_dir(data, VALID_ID), data)
+    archive = folder / NAME
+    archive.write_bytes(ARCHIVE_BYTES)
+    return archive
+
+
+def job_folders(root: Path) -> list[str]:
+    """The entries of the jobs folder but its lock: what a command left behind."""
+    folder = jobs_dir(root)
+    return sorted(path.name for path in folder.iterdir() if path.name != ".lock") if folder.is_dir() else []
+
+
+def create(output: str | None = None) -> int:
+    """``cmd_create`` as ``dev.py backup create`` runs it. An exception escaping it is a traceback on the user's screen
+    where a message and exit code 1 belong: a failure of the test, not an error."""
+    try:
+        return backup_cli.cmd_create(create_args(output))
+    except Exception as exc:
+        pytest.fail(f"backup create raised {type(exc).__name__} ({exc}): the user would get a traceback instead of a message and exit code 1")
+
+
+def no_space() -> OSError:
+    return OSError(errno.ENOSPC, os.strerror(errno.ENOSPC))
+
+
+def on_mount(path, mount: Path) -> bool:
+    """Whether ``path`` is ``mount`` or below it: on the disk mounted there."""
+    path = Path(path)
+    return path == mount or mount in path.parents
+
+
+class OsStandIn:
+    """``backup_cli``'s ``os``, but for what a case needs: ``other_device`` and everything below it are on another
+    device than the rest (``os.stat``), as a disk mounted there; ``os.replace`` fails with ``rename_error`` when one is
+    given. The rest is the real ``os``."""
+
+    def __init__(self, *, other_device: Path | None = None, rename_error: OSError | None = None):
+        self._other_device = other_device
+        self._rename_error = rename_error
+
+    def __getattr__(self, name: str):
+        return getattr(os, name)
+
+    def stat(self, path, *args, **kwargs):
+        result = os.stat(path, *args, **kwargs)
+        if self._other_device is not None and on_mount(path, self._other_device):
+            return SimpleNamespace(st_dev=result.st_dev + 1, st_mode=result.st_mode, st_size=result.st_size)
+        return result
+
+    def replace(self, src, dst, *args, **kwargs):
+        if self._rename_error is not None:
+            raise self._rename_error
+        return os.replace(src, dst, *args, **kwargs)
+
+
+def free_space(monkeypatch, mount: Path, free: int) -> None:
+    """``shutil.disk_usage`` reports ``free`` bytes on the disk mounted at ``mount`` (it and everything below it), the
+    real figures anywhere else."""
+    real_disk_usage = shutil.disk_usage
+
+    def disk_usage(path):
+        if on_mount(path, mount):
+            return SimpleNamespace(total=max(free, 0) * 2, used=max(free, 0), free=free)
+        return real_disk_usage(path)
+
+    monkeypatch.setattr(backup_cli.shutil, "disk_usage", disk_usage)
+
+
+def failing_move(monkeypatch, error: OSError, *, target: Path | None = None, partial: bytes = b"") -> None:
+    """``shutil.move`` to ``target`` (to anywhere when ``None``) fails with ``error``, after writing ``partial`` there
+    when given: a copy to another disk that stops half-way. Moves elsewhere go through."""
+    real_move = shutil.move
+
+    def move(src, dst, *args, **kwargs):
+        if target is not None and Path(dst) != target:
+            return real_move(src, dst, *args, **kwargs)
+        if partial:
+            Path(dst).write_bytes(partial)
+        raise error
+
+    monkeypatch.setattr(backup_cli.shutil, "move", move)
+
+
 # =============================================================================
 # (a) _output_path
 # =============================================================================
@@ -197,6 +336,27 @@ def test_a_path_from_the_home_folder_is_expanded(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(home))
     assert backup_cli._output_path("~/nas", tmp_path / "data", NAME) == home / "nas" / NAME, "~ is the home folder"
     print_success("~/nas → <home>/nas/<name>")
+
+
+def test_requested_makes_the_output_absolute_and_creates_nothing(tmp_path, monkeypatch):
+    """(a) ``~`` is the home folder; a relative path starts from the working directory (dev.py's is the project root)."""
+    home = tmp_path / "home"
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(project)
+    cases = {
+        "~/nas/monday.zip": home / "nas" / "monday.zip",
+        "~": home,
+        "nas/monday.zip": Path.cwd() / "nas" / "monday.zip",
+        "monday.zip": Path.cwd() / "monday.zip",
+        str(tmp_path / "elsewhere" / "monday.zip"): tmp_path / "elsewhere" / "monday.zip",
+    }
+    for output, expected in cases.items():
+        requested = backup_cli._requested(output)
+        assert requested == expected and requested.is_absolute(), f"--output {output!r} must be read as {expected}, not {requested}"
+    assert listing(tmp_path) == ["project"], f"reading a path creates nothing: {listing(tmp_path)}"
+    print_success("~ → home, relative → working directory, absolute → as is")
 
 
 # =============================================================================
@@ -298,12 +458,26 @@ def test_inspect_an_intact_archive(good_archive, capsys):
     print_success("intact archive → 0")
 
 
-def test_inspect_without_verification_reads_the_manifest_only(good_archive, tmp_path, capsys):
+def test_inspect_without_verification_reads_no_entry(good_archive, tmp_path, capsys):
+    """(d) Repaired (was ``…_reads_the_manifest_only``, which asserted the old closing line): ``--no-verify`` compares
+    the names and reads no entry, so other bytes under the right names pass, and the last line says exactly that."""
     tampered = rebuilt(good_archive, tmp_path / "tampered.zip", swap={"custom-uploads/a.txt": FILES["custom-uploads/a.txt"].upper()})
     assert inspect(tampered, no_verify=True) == 0, "--no-verify does not read the entries: names right, exit code 0"
-    assert "entries not verified (--no-verify)" in capsys.readouterr().out, "and says the entries were not verified"
+    out = capsys.readouterr().out
+    assert NO_VERIFY_LINE in out, f"the last line says the names match and the contents were not read: {out}"
+    assert "✅" not in out, f"an archive whose entries were not read is never called intact: {out}"
     assert inspect(tampered) == 1, "verified, the same archive is exit code 1"
-    print_success("--no-verify → 0 with a notice; verified → 1")
+    print_success("--no-verify → 0, names matched, contents not read; verified → 1")
+
+
+def test_inspect_without_verification_still_compares_the_names(good_archive, tmp_path, capsys):
+    """(d) What the help of ``--no-verify`` promises: a name the manifest does not list is found without reading it."""
+    added = rebuilt(good_archive, tmp_path / "added.zip", add={"custom-uploads/extra.txt": b"not in the manifest"})
+    assert inspect(added, no_verify=True) == 1, "an entry the manifest does not list is exit code 1, with --no-verify too"
+    out = capsys.readouterr().out
+    assert "1 entry not in the manifest: custom-uploads/extra.txt" in out, f"inspect names the entry: {out}"
+    assert NO_VERIFY_LINE not in out, f"names that do not match are not reported as matching: {out}"
+    print_success("--no-verify, an added entry → 1")
 
 
 def bad_archive(case: str, good: Path, tmp_path: Path) -> Path:
@@ -399,6 +573,187 @@ def test_create_writes_the_archive_where_asked_and_removes_its_job(tmp_path, mon
     print_success(f"{written[0].name} written, job folder removed")
 
 
+@needs_symlinks
+@pytest.mark.parametrize("case", ["below-a-file", "dangling-link", "link-to-a-file"])
+def test_create_refuses_an_unusable_output_before_running(tmp_path, monkeypatch, capsys, case):
+    """(e)(g) The output is checked before the backup: a refusal costs no backup, writes nothing, creates no folder."""
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+    kept = tmp_path / "kept.zip"
+    kept.write_bytes(b"an archive kept by the user")
+    output = tmp_path / "monday.zip"
+    if case == "below-a-file":
+        output, said = kept / "2026" / "monday.zip", f"{kept} is not a folder"
+    elif case == "dangling-link":
+        output.symlink_to(tmp_path / "nowhere.zip")
+        said = f"{output} already exists"
+    else:
+        output.symlink_to(kept)
+        said = f"{output} already exists"
+    before = listing(tmp_path)
+    assert create(str(output)) == 1, f"{case}: an unusable --output is exit code 1"
+    out = capsys.readouterr().out
+    assert f"❌ {said}" in out, f"{case}: the command says {said!r}: {out}"
+    assert "💾 Backing up" not in out and not backups_dir(root).exists(), f"{case}: the backup never started (no backups/, no job folder): {out}"
+    assert listing(tmp_path) == before, f"{case}: nothing may be created or written: {sorted(set(listing(tmp_path)) ^ set(before))}"
+    assert kept.read_bytes() == b"an archive kept by the user", f"{case}: the file already there is untouched"
+    print_success(f"{case}: refused before running — {said}")
+
+
+@needs_permission_checks
+def test_create_refuses_an_output_in_a_folder_it_cannot_write_into(tmp_path, monkeypatch, capsys):
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    locked.chmod(0o500)
+    try:
+        code = create(str(locked / "2026" / "monday.zip"))
+        created = sorted(path.name for path in locked.iterdir())
+    finally:
+        locked.chmod(0o700)
+    out = capsys.readouterr().out
+    assert code == 1 and f"❌ cannot write into {locked}" in out, f"a folder it cannot write into is refused with exit code 1, got {code}: {out}"
+    assert created == [] and not backups_dir(root).exists(), f"nothing created there, no backup run: {created}"
+    print_success("read-only folder → refused before running")
+
+
+def test_a_backup_that_fails_creates_none_of_the_folders_of_its_output(tmp_path, monkeypatch, capsys):
+    """(e) B1 fix 8: the missing folders of --output come with the archive, so a failed backup leaves no empty one."""
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+
+    def broken_build(*args, **kwargs):
+        raise RuntimeError("the build failed")
+
+    monkeypatch.setattr(jobs, "build_archive", broken_build)
+    assert create(str(tmp_path / "nas" / "2026" / "monday.zip")) == 1, "a failed backup is exit code 1"
+    out = capsys.readouterr().out
+    assert "💾 Backing up" in out and "❌ Backup failed (backup_failed)" in out, f"precondition: --output was accepted, the backup ran and failed: {out}"
+    assert not (tmp_path / "nas").exists(), f"no folder of --output may be created by a failed backup: {listing(tmp_path / 'nas') if (tmp_path / 'nas').exists() else []}"
+    assert job_folders(root) == [], f"the failed job's folder is removed: {job_folders(root)}"
+    print_success("failed backup → no folder created for --output")
+
+
+def test_a_backup_creates_the_missing_folders_of_its_output_with_the_archive(tmp_path, monkeypatch, capsys):
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+    output = tmp_path / "nas" / "2026" / "monday.zip"
+    assert create(str(output)) == 0, "a backup into folders that do not exist yet is exit code 0"
+    assert output.is_file() and check_archive(output).ok, "the archive is where it was asked for, and checks ok"
+    assert f"✅ Backup written: {output}" in capsys.readouterr().out, "the command says where it is"
+    assert job_folders(root) == [], f"the job's folder is removed: {job_folders(root)}"
+    print_success("nas/2026/ created with the archive")
+
+
+@needs_symlinks
+@pytest.mark.parametrize("case", ["backups-is-a-link", "backups-is-a-dangling-link", "backups-is-a-file", "jobs-is-a-link"])
+def test_create_names_the_folder_that_is_not_a_plain_folder_and_writes_nothing_through_it(tmp_path, monkeypatch, capsys, case):
+    """(e) ``BackupPathError``: exit 1 and a message naming the very folder that is a link or a file (``backups/.jobs``
+    when that is the one), never a traceback; nothing is created through the link."""
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    culprit = jobs_dir(root) if case == "jobs-is-a-link" else backups_dir(root)
+    if case == "backups-is-a-link":
+        backups_dir(root).symlink_to(elsewhere, target_is_directory=True)
+    elif case == "backups-is-a-dangling-link":
+        backups_dir(root).symlink_to(tmp_path / "nowhere", target_is_directory=True)
+    elif case == "backups-is-a-file":
+        backups_dir(root).write_bytes(b"not a folder")
+    else:
+        backups_dir(root).mkdir()
+        jobs_dir(root).symlink_to(elsewhere, target_is_directory=True)
+    assert create() == 1, f"{case}: exit code 1"
+    out = capsys.readouterr().out
+    assert f"❌ {culprit} is not a plain folder (a link, or a file)" in out, f"{case}: the message names {culprit}: {out}"
+    if case == "jobs-is-a-link":
+        assert f"❌ {backups_dir(root)} is not a plain folder" not in out, f"backups/ is a plain folder: the message must name .jobs, not backups/: {out}"
+    assert list(elsewhere.iterdir()) == [], f"{case}: nothing may be created through the link: {sorted(path.name for path in elsewhere.iterdir())}"
+    assert not (tmp_path / "nowhere").exists(), f"{case}: a dangling link is not made to point to a new folder"
+    print_success(f"{case}: names {culprit.name}, exit 1, nothing written through it")
+
+
+def test_create_reports_an_error_that_keeps_the_run_from_starting(tmp_path, monkeypatch, capsys):
+    """(e) Any ``OSError`` of ``jobs.run_backup`` before the run (backups/ cannot be written): a message, exit 1."""
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+
+    def cannot_start(**kwargs):
+        raise PermissionError(errno.EACCES, os.strerror(errno.EACCES), str(jobs_dir(root)))
+
+    monkeypatch.setattr(jobs, "run_backup", cannot_start)
+    assert create() == 1, "a run that cannot start is exit code 1"
+    out = capsys.readouterr().out
+    assert f"❌ The backup could not run in {backups_dir(root)}: {os.strerror(errno.EACCES)}" in out, f"the message says where and why: {out}"
+    print_success("OSError before the run → message, exit 1")
+
+
+@needs_permission_checks
+def test_create_reports_a_backups_folder_it_cannot_write_into(tmp_path, monkeypatch, capsys):
+    """(e) The same, for real: ``backups/`` read-only, so ``backups/.jobs`` cannot be created."""
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+    backups_dir(root).mkdir()
+    backups_dir(root).chmod(0o500)
+    try:
+        code = create()
+        created = sorted(path.name for path in backups_dir(root).iterdir())
+    finally:
+        backups_dir(root).chmod(0o700)
+    out = capsys.readouterr().out
+    assert code == 1 and f"❌ The backup could not run in {backups_dir(root)}: {os.strerror(errno.EACCES)}" in out, f"a read-only backups/ is exit code 1 with the reason, got {code}: {out}"
+    assert created == [], f"nothing is created in it: {created}"
+    print_success("read-only backups/ → message, exit 1")
+
+
+def test_create_that_cannot_write_its_output_puts_the_archive_in_the_backups_folder_and_exits_1(tmp_path, monkeypatch, capsys):
+    """(e)(i) The disk of --output fills up during the copy: no partial file left there, the archive in backups/."""
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+    (tmp_path / "nas").mkdir()
+    output = tmp_path / "nas" / "monday.zip"
+    failing_move(monkeypatch, no_space(), target=output, partial=b"PK half an archive")
+    assert create(str(output)) == 1, "an archive written elsewhere than asked is exit code 1"
+    out = capsys.readouterr().out
+    written = sorted(backups_dir(root).glob("*.zip"))
+    assert len(written) == 1, f"the archive lands in <data dir>/backups/: {[path.name for path in written]}"
+    assert f"⚠️  cannot write {output}: {os.strerror(errno.ENOSPC)}: the archive was written to {written[0]} instead" in out, f"the command says why and where: {out}"
+    assert "✅" not in out, f"an archive not where it was asked for is not reported as written there: {out}"
+    assert not output.exists(), "no partial archive is left at --output"
+    assert check_archive(written[0]).ok, "the archive in backups/ is whole"
+    assert job_folders(root) == [], f"the job's folder is removed: {job_folders(root)}"
+    print_success(f"--output full → {written[0].name} in backups/, exit 1")
+
+
+def test_create_whose_archive_cannot_leave_its_job_folder_says_where_it_stays(tmp_path, monkeypatch, capsys):
+    """(e)(i) Default place, and the move into backups/ fails: the archive stays in its job folder, which is kept."""
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+    failing_move(monkeypatch, OSError(errno.EIO, os.strerror(errno.EIO)))
+    assert create() == 1, "an archive left in its job folder is exit code 1"
+    out = capsys.readouterr().out
+    folders = job_folders(root)
+    assert len(folders) == 1, f"the job's folder is kept, it holds the archive: {folders}"
+    kept = sorted(job_dir(root, folders[0]).glob("*.zip"))
+    assert len(kept) == 1 and check_archive(kept[0]).ok, f"the archive is whole in its job folder: {[path.name for path in kept]}"
+    said = f"❌ cannot write {backups_dir(root) / kept[0].name}: {os.strerror(errno.EIO)}: the archive stays in {kept[0]}. Move it within the hour"
+    assert said in out, f"the command says where the archive stays and for how long: {out}"
+    assert sorted(backups_dir(root).glob("*.zip")) == [], "no archive reached backups/"
+    print_success("move failed → archive kept in its job folder, path said, exit 1")
+
+
+@pytest.mark.parametrize("into", ["backups-folder", "output-folder"])
+def test_backups_of_the_same_second_keep_their_own_names(tmp_path, monkeypatch, capsys, into):
+    """(e)(h) Three backups of one second into one folder: -2, -3, each exit 0 (the second used to stay in its job)."""
+    root = point_at(monkeypatch, make_data_dir(tmp_path / "data"))
+    monkeypatch.setattr(jobs, "archive_name", lambda created_at: NAME)
+    folder = tmp_path / "nas" if into == "output-folder" else backups_dir(root)
+    if into == "output-folder":
+        folder.mkdir()
+    codes = [create(str(folder) if into == "output-folder" else None) for _ in range(3)]
+    out = capsys.readouterr().out
+    assert codes == [0, 0, 0], f"every backup of the same second is exit code 0: {codes}\n{out}"
+    names = sorted(path.name for path in folder.glob("*.zip"))
+    assert names == sorted([NAME, SECOND_NAME, THIRD_NAME]), f"each archive keeps its own name: {names}"
+    for name in (NAME, SECOND_NAME, THIRD_NAME):
+        assert f"✅ Backup written: {folder / name}" in out and check_archive(folder / name).ok, f"{name} is written, said, and checks ok: {out}"
+    assert job_folders(root) == [], f"every job folder is removed: {job_folders(root)}"
+    print_success(f"{into}: {', '.join(names)}")
+
+
 # =============================================================================
 # (f) the script
 # =============================================================================
@@ -441,3 +796,303 @@ def test_the_script_without_a_command_exits_1(tmp_path):
     done = script(env=child_env(tmp_path / "data"), cwd=tmp_path)
     assert done.returncode == 1 and "backup command required" in done.stdout, f"no command: exit 1 and a hint, got {done.returncode}\n{done.stdout[-TAIL:]}{done.stderr[-TAIL:]}"
     print_success("no command → exit 1")
+
+
+# =============================================================================
+# (g) _check_output
+# =============================================================================
+
+
+def test_check_output_accepts_an_existing_folder_and_a_new_file_path_and_creates_nothing(tmp_path):
+    """(g) A folder receives the archive under its own name, whatever it holds (B1 fix 2: a ``librefolio-backup.zip``
+    in it read as "already exists"); the missing folders of a new file path are left for the archive to bring."""
+    print_section("_check_output")
+    nas = tmp_path / "nas"
+    nas.mkdir()
+    (nas / "librefolio-backup.zip").write_bytes(b"an archive kept by the user")
+    before = listing(tmp_path)
+    for output in (str(nas), f"{nas}/", str(nas / "monday.zip"), str(tmp_path / "new" / "2026" / "monday.zip")):
+        problem = backup_cli._check_output(output)
+        assert problem is None, f"--output {output} must be accepted, not refused with {problem!r}"
+    assert listing(tmp_path) == before, f"the check creates nothing: {sorted(set(listing(tmp_path)) ^ set(before))}"
+    print_success("existing folder, new file, new folders → accepted, nothing created")
+
+
+@needs_symlinks
+@pytest.mark.parametrize("taken_by", ["file", "link-to-a-file", "dangling-link"])
+def test_check_output_refuses_a_file_path_already_taken(tmp_path, taken_by):
+    """(g) An archive never replaces a file, and a link at its place, dangling or not, is never written through."""
+    kept = tmp_path / "kept.zip"
+    kept.write_bytes(b"an archive kept by the user")
+    path = tmp_path / "monday.zip"
+    if taken_by == "file":
+        path.write_bytes(b"an archive kept by the user")
+    elif taken_by == "link-to-a-file":
+        path.symlink_to(kept)
+    else:
+        path.symlink_to(tmp_path / "nowhere.zip")
+    expected = f"{path} already exists: choose another name or folder"
+    assert backup_cli._check_output(str(path)) == expected, f"{taken_by}: must be refused with {expected!r}"
+    assert kept.read_bytes() == b"an archive kept by the user" and not (tmp_path / "nowhere.zip").exists(), f"{taken_by}: nothing written through it"
+    print_success(f"{taken_by} → already exists")
+
+
+@pytest.mark.parametrize("where", ["in-it", "folders-below-it"])
+def test_check_output_refuses_a_path_where_a_file_stands_for_a_folder(tmp_path, where):
+    blocker = tmp_path / "nas"
+    blocker.write_bytes(b"a file where a folder belongs")
+    output = blocker / "monday.zip" if where == "in-it" else blocker / "2026" / "10" / "monday.zip"
+    expected = f"{blocker} is not a folder: choose another path"
+    assert backup_cli._check_output(str(output)) == expected, f"{where}: the nearest existing part of the path is a file: {expected!r}"
+    assert blocker.read_bytes() == b"a file where a folder belongs", "the file is untouched"
+    print_success(f"{where} → is not a folder")
+
+
+@needs_permission_checks
+@pytest.mark.parametrize("output", ["the-folder", "a-file-in-it", "a-file-below-it"])
+def test_check_output_refuses_a_folder_it_cannot_write_into(tmp_path, output):
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    locked.chmod(0o500)
+    path = {"the-folder": locked, "a-file-in-it": locked / "monday.zip", "a-file-below-it": locked / "2026" / "monday.zip"}[output]
+    try:
+        problem = backup_cli._check_output(str(path))
+        created = sorted(entry.name for entry in locked.iterdir())
+    finally:
+        locked.chmod(0o700)
+    expected = f"cannot write into {locked}: choose another folder, or run the command as a user who can"
+    assert problem == expected, f"{output}: the nearest existing folder is read-only: {expected!r}, not {problem!r}"
+    assert created == [], f"{output}: nothing created in it: {created}"
+    print_success(f"{output} → cannot write into")
+
+
+def test_check_output_reads_a_relative_or_home_path_as_the_command_does(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    (home / "nas").mkdir(parents=True)
+    (home / "nas" / "monday.zip").write_bytes(b"an archive kept by the user")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(home / "nas")
+    expected = f"{Path.cwd() / 'monday.zip'} already exists: choose another name or folder"
+    assert backup_cli._check_output("monday.zip") == expected, "a relative path is checked from the working directory"
+    assert backup_cli._check_output("~/nas/monday.zip") == f"{home / 'nas' / 'monday.zip'} already exists: choose another name or folder", "~ is the home folder"
+    assert backup_cli._check_output("tuesday.zip") is None, "a free relative name is accepted"
+    print_success("relative and ~ paths checked where they point")
+
+
+# =============================================================================
+# (h) _free_path
+# =============================================================================
+
+
+@needs_symlinks
+def test_free_path_takes_the_next_number_past_every_name_taken(tmp_path):
+    print_section("_free_path")
+    folder = tmp_path / "nas"
+    folder.mkdir()
+    assert backup_cli._free_path(folder, NAME) == folder / NAME, "a free name is kept"
+    (folder / NAME).write_bytes(b"first")
+    assert backup_cli._free_path(folder, NAME) == folder / SECOND_NAME, "taken by a file: -2, before the suffix"
+    (folder / SECOND_NAME).symlink_to(tmp_path / "nowhere.zip")
+    assert backup_cli._free_path(folder, NAME) == folder / THIRD_NAME, "a dangling link takes its name too"
+    (folder / THIRD_NAME).mkdir()
+    assert backup_cli._free_path(folder, NAME) == folder / "librefolio-backup-20261015-101500-4.zip", "and so does a folder"
+    assert sorted(path.name for path in folder.iterdir()) == sorted([NAME, SECOND_NAME, THIRD_NAME]), "it chooses a name, it creates nothing"
+    assert not (tmp_path / "nowhere.zip").exists(), "the dangling link is not followed"
+    print_success("name, -2, -3, -4")
+
+
+# =============================================================================
+# (i) _place_archive
+# =============================================================================
+
+
+def test_place_moves_the_archive_to_its_target_creating_the_missing_folders(tmp_path):
+    print_section("_place_archive")
+    data = tmp_path / "data"
+    source = job_archive(data)
+    target = tmp_path / "nas" / "2026" / "monday.zip"
+    assert backup_cli._place_archive(source, target, data) == (target, None), "a move that succeeds returns the target and no problem"
+    assert sha256_of(target) == EXPECTED_SHA, "the target holds the archive's bytes"
+    assert not source.exists(), "the archive left its job folder"
+    print_success("moved, nas/2026/ created")
+
+
+@needs_symlinks
+@pytest.mark.parametrize("taken_by", ["file", "dangling-link"])
+def test_place_never_replaces_a_taken_target_and_falls_back_to_the_backups_folder(tmp_path, taken_by):
+    data = tmp_path / "data"
+    source = job_archive(data)
+    (tmp_path / "nas").mkdir()
+    target = tmp_path / "nas" / "monday.zip"
+    if taken_by == "file":
+        target.write_bytes(b"an archive kept by the user")
+    else:
+        target.symlink_to(tmp_path / "nowhere.zip")
+    placed, problem = backup_cli._place_archive(source, target, data)
+    assert (placed, problem) == (backups_dir(data) / NAME, f"{target} already exists"), f"{taken_by}: into backups/, with the reason: {placed}, {problem!r}"
+    assert sha256_of(placed) == EXPECTED_SHA and not source.exists(), f"{taken_by}: the archive is whole where it is said to be"
+    if taken_by == "file":
+        assert target.read_bytes() == b"an archive kept by the user", "the file at the target is untouched"
+    else:
+        assert target.is_symlink() and not (tmp_path / "nowhere.zip").exists(), "the link is neither replaced nor followed"
+    print_success(f"{taken_by} at the target → backups/{placed.name}")
+
+
+def test_place_falls_back_under_a_free_name(tmp_path):
+    data = tmp_path / "data"
+    source = job_archive(data)
+    (backups_dir(data) / NAME).write_bytes(b"an archive of the same second")
+    (tmp_path / "nas").mkdir()
+    target = tmp_path / "nas" / "monday.zip"
+    target.write_bytes(b"an archive kept by the user")
+    placed, _ = backup_cli._place_archive(source, target, data)
+    assert placed == backups_dir(data) / SECOND_NAME and sha256_of(placed) == EXPECTED_SHA, f"backups/ holds the name: the archive takes -2, {placed}"
+    assert (backups_dir(data) / NAME).read_bytes() == b"an archive of the same second", "the archive already there is untouched"
+    print_success(f"fallback → {SECOND_NAME}")
+
+
+@pytest.mark.parametrize(
+    ("device", "spare", "lands"),
+    [
+        pytest.param("other", -1, "backups", id="other-device-one-byte-short"),
+        pytest.param("other", 0, "target", id="other-device-exactly-enough"),
+        pytest.param("same", -1, "target", id="same-device-a-rename-needs-no-space"),
+    ],
+)
+def test_place_checks_the_space_of_another_device_before_moving(tmp_path, monkeypatch, device, spare, lands):
+    """(i) On another device the archive is copied, so it needs its size free there; on the same one it is renamed."""
+    data = tmp_path / "data"
+    source = job_archive(data)
+    nas = tmp_path / "nas"
+    nas.mkdir()
+    target = nas / "monday.zip"
+    free_space(monkeypatch, nas, len(ARCHIVE_BYTES) + spare)
+    if device == "other":
+        monkeypatch.setattr(backup_cli, "os", OsStandIn(other_device=nas))
+    placed, problem = backup_cli._place_archive(source, target, data)
+    if lands == "target":
+        assert (placed, problem) == (target, None), f"{device} device, {spare:+d} byte(s) spare: the archive goes to its target: {placed}, {problem!r}"
+    else:
+        expected = f"not enough free space in {nas} for {backup_cli._human(len(ARCHIVE_BYTES))}"
+        assert (placed, problem) == (backups_dir(data) / NAME, expected), f"one byte short on another device: into backups/, {expected!r}: {placed}, {problem!r}"
+        assert not target.exists(), "nothing is written at the target"
+    assert sha256_of(placed) == EXPECTED_SHA and not source.exists(), "the archive is whole where it is said to be"
+    print_success(f"{device} device, {spare:+d} → {lands}")
+
+
+@pytest.mark.parametrize("partial", [b"", b"PK half an archive"], ids=["nothing-written", "half-written"])
+def test_place_removes_a_partial_copy_and_falls_back_when_the_move_fails(tmp_path, monkeypatch, partial):
+    data = tmp_path / "data"
+    source = job_archive(data)
+    (tmp_path / "nas").mkdir()
+    target = tmp_path / "nas" / "monday.zip"
+    failing_move(monkeypatch, no_space(), target=target, partial=partial)
+    placed, problem = backup_cli._place_archive(source, target, data)
+    expected = f"cannot write {target}: {os.strerror(errno.ENOSPC)}"
+    assert (placed, problem) == (backups_dir(data) / NAME, expected), f"a failed move falls back to backups/ with {expected!r}: {placed}, {problem!r}"
+    assert not target.exists(), "no partial copy is left at the target"
+    assert sha256_of(placed) == EXPECTED_SHA, "the archive is whole in backups/"
+    print_success(f"move failed ({'half-written' if partial else 'nothing written'}) → backups/, target clean")
+
+
+def test_a_move_that_fails_once_the_archive_left_its_job_folder_never_removes_the_only_copy(tmp_path, monkeypatch):
+    """(i) The move raises, but the archive has left its job folder and is at the target: it got there whole (a rename
+    is atomic; a move to another disk removes its source only after a complete copy). It is reported as written there,
+    ``(target, None)``, never as a failure pointing at a job folder that no longer holds it; and the target, its only
+    copy, is never removed."""
+    data = tmp_path / "data"
+    source = job_archive(data)
+    (tmp_path / "nas").mkdir()
+    target = tmp_path / "nas" / "monday.zip"
+
+    def move_then_fail(src, dst, *args, **kwargs):
+        os.replace(src, dst)
+        raise OSError(errno.EIO, os.strerror(errno.EIO))
+
+    monkeypatch.setattr(backup_cli.shutil, "move", move_then_fail)
+    placed, problem = backup_cli._place_archive(source, target, data)
+    assert not source.exists(), "precondition: the archive had left its job folder when the move failed"
+    assert target.is_file() and sha256_of(target) == EXPECTED_SHA, "the target, the archive's only copy, is kept whole"
+    assert (placed, problem) == (target, None), f"the archive is whole at the target: reported written there, not as a failure pointing at a job folder that no longer holds it: {placed}, {problem!r}"
+    print_success("raised after the archive arrived → (target, None), the only copy kept")
+
+
+def test_an_archive_bound_for_the_backups_folder_stays_in_its_job_folder_when_the_move_fails(tmp_path, monkeypatch):
+    """(i) The fallback is the target's own folder: trying it again is pointless, the archive stays where it is."""
+    data = tmp_path / "data"
+    source = job_archive(data)
+    target = backups_dir(data) / NAME
+    failing_move(monkeypatch, OSError(errno.EIO, os.strerror(errno.EIO)), target=target)
+    placed, problem = backup_cli._place_archive(source, target, data)
+    assert (placed, problem) == (source, f"cannot write {target}: {os.strerror(errno.EIO)}"), f"the archive stays in its job folder, the reason given: {placed}, {problem!r}"
+    assert sha256_of(placed) == EXPECTED_SHA, "the archive is whole in its job folder"
+    assert sorted(path.name for path in backups_dir(data).iterdir()) == [".jobs"], "nothing reached backups/"
+    print_success("bound for backups/, move failed → stays in its job folder")
+
+
+def test_an_archive_that_cannot_be_renamed_into_the_backups_folder_stays_in_its_job_folder(tmp_path, monkeypatch):
+    data = tmp_path / "data"
+    source = job_archive(data)
+    (tmp_path / "nas").mkdir()
+    target = tmp_path / "nas" / "monday.zip"
+    target.write_bytes(b"an archive kept by the user")
+    monkeypatch.setattr(backup_cli, "os", OsStandIn(rename_error=PermissionError(errno.EACCES, os.strerror(errno.EACCES))))
+    placed, problem = backup_cli._place_archive(source, target, data)
+    assert (placed, problem) == (source, f"{target} already exists"), f"neither the target nor backups/: the archive stays, the first reason given: {placed}, {problem!r}"
+    assert sha256_of(placed) == EXPECTED_SHA, "the archive is whole in its job folder"
+    print_success("target taken, rename refused → stays in its job folder")
+
+
+@pytest.mark.parametrize("failure", ["no-space-on-another-device", "the-move-fails"])
+def test_a_target_the_archive_never_reached_leaves_none_of_the_folders_created_for_it(tmp_path, monkeypatch, failure):
+    """(i) B1 fix 8: the missing folders of --output are created only when the archive gets there. ``nas/`` exists and
+    the archive is bound for ``nas/2026/10/``. On another disk without the space, the check runs on ``nas``, the nearest
+    folder that exists, before anything is created; when the move fails, the two folders made for it are removed again,
+    deepest first. Either way the archive goes to backups/ and ``nas`` is left as it was."""
+    data = tmp_path / "data"
+    source = job_archive(data)
+    nas = tmp_path / "nas"
+    nas.mkdir()
+    older = nas / "librefolio-backup-20261014-090000.zip"
+    older.write_bytes(b"an older archive")
+    target = nas / "2026" / "10" / "monday.zip"
+    if failure == "no-space-on-another-device":
+        free_space(monkeypatch, nas, 0)
+        monkeypatch.setattr(backup_cli, "os", OsStandIn(other_device=nas))
+        expected = f"not enough free space in {nas} for {backup_cli._human(len(ARCHIVE_BYTES))}"
+    else:
+        failing_move(monkeypatch, no_space(), target=target, partial=b"PK half an archive")
+        expected = f"cannot write {target}: {os.strerror(errno.ENOSPC)}"
+    placed, problem = backup_cli._place_archive(source, target, data)
+    assert sorted(os.listdir(nas)) == [older.name], f"{failure}: the archive never reached {target}, so no folder made for it may be left in nas/: {listing(nas)}"
+    assert older.read_bytes() == b"an older archive", f"{failure}: what nas/ held is untouched"
+    assert (placed, problem) == (backups_dir(data) / NAME, expected), f"{failure}: into backups/, with {expected!r}: {placed}, {problem!r}"
+    assert sha256_of(placed) == EXPECTED_SHA, "the archive is whole in backups/"
+    print_success(f"{failure}: {expected}; nas/ as it was")
+
+
+# =============================================================================
+# (j) the help
+# =============================================================================
+
+
+def help_of(monkeypatch, capsys, *command: str) -> str:
+    """What ``dev.py <command> --help`` prints, its whitespace collapsed: the wrapping depends on the terminal."""
+    monkeypatch.setenv("COLUMNS", "120")
+    parser = argparse.ArgumentParser(prog="dev.py")
+    backup_cli.register_subparser(parser.add_subparsers(dest="command"))
+    with pytest.raises(SystemExit) as done:
+        parser.parse_args([*command, "--help"])
+    assert done.value.code == 0, f"{' '.join(command)} --help exits 0, not {done.value.code}"
+    return " ".join(capsys.readouterr().out.split())
+
+
+def test_the_help_says_what_no_verify_compares_and_where_a_relative_path_starts(monkeypatch, capsys):
+    print_section("Help")
+    group = help_of(monkeypatch, capsys, "backup")
+    assert "A relative path starts from the project root, like every path given to dev.py." in group, f"backup --help says where a relative path starts: {group}"
+    inspect_help = help_of(monkeypatch, capsys, "backup", "inspect")
+    assert "--no-verify Compare the entry names with the manifest without reading the entries (faster)" in inspect_help, f"--no-verify says it still compares the names: {inspect_help}"
+    create_help = help_of(monkeypatch, capsys, "backup", "create")
+    assert "checked before the backup starts" in create_help, f"--output says it is checked first: {create_help}"
+    print_success("--no-verify, --output and the relative-path line")
