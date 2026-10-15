@@ -2721,15 +2721,18 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   il coordinatore gira al coordinatore colori. **Chiusa nel CP3b il 15/10** per le 13 righe del perimetro deciso; i due
   commenti di `AssetModal` restano in X-R3, le 3 fixture sono passate a G. Dettagli:
   [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», quinto aggiornamento di base e CP3b.
-- **X-R6 · `web_link_finder`: timeout e numero massimo di URL non validati** — piccolo; segnalato da H il 15/10 (lotto
+- ✅ **X-R6 · `web_link_finder`: timeout e numero massimo di URL non validati** — piccolo; segnalato da H il 15/10 (lotto
   `web_link_finder`), girato a X dal coordinatore. Preesistente e invariato dagli spostamenti. `config/plugins.py:46-52`
   accetta `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` a `nan` o `inf` (`float()`), e `services/assets/web_link_finder.py:108`
   (`DDGS(timeout=int(timeout) or None)`) allora solleva: la ricerca rende `[]` scrivendo solo un debug (`:244-245`); un
   timeout sotto 1 diventa `int(…) == 0`, cioè nessun timeout; con `LIBREFOLIO_WEB_LINK_FINDER_MAX=0` il controllo di
   `:259` arriva dopo il primo `append`, e torna comunque un URL. Cura: valori finiti e ≥ 1 negli accessori di
   `config/plugins.py` (file di H: d'accordo con H) e un timeout non intero rispettato; con il CP6 (F05) o il CP10, che
-  toccano la configurazione dei plugin. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
-  sezione «15», quinto aggiornamento di base.
+  toccano la configurazione dei plugin. **Chiusa nel CP10 il 15/10** (commit al checkpoint del CP10): i due accessori di
+  `config/plugins.py` danno il default per un valore non finito o sotto 1, `DDGS(timeout=math.ceil(timeout))` rispetta un
+  timeout non intero, `.env.example` e la docstring dicono «at least 1»; i sei casi di `test_config_package.py` che
+  fissavano il vecchio comportamento aggiornati. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», quinto aggiornamento di base, e sezione «CP10», passo 8.
 - ✅ **X-R7 · La pagina di Borsa Italiana elenca le variabili del `web_link_finder` senza `_FILE`** — minimo, doc; segnalato
   da H il 15/10. `mkdocs_src/docs/developer/backend/assets/provider_borsa_italiana.md:123` cita `_API_KEY` ma non
   `_API_KEY_FILE` (segreti Docker, `env_secret()`); la fonte di verità è `search_link_finder.md`: la riga va ridotta a un
@@ -2819,6 +2822,29 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   `asyncio.Runner.close()`; test `test_provider_core_cache.py::TestRunProviderInThread::test_worker_thread_does_not_keep_closed_event_loop`,
   rosso prima della riga e verde dopo (`7794e2fb0`, in `dev_release2` con `743fca514`). Dettagli:
   [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», J-5.
+
+- **X-R12 · Un evento del fornitore datato oggi arriva solo il giorno dopo** — piccolo, prodotto; trovata da W in E1b,
+  girata a X dal coordinatore il 15/10, valutata da X lo stesso giorno, fuori dal CP10. Il refresh chiede la storia fino
+  a ieri (`services/assets/refresh.py:227`, `history_end = today - 1` quando `end >= today`), e gli eventi arrivano
+  solo con la storia: un dividendo o uno split con la data di oggi entra il giorno dopo.
+  - **Perché c'è il taglio**: protegge i prezzi. La chiusura di oggi non c'è ancora, e il valore di oggi arriva da
+    `get_current_value`.
+  - **Gli eventi non hanno questa ragione**: una data di stacco annunciata è un fatto. Restano legati al taglio solo
+    perché viaggiano nella stessa chiamata.
+  - **Effetto**: nessun errore di valore. Uno split sposta le posizioni solo con la transazione ADJUSTMENT legata
+    all'evento (`portfolio/engine.py:213-223`). Ritarda di un giorno la comparsa dell'evento, il suo collegamento da una
+    transazione e i dati di AI Export.
+  - **Cura proposta**: chiedere la storia fino a oggi e scartare il prezzo di oggi prima della cache e della scrittura,
+    tenendo gli eventi fino a oggi. Va rivisto il calcolo della copertura della cache (`dates`), che non deve contare
+    oggi. Va verificato per ogni plugin che `end_date` sia inclusivo, e con `scheduled_investment`, che i punti futuri
+    li genera da sé.
+  - Un lotto con un test di regressione su `mockprov`, dopo X1–X8, che toccano lo stesso percorso.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», nota su X-R12.
+- **X-R13 · La pagina dell'asset calcola ancora `emoji` per il grafico dei settori** — minimo, frontend; dal programma
+  colori (DV-3, innocua), girata a X dal coordinatore il 15/10. Con DV il campo `emoji` di `AllocationEntry` sparisce,
+  ma `routes/(app)/assets/[id]/+page.svelte:3496` (su `dev_release2`, il `map` dei dati di `AllocationPieChart` per i
+  settori) lo calcola ancora: un dato morto, che `front check` non vede. Da togliere nel FE5c, col taglio della pagina.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», note della sera.
 
 ## W · Import e transazioni (fase 01)
 

@@ -29,6 +29,7 @@ from backend.app.schemas.fx import (
 )
 from backend.app.services.fx.catalog import get_supported_currencies_cached
 from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.fx.runtime import configured_fx_provider
 from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY
 
 logger = get_logger(__name__)
@@ -76,9 +77,8 @@ async def list_providers(
         # Get all providers from registry
         providers_list = FXProviderRegistry.list_providers()
 
-        # Filter out internal/testing providers from public list
-        _HIDDEN_FX_PROVIDERS = {"MANUAL", "MOCKFX", "MOCKFX_FAIL"}
-        providers_list = [p for p in providers_list if p["code"] not in _HIDDEN_FX_PROVIDERS]
+        # Filter out the testing providers and MANUAL (the sentinel of hand-entered rates) from the public list
+        providers_list = [p for p in providers_list if p["code"] != "MANUAL" and not getattr(FXProviderRegistry.get_plugin(p["code"]), "test_only", True)]
 
         # Filter by requested provider codes (case-insensitive)
         if providers:
@@ -89,7 +89,7 @@ async def list_providers(
         result = []
         for provider_dict in providers_list:
             code = provider_dict["code"]
-            instance = FXProviderRegistry.get_provider_instance(code)
+            instance = await configured_fx_provider(code)
 
             # Get base currencies (property always available in base class)
             base_currencies = instance.base_currencies

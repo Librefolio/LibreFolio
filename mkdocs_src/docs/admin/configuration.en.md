@@ -107,6 +107,9 @@ read from a file.
 | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` | The key of a paid search service, for the `apikey` engine of the web search below. Unlike the first two, a file that cannot give it does not stop the server: it only turns the web search off. |
 | `LIBREFOLIO_SMTP_PASSWORD` | `LIBREFOLIO_SMTP_PASSWORD_FILE` | The password of the SMTP server that sends LibreFolio's emails: see [Email](email.md). Like the web-search key, a file that cannot give it does not stop the server: it only turns email off. |
 
+A plugin may have secrets of its own, such as the API key of a paid data source: see
+[Plugin Settings](#plugin-settings).
+
 ### 📄 Secrets in Files {: #secret-files }
 
 Add `_FILE` to the name of a secret and give the path of a file that holds it. This is how Docker and
@@ -203,6 +206,96 @@ the data directory. Give every instance its own key: never share one key between
     - Setting `LIBREFOLIO_INSTANCE_KEY` where `secrets/instance.key` already exists changes the key. To
       move the key to the environment or to a Docker secret, use the content of `secrets/instance.key`
       as the value.
+
+---
+
+## 🧩 Plugin Settings {: #plugin-settings }
+
+A plugin can ask for settings of its own: the API key of a paid data source, a region, a
+preference. No plugin shipped with LibreFolio asks for one today; a plugin you add may. A setting is
+one of two kinds:
+
+- **Instance-wide**: one value for the whole instance, which only an administrator can save. Every
+  user can read a plain value, and of a secret one, such as an API key, only whether it is set.
+- **Personal**: each user's own value, which only that user can save and read. Administrators never
+  see it.
+
+An instance-wide setting can also be given by an environment variable, in `.env` or in the
+container's environment like the other options; a personal one cannot. The plugins that have
+settings, with the keys of their settings, are listed by `GET /api/v1/settings/plugins` to any
+signed-in user.
+
+### 🏷️ The Variables {: #plugin-variables }
+
+LibreFolio builds the name of the variable from the kind of plugin, the plugin's code and the
+setting's key:
+
+```text
+LIBREFOLIO_PLUGIN_<KIND>_<PLUGIN CODE>_<SETTING KEY>
+```
+
+- `<KIND>` is `ASSET` for a price provider and `FX` for an exchange-rate provider.
+- The whole name is in uppercase, and every character other than a letter or a digit becomes `_`:
+  the `api_key` setting of the price provider `my_provider` is
+  `LIBREFOLIO_PLUGIN_ASSET_MY_PROVIDER_API_KEY`.
+- For a secret setting, a plugin may also accept the variable it read before it had settings, so
+  that an existing install keeps working. When both are set, the name above wins.
+- Each variable also has a `_FILE` form, the path of a file that holds the value, such as a Docker
+  secret. The file is read as in [Secrets in Files](#secret-files), but one that cannot be read never
+  stops the server: see below.
+
+### 🔒 A Variable Locks the Setting {: #plugin-variable-lock }
+
+While its variable is set, a setting takes its value from there, and nobody can change it from
+inside LibreFolio: a save is refused (`LOCKED_BY_ENV`), and a value saved earlier is ignored until
+you remove the variable and restart.
+
+- A wrong value, one the setting does not accept or a `_FILE` that cannot be read, still locks the
+  setting, and the plugin is then not configured: LibreFolio refuses every request to it, even when
+  the setting is optional, until you fix the variable. It never falls back to the saved value or to
+  the plugin's default. The log says why, with a warning once per server process:
+  `Plugin setting variable invalid: the plugin is not configured until it is fixed`, with the
+  variable and the reason, never the value. Fix the value, then restart.
+- In the [managed profile](hosting_providers.md#managed-profile), a setting locked by a variable is
+  not shown at all, and a save to it is refused as if it did not exist: the hosting provider sets it,
+  and the instance's administrators and users never see it.
+
+### 🔐 Saved Secrets and the Instance Key {: #plugin-secrets }
+
+A setting saved inside LibreFolio is kept in the database. A secret one is first encrypted
+(AES-256-GCM) with a key derived from the [instance key](#instance-key), and is never shown again,
+not even to whoever saved it: LibreFolio only says whether it is set. A value given by a variable,
+secret or not, is never saved in the database.
+
+If the instance key changes, the saved secrets can no longer be read. LibreFolio keeps them and
+reports them as unreadable, and never uses a wrong value: enter them again.
+
+If `secrets/instance.key` is damaged or out of reach, LibreFolio starts anyway, with an error from
+the [startup checks](#startup-checks); a key you set yourself that cannot be used stops the start
+instead. Until you fix it:
+
+- every saved secret is reported as unreadable, and the plugins run without them: a plugin that needs
+  one answers that it is not configured;
+- secrets given by variables keep working;
+- a new secret cannot be saved;
+- the log has one more error, the first time each server process needs a saved secret:
+  `Plugin secrets unreadable: the instance key cannot be used (see the configuration checks)`.
+
+Fix the file, or restore it from a backup, and the saved secrets come back. A new key does not bring
+them back: they would have to be entered again.
+
+!!! warning "🗄️ The database and the key in one folder"
+
+    The database (`sqlite/app.db`) and the instance key that LibreFolio generates
+    (`secrets/instance.key`) are in the same [data directory](filesystem.md): whoever gets both, the
+    folder itself or a copy of it, can read every saved secret.
+
+    - Keep the data directory, and every copy of it, private.
+    - Better, give the instance key from a secret store, with `LIBREFOLIO_INSTANCE_KEY_FILE` (a
+      Docker secret) or `LIBREFOLIO_INSTANCE_KEY`: LibreFolio then never writes it to the data
+      directory. If LibreFolio has already created `secrets/instance.key`, use its content as the
+      value, as [The Instance Key](#instance-key) explains: another key would make the saved secrets
+      unreadable.
 
 ---
 
@@ -309,8 +402,8 @@ updates. All these variables are optional: uncomment a line of `.env.example` to
 | `LIBREFOLIO_WEB_LINK_FINDER_ENGINE` | `ddgs` | `ddgs` needs no setup. `apikey` is reserved for a paid search service and returns no results yet. |
 | `LIBREFOLIO_WEB_LINK_FINDER_DDGS_REGION` | `wt-wt` | Search region. `wt-wt` (worldwide) keeps national sites such as Borsa Italiana from being pushed down. Examples: `it-it`, `us-en`. |
 | `LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND` | `auto` | Engines that `ddgs` queries: `auto` rotates them for the widest coverage; a list such as `google,bing,duckduckgo` gives steadier results. |
-| `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` | `6` | Time limit of one search, in seconds. |
-| `LIBREFOLIO_WEB_LINK_FINDER_MAX` | `5` | Most links returned by one search. |
+| `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` | `6` | Time limit of one search, in seconds: at least `1`. Any other value means the default. |
+| `LIBREFOLIO_WEB_LINK_FINDER_MAX` | `5` | Most links returned by one search: a whole number, at least `1`. Any other value means the default. |
 | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | _empty_ | Key for the `apikey` engine. `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` reads it from a file instead: see [Secrets](#secrets). |
 
 ??? tip "🔁 Results change between attempts — when a known asset is sometimes not found"
@@ -334,6 +427,12 @@ With Docker Compose, the `environment:` block of `docker-compose.yml` wins over 
 `HOST`, `LIBREFOLIO_DATA_DIR` and, inside the container, `PORT=6040` (your `PORT` still sets the host
 port). See [Advanced Docker](docker_advanced.md#resolution-priority).
 
+For a [plugin setting](#plugin-settings), from the highest priority to the lowest: its variable
+(`LIBREFOLIO_PLUGIN_…` before the plugin's older name for it, each before its `_FILE` form), the
+value saved inside LibreFolio, then the plugin's default. A variable with a wrong value still wins,
+and leaves the plugin not configured. A personal setting has no variable: the user's saved value,
+then the default.
+
 ---
 
 ## 📂 Where the Data Goes
@@ -355,3 +454,5 @@ port). See [Advanced Docker](docker_advanced.md#resolution-priority).
   values are loaded
 - 🔒 For developers: **[Security Architecture](../developer/architecture/security.md)** — Secrets,
   the instance key and the startup checks
+- 🧩 For developers: **[Plugin Settings](../developer/architecture/patterns/plugin_settings.md)** —
+  How plugins declare settings, and how secrets are protected

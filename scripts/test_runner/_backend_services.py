@@ -902,6 +902,54 @@ def services_config_env_example(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, ".env.example guard tests", verbose=verbose)
 
 
+def services_plugin_settings_contract(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what a plugin declares to have settings, the values a field accepts, and what the core binds."""
+    print_section("Services: Plugin Settings Contract")
+    print_info("Testing: backend/app/services/plugin_settings/fields.py, contract.py, provider_registry.register")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_contract.py", test_names)
+    return run_command(cmd, "Plugin settings contract tests", verbose=verbose)
+
+
+def services_plugin_settings_crypto(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the encryption of the secret plugin settings and the re-encryption a restore needs."""
+    print_section("Services: Plugin Settings Encryption")
+    print_info("Testing: backend/app/services/plugin_settings/crypto.py (AES-256-GCM, AAD, key id, rekey, key status)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_crypto.py", test_names)
+    return run_command(cmd, "Plugin settings encryption tests", verbose=verbose)
+
+
+def services_plugin_settings_runtime(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the resolution of plugin settings and their delivery at the asset and FX call boundaries."""
+    print_section("Services: Plugin Settings Resolution and Delivery")
+    print_info("Testing: plugin_settings/resolver.py, runtime.py, assets/core.py (call_provider), fx/runtime.py (call_fx_provider)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_runtime.py", test_names)
+    return run_command(cmd, "Plugin settings runtime tests", verbose=verbose)
+
+
+def services_plugin_settings_service(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plugin settings catalogue and the all-or-nothing writes on a private database."""
+    print_section("Services: Plugin Settings Service")
+    print_info("Testing: backend/app/services/plugin_settings/service.py (read_catalogue, write_settings)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_service.py", test_names)
+    return run_command(cmd, "Plugin settings service tests", verbose=verbose)
+
+
+def services_secret_masking(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the masking of the secrets a plugin call carries, in its errors and its log lines."""
+    print_section("Services: Secret Masking")
+    print_info("Testing: backend/app/utils/runtime/secret_masking.py and its wiring in logging_config.configure_logging")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_secret_masking.py", test_names)
+    return run_command(cmd, "Secret masking tests", verbose=verbose)
+
+
+def services_plugin_settings_guards(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plugin settings guards: variables documented, derived names unique, AI Export never reads them."""
+    print_section("Services: Plugin Settings Guards")
+    print_info("Testing: registered declarations against .env.example, derived variable names, imports of services/ai_export/")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_guards.py", test_names)
+    return run_command(cmd, "Plugin settings guard tests", verbose=verbose)
+
+
 def services_platform_readiness(verbose: bool = False, test_names: list = None) -> bool:
     """Test the readiness checks: database and migration codes, the head read once, no detail in the response."""
     print_section("Services: Instance Readiness")
@@ -1539,6 +1587,16 @@ Note: No backend server required.
     add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
+    # Plugin settings (CP10). PURE, all six: no lane DB and no server. The databases are private files under tmp_path
+    # built with create_all, the call boundaries read their rows through a private engine put in place of
+    # get_async_engine, the instance key is a test key set with monkeypatch (the data directory pointed into tmp_path,
+    # so no key file is ever read or made in the lane), and the real plugin registries are only read.
+    add_test(cat, "plugin-settings-contract", services_plugin_settings_contract, name="Plugin Settings Contract", desc="Declarations per family, refusal at registration, values per type, refusals without the value, derived variable names, BoundSettings and the test doubles", isolation="pure")
+    add_test(cat, "plugin-settings-crypto", services_plugin_settings_crypto, name="Plugin Settings Encryption", desc="AES-256-GCM blob and AAD, key id, subkeys, count and rekey on a sqlite3 copy (savepoint, idempotent, unreadable rows kept), key status (unusable key: totals)", isolation="pure")
+    add_test(cat, "plugin-settings-runtime", services_plugin_settings_runtime, name="Plugin Settings Resolution", desc="env > _FILE > row > default, invalid variable unconfigures, unusable key, fingerprints, configure_instance, NOT_CONFIGURED and masking at both boundaries", isolation="pure")
+    add_test(cat, "plugin-settings-service", services_plugin_settings_service, name="Plugin Settings Service", desc="Catalogue and all-or-nothing writes on a private DB: scopes, LOCKED_BY_ENV, managed profile, item rules, log without values, key unavailable, MOCKFX writes", isolation="pure")
+    add_test(cat, "secret-masking", services_secret_masking, name="Secret Masking", desc="mask_text with the URL forms, mask_exception through chains and groups, structlog processor and logging filter, the context variable across threads and tasks, the wiring in configure_logging", isolation="pure")
+    add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
     add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
     add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
     add_test(
