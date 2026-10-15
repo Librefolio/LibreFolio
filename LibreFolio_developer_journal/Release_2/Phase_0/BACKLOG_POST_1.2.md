@@ -3745,6 +3745,10 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   come un account disattivo qualunque: l'admin lo può attivare a mano, ma non vede che aspetta la verifica. Serve un
   campo nella lista di A (`pending_verification`) e un badge in `UserRow`. Fuori dalla 1.3 per decisione del
   coordinatore. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E5.0».
+- **E-8 · «Invia per email» non sceglie la lingua dell'invito** — minimo; E, 15/10 (E4a, decisione notturna da
+  rivedere). L'azione manda l'invito sempre nella lingua predefinita dell'istanza; `POST /email/links` accetterebbe
+  `language`, ma la 1.3 non mostra un selettore. Da aggiungere se serve invitare chi parla un'altra lingua.
+  Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E4.1».
 
 ## Y · Cruscotto e grafici (fase 01)
 
