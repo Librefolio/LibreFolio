@@ -45,12 +45,14 @@ const PREFIX_ALT = [...PREFIXES].sort((a, b) => b.length - a.length).join('|');
 
 const TW_RE = new RegExp(`(?<![\\w-])((?:[a-z0-9-]+:)*)(${PREFIX_ALT})-(${FAMILIES.join('|')})-(50|100|200|300|400|500|600|700|800|900|950)(/\\d{1,3}|/\\[[^\\]]+\\])?(?![\\w-])`, 'g');
 const TW_BW_RE = /(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via)-(white|black|transparent|current)(\/\d{1,3})?(?![\w-])/g;
-const TW_CUSTOM_RE = /(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via|outline|divide)-(libre-[a-z-]+|theme-[a-z-]+|primary[a-z-]*|accent[a-z-]*)(\/\d{1,3})?(?![\w-])/g;
+const TW_CUSTOM_RE = /(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via|outline|divide)-(libre-[a-z-]+|theme-[a-z-]+|primary[a-z-]*|accent[a-z-]*|lf-[a-z0-9-]+)(\/\d{1,3})?(?![\w-])/g;
 const TW_ARBITRARY_RE = /(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via|outline|divide|shadow)-\[([^\]]*(?:#|rgb|hsl|var\(|oklch)[^\]]*)\]/g;
 const HEX_RE = /(?<![\w&])#([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/g;
 const FUNC_RE = /\b(rgba?|hsla?|oklch|color-mix)\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
 const VAR_USE_RE = /var\(\s*(--[\w-]+)/g;
 const VAR_DEF_RE = /^\s*(--[\w-]+)\s*:\s*([^;]+);/gm;
+/** A definition that only names another variable: `var(--x)`, the form of an alias. */
+const ALIAS_VALUE_RE = /^var\(\s*(--[\w-]+)\s*\)$/;
 /**
  * A test id written in the markup: `data-testid=…`, or a prop a component renders as a `data-testid` — `testid`,
  * `testId`, `optionTestId`… (never `testIdPrefix`: the name must end the attribute). The value is read by
@@ -268,12 +270,14 @@ function cssContext(text, blocks, offset) {
     /** @type {CssBlock | null} */
     let inner = null;
     for (const b of blocks) if (b.start < offset && offset < b.end && (!inner || b.start > inner.start)) inner = b;
-    if (!inner) return {selector: null, at: [], property: null, theme: 'both'};
+    if (!inner) return {selector: null, at: [], property: null, theme: 'both', inline: false};
     const chain = [];
     for (let b = /** @type {CssBlock | null} */ (inner); b; b = b.parent) chain.unshift(b.prelude);
     const at = chain.filter((p) => p.startsWith('@') && p !== '@theme');
     const selectors = chain.filter((p) => !p.startsWith('@') || p === '@theme');
     const selector = selectors.length ? selectors.join(' ') : null;
+    // `@theme inline`: Tailwind writes the values into the utilities and emits no variable for them.
+    const inline = chain.some((p) => /^@theme\b/.test(p) && /\binline\b/.test(p));
     let start = offset;
     while (start > inner.start && !';{}'.includes(text[start - 1])) start--;
     const declaration = text.slice(start, offset);
@@ -285,7 +289,7 @@ function cssContext(text, blocks, offset) {
                   .replace(/\/\*[\s\S]*?\*\//g, '')
                   .trim() || null
             : null;
-    return {selector, at, property, theme: themeOfChain(chain)};
+    return {selector, at, property, theme: themeOfChain(chain), inline};
 }
 
 /**
@@ -588,6 +592,9 @@ export function scanSource(rel, text, opts = {}) {
         const region = cssRegions.find((r) => r.start <= def.offset && def.offset < r.end);
         const ctx = region ? cssContext(text, region.blocks, def.offset) : null;
         Object.assign(def, {zone: zoneAt(def.offset), selector: ctx?.selector ?? null, theme: ctx?.theme ?? null});
+        // An alias of `@theme inline` (`--color-lf-card: var(--lf-surface-card)`) does not exist at runtime: the
+        // utilities read the variable it names. The two fields are written only for such a definition.
+        if (ctx?.inline) Object.assign(def, {inline: true, alias_of: ALIAS_VALUE_RE.exec(def.value)?.[1] ?? null});
     }
     return result;
 }
@@ -632,12 +639,12 @@ export function scanColors(opts = {}) {
     const parity = {files: paths.length, tw: 0, custom: 0, arbitrary: 0, hex: 0, fn: 0, var_uses: 0, var_uses_distinct: 0, var_defs: 0};
     /** @type {Set<string>} */
     const distinctUses = new Set();
-    /** @type {Map<string, {var: string, uses: number, dark: number, classes: Record<string, number>, files: Record<string, number>, occ: number[][]}>} */
+    /** @type {Map<string, {var: string, uses: number, dark: number, classes: Record<string, number>, files: Record<string, number>, occ: number[][], role?: string}>} */
     const palette = new Map();
     /** Per palette variable: class → its index in `classes` (insertion order, the order `Object.keys` returns). */
     /** @type {Map<string, Map<string, number>>} */
     const classIndex = new Map();
-    /** @type {Map<string, {name: string, defs: object[], uses: number, files: Record<string, number>, use_sites: (number | string | null)[][]}>} */
+    /** @type {Map<string, {name: string, defs: {inline?: boolean, alias_of?: string | null}[], uses: number, files: Record<string, number>, use_sites: (number | string | null)[][]}>} */
     const cssVars = new Map();
     /** @type {object[]} */
     const literals = [];
@@ -717,6 +724,15 @@ export function scanColors(opts = {}) {
         const scan = scanSource(rel, readFileSync(full, 'utf8'), {zoneOverride: 'static'});
         const f = idx(rel);
         for (const lit of scan.literals) literals.push({file: f, ...lit});
+    }
+
+    // The classes of an inline alias (`bg-lf-card` → `--color-lf-card`, which no stylesheet defines at runtime) read the
+    // variable the alias names: that variable is what the Lab edits for them, the role (`--lf-surface-card`).
+    for (const p of palette.values()) {
+        const defs = cssVars.get(p.var)?.defs ?? [];
+        const named = new Set(defs.map((d) => (d.inline ? d.alias_of : undefined)));
+        const role = named.size === 1 ? [...named][0] : undefined;
+        if (defs.length && role) p.role = role;
     }
 
     literals.forEach((lit, i) => Object.assign(lit, {id: i}));

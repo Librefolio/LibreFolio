@@ -40,6 +40,8 @@ class EventStoreOperations:
         events: list[dict | FAAssetEventPoint],
         provider_assignment_id: Optional[int],
         default_currency: str,
+        *,
+        commit: bool = True,
     ) -> int:
         """Upsert the events of one source (a provider assignment, or manual) in place.
 
@@ -61,7 +63,9 @@ class EventStoreOperations:
 
         Committed in slices of ``PRICE_UPSERT_CHUNK_SIZE`` keys for the same reason as
         bulk_upsert_prices: one transaction spanning every event would hold SQLite's
-        single write lock for the whole loop.
+        single write lock for the whole loop. ``commit=False`` leaves the transaction to
+        the caller — each slice is flushed, none committed: the manual upsert, all or
+        nothing.
 
         Args:
             session: Database session
@@ -69,19 +73,37 @@ class EventStoreOperations:
             events: List of FAAssetEventPoint or dicts (parsed via Pydantic)
             provider_assignment_id: FK to asset_provider_assignments.id (None = manual)
             default_currency: Fallback currency
+            commit: Commit each slice (the provider refresh) or leave it to the caller
 
         Returns:
             Number of events upserted
         """
+        return len(await EventStoreOperations._write_asset_events(session, asset_id, events, provider_assignment_id, default_currency, commit=commit))
+
+    @staticmethod
+    async def _write_asset_events(
+        session: AsyncSession,
+        asset_id: int,
+        events: list[dict | FAAssetEventPoint],
+        provider_assignment_id: Optional[int],
+        default_currency: str,
+        *,
+        commit: bool,
+    ) -> list[int]:
+        """``_upsert_asset_events``, answering the id of the row each event wrote, in the order of ``events``.
+
+        The ids are read after each slice is flushed, before any commit expires the rows.
+        """
         if not events:
-            return 0
+            return []
 
-        groups: dict[_EventKey, list[FAAssetEventPoint]] = {}
-        for raw_evt in events:
-            # Parse through Pydantic if raw dict; if already FAAssetEventPoint, use directly
-            evt = raw_evt if isinstance(raw_evt, FAAssetEventPoint) else FAAssetEventPoint(**raw_evt)
-            groups.setdefault((evt.date, str(evt.type)), []).append(evt)
+        # Parse through Pydantic if raw dict; if already FAAssetEventPoint, use directly
+        parsed = [raw if isinstance(raw, FAAssetEventPoint) else FAAssetEventPoint(**raw) for raw in events]
+        groups: dict[_EventKey, list[int]] = {}
+        for index, evt in enumerate(parsed):
+            groups.setdefault((evt.date, str(evt.type)), []).append(index)
 
+        ids: list[int] = [0] * len(parsed)
         keys = list(groups)
         for chunk_start in range(0, len(keys), PRICE_UPSERT_CHUNK_SIZE):
             chunk_keys = keys[chunk_start : chunk_start + PRICE_UPSERT_CHUNK_SIZE]
@@ -98,11 +120,18 @@ class EventStoreOperations:
             stored: dict[_EventKey, list[AssetEvent]] = {}
             for row in (await session.execute(stored_stmt)).scalars().all():
                 stored.setdefault((row.date, str(row.type)), []).append(row)
+            written: list[tuple[int, AssetEvent]] = []
             for key in chunk_keys:
-                await EventStoreOperations._write_event_group(session, asset_id, provider_assignment_id, default_currency, groups[key], stored.get(key, []))
-            await session.commit()
+                indices = groups[key]
+                rows = await EventStoreOperations._write_event_group(session, asset_id, provider_assignment_id, default_currency, [parsed[i] for i in indices], stored.get(key, []))
+                written += zip(indices, rows, strict=True)
+            await session.flush()
+            for index, row in written:
+                ids[index] = row.id
+            if commit:
+                await session.commit()
 
-        return len(events)
+        return ids
 
     @staticmethod
     async def _write_event_group(
@@ -112,8 +141,11 @@ class EventStoreOperations:
         default_currency: str,
         incoming: list[FAAssetEventPoint],
         stored: list[AssetEvent],
-    ) -> None:
-        """Make the stored rows of one (date, type) key match ``incoming``, in place (see ``_upsert_asset_events``)."""
+    ) -> list[AssetEvent]:
+        """Make the stored rows of one (date, type) key match ``incoming``, in place (see ``_upsert_asset_events``).
+
+        Returns the row each incoming event wrote, in order: the stored rows it updated, then the rows it added.
+        """
         now = utcnow()
         # AssetEvent has no before_update listener: updated_at is set here.
         for row, evt in zip(stored, incoming, strict=False):
@@ -121,141 +153,185 @@ class EventStoreOperations:
             row.currency = evt.value.code or default_currency
             row.notes = evt.notes
             row.updated_at = now
-        session.add_all(
-            [
-                AssetEvent(
-                    asset_id=asset_id,
-                    date=evt.date,
-                    type=evt.type,
-                    value=evt.value.amount,
-                    currency=evt.value.code or default_currency,
-                    provider_assignment_id=provider_assignment_id,
-                    notes=evt.notes,
-                )
-                for evt in incoming[len(stored) :]
-            ]
-        )
+        added = [
+            AssetEvent(
+                asset_id=asset_id,
+                date=evt.date,
+                type=evt.type,
+                value=evt.value.amount,
+                currency=evt.value.code or default_currency,
+                provider_assignment_id=provider_assignment_id,
+                notes=evt.notes,
+            )
+            for evt in incoming[len(stored) :]
+        ]
+        session.add_all(added)
         surplus_ids = [row.id for row in stored[len(incoming) :]]
         if surplus_ids:
             # Re-point the links before deleting (ON DELETE RESTRICT). A bulk UPDATE
             # skips Transaction's before_update listener, hence the explicit updated_at.
             await session.execute(update(Transaction).where(Transaction.asset_event_id.in_(surplus_ids)).values(asset_event_id=stored[0].id, updated_at=now))
             await session.execute(delete(AssetEvent).where(AssetEvent.id.in_(surplus_ids)))
+        return [*stored[: len(incoming)], *added]
 
     @staticmethod
     async def bulk_upsert_events(data: list, session: AsyncSession) -> dict:
         """
-        Bulk upsert manual events (provider_assignment_id = NULL).
+        Bulk upsert manual events (provider_assignment_id = NULL), all or nothing.
 
-        Per item, events carrying an ``id`` edit that manual row in place, every field
-        included (date and type too: the row keeps its id, so a linked transaction
-        stays linked). The whole item is validated before anything is written (see
-        ``_apply_manual_event_edits``). Events without ``id`` go through
-        ``_upsert_asset_events`` with provider_assignment_id=None: matched on
-        (date, type) and updated in place. Each item is committed on its own.
+        The items run in order in ONE transaction: each is checked, then written and
+        flushed, and the request is committed at the end. A refusal rolls everything
+        back, so a request is saved whole or not at all (decision 22 of release 1.3).
+        Every refusal says where it is: ``AssetSourceError.details`` names the item
+        (``item_index``, ``asset_id``) and, when it is about events, which ones.
 
-        **R3-3 Policy D — hard-400 on currency mismatch**: every event must
-        carry the same currency as its parent asset. Mixing currencies in
-        ``asset_events`` would create the same kind of silent inconsistency
-        already rejected for ``price_history`` (see ``bulk_upsert_prices``).
-        If any event in ``data`` has ``value.code`` set to a code different
-        from ``asset.currency`` we raise a 400 via ``AssetSourceError`` with
-        the symmetric ``EVENT_CURRENCY_MISMATCH`` code; the caller
-        (endpoint handler) re-raises it as ``HTTPException`` 400.
+        Per item, ``mode``:
+
+        - ``"upsert"`` (default): events carrying an ``id`` edit that manual row in
+          place, every field included (date and type too: the row keeps its id, so a
+          linked transaction stays linked; see ``_apply_manual_event_edits``). Events
+          without ``id`` go through ``_write_asset_events`` with
+          provider_assignment_id=None: matched on (date, type) with the manual rows and
+          updated in place — the event editor and its CSV import.
+        - ``"create"``: events without ``id`` only («+ New event»). One on a (date, type)
+          the asset already has, manual or from a provider, is refused with
+          ``EVENT_EXISTS`` and the stored events on that key: a new event never
+          overwrites (decision 20).
+
+        **R3-3 Policy D — hard-400 on currency mismatch**: every event must carry the
+        same currency as its parent asset (``EVENT_CURRENCY_MISMATCH``, symmetric to
+        ``bulk_upsert_prices``). An event without a code inherits the asset currency.
 
         Args:
-            data: List of FAEventUpsert objects (asset_id + events[])
+            data: List of FAEventUpsert objects (asset_id + mode + events[])
             session: Database session
 
         Returns:
-            dict with results list and success_count
+            dict with results list (``event_ids``: the row each event wrote, in request
+            order) and success_count
 
         Raises:
-            AssetSourceError(code="EVENT_CURRENCY_MISMATCH"): when any
-                submitted event has an explicit currency code that does not
-                match the asset's currency.
-            AssetSourceError(code="EVENT_NOT_EDITABLE"): an ``id`` that is
-                unknown, belongs to another asset, or names a provider event.
-            AssetSourceError(code="EVENT_KEY_CONFLICT"): an edit would move onto
-                a (date, type) another manual event keeps, or an event without id
-                would take the key an edit ends on (see ``_reject_event_key_conflicts``).
+            AssetSourceError(code="EVENT_ASSET_NOT_FOUND"): an item names an asset that
+                does not exist.
+            AssetSourceError(code="EVENT_CURRENCY_MISMATCH"): see above.
+            AssetSourceError(code="EVENT_NOT_EDITABLE"): an ``id`` that is unknown,
+                belongs to another asset, or names a provider event.
+            AssetSourceError(code="EVENT_KEY_CONFLICT"): an edit would move onto a
+                (date, type) another manual event keeps, or an event without id would take
+                the key an edit ends on (see ``_reject_event_key_conflicts``).
+            AssetSourceError(code="EVENT_EXISTS"): ``create`` on a (date, type) already taken.
         """
-        results = []
-        total_count = 0
-
-        for item in data:
-            asset_id = item.asset_id
-
-            # Verify asset exists
-            asset_stmt = select(Asset).where(Asset.id == asset_id)
-            asset_res = await session.execute(asset_stmt)
-            asset = asset_res.scalar_one_or_none()
-            if not asset:
-                results.append(
-                    {
-                        "asset_id": asset_id,
-                        "count": 0,
-                        "message": f"Asset {asset_id} not found",
-                    }
-                )
-                continue
-
-            # Determine default currency from asset or 'USD'
-            default_currency = asset.currency or "USD"
-
-            # R3-3 Policy D: reject any event whose explicit currency does
-            # not match the asset's currency. ``None`` / empty codes are
-            # accepted (they'll inherit ``default_currency`` downstream).
-            mismatches: list[tuple[int, str]] = []  # (event_index, code)
-            for idx, raw_evt in enumerate(item.events or []):
-                code = None
-                value_obj = getattr(raw_evt, "value", None) if not isinstance(raw_evt, dict) else raw_evt.get("value")
-                if isinstance(value_obj, dict):
-                    code = value_obj.get("code")
-                elif value_obj is not None:
-                    code = getattr(value_obj, "code", None)
-                if code and code != asset.currency:
-                    mismatches.append((idx, code))
-
-            if mismatches:
-                mismatch_detail = ", ".join(f"#{i}={c}" for i, c in mismatches[:5])
-                raise AssetSourceError(
-                    f"EVENT_CURRENCY_MISMATCH: asset {asset_id} expects {asset.currency}, " f"got mismatched events [{mismatch_detail}]" + (f" (+{len(mismatches) - 5} more)" if len(mismatches) > 5 else ""),
-                    "EVENT_CURRENCY_MISMATCH",
-                )
-
-            edits, new_events = EventStoreOperations._split_manual_events(item.events)
-            await EventStoreOperations._apply_manual_event_edits(session, asset_id, edits, new_events, default_currency)
-            count = len(edits) + await EventStoreOperations._upsert_asset_events(
-                session=session,
-                asset_id=asset_id,
-                events=new_events,
-                provider_assignment_id=None,  # manual events
-                default_currency=default_currency,
-            )
-            # The edits are only flushed when the item has no event without id.
+        try:
+            results = [await EventStoreOperations._write_manual_item(session, item_index, item) for item_index, item in enumerate(data)]
             await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        return {"results": results, "success_count": sum(1 for r in results if r["count"] > 0)}
 
-            total_count += count
-            results.append(
-                {
-                    "asset_id": asset_id,
-                    "count": count,
-                    "message": f"Upserted {count} manual events",
-                }
+    @staticmethod
+    async def _write_manual_item(session: AsyncSession, item_index: int, item) -> dict:
+        """Check one item of ``bulk_upsert_events``, then write and flush it. A refusal names the item."""
+        asset_id = item.asset_id
+        try:
+            asset = (await session.execute(select(Asset).where(Asset.id == asset_id))).scalar_one_or_none()
+            if asset is None:
+                raise AssetSourceError(f"EVENT_ASSET_NOT_FOUND: asset {asset_id} does not exist", "EVENT_ASSET_NOT_FOUND")
+            default_currency = asset.currency or "USD"
+            EventStoreOperations._reject_currency_mismatches(asset, item.events)
+            points = EventStoreOperations._as_upsert_points(item.events)
+            edits, new_events = EventStoreOperations._split_manual_events(points)
+            if getattr(item, "mode", "upsert") == "create":
+                await EventStoreOperations._reject_existing_events(session, asset_id, new_events)
+            await EventStoreOperations._apply_manual_event_edits(session, asset_id, edits, new_events, default_currency)
+            new_ids = iter(await EventStoreOperations._write_asset_events(session, asset_id, new_events, None, default_currency, commit=False))
+        except AssetSourceError as exc:
+            exc.details = {"asset_id": asset_id, "item_index": item_index, **exc.details}
+            raise
+        # The row of each event, in request order: an edit keeps its id, the others take the one they wrote.
+        event_ids = [point.id if point.id is not None else next(new_ids) for point in points]
+        return {"asset_id": asset_id, "count": len(event_ids), "message": f"Upserted {len(event_ids)} manual events", "event_ids": event_ids}
+
+    @staticmethod
+    def _reject_currency_mismatches(asset: Asset, events: Optional[list]) -> None:
+        """R3-3 Policy D: refuse an item whose events carry a currency other than the asset's, naming each one.
+
+        ``None`` / empty codes are accepted: they inherit ``default_currency`` downstream.
+
+        Raises:
+            AssetSourceError(code="EVENT_CURRENCY_MISMATCH"): ``details`` holds the asset currency and, per
+                mismatched event, its index, date, type and currency.
+        """
+
+        def field(raw: object, name: str) -> object:
+            return raw.get(name) if isinstance(raw, dict) else getattr(raw, name, None)
+
+        mismatches: list[dict] = []
+        for index, raw_evt in enumerate(events or []):
+            value_obj = field(raw_evt, "value")
+            code = field(value_obj, "code") if value_obj is not None else None
+            if code and code != asset.currency:
+                mismatches.append({"event_index": index, "date": str(field(raw_evt, "date")), "type": str(field(raw_evt, "type")), "currency": code})
+        if mismatches:
+            mismatch_detail = ", ".join(f"#{m['event_index']}={m['currency']}" for m in mismatches[:5])
+            raise AssetSourceError(
+                f"EVENT_CURRENCY_MISMATCH: asset {asset.id} expects {asset.currency}, " f"got mismatched events [{mismatch_detail}]" + (f" (+{len(mismatches) - 5} more)" if len(mismatches) > 5 else ""),
+                "EVENT_CURRENCY_MISMATCH",
+                {"expected": asset.currency, "events": mismatches},
             )
 
-        return {"results": results, "success_count": sum(1 for r in results if r["count"] > 0)}
+    @staticmethod
+    async def _reject_existing_events(session: AsyncSession, asset_id: int, new_events: list[FAEventUpsertPoint]) -> None:
+        """A ``create`` item may not land on a (date, type) the asset already has, manual or from a provider (decision 20).
+
+        Raises:
+            AssetSourceError(code="EVENT_EXISTS"): ``details["existing"]`` lists the stored events on every such
+                key, ordered by (date, type, id), each with the number of transactions linked to it.
+        """
+        keys = {(point.date, str(point.type)) for point in new_events}
+        if not keys:
+            return
+        stmt = select(AssetEvent).where(AssetEvent.asset_id == asset_id, AssetEvent.date.in_(sorted({day for day, _ in keys}))).order_by(AssetEvent.date, AssetEvent.type, AssetEvent.id)
+        existing = [row for row in (await session.execute(stmt)).scalars().all() if (row.date, str(row.type)) in keys]
+        if not existing:
+            return
+        linked_stmt = select(Transaction.asset_event_id, func.count(Transaction.id)).where(Transaction.asset_event_id.in_([row.id for row in existing])).group_by(Transaction.asset_event_id)
+        linked = dict((await session.execute(linked_stmt)).all())
+        first = existing[0]
+        raise AssetSourceError(
+            f"EVENT_EXISTS: asset {asset_id} already has a {first.type} event on {first.date.isoformat()}" + (f" (+{len(existing) - 1} more)" if len(existing) > 1 else ""),
+            "EVENT_EXISTS",
+            {
+                "existing": [
+                    {
+                        "id": row.id,
+                        "date": row.date.isoformat(),
+                        "type": str(row.type),
+                        "value": Currency(code=row.currency, amount=row.value).model_dump(mode="json"),
+                        "notes": row.notes,
+                        "is_auto": row.provider_assignment_id is not None,
+                        "linked_transactions": int(linked.get(row.id, 0)),
+                    }
+                    for row in existing
+                ]
+            },
+        )
+
+    @staticmethod
+    def _as_upsert_points(events: Optional[list]) -> list[FAEventUpsertPoint]:
+        """The events of one manual upsert item as ``FAEventUpsertPoint``s, in request order."""
+        return [ev if isinstance(ev, FAEventUpsertPoint) else FAEventUpsertPoint.model_validate(ev) for ev in events or []]
 
     @staticmethod
     def _split_manual_events(events: Optional[list]) -> tuple[dict[int, FAEventUpsertPoint], list[FAEventUpsertPoint]]:
         """Split the events of one manual upsert item into edits by id and events without id."""
-        points = [ev if isinstance(ev, FAEventUpsertPoint) else FAEventUpsertPoint.model_validate(ev) for ev in events or []]
+        points = EventStoreOperations._as_upsert_points(events)
         with_id = [p for p in points if p.id is not None]
         edits = {p.id: p for p in with_id}
         if len(edits) != len(with_id):
             # FAEventUpsert already answers 422; this guards callers that skip validation.
-            raise AssetSourceError("EVENT_KEY_CONFLICT: the same event id appears twice in one upsert item", "EVENT_KEY_CONFLICT")
+            repeated = sorted({p.id for p in with_id if sum(1 for q in with_id if q.id == p.id) > 1})
+            raise AssetSourceError("EVENT_KEY_CONFLICT: the same event id appears twice in one upsert item", "EVENT_KEY_CONFLICT", {"ids": repeated})
         return edits, [p for p in points if p.id is None]
 
     @staticmethod
@@ -282,7 +358,7 @@ class EventStoreOperations:
         rows = {row.id: row for row in (await session.execute(stmt)).scalars().all()}
         refused = sorted(set(edits) - set(rows))
         if refused:
-            raise AssetSourceError(f"EVENT_NOT_EDITABLE: no manual event of asset {asset_id} has id {', '.join(str(i) for i in refused)}", "EVENT_NOT_EDITABLE")
+            raise AssetSourceError(f"EVENT_NOT_EDITABLE: no manual event of asset {asset_id} has id {', '.join(str(i) for i in refused)}", "EVENT_NOT_EDITABLE", {"ids": refused})
         await EventStoreOperations._reject_event_key_conflicts(session, asset_id, edits, rows, new_events)
 
         now = utcnow()
@@ -332,7 +408,7 @@ class EventStoreOperations:
         conflicts += [key for key in ((p.date, str(p.type)) for p in new_events) if key in ends_on]
         if conflicts:
             day, kind = conflicts[0]
-            raise AssetSourceError(f"EVENT_KEY_CONFLICT: asset {asset_id} would have two manual {kind} events on {day.isoformat()}", "EVENT_KEY_CONFLICT")
+            raise AssetSourceError(f"EVENT_KEY_CONFLICT: asset {asset_id} would have two manual {kind} events on {day.isoformat()}", "EVENT_KEY_CONFLICT", {"date": day.isoformat(), "type": kind})
 
     @staticmethod
     async def query_events_bulk(requests: list, session: AsyncSession) -> list:
@@ -469,16 +545,21 @@ class EventStoreOperations:
 
     @staticmethod
     async def delete_events_bulk(
+        asset_id: int,
         event_ids: list[int],
         session: AsyncSession,
         current_user: User,
     ) -> FAEventBulkDeleteResponse:
         """
-        Bulk delete asset events with RESTRICT-aware per-item result.
+        Bulk delete events of one asset with RESTRICT-aware per-item result.
+
+        Scoped by ``asset_id`` (decision 21): an id of another asset is ``not_found``
+        and its event is left alone, so a wrong or crafted request cannot delete the
+        events of other assets.
 
         For each requested id, returns one of:
         - ``deleted`` — event removed
-        - ``not_found`` — id did not exist
+        - ``not_found`` — id did not exist, or names an event of another asset
         - ``in_use`` — referenced by one or more transactions; response exposes
           ``accessible_transactions`` (tx ids current user can see) and
           ``hidden_transactions_count`` (refs owned by other users).
@@ -490,7 +571,7 @@ class EventStoreOperations:
 
         for event_id in event_ids:
             event = await session.get(AssetEvent, event_id)
-            if event is None:
+            if event is None or event.asset_id != asset_id:
                 results.append(FAEventDeleteItemResult(event_id=event_id, status="not_found"))
                 continue
 

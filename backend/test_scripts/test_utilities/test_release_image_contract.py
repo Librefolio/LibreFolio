@@ -1,9 +1,10 @@
 """Release images ship a production frontend: the contract between ``release.yml`` and the ``Dockerfile`` (M, R2 P0).
 
 The images are built from the runner's working tree, and the docs gallery runs in the
-same job before them. Its Playwright webServer is ``./dev.py server --test``, which
-rebuilds ``frontend/build/`` in debug mode (no minification, sourcemaps, ~2.7x the
-size), and that build is what reached the published images. It also built the docs
+same job before them. The gallery rebuilds ``frontend/build/`` in debug mode for its
+test server (no minification, sourcemaps, ~2.7x the size) — today in its build step
+``./dev.py server --test --build-only``, before Playwright starts the webServer — and
+that build is what reached the published images. It also built the docs
 site *before* the screenshots existed, so the "full" image had no gallery. Two halves
 now hold the line, and this module pins both:
 
@@ -1311,7 +1312,7 @@ def writes_app_version(step: dict) -> bool:
 
 
 def builds_frontend(step: dict) -> bool:
-    """Whether the step builds or serves the frontend, which bakes ``__APP_VERSION__`` in: ``dev.py front build``, the gallery (its webServer rebuilds), ``dev.py server``, ``npm run build``."""
+    """Whether the step builds or serves the frontend, which bakes ``__APP_VERSION__`` in: ``dev.py front build``, the gallery (its build step rebuilds), ``dev.py server``, ``npm run build``."""
     runs = _runs_dev_py(step, "front", "build") or _runs_dev_py(step, "mkdocs", "gallery") or _runs_dev_py(step, "server")
     return bool(runs) or any(NPM_BUILD.search(line) for line in _logical_lines(step))
 
