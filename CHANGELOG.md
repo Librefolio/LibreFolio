@@ -56,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **«+ New event» never overwrites an event.** On a date and type the asset already has, entered by hand or from a data provider, nothing is saved: the form shows the event already there, to use it or, if entered by hand, to edit it. Until now the new event replaced the manual one of that day and type, or added a manual copy next to a provider's.
 - Logs: the startup and shutdown lines are written by the logger `backend.app.services.platform.app_lifespan` (before: `backend.app.main`).
 - `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` and `_MAX` below 1, or not a finite number, take their default. A timeout under a second used to mean no timeout, and `0` still returned one link. A fractional timeout is now honoured, rounded up to whole seconds.
+- **The server stops within 8 seconds.** After a `docker stop`, a restart or Ctrl+C, requests still running after 3 seconds are cancelled and what they had not saved is rolled back; the server's own work (scheduled syncs, workers, caches) gets the rest of the time, and worker processes still alive are ended, so none is left behind. If something still holds the server when the time is up, it ends anyway and its log says what was still running. `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` changes the budget (`0`: no limit, as before). Docker waits 10 seconds by default: if you raise the budget, give the container more time too (`stop_grace_period`).
 
 ### 🧹 Repository cleanup
 

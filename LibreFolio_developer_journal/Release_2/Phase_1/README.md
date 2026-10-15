@@ -144,3 +144,4 @@ Sono tutti locali: la push la fa il developer.
 | 55b | 15/10 20:56 | B: scatto `settings/backup-ready` (rivisto da G), da solo prima di B2a | `ab2ddf86e` |
 | 56 | 15/10 21:04 | X: CP10, impostazioni dei plugin (migrazione 007, segreti cifrati, `/settings/plugins`, confine unico per famiglia, mascheramento), X-R6 | `9fb7fe6c9` |
 | 57 | 15/10 21:24 | Y8: correzioni ai grafici (I-01, I-03, O-16, 47-1 etichette sull'asse zoomato, 48-1 pulsanti); CHANGELOG scritto da Y | `160562b56` |
+| 58 | 15/10 21:28 | Z6b parte 2: watchdog e scadenza dei passi nel lifespan, processi figli chiusi; spegnimento entro 8 s (decisione 35) | `967094d81` |
