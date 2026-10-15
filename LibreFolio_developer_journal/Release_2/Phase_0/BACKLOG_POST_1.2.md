@@ -2029,7 +2029,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
 ## G · Gallery deterministica (56)
 
-- **G-1 · 27 schermate instabili su 177** — medio; coordinatore, 14/10, misura di due esecuzioni identiche.
+- ✅ **G-1 · 27 schermate instabili su 177** — medio; coordinatore, 14/10, misura di due esecuzioni identiche.
   - Sfondo animato del login non congelato.
   - Scorrimento di pochi pixel nel pannello lotti.
   - Altre instabili da analizzare.
@@ -2050,6 +2050,11 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
       variante su 16 (G-11).
 
     Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md).
+  - ✅ **15/10, chiusa** con il piano della 56, su decisione del coordinatore delle 16:05.
+    - La DoD è raggiunta con `g-final3`.
+    - Dopo sono arrivati il checkpoint 2, G-9 e G-10, corretta da H.
+    - **Resta aperta G-11.**
+    - La conferma su due run complete viene dalla nuova coppia di riferimento (G-13).
 - **G-2 · 4–5 test desktop falliti in ogni esecuzione completa a 10 worker, ogni volta diversi** — medio; coordinatore,
   14/10.
   - Login fermo su «auth-loading» nel primo blocco; modali delle transazioni.
@@ -2241,6 +2246,22 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     usa il contratto, non il contratto. Decide comunque il proprietario.
 
   Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), passo 8.
+- **G-13 · Nuova coppia di riferimento della gallery sul target, dopo l'ingresso di T** — medio; coordinatore, 15/10,
+  assegnata a G.
+  - Quando: T entra in `dev_release2` (D-T20, dopo la revisione di T-8 da parte del developer). Via e slot li dà il
+    coordinatore; fino ad allora nessuna run.
+  - Cosa:
+    - due gallery complete dello stesso giorno sul target, con `-- --workers 6` e un populate nuovo per ogni run;
+    - `live_price_check` dopo ogni run;
+    - il diff con le maschere e l'analisi di stabilità.
+  - Perché: diventano il riferimento delle ondate e della 1.3. Contengono le inquadrature del checkpoint 2, G-9 e G-10,
+    che `g-final3` non ha.
+  - Conferma attesa:
+    - 0 instabili di inquadratura, salvo l'eventuale variante di G-11;
+    - `media/asset-picker-modal` stabile;
+    - fra quelle di contenuto, solo `brokers/import-nway-compare`, accettata.
+
+  Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), §4, registro del 15/10, 16:05.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
