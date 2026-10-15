@@ -30,8 +30,9 @@ full-portfolio export/restore endpoints.
 
 ## Location
 
-`backend/app/api/v1/backup.py` — mounted under `/api/v1/backup` by the main
-v1 router (see [[entities/api-router]]).
+`backend/app/api/v1/backup/` — a package since the 1.3 split (rule C2): `__init__.py` composes `backup_router` from
+`instance.py` (the full-instance export and restore) and `exports.py` (the per-series exports below). It is mounted
+under `/api/v1/backup` by the main v1 router (see [[entities/api-router]]).
 
 ## Key Endpoints
 
@@ -103,10 +104,11 @@ const eventsBlob  = await api.get(`/backup/asset/${assetId}/events?format=csv`);
 
 | Role | Path |
 |------|------|
-| Router definition | `backend/app/api/v1/backup.py` |
+| Router composition | `backend/app/api/v1/backup/__init__.py` |
+| Per-series export endpoints | `backend/app/api/v1/backup/exports.py` |
 | Mount | `backend/app/api/v1/router.py` |
 | Asset events serializer | `backend/app/services/assets/event_store.py::query_events_bulk` |
-| FX rates serializer | `backend/app/api/v1/backup.py` (`backup_fx_rates`) |
+| FX rates serializer | `backend/app/api/v1/backup/exports.py` (`backup_fx_rates`) |
 | Tests | `backend/test_scripts/test_api/test_backup_export_extras.py`, `test_asset_prices_export.py` |
 | Frontend consumer | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
 

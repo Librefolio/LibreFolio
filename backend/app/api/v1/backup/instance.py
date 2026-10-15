@@ -1,0 +1,167 @@
+"""
+Full-instance export and restore (``/backup/export``, ``/backup/restore``, ``/backup/formats``, ``/backup/status``).
+
+Still placeholders: export and restore answer 501. ``backup_router`` (``__init__.py``) gives these routes the
+``/backup`` prefix and the ``Backup & Export`` tag, before the per-series exports of ``exports.py``.
+"""
+
+from enum import StrEnum
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from backend.app.api.v1.auth import get_current_user
+from backend.app.db.models import User
+
+instance_router = APIRouter()
+
+
+# =============================================================================
+# SCHEMAS — full-portfolio placeholders (kept as-is)
+# =============================================================================
+
+
+class ExportFormat(StrEnum):
+    """Supported export formats."""
+
+    JSON = "json"
+    CSV = "csv"
+    SQLITE = "sqlite"  # Full database backup
+
+
+class ExportScope(StrEnum):
+    """What to include in export."""
+
+    ALL = "all"
+    TRANSACTIONS = "transactions"
+    ASSETS = "assets"
+    BROKERS = "brokers"
+    SETTINGS = "settings"
+
+
+class ExportRequest(BaseModel):
+    """Request for data export."""
+
+    format: ExportFormat = ExportFormat.JSON
+    scope: List[ExportScope] = [ExportScope.ALL]
+    include_price_history: bool = False  # Can be large
+    broker_ids: Optional[List[int]] = None  # Filter by broker (None = all)
+
+
+class ExportResponse(BaseModel):
+    """Response with export file info."""
+
+    download_url: str
+    filename: str
+    size_bytes: int
+    expires_at: str  # ISO datetime
+
+
+class RestoreRequest(BaseModel):
+    """Request to restore from backup."""
+
+    file_id: str  # UUID of uploaded backup file
+    overwrite_existing: bool = False  # If true, replaces existing data
+
+
+class RestoreResponse(BaseModel):
+    """Response from restore operation."""
+
+    success: bool
+    restored_count: dict  # e.g., {"brokers": 2, "assets": 50, "transactions": 1000}
+    warnings: List[str] = []
+
+
+# =============================================================================
+# ENDPOINTS
+# =============================================================================
+
+
+@instance_router.post("/export", response_model=ExportResponse)
+async def export_data(request: ExportRequest, _current_user: User = Depends(get_current_user)):
+    """
+    Export portfolio data to file.
+
+    **Supported Formats:**
+    - `json`: Human-readable JSON file
+    - `csv`: Multiple CSV files in ZIP archive
+    - `sqlite`: Full SQLite database file
+
+    **Scope Options:**
+    - `all`: Export everything
+    - `transactions`: Only transactions
+    - `assets`: Only assets and metadata
+    - `brokers`: Only broker definitions
+    - `settings`: Only user settings
+
+    **Note:** This endpoint is not yet implemented.
+    """
+    raise HTTPException(status_code=501, detail="Export functionality is not yet implemented. Coming soon!")
+
+
+@instance_router.post("/restore", response_model=RestoreResponse)
+async def restore_data(request: RestoreRequest, _current_user: User = Depends(get_current_user)):
+    """
+    Restore portfolio data from backup file.
+
+    **Important:**
+    - If `overwrite_existing=False` (default), only imports new data
+    - If `overwrite_existing=True`, replaces all existing data
+
+    **Supported Formats:**
+    - JSON export files created by `/export`
+    - SQLite database files
+
+    **Note:** This endpoint is not yet implemented.
+    """
+    raise HTTPException(status_code=501, detail="Restore functionality is not yet implemented. Coming soon!")
+
+
+@instance_router.get("/formats")
+async def list_export_formats(_current_user: User = Depends(get_current_user)):
+    """
+    List available export formats.
+
+    Returns information about each supported format.
+    """
+    return {
+        "formats": [
+            {
+                "code": "json",
+                "name": "JSON Export",
+                "description": "Human-readable JSON file with all data",
+                "extension": ".json",
+                "available": False,  # Not yet implemented
+            },
+            {
+                "code": "csv",
+                "name": "CSV Archive",
+                "description": "ZIP file containing CSV files for each table",
+                "extension": ".zip",
+                "available": False,
+            },
+            {
+                "code": "sqlite",
+                "name": "SQLite Database",
+                "description": "Full database backup as SQLite file",
+                "extension": ".db",
+                "available": False,
+            },
+        ]
+    }
+
+
+@instance_router.get("/status")
+async def backup_status(_current_user: User = Depends(get_current_user)):
+    """
+    Get backup/export system status.
+
+    Returns current implementation status.
+    """
+    return {
+        "status": "placeholder",
+        "message": "Backup/Export functionality is planned for a future release",
+        "implemented_endpoints": ["/backup/formats", "/backup/status"],
+        "planned_endpoints": ["/backup/export", "/backup/restore"],
+    }
