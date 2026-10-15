@@ -505,7 +505,8 @@ graph TD
    `api/v1/fx.py` → `api/v1/fx/` per risorsa (C2). CP2b e CP3 possono viaggiare nello stesso treno. Dopo il PL4, J scrive
    nei miei file le parti X6, X7, X8 e `fx.py:717` di U1 (regola 10), con me informato.
    Poi **CP3b — test senza rete e residui di testo** (approvato dal coordinatore il 15/10, dopo l'ingresso del CP3 e prima
-   del CP4): W-B9, W-B13, X-R5 (tranne `AssetModal`) e X-R7, con test-author e docs-writer.
+   del CP4): W-B9, W-B13, X-R5 (tranne `AssetModal` e le fixture della galleria) e X-R7, con test-author e docs-writer.
+   Poi, in un mio lotto, **X-R8** (la cache dell'elenco delle valute dei fornitori, proposta del coordinatore).
 6. **CP4 — schemi** (C3: pacchetti per dominio, al posto di D-X9), quando W e J sono fermi su quei file.
 7. **CP5 — PL7**, dopo PL1 di J.
 8. **CP6 — F05**: elenchi, `is_scraper`, punto unico, esiti `PROVIDER_NOT_ALLOWED`, `provider_allowed`, sezione `.env.example`;
@@ -1095,7 +1096,7 @@ Via del coordinatore il 15/10 (~03:51), sul mio ramo a `05c21b2b6`. Lotto di sol
 > - La prima versione della guardia delle patch mute dava 13 falsi positivi sugli asset (letture `core.X` da altri moduli,
 >   `DDGS` legato in un `try` di modulo): corretta prima di usarla come prova.
 
-### Quinto aggiornamento di base: W K1, H `web_link_finder`, J CP-1, W4 CP6 — validazione di `d1ef3ddeb` (2026-10-15)
+### Quinto aggiornamento di base: W K1, H `web_link_finder`, J CP-1, W4 CP6 — validazione di `d1ef3ddeb` ✅ (2026-10-15) — journal `3f6a2f47e`
 
 Il coordinatore ha committato il CP3 (`b991d5e26`, 100 file, con il suo controllo sull'AST: 32/32 definizioni dei servizi e
 20/20 del router identiche) e il journal (`7639d71d9`), poi ha fuso `dev_release2` a `0902524e5` nel mio ramo: HEAD
@@ -1146,3 +1147,33 @@ Note del coordinatore per i prossimi lotti, registrate:
   del solo test 1: anche `test_get_providers` (`test_fx_api.py:175`) vuole valute per ogni fornitore, e i suoi controlli del
   filtro usano la BCE (`:186`, `:199`); la verifica dal vivo della BCE c'è già in
   `test_external/test_fx_providers.py::test_supported_currencies`.
+
+### Sesto aggiornamento di base: A4 — controllo leggero di `9a3ba752a` ✅ (2026-10-15)
+
+Il coordinatore ha committato il journal della validazione precedente (`3f6a2f47e`) e fuso `dev_release2` a `be2ad6573`
+(A4: migrazione 005, `account_tokens`, `services/accounts/token_service.py`): HEAD `9a3ba752a` (genitori `3f6a2f47e` e
+`be2ad6573`), unione automatica (backlog e `_backend_services.py`), worktree pulito. Richiesta: controllo leggero, senza
+`all-backend`, poi l'ingresso del CP3. Script `/tmp/libreFolio_x_base6_static.sh` (quello del quinto aggiornamento, con i
+nuovi riferimenti), log `/tmp/libreFolio_x_base6_static.log`.
+
+- ✅ `services config-package` sulla 6183: **573 passati** = 572 su `d1ef3ddeb` + 1, il caso di
+  `services/accounts/token_service.py` (A4). Contro `be2ad6573` estratto (568 casi raccolti) il +5 è il CP3 (−2 file tolti,
+  +7 moduli nuovi).
+- ✅ Raccolta: 13 976 contro 13 971 di `be2ad6573`; la differenza è la stessa, i casi 2 → 7 della guardia.
+- ✅ `api schema` identico a quello di `be2ad6573` salvo `info.version` (113 percorsi); `tool-contracts` identico.
+- ✅ Oltre la richiesta, perché costano poco: riscrittori a secco a zero (resta `router.py:8`); 0 import irrisolti su 9 585
+  nomi; 42 patch, nessuna muta; scanner delle stringhe uguale sui due alberi salvo X-R1; nessun riferimento nuovo ai vecchi
+  percorsi rispetto a `3f6a2f47e`; sonda delle rotte identica (139 rotte, 63 richieste); scoperta dei registri identica.
+- Porta 6183 libera prima e dopo.
+
+Decisioni del coordinatore sul CP3b (15/10, ~05:20):
+- **W-B9**: sì, come proposto. Contratto e filtri su FED, BOE e SNB; le chiamate senza filtro controllano solo i codici; la
+  BCE dal vivo solo in `test_external`. **W-B13**: sì.
+- **X-R5**: sì per le docstring del backend, i commenti del frontend fuori da `AssetModal`, il commento di
+  `auth.test.ts:574` (lo dice il coordinatore ad A) e le 2 righe di `TODO_FUTURI.md`. **No** per le 3 fixture della galleria
+  (di G, nella finestra): le gira il coordinatore al coordinatore colori — `frontend/e2e/fixtures/galleryOfflineData.ts:62`
+  (`api/v1/fx.py` → `api/v1/fx/providers.py`), `galleryProviderCompare.ts:40` e `galleryReportSets.ts:398`
+  (`asset_sources/search.py` → `services/assets/search.py`).
+- **X-R7**: sì.
+- **X-R8, proposta del coordinatore** (il developer può cambiarla): una cache dell'elenco delle valute dei fornitori,
+  valida 24 ore; se la BCE non risponde si usa l'ultimo elenco noto, con un timeout breve. In un mio lotto dopo il CP3b.
