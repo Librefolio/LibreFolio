@@ -2,6 +2,7 @@
     import {untrack} from 'svelte';
     import {colorKey, formatOklch, inSrgbGamut, parseColor, rgbaToOklch, toHex} from './color.js';
     import {editTarget, isInlineAlias, sourceVarValue, varImpact} from './catalogView';
+    import {baseVar, resolveValue, valueOpacity, withBase, withOpacity} from './colorValue';
     import {literalsOf} from './export';
     import {labT} from './i18n';
     import {changeId} from './store';
@@ -57,15 +58,16 @@
         note = c?.note ?? '';
         shots = c?.shots?.join(', ') ?? '';
         alphaVariants = c?.alphaVariants ?? true;
-        snap = c && /^var\(/.test(c.to) ? c.to.slice(4, -1).trim() : '';
+        snap = c ? (baseVar(c.to) ?? '') : '';
     });
 
     const varNames = $derived([...new Set([...catalog.palette.map((p) => editTarget(p)), ...catalog.css_vars.filter((v) => v.defs.length && !isInlineAlias(v)).map((v) => v.name)])].sort());
+    // A literal, a `var()` read from the page, or the translucent mix of the role tokens (`color-mix(…, transparent)`).
     const resolved = $derived.by(() => {
         void revision;
-        const ref = /^var\(\s*(--[\w-]+)\s*\)$/.exec(to.trim());
-        return parseColor(ref ? computed(ref[1]) : to);
+        return resolveValue(to, computed);
     });
+    const opacity = $derived(valueOpacity(to));
     const valid = $derived(isSafeCssValue(to.trim()) && !!resolved);
     const oklch = $derived(resolved ? rgbaToOklch(resolved) : null);
     const outOfGamut = $derived(!!resolved && !inSrgbGamut(resolved));
@@ -81,10 +83,16 @@
             : [],
     );
 
+    // The colour controls change the colour and keep the opacity: a translucent value stays translucent, a mix stays a mix.
     function setFromOklch(part: 'l' | 'c' | 'h', value: number): void {
         if (!oklch) return;
         snap = '';
-        to = formatOklch({...oklch, alpha: 1, [part]: value});
+        to = withBase(to, formatOklch({...oklch, alpha: 1, [part]: value}));
+    }
+
+    function setOpacity(value: number): void {
+        const next = withOpacity(to, value);
+        if (next !== null) to = next;
     }
 
     function apply(): void {
@@ -128,12 +136,12 @@
     <div class="swatches">
         <div>
             <span class="label">{$labT('editor.from')}</span>
-            <span class="swatch big" style:background={original}></span>
+            <span class="swatch big checker"><span class="fill" style:background={original}></span></span>
             <code data-testid="lab-editor-from">{original || '—'}</code>
         </div>
         <div>
             <span class="label">→</span>
-            <span class="swatch big" style:background={valid ? to : 'transparent'}></span>
+            <span class="swatch big checker"><span class="fill" style:background={valid ? to : 'transparent'}></span></span>
         </div>
     </div>
 
@@ -149,6 +157,9 @@
             <label>L <input type="range" min="0" max="1" step="0.001" value={oklch.l} oninput={(e) => setFromOklch('l', +e.currentTarget.value)} data-testid="lab-editor-l" /> <code>{(oklch.l * 100).toFixed(1)}%</code></label>
             <label>C <input type="range" min="0" max="0.4" step="0.001" value={oklch.c} oninput={(e) => setFromOklch('c', +e.currentTarget.value)} data-testid="lab-editor-c" /> <code>{oklch.c.toFixed(3)}</code></label>
             <label>H <input type="range" min="0" max="360" step="0.5" value={oklch.h} oninput={(e) => setFromOklch('h', +e.currentTarget.value)} data-testid="lab-editor-h" /> <code>{oklch.h.toFixed(1)}</code></label>
+            {#if opacity !== null}
+                <label title={$labT('editor.opacity')}>A <input type="range" min="0" max="1" step="0.01" value={opacity} oninput={(e) => setOpacity(+e.currentTarget.value)} data-testid="lab-editor-a" /> <code>{Math.round(opacity * 100)}%</code></label>
+            {/if}
         </div>
     {/if}
 
@@ -160,7 +171,7 @@
                 value={resolved ? toHex(resolved, false) : '#000000'}
                 oninput={(e) => {
                     snap = '';
-                    to = e.currentTarget.value;
+                    to = withBase(to, e.currentTarget.value);
                 }}
                 data-testid="lab-editor-color"
             />
@@ -170,7 +181,7 @@
             <select
                 bind:value={snap}
                 onchange={() => {
-                    if (snap) to = `var(${snap})`;
+                    if (snap) to = withBase(to, `var(${snap})`);
                 }}
                 data-testid="lab-editor-snap"
             >
@@ -303,6 +314,16 @@
     .swatch.big {
         width: 2.5rem;
         height: 2.5rem;
+    }
+    /* A checkerboard under the colour, so that its opacity shows. */
+    .checker {
+        position: relative;
+        overflow: hidden;
+        background: conic-gradient(var(--lab-check) 25%, var(--lab-panel) 0 50%, var(--lab-check) 0 75%, var(--lab-panel) 0) 0 0 / 0.625rem 0.625rem;
+    }
+    .checker > .fill {
+        position: absolute;
+        inset: 0;
     }
     .field {
         display: flex;
