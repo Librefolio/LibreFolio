@@ -1099,3 +1099,123 @@ Via del coordinatore alle 21:31, con la decisione 45 e il contratto della sonda 
 > **Base**: HEAD `1d74e212e`. Delta: 20 file tracciati modificati, 2 nuovi (`features/email/emailLinks.ts`,
 > `emailLinks.test.ts`). Righe condivise: `_frontend_utility.py` (una riga), `admin/configuration.en.md` (+1 −1);
 > `addressProbe.ts` di A riusato senza modifiche. Resta di E3: l'email d'attivazione dell'admin iniziale, dopo A7.
+>
+> **Entrato** in `dev_release2` = `e54ae96bb`; CHANGELOG `2415faf33`. Ramo a `2415faf33`.
+
+### E5 — la verifica dell'email (decisione 44)
+
+Ordine del coordinatore (22:12): E4 aspetta A6e (password attuale per cambiare l'email, poi tolgo la sospensione);
+intanto E5, che non ne dipende. L'email d'attivazione dell'admin iniziale resta dopo A7.
+
+#### E5.0 — Analisi sul codice (2026-10-15, base `2415faf33`)
+> **Stato reale**:
+> - Nessuna migrazione serve: la 005 di A ha già `users.email_verified_at` (NULL per gli account esistenti, «deciso
+>   nella logica»), lo scopo `email_verification` nel CHECK, 24 h e `/verify-email` in `token_service`; il testo
+>   `build_email_verification` è già nel mio catalogo (E1).
+> - L'opzione `require_email_verification` è un segnaposto: `schemas/settings.py` («read nowhere»),
+>   `GlobalSettingsTab` la disegna disattiva con un badge (`PLACEHOLDER_KEYS`), GSET-VAL-007 e i casi di
+>   `test_settings_api.py:1592-1596` la girano sul DB di corsia perché «nessuno la legge».
+> - `register_user` (A) crea l'account attivo e fa commit; `/auth/register` risponde 201 senza sessione, e
+>   `RegisterCard` torna al login con `auth.accountCreated`. Il login risponde 403 `ACCOUNT_DISABLED` solo con la
+>   password giusta; `stores/app/auth.ts` lo traduce. `user_usage` conta attivi + inviti vivi. `update_user_status` e
+>   `set_user_active` cambiano lo stato senza toccare i token. Nessun limitatore sul login (A8 non c'è ancora).
+> - Pagine dei token di A: `routes/invite`, `routes/reset-password`, `LinkStatusCard`, `authFlash`, `linkToken.ts`
+>   (`LinkPurpose = 'invite' | 'password_reset'`).
+>
+> **Disegno proposto**:
+> - «In attesa» = account disattivo con un token di verifica non consumato né revocato (anche scaduto). Ogni cambio di
+>   stato fatto dall'admin revoca i token di verifica: un account disattivato dall'admin non torna attivo con un
+>   vecchio link, e il login gli dice `ACCOUNT_DISABLED`, non «verifica».
+> - Registrazione con l'opzione accesa (mai il primo account): account disattivo + token (24 h, con l'email
+>   dell'account), nella stessa transazione; email in background dopo il commit; la risposta dice
+>   `verification_required` e la card mostra «controlla la posta».
+> - Login di un account in attesa → 403 `EMAIL_NOT_VERIFIED` (solo con la password giusta) e «rispedisci».
+> - `POST /email/verification/confirm {token}` (anonimo): consuma il token, rifiuta se l'email dell'account è cambiata
+>   da allora, attiva l'account, `email_verified_at = now`, revoca gli altri token di verifica.
+> - `POST /email/verification/resend {username, password}` (anonimo): la stessa prova del login (hash fittizio per
+>   chi non esiste), limite per indirizzo (10/15 min, prima della password), per account 1 ogni 5 min e 3/h, budget
+>   d'istanza, posto libero; nuovo token (revoca i vecchi) e invio sincrono (502 → token revocato).
+> - Opzione: si accende solo con email pronta **e** `LIBREFOLIO_PUBLIC_URL` utilizzabile (il link) → 409 altrimenti;
+>   la scheda Impostazioni la abilita da `instanceConfig.email.links`.
+> - Pagina `/verify-email` (mia): legge `#token=`, conferma, torna al login con un flash «email verificata».
+>
+> **Decisioni del coordinatore** (15/10, 22:3x): (1) verifica per tutte le registrazioni tranne il primo account,
+> inviti compresi; (2) opzione accesa ma email o link non pronti alla registrazione → 409
+> `EMAIL_VERIFICATION_UNAVAILABLE`; (3) gli account in attesa contano per `LIBREFOLIO_MAX_USERS` finché il link è
+> vivo; (4) «rispedisci» con nome e password; (5) ad A per A6e: `email_verified_at` a NULL quando l'email cambia;
+> (6) spegnere l'opzione lascia gli account in attesa; (7) badge «in attesa» nella scheda Users fuori dalla 1.3
+> (backlog E-7). **Le righe nei file di A le scrivo io, dichiarate, A le rivede, ma solo dopo l'ingresso di A6d e
+> A6e** (A tocca proprio `registration_service`, `auth.py`, `settings_service`, `LoginCard`, `GlobalSettingsTab`).
+> Adesso: le parti solo mie (`email/verification.py`, le due rotte, `/verify-email`, l'i18n).
+>
+> **Dettaglio del disegno** (deciso scrivendo): il token creato dentro la transazione di `register_user` («tenuta»,
+> `email` NULL) segna l'attesa e tiene il posto, ma il suo testo non esce mai; il lavoro in background ne crea uno
+> nuovo con l'email dell'account, che revoca la tenuta, e lo spedisce. Se l'invio fallisce il token resta: l'account
+> resta in attesa e «rispedisci» funziona. I limiti per account contano solo i token spediti (`email` non NULL); la
+> conferma accetta solo un token la cui `email` è quella attuale dell'account.
+
+#### E5.1 — Le parti solo mie (lotto E5a) ✅ scritte (2026-10-15)
+> **Note implementazione**:
+> - `services/email/verification.py` (nuovo): `verification_required`, `links_can_go`,
+>   `ensure_verification_can_be_enabled`, `awaiting_verification`, `hold_for_verification` (lancia
+>   `RegistrationError("EMAIL_VERIFICATION_UNAVAILABLE")` con import pigro: `registration_service` lo chiamerà),
+>   `registration_email_work` (background, mai un'eccezione), `confirm_email`, `resend_verification` (limite per
+>   indirizzo prima della password, `verify_password_or_dummy` di A, limiti per account sui soli token spediti, posto
+>   di nuovo se il link è scaduto, riconteggio nella transazione come la password dimenticata).
+> - `flows.py`: `_require_email` → `require_email`, `_remaining` → `link_ttl` (pubbliche, le riusa la verifica).
+> - Rotte: `POST /email/verification/confirm` (400 `TOKEN_INVALID` con lo `status`) e `/resend` (401 e 403 come il
+>   login, 409, 429 con `Retry-After`, 502, 422); schemi con docstring su una riga (backlog E-5).
+> - Frontend: `verificationApi.ts`; in `emailApi.ts` `refusalBody`/`refusalStatus`/`refusalDetail`/`retryAfterOf`
+>   esportati e riusati da `readTestFailure`; `emailText.ts` `VERIFY_PAGE_KEYS`, `resendFailureMessage`;
+>   `VerifyEmailCard.svelte` (sopra `AuthCard` di A: la `LinkStatusCard` di A manda sempre dall'admin, qui invece
+>   «accedi e chiedine un altro»); `VerificationNotice.svelte` (il «rispedisci» che `LoginCard` ospiterà con gli
+>   agganci); pagina `routes/verify-email/+page.svelte` (come `/reset-password`: token tolto dalla barra, flash al
+>   login). Il backend serve `200.html` per ogni percorso: nessuna registrazione della rotta.
+> - i18n `email.verification.*` × 4 (19 chiavi); le chiavi degli agganci (messaggio della registrazione, rifiuto
+>   della registrazione, opzione nelle Impostazioni) arrivano con gli agganci.
+> - Prove leggere: `ruff`/`black` ✅; le rotte si importano ✅; `api sync` ✅ (nessun file tracciato toccato);
+>   `prettier --check` ✅; `i18n build` + `check` ✅ (4 653 chiavi); `front check` 0 errori, 0 avvisi.
+> - **Atterraggio senza agganci**: le rotte vivono ma nessun token di verifica esiste finché `register_user` non chiama
+>   `hold_for_verification`: `confirm` risponde 400, `resend` 401/403/409. Innocuo.
+>
+> **⚠️ Fuori pista** (rilettura di docs-writer, due difetti nel mio codice, corretti prima dei test):
+> - un'email di verifica non partita lasciava il token con l'indirizzo, contato come «spedito»: il «rispedisci» subito
+>   dopo un 502 dava 429 «un link è appena partito». Ora il token perde l'indirizzo (`email` NULL) e torna una tenuta:
+>   l'account resta in attesa, il link (che non ha raggiunto nessuno) non si conferma, e non conta per i limiti;
+> - le 409 `EMAIL_UNAVAILABLE`/`EMAIL_LINKS_UNAVAILABLE` di `/verification/resend` mostravano il `problem` della
+>   configurazione a chi non è admin: tolto, come in `/password-reset`.
+>
+> **Per gli agganci** (lotto E5b, dopo A6d e A6e): `_REGISTRATION_REFUSALS` di `auth.py` non conosce
+> `EMAIL_VERIFICATION_UNAVAILABLE` (oggi uscirebbe 400 senza codice: va a 409); il commento «placeholder» di
+> `schemas/settings.py:294`; `confirm_email` conta sulla revoca dei token ai cambi di stato dell'admin (aggancio).
+> - seconda rilettura di docs-writer: (1) un'email che arriva dopo un errore di connessione (timeout dopo il DATA)
+>   lasciava un token senza indirizzo che `confirm_email` revocava: se era l'unico, l'account smetteva di essere in
+>   attesa → bloccato. Ora un token senza indirizzo è rifiutato (`revoked`) **senza** revocarlo; (2) il `try` copre
+>   tutto quello che segue il commit, non solo `send_email`; (3) `resendErrors.EMAIL_RATE_LIMITED` reso neutro × 4
+>   (lo danno anche il limite per indirizzo e il budget). `ruff`/`black`, `i18n build` + `check` ✅.
+
+#### E5.2 — Test e doc di E5a ✅ (2026-10-15)
+> **Note implementazione**:
+> - test-author: `test_email_verification.py` (EMV-001…042, `services email-verification`, pure);
+>   `test_email_verification_api.py` (EVA-001…015, `api email-verification`, pure); Vitest `verificationApi.test.ts`
+>   (VFA-01…18, core-unit), `emailApi.test.ts` EAP-08…11, `emailText.test.ts` ETX-07…10; componenti
+>   `VerifyEmailCard.test.ts` (VEC), `VerificationNotice.test.ts` (VNT), `routes/verify-email/page.test.ts` (VEP).
+>   Registrazioni nel runner: due voci backend, una core-unit, tre component-unit. Primo giro: 6 rossi di EMV-017,
+>   colpa del test (id letto dopo il rollback), corretti nel test.
+> - Decisione mia su una domanda di test-author: anche la 502 di `resend` perde lo `smtp_code` (chi chiede non è
+>   admin), come le 409.
+> - docs-writer: sezione `#verification` di `developer/backend/email.md` (attesa, tenuta e link spediti, funzioni,
+>   limiti, log, frontend, «non ancora collegato»), le due rotte, `link_ttl`/`require_email`. Tabella Testing mia.
+> - Prove (prima della finestra delle 00:00, una alla volta): `services email-verification` 115 ✅,
+>   `api email-verification` 48 ✅, `services email-flows` 132 ✅, `api email` 160 ✅, Vitest di
+>   `features/email/` + `routes/verify-email/` 523 ✅ (8 file), `front check` 0/0, `prettier`, `ruff`, `black` (solo
+>   la riga di A), `check-orphans` ✅.
+> - Dopo la decisione sulla 502: `api email-verification` 48 ✅ di nuovo; `mkdocs build` stretto ✅ (nessun
+>   WARNING/ERROR), `check-links` 96 ✅; `front-utility core-unit` intero (via del coordinatore, 23:27): 159 file,
+>   5 415 test ✅ (`/tmp/libreFolio_e5a_core_unit.log`).
+
+### Checkpoint E5a 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+> **Base**: HEAD `2415faf33`. Delta: 17 file tracciati modificati, 11 nuovi (`services/email/verification.py`, due
+> file di test backend, `verificationApi.ts` e il suo test, `VerifyEmailCard` e `VerificationNotice` con i loro test,
+> `routes/verify-email/` con pagina e test). Righe condivise: i tre file del runner (solo voci mie), la riga E-7 del
+> backlog. Nessun file di A toccato: gli agganci sono il lotto E5b, dopo A6d e A6e.
