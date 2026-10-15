@@ -126,8 +126,8 @@
 | Codice | Sessione | Cartella del piano | Corsia (porta + dati) | Stato |
 |---|---|---|---|---|
 | — | coordinatore | questo file | 6150 + `/tmp/librefolio-r2-main` | — |
-| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | **integrato** in `dev_release2` (`9d57aa4c0`); L-10, la chiusura delle prove, nello slot pesante il 15/10; poi nel Lab i ruoli di T-8 e i colori di categoria di DV, per il giro 3 |
-| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | **integrato** (`60b3f27aa`, `9f3b141a8`); G-9 (MACD scelto da tastiera) committato in `5da3c9eba`, da ripetere 4 test a 1 worker prima dell'ingresso; G-10 passato a H della 1.3 |
+| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | **integrato** in `dev_release2`: fino a L-9 con `9d57aa4c0`, L-10 (il Lab modifica i ruoli di T) con `87755fe2a`, validato sul fuso il 15/10; prossimo: nel Lab i ruoli di T-8 e i colori di categoria di DV, per il giro 3 |
+| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | **piano della 56 chiuso il 15/10** (DoD con `g-final3`): integrato fino a G-9 (`1470bd693`) e alla chiusura (`243c8c9ff`); G-10 risolta da H (`b4533a949`); G-11 aperta, peso basso; G-13: la nuova coppia di riferimento dopo l'ingresso di T |
 | R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154, chiusa | **chiuso**, integrato in `dev_release2` (`8fd8e494b`, `23f6578f3`, `ed9fb6996`) |
 | — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo: worktree `preview-colori` (T-6 più L, `7a94a1553`); da aggiornare con T-8 |
 | T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | T-1 e T-2 **integrati**. Sul ramo: T-3, T-5, T-6 (palette, `078dec1ae`), validazione `c5a8a03a4`, T-7 (header e fascia del logo) `0580c92ab`. Prossimi: merge di base, T-8 con T-4, poi W1 e W2 |
