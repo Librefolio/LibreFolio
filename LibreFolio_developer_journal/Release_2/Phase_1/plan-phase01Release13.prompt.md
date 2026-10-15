@@ -905,3 +905,13 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > legge più) e `guard_strings.py` (percorsi nelle stringhe delle guardie che non portano più a niente). Con la
 > risoluzione statica degli import del coordinatore, sono i controlli di ogni aggiornamento di base. J-2 diventa C-94
 > nella sezione C; C-93 non si è ripresentato.
+
+### W4 CP6, BRIM in `services/brim/`, integrato ✅ (2026-10-15, 04:45)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `155d9b050`. Rinomina pura `548a0688d` (C1): i 4 moduli
+> `brim_provider`, `brim_report_sets`, `brim_parse_pool`, `brim_gap_fix` in `services/brim/` (R098–R100), import nei 33
+> plugin, costanti del cancello `gate-event-loop-io`, `applyTo`, skill, doc e devWiki; U-B8 (passo «Capacity table»
+> tolto dalla guida). Validazione di W: `all-backend` 13 749 passed, 28 skipped, 0 failed sulla base `0229dbc6a`;
+> sopra J CP-1 e il lotto di H, controllo leggero (guardia 567, raccolta identica file per file, API identica) e i
+> tre controlli statici del coordinatore puliti. Il taglio (CP7), W3 e W5–W6 aspettano un commit del coordinatore su
+> `brokers.py` e `uploads.py`; intanto W7 e K2.
