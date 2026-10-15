@@ -137,6 +137,7 @@ class AccountsInstanceConfig(StrictModel):
 
     registration_mode: Literal["open", "invite", "disabled"] = Field(..., description="Who may create an account: open (anyone), invite (an invitation link), disabled (nobody)")
     registration_locked: bool = Field(..., description="LIBREFOLIO_REGISTRATION pins the mode: the global setting cannot change it")
+    first_account_open: bool = Field(False, description="No account yet: the next registration creates the first account, an administrator, whatever the mode")
 
 
 class ChangePasswordResponse(BaseModel):
