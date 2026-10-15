@@ -113,6 +113,7 @@ E2E del Lab legge il token della sua intestazione.
 | K-15, C-34, C-15 (parte di Y) | ✗ | formatter dei grafici; `CorrelationHeatmap.svelte:330`; `translateOr`, `LABEL_BUNDLE` | Y9 |
 | K-13 | ✗ | 15 componenti con `echarts.init` (+2 del PAC) | Y9 |
 | 54-1 | ⚠ | `AllocationHistoryChart` 627/630/779, 707, 806; `AllocationPanel:64` | Y10, dopo il developer |
+| Y-6 (dal coordinatore, DV, 15/10) | ✗ | `dashboard/AllocationPanel.svelte:65` (`toAllocEntries`) e il tipo `AllocEntry` (`:23`): `emoji` passato alla torta, che dopo DV non lo legge più. È un dato morto | Y10, dopo DV |
 | C-85 | ✗ | nessun componente comune | Y11, se c'è spazio, dopo il developer |
 | U8 | ✗ | inventario del 43 (R17, W7, W8, P4, P5, V11; `LotCustodyModal:236`; dichiarazioni) | Y12 a/b; b dopo CP-13 di J |
 | FE9, FE10, FE11 | ✗ | — | Y13, per ultimi |
@@ -753,3 +754,88 @@ sessione) e nel §2; si scrivono qui quando partono.
 >
 > **Ancora da fare**: la galleria filtrata, cancello d'ingresso dopo il commit (slot del programma colori, chiesto dal
 > coordinatore).
+
+### Y2 — commit e aggiornamento di base ✅ (2026-10-15, 16:42–16:48)
+
+> **Note implementazione**:
+> - **Commit del coordinatore**: `fbee8506d` (`refactor(table): split DataTable header and cells`) e `491cf3a4c`
+>   (journal).
+> - **Aggiornamento di base**: con `dev_release2` a `dae4de4fa`, che porta FE8a di W. L'unico conflitto è stato
+>   `frontend/src/themeRoles.baseline.tsv`.
+>   - `--resolve` ha fatto vincere il lato più stretto, e `--check` è pulito, senza il caso R-8.
+>   - Restano tutte e 6 le righe `~split`, le 3 di Y e le 3 di FE8a, più l'`~accept` D3 di `themeStore.ts`.
+>   - `git add` del solo baseline. Merge committato dal coordinatore: `2ffedf004`.
+> - **File uniti da Git, controllati**:
+>   - `htmlSink.gate.test.ts`: le due voci di Y più quella di W (`TxBulkBanners`), nessuna persa;
+>   - backlog: la sezione Y è identica;
+>   - nessun marcatore di conflitto;
+>   - nessun file nuovo di FE8a stila da fuori le classi passate ai figli, né li importa.
+> - **Sulla revisione unita**, una prova alla volta con `nice -n 10`:
+>   - `api sync`, nessun file tracciato cambiato;
+>   - `npm run check`, **0/0**;
+>   - Vitest: `htmlSink` 7, `DataTable` 55, `rowOrder` 12, `HeaderTooltip` 12, `ColumnFilter` 59, `Pagination` 20,
+>     `dataTableLogic` 83, `ReportSetCard` 45. Tutti verdi.
+
+### Y2 — galleria filtrata, cancello d'ingresso ✅ (2026-10-15, 16:54–18:10)
+
+> **Note implementazione**:
+> - **Scatto**: slot del programma colori, concesso mentre T-8 era in scrittura.
+>   `gallery_snapshot.sh y2-dt-2ffedf004 … -- -f "Transactions|Assets|FX|Files|Risk Analysis" --desktop-only --workers 6`,
+>   cioè i 57 test dei cinque gruppi più un test di Onboarding e uno di Import report sets, i cui titoli contengono
+>   quelle parole.
+>   - Esito: 59 verdi e 10 rossi, 600 PNG, in 16 minuti.
+>   - Carico medio da 21 (16:48) a 85 (17:11). Porta libera alla fine.
+> - **Confronto** con `g-final3-r1` (`--common-only`, maschere e stabilità di `g-final3__r1__vs__r2`): 454 identiche,
+>   146 cambiate in 46 scatti.
+>   - 43 scatti su 46 cambiano anche nel rumore `r1` contro `r2` (stesso codice), con ampiezze simili o maggiori; lo
+>     script è `/tmp/libreFolio_y2_noise_cmp.py`.
+>   - I 3 restanti hanno Δ1: la linea del grafico FX dietro il modale dei provider, un bordo di 1 px di
+>     `add-pair-routes` e un'icona 7×7 di RSI.
+>   - `transactions/list`: 8 su 8 identiche.
+>   - `assets/list-table`: punti cambiati solo nella barra sopra la tabella. `fx/list-table`: bordi della barra e
+>     pillola della paginazione, un file che Y2 non tocca. Entrambe cambiano allo stesso modo anche nel rumore.
+>   - **Nessuna differenza viene da Y2.**
+> - **Triage dei 10 rossi** (skill `test-triage`). Verdetto: **ambiente**, da confermare con la ripresa.
+>   - §1 forma della risposta: nessuna asserzione sul contenuto, solo timeout.
+>   - §2 clock: le attese sono sulle condizioni giuste.
+>   - §3 stato condiviso: corsia esclusiva e nessun errore del backend.
+>   - §4 cascata: nessuna causa unica. I 2 rossi di Files cadono nella prima ondata di login, gli 8 di Assets negli
+>     ultimi 15 test, al picco di carico.
+>   - Tutti e 10 erano verdi in `r1`, `r2`, `candR`, `candL` e `candT6`.
+>   - Nessuno cade su una `DataTable`. Il #10 passa `tx-table` e cade sull'`AssetSelect` del wizard, che non è mai in una
+>     cella.
+> - **Ripresa chiesta** al coordinatore: `-- --no-populate --desktop-only --workers 2 -f "<i 10 titoli>"`; il filtro
+>   prende esattamente quei 10. Chiude anche il buco di copertura, che comprende la lista dei report dei broker in
+>   Files (`FilesTable`, una `DataTable`).
+
+### Y2 — E2E sulla revisione unita ✅ (2026-10-15, 17:39–17:45)
+
+> **Note implementazione**: slot pesante 2, dopo E1b di W. Sulla revisione `2ffedf004`, che porta FE8a, con
+> `/tmp/libreFolio_y2_e2e_merged.sh`: `--workers 2`, `nice -n 10`, una spec alla volta.
+> - `front-transaction transactions-table`: 25 verdi.
+> - `front-transaction transactions-modals`: 25 verdi.
+> - `front-transaction tx-import-upload`: 10 verdi.
+>
+> Porta 6189 libera alla fine.
+
+### Y2 — ripresa della galleria e ingresso ✅ (2026-10-15, 18:00–18:10)
+
+> **Note implementazione**:
+> - **Ripresa**: slot del programma colori, a carico basso, dopo la validazione di T-8.
+>   `gallery_snapshot.sh y2-dt-2ffedf004-retry … -- --desktop-only --workers 2 -f "<i 10 titoli>"`: **10 verdi su 10**,
+>   96 PNG, in 4,7 minuti, con il carico medio fra 31 e 38. Il verdetto «ambiente» del triage è confermato.
+> - **Confronto** con `g-final3-r1`, stesse opzioni: 75 identiche, 21 cambiate in 7 scatti, e tutti e 7 cambiano anche
+>   nel rumore `r1` contro `r2`.
+>   - `files/static-grid` supera il rumore (fino a 28 113 px), ma è G-10: l'ultima scheda mostra un altro avatar
+>     (`men_04` → `men_01`), e cambiano gli orari di caricamento (09:15 → 18:00). È la griglia, senza tabelle.
+>   - Pagine con `DataTable`: `files/brim-tab` (la lista dei report dei broker, `FilesTable`) è identica 8 su 8, e lo
+>     sono anche `assets/distribution-editor-*`, `detail-classification` e `chart-settings`.
+>   - **Nessuna differenza viene da Y2.**
+>
+> **Fuori pista**: per la ripresa ho fatto ripopolare il DB alla galleria invece di usare `--no-populate`. Le 3 E2E
+> fatte nel frattempo l'avevano ripopolato senza risorse statiche (il runner E2E non usa `--with-static`), e i test di
+> Files avrebbero falsato il confronto. Regola: `--no-populate` vale solo se fra la galleria e la ripresa non gira nulla
+> nella corsia.
+>
+> Il coordinatore ha aggiunto Y-6 per Y10 (`AllocationPanel.svelte:65` passa `emoji` alla torta, che dopo DV non lo
+> legge più): è nel backlog e in §2.
