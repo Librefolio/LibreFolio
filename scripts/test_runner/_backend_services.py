@@ -487,7 +487,7 @@ def services_email_messages(verbose: bool = False, test_names: list = None) -> b
     """Test the e-mail texts: typed builders, the four-language catalogue and the composed message."""
     print_section("Services: E-mail Messages")
     print_info("Testing: backend/app/services/email/messages.py, backend/app/services/email/templates/")
-    print_info("Tests: languages, keyword-only builders, http(s) links only, escaping, no user data in subjects, Babel durations, catalogue guard, headers and multipart/alternative, one recipient")
+    print_info("Tests: languages, keyword-only builders, http(s) links only, escaping, no user data in subjects, Babel durations, catalogue guard, headers and multipart/alternative, one recipient, every value on one line")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_messages.py", test_names)
     return run_command(cmd, "E-mail message tests", verbose=verbose)
@@ -1332,7 +1332,7 @@ Note: No backend server required.
         "email-messages",
         services_email_messages,
         name="E-mail Messages",
-        desc="EMAIL_LANGUAGES = default_language choices, email_language, keyword-only builders, http(s) links only, user values escaped in the HTML and absent from subjects, Babel durations, one more sentence for admin invites, catalogue guard (same keys and placeholders in en/it/fr/es, valid templates), compose_message headers, plain then HTML, exactly one recipient",
+        desc="EMAIL_LANGUAGES = default_language choices, email_language, keyword-only builders, http(s) links only, user values escaped in the HTML and absent from subjects, Babel durations, one more sentence for admin invites, catalogue guard (same keys and placeholders in en/it/fr/es, valid templates), compose_message headers, plain then HTML, exactly one recipient; every value shown on one line (control characters and line separators as spaces, bidirectional controls removed)",
         # PURE: no lane DB, no server, no environment read (inherited SMTP variables removed with monkeypatch); reads the committed templates only.
         isolation="pure",
     )
@@ -1360,7 +1360,7 @@ Note: No backend server required.
         "email-flows",
         services_email_flows,
         name="E-mail Flows",
-        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop; send_link_email: email, then links, then the token, then the recipient, exactly the PUBLIC_URL link, the token never logged; admit_forgotten_password: per address (none without one), per identifier, the budget peeked; forgotten_password_work: per-account limits, the configuration read again before the link is made, the new link revoked whatever stops the email, never raises; a blocked instance is refused first by every flow and makes no link",
+        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop; send_link_email: email, then links, then the token, then the recipient, an inactive account's reset link refused, exactly the PUBLIC_URL link, the token never logged; admit_forgotten_password: held first (FORGOT_PASSWORD_DISABLED), then per address keyed by address_key (IPv6 by its /64, a mapped IPv4 as the IPv4, none without one), per identifier, the budget peeked; forgotten_password_work: per-account limits, an administrator's live link, per mailbox, the configuration read again before the link is made, a link made meanwhile rolled back, the new link revoked whatever stops the email, never raises, an unexpected error logged as its type alone; a blocked instance is refused first by every flow and makes no link",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server; LIBREFOLIO_SMTP_* removed then set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
         isolation="pure",
@@ -1370,7 +1370,7 @@ Note: No backend server required.
         "email-links",
         services_email_links,
         name="E-mail Links",
-        desc="links_state: LIBREFOLIO_PUBLIC_URL missing, invalid (not http(s), or no host, a space, a ? or #, a bad port, credentials; never echoed) or ready (spaces and one trailing slash removed, path prefix kept), read at each call, never raises; LinksState.instance = host with port; require_links; email_link = base + /reset-password or /invite + the token urlencoded in the fragment, nothing from a request; email_instance_config: available, and links only with email usable and links ready",
+        desc="links_state: LIBREFOLIO_PUBLIC_URL missing, invalid (not http(s), or no host, a space, a ? or #, a bad port, credentials, a bracket the parser cannot read; never echoed) or ready (spaces and one trailing slash removed, path prefix kept), read at each call, never raises; LinksState.instance = host with port; require_links; email_link = base + /reset-password or /invite + the token urlencoded in the fragment, nothing from a request; email_instance_config: available, and links only with email usable and links ready",
         # PURE: no lane DB, no server, no network; LIBREFOLIO_SMTP_* and LIBREFOLIO_PUBLIC_URL removed then set with monkeypatch.
         isolation="pure",
     )
