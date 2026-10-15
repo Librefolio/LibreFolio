@@ -11,7 +11,7 @@
 > - **Approvate** (coordinamento, 14/10): D-P1, D-X1, D-X3, D-X5, D-X6, D-X7, D-X8, D-X11, D-X12, D-X13, D-X14, D-X15.
 >   D-X9 è **superata da C3** (schemi in pacchetti per dominio; gli eventi in `schemas/assets/events.py` o dove li colloca X
 >   nel pacchetto). D-X10: oltre al confronto di `openapi.json`, la verifica della corrispondenza dei percorsi (C2).
->   **Ancora al developer**: D-X2 e D-X4 (non servono al CP1; nel documento delle decisioni sono le voci 18 e 19).
+>   **Ancora al developer**: D-X2 (voce 18, assorbita dalla voce 39, non ancora decisa). **D-X4 decisa il 15/10** (voce 19): §4.3.
 > - **Regole comuni**: piano generale, §6 (Git, «Forma comune del riordino» C1–C7, superfici condivise, regole di ogni lotto
 >   di riordino, «Taglio dichiarato», nuove schermate) e §7 (programma colori, regola «chi parte prima»).
 > - **Primo treno**: H CP1 → X CP1 → A A1; il CP1 di X entra dopo quello di H, con gli import riallineati all'aggiornamento
@@ -199,25 +199,75 @@ riga d'import in `main.py` o nel suo successore, da riallineare all'aggiornament
 
 ### 4.3 Elenchi dei fornitori permessi (F05, parte X)
 
-- `LIBREFOLIO_ASSET_PROVIDERS_ALLOWED`, `LIBREFOLIO_FX_PROVIDERS_ALLOWED` (+ `_FILE` non serve: non sono segreti), letti con
-  un accessore in `backend/app/config/<sezione>.py` (regola di H, sotto §6) e scritti in `.env.example`. **Non impostate = tutti permessi** (self-hosted invariato). Profilo gestito (interruttore di
-  H) e non impostate = solo i fornitori **non scraper** (D-X4). `MANUAL` sempre permesso; i fornitori di test esclusi.
+**D-X4, decisa dal developer il 15/10** (voce 19), alla lettera: «si al togliere il search, ma almeno all'inizio lasciamo che
+se un utente proprio vuole può setupparlo manualmente uno di questi provider, poi capiremo se legalmente è un azzardo o una
+zona grigia, essendo in fondo la sua macchina e offrendo noi i premium, diciamo che servirebbe più da tappa buchi per quei
+titoli di super nicchia». In chat, sulla proposta di un avviso del coordinatore: «19 ok come proponi». Per questo lotto, dal
+coordinatore:
+- senza un elenco del pannello, le fonti scraper (Yahoo, justETF, Borsa Italiana, lo scraper CSS) non compaiono nella ricerca;
+- l'utente può comunque assegnarne una a mano a un singolo asset, dalla configurazione della fonte;
+- lì compare una riga d'avviso, del tipo «fonte non ufficiale, a tuo rischio»;
+- i cambi delle banche centrali restano tutti; nel self-hosted non cambia niente.
+
+Prima della decisione il profilo gestito senza elenchi toglieva gli scraper del tutto; ora li toglie solo dalla ricerca. Il
+permesso e la ricerca diventano quindi due livelli, con un punto unico ciascuno nel registro della famiglia.
+
+- **Permesso**, `is_allowed(code)`: `LIBREFOLIO_ASSET_PROVIDERS_ALLOWED` e `LIBREFOLIO_FX_PROVIDERS_ALLOWED` (senza `_FILE`:
+  non sono segreti), lette con un accessore in `backend/app/config/plugins.py` (regola di H, sotto §6) e scritte in
+  `.env.example`. **Non impostate = tutti permessi, in tutti e due i profili**: il self-hosted non cambia, e nel profilo
+  gestito gli scraper restano assegnabili a mano. Impostate = solo gli elencati. `MANUAL` sempre permesso; i fornitori di test
+  esclusi. È la leva per «poi capiremo se legalmente è un azzardo»: se la risposta è no, l'operatore elenca solo le fonti
+  ufficiali e l'uso a mano si chiude senza codice nuovo; gli asset già legati seguono D-X5 (sotto).
+- **Ricerca**, `is_searchable(code)`, solo per gli asset: vi partecipa un fornitore permesso che dichiara la ricerca, tranne
+  gli scraper nel profilo gestito. **Lettura mia, segnalata al coordinatore**: nel profilo gestito gli scraper restano fuori
+  dalla ricerca anche con un elenco del pannello, perché l'elenco decide il permesso e mai la ricerca. Un pannello che elenca
+  le fonti incluse in un piano (un diritto, non una scelta legale) non deve rimettere in ricerca gli scraper come effetto
+  collaterale; e così si può tenere uno scraper solo a mano e chiuderne un altro. L'altra lettura (un elenco del pannello vale
+  anche per la ricerca) è una riga nel registro.
+
+  | Profilo | `…_ALLOWED` | Permessi: a mano, probe, sync | In ricerca |
+  |---|---|---|---|
+  | self-hosted | non impostata | tutti | tutti quelli con la ricerca, come oggi |
+  | self-hosted | impostata | gli elencati | gli elencati con la ricerca |
+  | gestito | non impostata | tutti | i non scraper con la ricerca: oggi nessuno, fino a F06 |
+  | gestito | impostata | gli elencati | gli elencati non scraper con la ricerca |
+
 - Ogni fornitore dichiara `is_scraper` (asset: yfinance, justETF, Borsa Italiana, CSS scraper = sì; scheduled_investment = no;
   FX: banche centrali = no). Default **prudente**: un fornitore che non lo dichiara conta come scraper, così un plugin di terzi
-  montato non entra da solo in un'istanza gestita. È un attributo distinto dal `tier` di F21: «community» non vuol dire
-  scraper (una futura API ufficiale gratuita, come OpenFIGI, sarebbe community ma non scraper). Facoltativo: un flag
-  dichiarato «solo test» sostituisce i nomi scritti a mano (`api/v1/assets.py:419`, `api/v1/fx.py:129`).
-- Nel profilo gestito senza elenchi espliciti la ricerca degli asset resta senza fornitori finché non arriva il fornitore a
-  pagamento (F06) o l'operatore ne permette qualcuno: è la specifica («scraper disattivati di default»), da sapere.
-- Un punto unico per famiglia (`registry.is_allowed(code)`), controllato a: elenco, ricerca, probe, assegnazione, sync, prezzo
-  corrente, metadati. **Asset già legati a un fornitore non permesso** (D-X5): l'assegnazione resta nel DB; sync e prezzo
-  corrente lo saltano con esito per voce `PROVIDER_NOT_ALLOWED` (niente 500, niente spam nello scheduler); le letture delle
-  assegnazioni espongono `provider_allowed: false`; la UI mostra un avviso con «Cambia fonte» o prezzi manuali; mai
-  cancellazioni né riassegnazioni automatiche. FX: il fornitore non permesso esce dalla catena di ripiego della coppia,
-  l'esito della gamba lo dice; nessuna modifica alle rotte salvate (l'ambiente può tornare indietro).
+  montato non entra da solo nella ricerca di un'istanza gestita, e porta l'avviso. È un attributo distinto dal `tier` di F21
+  («community» non vuol dire scraper: una futura API ufficiale gratuita, come OpenFIGI, sarebbe community ma non scraper) e
+  dal `kind` di oggi (`FAProviderKind.ONLINE_SCRAPER` vuol dire «dati presi da fuori», e varrebbe anche per un'API ufficiale).
+  Facoltativo: un flag dichiarato «solo test» sostituisce i nomi scritti a mano (`api/v1/assets/providers.py:62`, `mockprov`;
+  `api/v1/fx/providers.py:80`, `_HIDDEN_FX_PROVIDERS`).
+- **La riga d'avviso**: `FAProviderInfo` (`schemas/provider.py`) espone `searchable` e `notice` (`"unofficial_source"` |
+  `null`), calcolati nel backend: `notice` vale `"unofficial_source"` per uno scraper permesso ma fuori dalla ricerca, cioè
+  offerto solo a mano. La configurazione della fonte (`ProviderAssignmentSection`, in `AssetModalProvider`, alla creazione e
+  alla modifica) mostra la riga quando il fornitore scelto ha il `notice`: una chiave nuova nelle 4 lingue, ruoli `lf-*`, lo
+  stesso componente d'avviso per asset di F21 (§4.6) con un messaggio suo; UI dopo il lotto A, come C-90. Nel self-hosted
+  senza elenchi nessuno scraper è fuori dalla ricerca, quindi la riga non compare mai. FX: oggi nessuno scraper e nessuna
+  ricerca, quindi nessun secondo livello.
+- **Dove si controlla**. `is_searchable`: l'elenco dei fornitori di ricerca, `GET /api/v1/assets/provider/search` e
+  `/search/stream`, compresa la risoluzione di un URL incollato, che è un ingresso della ricerca (`services/assets/search.py:104`,
+  `resolve_url`). Il filtro sta nel backend: una richiesta che nomina uno scraper in `providers=` non lo interroga.
+  `is_allowed`: l'elenco per la configurazione, `POST /api/v1/assets/provider/probe`, l'assegnazione, il sync, il prezzo
+  corrente e i metadati. Una fonte solo a mano fa quindi tutto tranne comparire nella ricerca: probe, «Chiedi al fornitore»,
+  sync dello scheduler.
+- **Asset già legati a un fornitore non permesso** (D-X5): l'assegnazione resta nel DB; sync e prezzo corrente lo saltano con
+  esito per voce `PROVIDER_NOT_ALLOWED` (niente 500, niente spam nello scheduler); le letture delle assegnazioni espongono
+  `provider_allowed: false`; la UI mostra un avviso con «Cambia fonte» o prezzi manuali; mai cancellazioni né riassegnazioni
+  automatiche. FX: il fornitore non permesso esce dalla catena di ripiego della coppia, l'esito della gamba lo dice; nessuna
+  modifica alle rotte salvate (l'ambiente può tornare indietro). Una fonte soltanto fuori dalla ricerca non è «non
+  permessa»: nessun esito e nessun avviso di D-X5.
+- Nel profilo gestito senza elenchi la ricerca degli asset resta senza fornitori finché non arriva il fornitore a pagamento
+  (F06), o finché l'operatore non permette una fonte non scraper: è la specifica («scraper disattivati di default»). L'utente
+  crea l'asset a mano e, se vuole, gli configura una fonte scraper con l'avviso; la ricerca vuota lo dice e porta lì (con F21,
+  «Non lo trovi?»).
 - Facoltativo, se H offre l'area avvisi: «N asset usano fonti non permesse su questa istanza» per l'admin.
 - Dal giro di sicurezza di H (coordinatore, 14/10), nello stesso lotto: il `css_scraper` segue i redirect su URL scelti
-  dall'utente; vanno bloccati loopback, reti private, link-local e metadati del cloud, anche dopo un redirect.
+  dall'utente (`css_scraper/plugin.py:192`, `follow_redirects=True`); vanno bloccati loopback, reti private, link-local e
+  metadati del cloud, anche dopo un redirect. **Con D-X4 è una precondizione**: nel profilo gestito ogni utente può configurare
+  a mano lo scraper CSS con un URL suo, e la probe lo fa partire subito; il profilo gestito con le fonti a mano non esce senza
+  questo blocco.
 
 ### 4.4 Impostazioni dei plugin
 
@@ -345,10 +395,10 @@ in più (D-X2) gli zip di backup scaricabili dalla UI contengono la chiave d'ist
 
 #### Ripristino di un backup: il contratto con B (aggiunta del 15/10, solo disegno)
 
-Richiesta dell'analisi di B, girata dal coordinatore il 15/10. Contesto: le decisioni 18 e 39, ancora al developer. La chiave
+Richiesta dell'analisi di B, girata dal coordinatore il 15/10. Contesto: la decisione 39, che assorbe la 18, ancora al developer. La chiave
 d'istanza entra in un backup solo con password e solo se generata; al ripristino l'istanza tiene la sua chiave e i segreti si
 ricifrano, altrimenti restano «impostati ma illeggibili, reinseriscili» (misura 4). Il disegno regge entrambi gli esiti. Il
-CP10 resta fermo fino alle decisioni 18–19 e alla finestra di `cryptography`.
+CP10 resta fermo fino alla decisione 39 (la 19 è decisa il 15/10, §4.3) e alla finestra di `cryptography`.
 
 **Due funzioni sincrone** in `plugin_settings/crypto.py`, su una `sqlite3.Connection` della copia. Non usano il motore
 dell'app e non leggono la configurazione: ricevono le sottochiavi.
@@ -440,7 +490,7 @@ SvelteKit sulla pagina lista per i filtri); C-66 (avviso nel dialogo di sync qua
 | CP3 — PL4 cambi | `fx.py` → `fx/{registry,base,sync,conversion,storage}.py`; `api/v1/fx.py` → `api/v1/fx/{router,providers,currencies}.py`; 6 plugin FX; 17 importatori app | 11 test di servizio, patch di `test_fx_sync_service.py`; `test_fx_api_unit.py`, `test_fx_signals_api.py`, `test_fx_compress_errors.py`, `test_fx_route_schemas.py` (patch sui nuovi sotto-moduli) | `fx_plugin_guide.md`, `backend/fx/{architecture,configuration}.md`, `financial_math.md`; `backend-providers-fx` (`applyTo`, nome della base), mappa di `backend.instructions.md` |
 | PL7 | `api/v1/signals.py` + estrazione dei pezzi segnali da `prices/query` e `currencies/convert` | `api signal-*` | `backend-signals` (sezione API) |
 | Schemi | `schemas/{assets,prices,provider,refresh,fx}.py` (D-X9) | importatori | `backend-schemas.instructions.md` |
-| F05 | `assets/registry.py`, `fx/registry.py`, choke point nei servizi, schemi `provider_allowed` | nuovi pytest | sezione X di `.env.example`; testo per `admin/configuration` (H) |
+| F05 | `assets/registry.py` (`is_allowed`, `is_searchable`), `fx/registry.py`, choke point nei servizi e nella ricerca, `config/plugins.py`, schemi `provider_allowed`, `searchable`, `notice` (`schemas/provider.py`); `ProviderAssignmentSection` (la riga d'avviso, dopo il lotto A); `css_scraper` (blocco SSRF) | nuovi pytest, Vitest della riga | sezione X di `.env.example`; testo per `admin/configuration` (H); la riga d'avviso nelle 4 lingue |
 | Impostazioni | `plugin_settings/*`, `db/models.py` (un modello), `alembic/versions/007_plugin_settings.py`, `api/v1/plugin_settings.py`, `schemas/plugin_settings.py`, basi di famiglia, justETF/Borsa; frontend `lib/features/plugin-settings/*`, una riga nel registro schede di A, «Configura» | pytest servizi/API/migrazione/sicurezza; Vitest; E2E; galleria | pagina dev `patterns/plugin_settings.md`; admin (sicurezza e variabili); utente `user/settings/plugins.md`, pagine dei fornitori |
 | F21 + C-90 | `assets/registry.py`, `assets/search.py`, `FAProviderInfo`; `features/assets/` ricerca e pannello | pytest, Vitest, E2E | `search_link_finder.md`, `user/assets/create-edit.en.md` |
 
@@ -474,9 +524,9 @@ config-package` e `services config-env-example`), valide per ogni mia variabile 
 | # | Domanda | Raccomandazione |
 |---|---|---|
 | D-X1 | Cifratura | AES-256-GCM con AAD di contesto e sottochiave HKDF (`cryptography`); Fernet come alternativa più semplice ma senza AAD |
-| D-X2 | Segreti personali e backup (§10 n. 5) | ammessi, scrittura sola dal proprietario; zip della UI con la chiave d'istanza solo se protetto da password, altrimenti senza chiave e segreti da reinserire (con B) |
+| D-X2 | Segreti personali e backup (§10 n. 5) | ammessi, scrittura sola dal proprietario; zip della UI con la chiave d'istanza solo se protetto da password, altrimenti senza chiave e segreti da reinserire (con B); voce 18, assorbita dalla 39, ancora al developer (15/10) |
 | D-X3 | F21 senza fornitori premium attivi | lista come oggi: gruppi e avviso solo se almeno un premium è permesso |
-| D-X4 | Default degli elenchi nel profilo gestito | solo fornitori non scraper (flag dichiarato); `MANUAL` sempre |
+| D-X4 | Default degli elenchi nel profilo gestito | **decisa dal developer il 15/10** (voce 19): gli scraper fuori dalla ricerca, assegnabili a mano con la riga «fonte non ufficiale»; permesso e ricerca su due livelli; cambi delle banche centrali tutti; self-hosted invariato (§4.3). Proposta di prima: solo fornitori non scraper |
 | D-X5 | Asset legati a un fornitore non più permesso | assegnazione intatta, sync saltato con esito chiaro, avviso e «Cambia fonte» |
 | D-X6 | Nome delle variabili per campo | `LIBREFOLIO_PLUGIN_<FAMIGLIA>_<CODICE>_<CAMPO>` (+ `_FILE`) più alias dichiarato; letti solo in `backend/app/config/` con `env_secret()`, ogni variabile in `.env.example` (regola di H, sotto) |
 | D-X7 | K-16 | `etc/etn` → `ETF_COMMODITY` |
@@ -513,7 +563,7 @@ config-package` e `services config-env-example`), valide per ogni mia variabile 
 | Schemi | medio (molti import) | churn | D-X9 |
 | FE4 / FE5a | basso / medio | `vi.mock` sui vecchi percorsi | nessun barile per i moduli mockati; Vitest + `svelte-check` + build + E2E |
 | FE5b/c | alto | regressioni di comportamento in due file enormi | commit piccoli, test esistenti come oracolo, `data-testid` invariati |
-| F05 | medio | scheduler rumoroso, UX degli asset orfani | esiti per voce, test dello scheduler, avviso |
+| F05 | medio | scheduler rumoroso, UX degli asset orfani; con D-X4, lo scraper CSS configurato a mano da ogni utente del profilo gestito (SSRF) | esiti per voce, test dello scheduler, avviso; blocco degli indirizzi interni anche dopo i redirect, precondizione del profilo gestito |
 | Impostazioni | alto | fughe di segreti, migrazione, permessi | analisi §4.5, test di sicurezza, `security-review` |
 | F21 | medio | regressione UX self-hosted | D-X3, Vitest dei gruppi, E2E |
 
@@ -576,8 +626,10 @@ graph TD
    Poi, in un mio lotto, **X-R8** (la cache dell'elenco delle valute dei fornitori, proposta del coordinatore).
 6. **CP4 — schemi** (C3: pacchetti per dominio, al posto di D-X9), quando W e J sono fermi su quei file.
 7. **CP5 — PL7**, dopo PL1 di J.
-8. **CP6 — F05**: elenchi, `is_scraper`, punto unico, esiti `PROVIDER_NOT_ALLOWED`, `provider_allowed`, sezione `.env.example`;
-   avviso minimo nella UI (asset e cambi). K-16 e O-9 (backend, piccoli) viaggiano qui o in un treno qualunque.
+8. **CP6 — F05**: elenchi, `is_scraper`, i due livelli di D-X4 (permesso e ricerca, un punto unico ciascuno), esiti
+   `PROVIDER_NOT_ALLOWED`, `provider_allowed`, `searchable` e `notice`, sezione `.env.example`; il blocco SSRF dello scraper
+   CSS (precondizione); avviso minimo nella UI (asset e cambi) e la riga «fonte non ufficiale» nella configurazione della
+   fonte (dopo il lotto A). K-16 e O-9 (backend, piccoli) viaggiano qui o in un treno qualunque.
 9. **CP7 — FE4**; **CP8 — FE5a** con O-8, O-20, K-20, K-19; **CP9 — FE5b/c**.
 10. **CP10 — impostazioni backend**: contratto e validazione, modello e migrazione 007 (upgrade/downgrade su un DB 1.2 popolato),
     cifratura, archivio, risoluzione, redazione, API, consegna asset/FX, test di sicurezza.
@@ -593,7 +645,10 @@ graph TD
   stessi conteggi della base (+ test nuovi); `ruff`/`black` puliti; `--dead-code` senza reperti nuovi; `openapi.json`
   identico (o D-X10 per PL7); `mkdocs build` e `check-links` verdi; `check_source_paths.py` non peggiora; rinomine ≥ 95 %.
 - Frontend: `svelte-check`, Vitest, `front build`, E2E di asset e cambi verdi; `data-testid` e chiavi invariati.
-- F05: default invariato nel self-hosted provato da test; profilo gestito provato; asset orfani gestiti.
+- F05: default invariato nel self-hosted provato da test (nessuna fonte fuori dalla ricerca, nessuna riga d'avviso);
+  profilo gestito provato con D-X4: scraper fuori dalla ricerca (anche nominati in `providers=` o con un URL incollato),
+  assegnabili a mano con il `notice`, probe e sync che funzionano, cambi delle banche centrali tutti; asset orfani gestiti;
+  SSRF dello scraper CSS bloccato, anche dopo i redirect.
 - Impostazioni: §4.5 nel piano prima del codice; contratto in 4 famiglie; 007 testata su un DB 1.2; nessun segreto in risposte,
   log, errori, AI Export (test); permessi provati (utente/utente, admin/personale, non-admin/sistema); env vince e blocca;
   invisibilità nel profilo gestito; chiave persa o cambiata gestita; 4 lingue; doc; `security-review` senza HIGH/CRITICAL aperti.
@@ -624,8 +679,12 @@ mai riavviando il server della corsia. Il risolutore legge l'ambiente a ogni chi
 - **CP3 (PL4 + router dei cambi)**: `services fx-conversion`, `fx-core`, `fx-sync-service`, `financial-math`, `roi-fifo-utils`,
   `portfolio-engine`, `lots-analysis-pure`, `ai-export-pure`; `api fx`, `fx-unit`, `fx-sync`, `fx-signals`,
   `fx-compress-errors`, `signal-catalogs`, `signal-request-validation`; `schemas fx-routes`; `all-backend`; hash di `api schema`.
-- **F05**: `services provider-policy` (nuovo, in processo), `scheduler-jobs`, `asset-source-refresh`, `fx-sync-service`;
-  `api assets-provider`, `fx-sync` (comportamento di default, invariato).
+- **F05**: `services provider-policy` (nuovo, in processo: la tabella di §4.3, profilo × elenco × `is_scraper` → permesso,
+  ricerca, `notice`, compreso il fornitore senza dichiarazione), `scheduler-jobs`, `asset-source-refresh`, `fx-sync-service`;
+  `api assets-provider` (default invariato; profilo gestito in processo: la ricerca, anche in streaming, con `providers=` e
+  con un URL, non interroga gli scraper, la probe e l'assegnazione sì), `fx-sync` (comportamento di default, invariato); il
+  blocco SSRF senza rete (risolutore finto, redirect verso un indirizzo interno); Vitest della riga d'avviso in
+  `ProviderAssignmentSection.test.ts`.
 - **Impostazioni**: `services plugin-settings` (nuovo: dichiarazioni, cifratura, AAD, risoluzione, redazione, blocco da ambiente
   in processo), `api plugin-settings` (nuovo: permessi, scrittura sola, esiti per campo; profilo gestito in processo),
   `db post-migration` + test della 007 (upgrade/downgrade su un DB 1.2 popolato, `db validate`), `api account-deletion`,
@@ -1836,3 +1895,17 @@ Chiesta dal coordinatore il 15/10 per l'analisi di B. Scritta in §4.5, «Ripris
 `rekey_plugin_secrets` e `count_unreadable_secrets` su una `sqlite3.Connection` della copia, e il valore di controllo H-3 = il
 `key_id` di ogni riga nella 007, senza tabelle a parte. Da H servono `derive_key_from(instance_key, purpose, length)` e il
 controllo all'avvio con il DB. Corrette anche due righe rimaste a `006_plugin_settings` (§4.4 e §5): la migrazione è la 007.
+
+### D-X4 decisa dal developer: il piano del profilo gestito ✅ (2026-10-15)
+
+Girata dal coordinatore alle 12:44, senza richiesta di risposta. Scritta in §4.3, con le conseguenze in §5, §6 (D-X4; e D-X2,
+voce 18, assorbita dalla 39 e ancora al developer), §8, §9 (CP6), §10, §11 e nella nota del CP10, fermo fino alla 39.
+Il disegno: permesso e ricerca su due livelli. Nel profilo gestito gli scraper escono solo dalla ricerca e restano assegnabili
+a mano, con un `notice` calcolato nel backend e la riga d'avviso nella configurazione della fonte. L'elenco del pannello
+decide il permesso: è la leva per chiudere l'uso a mano senza codice, se il dubbio legale lo chiede. Il blocco SSRF dello
+scraper CSS diventa una precondizione del profilo gestito. Corretti anche due riferimenti di §4.3 rimasti alle righe dei
+router di prima del CP2b e del CP3.
+> **⚠️ Fuori pista**: la frase del coordinatore «senza un elenco del pannello, le fonti scraper non compaiono nella ricerca» si
+> può leggere come «un elenco del pannello le rimette in ricerca». Ho scritto l'altra lettura (l'elenco vale per il permesso,
+> mai per la ricerca): è più vicina alle parole del developer («si al togliere il search») e regge un elenco di diritti per
+> piano. Segnalata al coordinatore, che può chiedere l'altra (una riga nel registro).
