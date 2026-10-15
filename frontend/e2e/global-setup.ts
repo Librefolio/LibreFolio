@@ -64,16 +64,16 @@ export default async function globalSetup() {
         }
 
         try {
-            // 2. Ensure E2E test users exist
+            // 2. Ensure E2E test users exist: only e2e_test_admin is an administrator (backlog 38, L12)
             const users = [
-                ['e2e_test_user', 'e2e@test.example.com', 'E2eTestPass123!'],
-                ['e2e_test_admin', 'e2eadmin@test.example.com', 'E2eAdminPass123!'],
-                ['e2e_test_user2', 'e2e2@test.example.com', 'E2eTestPass456!'],
+                ['create-user', 'e2e_test_user', 'e2e@test.example.com', 'E2eTestPass123!'],
+                ['create-superuser', 'e2e_test_admin', 'e2eadmin@test.example.com', 'E2eAdminPass123!'],
+                ['create-user', 'e2e_test_user2', 'e2e2@test.example.com', 'E2eTestPass456!'],
             ];
 
-            for (const [username, email, password] of users) {
+            for (const [command, username, email, password] of users) {
                 try {
-                    execSync(`pipenv run python scripts/user_cli.py --test-db create-superuser ${username} ${email} ${password}`, {cwd: PROJECT_ROOT, stdio: 'pipe', timeout: 15_000});
+                    execSync(`pipenv run python scripts/user_cli.py --test-db ${command} ${username} ${email} ${password}`, {cwd: PROJECT_ROOT, stdio: 'pipe', timeout: 15_000});
                 } catch {
                     // "already exists" is expected — ignore
                 }

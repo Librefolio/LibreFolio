@@ -14,8 +14,8 @@ from backend.app.config import PROJECT_ROOT
 # Add project root to path
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app.services.fx import FXServiceError, normalize_rate_for_storage
-from backend.app.services.provider_registry import FXProviderRegistry
+from backend.app.services.fx.fx import FXServiceError, normalize_rate_for_storage
+from backend.app.services.fx.registry import FXProviderRegistry
 from backend.test_scripts.test_utils import (
     print_error,
     print_info,

@@ -618,6 +618,7 @@ class TXQueryParams(StrictModel):
 
     broker_id: Optional[int] = Field(default=None, gt=0, description="Filter by broker")
     asset_id: Optional[int] = Field(default=None, gt=0, description="Filter by asset")
+    asset_event_id: Optional[int] = Field(default=None, gt=0, description="Only transactions linked to this asset event (reverse lookup)")
     types: Optional[List[TransactionType]] = Field(default=None, description="Filter by types")
 
     # When set, other filters are ignored and the service returns the requested

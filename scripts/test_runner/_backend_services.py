@@ -169,7 +169,7 @@ def services_pac_planner_service(verbose: bool = False, test_names: list = None)
 def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bool:
     """Test FX conversion service logic."""
     print_section("Services: FX Conversion Logic")
-    print_info("Testing: backend/app/services/fx.py convert() function")
+    print_info("Testing: backend/app/services/fx/fx.py convert() function")
     print_info("Scenarios: Identity, Direct, Inverse, Roundtrip, Different Dates, Forward-fill")
     print_info("Safety: Verifies test database usage before modifying data")
     print_info("Note: Mock FX rates automatically inserted for 3 dates")
@@ -181,7 +181,7 @@ def services_fx_conversion(verbose: bool = False, test_names: list = None) -> bo
 def services_asset_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test Asset Source service logic."""
     print_section("Services: Asset Source Logic")
-    print_info("Testing: backend/app/services/asset_source.py")
+    print_info("Testing: backend/app/services/assets/")
     print_info("Tests: Helper functions, Provider assignment, Synthetic yield")
     print_info("Note: Test assets automatically created and cleaned up")
 
@@ -192,7 +192,7 @@ def services_asset_source(verbose: bool = False, test_names: list = None) -> boo
 def services_asset_source_refresh(verbose: bool = False, test_names: list = None) -> bool:
     """Smoke test: Asset Source refresh orchestration."""
     print_section("Services: Asset Source Refresh (smoke)")
-    print_info("Testing: backend/app/services/asset_source bulk refresh orchestration (smoke)")
+    print_info("Testing: backend/app/services/assets/refresh.py bulk refresh orchestration (smoke)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source_refresh.py", test_names)
     return run_command(cmd, "Asset source refresh smoke test", verbose=verbose)
 
@@ -465,7 +465,7 @@ def services_global_settings(verbose: bool = False, test_names: list = None) -> 
 def services_fx_core(verbose: bool = False, test_names: list = None) -> bool:
     """Test FX core helpers."""
     print_section("Services: FX Core Helpers")
-    print_info("Testing: backend/app/services/fx.py (core functions not covered by fx-conversion)")
+    print_info("Testing: backend/app/services/fx/fx.py (core functions not covered by fx-conversion)")
     print_info("Tests: normalize_rate, upsert_rates_bulk, delete_rates_bulk, _count_actual_changes")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_core.py", test_names)
@@ -512,7 +512,7 @@ def services_settings(verbose: bool = False, test_names: list = None) -> bool:
 
 
 def services_current_price_bootstrap(verbose: bool = False, test_names: list = None) -> bool:
-    """Test F.2/F.3 unit helper `_extend_ohlc_bounds` in asset_source."""
+    """Test F.2/F.3 unit helper `_extend_ohlc_bounds` in assets.price_query."""
     print_section("Services: Current Price Bootstrap (F.2/F.3)")
     print_info("Testing OHLC widening helper used by /assets/prices/current side-effect")
 
@@ -614,7 +614,7 @@ def services_lots_analysis_pure(verbose: bool = False, test_names: list = None) 
 def services_asset_source_guards(verbose: bool = False, test_names: list = None) -> bool:
     """Run the AssetSourceManager integrity guards and event FX conversion tests."""
     print_section("Services: Asset Source Guards")
-    print_info("Testing: backend/app/services/asset_source.py (bulk_upsert_prices, get_prices_bulk, list_assets)")
+    print_info("Testing: backend/app/services/assets/ (bulk_upsert_prices, get_prices_bulk, list_assets)")
     print_info("Tests: OHLC rejection policy, close-only bound widening, identifier filters, event FX pass")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source_upsert_guards.py", test_names)
     return run_command(cmd, "Asset Source guard tests", verbose=verbose)
@@ -766,9 +766,9 @@ def services_file_preview(verbose: bool = False, test_names: list = None) -> boo
 
 
 def services_fx_sync(verbose: bool = False, test_names: list = None) -> bool:
-    """Test FX pair-sync orchestration branches in services/fx.py."""
+    """Test FX pair-sync orchestration branches in services/fx/fx.py."""
     print_section("Services: FX Sync Orchestration")
-    print_info("Testing: backend/app/services/fx.py")
+    print_info("Testing: backend/app/services/fx/fx.py")
     print_info("Tests: _is_date_within_sync_range, sync_pairs_bulk._process_route/._compute_multi_step")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_sync_service.py", test_names)
     return run_command(cmd, "FX sync service tests", verbose=verbose)
@@ -871,7 +871,7 @@ def services_borsa_italiana_funds(verbose: bool = False, test_names: list = None
 def services_web_link_finder(verbose: bool = False, test_names: list = None) -> bool:
     """Test web_link_finder unit behaviour + search orchestration augmentation."""
     print_section("Services: Web Link Finder")
-    print_info("Testing: backend/app/services/web_link_finder.py")
+    print_info("Testing: backend/app/services/assets/web_link_finder.py")
     print_info("External engine mocked — no live ddgs/network call")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_web_link_finder.py", test_names)

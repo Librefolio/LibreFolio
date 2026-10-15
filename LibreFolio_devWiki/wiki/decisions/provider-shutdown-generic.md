@@ -63,5 +63,5 @@ BRIMProviderRegistry.shutdown_all_providers()
 | Role | Path |
 |------|------|
 | Provider registry | `backend/app/services/provider_registry.py` |
-| Asset service (thread isolation) | `backend/app/services/asset_source.py` |
+| Asset service (thread isolation) | `backend/app/services/assets/core.py` |
 | FastAPI app lifecycle | `backend/app/main.py` |

@@ -51,11 +51,13 @@ from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.prices import FAAssetEventPoint, FAEventUpsert, FAHistoricalData, FAPricePoint, FAPriceQueryItem, FAUpsert
 from backend.app.schemas.provider import ProviderInputType
 from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel, SyncStatus
-from backend.app.services.asset_source import AssetCRUDService, AssetSourceError, AssetSourceManager
-from backend.app.services.asset_sources import core as asset_source_core
-from backend.app.services.asset_sources import price_query as price_query_module
-from backend.app.services.asset_sources import refresh as refresh_module
-from backend.app.services.asset_sources.price_store import PriceStoreOperations
+from backend.app.services.assets import core as asset_source_core
+from backend.app.services.assets import price_query as price_query_module
+from backend.app.services.assets import refresh as refresh_module
+from backend.app.services.assets.core import AssetSourceError
+from backend.app.services.assets.crud import AssetCRUDService
+from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.assets.price_store import PriceStoreOperations
 from backend.test_scripts.test_utils import unique_id
 
 # A date window far from the mock dataset's, so a stray row of this unit can

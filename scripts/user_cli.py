@@ -7,7 +7,7 @@ Command-line tool for managing users from the server terminal.
 Use this when you need to reset passwords or manage users without the web UI.
 
 Usage:
-    ./dev.py user create <username> <email> <password>
+    ./dev.py user create <username> <email> <password> [--role admin|user]
     ./dev.py user reset <username> <new_password>
     ./dev.py user list
     ./dev.py user activate <username>
@@ -15,6 +15,7 @@ Usage:
 
 Or directly:
     pipenv run python user_cli.py create-superuser <username> <email> <password>
+    pipenv run python user_cli.py create-user <username> <email> <password>
     pipenv run python user_cli.py reset-password <username> <new_password>
     pipenv run python user_cli.py list-users
     pipenv run python user_cli.py activate <username>
@@ -23,6 +24,7 @@ Or directly:
 Use --test-db to operate on the test database:
     pipenv run python user_cli.py --test-db list-users
 """
+
 import argparse
 import asyncio
 import sys
@@ -36,6 +38,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.config import set_test_mode
 from backend.app.db.session import get_async_engine
 from backend.app.services.accounts import user_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
@@ -97,8 +100,8 @@ async def cmd_reset_password(username: str, new_password: str):
         return success
 
 
-async def cmd_create_superuser(username: str, email: str, password: str):
-    """Create a new superuser with password validation."""
+async def cmd_create_user(username: str, email: str, password: str, is_superuser: bool):
+    """Create an administrator or a regular account, with password validation."""
     # Validate password first
     is_valid, errors = validate_password(password)
     if not is_valid:
@@ -110,12 +113,10 @@ async def cmd_create_superuser(username: str, email: str, password: str):
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
-        user, error = await user_service.create_user(
-            session, username, email, password, is_superuser=True
-            )
+        user, error = await user_service.create_user(session, username, email, password, is_superuser=is_superuser)
 
         if user:
-            print(f"✅ Superuser '{username}' created with ID {user.id}")
+            print(f"✅ {'Superuser' if is_superuser else 'User'} '{username}' created with ID {user.id}")
             return True
         else:
             print(f"❌ {error}")
@@ -200,24 +201,21 @@ def main():
 Examples:
   python user_cli.py reset-password john newpassword123
   python user_cli.py create-superuser admin admin@example.com adminpass
+  python user_cli.py create-user john john@example.com Johnpass1!
   python user_cli.py list-users
   python user_cli.py deactivate john
   python user_cli.py activate john
   python user_cli.py promote john
   python user_cli.py demote john
-  
+
   # Operate on test database:
   python user_cli.py --test-db list-users
   python user_cli.py --test-db promote john
-        """
-        )
+        """,
+    )
 
     # Global flag for test database
-    parser.add_argument(
-        "--test-db",
-        action="store_true",
-        help="Operate on test database instead of production"
-        )
+    parser.add_argument("--test-db", action="store_true", help="Operate on test database instead of production")
 
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
@@ -231,6 +229,12 @@ Examples:
     super_parser.add_argument("username", help="Username")
     super_parser.add_argument("email", help="Email address")
     super_parser.add_argument("password", help="Password")
+
+    # create-user (a regular account)
+    create_user_parser = subparsers.add_parser("create-user", help="Create regular (non-admin) user")
+    create_user_parser.add_argument("username", help="Username")
+    create_user_parser.add_argument("email", help="Email address")
+    create_user_parser.add_argument("password", help="Password")
 
     # list-users
     subparsers.add_parser("list-users", help="List all users")
@@ -267,28 +271,23 @@ Examples:
 def _dispatch_user_command(args):
     """Dispatch to appropriate user command."""
     # Set test mode environment variable if --test-db flag is used
-    if getattr(args, 'test_db', False):
-        from backend.app.config import set_test_mode
+    if getattr(args, "test_db", False):
         set_test_mode(True)
         print("ℹ️  Operating on TEST database")
 
-    if args.command == "reset-password":
-        return asyncio.run(cmd_reset_password(args.username, args.new_password))
-    elif args.command == "create-superuser":
-        return asyncio.run(cmd_create_superuser(args.username, args.email, args.password))
-    elif args.command == "list-users":
-        return asyncio.run(cmd_list_users())
-    elif args.command == "deactivate":
-        return asyncio.run(cmd_set_user_active(args.username, False))
-    elif args.command == "activate":
-        return asyncio.run(cmd_set_user_active(args.username, True))
-    elif args.command == "promote":
-        return asyncio.run(cmd_set_admin(args.username, True))
-    elif args.command == "demote":
-        return asyncio.run(cmd_set_admin(args.username, False))
-    elif args.command == "init-settings":
-        return asyncio.run(cmd_init_settings())
-    return False
+    commands = {
+        "reset-password": lambda: cmd_reset_password(args.username, args.new_password),
+        "create-superuser": lambda: cmd_create_user(args.username, args.email, args.password, is_superuser=True),
+        "create-user": lambda: cmd_create_user(args.username, args.email, args.password, is_superuser=False),
+        "list-users": cmd_list_users,
+        "deactivate": lambda: cmd_set_user_active(args.username, False),
+        "activate": lambda: cmd_set_user_active(args.username, True),
+        "promote": lambda: cmd_set_admin(args.username, True),
+        "demote": lambda: cmd_set_admin(args.username, False),
+        "init-settings": cmd_init_settings,
+    }
+    command = commands.get(args.command)
+    return asyncio.run(command()) if command else False
 
 
 def register_subparser(parent_subparsers):
@@ -305,30 +304,25 @@ def register_subparser(parent_subparsers):
         epilog="""
 Examples:
   ./dev.py user list                           List all users
-  ./dev.py user create admin admin@ex.com pw   Create user
+  ./dev.py user create admin admin@ex.com pw   Create an administrator
+  ./dev.py user create bob bob@ex.com pw --role user
+                                               Create a regular account
   ./dev.py user reset admin newpassword        Reset password
   ./dev.py user promote admin                  Make admin
   ./dev.py user --test-db list                 Use test database
-"""
-        )
+""",
+    )
 
-    user_parser.add_argument(
-        "--test-db",
-        action="store_true",
-        help="Use test database instead of production"
-        )
+    user_parser.add_argument("--test-db", action="store_true", help="Use test database instead of production")
 
-    user_subparsers = user_parser.add_subparsers(
-        dest="command",
-        title="User commands",
-        metavar=""
-        )
+    user_subparsers = user_parser.add_subparsers(dest="command", title="User commands", metavar="")
 
-    # create-superuser
-    p = user_subparsers.add_parser("create", help="Create new user")
+    # create-superuser, or create-user with --role user
+    p = user_subparsers.add_parser("create", help="Create new user (an administrator unless --role user)")
     p.add_argument("username", help="Username")
     p.add_argument("email", help="Email address")
     p.add_argument("password", help="Password")
+    p.add_argument("--role", choices=("admin", "user"), default="admin", help="admin (default) or user, a regular account")
 
     # list-users
     user_subparsers.add_parser("list", help="List all users")
@@ -370,10 +364,10 @@ def _dispatch_user_from_devpy(args):
 
     # Map dev.py command names to internal names
     command_map = {
-        "create": "create-superuser",
+        "create": "create-user" if getattr(args, "role", "admin") == "user" else "create-superuser",
         "list": "list-users",
         "reset": "reset-password",
-        }
+    }
     args.command = command_map.get(args.command, args.command)
 
     # A command that fails (it printed ❌) exits 1, for scripts that check the status.

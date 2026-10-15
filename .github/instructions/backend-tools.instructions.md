@@ -9,7 +9,8 @@ applyTo: "backend/app/services/tools/**,backend/app/services/tool_plugins/**"
 - **Plugins**: thin wrappers, one folder per tool, `services/tool_plugins/<name>/` (`__init__.py` with the docstring only,
   `plugin.py` with the code, `i18n/` with its `name_i18n_key`/`description_i18n_key` texts), extending `ToolPlugin`
   (`services/tools/base.py`) and registered with `@register_plugin(ToolPluginRegistry)`. The registry is a specialization
-  in `services/tools/registry.py`, outside `provider_registry.py`.
+  in `services/tools/registry.py`: like every family's registry, it lives in its runtime package, while
+  `provider_registry.py` holds the shared bases and decorators.
 - **Runtime**: `services/tools/` holds the catalog, the schema export, the executor and the worker processes; each
   plugin's numerical engine lives in its own domain package (the PAC planner in `services/pac_allocator/`).
 - **API**: `api/v1/tools.py` (catalog, bulk compute, diagnostics). Contracts live in `schemas/tools.py` and the plugin's

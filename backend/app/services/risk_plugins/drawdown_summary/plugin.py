@@ -14,10 +14,11 @@ from backend.app.schemas.risk import (
     RiskReturnBasis,
     RiskScopeKind,
 )
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import require_primary_returns
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskExecutionContext, RiskSeriesInputs, RiskUnavailableError
 from backend.app.services.risk.metrics import drawdown_episodes
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 class DrawdownSummaryParams(BaseModel):

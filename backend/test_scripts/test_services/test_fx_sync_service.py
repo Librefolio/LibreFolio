@@ -1,7 +1,7 @@
 """
 FX sync service tests.
 
-Focus: pair-sync orchestration branches in services/fx.py
+Focus: pair-sync orchestration branches in services/fx/fx.py
 - _is_date_within_sync_range
 - sync_pairs_bulk._process_route
 - sync_pairs_bulk._compute_multi_step
@@ -29,8 +29,8 @@ from sqlmodel import delete, select
 
 from backend.app.db.models import FxConversionRoute, FxRate
 from backend.app.db.session import get_async_engine
-from backend.app.services import fx as fx_service
-from backend.app.services.fx import _is_date_within_sync_range, sync_pairs_bulk
+from backend.app.services.fx import fx as fx_service
+from backend.app.services.fx.fx import _is_date_within_sync_range, sync_pairs_bulk
 from backend.app.services.fx_providers.mockfx.plugin import MOCKFX_FIXED_RATE, MockFXProvider
 from backend.test_scripts.test_utils import print_section, print_success
 

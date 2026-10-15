@@ -40,12 +40,12 @@ from backend.app.schemas.signals import (
     SignalWarningCode,
 )
 from backend.app.services import signal_service as signal_service_module
-from backend.app.services.provider_registry import SignalPluginRegistry
 from backend.app.services.signal_plugins.base import SignalUnavailableError
 from backend.app.services.signal_service import (
     SignalRequestValidationError,
     SignalService,
 )
+from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.test_scripts.fixtures.signal_plugins.events_fixture import (
     EventsFixturePlugin,
 )

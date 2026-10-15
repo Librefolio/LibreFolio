@@ -849,7 +849,7 @@ class TestFAProviderConfigBase:
 
     def test_provider_params_validated_with_provider_instance(self, monkeypatch):
         from backend.app.schemas.provider import FAProviderConfigBase  # noqa: PLC0415
-        from backend.app.services.provider_registry import AssetProviderRegistry  # noqa: PLC0415
+        from backend.app.services.assets.registry import AssetProviderRegistry  # noqa: PLC0415
 
         class _DummyProvider:
             def __init__(self):
