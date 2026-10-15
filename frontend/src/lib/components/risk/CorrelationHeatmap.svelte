@@ -72,6 +72,10 @@
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {themed} from '$lib/theme/themePair';
+    import {CORRELATION_COLORS} from '$lib/theme/chartTheme';
+    import {CORRELATION_SCALE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     type Ordering = 'similarity' | 'name' | 'type' | 'sector' | 'region';
     type Distribution = Readonly<Record<string, number>>;
@@ -128,8 +132,8 @@
     const X_LABEL_MAX = 150;
     const X_LABEL_ROTATION = 45;
     /** Red for −1, neutral for 0, blue for +1. The neutral follows the card, so a zero reads as "nothing" in both themes. */
-    const SCALE_LIGHT = ['#b91c1c', '#f8fafc', '#1d4ed8'];
-    const SCALE_DARK = ['#b91c1c', '#334155', '#1d4ed8'];
+    const SCALE_LIGHT = CORRELATION_SCALE.light;
+    const SCALE_DARK = CORRELATION_SCALE.dark;
 
     let lookup = $derived(buildLookup(output.cells));
     let order = $derived.by(() => {
@@ -280,8 +284,8 @@
 
     /** Dark text on pale cells, white on saturated ones: the value must stay legible across the whole scale. */
     function valueColor(value: number | null): string {
-        if (dark) return '#f1f5f9';
-        return value !== null && Math.abs(value) >= 0.6 ? '#ffffff' : '#0f172a';
+        if (dark) return CORRELATION_COLORS.cellValue.darkTheme;
+        return value !== null && Math.abs(value) >= 0.6 ? CORRELATION_COLORS.cellValue.lightOnSaturated : CORRELATION_COLORS.cellValue.lightOnPale;
     }
 
     /**
@@ -294,11 +298,10 @@
 
     onMount(() => {
         const readTheme = () => {
-            dark = document.documentElement.classList.contains('dark');
+            dark = isDarkTheme();
         };
         readTheme();
-        const darkObserver = new MutationObserver(readTheme);
-        darkObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        const darkObserver = onThemeClassChange(readTheme);
         return () => {
             darkObserver.disconnect();
             resizeWatcher.disconnect();
@@ -365,7 +368,7 @@
     }
 
     function badgeHtml(parts: BadgeParts, value: string): string {
-        return `<span style="display:inline-block;margin-right:4px;padding:0 6px;border-radius:9999px;background:#f1f5f9;color:#334155;font-size:11px;line-height:18px">${escapeHtml(`${parts.icon} ${parts.name}`)} <b>${escapeHtml(value)}</b></span>`;
+        return `<span style="display:inline-block;margin-right:4px;padding:0 6px;border-radius:9999px;background:${CORRELATION_COLORS.tooltipBadge.background};color:${CORRELATION_COLORS.tooltipBadge.text};font-size:11px;line-height:18px">${escapeHtml(`${parts.icon} ${parts.name}`)} <b>${escapeHtml(value)}</b></span>`;
     }
 
     /**
@@ -450,7 +453,7 @@
             label: {color: valueColor(point.value[2])},
         }));
         drawn = data;
-        const axisColor = dark ? '#cbd5e1' : '#475569';
+        const axisColor = themed(CORRELATION_COLORS.axisLabel, dark);
         const axisLabel = {color: axisColor, fontSize: AXIS_FONT_SIZE, fontFamily: AXIS_FONT_FAMILY, interval: 0};
 
         chart.setOption(
@@ -492,7 +495,7 @@
                                 ? `<div style="font-weight:600">ρ = ${formatFixed(value, 3)} · ${$t(`risk.assetSet.band.${band}`)}${value >= NEAR_IDENTICAL ? ` · ${$t('risk.assetSet.nearIdentical')}` : ''}</div>`
                                 : `<div style="font-weight:600">${$t(`risk.valueStatus.${item.status}`)}</div>`;
                         const metadata = `<div style="opacity:0.75;margin-top:2px">${$t('risk.metadata.observations')}: ${formatFixed(item.observations, 0)} · ${$t('risk.metadata.coverage')}: ${formatPercent(item.coverage, {scale: 100, digits: 1, signed: false})}</div>`;
-                        const assets = `<div style="margin-top:6px;padding-top:4px;border-top:1px solid rgba(148,163,184,0.35)">${assetBlock(item.rowAssetId)}${assetBlock(item.columnAssetId)}</div>`;
+                        const assets = `<div style="margin-top:6px;padding-top:4px;border-top:1px solid ${CORRELATION_COLORS.tooltipDivider}">${assetBlock(item.rowAssetId)}${assetBlock(item.columnAssetId)}</div>`;
                         return `${reading}${metadata}${assets}`;
                     },
                 },
@@ -502,7 +505,7 @@
                         type: 'heatmap',
                         data,
                         // A gap the colour of the card between cells: the triangle reads as tiles, not as a smear.
-                        itemStyle: {borderColor: dark ? '#1e293b' : '#ffffff', borderWidth: 2, borderRadius: 3},
+                        itemStyle: {borderColor: themed(CORRELATION_COLORS.cellGap, dark), borderWidth: 2, borderRadius: 3},
                         label: {
                             show: true,
                             fontSize: AXIS_FONT_SIZE,
@@ -518,7 +521,7 @@
                         // the opposite shade, stands out on the pale cells and on the saturated ones alike.
                         // ECharts lifts an emphasised cell above its neighbours (`Z2_EMPHASIS_LIFT`), so the
                         // neighbours' tile gaps cannot cover its border.
-                        emphasis: {itemStyle: dark ? {borderColor: '#ffffff', borderWidth: 3, shadowBlur: 10, shadowColor: 'rgba(2, 6, 23, 0.95)'} : {borderColor: '#0f172a', borderWidth: 3, shadowBlur: 10, shadowColor: 'rgba(255, 255, 255, 0.95)'}},
+                        emphasis: {itemStyle: {borderColor: themed(CORRELATION_COLORS.emphasisBorder, dark), borderWidth: 3, shadowBlur: 10, shadowColor: themed(CORRELATION_COLORS.emphasisHalo, dark)}},
                     },
                 ],
             },
