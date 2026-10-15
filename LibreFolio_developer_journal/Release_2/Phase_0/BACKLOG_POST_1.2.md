@@ -3549,6 +3549,12 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   non è un prezzo osservato); per quelle in entrata, segnare solo se l'asset non ha ancora una quotazione di mercato.
   Prima il rosso; serve la decisione del developer, perché cambia il comportamento dei seed. Dettagli: piano J, §10
   «CP-16».
+- **J-18 · Su SQLite `Numeric(18, 6)` si salva come numero in virgola mobile** — basso, dati; trovata dal test-author di
+  J il 16/10 (CP-15), con una prova su file. SQLAlchemy su SQLite non passa i Decimal al driver: li converte in `float`
+  e li rilegge con 6 decimali, quindi un importo o una quantità oltre ~15 cifre significative si salva arrotondato
+  (`123456789012.123456` torna `123456789012.123459`). Fino a ~1e10 il 6° decimale regge: nessun portafoglio personale
+  ci arriva. Ma `backend-db.instructions.md` («`Numeric(18, 6)` for precision») fa credere a 18 cifre esatte. Proposta:
+  scriverlo in quelle istruzioni e nella pagina dev del DB; nessun cambio di schema. Dettagli: piano J, §10 «CP-15».
 
 ## Z · Sospensione e risveglio (fase 01)
 
