@@ -72,7 +72,7 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | Daily portfolio state: NAV, capital baseline, P&L, per-broker contributions | `services/financial_math/portfolio/` (`daily_state.py`, run by `engine.py`) |
 | FIFO lots and realized gains | `services/financial_math/fifo/` |
 | Lots analysis: lot histories, economic events, average cost lines | `services/financial_math/lots/` |
-| Simple ROI, TWRR, MWRR, annualization | `services/financial_math/returns.py` |
+| Simple ROI, TWRR, MWRR, annualization, a period's start (rebasing), net holding return, G/L ratio | `services/financial_math/returns.py` |
 | Holding value from quantity and price | `services/financial_math/valuation.py` |
 | Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
