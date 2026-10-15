@@ -2166,7 +2166,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     86–150) l'helper è riuscito in tutti i 63 scatti presi: `focus` "-" in tutti, frame identici a `g-final3-r1`, MACD
     verde sui due progetti. 5 rossi fuori dall'helper (lista asset, clic sul tema, `textStill`, cattura), tutti di
     carico.
-  - Resta da rifare da soli, quando il coordinatore dà il posto, EMA, RSI, Bollinger e drawdown: poi ✅.
+  - Codice committato dal coordinatore in `5da3c9eba` (15/10), che entra nel target a DoD raggiunta. Resta da rifare da
+    soli, quando il coordinatore dà il posto, EMA, RSI, Bollinger e drawdown: poi ✅.
 
   Dettagli: piano della 56, passo 8.
 - **G-10 · Ordine casuale delle immagini del seed nelle liste di file** — medio-basso; G, 15/10, su segnalazione del
@@ -2206,6 +2207,28 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     Se la causa è nel prodotto, va segnalata e non corretta qui.
 
   Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md), «Verifica delle correzioni».
+- **G-12 · Due commenti nel codice descrivono ancora il vecchio helper della gallery** — minimo; G, 15/10, handoff di
+  G-9; voce aperta su richiesta del coordinatore. **Proprietario da instradare.**
+  - Da G-9 (`5da3c9eba`), `selectIndicatorFromTree` (`frontend/e2e/gallery.spec.ts`) non tocca più il menu con il
+    puntatore. Apre con ↓, aspetta il focus sulla ricerca, sposta l'evidenziazione con ↓/↑ leggendo
+    `aria-activedescendant`, apre la famiglia chiusa con → e sceglie con Invio.
+  - `frontend/src/lib/components/charts/SignalTreeSelect.test.ts`, la rete di caratterizzazione D-K1 (workstream K):
+    - righe 16–17, l'elenco «Who leans on the contract»: attribuisce all'helper la prima famiglia aperta da sola, che
+      oggi serve allo scatto `assets/detail-signals-tree`, e la famiglia chiusa aperta con un clic, che oggi si apre
+      con →;
+    - righe 306–310: il titolo «the way the gallery helper drives it» e il commento «expand the family only when it is
+      collapsed, then click the option» descrivono il percorso vecchio.
+
+    La riga 213 resta vera. Le asserzioni restano giuste: la scelta con il clic è un percorso degli utenti. Il percorso
+    nuovo della gallery è già fissato dal blocco `keyboard` dello stesso file: ↓ sul trigger chiuso apre con il focus
+    sulla ricerca, poi ↓/↑, → sulla famiglia chiusa, Invio sceglie. Va aggiornato solo il testo, nessuna asserzione.
+  - `frontend/src/lib/components/ui/select/TreeSelect.svelte`, commento alle righe 17–19: resta vero, perché lo scatto
+    `assets/detail-signals-tree` conta sulla prima famiglia aperta da sola (`defaultExpanded`). Da rileggere insieme
+    all'elenco del test: ora la gallery si appoggia anche al contratto da tastiera.
+  - L'intestazione del test vieta di cambiarlo «to accommodate the refactor». Qui il refactor non c'entra: cambia chi
+    usa il contratto, non il contratto. Decide comunque il proprietario.
+
+  Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), passo 8.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
