@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Email links**: every link an email carries is built from `LIBREFOLIO_PUBLIC_URL` alone. While email works, the start log and Settings › Email say when that variable is missing or cannot be used, and `GET /api/v1/system/instance` tells whether emails with a link can go out.
 - Settings › Email checks, from the administrator's browser, that `LIBREFOLIO_PUBLIC_URL` reaches this very instance, and warns, for this device only, when another server answers there or nothing does; the startup warning about `LIBREFOLIO_PUBLIC_URL` now lists every rule the address must follow.
 - `GET /api/v1/brokers/import/files`: each file carries `can_delete`, true when the caller may delete it.
+- Test configuration shows until when a provider is paused after too many requests. API: live prices, asset refresh and FX sync results carry `error_code="RATE_LIMITED"` and `retry_after`.
 
 ### 🔄 Changed
 
@@ -60,6 +61,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Logs: the startup and shutdown lines are written by the logger `backend.app.services.platform.app_lifespan` (before: `backend.app.main`).
 - `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` and `_MAX` below 1, or not a finite number, take their default. A timeout under a second used to mean no timeout, and `0` still returned one link. A fractional timeout is now honoured, rounded up to whole seconds.
 - **The server stops within 8 seconds.** After a `docker stop`, a restart or Ctrl+C, requests still running after 3 seconds are cancelled and what they had not saved is rolled back; the server's own work (scheduled syncs, workers, caches) gets the rest of the time, and worker processes still alive are ended, so none is left behind. If something still holds the server when the time is up, it ends anyway and its log says what was still running. `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` changes the budget (`0`: no limit, as before). Docker waits 10 seconds by default: if you raise the budget, give the container more time too (`stop_grace_period`).
+- **Uploaded files have a scope.** Common files (images: icons, logos, asset photos, avatars) are visible to every signed-in user; personal files (every other type) only to their uploader and the administrators. Files uploaded before this version follow the same rule.
+- API: `POST /api/v1/uploads` accepts `scope`; `PATCH /api/v1/uploads/{id}` changes it; file info carries `scope` and `can_delete`. Another user's personal file answers 404, as a missing one.
+- **Yahoo Finance no longer retries a "too many requests" refusal three times**: like every price and exchange-rate provider, it pauses. During a pause the last stored price stays on screen.
+
+#### 🎨 A new colour palette
+
+- **A new colour palette, in light and in dark**, chosen with a designer: «Stone and Sage» in light, «Slate and Sage» in dark. It already covers the sign-in pages, the sidebar, the header and its menus; the rest of the app keeps its current look and moves to the new palette over the next updates. Every text and control of the palette meets the WCAG contrast minimum (4.5:1 for text, 3:1 for controls) in both themes.
+- **Green sidebar, neutral header.** The sidebar takes the brand green in both themes, with the page you are on marked by a bar on its left; the header sits on a neutral band, a shade darker than the page in light and lighter in dark. The control you reach with the keyboard shows a clear focus ring. The title bar of the installed app takes the sidebar's green.
+- **Softer red and green in the dark theme**, easier on the eyes, for errors, success marks, the password-strength bar, the connection status and the gains and losses on the Dashboard.
+- **Sign-in pages, new look:** icons in the fields, a highlighted border under the pointer and in focus, the password requirements in a box of their own, no subtitle under the logo, and the recovery commands in a dark terminal box.
+- **Charts: every asset type and sector keeps one colour everywhere:** the same in the allocation pie and in its history, in every portfolio, broker and period. Liquidity has a colour of its own, subtypes are shades of their family, and the maps, the sharing semi-donut and the correlation matrix follow the light and dark theme.
 
 ### 🧹 Repository cleanup
 
@@ -111,12 +123,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Zoomed date axes keep their labels.** Zooming into a long period on the price charts of the asset and FX pages, or on the risk charts, left two or three dates on the axis, on phones especially: the labels are now spaced on the days you see.
 - The **Lot Life & Custody** tooltip says "1 share open out of 10" in the singular, in every language, and stays plural while amounts are hidden.
 - **The money-weighted return (MWRR) is checked before it is shown.** In some portfolios with large withdrawals the Dashboard showed a wrong rate, often +10.01% a year; it now shows the true one, or "—" when there is none.
+- **Sign-in pages on a phone:** the theme, language and help buttons no longer cover the card. They scroll away with the page, and a tall card such as registration starts below them, in the app installed on an iPhone too.
+- **The header hides again when you scroll down** after clicking one of its buttons with the mouse; reaching a button with the keyboard still keeps it in view.
+- **The allocation pie and its history show the same sector emoji.**
+- **Deleting several brokers at once**: a broker whose deletion fails part-way now stays exactly as it was, with nothing changed on the other broker of a transfer, and the other brokers of the request are still deleted.
 
 #### 🔒 Security
 
 - **Broker reports uploaded by older versions are no longer open to every user.** A report stored without a broker could be listed, read, parsed and deleted by any signed-in user. Now only the user who uploaded it and an administrator can reach it, and only an administrator when no uploader was recorded.
 - **Parsing a report checks the broker it imports into.** The parse compared the report with the transactions of the broker named in the request without checking that the caller could edit it. It now needs EDITOR or OWNER there too, as the duplicates check already did.
 - **Report file ids are checked first.** An id that is not a file's own UUID answers 404; a very long one used to cause a server error.
+- **Thumbnails of uploaded images are no longer kept by shared caches**: they are sent `Cache-Control: private`, so a proxy in front of the instance does not store them.
 
 ### ⚠️ Breaking changes
 

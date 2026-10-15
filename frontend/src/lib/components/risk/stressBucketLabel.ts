@@ -18,7 +18,7 @@ import {translateOr} from '$lib/utils/core/translateOr';
 export interface StressBucketVocabulary {
     /** The catalogue, as `$t` reads it. */
     translate: (key: string) => string;
-    /** A sector's emoji (`getSectorEmoji`). */
+    /** A sector's emoji (`getSectorEmoji`): `''` until the sector list arrives, and the name then stands alone. */
     sectorEmoji: (sector: string) => string;
     /** A country by its ISO alpha-3 code (`getCountryInfo`): an unknown code has an empty `iso2`. */
     country: (iso3: string) => {iso2: string; flag_emoji: string; name: string};
@@ -34,7 +34,9 @@ export function stressBucketLabel(bucket: string, dimension: RiskScenarioDimensi
     if (dimension === 'asset_class') return translateOr(words.translate, `assets.types.${bucket}`, bucket);
     if (dimension === 'sector') {
         const name = translateOr(words.translate, `sectors.${sectorI18nKey(bucket)}`, '');
-        return name === '' ? bucket : `${words.sectorEmoji(bucket)} ${name}`;
+        if (name === '') return bucket;
+        const emoji = words.sectorEmoji(bucket);
+        return emoji ? `${emoji} ${name}` : name;
     }
     const country = words.country(bucket);
     return country.iso2 === '' ? bucket : `${country.flag_emoji} ${country.name}`;

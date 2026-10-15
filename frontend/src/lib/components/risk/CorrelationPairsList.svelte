@@ -53,12 +53,12 @@
     }
 
     /**
-     * The heatmap's own polarity — blue for a positive pair (`#1d4ed8` at +1), red
-     * for an offsetting one (`#b91c1c` at −1) — so the list and the matrix cannot
+     * The heatmap's own polarity — the info role for a positive pair (+1), the danger role
+     * for an offsetting one (−1), the two ends of its scale — so the list and the matrix cannot
      * contradict each other. This docstring used to promise exactly that while the
      * list did the opposite (red for redundancy), so the same pair was red here and
      * dark blue in the matrix. The polarity is the heatmap's, not a verdict: flipping
-     * it is one line in `CorrelationHeatmap`'s `visualMap`, and it has to move both
+     * it is one line in `CorrelationHeatmap`'s scale, and it has to move both
      * views together.
      */
     function toneClass(pair: CorrelationPair): string {

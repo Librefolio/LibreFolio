@@ -76,6 +76,7 @@ function filesFor(type: TableType): FileData[] {
             original_name: `review-${id}.txt`,
             mime_type: 'text/plain',
             uploaded_by_user_id: uploader,
+            scope: 'common',
             url: `/review/files/${id}`,
         } satisfies UploadedFile;
     });

@@ -26,7 +26,7 @@ import type {UploadedFile} from '$lib/types';
 import AssetPickerModal from './AssetPickerModal.svelte';
 
 function file(id: string, name: string, mime = 'image/png'): UploadedFile {
-    return {id, original_name: name, url: `/uploads/${id}/${name}`, mime_type: mime, size_bytes: 1234} as UploadedFile;
+    return {id, original_name: name, url: `/uploads/${id}/${name}`, mime_type: mime, size_bytes: 1234, scope: 'common'} as UploadedFile;
 }
 
 interface Handlers {

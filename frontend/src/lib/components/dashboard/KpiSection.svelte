@@ -149,7 +149,7 @@
     const marketStartMarkerPct = $derived(marketValueStartAmt > 0 ? (marketValueStartAmt / nwBarMax) * 100 : 0);
     const purchaseCostStartMarkerPct = $derived(purchaseCostStartAmt > 0 ? (purchaseCostStartAmt / nwBarMax) * 100 : 0);
     const cashStartMarkerPct = $derived(cashStartAmt > 0 ? (cashStartAmt / nwBarMax) * 100 : 0);
-    const marketBarColor = $derived(marketValueAmt >= marketValueStartAmt ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500');
+    const marketBarColor = $derived(marketValueAmt >= marketValueStartAmt ? SIGN_BAR.kpi.gain : SIGN_BAR.kpi.loss);
 
     const periodPnlCur = $derived(summary ? safeCurrency(summary.period_pnl) : null);
     const periodPnlAmt = $derived(periodPnlCur ? parseFloat(periodPnlCur.amount) : 0);
@@ -314,8 +314,8 @@
                         valueColor={pnlValueColor(uglDeltaAmt)}
                     />
                     <KpiMetricBar label={$_('dashboard.realizedSales')} tooltip={$_('dashboard.realizedSalesTooltip')} value={realizedStr} numericValue={realizedAmt} formatValue={fmtMoney} barPct={pnlBarPct(realizedAmt)} barColor={pnlBarColor(realizedAmt)} valueColor={pnlValueColor(realizedAmt)} />
-                    <KpiMetricBar label={$_('dashboard.income')} tooltip={$_('dashboard.incomeTooltip')} value={incomeStr} numericValue={incomeAmt} formatValue={fmtMoney} barPct={pnlBarPct(incomeAmt)} barColor="bg-green-500 dark:bg-green-400" valueColor="text-green-600 dark:text-green-400" />
-                    <KpiMetricBar label={$_('dashboard.feesAndTaxes')} tooltipHtml={feesTooltipHtml} value={feesStr} numericValue={feesAmt} formatValue={fmtMoney} barPct={pnlBarPct(feesAmt)} barColor="bg-red-400 dark:bg-red-500" valueColor="text-red-600 dark:text-red-400" />
+                    <KpiMetricBar label={$_('dashboard.income')} tooltip={$_('dashboard.incomeTooltip')} value={incomeStr} numericValue={incomeAmt} formatValue={fmtMoney} barPct={pnlBarPct(incomeAmt)} barColor={SIGN_BAR.kpi.gain} valueColor={SIGN_TEXT.kpi.gain} />
+                    <KpiMetricBar label={$_('dashboard.feesAndTaxes')} tooltipHtml={feesTooltipHtml} value={feesStr} numericValue={feesAmt} formatValue={fmtMoney} barPct={pnlBarPct(feesAmt)} barColor={SIGN_BAR.kpi.loss} valueColor={SIGN_TEXT.kpi.loss} />
                 </div>
                 <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.cashFlowAdjustedResult')}</p>
             </div>
@@ -325,7 +325,7 @@
     <!-- Card 2 — Returns -->
     <div class="relative @container bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-returns">
         {#if roiIsPositive !== undefined}
-            <div class="absolute top-0 left-0 right-0 h-0.5 {roiIsPositive ? 'bg-green-500 dark:bg-green-400' : 'bg-red-500 dark:bg-red-400'}"></div>
+            <div class="absolute top-0 left-0 right-0 h-0.5 {roiIsPositive ? SIGN_BAR.accent.gain : SIGN_BAR.accent.loss}"></div>
         {/if}
         <div class="flex items-center justify-between">
             <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.returns')}</p>
@@ -418,14 +418,7 @@
                     marker={cashStartMarkerPct > 0 ? cashStartMarkerPct : undefined}
                     markerTooltip="{$_('dashboard.cashValueStart')}: {cashStartStr}"
                 />
-                <KpiDivergingFlowBar
-                    label={$_('dashboard.netDepositedCapital')}
-                    tooltipHtml={netDepositedTooltipHtml}
-                    value={netDepositedStr}
-                    depositPct={depositBarPct}
-                    withdrawPct={withdrawBarPct}
-                    valueColor={netDepositedPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}
-                />
+                <KpiDivergingFlowBar label={$_('dashboard.netDepositedCapital')} tooltipHtml={netDepositedTooltipHtml} value={netDepositedStr} depositPct={depositBarPct} withdrawPct={withdrawBarPct} valueColor={netDepositedPositive ? SIGN_TEXT.kpi.gain : SIGN_TEXT.kpi.loss} />
             </div>
             <p class="text-[10px] text-gray-400 dark:text-gray-600 mt-1 italic">{$_('dashboard.periodScopeNote')}</p>
         {/if}
