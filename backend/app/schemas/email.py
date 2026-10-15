@@ -7,7 +7,7 @@ user, the sender nor the password: the SMTP configuration is never shown in the 
 
 from typing import Literal, Optional
 
-from pydantic import Field
+from pydantic import EmailStr, Field
 
 from backend.app.schemas.common import StrictModel
 
@@ -29,6 +29,14 @@ class EmailBudgetRead(StrictModel):
     retry_after_seconds: int = Field(..., description="Seconds until the next email fits; 0 when one fits now")
 
 
+class EmailLinksRead(StrictModel):
+    """Whether emails can carry links: they are built only from LIBREFOLIO_PUBLIC_URL (developer decision 45)."""
+
+    ready: bool = Field(default=False, description="LIBREFOLIO_PUBLIC_URL is set to an http(s) address")
+    base: Optional[str] = Field(None, description="LIBREFOLIO_PUBLIC_URL, the base of every emailed link: the browser checks that it reaches this instance")
+    problem: Optional[Literal["PUBLIC_URL_MISSING", "PUBLIC_URL_INVALID"]] = Field(None, description="Why no link can be emailed")
+
+
 class EmailStatusResponse(StrictModel):
     """``GET /email/status``: the state of the instance's email, for administrators."""
 
@@ -37,6 +45,7 @@ class EmailStatusResponse(StrictModel):
     variable: Optional[str] = Field(None, description="invalid only: the environment variable at fault")
     checks: list[EmailCheckRead] = Field(default_factory=list, description="The configuration checks of the email section")
     budget: Optional[EmailBudgetRead] = Field(None, description="ready only: the hourly budget")
+    links: EmailLinksRead = Field(default_factory=EmailLinksRead, description="Whether emails can carry links (LIBREFOLIO_PUBLIC_URL)")
 
 
 class EmailTestResponse(StrictModel):
@@ -53,3 +62,33 @@ class EmailInstanceConfig(StrictModel):
     # without escaping its backticks. The default is the instance without email: an answer built without this part
     # says that nothing can be sent.
     available: bool = Field(default=False, description="Whether this instance can send emails now: an SMTP server is set and every LIBREFOLIO_SMTP_* variable can be used")
+    links: bool = Field(default=False, description="Whether emails with a link can go out now: email is available and LIBREFOLIO_PUBLIC_URL is set")
+
+
+class EmailLinkRequest(StrictModel):
+    """Email a link an administrator has just created: an invitation, or a password-reset link."""
+
+    purpose: Literal["invite", "password_reset"] = Field(..., description="What the link is for")
+    token: str = Field(..., min_length=1, max_length=512, description="The token of the link, as the route that created it answered it; never logged")
+    to: Optional[EmailStr] = Field(None, description="invite only: where to send it; without it, the address written in the invitation")
+    language: Optional[Literal["en", "it", "fr", "es"]] = Field(None, description="invite only: the language of the email; without it, the instance's default language")
+
+
+class EmailLinkResponse(StrictModel):
+    """``POST /email/links``: the link went out."""
+
+    purpose: Literal["invite", "password_reset"]
+    to: str = Field(..., description="Where the email went")
+    language: Literal["en", "it", "fr", "es"] = Field(..., description="The language the email was written in")
+
+
+class PasswordResetEmailRequest(StrictModel):
+    """``POST /email/password-reset``: a forgotten password, by username or email address."""
+
+    identifier: str = Field(..., min_length=1, max_length=254, description="The username or the email address of the account")
+
+
+class PasswordResetEmailAccepted(StrictModel):
+    """The same answer whether or not an account matches: if one does, its owner gets an email."""
+
+    message: str = "If an active account matches, its owner gets an email with a link to choose a new password"

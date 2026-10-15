@@ -47,7 +47,7 @@ from pathlib import Path
 import pytest
 
 from backend.app.config import SECRET_FILE_MAX_BYTES, SecretFileError
-from backend.app.services.email.checks import check_smtp_configuration, check_smtp_encryption
+from backend.app.services.email.checks import check_email_links, check_smtp_configuration, check_smtp_encryption
 from backend.app.services.platform import config_audit
 from backend.app.services.platform.config_audit import (
     CONFIG_CHECKS,
@@ -78,6 +78,7 @@ CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     check_log_level: "platform.log_level",
     check_smtp_configuration: "email.smtp",
     check_smtp_encryption: "email.smtp_encryption",
+    check_email_links: "email.links",
 }
 SEVERITIES = ("ok", "info", "warning", "error")
 I18N_PREFIX = "instance.checks."

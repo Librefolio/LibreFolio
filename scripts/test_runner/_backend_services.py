@@ -487,30 +487,43 @@ def services_email_delivery(verbose: bool = False, test_names: list = None) -> b
     """Test SMTP delivery against a fake server on 127.0.0.1, the configuration state, the hourly budget and send_email."""
     print_section("Services: E-mail Delivery")
     print_info("Testing: backend/app/services/email/smtp.py, backend/app/services/email/delivery.py")
-    print_info("Tests: the fake SMTP server, error codes (TLS never falls back to plain), config state and its one-time log, budget on a fake clock, smtplib off the event loop, no secret in the logs")
+    print_info("Tests: the fake SMTP server, error codes (TLS never falls back to plain), config state and its one-time log, budget on a fake clock, smtplib off the event loop, no secret in the logs, a blocked instance sends nothing")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_delivery.py", test_names)
     return run_command(cmd, "E-mail delivery tests", verbose=verbose)
 
 
 def services_email_checks(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the configuration checks of the optional e-mail (email.smtp, email.smtp_encryption)."""
+    """Test the configuration checks of the optional e-mail (email.smtp, email.smtp_encryption, email.links)."""
     print_section("Services: E-mail Configuration Checks")
     print_info("Testing: backend/app/services/email/checks.py, their place in backend/app/services/platform/config_audit.py")
-    print_info("Tests: off/ok/invalid with problem and variable, plain text local or public, EMAIL_CONFIG_CHECKS, no password, host, user or sender in a detail; the end of CONFIG_CHECKS, run_config_checks, either module imported first in a fresh interpreter, the startup log")
+    print_info("Tests: off/ok/invalid with problem and variable, plain text local or public, links ok/missing/invalid, EMAIL_CONFIG_CHECKS, no password, host, user or sender in a detail")
+    print_info("Tests: the end of CONFIG_CHECKS, run_config_checks, either module imported first in a fresh interpreter, the startup log")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_checks.py", test_names)
     return run_command(cmd, "E-mail configuration check tests", verbose=verbose)
 
 
 def services_email_flows(verbose: bool = False, test_names: list = None) -> bool:
-    """Test what an action of the application sends: the language of an account's emails, and the test email."""
+    """Test what an action of the application sends: the language of an account's emails, the test email, the links an administrator emails and the forgotten password."""
     print_section("Services: E-mail Flows")
     print_info("Testing: backend/app/services/email/flows.py")
     print_info("Tests: account language (its own, else default_language, else English; no settings row created), the test email to the account's own address in its language, nothing sent when e-mail is off or unusable, configuration read off the event loop")
+    print_info("Tests: send_link_email (order of refusals, token states, recipients, languages, the PUBLIC_URL link)")
+    print_info("Tests: forgotten password admission (limits per address and identifier, budget) and work (per-account limits, revocation, silence, never raises)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_flows.py", test_names)
     return run_command(cmd, "E-mail flow tests", verbose=verbose)
+
+
+def services_email_links(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the links an email carries: built from LIBREFOLIO_PUBLIC_URL alone (developer decision 45)."""
+    print_section("Services: E-mail Links")
+    print_info("Testing: backend/app/services/email/links.py")
+    print_info("Tests: links_state missing/invalid/ready (an address no link can start from, trailing slash, path prefix, never raises, never echoes), the instance host with its port, require_links, email_link = base + page + token in the fragment, email_instance_config in every combination")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_links.py", test_names)
+    return run_command(cmd, "E-mail link tests", verbose=verbose)
 
 
 def services_provider_cooldown(verbose: bool = False, test_names: list = None) -> bool:
@@ -1277,7 +1290,7 @@ Note: No backend server required.
         "email-delivery",
         services_email_delivery,
         name="E-mail Delivery",
-        desc="Fake SMTP server self-checks; deliver: plain, AUTH, AUTH_FAILED, TLS_FAILED without fallback, CONNECTION_FAILED, TIMEOUT, refusals, non-221 QUIT is success; email_config_state never raises, one problem and variable per fault, logged once per process without the password; hourly budget on a fake clock; send_email off the event loop; no password, link or body in the logs",
+        desc="Fake SMTP server self-checks; deliver: plain, AUTH, AUTH_FAILED, TLS_FAILED without fallback, CONNECTION_FAILED, TIMEOUT, refusals, non-221 QUIT is success; email_config_state never raises, one problem and variable per fault, logged once per process without the password; hourly budget on a fake clock; send_email off the event loop; no password, link or body in the logs; a blocked instance (LIBREFOLIO_BLOCKED, or unreadable) sends nothing, before any other check; sending_blocked",
         # PURE: no lane DB, no server; env set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
         isolation="pure",
     )
@@ -1286,7 +1299,7 @@ Note: No backend server required.
         "email-checks",
         services_email_checks,
         name="E-mail Configuration Checks",
-        desc="email.smtp: off, ok, or error with problem and variable; email.smtp_encryption: ok unless plain text to a non-local host (warning); EMAIL_CONFIG_CHECKS; no password anywhere, no host, user or sender in a detail; config_audit.CONFIG_CHECKS ends with them, run_config_checks carries their results, either module imports first in a fresh interpreter; the startup audit logs an error, a warning, nothing when off, never the password",
+        desc="email.smtp: off, ok, or error with problem and variable; email.smtp_encryption: ok unless plain text to a non-local host (warning); email.links: ok when email is not usable or links are ready, info without LIBREFOLIO_PUBLIC_URL, warning when it is not http(s) or no link can start from it; EMAIL_CONFIG_CHECKS (three); no password anywhere, no host, user or sender in a detail; config_audit.CONFIG_CHECKS ends with them, run_config_checks carries their results, either module imports first in a fresh interpreter; the startup audit logs an error, warnings, an info, nothing when off, never the password",
         # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path; the
         # startup audit runs in test mode with its data directory in tmp_path, and so do the fresh interpreters of the import order.
         isolation="pure",
@@ -1296,9 +1309,18 @@ Note: No backend server required.
         "email-flows",
         services_email_flows,
         name="E-mail Flows",
-        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop",
+        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop; send_link_email: email, then links, then the token, then the recipient, exactly the PUBLIC_URL link, the token never logged; admit_forgotten_password: per address (none without one), per identifier, the budget peeked; forgotten_password_work: per-account limits, the configuration read again before the link is made, the new link revoked whatever stops the email, never raises; a blocked instance is refused first by every flow and makes no link",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server; LIBREFOLIO_SMTP_* removed then set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-links",
+        services_email_links,
+        name="E-mail Links",
+        desc="links_state: LIBREFOLIO_PUBLIC_URL missing, invalid (not http(s), or no host, a space, a ? or #, a bad port, credentials; never echoed) or ready (spaces and one trailing slash removed, path prefix kept), read at each call, never raises; LinksState.instance = host with port; require_links; email_link = base + /reset-password or /invite + the token urlencoded in the fragment, nothing from a request; email_instance_config: available, and links only with email usable and links ready",
+        # PURE: no lane DB, no server, no network; LIBREFOLIO_SMTP_* and LIBREFOLIO_PUBLIC_URL removed then set with monkeypatch.
         isolation="pure",
     )
     add_test(
