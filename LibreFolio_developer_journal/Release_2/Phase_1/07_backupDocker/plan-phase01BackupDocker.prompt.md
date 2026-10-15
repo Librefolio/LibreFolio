@@ -1527,7 +1527,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >    `front check`, `check-orphans`, poi l'E2E `front-utility backup` da sola (una scheda in più nella barra).
 > 4. Poi B8 dalla patch, i suoi test e il FROZEN.
 
-### Aggiornamento di base — merge di `dev_release2` `bcd680868`, con E2 (2026-10-15, dalle 18:42)
+### Aggiornamento di base — merge di `dev_release2` `bcd680868`, con E2 (2026-10-15, 18:42-19:05) ✅ — committato
 
 > - **Piano committato dal coordinatore**: `ddf0c4035` (`docs(journal): all-backend green, B4 notes`). Merge aperto
 >   da lui: `MERGE_HEAD` `bcd680868`, con E2 (la scheda Email) e W (il salvataggio degli eventi).
@@ -1590,6 +1590,177 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - E2E `front-utility backup` da sola;
 > - `front-utility core-unit`, nello slot 1. Rosso noto e accettato: `htmlInterpolation.gate.test.ts` sulla chiave
 >   `email.problems.SMTP_FROM_INVALID`, che E sta correggendo.
+>
+> **Committato dal coordinatore** (18:54):
+>
+> - il merge `b1f5b0fd1` (genitori `ddf0c4035` e `bcd680868`), con dentro la riga di `page.tabs.test.ts`: per lui è
+>   una correzione di significato del merge;
+> - il piano in `ef61f0e7f`;
+> - togliere `adminOnly` va bene: le liste per contesto di E fissano la stessa cosa.
+>
+> **Prove sulla revisione combinata `ef61f0e7f`** (18:55-19:05, `nice -n 10`, una alla volta; log in
+> `/tmp/libreFolio_b_post_b1f5_*.log`):
+>
+> - Vitest `settingsTabs` 20/20 e `page.tabs` 18/18.
+> - `api sync` 0, poi `front check` 0 errori e 0 avvisi. Il sync va prima perché il client generato è ignorato e il
+>   merge porta le rotte email di E.
+> - `check-orphans` verde: 127 E2E, 418 Vitest, 311 backend.
+> - E2E `front-utility backup` 5/5 (FBKP-001…004), con la scheda Email nella barra; 4 min 30 s, avvio della corsia
+>   compreso (carico 37).
+> - `front-utility core-unit` (slot 1): 5 046 passati e 1 rosso, quello noto: `htmlInterpolation.gate`, perché
+>   `email.problems.SMTP_FROM_INVALID` contiene `<` nei 4 cataloghi. La correzione di E (`be7de95b6`) è fuori dalla mia
+>   base. File: 154 su 155.
+> - Porta 6187 libera; in `.jobs` solo `.lock`; worktree pulito. Slot 1 liberato alle 19:05 (dopo B tocca a J).
+>
+> **B è entrato** (coordinatore, dopo le 19:05): `dev_release2` = `629d63306`, il merge di `ef61f0e7f`. Il CHANGELOG lo
+> scrive lui: in Added «Instance backup…», e fra le ⚠️ «the four placeholder backup endpoints are removed». Il mio HEAD
+> non si sposta: B8 va sopra `ef61f0e7f`, e la base la aggiorna lui al checkpoint di B8.
+>
+> **Ordine dopo B8**, dal coordinatore:
+>
+> 1. lo scatto `settings/backup-ready`, con la checklist di G (lo slot della galleria lo chiede lui);
+> 2. B2, la prova su copia, con le decisioni 41–43;
+> 3. B3, il ripristino e l'avvio, con `pending-restore` in `lifecycle.py` dopo l'ingresso di CP2b;
+> 4. B5, il resto della scheda;
+> 5. B4, il backup «sicuro» `.lfbk`;
+> 6. B7, Litestream, dopo CP7b di H e con il developer fuori dalla VPN.
+
+### B8 — il token del pannello, rimesso sopra `ef61f0e7f` (2026-10-15, 19:06-20:11) ✅ — 🧊 FROZEN
+
+> - **Rimesso**: `git apply` di `files/b8-wip/b8-on-23d284d3b.patch`, controllato prima con `--check`. Gli 8 file
+>   escluso `.env.example` sono identici al manifest `MANIFEST-23d284d3b.sha256`. `.env.example` differisce solo per la
+>   riga di E entrata col merge (`# Docs: mkdocs_src → admin/email.md`), fuori dal frammento di B8.
+> - **OpenAPI**: `api sync`, poi confronto con quello di `ef61f0e7f` salvato prima
+>   (`/tmp/libreFolio_b_openapi_pre_b8_ef61f0e7f.json`):
+>   - in più solo i 3 percorsi del pannello (4 operazioni, ciascuna con `BackupPanelToken`) e lo schema di sicurezza
+>     `BackupPanelToken`;
+>   - nessun percorso tolto o cambiato, e i 6 dell'admin identici;
+>   - in `info.version` c'è solo il suffisso `-dirty`.
+> - **Statici**: ruff e black puliti sugli 8 file Python; `git diff --check` pulito.
+>
+>   **⚠️ Fuori pista**: il primo ruff ha letto `.env.example` come Python, perché `MODIFIED.txt` tiene i percorsi su
+>   una riga sola e il filtro `\.py$` lo lasciava passare; rifatto con l'elenco a mano.
+> - **`Bearer` nei file**: nell'output del terminale compare `******` al posto di `Bearer <token>`, ma è solo il
+>   mascheramento dell'output. I byte di `.env.example` e di `panel.py` sono giusti; nei 9 file e nel brief non c'è
+>   nessun `******` letterale.
+> - **Test**: test-author in corso (dalle 19:10) con il brief v2 (`files/b8-test-brief-v2.txt`), aggiornato allo
+>   stato attuale:
+>   - 21 voci in `ALLOWED_ROUTES`;
+>   - il servizio finto di `test_instance_block.py` fa job d'origine `ui`, quindi va un parametro facoltativo `origin`,
+>     senza cambiare i test che ci sono;
+>   - la sequenza delle chiamate del pannello: start, poi `get_job`, poi `job_archive` o `delete_job`;
+>   - il corpo esatto del 401 del pannello, perché non passi per quello del blocco;
+>   - una sessione non sostituisce il token.
+>
+>   Gli ho dato la corsia, un selettore alla volta: io non lancio niente finché non ha finito.
+> - **Lasciati com'erano** (di H): `test_config_secrets.py`, i cui `ACCESSORS` sono solo quelli di
+>   `config/platform.py`, e l'elenco dei segreti che la corsia non eredita (firma JWT e chiave d'istanza). I casi del
+>   token sono nel file nuovo.
+>
+> **Esito di test-author** (19:10-19:43; log in `/tmp/libreFolio_b8ta_*.log`):
+>
+> - **⚠️ Fuori pista — B8 rompeva 2 test di CP6 in `test_instance_block.py`.** La precondizione di
+>   `_replace_the_backup_service` leggeva `backup_instance.jobs`, e B8 ha portato quell'import in `job_views.py`.
+>   - Base di test-author, prima di ogni sua modifica: `api instance-block` 54 passati e 2 rossi, con
+>     `AttributeError: … has no attribute 'jobs'`.
+>   - La mia prova di B8 era fatta su un'app piccola in un processo, senza lanciare `api instance-block`.
+>   - Cura, nel file di H (da dichiarare): la precondizione diventa
+>     `backup_instance.job_views.jobs is jobs and backup_panel.job_views.jobs is jobs`, il modulo che tutte e due le
+>     rotte chiamano davvero.
+> - **`test_backup_panel.py`**, nuovo, puro: 17 test e 42 casi, registrato come `api backup-panel` in `_backend_api.py`
+>   (+19 righe, solo in aggiunta). Ogni richiesta passa da un `send()` che controlla che il token, e quello che il
+>   chiamante presenta, non compaiano mai nel corpo, negli header o nel log catturato.
+>   - PANEL-001…006: l'accessore. Variabile, `_FILE`, precedenza, BOM e a capo, 31 contro 32 caratteri, file mancante,
+>     cartella, vuoto o bianco.
+>   - PANEL-010: token non impostato → 404 «Not Found» su 4 rotte × 4 header.
+>   - PANEL-011: token inutilizzabile → 503 con una riga di log che nomina la variabile.
+>   - PANEL-012: 9 varianti di header sbagliato → il 401 esatto, con `WWW-Authenticate: Bearer`. Fra le varianti:
+>     Basic, `Bearer` vuoto, prefisso, estensione, maiuscole, token nella query.
+>   - PANEL-013/014: il ciclo completo, con le chiamate esatte; il token preso dal `_FILE`.
+>   - PANEL-015/016/017: i job di un'altra origine (`ui`, `cli`, `pre-restore`) e gli id sconosciuti come «non
+>     esiste»; il job in corso con 409.
+>   - PANEL-018: gli errori d'avvio.
+>   - PANEL-019: le rotte dell'admin con le chiamate di prima di B8, verificate su `ef61f0e7f`.
+>   - PANEL-020: l'OpenAPI.
+> - **`test_instance_block.py`** (di H), in aggiunta nella sezione «(a) … the full backup»:
+>   - `origin` facoltativo nel servizio finto (default `ui`);
+>   - 4 test sull'istanza bloccata, senza sessione: 404 senza token impostato; il 401 del pannello, che il controllo
+>     del corpo esatto distingue da quello di `get_current_user`; il ciclo completo con il token; una sessione admin
+>     non sostituisce il token.
+>   - La barriera anonima è `GET /utilities/sectors`: 200 senza blocco, 401 col blocco.
+> - **Verdi**, una alla volta:
+>
+>   | Selettore | Esito |
+>   |---|---|
+>   | `api backup-panel` | 42 |
+>   | `api instance-block` | 60 (54 + 2 riparati + 4 nuovi) |
+>   | `api backup` | 23 |
+>   | `api backup-instance-errors` | 6 |
+>   | `services config-package` | 659 |
+>   | `services config-env-example` | 36 |
+>   | `check-orphans` | pulito |
+>
+>   Porta 6187 libera.
+> - **Mutazioni rosse**, ognuna ripristinata identica (sha256 e `cmp`):
+>   1. `require_panel_token` tolto dalla rotta del file: 11 rossi (il file servito senza token);
+>   2. `origin=None` sul download: 6 rossi (l'archivio dell'admin servito al pannello);
+>   3. il ramo 404 sostituito da `""`: 3 rossi (un backup avviato senza token);
+>   4. la rotta del file tolta da `ALLOWED_WHEN_BLOCKED`: 5 rossi, il perno di H compreso.
+>
+>   `==` al posto di `hmac.compare_digest` non si vede dai test funzionali: solo revisione del codice, come previsto.
+> - **Rilievo di test-author, curato** (19:45): un token con spazi intorno passava `backup_download_token()`, ma non
+>   poteva mai coincidere, perché HTTP toglie gli spazi in fondo a un header. Il pannello avrebbe preso un 401 per
+>   sempre, senza niente nel log. Ho allargato la cura:
+>   - in `config/backup.py`, `PANEL_TOKEN_CHARACTERS`: il token può contenere solo ASCII visibile (0x21-0x7E),
+>     controllato prima della lunghezza; altrimenti `BackupConfigError` con il codice
+>     `BACKUP_DOWNLOAD_TOKEN_NOT_VISIBLE_ASCII`, quindi 503 e una riga di log;
+>   - copre gli spazi (intorno e dentro), i caratteri fuori ASCII e quelli di controllo;
+>   - commento di `.env.example`: «At least 32 visible ASCII characters, no spaces».
+>
+>   test-author aggiunge i casi e la mutazione.
+> - **Seconda tornata di test-author** (19:48-20:00; log `/tmp/libreFolio_b8ta_r2_*.log`), solo in
+>   `test_backup_panel.py`, in aggiunta (+130 righe):
+>   - PANEL-007, 10 casi: spazio davanti, dietro, tab, spazio interno, `é`, `€`, U+00A0, DEL, `\x01` su un token
+>     valido di 40 caratteri, più un `_FILE` con spazi prima dell'a capo. Codice `…_NOT_VISIBLE_ASCII` e `variable`; il
+>     messaggio non contiene mai il valore, né una delle sue due metà.
+>   - PANEL-008: i caratteri si controllano prima della lunghezza.
+>   - PANEL-009: i token ai bordi, `!`…`~`, e uno con tutti i 94 caratteri visibili, presi come scritti, dalla
+>     variabile e dal file.
+>   - PANEL-021: un token con spazi intorno dà 503 sulle 4 rotte anche a chi presenta quel token, con una riga di log
+>     e mai il valore. Barriera: lo stesso token senza spazi apre la lettura.
+>
+>   Esito: `api backup-panel` 59 (42 + 17). La mutazione «controllo dei caratteri tolto» fa 13 rossi (PANEL-007 ×10,
+>   PANEL-008 ×2, PANEL-021, quest'ultimo con il 401 silenzioso di prima), ed è ripristinata identica: sha256
+>   `6b515315…` prima e dopo. `config-package` 659 e `config-env-example` 36.
+> - La descrizione di `api backup-panel` nel catalogo nomina la regola dei caratteri (ritocco mio, segnalato da
+>   test-author).
+> - **Rivisto da me**: `test_backup_panel.py` è puro, con un'app piccola con `backup_router`, `jobs` finto in un
+>   fixture automatico e log catturati con `structlog.testing.capture_logs`. `DATA_DIR = /srv/…` è solo una stringa
+>   nelle eccezioni finte, per provare che nessun percorso esce nelle risposte, e non viene mai creata. In
+>   `test_instance_block.py` le aggiunte sono quelle dichiarate.
+> - **Prove finali sullo stato finale** (20:02-20:10, `/tmp/libreFolio_b8_final.sh`, una alla volta, `nice -n 10`,
+>   carico 99; riepilogo in `/tmp/libreFolio_b8_final_summary.log`):
+>
+>   | Selettore | Esito |
+>   |---|---|
+>   | `api backup-panel` | 59 |
+>   | `api instance-block` | 60 |
+>   | `api backup` | 23 |
+>   | `api backup-instance-errors` | 6 |
+>   | `services config-package` | 659 |
+>   | `services config-env-example` | 36 |
+>   | `check-orphans` | 312 backend, 418 Vitest |
+>   | `api sync` | 0 |
+>   | `front check` | 0 errori e 0 avvisi |
+>
+>   Ruff e black puliti sugli 11 file Python toccati, `git diff --check` pulito, porta 6187 libera, in `.jobs` solo
+>   `.lock`.
+> - **Backlog**: B-9, il token del pannello fra i controlli della configurazione, come ha fatto E (sezione B).
+> - **Checkpoint** (20:11) 🧊 FROZEN: handoff al coordinatore, con i file di H dichiarati (`instance_block.py`,
+>   `test_instance_block.py`) e la voce del catalogo.
+> - **Nota per BZ**, solo informazione: senza token, un metodo che le rotte non servono (per esempio
+>   `PUT …/panel/jobs`) risponde 405, e l'OpenAPI elenca le rotte comunque. Il «404 come se non ci fossero» vale per le
+>   4 operazioni servite. Nessun effetto sulla sicurezza: il codice è pubblico.
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 

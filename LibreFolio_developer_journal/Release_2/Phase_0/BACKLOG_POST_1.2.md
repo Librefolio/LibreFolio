@@ -3223,6 +3223,15 @@ sulla base `23f6578f3`.
     un'attenzione: un job della CLI si sposta fuori da `.jobs/` alla fine.
 
   Dettagli: piano 07, §13, B5a, terza tornata.
+- **B-9 · Il token del pannello non è fra i controlli della configurazione** — piccolo; B, 15/10 (B8).
+  - Oggi un `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` inutilizzabile (corto, non ASCII visibile, `_FILE` illeggibile) si vede
+    solo alla prima richiesta del pannello: 503 `backup_panel_unavailable` e una riga d'errore nel log.
+  - All'avvio, `log_configuration_audit()` non lo nomina, e la futura scheda «Sicurezza» non lo mostrerà.
+  - Cura possibile, come ha fatto E per l'email: `BACKUP_CONFIG_CHECKS` in un modulo di B (stato `ok`, `info` se
+    spento, `error` se inutilizzabile, mai il valore), una riga in `config_audit.CONFIG_CHECKS` (file di H) e le
+    chiavi `backup.checks.*` nelle 4 lingue.
+
+  Dettagli: piano 07, §13, «B8 — il token del pannello, rimesso sopra `ef61f0e7f`».
 
 ## E · Email (fase 01)
 
