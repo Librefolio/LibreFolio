@@ -47,7 +47,7 @@ Only administrators (superusers) have the lock; everyone else gets a read-only v
 | Category | Setting | Default | What it does — when to change it |
 |---|---|---|---|
 | ⏳ Session | **Session Duration** | 24 hours | How long users stay signed in. Shorten it on shared devices; a new value applies from each user's next login. |
-| 🛡️ Security | **Enable Registration** | On | Lets new people sign up. Turn it off once everyone has an account, above all if the instance is reachable from the internet. The first account of a new instance can always be created. |
+| 🛡️ Security | **Registration** | Open | Who can create an account: **Open**, **By invitation** or **Closed** (see [Who Can Sign Up](#registration)). Once everyone has an account, choose **By invitation** or **Closed**, above all if the instance is reachable from the internet. |
 | 🛡️ Security | **Require Email Verification** | Off | Not active yet: sending emails is a planned feature, so the switch is read-only and marked **Coming soon**. |
 | 🔄 Update Job | **Scheduler Enabled** | On | Turns the automatic price and exchange-rate updates on or off: see [Market Data Scheduler](#market-data-scheduler). |
 | 🧠 Memory | **Max File Upload Size** | 10 MB | The largest file users can upload, broker reports included. Raise it if a large export is refused. |
@@ -58,6 +58,49 @@ Only administrators (superusers) have the lock; everyone else gets a read-only v
 New users start from the three defaults: the [Welcome setup](../user/getting-started.md#welcome-setup)
 shows their language and currency pre-filled. Changing a default later leaves the
 [Preferences](../user/settings/preferences.md) of existing users untouched.
+
+---
+
+## 🚪 Who Can Sign Up {: #registration }
+
+The **Registration** setting decides who can create an account:
+
+| Mode | Who can create an account |
+|---|---|
+| 🌐 **Open** (default) | Anyone who reaches the login page, with **Register here**. |
+| ✉️ **By invitation** | Only people with an invitation link. You create one link per person from the [command line](cli_tools.md#invite), and send it to them. The login page shows no **Register here**. |
+| 🔒 **Closed** | Nobody, not even with an invitation link. The login page shows no **Register here**. |
+
+- 👑 The first account of a new instance can always be created, whatever the mode: it becomes the
+  administrator.
+- ✉️ An invitation link works once, for 7 days, and can make the new account an administrator. With
+  **Open**, nobody needs one, but a link still gives its role.
+- 💻 Whatever the mode, the [command line](cli_tools.md) can still create accounts with
+  `user create`.
+- 📏 With a user limit, nobody can sign up without an invitation once the instance is full: see
+  [When the Instance Is Full](configuration.md#user-limit).
+- 🔒 If the server's configuration sets `LIBREFOLIO_REGISTRATION`, that value decides: the field
+  shows it, cannot be changed, and says *Set on the server by LIBREFOLIO_REGISTRATION: change it
+  there*. **Reset All to Defaults** leaves it alone. See [Accounts and Sign-ups](configuration.md#accounts).
+- ⬆️ This setting replaces the **Enable Registration** switch of earlier versions, and the upgrade
+  keeps your choice: a switch that was on becomes **Open**, a switch that was off becomes **Closed**.
+
+!!! warning "🆕 A new instance where the server's configuration sets `invite` or `disabled`"
+
+    The login page shows **Register here** only while the mode is **Open**. On a new instance whose
+    `LIBREFOLIO_REGISTRATION` is `invite` or `disabled`, the first account cannot be created from
+    the login page, so create the first administrator from the [command line](cli_tools.md)
+    instead:
+
+    ```bash
+    pipenv run ./dev.py user create <username> <email> <password>
+    ```
+
+    With Docker: `docker compose exec librefolio python dev.py user create <username> <email> <password>`.
+    With `invite`, an [invitation link](cli_tools.md#invite) works too: run `user invite` and open
+    the link it prints, then choose your password in the browser. The first account is an
+    administrator whatever the invitation says, and the link is used up.
+    A setup link for this first account is planned for a later version.
 
 ---
 

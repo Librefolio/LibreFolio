@@ -2,11 +2,13 @@
 /**
  * RegisterCard — component test (Vitest + jsdom).
  *
- * The sign-up form. Four fields, four client-side validators, and a `catch`
- * block that turns whatever the server said into one of eight messages. It is
- * mounted by `routes/+page.svelte` with no props at all, so everything that
- * decides its behaviour is either typed into it or comes back from
- * `POST /api/v1/auth/register` — both fully controllable from here.
+ * The sign-up form. Four fields, four client-side validators, and an error
+ * ladder that turns whatever the server said into one message. It is mounted by
+ * `routes/+page.svelte` with no props at all, and by `routes/invite/+page.svelte`
+ * with an invitation (accounts lot A5b), so everything that decides its
+ * behaviour is either typed into it, handed over by the invitation page, or
+ * comes back from `POST /api/v1/auth/register` — all fully controllable from
+ * here.
  *
  * Two things make this a component test rather than an E2E:
  *   - the error ladder needs eight *different* server responses, and six of them
@@ -43,6 +45,21 @@
  * check, behind a barrier proving that this card does print keys. And each field
  * draws its icon inside it — User, Mail, and a Lock on both passwords — as
  * decoration, `aria-hidden`, the `<label for>` staying its only name.
+ *
+ * Accounts lot A5b (plan A5b.1) adds two things, each in a describe of its own.
+ *   - The refusals A5a explains with a code, `{detail: {error_code, message}}`:
+ *     the ladder moved to `describeRegistrationError` (`registrationErrors.ts`,
+ *     pinned case by case in `registrationErrors.test.ts`), and here the card is
+ *     held to drawing its answer — a key through the translator, a raw sentence
+ *     as it came. The old string match on «registration is disabled» is gone with
+ *     the sentence: A5a answers a closed instance with `REGISTRATION_DISABLED`.
+ *   - The invitation: props `inviteToken` (`null` by default), `initialEmail`
+ *     (`''`) and `grantsAdmin` (`false`). The address the invitation suggests
+ *     fills the email field and stays editable (D-A16 rejected: a suggestion,
+ *     not a constraint); `register-invite-notice` says the form is an
+ *     invitation, `register-invite-admin-notice` that it makes an administrator;
+ *     `invite_token` goes in the body only with an invitation — no key at all
+ *     otherwise.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {readable} from 'svelte/store';
@@ -65,9 +82,16 @@ interface Mounted {
     gotoLogin: ReturnType<typeof vi.fn>;
 }
 
-function mount(): Mounted {
+/** The props an invitation hands over; a plain sign-up passes none. */
+interface InviteProps {
+    inviteToken?: string | null;
+    initialEmail?: string;
+    grantsAdmin?: boolean;
+}
+
+function mount(props: InviteProps = {}): Mounted {
     const gotoLogin = vi.fn();
-    render(RegisterCard, {$$events: {gotoLogin: (event: CustomEvent) => gotoLogin(event.detail)}} as never);
+    render(RegisterCard, {...props, $$events: {gotoLogin: (event: CustomEvent) => gotoLogin(event.detail)}} as never);
     return {gotoLogin};
 }
 
@@ -97,6 +121,14 @@ function serverError(detail: unknown): Error {
     return Object.assign(new Error('Request failed with status code 400'), {
         isAxiosError: true,
         response: {data: {detail}},
+    });
+}
+
+/** A structured refusal of A5a, with its status: `{detail: {error_code, message}}`, the message in English. */
+function codedRefusal(status: number, error_code: string): Error {
+    return Object.assign(new Error(`Request failed with status code ${status}`), {
+        isAxiosError: true,
+        response: {status, data: {detail: {error_code, message: 'An English sentence the user must not read'}}},
     });
 }
 
@@ -286,6 +318,97 @@ describe('RegisterCard — the login link', () => {
     });
 });
 
+describe('RegisterCard — joining by invitation (A5b)', () => {
+    const INVITE = 'inv-token-0123';
+
+    it('starts the email field on the address the invitation suggests, and leaves it editable', async () => {
+        mount({inviteToken: INVITE, initialEmail: 'eve@example.com'});
+        const email = screen.getByTestId('register-email');
+
+        expect(email).toHaveValue('eve@example.com');
+        // A suggestion, not a constraint (D-A16 rejected): the user may register another address.
+        expect(email).toBeEnabled();
+        expect(email).not.toHaveAttribute('readonly');
+
+        await fillValid({email: 'eve.private@example.com'});
+        await submit();
+
+        await waitFor(() => expect(register).toHaveBeenCalledTimes(1));
+        expect(register.mock.calls[0][0]).toMatchObject({email: 'eve.private@example.com'});
+    });
+
+    it('sends the suggested address when the user keeps it', async () => {
+        mount({inviteToken: INVITE, initialEmail: 'eve@example.com'});
+        await fill('register-username', 'eve');
+        await fill('register-password', GOOD_PASSWORD);
+        await fill('register-confirm-password', GOOD_PASSWORD);
+
+        await submit();
+
+        await waitFor(() => expect(register).toHaveBeenCalledTimes(1));
+        expect(register.mock.calls[0][0]).toMatchObject({email: 'eve@example.com'});
+    });
+
+    it('starts the email field empty when nothing is suggested', () => {
+        mount();
+
+        expect(screen.getByTestId('register-email')).toHaveValue('');
+    });
+
+    it('says the form is an invitation', () => {
+        mount({inviteToken: INVITE});
+
+        expect(screen.getByTestId('register-invite-notice')).toHaveTextContent('auth.invite.notice');
+        expect(screen.queryByTestId('register-invite-admin-notice'), 'an ordinary invitation makes an ordinary account').toBeNull();
+    });
+
+    it('says, too, that the invitation makes an administrator', () => {
+        mount({inviteToken: INVITE, grantsAdmin: true});
+
+        expect(screen.getByTestId('register-invite-notice')).toBeInTheDocument();
+        expect(screen.getByTestId('register-invite-admin-notice')).toHaveTextContent('auth.invite.adminNotice');
+    });
+
+    it('says nothing about invitations on a plain sign-up', () => {
+        mount();
+
+        expect(screen.getByTestId('register-form'), 'premise: the form is drawn').toBeInTheDocument();
+        expect(screen.queryByTestId('register-invite-notice')).toBeNull();
+        expect(screen.queryByTestId('register-invite-admin-notice')).toBeNull();
+    });
+
+    it('sends the invitation token with the three credentials', async () => {
+        mount({inviteToken: INVITE, initialEmail: 'eve@example.com'});
+        await fillValid({username: 'eve', email: 'eve@example.com'});
+
+        await submit();
+
+        await waitFor(() => expect(register).toHaveBeenCalledTimes(1));
+        expect(register.mock.calls[0][0]).toStrictEqual({username: 'eve', email: 'eve@example.com', password: GOOD_PASSWORD, invite_token: INVITE});
+    });
+
+    it('sends no invite_token key at all without an invitation', async () => {
+        // Not `invite_token: null` nor `undefined`: a plain sign-up keeps the body it always had.
+        mount();
+        await fillValid();
+
+        await submit();
+
+        await waitFor(() => expect(register).toHaveBeenCalledTimes(1));
+        expect(Object.keys(register.mock.calls[0][0] as object).sort()).toEqual(['email', 'password', 'username']);
+    });
+
+    it('hands the user back to the login card with something to say, as a plain sign-up does', async () => {
+        const {gotoLogin} = mount({inviteToken: INVITE, initialEmail: 'eve@example.com'});
+        await fillValid({email: 'eve@example.com'});
+
+        await submit();
+
+        await waitFor(() => expect(gotoLogin).toHaveBeenCalledTimes(1));
+        expect(gotoLogin).toHaveBeenCalledWith({message: 'auth.accountCreated'});
+    });
+});
+
 describe('RegisterCard — field-level errors reported by the server', () => {
     async function submitAndRead(detail: unknown): Promise<string> {
         register.mockRejectedValue(serverError(detail));
@@ -356,18 +479,45 @@ describe('RegisterCard — plain-text errors reported by the server', () => {
         expect(await submitAndRead(detail)).toBe(key);
     });
 
-    it('translates the administrator having closed sign-ups', async () => {
-        // `auth.py:191`. Unlike the other two it says nothing about what the
-        // user typed, so it has wording of its own rather than the generic
-        // failure — and, until this key existed, an Italian user read English.
-        expect(await submitAndRead('New user registration is disabled')).toBe('auth.registrationDisabled');
-    });
-
     it('still shows a sentence it has no translation for, rather than swallowing it', async () => {
-        // Anything the three branches do not claim: the server's own words are
+        // Anything the two branches do not claim: the server's own words are
         // the best available answer, and silence would be the worst.
         const detail = 'Something the frontend has never heard of';
         expect(await submitAndRead(detail)).toBe(detail);
+    });
+});
+
+describe('RegisterCard — refusals the server explains with a code (A5a, drawn since A5b)', () => {
+    /** Submits valid credentials against a server that refuses with `failure`; returns the banner's text. */
+    async function submitAndRead(failure: Error, props: InviteProps = {}): Promise<string> {
+        register.mockRejectedValue(failure);
+        mount(props);
+        await fillValid();
+        await submit();
+
+        await waitFor(() => expect(banner()).not.toBeNull());
+        return banner()!.textContent?.trim() ?? '';
+    }
+
+    it.each([
+        // A closed instance: until A5b the card read only string details, and
+        // this object fell through to the generic failure.
+        [403, 'REGISTRATION_DISABLED', 'auth.registrationDisabled'],
+        [403, 'INVITE_REQUIRED', 'auth.registrationInviteOnly'],
+        [409, 'USER_LIMIT_REACHED', 'auth.userLimitReached'],
+    ])('draws a %i %s as %s, never the server sentence', async (status, code, key) => {
+        expect(await submitAndRead(codedRefusal(status, code))).toBe(key);
+    });
+
+    it('draws an invitation the server no longer accepts as an unknown link', async () => {
+        expect(await submitAndRead(codedRefusal(400, 'INVITE_INVALID'), {inviteToken: 'spent-invite'})).toBe('auth.link.unknown');
+    });
+
+    it('unlocks the form after a coded refusal, so the user can retry', async () => {
+        await submitAndRead(codedRefusal(403, 'INVITE_REQUIRED'));
+
+        expect(screen.getByTestId('register-submit')).toBeEnabled();
+        expect(screen.getByTestId('register-username')).toHaveValue('alice');
     });
 });
 

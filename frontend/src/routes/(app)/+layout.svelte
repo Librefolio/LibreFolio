@@ -28,7 +28,9 @@
     import {loginUrl} from '$lib/utils/internalPath';
     import ServerUnreachable from '$lib/components/layout/ServerUnreachable.svelte';
     import InstanceNotices from '$lib/features/instance/components/InstanceNotices.svelte';
+    import InstanceBlockedPage from '$lib/features/instance/components/InstanceBlockedPage.svelte';
     import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+    import {instanceBlock} from '$lib/features/instance/instanceBlock.svelte';
 
     // Sidebar state for mobile
     let sidebarOpen = false;
@@ -233,6 +235,9 @@
     <div class="min-h-screen flex items-center justify-center bg-libre-beige dark:bg-slate-900">
         <div class="text-libre-green dark:text-green-400 text-xl">Loading...</div>
     </div>
+{:else if $isAuthenticated && instanceBlock.blocked}
+    <!-- The hosting provider blocked this instance: the block page instead of the app, before its bootstrap -->
+    <InstanceBlockedPage onlogout={logout} />
 {:else if $isAuthenticated && appBootstrap.state === 'blocked'}
     <OnboardingBootstrapBlock error={appBootstrap.error} onretry={retryBootstrap} onlogout={logout} />
 {:else if $isAuthenticated && !appBootstrap.ready}

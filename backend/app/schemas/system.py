@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Literal
 
 from pydantic import Field, RootModel, model_validator
 
+from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.common import StrictModel
 from backend.app.utils.runtime.network import ClientClass
 
@@ -110,3 +112,14 @@ class InstanceConfigResponse(StrictModel):
     """
 
     profile: InstanceProfile = Field(description="selfhosted: an install run by its owner; managed: an instance a hosting provider runs for its customers")
+    accounts: AccountsInstanceConfig = Field(description="Who may create an account (workstream A)")
+
+
+class InstanceBlockResponse(StrictModel):
+    """``GET /system/block``: the block of this instance by its hosting provider, for the block page. Signed-in users only.
+
+    A workstream that owns part of the block page adds one field here, filled in ``api/v1/system/block.py``.
+    """
+
+    blocked: bool = Field(description="Whether the hosting provider blocked this instance: then every API call but a few answers 423")
+    deletion_date: date | None = Field(default=None, description="The day the hosting provider will delete this instance and its data, when it gave one")

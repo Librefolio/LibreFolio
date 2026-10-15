@@ -1,0 +1,246 @@
+Ecco la sezione in **append** da incollare di seguito al documento precedente per rispondere a tutte le domande sui grafici (`GR1–GR5`), risolvere l'incoerenza tra Torta e Storico visibile negli screenshot `09` e `10` e compilare le tabelle per Tipi di Asset e Settori.
+
+(Nota rapida sugli screenshot `09` e `10`: nel Tema Scuro la card "Allocazione Patrimoniale" mostra ancora il vecchio sfondo blu-notte `#18202F`; ricorda all'agente di migrarla a `--lf-surface-card` `#151B19` con i pulsanti toggle attivi sul verde `--lf-action` `#215240` anziché sul vecchio verde acceso).
+
+---
+
+## 3. Appendice Grafici e Data Visualization (`GR1–GR5`)
+
+### Risposte alle decisioni di sistema (`GR1–GR5`)
+
+#### GR1 · Colore fisso per categoria vs posizione in classifica
+
+
+
+* Decisione: SÌ al colore fisso semantico per categoria, identico tra Torta («Ora») e Storico.
+
+
+* **Perché:** Negli screenshot `09` e `10` si vede chiaramente il problema attuale: passando da Torta a Storico la voce "Azione" (o la 3ª categoria) cambia da viola ad ambra, disorientando l'utente. Assegnando un colore fisso a ogni Asset e Settore, un investitore riconosce a colpo d'occhio gli ETF, le Azioni o la Liquidità in qualsiasi vista, filtro temporale o broker.
+
+
+
+#### GR2 · Verde e Rosso nei grafici
+
+
+
+* **Decisione:**
+* **Teniamo fuori dalle categorie sia il Rosso semantico d'errore/perdita (`#C82838` / `#F84361`) sia il Verde fluo di guadagno (`#36D399` / `#4ADE80`)** che oggi spara troppo nella torta scura (`09-grafico-torta-ora.png`).
+
+
+* **Riserviamo il Verde Bosco / Salvia del brand esclusivamente alla `Liquidity` (Liquidità)**, ma in una tonalità morbida e istituzionale (vedi `GR3`).
+
+
+* Per le categorie che richiedono toni caldi usiamo **Ambra/Oro**, **Rame/Terracotta** e **Rosa Malva/Prugna**, così nessuna fetta del grafico sembra "in perdita" o "in errore".
+
+
+
+
+
+#### GR3 · Liquidità (`Liquidity`)
+
+
+
+* **Decisione:** Poiché la Liquidità compare trasversalmente in tutti i grafici (Per Tipo, Per Settore, Storico), **ha un suo colore dedicato e fisso** che richiama l'identità salvia/minerale di LibreFolio:
+
+
+* **Chiaro:** **`#2D6A54`** (Verde bosco-salvia medio: meno cupo del `#1A4031` attuale, così nello Storico al 53% di opacità non diventa un grigio spento come nello screenshot `10`).
+
+
+* **Scuro:** **`#429E79`** (Allineato a `--lf-focus`: elegante, leggibilissimo su `#151B19` e molto più riposante del verde fluo `#4ADE80` attuale).
+
+
+
+
+
+#### GR4 · Sottotipi (es. ETF azionario, obbligazionario, monetario…)
+
+
+
+* **Decisione:** **Confermata la logica delle sfumature della famiglia nell'anello esterno della torta**, con una regola semplice e deterministica per il codice:
+
+
+* **In Tema Chiaro:** genera i sottotipi schiarendo progressivamente la luminosità (Lightness in HSL) del colore madre di **+8%, +15%, +22%** (o mescolando con bianco al 15%, 30%, 45%).
+* **In Tema Scuro:** genera i sottotipi variando la luminosità di **-10%, +10%, -20%** (oppure mescolando verso `--lf-surface-card` `#151B19` al 18%, 32%, 45%) così non diventano mai bianchi slavati.
+
+
+
+
+
+#### GR5 · Le altre tavolozze dei grafici (Tabella 3.5)
+
+
+
+* **Decisione: SÌ, devono tutte seguire la nuova famiglia cromatica (niente colori usati solo in Light e riciclati in Dark)**:
+
+
+1. Mappa «Geografica» (Scala a 6 verdi): Sostituire i verdi standard Tailwind (`#F0FDF4` -> `#16A34A`) con una scala basata sul nostro verde salvia/bosco:
+
+
+* *Chiaro:* `#E6F2ED` → `#C2E0D3` → `#94C7B2` → `#62AB8E` → `#378567` → `#1B4334`
+* *Scuro:* `#182923` → `#1F3B30` → `#275241` → `#316B54` → `#3D876A` → `#4FB38B`
+
+
+2. Semi-ciambella delle quote & Indicatori tecnici (EMA, RSI): Oggi in Dark usano i colori chiari (e `#1A4031` sparisce sul fondo scuro). Devono invece leggere dinamicamente i primi 8 colori della nuova palette categorica rispettando il tema attivo (Chiaro vs Scuro).
+
+
+3. Matrice di correlazione: Sostituire il centro neutro `#F8FAFC` / `#334155` (che è un grigio-blu freddo Tailwind) con `--lf-surface-panel` (`#E8ECE9` in Light, `#1B2421` in Dark), usando per gli estremi `--lf-danger` (`#C82838` / `#F84361`) e `--lf-info` (`#155EEF` / `#3F86FA`).
+
+
+
+
+
+---
+
+### Tabella 3.2 A — Colori fissi per **Tipi di Asset** (11 + Liquidità)
+
+Palette studiata affinché le categorie più frequenti in un portafoglio (`ETF`, `STOCK`, `BOND`, `Liquidity`, `CRYPTO`) abbiano il massimo contrasto reciproco senza usare il rosso d'errore:
+
+| # | Chiave | Nome | Emoji | Tuo colore, chiaro | Tuo colore, scuro | Tinta di riferimento |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | `STOCK` | Azione
+
+ | 📈
+
+ | **`#6D28D9`** | **`#A78BFA`** | Viola Ametista |
+| 2 | `ETF` | ETF
+
+ | 📊
+
+ | **`#1D5BD8`** | **`#60A5FA`** | Blu Cobalto / Oceano |
+| 3 | `BOND` | Obbligazione
+
+ | 🏛️
+
+ | **`#0E7490`** | **`#22D3EE`** | Ottanio / Ciano profondo |
+| 4 | `CRYPTO` | Cripto
+
+ | 🪙
+
+ | **`#D97706`** | **`#FBBF24`** | Ambra / Oro (sostituisce il rosso) |
+| 5 | `FUND` | Fondo
+
+ | 💼
+
+ | **`#4338CA`** | **`#818CF8`** | Indaco |
+| 6 | `HOLD` | Bene detenuto
+
+ | ⏸️
+
+ | **`#5F6B7A`** | **`#94A3B8`** | Blu-Ardesia calmo |
+| 7 | `CROWDFUND` | Crowdfunding
+
+ | 🤝
+
+ | **`#0D9488`** | **`#2DD4BF`** | Verde Acqua (Teal) |
+| 8 | `COMMODITY` | Materia prima
+
+ | 🛢️
+
+ | **`#C25E00`** | **`#FB923C`** | Rame / Terracotta |
+| 9 | `REAL_ESTATE` | Immobiliare
+
+ | 🏠
+
+ | **`#B45309`** | **`#F59E0B`** | Ocra / Mattone caldo |
+| 10 | `INDEX` | Indice
+
+ | 📉
+
+ | **`#A21CAF`** | **`#E879F9`** | Prugna / Orchidea |
+| 11 | `OTHER` | Altro
+
+ | 📦
+
+ | **`#6E7A74`** | **`#7F8C87`** | Grigio Pietra (`--lf-text-muted`) |
+| + | `Liquidity` | Liquidità
+
+ | 💰
+
+ | **`#2D6A54`** | **`#429E79`** | Verde Salvia Brand |
+
+---
+
+### Tabella 3.2 B — Colori fissi per **Settori** (14 + Liquidità + Non classificato)
+
+Inclusa l'**unificazione delle emoji discordanti (⚠️)** tra Torta e Storico (così non ci sono anche due icone diverse per `Real Estate` e `Corporate Bonds` che oggi usano entrambe `🏢` nella torta):
+
+| # | Chiave | Nome | Emoji Unificata (Torta & Storico) | Tuo colore, chiaro | Tuo colore, scuro | Tinta di riferimento |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | `Industrials` | Industriali
+
+ | 🏭
+
+ | **`#475569`** | **`#94A3B8`** | Acciaio / Ardesia |
+| 2 | `Technology` | Tecnologia
+
+ | 💻
+
+ | **`#1D5BD8`** | **`#60A5FA`** | Blu Elettrico / Cobalto |
+| 3 | `Financials` | Finanziari
+
+ | 🏦
+
+ | **`#0F766E`** | **`#2DD4BF`** | Verde Acqua istituzionale |
+| 4 | `Consumer Discretionary` | Beni voluttuari
+
+ | 🛍️
+
+ | **`#7C3AED`** | **`#A78BFA`** | Viola |
+| 5 | `Health Care` | Sanità
+
+ | 🏥 *(unificata)*<br> | **`#0284C7`** | **`#38BDF8`** | Azzurro Ceruleo |
+| 6 | `Real Estate` | Immobiliare
+
+ | 🏠 *(unificata, libera 🏢 per Corp. Bonds)*<br> | **`#B45309`** | **`#FBBF24`** | Ocra / Ambra |
+| 7 | `Basic Materials` | Materie prime
+
+ | ⛏️
+
+ | **`#9A3412`** | **`#FB923C`** | Terracotta / Rame |
+| 8 | `Energy` | Energia
+
+ | ⚡
+
+ | **`#D97706`** | **`#FACC15`** | Oro / Giallo Solare |
+| 9 | `Consumer Staples` | Beni di consumo
+
+ | 🛒
+
+ | **`#4D7C0F`** | **`#A3E635`** | Verde Oliva / Lime morbido |
+| 10 | `Telecommunication` | Telecomunicazioni
+
+ | 📡
+
+ | **`#4338CA`** | **`#818CF8`** | Indaco |
+| 11 | `Utilities` | Servizi pubblici
+
+ | 💡 *(unificata)*<br> | **`#0E7490`** | **`#22D3EE`** | Ciano / Ottanio |
+| 12 | `Corporate Bonds` | Obbligazioni societarie
+
+ | 🏢
+
+ | **`#86198F`** | **`#E879F9`** | Prugna |
+| 13 | `Government Bonds` | Titoli di Stato
+
+ | 🏛️
+
+ | **`#1E3A8A`** | **`#93C5FD`** | Blu Navy / Istituzionale |
+| 14 | `Other` | Altro
+
+ | 📦
+
+ | **`#6E7A74`** | **`#7F8C87`** | Grigio Pietra |
+| + | `Liquidity` | Liquidità
+
+ | 💰 *(unificata con Per Tipo)*<br> | **`#2D6A54`** | **`#429E79`** | Verde Salvia Brand |
+| + | `Unknown` | Non classificato
+
+ | ❓
+
+ | **`#94A09B`** | **`#52605B`** | Grigio Nebbia neutro |
+
+(Nota per la vista **Storico Geografica** o classifiche generiche senza chiave fissa: usare l'ordine dei primi 14 colori della tabella Settori qui sopra, così sono già 16 tinte distinte e non si ripetono al 15° elemento).
+
+---
+
+Dimmi pure se l'abbinamento cromatico sui principali asset (es. `ETF` blu, `STOCK` viola, `BOND` ottanio, `CRYPTO` oro, `Liquidity` verde salvia) rispecchia il modo in cui ti piace leggere il tuo portafoglio o se preferisci invertire qualche coppia!

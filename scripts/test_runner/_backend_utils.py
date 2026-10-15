@@ -70,6 +70,15 @@ def utils_container_registry(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Container registry tests", verbose=verbose)
 
 
+def utils_served_content_types(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that uploaded content reaches the browser only as types that cannot run."""
+    print_section("Utils: Served Content Types")
+    print_info("Testing: backend/app/api/v1/uploads.py (serve_file text preview), backend/app/api/v1/brokers.py (download_file)")
+    print_info("Tests: text preview always text/plain with nosniff; broker reports inline only for safe types with download=false, attachment otherwise; nosniff on every report")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_served_content_types.py", test_names)
+    return run_command(cmd, "Served content type tests", verbose=verbose)
+
+
 def utils_coverage_js_adapter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the JS/Svelte coverage adapter that feeds coverage_analysis."""
     print_section("Utils: JS Coverage Adapter")
@@ -104,6 +113,15 @@ def utils_cache_utils(verbose: bool = False, test_names: list = None) -> bool:
     print_info("Tests: NamedCache set/get/delete/clear, TTL, registry, stats")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_cache_utils.py", test_names)
     return run_command(cmd, "Cache utils tests", verbose=verbose)
+
+
+def utils_rate_window(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the sliding-window limiter shared by the e-mail budget and the login limits."""
+    print_section("Utils: Rate Window")
+    print_info("Testing: backend/app/utils/runtime/rate_window.py")
+    print_info("Tests: window edge, peek never counts, refused hits not recorded, retry_after, per-call limit, independent keys, LRU eviction, thread safety (fake clock, no sleeps)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_rate_window.py", test_names)
+    return run_command(cmd, "Rate window tests", verbose=verbose)
 
 
 def utils_provider_core_cache(verbose: bool = False, test_names: list = None) -> bool:
@@ -196,6 +214,15 @@ def utils_dev_cli_image(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "dev.py image tests", verbose=verbose)
 
 
+def utils_dev_cli_docker(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Docker lot (CP7a): the image's packages and port, the compose files, docker exec, and one version per image build."""
+    print_section("Utils: dev.py docker commands and the image contract")
+    print_info("Testing: Dockerfile, docker-compose*.yml, dev.py cmd_docker_exec, _docker_frontend_stale_reason, _docker_ensure_frontend_built, _docker_ensure_assets_built, _get_docker_tag, cmd_docker_build, _check_env_file")
+    print_info('Tests: tzdata-legacy, EXPOSE and compose ports, compose environment, exec through gosu and "$@", the frozen version in the bundle, VERSION and the tag')
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_cli_docker.py", test_names)
+    return run_command(cmd, "dev.py docker tests", verbose=verbose)
+
+
 def utils_gate_i18n_usage(verbose: bool = False, test_names: list = None) -> bool:
     """Test the i18n three-verdict classifier (used / not verified / dead)."""
     print_section("Utils: i18n Usage Gate")
@@ -266,6 +293,33 @@ def utils_runtime_isolation(verbose: bool = False, test_names: list = None) -> b
     print_info("Tests: prod guards, dotenv/Pipenv boundaries, port collisions, symlink escapes, server/test parser shapes")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_runtime_isolation.py", test_names)
     return run_command(cmd, "Runtime isolation tests", verbose=verbose)
+
+
+def utils_confined_path(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a request path joined to a folder never leaves that folder."""
+    print_section("Utils: Confined Path")
+    print_info("Testing: backend/app/utils/runtime/paths.py (confined_path)")
+    print_info("Tests: paths inside returned resolved; parent segments leaving, absolute paths, a sibling folder sharing the name prefix, symlinks pointing outside and a NUL byte refused")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_confined_path.py", test_names)
+    return run_command(cmd, "Confined path tests", verbose=verbose)
+
+
+def utils_static_route_confinement(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the routes serving files by request path never leave their folder."""
+    print_section("Utils: Static Route Confinement")
+    print_info("Testing: backend/app/main.py (frontend_catchall, mkdocs_static), backend/app/api/v1/uploads.py (serve_plugin_static)")
+    print_info("Tests: raw ASGI requests landing outside the served folder → SPA fallback / 404 / 403, never the outside content; the files of each folder still served")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_static_route_confinement.py", test_names)
+    return run_command(cmd, "Static route confinement tests", verbose=verbose)
+
+
+def utils_jwt_secret_blank(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a blank JWT_SECRET never becomes the key that signs session cookies."""
+    print_section("Utils: JWT Secret Blank")
+    print_info("Testing: backend/app/services/accounts/auth_service.py (_JWT_SECRET, decode_jwt_token), backend/app/config/platform.py (configured_jwt_secret)")
+    print_info("Tests: a whitespace-only JWT_SECRET replaced by a random key and tokens signed with it refused; a non-blank secret kept as written; unset or empty still random")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_jwt_secret_blank.py", test_names)
+    return run_command(cmd, "JWT secret blank tests", verbose=verbose)
 
 
 def utils_test_runner_cli(verbose: bool = False, test_names: list = None) -> bool:
@@ -411,10 +465,30 @@ Tests for utility modules and helper functions:
     add_test(cat, "cache-utils", utils_cache_utils, name="Cache Utils", desc="NamedCache, TTL, registry, stats")
     add_test(
         cat,
+        "rate-window",
+        utils_rate_window,
+        name="Rate Window",
+        desc="SlidingWindowLimiter: a hit counts until exactly window_seconds later, peek never counts, a refused hit records nothing, retry_after waits for enough hits to leave (per-call limit too), independent keys with None among them, reset/clear/len, LRU eviction at max_keys, exactly N allowed under concurrent threads",
+        # PURE: no lane DB, no server, no environment read; an injected fake clock, threads of its own, no sleeps.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "container-registry",
         utils_container_registry,
         name="Container Registry",
         desc="Trusted GHCR challenge/token flow, result mapping, endpoint guards, secret redaction",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "served-content-types",
+        utils_served_content_types,
+        name="Served Content Types",
+        desc="Uploaded content reaches the browser only as types that cannot run: the text preview of an upload is text/plain; charset=utf-8 with X-Content-Type-Options: nosniff whatever type was stored (a CSV still readable, whole or windowed); a broker report opens inline only with download=false and a type that cannot carry active content (PDF, PNG, CSV, JSON, plain text), while HTML, SVG, XML, XHTML and unknown types are attachments, download=true (the default) is always an attachment, and every answer carries nosniff",
+        # Fresh apps holding the uploads and broker import routers, called through httpx's in-process
+        # ASGI transport; sign-in and session dependencies overridden, storage lookups monkeypatched to
+        # files under tmp_path. No DB, no server, no network.
         isolation="pure",
     )
     add_test(cat, "provider-core-cache", utils_provider_core_cache, name="Provider Core Cache", desc="Thread isolation, timeout, caches")
@@ -449,6 +523,18 @@ Tests for utility modules and helper functions:
         desc="dev.py on a copy of the image's /app file set (no backend/test_scripts): help, user, db and backup run; test, i18n and mkdocs translate answer «not available in this installation» and exit 2; user create/reset/list on a temporary DB; the role of a created account (L12): user create is an administrator by default and with --role admin, an ordinary account with --role user even alone in an empty DB, an unknown role an argparse error that creates nobody, and user_cli.py create-user an ordinary account (❌ and exit 1 on a weak password or a taken username) while create-superuser stays an administrator; dev.py backup (B1): listed in --help, group help exits 0, backup create on the image's DB writes exactly one librefolio-backup-*.zip into <data dir>/backups/ with no job folder left and that DB inside, inspect exits 0 on it and 1 on a missing file; the Dockerfile HEALTHCHECK probes the port the CMD binds, like compose",
         # A copy of the image tree and a temporary DB under tmp_path, dev.py in
         # subprocesses: no lane DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "dev-cli-docker",
+        utils_dev_cli_docker,
+        name="dev.py docker commands and the image contract",
+        desc="The Docker lot (CP7a): the final image installs tzdata and tzdata-legacy (P-4); EXPOSE and service librefolio of every compose file publish only the CMD's port, 6040 (C-37); both compose files pin PORT, HOST and LIBREFOLIO_DATA_DIR in environment to what the image binds and mounts (N-8); docker exec runs sh -c 'exec gosu \"${LIBREFOLIO_UID:-1000}:${LIBREFOLIO_GID:-1000}\" python dev.py \"$@\"' sh <args>, each argument one element and verbatim through a real sh, as the ids of the image's ENV or, with neither set, entrypoint.sh's 1000:1000, exit 1 without a command (32-3); docker build freezes the version once, rebuilds the frontend when its sources changed, it is not production, has no recorded version or another one, sets LF_APP_VERSION around that build only and gives it back, records .build-version only on success, writes the same version to VERSION, and tags the image from VERSION, not from a later -dirty git answer (M-25); _check_env_file compares PORT only; each static check with synthetic negative controls",
+        # Reads the Dockerfile, compose files and entrypoint.sh; dev.py loaded in-process with its
+        # commands stood in for, a fake project and build markers under tmp_path,
+        # a local sh with stand-ins for gosu and python: no DB, no server, no
+        # network, no Docker, no repo writes.
         isolation="pure",
     )
     add_test(
@@ -558,6 +644,36 @@ Tests for utility modules and helper functions:
         desc="Per-lane port/data propagation, production guards, readiness identity and process ownership",
         # Only monkeypatches os.environ/sys.argv and builds argparse parsers;
         # no DB, no server, no filesystem writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "confined-path",
+        utils_confined_path,
+        name="Confined Path",
+        desc="confined_path keeps a request path inside the folder it is joined to: a file inside, parent segments coming back inside, an empty path (the resolved root), a missing file inside and a symlink pointing inside are returned resolved, also when the root itself sits behind a symlink; parent segments leaving at any depth, an absolute path outside, a sibling folder sharing the root's name prefix, a symlink pointing outside and a NUL byte are refused (None)",
+        # A function over folders built under tmp_path: no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "static-route-confinement",
+        utils_static_route_confinement,
+        name="Static Route Confinement",
+        desc="The frontend catch-all, the documentation and the plugin icon routes serve the files of their own folder only: a path landing outside it (parent segments at several depths, an absolute path, a sibling folder sharing the plugin folder's name prefix) gets the SPA fallback (200.html, else index.html), the documentation's 404 and a 403, never the outside content, and a path the OS rejects gets a 403 from the plugin route; build files, client-side routes, documentation folders, the site index and plugin icons are still served",
+        # Raw ASGI calls on the global app (the lifespan never runs) and on a fresh app holding the
+        # uploads router with sign-in overridden; folders under tmp_path swapped in for the module
+        # globals by monkeypatch. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "jwt-secret-blank",
+        utils_jwt_secret_blank,
+        name="JWT Secret Blank",
+        desc="The JWT_SECRET read at import signs session cookies only when it holds something besides whitespace: a value made only of whitespace (three spaces, tab-space-newline, one space) is replaced by a random URL-safe key of at least 64 characters, new in every process, and a token signed with the blank value is refused by decode_jwt_token; a non-blank value is the key exactly as written, surrounding spaces included, and a token signed with it decodes to its user id; an unset or empty JWT_SECRET gives a random key, new in every process",
+        # Each case imports auth_service in a fresh interpreter run in tmp_path, with a copy of the
+        # environment carrying the case's JWT_SECRET. No DB, no server, no network.
         isolation="pure",
     )
     add_test(

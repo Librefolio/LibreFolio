@@ -176,6 +176,10 @@ export const STATUS_TONES = {
             button: 'bg-sky-100 dark:bg-sky-800/40 hover:bg-sky-200 dark:hover:bg-sky-700/40',
         },
     },
+    /** The «Updates paused» pill of the live prices: a neutral chip on the roles, which follow the theme by themselves. */
+    liveUpdates: {
+        paused: 'bg-lf-neutral text-lf-secondary',
+    },
 } as const;
 
 /** Badges that tell kinds apart rather than states: one hue per kind. */
