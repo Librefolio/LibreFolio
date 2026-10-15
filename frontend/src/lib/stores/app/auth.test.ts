@@ -571,7 +571,7 @@ describe('login errors — a catalogue key for every failure, never the transpor
      * disabled account "Account is disabled" before checking the password, so anyone could learn that it exists.
      * It now checks the password first: a wrong one is the 401 above, whatever the account, and only the right one
      * meets the disabled state, as a 403 whose `detail` carries `error_code: 'ACCOUNT_DISABLED'` (the `error_code`
-     * convention of `api/v1/assets.py`). The axios interceptor reacts to a 401 alone (`zodios-client.ts`), so the
+     * convention of `api/v1/assets/crud.py`). The axios interceptor reacts to a 401 alone (`zodios-client.ts`), so the
      * 403 reaches this catch untouched. The code decides: a 403 without it is "any other status", the login-failed
      * key (plan A3), and never the transport's words.
      */

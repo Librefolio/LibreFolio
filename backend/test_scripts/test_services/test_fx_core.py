@@ -2,7 +2,7 @@
 Test: FX Core Service — normalize_rate_for_storage, upsert_rates_bulk,
 delete_rates_bulk, _count_actual_changes.
 
-Covers the service-layer helper functions in fx.py that are NOT covered
+Covers the service-layer helper functions in services/fx/ (storage.py, sync.py) that are NOT covered
 by test_fx_conversion.py (which focuses on convert_bulk / compute_chain_rate).
 """
 
