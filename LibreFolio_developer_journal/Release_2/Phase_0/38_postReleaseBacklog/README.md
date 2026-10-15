@@ -166,6 +166,10 @@ Origine: [26_brimDanskeBank](../../phases/26_brimDanskeBank/plan-phase00BrimDans
   gli upload BRIM il developer la vuole risolta «per un futuro in cui generalizziamo generic csv» (06/10 22:50).
 - **L5 · `get_file_path` sull'event loop** — basso. `backend/app/api/v1/brokers.py:693`, `:765`: solo `:863` usa
   `asyncio.to_thread`.
+  - ✅ **Chiusa il 15/10** con `fix: per-row access refusals, BRIM storage cleanup` (W, lotto I1 della 1.3; in
+    `dev_release2` con `dc7e4e48e`).
+    - Anteprima e download risolvono il percorso del file BRIM in un thread (`asyncio.to_thread`).
+    - Cancello puro `utils gate-event-loop-io`.
 - **L6 · Il nome salvato nel rifiuto del plugin** — basso. `brim_provider.py:1169` mostra il nome salvato, non
   quello originale.
 - **L7 · Un plugin di set scelto a mano per un file che non legge** — basso. `importReportSets.ts:131-139` contro
@@ -406,6 +410,9 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
 - **C-3 · Cartelle `broker_<id>` vuote dopo la cancellazione di un broker** — minimo. `delete_files_for_brokers`
   (`brim_provider.py:1203-1222`) cancella i file ma lascia le cartelle in uploaded, parsed e failed; con
   `AUTOINCREMENT` gli id non tornano, quindi le cartelle vuote si accumulano, innocue (I, 08/10).
+  - ✅ **Chiusa il 15/10** con `fix: per-row access refusals, BRIM storage cleanup` (W, lotto I1 della 1.3; in
+    `dev_release2` con `dc7e4e48e`): la cancellazione del broker toglie le cartelle di stato vuote e il suo lock (C-79
+    nel backlog post 1.2).
 - **C-4 · Stato dei plugin BRIM (Stable/Beta/Alpha) solo nella doc** — basso. Sta in `providers_list.md` (per esempio
   `:9`, `:29`), nelle card dell'indice e nell'avviso della pagina utente; nessun attributo nel codice lo tiene
   allineato (Q, 08/10).
