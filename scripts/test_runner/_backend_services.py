@@ -671,6 +671,16 @@ def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "ROI/FIFO/Portfolio service tests", verbose=verbose)
 
 
+def services_orphan_transfer_numbers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the lots and the Dashboard of a broker whose TRANSFER partner was deleted with its broker (V-3, D-J4)."""
+    print_section("Services: Orphan Transfer After Broker Delete (V-3 numbers)")
+    print_info("Testing: LotsAnalysisService and PortfolioService after BrokerService.delete_bulk leaves the other half of a TRANSFER")
+    print_info("Tests: TRANSFER_PAIR_MISSING vs the ADJUSTMENT-in lot, in-kind capital at market value vs at cost basis, against a control book")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_orphan_transfer_after_broker_delete.py", test_names)
+    return run_command(cmd, "Orphan transfer numbers tests", verbose=verbose)
+
+
 def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test the read-only PAC/Rebalancer portfolio source snapshot."""
     print_section("Services: Portfolio Allocation Source")
@@ -700,6 +710,15 @@ def services_asset_source_guards(verbose: bool = False, test_names: list = None)
     print_info("Tests: OHLC rejection policy, close-only bound widening, identifier filters, event FX pass")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source_upsert_guards.py", test_names)
     return run_command(cmd, "Asset Source guard tests", verbose=verbose)
+
+
+def services_asset_event_store(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the manual asset-event store contract tests (release 1.3, W E1a: decisions 20-23)."""
+    print_section("Services: Asset Event Store")
+    print_info("Testing: backend/app/services/assets/event_store.py, backend/app/schemas/assets/events.py")
+    print_info("Tests: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_event_store.py", test_names)
+    return run_command(cmd, "Asset Event Store tests", verbose=verbose)
 
 
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
@@ -1293,6 +1312,16 @@ Note: No backend server required.
     add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price marks")
     add_test(
         cat,
+        "orphan-transfer-numbers",
+        services_orphan_transfer_numbers,
+        name="Orphan Transfer Numbers",
+        desc="Lots and Dashboard once a broker deletion leaves the other half of a TRANSFER: the orphan against an ADJUSTMENT-in control",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+    )
+    add_test(
+        cat,
         "portfolio-allocation-source",
         services_portfolio_allocation_source,
         name="Portfolio Allocation Source",
@@ -1322,6 +1351,18 @@ Note: No backend server required.
         # asset this unit creates and every price/event row written against it are
         # visible to all concurrent tests. Rows are uniquely named and dropped in
         # teardown, but the tables themselves are shared surfaces.
+        isolation="write-global",
+    )
+    add_test(
+        cat,
+        "asset-event-store",
+        services_asset_event_store,
+        name="Asset Event Store",
+        desc="Manual events: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset",
+        # WRITE_GLOBAL: Asset and AssetEvent carry no user_id (nor do the AssetProviderAssignment,
+        # Broker and Transaction written beside them), so the two assets this unit creates and
+        # every event and transaction written against them are visible to all concurrent tests.
+        # Rows are uniquely named and dropped in teardown, but the tables are shared surfaces.
         isolation="write-global",
     )
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
