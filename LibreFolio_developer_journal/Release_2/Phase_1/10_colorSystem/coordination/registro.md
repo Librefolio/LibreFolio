@@ -11,24 +11,22 @@
 
 ## Stato delle corsie
 
-> Aggiornata il 14/10/2026 alle 20:35. Destinazione: `dev_release2`. Il push lo fa il developer: `origin/dev_release2`
-> era a `f27e83448` all'ultima verifica.
-> Regola git (cc7a94501, `.github/copilot-instructions.md`): in locale fa tutto il coordinatore (commit per i worker,
-> merge, basi); il push resta al developer.
-> Dal 14/10 sera il programma sta in `Phase_1/10_colorSystem` (prima: `Phase_0/55_colorSystem` e
-> `Phase_0/56_galleryDeterminism`). I piani dei figli (`L-designerLab/`, `R-colorRefactor/`, il piano di G) restano nel
-> vecchio percorso nei loro branch. Il rilevamento delle cartelle rinominate di git non li sposta, come verificato con
-> `merge-tree`. Al prossimo merge di base, a worktree fermo, il coordinatore li sposta con un `git mv` nel branch del
-> figlio; il figlio poi corregge i link relativi del proprio piano.
+> Aggiornata il 15/10/2026 alle 19:45. Destinazione: `dev_release2` = `00aa2ab3c`. Il push lo fa il developer:
+> `origin/dev_release2` era a `dae4de4fa` all'ultima verifica, 112 commit indietro.
+> Regola git (`.github/copilot-instructions.md`, «Git: local yes, remote only the developer»): in locale fa tutto il
+> coordinatore (commit per i worker, merge, basi); il push resta al developer.
+> Il programma sta in `Phase_1/10_colorSystem`, con i piani dei figli nelle loro cartelle. Il piano generale ha lo
+> stato per workstream; qui sotto le corsie.
 
-| Lettera | Sessione (id) | Worktree | Branch | Corsia | Stato |
+| Codice | Sessione (id) | Worktree | Branch | Corsia | Stato |
 |---|---|---|---|---|---|
 | — | coordinatore (`aec04834-1532-4d86-9e3f-f942e82aca89`) | checkout principale | `dev_release2` | 6150 + `/tmp/librefolio-r2-main` | — |
-| L | `L - designer lab` (`13212938-4f86-497c-a242-e21e069a8280`) | `LibreFolio-worktrees/e-alfy-fuzzy-robot` | `e-alfy-designer-lab` | 6152 + `/tmp/librefolio-r2-l` | passi 0–5 nel checkpoint `6e967202e` (19:58), base aggiornata → HEAD `150f2716a`; passo 5b (selettore di elementi) autorizzato, poi passo 6 |
-| G | `G - gallery deterministica` (`0c554bef-ff1a-4821-8fab-1fb1bc063b66`) | `LibreFolio-worktrees/e-alfy-laughing-spoon` | `e-alfy-g-gallery-deterministica` | 6153 + `/tmp/librefolio-r2-g` | G-4 corretto, G-3 pronto, t* = 3600 ms (D1); compito B in corso; run filtrate di verifica dalle 20:08 |
-| R | `R - fattorizzazione colori` (`282018bc-660a-4d3a-8df9-20fab8549ecc`) | `LibreFolio-worktrees/e-alfy-literate-tribble` | `e-alfy-r-fattorizzazione-colori` | 6154 + `/tmp/librefolio-r2-r` | lotto A `d80b9e0cd`, lotto B `75c45d923` (20:10); base allineata a `e6d293e41` → HEAD `f53d979ef`; prosegue con il lotto C (W6–W7); cancelli A e B dopo G |
-| — | server per la designer | checkout principale | — | 6160 + `/tmp/librefolio-color-review` | fermo, su richiesta |
-| T | `T - token e tema` (`566352ca-ec49-456a-97db-b6e3519095a7`) | `LibreFolio-worktrees/e-alfy-expert-barnacle` | `e-alfy-expert-barnacle` (nome automatico) | 6155 + `/tmp/librefolio-r2-t` | aperto alle 21:23; portato alla baseline `d9aec0193` con fast-forward; analisi d'implementazione in sola lettura |
+| L | `L - designer lab` (`13212938-4f86-497c-a242-e21e069a8280`) | `LibreFolio-worktrees/e-alfy-fuzzy-robot` | `e-alfy-designer-lab` | 6152 + `/tmp/librefolio-r2-l` | integrato fino al cursore dell'opacità (`c96a62268`); fermo fino a L-16 (ruoli di T-8 dopo T, livello `category` dopo DV) |
+| G | `G - gallery deterministica` (`0c554bef-ff1a-4821-8fab-1fb1bc063b66`) | `LibreFolio-worktrees/e-alfy-laughing-spoon` | `e-alfy-g-gallery-deterministica` | 6153 + `/tmp/librefolio-r2-g` | piano della 56 chiuso; rivede gli scatti nuovi della 1.3 (A6b in corso); G-13 dopo T e le schede Users, Backup ed Email |
+| R | `R - fattorizzazione colori` (`282018bc-660a-4d3a-8df9-20fab8549ecc`) | rimosso | `e-alfy-r-fattorizzazione-colori` | 6154, chiusa | integrato; sessione archiviata il 15/10 |
+| T | `T - token e tema` (`566352ca-ec49-456a-97db-b6e3519095a7`) | `LibreFolio-worktrees/e-alfy-expert-barnacle` | `e-alfy-t-tokens-theme` | 6155 + `/tmp/librefolio-r2-t` | T-8b validato (`e0c88bbc3`); entra dopo l'OK del developer (D-T20); margine di `AuthPageFrame` in corso, poi un E2E breve |
+| DV | `DV - colori dei grafici` (`f4c3d86e-777f-4d14-b3a4-d59ee1191f67`) | `LibreFolio-worktrees/e-alfy-congenial-potato` | `e-alfy-dv-colori-dei-grafici` | 6156 + `/tmp/librefolio-r2-dv` | `fb59c7bec` sopra la base `0182d890d`; aspetta lo slot per le prove 1–7, dopo un nuovo merge di base |
+| — | anteprima per developer e designer | `LibreFolio-worktrees/preview-colori` | `preview-colori-t8b` = `e0c88bbc3` | 6160 + `/tmp/librefolio-color-review` | acceso (shellId `preview6160d`); da togliere, con worktree e rami `preview-colori-*`, a revisione finita |
 
 ## Note
 - **14/10, base dei figli.** I tre worktree sono nati da `origin/dev_release2` (`6d0b1266c`), non dal `dev_release2`
@@ -1241,3 +1239,115 @@
 - **16:10:** Z1 entrato (`9d2074b2b`). Piano della 56 chiuso: journal di G `fb5eef9ec` (piano, README di G, backlog: G-1 ✅, G-11 aperta, G-13 nuova), merge `243c8c9ff` sopra `9d2074b2b`; G portato con fast-forward a `243c8c9ff`. G-13 (coppia di riferimento, ~75 min, 6153) dopo l'ingresso di T.
 - **16:12, L-10 integrato:** journal di L `5166916e7` (validazione sul fuso `fb2526cc4`: unit 422, `front-designer-lab all` 13/13, check 0/0, gate 168/168, parità 942); merge `87755fe2a` sopra `243c8c9ff`; `theme-roles --check` pulito; L portato con fast-forward a `87755fe2a`. Deriva dopo la validazione: solo G-9 e Z1, fuori dal Lab. Prossimo compito di L: il Lab per il giro 3, dopo T-8 e DV.
 - **Toolkit:** `color_inventory.py`, docstring ed etichetta del riepilogo con `lf-*` (note di L).
+- **16:19, 1.3:** W entrato, `dev_release2` = `14d58cc61` (FE8a: Form, Bulk e Wizard delle transazioni in pezzi, con tre `~split`; N1, N1b, E1a/E1c). Baseline verificata: `~accept` D3 intatto, cinque `~split` (AssetModal, GrowthChart, ImportWizard, TransactionBulk, TransactionForm). Per T: FE8a chiude un prerequisito di W4; al prossimo merge di base controllare le righe `~` (TC-7).
+- **16:20, DV:** analisi pronta (sessione DV, `plan.md`), FROZEN. Opzione A (`lib/theme/chartCategories.ts`) + ponte `roleColors.ts`; GR4 a miscela in OKLab; S1–S8, S10; S9 (indicatori) dopo Y4/Y8/X. 12 decisioni per il developer. Elenco dei file inviato al 1.3 per l'ordine con Y (Y9, Y10) e J (3 righe di `derived_views.py`).
+- **16:25, DV approvato dal developer** (D-T22). Testuale: «Sì, approva DV così», dopo due osservazioni:
+  - punto 6: «riguardo il punto 6 parliamo dei colori proposti vero? perchè poi l'utente è sempre libero di cambiarli» → sì, solo i default; i colori scelti a mano restano;
+  - punto 8: «sul punto 8 non sono daccordo alla copia nel frontend, se la andasse a prendere dal backend per essere centralizzati» → niente specchio: mappa unica in `utils/asset/sector.py`, il frontend la legge dall'endpoint dei settori, store reattivo, ripiego tolto.
+  - Le altre dieci come raccomandate (A + ponte; GR4 ranghi 4–6; 14 + «Non classificato»; Unknown; broker sui primi 8; S9 dopo Y4/Y8/FE5c; badge per famiglia in W4 di T; POLARITY della correlazione; R-7; ponte di DV con API concordata con T).
+- **Ordine (1.3):** prima DV, poi Y9 e Y10; S1 aspetta l'OK di J sulle 3 righe di `derived_views.py`; S9 dopo Y4, Y8, FE5c. DV portato con fast-forward a `dae4de4fa`; `npm ci` approvato una volta. Piano di DV approvato in modalità interattiva, con il via inoltrato alla lettera.
+- **16:41, J (via 1.3):** OK alle 3 righe di DV in `derived_views.py`; CP-8 non sposta il file; CP-11/CP-13 toccheranno poi `_alloc` (231–243) tenendo la chiamata dell'emoji. DV avvisato: S1 sbloccato, cambio minimo lì.
+- **16:43, slot a Y2 (1.3):** Y2 committato `491cf3a4c` (taglio di `DataTable` con `~split`), base update su `dae4de4fa` in corso (`--resolve` con FE8a). T senza prove in corso (27 file in scrittura, 6155 spenta) → galleria Y2 `--desktop-only` adesso (~40 min), poi la validazione di T-8. Ricordato al 1.3 il controllo delle righe `~` dopo `--resolve` (TC-7).
+- **16:47, Y2:** revisione combinata `2ffedf004`; baseline verificata da Y (6 `~split`: AssetModal, GrowthChart, DataTable, 3 di FE8a; `~accept` D3; `--check` pulito). Galleria dopo `api sync`, `front check`, Vitest.
+- **16:50, richiesta del developer:** indirizzo del Designer Lab nel banner di `./dev.py server`, solo se la build contiene il Lab (testuale: «puoi fare che in dev.py quando si avvia il server, viene mostrato anche il path per il design lab? similmente a quanto facciamo per le pagine delle api? ovviamente solo se è stato compilato, quindi in debug mode»). Affidato a L (rilevazione con `LAB_MARKER` nei file della build), poi l'analisi del giro 3 nel Lab in sola lettura. L portato con fast-forward a `dae4de4fa`. 1.3 avvisata per `dev.py`.
+- **16:55, R archiviata** su richiesta del developer («Sì, archivia R»): worktree `e-alfy-literate-tribble` pulito, HEAD `ed9fb6996` tutto in `dev_release2`, 6154 spenta; worktree rimosso.
+- **1.3:** via libera a L sul blocco «Available endpoints» di `dev.py`; J entrato (`2faa88a34`, C-94: `--build-only`, build prima del server; CP-2), poi journal `d22eb6f43`. J-15 (flush di Playwright): via libera, purché fuori da `gallery.spec.ts` e `scripts/visual_review/`.
+- **T-8 committato:** `68c990b35` (padre `fe618a0e3`), 28 file: `tokens.css` (famiglia `--lf-bar-*`, stati, N3, Q2–Q11, hover dei campi), barre verdi con anello `#52C493`, T-4 (`theme-color` `#1b4334`, manifest, `offline.html`, `~accept` D-T17), TC-7 (`--resolve` a tre vie), gate e test. 8 correzioni D-T6 per il giro 3 (TC-8). Merge di base con `d22eb6f43` aperto: conflitto solo nella baseline (righe del wizard di FE8a e riga vecchia di `AnimatedBackground`) → a T con `--resolve` a tre vie.
+- **L:** fast-forward a `d22eb6f43` prima di toccare `cmd_server` (C-94 lo modifica).
+- **17:00, T:** merge di base committato `02c23c773` (padri `68c990b35`, `d22eb6f43`). Primo `--resolve` a tre vie su un caso reale: righe del wizard dentro, `AnimatedBackground` fuori; 303 invariate, 10 dal lato di T, 15 dal target, 0 conflitti; 7 righe `~`; `--check` pulito. In attesa dello slot (galleria Y2), poi validazione, anteprima 6160, revisione del developer, ingresso.
+- **17:02, 1.3 (informativo):** E ha fatto il merge di base (`d42b4c32f`), con un conflitto in `scripts/test_runner/_frontend_utility.py` (lista Vitest `core-unit`) risolto tenendo i due lati: le 7 righe nostre più le 2 di E. Non entra subito: prima E2b.
+- **17:05, L (banner):** codice fatto. Scelta (b): nessun server reale, slot riservato al percorso critico di T. Il pytest deve coprire: nessuna build, release, debug con Lab, debug con `LF_DESIGNER_LAB=0`, `--build-only`, errore di lettura → nessuna riga, mai un crash. Helper vero sulla build di debug: True in 5–110 ms.
+- **17:10, galleria Y2 finita** (59 verdi, 10 rossi in grafici asset/cambi e File, carico 85; Y li analizza contro `g-final3-r1`). Slot a T: validazione di `02c23c773`.
+- **DV S1 committato:** `8b8571f9a` (padre `dae4de4fa`): mappa unica `SECTOR_EMOJI` in `utils/asset/sector.py`; `utilities.py` e `derived_views.py` (import + nome, come concordato con J) la leggono; golden `native_cash_guard` Liquidità 💵→💰; test 4+7+controlli; piano `DV-chartColors/` e backlog DV-1/DV-2. Prove: roi-fifo-utils 681, sector-normalization 64, financial-math 212.
+  - **Disguido:** DV non aveva visto il commento all'approvazione del piano (decisioni 1–12 e ordine della 1.3). Rimandati per messaggio, con le citazioni testuali. `npm ci` autorizzato. DV-2: ripiego unico ❓ accanto alla mappa. DV-1 (`_test_lane_drops` scarta `LIBREFOLIO_REGEN_NATIVE_CASH_GUARD`) girato alla 1.3.
+- **17:12, il developer:** «t è fermo». T aspettava lo slot, occupato dalla galleria Y2 fino alle 17:10; è partito alle 17:12 con la validazione di `02c23c773` nella 6155.
+- **17:20, anteprima 6160 aggiornata a T-8:** server `preview6160b` fermato; worktree `preview-colori` passato al ramo nuovo `preview-colori-t8` = `02c23c773` (il vecchio `preview-colori-1015` = `7a94a1553` resta); `designer_live.sh` staccato, shellId `preview6160c`, build e API ricostruite dal server (C-94), migrazioni applicate all'avvio. Verifica: barra e header `rgb(27,67,52)` nei due temi; `/`, `/designer-lab` e la pagina d'errore danno 200. Lista per il developer: `review/T8-preview/cosa-guardare.md`. 1.3 avvisata del build una tantum in parallelo alla validazione di T.
+- **1.3:** A6a entrato (`1840ebd62`, solo backend; registri `ca4ec658e`). Parte A6b.
+- **17:21, 1.3:** DV-1 va ad H (isolamento delle corsie, C-96), come voce di backlog: una scappatoia per i comandi di rigenerazione documentati. I rossi di Y2: primo giro di Y senza slot; se toccano G-9, `goToAssetsPage` o i timeout, arrivano lista e snapshot per G in sola lettura.
+- **17:22, Y2:** i 10 rossi sono dell'ambiente (timeout sotto carico; nessuno in `DataTable`; 43 scatti su 46 nel rumore r1/r2, gli altri di Δ1). Chiede una ripresa di 10 test (`--desktop-only --workers 2 --no-populate`, 6189) → dopo la validazione di T-8, verso le 18:00, per non ricadere nei timeout durante i Vitest di T.
+- **17:27, `gallery.spec.ts` (di G):** A6b (scheda Users, `page.route` su `/users` e `/users/invites`) e B (Backup «pronto da scaricare») aggiungono uno scatto ciascuno nel `describe('Settings')`. Deciso: li scrivono A e B nello stesso lotto, con le regole di determinismo (posto, nomi `settings/<nome>`, helper di inquadratura, `data-testid`, dati fissi, niente attese a tempo, ripresa doppia con diff vuoto); G rivede in sola lettura prima dell'ingresso; io aggiorno la mappa di `scripts/visual_review`; G-13 ne misura la stabilità.
+- **17:30, banner del Lab integrato:** L `c0ee8f2c1` (dev.py +29, `_backend_utils.py` +21, test 37 casi, 3 righe di doc, piano); `dev_release2` = `a4d1884b4` (merge sopra `ca4ec658e`, A6a); L portato con fast-forward. MkDocs strict non eseguito: l'ancora `#release-builds` esiste.
+- **Analisi del giro 3 di L:** decisioni mie (accordi tecnici, nessuna decisione di prodotto):
+  - D1: contratto C1–C4 con DV (`categoryColor` unico, letterali per riga, aggancio `globalThis.__lfDesignerLab` solo in debug, segnale `onChartColorsChange` in `themeMode.ts` scritto da DV); inviato a DV per S2;
+  - D2: ombre già ruoli di solo colore in T-8 (`--lf-shadow-raised`, `--lf-shadow-card`), nessuna isola → solo il cursore dell'alfa;
+  - D3: `CONTRAST_PAIRS` in un modulo condiviso, lo sposta T dopo l'ingresso di T-8 (L-15);
+  - D4: prima i ruoli, poi le categorie.
+- **17:31, G:** lista di controllo per gli scatti nuovi di A6b e B (struttura, inquadratura, rotte con `route.fallback()`, nessun `unroute`, dati fissi, tempo relativo da decidere prima, nessuna scrittura, handoff con doppia cattura e diff vuoto). Girata alla 1.3.
+- **17:35–17:58, feedback del developer sull'anteprima:**
+  - togliere «Password Recovery» da `ForgotPasswordCard` (come «Crea un account");
+  - KeePassXC nella registrazione mette l'icona sull'email: attributi corretti (`username`, `email`, `new-password`), è la sua euristica (il campo prima della password) → backlog di A, peso basso (girato alla 1.3);
+  - rosso e verde scuri «troppo accesi»: sono i valori della designer (rosso approvato in N5). Prima tre alternative (`rosso-verde-scuro.html`), poi i candidati del developer in griglia 3×3 (`rosso-verde-scuro-2.html`): rossi `#D33F58` (3,84:1 sulla card, sotto 4,5 per il testo), `#FF7A86`, `#F09A91`; verdi `#3EB489`, `#36D399`, `#5ED69A`. Decisione in attesa;
+  - mobile: i controlli delle pagine d'accesso «scendono con lo schermo». Erano `fixed` già nella v1.2 (`AuthPageFrame` di A5) → `absolute` sotto il breakpoint mobile; OK della 1.3;
+  - **D-T23, header:** non più verde. Opzione A, la barra neutra della designer: `#EDF0EE` chiaro, `#111615` scuro (scelta col confronto `header-confronto.png` sull'anteprima), più la «lineetta» tolta (bordo destro della barra in scuro).
+- **T:** validazione di `02c23c773` verde (front check 0/0, core-unit 4.655, component-unit 3.416, onboarding 449, E2E theme-roles 24 + 2 saltati, header-scroll 8, connection-security 8, auth 33, Lab 422 + 13); `utils pwa-assets` era rosso → correzione `63de39c45` (sw.js rimarcato, manifest beige per le icone maskable, TC-9). Mandato T-8b: header A, lineetta, titolo, `AuthPageFrame`, rosso/verde in attesa, E2E da aggiornare, revisione dell'API del ponte di DV.
+- **DV:** S2–S8 e DV-2 scritti (bucket nell'endpoint dei settori, store reattivo, C1–C4, ponte); test in corso. OK al catalogo (solo aggiunte); slot dopo Y2 e T-8b. API del ponte girata a T, C3/C4 a L.
+- **Slot:** ripresa di Y2 (10 test) adesso, poi T-8b, poi DV.
+- **18:01, 1.3:** DV-1 chiuso da J in CP-4 (`LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1`). Conflitto certo su `eur_only_golden.json` (J +116 righe, DV 4 righe): chi entra per secondo rigenera sulla revisione fusa. J entra fra almeno un'ora. Girato a DV.
+- **18:05, T:** revisione dell'API del ponte di DV (scope, gate di parità del ripiego, `lib/theme/contrast.ts` condiviso, rgba lasciato com'è) → girata a DV come approvata; T informato che C4 esiste già.
+- **D-T24 (developer, ask_user):** `theme-color` resta verde `#1B4334` nei due temi, come la barra laterale (D-T2), anche con l'header neutro di D-T23.
+- **1.3:** ripresa di Y2 10/10 (carico 31–38: era l'ambiente). Y2 entrato, `dev_release2` = `c747a74c3` (`~split` di `DataTable`, `htmlSink.gate`); registri `695e6ad12`. Richiesta di slot per gli scatti B (`settings/backup-ready`) ed E (`settings/email`) → in coda dopo L, T-8b e DV.
+- **L:** cursore dell'opacità (A) fatto (unit del Lab 548); slot a L per il checkpoint (~20 min) appena i due E2E sono scritti.
+- **18:15, 1.3:** E1b di W entrato (`fecf88c1a`, registri `f0d2c77e2`); J CP-4a/b entrato (`322d55042`, registri `63d792917`) con il golden `eur_only_golden.json` rigenerato e la variabile `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD` → DV rigenera il golden al suo merge di base; DV-1 chiudibile.
+- **18:10, designer (via developer):** `#151B19` è la sua `--lf-surface-card` scura; mandata la tabella delle superfici e dei testi usati nel confronto, con l'origine.
+- **18:18–18:25, decisioni del developer sul tema scuro:**
+  - **D-T25:** rosso `#FF7A86` (al posto di `#F84361`), contrasto 7,0:1 sulla card; `--lf-danger-solid`/`-hover` invariati (pulsanti pieni sotto testo bianco).
+  - **D-T26:** verde `#5ED69A` (al posto di `#36D399`), 9,6:1 sulla card; scelto fra cinque candidati (`verde-scuro-5-candidati.html`; i due nuovi del developer `#8ED1A0`, `#72947D`).
+  - Indicazione mia a T: le stesse due sulla barra verde (`--lf-bar-success` `#5ED69A` 6,09:1; `--lf-bar-danger` `#FF7A86` 4,41:1), salvo gate.
+- **18:27, G su E2b (`settings/email`, `116bf665c`):** OK, può entrare (checklist completa; `tsc` e2e da mettere nell'handoff di E). Note: il doppio lancio lo fa la coppia di G-13, se E2b entra prima; ogni scheda nuova (Email, Users, Backup) cambia i 13 scatti di `Settings` e il modale Reddit, quindi conviene che entrino tutte prima di G-13. Chiesti alla 1.3 i tempi di A6b e B.
+- **18:28, 1.3:** E2b entra (merge di `116bf665c` sopra `cb8bbe207`; `gallery.spec.ts` + `galleryEmail.ts` + voce runner). B previsto 18:50–19:00 (scatto `settings/backup-ready`, revisione di G), A6b 19:30–19:45 (scatto `settings/users`). G-13 dopo l'ingresso di T e delle tre schede.
+- **18:28, 1.3:** E2b entrato, `dev_release2` = `755158aad` (registri `6c427eb4e`); `theme-roles --check` pulito, i18n 4.482 chiavi.
+- **18:30, T-8b committato:** `312748dcc` (padre `63de39c45`), 26 file: `--lf-surface-header` (`#EDF0EE`/`#111615`), controlli dell'header in aspetto di pagina (via `onBar`), via il bordo destro della barra, scuro `--lf-danger` `#FF7A86` e `--lf-success` `#5ED69A`, stati sulla barra allineati, via «Password Recovery» e la chiave `auth.passwordRecovery` (4 cataloghi), `AuthPageFrame` `absolute lg:fixed`, `sw.js` rimarcato, test aggiornati. Merge di base con `9bd3e39bb` aperto: conflitto in `header-scroll.spec.ts` (H `9893aeb9d`) → a T. Slot: prima T-8b, poi L. DV avvisato del ripiego `#FF7A86`/`#5ED69A`. Nota per il developer: il rosso e il verde accesi della dashboard vengono da `toneClasses.ts` (W3, B2), non dai ruoli.
+- **18:33, T:** conflitto di `header-scroll.spec.ts` risolto tenendo la risposta di H (`plainInstanceConfig()`) e togliendo il duplicato di T-7; baseline 8 righe `~`, `--check` pulito. Merge committato `a74185670` (padri `312748dcc`, `9bd3e39bb`). Slot a T per la validazione di T-8b.
+- **L:** la parte statica del checkpoint era già girata (18:29–18:32, tutta verde: unit 548, check 0/0, gate 168, mkdocs strict 0, check-links 95, build di release pulita); restano gli E2E del Lab (~15–20 min) dopo T-8b.
+- **18:40, T (validazione di T-8b):** `core-unit` 4.880/4.881. Il rosso viene dal target (E2b, `b33654f22`): `htmlInterpolation.gate` contro `email.problems.SMTP_FROM_INVALID` con `<` nei 4 cataloghi `i18n/email/`. Segnalato alla 1.3 (riformulare, o elenco rivisto del gate); per T è preesistente.
+- **Pagina toast e banner** chiesta dal developer: generatore `/tmp/libreFolio_toastbanner.py` (toast in stile pieno e tenue, banner per tono, chiaro e scuro, ruoli T-8b); inventario dei banner affidato a un agente explore in background.
+- **18:55, 1.3:** rosso `htmlInterpolation.gate` corretto nel target, `be7de95b6` (merge di `7f735af7c`, solo i 4 `i18n/email/*.json`). Il merge di T non serve rifarlo: il fix arriva con l'ingresso di T; dopo l'ingresso, `core-unit` sul target.
+- **19:05, pagina toast e banner pronta:** `review/T8-preview/toast-e-banner.html`. Contiene i 4 toast in stile pieno e tenue e 11 famiglie di banner, 15 componenti e 33 varianti, più i riquadri in linea e le etichette, in chiaro e scuro, con i ruoli T-8b letti dal `tokens.css` di T e i testi del catalogo italiano. Nessun contrasto sotto soglia. Tre domande per la designer: toast pieno o tenue; chip e pulsanti dentro i banner (proposta: fondo card, bordo `-line`); errori della qualità dati in ambra o in rosso. Generatore: `/tmp/libreFolio_toastbanner2.py`, inventario `/tmp/libreFolio_banners_raw.json`.
+- **19:00, 1.3: Z6b parte 1** è entrata (`000090aaf`, registri `10d5ccd2d`) con il budget di spegnimento: uvicorn 3 s, runner 10 s, Playwright webServer 10000 ms. Nessun file nostro; vale per tutte le corsie.
+- **19:05, DV checkpoint 2** (S2–S8, DV-2, ponte rivisto da T). Verificato: HEAD `8b8571f9a`, 48 path (35 M, 13 nuovi), niente in stage, `diff --check` pulito, backlog solo nella sezione DV, runner con 8 righe solo aggiunte.
+  - **Due ritocchi chiesti prima del commit:**
+    - ripiego scuro di `--lf-danger` di nuovo a `#f25f5c`: i `STAND_INS` seguono il `tokens.css` della base;
+    - `desc` di `allocation-unit` in `_frontend_portfolio.py:460`, col testo di DV.
+  - **Regola d'incontro T↔DV:** chi entra per secondo allinea i 6 `STAND_INS` (card, panel, text-primary, text-on-inverse, danger, info) al `tokens.css` unito. T-8 e T-8b ne cambiano 11 valori su 12; il gate di parità lo impone.
+  - **DV-6** (spazio iniziale nelle etichette dei settori, in `stressBucketLabel.ts:37` di Y e `categoryLabels.svelte.ts:22` del PAC): chiesto l'OK alla 1.3. **DV-3** girato per Y10 e X.
+  - **Giro 3:** ΔE00 11,4 tra il verde scuro `#5ED69A` (D-T26) e la categoria `#2DD4BF` (Crowdfunding/Finanziari); il rosso `#FF7A86` sta a ≥ 25,9 da tutte.
+- **19:10, 1.3, su DV-6:** OK, lo fa DV nel suo lotto, con il test e le righe dichiarate. Va fatto dopo il merge di base, prima dello slot pesante.
+  - **Vincolo d'ordine:** Y4b sposta la cartella di `stressBucketLabel.ts` dopo l'ingresso di DV.
+  - **DV-3:** `AllocationPanel.svelte:65` va a Y-6/Y10; `assets/[id]/+page.svelte:3496` va a X (FE5c).
+- **19:20, DV:**
+  - **Checkpoint 2 committato:** `c5bca76ae`, 49 file. Il ripiego di `--lf-danger` è tornato `#f25f5c` e la `desc` di `allocation-unit` è aggiornata. I rilievi ruff e black su `_frontend_portfolio.py` c'erano già su HEAD.
+  - **Merge di base pulito:** `0182d890d`, genitori `c5bca76ae` e `10d5ccd2d`.
+    - Il golden si è unito riga per riga: il golden di J più le 4 righe 💰 di DV, nessun 💵 rimasto, nessuna emoji nelle righe di J.
+    - La prova 0 di DV verifica che la rigenerazione dia un diff vuoto.
+  - **Prossimi passi di DV:** DV-6 (prova 0b) e `api sync`, poi lo slot pesante dopo T-8b e L.
+- **Pagina toast e banner, correzioni:**
+  - i riquadri in linea sono 61, non 66;
+  - le etichette viola non sono AI (strumento «misura» attivo, marcatore «altro» dei lotti): la sezione esce dal pacchetto, ed è da riprendere nel giro sui badge, con le arancio come avviso.
+- **19:12, pacchetto per la designer:** `LibreFolio_subRepo/LibreFolio_visual_review/package/toast-e-banner-2026-10-15.zip` (19 KB). Contiene `toast-e-banner.html`, autosufficiente, e `toast-e-banner.md`, gli stessi dati per l'IA.
+  - Generatori: `/tmp/libreFolio_toastbanner2.py` e `/tmp/libreFolio_toastbanner_md.py`; copie in `review/T8-preview/`.
+  - Colori: i ruoli della designer come sono in T-8b, non quelli di oggi dell'app.
+  - Quando lei risponde, si archivia con il suo feedback in `10_colorSystem/designer-feedback/`.
+- **19:05, anteprima 6160 → T-8b:** `preview6160c` fermato. Il worktree `preview-colori` è passato al ramo nuovo `preview-colori-t8b` = `e0c88bbc3`, dopo aver scartato `sw.js`, artefatto della mia build. `designer_live.sh` è staccato, shellId `preview6160d`, log `/tmp/libreFolio_preview6160d.log`.
+- **19:00, T:** piano committato, `e0c88bbc3`. La correzione di `AuthPageFrame` (`pt-16 lg:pt-4`) la fa T con l'OK della 1.3; il suo E2E breve va dopo L.
+- **19:00, L:** ha il via per lo slot (6152). **B è entrato:** `629d63306`.
+- **19:18, pacchetto definitivo:** `package/toast-e-banner-2026-10-15.zip` (19,6 KB).
+  - Aggiunta la tabella «Dove i valori non sono i tuoi»:
+    - 3 correzioni di contrasto in chiaro, da confermare nel giro 3 (TC-8): warning `#AE4E00`, danger-soft `#FFE5E5`, info-soft `#DEEDFF`;
+    - 2 scelte del developer in scuro: danger `#FF7A86` (era `#F84361`) e success `#5ED69A` (era `#36D399`).
+  - Pagina impilata sotto i 760 px; testo in seconda persona, rivolto alla designer.
+- **19:18, anteprima 6160 su T-8b pronta** (`/system/ready` 200). Lista per il developer: `review/T8-preview/cosa-guardare-t8b.md`, con le affermazioni verificate nel codice: errori della registrazione e `PasswordStrength` sui ruoli; il riquadro d'errore dell'accesso usa `danger-on-soft`, invariato. **Serve l'OK del developer per l'ingresso di T (D-T20).**
+- **19:22, DV:** prova 0 con diff vuoto (golden giusto dopo il merge automatico); `services` 687 + 265 e `sector-normalization` 73. DV-6 committato: `fb59c7bec`, 8 file. DV è FROZEN e aspetta lo slot; prima delle prove 1–7, un nuovo merge di base (B, ed eventualmente T).
+- **19:25, L, checkpoint del cursore dell'opacità:**
+  - nello slot: `live` 10/10, `all` 15 E2E + 548 unit, `e2e` a 4 15/15, `check-orphans`;
+  - verificato: 14 path, runner con 3 righe solo aggiunte, backlog solo nella sezione L;
+  - **commit `7af0922c0`**; merge di base pulito **`47e33997b`** (con `7c39f0666`);
+  - L valida nello slot la revisione unita: `api sync`, `front-designer-lab all`, gate, `npm run check`, build di release. **Poi entra nel target**, con l'annuncio alla 1.3.
+- **Coda dello slot:** L (revisione unita) → T (E2E breve dopo `AuthPageFrame`) → DV (merge di base, poi prove 1–7). G-13 dopo T + A6b (e DV?).
+- **19:38, L nel target:** `dev_release2` = **`c96a62268`**, merge `--no-ff` di `f37f805fc` sopra `7c39f0666`.
+  - Prima del merge: checkout pulito, nessun `MERGE_HEAD` né `index.lock`; simulazione `merge-tree` pulita.
+  - Dopo: genitori `7c39f0666` e `f37f805fc`, albero uguale alla simulazione, checkout ancora pulito.
+  - **Validazione di L sul fuso `47e33997b`:** `front-designer-lab all` (15 E2E + 548 unit), gate 168, `npm run check` 0/0, release con marcatore, catalogo e indice a 0.
+  - `theme-roles --check` sul target: pulito, 79 file sotto il record; la stretta della baseline spetta a T al suo ingresso.
+  - 1.3 avvisata prima del merge e dopo, con lo SHA. L è fermo fino a L-16, dopo T.
+- **19:36:** slot a T per l'E2E breve, dopo `AuthPageFrame`. Se T non è pronto, passa a DV.
+- **19:45, registri:** decisioni D-T22…D-T26 nel piano generale e in `analisi.md` §1 (D-T19 superata da D-T23); tabella delle corsie rifatta in testa a questo registro e nel piano; registro copiato nel repo.

@@ -119,6 +119,7 @@ const STRINGS = {
     'editor.snap': {it: 'Aggancia a una variabile', en: 'Snap to a variable'},
     'editor.snapNone': {it: '(nessuna)', en: '(none)'},
     'editor.alpha': {it: 'Anche le varianti trasparenti (alfa conservato)', en: 'Translucent variants too (alpha kept)'},
+    'editor.opacity': {it: 'Opacità: su una variabile o un mix con transparent cambia la percentuale, la base resta', en: 'Opacity: on a variable or a mix with transparent it changes the percentage and keeps the base'},
     'editor.granularity': {it: 'Ambito nel codice', en: 'Reach in the code'},
     'editor.allOccurrences': {it: 'Tutte le occorrenze di questo valore', en: 'Every occurrence of this value'},
     'editor.oneOccurrence': {it: 'Solo questa occorrenza', en: 'This occurrence only'},

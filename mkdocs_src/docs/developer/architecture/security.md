@@ -318,7 +318,8 @@ A check changes nothing, never raises and never puts a secret value in its resul
 | `platform.session_cookie` | `SESSION_COOKIE_SECURE=never` | `warning` |
 | `platform.log_level` | `LOG_LEVEL`, after the `LIBREFOLIO_LOG_LEVEL` override, is `DEBUG` or `TRACE` | `info` |
 
-At startup, the lifespan of `backend/app/main.py` runs `log_configuration_audit()` in a thread
+At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
+`backend/app/services/platform/app_lifespan.py`) runs `log_configuration_audit()` in a thread
 (`asyncio.to_thread`), right after the `Starting LibreFolio` line:
 
 1. `configured_jwt_secret()`: an unreadable `JWT_SECRET_FILE` raises `SecretFileError`. In practice
@@ -695,10 +696,10 @@ answer, `true` or `false`:
 - `Access-Control-Allow-Origin: *`, once: no other route of the backend sets this header;
 - `Cache-Control: no-store`.
 
-The global `CORSMiddleware` of `backend/app/main.py` (`allow_credentials=True`, no allowed origin) leaves
-that header in place on a simple `GET` and only adds `Access-Control-Allow-Credentials: true`, which the
-browser ignores for a request without credentials. Every other route answers a request from another origin
-without `Access-Control-Allow-Origin`.
+The global `CORSMiddleware` (the `cors` entry of `MIDDLEWARE_STACK`, `backend/app/services/platform/middleware.py`:
+`allow_credentials=True`, no allowed origin) leaves that header in place on a simple `GET` and only adds
+`Access-Control-Allow-Credentials: true`, which the browser ignores for a request without credentials. Every other
+route answers a request from another origin without `Access-Control-Allow-Origin`.
 
 !!! warning "The check must be a CORS simple request"
 

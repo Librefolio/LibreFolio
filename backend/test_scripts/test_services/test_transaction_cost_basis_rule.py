@@ -1,0 +1,789 @@
+"""
+N2 — which rows need a cost basis, and when a batch holds them to it (workstream W, release 1.3).
+
+The rule. A TRANSFER's receiving leg (quantity > 0) and an ADJUSTMENT adding quantity need a cost basis: a
+``cost_basis_override``, or ``cost_basis_mode`` ``auto``/``auto-detail`` (the batch then writes the average itself).
+``TX_TYPE_METADATA`` says so — TRANSFER ``cost_basis_pair = ["forbidden", "required_qty_pos"]``, ADJUSTMENT
+``cost_basis_mode = "required_qty_pos"`` — and every batch path enforces it in ``validate_cost_basis``
+(``batch_costs.py``): the issue ``costBasisRequired`` on ``cost_basis_override``, and the batch does not commit.
+
+What N2 changes:
+
+1. The rule is READ from ``TX_TYPE_METADATA`` — pair types ``cost_basis_pair[1 if quantity > 0 else 0]``, the
+   others ``cost_basis_mode``; ``required_qty_pos`` with quantity > 0 means required — instead of being written by
+   hand in ``TransactionValidationMixin._requires_cost_basis`` (``validation.py``).
+2. An update is held to the rule only when it changes, compared with the stored row, the type, the quantity (its
+   sign included), the cost (``cost_basis_override``, its currency, ``cost_basis_mode``) or the asset event link
+   (``asset_event_id``: an ADJUSTMENT linked to a SPLIT takes its cost from the split's ratio, so the link stands
+   for its cost). The comparison is on values, not on which keys the payload carries, so the app's diff payloads
+   and a client sending the whole row are judged alike. Editing the notes (``description``, "Transaction notes") or
+   the tags of a row an older version stored without a cost stays possible, and the row stays as it was: no repair.
+
+Reds — fail before N2, pass after it:
+
+- ``TestEditsOfARowStoredWithoutCost``: a notes-only or tags-only edit of a TRANSFER receiving leg (sent with its
+  giving leg) or of an ADJUSTMENT +qty stored without a cost commits; today ``_check_update_cost_basis`` refuses any
+  update of such a row. Plus a date-only edit, DERIVED from the same decision (a date is none of the changes the
+  rule reads): it is what tells a cure that lists the changes that matter from one that lists the edits that are
+  harmless.
+- ``TestTheRuleReadsTheMetadata``: with an entry of ``TX_TYPE_METADATA`` patched in place, ``_requires_cost_basis``
+  and a create follow the patch; today the hand-written rule ignores it.
+- ``TestSplitLinkedAdjustment``: an update that only unlinks an ADJUSTMENT +qty linked to a SPLIT (stored without a
+  cost by design), or re-links it to a PRICE_ADJUSTMENT, is refused. Not red before N2, which refused every update
+  of that row, but red with the first N2 cure, whose ``cost_fields`` left the link out.
+
+Guards — green before N2, and the cure must keep them green:
+
+- ``TestCreatesNeedACost``: a create without a cost is refused, on its own row (index, field, params);
+- ``TestUpdatesThatChangeWhatTheRuleReads``: a quantity change (a sign flip −5 → +5, or more units on a stored row
+  without a cost), a type change into ADJUSTMENT, or ``cost_basis_mode: "manual"`` with no cost, is refused;
+- ``TestEditsOfARowWithCost``: a notes-only or tags-only edit of a row that has its cost commits, cost untouched;
+- ``TestAutoCost``: an Auto create with an average available commits, with that average written;
+- ``TestPromoteOfARowStoredWithoutCost``: a promote that makes a stored ADJUSTMENT +5 without a cost the receiving
+  leg of a TRANSFER stays refused when the same batch also edits that row's notes — today the update check refuses
+  it, and ``_check_promoted_saved_cost_basis`` skips updated rows on the strength of that check;
+- ``TestSplitLinkedAdjustment``: a notes-only or tags-only edit of the split-linked ADJUSTMENT commits, link and
+  missing cost untouched; the same link changes made WITH a cost commit;
+- ``TestTheRuleAgreesWithTheMetadata``: for every type and quantity sign, ``_requires_cost_basis`` says what the
+  metadata says.
+
+Not covered, on purpose:
+
+- an update that REMOVES a cost: ``TXUpdateItem`` cannot express it. ``cost_basis_override: null`` is read as
+  "unchanged" (``_apply_update_values``, ``batch_edits.py``), exactly like an absent key; ``cost_basis_mode`` is not
+  stored. So no update can take a cost away, and no test can watch one being refused;
+- Auto with no average (P-1, ``auto_cost.py``) and SPLIT-linked ADJUSTMENTs: outside N2, unchanged.
+
+Ownership. Every test builds its own asset and brokers under a unique marker, in a session rolled back at the end:
+``execute_batch`` never commits (its caller does), so nothing reaches the lane's database. The two scaffolds that
+change module state — an entry of ``TX_TYPE_METADATA``, ``SWAP_GROUPS`` — go through ``monkeypatch``, which puts
+them back.
+
+Run: ``./dev.py test services transaction-cost-basis-rule`` (the action ``services_transaction_cost_basis_rule``).
+"""
+
+import sys
+import uuid
+from dataclasses import dataclass
+from datetime import date, timedelta
+from decimal import Decimal
+
+import pytest
+import pytest_asyncio
+
+from backend.app.config import PROJECT_ROOT
+
+sys.path.insert(0, str(PROJECT_ROOT))
+
+# Before any app module that reads DATABASE_URL: this lane's test database.
+from backend.test_scripts.test_db_config import setup_test_database
+
+setup_test_database()
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+import backend.app.schemas.transactions.transactions as transaction_schemas
+from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, Broker, Transaction, TransactionType
+from backend.app.db.session import get_async_engine
+from backend.app.schemas.common import Currency
+from backend.app.schemas.transactions.batch import TXBatchResponse, TXValidationCode, TXValidationIssue
+from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA
+from backend.app.services.transactions.transaction_service import TransactionService
+from backend.app.utils.datetime_utils import utcnow
+
+EUR = "EUR"
+BUY_DAY = date(2025, 1, 6)
+MOVE_DAY = date(2025, 2, 3)
+BUY_QUANTITY = Decimal("10")
+# The BUY pays 1 000 EUR for 10 units: 100 EUR is the source broker's average, the cost an Auto row receives.
+UNIT_COST = Decimal("100")
+TRANSFER_QUANTITY = Decimal("4")
+ADJUSTMENT_QUANTITY = Decimal("5")
+# A cost basis a row was saved with, distinct from the average so that "unchanged" cannot be confused with "recomputed".
+STORED_COST = Currency(code=EUR, amount=Decimal("42"))
+STORED_TAGS = "n2-stored"
+EDITED_TAGS = ["n2-edited"]
+COST_BASIS_REQUIRED = TXValidationCode.COST_BASIS_REQUIRED.value
+
+SHAPES = ("transfer_in", "adjustment_in")
+SHAPE_LABELS = {
+    "transfer_in": "TRANSFER receiving leg (quantity > 0, edited together with its giving leg)",
+    "adjustment_in": "ADJUSTMENT adding quantity",
+}
+EDITS = ("notes", "tags")
+
+SPLIT_RATIO = Decimal("2")
+# A 2:1 split doubles the 10 units the BUY gave the source broker: the ADJUSTMENT that realizes it adds 10 more.
+SPLIT_QUANTITY = BUY_QUANTITY * (SPLIT_RATIO - 1)
+LINK_CHANGES = ("unlink", "relink-price-adjustment")
+
+
+# ============================================================================
+# FIXTURES
+# ============================================================================
+
+
+@pytest.fixture(scope="module")
+def engine():
+    """The app's async engine, on this lane's test database."""
+    return get_async_engine()
+
+
+@pytest_asyncio.fixture
+async def session(engine):
+    """One session per test, rolled back at the end: ``execute_batch`` never commits, its caller does."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        yield session
+        await session.rollback()
+
+
+@dataclass
+class World:
+    """One test's own data: an asset, the broker that holds it, the broker that receives it."""
+
+    session: AsyncSession
+    marker: str
+    asset: Asset
+    source: Broker
+    dest: Broker
+
+
+@pytest_asyncio.fixture
+async def world(session) -> World:
+    """An asset and two brokers of this test alone, and the BUY that gives ``source`` 10 units at 100 EUR.
+
+    The BUY is what lets ``source`` give units away without going short — the balance replay of every batch re-reads
+    those days — and what an Auto cost averages. Both brokers allow a cash overdraft (the BUY spends cash no DEPOSIT
+    brought) and refuse shorting, as a broker does by default.
+    """
+    marker = f"N2-cost-rule {uuid.uuid4().hex}"
+    now = utcnow()
+    asset = Asset(display_name=f"{marker} asset", asset_type=AssetType.STOCK, currency=EUR, created_at=now, updated_at=now)
+    source = Broker(name=f"{marker} source", description="N2 cost basis rule: the broker units leave", allow_cash_overdraft=True, allow_asset_shorting=False, created_at=now, updated_at=now)
+    dest = Broker(name=f"{marker} dest", description="N2 cost basis rule: the broker units reach", allow_cash_overdraft=True, allow_asset_shorting=False, created_at=now, updated_at=now)
+    session.add_all([asset, source, dest])
+    await session.flush()
+    session.add(
+        Transaction(
+            broker_id=source.id,
+            asset_id=asset.id,
+            type=TransactionType.BUY,
+            date=BUY_DAY,
+            quantity=BUY_QUANTITY,
+            amount=-(BUY_QUANTITY * UNIT_COST),
+            currency=EUR,
+            description=f"{marker} buy",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await session.flush()
+    return World(session=session, marker=marker, asset=asset, source=source, dest=dest)
+
+
+# ============================================================================
+# HELPERS
+# ============================================================================
+
+
+def _stored_row(
+    world: World,
+    *,
+    broker: Broker,
+    tx_type: TransactionType,
+    quantity: Decimal,
+    cost: Currency | None = None,
+    amount: Decimal = Decimal("0"),
+    currency: str | None = None,
+) -> Transaction:
+    """A row as the database holds it, written without the batch and its checks.
+
+    Without ``cost`` it is the shape ``test_db/legacy_cost_rows.py`` writes for data an older version left behind:
+    amount 0, no currency, no cost basis, no asset event. Every row of a test carries the same description and tags,
+    as both legs of a pair must.
+    """
+    now = utcnow()
+    return Transaction(
+        broker_id=broker.id,
+        asset_id=world.asset.id,
+        type=tx_type,
+        date=MOVE_DAY,
+        quantity=quantity,
+        amount=amount,
+        currency=currency,
+        cost_basis_override=cost.amount if cost is not None else None,
+        cost_basis_currency=cost.code if cost is not None else None,
+        asset_event_id=None,
+        description=f"{world.marker} stored",
+        tags=STORED_TAGS,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+@dataclass
+class Stored:
+    """A stored row that needs a cost basis, and the rows an edit of it sends.
+
+    The receiving leg of a TRANSFER goes with its giving leg — a pair keeps one description and one set of tags, so
+    the app edits both — and an ADJUSTMENT goes alone. ``subject_index`` is the subject's index in the edit.
+    """
+
+    subject: Transaction
+    rows: list[Transaction]
+
+    @property
+    def subject_index(self) -> int:
+        return next(index for index, row in enumerate(self.rows) if row is self.subject)
+
+
+async def _store(world: World, shape: str, *, cost: Currency | None) -> Stored:
+    """Store the row ``shape`` names — ``transfer_in`` (a linked pair source → dest) or ``adjustment_in`` (on dest)."""
+    session = world.session
+    if shape == "transfer_in":
+        giving = _stored_row(world, broker=world.source, tx_type=TransactionType.TRANSFER, quantity=-TRANSFER_QUANTITY)
+        receiving = _stored_row(world, broker=world.dest, tx_type=TransactionType.TRANSFER, quantity=TRANSFER_QUANTITY, cost=cost)
+        session.add_all([giving, receiving])
+        await session.flush()
+        # A pair points both ways, and the ids exist only after the first flush (as legacy_cost_rows.py does it).
+        giving.related_transaction_id = receiving.id
+        receiving.related_transaction_id = giving.id
+        await session.flush()
+        return Stored(subject=receiving, rows=[giving, receiving])
+    if shape == "adjustment_in":
+        added = _stored_row(world, broker=world.dest, tx_type=TransactionType.ADJUSTMENT, quantity=ADJUSTMENT_QUANTITY, cost=cost)
+        session.add(added)
+        await session.flush()
+        return Stored(subject=added, rows=[added])
+    raise ValueError(f"unknown shape {shape!r}")
+
+
+def _created_pair(world: World, *, cost_basis_mode: str | None = None) -> list[dict]:
+    """A TRANSFER pair to create, source → dest, the receiving leg at index 1 and without a cost basis."""
+    link_uuid = str(uuid.uuid4())
+    giving = {"broker_id": world.source.id, "asset_id": world.asset.id, "type": "TRANSFER", "date": MOVE_DAY.isoformat(), "quantity": str(-TRANSFER_QUANTITY), "link_uuid": link_uuid}
+    receiving = {"broker_id": world.dest.id, "asset_id": world.asset.id, "type": "TRANSFER", "date": MOVE_DAY.isoformat(), "quantity": str(TRANSFER_QUANTITY), "link_uuid": link_uuid}
+    if cost_basis_mode is not None:
+        receiving["cost_basis_mode"] = cost_basis_mode
+    return [giving, receiving]
+
+
+def _created_adjustment(world: World, *, broker: Broker, quantity: Decimal, cost_basis_mode: str | None = None) -> dict:
+    """An ADJUSTMENT to create, without a cost basis."""
+    created = {"broker_id": broker.id, "asset_id": world.asset.id, "type": "ADJUSTMENT", "date": MOVE_DAY.isoformat(), "quantity": str(quantity)}
+    if cost_basis_mode is not None:
+        created["cost_basis_mode"] = cost_basis_mode
+    return created
+
+
+async def _event(world: World, event_type: AssetEventType, value: Decimal) -> AssetEvent:
+    """A manual event of the test's asset on ``MOVE_DAY`` (``provider_assignment_id`` None, as a user creates one)."""
+    now = utcnow()
+    event = AssetEvent(asset_id=world.asset.id, date=MOVE_DAY, type=event_type, value=value, currency=EUR, notes=f"{world.marker} {event_type.value}", created_at=now, updated_at=now)
+    world.session.add(event)
+    await world.session.flush()
+    return event
+
+
+async def _split_linked_adjustment(world: World) -> tuple[Transaction, AssetEvent]:
+    """The ADJUSTMENT +10 that realizes a 2:1 SPLIT on ``source``, saved as the app saves it: created in Auto, linked.
+
+    The Auto cost of a split-linked ADJUSTMENT is no cost at all (``_compute_wac_for_auto_items``, ``auto_cost.py``):
+    its units come from the split's ratio, which the average rescales when it is computed, so the row is stored
+    without a cost basis by design. That is checked here, so no test edits a row it only assumes.
+    """
+    split = await _event(world, AssetEventType.SPLIT, SPLIT_RATIO)
+    created = {**_created_adjustment(world, broker=world.source, quantity=SPLIT_QUANTITY, cost_basis_mode="auto"), "asset_event_id": split.id}
+
+    response = await _commit(world, creates=[created])
+
+    assert response.committed is True and response.issues == [], f"scaffold: the Auto create of an ADJUSTMENT +{SPLIT_QUANTITY} linked to SPLIT id={split.id} was refused: {_render(response.issues)}"
+    row_id = next(result.ids[0] for result in response.results if result.operation == "create" and result.index == 0)
+    row = await world.session.get(Transaction, row_id)
+    assert row is not None, f"scaffold: the created row id={row_id} is not in the session"
+    stored = (row.type, row.quantity, row.asset_event_id, row.cost_basis_override, row.cost_basis_currency)
+    assert stored == (TransactionType.ADJUSTMENT, SPLIT_QUANTITY, split.id, None, None), f"scaffold: the split-linked ADJUSTMENT must be stored linked and without a cost basis; (type, quantity, asset_event_id, cost, currency) = {stored}"
+    return row, split
+
+
+async def _link_change(world: World, link_change: str) -> tuple[int, int | None]:
+    """The ``asset_event_id`` an update sends for ``link_change``, and the link the row has once it is applied.
+
+    ``unlink`` sends 0: the unlink sentinel of ``TXUpdateItem`` (None leaves the link as it is; ``_apply_update_event``
+    in ``batch_edits.py``), and what the app's ``buildUpdateDiff`` sends when a link is removed.
+    ``relink-price-adjustment`` sends a PRICE_ADJUSTMENT event of the same asset, the other event type an ADJUSTMENT
+    may realize (``event_suggestions.py``).
+    """
+    if link_change == "unlink":
+        return 0, None
+    if link_change == "relink-price-adjustment":
+        price_adjustment = await _event(world, AssetEventType.PRICE_ADJUSTMENT, Decimal("1.5"))
+        return price_adjustment.id, price_adjustment.id
+    raise ValueError(f"unknown link change {link_change!r}")
+
+
+async def _commit(world: World, *, creates: list[dict] | None = None, updates: list[dict] | None = None, promotes: list[dict] | None = None) -> TXBatchResponse:
+    """The batch as ``POST /transactions/commit`` runs it: commit requested, no user (so no access check)."""
+    return await TransactionService(world.session).execute_batch(
+        creates_raw=creates or [],
+        updates_raw=updates or [],
+        deletes=[],
+        promotes_raw=promotes or [],
+        commit=True,
+    )
+
+
+def _render(issues: list[TXValidationIssue]) -> str:
+    """The issues, for a failure message."""
+    return "; ".join(f"{issue.operation}[{issue.index}] ref_id={issue.ref_id} code={issue.code} field={issue.field} params={issue.params} error={issue.error!r}" for issue in issues) or "none"
+
+
+def _cost_issues(response: TXBatchResponse) -> list[tuple]:
+    """Every ``costBasisRequired`` issue, as ``(operation, index, ref_id, field, params)``."""
+    return [(issue.operation, issue.index, issue.ref_id, issue.field, issue.params) for issue in response.issues if issue.code == COST_BASIS_REQUIRED]
+
+
+def _update_results(response: TXBatchResponse) -> list[tuple]:
+    """The update results, as ``(index, ids, status)`` in index order."""
+    return sorted((result.index, tuple(result.ids), result.status) for result in response.results if result.operation == "update")
+
+
+def _edit(rows: list[Transaction], edit: str, marker: str) -> list[dict]:
+    """A notes-only or tags-only edit of every row given: what the app's diff sends when nothing else changed."""
+    if edit == "notes":
+        return [{"id": row.id, "description": f"{marker} notes edited"} for row in rows]
+    if edit == "tags":
+        return [{"id": row.id, "tags": EDITED_TAGS} for row in rows]
+    raise ValueError(f"unknown edit {edit!r}")
+
+
+def _assert_edit_landed(rows: list[Transaction], edit: str, marker: str) -> None:
+    for row in rows:
+        if edit == "notes":
+            assert row.description == f"{marker} notes edited", f"row {row.id} ({row.type.value} {row.quantity}): notes {row.description!r} after a committed notes edit"
+        else:
+            assert row.tags == ",".join(EDITED_TAGS), f"row {row.id} ({row.type.value} {row.quantity}): tags {row.tags!r} after a committed tags edit"
+
+
+def _requires_cost_basis(tx_type: TransactionType, quantity: Decimal) -> bool:
+    """``_requires_cost_basis`` on an unsaved row of this type and quantity, called as the batch calls it.
+
+    Through an instance without a session: the rule reads the row alone, and the call works whether it stays a
+    staticmethod or not.
+    """
+    row = Transaction(broker_id=1, asset_id=1, type=tx_type, date=MOVE_DAY, quantity=quantity, amount=Decimal("0"))
+    return bool(TransactionService(session=None)._requires_cost_basis(row))
+
+
+def _metadata_says_required(tx_type: TransactionType, quantity: Decimal) -> bool:
+    """What ``TX_TYPE_METADATA`` says, read the way N2 reads it: a pair type by its side, any other by its mode."""
+    entry = TX_TYPE_METADATA[tx_type]
+    mode = entry.cost_basis_mode if entry.cost_basis_pair is None else entry.cost_basis_pair[1 if quantity > 0 else 0]
+    return mode == "required_qty_pos" and quantity > 0
+
+
+def _patch_metadata(monkeypatch: pytest.MonkeyPatch, tx_type: TransactionType, attribute: str, value) -> None:
+    """Patch one field of a ``TX_TYPE_METADATA`` entry IN PLACE, for this test only.
+
+    The entry object itself is changed — not a copy put back in the dict — so whatever reads the metadata when it
+    runs, through the dict or through the entry, sees the patch. A rule that copies the metadata at import time does
+    not, and that is the defect these tests exist to refuse. ``monkeypatch`` restores the field at teardown.
+    """
+    monkeypatch.setattr(TX_TYPE_METADATA[tx_type], attribute, value)
+    assert getattr(TX_TYPE_METADATA[tx_type], attribute) == value, f"scaffold: TX_TYPE_METADATA[{tx_type.value}].{attribute} does not show the patch"
+
+
+# ============================================================================
+# RED — EDITS OF A ROW STORED WITHOUT A COST
+# ============================================================================
+
+
+class TestEditsOfARowStoredWithoutCost:
+    """RED before N2: the edits that change no type, quantity or cost of a row stored without a cost commit.
+
+    Today ``_check_update_cost_basis`` checks the final state of EVERY update, so any edit of such a row is refused
+    with ``costBasisRequired`` on the row — the subject's index, ``ref_id`` the row — and the batch does not commit.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shape", SHAPES)
+    @pytest.mark.parametrize("edit", EDITS)
+    async def test_notes_or_tags_edit_of_row_stored_without_cost_commits(self, world, edit, shape):
+        """RED before N2: a notes-only or tags-only edit of a row stored without a cost commits, and repairs nothing."""
+        stored = await _store(world, shape, cost=None)
+
+        response = await _commit(world, updates=_edit(stored.rows, edit, world.marker))
+
+        assert response.committed is True and response.issues == [], f"N2: a {edit}-only edit of a {SHAPE_LABELS[shape]} stored without a cost basis changes no type, quantity or cost, so it must commit and leave the row as it is. It was refused: {_render(response.issues)}"
+        assert _update_results(response) == [(index, (row.id,), "success") for index, row in enumerate(stored.rows)], f"Committed, but not every row was updated: {response.results}"
+        _assert_edit_landed(stored.rows, edit, world.marker)
+        assert (stored.subject.cost_basis_override, stored.subject.cost_basis_currency) == (None, None), f"N2 repairs nothing: id={stored.subject.id} must keep no cost basis after a {edit} edit, it now has {stored.subject.cost_basis_override} {stored.subject.cost_basis_currency}"
+
+    @pytest.mark.asyncio
+    async def test_date_only_edit_of_adjustment_stored_without_cost_commits(self, world):
+        """RED before N2, DERIVED: a date is none of the three changes the rule reads, so a date-only edit commits.
+
+        Not in the coordinator's list: it follows from the decision «the rule applies to updates that change type,
+        quantity or cost». It is the test that tells a cure listing what matters (type, quantity, cost, event link)
+        from one listing what is harmless (notes, tags): the second refuses this edit. Drop it if a date was meant to
+        count.
+        """
+        stored = await _store(world, "adjustment_in", cost=None)
+        new_day = MOVE_DAY + timedelta(days=1)
+
+        response = await _commit(world, updates=[{"id": stored.subject.id, "date": new_day.isoformat()}])
+
+        assert response.committed is True and response.issues == [], f"N2: a date-only edit of an ADJUSTMENT +{ADJUSTMENT_QUANTITY} stored without a cost basis changes no type, quantity or cost, so it must commit. It was refused: {_render(response.issues)}"
+        assert stored.subject.date == new_day, f"Committed, but the row's date is {stored.subject.date}, not {new_day}"
+        assert (stored.subject.cost_basis_override, stored.subject.cost_basis_currency) == (None, None), f"N2 repairs nothing: the row now has {stored.subject.cost_basis_override} {stored.subject.cost_basis_currency}"
+
+
+# ============================================================================
+# RED — THE RULE READS THE METADATA
+# ============================================================================
+
+
+class TestTheRuleReadsTheMetadata:
+    """RED before N2: the rule follows ``TX_TYPE_METADATA``, so a patched entry changes the answer.
+
+    Today ``_requires_cost_basis`` is written by hand (TRANSFER and ADJUSTMENT with quantity > 0) and ignores the
+    patch: it answers what it always answered.
+    """
+
+    @pytest.mark.parametrize(
+        ("tx_type", "attribute", "patched", "quantity", "required"),
+        [
+            (TransactionType.ADJUSTMENT, "cost_basis_mode", "optional", ADJUSTMENT_QUANTITY, False),
+            (TransactionType.TRANSFER, "cost_basis_pair", ["forbidden", "optional"], TRANSFER_QUANTITY, False),
+            (TransactionType.BUY, "cost_basis_mode", "required_qty_pos", Decimal("3"), True),
+        ],
+        ids=["adjustment-made-optional", "transfer-receiver-made-optional", "buy-made-required"],
+    )
+    def test_requires_cost_basis_follows_patched_metadata(self, monkeypatch, tx_type, attribute, patched, quantity, required):
+        """RED before N2: ``_requires_cost_basis`` answers what the patched metadata says, for any type."""
+        _patch_metadata(monkeypatch, tx_type, attribute, patched)
+
+        answer = _requires_cost_basis(tx_type, quantity)
+
+        assert answer is required, f"N2: with TX_TYPE_METADATA[{tx_type.value}].{attribute} patched to {patched!r}, _requires_cost_basis({tx_type.value}, quantity={quantity}) must follow the metadata and answer {required}; it answered {answer}, so the rule is still written by hand"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shape", SHAPES)
+    async def test_create_without_cost_commits_when_metadata_makes_it_optional(self, world, monkeypatch, shape):
+        """RED before N2: a create without a cost commits once the metadata makes its cost basis optional.
+
+        The ADJUSTMENT goes through ``_check_result_create_cost_basis``, the TRANSFER pair through
+        ``_check_linked_create_cost_basis``: both ask ``_requires_cost_basis``.
+        """
+        if shape == "transfer_in":
+            _patch_metadata(monkeypatch, TransactionType.TRANSFER, "cost_basis_pair", ["forbidden", "optional"])
+            creates, subject_index = _created_pair(world), 1
+        else:
+            _patch_metadata(monkeypatch, TransactionType.ADJUSTMENT, "cost_basis_mode", "optional")
+            creates, subject_index = [_created_adjustment(world, broker=world.dest, quantity=ADJUSTMENT_QUANTITY)], 0
+
+        response = await _commit(world, creates=creates)
+
+        assert response.committed is True and response.issues == [], f"N2: with TX_TYPE_METADATA patched to make its cost basis optional, a {SHAPE_LABELS[shape]} created without a cost must commit; it was refused, so the hand-written rule still decides: {_render(response.issues)}"
+        created_id = next(result.ids[0] for result in response.results if result.operation == "create" and result.index == subject_index)
+        created = await world.session.get(Transaction, created_id)
+        assert created is not None and created.cost_basis_override is None, f"The {SHAPE_LABELS[shape]} id={created_id} was committed with a cost basis nobody gave: {created}"
+
+
+# ============================================================================
+# GUARDS — CREATES NEED A COST
+# ============================================================================
+
+
+class TestCreatesNeedACost:
+    """Guard, green before and after N2: a create without a cost is refused on its own row."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shape", SHAPES)
+    async def test_create_without_cost_is_refused_on_its_row(self, world, shape):
+        """Guard: ``costBasisRequired`` on the create's index, field ``cost_basis_override``, ``params.type``; not committed.
+
+        The row that needs the cost sits at index 1 behind a row that needs none — the pair's giving leg, or an
+        ADJUSTMENT taking one unit away — so the index is the row's own, not a default.
+        """
+        if shape == "transfer_in":
+            creates, expected_type = _created_pair(world), "TRANSFER"
+        else:
+            creates = [
+                _created_adjustment(world, broker=world.source, quantity=Decimal("-1")),
+                _created_adjustment(world, broker=world.dest, quantity=ADJUSTMENT_QUANTITY),
+            ]
+            expected_type = "ADJUSTMENT"
+
+        response = await _commit(world, creates=creates)
+
+        assert response.committed is False, f"A {SHAPE_LABELS[shape]} created without a cost basis was committed: {response.results}"
+        assert _cost_issues(response) == [("create", 1, None, "cost_basis_override", {"type": expected_type})], f"Expected one costBasisRequired on create 1 alone: {_render(response.issues)}"
+        assert [issue for issue in response.issues if issue.code != COST_BASIS_REQUIRED] == [], f"Only the cost basis may refuse this batch: {_render(response.issues)}"
+
+
+# ============================================================================
+# GUARDS — UPDATES THAT CHANGE WHAT THE RULE READS
+# ============================================================================
+
+
+class TestUpdatesThatChangeWhatTheRuleReads:
+    """Guard, green before and after N2: an update that changes the quantity or the type, or names a cost basis mode,
+    without a cost, is refused.
+
+    Today every update is checked; after N2 these still are, because each changes the quantity or the type of the
+    stored row, or names the mode.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("case", ["adjustment-out-flipped-in", "adjustment-in-more-units", "transfer-in-more-units"])
+    async def test_quantity_change_without_cost_is_refused(self, world, case):
+        """Guard: −5 → +5 on an ADJUSTMENT (the sign), or more units on a row stored without a cost, is refused."""
+        session = world.session
+        if case == "adjustment-out-flipped-in":
+            # An ADJUSTMENT taking 5 units away needs no cost; flipped to +5, it adds units and does.
+            subject = _stored_row(world, broker=world.source, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("-5"))
+            session.add(subject)
+            await session.flush()
+            updates, subject_index = [{"id": subject.id, "quantity": "5"}], 0
+        elif case == "adjustment-in-more-units":
+            stored = await _store(world, "adjustment_in", cost=None)
+            subject = stored.subject
+            updates, subject_index = [{"id": subject.id, "quantity": "7"}], 0
+        else:
+            stored = await _store(world, "transfer_in", cost=None)
+            giving, subject = stored.rows
+            updates, subject_index = [{"id": giving.id, "quantity": "-6"}, {"id": subject.id, "quantity": "6"}], stored.subject_index
+
+        response = await _commit(world, updates=updates)
+
+        assert response.committed is False, f"{case}: an update changing the quantity of a row without a cost basis was committed: {response.results}"
+        assert _cost_issues(response) == [("update", subject_index, subject.id, "cost_basis_override", {"type": subject.type.value})], f"{case}: expected one costBasisRequired on update {subject_index} (id={subject.id}): {_render(response.issues)}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shape", SHAPES)
+    async def test_manual_mode_without_cost_is_refused(self, world, shape):
+        """Guard: ``cost_basis_mode: "manual"`` with no ``cost_basis_override``, on a row stored without a cost, is refused.
+
+        The update names a cost basis mode — one of the cost fields of the decision — and gives no cost: the rule
+        applies and the row has none. The app never sends it (``buildUpdateDiff`` sends a mode only for Auto); a
+        client can. The mode is not stored, so it cannot be compared with the row: naming it is the change.
+        """
+        stored = await _store(world, shape, cost=None)
+
+        response = await _commit(world, updates=[{"id": stored.subject.id, "cost_basis_mode": "manual"}])
+
+        assert response.committed is False, f"cost_basis_mode=manual without a cost basis on the {SHAPE_LABELS[shape]} id={stored.subject.id} was committed: {response.results}"
+        assert _cost_issues(response) == [("update", 0, stored.subject.id, "cost_basis_override", {"type": stored.subject.type.value})], f"Expected one costBasisRequired on update 0 (id={stored.subject.id}): {_render(response.issues)}"
+
+    @pytest.mark.asyncio
+    async def test_type_change_into_adjustment_without_cost_is_refused(self, world, monkeypatch):
+        """Guard: a BUY +3 turned into an ADJUSTMENT +3 without a cost is refused — the type alone changed the answer.
+
+        Scaffold. No real swap group reaches a type that needs a cost: TRANSFER and ADJUSTMENT are singletons, and
+        BUY↔SELL, DEPOSIT↔WITHDRAWAL, DIVIDEND↔INTEREST, TAX↔FEE are all ``forbidden`` in the metadata. So the test
+        lets BUY swap with ADJUSTMENT, through ``SWAP_GROUPS`` (read by ``get_swap_group`` when it runs). The
+        quantity stays +3 and no cost is sent: only the type can make the rule apply. The cash goes to 0, as an
+        ADJUSTMENT has none; cash is not one of the changes the rule reads.
+        """
+        session = world.session
+        other_groups = [group for group in transaction_schemas.SWAP_GROUPS if TransactionType.BUY not in group]
+        monkeypatch.setattr(transaction_schemas, "SWAP_GROUPS", [frozenset({TransactionType.BUY, TransactionType.SELL, TransactionType.ADJUSTMENT}), *other_groups])
+        bought = _stored_row(world, broker=world.dest, tx_type=TransactionType.BUY, quantity=Decimal("3"), amount=Decimal("-300"), currency=EUR)
+        session.add(bought)
+        await session.flush()
+
+        response = await _commit(world, updates=[{"id": bought.id, "type": "ADJUSTMENT", "cash": {"code": EUR, "amount": "0"}}])
+
+        uncoded = [issue for issue in response.issues if issue.code is None]
+        assert uncoded == [], f"scaffold: the BUY → ADJUSTMENT swap did not get through (SWAP_GROUPS patch not read?), so this proves nothing about the rule: {_render(uncoded)}"
+        assert response.committed is False, f"A BUY +3 turned into an ADJUSTMENT +3 without a cost basis was committed: {response.results}"
+        assert _cost_issues(response) == [("update", 0, bought.id, "cost_basis_override", {"type": "ADJUSTMENT"})], f"Expected one costBasisRequired on update 0 (id={bought.id}): {_render(response.issues)}"
+
+
+# ============================================================================
+# GUARDS — EDITS OF A ROW WITH ITS COST
+# ============================================================================
+
+
+class TestEditsOfARowWithCost:
+    """Guard, green before and after N2: a notes-only or tags-only edit of a row that has its cost commits."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shape", SHAPES)
+    @pytest.mark.parametrize("edit", EDITS)
+    async def test_notes_or_tags_edit_of_row_with_cost_commits(self, world, edit, shape):
+        """Guard: committed, the edit landed, the cost basis is the one the row was saved with."""
+        stored = await _store(world, shape, cost=STORED_COST)
+
+        response = await _commit(world, updates=_edit(stored.rows, edit, world.marker))
+
+        assert response.committed is True and response.issues == [], f"A {edit}-only edit of a {SHAPE_LABELS[shape]} with its cost basis was refused: {_render(response.issues)}"
+        assert _update_results(response) == [(index, (row.id,), "success") for index, row in enumerate(stored.rows)], f"Committed, but not every row was updated: {response.results}"
+        _assert_edit_landed(stored.rows, edit, world.marker)
+        assert (stored.subject.cost_basis_override, stored.subject.cost_basis_currency) == (STORED_COST.amount, STORED_COST.code), f"A {edit} edit changed the cost basis of id={stored.subject.id}: {stored.subject.cost_basis_override} {stored.subject.cost_basis_currency}"
+
+
+# ============================================================================
+# GUARDS — AUTO COST
+# ============================================================================
+
+
+class TestAutoCost:
+    """Guard, green before and after N2: an Auto create with an average available commits, with that average."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("shape", SHAPES)
+    async def test_auto_create_with_an_average_commits(self, world, shape):
+        """Guard: committed, and the row carries the average of the BUY, 100 EUR.
+
+        The TRANSFER's receiving leg averages its partner's broker (``source``) before the transfer; the ADJUSTMENT,
+        created on ``source``, averages its own broker without itself.
+        """
+        if shape == "transfer_in":
+            creates, subject_index = _created_pair(world, cost_basis_mode="auto"), 1
+        else:
+            creates, subject_index = [_created_adjustment(world, broker=world.source, quantity=ADJUSTMENT_QUANTITY, cost_basis_mode="auto")], 0
+
+        response = await _commit(world, creates=creates)
+
+        assert response.committed is True and response.issues == [], f"An Auto {SHAPE_LABELS[shape]} with an average available was refused: {_render(response.issues)}"
+        created_id = next(result.ids[0] for result in response.results if result.operation == "create" and result.index == subject_index)
+        created = await world.session.get(Transaction, created_id)
+        assert created is not None, f"Committed, but the created row id={created_id} is not in the session"
+        assert (created.cost_basis_override, created.cost_basis_currency) == (UNIT_COST, EUR), f"Auto cost of id={created_id}: expected {UNIT_COST} {EUR}, the average of the BUY; got {created.cost_basis_override} {created.cost_basis_currency} (wac_results={response.wac_results})"
+
+
+# ============================================================================
+# GUARDS — PROMOTE OF A ROW STORED WITHOUT A COST
+# ============================================================================
+
+
+class TestPromoteOfARowStoredWithoutCost:
+    """Guard, green before and after N2: a promote cannot carry a row without a cost into a pair behind a notes edit."""
+
+    @pytest.mark.asyncio
+    async def test_promote_of_legacy_row_edited_in_same_batch_is_refused(self, world):
+        """Guard: promote a stored ADJUSTMENT −5 (source) with a stored ADJUSTMENT +5 without a cost (dest), and edit
+        the +5's notes in the same batch → refused, ``costBasisRequired`` on the +5.
+
+        The promote makes the +5 the receiving leg of a TRANSFER. ``_check_promoted_saved_cost_basis`` skips the
+        rows the batch also updates, because the update check covers them; today it does, since it checks every
+        update. A cure that skips notes-only updates must still see this one — its type changes, ADJUSTMENT to
+        TRANSFER — or stop the promote check from skipping it. Either issue is accepted: on the update or on the
+        promote, both at index 0, with ``ref_id`` the +5. Otherwise a TRANSFER without a cost is committed, the
+        defect closed by d7c148564 (devWiki problems/promote-skipped-cost-basis-check).
+        """
+        session = world.session
+        giving = _stored_row(world, broker=world.source, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("-5"))
+        receiving = _stored_row(world, broker=world.dest, tx_type=TransactionType.ADJUSTMENT, quantity=Decimal("5"))
+        session.add_all([giving, receiving])
+        await session.flush()
+
+        response = await _commit(
+            world,
+            updates=[{"id": receiving.id, "description": f"{world.marker} notes edited"}],
+            promotes=[{"id_a": giving.id, "id_b": receiving.id}],
+        )
+
+        assert response.committed is False, f"A promote made the ADJUSTMENT +5 id={receiving.id}, stored without a cost basis, the receiving leg of a TRANSFER, and the batch was committed: {response.results}"
+        on_receiver = [issue for issue in _cost_issues(response) if issue[2] == receiving.id]
+        assert on_receiver in (
+            [("update", 0, receiving.id, "cost_basis_override", {"type": "TRANSFER"})],
+            [("promote", 0, receiving.id, "cost_basis_override", {"type": "TRANSFER"})],
+        ), f"Expected one costBasisRequired on the receiving leg id={receiving.id}, on the update or on the promote: {_render(response.issues)}"
+
+
+# ============================================================================
+# RED AND GUARDS — THE SPLIT-LINKED ADJUSTMENT
+# ============================================================================
+
+
+class TestSplitLinkedAdjustment:
+    """The ADJUSTMENT +qty that realizes a SPLIT: stored without a cost basis by design, its link standing for its cost.
+
+    While the row points at a SPLIT event, the average reads its units as a rescale of the pool
+    (``CostMovementKind.SPLIT``, ``financial_math/average_cost.py``). Unlinked, or linked to an event that is not a
+    SPLIT, the same row is an acquisition of unknown cost. So an update that changes the link changes what the cost
+    basis depends on, and is held to the rule like one that changes the type, the quantity or the cost.
+
+    Before N2, every update of the row without Auto was refused. The first N2 cure let all of them through, link
+    changes included, because its ``cost_fields`` compared type, quantity and cost only. The updates here carry no
+    ``cost_basis_mode``, as an API client sends them: an Auto update is not checked here at all (its cost is
+    recomputed), and the form opens a saved row without a manual cost in Auto.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("link_change", LINK_CHANGES)
+    async def test_link_change_without_cost_is_refused(self, world, link_change):
+        """RED with the first N2 cure, green once ``cost_fields`` carries ``asset_event_id``: ``costBasisRequired`` on
+        update 0, ``ref_id`` the row, ``params.type`` ADJUSTMENT; not committed."""
+        row, split = await _split_linked_adjustment(world)
+        new_link, _linked_after = await _link_change(world, link_change)
+
+        response = await _commit(world, updates=[{"id": row.id, "asset_event_id": new_link}])
+
+        if response.committed:
+            pytest.fail(
+                f"{link_change}: the ADJUSTMENT +{SPLIT_QUANTITY} id={row.id}, linked to SPLIT id={split.id} and stored without a cost basis, was committed with asset_event_id={row.asset_event_id} and cost_basis_override={row.cost_basis_override}: "
+                "an acquisition of unknown cost. Its link stands for its cost, so changing it must be held to the rule (cost_fields must carry asset_event_id)"
+            )
+        assert [issue for issue in response.issues if issue.code != COST_BASIS_REQUIRED] == [], f"{link_change}: only the cost basis may refuse this update: {_render(response.issues)}"
+        assert _cost_issues(response) == [("update", 0, row.id, "cost_basis_override", {"type": "ADJUSTMENT"})], f"{link_change}: expected one costBasisRequired on update 0 (id={row.id}): {_render(response.issues)}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("edit", EDITS)
+    async def test_notes_or_tags_edit_commits_and_keeps_the_link(self, world, edit):
+        """Guard, green with the first N2 cure and after the fix: nothing the cost basis depends on changes, so a
+        notes-only or tags-only edit commits, and the link and the missing cost stay as they are. (Before N2 it was
+        refused, like any update of the row.)"""
+        row, split = await _split_linked_adjustment(world)
+
+        response = await _commit(world, updates=_edit([row], edit, world.marker))
+
+        assert response.committed is True and response.issues == [], f"A {edit}-only edit of the split-linked ADJUSTMENT +{SPLIT_QUANTITY} id={row.id} changes nothing its cost basis depends on, and was refused: {_render(response.issues)}"
+        assert _update_results(response) == [(0, (row.id,), "success")], f"Committed, but the row was not updated: {response.results}"
+        _assert_edit_landed([row], edit, world.marker)
+        assert (row.asset_event_id, row.cost_basis_override, row.cost_basis_currency) == (split.id, None, None), f"A {edit} edit changed what stands for the cost of id={row.id}: asset_event_id={row.asset_event_id}, cost {row.cost_basis_override} {row.cost_basis_currency}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("link_change", LINK_CHANGES)
+    async def test_link_change_with_a_cost_commits(self, world, link_change):
+        """Guard, green with the first N2 cure and after the fix: the same link change, with the row's cost in the same
+        update, commits with that cost: the way out the refusal points to.
+
+        The refusal is about the missing cost, never about the link. The keys are the ones the app's diff sends for
+        it in manual mode: the link, and the cost (``buildUpdateDiff`` sends no mode for manual).
+        """
+        row, _split = await _split_linked_adjustment(world)
+        new_link, linked_after = await _link_change(world, link_change)
+
+        response = await _commit(world, updates=[{"id": row.id, "asset_event_id": new_link, "cost_basis_override": {"code": STORED_COST.code, "amount": str(STORED_COST.amount)}}])
+
+        assert response.committed is True and response.issues == [], f"{link_change} with a cost basis on id={row.id} was refused: {_render(response.issues)}"
+        assert _update_results(response) == [(0, (row.id,), "success")], f"Committed, but the row was not updated: {response.results}"
+        assert (row.asset_event_id, row.cost_basis_override, row.cost_basis_currency) == (linked_after, STORED_COST.amount, STORED_COST.code), f"{link_change} with a cost: id={row.id} now has asset_event_id={row.asset_event_id}, cost {row.cost_basis_override} {row.cost_basis_currency}"
+
+
+# ============================================================================
+# GUARD — THE RULE AGREES WITH THE METADATA
+# ============================================================================
+
+
+class TestTheRuleAgreesWithTheMetadata:
+    """Guard, green before and after N2: for every type and quantity sign, the rule says what the metadata says.
+
+    Green today because the hand-written rule happens to match the metadata; after N2 because it reads it. A cure
+    that reads it wrongly — the wrong side of a pair, the mode of a pair type — turns one of these red.
+    """
+
+    @pytest.mark.parametrize("quantity", [Decimal("-3"), Decimal("0"), Decimal("3")], ids=["qty-negative", "qty-zero", "qty-positive"])
+    @pytest.mark.parametrize("tx_type", list(TransactionType), ids=lambda tx_type: tx_type.value)
+    def test_requires_cost_basis_agrees_with_metadata(self, tx_type, quantity):
+        """Guard: ``_requires_cost_basis(type, quantity)`` == the metadata's ``required_qty_pos`` with quantity > 0."""
+        expected = _metadata_says_required(tx_type, quantity)
+
+        answer = _requires_cost_basis(tx_type, quantity)
+
+        entry = TX_TYPE_METADATA[tx_type]
+        assert answer is expected, f"_requires_cost_basis({tx_type.value}, quantity={quantity}) answered {answer}; TX_TYPE_METADATA says {expected} (cost_basis_mode={entry.cost_basis_mode!r}, cost_basis_pair={entry.cost_basis_pair!r})"
