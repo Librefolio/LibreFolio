@@ -25,7 +25,7 @@ from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.schemas.provider import FAVolumeKind
 from backend.app.services.asset_source_providers.borsa_italiana import plugin as bi
 from backend.app.services.asset_source_providers.borsa_italiana.plugin import BorsaItalianaProvider
-from backend.app.services.assets.core import AssetSourceError
+from backend.app.services.assets.base import AssetSourceError
 
 # Captured at import, before the autouse fixture stubs the module name, so the
 # lazy-init contract of the real _get_session stays testable.

@@ -52,6 +52,11 @@
     "invalidCredentials": "Invalid username or password",
     "invalidInput": "Invalid input",
     "loginFailed": "Login failed",
-    "accountDisabled": "This account is disabled: ask an administrator to enable it again."
+    "accountDisabled": "This account is disabled: ask an administrator to enable it again.",
+    "loginServerUnreachable": "The server is not responding: check your connection and try again in a moment.",
+    "loginServerError": "The server ran into an error: try again in a moment, and if it happens again, tell an administrator.",
+    "tooManyAttempts": "Too many login attempts: wait a few minutes and try again.",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   }
 }
