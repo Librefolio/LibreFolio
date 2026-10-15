@@ -56,11 +56,14 @@ Estos comandos escriben directamente en la base de datos, por lo que también fu
 # Crea una cuenta de administrador
 pipenv run ./dev.py user create <username> <email> <password>
 
+# Crea una cuenta normal
+pipenv run ./dev.py user create <username> <email> <password> --role user
+
 # Lista todos los usuarios: ID, nombre de usuario, correo electrónico, activo, administrador
 pipenv run ./dev.py user list
 ```
 
-- 👑 Las cuentas creadas aquí son siempre **administradores**. Para una cuenta normal, deja que la persona se registre con **Regístrate aquí** en la página de inicio de sesión (cuando el registro esté abierto en la [Configuración global](settings.md)), o usa `demote` sobre la cuenta nueva.
+- 👑 `user create` crea un **administrador**, salvo que añadas `--role user`, que crea una cuenta normal. Una persona también puede tener una cuenta normal registrándose con **Regístrate aquí** en la página de inicio de sesión, cuando el registro esté abierto en la [Configuración global](settings.md).
 - 🔒 La contraseña debe tener al menos 8 caracteres, con una letra mayúscula, una letra minúscula, un dígito y un símbolo.
 
 ### 🔑 Restablecer una contraseña o bloquear una cuenta {: #reset-a-password-or-lock-an-account }

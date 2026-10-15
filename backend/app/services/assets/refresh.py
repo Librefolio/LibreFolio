@@ -32,10 +32,11 @@ from backend.app.schemas import (
     SyncStatus,
 )
 from backend.app.services.assets import core
-from backend.app.services.assets.core import (
+from backend.app.services.assets.base import (
     AssetHistoryStartDate,
     AssetSourceProvider,
 )
+from backend.app.services.assets.event_store import EventStoreOperations
 from backend.app.services.assets.price_store import PriceStoreOperations
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
@@ -553,7 +554,7 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
                 try:
                     assignment_id = prep.assignment_id
                     events_changed_count = (
-                        await PriceStoreOperations._upsert_asset_events(
+                        await EventStoreOperations._upsert_asset_events(
                             persist_session,
                             asset_id,
                             events_list,

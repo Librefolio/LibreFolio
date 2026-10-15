@@ -63,7 +63,7 @@ erDiagram
 
 ### 👤 `USER`
 
-The core identity table. Each user has a unique `username` and `email`. The `hashed_password` is stored using `bcrypt`. The first user created automatically becomes the superuser (`is_superuser = true`).
+The core identity table. Each user has a unique `username` and `email`. The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`); from the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers)).
 
 ### ⚙️ `USER_SETTINGS`
 
