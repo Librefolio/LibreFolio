@@ -219,7 +219,7 @@ permesso e la ricerca diventano quindi due livelli, con un punto unico ciascuno 
   esclusi. È la leva per «poi capiremo se legalmente è un azzardo»: se la risposta è no, l'operatore elenca solo le fonti
   ufficiali e l'uso a mano si chiude senza codice nuovo; gli asset già legati seguono D-X5 (sotto).
 - **Ricerca**, `is_searchable(code)`, solo per gli asset: vi partecipa un fornitore permesso che dichiara la ricerca, tranne
-  gli scraper nel profilo gestito. **Lettura mia, segnalata al coordinatore**: nel profilo gestito gli scraper restano fuori
+  gli scraper nel profilo gestito. **Lettura mia, confermata dal coordinatore il 15/10**: nel profilo gestito gli scraper restano fuori
   dalla ricerca anche con un elenco del pannello, perché l'elenco decide il permesso e mai la ricerca. Un pannello che elenca
   le fonti incluse in un piano (un diritto, non una scelta legale) non deve rimettere in ricerca gli scraper come effetto
   collaterale; e così si può tenere uno scraper solo a mano e chiuderne un altro. L'altra lettura (un elenco del pannello vale
@@ -1908,4 +1908,69 @@ router di prima del CP2b e del CP3.
 > **⚠️ Fuori pista**: la frase del coordinatore «senza un elenco del pannello, le fonti scraper non compaiono nella ricerca» si
 > può leggere come «un elenco del pannello le rimette in ricerca». Ho scritto l'altra lettura (l'elenco vale per il permesso,
 > mai per la ricerca): è più vicina alle parole del developer («si al togliere il search») e regge un elenco di diritti per
-> piano. Segnalata al coordinatore, che può chiedere l'altra (una riga nel registro).
+> piano. Segnalata al coordinatore, che può chiedere l'altra (una riga nel registro). **Confermata** dal coordinatore alle
+> 12:53, con le altre tre scelte (permesso di default in tutti e due i profili, `notice` dal backend, URL incollato come
+> ricerca, SSRF come precondizione); ad H non era stato girato niente, quindi niente da riallineare. Piano committato in
+> `d9b79bb8c`. «Il via te lo do con l'avviso di fine finestra» (coordinatore); il CP6 dipende ancora dal profilo gestito di
+> H (§9).
+
+### Nono aggiornamento di base: R, L, G, la 1.2.1 — merge di `13705dd05` in `d9b79bb8c` ✅ (2026-10-15) — merge `2fb577588`
+
+Finestra della galleria chiusa alle 13:01; da ora al massimo 2 suite pesanti sulla macchina, assegnate dal coordinatore (a
+me il secondo slot), il resto con `nice -n 10`. Merge aperto dal coordinatore nel mio worktree: `MERGE_HEAD` `13705dd05`,
+base comune `380a3e768`, un solo conflitto, `frontend/src/themeRoles.baseline.tsv`. La mia modifica non committata del
+piano 03 resta fuori dallo stage (la committa lui a parte).
+
+1. ✅ Il baseline, prima di scrivere: prova a secco di `--resolve` (`resolveConflict()` e `compareWithBaseline(scanTree(),
+   …)`, come consiglia la pagina della devWiki `problems/colour-ratchet-resolve-drops-an-accept.md` che il merge porta).
+   Previsione: una violazione, `R2 m2 lib/stores/app/themeStore.ts: colour literals beyond its record: #166534`. Le tre
+   versioni della riga: base e mio lato `0 #156534 #1a4031` (il mio ramo non ha mai toccato il file), `dev_release2`
+   `0 #166534 #1a4031` (l'`~accept` D3 di R del 14/10, decisione del developer). `mergeBaselines` tiene solo i valori comuni
+   ai due lati e non guarda la base: è R-8. Le 81 «drops» sono solo margine da stringere (`--update`, di T); le 22 «moves»
+   (`lib/components/{auth,settings,support}` → `lib/features/…`) il cancello le riconosce da solo.
+2. ✅ `--resolve` scritto (identico alla prova a secco, nessun marcatore); `--check` rosso come previsto; **non in stage**.
+   Prova a secco della cura della pagina, cioè ripetere l'`--accept` di R con la stessa ragione: la riga torna
+   `0 #166534 #1a4031`, identica a `dev_release2` e a quello che misura l'albero; un solo `~accept`; 0 violazioni. Il baseline
+   finale differirebbe da `dev_release2` solo per il mio split di FE5b-1 (8 righe) e dal mio lato solo per la riga accettata
+   di R e la sua dichiarazione: è il risultato di un vero merge a tre vie. `--accept` allarga un record, quindi vuole l'OK
+   del coordinatore colori: chiesto al coordinatore alle 13:07; il baseline non si tocca fino alla risposta.
+3. ✅ Gli altri file cambiati dai due lati: `scripts/test_runner/_frontend_utility.py` (i 6 test di R e i miei 2, il file si
+   analizza) e il backlog (nessun doppione nuovo: G-8, J-5, T-B4, W-B13, W-B9 compaiono due volte già nella base e nei due
+   lati).
+4. ✅ Prove leggere sull'albero fuso, prima della pausa delle dipendenze (13:10, `cryptography` nell'ambiente condiviso:
+   niente Python fino all'avviso): `dev.py api sync` verde (solo file ignorati; hash dei tool-contracts `202402e5…`
+   invariato); `npm run check` 0/0. Durante la pausa, solo Node: vitest dei sei file degli asset 246/246; vitest delle unità
+   del Designer Lab (i 15 file di `front-designer-lab unit`) 394/394.
+5. ✅ OK del coordinatore colori alle 13:12 («è la stessa D3 già autorizzata dal developer, con la stessa ragione»); la
+   correzione di `--resolve` è passata nel backlog di T come TC-7. `--accept lib/stores/app/themeStore.ts` con la ragione D3:
+   file identico alla prova a secco, un solo `~accept`; `--check` pulito (81 «drops», margine per l'`--update` di T); `git
+   add` del solo baseline; nessuna voce in conflitto rimasta. Il baseline in stage: contro `dev_release2` +8 −1 (il mio split
+   di FE5b-1), contro il mio HEAD +2 −1 (la riga di R e il suo `~accept`). «staged» al coordinatore, che fa il commit del
+   merge.
+   Commit del merge del coordinatore: `2fb577588` (genitori `d9b79bb8c` e `13705dd05`), verificato: il baseline committato è
+   byte per byte quello controllato, nessun merge aperto, il piano 03 fuori.
+6. ✅ Sulla revisione combinata `2fb577588`, dopo la fine della pausa (13:36: `cryptography 50.0.2` nell'ambiente condiviso,
+   `dc9a5d232` su `dev_release2`; regole sul carico più strette: per H, X, A ed E le prove leggere e medie sono libere, una alla
+   volta per corsia con `nice -n 10`; a me lo slot pesante 2, per `front-asset`). Medie, tutte verdi:
+   - `dev.py front build --debug` (13:37–13:41);
+   - `dev.py mkdocs build`, stretto, 94 s;
+   - `front-utility core-unit`: 142 file, 4 510 test (comprese le guardie dei colori sul baseline fuso);
+   - `check-orphans`: 121 spec E2E, 393 file unitari, 281 file del backend, tutti raggiungibili da un `all`.
+   Poi la prova pesante e le spec singole, tutte con `--workers 2` e `nice -n 10`, una alla volta:
+   - `front-asset all` (13:45–14:00): 21 file unitari (1 001 test) e 144 E2E verdi, comprese tutte le spec del lotto
+     (asset-modal, asset-classification, asset-mobile-layout, asset-detail, asset-data-editor); **2 rossi in
+     `asset-browse`**: AB-001 (`locator.fill` sulla ricerca della lista, 60 s scaduti) e AB-002 (dopo la ricerca la griglia
+     tiene 22 schede invece delle 3 del test);
+   - triage con la skill `test-triage`, verdetto **ambiente**: alle 13:54 il carico della macchina era 110–139 su 10 core
+     (coordinatore). Nella run pesante i test verdi di `asset-browse` duravano 34–46 s e i due rossi 78–97 s; in AB-002
+     Playwright ha interrogato il conteggio solo 4 volte in 15 s (runner affamato, non solo la pagina). Escluse le altre
+     ipotesi: prodotto (`searchText` lo scrivono solo l'input con 300 ms di debounce e «pulisci filtri», nessun ripristino
+     asincrono), test (attende presenza, valore e conteggio delle sue schede, con un token unico), stato condiviso (token
+     diversi, contesti separati). Conferma: la spec da sola, alle 14:02 con carico 39–49, **8/8 in 33,5 s** (6–9 s per test);
+   - `front-transaction` `tx-import-resolution` 15/15, `tx-import-asset-inspector` 5/5, `tx-ca-contract` 12/12;
+   - `front-utility` `utilities` 16/16, `onboarding-guides` 24/24;
+   - `front-designer-lab` `live` 7/7, `picker` 3/3, `neutral` 1/1.
+   Porta 6183 libera alle 14:15. `all-backend` non eseguita (non richiesta; dal mio lato, dopo l'ultima, solo le docstring
+   di X-R1/R2).
+   > **⚠️ Fuori pista**: un rosso da carico. Proposta al coordinatore, fuori dal mio perimetro: il runner potrebbe stampare
+   > il carico a inizio e fine run, così una run satura si vede nel log e non solo dai tempi.
