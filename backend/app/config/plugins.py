@@ -2,13 +2,19 @@
 
 Owner: workstream X (plugins and asset search); the reads moved here from ``services/assets/web_link_finder.py`` in
 workstream H's lot after checkpoint CP3. Read from the process environment only, never from ``.env``: ``./dev.py`` and
-Docker Compose put them there. Each function keeps the exact semantics the call site had before it moved here; the API
-key also accepts ``LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE``, as every secret does.
+Docker Compose put them there. Each function keeps the exact semantics the call site had before it moved here, except
+the timeout and the maximum of the link finder, which take their default for a value below 1 or not finite (X-R6); the
+API key also accepts ``LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE``, as every secret does.
+
+The plugin settings (``services/plugin_settings/``) read their variables through ``plugin_setting_env``: the names are
+derived from the fields the plugins declare, ``LIBREFOLIO_PLUGIN_<FAMILY>_<CODE>_<FIELD>``, or are a field's declared
+alias.
 """
 
+import math
 import os
 
-from backend.app.config import env_secret
+from backend.app.config import env_secret, env_secret_origin
 
 
 def web_link_finder_enabled() -> bool:
@@ -44,18 +50,38 @@ def web_link_finder_ddgs_backend() -> str:
 
 
 def web_link_finder_timeout(default: float) -> float:
-    """``LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT``, seconds, as ``float()`` reads it; ``default`` when unset, blank or not a number."""
+    """``LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT``, seconds, as ``float()`` reads it; ``default`` when unset, blank, not a
+    number, not finite or below 1 (a timeout under a second used to mean no timeout at all)."""
     raw = os.environ.get("LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT", "").strip()
     try:
-        return float(raw) if raw else default
+        value = float(raw) if raw else default
     except ValueError:
         return default
+    return value if math.isfinite(value) and value >= 1 else default
 
 
 def web_link_finder_max_results(default: int) -> int:
-    """``LIBREFOLIO_WEB_LINK_FINDER_MAX``, as ``int()`` reads it; ``default`` when unset, blank or not an integer."""
+    """``LIBREFOLIO_WEB_LINK_FINDER_MAX``, as ``int()`` reads it; ``default`` when unset, blank, not an integer or below
+    1 (``0`` used to return one URL all the same)."""
     raw = os.environ.get("LIBREFOLIO_WEB_LINK_FINDER_MAX", "").strip()
     try:
-        return int(raw) if raw else default
+        value = int(raw) if raw else default
     except ValueError:
         return default
+    return value if value >= 1 else default
+
+
+def plugin_setting_env(name: str) -> str | None:
+    """The value the variable ``name`` gives a plugin setting, as ``env_secret`` reads it: ``NAME``, or the content of
+    ``NAME_FILE``; ``None`` when neither is set or both are blank.
+
+    Every field accepts the ``_FILE`` form, secret or not. A ``NAME_FILE`` that cannot give its value raises
+    ``SecretFileError``, which names the variable and the path, never the content.
+    """
+    return env_secret(name)
+
+
+def plugin_setting_env_origin(name: str) -> str | None:
+    """Where ``plugin_setting_env(name)`` would take its value from: ``NAME``, ``NAME_FILE (<path>)``, or ``None`` when
+    neither is set. Reads no file: enough to know that a variable locks its field."""
+    return env_secret_origin(name)

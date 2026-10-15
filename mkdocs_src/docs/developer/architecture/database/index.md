@@ -39,7 +39,7 @@ graph TD
 
 The database is organized into four logical subsystems. Each has its own detailed page:
 
-- 👤 **[Users & Access](users_access.md)** — Authentication, user settings, onboarding progress, and broker sharing (RBAC)
+- 👤 **[Users & Access](users_access.md)** — Authentication, user settings, onboarding progress, broker sharing (RBAC), and the plugin settings
 - 🏦 **[Brokers & Transactions](brokers_transactions.md)** — The core financial data structure
 - 📊 **[Assets & Pricing](assets_pricing.md)** — Global financial instruments and provider assignments
 - 💱 **[FX Rates & Routes](fx_rates.md)** — Currency exchange rates and routing configuration
@@ -69,6 +69,7 @@ The chain is linear:
 | `004_release_1_2_0_schema.py` | `004_release_1_2_0_schema` | `5b1333fa6b07` | `assets.is_benchmark` and the two onboarding progress tables |
 | `005_accounts_invites.py` | `005_accounts_invites` | `004_release_1_2_0_schema` | `users.session_version`, `users.email_verified_at` and `users.last_seen_version`, and the [`account_tokens`](users_access.md#account-token) table of single-use account links |
 | `006_registration_mode.py` | `006_registration_mode` | `005_accounts_invites` | Data only: the global setting `enable_registration` becomes [`registration_mode`](users_access.md#global-setting) — `open` when the old value read as true (`true`, `1`, `yes`, `on`, any case), `disabled` otherwise; the downgrade writes `true` for `open`, `false` for `invite` and `disabled` |
+| `007_plugin_settings.py` | `007_plugin_settings` | `006_registration_mode` | The [`plugin_system_settings`](users_access.md#plugin-system-setting) and [`plugin_user_settings`](users_access.md#plugin-user-setting) tables of the plugin settings, created empty; the downgrade drops them, with their values and secrets |
 
 !!! warning "The revision id is the contract, not the filename"
 
