@@ -25,7 +25,8 @@
     import {_ as t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {LineDataPoint} from './LineChart.svelte';
-    import {COLORS, hexToRgba, updateArrowRotations} from './lineChartHelpers';
+    import {COLORS, updateArrowRotations} from './lineChartHelpers';
+    import {toRgba} from '$lib/theme/colorAlpha';
     import {signalLabelToHtml} from '$lib/charts/signalLabel';
     import {assignOverlaySignalAxes, buildPriceYAxis, buildSecondaryYAxes, buildOverlaySignalSeries, buildDataZoom, computeRightMargin, getChartColors} from './chartCoreHelpers';
     import {scheduleFirstRenderStabilityFix, tooltipPositionSide} from './echartsTooltipHelpers';
@@ -39,6 +40,9 @@
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {themed} from '$lib/theme/themePair';
+    import {CHART_NEUTRALS, CHART_TOOLTIP_COLORS} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Props
@@ -142,12 +146,8 @@
 
     onMount(() => {
         // Watch for dark-mode class changes on <html>
-        const observer = new MutationObserver(() => {
+        const observer = onThemeClassChange(() => {
             if (chartContainer && data.length > 0) renderChart();
-        });
-        observer.observe(document.documentElement, {
-            attributes: true,
-            attributeFilter: ['class'],
         });
         return () => {
             observer.disconnect();
@@ -188,18 +188,18 @@
 
     function buildTooltipHeader(date: string, bucketInfo?: {bucketStart: string; bucketEnd: string}): string {
         if (resolution === 'daily') {
-            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${(isDarkProp ?? document.documentElement.classList.contains('dark')) ? '#e2e8f0' : '#1f2937'}">${formatDay(date)}</div>`;
+            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${themed(CHART_TOOLTIP_COLORS.candlestickBox.heading, isDarkProp ?? isDarkTheme())}">${formatDay(date)}</div>`;
         }
 
-        const dark = isDarkProp ?? document.documentElement.classList.contains('dark');
+        const dark = isDarkProp ?? isDarkTheme();
         // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
         const info = bucketSpanUpTo(date, bucketInfo ?? {bucketStart: date, bucketEnd: date});
 
         if (resolution === 'weekly') {
-            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</div>`;
+            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${themed(CHART_TOOLTIP_COLORS.candlestickBox.heading, dark)}">${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</div>`;
         }
 
-        return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${dark ? '#e2e8f0' : '#1f2937'}">${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</div><div style="font-size:11px;margin-bottom:3px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</div>`;
+        return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${themed(CHART_TOOLTIP_COLORS.candlestickBox.heading, dark)}">${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</div><div style="font-size:11px;margin-bottom:3px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</div>`;
     }
 
     // =========================================================================
@@ -314,12 +314,12 @@
             });
         }
 
-        const dark = isDarkProp ?? document.documentElement.classList.contains('dark');
+        const dark = isDarkProp ?? isDarkTheme();
 
         const greenColor = dark ? COLORS.greenDark : COLORS.greenLight;
         const redColor = dark ? COLORS.redDark : COLORS.redLight;
-        const axisColor = dark ? '#475569' : '#d1d5db';
-        const labelColor = dark ? '#94a3b8' : '#6b7280';
+        const axisColor = themed(CHART_NEUTRALS.priceAxis.line, dark);
+        const labelColor = themed(CHART_NEUTRALS.priceAxis.label, dark);
 
         const dates = data.map((d) => d.date);
         lastRenderedDates = dates;
@@ -341,7 +341,7 @@
         const volumeData: any[] = data.map((d) => ({
             value: d.volume ?? 0,
             itemStyle: {
-                color: isBullishBar(d) ? hexToRgba(greenColor, 0.55) : hexToRgba(redColor, 0.55),
+                color: isBullishBar(d) ? toRgba(greenColor, 0.55) : toRgba(redColor, 0.55),
             },
         }));
 
@@ -490,7 +490,7 @@
                 if (p.seriesName === 'Volume') {
                     const vol: number = p.value ?? 0;
                     const volFmt = formatVolume(vol);
-                    html += `<div style="color:${dark ? '#94a3b8' : '#6b7280'};font-size:11px;margin-top:3px">Vol: ${volFmt}</div>`;
+                    html += `<div style="color:${themed(CHART_TOOLTIP_COLORS.candlestickBox.muted, dark)};font-size:11px;margin-top:3px">Vol: ${volFmt}</div>`;
                     continue;
                 }
 
@@ -502,7 +502,7 @@
                     // works regardless of whether the index got prepended.
                     const {open, close, low, high, bullish} = parseCandleTooltipValue(p.value as number[]);
                     const clr = bullish ? greenColor : redColor;
-                    const dimClr = dark ? '#94a3b8' : '#6b7280';
+                    const dimClr = themed(CHART_TOOLTIP_COLORS.candlestickBox.muted, dark);
                     html += `<div style="display:grid;grid-template-columns:auto 1fr;gap:0 6px;font-size:11px;margin-top:2px">`;
                     html += `<span style="color:${dimClr}">O</span><span style="color:${clr}">${fmtPrice(open)}</span>`;
                     html += `<span style="color:${dimClr}">H</span><span style="color:${clr}">${fmtPrice(high)}</span>`;
@@ -514,16 +514,16 @@
 
                 // Overlay signal line
                 if (p.value !== null && p.value !== undefined) {
-                    html += `<div style="font-size:11px"><span style="color:${p.color ?? '#888'}">${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${typeof p.value === 'number' ? formatFixed(p.value, 4) : p.value}</span></div>`;
+                    html += `<div style="font-size:11px"><span style="color:${p.color ?? CHART_TOOLTIP_COLORS.candlestickBox.seriesFallback}">${escapeHtml(truncateName(String(p.seriesName ?? '')))}: ${typeof p.value === 'number' ? formatFixed(p.value, 4) : p.value}</span></div>`;
                 }
             }
 
             const staleDays = staleLookup.get(date);
             if (staleDays !== undefined) {
-                html += `<div style="color:#f59e0b;font-size:11px;margin-top:3px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</div>`;
+                html += `<div style="color:${CHART_TOOLTIP_COLORS.staleWarning};font-size:11px;margin-top:3px">⚠ ${$t('chart.tooltip.stale', {values: {days: staleDays}})}</div>`;
                 const fxStaleDays = fxStaleLookup.get(date);
                 if (fxStaleDays !== undefined && fxStaleDays > 0) {
-                    html += `<div style="color:#f59e0b;font-size:11px">⚠ ${$t('chart.tooltip.fxStale', {values: {days: fxStaleDays}})}</div>`;
+                    html += `<div style="color:${CHART_TOOLTIP_COLORS.staleWarning};font-size:11px">⚠ ${$t('chart.tooltip.fxStale', {values: {days: fxStaleDays}})}</div>`;
                 }
             }
 
@@ -538,13 +538,13 @@
             yAxis: yAxes,
             tooltip: {
                 trigger: 'axis' as const,
-                axisPointer: {type: 'cross' as const, crossStyle: {color: dark ? '#475569' : '#9ca3af'}},
+                axisPointer: {type: 'cross' as const, crossStyle: {color: themed(CHART_TOOLTIP_COLORS.candlestickBox.crosshair, dark)}},
                 appendToBody: true,
                 confine: true,
                 position: tooltipPositionSide,
-                backgroundColor: dark ? '#1e293b' : '#ffffff',
-                borderColor: dark ? '#334155' : '#e5e7eb',
-                textStyle: {color: dark ? '#e2e8f0' : '#111827', fontSize: 12},
+                backgroundColor: themed(CHART_TOOLTIP_COLORS.box.background, dark),
+                borderColor: themed(CHART_TOOLTIP_COLORS.candlestickBox.border, dark),
+                textStyle: {color: themed(CHART_TOOLTIP_COLORS.candlestickBox.text, dark), fontSize: 12},
                 formatter: tooltipFormatter,
             },
             series,

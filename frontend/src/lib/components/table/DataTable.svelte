@@ -27,6 +27,7 @@
     import type {BulkAction, ColumnDef, ColumnWidthsState, FilterValue, FooterCellContent, FooterCells, PaginationState, RowAction, RowActions, SelectionState, SortState, VisibilityState} from './types';
     import {compareRowsByColumn, formatCellDate, getColumnMinMax, getCurrencyMinMaxByCode, getCurrencyOptions, getEnumOptionsWithCounts, getMultiEnumOptions, getMultiEnumOptionsWithCounts, matchesColumnFilter} from './dataTableLogic';
     import {clearTimer} from '$lib/utils/core/clearTimer';
+    import '$lib/theme/components/table.css';
 
     interface Props {
         data: T[];
@@ -1565,21 +1566,21 @@
     .table-wrapper {
         overflow-x: auto;
         overflow-y: visible;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-datatable-border);
         border-radius: 8px;
-        background: white;
+        background: var(--lf-cmp-datatable-surface-bg);
     }
 
     :global(.dark) .table-wrapper {
-        border-color: #334155;
-        background: #0f172a;
+        border-color: var(--lf-cmp-datatable-border-dark);
+        background: var(--lf-cmp-datatable-surface-bg-dark);
     }
 
     .datatable {
         width: 100%;
         border-collapse: collapse;
         table-layout: fixed;
-        background: white;
+        background: var(--lf-cmp-datatable-surface-bg);
     }
 
     .datatable.layout-auto {
@@ -1587,16 +1588,16 @@
     }
 
     :global(.dark) .datatable {
-        background: #0f172a;
+        background: var(--lf-cmp-datatable-surface-bg-dark);
     }
 
     /* Header */
     thead {
-        background: #f8fafc;
+        background: var(--lf-cmp-datatable-header-bg);
     }
 
     :global(.dark) thead {
-        background: #1e293b;
+        background: var(--lf-cmp-datatable-header-bg-dark);
     }
 
     th {
@@ -1604,8 +1605,8 @@
         text-align: left;
         font-size: 0.75rem;
         font-weight: 600;
-        color: #64748b;
-        border-bottom: 1px solid #e2e8f0;
+        color: var(--lf-cmp-datatable-header-text);
+        border-bottom: 1px solid var(--lf-cmp-datatable-border);
         white-space: nowrap;
         position: relative;
         text-transform: uppercase;
@@ -1613,8 +1614,8 @@
     }
 
     :global(.dark) th {
-        color: #94a3b8;
-        border-bottom-color: #334155;
+        color: var(--lf-cmp-datatable-header-text-dark);
+        border-bottom-color: var(--lf-cmp-datatable-border-dark);
     }
 
     thead.sticky-header th {
@@ -1626,21 +1627,21 @@
 
     thead.sticky-header .th-fixed {
         z-index: 25;
-        background: #f8fafc;
+        background: var(--lf-cmp-datatable-header-bg);
     }
 
     :global(.dark) thead.sticky-header .th-fixed {
-        background: #1e293b;
+        background: var(--lf-cmp-datatable-header-bg-dark);
     }
 
     .th-fixed {
         position: sticky;
         z-index: 10;
-        background: #f8fafc;
+        background: var(--lf-cmp-datatable-header-bg);
     }
 
     :global(.dark) .th-fixed {
-        background: #1e293b;
+        background: var(--lf-cmp-datatable-header-bg-dark);
     }
 
     .th-pinned-right {
@@ -1670,11 +1671,11 @@
     }
 
     .th-data.sortable:hover {
-        background: #f1f5f9;
+        background: var(--lf-cmp-datatable-sortable-hover-bg);
     }
 
     :global(.dark) .th-data.sortable:hover {
-        background: #334155;
+        background: var(--lf-cmp-datatable-sortable-hover-bg-dark);
     }
 
     .header-content {
@@ -1701,19 +1702,19 @@
 
     .sort-icon {
         display: flex;
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-faint-text);
     }
 
     .header-tooltip-icon {
         display: flex;
         align-items: center;
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-icon-text);
         cursor: pointer;
         flex-shrink: 0;
     }
 
     :global(.dark) .header-tooltip-icon {
-        color: #64748b;
+        color: var(--lf-cmp-datatable-icon-text-dark);
     }
 
     .header-tooltip-link {
@@ -1730,12 +1731,12 @@
 
     .header-tooltip-link:hover,
     .header-tooltip-gesture:hover {
-        color: #1a4031;
+        color: var(--lf-cmp-datatable-accent-text);
     }
 
     :global(.dark) .header-tooltip-link:hover,
     :global(.dark) .header-tooltip-gesture:hover {
-        color: #4ade80;
+        color: var(--lf-cmp-datatable-accent-text-dark);
     }
 
     .filter-btn {
@@ -1747,29 +1748,29 @@
         border: none;
         border-radius: 4px;
         background: transparent;
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-faint-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .filter-btn:hover {
-        background: #e2e8f0;
-        color: #475569;
+        background: var(--lf-cmp-datatable-filter-btn-hover-bg);
+        color: var(--lf-cmp-datatable-filter-btn-hover-text);
     }
 
     .filter-btn.active {
-        background: #1a4031;
-        color: white;
+        background: var(--lf-cmp-datatable-accent-bg);
+        color: var(--lf-cmp-datatable-on-accent-text);
     }
 
     :global(.dark) .filter-btn:hover {
-        background: #475569;
-        color: #f1f5f9;
+        background: var(--lf-cmp-datatable-filter-btn-hover-bg-dark);
+        color: var(--lf-cmp-datatable-filter-btn-hover-text-dark);
     }
 
     :global(.dark) .filter-btn.active {
-        background: #4ade80;
-        color: #0f172a;
+        background: var(--lf-cmp-datatable-accent-bg-dark);
+        color: var(--lf-cmp-datatable-on-accent-text-dark);
     }
 
     .resize-handle {
@@ -1787,67 +1788,67 @@
 
     th:hover .resize-handle {
         opacity: 1;
-        background: #cbd5e1;
+        background: var(--lf-cmp-datatable-resize-handle-bg);
     }
 
     .resize-handle.resizing,
     .resize-handle:active {
         opacity: 1;
-        background: #1a4031;
+        background: var(--lf-cmp-datatable-accent-bg);
     }
 
     :global(.dark) th:hover .resize-handle {
-        background: #475569;
+        background: var(--lf-cmp-datatable-resize-handle-bg-dark);
     }
 
     :global(.dark) .resize-handle.resizing {
-        background: #4ade80;
+        background: var(--lf-cmp-datatable-accent-bg-dark);
     }
 
     /* Body */
     tbody tr {
-        background: white;
+        background: var(--lf-cmp-datatable-surface-bg);
         transition: background 0.15s;
     }
 
     :global(.dark) tbody tr {
-        background: #0f172a;
+        background: var(--lf-cmp-datatable-surface-bg-dark);
     }
 
     tfoot tr {
-        background: #f8fafc;
+        background: var(--lf-cmp-datatable-footer-bg);
     }
 
     :global(.dark) tfoot tr {
-        background: #1e293b;
+        background: var(--lf-cmp-datatable-footer-bg-dark);
     }
 
     .td-footer {
-        border-top: 1px solid #e2e8f0;
+        border-top: 1px solid var(--lf-cmp-datatable-border);
         border-bottom: 0;
         font-weight: 700;
-        color: #334155;
+        color: var(--lf-cmp-datatable-footer-text);
     }
 
     :global(.dark) .td-footer {
-        border-top-color: #334155;
-        color: #e2e8f0;
+        border-top-color: var(--lf-cmp-datatable-border-dark);
+        color: var(--lf-cmp-datatable-footer-text-dark);
     }
 
     tbody tr:hover {
-        background: #f8fafc;
+        background: var(--lf-cmp-datatable-row-hover-bg);
     }
 
     :global(.dark) tbody tr:hover {
-        background: #1e293b;
+        background: var(--lf-cmp-datatable-row-hover-bg-dark);
     }
 
     tbody :global(tr.selected) {
-        background: #eff6ff;
+        background: var(--lf-cmp-datatable-row-selected-bg);
     }
 
     :global(.dark) tbody :global(tr.selected) {
-        background: #1e3a5f;
+        background: var(--lf-cmp-datatable-row-selected-bg-dark);
     }
 
     tbody :global(tr.clickable) {
@@ -1855,19 +1856,19 @@
     }
 
     tbody :global(tr.clickable):hover {
-        background: #f0fdf4;
+        background: var(--lf-cmp-datatable-row-clickable-hover-bg);
     }
 
     :global(.dark) tbody :global(tr.clickable):hover {
-        background: #1a2e35;
+        background: var(--lf-cmp-datatable-row-clickable-hover-bg-dark);
     }
 
     tbody :global(tr.clickable.selected) {
-        background: #dcfce7;
+        background: var(--lf-cmp-datatable-row-clickable-selected-bg);
     }
 
     :global(.dark) tbody :global(tr.clickable.selected) {
-        background: #14532d;
+        background: var(--lf-cmp-datatable-row-clickable-selected-bg-dark);
     }
 
     @keyframes pulse-highlight {
@@ -1882,50 +1883,50 @@
 
     /* Highlighted row (navigateToRowId) — purple, highest priority */
     tbody :global(tr.highlighted) {
-        --highlight-base: #f3e8ff;
-        --highlight-peak: #e9d5ff;
-        background: #f3e8ff !important;
+        --highlight-base: var(--lf-cmp-datatable-highlight-base);
+        --highlight-peak: var(--lf-cmp-datatable-highlight-peak);
+        background: var(--lf-cmp-datatable-row-highlighted-bg) !important;
         animation: pulse-highlight 0.6s ease-in-out 3;
     }
 
     tbody :global(tr.highlighted):hover {
-        background: #f3e8ff !important;
+        background: var(--lf-cmp-datatable-row-highlighted-bg) !important;
     }
 
     :global(.dark) tbody :global(tr.highlighted) {
-        --highlight-base: rgba(147, 51, 234, 0.25);
-        --highlight-peak: rgba(147, 51, 234, 0.4);
-        background: rgba(147, 51, 234, 0.25) !important;
+        --highlight-base: var(--lf-cmp-datatable-highlight-base-dark);
+        --highlight-peak: var(--lf-cmp-datatable-highlight-peak-dark);
+        background: var(--lf-cmp-datatable-row-highlighted-bg-dark) !important;
     }
 
     :global(.dark) tbody :global(tr.highlighted):hover {
-        background: rgba(147, 51, 234, 0.25) !important;
+        background: var(--lf-cmp-datatable-row-highlighted-bg-dark) !important;
     }
 
     :global(tr.highlighted) td {
-        border-bottom-color: #e9d5ff;
+        border-bottom-color: var(--lf-cmp-datatable-row-highlighted-border);
     }
 
     /* Row whose lot-analysis panel is currently open (F9) — steady emerald
        tint, no pulse (persistent state, not a navigation flash) */
     tbody :global(tr.row-analyzed) {
-        background: #ecfdf5;
+        background: var(--lf-cmp-datatable-row-analyzed-bg);
     }
 
     tbody :global(tr.row-analyzed):hover {
-        background: #d1fae5;
+        background: var(--lf-cmp-datatable-row-analyzed-hover-bg);
     }
 
     :global(.dark) tbody :global(tr.row-analyzed) {
-        background: rgba(16, 185, 129, 0.15);
+        background: var(--lf-cmp-datatable-row-analyzed-bg-dark);
     }
 
     :global(.dark) tbody :global(tr.row-analyzed):hover {
-        background: rgba(16, 185, 129, 0.25);
+        background: var(--lf-cmp-datatable-row-analyzed-hover-bg-dark);
     }
 
     :global(.dark) :global(tr.highlighted) td {
-        border-bottom-color: #7e22ce;
+        border-bottom-color: var(--lf-cmp-datatable-row-highlighted-border-dark);
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1938,8 +1939,8 @@
     td {
         padding: 0.625rem 0.5rem;
         font-size: 0.875rem;
-        color: #475569;
-        border-bottom: 1px solid #f1f5f9;
+        color: var(--lf-cmp-datatable-cell-text);
+        border-bottom: 1px solid var(--lf-cmp-datatable-cell-border);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -1947,8 +1948,8 @@
     }
 
     :global(.dark) td {
-        color: #e2e8f0;
-        border-bottom-color: #1e293b;
+        color: var(--lf-cmp-datatable-cell-text-dark);
+        border-bottom-color: var(--lf-cmp-datatable-cell-border-dark);
     }
 
     .td-data {
@@ -1993,8 +1994,8 @@
     .td-loading {
         text-align: center;
         padding: 3rem 2rem;
-        color: #94a3b8;
-        background: white;
+        color: var(--lf-cmp-datatable-faint-text);
+        background: var(--lf-cmp-datatable-surface-bg);
         height: 230px;
         vertical-align: middle;
     }
@@ -2021,7 +2022,7 @@
         justify-content: center;
         overflow: hidden;
         border-radius: 0.25rem;
-        background: #f1f5f9;
+        background: var(--lf-cmp-datatable-cell-image-bg);
         flex-shrink: 0;
         min-width: 0;
     }
@@ -2039,7 +2040,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-icon-text);
     }
 
     .cell-image :global(.hidden) {
@@ -2047,24 +2048,24 @@
     }
 
     :global(.dark) .cell-image {
-        background: #334155;
+        background: var(--lf-cmp-datatable-cell-image-bg-dark);
     }
 
     :global(.dark) .cell-image .image-fallback {
-        color: #64748b;
+        color: var(--lf-cmp-datatable-icon-text-dark);
     }
 
     :global(.dark) .td-empty,
     :global(.dark) .td-loading {
-        background: #0f172a;
+        background: var(--lf-cmp-datatable-surface-bg-dark);
     }
 
     .loading-spinner {
         display: inline-block;
         width: 1.5rem;
         height: 1.5rem;
-        border: 2px solid #e2e8f0;
-        border-top-color: #1a4031;
+        border: 2px solid var(--lf-cmp-datatable-spinner-border);
+        border-top-color: var(--lf-cmp-datatable-spinner-arc-border);
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
         margin-bottom: 0.5rem;
@@ -2084,12 +2085,12 @@
         width: 24px;
         height: 24px;
         margin: 0 auto;
-        color: #ef4444;
+        color: var(--lf-cmp-datatable-disabled-select-icon-text);
         opacity: 0.7;
     }
 
     :global(.dark) .disabled-select-icon {
-        color: #f87171;
+        color: var(--lf-cmp-datatable-disabled-select-icon-text-dark);
         opacity: 0.6;
     }
 
@@ -2110,30 +2111,30 @@
         display: block;
         width: 16px;
         height: 16px;
-        border: 1px solid #cbd5e1;
+        border: 1px solid var(--lf-cmp-datatable-checkbox-border);
         border-radius: 3px;
-        background: white;
+        background: var(--lf-cmp-datatable-surface-bg);
     }
 
     :global(.dark) .check-box {
-        background: #0f172a;
-        border-color: #475569;
+        background: var(--lf-cmp-datatable-surface-bg-dark);
+        border-color: var(--lf-cmp-datatable-checkbox-border-dark);
     }
 
     :global(.check-icon) {
-        color: #1a4031;
+        color: var(--lf-cmp-datatable-check-icon-text);
     }
 
     :global(.check-icon.checked) {
-        color: #1a4031;
+        color: var(--lf-cmp-datatable-accent-text);
     }
 
     :global(.check-icon.partial) {
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-faint-text);
     }
 
     :global(.dark) :global(.check-icon.checked) {
-        color: #4ade80;
+        color: var(--lf-cmp-datatable-accent-text-dark);
     }
 
     /* Cell content types */
@@ -2157,11 +2158,11 @@
         width: 32px;
         height: 32px;
         min-width: 32px;
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-icon-text);
     }
 
     :global(.dark) .cell-icon-box {
-        color: #64748b;
+        color: var(--lf-cmp-datatable-icon-text-dark);
     }
 
     .cell-icon-text span {
@@ -2181,71 +2182,71 @@
     }
 
     .cell-badge.default {
-        background: #f1f5f9;
-        color: #475569;
+        background: var(--lf-cmp-datatable-badge-default-bg);
+        color: var(--lf-cmp-datatable-badge-default-text);
     }
 
     .cell-badge.success {
-        background: #dcfce7;
-        color: #166534;
+        background: var(--lf-cmp-datatable-badge-success-bg);
+        color: var(--lf-cmp-datatable-badge-success-text);
     }
 
     .cell-badge.warning {
-        background: #fef3c7;
-        color: #92400e;
+        background: var(--lf-cmp-datatable-badge-warning-bg);
+        color: var(--lf-cmp-datatable-badge-warning-text);
     }
 
     .cell-badge.error {
-        background: #fee2e2;
-        color: #991b1b;
+        background: var(--lf-cmp-datatable-badge-error-bg);
+        color: var(--lf-cmp-datatable-badge-error-text);
     }
 
     .cell-badge.info {
-        background: #dbeafe;
-        color: #1e40af;
+        background: var(--lf-cmp-datatable-badge-info-bg);
+        color: var(--lf-cmp-datatable-badge-info-text);
     }
 
     :global(.dark) .cell-badge.default {
-        background: #334155;
-        color: #e2e8f0;
+        background: var(--lf-cmp-datatable-badge-default-bg-dark);
+        color: var(--lf-cmp-datatable-badge-default-text-dark);
     }
 
     :global(.dark) .cell-badge.success {
-        background: #14532d;
-        color: #86efac;
+        background: var(--lf-cmp-datatable-badge-success-bg-dark);
+        color: var(--lf-cmp-datatable-badge-success-text-dark);
     }
 
     :global(.dark) .cell-badge.warning {
-        background: #78350f;
-        color: #fde68a;
+        background: var(--lf-cmp-datatable-badge-warning-bg-dark);
+        color: var(--lf-cmp-datatable-badge-warning-text-dark);
     }
 
     :global(.dark) .cell-badge.error {
-        background: #7f1d1d;
-        color: #fecaca;
+        background: var(--lf-cmp-datatable-badge-error-bg-dark);
+        color: var(--lf-cmp-datatable-badge-error-text-dark);
     }
 
     :global(.dark) .cell-badge.info {
-        background: #1e3a8a;
-        color: #bfdbfe;
+        background: var(--lf-cmp-datatable-badge-info-bg-dark);
+        color: var(--lf-cmp-datatable-badge-info-text-dark);
     }
 
     /* Custom styled badge (e.g., broker colors) */
     .cell-badge.custom-style {
-        background: var(--broker-bg, #f1f5f9);
-        color: var(--broker-text, #475569);
+        background: var(--broker-bg, var(--lf-cmp-datatable-badge-default-bg));
+        color: var(--broker-text, var(--lf-cmp-datatable-badge-default-text));
     }
 
     :global(.dark) .cell-badge.custom-style {
-        background: var(--broker-dark-bg, #334155);
-        color: var(--broker-dark-text, #e2e8f0);
+        background: var(--broker-dark-bg, var(--lf-cmp-datatable-badge-default-bg-dark));
+        color: var(--broker-dark-text, var(--lf-cmp-datatable-badge-default-text-dark));
     }
 
     .cell-link {
         display: inline-flex;
         align-items: center;
         gap: 0.25rem;
-        color: #1a4031;
+        color: var(--lf-cmp-datatable-accent-text);
         text-decoration: none;
     }
 
@@ -2254,7 +2255,7 @@
     }
 
     :global(.dark) .cell-link {
-        color: #4ade80;
+        color: var(--lf-cmp-datatable-accent-text-dark);
     }
 
     /* Actions */
@@ -2272,7 +2273,7 @@
         border: 0;
         border-radius: 9999px;
         background: transparent;
-        color: #64748b;
+        color: var(--lf-cmp-datatable-row-action-text);
         cursor: pointer;
         font-size: 1.25rem;
         line-height: 1;
@@ -2283,19 +2284,19 @@
 
     .row-actions-btn:hover,
     .row-actions-btn:focus-visible {
-        background: #e2e8f0;
-        color: #1a4031;
+        background: var(--lf-cmp-datatable-row-action-hover-bg);
+        color: var(--lf-cmp-datatable-accent-text);
         outline: none;
     }
 
     :global(.dark) .row-actions-btn {
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-row-action-text-dark);
     }
 
     :global(.dark) .row-actions-btn:hover,
     :global(.dark) .row-actions-btn:focus-visible {
-        background: #334155;
-        color: #4ade80;
+        background: var(--lf-cmp-datatable-row-action-hover-bg-dark);
+        color: var(--lf-cmp-datatable-accent-text-dark);
     }
 
     /* Responsive: hide sticky actions on mobile */
@@ -2313,28 +2314,28 @@
         padding: 0.25rem 0.375rem;
         font-size: 0.8125rem;
         font-family: ui-monospace, monospace;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-datatable-editable-border);
         border-radius: 4px;
-        background: white;
-        color: #1e293b;
+        background: var(--lf-cmp-datatable-surface-bg);
+        color: var(--lf-cmp-datatable-editable-text);
         outline: none;
         transition: border-color 0.15s;
     }
 
     .cell-editable-number:focus {
-        border-color: #1a4031;
-        box-shadow: 0 0 0 1px #1a403140;
+        border-color: var(--lf-cmp-datatable-editable-focus-border);
+        box-shadow: 0 0 0 1px var(--lf-cmp-datatable-editable-focus-shadow);
     }
 
     :global(.dark) .cell-editable-number {
-        background: #0f172a;
-        border-color: #475569;
-        color: #e2e8f0;
+        background: var(--lf-cmp-datatable-surface-bg-dark);
+        border-color: var(--lf-cmp-datatable-editable-border-dark);
+        color: var(--lf-cmp-datatable-editable-text-dark);
     }
 
     :global(.dark) .cell-editable-number:focus {
-        border-color: #4ade80;
-        box-shadow: 0 0 0 1px #4ade8040;
+        border-color: var(--lf-cmp-datatable-editable-focus-border-dark);
+        box-shadow: 0 0 0 1px var(--lf-cmp-datatable-editable-focus-shadow-dark);
     }
 
     /* Editable text cell */
@@ -2342,28 +2343,28 @@
         width: 100%;
         padding: 0.25rem 0.375rem;
         font-size: 0.8125rem;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-datatable-editable-border);
         border-radius: 4px;
-        background: white;
-        color: #1e293b;
+        background: var(--lf-cmp-datatable-surface-bg);
+        color: var(--lf-cmp-datatable-editable-text);
         outline: none;
         transition: border-color 0.15s;
     }
 
     .cell-editable-text:focus {
-        border-color: #1a4031;
-        box-shadow: 0 0 0 1px #1a403140;
+        border-color: var(--lf-cmp-datatable-editable-focus-border);
+        box-shadow: 0 0 0 1px var(--lf-cmp-datatable-editable-focus-shadow);
     }
 
     :global(.dark) .cell-editable-text {
-        background: #0f172a;
-        border-color: #475569;
-        color: #e2e8f0;
+        background: var(--lf-cmp-datatable-surface-bg-dark);
+        border-color: var(--lf-cmp-datatable-editable-border-dark);
+        color: var(--lf-cmp-datatable-editable-text-dark);
     }
 
     :global(.dark) .cell-editable-text:focus {
-        border-color: #4ade80;
-        box-shadow: 0 0 0 1px #4ade8040;
+        border-color: var(--lf-cmp-datatable-editable-focus-border-dark);
+        box-shadow: 0 0 0 1px var(--lf-cmp-datatable-editable-focus-shadow-dark);
     }
 
     /* Editable select cell (SimpleSelect wrapper) */
@@ -2379,52 +2380,52 @@
 
     /* Row status classes (used via getRowClass prop) */
     :global(tr.row-deleted) td {
-        background: rgba(239, 68, 68, 0.06) !important;
+        background: var(--lf-cmp-datatable-row-deleted-bg) !important;
         opacity: 0.55;
     }
 
     :global(.dark) :global(tr.row-deleted) td {
-        background: rgba(239, 68, 68, 0.2) !important;
+        background: var(--lf-cmp-datatable-row-deleted-bg-dark) !important;
         opacity: 0.55;
     }
 
     :global(tr.row-edited) td {
-        background: rgba(59, 130, 246, 0.06) !important;
+        background: var(--lf-cmp-datatable-row-edited-bg) !important;
     }
 
     :global(.dark) :global(tr.row-edited) td {
-        background: rgba(59, 130, 246, 0.2) !important;
+        background: var(--lf-cmp-datatable-row-edited-bg-dark) !important;
     }
 
     :global(tr.row-appended) td {
-        background: rgba(16, 185, 129, 0.06) !important;
+        background: var(--lf-cmp-datatable-row-appended-bg) !important;
     }
 
     :global(.dark) :global(tr.row-appended) td {
-        background: rgba(16, 185, 129, 0.2) !important;
+        background: var(--lf-cmp-datatable-row-appended-bg-dark) !important;
     }
 
     :global(tr.row-todo-blocker) td {
-        background: rgba(239, 68, 68, 0.08) !important;
+        background: var(--lf-cmp-datatable-row-todo-blocker-bg) !important;
     }
 
     :global(.dark) :global(tr.row-todo-blocker) td {
-        background: rgba(239, 68, 68, 0.22) !important;
+        background: var(--lf-cmp-datatable-row-todo-blocker-bg-dark) !important;
     }
 
     :global(tr.row-stale) td {
-        background: rgba(245, 158, 11, var(--stale-opacity, 0.04)) !important;
+        background: rgba(var(--lf-cmp-datatable-row-stale-rgb), var(--stale-opacity, 0.04)) !important;
     }
 
     :global(.dark) :global(tr.row-stale) td {
-        background: rgba(245, 158, 11, var(--stale-opacity, 0.08)) !important;
+        background: rgba(var(--lf-cmp-datatable-row-stale-rgb-dark), var(--stale-opacity, 0.08)) !important;
     }
 
     :global(tr.row-paired) td {
-        background: rgba(99, 102, 241, 0.06) !important;
+        background: var(--lf-cmp-datatable-row-paired-bg) !important;
     }
 
     :global(.dark) :global(tr.row-paired) td {
-        background: rgba(99, 102, 241, 0.15) !important;
+        background: var(--lf-cmp-datatable-row-paired-bg-dark) !important;
     }
 </style>

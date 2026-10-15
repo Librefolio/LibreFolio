@@ -43,6 +43,7 @@
     import {scheduleFirstRenderStabilityFix, tooltipPositionAboveFinger} from './echartsTooltipHelpers';
     import {buildScatterOption, type RiskReturnPoint} from './scatterChartHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     interface Props {
         points: readonly RiskReturnPoint[];
@@ -78,11 +79,10 @@
     let built = $derived(buildScatterOption({points, riskFreeRate, dark, labels, selectedId}));
 
     onMount(() => {
-        dark = document.documentElement.classList.contains('dark');
-        const darkObserver = new MutationObserver(() => {
-            dark = document.documentElement.classList.contains('dark');
+        dark = isDarkTheme();
+        const darkObserver = onThemeClassChange(() => {
+            dark = isDarkTheme();
         });
-        darkObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
         return () => {
             darkObserver.disconnect();
             resizeWatcher.disconnect();

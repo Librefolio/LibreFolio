@@ -36,6 +36,11 @@
     import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {withHexAlpha} from '$lib/theme/colorAlpha';
+    import {themed} from '$lib/theme/themePair';
+    import {ALLOCATION_CHART_COLORS, CHART_NEUTRALS, CHART_TOOLTIP_COLORS} from '$lib/theme/chartTheme';
+    import {ALLOCATION_HISTORY_PALETTE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     interface AllocationComponent {
         name: string;
@@ -170,8 +175,8 @@
     // hue gap left in BOTH palettes, and purple-700/400 follows it while keeping
     // the cross-theme pairing. The first 12 entries are untouched, so every chart
     // with 12 categories or fewer renders exactly as before.
-    const PALETTE_LIGHT = ['#1a4031', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#84cc16', '#ec4899', '#f97316', '#14b8a6', '#6366f1', '#a3a3a3', '#a21caf', '#7e22ce'];
-    const PALETTE_DARK = ['#4ade80', '#60a5fa', '#fbbf24', '#f87171', '#a78bfa', '#22d3ee', '#a3e635', '#f472b6', '#fb923c', '#2dd4bf', '#818cf8', '#d4d4d4', '#e879f9', '#c084fc'];
+    const PALETTE_LIGHT = ALLOCATION_HISTORY_PALETTE.light;
+    const PALETTE_DARK = ALLOCATION_HISTORY_PALETTE.dark;
 
     /** Get an emoji/icon label for a category. */
     function getCategoryEmoji(rawName: string): string {
@@ -185,8 +190,7 @@
     }
 
     onMount(() => {
-        darkModeObserver = new MutationObserver(() => renderChart());
-        darkModeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        darkModeObserver = onThemeClassChange(() => renderChart());
 
         const loadRefs = async () => {
             await Promise.allSettled([ensureCountriesLoaded($currentLanguage), ensureSectorsLoaded()]);
@@ -649,10 +653,10 @@
 
     function buildChartOption(dataset: AggregatedAllocationDataset, isDark: boolean, skipAnimation: boolean): echarts.EChartsOption {
         const palette = isDark ? PALETTE_DARK : PALETTE_LIGHT;
-        const textColor = isDark ? '#94a3b8' : '#64748b';
-        const gridColor = isDark ? '#1e293b' : '#f1f5f9';
-        const tooltipBg = isDark ? '#1e293b' : '#ffffff';
-        const tooltipBorder = isDark ? '#334155' : '#e2e8f0';
+        const textColor = themed(CHART_NEUTRALS.dashboard.text, isDark);
+        const gridColor = themed(CHART_NEUTRALS.dashboard.gridLine, isDark);
+        const tooltipBg = themed(CHART_TOOLTIP_COLORS.box.background, isDark);
+        const tooltipBorder = themed(CHART_TOOLTIP_COLORS.box.border, isDark);
         const xAxisPolicy = buildResponsiveXAxisPolicy({
             width: chartContainer?.clientWidth ?? 0,
             values: dataset.dates,
@@ -713,7 +717,7 @@
                 smooth: false,
                 symbol: 'none',
                 lineStyle: {color, width: 1, opacity: 0.7},
-                areaStyle: {color: color + '88'},
+                areaStyle: {color: withHexAlpha(color, '88')},
                 itemStyle: {color},
                 emphasis: {focus: 'series'},
                 label: showLabel
@@ -722,8 +726,8 @@
                           position: 'inside',
                           formatter: () => emoji,
                           fontSize: 14,
-                          color: isDark ? '#ffffff' : '#000000',
-                          textShadowColor: isDark ? '#000' : '#fff',
+                          color: themed(ALLOCATION_CHART_COLORS.historyAreaLabel, isDark),
+                          textShadowColor: themed(ALLOCATION_CHART_COLORS.historyAreaLabelShadow, isDark),
                           textShadowBlur: 2,
                       }
                     : {show: false},
@@ -754,7 +758,7 @@
                 backgroundColor: tooltipBg,
                 borderColor: tooltipBorder,
                 borderWidth: 1,
-                textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+                textStyle: {color: themed(CHART_TOOLTIP_COLORS.box.text, isDark), fontSize: 12},
                 formatter: (params: unknown) => {
                     const items = Array.isArray(params) ? params : [params];
                     const idx = (items[0] as {dataIndex?: number} | undefined)?.dataIndex ?? 0;
@@ -787,7 +791,7 @@
                 width: '90%',
                 pageTextStyle: {color: textColor},
                 pageIconColor: textColor,
-                pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1',
+                pageIconInactiveColor: themed(CHART_NEUTRALS.legendPageIconInactive, isDark),
             },
             dataZoom: buildDataZoomOption(dataset, logicalRange),
             xAxis: {
@@ -881,7 +885,7 @@
         }
 
         const activeDataset = getResolutionDataset(currentResolution);
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
         const skipAnimation = options.skipAnimation ?? (lastRenderedResolution !== null && lastRenderedResolution !== currentResolution);
         const option = buildChartOption(activeDataset, isDark, skipAnimation);
 

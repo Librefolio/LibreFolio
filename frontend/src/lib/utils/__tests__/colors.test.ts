@@ -7,12 +7,14 @@
  * original string) rather than to black — a black slice is an invisible bug,
  * a `null` is a branch the caller can handle.
  *
- * The palettes below are **read from the two components that own them** —
- * `PALETTE_LIGHT` and `PALETTE_DARK` in `AllocationPieChart.svelte`
- * (src/lib/components/charts/) and in `AllocationHistoryChart.svelte`
- * (src/lib/components/dashboard/) — by name, through `$test/sourcePalettes`. So
- * an edit there is measured here. (They used to be copies, and a copy agrees
- * with itself: an edited palette left this file green.)
+ * The palettes below are **the ones the two allocation charts draw with** —
+ * `ALLOCATION_PIE_PALETTE` (`AllocationPieChart.svelte`) and
+ * `ALLOCATION_HISTORY_PALETTE` (`AllocationHistoryChart.svelte`), light and
+ * dark, imported from `$lib/theme/chartPalettes`, the one module both charts
+ * take them from. So an edit there is measured here. (They used to be copies,
+ * and a copy agrees with itself: an edited palette left this file green.) That
+ * the charts really draw them is proven on the mounted charts, in both themes:
+ * `AllocationPieChart.test.ts` and `AllocationHistoryChart.test.ts`.
  *
  * No runes, no DOM: this stays in the default `node` environment.
  *
@@ -20,37 +22,35 @@
  */
 import {describe, expect, it} from 'vitest';
 
-import {PALETTE_SLOTS, paletteDefects, readSourcePalette} from '$test/sourcePalettes';
+import {ALLOCATION_HISTORY_PALETTE, ALLOCATION_PIE_PALETTE} from '$lib/theme/chartPalettes';
+import {PALETTE_SLOTS, paletteDefects} from '$test/palettes';
 
 import {hexToHsl, hslToHex} from '../colors';
 
 // =============================================================================
-// The four real palettes — read from the components that declare them
+// The four real palettes — the ones the charts draw with, imported, not copied
 // =============================================================================
 
-const PIE_CHART = new URL('../../components/charts/AllocationPieChart.svelte', import.meta.url);
-const HISTORY_CHART = new URL('../../components/dashboard/AllocationHistoryChart.svelte', import.meta.url);
-
-/** `PALETTE_LIGHT` in `AllocationPieChart.svelte`. */
-const PIE_PALETTE_LIGHT = readSourcePalette(PIE_CHART, 'PALETTE_LIGHT');
-/** `PALETTE_DARK` in `AllocationPieChart.svelte`. */
-const PIE_PALETTE_DARK = readSourcePalette(PIE_CHART, 'PALETTE_DARK');
-/** `PALETTE_LIGHT` in `AllocationHistoryChart.svelte`. */
-const HISTORY_PALETTE_LIGHT = readSourcePalette(HISTORY_CHART, 'PALETTE_LIGHT');
-/** `PALETTE_DARK` in `AllocationHistoryChart.svelte`. */
-const HISTORY_PALETTE_DARK = readSourcePalette(HISTORY_CHART, 'PALETTE_DARK');
+/** `ALLOCATION_PIE_PALETTE.light`: `AllocationPieChart.svelte`, light theme. */
+const PIE_PALETTE_LIGHT = ALLOCATION_PIE_PALETTE.light;
+/** `ALLOCATION_PIE_PALETTE.dark`: `AllocationPieChart.svelte`, dark theme. */
+const PIE_PALETTE_DARK = ALLOCATION_PIE_PALETTE.dark;
+/** `ALLOCATION_HISTORY_PALETTE.light`: `AllocationHistoryChart.svelte`, light theme. */
+const HISTORY_PALETTE_LIGHT = ALLOCATION_HISTORY_PALETTE.light;
+/** `ALLOCATION_HISTORY_PALETTE.dark`: `AllocationHistoryChart.svelte`, dark theme. */
+const HISTORY_PALETTE_DARK = ALLOCATION_HISTORY_PALETTE.dark;
 
 const ALL_PALETTES: ReadonlyArray<readonly [string, readonly string[]]> = [
-    ['AllocationPieChart PALETTE_LIGHT', PIE_PALETTE_LIGHT],
-    ['AllocationPieChart PALETTE_DARK', PIE_PALETTE_DARK],
-    ['AllocationHistoryChart PALETTE_LIGHT', HISTORY_PALETTE_LIGHT],
-    ['AllocationHistoryChart PALETTE_DARK', HISTORY_PALETTE_DARK],
+    ['ALLOCATION_PIE_PALETTE.light', PIE_PALETTE_LIGHT],
+    ['ALLOCATION_PIE_PALETTE.dark', PIE_PALETTE_DARK],
+    ['ALLOCATION_HISTORY_PALETTE.light', HISTORY_PALETTE_LIGHT],
+    ['ALLOCATION_HISTORY_PALETTE.dark', HISTORY_PALETTE_DARK],
 ];
 
-/** Each chart's two themes, paired slot by slot (the comment above the constants in `AllocationHistoryChart.svelte`). */
+/** Each chart's two themes, paired slot by slot (the comment above the palette constants in `AllocationHistoryChart.svelte`). */
 const THEME_PAIRS: ReadonlyArray<readonly [string, readonly string[], readonly string[]]> = [
-    ['AllocationPieChart', PIE_PALETTE_LIGHT, PIE_PALETTE_DARK],
-    ['AllocationHistoryChart', HISTORY_PALETTE_LIGHT, HISTORY_PALETTE_DARK],
+    ['ALLOCATION_PIE_PALETTE', PIE_PALETTE_LIGHT, PIE_PALETTE_DARK],
+    ['ALLOCATION_HISTORY_PALETTE', HISTORY_PALETTE_LIGHT, HISTORY_PALETTE_DARK],
 ];
 
 /** Split a `#rrggbb` (or bare `rrggbb`) into its three 0-255 channels. */
@@ -60,7 +60,7 @@ function channels(hex: string): [number, number, number] {
 }
 
 // =============================================================================
-// The palettes under test — what was read, so no loop below can pass on nothing
+// The palettes under test — checked whole first, so no loop below can pass on nothing
 // =============================================================================
 
 describe('the palettes under test', () => {

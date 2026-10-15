@@ -1,0 +1,159 @@
+/*
+ * Files area: grid, preview, the files page, the broker import files.
+ *
+ * Component colour tokens (plan 55, workstream R, R-3): the colours that the components' <style> blocks used
+ * to write by hand, one name per role. `-dark` twins feed the components' `.dark` rules, which stay where
+ * they are. Same look as before by construction:
+ * - every value is the exact text the production build emitted for the original literal (esbuild turns
+ *   `white` into `#fff` and `rgb(0 0 0 / 0.1)` into `#0000001a`, but leaves custom properties untouched);
+ * - the original spelling follows in a comment when it differs.
+ * Divergences between similar components are kept on purpose: the designer decides (phase B, `--lf-*` roles).
+ */
+:root {
+    /* FileGrid.svelte */
+    --lf-cmp-file-grid-border: #e5e7eb;
+    --lf-cmp-file-grid-border-dark: #374151;
+    --lf-cmp-file-grid-surface-bg: #fff; /* white */
+    --lf-cmp-file-grid-surface-bg-dark: #1f2937;
+    --lf-cmp-file-grid-faint-text: #9ca3af;
+    --lf-cmp-file-grid-search-input-text: #374151;
+    --lf-cmp-file-grid-search-input-text-dark: #f3f4f6;
+    --lf-cmp-file-grid-search-clear-bg: #e5e7eb;
+    --lf-cmp-file-grid-search-clear-bg-dark: #374151;
+    --lf-cmp-file-grid-muted-text: #6b7280;
+    --lf-cmp-file-grid-muted-text-dark: #9ca3af;
+    --lf-cmp-file-grid-file-card-hover-shadow: #0000001a; /* rgb(0 0 0 / 0.1) */
+    --lf-cmp-file-grid-file-card-hover-shadow-dark: #0000004d; /* rgb(0 0 0 / 0.3) */
+    --lf-cmp-file-grid-file-card-selectable-hover-border: #d1d5db;
+    --lf-cmp-file-grid-file-card-selectable-hover-border-dark: #4b5563;
+    --lf-cmp-file-grid-file-card-selected-border: #1a4031;
+    --lf-cmp-file-grid-file-card-selected-border-dark: #10b981;
+    --lf-cmp-file-grid-file-card-selected-bg: #f0fdf4;
+    --lf-cmp-file-grid-file-card-selected-bg-dark: #10b9811a; /* rgba(16, 185, 129, 0.1) */
+    --lf-cmp-file-grid-file-preview-bg: #f3f4f6;
+    --lf-cmp-file-grid-file-preview-bg-dark: #374151;
+    --lf-cmp-file-grid-selected-badge-bg: #1a4031;
+    --lf-cmp-file-grid-selected-badge-bg-dark: #10b981;
+    --lf-cmp-file-grid-selected-badge-text: #fff; /* white */
+    --lf-cmp-file-grid-strong-text: #1f2937;
+    --lf-cmp-file-grid-strong-text-dark: #f3f4f6;
+    --lf-cmp-file-grid-card-actions-border: #f3f4f6;
+    --lf-cmp-file-grid-card-actions-border-dark: #374151;
+    --lf-cmp-file-grid-action-btn-border: #e5e7eb;
+    --lf-cmp-file-grid-action-btn-border-dark: #4b5563;
+    --lf-cmp-file-grid-action-btn-bg: #fff; /* white */
+    --lf-cmp-file-grid-action-btn-bg-dark: #374151;
+    --lf-cmp-file-grid-action-btn-hover-bg: #f3f4f6;
+    --lf-cmp-file-grid-action-btn-hover-bg-dark: #4b5563;
+    --lf-cmp-file-grid-action-btn-danger-text: #dc2626;
+    --lf-cmp-file-grid-action-btn-danger-text-dark: #fca5a5;
+    --lf-cmp-file-grid-action-btn-danger-border: #fecaca;
+    --lf-cmp-file-grid-action-btn-danger-border-dark: #dc26264d; /* rgba(220, 38, 38, 0.3) */
+    --lf-cmp-file-grid-action-btn-danger-hover-bg: #fef2f2;
+    --lf-cmp-file-grid-action-btn-danger-hover-bg-dark: #dc262633; /* rgba(220, 38, 38, 0.2) */
+    --lf-cmp-file-grid-action-btn-danger-hover-border: #fecaca;
+    --lf-cmp-file-grid-action-btn-danger-hover-border-dark: #dc262666; /* rgba(220, 38, 38, 0.4) */
+
+    /* FilePreviewModal.svelte */
+    --lf-cmp-file-preview-header-border: #e5e7eb;
+    --lf-cmp-file-preview-header-border-dark: #334155;
+    --lf-cmp-file-preview-meta-text: #64748b;
+    --lf-cmp-file-preview-meta-text-dark: #cbd5e1;
+    --lf-cmp-file-preview-toggle-border: #cbd5e1;
+    --lf-cmp-file-preview-toggle-border-dark: #334155;
+    --lf-cmp-file-preview-surface-bg: #fff; /* white */
+    --lf-cmp-file-preview-surface-bg-dark: #0f172a;
+    --lf-cmp-file-preview-text: #0f172a;
+    --lf-cmp-file-preview-text-dark: #e2e8f0;
+    --lf-cmp-file-preview-accent-bg: #1a4031;
+    --lf-cmp-file-preview-accent-bg-dark: #1a4031;
+    --lf-cmp-file-preview-on-accent-text: #fff; /* white */
+    --lf-cmp-file-preview-control-border: #cbd5e1;
+    --lf-cmp-file-preview-muted-text: #64748b;
+    --lf-cmp-file-preview-inline-error-text: #b45309;
+    --lf-cmp-file-preview-error-state-text: #dc2626;
+    --lf-cmp-file-preview-image-stage-bg: #f8fafc;
+    --lf-cmp-file-preview-image-stage-bg-dark: #0f172a;
+    --lf-cmp-file-preview-stage-border: #e2e8f0;
+    --lf-cmp-file-preview-strong-border: #cbd5e1;
+    --lf-cmp-file-preview-strong-border-dark: #475569;
+    --lf-cmp-file-preview-table-border: #e2e8f0;
+    --lf-cmp-file-preview-table-border-dark: #334155;
+    --lf-cmp-file-preview-text-stage-bg: #fff; /* white */
+    --lf-cmp-file-preview-text-stage-bg-dark: #111827;
+    --lf-cmp-file-preview-subtle-bg: #f8fafc;
+    --lf-cmp-file-preview-subtle-bg-dark: #1e293b;
+    --lf-cmp-file-preview-markdown-stage-bg: #fff; /* white */
+    --lf-cmp-file-preview-markdown-stage-blockquote-text: #475569;
+    --lf-cmp-file-preview-markdown-stage-blockquote-text-dark: #cbd5e1;
+    --lf-cmp-file-preview-markdown-stage-pre-bg: #0f172a;
+    --lf-cmp-file-preview-markdown-stage-pre-text: #e2e8f0;
+    --lf-cmp-file-preview-markdown-stage-code-bg: #f1f5f9;
+    --lf-cmp-file-preview-markdown-stage-code-bg-dark: #1e293b;
+    --lf-cmp-file-preview-pdf-stage-text-dark: #e2e8f0;
+
+    /* routes/(app)/files/+page.svelte */
+    --lf-cmp-files-page-strong-text: #1f2937;
+    --lf-cmp-files-page-strong-text-dark: #f3f4f6;
+    --lf-cmp-files-page-view-toggle-border: #e5e7eb;
+    --lf-cmp-files-page-view-toggle-border-dark: #4b5563;
+    --lf-cmp-files-page-view-btn-bg: #fff; /* white */
+    --lf-cmp-files-page-view-btn-bg-dark: #374151;
+    --lf-cmp-files-page-muted-text: #6b7280;
+    --lf-cmp-files-page-muted-text-dark: #9ca3af;
+    --lf-cmp-files-page-view-btn-hover-bg: #f3f4f6;
+    --lf-cmp-files-page-view-btn-hover-bg-dark: #4b5563;
+    --lf-cmp-files-page-accent-bg: #1a4031;
+    --lf-cmp-files-page-on-fill-text: #fff; /* white */
+    --lf-cmp-files-page-btn-primary-border: #1a4031;
+    --lf-cmp-files-page-btn-primary-hover-bg: #143326;
+    --lf-cmp-files-page-upload-area-bg: #f9fafb;
+    --lf-cmp-files-page-upload-area-bg-dark: #374151;
+    --lf-cmp-files-page-faint-text: #9ca3af;
+    --lf-cmp-files-page-divider-border: #e5e7eb;
+    --lf-cmp-files-page-divider-border-dark: #374151;
+    --lf-cmp-files-page-modal-close-text: #6b7280;
+    --lf-cmp-files-page-hover-bg: #f3f4f6;
+    --lf-cmp-files-page-hover-bg-dark: #374151;
+    --lf-cmp-files-page-btn-secondary-bg: #f3f4f6;
+    --lf-cmp-files-page-btn-secondary-bg-dark: #374151;
+    --lf-cmp-files-page-body-text: #4b5563;
+    --lf-cmp-files-page-body-text-dark: #9ca3af;
+    --lf-cmp-files-page-btn-secondary-border: #d1d5db;
+    --lf-cmp-files-page-btn-secondary-border-dark: #4b5563;
+    --lf-cmp-files-page-text: #374151;
+    --lf-cmp-files-page-text-dark: #e5e7eb;
+    --lf-cmp-files-page-btn-secondary-hover-bg: #e5e7eb;
+    --lf-cmp-files-page-btn-secondary-hover-bg-dark: #4b5563;
+    --lf-cmp-files-page-btn-danger-bg: #dc2626;
+    --lf-cmp-files-page-btn-danger-border: #dc2626;
+    --lf-cmp-files-page-btn-danger-hover-bg: #b91c1c;
+    --lf-cmp-files-page-btn-disabled-bg: #9ca3af;
+    --lf-cmp-files-page-btn-disabled-border: #9ca3af;
+    --lf-cmp-files-page-assign-all-section-bg: #f8fafc;
+    --lf-cmp-files-page-assign-all-section-bg-dark: #1e293b;
+    --lf-cmp-files-page-file-row-bg: #fff; /* white */
+    --lf-cmp-files-page-file-row-bg-dark: #1f2937;
+    --lf-cmp-files-page-brim-edit-btn-hover-text: #1a4031;
+    --lf-cmp-files-page-brim-edit-btn-hover-text-dark: #a7f3d0;
+    --lf-cmp-files-page-brim-edit-btn-hover-bg: #1a40311a; /* rgba(26, 64, 49, 0.1) */
+    --lf-cmp-files-page-brim-edit-btn-hover-bg-dark: #a7f3d01a; /* rgba(167, 243, 208, 0.1) */
+
+    /* BrokerImportFilesModal.svelte */
+    --lf-cmp-broker-import-files-divider-border: #e5e7eb;
+    --lf-cmp-broker-import-files-divider-border-dark: #374151;
+    --lf-cmp-broker-import-files-muted-text: #6b7280;
+    --lf-cmp-broker-import-files-hover-bg: #f3f4f6;
+    --lf-cmp-broker-import-files-hover-bg-dark: #374151;
+    --lf-cmp-broker-import-files-hover-text: #374151;
+    --lf-cmp-broker-import-files-hover-text-dark: #d1d5db;
+    --lf-cmp-broker-import-files-btn-primary-bg: #1a4031;
+    --lf-cmp-broker-import-files-on-fill-text: #fff; /* white */
+    --lf-cmp-broker-import-files-btn-primary-hover-bg: #143326;
+    --lf-cmp-broker-import-files-btn-secondary-bg: #6b7280;
+    --lf-cmp-broker-import-files-btn-secondary-hover-bg: #4b5563;
+    --lf-cmp-broker-import-files-subtle-bg: #f9fafb;
+    --lf-cmp-broker-import-files-subtle-bg-dark: #111827;
+    --lf-cmp-broker-import-files-manage-link-text: #1a4031;
+    --lf-cmp-broker-import-files-manage-link-text-dark: #10b981;
+}

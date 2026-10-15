@@ -6,10 +6,13 @@
     import {formatBytes} from '$lib/utils/files/upload';
     import {writeTextToClipboard} from '$lib/utils/clipboard';
     import {NO_PDF_REPORTS, pdfPreviewState, type PdfPreviewReports, type PdfPreviewState} from '$lib/utils/files/pdfPreviewState';
+    import {SPREADSHEET_LIGHT_BORDERS, SPREADSHEET_TARGET_ROW_BG, buildDarkSpreadsheetTheme} from '$lib/theme/drawnColors';
     import type {DocumentManagerCapability, TilingCapability} from '@embedpdf/snippet';
     import {AlertCircle, Copy, Download, Eye, FileImage, FileSpreadsheet, FileText, LoaderCircle, Minus, Plus, RotateCcw, X} from 'lucide-svelte';
     import katex from 'katex';
     import 'katex/dist/katex.min.css';
+    import '$lib/theme/components/files.css';
+    import {isDarkTheme} from '$lib/theme/themeMode';
 
     interface Props {
         open?: boolean;
@@ -74,9 +77,6 @@
 
     /** Left + right cell padding to leave around the widest value. */
     const CELL_PADDING_PX = 24;
-
-    /** Amber, matching the "look at this row" accent used by the evidence tables. */
-    const HIGHLIGHT_BG = 'rgba(251, 191, 36, 0.35)';
 
     let {open = false, preview = null, loading = false, error = null, onRequestClose = () => {}, onSheetChange = () => {}, highlightRows = [], zIndex = 50}: Props = $props();
 
@@ -292,11 +292,11 @@
                 if (token !== tableToken) return;
                 // Firmer grid lines than the stock theme: with faint borders there is no way to
                 // tell a short value from one the column is cutting off.
-                const tableTheme = document.documentElement.classList.contains('dark') ? buildDarkSpreadsheetTheme() : (cheetahGrid.themes?.MATERIAL_DESIGN?.extends?.({borderColor: '#cbd5e1', frozenRowsBorderColor: '#94a3b8'}) ?? 'MATERIAL_DESIGN');
+                const tableTheme = isDarkTheme() ? buildDarkSpreadsheetTheme() : (cheetahGrid.themes?.MATERIAL_DESIGN?.extends?.({...SPREADSHEET_LIGHT_BORDERS}) ?? 'MATERIAL_DESIGN');
 
                 // Tinting whole rows, not single cells: the rows are what the caller is
                 // pointing at, and a single highlighted cell reads as a selection instead.
-                const rowStyle = targets.size === 0 ? undefined : (record: {__rowNumber?: number}) => (record.__rowNumber !== undefined && targets.has(record.__rowNumber) ? {bgColor: HIGHLIGHT_BG} : undefined);
+                const rowStyle = targets.size === 0 ? undefined : (record: {__rowNumber?: number}) => (record.__rowNumber !== undefined && targets.has(record.__rowNumber) ? {bgColor: SPREADSHEET_TARGET_ROW_BG} : undefined);
 
                 const records = rows.map((row, rowIndex) => {
                     const record: Record<string, string | number> = {__rowNumber: rowIndex + 1};
@@ -630,51 +630,6 @@
         }
         return Math.min(720, Math.max(56, Math.ceil(widest) + CELL_PADDING_PX));
     }
-
-    function buildDarkSpreadsheetTheme() {
-        return {
-            color: '#e2e8f0',
-            frozenRowsColor: '#cbd5e1',
-            defaultBgColor: '#0f172a',
-            frozenRowsBgColor: '#111827',
-            selectionBgColor: 'rgba(37, 99, 235, 0.38)',
-            highlightBgColor: '#1e293b',
-            borderColor: '#475569',
-            frozenRowsBorderColor: '#64748b',
-            highlightBorderColor: '#60a5fa',
-            checkbox: {
-                uncheckBgColor: '#0f172a',
-                checkBgColor: '#2563eb',
-                borderColor: '#64748b',
-            },
-            radioButton: {
-                checkColor: '#60a5fa',
-                checkBorderColor: '#60a5fa',
-                uncheckBorderColor: '#64748b',
-                uncheckBgColor: '#0f172a',
-                checkBgColor: '#0f172a',
-            },
-            button: {
-                color: '#e2e8f0',
-                bgColor: '#2563eb',
-            },
-            tree: {
-                lineColor: '#475569',
-            },
-            header: {
-                sortArrowColor: '#94a3b8',
-            },
-            messages: {
-                infoBgColor: '#1d4ed8',
-                errorBgColor: '#b91c1c',
-                warnBgColor: '#b45309',
-            },
-            indicators: {
-                topLeftColor: '#475569',
-            },
-            underlayBackgroundColor: '#0f172a',
-        };
-    }
 </script>
 
 <ModalBase {open} {onRequestClose} maxWidth="5xl" contentClass="file-preview-modal" testId="file-preview-modal" {zIndex}>
@@ -882,7 +837,7 @@
         align-items: flex-start;
         justify-content: space-between;
         gap: 1rem;
-        border-bottom: 1px solid #e5e7eb;
+        border-bottom: 1px solid var(--lf-cmp-file-preview-header-border);
         padding: 1rem 1.25rem;
         flex-shrink: 0;
     }
@@ -911,7 +866,7 @@
         display: flex;
         flex-wrap: wrap;
         gap: 0.4rem;
-        color: #64748b;
+        color: var(--lf-cmp-file-preview-meta-text);
         font-size: 0.85rem;
     }
 
@@ -926,7 +881,7 @@
     .preview-toggle {
         display: inline-flex;
         align-items: center;
-        border: 1px solid #cbd5e1;
+        border: 1px solid var(--lf-cmp-file-preview-toggle-border);
         border-radius: 0.5rem;
         overflow: hidden;
     }
@@ -938,8 +893,8 @@
         align-items: center;
         gap: 0.35rem;
         border: none;
-        background: white;
-        color: #0f172a;
+        background: var(--lf-cmp-file-preview-surface-bg);
+        color: var(--lf-cmp-file-preview-text);
         cursor: pointer;
         text-decoration: none;
         padding: 0.55rem 0.8rem;
@@ -947,13 +902,13 @@
     }
 
     .preview-toggle button.active {
-        background: #1a4031;
-        color: white;
+        background: var(--lf-cmp-file-preview-accent-bg);
+        color: var(--lf-cmp-file-preview-on-accent-text);
     }
 
     .icon-btn,
     .close-btn {
-        border: 1px solid #cbd5e1;
+        border: 1px solid var(--lf-cmp-file-preview-control-border);
         border-radius: 0.5rem;
     }
 
@@ -978,17 +933,17 @@
         justify-content: center;
         gap: 0.75rem;
         padding: 1.25rem;
-        color: #64748b;
+        color: var(--lf-cmp-file-preview-muted-text);
     }
 
     .preview-inline-error {
         justify-content: flex-start;
         padding-inline: 0;
-        color: #b45309;
+        color: var(--lf-cmp-file-preview-inline-error-text);
     }
 
     .error-state {
-        color: #dc2626;
+        color: var(--lf-cmp-file-preview-error-state-text);
     }
 
     .preview-spinner {
@@ -1013,7 +968,7 @@
     .image-stage {
         overflow: auto;
         border-radius: 0.75rem;
-        background: #f8fafc;
+        background: var(--lf-cmp-file-preview-image-stage-bg);
         padding: 1rem;
         overscroll-behavior: contain;
     }
@@ -1052,15 +1007,15 @@
     .grid-host,
     .table-fallback {
         width: 100%;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-file-preview-stage-border);
         border-radius: 0.75rem;
-        background: white;
+        background: var(--lf-cmp-file-preview-surface-bg);
         overscroll-behavior: contain;
     }
 
     .pdf-stage,
     .pdf-fallback {
-        border-color: #cbd5e1;
+        border-color: var(--lf-cmp-file-preview-strong-border);
     }
 
     .pdf-stage,
@@ -1083,7 +1038,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 1rem;
-        color: #64748b;
+        color: var(--lf-cmp-file-preview-muted-text);
         font-size: 0.85rem;
     }
 
@@ -1094,9 +1049,9 @@
     }
 
     .table-toolbar select {
-        border: 1px solid #cbd5e1;
+        border: 1px solid var(--lf-cmp-file-preview-control-border);
         border-radius: 0.45rem;
-        background: white;
+        background: var(--lf-cmp-file-preview-surface-bg);
         padding: 0.4rem 0.6rem;
         color: inherit;
     }
@@ -1124,16 +1079,16 @@
     }
 
     .table-fallback td {
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-file-preview-table-border);
         padding: 0.45rem 0.6rem;
         white-space: nowrap;
     }
 
     .text-stage {
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-file-preview-table-border);
         border-radius: 0.75rem;
-        background: white;
-        color: #0f172a;
+        background: var(--lf-cmp-file-preview-text-stage-bg);
+        color: var(--lf-cmp-file-preview-text);
         overflow: auto;
         padding: 0.75rem 0 1rem;
         overscroll-behavior: contain;
@@ -1156,11 +1111,11 @@
     }
 
     .text-line:hover {
-        background: #f8fafc;
+        background: var(--lf-cmp-file-preview-subtle-bg);
     }
 
     .line-number {
-        color: #64748b;
+        color: var(--lf-cmp-file-preview-muted-text);
         text-align: right;
         user-select: none;
     }
@@ -1175,12 +1130,12 @@
 
     .markdown-stage {
         overflow: auto;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-file-preview-stage-border);
         border-radius: 0.75rem;
-        background: white;
+        background: var(--lf-cmp-file-preview-markdown-stage-bg);
         padding: 1.25rem;
         overscroll-behavior: contain;
-        color: #0f172a;
+        color: var(--lf-cmp-file-preview-text);
         line-height: 1.7;
     }
 
@@ -1229,11 +1184,11 @@
 
     .markdown-stage :global(blockquote) {
         margin: 1rem 0;
-        border-left: 4px solid #cbd5e1;
+        border-left: 4px solid var(--lf-cmp-file-preview-strong-border);
         border-radius: 0.5rem;
-        background: #f8fafc;
+        background: var(--lf-cmp-file-preview-subtle-bg);
         padding: 0.3rem 1rem;
-        color: #475569;
+        color: var(--lf-cmp-file-preview-markdown-stage-blockquote-text);
     }
 
     .markdown-stage :global(table) {
@@ -1244,14 +1199,14 @@
 
     .markdown-stage :global(th),
     .markdown-stage :global(td) {
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-file-preview-table-border);
         padding: 0.55rem 0.7rem;
         text-align: left;
         vertical-align: top;
     }
 
     .markdown-stage :global(th) {
-        background: #f8fafc;
+        background: var(--lf-cmp-file-preview-subtle-bg);
         font-weight: 600;
     }
 
@@ -1259,13 +1214,13 @@
         margin: 1rem 0;
         overflow: auto;
         border-radius: 0.75rem;
-        background: #0f172a;
-        color: #e2e8f0;
+        background: var(--lf-cmp-file-preview-markdown-stage-pre-bg);
+        color: var(--lf-cmp-file-preview-markdown-stage-pre-text);
         padding: 1rem;
     }
 
     .markdown-stage :global(code) {
-        background: #f1f5f9;
+        background: var(--lf-cmp-file-preview-markdown-stage-code-bg);
         border-radius: 0.35rem;
         padding: 0.1rem 0.3rem;
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -1279,7 +1234,7 @@
 
     .markdown-stage :global(hr) {
         border: none;
-        border-top: 1px solid #e2e8f0;
+        border-top: 1px solid var(--lf-cmp-file-preview-stage-border);
         margin: 1.25rem 0;
     }
 
@@ -1292,13 +1247,13 @@
     }
 
     :global(.dark) .preview-header {
-        border-bottom-color: #334155;
+        border-bottom-color: var(--lf-cmp-file-preview-header-border-dark);
     }
 
     :global(.dark) .preview-meta,
     :global(.dark) .table-toolbar,
     :global(.dark) .preview-state {
-        color: #cbd5e1;
+        color: var(--lf-cmp-file-preview-meta-text-dark);
     }
 
     :global(.dark) .preview-toggle,
@@ -1308,62 +1263,62 @@
     :global(.dark) .grid-host,
     :global(.dark) .table-fallback,
     :global(.dark) .markdown-stage {
-        background: #0f172a;
-        border-color: #334155;
-        color: #e2e8f0;
+        background: var(--lf-cmp-file-preview-surface-bg-dark);
+        border-color: var(--lf-cmp-file-preview-toggle-border-dark);
+        color: var(--lf-cmp-file-preview-text-dark);
     }
 
     :global(.dark) .pdf-stage,
     :global(.dark) .pdf-fallback {
-        background: #0f172a;
-        border-color: #475569;
-        color: #e2e8f0;
+        background: var(--lf-cmp-file-preview-surface-bg-dark);
+        border-color: var(--lf-cmp-file-preview-strong-border-dark);
+        color: var(--lf-cmp-file-preview-pdf-stage-text-dark);
     }
 
     :global(.dark) .preview-toggle button {
-        background: #0f172a;
-        color: #e2e8f0;
+        background: var(--lf-cmp-file-preview-surface-bg-dark);
+        color: var(--lf-cmp-file-preview-text-dark);
     }
 
     :global(.dark) .preview-toggle button.active {
-        background: #1a4031;
+        background: var(--lf-cmp-file-preview-accent-bg-dark);
     }
 
     :global(.dark) .image-stage {
-        background: #0f172a;
+        background: var(--lf-cmp-file-preview-image-stage-bg-dark);
     }
 
     :global(.dark) .text-stage {
-        background: #111827;
-        border-color: #334155;
-        color: #e2e8f0;
+        background: var(--lf-cmp-file-preview-text-stage-bg-dark);
+        border-color: var(--lf-cmp-file-preview-table-border-dark);
+        color: var(--lf-cmp-file-preview-text-dark);
     }
 
     :global(.dark) .text-line:hover {
-        background: #1e293b;
+        background: var(--lf-cmp-file-preview-subtle-bg-dark);
     }
 
     :global(.dark) .table-fallback td {
-        border-color: #334155;
+        border-color: var(--lf-cmp-file-preview-table-border-dark);
     }
 
     :global(.dark) .markdown-stage :global(blockquote) {
-        background: #1e293b;
-        border-left-color: #475569;
-        color: #cbd5e1;
+        background: var(--lf-cmp-file-preview-subtle-bg-dark);
+        border-left-color: var(--lf-cmp-file-preview-strong-border-dark);
+        color: var(--lf-cmp-file-preview-markdown-stage-blockquote-text-dark);
     }
 
     :global(.dark) .markdown-stage :global(th),
     :global(.dark) .markdown-stage :global(td) {
-        border-color: #334155;
+        border-color: var(--lf-cmp-file-preview-table-border-dark);
     }
 
     :global(.dark) .markdown-stage :global(th) {
-        background: #1e293b;
+        background: var(--lf-cmp-file-preview-subtle-bg-dark);
     }
 
     :global(.dark) .markdown-stage :global(code) {
-        background: #1e293b;
+        background: var(--lf-cmp-file-preview-markdown-stage-code-bg-dark);
     }
 
     :global(.file-preview-modal) {

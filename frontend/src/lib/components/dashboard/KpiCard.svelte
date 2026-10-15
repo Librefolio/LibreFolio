@@ -23,6 +23,7 @@
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_BAR, SIGN_TEXT} from '$lib/theme/toneClasses';
 
     interface Props {
         label: string;
@@ -45,7 +46,7 @@
 <div class="relative bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-6 flex flex-col gap-1 overflow-hidden" data-testid="kpi-card">
     <!-- Subtle accent line on top based on positive/negative state -->
     {#if isPositive !== undefined}
-        <div class="absolute top-0 left-0 right-0 h-0.5 {isPositive ? 'bg-green-500 dark:bg-green-400' : 'bg-red-500 dark:bg-red-400'}"></div>
+        <div class="absolute top-0 left-0 right-0 h-0.5 {isPositive ? SIGN_BAR.accent.gain : SIGN_BAR.accent.loss}"></div>
     {/if}
 
     <!-- Label -->
@@ -67,7 +68,7 @@
 
         <!-- Change badge (gain / loss) -->
         {#if changeValue !== undefined || changePercent !== undefined}
-            <p class="text-sm font-medium transition-opacity duration-300 {isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}" class:opacity-50={refreshing} data-testid="kpi-change">
+            <p class="text-sm font-medium transition-opacity duration-300 {isPositive ? SIGN_TEXT.kpi.gain : SIGN_TEXT.kpi.loss}" class:opacity-50={refreshing} data-testid="kpi-change">
                 {changeValue ?? ''}{changeValue !== undefined && changePercent !== undefined ? ' ' : ''}{changePercent !== undefined ? `(${formatPercent(changePercent)})` : ''}
             </p>
         {/if}

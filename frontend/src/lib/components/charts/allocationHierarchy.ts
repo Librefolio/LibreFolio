@@ -99,7 +99,7 @@ export interface AllocationHierarchyOptions {
 export interface AllocationHierarchyResult<T> {
     key: string;
     item: T;
-    /** 6-digit hex, so the existing `color + '88'` alpha concatenation keeps working. */
+    /** 6-digit hex: the history chart's area fill appends its alpha to it (`withHexAlpha(color, '88')`). */
     color: string;
     /** The group this entry belongs to, as returned by `resolvePrimary`. */
     primary: string;

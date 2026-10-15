@@ -1866,30 +1866,166 @@ plugin.
   - Modifica dal vivo di variabili CSS, colori dei fogli di stile e colori dei grafici.
   - Export JSON + Markdown con file e riga, per l'agente.
 
-  Dettagli: [progetto](55_colorSystem/design-designerLab.md); piano del figlio in `55_colorSystem/L-designerLab/`.
+  Dettagli: [progetto](../Phase_1/10_colorSystem/design-designerLab.md); piano del figlio in `../Phase_1/10_colorSystem/L-designerLab/`.
+- **L-2 · L'inventario Python legge il catalogo JS** — basso; L, 14/10 (decisione 4: una fonte sola, passaggio separato).
+  Oggi le due implementazioni danno conteggi identici (verifica riga per riga) e devono restare allineate a mano.
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 1».
+- **L-3 · Campionario dei componenti negli stati principali** — medio; L, 14/10 (decisione 6: dopo la v1).
+  Dettagli: [progetto](../Phase_1/10_colorSystem/design-designerLab.md), §11.6.
+- **L-4 · Salvataggio dell'export sul server di test** — basso; L, 14/10 (decisione 3: solo download nella v1).
+  Serve un endpoint solo in modalità test. Dettagli: [progetto](../Phase_1/10_colorSystem/design-designerLab.md), §11.3.
+- **L-5 · Contratto `themeRevision` con R** — basso; L, 14/10.
+  - Se R-1 sostituisce gli osservatori dei grafici con uno store, il Lab può incrementarlo invece di riapplicare le opzioni.
+  - Oggi la ri-applicazione dal vivo copre tutti i grafici.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Correzioni al progetto» 1.
+- **L-6 · Indice «visto dal vivo» per valore** — basso; L, 14/10.
+  - Le schede dell'app non riferiscono al Lab quali valori del catalogo hanno davvero visto, nel CSSOM o in `setOption`.
+  - La portata reale di L3 (colori derivati, palette predefinita di ECharts) resta dichiarata ma non misurata.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Correzioni al progetto» 2.
+- **L-7 · Accettazione dal vivo con la designer** — medio; L, 14/10: è la DoD esterna del passo 4, su
+  `scripts/visual_review/designer_live.sh`. Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 4».
+- **L-8 · File del componente dalla classe di scope** — basso; L, 14/10 (passo 5b).
+  - Il selettore conosce la classe di scope Svelte dell'elemento puntato (`svelte-xxxx`), ma non il file `.svelte` a cui appartiene.
+  - Oggi i candidati vengono da test id, regole e usi delle classi. Una mappa classe → file costruita al build, solo in debug, aggiungerebbe il file del componente come candidato.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 5b».
+- **L-9 · Limiti noti del selettore di elementi** — basso; L, 14/10 (passo 5b).
+  - Non si possono puntare gli elementi con `pointer-events: none`.
+  - I colori dei grafici calcolati da funzioni (tooltip) restano al piano globale anche dentro una specializzazione.
+  - Uno sfondo visto attraverso, che viene da fuori del componente, non si specializza.
+  - Il percorso strutturale del selettore di anteprima si rompe se il DOM cambia.
+
+  Dettagli: pagina developer `designer-lab.md`, «Known Limits».
+- **L-10 · Ruoli di T nel catalogo** — basso-medio; L, 14/10 (avviso del coordinatore sul workstream T). **Dipende da T-1 nella base di L.**
+  - Classi `*-lf-<nome>`: il conteggio va esteso nello scanner **e** in `color_inventory.py` con una riga ciascuno, per tenere la parità. La riga Python di `tw_custom_re` è **assegnata a L** come estensione di ④ (coordinatore, 14/10 alle 21:59). Si fanno entrambe nello stesso cambio; la parità si verifica dopo, sullo stesso albero; i numeri prima e dopo vanno nell'handoff.
+  - Catena `@theme inline`: `--color-lf-card: var(--lf-surface-card)` è un alias che a runtime non esiste. La palette e le «Variabili dell'app» devono mandare la modifica a `--lf-surface-card`, non all'alias.
+  - L1: oggi gli override stanno su `html`, quindi un sotto-albero `.dark`/`.light` che ridefinisce i ruoli tiene i suoi valori. Da scriverli anche sui selettori del token (`html.dark, .dark`). Oggi nessun sotto-albero lo fa.
+  - Il selettore di elementi non ha bisogno di nulla: con `inline` la regola vincitrice legge già `var(--lf-…)`.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 6».
+- **L-11 · Interruttore «mostra i rimasti indietro»** — basso; proposta di T, 14/10.
+  - Un contorno di debug, nel layer `lf-designer-lab` e sincronizzato tra le schede, sugli elementi con classi legacy (`-gray-`, `-slate-`, `bg-white`, `libre-`).
+  - La lista va presa dal piano di migrazione di T.
+  - Va fatto dopo il checkpoint dei passi 5b–6, quando T-1 avrà fissato i ruoli.
+- **L-12 · Il runner può ricostruire in release a metà giro** — medio; L, 14/10, dal rapporto di `test-author` E2E. **Proprietario: chi mantiene il runner** (`scripts/test_runner/_frontend_common.py`).
+  - Il server condiviso (`dev.py server --test`) costruisce il frontend in debug. Poi l'azione chiama `_ensure_frontend_build()` con `debug=False`, che ricostruisce **in release** se un file sotto `frontend/src` è più nuovo della build.
+  - Se un sorgente cambia in quel momento, il server serve una build senza Lab e gli E2E del Lab cadono a metà giro. Il problema riguarda anche chiunque modifichi `src` mentre gira una suite.
+  - Il 14/10 non è successo: ogni giro ha stampato «Frontend build is up to date».
+  - Correzione possibile: allineare `_ensure_frontend_build()` alla modalità del server di test, cioè debug, o farlo saltare quando il server di test è già partito.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 6».
+- **L-13 · Soggetti degli E2E del Lab che seguono la migrazione di T** — basso; L, 15/10, dal rapporto di `test-author` dopo il fuso con R.
+  - Gli E2E del Lab ricavano a runtime come un componente scrive il colore (fuso con R). Restano però legati ad alcuni elementi dell'app, che le ondate di T cambieranno:
+    - **W4**, transazioni: il sottotitolo della pagina passa a un'utility di ruolo (`text-lf-*`). `textPaletteClassOf` cerca una classe di palette e fallisce in modo esplicito. Con L-10 l'helper deve accettare anche le utility di ruolo, con la catena alias → ruolo. Il test L1, la sospensione e la scorciatoia vanno riportati su quel percorso.
+    - **B6**, pulizia: sparisce l'override P1 di `app.css` su `text-gray-500`. Il test del selettore in scuro va ritirato o riportato su un nuovo soggetto P1, se ne resta uno. Decisione di L in quel momento.
+    - **W6**, DataTable: l'intestazione con un'utility di ruolo chiede a `pickView` i candidati `class-use` via ruolo, cioè L-10 (2). Senza L-10 il controllo «candidato in `DataTable.svelte`» diventa rosso, e a ragione.
+    - **W5**, ponte sRGB per ECharts: se i colori dei grafici smettono di essere letterali, il test L3 e forse il motore L3 vanno rivisti.
+  - Ogni rottura è esplicita: il test cade con un messaggio che nomina il presupposto mancante.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Gallery candidata di L e validazione del fuso con R».
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 
 Ogni ondata va dimostrata con una gallery dello stesso giorno `identical` (a parte le schermate instabili della 56).
 Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano generale, «Decisioni del developer»).
 
-- **R-1 · Colori dei grafici in un modulo unico** — alto; coordinatore, 14/10.
+> **Stato (R, 15/10): ✅ R chiuso.** Lotti A–D in `dev_release2` da `8fd8e494b`; cancello gallery unico A+B+C+D
+> superato. Restano aperte R-5…R-8. Piano: [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md).
+
+- ✅ **R-1 · Colori dei grafici in un modulo unico** — alto; coordinatore, 14/10.
   - Oggi: 4 set per assi, griglie e tooltip; 3 palette di allocazione; coppie chiaro/scuro scritte in 17 grafici.
   - Stessi valori, divergenze con un nome.
 
-  Dettagli: [report 04](55_colorSystem/analysis/04_charts_dataviz.md), §1–§3.
-- **R-2 · Funzioni condivise per segno, stati e badge** — medio; coordinatore, 14/10.
+  Dettagli: [report 04](../Phase_1/10_colorSystem/analysis/04_charts_dataviz.md), §1–§3.
+  - Stato (R, 14/10): codice nel checkpoint del lotto B (W3–W5). `lib/theme/themePair.ts` (`themed()`),
+    `chartTheme.ts`, `chartPalettes.ts`, `chartColorScales.ts`: 229 siti in 33 file; neutri, palette, serie, formule e
+    lotti; ogni divergenza ha un nome (`CHART_GAIN_LOSS.price` `#ef4444` / `.portfolio` `#dc2626`, box del tooltip
+    comune e della candela, interesse di Growth e dei lotti…). Il dividendo di Growth e dei lotti è ora una voce sola. Si
+    chiude con il commit e il cancello B.
+  - Stato (R, 14/10), lotto D (W8, D4): il tema si legge da un solo punto, `lib/theme/themeMode.ts`
+    (`isDarkTheme()`, `onThemeClassChange()`).
+    - Interessa 16 osservatori e 23 letture di `classList.contains('dark')` in 19 file.
+    - Il ridisegno a ogni cambio di classe di `<html>` resta.
+    - Gate `themeModeReads`: niente letture o osservatori della classe fuori da `themeMode.ts`.
+    - Piano: [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W8».
+  - ✅ Chiusa il 15/10 (R): lotti B (`75c45d923`) e D (`98731240d`), in `dev_release2` da `8fd8e494b`; cancello
+    gallery unico A+B+C+D superato.
+- ✅ **R-2 · Funzioni condivise per segno, stati e badge** — medio; coordinatore, 14/10.
   - Oggi: ternario guadagno/perdita in almeno 20 punti e 7 mappe di stato indipendenti.
   - Output identici.
 
-  Dettagli: [report 03](55_colorSystem/analysis/03_semantic_dynamic_logic.md), §1–§3.
-- **R-3 · Hex nei `<style>` in variabili CSS con lo stesso valore** (P8: `DataTable*`, modali file e immagini,
-  `ConfirmModal`) — medio; coordinatore, 14/10. Dettagli: [report 02](55_colorSystem/analysis/02_ui_components.md), §4.
-- **R-4 · Funzioni fragili e refusi senza effetto visibile** — basso; coordinatore, 14/10.
+  Dettagli: [report 03](../Phase_1/10_colorSystem/analysis/03_semantic_dynamic_logic.md), §1–§3.
+  - Stato (R, 14/10): codice nel checkpoint del lotto A (W1–W2): `lib/theme/toneClasses.ts` (`SIGN_TEXT`, `SIGN_BAR`,
+    `POLARITY_TONES`, `STATUS_TONES`, `KIND_TONES`), 42 siti di segno in 20 file e 11 mappe di stato in 9 file; CSS
+    compilato identico alla baseline. Si chiude con il commit del checkpoint e il cancello A.
+  - ✅ Chiusa il 15/10 (R): lotto A (`d80b9e0cd`), in `dev_release2` da `8fd8e494b`; cancello gallery unico
+    A+B+C+D superato.
+- ✅ **R-3 · Hex nei `<style>` in variabili CSS con lo stesso valore** (P8: `DataTable*`, modali file e immagini,
+  `ConfirmModal`) — medio; coordinatore, 14/10. Dettagli: [report 02](../Phase_1/10_colorSystem/analysis/02_ui_components.md), §4.
+  - Stato (R, 14/10): codice nel checkpoint del lotto C (W6–W7).
+    - 16 componenti, 908 dichiarazioni, 604 token `--lf-cmp-<componente>-<ruolo>` con gemelle `-dark`, su `:root` in
+      `lib/theme/components/{table,media,files,dialogs}.css`, importati dai componenti; le regole `.dark` restano
+      dove sono.
+    - I valori sono quelli che la build emetteva: esbuild quantizza i colori delle dichiarazioni, ma non quelli delle
+      custom property.
+    - Fuori dal CSS, cioè cheetah-grid e SVG in data URL, i colori vanno in `lib/theme/drawnColors.ts`.
+    - Prove: CSS compilato identico regola per regola; definizioni presenti con ogni pagina che le usa; gate
+      `themeComponentTokens` in `core-unit` (definizione unica, import, nessun token orfano).
+    - Si chiude con il commit e il cancello C.
+  - Stato (R, 14/10), lotto D (W9, D5): i quattro file P8 fuori elenco (pagina dei file, `BrokerImportFilesModal`,
+    `ImportBrokerMismatchModal`, `CompactCashCell`).
+    - 172 letterali diventano 124 token: 728 in tutto.
+    - Letterali fuori da `lib/theme/**` e da `app.css`, dalla base al lotto D: hex da 1.554 a 88, funzioni colore da
+      198 a 50.
+    - Piano: [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W9».
+  - ✅ Chiusa il 15/10 (R): lotti C (`0b660632f`) e D (`98731240d`), in `dev_release2` da `8fd8e494b`; cancello
+    gallery unico A+B+C+D superato.
+- ✅ **R-4 · Funzioni fragili e refusi senza effetto visibile** — basso; coordinatore, 14/10.
   - `hexToRgba` e la concatenazione `+ '88'` accettano solo `#rrggbb`.
   - La meta `theme-color` scura è `#156534` invece di `#166534`.
 
-  Dettagli: [report 01](55_colorSystem/analysis/01_theme_foundation.md), §6.5; [report 04](55_colorSystem/analysis/04_charts_dataviz.md), §5.
+  Dettagli: [report 01](../Phase_1/10_colorSystem/analysis/01_theme_foundation.md), §6.5; [report 04](../Phase_1/10_colorSystem/analysis/04_charts_dataviz.md), §5.
+  - Stato (R, 14/10): codice e test nel checkpoint del lotto A (W0); `lib/theme/colorAlpha.ts`, meta corretta nei tre
+    punti con gate di concordanza. Si chiude con il commit del checkpoint e il cancello A. Piano:
+    [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W0».
+  - ✅ Chiusa il 15/10 (R): lotto A (`d80b9e0cd`), in `dev_release2` da `8fd8e494b`; cancello gallery unico
+    A+B+C+D superato. Il timbro di `static/sw.js`, che andava rifatto con la correzione di `offline.html`, l'ha
+    aggiunto il coordinatore all'ingresso (`23f6578f3`).
+- **R-5 · `withAlpha` su `hsl()` con spazi produce un colore non valido** — minimo; R, 14/10.
+  - `hsla(210 68% 44%, a)` mescola le due sintassi; oggi nessun chiamante ci passa (`lotColor` non arriva a `withAlpha`).
+  - Da correggere quando un colore con spazi ci arriverà (fase B), con la gallery.
+
+  Dettagli: piano R, «W0», nota «Fuori pista».
+- **R-6 · Viola della linea di anteprima negli editor dei dati** — minimo; coordinatore, 14/10.
+  - `color: '#a855f7'` scritto a mano in `assets/AssetDataEditorSection.svelte:248` e in
+    `fx/FxDataEditorSection.svelte:129`.
+  - Fuori dal perimetro di R: sono cartelle della 1.3. Passa alla fase B.
+  - Fino ad allora è un'eccezione del cricchetto dei colori letterali, che dal 14/10 è il gate M2 di T: R gli ha
+    consegnato l'elenco delle eccezioni.
+
+  Dettagli: piano R, «W7», nota sulle eccezioni del cricchetto.
+- **R-7 · Due viste non seguono il cambio di tema dal vivo** — basso; R, 14/10 (osservazione del `test-author` in W8).
+  - `charts/SemiDonutChart.svelte` e l'anteprima a tabella di `files/FilePreviewModal.svelte` (cheetah-grid)
+    leggono il tema quando disegnano, ma non hanno osservatore. Dopo un cambio di tema mostrano i colori vecchi fino
+    al ridisegno successivo o alla riapertura.
+  - Precede R. Correggerlo cambia il comportamento, quindi non è di R.
+  - Riguarda T (B4) e il Designer Lab, che riapplica i colori dal vivo. La correzione è un `onThemeClassChange()`
+    con ridisegno.
+
+  Dettagli: [piano R](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W8», «Fuori pista».
+- **R-8 · `--resolve` della baseline colori toglie un `--accept`** — basso; R, 15/10; per T.
+  - `theme-roles.mjs --resolve` (`mergeBaselines`) dà a una riga presente sui due lati il m1 minore e **solo i
+    colori che entrambi hanno**, senza guardare la base né le righe `~accept`.
+  - Se un lato ha accettato uno scambio di colore e l'altro ha ancora la riga della base, il colore accettato
+    sparisce e `--check` torna rosso. È successo il 15/10, nel merge della base di R con T-2, sulla correzione D3 di
+    `themeStore.ts`: rimediato rilanciando lo stesso `--accept`, con l'OK del coordinatore.
+  - Correzione proposta: un vero merge a tre vie (se un lato è uguale alla base, vince l'altro), oppure vince il
+    lato che ha un `~accept` per quel file.
+
+  Dettagli: [piano R](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «Merge della base con T-2»; wiki
+  `problems/colour-ratchet-resolve-drops-an-accept`.
 
 ## G · Gallery deterministica (56)
 
@@ -2490,14 +2626,16 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 ## B · Backup e Docker (fase 01)
 
 Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md). Sessione avviata il 15/10 alle
-07:10, solo analisi, sulla base `ee5d81a6f`.
+07:10, solo analisi, sulla base `ee5d81a6f`. Codice autorizzato il 15/10 alle 11:25 (delega del developer): B0 e B1,
+sulla base `23f6578f3`.
 
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
-analisi, sulla base `380a3e768`.
+analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega del developer): E0 ed E1, sulla base
+`23f6578f3`.
 
 ## Y · Cruscotto e grafici (fase 01)
 
-Piano: [`09_dashboardCharts`](../Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md). Sessione non ancora
-avviata.
+Piano: [`09_dashboardCharts`](../Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md). Sessione avviata il
+15/10 alle 11:28, solo analisi, sulla base `23f6578f3`.
