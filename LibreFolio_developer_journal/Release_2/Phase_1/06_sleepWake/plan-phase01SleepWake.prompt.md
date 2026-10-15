@@ -31,7 +31,7 @@
 | Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ⏸ attende gli agganci di H |
 | Z5 | «Aggiornamento prezzi…» | ⏸ attende l'area avvisi e la configurazione pubblica di H |
 | Z6b | C-49: la cura | 📝 disegnato il 15/10 (sezione «Z6b — disegno»), punto 35 deciso; il codice aspetta gli agganci di H (CP2b) e l'autorizzazione del developer |
-| Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | 📝 disegnato il 15/10 (sezione «Z7 — disegno»): Z7a primitiva e configurazione, poi X con il contratto `RATE_LIMITED` (X1–X8, girato dal coordinatore), poi Z7b scheduler e Z7c frontend; decisioni D-Z7 prese dal coordinatore; il codice di Z7a aspetta l'autorizzazione del developer, chiesta dal coordinatore |
+| Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | 📝 disegnato il 15/10 (sezione «Z7 — disegno»), decisioni D-Z7 prese dal coordinatore; **Z7a ✅ 15/10** (primitiva, configurazione, servizio, test verdi; sezione «Z7a»); poi X con il contratto `RATE_LIMITED` (X1–X8), poi Z7b scheduler e Z7c frontend |
 
 Checkpoint FROZEN a fine Z6a; poi un checkpoint per lotto.
 
@@ -848,3 +848,118 @@ tool.
 - Con la grazia di 10 s il runner non mostra l'avviso nelle run di categoria.
 - `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS=0` ridà il comportamento di oggi.
 - Doc EN aggiornata: variabili d'ambiente, deploy con Docker e con Fly; `.env.example` aggiornato.
+
+## Z7a — la primitiva delle pause (codice, autorizzato il 15/10)
+
+> **Autorizzazione del developer, alla lettera** (15/10 16:3x, inoltrata dal coordinatore; risposta alla domanda
+> «Posso far partire Z con il codice di Z7a?»): «Sì, Z parta con Z7a».
+>
+> - **Base**: piano committato in `4992b864b`, poi il merge di `dev_release2` a `dae4de4fa` (W, i colori di L-10, i
+>   journal del coordinatore): HEAD `42713788e`, senza conflitti.
+> - **Superfici**: `backend/app/utils/runtime/cooldown.py`, `backend/app/services/platform/provider_cooldown.py`,
+>   `backend/app/config/sleep_wake.py`, la sezione di Z in `.env.example` con l'eccezione della decisione 34, i test e
+>   le loro voci nel catalogo del runner.
+> - X fa nascere `call_provider` nel suo CP10 con la firma di questo disegno, e aggancia il registro in X1–X8: Z non
+>   tocca `services/assets/` né `services/fx/`.
+
+### Contratto del codice
+
+- `utils/runtime/cooldown.py` (foglia, nessun import dai servizi o dalla configurazione):
+  - `RateLimitedError(Exception)`, il marcatore: `__init__(*args, retry_after=None, scope=None)`, con gli attributi
+    omonimi; si combina con le eccezioni di dominio (`AssetSourceError` chiama `super().__init__(message)`);
+  - `retry_after_seconds(value, *, now=None) -> float | None`: secondi (anche decimali) o data HTTP; una data passata
+    vale 0; `None` su un valore assente, vuoto, negativo, non finito o illeggibile;
+  - `CooldownState(key, refusals, remaining, trial_in_flight)`, immutabile, per `snapshot()`;
+  - `Cooldowns(base_seconds, max_seconds, *, hard_max_seconds=86_400, jitter=0.1, trial_seconds=60, max_keys=10_000,
+    clock=time.time, rng=random.random)`; argomenti fuori dominio → `ValueError`. I metodi:
+    - `check(key) -> float`: 0 se si può chiamare. Durante una pausa restituisce il tempo che manca; alla scadenza dà
+      il posto di prova a un chiamante solo, e agli altri il tempo che resta alla prova;
+    - `refused(key, retry_after=None, *, base_seconds=None, max_seconds=None) -> float`: l'attesa
+      `max(min(base × 2^(n−1), max), min(retry_after, hard_max))`, più un jitter in `[0, jitter]` della stessa,
+      dentro `hard_max`. Un rifiuto che arriva più di `max` dopo la fine della pausa precedente riparte da n = 1. Un
+      rifiuto che arriva **mentre la pausa è in corso** viene da una chiamata già partita: non conta e non accorcia la
+      pausa, e solo un `Retry-After` che finisce dopo la allunga. Così una raffica di chiamate concorrenti rifiutate
+      insieme mette in pausa una volta sola (regola aggiunta il 15/10, su una domanda di test-author: senza, 5 chiamate
+      in parallelo partivano da n = 5, cioè 960 s invece di 60);
+    - `succeeded(key) -> int`: dimentica la chiave e restituisce i rifiuti che aveva. Durante una pausa in corso non fa
+      niente e restituisce 0, perché la risposta viene da una chiamata già partita;
+    - `released(key)`: libera il posto di prova di un esito senza verdetto (un altro errore, un timeout);
+    - `snapshot()`, `reset(key)`, `clear()`, `len()`.
+  - Se l'orologio va indietro, il tempo che manca non supera mai l'attesa registrata. Il limite `max_keys` è LRU.
+    Thread-safe.
+- `config/sleep_wake.py`, la sezione di Z:
+  - `SleepWakeConfigError(variable, code, message)`;
+  - `provider_cooldown_base_seconds()`: `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS`, un intero ≥ 0, default 60, con 0
+    spento; altrimenti `PROVIDER_COOLDOWN_BASE_INVALID`;
+  - `provider_cooldown_max_seconds()`: `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS`, un intero da 1 a 86 400, default
+    3600; altrimenti `PROVIDER_COOLDOWN_MAX_INVALID`;
+  - `provider_cooldown_settings()`: le due insieme, `ProviderCooldownSettings(base_seconds, max_seconds)` con
+    `enabled`; un tetto sotto la base, con le pause accese, dà `PROVIDER_COOLDOWN_MAX_INVALID`.
+- `services/platform/provider_cooldown.py`:
+  - l'istanza `PROVIDER_COOLDOWNS`, letta al momento della chiamata, così un test la sostituisce;
+  - la chiave `(dominio, fornitore, scope)`;
+  - `wait_before_call`, `record_refusal(…, retry_after=None)`, `record_success`, `record_no_verdict`,
+    `cooldown_snapshot`, `reset_provider_cooldowns`;
+  - la configurazione si legge a ogni chiamata; con le pause spente non si registra nulla e non si salta nulla;
+  - log: WARNING a ogni pausa che inizia o cresce, INFO al primo successo dopo una pausa, DEBUG per le chiamate
+    saltate.
+
+> **Fuori pista (decisione)**: un valore non valido delle due variabili non ferma l'avvio, come diceva il disegno:
+> scrive un errore nel log, una volta per valore, e si usano i default, come fa l'email. Due motivi: il controllo
+> d'avvio sta in `config_audit.py` di H, fuori dalle superfici assegnate; e un valore sbagliato qui non mette a
+> rischio niente. Se servirà, un `ConfigCheck` si aggiunge dopo, con H.
+
+### Passi di Z7a
+
+1. Test di `test-author`:
+   - `backend/test_scripts/test_utilities/test_cooldown.py`, azione `utils cooldown`;
+   - `backend/test_scripts/test_services/test_provider_cooldown.py`, azione `services provider-cooldown`;
+   - entrambi registrati nel catalogo, PURE. ✅ 2026-10-15
+
+   > **Note implementazione**: 41 test (CDW-001…041, 112 casi) e 23 test (PCD-001…023, 66 casi). Le voci sono in
+   > `scripts/test_runner/_backend_utils.py` e `_backend_services.py`, solo aggiunte, con `isolation="pure"` e il
+   > perché in un commento. Il log «una volta per variabile e codice» si prova in un interprete nuovo (PCD-022,
+   > `structlog.testing.capture_logs`), come `test_jwt_secret_blank.py`. `check-orphans` verde: 299 test raggiungibili.
+   > black pulito; ruff segnala un I001 per file finché i moduli non esistono.
+   >
+   > **Fuori pista**: test-author ha trovato un difetto del contratto. Un rifiuto durante una pausa in corso contava
+   > come consecutivo, quindi 5 chiamate in parallelo partivano da n = 5 (960 s). Il contratto è corretto sopra, con la
+   > regola della pausa in corso; i test sono stati rivisti (CDW-036…041, PCD-023). Le letture fissate da test-author:
+   > - il jitter sopra il tetto, fino a 3960 s, è voluto;
+   > - il decadimento si misura dalla fine estesa;
+   > - un rifiuto che non conta segna comunque la chiave come usata (LRU);
+   > - con una configurazione non valida si usa la coppia di default intera.
+2. Rossi: i moduli non esistono, i test non importano. ✅ 2026-10-15
+
+   > **Note implementazione**: `dev.py test --test-port 6186 --data-dir /tmp/librefolio-r13-z utils cooldown` →
+   > exit 1, `ModuleNotFoundError: No module named 'backend.app.utils.runtime.cooldown'`;
+   > `… services provider-cooldown` → exit 1, `No module named 'backend.app.config.sleep_wake'`. Entrambi alla raccolta,
+   > nessun test eseguito. Log: `/tmp/libreFolio_z7a_red_*.log`.
+3. Codice dei tre moduli. ✅ 2026-10-15
+
+   > **Note implementazione**: scritti prima in bozza fuori dal repo (cartella di sessione `files/z7a-draft/`), così i
+   > rossi restavano veri. Una prova mia in `/tmp` copriva crescita, raffica, estensione, prova unica, LRU, thread e
+   > `Retry-After`. Poi copiati in `backend/app/utils/runtime/cooldown.py`, `backend/app/config/sleep_wake.py` e
+   > `backend/app/services/platform/provider_cooldown.py`. Sono gli unici file di prodotto toccati: niente in
+   > `services/assets/` né in `services/fx/`. Le docstring di modulo dicono il perché dell'orologio di parete, della
+   > prova unica e della regola della pausa in corso.
+4. Verdi, più ruff e black sui file nuovi. ✅ 2026-10-15
+
+   > **Note implementazione** (corsia 6186, `nice -n 15`, un file alla volta):
+   > - `utils cooldown` **112 passati** in 1,6 s; `services provider-cooldown` **66 passati** in 3,2 s;
+   > - le guardie toccate dal lotto: `services config-env-example` 36/36, `utils runtime-isolation` 195/195;
+   > - ruff e black puliti sui 7 file del lotto (3 moduli, 2 test, 2 file del runner);
+   > - `dev.py lint --dead-code --scope backend` esce 1 come prima, per i reperti già presenti. Di nuovi ce ne sono 8,
+   >   tutti nei due moduli: le sei funzioni del servizio, `RateLimitedError` e `retry_after_seconds`. Li usano solo i
+   >   test finché X non aggancia il confine (X1–X4); vale lo stesso per le funzioni dell'email di E;
+   > - porta 6186 libera.
+5. `.env.example`, poi la doc dev della primitiva (`docs-writer`). ✅ 2026-10-15 (`.env.example`); doc rimandata
+
+   > **Note implementazione**: nella sezione «Sleep and Wake» di `.env.example` le due variabili, commentate,
+   > sostituiscono «No options yet.»: default, 0 per spegnere, `Retry-After` fino a un giorno, e l'eccezione alla
+   > regola del default invariato, con la decisione 34 citata.
+   >
+   > **Fuori pista**: la doc (la pagina admin `configuration.en.md`, che ha le traduzioni, e quella d'architettura) non
+   > l'ho scritta ora. Descriverebbe un comportamento che non esiste finché X non aggancia il confine: senza X1–X4 le
+   > variabili non hanno effetto. È nel backlog come Z-9, da fare con l'aggancio.
+6. Checkpoint FROZEN. ✅ 2026-10-15
