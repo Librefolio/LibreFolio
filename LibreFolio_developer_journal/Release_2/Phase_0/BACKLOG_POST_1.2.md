@@ -2148,6 +2148,10 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Probabile causa: `lib/stores/app/language.ts`, `init()`.
   - Si corregge in un lotto di A che tocca la pagina d'accesso o le preferenze, con il rosso visto prima (E2E con il
     locale del browser `it-IT`).
+  - ✅ **Corretta in A5b** (15/10; commit all'ingresso di A5). Il negozio della lingua segue `locale` di
+    svelte-i18n finché non c'è una preferenza salvata e nessuno ne sceglie una. Il selettore pubblica
+    `data-language`. Rosso visto prima: `language.test.ts` (6 rossi su 7, poi 7 ✅). L'E2E `it-IT`/`fr-FR` in
+    `auth.spec.ts` gira dopo la finestra.
   - Dettagli: idem, «A3.0».
 - **A-9 · Il runner non toglie le variabili degli account dall'ambiente della corsia** — basso; A (15/10, trovata da
   `test-author` in A5).
@@ -2157,7 +2161,21 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - I casi che cambiano queste variabili girano già nel processo del test, con `monkeypatch`: il rischio è solo
     l'ambiente di chi lancia.
   - È infrastruttura condivisa dei test (`configure_test_runtime`): decide il coordinatore.
+  - ➡️ **Passa a H come C-96** (coordinatore, 15/10). E ha trovato che il problema è più largo: ogni `LIBREFOLIO_*`
+    del `.env` arriva alle corsie dei test, comprese le future variabili SMTP. La cura generale di H copre anche
+    queste quattro. A non ha scritto né codice né test per A-9.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5.2».
+- **A-10 · Debito di traduzione delle pagine toccate da A5** — basso; A, 15/10.
+  - Le pagine EN di A5a e A5b sono nel lotto; IT, FR ed ES sono indietro su 6 pagine: `admin/configuration`,
+    `admin/cli_tools`, `admin/settings`, `admin/service_exposure`, `community/faq`, `user/getting-started`.
+  - Vanno tradotte insieme: si linkano con ancore esplicite nuove (`#accounts`, `#user-limit`, `#registration`,
+    `#invite`, `#reset-link`, `#reset-onboarding`, `#invitation-link`, `#password-reset-link`), da tenere uguali
+    in ogni lingua.
+  - Finché non sono tradotte il build stretto resta verde: le pagine vecchie non puntano alle ancore nuove.
+  - Si fa dopo A6–A9, che toccano di nuovo le stesse pagine. La prepara il lotto A10, solo su richiesta
+    esplicita del developer (coordinatore, 15/10).
+
+  Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
