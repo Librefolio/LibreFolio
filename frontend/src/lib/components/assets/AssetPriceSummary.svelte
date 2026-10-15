@@ -24,6 +24,7 @@
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     interface Props {
         /** Last (closing) price */
@@ -114,7 +115,7 @@
             </div>
 
             {#if deltaPercent !== null}
-                <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                <span class="flex items-center gap-0.5 text-xs font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}">
                     {#if deltaPercent >= 0}<TrendingUp size={12} />{:else}<TrendingDown size={12} />{/if}
                     {formatPercent(deltaPercent)}
                 </span>

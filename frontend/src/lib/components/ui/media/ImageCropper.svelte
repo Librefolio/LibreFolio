@@ -10,6 +10,7 @@
     // Note: cropperjs v2 uses Web Components, CSS is built-in
     import {_} from '$lib/i18n';
     import {FlipHorizontal, FlipVertical, RotateCcw, RotateCw, ZoomIn, ZoomOut} from 'lucide-svelte';
+    import '$lib/theme/components/media.css';
 
     // Props
     export let imageSrc: string;
@@ -819,7 +820,7 @@
         flex-direction: column;
         gap: 0.25rem;
         z-index: 10;
-        background: rgba(0, 0, 0, 0.5);
+        background: var(--lf-cmp-image-cropper-controls-overlay-bg);
         padding: 0.25rem;
         border-radius: 0.375rem;
     }
@@ -832,30 +833,30 @@
         height: 32px;
         border: none;
         border-radius: 0.25rem;
-        background: rgba(255, 255, 255, 0.9);
-        color: #374151;
+        background: var(--lf-cmp-image-cropper-overlay-btn-bg);
+        color: var(--lf-cmp-image-cropper-overlay-btn-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .overlay-btn:hover {
-        background: white;
-        color: #1a4031;
+        background: var(--lf-cmp-image-cropper-overlay-btn-hover-bg);
+        color: var(--lf-cmp-image-cropper-overlay-btn-hover-text);
     }
 
     .overlay-btn.active {
-        background: rgba(16, 185, 129, 0.9);
-        color: white;
+        background: var(--lf-cmp-image-cropper-overlay-btn-active-bg);
+        color: var(--lf-cmp-image-cropper-overlay-btn-active-text);
     }
 
     .overlay-btn.active:hover {
-        background: #059669;
+        background: var(--lf-cmp-image-cropper-overlay-btn-active-hover-bg);
     }
 
     .overlay-separator {
         width: 24px;
         height: 1px;
-        background: rgba(255, 255, 255, 0.3);
+        background: var(--lf-cmp-image-cropper-overlay-separator-bg);
         margin: 0.125rem auto;
     }
 
@@ -863,8 +864,8 @@
     .ellipse-overlay {
         position: absolute;
         border-radius: 50%;
-        box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
-        border: 2px solid rgba(255, 255, 255, 0.5);
+        box-shadow: 0 0 0 9999px var(--lf-cmp-image-cropper-ellipse-overlay-shadow);
+        border: 2px solid var(--lf-cmp-image-cropper-ellipse-overlay-border);
         pointer-events: none;
         z-index: 5;
     }
@@ -873,7 +874,7 @@
         position: relative;
         width: 100%;
         height: 300px;
-        background: #1a1a1a;
+        background: var(--lf-cmp-image-cropper-container-bg);
         border-radius: 0.5rem;
         overflow: hidden;
     }
@@ -898,8 +899,8 @@
     /* Configurazione Variabili Globali per Cropper v2 */
     .crop-container :global(cropper-canvas) {
         /* Questa è la chiave per l'overlay scuro - usa CSS Variables */
-        --theme-color: rgba(0, 0, 0, 0.5);
-        --cropper-backdrop-color: rgba(0, 0, 0, 0.3);
+        --theme-color: var(--lf-cmp-image-cropper-theme-color);
+        --cropper-backdrop-color: var(--lf-cmp-image-cropper-cropper-backdrop-color);
     }
 
     /* Hide ALL default cropper visual elements that we don't want */
@@ -923,8 +924,8 @@
     /* Selection box - white outline, TRANSPARENT inside (show original image) */
     .crop-container :global(cropper-selection) {
         --cropper-selection-outline-width: 2px;
-        --cropper-selection-outline-color: rgba(255, 255, 255, 0.9);
-        outline: 2px solid rgba(255, 255, 255, 0.9) !important;
+        --cropper-selection-outline-color: var(--lf-cmp-image-cropper-cropper-selection-outline-color);
+        outline: 2px solid var(--lf-cmp-image-cropper-selection-outline) !important;
         outline-offset: -1px;
         background-color: transparent !important;
         background: transparent !important;
@@ -941,8 +942,8 @@
         width: 20px !important;
         height: 20px !important;
         background: transparent !important;
-        border-top: 3px solid white !important;
-        border-left: 3px solid white !important;
+        border-top: 3px solid var(--lf-cmp-image-cropper-handle-corner-border) !important;
+        border-left: 3px solid var(--lf-cmp-image-cropper-handle-corner-border) !important;
         border-right: none !important;
         border-bottom: none !important;
     }
@@ -951,8 +952,8 @@
         width: 20px !important;
         height: 20px !important;
         background: transparent !important;
-        border-top: 3px solid white !important;
-        border-right: 3px solid white !important;
+        border-top: 3px solid var(--lf-cmp-image-cropper-handle-corner-border) !important;
+        border-right: 3px solid var(--lf-cmp-image-cropper-handle-corner-border) !important;
         border-left: none !important;
         border-bottom: none !important;
     }
@@ -961,8 +962,8 @@
         width: 20px !important;
         height: 20px !important;
         background: transparent !important;
-        border-bottom: 3px solid white !important;
-        border-left: 3px solid white !important;
+        border-bottom: 3px solid var(--lf-cmp-image-cropper-handle-corner-border) !important;
+        border-left: 3px solid var(--lf-cmp-image-cropper-handle-corner-border) !important;
         border-top: none !important;
         border-right: none !important;
     }
@@ -971,8 +972,8 @@
         width: 20px !important;
         height: 20px !important;
         background: transparent !important;
-        border-bottom: 3px solid white !important;
-        border-right: 3px solid white !important;
+        border-bottom: 3px solid var(--lf-cmp-image-cropper-handle-corner-border) !important;
+        border-right: 3px solid var(--lf-cmp-image-cropper-handle-corner-border) !important;
         border-top: none !important;
         border-left: none !important;
     }
@@ -982,7 +983,7 @@
     .crop-container :global(cropper-handle[action='s-resize']) {
         width: 40px !important;
         height: 3px !important;
-        background-color: white !important;
+        background-color: var(--lf-cmp-image-cropper-handle-side-bg) !important;
         border: none !important;
         border-radius: 0 !important;
     }
@@ -991,7 +992,7 @@
     .crop-container :global(cropper-handle[action='w-resize']) {
         width: 3px !important;
         height: 40px !important;
-        background-color: white !important;
+        background-color: var(--lf-cmp-image-cropper-handle-side-bg) !important;
         border: none !important;
         border-radius: 0 !important;
     }
@@ -1006,25 +1007,25 @@
        ========================================================================== */
 
     :global(.dark) .crop-container :global(cropper-canvas) {
-        --theme-color: rgba(0, 0, 0, 0.7);
-        --cropper-backdrop-color: rgba(0, 0, 0, 0.8);
+        --theme-color: var(--lf-cmp-image-cropper-theme-color-dark);
+        --cropper-backdrop-color: var(--lf-cmp-image-cropper-cropper-backdrop-color-dark);
     }
 
     :global(.dark) .crop-container :global(cropper-selection) {
-        --cropper-selection-outline-color: rgba(255, 255, 255, 0.9);
-        outline-color: rgba(255, 255, 255, 0.9) !important;
+        --cropper-selection-outline-color: var(--lf-cmp-image-cropper-cropper-selection-outline-color-dark);
+        outline-color: var(--lf-cmp-image-cropper-selection-outline-dark) !important;
     }
 
     /* Dark mode handles - keep white, no green */
     :global(.dark) .crop-container :global(cropper-handle) {
         background-color: transparent !important;
-        border-color: white !important;
+        border-color: var(--lf-cmp-image-cropper-handle-border-dark) !important;
     }
 
     :global(.dark) .crop-container :global(cropper-handle[action='n-resize']),
     :global(.dark) .crop-container :global(cropper-handle[action='s-resize']),
     :global(.dark) .crop-container :global(cropper-handle[action='e-resize']),
     :global(.dark) .crop-container :global(cropper-handle[action='w-resize']) {
-        background-color: white !important;
+        background-color: var(--lf-cmp-image-cropper-handle-side-bg-dark) !important;
     }
 </style>

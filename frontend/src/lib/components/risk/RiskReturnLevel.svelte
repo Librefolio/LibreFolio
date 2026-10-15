@@ -51,6 +51,7 @@
     import {assetNameColumn, figureCell} from './assetSetTable';
     import {formatShare} from './levels/shareFormat';
     import {headerWidth, measureHeaderTitle, outsideParts, pointIdOf, referenceRowsFirst, riskReturnNotes, rowIdForPoint, rowIdOf, type RiskReturnCapabilities, type RiskReturnOutside, type RiskReturnRow} from './riskReturnLevel';
+    import '$lib/theme/components/table.css';
 
     interface Props {
         /** One per asset, in the order the page opens them in. */
@@ -365,19 +366,19 @@
      * (`colorForRole`): sky for the portfolio, amber for the benchmark.
      */
     :global(div.risk-return-table table tbody tr.risk-return-row-portfolio) {
-        background: rgb(2 132 199 / 0.1);
+        background: var(--lf-cmp-risk-return-row-portfolio-bg);
     }
 
     :global(div.risk-return-table table tbody tr.risk-return-row-benchmark) {
-        background: rgb(217 119 6 / 0.1);
+        background: var(--lf-cmp-risk-return-row-benchmark-bg);
     }
 
     :global(.dark div.risk-return-table table tbody tr.risk-return-row-portfolio) {
-        background: rgb(56 189 248 / 0.14);
+        background: var(--lf-cmp-risk-return-row-portfolio-bg-dark);
     }
 
     :global(.dark div.risk-return-table table tbody tr.risk-return-row-benchmark) {
-        background: rgb(251 191 36 / 0.14);
+        background: var(--lf-cmp-risk-return-row-benchmark-bg-dark);
     }
 
     /*
@@ -386,10 +387,10 @@
      * selection (0,3,2) — for this table only.
      */
     :global(div.risk-return-table table tbody tr.clickable.selected) {
-        background: rgb(34 197 94 / 0.12);
+        background: var(--lf-cmp-risk-return-row-selected-bg);
     }
 
     :global(.dark div.risk-return-table table tbody tr.clickable.selected) {
-        background: rgb(74 222 128 / 0.14);
+        background: var(--lf-cmp-risk-return-row-selected-bg-dark);
     }
 </style>

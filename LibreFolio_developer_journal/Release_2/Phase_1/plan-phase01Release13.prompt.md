@@ -558,7 +558,7 @@ fermati all'handoff, porta verificata libera.
   |---|---|---|---|---|
   | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | **X, FE5b (`AssetModal`), dal 15/10 alle 08:20** (via libera del coordinatore colori; m1 214, nessun letterale). La pagina (FE5c) dopo il lotto di Z sul polling |
   | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | **W, dal 15/10 alle 07:55** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
-  | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | nessuno |
+  | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | **Y, FE6a (taglio sul posto in moduli `.ts` puri), dal 15/10 alle 12:47** (via libera del coordinatore colori: nessun annuncio loro; T lo converte in W5; restano `data-testid="growth-chart"` e la forma dell'opzione ECharts, letta dalla E2E del Lab) |
   | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | nessuno |
 
 ## 8. Traguardi, in ordine di dipendenza
@@ -1158,3 +1158,74 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >
 > **Finestra della galleria**: dalle 08:45 a fine r2 (verso le 10:15) `dev_release2` resta fermo; poi i lotti solo
 > backend possono rientrare con l'avviso, quelli frontend dopo la fine della finestra (verso le 12:30).
+
+### Finestra della galleria, prima parte (2026-10-15, 08:45–10:20)
+
+> **Note implementazione**: `dev_release2` fermo a `2338aaf79` dalle 08:38 alle 10:16 (gallerie r1 e r2 del programma
+> colori nel checkout principale; r1 rilanciata alle 09:15 con meno worker; tutte e due pulite). Nel frattempo, solo
+> commit sui rami dei figli:
+> - **H**: CP5b e CP6 (`87be1e2d8`…`0326a1d02`, base in `5b2b9061f`); scritti CP7a, C-96 e un filtro che maschera i
+>   token nel log d'accesso di uvicorn (i link di A5b portano ora il token nel frammento). CP6 entrerà dal commit
+>   `5b2b9061f`, validato con il worktree staccato lì; i tre lotti nuovi restano sul ramo finché non sono provati.
+> - **A**: A5a committato e base aggiornata (`8e049474e`, conflitto in `test_system_api.py` risolto da A); A5b in corso.
+> - **X**: FE5b-1, FE5b-2, X-R11a, X-R1 e X-R2 committati; il contratto del ripristino per B nel disegno del CP10
+>   (il `key_id` di ogni segreto fa da valore di controllo H-3: B non deve riscrivere niente).
+> - **W**: FE8a in tre pezzi committati (il Wizard prima delle prove); avviato N1: la cassa e le posizioni della pagina
+>   broker al giorno dell'utente (verificato da J: è la regola della Dashboard) e le metà spaiate dei trasferimenti
+>   (V-3). Decisioni del coordinatore: CASH_TRANSFER e FX_CONVERSION come la divisione di una coppia (deposito o
+>   prelievo); le metà già nei DB con una correzione dopo le migrazioni (non Alembic: il log di ogni riga si vede
+>   anche in Docker), che entra solo con l'ok del developer (punto 46); le gambe in uscita restano come oggi fino al
+>   punto 47 (proposta di J: rettifica in uscita al costo). D-J4 aggiornata: i rossi su lotti e Dashboard li scrive il
+>   test-author di W, J ne rivede i numeri.
+> - **E**: analisi consegnata, senza dipendenze nuove; scelte di prodotto nei punti 44 (la verifica dell'email) e 45
+>   (link solo con `LIBREFOLIO_PUBLIC_URL`), le altre del coordinatore nello stesso blocco. Trovata C-96, assegnata a
+>   H; A-9 di A ne fa parte.
+> - **J**: C-94 scritto (prove dopo la finestra, con una categoria della galleria e `LF_APP_VERSION` concordata col
+>   coordinatore colori); rivista la V-3 di W.
+>
+> Punti nuovi per il developer nel file delle decisioni: 44–47.
+
+### R in `dev_release2`, avvio di B, E e Y (2026-10-15, 11:10–11:30)
+
+> **Note implementazione**: il coordinatore colori ha fuso i lotti A–D di R (`8fd8e494b`, più `23f6578f3`: timbro di
+> `sw.js`); `dev_release2` fermo per loro dalle 11:17 alle 11:22. Sbloccati gli spostamenti di cartella legati ai lotti di
+> R (FE4 e FE5a di X, FE8 di W; FE2, FE3, FE6, FE7 e `DataTable` di Y). Coda dei lotti frontend: L, poi i nostri, poi T.
+> - **B ed E avviati** su delega del developer («riguardo b ed e sei tu il coordinatore, a meno che non devo qualcosa
+>   in particolare, e allora aggiornami, avviali tu»), base `23f6578f3`. B: B0 (divisione di `api/v1/backup.py`, prima
+>   dell'E1 di W, che partirà dal pacchetto nuovo; D-B8, la rinomina `backup_service.py` → `series_export.py`) e B1;
+>   D-B7 e D-B9 come proposte, D-B10 dopo B7. E: E0 ed E1, con `links.py` spostato in E3 (aspetta il punto 45) e la
+>   registrazione in `config_audit.py` in E2 (il file ha modifiche in attesa sul ramo di H); l'aggancio a `cli_base.py`
+>   non serve più, lo copre C-96 di H; D-E1, D-E2, D-E4…D-E6, D-E8…D-E14 come proposte.
+> - **Y avviato** in sola analisi (sessione `17050e81`, corsia 6189), base `23f6578f3`: i tagli di `DataTable` e
+>   `GrowthChart` devono arrivare prima delle ondate W5 e W6 di T.
+> - **W**: committati la doc di N1b-2 (`3f42dda9d`) e il journal (`eb3bb0529`). W-B20 riscritta con i reperti di X:
+>   `delete_assets_bulk` è già atomico (un `UPDATE` vuoto prima del primo savepoint); il listener `begin` generale è
+>   scartato (`SQLITE_BUSY_SNAPSHOT`). Cura decisa: un aiuto mirato in `db/session.py`, lotto piccolo di W dopo N1.
+>   W-B22 e W-B23 (quadro delle correzioni post-migrazione) assegnate a W come N1b-3: W-B22 è legata a N1b-2, perché
+>   una violazione di FK già nel DB ferma il giro prima di `orphan_pair_halves`.
+
+### La 1.2.1 pubblicata e riportata in `dev_release2` (2026-10-15, 12:00–12:50)
+
+> **Note implementazione**: il developer ha deciso di pubblicare la 1.2.1 subito, separata dal restyle dei colori, con
+> una terza correzione: un `JWT_SECRET` di soli spazi non è più la chiave che firma le sessioni (`c73d5d56a`, test
+> `utils jwt-secret-blank` rosso 9/15 prima, verde 15/15 dopo). Ramo `hotfix-1.2.1` = `064fb4fc2` (9 commit su v1.2.0);
+> `main` avanzato e release v1.2.1 pubblicata dal developer alle 12:27 (pipeline `38720357465`). Nessuna advisory né CVE
+> (decisione del developer). Riportata in `dev_release2` con il merge `6c349f907`, preparato in un worktree a parte:
+> conflitti solo in `CHANGELOG.md` e `services/accounts/auth_service.py` (tenuta la versione 1.3: `env_secret()` di H
+> scarta già il segreto vuoto); il test del segreto adattato alla 1.3 dal test-author; prove sull'albero fuso: i 4 test
+> della 1.2.1 (23, 26, 36, 15), `config-package` 594, ruff pulito. Sbloccati il CP2b di H e i lotti CP7, W3 e W5–W6 di W.
+> `dev_release2` si può pushare.
+>
+> **⚠️ Fuori pista**: avevo detto al developer che la pipeline di rilascio rifà i test; non è così: fa build, controlli
+> della documentazione, galleria e immagini. Il giro completo sull'hotfix (`utils all`, `api auth`) lo faccio dopo la
+> finestra della galleria.
+
+### Y e Z avviati, decisioni 19–25 girate (2026-10-15, 12:40–12:50)
+
+> **Note implementazione**: su delega del developer («Sì: avvia tu Y (i due tagli) e Z (Z6a subito, Z1 quando decido il
+> 31)») approvati i piani di Y e Z, base `1e9e567f7`. Y: Y1 (taglio di `GrowthChart`, FE6a, annunciato e accettato dal
+> coordinatore colori) e Y2 (`DataTable`, da annunciare); D-Y1…D-Y9 decise dal coordinatore; D-Y10…D-Y12 (C-85, 54-1,
+> difetto 5 del PAC) vanno nel file delle decisioni. Z: Z6a (prove su C-49); Z1 aspetta il punto 31. Decisioni del
+> developer girate alla lettera: 19 a X (scraper fuori dalla ricerca nel profilo gestito, assegnabili a mano con un
+> avviso), 20–25 a W (20 subito in E1: errore e «Modifica questo»/«Usa questo»/«Annulla», niente «Crea comunque»; 23:
+> i tipi sconosciuti già salvati si cancellano); E1 di W autorizzato, la parte sull'export degli eventi dopo B0.

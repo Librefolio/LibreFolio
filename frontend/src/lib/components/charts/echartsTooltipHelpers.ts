@@ -1,6 +1,8 @@
 import type {ECharts} from 'echarts';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {formatPercent} from '$lib/utils/core/formatPercent';
+import {themed} from '$lib/theme/themePair';
+import {CHART_NEUTRALS, CHART_TOOLTIP_COLORS} from '$lib/theme/chartTheme';
 
 /**
  * echartsTooltipHelpers.ts — Shared tooltip and lifecycle utilities for ALL ECharts charts.
@@ -25,10 +27,10 @@ export interface TooltipTheme {
  */
 export function buildTooltipTheme(isDark: boolean): TooltipTheme {
     return {
-        bg: isDark ? '#1e293b' : '#ffffff',
-        border: isDark ? '#334155' : '#e2e8f0',
-        textColor: isDark ? '#e2e8f0' : '#1e293b',
-        mutedColor: isDark ? '#94a3b8' : '#64748b',
+        bg: themed(CHART_TOOLTIP_COLORS.box.background, isDark),
+        border: themed(CHART_TOOLTIP_COLORS.box.border, isDark),
+        textColor: themed(CHART_TOOLTIP_COLORS.box.text, isDark),
+        mutedColor: themed(CHART_TOOLTIP_COLORS.box.muted, isDark),
     };
 }
 
@@ -160,8 +162,8 @@ export interface ChartGridColors {
  */
 export function buildGridColors(isDark: boolean): ChartGridColors {
     return {
-        textColor: isDark ? '#94a3b8' : '#64748b',
-        gridColor: isDark ? '#1e293b' : '#f1f5f9',
+        textColor: themed(CHART_NEUTRALS.dashboard.text, isDark),
+        gridColor: themed(CHART_NEUTRALS.dashboard.gridLine, isDark),
     };
 }
 

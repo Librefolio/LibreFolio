@@ -18,6 +18,8 @@
     import KpiDivergingFlowBar from '$lib/components/ui/display/KpiDivergingFlowBar.svelte';
     import {safeString} from '$lib/types';
     import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {SIGN_BAR, SIGN_TEXT} from '$lib/theme/toneClasses';
+    import {timingEffectColor} from '$lib/theme/chartColorScales';
 
     interface Props {
         summary: PortfolioSummary | null;
@@ -220,10 +222,10 @@
         return (Math.abs(val) / pnlBarMax) * 100;
     }
     function pnlBarColor(val: number) {
-        return val >= 0 ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500';
+        return val >= 0 ? SIGN_BAR.kpi.gain : SIGN_BAR.kpi.loss;
     }
     function pnlValueColor(val: number) {
-        return val >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400';
+        return val >= 0 ? SIGN_TEXT.kpi.gain : SIGN_TEXT.kpi.loss;
     }
 
     const roiVal = $derived(summary ? parseFloat(summary.simple_roi_percent) * 100 : 0);
@@ -248,7 +250,7 @@
     function timingColor(base: number, span: number): string | undefined {
         if (timingEffectVal == null) return undefined;
         const alpha = base + timingIntensity * span;
-        return timingEffectVal >= 0 ? `color: rgba(22, 163, 74, ${alpha})` : `color: rgba(220, 38, 38, ${alpha})`;
+        return `color: ${timingEffectColor(timingEffectVal >= 0, alpha)}`;
     }
     const roiPct = $derived(summary ? formatPercent(roiVal, {signed: false}) : '—');
     const twrrCumPct = $derived(twrrCumVal != null ? formatPercent(twrrCumVal, {signed: false}) : '—');
@@ -261,7 +263,7 @@
         return (Math.abs(val) / retBarMax) * 100;
     }
     function retBarColor(val: number) {
-        return val >= 0 ? 'bg-green-500 dark:bg-green-400' : 'bg-red-400 dark:bg-red-500';
+        return val >= 0 ? SIGN_BAR.kpi.gain : SIGN_BAR.kpi.loss;
     }
 
     const fmtMoney = (v: number) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true});
@@ -273,7 +275,7 @@
     <!-- Card 1 — Period P&L -->
     <div class="relative @container bg-white dark:bg-slate-800 rounded-xl border border-gray-100 dark:border-slate-700 shadow-sm p-5 flex flex-col gap-2 overflow-hidden" data-testid="kpi-period-pnl">
         {#if periodPnlPositive !== undefined}
-            <div class="absolute top-0 left-0 right-0 h-0.5 {periodPnlPositive ? 'bg-green-500 dark:bg-green-400' : 'bg-red-500 dark:bg-red-400'}"></div>
+            <div class="absolute top-0 left-0 right-0 h-0.5 {periodPnlPositive ? SIGN_BAR.accent.gain : SIGN_BAR.accent.loss}"></div>
         {/if}
         <div class="flex items-center justify-between">
             <p class="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">{$_('dashboard.periodPnl')}</p>
@@ -287,14 +289,11 @@
                 </div>
             {/if}
             <div class:invisible={loading}>
-                <p
-                    class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold text-right tabular-nums transition-colors duration-300 {periodPnlPositive === true ? 'text-green-700 dark:text-green-400' : periodPnlPositive === false ? 'text-red-700 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}"
-                    data-testid="kpi-value"
-                >
+                <p class="text-[clamp(0.95rem,8cqw,1.5rem)] font-bold text-right tabular-nums transition-colors duration-300 {periodPnlPositive === true ? SIGN_TEXT.headline.gain : periodPnlPositive === false ? SIGN_TEXT.headline.loss : SIGN_TEXT.headline.neutral}" data-testid="kpi-value">
                     <TweenedValue value={periodPnlAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: true})} />
                 </p>
                 {#if pnlDeltaDay != null}
-                    <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-pnl-delta-day" data-direction={pnlDeltaDayDirection}>
+                    <p class="text-xs text-right tabular-nums transition-colors duration-300 {pnlDeltaDay >= 0 ? SIGN_TEXT.portfolio.gain : SIGN_TEXT.portfolio.loss}" data-testid="kpi-pnl-delta-day" data-direction={pnlDeltaDayDirection}>
                         <TweenedValue value={pnlDeltaDay} format={fmtMoney} />
                         {#if pnlDeltaDayVsPrevTotalPct != null}
                             <span> (<span data-testid="kpi-pnl-delta-day-pct">{formatPercent(pnlDeltaDayVsPrevTotalPct)}</span>)</span>
@@ -349,7 +348,7 @@
                 </span>
             </div>
             {#if pnlDeltaDayPct != null}
-                <p class="text-xs text-right {pnlDeltaDay != null && pnlDeltaDay >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-returns-delta-pct" data-direction={pnlDeltaDayDirection}>{formatPercent(pnlDeltaDayPct)}</p>
+                <p class="text-xs text-right {pnlDeltaDay != null && pnlDeltaDay >= 0 ? SIGN_TEXT.portfolio.gain : SIGN_TEXT.portfolio.loss}" data-testid="kpi-returns-delta-pct" data-direction={pnlDeltaDayDirection}>{formatPercent(pnlDeltaDayPct)}</p>
             {/if}
             <div class="flex flex-col gap-2 mt-1">
                 <KpiMetricBar testid="kpi-return-roi" label={$_('dashboard.roi')} tooltip={$_('dashboard.roiTooltip')} value={roiPct} numericValue={roiVal} formatValue={fmtPct} barPct={retBarPct(roiVal)} barColor={retBarColor(roiVal)} valueColor="font-bold text-gray-800 dark:text-gray-100" />
@@ -377,7 +376,7 @@
                 <TweenedValue value={navHeroAmt} format={(v) => formatCurrencyAmountPlain(v, displayCurrency, {showSign: false})} />
             </p>
             {#if totalPnlAmt != null}
-                <p class="text-xs text-right tabular-nums transition-colors duration-300 {totalPnlAmt >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'}" data-testid="kpi-total-pnl-delta">
+                <p class="text-xs text-right tabular-nums transition-colors duration-300 {totalPnlAmt >= 0 ? SIGN_TEXT.portfolio.gain : SIGN_TEXT.portfolio.loss}" data-testid="kpi-total-pnl-delta">
                     <TweenedValue value={totalPnlAmt} format={fmtMoney} />
                     {#if absRoiPct != null}
                         <span> ({formatPercent(absRoiPct)})</span>

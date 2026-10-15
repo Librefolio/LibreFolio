@@ -15,6 +15,7 @@
     import TableColumns from '../shared/TableColumns.svelte';
     import {withHelpCues} from '../shared/columnHelp';
     import DistributionDialog from './DistributionDialog.svelte';
+    import {STATUS_TONES} from '$lib/theme/toneClasses';
 
     interface Props {
         draft: PlannerDraft;
@@ -26,8 +27,8 @@
     const KEY = 'tools.pacAllocator.planner.targets';
     type TotalState = 'balanced' | 'excess' | 'missing' | 'unknown';
     /** Colours of the Asset distribution editor: green at 100%, red above, amber below. */
-    const BAR_CLASS: Record<TotalState, string> = {balanced: 'bg-libre-green', excess: 'bg-red-400', missing: 'bg-amber-400', unknown: 'bg-gray-300 dark:bg-gray-600'};
-    const TOTAL_CLASS: Record<TotalState, string> = {balanced: 'text-green-600 dark:text-green-400', excess: 'text-red-500', missing: 'text-amber-500', unknown: 'text-gray-500 dark:text-gray-400'};
+    const BAR_CLASS: Record<TotalState, string> = STATUS_TONES.pacTargetBar;
+    const TOTAL_CLASS: Record<TotalState, string> = STATUS_TONES.pacTargetTotal;
 
     let copying = $state(false);
     let selectedKeys = $state<string[]>([]);

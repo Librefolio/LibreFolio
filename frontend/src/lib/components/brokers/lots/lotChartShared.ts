@@ -11,6 +11,8 @@
  * The grid that decided what lands here (same one the Phase-1 dedup used):
  *
  * - `normalizeZero`, `clamp`, `withAlpha` were byte-identical copies → merged.
+ *   `withAlpha` has since moved to `$lib/theme/colorAlpha`, the one home of the
+ *   charts' alpha helpers (colour workstream R, R-4).
  * - `formatAxisNumber` was byte-identical in the WAC and Comparison charts →
  *   merged, with the machine locale made an explicit (defaulted) parameter so a
  *   test can pin the output; the charts still call it with no locale, so their
@@ -54,29 +56,6 @@ export function isUnknownOrNonZero(value: number | null | undefined): boolean {
 /** The sum of two lot amounts, or `null` (unknown) when either is. A known zero is a value. */
 export function addOrNull(left: number | null, right: number | null): number | null {
     return left == null || right == null ? null : left + right;
-}
-
-/**
- * Apply an alpha channel to a color the charts already computed. Two shapes are
- * understood:
- *
- * - `hsl(...)` → `hsla(..., alpha)` — the alpha is inserted literally, so the
- *   caller owns its range.
- * - `#rrggbb` → `#rrggbbaa` — the alpha is clamped to `[0, 1]`, scaled to a byte
- *   and appended as two hex digits.
- *
- * Anything else (a named color, an already-rgba string, an `#rgb` shorthand) is
- * returned unchanged: better a fully opaque color than a corrupted one.
- */
-export function withAlpha(color: string, alpha: number): string {
-    const hslMatch = color.match(/^hsl\((.+)\)$/i);
-    if (hslMatch) return `hsla(${hslMatch[1]}, ${alpha})`;
-    const hexMatch = color.match(/^#([0-9a-f]{6})$/i);
-    if (hexMatch)
-        return `${color}${Math.round(clamp(alpha, 0, 1) * 255)
-            .toString(16)
-            .padStart(2, '0')}`;
-    return color;
 }
 
 /**

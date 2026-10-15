@@ -15,6 +15,7 @@
     import {formatBytes, uploadFile} from '$lib/utils/files/upload';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
+    import '$lib/theme/components/media.css';
 
     // Props
     export let open: boolean = false;
@@ -227,11 +228,11 @@
         align-items: center;
         justify-content: space-between;
         padding: 1rem 1.5rem;
-        border-bottom: 1px solid #e5e7eb;
+        border-bottom: 1px solid var(--lf-cmp-file-edit-divider-border);
     }
 
     :global(.dark) .modal-header {
-        border-bottom-color: #374151;
+        border-bottom-color: var(--lf-cmp-file-edit-divider-border-dark);
     }
 
     .header-actions {
@@ -248,15 +249,15 @@
         height: 32px;
         border-radius: 0.5rem;
         border: none;
-        background: rgba(245, 158, 11, 0.1);
-        color: #f59e0b;
+        background: var(--lf-cmp-file-edit-restore-btn-bg);
+        color: var(--lf-cmp-file-edit-restore-btn-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .restore-btn:hover {
-        background: rgba(245, 158, 11, 0.2);
-        color: #d97706;
+        background: var(--lf-cmp-file-edit-restore-btn-hover-bg);
+        color: var(--lf-cmp-file-edit-restore-btn-hover-text);
     }
 
     .modal-title {
@@ -265,12 +266,12 @@
         gap: 0.5rem;
         font-size: 1.125rem;
         font-weight: 600;
-        color: #111827;
+        color: var(--lf-cmp-file-edit-title-text);
         margin: 0;
     }
 
     :global(.dark) .modal-title {
-        color: #f3f4f6;
+        color: var(--lf-cmp-file-edit-title-text-dark);
     }
 
     .close-btn {
@@ -282,19 +283,19 @@
         border-radius: 0.5rem;
         border: none;
         background: transparent;
-        color: #6b7280;
+        color: var(--lf-cmp-file-edit-close-btn-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .close-btn:hover {
-        background: #f3f4f6;
-        color: #374151;
+        background: var(--lf-cmp-file-edit-close-btn-hover-bg);
+        color: var(--lf-cmp-file-edit-text);
     }
 
     :global(.dark) .close-btn:hover {
-        background: #374151;
-        color: #d1d5db;
+        background: var(--lf-cmp-file-edit-close-btn-hover-bg-dark);
+        color: var(--lf-cmp-file-edit-text-dark);
     }
 
     .modal-body {
@@ -311,22 +312,22 @@
     }
 
     .info-label {
-        color: #6b7280;
+        color: var(--lf-cmp-file-edit-muted-text);
         font-weight: 500;
     }
 
     .info-value {
-        color: #374151;
+        color: var(--lf-cmp-file-edit-info-value-text);
         font-family: monospace;
         font-size: 0.75rem;
     }
 
     :global(.dark) .info-label {
-        color: #9ca3af;
+        color: var(--lf-cmp-file-edit-muted-text-dark);
     }
 
     :global(.dark) .info-value {
-        color: #e5e7eb;
+        color: var(--lf-cmp-file-edit-info-value-text-dark);
     }
 
     .filename-editor {
@@ -338,11 +339,11 @@
     .filename-label {
         font-size: 0.8125rem;
         font-weight: 500;
-        color: #374151;
+        color: var(--lf-cmp-file-edit-text);
     }
 
     :global(.dark) .filename-label {
-        color: #d1d5db;
+        color: var(--lf-cmp-file-edit-text-dark);
     }
 
     .filename-input-group {
@@ -353,27 +354,27 @@
         flex: 1;
         padding: 0.5rem 0.75rem;
         font-size: 0.875rem;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-cmp-file-edit-field-border);
         border-right: none;
         border-radius: 0.375rem 0 0 0.375rem;
-        background: white;
-        color: #374151;
+        background: var(--lf-cmp-file-edit-field-bg);
+        color: var(--lf-cmp-file-edit-field-text);
         outline: none;
         transition: border-color 0.15s;
     }
 
     .filename-input:focus {
-        border-color: #1a4031;
+        border-color: var(--lf-cmp-file-edit-field-focus-border);
     }
 
     :global(.dark) .filename-input {
-        background: #374151;
-        border-color: #4b5563;
-        color: #f3f4f6;
+        background: var(--lf-cmp-file-edit-field-bg-dark);
+        border-color: var(--lf-cmp-file-edit-field-border-dark);
+        color: var(--lf-cmp-file-edit-field-text-dark);
     }
 
     :global(.dark) .filename-input:focus {
-        border-color: #10b981;
+        border-color: var(--lf-cmp-file-edit-field-focus-border-dark);
     }
 
     .file-extension {
@@ -381,31 +382,31 @@
         align-items: center;
         padding: 0.5rem 0.75rem;
         font-size: 0.875rem;
-        border: 1px solid #d1d5db;
+        border: 1px solid var(--lf-cmp-file-edit-field-border);
         border-radius: 0 0.375rem 0.375rem 0;
-        background: #f3f4f6;
-        color: #6b7280;
+        background: var(--lf-cmp-file-edit-file-extension-bg);
+        color: var(--lf-cmp-file-edit-muted-text);
         font-family: monospace;
     }
 
     :global(.dark) .file-extension {
-        background: #4b5563;
-        border-color: #4b5563;
-        color: #9ca3af;
+        background: var(--lf-cmp-file-edit-file-extension-bg-dark);
+        border-color: var(--lf-cmp-file-edit-field-border-dark);
+        color: var(--lf-cmp-file-edit-muted-text-dark);
     }
 
     .error-message {
         padding: 0.75rem 1rem;
-        background-color: #fef2f2;
-        border: 1px solid #fecaca;
+        background-color: var(--lf-cmp-file-edit-error-message-bg);
+        border: 1px solid var(--lf-cmp-file-edit-error-message-border);
         border-radius: 0.5rem;
-        color: #dc2626;
+        color: var(--lf-cmp-file-edit-error-message-text);
         font-size: 0.875rem;
     }
 
     :global(.dark) .error-message {
-        background-color: rgba(220, 38, 38, 0.1);
-        border-color: rgba(220, 38, 38, 0.3);
+        background-color: var(--lf-cmp-file-edit-error-message-bg-dark);
+        border-color: var(--lf-cmp-file-edit-error-message-border-dark);
     }
 
     .modal-footer {
@@ -413,13 +414,13 @@
         justify-content: flex-end;
         gap: 0.75rem;
         padding: 1rem 1.5rem;
-        border-top: 1px solid #e5e7eb;
-        background: #f9fafb;
+        border-top: 1px solid var(--lf-cmp-file-edit-divider-border);
+        background: var(--lf-cmp-file-edit-footer-bg);
     }
 
     :global(.dark) .modal-footer {
-        background: #111827;
-        border-top-color: #374151;
+        background: var(--lf-cmp-file-edit-footer-bg-dark);
+        border-top-color: var(--lf-cmp-file-edit-divider-border-dark);
     }
 
     .btn {
@@ -441,38 +442,38 @@
     }
 
     .btn-primary {
-        background: #1a4031;
-        color: white;
+        background: var(--lf-cmp-file-edit-btn-primary-bg);
+        color: var(--lf-cmp-file-edit-on-fill-text);
     }
 
     .btn-primary:hover:not(:disabled) {
-        background: #143326;
+        background: var(--lf-cmp-file-edit-btn-primary-hover-bg);
     }
 
     :global(.dark) .btn-primary {
-        background: #10b981;
+        background: var(--lf-cmp-file-edit-btn-primary-bg-dark);
     }
 
     :global(.dark) .btn-primary:hover:not(:disabled) {
-        background: #059669;
+        background: var(--lf-cmp-file-edit-btn-primary-hover-bg-dark);
     }
 
     .btn-secondary {
-        background: #e5e7eb;
-        color: #374151;
+        background: var(--lf-cmp-file-edit-btn-secondary-bg);
+        color: var(--lf-cmp-file-edit-text);
     }
 
     .btn-secondary:hover:not(:disabled) {
-        background: #d1d5db;
+        background: var(--lf-cmp-file-edit-btn-secondary-hover-bg);
     }
 
     :global(.dark) .btn-secondary {
-        background: #374151;
-        color: #d1d5db;
+        background: var(--lf-cmp-file-edit-btn-secondary-bg-dark);
+        color: var(--lf-cmp-file-edit-text-dark);
     }
 
     :global(.dark) .btn-secondary:hover:not(:disabled) {
-        background: #4b5563;
+        background: var(--lf-cmp-file-edit-btn-secondary-hover-bg-dark);
     }
 
     :global(.animate-spin) {
@@ -508,21 +509,21 @@
         margin: 0;
         font-size: 1.125rem;
         font-weight: 600;
-        color: #d97706;
+        color: var(--lf-cmp-file-edit-confirm-title-text);
     }
 
     :global(.dark) .confirm-header h3 {
-        color: #fbbf24;
+        color: var(--lf-cmp-file-edit-confirm-title-text-dark);
     }
 
     .confirm-message {
-        color: #6b7280;
+        color: var(--lf-cmp-file-edit-muted-text);
         margin-bottom: 1.5rem;
         line-height: 1.5;
     }
 
     :global(.dark) .confirm-message {
-        color: #9ca3af;
+        color: var(--lf-cmp-file-edit-muted-text-dark);
     }
 
     .confirm-actions {
@@ -532,12 +533,12 @@
     }
 
     .btn-warning {
-        background: #f59e0b;
-        color: white;
+        background: var(--lf-cmp-file-edit-btn-warning-bg);
+        color: var(--lf-cmp-file-edit-on-fill-text);
         border: none;
     }
 
     .btn-warning:hover {
-        background: #d97706;
+        background: var(--lf-cmp-file-edit-btn-warning-hover-bg);
     }
 </style>

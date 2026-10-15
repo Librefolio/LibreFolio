@@ -9,19 +9,13 @@
 
 import * as echarts from 'echarts';
 import type {RenderedSignal} from '$lib/charts/signals';
+import {toRgba} from '$lib/theme/colorAlpha';
+import {themed} from '$lib/theme/themePair';
+import {CHART_GAIN_LOSS, CHART_NEUTRALS, PRICE_SERIES} from '$lib/theme/chartTheme';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Color utilities
+// Staleness
 // ═══════════════════════════════════════════════════════════════════════════════
-
-/** Convert hex color to rgba string with given alpha */
-export function hexToRgba(hex: string, alpha: number): string {
-    const h = hex.replace('#', '');
-    const r = parseInt(h.substring(0, 2), 16);
-    const g = parseInt(h.substring(2, 4), 16);
-    const b = parseInt(h.substring(4, 6), 16);
-    return `rgba(${r},${g},${b},${alpha})`;
-}
 
 /**
  * Staleness opacity: fully opaque for fresh data, linearly fading to 0.15
@@ -42,13 +36,14 @@ export function getStaleOpacity(staleDays?: number, maxDays = 14): number {
 // Theme constants
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/** The price charts' line and gain/loss colours, by name, for the charts that pick them that way. Values: `$lib/theme/chartTheme`. */
 export const COLORS = {
-    lineLight: '#1a4031',
-    lineDark: '#4ade80',
-    greenLight: '#16a34a',
-    greenDark: '#4ade80',
-    redLight: '#ef4444',
-    redDark: '#f87171',
+    lineLight: PRICE_SERIES.line.light,
+    lineDark: PRICE_SERIES.line.dark,
+    greenLight: CHART_GAIN_LOSS.price.gain.light,
+    greenDark: CHART_GAIN_LOSS.price.gain.dark,
+    redLight: CHART_GAIN_LOSS.price.loss.light,
+    redDark: CHART_GAIN_LOSS.price.loss.dark,
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -327,12 +322,12 @@ export function buildMainSeries(values: Array<number | null>, staleDays: number[
             const opStart = getStaleOpacity(seg.staleStart);
             const opEnd = getStaleOpacity(seg.staleEnd);
             lineColor = new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                {offset: 0, color: hexToRgba(seg.color, opStart)},
-                {offset: 1, color: hexToRgba(seg.color, opEnd)},
+                {offset: 0, color: toRgba(seg.color, opStart)},
+                {offset: 1, color: toRgba(seg.color, opEnd)},
             ]);
-            itemColor = hexToRgba(seg.color, (opStart + opEnd) / 2);
+            itemColor = toRgba(seg.color, (opStart + opEnd) / 2);
         } else {
-            const solidColor = hexToRgba(seg.color, seg.opacity);
+            const solidColor = toRgba(seg.color, seg.opacity);
             lineColor = solidColor;
             itemColor = solidColor;
         }
@@ -364,15 +359,15 @@ export function buildMainSeries(values: Array<number | null>, staleDays: number[
                 const opEnd = getStaleOpacity(seg.staleEnd);
                 s.areaStyle = {
                     color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                        {offset: 0, color: hexToRgba(seg.color, (isDark ? 0.15 : 0.1) * opStart)},
-                        {offset: 1, color: hexToRgba(seg.color, (isDark ? 0.03 : 0.02) * opEnd)},
+                        {offset: 0, color: toRgba(seg.color, (isDark ? 0.15 : 0.1) * opStart)},
+                        {offset: 1, color: toRgba(seg.color, (isDark ? 0.03 : 0.02) * opEnd)},
                     ]),
                 };
             } else {
                 s.areaStyle = {
                     color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                        {offset: 0, color: hexToRgba(seg.color, areaTopOp)},
-                        {offset: 1, color: hexToRgba(seg.color, areaBotOp)},
+                        {offset: 0, color: toRgba(seg.color, areaTopOp)},
+                        {offset: 1, color: toRgba(seg.color, areaBotOp)},
                     ]),
                 };
             }
@@ -471,7 +466,7 @@ export function buildBandSeries(signal: RenderedSignal, dates: string[], isDark:
             name: `${signal.label} Band`,
             data: bridgeBetweenPoints(deltaData),
             lineStyle: {opacity: 0},
-            areaStyle: {color: hexToRgba(bandColor, bandOpacity)},
+            areaStyle: {color: toRgba(bandColor, bandOpacity)},
             stack: `bb-${signal.id}`,
             stackStrategy: 'all',
             symbol: 'none',
@@ -543,7 +538,7 @@ export function buildSignalReferencePrimitives(signal: RenderedSignal, isDark: b
             },
             label: {
                 show: true,
-                color: isDark ? '#cbd5e1' : '#64748b',
+                color: themed(CHART_NEUTRALS.referenceLevelLabel, isDark),
                 fontSize: 9,
                 formatter: (params: {name?: string}) => params.name ?? '',
             },
@@ -558,7 +553,7 @@ export function buildSignalReferencePrimitives(signal: RenderedSignal, isDark: b
         primitives.markArea = {
             silent: true,
             itemStyle: {
-                color: hexToRgba(signal.color, isDark ? 0.08 : 0.06),
+                color: toRgba(signal.color, isDark ? 0.08 : 0.06),
             },
             label: {show: false},
             data: signal.valueRegions.map((region) => [
