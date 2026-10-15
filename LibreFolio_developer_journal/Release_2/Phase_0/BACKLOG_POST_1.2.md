@@ -1903,6 +1903,17 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     filtrate dello stesso giorno 10 delle 27 instabili sono diventate stabili e 10 «rumore minimo». La prima misura
     completa è stata invalidata dalla fuga del prezzo live (G-6). Misura finale il 15/10 su `dev_release2` con G dentro.
     Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), passi 3 e 6.
+  - *Stato al 15/10 (G):* misura finale `g-final3` (X = `2338aaf79`, 6 worker, `live_price_check` pulito): **6 instabili
+    su 177**.
+    - 2 di solo contenuto, accettate: ordine delle immagini del seed, ordine dei file del set.
+    - 4 di inquadratura (`detail-measures*` e `about-plugin-diagnostics` su mobile, la pagina dietro `scheduler-config`):
+      corrette nel checkpoint 2 di G, verifica nella corsia 6153.
+    - Le 19 medie sono contenuto o residui di resa spiegati.
+    - ✅ *Verifica del checkpoint 2:* 2 run da sole, 8/8 + 8/8 verdi, `live_price_check` 0. Diagnostica e
+      `scheduler-log` stabili, `scheduler-config` e `detail-measures-active` `low`. Su `detail-measures` resta 1
+      variante su 16 (G-11).
+
+    Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md).
 - **G-2 · 4–5 test desktop falliti in ogni esecuzione completa a 10 worker, ogni volta diversi** — medio; coordinatore,
   14/10.
   - Login fermo su «auth-loading» nel primo blocco; modali delle transazioni.
@@ -1920,6 +1931,14 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
     Da soli passano 2/2. Proposta non fatta: dare a `headerOutOfShot` la stessa scadenza di `frameTarget`. Dettagli:
     piano della 56, verifica del checkpoint.
+  - ✅ **15/10, verdetto:** saturazione della macchina.
+    - A 10 worker la prima r1 della misura finale ha avuto 8 rossi desktop nei primi 10 minuti, a carico 65, con
+      richieste in volo da 10–20 s. Da soli passano.
+    - A 6 worker: 0 rossi in 2 run complete.
+    - `dev.py mkdocs gallery` avvia di default un worker browser per CPU più 3 worker server.
+    - Il README del toolkit dice `-- --workers 6`; il default in `dev.py` passa a J (C-94), decisione del coordinatore.
+
+    Dettagli: piano della 56, passo 5.
 - **G-3 · `Dashboard Risk › what-if crisis replay` su desktop** — medio-basso; coordinatore, 14/10.
   - Fallisce in 2 esecuzioni su 3.
   - Il menu contiene «Global Financial Crisis», ma `chooseReplayPreset`
@@ -1930,6 +1949,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - *Stato al 14/10 (G):* `chooseReplayPreset` riscritto (puntatore parcheggiato, cammino nei due versi, messaggio con
     gli ultimi stati), nel checkpoint di G. Verde in 4 run desktop sotto carico su 5: smoke a 6 worker, 2 complete a 10
     e `g-verify2` a 5 con carico fino a 94. La quinta arriva con la misura finale del 15/10.
+  - ✅ **15/10:** verde in 6 run desktop sotto carico su 6, con le due della misura finale (`g-final3`). Dettagli: piano
+    della 56, passo 2.
 - **G-4 · Difetto del prodotto trovato col rumore: il chip del provider resta sul codice** — basso; G, 14/10,
   correzione autorizzata dal coordinatore. Causa: nell'intestazione del dettaglio asset il nome è
   `getAssetProviderName(code)`, che legge una `Map` non reattiva; se `assetInfo` arriva prima del catalogo dei provider
@@ -1953,6 +1974,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Correzione nel checkpoint di G: lasciare la pagina, poi togliere le rotte. Verifica:
     `scripts/visual_review/live_price_check.py` sugli snapshot, che dà 0 righe di prezzo live nel log della corsia
     (`g-alone4`, `g-verify2`, `g-alone5` del 14/10).
+  - ✅ **15/10:** la correzione è in `dev_release2` dal checkpoint 1 di G (`0076f4269`). `live_price_check` dà 0 su
+    entrambe le run della misura finale (`g-final3-r1`, `g-final3-r2`).
 
   Dettagli: piano della 56, passo 6.
 - **G-7 · Lo stesso varco di G-6 negli E2E fuori dalla gallery** — basso; G, 14/10, su richiesta del coordinatore.
@@ -1980,6 +2003,57 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     checkpoint di J. La voce nella sezione di J la scrive J.
 
   Dettagli: piano della 56, passo 6.
+- **G-9 · La gallery può fotografare un indicatore non applicato** — basso-medio; coordinatore, 15/10 (candidata di L,
+  `assets/detail-signals-macd`, mobile it chiaro: menu degli indicatori ancora aperto, MACD non applicato, 1 variante su
+  16).
+  - Causa (G, verificata nel codice): `selectIndicatorFromTree` (`frontend/e2e/gallery.spec.ts:165`) clicca l'opzione e
+    non verifica l'esito: né il menu chiuso né la card dell'indicatore. `waitForSignalCardsSettled` (`:182`) aspetta che
+    non resti nessun `signal-loading`, e passa a vuoto se la card non c'è ancora.
+  - Correzione proposta (perimetro G, test-author):
+    - dopo il clic, il menu chiuso (`aria-expanded` false sul trigger di `TreeSelect`) e una card `signal-card-*` con
+      `data-signal-type` uguale all'opzione;
+    - `waitForSignalCardsSettled` che richiede almeno una card.
+
+    Un clic perso diventa un rosso con un messaggio chiaro, invece di uno scatto sbagliato. Vale per tutti i chiamanti:
+    EMA, RSI, MACD, Bollinger.
+
+  Dettagli: piano della 56, passo 7.
+- **G-10 · Ordine casuale delle immagini del seed nelle liste di file** — medio-basso; G, 15/10, su segnalazione del
+  coordinatore (`files/static-grid`: miniatura `men_04` in una corsia, `woman_07` in un'altra).
+  - Causa (prodotto, verificata nel codice):
+    - `seed_default_avatars()` (`backend/app/services/files/static_uploads.py:480`) scrive tutti gli avatar con lo
+      stesso `uploaded_at` (un solo `now`) e con un UUID casuale come nome;
+    - `list_uploads()` (`:335`) legge i metadati con `glob("*.json")`, cioè nell'ordine della directory, e ordina solo
+      per `uploaded_at`. L'ordinamento è stabile, quindi a parità di data resta l'ordine dei nomi casuali, diverso a ogni
+      populate.
+  - Non dipende da file rimasti nella cartella dati: `--clean` svuota `custom-uploads`, marker compreso, e il populate
+    ricrea gli avatar.
+  - Effetto: `media/asset-picker-modal`, la prima instabile rimasta (16/16, 24 %), perché `AssetPickerModal` legge lo
+    stesso `GET /api/v1/uploads`. Inoltre l'ordine in `files/static-grid` e `static-tab`, e la miniatura che cambia da
+    una corsia all'altra. Oggi è contenuto accettato.
+  - Correzione proposta (fuori dal perimetro di G): una chiave secondaria deterministica nell'ordinamento di
+    `list_uploads`, per esempio il nome originale a parità di `uploaded_at`. Non cambia lo stile. Per un utente conta
+    solo fra file caricati nello stesso istante. Da instradare dal coordinatore.
+
+  Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md).
+- **G-11 · Su mobile, a scroll fermo in fondo alla pagina, l'header resta a volte visibile, solo in spagnolo** — basso;
+  G, 15/10, verifica del checkpoint 2.
+  - Sintomo: in `assets/detail-measures`, dove la pagina finisce prima del grafico (scroll fermo a 552 px), l'header
+    dovrebbe essere nascosto come dopo ogni scroll verso il basso. È rimasto visibile 3 volte, sempre in es: 2 con il
+    percorso vecchio (`g-final3-r1`, chiaro e scuro) e 1 con `frameTarget` (`g-c2-w1-a`, chiaro, ↕️ «header visible»);
+    nelle altre lingue mai. Una variante su 16, circa 5,8 % dei pixel: la fascia dell'header.
+  - Ipotesi: `Header.svelte` rimette `visible` senza scroll a ogni `syncScrollContext()`. Lo chiamano il focus che esce
+    dall'header, il suo ResizeObserver, un `resize`, un cambio di `routeKey` (`pathname + search`), menu e blocco dei
+    modali. Quale scatti in spagnolo non si vede dal codice.
+  - Proposta (perimetro G, test-author):
+    - una run filtrata con un osservatore, lato test, delle transizioni di `data-scroll-state` e degli eventi vicini,
+      per trovare la causa;
+    - nella gallery, a scroll fermo, un breve su-e-giù che porti l'header nello stato di uno scroll in basso, prima
+      dello scatto.
+
+    Se la causa è nel prodotto, va segnalata e non corretta qui.
+
+  Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md), «Verifica delle correzioni».
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
