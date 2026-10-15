@@ -286,7 +286,7 @@ if (!(await panel.isVisible())) await toggle.click();
 await expect(panel).toBeVisible();
 ```
 
-`AssetModal.svelte:595` does `moreInfoExpanded = identifierRows.length > 0`: the section
+`AssetModal.svelte` (`populateFromEditData`) does `moreInfoExpanded = identifierRows.length > 0`: the section
 opens itself when the asset has identifiers. A helper that clicks unconditionally works
 on the fixtures it was written against and inverts everywhere else.
 

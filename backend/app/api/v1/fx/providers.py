@@ -177,7 +177,7 @@ async def create_routes_bulk(  # noqa: C901 — flat bulk upsert loop, per-item 
     stored — and later listed, and addressed by the UI — as ``DKK-EUR``: the
     endpoint sorts the two codes alphabetically and the caller is told nothing.
     It is the same convention the rates use (see ``normalize_rate_for_storage``
-    in ``services/fx.py``), and it is what makes a pair one row instead of two
+    in ``services/fx/storage.py``), and it is what makes a pair one row instead of two
     that can disagree. But a client that posts one direction and then looks for
     that direction finds nothing, so it is worth saying out loud here rather
     than leaving it to be discovered from the response.

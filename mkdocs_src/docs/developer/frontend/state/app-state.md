@@ -2,7 +2,7 @@
 
 *Status: Implemented (Feb 2026)*
 
-The **App & UI State** category contains stores responsible for the global user experience. These stores manage authentication, global preferences, localization, shell navigation, and the public configuration and notices of the instance.
+The **App & UI State** category contains stores responsible for the global user experience. These stores manage authentication, global preferences, localization, shell navigation, and the public configuration, notices and block state of the instance.
 
 ## 🗂️ Stores
 
@@ -19,6 +19,7 @@ The **App & UI State** category contains stores responsible for the global user 
 | **Toasts** | `app/toastStore.svelte.ts` | Svelte 5 Rune-based store for displaying global notification messages. |
 | **Instance configuration** | `$lib/features/instance/instanceConfig.svelte.ts` | The public configuration of the instance (`GET /api/v1/system/instance`), read once per page load, before the sign-in. See [Instance configuration](#instance-config). |
 | **Instance notices** | `$lib/features/instance/instanceNotices.svelte.ts` | The messages about the instance that features register, shown above every page of the app shell. See [Instance notices](#instance-notices). |
+| **Instance block** | `$lib/features/instance/instanceBlock.svelte.ts` | Whether the hosting provider blocked the instance: the first `423` `instance_blocked` from the API turns it on, and the `(app)` layout then shows the block page instead of the app. See [Instance block](#instance-block). |
 | **Chart Settings** | `chartSettingsStore.svelte.ts` | Chart preferences of the FX and Assets pages: line colouring, area fill, grid lines, stale-data gradient, axis scales, the asset Calendar Return window and overlay signals. Kept per user in `localStorage` (`lf_{userId}_chartSettingsStore`), never on the server, in two separate scopes, `fx` and `assets`: each has its own global settings plus per-item overrides (pair slug, `asset-{id}`), and applying a scope's global settings clears that scope's per-item overrides. The chart period is not stored here: it lives in `sessionStorage` (Date Range, below). |
 | **Date Range** | `dateRangeStore.svelte.ts` | The date range (start, end) shared by the Dashboard (through `dateRangeController.svelte.ts`), the broker detail page, and the Assets and FX pages, list and detail. It lives in `sessionStorage` (`librefolio_dateRange`), so it belongs to the browser tab and survives a reload; on a full page load, `start` and `end` in the URL win, and it falls back to the last three months when the account changes. |
 
@@ -168,6 +169,46 @@ How `InstanceNotices.svelte` renders them:
   `warning`, `danger`), the notice is `bg-lf-X-soft border-lf-X-line text-lf-X-on-soft` and its icon
   `text-lf-X`. The classes are written whole in `NOTICE_CLASSES` and `ICON_CLASSES`, so the colour
   gates see every class.
+
+## 🔒 Instance block {: #instance-block }
+
+`instanceBlock` (`lib/features/instance/instanceBlock.svelte.ts`, Svelte 5 runes) is a flag: whether
+the hosting provider blocked this instance (backend side: [Instance Block](../../architecture/security.md#instance-block)).
+
+- **Who turns it on**: the error interceptor of `lib/api/zodios-client.ts` calls `markBlocked()` when
+  `isInstanceBlockedError(status, data)` is true: status `423` (`INSTANCE_BLOCKED_STATUS`) and
+  `detail.code` `instance_blocked` (`INSTANCE_BLOCKED_CODE`). The error still reaches its caller. The
+  module imports nothing from the API, so the interceptor imports it without a cycle.
+- **Who reads it**: in `routes/(app)/+layout.svelte`, the branch `$isAuthenticated && instanceBlock.blocked`
+  comes before the bootstrap ones, so `InstanceBlockedPage` replaces the app and the app shell never
+  starts: its requests never pile up refusals.
+- **Who turns it off**: `clear()`, which also runs when the signed-in account changes, signing out
+  included (`registerClientSessionReset('instanceBlock', …)`). A page load starts with the flag off.
+- **Getter**: `blocked`.
+
+The backend answers `423` only to a signed-in user; anyone else gets the `401` of `get_current_user()`,
+which the interceptor turns into the login as usual.
+
+`InstanceBlockedPage.svelte` (`lib/features/instance/components/`) is the full-page block page:
+
+- On mount it reads `GET /system/block` (`fetchBlock`, a prop that tests replace). When `blocked` is
+  false, the block was lifted meanwhile: it clears the flag and reloads the window. When the request
+  fails, the page stays, without the date.
+- Its text depends on the role: `instance.block.adminDescription` for `is_superuser`,
+  `instance.block.userDescription` for the other users, under the title `instance.block.title`.
+- `instance.block.deletionDate` shows `deletion_date`, written in the interface locale (`uiLocale()`).
+  The ISO day is read at midnight UTC and formatted in UTC, so no time zone moves it.
+- Its only button, labelled by `auth.logout`, calls the layout's `logout()`. There is no button to
+  delete one's own account yet, though `DELETE /auth/users/me` stays allowed.
+- Colours are colour roles only. The test ids are `instance-blocked`, `instance-blocked-description`,
+  `instance-blocked-deletion-date` and `instance-blocked-logout`.
+
+```ts
+import {instanceBlock, isInstanceBlockedError} from '$lib/features/instance/instanceBlock.svelte';
+
+if (isInstanceBlockedError(error.response?.status, error.response?.data)) instanceBlock.markBlocked();
+instanceBlock.blocked; // true: the (app) layout shows InstanceBlockedPage
+```
 
 ## 🙈 Privacy masking {: #privacy-masking }
 

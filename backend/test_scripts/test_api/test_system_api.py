@@ -8,7 +8,8 @@ Covers:
 - get_frontend_deps: frontend dependency list from package.json
 - GET /api/v1/system/info: the app version for anyone, everything with a valid session; signed_in_user reads a 401 of
   get_current_user as anonymous and lets any other refusal through; live, direct, and its OpenAPI 200 (full answer first)
-- the /system router split one module per resource (C2): the routes of system.py, in their order; /system/ready after them
+- the /system router split one module per resource (C2): the routes of system.py, in their order; /system/ready after them,
+  /system/block last, after /system/ready (CP6)
 - GET /api/v1/system/plugin-diagnostics: session required (live HTTP), failure-list shape for a logged-in user
 - classify_ip / client_address (utils/runtime/network.py): the class of a client address, and which address (plan 36, §2.1)
 - GET /api/v1/system/connection: session required, {client_class, cookie_secure} live and in-process (plan 36, §2.1)
@@ -305,6 +306,18 @@ def test_the_readiness_probe_comes_after_the_instance_configuration():
     ready = contexts[ready_at]
     served = f"{getattr(ready.endpoint, '__module__', '?').removeprefix(system_module.__name__ + '.')}.{getattr(ready.endpoint, '__name__', '?')}"
     assert (served, sorted(ready.methods or ()), list(getattr(ready, "tags", []))) == ("ready.get_readiness", ["GET"], ["System"]), f"/system/ready: {served} {ready.methods} {getattr(ready, 'tags', None)}"
+
+
+def test_the_block_page_comes_last_after_the_readiness_probe():
+    """CP6: /system/block, registered once after /system/ready and last of the router, a GET of the System tag served by block.py."""
+    contexts = list(iter_route_contexts(system_module.router.routes))
+    paths = [ctx.path for ctx in contexts]
+    assert paths.count("/system/block") == 1, f"/system/block is registered once: {paths}"
+    ready_at, block_at = paths.index("/system/ready"), paths.index("/system/block")
+    assert ready_at < block_at == len(paths) - 1, f"/system/block must come after /system/ready, last of the /system router: {paths}"
+    block = contexts[block_at]
+    served = f"{getattr(block.endpoint, '__module__', '?').removeprefix(system_module.__name__ + '.')}.{getattr(block.endpoint, '__name__', '?')}"
+    assert (served, sorted(block.methods or ()), list(getattr(block, "tags", []))) == ("block.get_instance_block", ["GET"], ["System"]), f"/system/block: {served} {block.methods} {getattr(block, 'tags', None)}"
 
 
 # ============================================================================
