@@ -455,12 +455,26 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Per chi usa già LibreFolio**: il salvataggio non modifica più un evento in silenzio, e chi lo faceva apposta
   riceve un messaggio.
 
+- **Aggiornamento dall'analisi di W (15/10, lotto E1)**:
+    - la premessa va corretta: un salvataggio senza id modifica solo un evento **manuale** con la stessa data e lo stesso
+      tipo; uno del fornitore non viene mai sovrascritto. Il caso del fornitore nasce dalla finestra, che dopo il
+      salvataggio rilegge il giorno e può collegare la transazione all'evento del fornitore (I-10 S4);
+    - l'export degli eventi non porta gli id: il giro «esporta, modifica, reimporta» si regge su data e tipo, quindi la
+      mia raccomandazione regge;
+    - proposta di W, precisata: «+ Nuovo evento» crea sempre; se esiste già un evento, manuale o del fornitore, con
+      quella data e quel tipo, la finestra lo mostra e offre «Usa questo», «Crea comunque» o «Annulla». Due eventi nello
+      stesso giorno sono ammessi già oggi, per esempio un dividendo ordinario e uno straordinario;
+    - **domanda per te**: «Crea comunque» resta?
+
 #### 21. Per cancellare degli eventi serve indicare l'asset — 🟢 (D-W2, I-12)
 - **Oggi**: la richiesta che cancella gli eventi accetta una lista di id, di qualunque asset. Una richiesta sbagliata,
   o costruita apposta, può cancellare eventi di altri asset.
 - **Proposta**: la richiesta indica l'asset, e si cancellano solo i suoi eventi.
 - **Perché**: sicurezza e integrità dei dati.
 - **Per chi usa già LibreFolio**: nulla. L'unico chiamante è l'editor degli eventi, aggiornato insieme.
+
+- **Aggiornamento dall'analisi di W (15/10)**: confermata. Gli id di un altro asset tornano «non trovati». L'unico
+  chiamante è l'editor degli eventi (una riga di X, aggiornata insieme).
 
 #### 22. Salvataggio degli eventi tutto o niente — 🟡 (D-W3, I-12)
 - **Oggi**: un salvataggio di più eventi li scrive uno alla volta. Se una riga è sbagliata, le precedenti restano
@@ -471,6 +485,10 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Per chi usa già LibreFolio**: un CSV di eventi con una riga sbagliata non salva più nulla, finché la riga non è
   corretta.
 
+- **Aggiornamento dall'analisi di W (15/10)**: ogni elemento si controlla prima di scrivere, con un solo commit per gli
+  eventi manuali. Il refresh dei fornitori continua a salvare a blocchi. Un asset inesistente fa fallire la richiesta,
+  invece di dire «0 salvati».
+
 #### 23. Tipi di evento in minuscolo: controllo e correzione dei dati — 🟢 (D-W7, I-09)
 - **Oggi**: un tipo scritto in minuscolo o sconosciuto, per esempio da un CSV scritto a mano, viene salvato, e da quel
   momento ogni lettura di quell'evento va in errore 500.
@@ -480,6 +498,15 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Da decidere**: cosa fare degli eventi con un tipo sconosciuto già salvati. Lasciarli e segnalarli (continuano a
   dare errore), oppure eliminarli.
 - **Alternative**: solo il controllo all'ingresso, senza toccare i dati salvati.
+
+- **Aggiornamento dall'analisi di W (15/10)**: tutti i fornitori scrivono già i tipi in maiuscolo, quindi il controllo
+  all'ingresso non li rompe e l'API non cambia. Per gli eventi con un tipo sconosciuto già salvati, che rendono in errore
+  ogni lettura degli eventi di quell'asset, due strade:
+    - **A**, prudente: lasciarli e scrivere nel log id, asset, data e importo;
+    - **B**: cancellare quelli non collegati a transazioni, scrivendoli nel log; quelli collegati non si possono
+      cancellare.
+
+  Come per K-1, un conteggio sulla copia del tuo database aiuterebbe a scegliere.
 
 #### 24. K-1 chiusa senza codice — 🟢 (D-W15)
 - **Contesto**: nella 1.2 il Bulk mostrava come «coppia» due cloni dello stesso tipo. La correzione è nell'interfaccia,
