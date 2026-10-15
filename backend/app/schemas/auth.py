@@ -126,6 +126,12 @@ class PasswordResetResponse(StrictModel):
     message: str = "Password reset successfully"
 
 
+class AddressProbeResult(StrictModel):
+    """``GET /auth/address-probe``: whether this instance issued the nonce, and nothing else."""
+
+    match: bool
+
+
 class AccountsInstanceConfig(StrictModel):
     """The accounts part of ``GET /system/instance``: public, the same for whoever asks."""
 

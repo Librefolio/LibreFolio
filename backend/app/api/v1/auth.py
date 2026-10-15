@@ -15,6 +15,7 @@ from backend.app.config import get_settings
 from backend.app.db.models import AccountTokenPurpose, User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import (
+    AddressProbeResult,
     AuthLoginRequest,
     AuthLoginResponse,
     AuthLogoutResponse,
@@ -31,7 +32,8 @@ from backend.app.schemas.auth import (
     UpdateProfileRequest,
     UpdateProfileResponse,
 )
-from backend.app.services.accounts import registration_service, settings_service, token_service, user_service
+from backend.app.schemas.users import AccountDeletionPreviewRead, BrokerAccessItemRead, BrokerDeletionItemRead
+from backend.app.services.accounts import address_probe, registration_service, settings_service, token_service, user_service
 from backend.app.services.accounts.auth_service import (
     create_jwt_token,
     decode_jwt_token,
@@ -42,7 +44,6 @@ from backend.app.services.accounts.auth_service import (
 from backend.app.services.accounts.donation_popup_service import record_login_and_maybe_show_popup
 from backend.app.services.accounts.global_settings_service import get_session_ttl_hours
 from backend.app.services.accounts.registration_service import RegistrationError
-from backend.app.services.brim import brim_provider
 
 logger = structlog.get_logger(__name__)
 
@@ -352,6 +353,41 @@ async def update_profile(
     return UpdateProfileResponse(user=AuthUserResponse.model_validate(updated_user), message="Profile updated successfully")
 
 
+def deletion_preview_read(preview: user_service.AccountDeletionPreview) -> AccountDeletionPreviewRead:
+    """The preview as the API returns it, to the account itself or to an administrator (``api/v1/users.py``)."""
+    return AccountDeletionPreviewRead(
+        user_id=preview.user_id,
+        username=preview.username,
+        brokers_deleted=[BrokerDeletionItemRead(id=item.broker_id, name=item.name, transactions=item.transactions) for item in preview.brokers_deleted],
+        brokers_left=[BrokerAccessItemRead(id=item.broker_id, name=item.name, role=item.role.value) for item in preview.brokers_left],
+        transfers_unpaired=preview.transfers_unpaired,
+    )
+
+
+@router.get("/users/me/deletion-preview", response_model=AccountDeletionPreviewRead)
+async def preview_own_account_deletion(current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session_generator)) -> AccountDeletionPreviewRead:
+    """What deleting your own account would take with it: the brokers that go, those you only leave, the transfers
+    left unpaired. Nothing is written.
+    """
+    preview = await user_service.preview_user_deletion(session, current_user.id)
+    if preview is None:
+        raise HTTPException(status_code=401, detail="User not found")
+    return deletion_preview_read(preview)
+
+
+@router.get("/address-probe", response_model=AddressProbeResult)
+def answer_address_probe(response: Response, nonce: str = "") -> AddressProbeResult:
+    """Whether this instance issued ``nonce`` (``POST /users/address-probe``), and nothing else.
+
+    Public and readable from any origin: an administrator's browser asks it at another address to check that this
+    instance answers there. Any other nonce — forged, of another instance, expired — is ``match: false``. Sync:
+    deriving the key reads the instance key file.
+    """
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Cache-Control"] = "no-store"
+    return AddressProbeResult(match=address_probe.verify_probe_nonce(nonce))
+
+
 @router.delete("/users/me", response_model=dict)
 async def delete_own_account(
     response: Response,
@@ -378,17 +414,16 @@ async def delete_own_account(
         if other_active_admins == 0:
             raise HTTPException(status_code=400, detail="Cannot delete account: you are the only administrator")
 
+    # A failed deletion rolls the session back and expires every object in it, current_user included: read it first
+    user_id, username = current_user.id, current_user.username
     try:
-        deletion = await user_service.delete_user(session, current_user.id)
+        # The deleted brokers' report files live on disk: removed after the commit, like DELETE /brokers
+        result = await user_service.delete_account(session, current_user)
     except Exception as exc:
-        logger.exception("Account deletion failed: nothing was deleted", user_id=current_user.id)
+        logger.exception("Account deletion failed: nothing was deleted", user_id=user_id)
         raise HTTPException(status_code=500, detail="Account deletion failed: nothing was deleted") from exc
 
-    # The deleted brokers' report files live on disk: removed after the commit, like DELETE /brokers
-    deleted_broker_ids = deletion.deleted_broker_ids if deletion else []
-    files_removed = await asyncio.to_thread(brim_provider.delete_files_for_brokers, deleted_broker_ids) if deleted_broker_ids else 0
-
-    logger.warning("User account deleted", user_id=current_user.id, username=current_user.username, brokers_deleted=deleted_broker_ids, brim_files_removed=files_removed)
+    logger.warning("User account deleted", user_id=user_id, username=username, brokers_deleted=result.deleted_broker_ids, brim_files_removed=result.files_removed)
 
     # Clear session cookie
     response.delete_cookie(

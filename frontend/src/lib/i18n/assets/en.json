@@ -379,7 +379,27 @@
     "deleteSuccess": "{n} event(s) deleted",
     "deleteNotFound": "Event(s) not found: {ids}",
     "deleteBlocked": "Cannot delete: {n} event(s) still in use by transactions ({accessible} visible to you, {hidden} in other users' portfolios)",
-    "fxBannerContext": "for dividend/cash events"
+    "fxBannerContext": "for dividend/cash events",
+    "exists": {
+      "title": "This event already exists",
+      "hint": "The asset already has an event of this type on this date: use it, or edit it. Nothing has been saved.",
+      "use": "Use this",
+      "edit": "Edit this",
+      "fromProvider": "From the data provider",
+      "manual": "Entered by hand",
+      "linked": "{n, plural, =0 {not linked to transactions} one {linked to # transaction} other {linked to # transactions}}",
+      "providerNotEditable": "The data provider updates its own events: this one cannot be edited here."
+    },
+    "saveError": {
+      "currencyMismatch": "Nothing was saved: the event of {date} ({type}) is in {currency}, but the asset is in {expected}. Convert its amount or remove the row{more, plural, =0 {} one { (and # more)} other { (and # more)}}.",
+      "keyConflict": "Nothing was saved: two manual {type} events would fall on {date}. Change the date or the type of one of them.",
+      "notEditable": "Nothing was saved: one of the events no longer exists or cannot be edited here. Reload the data and try again.",
+      "assetNotFound": "Nothing was saved: the asset no longer exists. Reload the page.",
+      "unknownType": "Nothing was saved: “{value}” (row of {date}) is not an event type. Use DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT or MATURITY_SETTLEMENT.",
+      "generic": "Nothing was saved: {message}",
+      "inUse": "Nothing was saved: the {type} event of {date} is linked to {n, plural, one {# transaction} other {# transactions}} and cannot be deleted. Remove the link from the transactions first{more, plural, =0 {} one { (and # more event)} other { (and # more events)}}.",
+      "notDeletable": "Nothing was saved: one of the events to delete no longer exists or cannot be deleted here. Reload the data and try again."
+    }
   },
   "providerErrors": {
     "NO_DATA": "No data available for this instrument on the provider.",

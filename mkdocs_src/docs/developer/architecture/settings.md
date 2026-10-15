@@ -22,8 +22,10 @@ catalogue, `SETTINGS_REGISTRY`.
       `LIBREFOLIO_TEST_MODE`, `LIBREFOLIO_LOG_LEVEL`, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY` (both
       also as `_FILE`), `LIBREFOLIO_NO_SCHEDULER`, `LIBREFOLIO_DISABLE_DONATION_POPUP`,
       `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`,
-      `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key
-      also as `_FILE`) — are read in `backend/app/config/` (base or section module), from
+      `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release
+      job or `./dev.py docker build` freezes), `LIBREFOLIO_BLOCKED`, `LIBREFOLIO_DELETION_DATE`,
+      `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key also as `_FILE`) — are read in
+      `backend/app/config/` (base or section module), from
       `os.environ` only. pydantic-settings does not export `.env` there, so they arrive through the
       launcher: `./dev.py server` copies `.env` into the environment (shell values win), Compose uses
       `env_file:`.
@@ -208,12 +210,13 @@ explicit user choice always wins afterwards.
 instance before anyone signs in. The app reads it at startup: the `(app)` layout calls
 `instanceConfig.load()` when it mounts, before the auth check, and works with a self-hosted default
 until the server answers (see [Instance configuration](../frontend/state/app-state.md#instance-config)).
-Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and today it has two fields:
+Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and today it has three fields:
 
 | Field | Values | Source |
 |-------|--------|--------|
 | `profile` | `selfhosted`, an install run by its owner, or `managed`, an instance a hosting provider runs for its customers | `LIBREFOLIO_PROFILE`, a field of `Settings`, so it comes from `.env` or the environment like `PORT`. Default `selfhosted`; case and spaces around the value are ignored, and any other value stops the startup. Admin side: [Configuration](../../admin/configuration.md). |
 | `accounts` | `{registration_mode, registration_locked}` (`AccountsInstanceConfig`, `backend/app/schemas/auth.py`): the registration mode in force, `open`, `invite` or `disabled`, and whether `LIBREFOLIO_REGISTRATION` pins it | `effective_registration_mode()` (workstream A, `registration_service.py`): the variable, otherwise the `registration_mode` row, so the endpoint is `async`, with a database session. No count and no limit. Details: [Registration Modes](access_control.md#registration-modes). |
+| `email` | `{available}` (`EmailInstanceConfig`, `backend/app/schemas/email.py`): whether the instance can send emails now, an SMTP server set and every `LIBREFOLIO_SMTP_*` variable usable; never the configuration itself | `email_available()` (workstream E, `services/email/delivery.py`), run in a worker thread since it may read the password file. The field has a default, `available: false`, so it is optional in the schema. Details: [Email Service](../backend/email.md#instance-email). |
 
 The rule for a workstream that owns part of the public configuration:
 
