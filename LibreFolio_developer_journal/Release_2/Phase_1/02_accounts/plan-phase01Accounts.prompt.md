@@ -2867,3 +2867,41 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   - `security.md#address-probe`: un rimando a `#request-logs` di H. Il suo filtro non maschera `nonce`, che non è
 >     una credenziale;
 >   - i 2 rossi di `instance-block` devono sparire con il test riparato da H: da verificare.
+> - **Committato dal coordinatore** (15/10, 16:56):
+>   - `5928176cf` feat(accounts): admin deletion, deletion preview, address probe;
+>   - `181096f6e` test(cli): renumber IMG-013..016 to IMG-027..030;
+>   - `2545791a4` docs(journal): A6a plan, backlog A-14 A-15.
+
+#### A6.6 — Aggiornamento di base (`4a74a9e7e`) e validazione della revisione combinata ✅ (2026-10-15)
+> - Il coordinatore ha unito `dev_release2` (`d22eb6f43`), senza conflitti: HEAD `4a74a9e7e`, genitori `2545791a4` e
+>   `d22eb6f43`. Dentro ci sono W (la conversione delle metà orfane), J e il resto. Mancano ancora la riga di H per
+>   il blocco (il suo lotto piccolo è in `all-backend`) e la scheda Email di E (E2b non è partito).
+> - **Validazione**, una prova alla volta con `nice -n 10` (`/tmp/libreFolio_a6a/combined.sh`; log in
+>   `/tmp/libreFolio_a6a/logs/combined/`):
+>
+> | Azione | Esito |
+> |---|---|
+> | `services account-deletion-preview` | 15 passati |
+> | `services config-package` | 643 passati |
+> | `api instance-block` | 44 passati: spariti i 2 rossi di base (test riparato da H) |
+> | `api system` | 117 passati |
+> | `api account-deletion` | 9 passati (con l'ACCDEL-001 di W) |
+> | `api users-admin` | 64 passati |
+> | `api registration` | 65 passati (1 avviso: `HTTP_422_UNPROCESSABLE_ENTITY` di `api/v1/settings.py`, di prima) |
+> | `api auth` | 60 passati |
+> | `api address-probe` | 26 passati |
+> | `check-orphans` | tutto registrato e raggiungibile |
+> | `api sync` | pulito |
+> | `front check` | 0 errori, 0 avvisi |
+>
+> - **`ALLOWED_WHEN_BLOCKED`**: sono entrato per primo, quindi la riga di `auth.preview_own_account_deletion` la
+>   scrive H al suo ingresso. `api instance-block` non segnala rotte non classificate, quindi non la scrivo io.
+> - **Doc riallineate alla base**:
+>   - `users_and_brokers.md#account-deletion`: la trasformazione di W (V-3, D-J4) e un rimando a
+>     `backend/transactions/service.md#broker-deletion`;
+>   - `security.md#address-probe`: il nonce arriva nel log delle richieste, e il filtro di `#request-logs` (H) non
+>     lo maschera, perché non è una credenziale.
+>   - `mkdocs build` (strict) pulito; `check-links`: 95 link validi.
+> - **Backlog**: in A-10, la sezione «Accounts and Sign-ups» di `admin/configuration` manca del tutto in IT, FR ed
+>   ES (debito di A, confermato dal coordinatore). A-14 è passato a W, A-15 ad H.
+> - `all-backend`: nella validazione di A6b, prima del suo ingresso (coordinatore).
