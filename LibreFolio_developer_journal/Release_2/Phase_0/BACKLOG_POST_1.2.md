@@ -3299,6 +3299,13 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   d'import non c'è più: si possono leggere dalla tabella, con un test di parità per tipo e segno come TX-S-090. Da
   verificare prima che le semantiche coincidano (per esempio «free», l'asset facoltativo di INTEREST, FEE e TAX).
   Dettagli: piano 04, sezione W-B31.
+  ◐ 16/10 (W-B36): la parte che coincide letta dalla tabella (regole 5, 7, 8, 9, 10, 11; `EVENT_COMPATIBLE_TYPES` tolto),
+  rossi TX-S-095…109; i quattro casi in cui la tabella è più severa restano com'è oggi, eccezioni esplicite che
+  rimandano alla decisione **P6** del developer (lista del 16/10); il caso 4 si raggiunge anche con un promote (un
+  WITHDRAWAL e un DEPOSIT a importo zero promossi). Restano due copie scritte a mano nei testi dell'API (OpenAPI, quindi
+  `api sync`): la descrizione di `TXCreateItem.asset_event_id` «(DIVIDEND/INTEREST/ADJUSTMENT only)» e quella di
+  `cost_basis_pair` (`type_metadata.py`: «qty<0» per l'indice 0, che vale ≤ 0, ed etichette italiane «Da»/«A»).
+  Dettagli: piano 04, sezione W-B36.
 - **W-B37 · Il modale dei report del broker cancella in blocco anche i file non cancellabili** — minimo, chiarezza; W,
   16/10 (H, CP-U2, docs-writer). Dopo CP-U2 `FilesTable` nasconde «elimina» sulle righe con `can_delete: false` in
   tutte e due le schede, quindi anche nel modale; ma `handleDeleteMultiple`
@@ -3306,6 +3313,13 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   mentre la pagina File li salta con l'avviso `uploads.deleteSkipped` (evento `file.delete.skipped`). Cura: filtrare
   `can_delete !== false` prima del ciclo, con la stessa chiave e lo stesso evento. Dopo l'ingresso di CP-U2 di H (la
   chiave e l'evento arrivano con quello). Dettagli: messaggio di H, 16/10 00:31.
+- **W-B38 · Gli errori multipli della creazione portano i testi con `{type}` non risolto** — minimo, chiarezza; W, 16/10
+  (W-B36, test-author). Con due o più violazioni `TXCreateItem.validate_transaction_rules`
+  (`backend/app/schemas/transactions/transactions.py`, `multipleBusinessRuleErrors`) impacchetta per ciascuna
+  `e.message_template`, non `e.message()`: il testo arriva in `TXValidationIssue.error` (batch) e in
+  `BRIMValidationIssue.message` (import) come «{type} requires asset_id». Cura: `e.message()` (i parametri restano in
+  `ctx`); cambia testi visibili nelle risposte (in meglio). W-B36 tiene apposta i testi di prima (letterali per tipo dove
+  lo erano). Dettagli: piano 04, sezione W-B36.
 - **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
   docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
   (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
