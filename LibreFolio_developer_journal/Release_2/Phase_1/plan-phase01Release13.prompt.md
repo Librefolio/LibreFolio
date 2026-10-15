@@ -557,7 +557,7 @@ fermati all'handoff, porta verificata libera.
   | Taglio | Sessione | File | Fuori dai lotti di R | Annuncio aperto |
   |---|---|---|---|---|
   | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | ~~X, FE5b (`AssetModal`), dal 15/10 alle 08:20~~ **chiuso: entrato in `dev_release2` il 15/10 alle 14:22 (`ec0dc7ebd`)**. La pagina (FE5c) dopo il lotto di Z sul polling |
-  | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | **W, dal 15/10 alle 07:55** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
+  | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | ~~W, dal 15/10 alle 07:55~~ **chiuso: entrato il 15/10 alle 16:19 (`14d58cc61`)** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
   | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | ~~Y, FE6a, dal 15/10 alle 12:47~~ **chiuso: entrato il 15/10 alle 15:12 (`badec1465`)** (via libera del coordinatore colori: nessun annuncio loro; T lo converte in W5; restano `data-testid="growth-chart"` e la forma dell'opzione ECharts, letta dalla E2E del Lab) |
   | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | **Y, Y2 (due figli: `DataTableColumnHeader`, `DataTableCellContent`), dal 15/10 alle 15:24** (via libera del coordinatore colori; le 4 classi di `editable-checkbox` passano al figlio con il record ereditato) |
 
@@ -1261,3 +1261,15 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > di default). Avviati A6 (scheda Utenti; verifica dell'indirizzo con un nonce firmato al posto del CORS su
 > `/system/instance`) e Y2 (`DataTable`). Checkpoint committati: E2a (`c1d1c3c2d`), Z1 (`a6199d0e7`, base aggiornata
 > `4618a2116`).
+
+### Treni 39–40, punto 46 (2026-10-15, 16:00–16:20)
+
+> **Note implementazione**: entrati Z1 (`9d2074b2b`) e W (`14d58cc61`: FE8a, N1, N1b-2/3, E1a, E1c). Punto 46
+> deciso dal developer: la correzione `orphan_pair_halves` entra; una metà senza costo resta «costo mancante». Verificato
+> poi sul codice che una metà ricevuta senza costo nasce solo da chiamate dirette all'API (il modulo e il Bulk, import
+> compresi, richiedono la modalità di costo: `cost_basis_pair` del TRANSFER ricevuto = `required_qty_pos`) o da dati
+> precedenti alla 1.0; il developer: «una protezione in caso di chiamate dirette dalle api, ma non certo metterci a fare
+> bonifiche» → lotto N2 di W. E1b: `delete_ids` nella richiesta di upsert, salvataggio atomico (decisione 22).
+>
+> **⚠️ Fuori pista**: al developer avevo detto che gli import creano trasferimenti senza costo; era sbagliato (avevo
+> letto i plugin, non il Bulk che li completa). Corretto in chat e ritirata la voce di backlog a W.
