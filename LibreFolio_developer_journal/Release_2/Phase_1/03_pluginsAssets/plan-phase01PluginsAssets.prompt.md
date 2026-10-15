@@ -1515,7 +1515,7 @@ Passi:
    > differenza di raccolta (+117 −1): i miei 9 e 107 arrivati con l'aggiornamento di base (A4b: `test_session_version` 47,
    > `test_session_revocation_api` 3; K2a: test BRIM 28 + 27 + 2 + 1). Porta 6183 libera.
 
-### Checkpoint X-R8 🧊 (2026-10-15) — FROZEN, handoff al coordinatore
+### Checkpoint X-R8 ✅ (2026-10-15) — committato dal coordinatore: `1dfd4e657` (codice, 11 file) e `edbb067b5` (journal)
 
 - **Base**: HEAD `4fdc0d9c5`.
 - **Elenchi**: nessuna rinomina, nessun taglio. Nuovi 2: `backend/app/services/fx/catalog.py`,
@@ -1526,3 +1526,21 @@ Passi:
   `frontend/fx-chain-algorithm.md`), il piano e il backlog (X-R8 chiusa, X-R10 nuova).
 - **Messaggi di commit proposti**: `feat(fx): cache the providers' supported currencies for a day` (11 percorsi: tutto
   tranne il journal) e `docs(journal): X X-R8 log, backlog X-R8 closed, X-R10` (piano e backlog).
+
+### Ottavo aggiornamento di base: H CP5a, J-6, W E0 — controllo leggero di `38b913df3` ✅ (2026-10-15)
+
+Il coordinatore ha fuso `dev_release2` a `979d9ac2e` (H CP5a, la guardia di J-6, W E0, i record) nel mio ramo: merge
+`38b913df3`, pulito (`_backend_services.py` mette `fx-catalog` accanto a `platform-readiness` di H). La guardia di J-6 manda
+in ERROR, al suo teardown, ogni test che lascia aperta una connessione aiosqlite creata da lui: la run completa di X-R8 non
+l'aveva. Controllo leggero sulla 6183 (`/tmp/libreFolio_x_base8.sh`, 08:13–08:17, log `/tmp/libreFolio_x_base8.log`):
+- ✅ `front build --debug` (86 s): E0 ha cambiato il frontend e CP5a l'API.
+- ✅ Con la guardia: `services fx-catalog` 8, `api fx-unit` 29, `api fx` 21; nessun ERROR al teardown.
+- ✅ `services config-package` 593; `check-orphans`: nessun file orfano, ogni test registrato raggiungibile da un `all`.
+- ✅ `api schema` contro `979d9ac2e` estratto: `openapi.json` identico (115 percorsi), `tool-contracts` identico.
+- ✅ `mkdocs build` stretto (41 s, 3 012 URL), `check-links` 95 validi.
+- Worktree pulito dopo, porta 6183 libera.
+
+Note del coordinatore: X-R10 riceve una quinta voce (la docstring di `create_routes_bulk`), che è X-R1: registrata come
+rimando. Il CHANGELOG di X-R8 lo scrive lui all'ingresso. Prossimo: il disegno di FE5b (taglio di `AssetModal.svelte`) in
+sola lettura, mentre chiede il via al coordinatore colori; non FE5a (dopo il lotto A) né FE5c (dopo il lotto di Z sul
+polling); taglio dichiarato con `theme-roles.mjs --split` nello stesso commit, poi `--check`; prove dopo la finestra.
