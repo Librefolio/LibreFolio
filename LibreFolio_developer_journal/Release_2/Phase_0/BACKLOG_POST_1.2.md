@@ -426,6 +426,13 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   `pac_allocator/`, `portfolio`, `risk`, `risk_scenarios`, `signals`, `system`, `tools`, `wac`; le righe di
   `assets/` e `transactions/` le hanno già aggiornate X (CP4) e W (K2a). Da fare in una passata sola a fine
   riordino. Dettagli: piano 04, §12, K2a.
+- **C-96 · Le corsie dei test prendono la configurazione dell'istanza dal `.env` del developer** — medio, sicurezza dei
+  test; E, 15/10 (analisi). `scripts/cli_base.py:configure_test_runtime()` carica il `.env` e toglie solo
+  `INSTANCE_TRUST_SECRETS` (S2 di H): ogni altra `LIBREFOLIO_*` arriva alle corsie. Con la configurazione SMTP di E i
+  test spedirebbero email vere; con `LIBREFOLIO_BLOCKED` o il profilo gestito tutte le corsie cambierebbero
+  comportamento. Cura: la corsia tiene solo le variabili del runner e scarta il resto della configurazione d'istanza
+  venuta dal `.env`; un test usa `.env.example` come elenco. Assegnata a H dal coordinatore, prima del primo lotto di E;
+  comprende A-9 (le quattro variabili di account di A5a). Dettagli: analisi di E; piano H.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
@@ -1859,30 +1866,166 @@ plugin.
   - Modifica dal vivo di variabili CSS, colori dei fogli di stile e colori dei grafici.
   - Export JSON + Markdown con file e riga, per l'agente.
 
-  Dettagli: [progetto](55_colorSystem/design-designerLab.md); piano del figlio in `55_colorSystem/L-designerLab/`.
+  Dettagli: [progetto](../Phase_1/10_colorSystem/design-designerLab.md); piano del figlio in `../Phase_1/10_colorSystem/L-designerLab/`.
+- **L-2 · L'inventario Python legge il catalogo JS** — basso; L, 14/10 (decisione 4: una fonte sola, passaggio separato).
+  Oggi le due implementazioni danno conteggi identici (verifica riga per riga) e devono restare allineate a mano.
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 1».
+- **L-3 · Campionario dei componenti negli stati principali** — medio; L, 14/10 (decisione 6: dopo la v1).
+  Dettagli: [progetto](../Phase_1/10_colorSystem/design-designerLab.md), §11.6.
+- **L-4 · Salvataggio dell'export sul server di test** — basso; L, 14/10 (decisione 3: solo download nella v1).
+  Serve un endpoint solo in modalità test. Dettagli: [progetto](../Phase_1/10_colorSystem/design-designerLab.md), §11.3.
+- **L-5 · Contratto `themeRevision` con R** — basso; L, 14/10.
+  - Se R-1 sostituisce gli osservatori dei grafici con uno store, il Lab può incrementarlo invece di riapplicare le opzioni.
+  - Oggi la ri-applicazione dal vivo copre tutti i grafici.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Correzioni al progetto» 1.
+- **L-6 · Indice «visto dal vivo» per valore** — basso; L, 14/10.
+  - Le schede dell'app non riferiscono al Lab quali valori del catalogo hanno davvero visto, nel CSSOM o in `setOption`.
+  - La portata reale di L3 (colori derivati, palette predefinita di ECharts) resta dichiarata ma non misurata.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Correzioni al progetto» 2.
+- **L-7 · Accettazione dal vivo con la designer** — medio; L, 14/10: è la DoD esterna del passo 4, su
+  `scripts/visual_review/designer_live.sh`. Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 4».
+- **L-8 · File del componente dalla classe di scope** — basso; L, 14/10 (passo 5b).
+  - Il selettore conosce la classe di scope Svelte dell'elemento puntato (`svelte-xxxx`), ma non il file `.svelte` a cui appartiene.
+  - Oggi i candidati vengono da test id, regole e usi delle classi. Una mappa classe → file costruita al build, solo in debug, aggiungerebbe il file del componente come candidato.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 5b».
+- **L-9 · Limiti noti del selettore di elementi** — basso; L, 14/10 (passo 5b).
+  - Non si possono puntare gli elementi con `pointer-events: none`.
+  - I colori dei grafici calcolati da funzioni (tooltip) restano al piano globale anche dentro una specializzazione.
+  - Uno sfondo visto attraverso, che viene da fuori del componente, non si specializza.
+  - Il percorso strutturale del selettore di anteprima si rompe se il DOM cambia.
+
+  Dettagli: pagina developer `designer-lab.md`, «Known Limits».
+- **L-10 · Ruoli di T nel catalogo** — basso-medio; L, 14/10 (avviso del coordinatore sul workstream T). **Dipende da T-1 nella base di L.**
+  - Classi `*-lf-<nome>`: il conteggio va esteso nello scanner **e** in `color_inventory.py` con una riga ciascuno, per tenere la parità. La riga Python di `tw_custom_re` è **assegnata a L** come estensione di ④ (coordinatore, 14/10 alle 21:59). Si fanno entrambe nello stesso cambio; la parità si verifica dopo, sullo stesso albero; i numeri prima e dopo vanno nell'handoff.
+  - Catena `@theme inline`: `--color-lf-card: var(--lf-surface-card)` è un alias che a runtime non esiste. La palette e le «Variabili dell'app» devono mandare la modifica a `--lf-surface-card`, non all'alias.
+  - L1: oggi gli override stanno su `html`, quindi un sotto-albero `.dark`/`.light` che ridefinisce i ruoli tiene i suoi valori. Da scriverli anche sui selettori del token (`html.dark, .dark`). Oggi nessun sotto-albero lo fa.
+  - Il selettore di elementi non ha bisogno di nulla: con `inline` la regola vincitrice legge già `var(--lf-…)`.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 6».
+- **L-11 · Interruttore «mostra i rimasti indietro»** — basso; proposta di T, 14/10.
+  - Un contorno di debug, nel layer `lf-designer-lab` e sincronizzato tra le schede, sugli elementi con classi legacy (`-gray-`, `-slate-`, `bg-white`, `libre-`).
+  - La lista va presa dal piano di migrazione di T.
+  - Va fatto dopo il checkpoint dei passi 5b–6, quando T-1 avrà fissato i ruoli.
+- **L-12 · Il runner può ricostruire in release a metà giro** — medio; L, 14/10, dal rapporto di `test-author` E2E. **Proprietario: chi mantiene il runner** (`scripts/test_runner/_frontend_common.py`).
+  - Il server condiviso (`dev.py server --test`) costruisce il frontend in debug. Poi l'azione chiama `_ensure_frontend_build()` con `debug=False`, che ricostruisce **in release** se un file sotto `frontend/src` è più nuovo della build.
+  - Se un sorgente cambia in quel momento, il server serve una build senza Lab e gli E2E del Lab cadono a metà giro. Il problema riguarda anche chiunque modifichi `src` mentre gira una suite.
+  - Il 14/10 non è successo: ogni giro ha stampato «Frontend build is up to date».
+  - Correzione possibile: allineare `_ensure_frontend_build()` alla modalità del server di test, cioè debug, o farlo saltare quando il server di test è già partito.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 6».
+- **L-13 · Soggetti degli E2E del Lab che seguono la migrazione di T** — basso; L, 15/10, dal rapporto di `test-author` dopo il fuso con R.
+  - Gli E2E del Lab ricavano a runtime come un componente scrive il colore (fuso con R). Restano però legati ad alcuni elementi dell'app, che le ondate di T cambieranno:
+    - **W4**, transazioni: il sottotitolo della pagina passa a un'utility di ruolo (`text-lf-*`). `textPaletteClassOf` cerca una classe di palette e fallisce in modo esplicito. Con L-10 l'helper deve accettare anche le utility di ruolo, con la catena alias → ruolo. Il test L1, la sospensione e la scorciatoia vanno riportati su quel percorso.
+    - **B6**, pulizia: sparisce l'override P1 di `app.css` su `text-gray-500`. Il test del selettore in scuro va ritirato o riportato su un nuovo soggetto P1, se ne resta uno. Decisione di L in quel momento.
+    - **W6**, DataTable: l'intestazione con un'utility di ruolo chiede a `pickView` i candidati `class-use` via ruolo, cioè L-10 (2). Senza L-10 il controllo «candidato in `DataTable.svelte`» diventa rosso, e a ragione.
+    - **W5**, ponte sRGB per ECharts: se i colori dei grafici smettono di essere letterali, il test L3 e forse il motore L3 vanno rivisti.
+  - Ogni rottura è esplicita: il test cade con un messaggio che nomina il presupposto mancante.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Gallery candidata di L e validazione del fuso con R».
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 
 Ogni ondata va dimostrata con una gallery dello stesso giorno `identical` (a parte le schermate instabili della 56).
 Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano generale, «Decisioni del developer»).
 
-- **R-1 · Colori dei grafici in un modulo unico** — alto; coordinatore, 14/10.
+> **Stato (R, 15/10): ✅ R chiuso.** Lotti A–D in `dev_release2` da `8fd8e494b`; cancello gallery unico A+B+C+D
+> superato. Restano aperte R-5…R-8. Piano: [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md).
+
+- ✅ **R-1 · Colori dei grafici in un modulo unico** — alto; coordinatore, 14/10.
   - Oggi: 4 set per assi, griglie e tooltip; 3 palette di allocazione; coppie chiaro/scuro scritte in 17 grafici.
   - Stessi valori, divergenze con un nome.
 
-  Dettagli: [report 04](55_colorSystem/analysis/04_charts_dataviz.md), §1–§3.
-- **R-2 · Funzioni condivise per segno, stati e badge** — medio; coordinatore, 14/10.
+  Dettagli: [report 04](../Phase_1/10_colorSystem/analysis/04_charts_dataviz.md), §1–§3.
+  - Stato (R, 14/10): codice nel checkpoint del lotto B (W3–W5). `lib/theme/themePair.ts` (`themed()`),
+    `chartTheme.ts`, `chartPalettes.ts`, `chartColorScales.ts`: 229 siti in 33 file; neutri, palette, serie, formule e
+    lotti; ogni divergenza ha un nome (`CHART_GAIN_LOSS.price` `#ef4444` / `.portfolio` `#dc2626`, box del tooltip
+    comune e della candela, interesse di Growth e dei lotti…). Il dividendo di Growth e dei lotti è ora una voce sola. Si
+    chiude con il commit e il cancello B.
+  - Stato (R, 14/10), lotto D (W8, D4): il tema si legge da un solo punto, `lib/theme/themeMode.ts`
+    (`isDarkTheme()`, `onThemeClassChange()`).
+    - Interessa 16 osservatori e 23 letture di `classList.contains('dark')` in 19 file.
+    - Il ridisegno a ogni cambio di classe di `<html>` resta.
+    - Gate `themeModeReads`: niente letture o osservatori della classe fuori da `themeMode.ts`.
+    - Piano: [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W8».
+  - ✅ Chiusa il 15/10 (R): lotti B (`75c45d923`) e D (`98731240d`), in `dev_release2` da `8fd8e494b`; cancello
+    gallery unico A+B+C+D superato.
+- ✅ **R-2 · Funzioni condivise per segno, stati e badge** — medio; coordinatore, 14/10.
   - Oggi: ternario guadagno/perdita in almeno 20 punti e 7 mappe di stato indipendenti.
   - Output identici.
 
-  Dettagli: [report 03](55_colorSystem/analysis/03_semantic_dynamic_logic.md), §1–§3.
-- **R-3 · Hex nei `<style>` in variabili CSS con lo stesso valore** (P8: `DataTable*`, modali file e immagini,
-  `ConfirmModal`) — medio; coordinatore, 14/10. Dettagli: [report 02](55_colorSystem/analysis/02_ui_components.md), §4.
-- **R-4 · Funzioni fragili e refusi senza effetto visibile** — basso; coordinatore, 14/10.
+  Dettagli: [report 03](../Phase_1/10_colorSystem/analysis/03_semantic_dynamic_logic.md), §1–§3.
+  - Stato (R, 14/10): codice nel checkpoint del lotto A (W1–W2): `lib/theme/toneClasses.ts` (`SIGN_TEXT`, `SIGN_BAR`,
+    `POLARITY_TONES`, `STATUS_TONES`, `KIND_TONES`), 42 siti di segno in 20 file e 11 mappe di stato in 9 file; CSS
+    compilato identico alla baseline. Si chiude con il commit del checkpoint e il cancello A.
+  - ✅ Chiusa il 15/10 (R): lotto A (`d80b9e0cd`), in `dev_release2` da `8fd8e494b`; cancello gallery unico
+    A+B+C+D superato.
+- ✅ **R-3 · Hex nei `<style>` in variabili CSS con lo stesso valore** (P8: `DataTable*`, modali file e immagini,
+  `ConfirmModal`) — medio; coordinatore, 14/10. Dettagli: [report 02](../Phase_1/10_colorSystem/analysis/02_ui_components.md), §4.
+  - Stato (R, 14/10): codice nel checkpoint del lotto C (W6–W7).
+    - 16 componenti, 908 dichiarazioni, 604 token `--lf-cmp-<componente>-<ruolo>` con gemelle `-dark`, su `:root` in
+      `lib/theme/components/{table,media,files,dialogs}.css`, importati dai componenti; le regole `.dark` restano
+      dove sono.
+    - I valori sono quelli che la build emetteva: esbuild quantizza i colori delle dichiarazioni, ma non quelli delle
+      custom property.
+    - Fuori dal CSS, cioè cheetah-grid e SVG in data URL, i colori vanno in `lib/theme/drawnColors.ts`.
+    - Prove: CSS compilato identico regola per regola; definizioni presenti con ogni pagina che le usa; gate
+      `themeComponentTokens` in `core-unit` (definizione unica, import, nessun token orfano).
+    - Si chiude con il commit e il cancello C.
+  - Stato (R, 14/10), lotto D (W9, D5): i quattro file P8 fuori elenco (pagina dei file, `BrokerImportFilesModal`,
+    `ImportBrokerMismatchModal`, `CompactCashCell`).
+    - 172 letterali diventano 124 token: 728 in tutto.
+    - Letterali fuori da `lib/theme/**` e da `app.css`, dalla base al lotto D: hex da 1.554 a 88, funzioni colore da
+      198 a 50.
+    - Piano: [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W9».
+  - ✅ Chiusa il 15/10 (R): lotti C (`0b660632f`) e D (`98731240d`), in `dev_release2` da `8fd8e494b`; cancello
+    gallery unico A+B+C+D superato.
+- ✅ **R-4 · Funzioni fragili e refusi senza effetto visibile** — basso; coordinatore, 14/10.
   - `hexToRgba` e la concatenazione `+ '88'` accettano solo `#rrggbb`.
   - La meta `theme-color` scura è `#156534` invece di `#166534`.
 
-  Dettagli: [report 01](55_colorSystem/analysis/01_theme_foundation.md), §6.5; [report 04](55_colorSystem/analysis/04_charts_dataviz.md), §5.
+  Dettagli: [report 01](../Phase_1/10_colorSystem/analysis/01_theme_foundation.md), §6.5; [report 04](../Phase_1/10_colorSystem/analysis/04_charts_dataviz.md), §5.
+  - Stato (R, 14/10): codice e test nel checkpoint del lotto A (W0); `lib/theme/colorAlpha.ts`, meta corretta nei tre
+    punti con gate di concordanza. Si chiude con il commit del checkpoint e il cancello A. Piano:
+    [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W0».
+  - ✅ Chiusa il 15/10 (R): lotto A (`d80b9e0cd`), in `dev_release2` da `8fd8e494b`; cancello gallery unico
+    A+B+C+D superato. Il timbro di `static/sw.js`, che andava rifatto con la correzione di `offline.html`, l'ha
+    aggiunto il coordinatore all'ingresso (`23f6578f3`).
+- **R-5 · `withAlpha` su `hsl()` con spazi produce un colore non valido** — minimo; R, 14/10.
+  - `hsla(210 68% 44%, a)` mescola le due sintassi; oggi nessun chiamante ci passa (`lotColor` non arriva a `withAlpha`).
+  - Da correggere quando un colore con spazi ci arriverà (fase B), con la gallery.
+
+  Dettagli: piano R, «W0», nota «Fuori pista».
+- **R-6 · Viola della linea di anteprima negli editor dei dati** — minimo; coordinatore, 14/10.
+  - `color: '#a855f7'` scritto a mano in `assets/AssetDataEditorSection.svelte:248` e in
+    `fx/FxDataEditorSection.svelte:129`.
+  - Fuori dal perimetro di R: sono cartelle della 1.3. Passa alla fase B.
+  - Fino ad allora è un'eccezione del cricchetto dei colori letterali, che dal 14/10 è il gate M2 di T: R gli ha
+    consegnato l'elenco delle eccezioni.
+
+  Dettagli: piano R, «W7», nota sulle eccezioni del cricchetto.
+- **R-7 · Due viste non seguono il cambio di tema dal vivo** — basso; R, 14/10 (osservazione del `test-author` in W8).
+  - `charts/SemiDonutChart.svelte` e l'anteprima a tabella di `files/FilePreviewModal.svelte` (cheetah-grid)
+    leggono il tema quando disegnano, ma non hanno osservatore. Dopo un cambio di tema mostrano i colori vecchi fino
+    al ridisegno successivo o alla riapertura.
+  - Precede R. Correggerlo cambia il comportamento, quindi non è di R.
+  - Riguarda T (B4) e il Designer Lab, che riapplica i colori dal vivo. La correzione è un `onThemeClassChange()`
+    con ridisegno.
+
+  Dettagli: [piano R](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W8», «Fuori pista».
+- **R-8 · `--resolve` della baseline colori toglie un `--accept`** — basso; R, 15/10; per T.
+  - `theme-roles.mjs --resolve` (`mergeBaselines`) dà a una riga presente sui due lati il m1 minore e **solo i
+    colori che entrambi hanno**, senza guardare la base né le righe `~accept`.
+  - Se un lato ha accettato uno scambio di colore e l'altro ha ancora la riga della base, il colore accettato
+    sparisce e `--check` torna rosso. È successo il 15/10, nel merge della base di R con T-2, sulla correzione D3 di
+    `themeStore.ts`: rimediato rilanciando lo stesso `--accept`, con l'OK del coordinatore.
+  - Correzione proposta: un vero merge a tre vie (se un lato è uguale alla base, vince l'altro), oppure vince il
+    lato che ha un `~accept` per quel file.
+
+  Dettagli: [piano R](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «Merge della base con T-2»; wiki
+  `problems/colour-ratchet-resolve-drops-an-accept`.
 
 ## G · Gallery deterministica (56)
 
@@ -1896,6 +2039,17 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     filtrate dello stesso giorno 10 delle 27 instabili sono diventate stabili e 10 «rumore minimo». La prima misura
     completa è stata invalidata dalla fuga del prezzo live (G-6). Misura finale il 15/10 su `dev_release2` con G dentro.
     Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), passi 3 e 6.
+  - *Stato al 15/10 (G):* misura finale `g-final3` (X = `2338aaf79`, 6 worker, `live_price_check` pulito): **6 instabili
+    su 177**.
+    - 2 di solo contenuto, accettate: ordine delle immagini del seed, ordine dei file del set.
+    - 4 di inquadratura (`detail-measures*` e `about-plugin-diagnostics` su mobile, la pagina dietro `scheduler-config`):
+      corrette nel checkpoint 2 di G, verifica nella corsia 6153.
+    - Le 19 medie sono contenuto o residui di resa spiegati.
+    - ✅ *Verifica del checkpoint 2:* 2 run da sole, 8/8 + 8/8 verdi, `live_price_check` 0. Diagnostica e
+      `scheduler-log` stabili, `scheduler-config` e `detail-measures-active` `low`. Su `detail-measures` resta 1
+      variante su 16 (G-11).
+
+    Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md).
 - **G-2 · 4–5 test desktop falliti in ogni esecuzione completa a 10 worker, ogni volta diversi** — medio; coordinatore,
   14/10.
   - Login fermo su «auth-loading» nel primo blocco; modali delle transazioni.
@@ -1913,6 +2067,14 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
     Da soli passano 2/2. Proposta non fatta: dare a `headerOutOfShot` la stessa scadenza di `frameTarget`. Dettagli:
     piano della 56, verifica del checkpoint.
+  - ✅ **15/10, verdetto:** saturazione della macchina.
+    - A 10 worker la prima r1 della misura finale ha avuto 8 rossi desktop nei primi 10 minuti, a carico 65, con
+      richieste in volo da 10–20 s. Da soli passano.
+    - A 6 worker: 0 rossi in 2 run complete.
+    - `dev.py mkdocs gallery` avvia di default un worker browser per CPU più 3 worker server.
+    - Il README del toolkit dice `-- --workers 6`; il default in `dev.py` passa a J (C-94), decisione del coordinatore.
+
+    Dettagli: piano della 56, passo 5.
 - **G-3 · `Dashboard Risk › what-if crisis replay` su desktop** — medio-basso; coordinatore, 14/10.
   - Fallisce in 2 esecuzioni su 3.
   - Il menu contiene «Global Financial Crisis», ma `chooseReplayPreset`
@@ -1923,6 +2085,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - *Stato al 14/10 (G):* `chooseReplayPreset` riscritto (puntatore parcheggiato, cammino nei due versi, messaggio con
     gli ultimi stati), nel checkpoint di G. Verde in 4 run desktop sotto carico su 5: smoke a 6 worker, 2 complete a 10
     e `g-verify2` a 5 con carico fino a 94. La quinta arriva con la misura finale del 15/10.
+  - ✅ **15/10:** verde in 6 run desktop sotto carico su 6, con le due della misura finale (`g-final3`). Dettagli: piano
+    della 56, passo 2.
 - **G-4 · Difetto del prodotto trovato col rumore: il chip del provider resta sul codice** — basso; G, 14/10,
   correzione autorizzata dal coordinatore. Causa: nell'intestazione del dettaglio asset il nome è
   `getAssetProviderName(code)`, che legge una `Map` non reattiva; se `assetInfo` arriva prima del catalogo dei provider
@@ -1946,6 +2110,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Correzione nel checkpoint di G: lasciare la pagina, poi togliere le rotte. Verifica:
     `scripts/visual_review/live_price_check.py` sugli snapshot, che dà 0 righe di prezzo live nel log della corsia
     (`g-alone4`, `g-verify2`, `g-alone5` del 14/10).
+  - ✅ **15/10:** la correzione è in `dev_release2` dal checkpoint 1 di G (`0076f4269`). `live_price_check` dà 0 su
+    entrambe le run della misura finale (`g-final3-r1`, `g-final3-r2`).
 
   Dettagli: piano della 56, passo 6.
 - **G-7 · Lo stesso varco di G-6 negli E2E fuori dalla gallery** — basso; G, 14/10, su richiesta del coordinatore.
@@ -1973,6 +2139,57 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     checkpoint di J. La voce nella sezione di J la scrive J.
 
   Dettagli: piano della 56, passo 6.
+- **G-9 · La gallery può fotografare un indicatore non applicato** — basso-medio; coordinatore, 15/10 (candidata di L,
+  `assets/detail-signals-macd`, mobile it chiaro: menu degli indicatori ancora aperto, MACD non applicato, 1 variante su
+  16).
+  - Causa (G, verificata nel codice): `selectIndicatorFromTree` (`frontend/e2e/gallery.spec.ts:165`) clicca l'opzione e
+    non verifica l'esito: né il menu chiuso né la card dell'indicatore. `waitForSignalCardsSettled` (`:182`) aspetta che
+    non resti nessun `signal-loading`, e passa a vuoto se la card non c'è ancora.
+  - Correzione proposta (perimetro G, test-author):
+    - dopo il clic, il menu chiuso (`aria-expanded` false sul trigger di `TreeSelect`) e una card `signal-card-*` con
+      `data-signal-type` uguale all'opzione;
+    - `waitForSignalCardsSettled` che richiede almeno una card.
+
+    Un clic perso diventa un rosso con un messaggio chiaro, invece di uno scatto sbagliato. Vale per tutti i chiamanti:
+    EMA, RSI, MACD, Bollinger.
+
+  Dettagli: piano della 56, passo 7.
+- **G-10 · Ordine casuale delle immagini del seed nelle liste di file** — medio-basso; G, 15/10, su segnalazione del
+  coordinatore (`files/static-grid`: miniatura `men_04` in una corsia, `woman_07` in un'altra).
+  - Causa (prodotto, verificata nel codice):
+    - `seed_default_avatars()` (`backend/app/services/files/static_uploads.py:480`) scrive tutti gli avatar con lo
+      stesso `uploaded_at` (un solo `now`) e con un UUID casuale come nome;
+    - `list_uploads()` (`:335`) legge i metadati con `glob("*.json")`, cioè nell'ordine della directory, e ordina solo
+      per `uploaded_at`. L'ordinamento è stabile, quindi a parità di data resta l'ordine dei nomi casuali, diverso a ogni
+      populate.
+  - Non dipende da file rimasti nella cartella dati: `--clean` svuota `custom-uploads`, marker compreso, e il populate
+    ricrea gli avatar.
+  - Effetto: `media/asset-picker-modal`, la prima instabile rimasta (16/16, 24 %), perché `AssetPickerModal` legge lo
+    stesso `GET /api/v1/uploads`. Inoltre l'ordine in `files/static-grid` e `static-tab`, e la miniatura che cambia da
+    una corsia all'altra. Oggi è contenuto accettato.
+  - Correzione proposta (fuori dal perimetro di G): una chiave secondaria deterministica nell'ordinamento di
+    `list_uploads`, per esempio il nome originale a parità di `uploaded_at`. Non cambia lo stile. Per un utente conta
+    solo fra file caricati nello stesso istante. Da instradare dal coordinatore.
+
+  Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md).
+- **G-11 · Su mobile, a scroll fermo in fondo alla pagina, l'header resta a volte visibile, solo in spagnolo** — basso;
+  G, 15/10, verifica del checkpoint 2.
+  - Sintomo: in `assets/detail-measures`, dove la pagina finisce prima del grafico (scroll fermo a 552 px), l'header
+    dovrebbe essere nascosto come dopo ogni scroll verso il basso. È rimasto visibile 3 volte, sempre in es: 2 con il
+    percorso vecchio (`g-final3-r1`, chiaro e scuro) e 1 con `frameTarget` (`g-c2-w1-a`, chiaro, ↕️ «header visible»);
+    nelle altre lingue mai. Una variante su 16, circa 5,8 % dei pixel: la fascia dell'header.
+  - Ipotesi: `Header.svelte` rimette `visible` senza scroll a ogni `syncScrollContext()`. Lo chiamano il focus che esce
+    dall'header, il suo ResizeObserver, un `resize`, un cambio di `routeKey` (`pathname + search`), menu e blocco dei
+    modali. Quale scatti in spagnolo non si vede dal codice.
+  - Proposta (perimetro G, test-author):
+    - una run filtrata con un osservatore, lato test, delle transizioni di `data-scroll-state` e degli eventi vicini,
+      per trovare la causa;
+    - nella gallery, a scroll fermo, un breve su-e-giù che porti l'header nello stato di uno scroll in basso, prima
+      dello scatto.
+
+    Se la causa è nel prodotto, va segnalata e non corretta qui.
+
+  Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md), «Verifica delle correzioni».
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
@@ -2190,24 +2407,30 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   14/10 senza codice: già fatta il 10/09 in `e50d66408` (conteggio e link nella cancellazione singola e in quella multipla,
   `FAAssetDeleteResult.transaction_count`, E2E in `e2e/assets/asset-list.spec.ts`); nella devWiki F-095 era già
   `documented`, e `domains/assets.md` non la elenca più fra le cose da fare. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «2.5».
-- **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1,
+- ✅ **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1,
   CP3). La docstring di `create_routes_bulk` (oggi `api/v1/fx/providers.py:183`) cita ancora «``services/fx.py``»; la
   funzione sta in `services/fx/storage.py` dal CP3. Il testo è nella descrizione dell'endpoint in `openapi.json`, e il PL4 è
   un riordino a `openapi.json` invariato: come X-R2, si corregge in un lotto che cambia comunque l'API (il CP6, F05, o
-  prima). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1 e CP3.
-- **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
+  prima). **Chiusa il 15/10**, con X-R2, in un commit sopra X-R11a che entra con FE5b; `openapi.json` cambia solo nelle tre
+  descrizioni. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1, CP3
+  e X-R1 + X-R2.
+- ✅ **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
   docstring di `BackwardFillInfo` (`schemas/common.py:369`) e di `IdentifierType` (`db/models.py:117` e `:123`) citano ancora
   `schemas/assets.py` (diventato `schemas/assets/assets.py` nel CP2b) e `asset_source.py` (tolto nel CP2a). Il testo finisce
   in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima). Nella stessa docstring di
   `db/models.py`, la riga `:127` cita `services/brim_provider.py`, spostato da W (W4 CP6) in `services/brim/`: per la stessa
-  ragione resta, e si corregge insieme alle altre (aggiunta il 15/10, validazione di `d1ef3ddeb`). Dettagli:
-  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a e CP2b.
-- **X-R3 · Tre commenti del frontend citano il modulo degli asset tolto** — minimo; X, 15/10 (CP2b, validazione di
+  ragione resta, e si corregge insieme alle altre (aggiunta il 15/10, validazione di `d1ef3ddeb`). **Chiusa il 15/10** con
+  X-R1; nella stessa docstring anche il passo 1, che mandava la colonna nuova in `001_initial.py` contro la regola delle
+  migrazioni incrementali. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione
+  «15», CP2a, CP2b e X-R1 + X-R2.
+- ✅ **X-R3 · Tre commenti del frontend citano il modulo degli asset tolto** — minimo; X, 15/10 (CP2b, validazione di
   `eb245b624`). `AssetModal.svelte:1507` e `:1636` attribuiscono ad `asset_source.py` le cancellazioni di prezzi ed eventi
   generati (oggi in `services/assets/provider_management.py`, `bulk_assign_providers`), e `assetPayload.test.ts:58` la fusione
   per campo della classificazione (oggi in `services/assets/crud.py`, `patch_assets_bulk`). Fuori dal perimetro dei lotti
-  del backend: si corregge nel FE5, con il taglio di `AssetModal`. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
-  sezione «15», CP2b.
+  del backend: si corregge nel FE5, con il taglio di `AssetModal`. **Chiusa nel FE5b-1 il 15/10**: i due commenti di
+  `AssetModal` puntano a `services/assets/provider_management.py`, quello di `assetPayload.test.ts:58` a
+  `services/assets/crud.py`. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», CP2b e FE5b.
 - **X-R4 · Il diagramma della guida dei plugin FX attribuisce al servizio la divisione per le valute multi-unità** —
   minimo, doc; segnalato da docs-writer il 15/10 (CP3). In `mkdocs_src/docs/developer/architecture/patterns/fx_plugin_guide.md`
   un riquadro Mermaid dice «Service normalizes … Multi-unit ÷100»; la stessa pagina dice che la divisione la fa il plugin, e
@@ -2276,6 +2499,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - la docstring di `create_routes_bulk` (`api/v1/fx/providers.py:180`) cita ancora `services/fx.py`, che dopo il CP3 è
     `services/fx/` (la normalizzazione sta in `storage.py`): segnalata dal coordinatore il 15/10, è la stessa riga di
     **X-R1**, aperta dal CP1; resta lì, perché il testo finisce nella descrizione dell'endpoint in `openapi.json`.
+    ✅ Chiusa il 15/10 con X-R1.
   Proposta: con il FE4 (frontend dei cambi). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
   sezione «15», X-R8.
 - ✅ **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
@@ -2302,6 +2526,22 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   lui a W, proprietario di `DataImportModal.svelte`. **15/10, i due test-id ci sono** (W E0, `d226bc69e`):
   `data-import-cancel` e `data-import-discard-confirm`. Restano a X le quattro righe della spec, con il FE4.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
+- **X-R11 · `AssetModal`: stranezze preesistenti viste dai test di FE5b-2** — minimo; X, 15/10 (FE5b-2, segnalate da
+  test-author). Copiate fedelmente nei moduli puri, nessuna cambiata:
+  - ✅ la riga della descrizione nel dialogo di confronto ha l'etichetta fissa `'Description'`
+    (`assetMetadataComparison.ts`), e `ProviderComparisonModal` la mostra com'è: in IT ed ES resta in inglese. Cura di
+    poche righe: `common.description` c'è già nei quattro cataloghi, basta un'etichetta in più in `ComparisonLabels`.
+    **Chiusa il 15/10** (X-R11a): in un commit a parte sopra FE5b-2, deciso dal coordinatore; entra con FE5b; test
+    rosso prima (3 su 61);
+  - `searchResultIdentifier` controlla che l'identificativo non sia vuoto prima di togliere gli spazi: uno di soli spazi
+    diventa una riga vuota, o un conflitto con un codice vuoto;
+  - `withElectedPrimary` chiama `.trim()` sui valori OTHER senza convertirli in stringa (`mergeOtherIdentifierValues` li
+    converte);
+  - `mergeOtherIdentifierValues` scarta solo `null` e `undefined`: `false` o un oggetto diventano righe `'false'` o
+    `'[object Object]'`;
+  - un `{currency: null}` nei parametri del fornitore blocca la valuta del risultato di ricerca (conta solo la chiave).
+  Proposta: le quattro rimaste con il FE5a. Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», FE5b-2 e X-R11a.
 
 - ✅ **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — basso, robustezza; trovata da J il
   15/10 (C-93), assegnata a X dal coordinatore. `services/assets/core.py:114-119` (`_sync_runner`, dentro
@@ -2443,14 +2683,16 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 ## B · Backup e Docker (fase 01)
 
 Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md). Sessione avviata il 15/10 alle
-07:10, solo analisi, sulla base `ee5d81a6f`.
+07:10, solo analisi, sulla base `ee5d81a6f`. Codice autorizzato il 15/10 alle 11:25 (delega del developer): B0 e B1,
+sulla base `23f6578f3`.
 
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
-analisi, sulla base `380a3e768`.
+analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega del developer): E0 ed E1, sulla base
+`23f6578f3`.
 
 ## Y · Cruscotto e grafici (fase 01)
 
-Piano: [`09_dashboardCharts`](../Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md). Sessione non ancora
-avviata.
+Piano: [`09_dashboardCharts`](../Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md). Sessione avviata il
+15/10 alle 11:28, solo analisi, sulla base `23f6578f3`.

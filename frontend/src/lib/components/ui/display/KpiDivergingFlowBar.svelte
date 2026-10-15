@@ -23,6 +23,7 @@
 -->
 <script lang="ts">
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import {SIGN_BAR} from '$lib/theme/toneClasses';
 
     interface Props {
         label: string;
@@ -85,8 +86,8 @@
         withdrawPct,
         signedPct,
         valueColor = 'text-gray-700 dark:text-gray-300',
-        positiveColor = 'bg-green-500 dark:bg-green-400',
-        negativeColor = 'bg-red-400 dark:bg-red-500',
+        positiveColor = SIGN_BAR.kpi.gain,
+        negativeColor = SIGN_BAR.kpi.loss,
         barHeight = 'h-1.5',
         layout = 'stacked',
         inlineColumns = 'minmax(7rem,1fr) minmax(10rem,2fr) 5rem',
