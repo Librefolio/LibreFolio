@@ -83,7 +83,7 @@ Create and apply database schema changes:
 | `./dev.py db create-clean` | Recreate a fresh database and apply all migrations |
 | `./dev.py db current` | Show the current database migration revision |
 
-`db migrate`, `db upgrade`, `db downgrade` and `db create-clean` refuse to run while a server listens on the port that serves the target database (`PORT` for the production database, `TEST_PORT` for the test one): stop that server first. The server itself applies pending migrations at startup (`ensure_database_exists()` in `backend/app/main.py`).
+`db migrate`, `db upgrade`, `db downgrade` and `db create-clean` refuse to run while a server listens on the port that serves the target database (`PORT` for the production database, `TEST_PORT` for the test one): stop that server first. The server itself applies pending migrations at startup (`ensure_database_exists()` in `backend/app/services/platform/database_bootstrap.py`, the `database` step of the [lifespan](architecture/overview.md#server-startup)).
 
 ### 🧪 Test Runner
 

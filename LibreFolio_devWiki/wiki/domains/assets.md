@@ -71,6 +71,7 @@ graph TD
 - [[decisions/data-editor-unification]] — the inline data editor was unified into a generic `DataEditor` component set shared by both the FX and Asset detail pages, eliminating duplicated logic for click-to-edit, CSV import, and bulk save.
 - [[decisions/price-currency-hard-reject]] — Phase 7 Part 3: hard-400 on any price-currency mismatch in `upsert_prices_bulk`; HTTP 409 on `Asset.currency` PATCH while price/event history exists.
 - [[decisions/policy-d-currency-wipe]] — when the user accepts the 409, currency change is destructive: prices + events wiped symmetrically, transactions preserved with `asset_event_id = NULL`. Pre-confirm snapshots via [[entities/backup-router]] (`/api/v1/backup/asset/{id}/{prices,events}`).
+- [[decisions/asset-event-saves-all-or-nothing]] — release 1.3, decisions 20–23. An events save is one transaction that refuses whole and says where. «+ New event» never overwrites (409 `EVENT_EXISTS`). The `DELETE` names its asset, and the editor's deletions travel inside its save. An unknown type is refused, and the stored ones are repaired by a post-migration fix.
 
 ## Known problems / limitations
 
@@ -79,6 +80,7 @@ graph TD
 - [[problems/asset-currency-mismatch]] — asset price currency may differ from `Asset.currency` (e.g. a EUR-denominated ETF with prices returned in USD by yfinance); per-row currency column added in 2026-04 (still present as forensic canary), now superseded at the API contract level by [[decisions/price-currency-hard-reject]].
 - [[problems/assets-wipe-error-attr-mismatch]] — Policy D wipe handlers used non-existent `e.code` attribute; fixed in G-batch6 (one residual occurrence flagged).
 - [[problems/babel-currency-symbol-echo]] — `normalize_currency` echoed unknown garbage via babel; fixed via strict pycountry lookup in G-batch7.
+- [[problems/provider-event-dated-today-not-synced]] — a sync reads the history up to yesterday, and today's point (the current value) carries no events: a provider event dated today arrives with the first sync of a later day. Open.
 
 ## What comes next
 

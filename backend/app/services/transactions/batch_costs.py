@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from backend.app.db.models import Transaction
 from backend.app.schemas.transactions.batch import TXValidationCode, TXValidationIssue
-from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext
+from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext, cost_fields
 
 if TYPE_CHECKING:
     from backend.app.services.transactions.transaction_service import TransactionService
@@ -154,12 +154,20 @@ async def _check_update_cost_basis(
     context: TransactionBatchContext,
     auto_update_indices: set[int],
 ) -> None:
-    """Check parsed updates not handled by auto WAC."""
+    """Check parsed updates not handled by auto WAC that touch what the cost basis depends on.
+
+    An update is checked when it changes the row's type, quantity (its sign included), cost basis or asset event link,
+    compared with the row as stored before the batch, or when it names a cost basis mode. Editing only the notes, tags or
+    description of an older row saved without a cost basis stays allowed: nothing is repaired behind the user's back.
+    """
     for original_index, item in context.parsed_updates:
         if original_index in auto_update_indices:
             continue
         transaction = await service.session.get(Transaction, item.id)
-        if transaction and service._requires_cost_basis(transaction) and transaction.cost_basis_override is None:
+        if transaction is None or not service._requires_cost_basis(transaction) or transaction.cost_basis_override is not None:
+            continue
+        touches_cost = getattr(item, "cost_basis_mode", None) is not None or cost_fields(transaction) != context.stored_cost_fields.get(item.id)
+        if touches_cost:
             _append_cost_basis_issue(
                 context,
                 operation="update",

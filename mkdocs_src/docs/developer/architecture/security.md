@@ -196,8 +196,8 @@ does not: `web_link_finder_api_key()` in `backend/app/config/plugins.py` reads i
 builds the `apikey` engine, and `_build_engine()` in `backend/app/services/assets/web_link_finder.py`
 then logs `web_link_finder: <error>; disabling` and returns no engine, so that search finds no links.
 Nor does a broken `LIBREFOLIO_SMTP_PASSWORD_FILE`: email is optional, so `email_config_state()` turns
-it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged and, from a later lot,
-shown to administrators ([Email Service](../backend/email.md#config-state)).
+it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged at startup and shown to
+administrators in Settings › Email ([Email Service](../backend/email.md#config-state)).
 
 When `NAME` and `NAME_FILE` are both set, neither blank, `NAME` wins. `secrets_set_twice()` lists those
 names for the [configuration checks](#configuration-checks). It covers `JWT_SECRET` and every
@@ -318,7 +318,8 @@ A check changes nothing, never raises and never puts a secret value in its resul
 | `platform.session_cookie` | `SESSION_COOKIE_SECURE=never` | `warning` |
 | `platform.log_level` | `LOG_LEVEL`, after the `LIBREFOLIO_LOG_LEVEL` override, is `DEBUG` or `TRACE` | `info` |
 
-At startup, the lifespan of `backend/app/main.py` runs `log_configuration_audit()` in a thread
+At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
+`backend/app/services/platform/app_lifespan.py`) runs `log_configuration_audit()` in a thread
 (`asyncio.to_thread`), right after the `Starting LibreFolio` line:
 
 1. `configured_jwt_secret()`: an unreadable `JWT_SECRET_FILE` raises `SecretFileError`. In practice
@@ -600,7 +601,7 @@ tokens:
   Any other token gets its status alone, and a token presented for the other purpose is `unknown`.
 - **Anonymous answers say nothing about the users.** The `409` `USER_LIMIT_REACHED` of `POST /auth/register`
   carries no count and no billing link; only the administrator's routes add `limit`, `used` and `billing_url`.
-  `GET /system/instance` publishes only the registration mode and whether a variable locks it.
+  About accounts, `GET /system/instance` publishes only the registration mode and whether a variable locks it.
 - **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…` and
   `/reset-password#token=…`. A browser never sends the fragment to the server, so the token is not in the request
   for the page: it stays out of the server's access log and out of the logs of every proxy on the way. A browser
@@ -695,10 +696,10 @@ answer, `true` or `false`:
 - `Access-Control-Allow-Origin: *`, once: no other route of the backend sets this header;
 - `Cache-Control: no-store`.
 
-The global `CORSMiddleware` of `backend/app/main.py` (`allow_credentials=True`, no allowed origin) leaves
-that header in place on a simple `GET` and only adds `Access-Control-Allow-Credentials: true`, which the
-browser ignores for a request without credentials. Every other route answers a request from another origin
-without `Access-Control-Allow-Origin`.
+The global `CORSMiddleware` (the `cors` entry of `MIDDLEWARE_STACK`, `backend/app/services/platform/middleware.py`:
+`allow_credentials=True`, no allowed origin) leaves that header in place on a simple `GET` and only adds
+`Access-Control-Allow-Credentials: true`, which the browser ignores for a request without credentials. Every other
+route answers a request from another origin without `Access-Control-Allow-Origin`.
 
 !!! warning "The check must be a CORS simple request"
 
