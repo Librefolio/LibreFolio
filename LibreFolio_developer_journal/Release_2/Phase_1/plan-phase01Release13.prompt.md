@@ -1140,3 +1140,21 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > resta fermo (richiesta del coordinatore colori). CHANGELOG con una riga. La docstring con `services/fx.py` in
 > `api/v1/fx/providers.py` è X-R1: cambia `openapi.json`, la corregge X col CP6. Poi FE5b (taglio di `AssetModal`,
 > annuncio aperto nel §7).
+
+### E, Email, avviata in sola analisi; checkpoint sui rami dei figli (2026-10-15, 08:40)
+
+> **Note implementazione**: sessione `877410cd`, worktree `e-alfy-stunning-fortnight`, corsia 6188 +
+> `/tmp/librefolio-r13-e`, base `380a3e768`. Condizione del §4 soddisfatta: i token monouso di A4 sono in
+> `dev_release2`, e il contratto di inviti e reset è nel checkpoint A5a (`2d4708578`, sul ramo di A), che E legge con
+> `git show`. Nodi affidati all'analisi: invio fuori dal ciclo di eventi, server SMTP finto per i test, link senza
+> `LIBREFOLIO_PUBLIC_URL`, enumerazione, limite di invii, lingua, avvisi di configurazione, blocco dell'istanza.
+>
+> Committati sui rami dei figli, non integrati: A5a (`7da2cd9a2`: migrazione 006, inviti, `registration_mode`, API
+> admin, CLI; l'aggiornamento di base è aperto nel worktree di A con un conflitto in `test_system_api.py`, che risolve
+> A), W FE8a-1 (`8a62cea7f`: il form delle transazioni tagliato per sezione), X FE5b-1 (`37532d558`: `AssetModal` in sei
+> pezzi). Entrano dopo la finestra della galleria, dopo R e L. Decisione su A-9: la corsia dei test toglie le quattro
+> variabili di account, come fa già con i segreti (in A5b). `billing_url` nella pagina di blocco: lotto piccolo di H
+> dopo l'ingresso di A5.
+>
+> **Finestra della galleria**: dalle 08:45 a fine r2 (verso le 10:15) `dev_release2` resta fermo; poi i lotti solo
+> backend possono rientrare con l'avviso, quelli frontend dopo la fine della finestra (verso le 12:30).

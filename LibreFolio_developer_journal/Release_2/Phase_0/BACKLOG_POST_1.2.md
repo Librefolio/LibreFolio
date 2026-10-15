@@ -2413,7 +2413,8 @@ Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.p
 
 ## E · Email (fase 01)
 
-Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione non ancora avviata.
+Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
+analisi, sulla base `380a3e768`.
 
 ## Y · Cruscotto e grafici (fase 01)
 
