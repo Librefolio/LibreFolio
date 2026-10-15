@@ -2203,14 +2203,14 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **Da fare**: i test in `test_backup_jobs.py` con test-author, dopo B2b; lo SHA a Z quando il coordinatore committa.
 >   `restore_jobs._a_check_runs` può usare `_lock_held`: lo unisco quando test-author ha finito con `restore_jobs.py`.
 
-### Aggiornamento di base — merge di `dev_release2` `84a18fb4c` (2026-10-15, 23:20-23:47) ✅ — in attesa del commit
+### Aggiornamento di base — merge di `dev_release2` `84a18fb4c` (2026-10-15, 23:20-23:35) ✅ — in attesa del commit
 
 > - **B2 committato dal coordinatore**: `80b8f8c39` (B2a), `22c116679` (B2b), `6a7fae5bf` (doc), `e3a9d2251` (journal).
 >   `backup_in_progress()` è in `22c116679`: lo SHA è mandato a Z.
 > - **Merge aperto da lui**, `MERGE_HEAD` `84a18fb4c`, con X CP10 (le impostazioni dei plugin, `007_plugin_settings`)
 >   e altro. **Un conflitto**, in `hosting_providers.en.md`: tutti e due avevano aggiunto una riga alla tabella del
->   profilo. Tenute tutte e due, prima quella di X; «three things» corretto in **four**, perché ognuno era passato da due a
->   tre. In stage solo quel file.
+>   profilo. Tenute tutte e due, prima quella di X; «three things» corretto in **four**, perché ognuno era passato da
+>   due a tre. In stage solo quel file.
 > - **File fusi da soli, riletti**: `.env.example`, `cli_tools`, `configuration`, `admin/index`, `security.md`, i 3
 >   cataloghi. Coerenti: «Five options are secrets» resta vero; le 8 righe di backup in `security.md` sono intere;
 >   nessun nome doppio nei cataloghi (il doppio `"all"` di `_backend_api.py` sono `api` ed `e2e`, già nei due lati).
@@ -2220,9 +2220,9 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **⚠️ Fuori pista — un test fragile, non il prodotto**: `OLDER = CHAIN[-2]` seguiva la head, ma il test si aspettava
 >   la conversione dei dati della `006`; con la `007`, «più vecchia» era diventata la `006`. Curato da test-author:
 >   `OLDER = "005_accounts_invites"` fissata per nome, con controllo all'import, e le migrazioni da lì alla head
->   (`AFTER_OLDER`). Corretta anche la stessa ipotesi in `test_backup_restore.py`, una riga. Dopo: `services backup-staging`
->   112, `api backup-restore` 114, `utils backup-cli` 84; porta libera. I due test sono fuori dallo stage: il
->   coordinatore decide se metterli nel merge.
+>   (`AFTER_OLDER`). Corretta anche la stessa ipotesi in `test_backup_restore.py`, una riga. Dopo:
+>   `services backup-staging` 112, `api backup-restore` 114, `utils backup-cli` 84; porta libera. I due test sono
+>   fuori dallo stage: il coordinatore decide se metterli nel merge.
 > - **Rifinitura proposta, dopo il commit del merge** (segnalata da test-author): una tabella creata vuota da un
 >   aggiornamento (prima nessuna, dopo 0) conta come `rows_changed`. Con la `007` ogni ripristino di un backup più
 >   vecchio avviserebbe senza motivo. La regola diventa `(before or 0) != (after or 0)`, anche per l'elenco della CLI.
@@ -2306,6 +2306,76 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - lo scambio con più worker, curato con lock, giornale e PID del padrone;
 > - un supervisore assente (la UI lo dice: B5b);
 > - il riavvio della corsia nei test: mai un vero SIGTERM.
+
+### Merge `abb81e702` committato; via per B3 e decisione sulle sessioni (2026-10-15, 23:45) — in corso
+
+> - **Coordinatore**: merge della base committato, `abb81e702`, con la mia risoluzione e la correzione dei due test
+>   (`OLDER` fissato a `005_accounts_invites`); journal di B3 in `f0b76e81d`; worktree pulito.
+> - **Rifinitura `rows_changed`: sì**, nel prossimo checkpoint con il suo test. Applicata (23:49): in `staging._report`
+>   e nell'elenco «Changed by the upgrade» di `backup_cli._print_stage_report` la regola è
+>   `(rows.before or 0) != (rows.after or 0)`. Ruff e black puliti. Tocca due test registrati
+>   (`test_backup_staging.py:875`, la formula vecchia; `test_backup_cli.py:1325`, che si aspetta
+>   `account_tokens (— → 0)`): li aggiorna test-author prima dell'`all-backend` di B2, con un test puro di `_report`.
+> - **Decisione sulle sessioni (40): la (a)**, presa di notte dal coordinatore, **da rivedere** col developer:
+>   - al commit, `session_version` di ogni utente = l'ora del ripristino in ms. Non tocca `auth.py` né
+>     `settings_service`, nessuna migrazione;
+>   - un test: un cambio di password dopo il ripristino incrementa ancora (ms + 1) e chiude le altre sessioni come oggi;
+>   - nella doc va detto che il valore è un tempo, non un contatore.
+>   - **Mia precisazione**, da confermare: il valore è `max(ora in ms, massimo del DB ripristinato + 1, massimo del DB
+>     di prima + 1)`. Con un orologio sano è sempre l'ora; il `max` rende dimostrabile che nessun cookie delle due storie
+>     coincide anche con l'orologio indietro.
+> - **B3 in codice: via, rossi prima.** Le righe nuove in `app_lifespan.py` (H) sono una per passo, dichiarate (più
+>   l'import).
+> - **`all-backend` per l'ingresso di B2** verso le 01:35, dopo la galleria di Y7: lo annuncia il coordinatore. Il
+>   runner lancia solo le voci del catalogo, quindi fino ad allora il lavoro di B3 vive in file nuovi non registrati e in
+>   moduli non collegati; i file esistenti si toccano dopo.
+>
+> **Contratto di B3** (fonte unica per test e codice, nella cartella della sessione: `files/b3-contract.md`). In sintesi:
+>
+> - `apply.py`: lo stato in `.restore/restore.json` (`pending` → `applying` → `applied` → `committed`; `rolling_back` →
+>   `rolled_back` con il motivo `first_start_failed`, `swap_interrupted`, `swap_failed` o `stage_missing`), il lock
+>   `.restore/apply.lock`, il giornale scritto prima della prima mossa, il ritorno indietro guidato dai file (idempotente),
+>   l'«avvio» (PID del processo padrone e ora di creazione, psutil), le sessioni al commit, la pulizia di `previous/`,
+>   `failed/` e della copia. Nessun file creato a un avvio senza ripristino.
+> - `restart.py`: SIGTERM al master di uvicorn (o a sé), con il mittente sostituibile nei test.
+> - `restore_jobs`: `confirm_check`, la copia di un ripristino attivo mai potata né cancellata.
+> - API: `POST …/stage/{id}/confirm` (202), `GET …/status`, `DELETE …/pending` (204), `POST …/restart` (202); tutte
+>   bloccate sull'istanza bloccata.
+> - CLI: `restore ARCHIVE` con conferma (`--yes`, o la parola `restore` al terminale), `pending [--cancel]`.
+> - Accettazione del fondatore in `e2e backup-roundtrip`: sorgente e destinazione in `tmp_path`, «un avvio» = la fetta
+>   di `STARTUP_STEPS` da `pending-restore` a `restore-commit` in un processo nuovo; i totali con il motore ufficiale
+>   (`PortfolioService.get_report`), finché non c'è CP-15 di J.
+>
+> **Test, rossi prima** (23:55):
+>
+> - test-author 1 (`74f52618`): il test della rifinitura, poi `test_api/test_backup_restore_apply.py` e
+>   `test_utilities/test_backup_cli_restore.py`;
+> - test-author 2 (`994eb260`): `test_services/test_backup_apply.py` e `test_e2e/test_backup_roundtrip.py`.
+> - Niente registrazione nel catalogo né run fino a dopo l'`all-backend` di B2; il rosso lo lancio io.
+> - Il codice lo scrivo intanto in una bozza fuori dal repo (cartella della sessione, `files/b3-wip/`), e lo porto nel
+>   worktree dopo aver visto il rosso.
+>
+> **Rifinitura `rows_changed`, test** (test-author 1, 00:10) ✅: `services backup-staging` **118** (6 nuovi: la formula
+> nuova nel test dell'aggiornamento, e un test puro di `_report` con tabelle create o tolte, vuote o no);
+> `utils backup-cli` **87** (3 nuovi: la riga attesa è `users (3 → 4)`; nessuna riga «Changed by the upgrade» se cambiano
+> solo tabelle vuote; una tabella creata o tolta con righe è elencata). Prodotto non toccato da lui; porta libera.
+>
+> **Test di B3, prima tornata** (test-author 1, 00:10): `test_api/test_backup_restore_apply.py` (64) e
+> `test_utilities/test_backup_cli_restore.py` (36), scritti, ruff e black puliti, raccolti; non registrati, non lanciati.
+> I suoi sei punti sul contratto, decisi (00:15) e scritti nel contratto:
+>
+> 1. conferma con `.restore` link o file → 500 `restore_folder_unusable` (la conferma ci scrive); un link al posto di
+>    `checks/` o `stage/` → 404;
+> 2. due test registrati che B3 rompe (la precondizione delle 4 rotte in `test_backup_restore.py`, il messaggio «Only
+>    --dry-run» in `test_backup_cli.py`) e l'aiuto `restore()` senza `yes`: si cambiano dopo l'`all-backend` di B2;
+> 3. la parola da scrivere: spazi ignorati, maiuscole no (`Restore` rifiuta);
+> 4. `pending`: parole, poi il codice fra parentesi (`backup_running`, `first_start_failed`, …);
+> 5. `pending --cancel` senza niente in attesa: `❌ … (restore_not_pending)`, uscita 1;
+> 6. l'annullamento senza ripristino non crea niente, nemmeno `.restore/apply.lock`.
+>
+> - **⚠️ Fuori pista — `all-backend` e i file nuovi**: verificato che `all-backend` lancia solo le voci del catalogo
+>   (`_suites.run_all_backend_tests`, nessun glob) e non fa il controllo degli orfani: i file di B3 non registrati non
+>   entrano nella run d'ingresso di B2.
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 
