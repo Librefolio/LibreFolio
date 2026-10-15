@@ -216,7 +216,8 @@ Manages user profile information:
 System-wide configuration with lock toggle:
 
 - Max file upload size
-- Registration toggle
+- Registration mode: a select with three options, `open`, `invite` and `disabled`
+  (`settings.registrationModes.*`: **Open**, **By invitation**, **Closed**)
 - Scheduler configuration and new-user defaults
 - Other app-wide settings
 
@@ -228,6 +229,25 @@ indicator instead of the lock toggle and the bulk Save/Undo/Reset actions.
 For the three *display* defaults (`default_language`, `default_currency`, `default_theme`) the
 tab reuses the **same shared `Setting*` wrappers as the PreferencesTab**, passing the
 `embedded` prop (see below) so they sit inside the tab's own cards without double separators.
+
+**Registration mode.** `registration_mode`, in the *Security* category, is a `SettingSelect`
+(default `open`, `SETTING_DEFAULTS`). The server variable `LIBREFOLIO_REGISTRATION` can pin it
+([Registration Modes](../../../architecture/access_control.md#registration-modes)); the tab learns
+it from the [instance configuration](../../state/app-state.md#instance-config),
+`instanceConfig.config.accounts.registration_locked`:
+
+- **Locked by the variable**: the select shows the mode in force,
+  `instanceConfig.config.accounts.registration_mode`, not the stored row; it is disabled even with
+  the tab unlocked; its hint becomes `settings.lockedByEnv` with `{variable: LIBREFOLIO_REGISTRATION}`
+  (*Set on the server by LIBREFOLIO_REGISTRATION: change it there.*); and **Reset All to Defaults**
+  skips it. Its card, `global-setting-registration_mode`, carries `data-locked="true"`
+  (`"false"` otherwise).
+- **A save that meets the lock anyway** — for example before the configuration arrived — gets
+  `409` `SETTING_LOCKED_BY_ENV`; the tab shows `settings.lockedByEnv` with the `variable` of the
+  answer.
+- **After a save that includes `registration_mode`**, alone or with **Save All**, the tab calls
+  `instanceConfig.load({force: true})`, so the login page's **Register here** and the `/invite` page
+  follow the new mode on this page load.
 
 ### 🧹 CachePanel
 
