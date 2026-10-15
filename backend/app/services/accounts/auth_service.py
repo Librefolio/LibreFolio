@@ -97,8 +97,9 @@ def verify_password_or_dummy(plain_password: str, hashed_password: str | None) -
 # each worker would generate its own random secret → tokens from worker A
 # would be invalid on worker B.
 #
-# If JWT_SECRET is not set (e.g. single-worker dev mode), a random one is
-# generated. On server restart, a new secret = all tokens invalidated.
+# If JWT_SECRET is not set, or blank (e.g. single-worker dev mode, or a
+# `JWT_SECRET=   ` line in a Docker env file), a random one is generated.
+# On server restart, a new secret = all tokens invalidated.
 # =============================================================================
 
 # Shared secret: from env var (multi-worker safe) or random (single-worker fallback)

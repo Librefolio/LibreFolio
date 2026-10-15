@@ -31,6 +31,10 @@
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {themed} from '$lib/theme/themePair';
+    import {ALLOCATION_CHART_COLORS, CHART_NEUTRALS, CHART_TOOLTIP_COLORS} from '$lib/theme/chartTheme';
+    import {ALLOCATION_PIE_PALETTE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Types & Props
@@ -107,16 +111,15 @@
     let needsInitialLayoutStabilityPass = false;
 
     // Diversified color palette — high chromatic distance
-    const PALETTE_LIGHT = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5', '#059669', '#ea580c', '#6366f1', '#0891b2', '#ca8a04', '#9333ea'];
-    const PALETTE_DARK = ['#4ade80', '#60a5fa', '#a78bfa', '#f87171', '#fbbf24', '#2dd4bf', '#f472b6', '#818cf8', '#34d399', '#fb923c', '#a5b4fc', '#22d3ee', '#facc15', '#c084fc'];
+    const PALETTE_LIGHT = ALLOCATION_PIE_PALETTE.light;
+    const PALETTE_DARK = ALLOCATION_PIE_PALETTE.dark;
 
     // =========================================================================
     // Lifecycle
     // =========================================================================
 
     onMount(() => {
-        const observer = new MutationObserver(() => renderChart());
-        observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        const observer = onThemeClassChange(() => renderChart());
         return () => {
             observer.disconnect();
             cleanup();
@@ -169,7 +172,7 @@
             needsInitialLayoutStabilityPass = true;
         }
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
         const tr = $t;
         const palette = isDark ? PALETTE_DARK : PALETTE_LIGHT;
 
@@ -321,7 +324,7 @@
         const legendBelow = legendPosition === 'bottom' || isNarrow;
 
         // Legend — always scrollable to avoid 4+ unwrapped rows
-        const legendBaseTextStyle: any = {color: isDark ? '#94a3b8' : '#64748b', fontSize: 11};
+        const legendBaseTextStyle: any = {color: themed(CHART_NEUTRALS.dashboard.text, isDark), fontSize: 11};
         const legendTextStyle = mode === 'type' ? {...legendBaseTextStyle, rich: richStyles} : legendBaseTextStyle;
 
         const legendTypeExtras =
@@ -352,9 +355,9 @@
                   left: 'center',
                   width: '95%',
                   textStyle: legendTextStyle,
-                  pageTextStyle: {color: isDark ? '#94a3b8' : '#64748b', fontSize: 10},
-                  pageIconColor: isDark ? '#94a3b8' : '#64748b',
-                  pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1',
+                  pageTextStyle: {color: themed(CHART_NEUTRALS.dashboard.text, isDark), fontSize: 10},
+                  pageIconColor: themed(CHART_NEUTRALS.dashboard.text, isDark),
+                  pageIconInactiveColor: themed(CHART_NEUTRALS.legendPageIconInactive, isDark),
                   pageButtonGap: 4,
               }
             : {
@@ -365,9 +368,9 @@
                   top: 20,
                   bottom: 20,
                   textStyle: legendTextStyle,
-                  pageTextStyle: {color: isDark ? '#94a3b8' : '#64748b'},
-                  pageIconColor: isDark ? '#94a3b8' : '#64748b',
-                  pageIconInactiveColor: isDark ? '#334155' : '#cbd5e1',
+                  pageTextStyle: {color: themed(CHART_NEUTRALS.dashboard.text, isDark)},
+                  pageIconColor: themed(CHART_NEUTRALS.dashboard.text, isDark),
+                  pageIconInactiveColor: themed(CHART_NEUTRALS.legendPageIconInactive, isDark),
               };
 
         const pieCenter = legendBelow ? ['50%', '40%'] : ['35%', '50%'];
@@ -386,7 +389,7 @@
                           return first && first.codePointAt(0)! > 127 ? first : '';
                       },
                       fontSize: 14,
-                      backgroundColor: 'rgba(255, 255, 255, 0.75)',
+                      backgroundColor: ALLOCATION_CHART_COLORS.iconBubble,
                       borderRadius: 20,
                       padding: [4, 4],
                   }
@@ -404,7 +407,7 @@
                           return `{img_${rawKey}|}`;
                       },
                       rich: richStyles,
-                      backgroundColor: 'rgba(255, 255, 255, 0.75)',
+                      backgroundColor: ALLOCATION_CHART_COLORS.iconBubble,
                       borderRadius: 20,
                       padding: [4, 4],
                   };
@@ -467,9 +470,9 @@
                 trigger: 'item',
                 formatter: tooltipFormatter,
                 position: tooltipPositionAboveFinger,
-                backgroundColor: isDark ? '#1e293b' : '#fff',
-                borderColor: isDark ? '#334155' : '#e2e8f0',
-                textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
+                backgroundColor: themed(CHART_TOOLTIP_COLORS.box.background, isDark),
+                borderColor: themed(CHART_TOOLTIP_COLORS.box.border, isDark),
+                textStyle: {color: themed(CHART_TOOLTIP_COLORS.box.text, isDark), fontSize: 12},
             },
             legend: legendConfig,
             series: rings
@@ -483,7 +486,7 @@
                           padAngle: 1,
                           itemStyle: {
                               borderRadius: 4,
-                              borderColor: isDark ? '#293548' : '#ffffff',
+                              borderColor: themed(ALLOCATION_CHART_COLORS.sliceBorder, isDark),
                               borderWidth: 2,
                           },
                           label: labelConfig,
@@ -516,7 +519,7 @@
             const span = end - start;
             const innerEnd = `${start + span * 0.67}%`;
             const outerStart = `${start + span * 0.8}%`;
-            const border = {borderRadius: 4, borderColor: isDark ? '#293548' : '#ffffff', borderWidth: 2};
+            const border = {borderRadius: 4, borderColor: themed(ALLOCATION_CHART_COLORS.sliceBorder, isDark), borderWidth: 2};
             const shared = {type: 'pie' as const, center: pieCenter, avoidLabelOverlap: true, padAngle: 0, itemStyle: border, labelLayout: {hideOverlap: true}};
             const captionConfig = {
                 show: true,
@@ -524,7 +527,7 @@
                 formatter: (params: any) => `${params.data?.caption ?? params.name}\n${formatPercent(Number(params.value), {digits: 2, signed: false, trim: true})}`,
                 fontSize: 11,
                 lineHeight: 14,
-                color: isDark ? '#cbd5e1' : '#374151',
+                color: themed(ALLOCATION_CHART_COLORS.caption, isDark),
             };
             return [
                 // Family icons only where they fit: a 0.01% "Liquidity" arc would otherwise

@@ -3467,3 +3467,28 @@ The two rows that existed only after publication are filled on [[sources/release
 `cf00fac7d`, the merge of PR #46 into `main`, with the tree of `a3fe2eb04` on `dev_release2`; the release pipeline's
 run 38540086298 is green (images `1.2.0`, `1.2.0-light` and `latest`, the `docker pull` lines on the GitHub release,
 the docs site deployed from `cf00fac7d`). Status `released`; index row updated. Graph: not updated (P-6).
+
+## [2026-10-15] file | Account link tokens travel in the URL fragment
+Release 1.3, workstream A, lot A5b. A review of the A5a docs found that `/invite?token=…` would put the token in
+uvicorn's access log (on in the Docker image) and in any proxy log; the token now travels in the fragment, before
+A5a was integrated. Filed [[decisions/link-tokens-in-the-url-fragment]]; updated [[domains/auth]] (registration
+modes, invitations, admin API, limit, K-5 until A7, what comes next in workstream A) and [[features/F-001]] (the
+register link reads `GET /system/instance`). Graph: not updated (P-6).
+
+## [2026-10-15] file | Colours factored into lib/theme at pixel parity (workstream R)
+Workstream R of the colour programme (`Phase_1/10_colorSystem`) closed: lots A–D entered `dev_release2` with
+`8fd8e494b` after one gallery gate (2 370 identical, 454 changed, all content or the shots' own noise). The decision
+page records the modules of `frontend/src/lib/theme/`, the rules (same values, divergences kept under a name), the
+proofs and what phase B inherits. Two problems filed:
+- esbuild rewrites colours in some declarations but never in custom properties, so tokens hold the build's emitted
+  text;
+- the colour ratchet's `--resolve` drops a colour accepted on one side (backlog R-8, for T).
+
+Pages updated:
+- [[features/F-007]]: a drift corrected; charts follow the theme through `onThemeClassChange()`, not store
+  subscriptions;
+- [[features/F-098]]: a change to `offline.html` ships with `sw.js` restamped (`23f6578f3`);
+- [[problems/front-check-does-not-check-what-you-think]]: a merge can make the generated client stale.
+
+Filed: [[decisions/colour-factorisation-at-pixel-parity]], [[problems/esbuild-colour-minify-skips-custom-properties]],
+[[problems/colour-ratchet-resolve-drops-an-accept]]. Graph: not updated (P-6).

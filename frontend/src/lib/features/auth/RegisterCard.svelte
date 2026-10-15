@@ -2,19 +2,26 @@
     import {createEventDispatcher} from 'svelte';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {isAxiosError} from 'axios';
     import {Lock, Mail, User} from 'lucide-svelte';
     import PasswordInput from '$lib/components/ui/input/PasswordInput.svelte';
     import PasswordStrength from '$lib/components/ui/input/PasswordStrength.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import {describeRegistrationError} from './registrationErrors';
 
     type _DispatchEvents = {
         gotoLogin: {message?: string};
     };
     const dispatch = createEventDispatcher();
 
+    /** The token of an invitation link (the `/invite` page): sent with the form, it sets the role of the account. */
+    export let inviteToken: string | null = null;
+    /** The address the administrator wrote on the invitation: a suggestion, the field stays editable. */
+    export let initialEmail = '';
+    /** The invitation creates an administrator. */
+    export let grantsAdmin = false;
+
     let username = '';
-    let email = '';
+    let email = initialEmail;
     let password = '';
     let confirmPassword = '';
     let error = '';
@@ -93,53 +100,12 @@
 
         loading = true;
         try {
-            await zodiosApi.register_api_v1_auth_register_post({username, email, password});
+            await zodiosApi.register_api_v1_auth_register_post(inviteToken ? {username, email, password, invite_token: inviteToken} : {username, email, password});
             // Success - go back to login with message
             dispatch('gotoLogin', {message: $_('auth.accountCreated')});
         } catch (e: unknown) {
-            // Handle specific error messages from backend
-            const detail = isAxiosError(e) ? e.response?.data?.detail : null;
-            if (Array.isArray(detail)) {
-                // Pydantic validation errors
-                const firstError = detail[0];
-                if (firstError?.loc?.includes('email')) {
-                    if (firstError.msg?.includes('special-use') || firstError.msg?.includes('reserved')) {
-                        error = $_('auth.validation.invalidEmailDomain');
-                    } else {
-                        error = $_('auth.validation.invalidEmail');
-                    }
-                } else if (firstError?.loc?.includes('username')) {
-                    error = $_('auth.validation.usernameMinLength');
-                } else if (firstError?.loc?.includes('password')) {
-                    error = $_('auth.validation.passwordTooWeak');
-                } else {
-                    error = $_('auth.registrationFailed');
-                }
-            } else if (typeof detail === 'string') {
-                // Case-folded, and that is the whole fix: the backend answers
-                // "Username already taken" and "Email already registered", with
-                // capitals, so `includes('username')` never matched and every
-                // 400 fell through to `error = detail`. The two keys below were
-                // therefore unreachable — eight translated strings, four
-                // languages by two keys, that nobody could ever read — and a
-                // user in Italian, French or Spanish got raw English instead.
-                const lowered = detail.toLowerCase();
-                if (lowered.includes('registration is disabled')) {
-                    // The administrator has closed sign-ups (`auth.py:191`). It
-                    // is the one string of the three that is not about the values
-                    // the user typed, so it gets its own wording rather than the
-                    // generic failure.
-                    error = $_('auth.registrationDisabled');
-                } else if (lowered.includes('username')) {
-                    error = $_('auth.validation.usernameTaken');
-                } else if (lowered.includes('email')) {
-                    error = $_('auth.validation.emailTaken');
-                } else {
-                    error = detail;
-                }
-            } else {
-                error = $_('auth.registrationFailed');
-            }
+            const described = describeRegistrationError(e);
+            error = 'key' in described ? $_(described.key) : described.raw;
         } finally {
             loading = false;
         }
@@ -162,6 +128,17 @@
         <form class="space-y-4" data-testid="register-form" on:submit|preventDefault={handleSubmit}>
             <!-- General Error Message -->
             <InfoBanner dismissible message={error} ondismiss={() => (error = '')} variant="error" />
+
+            {#if inviteToken}
+                <div data-testid="register-invite-notice">
+                    <InfoBanner message={$_('auth.invite.notice')} variant="info" />
+                </div>
+                {#if grantsAdmin}
+                    <div data-testid="register-invite-admin-notice">
+                        <InfoBanner message={$_('auth.invite.adminNotice')} variant="warning" />
+                    </div>
+                {/if}
+            {/if}
 
             <!-- Username Input -->
             <div>

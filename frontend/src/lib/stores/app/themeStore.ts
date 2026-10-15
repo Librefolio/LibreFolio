@@ -56,7 +56,7 @@ export function applyTheme(mode: ThemePreference): void {
         document.documentElement.classList.remove('light', 'dark');
         document.documentElement.classList.add(resolved);
         // Update PWA theme-color meta tag for title bar (matches sidebar color)
-        const themeColor = resolved === 'dark' ? '#156534' : '#1a4031';
+        const themeColor = resolved === 'dark' ? '#166534' : '#1a4031';
         const meta = document.querySelector('meta[name="theme-color"]');
         if (meta) meta.setAttribute('content', themeColor);
     }

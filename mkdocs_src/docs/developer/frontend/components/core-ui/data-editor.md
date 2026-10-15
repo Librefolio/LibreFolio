@@ -27,6 +27,10 @@ An **inline tabular editor** for structured data (add, edit, delete rows).
 
 - Editable cells with type-aware inputs (text, number, date)
 - Add row button with empty row template
+- A new row's date is chosen with `SingleDatePicker`, which disables the dates the row may not take:
+  those of the other rows, or, with `importMatchKeys`, only those of the rows with the same values
+  for those keys, so a new event moves to a day that holds only an event of another type
+  (`takenDates`; the move itself is checked the same way)
 - Delete row: the row is only marked deleted, and its **Undo** action restores a deleted or edited
   row and removes a new one; selected rows can be deleted together. Nothing is written until the
   owner saves
@@ -57,7 +61,7 @@ An **inline tabular editor** for structured data (add, edit, delete rows).
 |---|---|---|
 | Tables and columns | one table: `rate` | **Prices**: `close` (required), `open`, `high`, `low`, `volume` (erasable). **Events**: `type` (one of the five event types) and `amount` (required), `notes` |
 | Written through | `POST /api/v1/fx/currencies/rate`; a pair shown inverted (its base after its quote in alphabetical order) stores `1 / rate` under the alphabetical pair | `POST /api/v1/assets/prices`; `POST /api/v1/assets/events`, a saved event with its `id` (edited in place, type included), a new one without |
-| Deleted through | `DELETE /api/v1/fx/currencies/rate` | `DELETE /api/v1/assets/prices`; `DELETE /api/v1/assets/events` by id, whose per-item `in_use` result (an event a transaction uses) is reported, not deleted. An event row never saved sends no DELETE |
+| Deleted through | `DELETE /api/v1/fx/currencies/rate` | `DELETE /api/v1/assets/prices`; `DELETE /api/v1/assets/events` with the asset's `asset_id` and the event ids (the server deletes only that asset's events), whose per-item `in_use` result (an event a transaction uses) is reported, not deleted. An event row never saved sends no DELETE |
 | Rows not sent | A rate that is not a number above 0, counted as *skipped (invalid)*. When every row is invalid and none is deleted, the save stops with *Rate must be strictly greater than zero (0 is not allowed).* | A price whose close is not a number above 0, counted as *skipped (invalid)*; an event without a type or a numeric amount |
 
 Both wrappers:
@@ -104,7 +108,8 @@ locale prefix):
   optional. `amount` also reads a `value` column (an alias), the name the events export
   (`GET /api/v1/backup/asset/{id}/events?format=csv`) gives it, so an exported events file imports
   back with its other columns ignored. Its `source` column is not read (every row becomes a manual
-  event), and rows sharing a date are still duplicates.
+  event). Its `type` column is a `matchKey`: two rows are duplicates only when they share the date
+  and the type, so a dividend and a split of one day import together.
 
 ---
 
@@ -128,7 +133,9 @@ A **CSV preview and editor** with column detection and per-row validation.
   (a second one makes the value invalid). What remains must be a plain number (sign, digits,
   optional decimals and exponent), so an inner space or a letter is invalid. A column may also
   pass its own `parse` and `validate`
-- Highlights rows with errors (red) or warnings (yellow), such as a duplicate date
+- Highlights rows with errors (red) or warnings (yellow), such as a duplicate: two lines with the
+  same identity value and the same values in every column flagged `matchKey`
+  (`CsvColumnDef.matchKey`; only the events import flags one, `type`)
 - Editable cells for manual correction
 
 Its messages, one per invalid line:
@@ -141,7 +148,7 @@ Its messages, one per invalid line:
 | Row | `Required column "<label>" is empty` |
 | Row | `Invalid number in "<label>": "<value>"`, or `Invalid value in "<label>": "<value>"` when a column's `parse` rejects it |
 | Row | The column's own `validate` message, such as *Weight must be between 0 and 100* |
-| Duplicates | `Duplicate <identity>: <value>` on every row sharing that value; none of them is imported |
+| Duplicates | `Duplicate <identity>: <value>` on every row sharing that value, or `Duplicate date · type: <date> · <type>` with a `matchKey` column; none of them is imported |
 
 **Used by**: `DataImportModal` (FX CSV import preview and the asset price, event and distribution
 imports).

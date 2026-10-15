@@ -218,6 +218,16 @@ def db_autoincrement_schema(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "AUTOINCREMENT schema tests", verbose=verbose)
 
 
+def db_post_migration_event_types(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the post-migration fix event_types, and the row-count changes a fix declares, on temporary databases at head (E1c)."""
+    print_section("DB Test: Post-Migration Fix — Event Types")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: declared row-count changes checked exactly, event types corrected when trimming and upper-casing makes them valid, deleted otherwise with their transactions unlinked, outcome and checks, dry run and its warning, one log line per row, rollback")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_post_migration_event_types.py", test_names)
+    return run_command(cmd, "Post-migration event types tests", verbose=verbose)
+
+
 def db_post_migration(verbose: bool = False, test_names: list = None) -> bool:
     """Test the post-migration fixes on temporary databases (a 1.1 install upgraded to head)."""
     print_section("DB Test: Post-Migration Fixes")
@@ -228,6 +238,16 @@ def db_post_migration(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Post-migration fix tests", verbose=verbose)
 
 
+def db_post_migration_orphan_pairs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the post-migration fix orphan_pair_halves on temporary databases at head (N1b-2)."""
+    print_section("DB Test: Post-Migration Fix — Orphan Pair Halves")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: lone halves converted as a split leaves them, giving TRANSFER legs and unreadable rows left, outcome and checks, dry run and its warning, one log line per row, rollback")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_post_migration_orphan_pairs.py", test_names)
+    return run_command(cmd, "Post-migration orphan pair halves tests", verbose=verbose)
+
+
 def db_migration_005(verbose: bool = False, test_names: list = None) -> bool:
     """Test migration 005_accounts_invites on temporary databases: a new one, and a populated 1.2 install."""
     print_section("DB Test: Migration 005 (accounts)")
@@ -236,6 +256,16 @@ def db_migration_005(verbose: bool = False, test_names: list = None) -> bool:
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_005_accounts.py", test_names)
     return run_command(cmd, "Migration 005 tests", verbose=verbose)
+
+
+def db_migration_006(verbose: bool = False, test_names: list = None) -> bool:
+    """Test migration 006_registration_mode on temporary databases: enable_registration becomes registration_mode, and back."""
+    print_section("DB Test: Migration 006 (registration mode)")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: revision and single head, the conversion as the app read the boolean, the way back, metadata, idempotence, no other row, a 1.1 install at head")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_006_registration.py", test_names)
+    return run_command(cmd, "Migration 006 tests", verbose=verbose)
 
 
 def db_numeric_truncation(verbose: bool = False, test_names: list = None) -> bool:
@@ -280,8 +310,10 @@ def db_all(verbose: bool = False) -> bool:
     from ._registry import TEST_REGISTRY
 
     db_order = [
+        "post-migration-event-types",  # temporary databases only: needs none of the steps below
         "create", "validate", "numeric-truncation", "populate", "populate-reset", "autoincrement-schema", "post-migration",
-        "migration-005", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
+        "post-migration-orphan-pairs",
+        "migration-005", "migration-006", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
         ]
 
     tests = []
@@ -347,13 +379,23 @@ Note: No backend server required. Tests operate directly on test DB.
     add_test(cat, "autoincrement-schema", db_autoincrement_schema, name="AUTOINCREMENT Schema",
              desc="A fresh schema, the models and create_all give AUTOINCREMENT exactly to the census tables",
              prereq="None (temporary databases)")
+    add_test(cat, "post-migration-event-types", db_post_migration_event_types, name="Post-Migration Event Types",
+             desc="event_types: asset event types corrected when trimming and upper-casing makes them valid, deleted otherwise with their transactions unlinked; declared row-count changes checked exactly; dry run, log lines, rollback",
+             prereq="None (temporary databases)")
     add_test(cat, "post-migration", db_post_migration, name="Post-Migration Fixes",
              desc="Ordered fixes after alembic upgrade head: AUTOINCREMENT conversion, orphan broker folders, rollback",
+             prereq="None (temporary databases)")
+    add_test(cat, "post-migration-orphan-pairs", db_post_migration_orphan_pairs, name="Post-Migration Orphan Pair Halves",
+             desc="orphan_pair_halves: the lone halves older broker deletions left become standalone rows; giving TRANSFER legs and unreadable rows left; dry run, log lines, rollback",
              prereq="None (temporary databases)")
     # PURE: every database is a private file under tmp_path. Alembic runs in-process with -x sqlalchemy.url= pointing at
     # it, and a connect listener refuses any other file while it runs: no lane database, no server, nothing shared.
     add_test(cat, "migration-005", db_migration_005, name="Migration 005 Accounts",
              desc="005_accounts_invites: users columns and account_tokens at head, models = migration, a 1.2 install upgraded, downgrade without cascade",
+             prereq="None (temporary databases)", isolation="pure")
+    # PURE, as migration-005, whose in-process Alembic harness it reuses: private files under tmp_path only.
+    add_test(cat, "migration-006", db_migration_006, name="Migration 006 Registration Mode",
+             desc="006_registration_mode: enable_registration → registration_mode as the app read it (open iff true/1/yes/on), and back; metadata, idempotence, no other row",
              prereq="None (temporary databases)", isolation="pure")
     add_test(cat, "asset-merge", db_asset_merge, name="Asset Merge",
              desc="Fold a duplicate asset into another (FK migration policies)", prereq="Database created",

@@ -30,7 +30,11 @@ module elsewhere calls an accessor of the package instead of reading ``os.enviro
     timeout and the maximum are what ``float()`` and ``int()`` read, the caller's default when unset, blank or refused
     (``0`` and ``nan`` are kept, ``5.0`` is no integer). The API key is stripped and, as every secret now, may come from
     ``LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE``. ``LF_APP_VERSION``, read since through ``frozen_app_version()``, is the
-    version as set, stripped, and ``None`` when unset or blank.
+    version as set, stripped, and ``None`` when unset or blank. The variables of the instance block (CP6) are new, so
+    their semantics are the ones decided for them: ``LIBREFOLIO_BLOCKED`` unset or blank is not blocked, ``1``, ``true``,
+    ``yes``, ``on`` block and ``0``, ``false``, ``no``, ``off`` do not, in any case and stripped, any other value raising
+    ``ValueError``; ``LIBREFOLIO_DELETION_DATE`` unset or blank is no date, an ISO date (stripped) is that ``date``, any
+    other value raising ``ValueError``.
 (d) ``PROJECT_ROOT``, now computed from one directory deeper, is still the repository root.
 
 What the detector does not see: a read made on the module's behalf (``os.path.expanduser``, a library honouring
@@ -51,6 +55,7 @@ from __future__ import annotations
 import ast
 import math
 from collections.abc import Callable
+from datetime import date
 from pathlib import Path
 from typing import NamedTuple
 
@@ -58,7 +63,7 @@ import pytest
 
 from backend.app.config import PROJECT_ROOT, SecretFileError
 from backend.app.config.accounts import donation_popup_disabled
-from backend.app.config.platform import configured_jwt_secret, frozen_app_version, owning_test_lane_id, scheduler_disabled
+from backend.app.config.platform import configured_jwt_secret, frozen_app_version, instance_blocked, instance_deletion_date, owning_test_lane_id, scheduler_disabled
 from backend.app.config.plugins import (
     web_link_finder_api_key,
     web_link_finder_ddgs_backend,
@@ -396,6 +401,95 @@ def test_frozen_app_version_is_the_variable_stripped_and_none_when_blank(monkeyp
     _set_variable(monkeypatch, "LF_APP_VERSION", value)
     assert frozen_app_version() == expected
     print_success(f"LF_APP_VERSION={value!r}: frozen_app_version() == {expected!r}")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param(None, False, id="unset-is-not-blocked"),
+        pytest.param("", False, id="empty-is-not-blocked"),
+        pytest.param(" \t ", False, id="blank-is-not-blocked"),
+        pytest.param("1", True, id="1"),
+        pytest.param("true", True, id="true"),
+        pytest.param("yes", True, id="yes"),
+        pytest.param("on", True, id="on"),
+        pytest.param("TRUE", True, id="TRUE-any-case"),
+        pytest.param("Yes", True, id="Yes-any-case"),
+        pytest.param(" On ", True, id="On-stripped"),
+        pytest.param("0", False, id="0"),
+        pytest.param("false", False, id="false"),
+        pytest.param("no", False, id="no"),
+        pytest.param("off", False, id="off"),
+        pytest.param("FALSE", False, id="FALSE-any-case"),
+        pytest.param(" Off\n", False, id="Off-stripped"),
+    ],
+)
+def test_instance_blocked_by_1_true_yes_or_on_and_not_by_0_false_no_or_off(monkeypatch, value, expected):
+    """(c) ``LIBREFOLIO_BLOCKED``: unset or blank is not blocked; the four words of each side in any case, stripped."""
+    _set_variable(monkeypatch, "LIBREFOLIO_BLOCKED", value)
+    assert instance_blocked() is expected
+    print_success(f"LIBREFOLIO_BLOCKED={value!r}: instance_blocked() is {expected}")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("2", id="2"),
+        pytest.param("-1", id="minus-1"),
+        pytest.param("y", id="y"),
+        pytest.param("n", id="n"),
+        pytest.param("enabled", id="enabled"),
+        pytest.param("blocked", id="blocked"),
+        pytest.param("true false", id="two-words"),
+        pytest.param("1.0", id="1.0"),
+    ],
+)
+def test_instance_blocked_raises_on_any_other_value(monkeypatch, value):
+    """(c) ``LIBREFOLIO_BLOCKED``: a value outside the eight words is an error naming the variable, never a guess either way."""
+    _set_variable(monkeypatch, "LIBREFOLIO_BLOCKED", value)
+    with pytest.raises(ValueError, match="LIBREFOLIO_BLOCKED") as raised:
+        instance_blocked()
+    print_success(f"LIBREFOLIO_BLOCKED={value!r}: {raised.value}")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param(None, None, id="unset-is-no-date"),
+        pytest.param("", None, id="empty-is-no-date"),
+        pytest.param("   ", None, id="blank-is-no-date"),
+        pytest.param("2026-11-14", date(2026, 11, 14), id="iso-date"),
+        pytest.param(" 2026-11-14\n", date(2026, 11, 14), id="iso-date-stripped"),
+        pytest.param("2028-02-29", date(2028, 2, 29), id="leap-day"),
+    ],
+)
+def test_instance_deletion_date_is_an_iso_date_or_none(monkeypatch, value, expected):
+    """(c) ``LIBREFOLIO_DELETION_DATE``: an ISO date, stripped, is that ``date``; unset or blank is no date."""
+    _set_variable(monkeypatch, "LIBREFOLIO_DELETION_DATE", value)
+    deletion_date = instance_deletion_date()
+    assert (deletion_date, type(deletion_date)) == (expected, type(expected)), f"LIBREFOLIO_DELETION_DATE={value!r} must give {expected!r}, instance_deletion_date gave {deletion_date!r}"
+    print_success(f"LIBREFOLIO_DELETION_DATE={value!r}: instance_deletion_date() == {deletion_date!r}")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param("14/11/2026", id="day-first"),
+        pytest.param("11/14/2026", id="month-first"),
+        pytest.param("2026-13-01", id="no-month-13"),
+        pytest.param("2026-02-30", id="no-february-30"),
+        pytest.param("2026-11-14T00:00:00", id="a-datetime"),
+        pytest.param("tomorrow", id="a-word"),
+        pytest.param("0", id="0"),
+    ],
+)
+def test_instance_deletion_date_raises_on_anything_but_an_iso_date(monkeypatch, value):
+    """(c) ``LIBREFOLIO_DELETION_DATE``: any other value is an error naming the variable and quoting the value."""
+    _set_variable(monkeypatch, "LIBREFOLIO_DELETION_DATE", value)
+    with pytest.raises(ValueError, match="LIBREFOLIO_DELETION_DATE") as raised:
+        instance_deletion_date()
+    assert repr(value) in str(raised.value), f"the error must quote the value it refused, {value!r}: {raised.value}"
+    print_success(f"LIBREFOLIO_DELETION_DATE={value!r}: {raised.value}")
 
 
 @pytest.mark.parametrize(

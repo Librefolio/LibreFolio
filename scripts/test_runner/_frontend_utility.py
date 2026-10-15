@@ -26,6 +26,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/stores/app/privacyStoreSsr.test.ts",
             "src/lib/stores/app/navigationStore.test.ts",
             "src/lib/stores/app/settings.test.ts",
+            "src/lib/stores/app/language.test.ts",
             "src/lib/components/ui/select/optionFilter.test.ts",
             "src/lib/utils/__tests__/dateArrowStep.test.ts",
             "src/lib/utils/__tests__/dateOnly.test.ts",
@@ -95,6 +96,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/assets/providerComparisonQueue.test.ts",
             "src/lib/components/assets/currencyBlocker.test.ts",
             "src/lib/components/assets/assetPayload.test.ts",
+            "src/lib/components/assets/assetSearchSelection.test.ts",
+            "src/lib/components/assets/assetMetadataComparison.test.ts",
             "src/lib/components/assets/assetFormState.test.ts",
             "src/lib/components/assets/scheduleSerialization.test.ts",
             "src/lib/components/assets/assetBrowse.test.ts",
@@ -111,9 +114,15 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/htmlInterpolation.gate.test.ts",
             "src/htmlSink.gate.test.ts",
             "src/clipboardSink.gate.test.ts",
+            "src/themeColorMeta.gate.test.ts",
+            "src/themeComponentTokens.gate.test.ts",
+            "src/themeModeReads.gate.test.ts",
             "src/themeRoles.gate.test.ts",
             "src/themeTokens.gate.test.ts",
             "src/lib/api/dashboardReportFixture.test.ts",
+            "src/lib/theme/colorAlpha.test.ts",
+            "src/lib/theme/chartTheme.test.ts",
+            "src/lib/theme/themeMode.test.ts",
             "src/lib/components/brokers/lots/lotChartShared.test.ts",
             "src/lib/components/brokers/lots/lotWacPriceChartHelpers.test.ts",
             "src/lib/components/brokers/lots/lotComparisonChartHelpers.test.ts",
@@ -145,6 +154,13 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/settings/settingsTabs.test.ts",
             "src/lib/features/instance/instanceConfig.test.ts",
             "src/lib/features/instance/instanceNotices.test.ts",
+            "src/lib/features/auth/authFlash.test.ts",
+            "src/lib/features/auth/linkToken.test.ts",
+            "src/lib/features/auth/registrationErrors.test.ts",
+            "src/lib/features/instance/instanceBlock.test.ts",
+            "src/lib/api/zodios-client.test.ts",
+            "src/lib/features/live-updates/activityTracker.test.ts",
+            "src/lib/features/live-updates/activePolling.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.languageSwitch.test.ts",
@@ -265,6 +281,13 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/risk/AssetChip.test.ts",
             "src/lib/features/auth/RegisterCard.test.ts",
             "src/lib/features/auth/LoginCard.test.ts",
+            "src/lib/features/auth/AuthCard.test.ts",
+            "src/lib/features/auth/AuthPageFrame.test.ts",
+            "src/lib/features/auth/LinkStatusCard.test.ts",
+            "src/lib/features/auth/ResetPasswordCard.test.ts",
+            "src/routes/page.authFlash.test.ts",
+            "src/routes/invite/page.test.ts",
+            "src/routes/reset-password/page.test.ts",
             "src/lib/features/support/DonationPopupModal.test.ts",
             "src/lib/features/support/SupportActions.test.ts",
             "src/lib/features/support/SocialShareModal.test.ts",
@@ -310,6 +333,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/tools/pac-allocator/planner/request.test.ts",
             "src/lib/components/ui/display/BrokerBadge.test.ts",
             "src/lib/features/instance/components/InstanceNotices.test.ts",
+            "src/lib/features/instance/components/InstanceBlockedPage.test.ts",
+            "src/lib/features/live-updates/LiveUpdatesStatus.test.ts",
             *(["-t", "|".join(test_names)] if test_names else []),
         ],
         cwd="frontend",
@@ -382,6 +407,16 @@ def front_auth(verbose: bool = False, ui: bool = False, headed: bool = False, de
     if not _ensure_test_users():
         return False
     return _run_playwright("auth.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_auth_links(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the account link pages, /invite and /reset-password (accounts lot A5b)."""
+    print_section("Frontend Auth Links Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("auth-links.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_settings(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -639,6 +674,15 @@ def populate_registry(registry: dict) -> None:
     """Register all frontend utility test entries."""
     cat = make_category(help_text="Frontend utility & component E2E tests (auth, settings, files, select, image-crop)", description="""Frontend Utility & Component Tests\n\nOptions: --ui, --headed, --debug""")
     add_test(cat, "auth", front_auth, name="Auth Tests", desc="Login, register, logout, language change", prereq="Test users created", tests="auth.spec.ts")
+    add_test(
+        cat,
+        "auth-links",
+        front_auth_links,
+        name="Auth Links Tests",
+        desc="The account link pages (accounts lot A5b), on invitations and reset links an administrator issues over the API: the token, in the fragment, leaves the address bar on load; an invitation with an address prefills it (editable), its registration carries the token, ends on the login page with login-success and signs in as an ordinary member, and the same link then reads consumed; an admin invitation shows its notice; revoked and unknown tokens say so; a page without a token reads missing and sends no inspection; a reset link names its account and takes a new password, after which only the new one signs in; link-status-goto-login leads to /; served registration_mode invite (page only) a valid invitation still opens the registration, served disabled it reads closed; every pending invitation revoked and every account self-deleted after each test",
+        prereq="Test users created (e2e_test_admin an administrator); registration_mode open on the lane",
+        tests="auth-links.spec.ts",
+    )
     add_test(
         cat,
         "core-unit",

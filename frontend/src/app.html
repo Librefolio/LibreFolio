@@ -23,7 +23,7 @@
                 document.documentElement.classList.add(theme);
                 // PWA title bar matches sidebar (libre-green light / dark variant)
                 var meta = document.querySelector('meta[name="theme-color"]');
-                if (meta) meta.setAttribute('content', theme === 'dark' ? '#156534' : '#1a4031');
+                if (meta) meta.setAttribute('content', theme === 'dark' ? '#166534' : '#1a4031');
             })();
             // Early PWA install prompt capture (before Svelte mounts)
             window.addEventListener('beforeinstallprompt', function (e) {

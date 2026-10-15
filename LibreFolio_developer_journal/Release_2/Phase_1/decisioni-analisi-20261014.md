@@ -8,6 +8,12 @@
 > («la 7 no, la 12 così…»). Il primo via libera al codice è tuo: lo inoltro alla lettera a ogni sessione.
 >
 > Le sigle fra parentesi servono solo a ritrovare la voce nelle analisi.
+>
+> **Aggiunte del 15/10**: l'analisi di Backup e Docker (punti 38–43), quella di Email (44–45) e due punti di Import e
+> transazioni (46–47), in fondo al §2, ognuna con il modo di rispondere.
+>
+> **Stato al 15/10, 10:50**: sotto ogni decisione già presa c'è ora una riga «Attuazione»: ✅ in `dev_release2`,
+> 🟡 fatta e in attesa d'ingresso, ⏳ da fare. Il **punto 18 è superato dal 39**: si riparte dal 19.
 
 ## Come leggere i punti
 
@@ -79,6 +85,8 @@ passa dalla suite completa con gli stessi conteggi di prima.
 
 **Decisione (14/10)**: approvata, senza note.
 
+**Attuazione (15/10)**: 🟡 fatta da Account e accessi: migrazione 006 `registration_mode` e `LIBREFOLIO_REGISTRATION` (A5a), l'impostazione «Registrazione» a tre scelte e le pagine dei link (A5b). Committata sul ramo di A (`7da2cd9a2`, `2b0715532`); entra in `dev_release2` dopo la finestra della galleria.
+
 #### 2. «Chiusa» blocca anche gli inviti — 🟢 (D-A3)
 - **Oggi**: gli inviti non esistono.
 - **Proposta**: con la registrazione chiusa nemmeno un invito permette di creare un account. Per invitare, l'admin
@@ -97,6 +105,8 @@ Nota dev: gli inviti per iniziare facciamo che sono dei messaggi con un url link
   l'istanza.
 - `LIBREFOLIO_PUBLIC_URL`, facoltativa, serve per i link costruiti fuori dal browser: riga di comando e, più avanti,
   email.
+
+**Attuazione (15/10)**: 🟡 in A5a: con «chiusa» anche un invito valido viene rifiutato. Entra con A5.
 
 #### 3. Admin iniziale dalle variabili d'ambiente — 🟡 (D-A4, F02, K-5)
 - **Oggi**: il primo che si registra diventa admin. Su un'istanza appena creata e raggiungibile da internet, chiunque
@@ -138,6 +148,8 @@ cmq se la variabile non è impostata, ovviamente deve funzionare comè ora
 - **Da segnare per il pannello del cloud** (repo privato): un'azione «reinvia il link di attivazione», cioè token nuovo,
   riavvio, email nuova.
 
+**Attuazione (15/10)**: ⏳ lotto A7 di Account e accessi (`/setup`, link d'attivazione, avviso di registrazione aperta su un'istanza esposta).
+
 #### 4. Limite ai tentativi di login sbagliati — 🟡 (D-A5, F15)
 - **Oggi**: nessun limite: si possono provare password all'infinito.
 - **Proposta**: dopo 10 tentativi sbagliati in 15 minuti sullo stesso nome utente, o 50 dallo stesso indirizzo, il
@@ -161,10 +173,12 @@ nota dev: è un ottima proposta lato sicurezza, la metterei attiva di default e 
 - Il limite è attivo di default e si spegne solo con una variabile d'ambiente, pensata per i test.
 - Nasce una scheda **«Sicurezza»** in Impostazioni, solo per l'admin, che raccoglie le cose sospette, con un segnale
   sulla scheda quando c'è un avviso. Primi controlli:
-  - «limite dei tentativi disattivato», che può essere un errore di configurazione;
-  - «registrazione aperta su un indirizzo pubblico» (punto 3).
+    - «limite dei tentativi disattivato», che può essere un errore di configurazione;
+    - «registrazione aperta su un indirizzo pubblico» (punto 3).
 
   Le altre sessioni potranno aggiungere i loro controlli.
+
+**Attuazione (15/10)**: ⏳ lotto A8 di Account e accessi (limite su login e token, scheda «Sicurezza»).
 
 #### 5. La variabile che spegne il popup delle donazioni resta nascosta — 🟢 (D-A7)
 - **Oggi**: `LIBREFOLIO_DISABLE_DONATION_POPUP` spegne il popup, ma per tua scelta non è documentata (lo dice un
@@ -176,6 +190,8 @@ nota dev: no no è corretto che sia così, quelli selfosted ogni tanto devono ve
 
 **Decisione (14/10)**: approvata. La variabile resta nascosta: chi fa self-hosting continua a vedere ogni tanto l'invito a
 contribuire.
+
+**Attuazione (15/10)**: nessun codice: la variabile resta com'è.
 
 #### 6. Nel profilo gestito spariscono gli inviti a donare — 🟢 (D-A8)
 - **Oggi**: «Buy Me a Coffee» compare in cinque posti:
@@ -196,6 +212,8 @@ Nota dev: si ok farlo scomparire, non serve mettere supporto, c'è già il botto
 «Supporto» al loro posto: c'è già il pulsante delle segnalazioni su GitHub, quindi niente `LIBREFOLIO_SUPPORT_URL`. I
 link social per condividere LibreFolio restano in Impostazioni.
 
+**Attuazione (15/10)**: ⏳ lotto A9 di Account e accessi (profilo gestito, la sua parte).
+
 #### 7. «Gestisci abbonamento» solo per gli admin; messaggio del limite senza nomi di piani — 🟢 (D-A9)
 - **Proposta**:
     - il link `LIBREFOLIO_BILLING_URL` lo vede solo l'admin, che è chi paga;
@@ -210,6 +228,8 @@ nota dev: si ok far vedere il billing solo all'amministratore, colui che paga, n
   altre variabili.
 - L'admin vede «Gestisci abbonamento» nella scheda Utenti, accanto al conteggio («3 / 5 utenti»), nel messaggio di
   limite raggiunto e, nel cloud, nella pagina di blocco del punto 12. Gli altri utenti non lo vedono.
+
+**Attuazione (15/10)**: 🟡 in parte in A5a: chi non è admin riceve il messaggio del limite senza conteggi né link; `LIBREFOLIO_BILLING_URL` esce solo dalle API degli admin. Il pulsante «Gestisci abbonamento» nella pagina di blocco lo aggiunge Piattaforma dopo l'ingresso di A5.
 
 #### 8. Come si conta il limite di utenti — 🟢 (D-A10)
 - **Proposta**: `LIBREFOLIO_MAX_USERS` conta gli utenti attivi, gli inviti non scaduti e l'admin in attesa
@@ -226,15 +246,17 @@ Dovremmo invece ragionare su come può fare un amministratore ad eliminare un ut
 - **Pagina Utenti**, solo per l'admin: utenti attivi e inviti in corso. L'admin revoca un invito quando vuole e non
   può crearne oltre il limite. Senza `LIBREFOLIO_MAX_USERS` il limite non c'è (self-hosted).
 - **Eliminare un utente**: vale la regola di oggi per chi elimina il proprio account.
-  - I broker di cui era l'unico proprietario spariscono, con transazioni e file; da quelli condivisi sparisce solo il
+    - I broker di cui era l'unico proprietario spariscono, con transazioni e file; da quelli condivisi sparisce solo il
     suo accesso.
-  - Prima un'anteprima di cosa sparisce, poi la conferma con il nome utente.
-  - Come prima scelta l'admin vede «Disattiva», che è reversibile e non tocca i dati.
+    - Prima un'anteprima di cosa sparisce, poi la conferma con il nome utente.
+    - Come prima scelta l'admin vede «Disattiva», che è reversibile e non tocca i dati.
 - **Gli admin**:
-  - nessuno può eliminare, disattivare o declassare l'ultimo admin attivo (la regola esiste già);
-  - per eliminare un altro admin, prima va declassato a utente;
-  - nel cloud, l'admin creato dalle variabili, cioè chi paga, non può essere eliminato, disattivato né declassato da
+    - nessuno può eliminare, disattivare o declassare l'ultimo admin attivo (la regola esiste già);
+    - per eliminare un altro admin, prima va declassato a utente;
+    - nel cloud, l'admin creato dalle variabili, cioè chi paga, non può essere eliminato, disattivato né declassato da
     nessuno; per andarsene chiude l'abbonamento dal pannello.
+
+**Attuazione (15/10)**: 🟡 il conteggio (utenti attivi più inviti in attesa) e le API degli admin in A5a; la scheda Utenti in A6; la cancellazione di un utente da parte dell'admin ⏳ con la scheda Utenti.
 
 #### 9. Il campo «ultima versione vista» già nella migrazione degli account — 🟢 (D-A12)
 - **Contesto**: «Novità dalla tua ultima versione» (C-54): al login, se la versione è cambiata, si apre il changelog
@@ -246,6 +268,8 @@ Dovremmo invece ragionare su come può fare un amministratore ad eliminare un ut
 
 **Decisione (14/10)**: approvata, senza note.
 
+**Attuazione (15/10)**: ✅ nella migrazione 005 (A4, `e476d2ed4`): colonna `last_seen_version`.
+
 #### 10. Un invito con un'email vale solo per quell'email — 🟢 (D-A16)
 - **Proposta**: se l'admin scrive un'email nell'invito, ci si registra solo con quella. Senza email, il link vale per
   chi lo riceve.
@@ -255,6 +279,8 @@ nota dev: la rimanderei a più avanti, quando integriamo il servizio e mail ma a
 
 **Decisione (14/10)**: respinta. Un invito non è legato a un'email: basta il link, perché scade e si usa una volta sola. Se
 serve, se ne riparla con il servizio email.
+
+**Attuazione (15/10)**: 🟡 in A5a: l'invito non porta un'email. Entra con A5.
 
 #### 11. Cambiare password chiude le altre sessioni — 🟡 (D-A17)
 - **Oggi**: una sessione dura 24 ore (impostazione globale). Cambiare la password non chiude le sessioni già aperte:
@@ -279,6 +305,8 @@ Nota dev: capisco che in caso di piscing abbia senso che al cambio pw tutti i de
 - cambiare o reimpostare la password alza il numero, e la stessa risposta dà al dispositivo da cui lo fai un cookie
   nuovo: resti dentro senza riscrivere la password;
 - gli altri dispositivi, alla richiesta successiva, tornano al login.
+
+**Attuazione (15/10)**: ✅ A4b (`dbf89cdd5`): il cambio password chiude gli altri dispositivi e lascia acceso quello da cui lo fai; un reset da riga di comando, una disattivazione o un declassamento chiudono tutto.
 
 ### Piattaforma
 
@@ -313,6 +341,8 @@ Nota dev: non la farei così complicata modificando la ui, semplicemente impedir
   diceva 30 giorni, la tua nota una settimana: si sceglie nel cloud, senza toccare il codice.
 - Cambiano di conseguenza le eccezioni di Account e accessi per la sola lettura (D-A15).
 
+**Attuazione (15/10)**: 🟡 CP6 di Piattaforma, committato sul suo ramo (`2c3b00139`, `cb34327e9`): `LIBREFOLIO_BLOCKED`, `LIBREFOLIO_DELETION_DATE`, la pagina di blocco, poche chiamate permesse. Entra dopo la finestra. Il backup per l'admin e il risveglio entrano nell'elenco con i lotti di B e Z. Da sapere: chi non ha fatto login può capire che l'istanza è bloccata, senza vedere dati; resta così (scelta del coordinatore: allargare l'elenco non lo eviterebbe).
+
 #### 13. Header di sicurezza — 🟢 (H D5, F15)
 - **Oggi**: il server non manda header di sicurezza, a parte quelli della cache.
 - **Proposta**:
@@ -342,6 +372,8 @@ comportarsi. Pesano qualche centinaio di byte e non rallentano nulla di misurabi
 
 **Decisione (14/10)**: approvata, tutto come proposto.
 
+**Attuazione (15/10)**: ⏳ lotto CP7b di Piattaforma.
+
 #### 14. Versioni scritte a mano a 0.0.0 — 🟢 (H D6, C-84)
 - **Oggi**: `pyproject.toml` e `frontend/package.json` dicono 1.1.0, fermi dal 05/08. Nessuno li legge: la versione
   mostrata viene dal tag git, o dal file `VERSION` nell'immagine Docker.
@@ -352,6 +384,8 @@ comportarsi. Pesano qualche centinaio di byte e non rallentano nulla di misurabi
 nota dev: si mi piace
 
 **Decisione (14/10)**: approvata.
+
+**Attuazione (15/10)**: ✅ `pyproject.toml` a 0.0.0 (CP5a, `9deb0ea08`); 🟡 `frontend/package.json` con CP5b, committato, dopo la finestra.
 
 #### 15. `/system/info` dietro il login — 🟢 (H D14)
 - **Oggi**: `GET /api/v1/system/info` risponde a chiunque, anche senza login, con le versioni di tutte le dipendenze e
@@ -367,6 +401,8 @@ nota dev: facciamo che se non si è loggati il ritorno è minimo, l'equivalente 
 **Decisione (14/10)**: approvata con una modifica. Nessun endpoint nuovo: `/system/info` senza login risponde solo con il
 minimo, cioè la versione dell'app; con il login, tutto come oggi.
 
+**Attuazione (15/10)**: ✅ CP5a di Piattaforma (`9deb0ea08`): senza login `/system/info` risponde solo con la versione.
+
 #### 16. Metriche Prometheus, spente di default — 🟢 (H D9, F08)
 - **Proposta**: `/metrics` con le richieste, i job dello scheduler, l'ultimo aggiornamento dei prezzi e la dimensione
   del database. Si accende con `LIBREFOLIO_METRICS_ENABLED`.
@@ -376,6 +412,8 @@ minimo, cioè la versione dell'app; con il login, tutto come oggi.
 Nota dev, è sicuramente una cosa figa, ma la rimanderei
 
 **Decisione (14/10)**: rimandata, fuori dalla 1.3.
+
+**Attuazione (15/10)**: niente nella 1.3.
 
 #### 17. Test del backend organizzati come il codice — 🟢 (TS1)
 - **Oggi**: i test del backend sono divisi per tipo (API, servizi…), non per dominio; il catalogo del runner contiene
@@ -388,6 +426,8 @@ Nota dev: non credo sia una buona idea era stato pensato così per fare i test a
 
 **Decisione (14/10)**: respinta. I test restano organizzati a strati (API, servizi…), com'erano stati pensati; al più si
 dividono meglio i file di test troppo grandi, quando serve.
+
+**Attuazione (15/10)**: niente: i test restano a strati.
 
 ### Plugin, asset e ricerca
 
@@ -414,6 +454,11 @@ nota dev: chat, questo punto non l'ho capito, spiegamelo.
 - Da qui la proposta: con una password sullo zip la chiave entra, e il ripristino è completo. Senza password la chiave
   resta fuori: il ripristino funziona lo stesso, ma le chiavi dei plugin vanno reinserite a mano.
 
+**Aggiornamento (15/10)**: la spiegazione sopra vale ancora, ma l'analisi di Backup e Docker l'ha resa più precisa nel
+**punto 39** (e il formato della password nel **38**). Puoi saltare il 18 e rispondere al 39: copre anche questo.
+
+**Decisione (15/10)**: assorbito dal **punto 39**, che pone la stessa domanda in modo più preciso: si decide lì.
+
 #### 19. Il profilo gestito, senza elenchi espliciti, non usa scraper — 🟢 (D-X4)
 - **Contesto**: le fonti dei prezzi di oggi sono tutte scraper o API non ufficiali: Yahoo Finance, justETF, Borsa
   Italiana, lo scraper CSS. Le fonti dei cambi (BCE, Fed, Banca d'Inghilterra, Banca nazionale svizzera) sono
@@ -435,6 +480,13 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - Un asset già collegato a una fonte non permessa mostra un avviso, con «Cambia fonte» o i prezzi manuali.
 - Nel self-hosted non cambia nulla: tutte le fonti come oggi.
 
+**Aggiornamento (15/10)**: ancora aperto; serve al lotto del profilo gestito di Plugin asset e ricerca.
+
+nota dev: si al togliere il search, ma almeno all'inizio lasciamo che se un utente  proprio vuole può setupparlo manualmente uno di questi provider, poi capiremo se legalmente è un azzardo o una zona grigia, essendo in fondo la sua macchina e offrendo noi i premium, diciamo che servirebbe più da tappa buchi per quei titoli di super nicchia.
+
+**Decisione (15/10)**: nel profilo gestito gli scraper escono dalla ricerca, anche quando il pannello dà un elenco: l'elenco decide solo cosa è permesso. L'utente può comunque assegnarne uno a mano a un singolo asset, con l'avviso «fonte non ufficiale, a tuo rischio». I cambi delle banche centrali restano tutti; nel self-hosted non cambia niente.
+**Attuazione (15/10)**: ⏳ nel piano di Plugin asset e ricerca (piano 03, §4.3), lotto del profilo gestito.
+
 ### Import e transazioni
 
 #### 20. «+ Nuovo evento» non sovrascrive più un evento esistente — 🟡 (D-W1, V-22)
@@ -446,8 +498,7 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
   esistente e la finestra propone «usa quello».
 - **La mia raccomandazione**:
     - il divieto vale per «+ Nuovo evento», dove l'intenzione è creare;
-    - l'editor degli eventi e il CSV continuano ad aggiornare per data e tipo, ma non toccano un evento collegato a
-    transazioni senza conferma.
+    - l'editor degli eventi e il CSV continuano ad aggiornare per data e tipo, ma non toccano un evento collegato a transazioni senza conferma.
 
   Con la proposta della sessione, il giro «esporta il CSV, modificalo, reimportalo» si romperebbe, se l'export non porta
   gli id: va verificato.
@@ -456,15 +507,15 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
   riceve un messaggio.
 
 - **Aggiornamento dall'analisi di W (15/10, lotto E1)**:
-    - la premessa va corretta: un salvataggio senza id modifica solo un evento **manuale** con la stessa data e lo stesso
-      tipo; uno del fornitore non viene mai sovrascritto. Il caso del fornitore nasce dalla finestra, che dopo il
-      salvataggio rilegge il giorno e può collegare la transazione all'evento del fornitore (I-10 S4);
-    - l'export degli eventi non porta gli id: il giro «esporta, modifica, reimporta» si regge su data e tipo, quindi la
-      mia raccomandazione regge;
-    - proposta di W, precisata: «+ Nuovo evento» crea sempre; se esiste già un evento, manuale o del fornitore, con
-      quella data e quel tipo, la finestra lo mostra e offre «Usa questo», «Crea comunque» o «Annulla». Due eventi nello
-      stesso giorno sono ammessi già oggi, per esempio un dividendo ordinario e uno straordinario;
+    - la premessa va corretta: un salvataggio senza id modifica solo un evento **manuale** con la stessa data e lo stesso tipo; uno del fornitore non viene mai sovrascritto. Il caso del fornitore nasce dalla finestra, che dopo il salvataggio rilegge il giorno e può collegare la transazione all'evento del fornitore (I-10 S4);
+    - l'export degli eventi non porta gli id: il giro «esporta, modifica, reimporta» si regge su data e tipo, quindi la mia raccomandazione regge;
+    - proposta di W, precisata: «+ Nuovo evento» crea sempre; se esiste già un evento, manuale o del fornitore, con  quella data e quel tipo, la finestra lo mostra e offre «Usa questo», «Crea comunque» o «Annulla». Due eventi nello stesso giorno sono ammessi già oggi, per esempio un dividendo ordinario e uno straordinario;
     - **domanda per te**: «Crea comunque» resta?
+
+Nota dev: bhe chat, diciamo che gli eventi per ora come funzione sono un pò abbandonata, quindi non mi ci dedicherei troppo. Per ora abbiamo fatto che un evento automatico è tale se creato dal provider così che in caso di risincronizzazione scompaia, mentre se è manuale resta, ma poi mi pare che abbiamo aggiunto che se una transazione lo linka diventa come fosse manuale. Ad ora per altro penso che l'unico vero effetto sia per il calcolo dei lotti in caso di split, per cambiare il calcolo. Io di tutto questo testo che hai fatto non ho neanche capito il bug quale sia e come si forma, quindi già sarei portato a rimandare, magari spiegamelo un pò meglio prima
+
+**Decisione (15/10, in chat)**: «+ Nuovo evento» non sovrascrive mai. Se esiste già un evento con la stessa data e lo stesso tipo, manuale o del fornitore, arriva un errore e la finestra offre «Modifica questo» (apre l'evento esistente con i suoi valori; solo per quelli manuali), «Usa questo» o «Annulla». Niente «Crea comunque»: due eventi dello stesso tipo nello stesso giorno non capitano. L'editor degli eventi e il CSV continuano ad aggiornare per data e tipo.
+**Attuazione (15/10)**: 🟡 lotto E1 di Import e transazioni, in corso.
 
 #### 21. Per cancellare degli eventi serve indicare l'asset — 🟢 (D-W2, I-12)
 - **Oggi**: la richiesta che cancella gli eventi accetta una lista di id, di qualunque asset. Una richiesta sbagliata,
@@ -475,6 +526,11 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 
 - **Aggiornamento dall'analisi di W (15/10)**: confermata. Gli id di un altro asset tornano «non trovati». L'unico
   chiamante è l'editor degli eventi (una riga di X, aggiornata insieme).
+
+nota dev: ma quindi non ho capito è un bug vero o fantasma? cmq se fosse vero sono daccordo nell'aggiungere la specifica sull'asset da indicare, per evitare errori.
+
+**Decisione (15/10)**: sì. Il problema era vero solo nell'API (l'app manda sempre gli id dell'asset aperto): la protezione serve contro errori futuri.
+**Attuazione (15/10)**: 🟡 lotto E1 di Import e transazioni, in corso.
 
 #### 22. Salvataggio degli eventi tutto o niente — 🟡 (D-W3, I-12)
 - **Oggi**: un salvataggio di più eventi li scrive uno alla volta. Se una riga è sbagliata, le precedenti restano
@@ -488,6 +544,11 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Aggiornamento dall'analisi di W (15/10)**: ogni elemento si controlla prima di scrivere, con un solo commit per gli
   eventi manuali. Il refresh dei fornitori continua a salvare a blocchi. Un asset inesistente fa fallire la richiesta,
   invece di dire «0 salvati».
+
+Nota dev: si sono daccordo con la logica bulk che proponi, tutto o niente e se fallisce ti dice dove
+
+**Decisione (15/10)**: sì, tutto o niente, con l'errore che dice quale riga.
+**Attuazione (15/10)**: 🟡 lotto E1 di Import e transazioni, in corso.
 
 #### 23. Tipi di evento in minuscolo: controllo e correzione dei dati — 🟢 (D-W7, I-09)
 - **Oggi**: un tipo scritto in minuscolo o sconosciuto, per esempio da un CSV scritto a mano, viene salvato, e da quel
@@ -508,11 +569,21 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 
   Come per K-1, un conteggio sulla copia del tuo database aiuterebbe a scegliere.
 
+Nota dev: si sono daccordo a fare upper e se ancora non va impedire il salvataggio, per quelli salvati male l'unica è cancellarli, tanto già ora non vengono visualizzati
+
+**Decisione (15/10)**: all'ingresso il tipo passa in maiuscolo, e uno sconosciuto viene rifiutato. Tipi già salvati: quelli correggibili vanno in maiuscolo, gli altri si cancellano, dopo aver scollegato le transazioni. Lo fa una correzione dopo le migrazioni, non Alembic: il log di ogni riga si vede anche in Docker.
+**Attuazione (15/10)**: 🟡 correzione committata sul ramo di Import e transazioni (`313dde70e`); entra con E1.
+
 #### 24. K-1 chiusa senza codice — 🟢 (D-W15)
 - **Contesto**: nella 1.2 il Bulk mostrava come «coppia» due cloni dello stesso tipo. La correzione è nell'interfaccia,
   ma i dati salvati prima potrebbero contenere coppie sbagliate. La copia del tuo database ne aveva 0.
 - **Proposta**: chiuderla senza codice. La query per trovarle resta scritta nel piano, se servisse.
 - **Alternative**: scrivere comunque una riparazione, per le altre installazioni.
+
+nota dev: si sono daccordo, niente codice, parliamo comunque di un caso limite.
+
+**Decisione (15/10)**: chiusa senza codice.
+**Attuazione (15/10)**: ✅ K-1 chiusa nel backlog 38 (`13705dd05`).
 
 #### 25. Domanda nuova: chi può modificare i dati condivisi degli asset — 🟢 se resta com'è
 - **Oggi**: asset, prezzi manuali, eventi (dividendi, split) e classificazioni sono condivisi fra tutti gli utenti
@@ -521,6 +592,10 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Proposta**: nella 1.3 resta così, perché gli utenti di un'istanza si fidano tra loro, più una voce nel backlog
   per decidere un modello.
 - **Alternative**: solo gli admin; solo chi ha creato l'asset; solo chi ne ha delle posizioni.
+
+nota dev: è corretto, l'istanza è condivisa apposta, è un rischio necessario che uno sbagli, è noto e accettato.
+
+**Decisione (15/10)**: resta così. Una voce nel backlog (W-B24) per un modello futuro.
 
 ### Numeri e analisi
 
@@ -547,6 +622,11 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Per chi usa già LibreFolio**: cambiano numeri già visti nel pannello dei lotti, per chi ha venduto titoli in
   valuta estera. Il totale di ogni lotto resta uguale, salvo il caso con due valute, che oggi è sbagliato.
 
+nota dev: aiutami a capire che sono un attimo confuso: davo per scontato che l'operazione corretta fosse fare i cambi di valuta in base alla data dell'operazione, e dopo che tutte queste operazioni sono state portate in valuta target, si applica l'algoritmo, lo stesso che se fossero state fatte tutte già in origine in quella valuta, ad ora quale sarebbe l'errore? negli esempi che mi porti non sono sicuro di aver capito la risposta attuale e quella futura, e quale delle 2 è corretta.
+
+**Decisione (15/10, in chat)**: approvata. La proposta è proprio il metodo descritto qui sopra: ogni operazione convertita al cambio della sua data, poi il calcolo dei lotti. La Dashboard lo fa già; il pannello dei lotti no. In più: le altre parti del codice che fanno un calcolo simile vanno portate a una sola implementazione in `services/financial_math/`, con la regola corretta.
+**Attuazione (15/10)**: ⏳ lotto CP-7 di Numeri e analisi; l'inventario è J-14 (lotti, riepilogo, AI Export, una copia della percentuale di guadagno nella pagina broker).
+
 #### 27. Cambiare il tipo di uno split con rettifiche collegate viene rifiutato — 🟡 (D-J2, P-10)
 - **Contesto**: con uno split le quote in più entrano come rettifiche collegate all'evento, senza un costo proprio,
   perché il costo resta quello di partenza, ridistribuito.
@@ -559,6 +639,11 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Alternative**: tenere solo l'avviso di oggi e documentarlo.
 - **Per chi usa già LibreFolio**: un'operazione rara, che rompeva i dati, viene rifiutata.
 
+nota dev: si buona idea, per coerenza
+
+**Decisione (15/10)**: sì.
+**Attuazione (15/10)**: ⏳ lotto CP-14 di Numeri e analisi.
+
 #### 28. Giorni in cui si muove solo il cambio di un titolo — 🟡 (D-J3, B11)
 - **Contesto**: il motore del portafoglio ricalcola il valore solo nei giorni in cui succede qualcosa. Oggi contano
   le transazioni, i prezzi e i cambi delle valute tenute **in cassa**.
@@ -570,12 +655,22 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Per chi usa già LibreFolio**: piccole variazioni, più corrette, nelle linee del valore in quei giorni. Il
   riferimento dei test va rigenerato, dopo aver scritto date e valori attesi.
 
+Nota dev: si si, mi pare corretto, bisogna ricalcolare ogni volta che cambia uno dei termini della formula, mi pare ovvio, credo che per ora non sia saltato fuori perchè i provider danno dati tutti i gironi, ma meglio correggere l'algoritmo.
+
+**Decisione (15/10)**: sì.
+**Attuazione (15/10)**: ⏳ lotto CP-6 di Numeri e analisi.
+
 #### 29. I due «Rolling Return» con lo stesso nome — 🟢 (D-J6, C-71)
 - **Oggi**: due indicatori diversi hanno lo stesso nome. Quello della 1.1 usa una finestra in numero di osservazioni;
   il modo nuovo del grafico dell'asset usa una finestra in giorni di calendario.
 - **Proposta**: due nomi distinti, «Rolling Return (osservazioni)» e «Rolling Return (giorni di calendario)». Nessuno
   dei due viene ritirato, perché le configurazioni salvate degli utenti usano quello vecchio.
 - **Alternative**: ritirare quello vecchio, rompendo le configurazioni salvate dei grafici.
+
+nota dev: più che rinominare sarebbe da capire quello corretto e appliccarlo ovunque, ad ora in quali componenti troviamo le 2 varianti?
+
+**Decisione (15/10, in chat)**: un solo Rolling Return, a giorni di calendario, ovunque. Quello vecchio (finestra in numero di quotazioni, nel menu degli indicatori e nell'AI Export) esce. Le configurazioni salvate, solo nel browser, si convertono una volta con la stessa finestra (30 → 30 giorni): sulle borse l'orizzonte passa da circa 42 a 30 giorni, una riga nel CHANGELOG. La matematica del rendimento va in `services/financial_math/`.
+**Attuazione (15/10)**: ⏳ lotto CP-10a di Numeri e analisi. Trovato in più: Volatilità, Sharpe e Beta mostrano «giorni» ma contano le quotazioni, che per loro è giusto: va corretta solo l'etichetta (J-13).
 
 #### 30. L'avviso «nessun prezzo di mercato da oltre 2 settimane» — 🟢 (D-J15, V-11)
 - **Oggi**: per un asset valutato al prezzo di una transazione, l'avviso conta le due settimane dalla prima
@@ -584,6 +679,11 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
   vero.
 - **Alternative**: cambiare solo il testo dell'avviso.
 - **Per chi usa già LibreFolio**: meno avvisi falsi.
+
+Nota dev: si mi pare ottima!
+
+**Decisione (15/10)**: sì.
+**Attuazione (15/10)**: ⏳ lotto CP-4 di Numeri e analisi.
 
 ### Sospensione e risveglio
 
@@ -603,6 +703,12 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Per chi usa già LibreFolio**: chi tiene una pagina aperta su uno schermo, come un tabellone dei prezzi, la vede
   fermarsi dopo 10 minuti, finché non tocca qualcosa.
 
+Nota dev: mi pare un contro senso che in asset global sia ogni 30 e in detail ogni 60, al più lo invertirei.
+Comunque sono daccordo che a schermata nascosta e dopo anche solo 2 min di mouse fermo, la richiesta di aggiornamenti venga mandata in pausa, ma appena la schermata ritorna attiva o il mouse si muove, se il tempo passato supera la soglia, mandiamo subito la richiesta senza scrivere nulla. e questo per quanto riguarda l'aggiornamento attivo, triggerato dall'utente mentre è connesso
+
+**Decisione (15/10)**: pausa a scheda nascosta o dopo **2 minuti** senza mouse né tastiera. Al ritorno, se è passato più dell'intervallo, la richiesta parte subito da sola, senza clic. Intervalli invertiti: lista ogni 60 s, dettaglio ogni 30 s, con un solo ciclo nel dettaglio. Riguarda solo l'aggiornamento dal vivo nel browser; lo scheduler resta com'è.
+**Attuazione (15/10)**: 🟡 Z1 di Sospensione e risveglio, in corso.
+
 #### 32. Il polling conta come presenza dell'utente — 🟢 (Z D4)
 - **Contesto**: per sospendersi da solo, il server deve capire quando nessuno lo usa. La specifica dice di contare le
   richieste dell'utente, esclusi i controlli di salute e il polling.
@@ -614,6 +720,10 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Per chi usa già LibreFolio**: niente: vale solo con le variabili della sospensione, che nel self-hosted restano
   spente.
 
+Nota dev: alla luce della risposta di prima, il backend direi che deve spegnersi o comnque andare a riposo, dopo 5 min dall'ultimo pacchetto ricevuto, solo non saprei come fare per farlo risvegliare quando ne arriva uno nuovo, tanto nel caso cloud che nel self hosted. In oltre, allo stato attuale abbiamo anche lo scheduler che ogni tanto arriva e deve lavorare, come possiamo fare, c'è una soluzione che ci permetta di non usare una seconda macchina esterna che dia i comandi on e off?
+
+**Decisione (15/10, in chat)**: nel cloud il server si sospende dopo **5 minuti** senza richieste dell'utente (il polling conta come presenza), mai con lavoro in corso. Lo risveglia il proxy di Fly alla prima richiesta: nessuna seconda macchina. Al risveglio lo scheduler recupera da solo i giri persi, come previsto dall'inizio. Resta aperta la possibilità di un risveglio dall'esterno, per esempio a turno ogni 2 ore quando ci saranno le notifiche. Nel self-hosted non si sospende niente.
+
 #### 33. Il risveglio programmato risponde un po' alla volta — 🟢 (Z D7)
 - **Contesto**: di notte il pannello del cloud sveglia l'istanza per aggiornare i prezzi, aspetta la fine e legge
   quando svegliarla la prossima volta. Il proxy di Fly chiude una connessione che resta 60 secondi senza dati, e un
@@ -621,10 +731,13 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Proposta**: la risposta parte subito e manda uno spazio ogni 15 secondi circa, finché il lavoro non finisce; poi
   arriva il risultato.
 - **Alternative**:
-    - una risposta immediata «ricevuto», più un secondo indirizzo che il pannello interroga finché il lavoro non è
-    finito;
+    - una risposta immediata «ricevuto», più un secondo indirizzo che il pannello interroga finché il lavoro non è finito;
     - la rete privata di Fly, che però non sveglia da sola una macchina sospesa.
 - **Per chi usa già LibreFolio**: niente: è un accordo tecnico con il pannello privato.
+
+Nota dev: come logica mi torna, ma come lo possiamo fare ora senza avere ancora l'istanza controller di fly.io?
+
+**Decisione (15/10, in chat)**: `wake-sync` è un endpoint di ogni istanza (questo repository), acceso solo con `LIBREFOLIO_WAKE_TOKEN`: senza token non esiste. Esegue subito i lavori in scadenza e risponde con l'esito, un po' alla volta per il proxy di Fly. Lo chiamerà il pannello del cloud (repository privato) quando esisterà. **`next_wake_at` per ora no**: servirà quando il pannello terrà un calendario dei risvegli, e aggiungerlo dopo non rompe niente.
 
 #### 34. Pause crescenti quando un fornitore dice «troppe richieste» — 🟢 (Z D9)
 - **Oggi**: se un fornitore risponde «troppe richieste» (429), lo scheduler riprova al giro successivo (ogni 10 minuti,
@@ -634,6 +747,10 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Alternative**: spento di default e acceso da variabile, alla lettera della regola «nessun cambiamento».
 - **Per chi usa già LibreFolio**: niente, finché un fornitore non rifiuta.
 
+Nota dev: si questo retry esponenziale non è male come idea, a prescindere, da mettere sia nel frontend che nello scheduler.
+
+**Decisione (15/10)**: sì, sia nello scheduler sia nel frontend: il polling rispetta la pausa del fornitore e rallenta a ogni errore.
+
 #### 35. Lo spegnimento ha un tempo massimo — 🟢 (Z D10, C-49)
 - **Oggi**: allo stop (un `docker stop`, un riavvio) il server aspetta senza limite i job in corso e le richieste aperte.
   Docker, dopo 10 secondi, lo uccide, con il rischio di interrompere una scrittura nel database.
@@ -642,24 +759,28 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Alternative**: un tempo configurabile, con il default di oggi (nessun limite).
 - **Per chi usa già LibreFolio**: niente di visibile; gli arresti diventano più puliti.
 
+Nota dev: si mi pare un ottima idea di coerenza.
+
+**Decisione (15/10)**: sì, per tutti.
+
 ### Nuovo, dalla verifica di Account e accessi (14/10 sera)
 
 #### 36. Cosa vede un utente dei dati degli altri — 🟡 (A-1, A-2)
 - **Oggi**: al punto 10 hai scritto che un utente nuovo vede degli altri solo i nomi dei broker e degli utenti.
   Account e accessi l'ha verificato, in sola lettura: con il login, un utente vede anche
-  - le email degli admin, dalla ricerca degli utenti;
-  - nome e icona di tutti i broker, anche di quelli non condivisi con lui;
-  - l'elenco, l'anteprima e lo scarico di **tutti i file caricati**, da chiunque: solo la cancellazione controlla il
+    - le email degli admin, dalla ricerca degli utenti;
+    - nome e icona di tutti i broker, anche di quelli non condivisi con lui;
+    - l'elenco, l'anteprima e lo scarico di **tutti i file caricati**, da chiunque: solo la cancellazione controlla il
     proprietario.
 
   Senza login, poi, si leggono le impostazioni globali: scheduler, durata della sessione, registrazione.
 - **Proposta**: correggerlo nella 1.3.
-  - Un file caricato lo vede solo chi l'ha caricato, o chi ha accesso al broker a cui appartiene.
-  - Nomi e icone dei broker non condivisi solo per l'admin (prima si verifica dove li usa l'app).
-  - Le email degli admin non escono dalla ricerca.
-  - Le impostazioni globali solo con il login, dopo che la configurazione pubblica di Piattaforma porta fuori quello
+    - Un file caricato lo vede solo chi l'ha caricato, o chi ha accesso al broker a cui appartiene.
+    - Nomi e icone dei broker non condivisi solo per l'admin (prima si verifica dove li usa l'app).
+    - Le email degli admin non escono dalla ricerca.
+    - Le impostazioni globali solo con il login, dopo che la configurazione pubblica di Piattaforma porta fuori quello
     che serve alla pagina di login.
-  - Chi lo fa: i file Piattaforma, i broker Import e transazioni, ricerca utenti e impostazioni Account e accessi.
+    - Chi lo fa: i file Piattaforma, i broker Import e transazioni, ricerca utenti e impostazioni Account e accessi.
 - **Perché**: in un'istanza condivisa (famiglia, amici, cloud) i file possono essere documenti personali.
 - **Alternative**: correggere solo i file e lasciare il resto com'è.
 - **Per chi usa già LibreFolio**: chi condivide l'istanza smette di vedere i file e i broker degli altri.
@@ -673,6 +794,191 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - **Perché**: quattro copie prima o poi divergono, e un controllo solo nel browser si aggira.
 - **Alternative**: lasciare le copie e allinearle a mano.
 - **Per chi usa già LibreFolio**: niente di visibile nell'app, che le applica già.
+
+### Backup e Docker (analisi di B, 15/10)
+
+> B ha verificato tutto sul codice: oggi il backup completo risponde «non ancora implementato», e la devWiki lo dava per
+> fatto. Il disegno: uno zip con la forma della cartella dei dati, il ripristino provato sempre prima su una copia, poi
+> un riavvio ordinato; Litestream spento finché non lo configuri. Il testo intero è nella cartella della sessione B, e
+> andrà nel piano 07 al primo via.
+
+#### 38. Il backup con password usa un formato di LibreFolio — 🟢 (D-B1)
+- **Oggi**: dalla UI non si fa nessun backup. La specifica dice «opzione: zip protetto da password».
+- **Proposta**: con la password, tutto lo zip va dentro una busta cifrata `.lfbackup`.
+    - La password diventa una chiave con scrypt, un metodo lento apposta, così indovinarla costa molto; poi si cifra con
+    AES-256-GCM.
+    - Serve solo `cryptography`, che entra comunque per le impostazioni dei plugin: **nessuna dipendenza nuova**.
+    - La busta si apre con LibreFolio: dalla UI, o con `dev.py backup decrypt`, anche dentro l'immagine Docker.
+- **Perché**: lo zip con password «classico» si apre solo con 7-Zip o Keka, non con il Finder né con Esplora risorse.
+  In più ricava la chiave in modo debole e porta una dipendenza nuova.
+- **Il rischio**: la busta la costruiamo noi, con pezzi standard e un metodo noto. Passa dalla revisione di sicurezza,
+  con dei casi di prova fissi.
+- **Alternative**: lo zip con password classico (`pyzipper`); nessuna cifratura, solo un avviso forte.
+- **Per chi usa già LibreFolio**: niente, è una funzione nuova.
+
+#### 39. La chiave d'istanza dentro un backup — 🟢 (D-B2, precisa il punto 18)
+- **Oggi**: in `secrets/` c'è solo la chiave d'istanza. Ancora nessuna funzione la usa: la useranno le impostazioni dei
+  plugin, per cifrare le chiavi d'accesso ai fornitori.
+- **Proposta**:
+    - la chiave entra nel backup solo se c'è la password, e solo se l'ha generata LibreFolio. Una chiave data con una
+    variabile, per esempio dal pannello del cloud, non esce mai: la custodisce chi l'ha data;
+    - al ripristino l'istanza tiene la sua chiave. I segreti dei plugin del backup si ricifrano con quella; se manca la
+    chiave vecchia, restano «impostato ma illeggibile: reinseriscilo».
+- **Perché**: una chiave per istanza, mai due istanze con la stessa. E uno zip con i dati e la chiave insieme, senza
+  password, vale come avere i segreti in chiaro (punto 18).
+- **Alternative**: adottare la chiave del backup. È più semplice, ma due istanze finiscono con la stessa chiave, ed è
+  impossibile quando la chiave arriva da una variabile.
+- **Per chi usa già LibreFolio**: niente.
+
+#### 40. Dopo un ripristino tutte le sessioni si chiudono — 🟢 (D-B3)
+- **Proposta**: dopo un ripristino si rientra con un account dei dati ripristinati. La UI lo dice prima della conferma.
+- **Perché**: con `JWT_SECRET` impostato, un cookie di prima potrebbe aprire, nei dati ripristinati, l'account di
+  un'altra persona.
+- **Alternative**: nessuna sicura.
+- **Per chi usa già LibreFolio**: tocca solo chi ripristina.
+
+#### 41. Prima di un ripristino, un backup automatico — 🟢 (D-B4)
+- **Proposta**: prima di sostituire i dati, LibreFolio fa uno zip dei dati attuali e lo tiene (solo l'ultimo),
+  scaricabile dalla scheda Backup. Se il primo avvio dopo il ripristino fallisce, per esempio per una migrazione,
+  rimette da solo i dati di prima.
+- **Alternative**: tenere la cartella vecchia invece di uno zip: niente spazio in più, ma niente file da scaricare.
+- **Per chi usa già LibreFolio**: niente.
+
+#### 42. Si ripristinano anche le copie fatte a mano — 🟢 (D-B5)
+- **Oggi**: la 1.2 non ha un backup; la guida dice di copiare a mano la cartella dei dati.
+- **Proposta**: il ripristino accetta anche lo zip di una cartella dei dati fatto a mano, senza `manifest.json`: legge
+  la versione dal database e lo segnala nel report.
+- **Perché**: così «ripristinare un backup della 1.2», chiesto dalla specifica e dai cancelli di rilascio, diventa una
+  cosa vera.
+- **Per chi usa già LibreFolio**: chi ha una copia della cartella la porta nella 1.3 dalla UI.
+
+#### 43. Il limite al caricamento di un backup lo decide chi ospita — 🟢 (D-B6)
+- **Proposta**: la variabile `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`; 0 vuol dire senza limite, ed è il default del
+  self-hosted; 500 MB nel profilo gestito.
+- **Perché**: nel cloud il cliente è admin, quindi il limite lo deve decidere l'hoster, non chi usa l'istanza.
+- **Alternative**: un'impostazione nella UI, che però l'admin potrebbe alzare.
+- **Per chi usa già LibreFolio**: niente.
+
+**Decise dal coordinatore, salvo tue obiezioni**:
+- le proposte 6–9 del §10 del piano reggono sul codice: password facoltativa (formato al 38); scaricamento per il
+  pannello con un token separato, spento se non impostato, mai con la chiave; senza un supervisore (Docker, systemd)
+  l'app esce comunque e la UI chiede di riavviarla; Litestream copre solo il database, i file viaggiano negli zip;
+- percorsi nuovi dell'API per backup e ripristino; via i 4 segnaposto di oggi, che nessuno usa;
+- `backup_service.py`, che fa gli export di prezzi, eventi e cambi di un asset, prende il nome `series_export.py`
+  (solo il nome);
+- la prova «stessi totali» gira in un processo a parte, senza un secondo server;
+- immagini anche arm64 (M-1) alla fine, solo se la build regge;
+- la divisione di `backup.py` entra per prima; il lotto di W sugli eventi, che aspetta le decisioni 20–23, la troverà
+  già fatta.
+
+**Come rispondere su B**: «approvo 38–43 e autorizzo il codice di B», più le eccezioni. Se vuoi pensarci ancora sulla
+38 e sulla 39, B può partire lo stesso: i primi tre lotti (divisione di `backup.py`, backup senza password, prova su
+copia) non ne dipendono.
+
+### Email (analisi di E, 15/10)
+
+> E ha verificato sul codice: oggi non c'è nessun codice email, e l'opzione «verifica dell'email» delle impostazioni
+> globali è un segnaposto che nessuno legge. Il disegno: SMTP solo da variabili o file, mai nel database né nella UI né
+> nei backup; senza SMTP tutto funziona come oggi (l'admin copia i link). **Nessuna dipendenza nuova.** Il testo
+> intero è nella cartella della sessione E, e andrà nel piano 08 al primo via.
+
+#### 44. Cosa vuol dire «richiedi la verifica dell'email» — 🟢 (D-E7)
+- **Oggi**: l'opzione c'è nelle impostazioni globali, ma è un segnaposto: non fa niente.
+- **Proposta**:
+    - vale per chi si registra mentre è accesa (non per il primo account): l'account nasce disattivo, riceve un link
+    valido 24 ore (si può rispedire), e il link lo attiva;
+    - chi prova ad entrare prima vede «verifica la tua email», con «rispedisci»;
+    - l'admin può attivarlo a mano dalla scheda Utenti;
+    - gli account di oggi, e quelli creati da riga di comando, non vengono mai bloccati;
+    - si può accendere solo se l'email è configurata;
+    - nessuna migrazione del database.
+- **Il lotto è l'ultimo di E**: se la release stringe, slitta alla 1.4 e l'opzione resta un segnaposto.
+- **Alternative**: una colonna nuova nel database con la sua migrazione; oppure lasciarla segnaposto anche nella 1.3.
+- **Per chi usa già LibreFolio**: niente, finché un admin non la accende.
+
+#### 45. I link nelle email dei visitatori solo con `LIBREFOLIO_PUBLIC_URL` — 🟢 (D-E3)
+- **Proposta**: le email che partono da una richiesta senza login (password dimenticata, verifica, attivazione
+  dell'admin) costruiscono il link solo con l'indirizzo dichiarato in `LIBREFOLIO_PUBLIC_URL`. Senza la variabile, la
+  pagina di login resta com'è oggi («chiedi all'admin»). Gli invii fatti dall'admin usano anche l'indirizzo che vede nel
+  browser.
+- **Perché**: ricavare l'indirizzo dalla richiesta permetterebbe a un estraneo di far arrivare a un utente un link vero
+  che punta a un sito suo («link avvelenato»), e di rubargli il token.
+- **Alternative**: sempre e solo `LIBREFOLIO_PUBLIC_URL`, anche per l'admin.
+- **Per chi usa già LibreFolio**: niente; per avere «password dimenticata» via email serve impostare la variabile, ed è
+  scritto nella guida.
+
+**Decise dal coordinatore, salvo tue obiezioni** (E):
+- invio con la libreria standard in un thread, nessuna dipendenza nuova; nei test un server SMTP finto scritto nei test,
+  mai email vere: le corsie dei test non prendono più la configurazione d'istanza dal `.env` (C-96, scritto da H);
+- una configurazione SMTP sbagliata spegne l'email e lo dice nel log e all'admin, ma l'avvio continua;
+- limite di invii per istanza in memoria, 50 l'ora di default, con `LIBREFOLIO_SMTP_MAX_PER_HOUR`; più
+  `LIBREFOLIO_SMTP_REPLY_TO`, che serve al cloud;
+- «password dimenticata»: risposta sempre uguale, lavoro in background, limiti per indirizzo IP e per nome, al più
+  un'email ogni 5 minuti e 3 l'ora per account; lingua dell'account, poi quella dell'istanza;
+- una scheda nuova «Email» nelle impostazioni, solo per gli admin: stato, problemi, «invia un'email di prova» al proprio
+  indirizzo; mai host, utente, mittente o password;
+- testi delle email nelle 4 lingue, nel backend;
+- un'istanza bloccata (CP6 di H) non spedisce niente.
+
+**Come rispondere su E**: «approvo 44–45 e autorizzo il codice di E», più le eccezioni. Il primo lotto (il servizio,
+senza UI) non dipende da 44 e 45.
+
+### Import e transazioni (15/10)
+
+#### 46. Le metà di trasferimenti rimaste spaiate, già nei database — 🟡 (V-3, W-B6)
+- **Oggi**: cancellare un broker toglie solo il collegamento alla metà di un trasferimento che sta su un altro broker.
+  Resta una metà spaiata: i lotti di quell'asset vanno in errore e la Dashboard la conta come capitale portato da fuori.
+  Il 13/10 hai deciso che la metà rimasta di un TRANSFER diventa una rettifica (ADJUSTMENT) con la stessa quantità e lo
+  stesso costo. W lo scrive ora per le cancellazioni future, e per le altre coppie usa la regola che l'app applica già
+  quando una coppia si divide (`SPLIT_TYPE_MAP`): trasferimento di cassa (CASH_TRANSFER) e cambio di valuta
+  (FX_CONVERSION) diventano un deposito o un prelievo, secondo il segno, senza asset. In tutti i casi il collegamento va
+  via e il resto della riga resta com'è: data, importo, valuta, descrizione, tag.
+- **Proposta**: la stessa conversione per le metà spaiate già presenti nei database, come correzione all'avvio (il quadro
+  delle correzioni dopo le migrazioni, piano 34): prima una copia del database, poi una transazione sola, i controlli
+  (chiavi esterne, conteggi, nessuna metà spaiata rimasta) e il ritorno indietro se qualcosa non torna; una riga di log
+  per ogni transazione convertita, anche in Docker.
+    - Una metà con il suo costo diventa una rettifica a quel costo. Sul broker rimasto il capitale investito passa dal
+    valore di mercato all'arrivo al costo, e il guadagno di prima del trasferimento si conta su quel broker (esempio
+    verificato da Numeri e analisi: investito 100 → 80, guadagno 20 → 40).
+    - **Una metà senza costo** (dati vecchi: oggi l'app non ne crea più) diventa una rettifica senza costo, segnalata
+    come «costo mancante» con il suo avviso, così l'utente lo inserisce (esempio: investito 100 → 0, guadagno 20 → 120).
+    **Domanda per te**: oppure usare come costo il prezzo di mercato del giorno d'arrivo? È più comodo, ma è un costo
+    inventato.
+    - Nelle cancellazioni nuove il costo non si perde mai: prima di cancellare il broker si calcola il costo medio della
+    metà che parte, come già fa l'app quando il costo è «Auto». Il cambio dei numeri per chi condivide un broker è
+    scritto nella conferma della cancellazione e nella guida.
+- **Prima di decidere puoi vedere cosa cambierebbe nel tuo database**, a server fermo:
+  `python -m backend.app.db.post_migration --dry-run` (non scrive niente; elenca le righe, con e senza costo).
+- **Perché**: senza, chi ha già cancellato un broker con dei trasferimenti tiene i lotti in errore.
+- **Alternative**: convertirle alla lettura, senza toccare i dati; oppure lasciarle, e mostrarle come problema da
+  sistemare a mano.
+- **Per chi usa già LibreFolio**: chi ha delle metà spaiate vede i lotti tornare calcolati e la Dashboard senza quel
+  capitale fasullo. Chi non ne ha non vede niente.
+- La correzione entra solo con il tuo ok; il resto del lotto non la aspetta.
+
+#### 47. Le unità che escono da un broker quando sparisce quello che le riceve — 🟡 (V-3, J-11)
+- **Il caso**: il broker A compra 10 titoli X a 20; il 3/10 ne trasferisce 4 al broker B (X vale 25); poi B viene
+  cancellato. Su A resta la gamba in uscita del trasferimento, che per come è fatto un trasferimento non porta un costo.
+  Guardiamo A il 5/10, con X a 30:
+    - **oggi**: Dashboard +80 (le unità escono al valore di mercato), lotti in errore, posizione di 6 unità con 60 di
+    guadagno;
+    - **applicando alla lettera la decisione del 13/10** (rettifica in uscita senza costo): Dashboard **−20** e lotti
+    **−20**, perché le unità uscite contano come perse a prezzo zero. Sembra una perdita, ma l'utente ci ha guadagnato.
+- **Proposta (di Numeri e analisi)**: la gamba diventa una rettifica in uscita **con il costo** medio con cui le unità
+  partono, calcolato dalla stessa funzione che l'app usa già per il costo «Auto». La Dashboard la legge come
+  un'uscita al costo: guadagno 60, come la posizione. Il guadagno di prima del trasferimento viaggia con le unità, come
+  succede dalla parte di chi le riceve. Serve una regola nuova nel calcolo FIFO dei lotti: un lotto di Numeri e
+  analisi, con un test rosso prima.
+- **Intanto** (decisione del coordinatore): si convertono solo le gambe in arrivo; quelle in uscita restano come oggi
+  (Dashboard +80, lotti in errore) finché non rispondi.
+- **La stessa domanda vale per la divisione di una coppia** (comando già esistente): oggi la gamba in uscita diventa una
+  rettifica senza costo, e il guadagno scende del costo delle unità spostate. Se «dividere» vuol dire «non era un
+  trasferimento, le unità sono state cancellate», è giusto così; altrimenti vale la stessa regola. Una tua riga copre
+  tutti e due i casi.
+- **Alternative**: applicare alla lettera la decisione del 13/10 (−20 e −20; sconsigliato); lasciare le gambe in uscita
+  come oggi.
+- **Per chi usa già LibreFolio**: solo chi ha cancellato o cancellerà un broker che riceveva trasferimenti, o chi divide
+  una coppia.
 
 ## 3. Decisioni di coordinamento (già prese; correggibili)
 
@@ -691,8 +997,9 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
     - I messaggi d'import tradotti (C-70) sono tutti di Import e transazioni.
     - La matematica dei cambi dentro i file dei plugin la scrive Numeri e analisi (regola 10: una sola casa per la
     matematica finanziaria).
-- **Migrazioni del database**: la 005 è degli account, la 006 delle impostazioni dei plugin, poi le correzioni dei dati
-  degli eventi. Chi integra per secondo ricollega la catena.
+- **Migrazioni del database**: la 005 e la 006 sono degli account (token monouso; modalità di registrazione), la 007
+  delle impostazioni dei plugin, poi le correzioni dei dati degli eventi (riallineato il 15/10). Chi integra per secondo
+  ricollega la catena.
 - **`npm ci` dal lock**: permesso a ogni sessione quando serve a un controllo. Mai `npm install`, che potrebbe cambiare
   le versioni.
 - **Colori**: il coordinatore colori ha dato gli elenchi esatti dei suoi lotti. Le cartelle di asset, cambi e
@@ -718,8 +1025,9 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 
 ## 4. Cose che servono da te più avanti
 
-- Una sola finestra per installare `cryptography` (impostazioni dei plugin), a corsie ferme. Facoltativa `tzdata`.
-- Docker acceso quando Piattaforma arriva al lotto dell'immagine.
+- Una sola finestra per installare `cryptography` (impostazioni dei plugin e, se approvi la 38, password dei backup), a
+  corsie ferme. Facoltativa `tzdata`.
+- Docker acceso quando Piattaforma arriva al lotto dell'immagine, e poi per Litestream (Backup e Docker).
 - Togliere il tag `test` da GHCR (C-26): è un'azione sul remoto.
 - Lato pannello di controllo (repo privato): **una chiave d'istanza diversa per ogni istanza**, generata a caso e mai
   ricavata da una parola d'ordine. Con la stessa chiave, i segreti cifrati di un'istanza sarebbero leggibili da

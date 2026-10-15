@@ -18,14 +18,16 @@ in the downgrade. The contract pinned here:
 3. Models and migration agree on ``users`` and ``account_tokens``: ``SQLModel.metadata.create_all`` builds the same
    columns and nullability, primary key, foreign keys (target and ON DELETE), indexes, unique and check constraints.
    Three service suites build their databases that way: a drift would test them against a schema production lacks.
-4. A populated 1.2 install upgraded to head keeps every row of every table, ids included (each table read on the
-   columns it had); every existing user gets 0 / NULL / NULL — no backfill, ``email_verified_at`` included, by decision
-   of the developer —; no foreign-key violation; ``account_tokens`` exists and is empty; the database is at head.
-5. The downgrade to 004 of a populated head database — tokens pointing at users through all three foreign keys, users
+4. A populated 1.2 install upgraded keeps, right after 005, every row of every table, ids included (each table read on
+   the columns it had); every existing user gets 0 / NULL / NULL — no backfill, ``email_verified_at`` included, by
+   decision of the developer —; no foreign-key violation; ``account_tokens`` exists and is empty; taken on to head, the
+   database is at head. The rows are compared at 005 because the migrations above it may convert data on purpose (006
+   turns ``enable_registration`` into ``registration_mode``), and pin that themselves.
+5. The downgrade to 004 of a populated database at 005 — tokens pointing at users through all three foreign keys, users
    with values of their own in the new columns — drops ``account_tokens`` and the three columns and touches no other
    row: nothing cascades into ``user_settings``, ``broker_user_access``, the onboarding tables or
-   ``global_settings.updated_by_user_id``. No violation, at 004. Upgrading again works, and brings the columns back at
-   their defaults.
+   ``global_settings.updated_by_user_id``. No violation, at 004. Upgrading to 005 again works, and brings the columns
+   back at their defaults.
 6. An upgrade interrupted after its first ``ALTER`` (``session_version`` already there, the revision still 004)
    completes, and ends with the schema a new database gets.
 
@@ -481,7 +483,11 @@ def install_1_2(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
 @dataclass(frozen=True)
 class Upgrade:
-    """A copy of the 1.2 install, before and after ``alembic upgrade head``."""
+    """A copy of the 1.2 install: its rows before ``alembic upgrade``, its rows right after 005, and the database then taken to head.
+
+    Contract 4 compares the rows at 005: the migrations above may convert data on purpose — 006 turns
+    ``enable_registration`` into ``registration_mode`` — and pin that themselves (``test_migration_006_registration``).
+    """
 
     db: Path
     rows_before: Rows
@@ -492,13 +498,19 @@ class Upgrade:
 def upgraded_1_2(install_1_2: Path, tmp_path_factory: pytest.TempPathFactory) -> Upgrade:
     db = _copy(install_1_2, tmp_path_factory.mktemp("upgraded-1.2") / "app.db")
     rows_before = _rows(db)
+    _migrate(db, "upgrade", REV_005)
+    rows_after = _rows(db)
     _migrate(db, "upgrade", "head")
-    return Upgrade(db=db, rows_before=rows_before, rows_after=_rows(db))
+    return Upgrade(db=db, rows_before=rows_before, rows_after=rows_after)
 
 
 @dataclass(frozen=True)
 class RoundTrip:
-    """A copy of the 1.2 install taken to head, given ``HEAD_ROWS``, downgraded to 004, then upgraded to head again."""
+    """A copy of the 1.2 install taken to 005, given ``HEAD_ROWS``, downgraded to 004, then upgraded to 005 again.
+
+    005 and nothing above it: 006 converts the registration row both ways on purpose, and would show here as a change
+    005 never made.
+    """
 
     db: Path
     tables_at_004: set[str]
@@ -522,7 +534,7 @@ def round_trip(install_1_2: Path, tmp_path_factory: pytest.TempPathFactory) -> R
     db = _copy(install_1_2, tmp_path_factory.mktemp("round-trip") / "app.db")
     tables_at_004, users_at_004 = _tables(db), _table_info(db, "users")
 
-    _migrate(db, "upgrade", "head")
+    _migrate(db, "upgrade", REV_005)
     _assert_includes_005(db)
     with _foreign_keys_on(db) as conn:
         conn.executescript(HEAD_ROWS)
@@ -534,7 +546,7 @@ def round_trip(install_1_2: Path, tmp_path_factory: pytest.TempPathFactory) -> R
     tables_down, users_down, rows_down = _tables(db), _table_info(db, "users"), _rows(db)
     revision_down, violations_down, integrity_down = _revision(db), _violations(db), _integrity(db)
 
-    _migrate(db, "upgrade", "head")
+    _migrate(db, "upgrade", REV_005)
     return RoundTrip(
         db=db,
         tables_at_004=tables_at_004,
@@ -878,13 +890,13 @@ def test_the_downgrade_leaves_no_violation(round_trip: RoundTrip) -> None:
 
 
 def test_upgrading_again_brings_the_columns_back_at_their_defaults(round_trip: RoundTrip) -> None:
-    """Contract 5: ``upgrade head`` after the downgrade works: at head, ``account_tokens`` back and empty, the three columns back at 0 / NULL / NULL for every user — the values they held are gone with the downgrade —, every other row as after the downgrade, no violation."""
+    """Contract 5: ``upgrade 005`` after the downgrade works: ``account_tokens`` back and empty, the three columns back at 0 / NULL / NULL for every user — the values they held are gone with the downgrade —, every other row as after the downgrade, no violation."""
     print_section("Contract 5: the round trip")
     _assert_includes_005(round_trip.db)
     users_columns, user_rows = round_trip.rows_down["users"]
     users = {row[users_columns.index("id")] for row in user_rows}
 
-    assert round_trip.revision_again == _scripts().get_current_head()
+    assert round_trip.revision_again == REV_005
     assert "account_tokens" in round_trip.tables_again and round_trip.rows_again["account_tokens"][1] == []
     assert round_trip.new_columns_again == dict.fromkeys(users, EXISTING_USER_VALUES)
     changes = _row_changes(round_trip.rows_down, round_trip.rows_again, set(round_trip.rows_down) - BOOKKEEPING, columns_of=round_trip.rows_down)

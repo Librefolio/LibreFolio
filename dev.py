@@ -1546,33 +1546,40 @@ def cmd_graph_report(args):
 # =============================================================================
 
 def _get_docker_tag(override: str | None = None) -> str:
-    """Get Docker image tag from git version or override.
+    """Get Docker image tag: the version the image reports, or the override.
 
-    Uses the same git-based versioning as `./dev.py info version`:
+    The same git-based versioning as `./dev.py info version`:
       - On a tag:       librefolio:v1.2.3
       - After commits:  librefolio:v1.2.3-5-gabcdef
       - Dirty tree:     librefolio:v1.2.3-dirty
       - No tags:        librefolio:v0.0.0-gabcdef
 
-    Note: We call get_git_version() fresh (bypassing lru_cache) because
-    _docker_ensure_assets_built() may have dirtied the tree after a prior
-    cached call.
+    Called after _docker_ensure_assets_built(), which froze the version before any build step and wrote it to
+    VERSION: the tag reads that file, so the tag, VERSION and the frontend bundle name one version even when a build
+    step wrote a tracked file meanwhile. Without the file, the version is computed afresh.
     """
     if override:
         return override
 
+    version_file = PROJECT_ROOT / "VERSION"
+    try:
+        frozen = version_file.read_text().strip()
+    except OSError:
+        frozen = ""
+    if frozen:
+        return f"librefolio:{frozen}"
+
     from backend.app.utils.runtime.version import get_git_version
-    # Clear lru_cache so that asset-build artefacts don't produce a stale result
+
     get_git_version.cache_clear()
-    version = get_git_version()  # e.g. "v0.5.0" or "v0.5.0-3-gabcdef-dirty"
-    return f"librefolio:{version}"
+    return f"librefolio:{get_git_version()}"
 
 
 def _check_env_file():
     """Check that .env exists; if not, abort with helpful instructions.
 
     Also warns when terminal environment variables override .env values
-    for Docker-relevant variables (PORT, TEST_PORT).
+    for the Docker-relevant variable PORT (the host side of the port mapping).
     """
     env_file = PROJECT_ROOT / ".env"
     if not env_file.exists():
@@ -1587,7 +1594,7 @@ def _check_env_file():
         return False
 
     # Check for shell env vars that override .env values
-    DOCKER_VARS = ("PORT", "TEST_PORT")
+    DOCKER_VARS = ("PORT",)
     try:
         for line in env_file.read_text().splitlines():
             line = line.strip()
@@ -1610,13 +1617,72 @@ def _check_env_file():
     return True
 
 
+def _docker_frontend_stale_reason(version: str, check_frontend_needs_build) -> Optional[str]:
+    """Why the frontend bundle cannot go into an image of ``version`` as it is, or None when it can.
+
+    The image needs a production bundle of this version: the sources changed, the last build was a debug one (or
+    of unknown mode), or it carries another version, e.g. after a commit that touched no frontend file.
+    """
+    if check_frontend_needs_build():
+        return "missing or outdated"
+    if _read_frontend_build_mode_marker() is not False:
+        return "not a production build"
+    recorded = _read_frontend_build_version()
+    if recorded is None:
+        return "made without a recorded version (not by docker build)"
+    if recorded != version:
+        return f"built for {recorded}, not {version}"
+    return None
+
+
+def _docker_ensure_frontend_built(version: str, check_frontend_needs_build) -> int:
+    """Rebuild the frontend in production mode with ``LF_APP_VERSION=version`` unless the bundle already fits."""
+    stale_reason = _docker_frontend_stale_reason(version, check_frontend_needs_build)
+    if stale_reason is None:
+        print(Colors.info(f"ℹ️  Frontend build is up to date ({version})"))
+        return 0
+    print_warning(f"Frontend build {stale_reason} — building now...")
+
+    class BuildArgs:
+        debug = False
+
+    previous = os.environ.get("LF_APP_VERSION")
+    os.environ["LF_APP_VERSION"] = version
+    try:
+        result = cmd_fe_build(BuildArgs())
+    finally:
+        if previous is None:
+            os.environ.pop("LF_APP_VERSION", None)
+        else:
+            os.environ["LF_APP_VERSION"] = previous
+    if result != 0:
+        print_error("Frontend build failed. Cannot build Docker image.")
+        return result
+    _write_frontend_build_version(version)
+    print_success(f"Frontend build ready ({version})")
+    return 0
+
+
 def _docker_ensure_assets_built():
     """Ensure frontend, docs, JS cache, requirements.txt and VERSION are ready before Docker build.
 
     Uses the same staleness checks as the 'server' command so that
-    ``dev.py docker build`` always produces an image with fresh assets.
+    ``dev.py docker build`` always produces an image with fresh assets. The
+    version is frozen once, first: the frontend bundle (as ``LF_APP_VERSION``)
+    and the VERSION file carry the same one.
     """
+    from backend.app.utils.runtime.version import get_git_version
     from scripts.cli_base import check_frontend_needs_build
+
+    # --- 0. The image's version, frozen once ----------------------------------
+    # Before any step can write a tracked file and make `git describe` say
+    # "-dirty". get_git_version() reads VERSION only where there is no .git/ or
+    # `git describe` fails: remove the file of a previous build first, so such a
+    # checkout gets "unknown" instead of the old value.
+    version_file = PROJECT_ROOT / "VERSION"
+    version_file.unlink(missing_ok=True)
+    get_git_version.cache_clear()
+    version = get_git_version()
 
     # --- 1. JS library cache (fonts must exist before SvelteKit prerender) ----
     # No narrowing here on purpose: the image copies mkdocs_src/site/ next to
@@ -1628,19 +1694,9 @@ def _docker_ensure_assets_built():
         return cache_result
 
     # --- 2. Frontend ----------------------------------------------------------
-    if check_frontend_needs_build():
-        print_warning("Frontend build missing or outdated — building now...")
-
-        class BuildArgs:
-            debug = False
-
-        result = cmd_fe_build(BuildArgs())
-        if result != 0:
-            print_error("Frontend build failed. Cannot build Docker image.")
-            return result
-        print_success("Frontend build ready")
-    else:
-        print(Colors.info("ℹ️  Frontend build is up to date"))
+    result = _docker_ensure_frontend_built(version, check_frontend_needs_build)
+    if result != 0:
+        return result
 
     # --- 3. MkDocs ------------------------------------------------------------
     docs_index = PROJECT_ROOT / "mkdocs_src" / "site" / "index.html"
@@ -1694,18 +1750,8 @@ def _docker_ensure_assets_built():
 
     # --- 5. VERSION file for Docker (no .git/ in the runtime image) -----------
     # The image has no .git/, so get_git_version()'s `git describe` can't run at
-    # container runtime. Freeze the version now (on the host, where .git/ exists)
-    # into a plain file that gets COPYed into the image.
-    from backend.app.utils.runtime.version import get_git_version
-
-    # get_git_version() reads VERSION only where there is no .git/ (inside the
-    # container) or when `git describe` fails. Remove any VERSION file from a
-    # previous build first, so a checkout where git cannot answer writes
-    # "unknown" instead of copying the old value forward.
-    version_file = PROJECT_ROOT / "VERSION"
-    version_file.unlink(missing_ok=True)
-    get_git_version.cache_clear()
-    version = get_git_version()
+    # container runtime: the version frozen at step 0 goes into a plain file
+    # that gets COPYed into the image.
     version_file.write_text(version)
     print_success(f"VERSION file generated ({version})")
 
@@ -1869,7 +1915,10 @@ def cmd_docker_exec(args):
         print(f"  ./dev.py docker exec db current")
         return 1
 
-    cmd = ["docker", "compose", "exec", "librefolio", "python", "dev.py"] + extra
+    # As the server: gosu drops to the numeric ids the entrypoint uses (LIBREFOLIO_UID/GID, set in the image, with the
+    # entrypoint's defaults), so a file a command creates in the data volume belongs to them, not to root. sh hands the
+    # arguments on as "$@".
+    cmd = ["docker", "compose", "exec", "librefolio", "sh", "-c", 'exec gosu "${LIBREFOLIO_UID:-1000}:${LIBREFOLIO_GID:-1000}" python dev.py "$@"', "sh", *extra]
     print(Colors.info(f"🐳 Running in container: dev.py {' '.join(extra)}"))
     return run_command_live(cmd)
 
@@ -2167,6 +2216,27 @@ def _read_frontend_build_mode_marker() -> Optional[bool]:
     """Return whether the last build was a debug build, or None if unknown (e.g. never built)."""
     try:
         return FRONTEND_BUILD_MODE_MARKER.read_text().strip() == "1"
+    except OSError:
+        return None
+
+
+#: The version the last frontend build for a Docker image carries (_docker_ensure_assets_built). Every build empties
+#: frontend/build/, so the file exists only when the last build was made for an image.
+FRONTEND_BUILD_VERSION_MARKER = PROJECT_ROOT / "frontend" / "build" / ".build-version"
+
+
+def _write_frontend_build_version(version: str) -> None:
+    """Record the version the frontend bundle was built with (LF_APP_VERSION), for the next image build."""
+    try:
+        FRONTEND_BUILD_VERSION_MARKER.write_text(version)
+    except OSError:
+        pass  # non-critical bookkeeping — worst case, the next image build rebuilds the frontend
+
+
+def _read_frontend_build_version() -> Optional[str]:
+    """Return the version the last image-bound frontend build carries, or None if unknown."""
+    try:
+        return FRONTEND_BUILD_VERSION_MARKER.read_text().strip() or None
     except OSError:
         return None
 
