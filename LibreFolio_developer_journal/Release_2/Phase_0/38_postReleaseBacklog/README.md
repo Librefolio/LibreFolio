@@ -180,6 +180,8 @@ Origine: [26_brimDanskeBank](../../phases/26_brimDanskeBank/plan-phase00BrimDans
     - Cancello puro `utils gate-event-loop-io`.
 - **L6 · Il nome salvato nel rifiuto del plugin** — basso. `brim_provider.py:1169` mostra il nome salvato, non
   quello originale.
+  - ✅ **Chiusa il 15/10** con `fix(brim): coded DEGIRO/Generic CSV refusals` (W, lotto K2a della 1.3; in
+    `dev_release2` con `62c964242`): il 400 del parse nomina il plugin col suo nome e il file col nome caricato.
 - **L7 · Un plugin di set scelto a mano per un file che non legge** — basso. `importReportSets.ts:131-139` contro
   `brim_report_sets.py:134`.
 - **L8 · Il ripiego `auto` → CSV generico** — basso. `brokers.py:861-875`. La doc dice ora che il Generic CSV non è
