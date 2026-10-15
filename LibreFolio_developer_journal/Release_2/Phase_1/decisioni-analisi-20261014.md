@@ -1050,6 +1050,15 @@ il costo; il lotto N2 di W permette di correggere le sole note di quelle righe.
 - **Per chi usa già LibreFolio**: solo chi ha cancellato o cancellerà un broker che riceveva trasferimenti, o chi divide
   una coppia.
 
+**Decisione (15/10)**: approvata la proposta di Numeri e analisi: «si va mantenuto lo stesso principio nel senso
+opposto». È lo stesso principio della 46 visto dall'altra parte: per il broker rimasto, la gamba che resta mantiene lo
+stesso senso di prima. Le unità uscite da A portano con sé il loro costo, quindi la gamba in uscita diventa una
+rettifica in uscita **con il costo** medio con cui le unità partono, calcolato dalla funzione del costo «Auto».
+Nell'esempio: Dashboard e lotti con guadagno 60, come la posizione. Vale per la cancellazione del broker che riceve,
+per le gambe in uscita già spaiate nei database e per «dividi la coppia». Serve la regola nuova nel calcolo FIFO dei
+lotti: un lotto di Numeri e analisi con il test rosso prima; la conversione delle cancellazioni e dei dati già presenti
+la fa Import e transazioni, sopra quella regola.
+
 ## 3. Decisioni di coordinamento (già prese; correggibili)
 
 - **Forma comune del riordino**. Perché: sei sessioni spostano file insieme, e serve una regola sola per non
