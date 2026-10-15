@@ -623,25 +623,31 @@ class TestProbeBypassesCache:
             provider_params=provider_params,
         )
 
+        # Each seed has the key the cached path would compute for this config (refresh's for history and current,
+        # metadata's, search's for the query "cache-probe"), so a probe that consulted or filled a cache would meet its
+        # sentinel. Since CP10 the provider's settings part closes those keys (core.settings_cache_part): "" for this
+        # double, which declares no settings, yet still an element of the key. Nothing reads the search-result cache
+        # by key, so its seed keeps its shape.
+        settings_part = asset_source_core.settings_cache_part(provider)
         seeded_caches = [
             (
                 _asset_history_cache,
-                ("cache-probe", "CACHE-PROBE", ProviderInputType.TICKER.value, "none"),
+                ("cache-probe", "CACHE-PROBE", ProviderInputType.TICKER.value, "none", settings_part),
                 {"sentinel": "history"},
             ),
             (
                 _asset_current_cache,
-                ("cache-probe", "CACHE-PROBE", ProviderInputType.TICKER.value, "none"),
+                ("cache-probe", "CACHE-PROBE", ProviderInputType.TICKER.value, "none", settings_part),
                 {"sentinel": "current"},
             ),
             (
                 _asset_metadata_cache,
-                ("cache-probe", "CACHE-PROBE", ProviderInputType.TICKER.value),
+                ("cache-probe", "CACHE-PROBE", ProviderInputType.TICKER.value, settings_part),
                 {"sentinel": "metadata"},
             ),
             (
                 _search_query_cache,
-                ("cache-probe", "cache-probe"),
+                ("cache-probe", "cache-probe", settings_part),
                 [{"sentinel": "search-query"}],
             ),
             (

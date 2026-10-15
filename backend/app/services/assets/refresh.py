@@ -38,7 +38,6 @@ from backend.app.services.assets.base import (
 )
 from backend.app.services.assets.event_store import EventStoreOperations
 from backend.app.services.assets.price_store import PriceStoreOperations
-from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
@@ -117,7 +116,7 @@ async def _prepare_refresh_items(  # noqa: C901 — per-item validation maps eac
             continue
 
         provider_code = assignment.provider_code
-        provider = AssetProviderRegistry.get_provider_instance(provider_code)
+        provider = await core.configured_provider(provider_code)
         if not provider:
             immediate_results.append(
                 FARefreshResult(
@@ -218,7 +217,8 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                 # points after switching to WEEKLY on a scheduled_investment asset) until
                 # the TTL naturally expires.
                 params_hash = core._provider_params_hash(provider_params)
-                cache_key = (provider_code, identifier, str(prep.identifier_type), params_hash)
+                # The provider's settings are part of the key too: other settings can give other prices.
+                cache_key = (provider_code, identifier, str(prep.identifier_type), params_hash, core.settings_cache_part(prov))
 
                 # 1. Fetch historical data (with core cache)
                 history_requested = start == "min" or start < today
@@ -258,7 +258,8 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                                             fetch_end = max(needed_dates)
 
                             if fetch_start is not None:
-                                hist_data = await core._run_provider_in_thread(
+                                hist_data = await core.call_provider(
+                                    prov,
                                     lambda: prov.get_history_value(identifier, identifier_type, provider_params, fetch_start, fetch_end),
                                     timeout=55.0,
                                 )
@@ -292,10 +293,7 @@ async def _fetch_refresh_item(  # noqa: C901 — cache gap analysis plus indepen
                             current_data = cached_current
                             logger.debug(f"Current cache HIT for asset {asset_id}")
                         else:
-                            current_data = await core._run_provider_in_thread(
-                                lambda: prov.get_current_value(identifier, identifier_type, provider_params),
-                                timeout=15.0,
-                            )
+                            current_data = await core.call_provider(prov, lambda: prov.get_current_value(identifier, identifier_type, provider_params), timeout=15.0)
                             if current_data:
                                 core._asset_current_cache.set(cache_key, current_data)
 

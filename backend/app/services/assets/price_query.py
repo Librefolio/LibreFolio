@@ -754,13 +754,13 @@ class PriceQueryOperations:
 
             # --- Try provider ---
             if assignment:
-                provider = AssetProviderRegistry.get_provider_instance(assignment.provider_code)
+                provider = await core.configured_provider(assignment.provider_code)
                 if provider:
                     params = core._parse_provider_params(assignment.provider_params)
                     mapped_id_type = AssetSourceProvider.map_input_type_to_identifier_type(assignment.identifier_type)
 
-                    # Check core cache first (TTL 2min)
-                    cache_key = (assignment.provider_code, assignment.identifier, str(assignment.identifier_type))
+                    # Check core cache first (TTL 2min); the provider's settings are part of the key
+                    cache_key = (assignment.provider_code, assignment.identifier, str(assignment.identifier_type), core.settings_cache_part(provider))
                     cached_cv, cache_ok = core._asset_current_cache.get(cache_key)
                     if cache_ok:
                         logger.debug(f"Current-price cache HIT for asset {asset_id}")
@@ -778,10 +778,7 @@ class PriceQueryOperations:
                         _id_type = mapped_id_type
                         _params = params
                         async with sem:
-                            cv = await core._run_provider_in_thread(
-                                lambda: provider.get_current_value(_id, _id_type, _params),
-                                timeout=10.0,
-                            )
+                            cv = await core.call_provider(provider, lambda: provider.get_current_value(_id, _id_type, _params), timeout=10.0)
                         core._asset_current_cache.set(cache_key, cv)
                         return FACurrentPriceItem(
                             asset_id=asset_id,
