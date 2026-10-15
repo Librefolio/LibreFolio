@@ -6,12 +6,13 @@ splits, updates), ``batch_creates`` (creates, promotes, links) and ``batch_costs
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Iterator, Optional, Tuple
 
 from pydantic import ValidationError
 
 from backend.app.db.models import UserRole
 from backend.app.schemas.transactions import (
+    TXBatchOperation,
     TXBatchResponse,
     TXCreateItem,
     TXPromoteBatchItem,
@@ -98,9 +99,10 @@ async def preload_and_authorize(
     ids_to_lookup = _referenced_existing_ids(context)
     await _load_existing_transactions(service, context, ids_to_lookup)
     await _load_missing_split_partners(service, context, ids_to_lookup)
-    await _append_access_issues(service, context)
+    denied = await _denied_brokers(service, context)
+    _append_access_issues(context, denied)
 
-    return any(issue.code == "accessDenied" for issue in context.issues)
+    return bool(denied)
 
 
 def _referenced_existing_ids(context: TransactionBatchContext) -> set[int]:
@@ -150,29 +152,74 @@ async def _load_missing_split_partners(
         context.touched_brokers.update(transaction.broker_id for transaction in partners)
 
 
-async def _append_access_issues(
+async def _denied_brokers(
     service: TransactionService,
     context: TransactionBatchContext,
-) -> None:
-    """Append one issue per touched broker lacking EDITOR access."""
-    if context.user_id is not None:
-        for broker_id in context.touched_brokers:
-            role = await service._check_broker_access(
-                broker_id,
-                context.user_id,
-                min_role=UserRole.EDITOR,
-            )
-            if role is None:
-                context.issues.append(
-                    TXValidationIssue(
-                        operation="create",
-                        index=0,
-                        ref_id=None,
-                        error=f"Access denied: EDITOR required for broker {broker_id}",
-                        code=TXValidationCode.ACCESS_DENIED.value,
-                        params={"brokerId": broker_id},
-                    )
-                )
+) -> set[int]:
+    """The touched brokers on which the user lacks EDITOR; none when the batch runs without a user."""
+    denied: set[int] = set()
+    if context.user_id is None:
+        return denied
+    for broker_id in sorted(context.touched_brokers):
+        role = await service._check_broker_access(
+            broker_id,
+            context.user_id,
+            min_role=UserRole.EDITOR,
+        )
+        if role is None:
+            denied.add(broker_id)
+    return denied
+
+
+def _rows_touching_brokers(
+    context: TransactionBatchContext,
+) -> Iterator[tuple[TXBatchOperation, int, Optional[int], int]]:
+    """Each row of the batch with each broker it touches: ``(operation, index, ref_id, broker_id)``.
+
+    A create touches its own broker (``ref_id`` None). An update, a delete, a split or a promote touches
+    the broker of every saved transaction it names, with ``ref_id`` that transaction. A promote naming a
+    create by ``link_uuid`` reaches that broker through the create itself.
+    """
+    for index, item in context.parsed_creates:
+        yield "create", index, None, item.broker_id
+    saved_refs: list[tuple[TXBatchOperation, int, tuple[Optional[int], ...]]] = [
+        *(("update", index, (item.id,)) for index, item in context.parsed_updates),
+        *(("delete", index, (transaction_id,)) for index, transaction_id in enumerate(context.deletes)),
+        *(("split", index, (item.id_a, item.id_b)) for index, item in context.parsed_splits),
+        *(("promote", index, (item.id_a, item.id_b)) for index, item in context.parsed_promotes),
+    ]
+    for operation, index, transaction_ids in saved_refs:
+        for transaction_id in transaction_ids:
+            transaction = context.existing_by_id.get(transaction_id) if transaction_id is not None else None
+            if transaction is not None:
+                yield operation, index, transaction.id, transaction.broker_id
+
+
+def _append_access_issues(context: TransactionBatchContext, denied: set[int]) -> None:
+    """Refuse each row that touches a denied broker, on that row's coordinates.
+
+    One ``accessDenied`` issue per row and denied broker: the editor marks the row its ``operation`` and
+    ``index`` point at. A denied broker that no row explains still gets a broker-level issue
+    (``index=-1``): a denial is never silent.
+    """
+    refused: set[tuple[str, int, int]] = set()
+    for operation, index, ref_id, broker_id in _rows_touching_brokers(context):
+        if broker_id in denied and (operation, index, broker_id) not in refused:
+            refused.add((operation, index, broker_id))
+            context.issues.append(_access_issue(operation, index, ref_id, broker_id))
+    for broker_id in sorted(denied - {broker_id for _, _, broker_id in refused}):
+        context.issues.append(_access_issue("create", -1, None, broker_id))
+
+
+def _access_issue(operation: TXBatchOperation, index: int, ref_id: Optional[int], broker_id: int) -> TXValidationIssue:
+    return TXValidationIssue(
+        operation=operation,
+        index=index,
+        ref_id=ref_id,
+        error=f"Access denied: EDITOR required for broker {broker_id}",
+        code=TXValidationCode.ACCESS_DENIED.value,
+        params={"brokerId": broker_id},
+    )
 
 
 async def validate_balances(
