@@ -298,6 +298,8 @@ def cmd_server(args):
     print()
     print(f"{Colors.BLUE}{Colors.BOLD}Available endpoints:{Colors.NC}")
     print(f" ├── 🏠 {Colors.YELLOW}Frontend:  http://localhost:{port}/{Colors.NC}")
+    if _frontend_build_has_designer_lab():
+        print(f" ├── 🎨 {Colors.YELLOW}Designer Lab: http://localhost:{port}/designer-lab{Colors.NC}")
     print(f" ├── 💻 {Colors.YELLOW}API Redoc: http://localhost:{port}/api/v1/redoc{Colors.NC}")
     print(f" ├── 🚀 {Colors.YELLOW}API Docs:  http://localhost:{port}/api/v1/docs{Colors.NC}")
     print(f" └── 📚 {Colors.YELLOW}User Doc:  http://localhost:{port}/mkdocs/{Colors.NC}")
@@ -614,6 +616,9 @@ def cmd_fe_dev(args):
     """Start frontend development server."""
     print(Colors.success("Starting frontend development server..."))
     print(Colors.warning("URL: http://localhost:5173"))
+    # `vite dev` carries the Designer Lab unless LF_DESIGNER_LAB=0 (designerLabEnabled in vite-plugin.mjs).
+    if os.environ.get("LF_DESIGNER_LAB") != "0":
+        print(Colors.warning("🎨 Designer Lab: http://localhost:5173/designer-lab"))
     print()
     return run_command_live(["npm", "run", "dev"], cwd=PROJECT_ROOT / "frontend")
 
@@ -2239,6 +2244,30 @@ def _read_frontend_build_version() -> Optional[str]:
         return FRONTEND_BUILD_VERSION_MARKER.read_text().strip() or None
     except OSError:
         return None
+
+
+#: A string every Designer Lab runtime module contains: LAB_MARKER of frontend/scripts/designer-lab/vite-plugin.mjs.
+DESIGNER_LAB_MARKER = b"lf-designer-lab"
+
+
+def _frontend_build_has_designer_lab(build_dir: Path = PROJECT_ROOT / "frontend" / "build") -> bool:
+    """Whether the frontend build carries the Designer Lab (/designer-lab): one of its scripts holds the Lab's marker.
+
+    The debug-mode marker cannot tell, since a debug build made with LF_DESIGNER_LAB=0 has no Lab. The marker can: when
+    the Lab is off, the Vite plugin fails the build if any emitted file contains it. Reads the scripts of
+    _app/immutable/ up to the first hit: a few milliseconds on a debug build, a few tens when it reads them all.
+    """
+    try:
+        scripts = sorted((build_dir / "_app" / "immutable").rglob("*.js"))
+    except OSError:
+        return False
+    for script in scripts:
+        try:
+            if DESIGNER_LAB_MARKER in script.read_bytes():
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def auto_build_frontend(debug=False):

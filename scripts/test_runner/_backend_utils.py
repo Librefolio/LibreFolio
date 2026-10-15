@@ -358,6 +358,15 @@ def utils_dev_port_check(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "dev.py port check tests", verbose=verbose)
 
 
+def utils_dev_designer_lab_banner(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that dev.py lists the Designer Lab (/designer-lab) among the server's endpoints only when the frontend build carries it, and under front dev unless LF_DESIGNER_LAB=0."""
+    print_section("Utils: dev.py Designer Lab banner")
+    print_info("Testing: dev.py _frontend_build_has_designer_lab, DESIGNER_LAB_MARKER (= LAB_MARKER of frontend/scripts/designer-lab/vite-plugin.mjs), cmd_server's «Available endpoints», cmd_fe_dev")
+    print_info("Tests: fake builds (none, release, debug with and without the Lab, production with LF_DESIGNER_LAB=1, rebuilt by the auto-build), only _app/immutable/**/*.js counts, listing and read errors read as no Lab and never stop the start, --build-only never asks, front dev hides it only for LF_DESIGNER_LAB=0")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_designer_lab_banner.py", test_names)
+    return run_command(cmd, "dev.py Designer Lab banner tests", verbose=verbose)
+
+
 def utils_coverage_combine(verbose: bool = False, test_names: list = None) -> bool:
     """Test that coverage parts renamed or landing late are still combined, that run directories never pile up, that an empty finished part is dropped, and that a failed combine is a red pass."""
     print_section("Utils: Coverage Combine")
@@ -717,6 +726,18 @@ Tests for utility modules and helper functions:
         # platform.system and subprocess.run monkeypatched for the Linux case, a 127.0.0.1
         # socket on a port the OS picks, read-only lsof/fuser/ps children, dev.py parsed:
         # no DB, no server, no network beyond loopback, no writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "dev-designer-lab-banner",
+        utils_dev_designer_lab_banner,
+        name="Dev Designer Lab banner",
+        desc="dev.py server lists 🎨 Designer Lab: http://localhost:<port>/designer-lab right after the Frontend line of «Available endpoints» only when a script under frontend/build/_app/immutable/ (any depth) holds DESIGNER_LAB_MARKER, the LAB_MARKER the Vite plugin exports, inside a longer string too: not without a build, not for a release build nor a debug build made with LF_DESIGNER_LAB=0 (whatever .build-debug says), yes for a debug build with the Lab and a production build made with LF_DESIGNER_LAB=1, as the auto-build left it; source maps, CSS, HTML, _app/env.js and the static files never count; a listing that fails or a script that cannot be read reads as no Lab (the script skipped, the scan going on) and the server still reaches its launch; --build-only prints no endpoint list and never asks; front dev lists http://localhost:5173/designer-lab after its URL unless LF_DESIGNER_LAB is exactly 0",
+        # The real helper on fake builds under tmp_path; cmd_server and cmd_fe_dev run in-process with their runtime
+        # configuration, builds, port check and launcher stood in for, every real process, exec and signal forbidden,
+        # os.environ compared before and after; reads frontend/scripts/designer-lab/vite-plugin.mjs. No DB, no server,
+        # no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(
