@@ -1704,3 +1704,31 @@ Passi:
    > E2E di FE5b (1 e 2 insieme) dopo l'avviso di fine finestra: `front build --debug`, poi `front-asset` (asset-modal,
    > asset-classification, asset-mobile-layout, asset-detail), i flussi d'importazione che aprono la modale
    > (tx-import-resolution, tx-import-asset-inspector, tx-import-ca-contract), `utilities`, `onboarding-guides`.
+
+FE5b-2 committato sul mio ramo, non integrato: `fc6220d28` (refactor, 10 file, con le due differenze dichiarate nel corpo)
+e `a50ec87d6` (journal). Il coordinatore: X-R11 nella sua prima voce, in un commit a parte sopra FE5b-2, che entra con
+FE5b; la riga 🐛 del CHANGELOG la scrive lui. Gli E2E dopo la finestra valgono per FE5b-1, FE5b-2 e X-R11a insieme.
+
+### X-R11a — la riga della descrizione nel dialogo di confronto, tradotta ✅ (2026-10-15; E2E dopo la finestra)
+
+Sopra `a50ec87d6`. Ogni riga del dialogo di confronto prende l'etichetta da `ComparisonLabels`, tradotta dal padre, salvo
+quella della descrizione, che usava il letterale `'Description'`: in italiano e in spagnolo restava in inglese
+(`ProviderComparisonModal` mostra `item.label` com'è). Preesistente, copiata fedelmente nel FE5b-2.
+
+1. ✅ (2026-10-15) Test prima, rosso. test-author: in `assetMetadataComparison.test.ts` l'etichetta `description: 'Desc'`
+   nelle `LABELS` dei test (diversa da `'Description'` di proposito: in inglese `common.description` e il letterale
+   coincidono, e solo un valore diverso li distingue); le tre attese che fissavano il letterale ora leggono
+   `LABELS.description`, e il titolo del test che diceva «under the literal label» porta `(X-R11)`.
+   Contro il sorgente non corretto: 3 rossi su 61, esattamente i tre test che leggono l'etichetta della descrizione,
+   ognuno solo su `"Desc"` contro `"Description"`.
+   > **Note implementazione**: niente test di componente: i test di `AssetModal` girano col catalogo inglese, dove le due
+   > etichette coincidono. Il padre non può dimenticare l'etichetta: il campo è obbligatorio nel tipo, e svelte-check lo
+   > controlla.
+2. ✅ (2026-10-15) La cura, tre righe: `ComparisonLabels` riceve `description: string` (obbligatorio);
+   `compareMetadata` usa `labels.description`; `AssetModal.svelte` passa `$t('common.description')`, chiave che c'è già
+   nei quattro cataloghi (Description, Descrizione, Description, Descripción) e che la sezione dei dettagli usa già.
+   Nessun catalogo toccato.
+   > **Note implementazione**: prove leggere: vitest sui sei file degli asset 246/246 (i 3 rossi ora verdi);
+   > `npm run check` 0/0; Prettier pulito. Nessuna classe toccata. Osservazione di test-author, fuori dalla voce: anche
+   > `name`, `type`, `currency` e `sector` nelle `LABELS` dei test coincidono con le parole inglesi, quindi un letterale
+   > futuro su quelle righe non si vedrebbe; oggi il sorgente passa `labels.*` per tutte.
