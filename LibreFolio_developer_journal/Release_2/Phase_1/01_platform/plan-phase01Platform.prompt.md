@@ -2184,3 +2184,171 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 >   - `api sync`; `front check` 0/0; Vitest `InstanceBlockedPage` 22; `front build --debug`;
 >   - E2E `files-uploader` 8/8, `header-scroll` 4/4;
 >   - `check-orphans` pulito; `mkdocs build` stretto e `check-links`.
+>
+> **Fuori pista** (DV-1, girato dal coordinatore alle 17:38): la corsia toglie `LIBREFOLIO_REGEN_NATIVE_CASH_GUARD`, il
+> comando documentato per rigenerare il golden di `test_native_cash_guard.py`. È un effetto di C-96, e l'unica variabile
+> di rigenerazione del repo. Nel backlog come H-13, con la cura proposta: il prefisso `LIBREFOLIO_TEST_REGEN_*`.
+>
+> ✅ 15/10, sera: DV-1 chiusa da J in CP-4, con la variabile rinominata `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD`
+> (decisione del coordinatore). H-13 chiusa nel backlog.
+
+### CP2b — il taglio di `main.py` (2026-10-15, sera) — in corso
+
+> **Base**: `9c8ee20c3` (`dev_release2` `eacc34784` con i registri e Z7a, in avanzamento veloce). Worktree pulito, salvo
+> le due righe di journal di H-13 e DV-1, che vanno nel commit di journal di CP2b.
+>
+> **Via del coordinatore**, con le decisioni 1–4 approvate:
+>
+> 1. niente commit di rinomina per `main.py`: solo il taglio, con la prova AST;
+> 2. la scadenza dello spegnimento nasce in CP2b, spenta per default;
+> 3. nel `finally` resta solo l'executor dei tool;
+> 4. `main.py` congelato per le altre sessioni fino all'ingresso di CP2b.
+>
+> **Accordi diretti**, su indicazione del coordinatore:
+>
+> - **Z (Z6b)**:
+>   - `Step(name, run, blocking=False)`; `run_shutdown_steps(steps, deadline)`, con la scadenza assoluta su
+>     `time.monotonic()`, almeno `MIN_STEP_SECONDS` (0,2 s) per passo, gli esiti per passo; `current_step()`;
+>   - il modulo di Z importa `lifecycle.py`, mai il contrario;
+>   - Z aggiunge poi in `app_lifespan.py` il watchdog come primo passo d'avvio, la sua `shutdown_deadline()` e il passo dei
+>     processi figli come ultimo dello spegnimento.
+> - **B**:
+>   - `pending-restore` fra `tool-catalog` e `data-directories`: prima di ogni passo che legge o scrive la cartella dati,
+>     tranne `logs/` e `secrets/`;
+>   - `restore-commit` fra `global-settings` e `provider-prewarm`;
+>   - le due righe le aggiunge B con B3; per B nessun passo di spegnimento. All'avvio `blocking` non cambia niente.
+
+#### Passo 1 — il taglio ✅ (2026-10-15, sera)
+
+> **Note implementazione**: lo script `files/` della sessione ritaglia le definizioni da `main.py` per contenuto, non
+> per numero di riga, e le porta così com'erano.
+>
+> - `main.py` passa da 527 a 63 righe: filtro degli avvisi, controllo della modalità di test, `settings`,
+>   `configure_logging`, `app`, poi `install_middleware(app)`, il router e `install_static_site(app)`.
+>   `backend.app.main:app` resta il punto d'ingresso di uvicorn.
+> - `services/platform/lifecycle.py`, nuovo: la macchina dei passi, che non importa niente dell'app.
+>   - `Step`, `StepOutcome`, `current_step()`, `run_startup_steps()`, `run_shutdown_steps(steps, deadline)`.
+>   - Sotto una scadenza, il tempo di ogni passo è limitato da `asyncio.timeout`, e `expired()` distingue un passo
+>     tagliato da un passo che solleva da sé un `TimeoutError`. Un `Task` atteso e tagliato viene cancellato.
+> - `services/platform/app_lifespan.py`: `STARTUP_STEPS` (13 passi), `FINALLY_STEPS` (l'executor dei tool),
+>   `SHUTDOWN_STEPS` (6), `shutdown_deadline()` che restituisce `None`, e `lifespan`.
+>   - Ogni passo chiama la sua funzione con una lambda, risolta al momento della chiamata, così i `monkeypatch` sul
+>     modulo funzionano.
+>   - Lo stato dello scheduler passa dal passo d'avvio a quello di spegnimento in `_SchedulerRun`.
+> - `services/platform/middleware.py`: `MIDDLEWARE_STACK`, la più esterna per prima (GZip, poi CORS), e
+>   `install_middleware()`, che le aggiunge in ordine inverso: Starlette mette fuori l'ultima aggiunta.
+> - `services/platform/static_site.py`: gli handler di MkDocs e della SPA così com'erano. `install_static_site()` li
+>   registra nello stesso ordine: `/mkdocs`, `/mkdocs/{path}`, `/`, il mount `/_app` se c'è la build, il catch-all per
+>   ultimo. `ImmutableStaticFiles` passa a livello di modulo.
+> - `services/platform/database_bootstrap.py`: `ensure_database_exists()` e `run_post_migration_fixes_at_startup()`.
+>   La head viene da `readiness.alembic_head_revision()`, l'unico lettore; l'avviso che il vecchio helper dava quando la
+>   head non si legge resta, in `ensure_database_exists()`.
+>
+> **Prove** (`files/` della sessione: `snapshot_app.py`, `ast_compare.py`):
+>
+> - **Fotografia dell'app, prima e dopo**: tabella delle rotte (10 voci, in ordine), stack dei middleware con le
+>   opzioni, sha256 dello schema OpenAPI (`621989381d73426d…`). Tutto identico.
+> - **AST**: 17 definizioni spostate identiche, decoratori esclusi. `ensure_database_exists` differisce solo per la
+>   lettura della head e il suo avviso.
+> - **Chiamate del lifespan**: le stesse 35, nello stesso ordine, prima e dopo, con le funzioni-passo espanse.
+> - Ogni modulo nuovo si importa da solo, senza `main`: niente cicli. `lifecycle` carica 9 moduli di `backend.app`.
+> - `ruff` e `black` puliti sui sei file.
+>
+> **Cambio di comportamento dichiarato**: un passo di spegnimento che solleva va nel log in ERROR, con la traccia, e i
+> passi dopo girano lo stesso. Prima, un'eccezione nel `finally` o nello spegnimento saltava il resto. Vale anche per
+> lo scheduler: un task finito con un errore non ferma più lo spegnimento dei fornitori.
+
+#### Passo 2 — i riferimenti fuori dai test e dalla doc MkDocs ✅ (2026-10-15, sera)
+
+> **Note implementazione**:
+>
+> - `.github/instructions/backend.instructions.md`: nell'albero e nella mappa, i cinque moduli nuovi della piattaforma.
+>   `backend-db.instructions.md`: la lettura della head è ora `readiness.alembic_head_revision()`, usata all'avvio e
+>   da `/system/ready`.
+> - Docstring e commenti: `db/post_migration/__init__.py` (il punto d'avvio), `test_db/db_schema_validate.py` (il
+>   controllo della head), la stringa del runner per `utils static-route-confinement`, il commento del `Dockerfile`
+>   sulle migrazioni all'avvio. Il `Dockerfile` è di B dopo CP7a: sono due righe di commento, da dichiarare.
+> - Wiki: 14 righe in 9 pagine, solo dove una pagina cita in `main.py` una funzione spostata. Le citazioni che restano
+>   vere (`backend.app.main:app`, il router montato in `main.py`, le pagine di storia) non cambiano.
+>   `check_source_paths.py`: 5 percorsi inesistenti su 3 936, tutti artefatti generati preesistenti.
+> - `lint --dead-code`: una sola voce nuova, `current_step` senza riferimenti. È l'aggancio del watchdog di Z6b: fino
+>   ad allora lo usa solo il test puro.
+>
+> **Accordi**: a Z la firma definitiva e l'avviso sui thread tagliati, che restano vivi fino all'uscita (`asyncio.run`
+> aspetta l'executor di default fino a 300 s). A B dove vanno i suoi due passi, e il fatto che `blocking` all'avvio non
+> cambia niente.
+>
+> **In corso**: test-author (puntamenti dei test di A, X e J, del test di confinamento e di `test_db_config`; test
+> puro `services app-lifecycle`), docs-writer (pagine MkDocs per sviluppatori).
+
+#### Passo 3 — i test e la doc ✅ (2026-10-15, sera)
+
+> **Note implementazione** (test-author, docs-writer):
+>
+> - **Test ripuntati**, nei file di altre sessioni, righe da dichiarare nel checkpoint:
+>   - `test_db/test_post_migration.py` (A): 883-884, 887, 894, 897, 1086, 1089, 1097, 1099, 1114, 1138-1152,
+>     1154-1157, 1169-1171, 1178-1179, 1182. `run_post_migration_fixes` si sostituisce in `database_bootstrap`, dove
+>     l'aggancio lo cerca; le patch sul lifespan vanno su `app_lifespan`; tolti i `raising=False` sui bersagli di `main`.
+>   - `test_services/test_market_calendar.py` (X): 530, 544-557, 559-560, 566-567, 585-590, 593.
+>   - `test_services/test_signal_runtime.py` (J): 9, 11, 88-89, 92.
+>   - `test_services/test_risk_scenario_catalog.py` (J): 12, 14 (tolta la vecchia 11), 211-216, 219.
+>   - Miei: `test_static_route_confinement.py` (1, 23-26, 43, 95-96), `test_db_config.py:124`; solo docstring in
+>     `test_config_audit.py:7`, `test_http_compression_api.py:1` e `:72`.
+> - **Test nuovo** `test_services/test_app_lifecycle.py`, selettore `services app-lifecycle` (isolamento `pure`), 38 casi:
+>   - il runner: ordine, attese, tagli, cancellazione del `Task`, errori che non fermano lo spegnimento, thread dei
+>     passi `blocking`, `current_step()`, log con `capture_logs`;
+>   - il cablaggio: ordine di oggi come **sottosequenza** (`assert_in_relative_order`, `CORE_STARTUP_ORDER`,
+>     `CORE_SHUTDOWN_ORDER`, riusabili da B e Z), nomi unici anche fra `FINALLY_STEPS` e `SHUTDOWN_STEPS`, binding
+>     tardivo;
+>   - lo stack dei middleware; l'ordine delle rotte statiche, con il catch-all ultimo anche sull'app vera.
+> - **Doc** (docs-writer), 10 pagine per sviluppatori, nessuna con traduzioni. La pagina principale è `overview.md`, con
+>   la sottosezione nuova «Steps and Middleware: the Contract» `{: #lifecycle-contract }`.
+>
+> **Fuori pista**:
+>
+> - Segnalato da test-author: un passo `blocking` che restituisce un awaitable, sotto scadenza, non veniva atteso.
+>   Corretto nel runner: ciò che `run()` restituisce si attende sempre. Un caso nuovo lo fissa, con un canarino che
+>   prova che l'avviso «never awaited» si vede.
+> - La nota «Pre-warm» di `provider_justetf.md` era falsa già prima: il prewarm crea solo i fornitori, e la lista degli
+>   ETF arriva alla prima ricerca. Corretta invece di spostarla (docs-writer, verificato su `plugin.py:161-168, 448`).
+> - `test_db_config.initialize_test_database()` non importa più `main`, quindi non ne subisce gli effetti all'import.
+>   Il commento del file chiedeva proprio questo. Effetto visibile: `db populate` non configura il logging dell'app,
+>   quindi niente righe INFO del bootstrap del DB in console e nel file di log della corsia; gli avvisi restano.
+> - I log dell'avvio e dello spegnimento hanno un logger nuovo (`…platform.app_lifespan`, `…database_bootstrap`).
+>   Nessun filtro del repo usa il vecchio nome.
+> - `coverage_analysis.py`: i quattro moduli usciti da `main.py` sono `INFRA` come lui; `lifecycle.py` no, perché è
+>   coperto dal test puro.
+> - `black` segnala `_backend_services.py` e `_backend_utils.py` già alla base, su righe di altri. Non li riformatto.
+
+#### Passo 4 — le prove leggere ✅ (2026-10-15, sera)
+
+> Corsia 6181, una alla volta, con `nice -n 10`; log in `/tmp/librefolio-r13-h-cp2b/`:
+>
+> - `services app-lifecycle` 38; `db post-migration` 41; `services signal-runtime` 6;
+>   `utils static-route-confinement` 26; `services risk-all` filtrato su market-calendar e risk-scenario-catalog 48;
+> - `services asset-source-refresh` 12, `asset-sync-counts` 1, `scheduled-investment-param-change` 3: le tre che
+>   passano da `initialize_test_database()`; poi `db populate --force`;
+> - `api instance-block` 54, `api system` 117, `api http-compression` 10. Nel log del server condiviso, gli avvii e gli
+>   spegnimenti passano dai moduli nuovi, senza passi falliti né tagliati;
+> - `utils runtime-isolation` 195;
+> - E2E `front-utility app-start-auth` 3, `files-pdf-offline` 1, `docs-offline-math` 2;
+> - `mkdocs build --strict`, `check-links` (95 link), `check-orphans` puliti; `git diff --check` pulito;
+> - grep dei vecchi percorsi a zero; fotografia dell'app ancora identica alla base.
+>
+> **Prossimo**: `all-backend` nello slot pesante, poi l'handoff FROZEN.
+
+#### Passo 5 — `all-backend` e il caso del watchdog ✅ (2026-10-15, sera)
+
+> - **`all-backend`** (slot pesante 1, 19:06–19:37, `-q --fresh-run --workers 2`, `nice -n 10`, corsia 6181): 7/7,
+>   **14 367 passed, 3 skipped, 0 failed**. Comprende i 38 casi di `services app-lifecycle` di quel momento.
+> - **Fuori pista** (domanda di Z alle 19:21): il passo d'avvio del watchdog restituisce l'oggetto watchdog o `None`,
+>   cioè un valore non attendibile. Il runner lo ignora già, perché attende solo ciò che è awaitable, ma nessun caso lo
+>   fissava. test-author lo aggiunge estendendo due test, senza funzioni nuove: un passo `"value"` all'avvio, e
+>   `None` o un valore qualunque allo spegnimento, con e senza scadenza, `blocking` o no. Dopo `all-backend`,
+>   `services app-lifecycle` dà **43 passed**.
+> - `ruff` pulito; `black` segnala solo righe preesistenti di altri (`_backend_services.py`, `_backend_utils.py`,
+>   `coverage_analysis.py`), già rosse alla base; `git diff --check` pulito. La porta 6181 è libera.
+> - `lint --dead-code`: gli «Unreferenced» restano i 5 della base; `current_step` è fra i «referenziati solo dai
+>   test» (42, prima 41) finché il watchdog di Z6b non lo usa.
+
+### Checkpoint CP2b 🧊 (2026-10-15, sera) — FROZEN, in attesa del coordinatore
