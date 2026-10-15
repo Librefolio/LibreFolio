@@ -533,6 +533,16 @@ def services_shutdown_budget(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Shutdown budget tests", verbose=verbose)
 
 
+def services_shutdown_process(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the shutdown budget in real server processes under the uvicorn CLI, signalled with SIGTERM and SIGINT."""
+    print_section("Services: Shutdown Budget in a Server Process")
+    print_info("Testing: backend/app/services/platform/lifecycle.py and shutdown_budget.py under uvicorn, the wiring of backend/app/services/platform/app_lifespan.py")
+    print_info("Tests: budget 2 s, drain 1 s: a request in flight cancelled, a step that never ends cut, SIGINT with a blocked thread ended by the watchdog, a child ignoring SIGTERM killed, budget 0 runs a 4 s step to its end, nothing pending exits at once; first and last steps")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_shutdown_budget_process.py", test_names)
+    return run_command(cmd, "Shutdown budget process tests", verbose=verbose)
+
+
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
     """Test session revocation through the session version (the sv claim of the session cookie)."""
     print_section("Services: Session Version")
@@ -1332,6 +1342,17 @@ Note: No backend server required.
         # restored around each test, never delivered (the wrappers are called directly); os._exit and the default
         # terminate_children replaced by recorders. Its subprocesses are `sh entrypoint.sh` runs and short-lived python
         # children of its own (fresh interpreters in tmp_path included), all reaped.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "shutdown-process",
+        services_shutdown_process,
+        name="Shutdown Budget in a Server Process",
+        desc="A fixture app with the real lifecycle and shutdown_budget under the uvicorn CLI, LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS=2 and UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=1: SIGTERM cancels a request in flight after the drain, cuts a shutdown step that never ends, kills a child that ignores SIGTERM, each within 6 s; SIGINT with a blocked non-daemon thread ends by the watchdog (status 1, 'Shutdown budget exhausted'); budget 0 runs a 4 s step to its end (status -SIGTERM, no watchdog); nothing pending exits within 3 s; app_lifespan: shutdown-watchdog first, child-processes last, shutdown_deadline from shutdown_budget",
+        # PURE: its own server processes on a Unix socket of their own (in a short directory under /tmp: an AF_UNIX path
+        # holds 104 bytes on macOS), data and logs in tmp_path; no lane port, no DB. Every process it starts — each server,
+        # in a session of its own, with its process group — is killed if still running and reaped.
         isolation="pure",
     )
     add_test(
