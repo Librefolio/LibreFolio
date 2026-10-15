@@ -50,6 +50,11 @@ graph LR
   cannot both spend it. The service never commits: spending an invitation and creating its account fail together.
   Migration `005_accounts_invites` adds the table with plain `ALTER TABLE`/`CREATE TABLE`, never a batch on
   `users`: with `PRAGMA foreign_keys=ON` a batch rebuild cascades deletes into every child table.
+- Session revocation by version (release 1.3, lot A4b, decision D-A17 of the developer, 14/10/2026) — the JWT
+  carries `sv`, the account's `users.session_version`; `get_current_user` refuses a cookie of another version.
+  A password change raises it and re-issues the cookie of the device that made the change; a reset, a
+  deactivation and a demotion raise it too. A cookie without `sv` is version 0, so the upgrade signed nobody out.
+  Still no session store: the check reads the user row that every request already loads.
 
 ## Known problems / limitations
 

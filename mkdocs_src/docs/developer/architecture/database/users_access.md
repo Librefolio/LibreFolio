@@ -85,16 +85,19 @@ The core identity table. Each user has a unique `username` and `email`. The `has
 
 Migration `005_accounts_invites` added three columns:
 
-- 🔄 **`session_version`** (`INTEGER NOT NULL DEFAULT 0`): the session generation of the account, stored for
-  session revocation. No code raises or checks it: it is `0` on every account.
+- 🔄 **`session_version`** (`INTEGER NOT NULL DEFAULT 0`): the session generation of the account. Each session
+  cookie carries the version it was issued at (the JWT's `sv` claim), and `get_current_user()` refuses, on every
+  request, a cookie whose version is not the account's. `user_service.end_sessions()` raises it by one on a password
+  change or reset, a deactivation or a demotion, ending every older session of the account. See
+  [Session Revocation](../security.md#session-revocation).
 - ✅ **`email_verified_at`** (`DATETIME`, nullable): when the email address was verified. The accounts that
   existed before the migration stay `NULL` — not verified, which is true — with no backfill: how they are
   treated once email verification is required is decided in the logic, not in the data (coordinator decision,
   15/10/2026).
 - 📰 **`last_seen_version`** (`VARCHAR(40)`, nullable): the release whose changelog the user last saw.
 
-No application code sets `email_verified_at` or `last_seen_version` either, so every account holds `0`, `NULL`
-and `NULL` in the three columns. The migration adds them with plain `ALTER TABLE users ADD COLUMN`, never with a
+No application code sets `email_verified_at` or `last_seen_version`: every account holds `NULL` in both. The
+migration adds the three columns with plain `ALTER TABLE users ADD COLUMN`, never with a
 batch: a batch rebuilds `users` — copy, drop the original, rename — and with `foreign_keys=ON` dropping the
 original fires the `ON DELETE` actions of every table that references it (the same trap as in
 [Post-migration fixes](index.md#post-migration-fixes)). Its downgrade removes them with `DROP COLUMN`, which

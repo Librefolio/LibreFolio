@@ -77,7 +77,7 @@ pipenv run ./dev.py user deactivate <username>
 pipenv run ./dev.py user activate <username>
 ```
 
-- ⏱️ Una reimpostazione non termina le sessioni già aperte: restano valide fino alla scadenza. Per bloccare subito qualcuno, disattiva l'account: gli viene negato l'accesso dalla richiesta successiva.
+- ⏱️ Una reimpostazione termina le sessioni già aperte: ogni dispositivo collegato all'account viene disconnesso alla richiesta successiva. Per escludere qualcuno del tutto, disattiva l'account: gli viene negato l'accesso dalla richiesta successiva, e riattivarlo non fa tornare valide le sessioni di prima.
 - 👑 `deactivate` rifiuta l'ultimo amministratore attivo: si ferma con l'errore `User '<username>' is the last active administrator: promote or activate another administrator first` ed esce con `1`.
 - 💬 La schermata **Password dimenticata?** dell'app mostra questo comando per entrambe le installazioni: `docker compose exec librefolio python dev.py user reset …` per Docker, e `./dev.py user reset …` per un'installazione host, da eseguire dopo `pipenv shell` o con `pipenv run` davanti.
 
@@ -88,7 +88,7 @@ pipenv run ./dev.py user promote <username>
 pipenv run ./dev.py user demote <username>
 ```
 
-`demote` rifiuta l'ultimo amministratore attivo: si ferma con l'errore `User '<username>' is the last active administrator: promote another user first` ed esce con `1`.
+`demote` rifiuta l'ultimo amministratore attivo: si ferma con l'errore `User '<username>' is the last active administrator: promote another user first` ed esce con `1`. Un declassamento disconnette l'account da ogni dispositivo.
 
 ---
 

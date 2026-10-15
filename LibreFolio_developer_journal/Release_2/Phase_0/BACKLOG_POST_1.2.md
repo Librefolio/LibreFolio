@@ -2114,11 +2114,11 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
       declassa né si disattiva;
     - dice che un account disattivato riceve un 401, ma riceve un 403 `ACCOUNT_DISABLED`, e solo con la password
       giusta.
-    - Si allinea con A6, che riscrive le regole dell'admin.
+    - ✅ **Chiuse il 15/10** con A4b: `docs-writer` le ha corrette insieme alle righe sulle sessioni.
   - `frontend/components/features/settings.md`: il titolo «GlobalSettingsTab (Admin only)», ma la scheda la vedono
     tutti. Si sistema in A6, con le schede Utenti e Sicurezza (attenzione all'ancora).
   - `frontend/state/app-state.md:11`: dice che lo store dell'autenticazione gestisce token JWT, ma usa il cookie
-    HttpOnly. Si sistema in A4 (sessioni).
+    HttpOnly. ✅ **Chiusa il 15/10** con A4b.
   - La prop `icon` di `PasswordInput`, aggiunta da T, manca in `core-ui/atoms.md` e `features/auth.md`. È di T:
     segnalata al coordinatore.
   - Trovata in A4 (15/10): `architecture/patterns/alembic.md` presenta il batch come modo normale di cambiare una
@@ -2126,7 +2126,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `foreign_keys=ON`, il batch ricostruisce la tabella e cancella a cascata le righe delle tabelle figlie: è il
     motivo per cui la 004 e la 005 lo evitano. Il nome della tabella è anche sbagliato: è `transactions`. La pagina è
     di tutti: segnalata al coordinatore.
-  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A3.5» e «A4.5».
+  - Trovata in A4b (15/10): `architecture/users_and_brokers.md`, «👤 User Roles», dice che un admin gestisce gli
+    utenti «via CLI or API». L'API non esiste ancora: la porta A5. Si verifica allora.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A3.5», «A4.5» e «A4b.4».
 - **A-8 · Richiama TC-6** della sezione «T (colori)»: alla prima visita con il browser in `it-IT`, il selettore della
   lingua mostra l'inglese — basso; programma colori (15/10).
   - Probabile causa: `lib/stores/app/language.ts`, `init()`.
