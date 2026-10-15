@@ -107,7 +107,7 @@ export const RISK_RETURN_COLORS = {
     capitalMarketLine: {light: '#94a3b8', dark: '#64748b'},
 } as const;
 
-/** The allocation charts: pie and donut, allocation history. Their palettes: `./chartPalettes`. */
+/** The allocation charts: pie and donut, allocation history. Their category colours: `./chartCategories`. */
 export const ALLOCATION_CHART_COLORS = {
     /** The gap between pie slices and rings: white on the light card, a slate a step above the dark card. */
     sliceBorder: {light: '#ffffff', dark: '#293548'},
@@ -120,15 +120,16 @@ export const ALLOCATION_CHART_COLORS = {
     historyAreaLabelShadow: {light: '#fff', dark: '#000'},
 } as const;
 
-/** The ownership semi-donut. Its palette: `SEMI_DONUT_PALETTE` in `./chartPalettes`. */
+/**
+ * The ownership semi-donut. Its owners take the first asset types in order (`CATEGORY_SEQUENCE` in
+ * `./chartCategories`); the initial on an avatar takes the text that reads best on its disc (`readableText`).
+ */
 export const SEMI_DONUT_COLORS = {
     label: {light: '#1e293b', dark: '#e2e8f0'},
     labelShadow: {light: 'rgba(255,255,255,0.8)', dark: 'rgba(0,0,0,0.6)'},
     labelLine: {light: '#94a3b8', dark: '#475569'},
     /** The ring around an owner's avatar, picture or initial. */
     avatarBorder: {light: '#ffffff', dark: '#334155'},
-    /** The initial drawn on an avatar without a picture, the same in both themes. */
-    avatarInitial: '#fff',
     /** The gap between slices: the card's background. */
     sliceGap: {light: '#ffffff', dark: '#1e293b'},
     /** The slice of what is still available. */
@@ -146,10 +147,11 @@ export const GEO_MAP_COLORS = {
     labelBackground: {light: 'rgba(255,255,255,0.72)', dark: 'rgba(15, 23, 42, 0.55)'},
 } as const;
 
-/** The correlation heatmap and its tooltip. Its scale: `CORRELATION_SCALE` in `./chartPalettes`. */
+/**
+ * The correlation heatmap and its tooltip. Its scale is three roles, danger, panel and info (GR5.3, read in
+ * `CorrelationHeatmap.svelte` through `./roleColors`); the value in a cell takes the text that reads best on it.
+ */
 export const CORRELATION_COLORS = {
-    /** The value printed in a cell: one tone in the dark theme; in the light one, white on saturated cells, dark on pale ones. */
-    cellValue: {darkTheme: '#f1f5f9', lightOnSaturated: '#ffffff', lightOnPale: '#0f172a'},
     /** The gap between cells: the card's background. */
     cellGap: {light: '#ffffff', dark: '#1e293b'},
     /** Border and halo of the hovered cell: no hue, the opposite shade of the theme. */

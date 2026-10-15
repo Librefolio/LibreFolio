@@ -4,8 +4,10 @@ Asset pricing core: the runtime shared by the asset service modules and every pl
 This module provides:
 - the provider caches (history, current value, metadata, search results, search queries)
 - configured_provider(): a new provider instance with its plugin settings bound (services/plugin_settings/)
-- call_provider(): the one boundary of every provider call — NOT_CONFIGURED, the secrets masked in the call's errors
-  and log lines, then _run_provider_in_thread(), where the call runs in a dedicated thread with its own event loop
+- call_provider(): the one boundary of every provider call — NOT_CONFIGURED, the pauses after «too many requests»
+  (RATE_LIMITED, services/platform/provider_cooldown.py), the secrets masked in the call's errors and log lines, then
+  _run_provider_in_thread(), where the call runs in a dedicated thread with its own event loop
+- cooldown_scope_for(): the part of a provider a pause applies to for one identifier (the plugin's hook)
 - the provider parameter helpers (_provider_params_hash, _parse_provider_params)
 - _json_safe_details(): the sanitizer of ``AssetSourceError.details`` for API responses
 
@@ -32,15 +34,18 @@ Design principles:
 import asyncio
 import hashlib
 import json
+import math
 from collections.abc import Awaitable, Callable
 from typing import Optional
 
 from backend.app.logging_config import get_logger
-from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.platform.provider_cooldown import record_no_verdict, record_refusal, record_success, wait_before_call
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 from backend.app.services.plugin_settings.runtime import configure_instance
 from backend.app.utils.runtime.cache import get_ttl_cache
+from backend.app.utils.runtime.cooldown import RateLimitedError
 from backend.app.utils.runtime.secret_masking import exception_renders_secret, mask_exception, masked_description, secrets_in_flight
 
 # Initialize structured logger
@@ -122,39 +127,79 @@ async def settings_cache_part_for(code: str) -> str:
     return settings_cache_part(provider) if provider is not None else ""
 
 
+def cooldown_scope_for(provider: AssetSourceProvider, identifier: str, identifier_type=None, provider_params: dict | None = None) -> str | None:
+    """The part of ``provider`` a pause applies to for this identifier: the plugin's ``cooldown_scope``, else None.
+
+    None for a test double without the hook, and when the hook fails (logged): a pause then applies to the whole
+    provider, which is never wrong, only broader.
+    """
+    hook = getattr(provider, "cooldown_scope", None)
+    if hook is None:
+        return None
+    try:
+        scope = hook(identifier, identifier_type, provider_params)
+    except Exception as error:  # noqa: BLE001 — a broken hook must not stop the call
+        logger.warning("Provider cooldown_scope failed: the pause covers the whole provider", provider=getattr(provider, "provider_code", None), error=type(error).__name__)
+        return None
+    return scope if isinstance(scope, str) and scope else None
+
+
 async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[], Awaitable[ResultT]], *, timeout: float, scope: str | None = None) -> ResultT:
     """The one boundary of every call to an asset provider.
 
     ``provider`` is the configured instance (``configured_provider``), ``fn`` a zero-argument callable that returns the
     provider coroutine, for example ``lambda: provider.get_current_value(identifier, identifier_type, params)``.
+    ``scope`` is the part of the provider the call is about (``cooldown_scope_for``), None for all of it.
 
     - A required setting left without a value refuses the call before any I/O: ``AssetSourceError`` with
       ``NOT_CONFIGURED`` and the missing field keys in ``details["missing"]``.
+    - A provider paused after «too many requests» (decision 34, ``services/platform/provider_cooldown.py``) is not
+      called: ``AssetRateLimitedError`` at once, ``retry_after`` the seconds of pause left. A refusal the call meets
+      (the plugin raises a ``RateLimitedError``) pauses the provider, and the error leaves with ``retry_after`` set to
+      the pause decided; an answer ends a pause; any other end frees the trial of an expired pause for the next caller.
     - The provider's secrets are in flight for the call: masked in every line logged meanwhile, here and in the
       provider's thread, and in the exception the call raises, its chain included (``utils/runtime/secret_masking.py``).
       An error that still shows a secret after masking (its text built by a ``__str__`` of its own) is replaced by an
-      ``AssetSourceError`` with ``PROVIDER_ERROR``, its masked description and no link to the original.
-    - ``scope`` is the cooldown scope of the call, for the pause registry of Z7: X1–X7 consult
-      ``provider_cooldown`` here, ``check`` before the thread and ``refused``/``succeeded`` after it.
+      ``AssetSourceError`` with ``PROVIDER_ERROR`` (``RATE_LIMITED`` for a refusal), its masked description and no link
+      to the original.
+
+    A test double that is not a plugin has no settings and no pause: it is called as it is.
     """
-    del scope  # used from X1–X7 (Z7): the cooldown key is (provider code, scope)
-    if not isinstance(provider, PluginSettingsMixin):  # a test double: no settings to check or mask
+    if not isinstance(provider, PluginSettingsMixin):  # a test double: no settings to check or mask, no pause
         return await _run_provider_in_thread(fn, timeout=timeout)
+    code = provider.provider_code
     settings = provider.settings
     if settings.missing:
         missing = list(settings.missing)
-        raise AssetSourceError(f"Provider {provider.provider_code} is not configured: {', '.join(missing)} missing", "NOT_CONFIGURED", {"missing": missing})
+        raise AssetSourceError(f"Provider {code} is not configured: {', '.join(missing)} missing", "NOT_CONFIGURED", {"missing": missing})
+    wait = wait_before_call("asset", code, scope)
+    if wait > 0:
+        raise AssetRateLimitedError(f"Provider {code} is paused after too many requests: {math.ceil(wait)} s left", retry_after=wait, scope=scope)
     secrets = settings.secret_values()
     with secrets_in_flight(secrets):
         try:
-            return await _run_provider_in_thread(fn, timeout=timeout)
+            result = await _run_provider_in_thread(fn, timeout=timeout)
         except BaseException as error:
             mask_exception(error, secrets)
-            if not isinstance(error, Exception) or not exception_renders_secret(error, secrets):
+            refused = isinstance(error, RateLimitedError)
+            if refused:
+                error_scope = error.scope if error.scope is not None else scope
+                paused = record_refusal("asset", code, error_scope, error.retry_after)
+                if paused > 0:
+                    error.retry_after, error.scope = paused, error_scope
+            else:
+                record_no_verdict("asset", code, scope)
+            if not isinstance(error, Exception) or (not exception_renders_secret(error, secrets) and (not refused or isinstance(error, AssetSourceError))):
                 raise
             description = masked_description(error, secrets)
-    # Raised out of the except block: the new error keeps no link to the one that still shows a secret.
-    raise AssetSourceError(f"Provider {provider.provider_code} failed: {description}", "PROVIDER_ERROR")
+            retry_after, error_scope = (error.retry_after, error.scope) if refused else (None, None)
+        else:
+            record_success("asset", code, scope)
+            return result
+    # Raised out of the except block: the new error keeps no link to the one it replaces.
+    if refused:
+        raise AssetRateLimitedError(f"Provider {code} refused for too many requests: {description}", retry_after=retry_after, scope=error_scope)
+    raise AssetSourceError(f"Provider {code} failed: {description}", "PROVIDER_ERROR")
 
 
 async def _run_provider_in_thread(coro_factory, *, timeout: float = 60.0):
