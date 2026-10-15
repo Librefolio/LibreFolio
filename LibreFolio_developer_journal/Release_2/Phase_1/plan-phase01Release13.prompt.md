@@ -779,7 +779,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > **Fuori pista**:
 > - Due trappole del primo avvio dei test in un worktree nuovo, trovate da H e da J: `npm ci` mancante e build oltre i
 >   300 s del server condiviso. Scritte in `.github/copilot-instructions.md` e nel §6.
-> - Nel piano di H una tabella nominava l'hotfix: resa neutra prima del commit.
+> - Nel piano di H una riga di tabella è stata resa neutra prima del commit.
 > - Dalla verifica di A1 è nata la decisione 36, cosa vede un utente dei dati degli altri.
 > - L'ID T-B4 compare due volte nel backlog: il coordinatore colori rinomina la sua voce.
 >
@@ -881,5 +881,27 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > `theme-roles` pulito, E2E `transactions-modals` 25, `asset-data-editor` 26, `fx-csv-import` 21, `fx-editor` 4.
 > Con l'ingresso, `ui/data-editor` è libera per T. W-B13 passa a X.
 >
-> **Prossimo di W**: W4 (`services/brim/`). W3 (`api/v1/brokers/`) e W5–W6 (`uploads.py`) aspettano il merge
-> dell'hotfix in `dev_release2`, che tocca `brokers.py`, `uploads.py` e `main.py`.
+> **Prossimo di W**: W4 (`services/brim/`). W3 (`api/v1/brokers/`) e W5–W6 (`uploads.py`) aspettano un commit del
+> coordinatore su quei file, come dice il piano di W.
+
+### H, letture di `web_link_finder` in `config/`, integrato ✅ (2026-10-15, 04:25)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `9dda5ccd9` (lotto `fd873f366`, base aggiornata con X CP2b
+> e W K1). Le 7 letture d'ambiente di `services/assets/web_link_finder.py` passano in `config/plugins.py`, la sezione
+> di X, con la stessa semantica; la chiave API vale anche da `..._API_KEY_FILE`. La guardia `config-package` non ha più
+> eccezioni: nessun modulo di `backend/app` fuori da `config/` legge l'ambiente. Validazione di H: `all-backend` 12 185
+> passed, 3 skipped, 0 failed sulla sua base; sopra X CP2b, controllo leggero (guardia 540 = 530 + 12 − 2, raccolta,
+> `api schema`, `mkdocs build` stretto). Le note su `web_link_finder` per X le gira il coordinatore.
+
+### J CP-1, il PAC per tema, integrato ✅ (2026-10-15, 04:35)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `e1fbc801f`. CP-1A (rinomina) e CP-1B (taglio del PAC e
+> guardia dei confini D-J18, allargata a `sqlmodel` e `backend.app.db`), poi quattro aggiornamenti di base. Sulla
+> revisione `b17f8fb85` (con W I1, A3, H CP3 e X CP2b) J ha fatto la prima run completa sulla combinazione X CP2b +
+> H CP3: `all-backend` 13 810 passed, 28 skipped, 0 failed; `openapi.json` identico. Sull'ultima base (`b8d604086`,
+> con W K1 e il lotto di H) un controllo leggero: guardia 567, raccolta +61, API identica.
+>
+> **Strumenti nuovi per i merge**, scritti da J: `patch_effect.py` (bersagli di `patch`/`monkeypatch` che nessuno
+> legge più) e `guard_strings.py` (percorsi nelle stringhe delle guardie che non portano più a niente). Con la
+> risoluzione statica degli import del coordinatore, sono i controlli di ogni aggiornamento di base. J-2 diventa C-94
+> nella sezione C; C-93 non si è ripresentato.

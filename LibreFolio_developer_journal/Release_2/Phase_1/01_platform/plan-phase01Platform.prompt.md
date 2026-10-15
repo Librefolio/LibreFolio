@@ -961,3 +961,92 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 >   - `git diff --check` pulito; porta 6181 libera.
 
 ### Checkpoint CP3 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+
+> Handoff inviato. Il coordinatore ha committato CP3 in quattro commit:
+>
+> - `8f9e8f018` «un segreto vuoto o di soli spazi vale come assente»;
+> - `7640313a4` «una corsia di test usa segreti suoi»;
+> - `54fd32def`, il resto di CP3;
+> - `32bdb5b95`, il journal.
+
+### Aggiornamento di base con X CP1, CP2a, W I1 e A3 ✅ (2026-10-15, notte)
+
+> **Note implementazione**:
+>
+> - Il coordinatore ha aperto `git merge --no-ff --no-commit 4696ef699` sopra `32bdb5b95`. Due conflitti, tutti e due
+>   additivi:
+>   - `backend/app/main.py`, negli import: tenuti `FXProviderRegistry` (X) e `log_configuration_audit` (H). Tolta la
+>     mia riga del vecchio `services.market_calendar`: il lato di X lo importa già da `services.assets.market_calendar`;
+>   - `test_dev_cli_image.py`: tenuti IMG-010e/f/g (H) e IMG-011/012 di A (`TestAccountRole`), nella docstring e nei
+>     test.
+> - Fusi da soli e rivisti: `backend.instructions.md`, `settings.md` (la menzione di X su
+>   `services/assets/web_link_finder.py`), `_backend_services.py` (89 azioni, nessuna doppia) e il backlog.
+> - **Revisione combinata**:
+>   - `front build --debug` e `mkdocs build`, rc 0;
+>   - mirati tutti verdi: `config-package` 475 (7 casi in più per i moduli spostati da X, con l'eccezione che regge sul
+>     percorso nuovo), `dev-cli-image` 44 (8 casi in più, di A);
+>   - `api schema` uguale a quello di `4696ef699` (`76085551e2d02d83`, `238c1e4b84afdbdc`);
+>   - `all-backend` 7/7 in 12 min 52 s: **12 125 passed, 3 skipped, 0 failed**.
+> - **Integrazione**: il merge è `751bf9ab3`, entrato in `dev_release2` con `d08d9358f`. Il coordinatore ha aggiunto i
+>   suoi record in `940297265` e ha portato il mio ramo in avanzamento veloce fin lì. Nel CHANGELOG ci sono le quattro
+>   righe ✨ e la 🔄.
+
+### Lotto `web_link_finder` — le ultime letture d'ambiente in `config/` ✅ (2026-10-15, notte)
+
+> **Via** del coordinatore (2026-10-15, 03:47): prima la nota del merge, poi questo lotto, poi CP4.
+>
+> **Note implementazione**:
+>
+> - **Sezione nuova `config/plugins.py`**, di X secondo D2, scritta da H. Ha sette funzioni con la semantica esatta di
+>   prima: `web_link_finder_enabled`, `_engine`, `_api_key`, `_ddgs_region`, `_ddgs_backend`, `_timeout(default)` e
+>   `_max_results(default)`.
+>   - Unica novità: la chiave API è un segreto e passa da `env_secret()`, quindi vale anche
+>     `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`, come chiede la specifica per tutti i segreti.
+> - **`services/assets/web_link_finder.py`**: `is_enabled()` delega alla sua funzione; spariscono `_env_int`,
+>   `_env_float` e `import os`.
+>   - Un `_FILE` rotto non ferma niente: `_build_engine()` lo scrive come avviso e spegne il motore, così
+>     `find_candidate_urls` mantiene la promessa di non sollevare mai.
+>   - Il file ora è pulito anche per black.
+> - **`.env.example`**: la riga commentata `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`.
+> - **Prova a mano**: 23 casi di semantica uguali a prima, comprese le stranezze (vuoto contro non impostato, `"0"`,
+>   `"5.0"`, gli spazi); un `_FILE` rotto dà `None` con l'avviso.
+> - **Test** (test-author):
+>   - `test_config_package.py`: `ENVIRONMENT_READ_EXCEPTIONS` ora è vuoto. Il meccanismo resta: il cricchetto è un
+>     solo test che scorre il dizionario e, quando è vuoto, passa invece di essere saltato. Un test prova il cricchetto
+>     su moduli finti. Ci sono 54 casi di semantica per le sette funzioni di `plugins.py`. Totale: 530 (erano 475).
+>   - `test_web_link_finder.py`, file di X, solo aggiunte: cinque test. La chiave da `_FILE` costruisce
+>     l'`ApiKeyEngine`; un file mancante, vuoto o non UTF-8 spegne il motore con un solo avviso, che non contiene il
+>     segreto; `find_candidate_urls` rende `[]` senza sollevare.
+>     - Con una copia senza la cattura di `SecretFileError`, i quattro test del file rotto vanno in rosso.
+>     - In più c'è una riga che rende ermetico un test esistente, che dipendeva dalla variabile nuova.
+>     - Totale: 29 (erano 24).
+>   - `test_env_example.py`: solo una docstring. Le otto variabili del motore si trovano soltanto in `config/plugins.py`,
+>     tutte documentate.
+> - **Doc** (docs-writer):
+>   - `settings.md`: la regola vale senza eccezioni; le sezioni sono tre: `platform`, `accounts` e `plugins`;
+>   - `configuration.en.md`: i segreti ora sono tre; un `_FILE` rotto della chiave API spegne solo la ricerca web;
+>   - `search_link_finder.md`: dove si leggono le variabili;
+>   - `security.md`: le corsie di test non ereditano «i segreti che fanno fidare l'istanza di una sessione o le fanno
+>     decifrare i dati». La chiave API la ereditano.
+>   - `mkdocs build` e `check-links` passano; `translate-validate` dà 3 errori in più per lingua su
+>     `configuration.en.md`.
+> - **Statici**: ruff e black puliti; `api schema` identico a `940297265`; dead code senza reperti nuovi (le
+>   differenze da CP3 sono solo i percorsi spostati da X).
+> - **Build e mirati**: `front build --debug` rc 0. Serviva per il `CHANGELOG.md` dei record del coordinatore, che
+>   entra nella modale. Poi `services config-package` 530, `config-env-example` 36, `config-secrets` 58, `config-audit`
+>   65 e `web-link-finder` 29.
+>
+> **Fuori pista**: vecchie stranezze del motore, lette nel codice da test-author e lasciate com'erano (sono di X):
+>
+> - `TIMEOUT` a `nan` o `inf` fa fallire `int(timeout)` in `DdgsEngine.search`, e la ricerca rende `[]`;
+> - un valore sotto 1 vuol dire nessun timeout;
+> - `MAX=0` rende comunque fino a un URL.
+>
+> **`all-backend`** (`-q --fresh-run --workers 2`, corsia 6181): 7/7 in 12 min 37 s, **12 185 passed, 3 skipped, 0
+> failed**.
+>
+> - Sono 60 in più rispetto alla revisione combinata di CP3 (12 125): 55 in `config-package` e 5 in `web-link-finder`.
+> - Nessun test saltato in più.
+> - `git diff --check` pulito; porta 6181 libera.
+
+### Checkpoint del lotto `web_link_finder` 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
