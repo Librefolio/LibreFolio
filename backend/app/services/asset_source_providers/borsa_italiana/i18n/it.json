@@ -16,5 +16,24 @@
         }
       }
     }
+  },
+  "pluginSettings": {
+    "asset": {
+      "borsa_italiana": {
+        "label": {
+          "preferred_language": "Lingua preferita"
+        },
+        "description": {
+          "preferred_language": "La ricerca mostra ogni strumento solo in questa lingua, quella in cui arrivano il nome e i dettagli. Con Entrambe le lingue, prima l'italiano, poi l'inglese."
+        },
+        "option": {
+          "preferred_language": {
+            "all": "Entrambe le lingue",
+            "it": "🇮🇹 Italiano",
+            "en": "🇬🇧 Inglese"
+          }
+        }
+      }
+    }
   }
 }
