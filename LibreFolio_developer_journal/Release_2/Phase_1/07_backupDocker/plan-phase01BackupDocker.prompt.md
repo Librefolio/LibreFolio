@@ -1207,7 +1207,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - `mkdocs build` senza avvisi; `check-links` 95 link validi;
 > - porta 6187 libera.
 
-### Due cambi dichiarati dopo il merge (2026-10-15, 16:27-17:03) ✅ — 🧊 FROZEN, in attesa del coordinatore
+### Due cambi dichiarati dopo il merge (2026-10-15, 16:27-17:03) ✅ — committati
 
 > **1. La riga della scheda Backup nel registro di A** (via del coordinatore, «una riga in aggiunta, dichiarata»):
 >
@@ -1279,6 +1279,134 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - la galleria (G);
 > - la scheda di backup sulla pagina di blocco, quando `backup_available` è vero (frontend di H);
 > - B2, B4, B7 come da decisioni.
+
+> **Committati dal coordinatore** (17:04): `b7a4d35e6` (scheda), `f43d5de89` (CP6), `e1858d277` (journal).
+
+### Base `a22400f1e` e decisioni 38–39 (2026-10-15, dalle 17:04)
+
+> **Base aggiornata dal coordinatore**: merge di `dev_release2` (`d22eb6f43`) senza conflitti, HEAD `a22400f1e`.
+> Entrano W (eventi e conversione), J (C-94: il server di prova fa la build prima del timeout) e i colori.
+>
+> **Prove sulla revisione combinata** (17:05-17:14, `nice -n 10`, uno alla volta), tutte verdi:
+>
+> - `api sync` 0; `front check` 0 errori e 0 avvisi;
+> - `api instance-block` 46 (backend della corsia partito in circa 270 s, carico 98); `api backup` 23;
+>   `api backup-instance-errors` 6;
+> - Vitest `settingsTabs` 18; `check-orphans` verde; porta libera.
+>
+> **Decisioni del developer**, alla lettera, dal treno 41 del piano generale:
+>
+> - **38**: «ok all'idea della busta» (`.lfbackup`, scrypt + AES-256-GCM, solo `cryptography`).
+> - **39**: «così l'utente sceglie se fare un backup in "chiaro" o un backup "sicuro" e nel messaggio gli viene detto
+>   la differenza».
+> - **B4 dopo B3 e B5**: è l'unico pezzo di B che può slittare.
+> - **40**: il developer ci sta ragionando (coordinatore, 17:04).
+>
+> **Chiarito dal coordinatore** (17:14):
+>
+> - l'estensione è **`.lfbk`**: è l'ultima parola del developer (17:00), nella riga «Decisione» del punto 38. Il testo
+>   del punto e la nota del treno 41 sono di prima, e la nota la corregge il coordinatore;
+> - **40–43 non sono decise**: 🟢 è il colore della proposta, una decisione ha la riga «Decisione (data)». Il
+>   developer è sulla 40, poi va in ordine. Restano fermi B2 (42 e 43) e B3 (40, 41 e CP2b di H).
+>
+> **Slot pesante 1**: dopo `all-backend` di H. In attesa, test-author scrive l'E2E della scheda
+> (`frontend/e2e/settings/backup.spec.ts`, FBKP-001…004) e la sua riga in `_frontend_utility.py`, file del programma
+> colori che il coordinatore dichiara. Nello slot: l'E2E, poi knip. La galleria la chiede il coordinatore ai colori,
+> dopo Y2. La scheda sulla pagina di blocco il coordinatore la propone ad H.
+
+### B8 — il token del pannello (via del coordinatore, 2026-10-15 alle 17:15) — in corso
+
+> **Via**: «B8: via». Le rotte del pannello vanno in `ALLOWED_WHEN_BLOCKED`: un'istanza bloccata, per esempio per un
+> mancato pagamento, e chi ospita che restituisce i dati al cliente. Le rotte sono autenticate dal token, non da una
+> sessione. Il test fissa che sull'istanza bloccata, senza token o con un token sbagliato, la risposta resta 404 o 401,
+> mai il file. Da dichiarare: la riga di `ALLOWED_WHEN_BLOCKED` e `test_instance_block.py`, file di H.
+>
+> **B7a: non adesso**. Le build Docker qui non riescono per la VPN; prima viene il CP7b di H (`Dockerfile`, compose),
+> poi B7a sopra la sua base, con le prove Docker in una finestra del developer. `stop_grace_period` (Z6b, 10 s) resta
+> ad H.
+>
+> **Disegno e codice** (17:17-17:21):
+>
+> - `config/backup.py` (sezione nuova): `backup_download_token()` con `env_secret("LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN")`,
+>   quindi anche `_FILE`; almeno 32 caratteri, altrimenti `BackupConfigError`.
+> - `api/v1/backup/job_views.py`: vista del job, errori, avvio, lettura, file e cancellazione, condivisi fra le rotte
+>   dell'admin e quelle del pannello. Un chiamante limitato a un'origine vede solo i suoi job.
+> - `api/v1/backup/panel.py`: `POST /backup/panel/jobs`, `GET` e `DELETE /backup/panel/jobs/{id}`,
+>   `GET …/{id}/file`.
+>   - `HTTPBearer` (schema `BackupPanelToken`) e `hmac.compare_digest`.
+>   - Le risposte: token non impostato → 404 «Not Found» (come un percorso che non c'è); token mancante o sbagliato →
+>     401 `backup_panel_unauthorized`; token inutilizzabile (file illeggibile, troppo corto) → 503
+>     `backup_panel_unavailable`, con una riga di log; un job di un'altra origine → 404.
+>   - Origine `panel`; mai la chiave d'istanza.
+> - `instance.py` passa a `job_views`: stessi nomi, docstring e risposte. L'OpenAPI dei 6 percorsi di backup è
+>   identico; si aggiungono solo i 3 percorsi (4 operazioni) del pannello.
+> - `.env.example`, la mia sezione: `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` e `_FILE`, commentate.
+> - `instance_block.py` (di H, dichiarato): le 4 rotte del pannello in `ALLOWED_WHEN_BLOCKED`.
+> - I perni, in modo meccanico: `ALLOWED_ROUTES` +4 in `test_instance_block.py`; `BACKUP_ROUTES` +4 in
+>   `test_backup_api.py`.
+> - **Smoke** in un processo, su una piccola app con i job finti: tutte e nove le risposte come previsto (non impostato
+>   404; senza header 401 con `WWW-Authenticate: Bearer`; sbagliato 401; avvio 202; stato 200; file 200 `no-store`; job
+>   dell'admin dal pannello 404; cancellazione 204; token corto 503; file illeggibile 503).
+>
+> **⚠️ Fuori pista — B8 messo da parte per lo slot** (17:22): alle 17:21 il coordinatore dà lo slot pesante 1
+> sulla revisione `a22400f1e`.
+>
+> - Per provare esattamente quella revisione, i 9 file di B8 vanno in
+>   `~/.copilot/session-state/5618ecee-…/files/b8-wip/`, con `MANIFEST.sha256`, `MODIFIED.txt` e `NEW.txt`.
+> - I 6 file modificati tornano al contenuto di HEAD (`git show HEAD:<file>`); i 3 nuovi vengono tolti.
+> - Si rimettono dopo lo slot, controllati con lo sha256.
+
+### Accordo con H sui passi d'avvio di CP2b (2026-10-15, 17:48)
+
+> H, su richiesta del coordinatore: con CP2b i passi d'avvio escono da `main.py` e vanno in
+> `services/platform/app_lifespan.py`, nella tupla ordinata `STARTUP_STEPS` (`Step(name, run, blocking=False)` di
+> `services/platform/lifecycle.py`). `run()` restituisce `None` o un awaitable; un'eccezione ferma l'avvio. H proponeva
+> un passo subito prima del DB.
+>
+> **Risposta di B**: i passi sono due.
+>
+> - **`pending-restore`** (`asyncio.to_thread(apply_pending_restore)`) va prima del primo passo che tocca la cartella
+>   dati, cioè subito prima di `ensure_data_dirs()`:
+>   - il catalogo degli scenari carica `scenario_catalog/` in memoria;
+>   - gli avatar scrivono in `custom-uploads/`;
+>   - audit, segnali e Tool possono restare prima: toccano solo `logs/` e `secrets/`, che non si scambiano.
+> - **`restore-commit`** (`asyncio.to_thread(commit_restore)`) va dopo DB, fix post-migrazione e impostazioni globali,
+>   e prima di prewarm, festività e scheduler.
+> - Le righe le aggiungo io, in B3, quando CP2b è nella mia base.
+> - Nessun passo di spegnimento: il riavvio è un SIGTERM, e Litestream avvolge uvicorn da fuori.
+> - Ho chiesto ad H che cosa cambia fra `blocking=True` e `blocking=False`.
+
+### Slot pesante 1 — E2E della scheda e knip (2026-10-15, 17:21-18:20) ✅ — 🧊 FROZEN, in attesa del coordinatore
+
+> - **knip** (`dev.py lint --dead-code --scope frontend`, 17:23, 9 s): nessun file di B fra i risultati
+>   (`features/backup`, `i18n/backup`, `settingsTabs`). I 2 file, 19 export, 28 tipi, 4 dipendenze di sviluppo e 20
+>   dipendenze non elencate sono di altre aree (codice di uscita 1 per quelli).
+> - **E2E** `frontend/e2e/settings/backup.spec.ts` (test-author), solo desktop come ogni spec seriale, `mode: 'serial'`
+>   (un backup alla volta per istanza):
+>   - FBKP-001: un utente normale non ha la scheda, e `?tab=backup` apre la prima;
+>   - FBKP-001b: l'admin la ha, e la scheda si apre `idle`;
+>   - FBKP-002: backup fino a `done`; `backup.created` con l'id del POST; il link al file del job con l'attributo
+>     `download`; lo scaricamento è uno zip (`PK\x03\x04`) grande quanto `file_size`, col nome del job;
+>     `backup.download.started`;
+>   - FBKP-003: la cancellazione torna a `idle`, `backup.deleted`, e il GET del job risponde 404;
+>   - FBKP-004: un ricaricamento riprende il job finito senza un secondo `backup.created`;
+>   - pulizia dopo ogni test: ogni job cancellato, l'id seguito tolto da `sessionStorage`.
+>
+>   Registrata in `_frontend_utility.py`: `front_backup` e la voce `front-utility backup`, +20 righe in aggiunta, file
+>   del programma colori dichiarato dal coordinatore. `front_utility_all` la prende dal registro.
+> - **Prove** (`front-utility backup`, `nice -n 10`, una alla volta):
+>   - codice committato: 5 passati (Playwright 30 s, build già aggiornata);
+>   - mutazione 1, l'attributo `download` tolto: FBKP-002 rosso;
+>   - mutazione 2, `remove()` che non chiama l'API: FBKP-003 rosso, perché il job risponde ancora 200;
+>   - di nuovo il codice ripristinato: 5 passati (Playwright 37 s; ricostruzione della build circa 130-155 s a ogni
+>     cambio);
+>   - sha256 identici, `git diff HEAD -- frontend/src` vuoto; in `.jobs` solo `.lock` dopo ogni corsa; porta libera.
+> - `check-orphans`: 124 spec E2E e 413 test unitari raggiungibili.
+> - **Da sapere** (test-author): il runner ricostruisce il frontend solo se un file di `src` è più nuovo di
+>   `build/index.html`. Un ripristino che rimette anche la data del file (`cp -p`) salta la ricostruzione, e la «prova
+>   verde finale» girerebbe sulla build mutata. Proposto per la devWiki.
+> - Rumore d'ambiente, non del prodotto: a ogni corsa la cache statica non scarica MathJax da jsDelivr (certificato SSL)
+>   e tiene la copia in cache.
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 
