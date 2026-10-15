@@ -4,7 +4,7 @@
 # Merge conflict: `--resolve` merges the three sides — a line one side left as it was takes the other side's; changed on both, an accepted file keeps its accepting side, otherwise the tighter side wins (the lower m1, the m2 values both sides have) — then the gate must pass on the merged tree. Never widen a line to pass.
 # Lines starting with ~ declare a split file (old, new files, its record then) or a file taken as it is (file, reason).
 lib/components/assets/AssetBrowseNav.svelte	6
-lib/components/assets/AssetCard.svelte	76
+lib/components/assets/AssetCard.svelte	70
 lib/components/assets/AssetCurrencyChangeModal.svelte	79
 lib/components/assets/AssetDataEditorSection.svelte	17
 lib/components/assets/AssetIcon.svelte	4
@@ -16,9 +16,9 @@ lib/components/assets/AssetModalIdentifiers.svelte	12
 lib/components/assets/AssetModalImportNotices.svelte	10
 lib/components/assets/AssetModalProvider.svelte	20
 lib/components/assets/AssetModalSelectionPrompts.svelte	38
-lib/components/assets/AssetPriceSummary.svelte	15
+lib/components/assets/AssetPriceSummary.svelte	13
 lib/components/assets/AssetSearchAutocomplete.svelte	57
-lib/components/assets/AssetTable.svelte	27	#fef3c7	#fffbeb	rgb(120 53 15/0.24)	rgb(120 53 15/0.36)
+lib/components/assets/AssetTable.svelte	23	#fef3c7	#fffbeb	rgb(120 53 15/0.24)	rgb(120 53 15/0.36)
 lib/components/assets/BoundaryDateModal.svelte	37
 lib/components/assets/CellDateRange.svelte	49
 lib/components/assets/DistributionDataImportModal.svelte	3
@@ -60,7 +60,6 @@ lib/components/charts/SignalParamControl.svelte	24
 lib/components/charts/SignalStyleEditor.svelte	42
 lib/components/charts/SignalVisualLegend.svelte	16
 lib/components/dashboard/AllocationHistoryChart.svelte	4
-lib/components/dashboard/AllocationPanel.svelte	42
 lib/components/dashboard/ContributionTable.svelte	14
 lib/components/dashboard/ExposureTable.svelte	2
 lib/components/dashboard/ExposureTreemap.svelte	10
@@ -270,7 +269,7 @@ lib/features/tools/pac-allocator/planner/ui.ts	118
 lib/features/update-check/AskAdminModal.svelte	27
 lib/features/update-check/UpdateAvailableModal.svelte	25	#334155×2	#e2e8f0×2
 lib/stores/app/themeStore.ts	0	#1b4334×2
-lib/theme/toneClasses.ts	176
+lib/theme/toneClasses.ts	166
 lib/utils/assetTypes.ts	80
 lib/utils/broker/brokerRoleHelpers.ts	4
 lib/utils/currency/fxConversionHelper.ts	6

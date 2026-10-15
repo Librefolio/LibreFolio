@@ -577,7 +577,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 8 | T-8b correzioni del developer (D-T23–D-T26), `ForgotPasswordCard`, `AuthPageFrame` | ✅ checkpoint `312748dcc`; base `9bd3e39bb` nel merge `a74185670`, validato il 15/10 con contact sheet |
 | 9 | T-8c `AuthPageFrame`: la card d'accesso non nasce sotto i controlli su telefono | ✅ checkpoint `87dbd494e` |
 | 10 | T-9 ramo combinato T + DV: `STAND_INS`, baseline stretta, test dell'header da tastiera | ✅ commit `690472ce3` e `54b0076e4`; basi `2ce572779` e `dd4be16ad`; **ingresso unico di T e DV in `dev_release2` con `a0915bef9`** |
-| 11 | W3-a (TD-2): il segno della dashboard sui ruoli `gain` / `loss` | ⏳ validato il 15/10 su `a0915bef9` più il delta; checkpoint da committare |
+| 11 | W3-a (TD-2): il segno della dashboard sui ruoli `gain` / `loss` | ✅ checkpoint `96a7c5bbb`, nel target |
+| 12 | TD-3 (card «Allocazione Patrimoniale») e W3-b (segno su mercato e broker) | 🔄 checkpoint di scrittura (prove leggere) da committare; prove pesanti nello slot insieme a W3-c/d, poi un ingresso unico |
 
 ## Avanzamento
 
@@ -1511,3 +1512,51 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > **Dove guardarlo** (per il developer): Dashboard, la fila dei tre KPI in alto (P&L del periodo, Rendimenti con
 > l'effetto tempi, Patrimonio netto), in chiaro e in scuro; le tabelle Contributo ed Esposizione sotto; nei pannelli
 > rischio le card delle metriche (striscia e valore) e il tornado dello stress test.
+
+> **Ingresso:** commit `96a7c5bbb` nel target (15/10, 23:4x).
+
+### TD-3 e W3-b — 🔄 15/10/2026 (la card «Allocazione Patrimoniale»; il segno su mercato e broker; D-T27)
+
+> **Avvio** (coordinatore, 23:4x): OK a TD-3 e a W3-b, la 1.3 informata. **Escluso `brokers/lots/LotCustodyModal.svelte`**
+> (J ha modifiche aperte nel suo worktree, righe 17 e 181): le sue due funzioni di segno, `signedToneClass` ed
+> `eventDetailToneClass` (righe 103–114, copie scritte a mano di `SIGN_TEXT.market`), vanno in un lotto dopo l'ingresso
+> di J. Se Y3 sposta `AllocationPanel.svelte` prima dell'ingresso, il merge di base lo segue coi rinomini. Dalle 00:00
+> alle 01:15 la finestra di G-13: solo scrittura e prove leggere; poi lo slot va a Y7 e a DV, poi a T.
+
+> ✅ **1 · TD-3, `dashboard/AllocationPanel.svelte`** (nota della designer nel giro 2: la card su `--lf-surface-card`, i
+> pulsanti di scelta attivi su `--lf-action` `#215240` invece del vecchio verde acceso). La card → `bg-lf-card
+> text-lf-primary border border-lf-subtle shadow-sm shadow-lf-shadow-card`; il titolo → `text-lf-secondary`; i due
+> gruppi di pulsanti → `border-lf-subtle`, attivo `bg-lf-action text-lf-on-action`, inattivo `bg-lf-card text-lf-muted
+> hover:bg-lf-hover`, divisori `border-l border-lf-subtle`; lo skeleton → `bg-lf-neutral`; «nessun dato» →
+> `text-lf-muted`. I grafici dentro sono di DV. Lo stesso pannello è nel dettaglio di ogni broker. I test leggono
+> `aria-pressed`, non i colori: nessun test da toccare.
+> - **Da rivedere (D-T27):** i pulsanti attivi seguono la designer (`--lf-action`), non D-T16 (`--lf-checked`, il verde
+>   focus `#236B4D` / `#429E79`, per i segmenti attivi); solo in questo pannello.
+
+> ✅ **2 · W3-b, il segno su mercato e broker:**
+> - `lib/theme/toneClasses.ts`: `SIGN_TEXT.market` e `.brokerCard` → `text-lf-gain` / `text-lf-loss`, `market.none` →
+>   `text-lf-muted`. Ora tutte le voci di `SIGN_TEXT` e `SIGN_BAR` sono sui ruoli; il commento del modulo descrive la
+>   deriva che resta, quella degli stati;
+> - `app.css`, il flash del prezzo live (`.lf-price-flash-*`, dettaglio dell'asset): picco `var(--lf-gain)` /
+>   `var(--lf-loss)`, riposo `var(--lf-text-secondary)`; via le quattro regole `html.dark`;
+> - copie scritte a mano delle stringhe di segno, trovate come in `KpiSection`: la direzione del prezzo live di
+>   `AssetTable` (riga 217) e di `AssetCard` (riga 224, il neutro → `text-lf-primary`), il neutro del prezzo di
+>   `AssetPriceSummary` (riga 95 → `text-lf-secondary`, lo stesso ruolo del riposo del flash: nessun salto a fine
+>   animazione);
+> - `CompactCashCell`: i bordi di segno leggono i ruoli nel `<style>`, `color-mix(in oklab, var(--lf-gain) 70%,
+>   transparent)`, e i due token `--lf-cmp-compact-cash-cell-sign-{ok,bad}-border` escono da
+>   `lib/theme/components/table.css` (il gate dei token di componente vuole ogni token definito letto da un
+>   componente). **⚠️ Fuori pista:** non li ho ridefiniti sui ruoli dentro `table.css`, perché i token di componente
+>   stanno su `:root`: un `var(--lf-gain)` lì si risolverebbe col tema della radice e non seguirebbe i sottoalberi
+>   forzati `.light` / `.dark` (l'anteprima del Lab), che invece `tokens.css` ricalcola.
+> - Cambiano aspetto senza modifiche: `FxCard`, `FxPriceSummary`, `FxTable`, `BrokerCard`, `MeasurePanel`. Nessun test
+>   legge questi colori; gli E2E del flash leggono i nomi `lf-price-flash-*`, invariati.
+
+> ✅ **3 · Prove leggere** (23:5x): Prettier verde sugli 8 file; `--check` pulito, 5 file sotto il record; `diff --check`
+> pulito. `--update` (00:00): m1 10.980 → 10.916, cioè `AllocationPanel` 42 → 0 (la riga esce dalla baseline: il file è
+> tutto sui ruoli), `toneClasses` 176 → 166, `AssetCard` 76 → 70, `AssetTable` 27 → 23, `AssetPriceSummary` 15 → 13;
+> `--check` pulito, 0 file sotto il record.
+
+> ✅ **4 · Checkpoint di scrittura** (coordinatore, 00:00, scelta (a)): `toneClasses.ts` sta sia in W3-b sia in W3-c/d,
+> quindi i lotti non si separano per path. TD-3 e W3-b si committano adesso con le sole prove leggere; W3-c/d si scrive
+> sopra; nello slot, dopo Y7 e DV, le prove pesanti coprono tutto insieme, con un solo ingresso.
