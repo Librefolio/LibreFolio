@@ -1309,6 +1309,19 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - **40–43 non sono decise**: 🟢 è il colore della proposta, una decisione ha la riga «Decisione (data)». Il
 >   developer è sulla 40, poi va in ordine. Restano fermi B2 (42 e 43) e B3 (40, 41 e CP2b di H).
 >
+> **Cosa vuol dire per B4** (coordinatore, 18:09):
+>
+> - Password facoltativa: con la password la busta cifrata (scrypt + AES-256-GCM, `cryptography`, nessuna dipendenza
+>   nuova). La chiave d'istanza entra solo con la password, e solo se l'ha generata LibreFolio.
+> - Al ripristino l'istanza tiene la sua chiave e ricifra i segreti dei plugin con il `rekey` del CP10 di X (in corso);
+>   se manca la chiave vecchia, «impostato ma illeggibile».
+> - **Nella scheda**, la scelta fra backup «in chiaro» e «sicuro», con la differenza spiegata:
+>   - in chiaro: chi ha il file vede tutti i dati; su un'altra istanza le chiavi dei fornitori vanno reinserite;
+>   - sicuro: serve la password per aprirlo, e se si perde non si recupera; porta con sé anche le chiavi dei fornitori.
+> - **Ordine**: B4 dopo B3 e dopo la scheda; se a fine release manca tempo, è l'unico pezzo che slitta.
+> - **Estensione: `.lfbk`**, riconfermata dal coordinatore (18:11). Il messaggio con `.lfbackup` era di prima della
+>   scelta del developer, ed è arrivato in ritardo dalla coda.
+>
 > **Slot pesante 1**: dopo `all-backend` di H. In attesa, test-author scrive l'E2E della scheda
 > (`frontend/e2e/settings/backup.spec.ts`, FBKP-001…004) e la sua riga in `_frontend_utility.py`, file del programma
 > colori che il coordinatore dichiara. Nello slot: l'E2E, poi knip. La galleria la chiede il coordinatore ai colori,
@@ -1468,6 +1481,51 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > **B8 dopo il merge**: le copie messe da parte sono su `a22400f1e`, quindi B8 si rimette come patch
 > (`files/b8-wip/b8.patch`, 9 file, 502 righe), non come copia, che cancellerebbe il merge. I 9 file di riserva sono
 > controllati col manifest.
+
+### Ingresso — journal e `all-backend` (2026-10-15, 18:10-18:37) ✅
+
+> - **Journal committato dal coordinatore**: `23d284d3b`. La simulazione dell'ingresso sopra `dev_release2` attuale
+>   (`695e6ad12`, con Y2) è pulita.
+> - **Slot pesante 1 a B per `all-backend`** prima dell'ingresso: `--workers 2`, `nice -n 10`, corsia 6187, revisione
+>   `23d284d3b`. Dopo tocca a E. B8 si rimette dopo `all-backend`, non durante.
+> - Comando: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py test --test-port 6187
+>   --data-dir /tmp/librefolio-r13-b --workers 2 all-backend`, dalle 18:10:16 alle 18:36:24 (26 minuti, carico
+>   iniziale 44); log in `/tmp/libreFolio_b_all_backend.log`.
+> - **Esito: 7/7 categorie verdi** (External, DB, Services, Utils, Schema, API, E2E); **16 455 passati, 29 saltati,
+>   0 falliti**:
+>   - 4 passate parallele (133, 47, 11 e 62 unità, 2 worker): 14 337 passati e 4 saltati;
+>   - sessioni sequenziali e consolidate: 2 118 passati e 25 saltati (25 riepiloghi pytest); il DB 17/17.
+> - Dopo: porta 6187 libera; in `backups/.jobs` solo `.lock`. Slot liberato e risultato mandato al coordinatore alle
+>   18:37; dopo B tocca a E.
+
+### Ingresso fermato — E2 in `dev_release2`, merge di base prima di B8 (2026-10-15, dalle 18:38)
+
+> **⚠️ Fuori pista — B8 rimesso, poi di nuovo da parte** (18:37-18:40):
+>
+> - Dopo `all-backend`, B8 rimesso come patch (`git apply --reject` di `files/b8-wip/b8.patch` su `23d284d3b`): 8
+>   file su 9 entrano con un offset; un frammento respinto, la docstring di `instance_block.py`, che il merge
+>   `9c8ee20c3` aveva riscritto (link di H, anteprima di A6a). Riscritto a mano sul testo nuovo: «the full backup of an
+>   administrator or of the hosting panel … the panel's routes want its token, not a session». Ruff pulito.
+> - Poi il fermo del coordinatore: in `dev_release2` (`bcd680868`) è entrato E2, e l'ingresso di B ha 4 conflitti
+>   (`settingsTabs.ts`, `settingsTabs.test.ts`, `_frontend_utility.py`, `LibreFolio_devWiki/log.md`). Prima di B8
+>   serve un merge di base.
+> - **B8 di nuovo da parte**, come patch sulla revisione attuale: `files/b8-wip/b8-on-23d284d3b.patch` (9 file, 526
+>   righe, con la docstring già fusa) e `MANIFEST-23d284d3b.sha256`. Tolto con `git apply -R` (prima `--check`), poi
+>   verificato: nel worktree resta solo il piano; la patch rientra pulita su HEAD (`git apply --check`);
+>   `git diff --check` pulito. La vecchia `b8.patch` (su `a22400f1e`) resta come storia.
+>
+> **I passi del coordinatore**:
+>
+> 1. Commit del piano 07 (`docs(journal): all-backend green, B4 notes`).
+> 2. Merge di `dev_release2`; B risolve tenendo i due lati:
+>    - `settingsTabs.ts`: la riga Backup (120) e quella Email (130) di E;
+>    - `settingsTabs.test.ts`: `TODAY`, le schede attese per contesto, i mock di Backup e di Email, i casi per la
+>      visibilità solo admin;
+>    - `_frontend_utility.py`: la voce `backup` e la voce `email-tab` di E, più le righe di W;
+>    - `log.md`: tutte e due le righe.
+> 3. Sulla revisione combinata: Vitest `settingsTabs` e `page.tabs` (le schede finte sul registro vero: E-6),
+>    `front check`, `check-orphans`, poi l'E2E `front-utility backup` da sola (una scheda in più nella barra).
+> 4. Poi B8 dalla patch, i suoi test e il FROZEN.
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 
