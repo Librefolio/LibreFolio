@@ -1,4 +1,4 @@
-"""The routes that serve files by request path never leave their folder (``backend/app/main.py``, ``backend/app/api/v1/uploads.py``).
+"""The routes that serve files by request path never leave their folder (``backend/app/services/platform/static_site.py``, ``backend/app/api/v1/uploads.py``).
 
 Three routes join a path taken from the request to a folder:
 
@@ -20,11 +20,10 @@ over once percent-decoded. A plain ``http`` scope never runs the lifespan, and w
 ``Accept-Encoding`` the GZip middleware leaves the body as it is.
 
 The folders are built under ``tmp_path`` and swapped in for the module globals the routes read at
-call time (``FRONTEND_BUILD_DIR`` and ``SITE_DIR`` of ``backend.app.main``, ``PLUGIN_STATIC_DIRS`` of
-``backend.app.api.v1.uploads``). The two public routes are called on the global app as it is; the
-plugin route is mounted on a fresh app whose sign-in dependency is overridden. Only those two modules
-are imported, never the helper behind the routes, so the file runs unchanged against older releases.
-No DB, no server, no network.
+call time (``FRONTEND_BUILD_DIR`` and ``SITE_DIR`` of ``backend.app.services.platform.static_site``, ``PLUGIN_STATIC_DIRS`` of
+``backend.app.api.v1.uploads``). The two public routes are called on the global app as it is (``backend.app.main``); the
+plugin route is mounted on a fresh app whose sign-in dependency is overridden. Only these modules are imported, never the
+helper behind the routes. No DB, no server, no network.
 """
 
 from __future__ import annotations
@@ -41,6 +40,7 @@ from fastapi import FastAPI
 
 import backend.app.api.v1.uploads as uploads
 import backend.app.main as app_main
+import backend.app.services.platform.static_site as static_site
 
 OUTSIDE_TEXT = b"content kept outside every served folder"
 SIBLING_TEXT = b"content of the folder next to the plugin folder"
@@ -92,8 +92,8 @@ def served(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Served:
     outside.parent.mkdir()
     outside.write_bytes(OUTSIDE_TEXT)
 
-    monkeypatch.setattr(app_main, "FRONTEND_BUILD_DIR", build)
-    monkeypatch.setattr(app_main, "SITE_DIR", site)
+    monkeypatch.setattr(static_site, "FRONTEND_BUILD_DIR", build)
+    monkeypatch.setattr(static_site, "SITE_DIR", site)
     monkeypatch.setitem(uploads.PLUGIN_STATIC_DIRS, PLUGIN_TYPE, static)
     return Served(base=base, build=build, site=site, static=static, outside=outside)
 
