@@ -526,6 +526,16 @@ def services_email_flows(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "E-mail flow tests", verbose=verbose)
 
 
+def services_email_verification(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the verification of an email address at sign-up (developer decision 44): the hold, the emailed link, the click and «resend»."""
+    print_section("Services: E-mail Verification")
+    print_info("Testing: backend/app/services/email/verification.py")
+    print_info("Tests: the option and whether a link can go, hold_for_verification, awaiting_verification, registration_email_work, confirm_email, resend_verification (limits per address and per account, the password as the login checks it), no secret in the logs")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_verification.py", test_names)
+    return run_command(cmd, "E-mail verification tests", verbose=verbose)
+
+
 def services_email_links(verbose: bool = False, test_names: list = None) -> bool:
     """Test the links an email carries: built from LIBREFOLIO_PUBLIC_URL alone (developer decision 45)."""
     print_section("Services: E-mail Links")
@@ -546,6 +556,46 @@ def services_provider_cooldown(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Provider cooldown tests", verbose=verbose)
 
 
+def services_rate_limit_errors(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the «too many requests» errors of the asset and FX domains and the helpers that recognise a refusal (X-RL X1/X2)."""
+    print_section("Services: Rate-Limit Errors")
+    print_info("Testing: backend/app/services/assets/base.py, backend/app/services/fx/base.py, the CSS scraper's cooldown_scope")
+    print_info("Tests: AssetRateLimitedError/FXRateLimitedError, a 429 (httpx, requests) with Retry-After in seconds or as an HTTP date, «status (code) 429» / «HTTP (Error) 429» / «Too Many Requests» text but never «4290» or «4291», passthrough, cooldown_scope hook, longest_refusal")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_rate_limit_errors.py", test_names)
+    return run_command(cmd, "Rate-limit error tests", verbose=verbose)
+
+
+def services_rate_limit_boundaries(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the pauses after «too many requests» at the asset and FX provider-call boundaries (X-RL X4)."""
+    print_section("Services: Rate-Limit Boundaries")
+    print_info("Testing: backend/app/services/assets/core.py (call_provider, cooldown_scope_for), backend/app/services/fx/runtime.py (call_fx_provider)")
+    print_info("Tests: pause = max(base, Retry-After), no plugin call while paused, one trial after it, an answer ends it, another error or a cancellation frees the trial, pauses off, one pause per CSS host, test doubles, foreign and secret-bearing refusals (private Cooldowns, fake clock)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_rate_limit_boundaries.py", test_names)
+    return run_command(cmd, "Rate-limit boundary tests", verbose=verbose)
+
+
+def services_rate_limit_http_providers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the CSS scraper and the four FX providers on an HTTP 429 (X-RL X3)."""
+    print_section("Services: Rate-Limit HTTP Providers")
+    print_info("Testing: css_scraper, fx_providers/ecb, fed, boe, snb on an httpx.MockTransport")
+    print_info("Tests: refusals with Retry-After and host scope, other statuses unchanged, FED/BOE whole-call refusal with the longest wait, ECB stopping at the first refused currency, SNB map and data, an ECB 429 through the FX boundary")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_rate_limit_http_providers.py", test_names)
+    return run_command(cmd, "Rate-limit HTTP provider tests", verbose=verbose)
+
+
+def services_rate_limit_results(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the results that carry a provider refusal: live price, refresh, FX sync, probe, search (X-RL X5)."""
+    print_section("Services: Rate-Limit Results")
+    print_info("Testing: assets/price_query.py, assets/refresh.py, fx/sync.py, assets/provider_management.py, assets/search.py")
+    print_info("Tests: error_code RATE_LIMITED and retry_after on each result, the last known price kept, data kept beside a refusal, the shortest wait of a pair's refused providers, INFO not tracebacks, the SSE provider_error fields (private DB, private Cooldowns)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_rate_limit_results.py", test_names)
+    return run_command(cmd, "Rate-limit result tests", verbose=verbose)
+
+
 def services_shutdown_budget(verbose: bool = False, test_names: list = None) -> bool:
     """Test the shutdown time budget: the server exits within about 8 s of SIGTERM or SIGINT (decision 35)."""
     print_section("Services: Shutdown Budget")
@@ -564,6 +614,16 @@ def services_shutdown_process(verbose: bool = False, test_names: list = None) ->
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_shutdown_budget_process.py", test_names)
     return run_command(cmd, "Shutdown budget process tests", verbose=verbose)
+
+
+def services_sleep_wake_activity(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the process's record of the user's presence and of the work in progress, read by sleep and wake (lot Z2a)."""
+    print_section("Services: Sleep and Wake Activity")
+    print_info("Testing: backend/app/services/platform/sleep_wake/activity.py, its entry in backend/app/services/platform/middleware.py")
+    print_info("Tests: request_kind, Activity on a fake clock (in flight and stamped, return listeners, idle seconds, busy spans and checks, threads), current_activity, ActivityMiddleware (scopes, probes, wake-sync, 404, streaming, background tasks, errors), activity first in MIDDLEWARE_STACK")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_sleep_wake_activity.py", test_names)
+    return run_command(cmd, "Sleep and wake activity tests", verbose=verbose)
 
 
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
@@ -1427,6 +1487,17 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "email-verification",
+        services_email_verification,
+        name="E-mail Verification",
+        desc="verification_required (the global setting, off by default); links_can_go/ensure_verification_can_be_enabled (not blocked, email usable, links ready; read off the event loop); hold_for_verification: never the first account nor with the option off, EMAIL_VERIFICATION_UNAVAILABLE when no link can go, else inactive + a hold without address, 24 h, flushed not committed, its text never out; awaiting_verification: inactive + an unspent verification token; registration_email_work: a new link with the address replaces the hold, exactly build_verification in the account's language from LIBREFOLIO_PUBLIC_URL, nothing for an account that no longer waits or when no email can go, any failure after the commit leaves the token without its address (the account waits, nothing counted), never twice in 5 minutes, never raises; confirm_email: live links only, a token without address refused as revoked but left live, another address revoked, the account active and verified, its other tokens revoked, a link spent meanwhile consumed; resend_verification: per address (address_key) before the password, the password as the login checks it, NOT_NEEDED/ACCOUNT_DISABLED before the configuration, per account on emailed links (5 min, 3/h), USER_LIMIT_REACHED for an expired link on a full instance, the budget, a link emailed meanwhile rolled back; no token, password, identifier or address in the logs",
+        # PURE: every database is a private file under tmp_path built with create_all, the option set in that file only; no
+        # session on the lane DB, no server; LIBREFOLIO_SMTP_*, PUBLIC_URL, BLOCKED and MAX_USERS removed then set with
+        # monkeypatch; the limiters are private on a fake clock; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "email-links",
         services_email_links,
         name="E-mail Links",
@@ -1443,6 +1514,49 @@ Note: No backend server required.
         # PURE: no DB, no server; environment changed only through monkeypatch, process-local; the module instance
         # replaced by monkeypatch. The once-per-process log is read in a fresh interpreter of its own (sys.executable,
         # run in tmp_path, with a copy of this environment): no DB, no server there either.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "rate-limit-errors",
+        services_rate_limit_errors,
+        name="Rate-Limit Errors",
+        desc="AssetRateLimitedError (an AssetSourceError, RATE_LIMITED) and FXRateLimitedError (an FXServiceError); a 429 of httpx or requests is a refusal with its Retry-After in seconds or as an HTTP date, None when absent or unreadable, any other status none; «status 429», «status code 429», «HTTP 429» or «HTTP Error 429» (a colon allowed) or the reason phrase «Too Many Requests» in a message is one, the texts of urllib, requests and httpx included, «4290» and «4291» never; raise_if_rate_limited raises from the error and passes a refusal through as it is; cooldown_scope None by default, the URL's host for the CSS scraper, None or a text for every provider; longest_refusal and raise_longest_refusal",
+        # PURE: no DB, no server, no network; responses built in memory, the HTTP-date clock replaced in the cooldown
+        # module only, with monkeypatch.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "rate-limit-boundaries",
+        services_rate_limit_boundaries,
+        name="Rate-Limit Boundaries",
+        desc="call_provider and call_fx_provider with mockprov and MockFX: a refusal pauses for max(base, Retry-After) and leaves with that wait; while paused no operation reaches the plugin; after it one trial goes, a concurrent caller is refused, the answer ends the pause, another error or a cancellation frees the trial; pauses off call the plugin every time and keep its Retry-After; two CSS hosts pause apart, the plugin's scope applies when the caller has none, a broken or textless cooldown_scope means the whole provider (logged); test doubles bypass; a foreign or secret-bearing refusal leaves as a fresh, masked domain RATE_LIMITED error",
+        # PURE: no DB, no server, no network (the CSS sites are an httpx.MockTransport). Each test replaces
+        # PROVIDER_COOLDOWNS with a private Cooldowns on a fake clock and sets the pause variables and MockFX's class
+        # attributes with monkeypatch: no pause outlives a test or reaches another unit of the same process.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "rate-limit-http-providers",
+        services_rate_limit_http_providers,
+        name="Rate-Limit HTTP Providers",
+        desc="CSS scraper 429 → AssetRateLimitedError with Retry-After and the host as scope, other statuses HTTP_ERROR; ECB, FED, BOE and SNB 429 → FXRateLimitedError with Retry-After, other statuses unchanged; FED and BOE refuse the whole call with the longest Retry-After, ECB stops at the first refused currency and still skips other failures, SNB's currency map and data requests; an ECB 429 through call_fx_provider pauses ECB and the next call asks nothing",
+        # PURE: no DB, no server, no network: each plugin module's httpx answers through an httpx.MockTransport,
+        # replaced with monkeypatch; SNB's class-level currency map and the pause instance are put back after each test.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "rate-limit-results",
+        services_rate_limit_results,
+        name="Rate-Limit Results",
+        desc="error_code RATE_LIMITED and retry_after on: the live current price (last known price kept, or the error item; no call while paused), the refresh result (FAILED with nothing stored, PARTIAL or OK with what came stored), the FX sync pair (FAILED or PARTIAL through a refused provider, the shortest wait; a fallback-served pair and a plain failure untouched; INFO, no traceback), each probe operation (on the result and in error_details), the search (providers_with_errors, INFO not a traceback, a cached query still answered) and its SSE provider_error event",
+        # PURE: every database is a private file under tmp_path built with create_all and put in place of the process's
+        # engine (db.session.async_engine) with monkeypatch; no session on the lane DB, no server. Pauses, MockFX's mode,
+        # the registries' hand-outs and the plugin settings variables are monkeypatched per test; identifiers, queries
+        # and FX date ranges are unique, so the process's provider caches answer for no other test.
         isolation="pure",
     )
     add_test(
@@ -1466,6 +1580,17 @@ Note: No backend server required.
         # PURE: its own server processes on a Unix socket of their own (in a short directory under /tmp: an AF_UNIX path
         # holds 104 bytes on macOS), data and logs in tmp_path; no lane port, no DB. Every process it starts — each server,
         # in a session of its own, with its process group — is killed if still running and reaped.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "sleep-wake-activity",
+        services_sleep_wake_activity,
+        name="Sleep and Wake Activity",
+        desc="request_kind: the probes (system/health, ready, test-lane-health) and system/wake-sync under API_V1_PREFIX, trailing slashes ignored, then exact and case-sensitive, anything else user; Activity on an injected clock (time.time by default): request(presence) in flight for its whole body, an exception or a cancellation included, presence stamped at start and at end, return listeners at or below the silence called with it in registration order on the calling thread before the body (one that raises logged and skipped, a name registered again replaced), presence=False only in flight, idle_seconds from started_at or the last user request and never below 0; busy(reason) nestable across threads, a blank reason refused; busy checks read at every call, true or raising = busy, a raising one warned once per streak; busy_reasons without duplicates, is_busy; thread safety; current_activity read at call time; ActivityMiddleware: other scopes untouched, probes uncounted, wake-sync in flight without presence, any other path (a 404 included) presence and in flight through the last chunk of a stream and its background tasks, errors and cancellations propagate, current_activity read per request without activity=; activity the outermost entry of MIDDLEWARE_STACK",
+        # PURE: no DB, no server, no lane port, no network; every Activity is the test's own, on a fake clock, and the
+        # process's ACTIVITY is replaced only through monkeypatch; the FastAPI apps are built in the test and served in
+        # this process by httpx.ASGITransport (no socket); its threads are daemon threads joined within a deadline.
         isolation="pure",
     )
     add_test(
@@ -1705,7 +1830,7 @@ Note: No backend server required.
         "provider-errors",
         services_provider_errors,
         name="Provider Error Paths",
-        desc="justETF, Borsa Italiana, Yahoo Finance and SNB when the source misbehaves (every client doubled)",
+        desc="justETF, Borsa Italiana, Yahoo Finance and SNB when the source misbehaves or refuses for too many requests (every client doubled)",
         isolation="pure",
     )
     add_test(cat, "borsa-italiana-search", services_borsa_italiana_search, name="Borsa Italiana Search", desc="Single-fetch search, IT+EN variants, ISIN direct hit (engine mocked)")
