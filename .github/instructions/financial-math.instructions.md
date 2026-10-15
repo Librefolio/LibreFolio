@@ -14,6 +14,7 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
 |---|---|
 | `average_cost.py` | average purchase cost (WAC): pools, cost-basis steps, conversions, the conversions that could not be made, the unit cost of each movement (`movement_unit_costs`) |
 | `native_cash.py` | cash per broker and currency: balances, value in the report currency on any day, period flows, FX results |
+| `ledger_totals.py` | control totals of the transaction ledger, with no price, rate or cost: cash per broker and currency, quantity per broker and asset (`compute_control_totals`, what a backup writes and a restore checks) |
 | `returns.py` | simple ROI, TWRR and MWRR, as point values and daily series; cumulative and annualized returns; a period's start (`rebase_to_period`); net holding return; gain or loss as a fraction of its base (`gain_loss_ratio`) |
 | `valuation.py` | value of a holding from quantity, price and `quote_base_quantity` |
 | `price_marks.py` | daily mark of an asset: market quote, same-day trade average, last observation carried forward |
@@ -27,8 +28,8 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
 1. **A calculation owns its whole problem.** It takes the plain data of the problem (movements, currencies, dates) and
    calls the infrastructure it needs: `fx.convert_bulk`, the base currency from `settings_service`, the thresholds of
    `data_quality_thresholds`, the cache. It reads its own data from the database only at named points: the portfolio
-   engine (`portfolio/engine.py`, and the configured FX pairs of `portfolio/data_quality.py`) and the Yield on Cost
-   loaders.
+   engine (`portfolio/engine.py`, and the configured FX pairs of `portfolio/data_quality.py`), the Yield on Cost
+   loaders and the ledger totals (`ledger_totals.compute_control_totals`, on the session it is given).
 2. **Callers call the layer, never the other way round.** The layer never imports orchestration services
    (`portfolio_service`, `broker_service`, `transaction_service`, `lots_analysis_service`), the API, AI Export, risk,
    PAC or signals.
