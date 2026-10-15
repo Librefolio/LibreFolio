@@ -179,35 +179,48 @@ backend/app/
 - **Divisione**: CP5a, il backend, che può entrare a qualunque ora; CP5b, il frontend (`package.json`, il lock e
   `AboutTab`, che deve riconoscere la risposta minima), dopo la finestra della galleria.
 
-### 3.6 Profilo gestito e sola lettura (F05, parte H)
+### 3.6 Profilo gestito e blocco dell'istanza (F05, parte H)
 
-- `LIBREFOLIO_PROFILE=selfhosted|managed` risolve i default.
-- Middleware ASGI `read_only`, default-deny per i metodi di scrittura sotto `/api/v1`:
-  - il middleware gira prima del routing, e FastAPI mette `scope["route"]` solo durante il matching
-    (`fastapi/routing.py:836`). Per questo cerca da sé la rotta con `route.matches(scope)`, solo per i metodi di
-    scrittura, e confronta metodo e template con una allow-list centrale;
-  - risposta 403 `{"detail": "<testo EN>", "code": "instance_read_only"}`;
-  - lo scheduler non passa da HTTP, quindi continua a scrivere i prezzi.
-- **Guardie**:
-  - ogni voce dell'allow-list deve esistere fra le rotte di `app`;
-  - ogni rotta di scrittura deve stare in una delle due liste, permesse o bloccate. Chi aggiunge una scrittura la
-    classifica nel suo lotto, e intanto resta bloccata.
-- **Bozza dell'allow-list**, 32 permessi e 38 bloccati su 70 (decisione §10 n. 1):
+> Riscritto all'avvio di CP6 (15/10). Il developer ha cambiato D4: niente sola lettura, l'istanza si blocca. Il disegno
+> che c'era qui (middleware di sola lettura, 32 permessi) è decaduto.
 
-| Permessi | Endpoint |
-|---|---|
-| Accesso | `POST /auth/login`, `/auth/logout`, `/auth/change-password` (D4) |
-| Preferenze personali | `PUT /settings/user` (lingua, tema, valuta base, avatar); onboarding ×4 (`complete`/`skip` di flusso e passo) |
-| Admin senza dati | `POST /settings/cache/clear-all`, `/settings/cache/clear/{name}` (D4) |
-| Letture via POST | `/ai-export/snapshot`; `/portfolio/{wac,allocation-source,report,lots/analysis}`; `/risk/{query,eligibility}`; `/signals/preview`; `/tools/compute`; `/transactions/{validate,events/suggest,promote-suggest}` (`validate` fa sempre rollback); `/brokers/import/{sets/preview,duplicates,asset-candidates,gap-fix}` (`gap-fix` calcola soltanto, verificato); `/assets/prices/query`; `/assets/events/query`; `/fx/currencies/convert`; `/assets/provider/probe` (prova senza salvare, verificato) |
-| Dati di mercato | `POST /assets/prices/current` (scrive la barra del giorno, C-83) |
-| Export | `POST /backup/export` |
-| **Bloccati** | creazione, modifica e cancellazione di asset, broker, accessi, prezzi, eventi, cambi, rotte, transazioni (commit, promote), upload, import (upload, parse, delete, combine), restore, impostazioni globali, registrazione, profilo, cancellazione dell'account; sync manuali di prezzi e cambi e refresh dei provider (D4) |
-
-- **Frontend**: avviso non chiudibile «istanza in sola lettura» nell'area avvisi; toast tradotto sulle scritture
-  rifiutate. Disattivare i pulsanti pagina per pagina resta alle sessioni proprietarie, che hanno un `isReadOnly()`.
-- **Default `managed`** proposti: idle dei worker di rischio 60 s (F27), CSP in sola segnalazione e frame-ancestors
-  `'self'` accesi (D5); popup di donazione spento (decide A).
+- **Variabili**, lette solo dall'ambiente in `config/platform.py`:
+  - `LIBREFOLIO_BLOCKED`: `1/0`, `true/false`, `yes/no`, `on/off`, in qualunque maiuscolo; vuota o assente = non
+    bloccata;
+  - `LIBREFOLIO_DELETION_DATE`: data ISO, facoltativa, mostrata nella pagina di blocco;
+  - un altro valore ferma l'avvio (`config_audit`);
+  - valgono in ogni profilo, perché servono a qualunque hoster.
+- **Guardia**: `refuse_when_blocked`, dipendenza del router `/api/v1` (`api/v1/router.py`, una riga a parte dagli
+  include). Niente middleware: andrebbe registrato in `main.py`, che resta fermo fino a CP2b.
+  - FastAPI 0.141 dà alla dipendenza la funzione dell'endpoint (`scope["endpoint"]`), non il percorso completo. Quindi
+    `ALLOWED_WHEN_BLOCKED` (`api/v1/instance_block.py`) è un insieme di funzioni.
+  - Rifiuto: `423 Locked` con `{"detail": {"code": "instance_blocked", "message": …}}`, solo a chi ha una sessione
+    valida. Gli altri ricevono il 401 di `get_current_user`: una rotta protetta risponde allo stesso modo col blocco e
+    senza. Le rotte pubbliche fuori dall'elenco (registrazione, liste di `utilities`, impostazioni globali, catalogo AI
+    Export) rispondono 401 solo col blocco: da quelle, chi non ha sessione capisce che l'istanza è bloccata, e nient'altro.
+  - La sessione è quella della richiesta, perché FastAPI mette in cache la dipendenza.
+- **Permessi** (decisione 12): `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `DELETE /auth/users/me`;
+  `GET /system/block`, `/system/instance`; le sonde `/system/health`, `/system/ready`, `/system/info` e
+  `/system/test-lane-health`.
+  - Ganci di una riga, quando le rotte esistono: il backup completo di B, il risveglio programmato di Z.
+  - Il reset della password resta fuori; un'aggiunta passa dal coordinatore al developer.
+- **`GET /system/block`**: con sessione, permesso col blocco; `{blocked, deletion_date}`. A ci aggiunge `billing_url`
+  solo per l'admin (D-A9), B la disponibilità del backup.
+- **`/system/instance` pubblico**: non dice niente del blocco.
+- **Frontend**:
+  - `instanceBlock`, un flag senza import dell'API, che l'interceptor accende al primo 423;
+  - nel layout, un ramo prima di quelli del bootstrap mostra la pagina di blocco a tutta pagina. Il guscio dell'app non
+    parte, quindi niente raffica di errori;
+  - la pagina dice che l'istanza è bloccata e la data di cancellazione; all'admin il backup e «Gestisci abbonamento»
+    quando A e B li danno; agli altri l'invito a chiedere il backup all'admin; «Esci»;
+  - la cancellazione del proprio account non c'è nella pagina, né come segnaposto: verrà col dialogo di A, estratto
+    dopo A5. L'API resta permessa.
+- **(C)**: nel profilo gestito un `JWT_SECRET` sotto i 32 caratteri ferma l'avvio (`WeakSecretError`); il controllo
+  per la scheda «Sicurezza» diventa `error`. Nel self-hosted resta un avviso.
+- **Lo scheduler** non passa da HTTP e continua: il risveglio programmato resta permesso.
+- **Test**: pytest e Vitest, niente E2E (il blocco richiederebbe un server dedicato).
+- **Revisione di sicurezza** (`security-review`) alla fine di CP6.
+- **Default del profilo gestito** di F27 e D5: in CP7b, dove servono.
 
 ### 3.7 Lotto operativo
 
@@ -238,7 +251,7 @@ Il lotto si divide in due:
 | CP3 | **Segreti (F03)**: sorgente `_FILE`, `JWT_SECRET_FILE` (e `dev.py`), `instance_key`, `config_audit` nei log, `.env.example` completo e a sezioni con la guardia «ogni variabile è in `.env.example`», doc admin (configuration, filesystem) | B, X (chiave), E | CP2 |
 | CP4 | **Config pubblica e avvisi**: due endpoint, `features/instance/`, layout, interceptor, i18n, Vitest, `api sync` | A (login, link), Z, X | CP3; `npm ci` approvato |
 | CP5 | **Prontezza e versione (F08)**: `/system/ready`, `/system/info` minimo senza sessione (D14 modificata), R2, C-84. CP5a backend, CP5b frontend | pannello di controllo | CP2a |
-| CP6 | **Profilo e sola lettura**: `PROFILE_DEFAULTS`, middleware, allow-list e guardia, avviso e toast, pagina admin «profilo gestito per gli hoster» | A e X (default del profilo) | CP4 |
+| CP6 | **Blocco dell'istanza (D4)**: variabili, guardia sul router v1 con un elenco corto di permessi, `/system/block`, pagina di blocco; (C) `JWT_SECRET` corto fatale nel profilo gestito; pagina admin per gli hoster | il pannello del cloud (blocco) | CP4, CP5 |
 | CP7a | **Lotto Docker**: P-4, M-25, C-37, N-8, 32-3, istruzioni per C-26. Poi i file Docker passano a B | B (Litestream) | Docker acceso; anticipabile subito dopo CP3 |
 | CP7b | **Lotto HTTP**: cache di `/_app` (F28), default di 60 s nel profilo gestito (F27), header con CSP in sola segnalazione (F15) | — | CP6 |
 | TS1 | Decisione sui test speculari, con i numeri (§13) | — | riordino del backend finito |
@@ -291,7 +304,10 @@ gli statici, la doc, il piano aggiornato e infine FROZEN.
   - CP5a: `api/v1/system/{__init__,info,ready}.py`, `services/platform/readiness.py`, `schemas/system.py`,
     `utils/runtime/version.py`, `pyproject.toml`, un commento di `dev.py`; i test di versione e di sistema; la doc;
   - CP5b: `frontend/package.json`, le due righe radice di `package-lock.json`, `AboutTab.svelte`.
-- **CP6**: `read_only.py`, `middleware.py`, `config.py`, `features/instance/**`; doc admin (pagina nuova) e sviluppatori.
+- **CP6**: `config/platform.py`, `api/v1/instance_block.py`, `api/v1/router.py` (una riga), `api/v1/system/block.py`,
+  `schemas/system.py`, `services/platform/config_audit.py`, `.env.example`; `lib/api/zodios-client.ts` (il ramo 423),
+  `features/instance/**`, `routes/(app)/+layout.svelte`, `lib/i18n/instance/**`; doc admin (pagina nuova) e
+  sviluppatori.
 - **CP7a e CP7b**: `Dockerfile`, `docker-compose*.yml`, `entrypoint.sh` (se serve), `dev.py` (docker build ed exec),
   `scripts/cli_base.py` (solo se serve per N-8), `static_site.py`, `security_headers.py`; test
   `utils dev-cli-image`, `release-image-contract`; doc `admin/docker_advanced.en.md`,
@@ -1438,3 +1454,636 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 >   - porta 6181 libera; `git diff --check` pulito.
 
 ### Checkpoint della correzione 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+
+> Committata dal coordinatore: `d80c0a091` (la correzione) e `5d1242ae5` (journal). CP5a è entrato in `dev_release2`
+> con il merge `9deb0ea08`, senza un nuovo controllo: nel frattempo era entrato solo X J-5, che non tocca file miei.
+> Il record del coordinatore è `6cd64b71b`: le tre righe del CHANGELOG, R2 chiusa (anche nel piano d'origine 09),
+> C-84 chiusa per metà, F08 in giallo nel README. Il mio ramo è avanzato a `6cd64b71b`.
+
+### CP6 — il blocco dell'istanza (D4) (2026-10-15, mattina) — in corso
+
+> **Via** del coordinatore (2026-10-15, 07:19): durante la finestra della galleria si scrive CP6, senza esecuzioni
+> pesanti; CP5b dopo l'avviso di fine finestra. CP6 ha una parte frontend, quindi entra dopo la finestra e dopo CP5b.
+>
+> **Risposte del coordinatore al disegno** (07:40):
+>
+> - sì a `api/v1/router.py` (solo la riga della dipendenza, separata dagli include, dove poi Z aggiungerà il suo) e al
+>   ramo 423 in `lib/api/zodios-client.ts`;
+> - (c): la pagina di blocco non offre la cancellazione dell'account, né come segnaposto. Dopo A5 il coordinatore
+>   registra ad A l'estrazione del dialogo da `ProfileTab.svelte`, e la pagina lo riuserà allora;
+> - il reset della password resta fuori dai permessi; i ganci di B e Z vanno bene;
+> - il resto del disegno va bene; alla fine di CP6 c'è la revisione di sicurezza.
+>
+> **Disegno**: §3.6, riscritto.
+
+#### CP6 passo 1 — il backend ✅ (2026-10-15, mattina)
+
+> **Note implementazione**:
+>
+> - `config/platform.py`: `instance_blocked()` e `instance_deletion_date()`, lette dall'ambiente; un valore illeggibile
+>   solleva `ValueError`.
+> - `config_audit.py`:
+>   - `log_configuration_audit()` legge le due variabili all'avvio, quindi un valore sbagliato ferma il server;
+>   - con il blocco attivo scrive un avviso nel log, con la data;
+>   - nel profilo gestito un `JWT_SECRET` corto solleva `WeakSecretError`; `check_jwt_secret()` lo segnala come `error`.
+> - `api/v1/instance_block.py`: `ALLOWED_WHEN_BLOCKED`, 10 funzioni, e la dipendenza `refuse_when_blocked`.
+> - `api/v1/router.py`: `APIRouter(dependencies=[Depends(refuse_when_blocked)])`, con un commento.
+> - `api/v1/system/block.py` (`GET /system/block`, con sessione), registrato per ultimo; schema
+>   `InstanceBlockResponse`.
+> - `.env.example`: la sezione «Instance Block (hosting providers)», con le due righe commentate.
+> - **Prova in processo** (TestClient, DB temporaneo poi cancellato):
+>   - senza blocco, `GET /brokers` anonimo dà 401;
+>   - col blocco, da anonimo: `GET /brokers` 401 «Not authenticated» e `POST /auth/register` 401;
+>   - col blocco, con sessione: `GET /brokers` 423 `instance_blocked`; `/system/block` 200
+>     `{blocked: true, deletion_date: 2026-11-14}`; `/auth/me` 200; `/system/info` completo;
+>   - sonde, `/system/instance` e il login rispondono come sempre;
+>   - `ture` e una data non ISO fermano i controlli d'avvio; `managed` con un segreto di 12 caratteri si ferma.
+> - Ruff e black puliti.
+>
+> **Fuori pista**:
+>
+> - La prima stesura rifiutava con 423 anche gli anonimi, perché la dipendenza del router gira prima dell'autenticazione
+>   della rotta. Così chiunque avrebbe visto da fuori che l'istanza è bloccata. Ora la guardia chiama
+>   `get_current_user` prima del 423.
+> - Le variabili non sono campi di `Settings`: `get_settings()` costruisce un'istanza nuova, e legge `.env`, a ogni
+>   chiamata. Una guardia su ogni richiesta legge invece l'ambiente, che costa una ricerca in un dizionario.
+> - In CP4 `zodios-client.ts` non era stato toccato: l'aggancio del §5 non era servito. Il ramo 423 è il primo.
+
+#### CP6 passo 2 — il frontend ✅ (2026-10-15, mattina)
+
+> **Note implementazione**:
+>
+> - `features/instance/instanceBlock.svelte.ts`:
+>   - un flag con `markBlocked()` e `clear()`, e `isInstanceBlockedError(status, data)`: vero solo per un 423 con
+>     `detail.code` `instance_blocked`;
+>   - nessun import dell'API, quindi l'interceptor lo importa senza ciclo;
+>   - un cambio d'account lo spegne (`registerClientSessionReset`).
+> - `lib/api/zodios-client.ts`: un ramo nell'interceptor degli errori accende il flag.
+> - `features/instance/components/InstanceBlockedPage.svelte`:
+>   - pagina a tutta pagina, con soli ruoli di colore;
+>   - testo per l'admin o per gli altri utenti, secondo `is_superuser`;
+>   - la data di cancellazione nel locale dell'interfaccia, letta e formattata in UTC, così nessun fuso la sposta;
+>   - «Esci», con la chiave `auth.logout`;
+>   - se `GET /system/block` dice che il blocco è tolto, spegne il flag e ricarica la pagina; se fallisce, la pagina
+>     resta senza data.
+> - `routes/(app)/+layout.svelte`: il ramo `$isAuthenticated && instanceBlock.blocked` sta prima di quelli del
+>   bootstrap.
+> - i18n: 4 chiavi `instance.block.*` nelle 4 lingue; `i18n check` stretto, 4396 chiavi.
+> - `api sync`, prettier senza modifiche; `front check` con svelte-check 0/0; porta dei colori pulita;
+>   `front build --debug` alle 07:36, così le corse di test-author sul server non ricostruiscono il frontend.
+> - **Test e doc** affidati a test-author e docs-writer, con la consegna di finire le esecuzioni pesanti entro le 08:40.
+
+#### CP6 passo 3 — revisione di sicurezza ✅ (2026-10-15, mattina)
+
+> **Note implementazione** (`security-review` sul codice di CP6, prima dei test):
+>
+> - Copertura:
+>   - le 133 rotte di `/api/v1` (130 `APIRoute`, 3 `ToolRoute`) hanno `refuse_when_blocked` come prima dipendenza,
+>     compresi i router annidati, lo stream SSE e il servizio dei file caricati;
+>   - le 10 voci dell'elenco corrispondono esattamente a 10 rotte, e nessuna funzione è registrata due volte;
+>   - il 423 arriva prima della validazione e prima delle dipendenze della rotta;
+>   - `get_current_user` non scrive niente.
+> - Valori non validi delle variabili fermano l'avvio; `WeakSecretError` dice l'origine e la lunghezza, mai il segreto.
+>   Nella pagina di blocco non c'è XSS.
+> - **Osservazione bassa**: le rotte pubbliche fuori dall'elenco rispondono 401 solo col blocco. Chi non ha sessione può
+>   quindi capire che l'istanza è bloccata (nessun dato).
+>   - Garanzia ristretta nella docstring di `instance_block.py`, nel §3.6 e nella doc.
+>   - **Decisione del coordinatore (08:04): (a), lasciare così.** La decisione 12 non promette che da fuori il blocco non
+>     si veda, e il segnale non porta dati. Permettere le GET pubbliche non lo chiuderebbe, perché la registrazione resta.
+>     Se il developer le vuole, è un cambio dell'elenco più avanti.
+> - FastAPI non dà le dipendenze del router a `Route`, `WebSocketRoute` e `Mount`. Il test della guardia fallisce se ne
+>   compare una sotto `/api/v1`.
+> - Il revisore ha trovato anche un caso già coperto da un commit del coordinatore in attesa.
+
+#### CP6 passo 4 — test e doc ✅ (2026-10-15, mattina)
+
+> **Note implementazione**:
+>
+> - **Test** (test-author). Il blocco si attiva solo in processo, con `monkeypatch`: il server della corsia non viene
+>   mai bloccato.
+>   - `test_config_package.py` +37 (valori accettati, rifiutati e vuoti delle due variabili);
+>   - `test_config_audit.py` +25 (gravità per profilo, `WeakSecretError` senza il segreto, arresto sui valori non
+>     validi, avviso col blocco);
+>   - nuovo `test_instance_block.py`, 44 test, registrato come `api instance-block`:
+>     - da anonimo, «stessa risposta col blocco e senza» vale per le rotte protette; un test documenta come sono le
+>       rotte pubbliche;
+>     - la guardia sulle rotte: fallisce per ogni rotta o mount sotto `/api/v1` che non sia un `APIRoute` con
+>       `refuse_when_blocked` per prima. Un'app di prova dimostra che la verifica coglie route semplici, WebSocket,
+>       mount e guardie mancanti o al secondo posto;
+>     - eccezioni fissate: le tre rotte della documentazione di FastAPI (`/api/v1/openapi.json`, `/docs`, `/redoc`),
+>       che portano lo schema e nessun dato;
+>   - `test_system_api.py` +1: `/system/block` registrata per ultima;
+>   - Vitest: `instanceBlock.test.ts` 21, `zodios-client.test.ts` 6, `InstanceBlockedPage.test.ts` 14. La data esce
+>     il 14 nei fusi di Los Angeles, Kiritimati e UTC. `layout.gate.test.ts` +6: la pagina vince su ogni stato del
+>     bootstrap;
+>   - verdi: `services config-package` 631, `services config-audit` 90, `api instance-block` 44, `api system` 117;
+>     `check-orphans` pulito.
+> - **Miei**, sulla corsia, prima delle 08:45:
+>   - `services config-env-example` 36;
+>   - `front check` 0/0; porta dei colori pulita; `i18n check` stretto, 4396 chiavi;
+>   - Vitest dal runner: `core-unit` 136 file e 4317 test (+27), `component-unit` 121 e 3223 (+14),
+>     `onboarding-component-unit` 15 e 447 (+6).
+> - **Doc** (docs-writer):
+>   - nuova `admin/hosting_providers.en.md`, nella navigazione di `mkdocs.yml` sotto «Deployment & Exposure»;
+>   - `admin/configuration.en.md` (righe delle due variabili, regola del `JWT_SECRET` nel profilo gestito, controlli
+>     d'avvio) e `admin/index.en.md`;
+>   - `security.md` (sezione «Instance Block», con la garanzia ristretta), `api/index.md`, `app-state.md`;
+>   - `mkdocs build` e `check-links` (95) passano. Debito di traduzione non timbrato: `hosting_providers` (solo
+>     inglese), `configuration`, `admin/index`.
+>
+> **Fuori pista**:
+>
+> - In `.env.example` una riga di prosa cominciava con `# LIBREFOLIO_BLOCKED=true`, e la guardia la leggeva come riga
+>   di variabile. Ho rifatto gli a capo.
+> - La docstring di `instance_block.py` ora nomina le tre rotte di documentazione di FastAPI come uniche eccezioni.
+> - Il database della corsia era vuoto, perché un selettore `api` da solo non lo popola. test-author ha adattato il test
+>   e ha tolto l'admin creato dalla prima corsa: la corsia è tornata a 0 utenti.
+
+### CP5b — la metà frontend di C-84 e `AboutTab` (2026-10-15, mattina) — scritto, da validare dopo la finestra
+
+> **Note implementazione**:
+>
+> - `frontend/package.json` e le due righe radice di `package-lock.json` a `0.0.0`. JSON non ha commenti: la
+>   spiegazione sta nel commento di `pyproject.toml` e in `release-pipeline.md`.
+> - `AboutTab.svelte`: la risposta di sola versione (senza sessione) non viene presa per il resoconto completo:
+>   `systemInfo` resta `null`. Prima la tab l'avrebbe letta come completa, e `backend_dependencies.length` avrebbe
+>   sollevato un errore.
+> - Il test nuovo in `AboutTab.test.ts` lo ha scritto test-author: «leaves the diagnostics grid out for a version-only
+>   answer, and still lists the providers». Il file passa 38 su 38.
+>   - Con la risposta di sola versione, l'intestazione mostra `...`: la risposta arriva solo a una sessione scaduta,
+>     che va comunque al login.
+>   - **Fuori pista**: due controlli d'assenza già presenti nello stesso file non possono fallire (H-6 nel backlog).
+> - CP5b e CP6 stanno insieme nel worktree, ma su file diversi: la validazione dopo la finestra vale per tutti e due,
+>   e i commit si dividono per percorso.
+
+### Dopo CP6: il lotto `billing_url` (deciso dal coordinatore, 2026-10-15 alle 08:40) — in attesa di A5
+
+> - Nell'ordine: A5a e A5b entrano insieme dopo la finestra, dopo R e L; l'handoff di CP6 arriva prima. Quindi CP6
+>   esce senza `billing_url`.
+> - Dopo l'aggiornamento di base che porta A5, un lotto piccolo:
+>   - `billing_url` in `InstanceBlockResponse`, solo per l'admin, da `registration_service.billing_link()` di A5a;
+>   - il link «Gestisci abbonamento» nella pagina di blocco, con la sua chiave i18n e i test;
+>   - `api instance-block` ripassato: A5a rende `get_instance_config` un `async` con una sessione del DB, e la guardia
+>     deve restare la prima dipendenza.
+
+#### CP5b e CP6 — i verdi prima della finestra ✅ (2026-10-15, mattina)
+
+> **Note implementazione** (corsia 6181, un'invocazione alla volta, tutto finito prima delle 08:45):
+>
+> - `front build --debug` rc 0, svelte-check 0/0. `mkdocs build` stretto senza avvisi, 3020 URL relativi;
+>   `check-links` 95.
+> - **`all-backend`** (`-q --fresh-run --workers 2`): 7/7 in 17 min 23 s, con la macchina carica. **12 606 passed, 3
+>   skipped, 0 failed**.
+>   - Sono 170 in più rispetto a CP5a (12 436). Circa 110 vengono da CP6 e dalla correzione di CP5a:
+>     `config-package` +39, `config-audit` +25, `instance-block` +44, `system` +1, `platform-readiness` +1.
+>   - Gli altri vengono dagli aggiornamenti di base: G-8, X CP4, W K2a, A4b, X J-5.
+> - Vitest: `core-unit` 4317, `component-unit` 3223, `onboarding-component-unit` 447; `AboutTab.test.ts` 38.
+> - **`api schema`** contro `6cd64b71b`: solo `+/api/v1/system/block` e `+InstanceBlockResponse`; Tool contracts
+>   identici; hash openapi `978bece3d1752e13`.
+> - Statici: ruff, black e prettier puliti; porta dei colori pulita; `i18n check` stretto, 4396 chiavi.
+> - **Dopo la finestra**: le E2E `front-utility auth`, `app-start-auth` e `settings` (il layout ha un ramo nuovo,
+>   l'interceptor un ramo, la scheda Informazioni una guardia).
+
+### Checkpoint CP5b e CP6 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore; E2E dopo la finestra
+
+> Committati dal coordinatore: `87be1e2d8`, `f8b827877` (CP5b), `2c3b00139`, `cb34327e9` (CP6) e `0326a1d02` (journal).
+> Base aggiornata: `5b2b9061f`, merge di `dev_release2` a `2338aaf79` (J-6, W E0, X-R8), pulito. Entrano dopo la
+> finestra della galleria, dopo R e L. Dopo l'avviso di fine finestra, sulla revisione combinata: `front build --debug`;
+> `api instance-block`, `api system`, `services config-audit` e `config-package`, con la guardia di J-6 arrivata con la
+> base; `core-unit`, `component-unit`; le E2E `auth`, `app-start-auth` e `settings`; `mkdocs build` stretto.
+
+### CP7a — il lotto Docker (2026-10-15, mattina) — ✅ provato; manca solo la prova dell'immagine a runtime
+
+> **Via** del coordinatore (08:46): durante la finestra si scrive il codice; la prova con Docker si chiede prima, perché
+> richiede il daemon acceso. B aspetta CP7a per Litestream.
+>
+> **Ordine con CP6**: CP6 va validato sulla revisione committata. Prima di quella validazione salvo CP7a come patch nella
+> cartella della sessione e lo tolgo con `git apply -R`; dopo, lo riapplico.
+>
+> **Superato** (coordinatore, 10:04): nessun file si sposta a mano. I tre lotti scritti (CP7a, C-96, il filtro del log)
+> entrano come tre checkpoint «prima delle prove» sopra `5b2b9061f`; vedi «Handoff dei tre lotti» in fondo.
+
+#### CP7a passo 1 — il codice ✅ (2026-10-15, mattina)
+
+> **Note implementazione**:
+>
+> - **P-4** (D11): `tzdata` e `tzdata-legacy` via apt nello stadio finale del `Dockerfile`. `zoneinfo` legge il
+>   database del sistema, e `tzdata` di PyPI non è nel lock. Senza `tzdata-legacy`, un fuso salvato con un nome vecchio
+>   (`Asia/Calcutta`, `US/Eastern`) farebbe ricadere lo scheduler in UTC (`scheduler.py:20-24`). Da provare
+>   nell'immagine.
+> - **C-37**: `EXPOSE 6040` soltanto; tolta la mappatura `${TEST_PORT:-6041}:6041` da `docker-compose.yml`.
+> - **N-8**: `PORT=6040` fra le `environment` dei due compose, con un commento: `PORT` è il lato host della mappatura,
+>   nel container il server ascolta sempre su 6040.
+> - **32-3** (D8): `./dev.py docker exec` lancia
+>   `sh -c 'exec gosu "$LIBREFOLIO_UID:$LIBREFOLIO_GID" python dev.py "$@"' sh …`. Gli argomenti passano da `"$@"`, gli
+>   id numerici vengono dall'ambiente dell'immagine. Corretto il commento del compose, che diceva «the 'librefolio'
+>   user».
+> - **M-25**:
+>   - `_docker_ensure_assets_built()` congela la versione una volta sola, al passo 0, prima che un passo possa scrivere
+>     un file tracciato;
+>   - il frontend si ricostruisce, con `LF_APP_VERSION` uguale a quella versione, se i sorgenti sono cambiati, se
+>     l'ultimo build era di debug o di modo ignoto, o se `frontend/build/.build-version` dice un'altra versione;
+>   - `VERSION` riceve la stessa versione. Ogni build svuota `frontend/build/`, quindi il segno esiste solo dopo un build
+>     per un'immagine;
+>   - la logica sta in `_docker_frontend_stale_reason()` e `_docker_ensure_frontend_built()`: la complessità di
+>     `_docker_ensure_assets_built` scende da 14 a 13, e la regola si prova da sola.
+> - **C-26**: il tag `test` su GHCR si cancella con un'azione remota del developer; le istruzioni vanno nell'handoff.
+>   Lettura anonima del registro (15/10, 08:55): 11 tag, `test` c'è ancora. Il suo digest (`a9cf8f56…`) non è
+>   condiviso con nessun altro tag, quindi cancellare la sua versione non tocca `latest`, `nightly` né i rilasci.
+> - `dev.py` si importa; i rilievi di ruff sono gli stessi di HEAD, a parte la complessità scesa.
+
+#### CP7a passo 2 — doc, e le correzioni venute dalla sua lettura ✅ (2026-10-15, mattina)
+
+> **Note implementazione**:
+>
+> - **Doc** (docs-writer, senza build: siamo nella finestra della galleria):
+>   - `admin/docker_advanced.en.md`: `docker exec` con gli id numerici, porte, `PORT=6040`, la modalità di test, la
+>     tabella e il YAML annotato;
+>   - `developer/dev_workflow.en.md` (passi del build con la versione congelata, niente più conflitto sulla 6041);
+>   - `release-pipeline.md` (sottosezione «Local image builds»), `architecture/overview.md`, `backend/scheduler.md`
+>     (`tzdata-legacy`), `admin/cli_tools.en.md`, `admin/configuration.en.md`;
+>   - `- PORT=6040` negli snippet di `user/installation.en.md` e `admin/service_exposure.en.md`;
+>   - debito di traduzione in `docker_advanced`, `cli_tools`, `configuration`, `service_exposure` e `installation`, non
+>     timbrato.
+> - **Correzioni dalla lettura di docs-writer**:
+>   - un `.build-version` mancante ora ha il suo motivo («made without a recorded version»), distinto da una versione
+>     diversa;
+>   - `_get_docker_tag()` rifaceva `git describe` dopo i passi di build, quindi il tag poteva dire `-dirty` mentre
+>     `VERSION` e la barra laterale no. Ora legge `VERSION`, scritto con la versione congelata; senza il file la
+>     ricalcola;
+>   - `_check_env_file()` avvisava anche per `TEST_PORT`, che il compose non usa più: ora solo `PORT`;
+>   - l'intestazione di `.env.example` ora dice che il compose fissa anche `PORT=6040`.
+>
+> **Fuori pista** (fuori dal lotto, nel backlog):
+>
+> - H-7: senza `tzdata` di PyPI, un'installazione su un sistema senza database dei fusi (Windows) fa ricadere ogni fuso
+>   dello scheduler in UTC;
+> - H-8: `ForgotPasswordCard.svelte`, di A, mostra ancora un `docker compose exec … user reset`, che gira come root.
+
+### C-96 — le corsie dei test non prendono la configurazione dell'istanza (2026-10-15, mattina) — ✅ provato
+
+> **Richiesta** del coordinatore (09:05), da un difetto trovato da E. `configure_test_runtime()` toglieva solo
+> `INSTANCE_TRUST_SECRETS`: ogni altra impostazione del `.env` del developer arrivava alle corsie (SMTP, blocco, profilo
+> gestito, le variabili di account di A5a). A-9 di A diventa parte di C-96. Il codice si scrive adesso; le prove complete
+> dopo la finestra.
+>
+> **Disegno**: le vie per cui l'impostazione arrivava sono due.
+>
+> - L'ambiente. `pipenv run` carica il `.env` prima che `dev.py` parta, e `_load_project_dotenv()` lo completava. La
+>   corsia ora toglie, qualunque sia l'origine (`.env` o shell):
+>   - ogni chiave del `.env` del developer;
+>   - ogni variabile documentata in `.env.example`;
+>   - i segreti d'istanza.
+>   Restano solo `TEST_LANE_KEEPS` (porte, cartelle dei dati, `HOST`, livello di log) e `TEST_LANE_RUNNER_OWNED` (il
+>   token della corsia). Dal `.env` si completa solo quell'elenco.
+> - `Settings`, che legge il `.env` da sé (`env_file`). In modalità test, `settings_customise_sources` toglie la fonte
+>   dotenv: un `Settings()` diretto obbedisce come `get_settings()`.
+> - Una variabile nuova di B o di E è coperta da sola: è documentata in `.env.example`, come esige la guardia, oppure
+>   sta nel `.env` del developer.
+>
+> **Note implementazione**:
+>
+> - `scripts/cli_base.py`: `TEST_LANE_KEEPS`, `TEST_LANE_RUNNER_OWNED`, `documented_instance_variables()` (le righe
+>   variabile di `.env.example`, commentate o no), `_test_lane_drops()`, `_load_project_dotenv(only=…)`;
+>   `configure_test_runtime()` toglie le variabili dopo le verifiche, prima di `PIPENV_DONT_LOAD_ENV`.
+> - `backend/app/config/__init__.py`: `Settings.settings_customise_sources`.
+> - `.env.example`: una nota nella sezione «Test Server».
+> - **Prova in processo**: un `.env` temporaneo, più esportazioni della shell.
+>   - Tolti: profilo, blocco, SMTP (non documentata, ma nel `.env`), cache delle anteprime, l'interruttore delle
+>     donazioni, `JWT_SECRET` e un'esportazione della shell di una variabile documentata.
+>   - Restano: livello di log, `HOST`, `PORT`, una variabile estranea a LibreFolio e quelle del runner.
+>   - Una seconda chiamata, come quella del server condiviso, tiene lo stesso token.
+>   - `Settings` in modalità test non legge il `.env` nemmeno quando glielo si passa; fuori dalla modalità test lo legge.
+> - Il server condiviso e il `webServer` di Playwright passano `--no-scheduler`, che `cmd_server` rimette dopo la
+>   configurazione della corsia. Toglierla dal `.env` non riaccende quindi lo scheduler.
+> - Ruff pulito. Black segnala su `cli_base.py` un debito di formato che c'era già; il file non è nel suo perimetro.
+> - **Doc**, mia, pagine solo inglesi:
+>   - `developer/architecture/security.md`: la sottosezione «Test lanes and the instance's configuration»;
+>   - `developer/test-walkthrough/index.md`: un paragrafo in «Isolated Runtime Lanes»;
+>   - `developer/architecture/settings.md`: un rimando.
+>   - Build e `check-links` dopo la finestra.
+> - **Test** affidati a test-author: il test guidato da `.env.example` che il coordinatore ha chiesto, più le chiavi non
+>   documentate, la chiamata annidata, la corsia rifiutata e `Settings` in modalità test.
+
+#### CP7a passo 3 — i test ✅ (2026-10-15, mattina)
+
+> **Note implementazione** (test-author):
+>
+> - Nuovo `backend/test_scripts/test_utilities/test_dev_cli_docker.py`, IMG-013…024, registrato come
+>   `utils dev-cli-docker` (puro). 95 test, circa 3 s; Docker non serve e nel repo non si scrive niente.
+>   - Statici, ciascuno con il suo controllo che deve fallire su file sintetici, compreso lo stato prima di CP7a:
+>     `tzdata-legacy` nell'immagine finale, `EXPOSE` uguale al `--port` del CMD, il servizio `librefolio` che pubblica
+>     solo la 6040, `PORT`/`HOST`/`LIBREFOLIO_DATA_DIR` nei due compose;
+>   - `docker exec`: l'argv esatto; gli argomenti ostili restano elementi separati, e una prova con un vero `sh` lo
+>     dimostra; gli id dati a gosu vengono da un `ENV` dell'immagine finale;
+>   - M-25: i motivi della ricostruzione, `LF_APP_VERSION` messo e rimesso a posto anche su errore ed eccezione, la
+>     versione congelata fino a `VERSION` e al tag anche quando git, dopo il passo 0, risponde `-dirty`; `cmd_docker_build`
+>     da capo a fondo;
+>   - `_check_env_file` avvisa per `PORT` e tace su `TEST_PORT`.
+> - `utils dev-cli-docker` 95 passed; `check-orphans` pulito.
+>
+> **Fuori pista**: lo script di `docker exec` non aveva i valori predefiniti degli id, che `entrypoint.sh` ha
+> (`:-1000`): ora li ha, e la doc lo riporta. test-author ha aggiornato l'argv esatto. Il caso nuovo, con un `gosu`
+> finto sul `PATH`, verifica che senza le variabili arrivi `1000:1000`, e che `entrypoint.sh` usi gli stessi valori.
+> `utils dev-cli-docker` 96 passed.
+>
+> **Fuori pista** (dal rapporto di test-author, 15 test nuovi, `utils runtime-isolation` 190):
+>
+> - La prima regola toglieva `LF_APP_VERSION`, documentata in `.env.example`. Così il job di rilascio avrebbe perso,
+>   nella galleria, la versione congelata di CP5a.
+> - Un `LIBREFOLIO_*` non documentato esportato nella shell restava. Ogni chiave del `.env` veniva tolta, comprese
+>   quelle estranee a LibreFolio (un proxy, `PYTHONPATH`).
+> - **Regola corretta**:
+>   - `kept_in_a_test_lane(name)`: `TEST_LANE_KEEPS` (le due porte, la cartella di produzione, `HOST`, il livello di
+>     log, `LF_APP_VERSION` e il `LIBREFOLIO_SERVER_WORKERS` di Playwright) oppure ogni nome `LIBREFOLIO_TEST_*`, cioè
+>     quelli del runner e dei test, compreso il token della corsia. `TEST_LANE_RUNNER_OWNED` non serve più;
+>   - si toglie ogni variabile documentata, ogni segreto d'istanza e ogni `LIBREFOLIO_*` dell'ambiente, salvo quelli
+>     tenuti;
+>   - il `.env` si carica per intero come prima, poi si toglie: le chiavi che non sono di LibreFolio restano.
+> - Prova in processo ripetuta: `LF_APP_VERSION` resta, come `LIBREFOLIO_TEST_STARTUP_TIMEOUT` e le chiavi estranee del
+>   `.env`. Un `LIBREFOLIO_*` nuovo esportato nella shell se ne va. Doc e nota di `.env.example` allineate.
+> - Restano due limiti, scritti nel codice e nella doc:
+>   - senza `.env.example`, cioè nell'immagine Docker, dove però non gira nessuna corsia, cadono solo i `LIBREFOLIO_*` e
+>     i segreti;
+>   - un helper dei test che chiama `configure_test_runtime()` toglie anche nel processo del test. Nessun test di oggi
+>     imposta una variabile documentata prima di chiamarlo.
+> - **Test allineati alla regola corretta** (test-author): `utils runtime-isolation` 194 passed.
+>   - Le attese sono costruite con `kept_in_a_test_lane`. Tre controlli nominano i valori direttamente:
+>     `LF_APP_VERSION`, i cinque `LIBREFOLIO_TEST_*` e la sonda non documentata.
+>   - Dieci regressioni simulate in memoria fanno fallire ciascuna almeno un test.
+>   - Chiesto in più un figlio `pipenv run` vero: pipenv carica il `.env` con `override=True`, e solo
+>     `PIPENV_DONT_LOAD_ENV` tiene fuori le impostazioni tolte.
+>   - Fatto: `test_a_pipenv_run_child_of_the_lane_gets_no_dropped_setting_back`, con il suo controllo. Lo stesso figlio
+>     senza la guardia riprende le impostazioni tolte; con la guardia no, e tiene `LF_APP_VERSION`.
+>   - Prima dei figli, `pipenv --venv` verifica che pipenv usi questo interprete, e il test salta se no: così pipenv
+>     non crea mai un ambiente. La stessa guardia va al test annidato che c'era già e non l'aveva.
+>   - `utils runtime-isolation` 195 passed.
+>   - Le due prove annidate passano ora da un helper solo, `run_python_in_a_pipenv_child()`. Prima di ogni
+>     `pipenv run`, l'helper fa `pipenv --venv`, e salta se l'ambiente non è questo. La verifica con un `subprocess`
+>     finto: se l'ambiente è un altro, o se non c'è, parte solo `pipenv --venv` e niente viene creato.
+>     `utils runtime-isolation` 195 passed, 0 skipped.
+
+#### C-96 — stato (2026-10-15, mattina)
+
+> Codice, test e doc scritti. Le prove complete dopo la finestra della galleria: `all-backend`, perché
+> `configure_test_runtime` e `Settings` toccano ogni corsia; `mkdocs build` e `check-links`.
+
+### Lotto «credenziali nei log di accesso» (2026-10-15, mattina) — ✅ provato
+
+> **Richiesta**: una nota di A5b, girata dal coordinatore alle 09:59. I link di invito, reset, setup e verifica ora
+> portano il token nel frammento, che il browser non manda. Resta un `?token=` scritto a mano, che il log di accesso di
+> uvicorn scriveva in chiaro. Il posto lo scelgo io: un lotto a parte, dopo CP7a e C-96, prima di CP7b e della
+> revisione di sicurezza finale.
+
+#### Passo 1 — il codice e la doc ✅ (2026-10-15, mattina)
+
+> **Note implementazione**:
+>
+> - `backend/app/logging_config.py`:
+>   - `mask_query_credentials(text)` sostituisce con `***` il valore di un parametro di query che si chiama `code`, o il
+>     cui nome contiene `token`, `secret`, `password`, `passwd`, `api_key`/`apikey`/`api-key` o `signature`, in
+>     qualunque maiuscolo. Il nome si giudica decodificato (`unquote_plus`), come lo legge l'app; il valore no;
+>   - `_QueryCredentialFilter` maschera ogni argomento stringa del record, al suo posto: numero e ordine restano, e
+>     l'`AccessFormatter` di uvicorn li spacchetta. Un messaggio senza argomenti si maschera da sé; una stringa di
+>     formato con argomenti non si tocca, così i segnaposto restano allineati;
+>   - `configure_logging()` mette lo stesso oggetto filtro su `uvicorn.access` (HTTP) e su `uvicorn.error` (le strette
+>     di mano WebSocket, che portano anche loro percorso e query): le chiamate ripetute non lo duplicano, e ogni worker
+>     lo installa importando l'app.
+> - Il log resta acceso ovunque: chi ospita da sé lo usa.
+> - Nessun reindirizzamento dell'app copia il frammento in una query: `loginUrl()`, `hooks.server.ts` e `returnTo`
+>   portano percorso e query, mai il frammento.
+> - **Prova in processo**: 13 casi della regola e 6 di record. Fra questi: `GET /setup?token=***&next=/home`;
+>   `tok%65n`, `api%5Fkey`, `api-key` mascherati; `currency_code`, `codes` e `q=token` tenuti; la riga WebSocket
+>   mascherata; un record senza niente da mascherare tiene lo stesso oggetto. Ruff e black puliti.
+> - **Doc**: in `security.md` la sezione nuova «📜 Request Logs», lontana da quella dei token di A.
+>
+> **Fuori pista** (dal primo rapporto di test-author, 51 test):
+>
+> - Il primo filtro leggeva solo il terzo argomento, se il record ne aveva almeno tre: diverso da come l'avevo
+>   descritto, e legato alla forma di un solo record. Ora ogni argomento stringa, al suo posto.
+> - Fuori dalla prima regola: un nome codificato (`tok%65n`), `api-key` con il trattino, e le righe WebSocket su
+>   `uvicorn.error`. Ora coperti tutti e tre.
+> - Limite scritto nel codice e nella doc: un URL codificato dentro il valore di un altro parametro non si legge.
+> - H-9 nel backlog: una seconda chiamata di `configure_logging()` lascia aperti i gestori che toglie. C'era già.
+
+#### Passo 2 — i test ✅ (2026-10-15, mattina)
+
+> **Note implementazione** (test-author):
+>
+> - `backend/test_scripts/test_services/test_logging_access_filter.py`, selettore puro `services logging-access-filter`
+>   in `scripts/test_runner/_backend_services.py`: 96 passed.
+>   - (a) la regola, 54 test:
+>     - i nomi semplici, quelli codificati (`tok%65n`, `api%5Fkey`, `c%6Fde`) e il trattino;
+>     - i nomi tenuti e l'URL annidato non codificato;
+>     - il valore vuoto, mascherato;
+>     - il valore codificato, fissato come limite: prima il test verifica che lo stesso URL, decodificato, viene
+>       mascherato.
+>   - (b) il filtro su un record, 30 test:
+>     - ogni posizione in una tupla da 1 a 6 argomenti;
+>     - lo stesso oggetto quando non c'è niente da mascherare;
+>     - bytes, `None`, interi e mappe intatti;
+>     - il messaggio senza argomenti mascherato;
+>     - la stringa di formato con argomenti mai riscritta.
+>   - (c) i record di uvicorn, 11 test, ciascuno con il suo controllo negativo senza filtro:
+>     - una richiesta HTTP vera, in memoria, con h11 e con httptools;
+>     - una stretta di mano WebSocket vera, rifiutata, con `WebSocketsSansIOProtocol`, quello che `--ws auto` sceglie.
+>   - (d) `configure_logging()` chiamata due volte lascia un solo filtro, quello del modulo, su ciascuno dei due logger.
+>     Le righe di uvicorn escono mascherate; i logger e structlog vengono rimessi a posto.
+> - 13 regressioni simulate, ciascuna presa da almeno un test. Per esempio: il vecchio filtro sul solo terzo argomento
+>   fa 26 rossi; i nomi non decodificati 7; `configure_logging` solo su `uvicorn.access` 1.
+> - Ruff, black e `check-orphans` puliti.
+>
+> **Fuori pista**:
+>
+> - Il test della stringa di formato con argomenti fissava una riga con il valore in chiaro. Ora verifica solo che `msg`
+>   e `args` restano intatti e che la formattazione non fallisce.
+> - **Residuo**, letto nel sorgente di uvicorn: con `--log-level trace`, `MessageLoggerMiddleware` scrive ogni messaggio
+>   ASGI su `uvicorn.asgi`, intestazioni comprese.
+>   - uvicorn fissa `uvicorn.error` a INFO, e né `dev.py` né il `Dockerfile` passano `--log-level`: la modalità si
+>     accende solo se qualcuno la chiede.
+>   - È scritto come limite in `security.md`.
+
+### Handoff dei tre lotti — checkpoint «prima delle prove» 🧊 (2026-10-15, mattina)
+
+> **Decisione del coordinatore** (10:04): nessun file si sposta a mano.
+>
+> - I tre lotti entrano come tre checkpoint separati sopra `5b2b9061f`, più il journal, con le prove leggere.
+> - Dopo la finestra il coordinatore stacca il worktree su `5b2b9061f` per la validazione di CP6, poi lo riattacca al
+>   ramo per le prove dei tre lotti.
+> - CP6 entra in `dev_release2` da `5b2b9061f`; i tre lotti restano sul ramo finché non sono provati.
+>
+> **Prove leggere**: corsia 6181, solo selettori puri, uno alla volta, con `nice`. In tutto 1451 passed.
+>
+> - `utils`: `dev-cli-docker` 96, `dev-cli-image` 44, `release-image-contract` 192, `runtime-isolation` 195.
+> - `services`: `config-env-example` 36, `config-package` 632, `config-secrets` 58, `config-audit` 90, `config-misc`
+>   12, `logging-access-filter` 96.
+> - `check-orphans` e `git diff --check` puliti.
+> - Ruff e black:
+>   - puliti sui file nuovi e su quelli dei lotti;
+>   - su `dev.py` e `cli_base.py`, gli stessi rilievi della base;
+>   - la complessità di `_docker_ensure_assets_built` scende da 14 a 13.
+>
+> **Dopo la finestra**:
+>
+> - `all-backend`, perché C-96 tocca ogni corsia;
+> - `front build --debug`, perché `dev.py` è cambiato;
+> - `mkdocs build` stretto e `check-links`;
+> - la prova Docker di CP7a, con il via del coordinatore.
+>
+> **Committati dal coordinatore** (10:48), con `git apply --cached` per patch e le impronte verificate:
+> `2e2d7ee70` (CP7a, 16 file), `901fa33f6` (C-96, 7), `4f5757915` (filtro del log, 4), `056ed3897` (journal, 2).
+
+### Validazione di CP5b e CP6 sulla revisione combinata ✅ (2026-10-15, pomeriggio)
+
+> **Come**: dopo la finestra della galleria il coordinatore ha staccato il worktree su una revisione combinata, cioè
+> `dev_release2` più `5b2b9061f`, senza i tre lotti. Nessun file modificato, quindi il piano si scrive adesso.
+>
+> - `64ed18b05` = `13705dd05` + `5b2b9061f` (con R, L, G e la 1.2.1); poi `83eaa5a28` = `dc9a5d232` + `5b2b9061f`,
+>   dopo la finestra delle dipendenze (`cryptography` 50.0.2, `pycparser` 3.11). Fra le due cambiano solo `Pipfile` e
+>   `Pipfile.lock`.
+> - L'altro lato tocca solo `main.py` (il `confined_path` della 1.2.1), il `+layout.svelte` della radice (Designer Lab)
+>   e `themeStore.ts`. Non tocca `(app)/+layout.svelte`, `zodios-client.ts`, `features/instance/` né `AboutTab`.
+>
+> **Esiti** (corsia 6181, un comando alla volta, con `nice`):
+>
+> - Su `64ed18b05`:
+>   - `front build --debug` (con `api sync` dentro, le uscite sono file ignorati): rc 0, svelte-check 0/0;
+>   - `npm run check`, cioè `dev.py front check`, lanciato durante la pausa del Python: 0/0;
+>   - Vitest con gli elenchi del runner: `core-unit` 4407, `component-unit` 3240 (con `InstanceBlockedPage`,
+>     `InstanceNotices` e `AboutTab`), `onboarding-component-unit` 447 (con i gate del layout `(app)`).
+> - Su `83eaa5a28`:
+>   - `mkdocs build` stretto rc 0; `check-links`: 95 link validi, 3028 URL di asset risolti;
+>   - **`all-backend`** (`-q --fresh-run --workers 2`, slot pesante 1): 7/7, **12 725 passed, 3 skipped, 0 failed**, in
+>     31 min 32 s;
+>   - E2E `front-utility` con `--workers 2`: `auth` 29, `app-start-auth` 3, `settings` 46, tutte passed.
+>
+> **Fuori pista**: alle 13:54 il carico era a 110–139 su 10 core, con X, A, E, un'altra corsia e il mio `all-backend`.
+> L'ho segnalato con i numeri per corsia; il coordinatore ha fermato le prove medie di A e di E.
+>
+> **Ingresso**: CP5b e CP6 sono in `dev_release2` = `83eaa5a28`, con un avanzamento veloce; sopra è entrato X
+> (`ec0dc7ebd`). Il ramo è tornato al suo posto con il merge di `dev_release2` in `aa0e3a49a` (genitori `056ed3897` e
+> `ec0dc7ebd`), senza conflitti. CHANGELOG di CP5b e CP6 mandato al coordinatore, che lo scrive.
+>
+> **Ordine deciso**:
+>
+> 1. questa nota;
+> 2. un lotto piccolo, G-10 e le due note di E, con il rosso prima;
+> 3. una validazione unica di CP7a, C-96, filtro del log, G-10 e doc. Per `all-backend` lo slot si chiede al
+>    coordinatore;
+> 4. la prova Docker. Il daemon è acceso; alla fine si tolgono le immagini e i container creati da H.
+
+### Lotto piccolo: G-10 e due note di E (2026-10-15, pomeriggio) — ✅ provato
+
+> **G-10**, dal programma colori: `list_uploads` (`services/files/static_uploads.py`) ordina solo per `uploaded_at`. Gli
+> avatar del seed hanno tutti la stessa data, quindi l'ordine segue quello della cartella, cioè gli UUID casuali, e la
+> galleria diventa instabile: `asset-picker-modal` al 24 %, la miniatura di `static-grid`.
+>
+> - Cura: a parità di data, il nome e poi l'id. L'id da solo non basta: è un UUID nuovo a ogni seed, quindi stabile
+>   dentro un DB ma diverso in ogni galleria.
+> - `AssetPickerModal` mostra l'ordine dell'API senza riordinare: basta il backend.
+>
+> **Note di E**:
+>
+> - Il paragrafo «Secrets» di `.env.example` dice che un `NAME_FILE` illeggibile ferma il server. È già falso oggi per
+>   il link finder: `web_link_finder.py` registra un avviso e spegne il link finder, e l'avvio continua.
+>   `admin/configuration.en.md` lo dice già bene. Il paragrafo si allinea: si fermano solo `JWT_SECRET_FILE` e
+>   `LIBREFOLIO_INSTANCE_KEY_FILE`, un segreto facoltativo spegne solo la sua funzione. Il segreto dell'email di E ci
+>   rientra senza nominarlo prima che esista.
+> - `settings.md`: all'elenco di `platform.py` mancano `frozen_app_version()` (CP5a), `instance_blocked()` e
+>   `instance_deletion_date()` (CP6).
+>
+> **Note implementazione**:
+>
+> - **Il rosso prima** (test-author): la classe nuova `TestListUploadsOrder` in `test_static_uploads.py`, 4 test.
+>   - `get_uploads_dir` viene sostituita da un `Path` il cui `glob()` dà i file veri in ordine crescente o decrescente;
+>     ogni test elenca gli stessi upload nei due ordini, e i due risultati devono essere uguali e quelli attesi. Così il
+>     rosso non dipende dal caso. Un'asserzione in più fallisce se `list_uploads` smette di elencare con
+>     `get_uploads_dir().glob()`.
+>   - Sul codice di prima: 3 rossi (stesso istante e nomi `b`, `A`, `C`, che fissano anche il `casefold`; stesso nome e
+>     stesso istante; i 30 avatar del seed) e un controllo verde, il più recente prima.
+> - **Cura**, `list_uploads()`: due ordinamenti stabili, prima per `(original_name.casefold(), id)`, poi per
+>   `uploaded_at` decrescente. `services static-uploads`: 39 passed. Ruff e black puliti.
+> - **Note di E**: il paragrafo «Secrets» di `.env.example` e l'elenco di `platform.py` in `settings.md`, come sopra.
+>   `services config-env-example`: 36 passed.
+>
+> **Fuori pista** (da test-author, nel backlog come H-10): `services static-uploads` è dichiarata `write-scoped`, ma il
+> suo fixture autouse cancella e ricrea la cartella `custom-uploads` della corsia, dove stanno anche gli avatar del seed.
+> C'era già prima.
+
+### Validazione unica dei quattro lotti e prova Docker (2026-10-15, pomeriggio) — 🧊
+
+> **Revisione**: `aa0e3a49a` più il lotto piccolo, non committato. Corsia 6181, un comando alla volta, con `nice`.
+>
+> - `front build --debug` rc 0, svelte-check 0/0. `mkdocs build` stretto rc 0. `check-links`: 95 link validi, 3028 URL
+>   di asset risolti.
+> - **`all-backend`** (`-q --fresh-run --workers 2`, slot pesante 1, 14:37:55–15:00:34): 7/7, **12 941 passed, 3
+>   skipped, 0 failed**.
+>
+> **Prova Docker** (slot 1; il daemon lo accende il developer):
+>
+> - **Prima**: le immagini `alpine:3.20` e `python:3.13-slim`, nessun container, nessun progetto compose.
+> - `dev.py docker build`, con un `.env` temporaneo (`PORT=7001`).
+>   - La versione si congela una volta sola: `VERSION`, `frontend/build/.build-version` e il tag
+>     `librefolio:v1.2.1-323-gaa0e3a49a-dirty` coincidono, e il bundle di produzione, ricostruito per quella versione,
+>     la contiene. È M-25 dal lato host.
+>   - Il passo apt dell'immagine finale (`gosu`, `sqlite3`, `tzdata`, `tzdata-legacy`) è andato.
+> - **Il build si ferma a `pip install` nello stadio `pybuilder`**: dal container di build, PyPI risponde «self-signed
+>   certificate in certificate chain».
+>   - Su questa rete un proxy ri-firma il TLS, e il container non ne conosce la CA. Dalla cache di pip arrivano solo le
+>     due dipendenze git; `aiosqlite==0.22.1` non c'è.
+>   - CP7a non tocca il passo di pip.
+> - **Provato senza l'immagine**:
+>   - **P-4**, in un container usa e getta sulla stessa base. `python:3.13-slim` (trixie) ha `tzdata` 2026c ma non
+>     `tzdata-legacy`: `Asia/Kolkata` ed `Europe/Rome` si risolvono, `Asia/Calcutta` e `US/Eastern` no. Dopo la riga apt
+>     del `Dockerfile` si risolvono tutti e quattro.
+>   - **N-8**, con `docker compose config`, che non crea niente: con `PORT=7001` nel `.env`, i due compose pubblicano
+>     7001 → 6040 e mettono `PORT=6040` nel container.
+>   - **C-37 e 32-3** non sono provati a runtime. Li coprono i controlli statici di `utils dev-cli-docker`: `EXPOSE`,
+>     l'argv esatto, un vero `sh` con un `gosu` finto.
+> - **Pulizia**, confrontata con lo stato di prima:
+>   - tolta la rete del progetto `lf-h-cp7a`; nessuna immagine nuova, perché il build non ne ha create;
+>   - container, reti e volumi come prima;
+>   - tolti `.env`, `VERSION` e `requirements.txt`; il worktree è come prima;
+>   - la cache di BuildKit, condivisa, non è stata toccata;
+>   - poi `front build --debug`, per rimettere il bundle di debug.
+> - **Resta da fare**: la prova a runtime dell'immagine (avvio, healthcheck, `docker exec` come uid:gid, versione nella
+>   barra laterale) dove PyPI si raggiunge senza proxy.
+>
+> **Fuori pista**: H-11 nel backlog. Un build locale dietro un proxy che ri-firma il TLS si ferma a `pip install`.
+
+### Due aggiornamenti di base (E1 e Y1, poi A5) e la verifica di C-96 con le variabili di A5 (2026-10-15, pomeriggio)
+
+> **Committati dal coordinatore**: `b4533a949` (G-10), `064f2ce4b` (doc della configurazione), `831aa4d39` (journal).
+>
+> - **Merge di `badec1465`** (E1, Y1), committato in `3bd15098a`. Un conflitto in `settings.md`: l'elenco dei moduli di
+>   `config/`, con l'`email.py` di E1 e i miei tre accessori di `platform.py`. Risolto tenendo le due parti.
+>   - Rivisti i file fusi in automatico: `.env.example`, `security.md`, le registrazioni del runner, il backlog.
+>   - Prove: `mkdocs build` stretto, `check-links` 95, `config-env-example` 36, `config-package` 639 (+7, i moduli nuovi
+>     di E1), `static-uploads` 39, `runtime-isolation` 195.
+> - **Merge di `8bcb23502`** (A5), committato in `9e411c6ec`. Stesso paragrafo di `settings.md`: i cinque accessori nuovi
+>   di `accounts.py` e la frase di chiusura di A, più i miei tre. `mkdocs build` stretto e `check-links` puliti.
+>
+> **Verifica di C-96 con le variabili di A5** (`LIBREFOLIO_REGISTRATION`, `MAX_USERS`, `PUBLIC_URL`, `BILLING_URL`):
+>
+> - Su ciascuna via, C-96 non c'entra:
+>   - i test di A le impostano con `monkeypatch.setenv` dentro il test, dopo che la corsia è stata preparata;
+>   - IMG-013…016 le passano nell'ambiente esplicito del sottoprocesso `dev.py user`, che non prepara una corsia.
+> - Primo giro, nell'ordine: `services registration` 146, `utils dev-cli-image` 71, `api system` 117; ma
+>   `api registration` 1 rosso, `api users-admin` 28 rossi, `api instance-block` server uscito all'avvio.
+> - **Causa dei 29 rossi: ambiente.** In un'azione singola il runner non esegue il setup della categoria `api`
+>   (`_api_setup` → `db populate`). La mia `services registration` appena prima aveva ricreato vuoto il DB della corsia,
+>   quindi il primo account registrato diventa admin (regola di A5). LIVE-002 dà `user_id=1`, `is_superuser` True.
+>   `users-admin` lo dice nel suo controllo di precondizione; LIVE-002 non ha quel controllo (file di A).
+> - **Conferma**: `test db populate --force` (lo stesso passo di `_api_setup`), poi `api registration` 65 e
+>   `api users-admin` 53, tutti passed.
+>
+> **Fuori pista**:
+>
+> - **Conflitto semantico CP6 × A5a**, rosso anche in `dev_release2` a `8bcb23502`: `test_instance_block.py` fissava il
+>   corpo di `GET /system/instance` a `{"profile": …}`, e A5a ha aggiunto `accounts`.
+>   - Riparato da test-author: per ogni rotta permessa il test confronta la risposta bloccata con quella della stessa
+>     richiesta a blocco spento, e così regge i campi che le altre sessioni aggiungeranno.
+>   - Il controllo negativo (un campo che cambia solo col blocco) dà 2 rossi. `api instance-block`: 44 passed.
+>   - Restano fissati i corpi di `/system/block`, che sono di H; si aggiornano con `billing_url`.
+> - **Avvio del server condiviso fallito una volta** (codice 1), 0 s dopo la fine di `api users-admin`; non si è
+>   ripetuto. L'output del server condiviso è scartato, quindi la causa non si vede. H-12 nel backlog.

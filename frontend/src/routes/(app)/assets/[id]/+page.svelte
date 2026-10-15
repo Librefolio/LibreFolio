@@ -81,8 +81,11 @@
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, collectConfiguredComparisonFxSlugs, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, getComparisonEventFxDependency, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
-    import {fetchCurrentPrices, computeDirection} from '$lib/services/livePriceService';
+    import {computeDirection} from '$lib/services/livePriceService';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
+    import {startActivePolling, type ActivePollingState} from '$lib/features/live-updates/activePolling';
+    import {ASSET_DETAIL_LIVE_INTERVAL_MS} from '$lib/features/live-updates/cadence';
+    import LiveUpdatesStatus from '$lib/features/live-updates/LiveUpdatesStatus.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
     import {collectConfigurableSecondaryAxes} from '$lib/components/charts/chartCoreHelpers';
@@ -345,6 +348,8 @@
     let currentLivePrice = $state<number | null>(null);
     /** True when live price conversion to displayCurrency failed (pair exists but rate unavailable) */
     let livePriceConversionFailed = $state(false);
+    /** State of the live poll, for the page root (`data-live-updates`) and the «Updates paused» pill (F26). */
+    let liveUpdatesState = $state<ActivePollingState>('stopped');
 
     // --- Live price direction flash --------------------------------------------
     // Tracks whether the latest polled tick moved the price up/down vs the
@@ -1478,8 +1483,10 @@
         }
     });
 
-    // Live current price polling — only when chart head date includes today
-    // Re-runs when displayCurrency or assetInfo changes (to reconvert)
+    // Live current price — one poll feeds the price summary and the chart's last point
+    // (F26, decision 31): every 30 s while the chart reaches today, paused while the tab
+    // is hidden or nobody uses the page, resumed by itself. Re-runs when displayCurrency
+    // or assetInfo changes (to reconvert).
     $effect(() => {
         const id = assetInfo?.id;
         const nativeCurrency = assetInfo?.currency;
@@ -1497,13 +1504,19 @@
                 clearTimeout(livePriceFlashTimeoutId);
                 livePriceFlashTimeoutId = null;
             }
+            liveUpdatesState = 'stopped';
             return;
         }
-        // Fetch immediately, then poll every 30s
-        _fetchLivePrice(id, nativeCurrency ?? '', targetCurrency, fxMissing);
-        const timer = setInterval(() => _fetchLivePrice(id, nativeCurrency ?? '', targetCurrency, fxMissing), 30_000);
+        // An answer that lands after this effect re-ran (another currency, another asset) writes nothing.
+        let current = true;
+        const poller = startActivePolling({
+            run: () => pollLivePriceOnce(id, nativeCurrency ?? '', targetCurrency, fxMissing, () => current),
+            intervalMs: ASSET_DETAIL_LIVE_INTERVAL_MS,
+            onstatechange: (state) => (liveUpdatesState = state),
+        });
         return () => {
-            clearInterval(timer);
+            current = false;
+            poller.stop();
             if (livePriceFlashTimeoutId) {
                 clearTimeout(livePriceFlashTimeoutId);
                 livePriceFlashTimeoutId = null;
@@ -1511,63 +1524,82 @@
         };
     });
 
-    async function _fetchLivePrice(assetId: number, nativeCurrency: string, targetCurrency: string, fxMissing: boolean) {
+    /**
+     * One live poll: a single `/assets/prices/current` request feeds the price summary and
+     * the chart's last point. It replaced two loops on the same endpoint (every 30 s for the
+     * summary, every 60 s with a 5 s warm-up for the chart), which made three writes of
+     * today's candle a minute: the endpoint is not read-only, it stores the day's OHLC.
+     */
+    async function pollLivePriceOnce(assetId: number, nativeCurrency: string, targetCurrency: string, fxMissing: boolean, isCurrent: () => boolean) {
+        let item: any;
         try {
-            const results = await fetchCurrentPrices([assetId]);
-            if (results.length === 0 || results[0].value == null) return;
-            const nativeValue = results[0].value;
+            const response = await zodiosApi.get_current_prices_bulk_api_v1_assets_prices_current_post([assetId]);
+            item = (response as any)?.results?.[0];
+        } catch {
+            // Non-blocking: keep the last known value; the next poll retries.
+            return;
+        }
+        // Route or currency changed mid-request: drop the result.
+        if (!isCurrent() || assetId !== data.assetId) return;
+        if (!item || item.value == null) return;
+        const nativeValue = Number(item.value);
+        if (!Number.isFinite(nativeValue)) return;
+        await applyLiveSummary(nativeValue, nativeCurrency, targetCurrency, fxMissing, isCurrent);
+        if (isCurrent()) await applyLiveChartHead(item, nativeValue);
+    }
 
-            // Direction compares this tick's NATIVE value to the previous poll's
-            // NATIVE value (never the day's open, never the display-converted
-            // value) — reuses computeDirection from livePriceService.ts (same
-            // helper the assets list page uses) so a displayCurrency switch can
-            // never fabricate a false up/down tick. First poll after (re)mount
-            // has no previous value → computeDirection returns 'neutral'.
-            const direction = computeDirection(nativeValue, previousNativeLivePrice);
-            previousNativeLivePrice = nativeValue;
-            if (direction !== 'neutral') {
-                livePriceDirection = direction;
-                livePriceFlashToken++;
-                if (livePriceFlashTimeoutId) clearTimeout(livePriceFlashTimeoutId);
-                livePriceFlashTimeoutId = setTimeout(() => {
-                    livePriceDirection = 'neutral';
-                    livePriceFlashTimeoutId = null;
-                }, LIVE_PRICE_FLASH_DECAY_MS);
-            }
+    /** The price summary's share of a live poll: the price, converted when the page shows another currency, and the flash of a tick. */
+    async function applyLiveSummary(nativeValue: number, nativeCurrency: string, targetCurrency: string, fxMissing: boolean, isCurrent: () => boolean) {
+        // Direction compares this tick's NATIVE value to the previous poll's
+        // NATIVE value (never the day's open, never the display-converted
+        // value) — reuses computeDirection from livePriceService.ts (same
+        // helper the assets list page uses) so a displayCurrency switch can
+        // never fabricate a false up/down tick. First poll after (re)mount
+        // has no previous value → computeDirection returns 'neutral'.
+        const direction = computeDirection(nativeValue, previousNativeLivePrice);
+        previousNativeLivePrice = nativeValue;
+        if (direction !== 'neutral') {
+            livePriceDirection = direction;
+            livePriceFlashToken++;
+            if (livePriceFlashTimeoutId) clearTimeout(livePriceFlashTimeoutId);
+            livePriceFlashTimeoutId = setTimeout(() => {
+                livePriceDirection = 'neutral';
+                livePriceFlashTimeoutId = null;
+            }, LIVE_PRICE_FLASH_DECAY_MS);
+        }
 
-            // No conversion needed
-            if (!targetCurrency || !nativeCurrency || targetCurrency === nativeCurrency || fxMissing) {
-                currentLivePrice = nativeValue;
+        // No conversion needed
+        if (!targetCurrency || !nativeCurrency || targetCurrency === nativeCurrency || fxMissing) {
+            currentLivePrice = nativeValue;
+            livePriceConversionFailed = false;
+            return;
+        }
+
+        // Convert via FX API
+        try {
+            const today = new Date().toISOString().slice(0, 10);
+            const convResponse = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([
+                {
+                    from_amount: {code: nativeCurrency, amount: String(nativeValue)},
+                    to: targetCurrency,
+                    date_range: {start: today, end: today},
+                },
+            ]);
+            if (!isCurrent()) return;
+            const convResults = (convResponse as any)?.results ?? [];
+            if (convResults.length > 0 && convResults[0].to_amount?.amount != null) {
+                currentLivePrice = parseFloat(convResults[0].to_amount.amount);
                 livePriceConversionFailed = false;
-                return;
-            }
-
-            // Convert via FX API
-            try {
-                const today = new Date().toISOString().slice(0, 10);
-                const convResponse = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([
-                    {
-                        from_amount: {code: nativeCurrency, amount: String(nativeValue)},
-                        to: targetCurrency,
-                        date_range: {start: today, end: today},
-                    },
-                ]);
-                const convResults = (convResponse as any)?.results ?? [];
-                if (convResults.length > 0 && convResults[0].to_amount?.amount != null) {
-                    currentLivePrice = parseFloat(convResults[0].to_amount.amount);
-                    livePriceConversionFailed = false;
-                } else {
-                    // Conversion returned no results — fallback to native
-                    currentLivePrice = nativeValue;
-                    livePriceConversionFailed = true;
-                }
-            } catch {
-                // FX conversion failed — fallback to native price
+            } else {
+                // Conversion returned no results — fallback to native
                 currentLivePrice = nativeValue;
                 livePriceConversionFailed = true;
             }
-        } catch (e: any) {
-            // Non-blocking: keep last known value or chart fallback
+        } catch {
+            if (!isCurrent()) return;
+            // FX conversion failed — fallback to native price
+            currentLivePrice = nativeValue;
+            livePriceConversionFailed = true;
         }
     }
 
@@ -1974,14 +2006,14 @@
     }
 
     // =========================================================================
-    // I-bis #24 — Live current-price polling (contextual auto-refresh)
+    // I-bis #24 — Live chart head (contextual auto-refresh)
     // =========================================================================
     //
     // Why: clicking Sync already does a targeted merge (decision matrix in
     // handleSyncAsset), but the user wants updates to appear *without* any
-    // manual click. This effect polls ``/assets/prices/current`` once per
-    // minute and, when the polled close differs from the in-memory chart,
-    // merges today's point in-place — zero flicker, signals auto-recompute.
+    // manual click. The live poll above (one request every 30 s) hands its
+    // answer here; when the polled close differs from the in-memory chart, today's
+    // point is merged in place — zero flicker, signals auto-recompute.
     //
     // IMPORTANT (why we do NOT fall back to a silent ``/sync`` call):
     // the ``/current`` endpoint is NOT read-only — its F.2/F.3 side-effect
@@ -1993,12 +2025,10 @@
     // need (close + currency + as_of_date) to update today's point.
     //
     // Constraints:
-    // • Only polls when the asset has a provider assigned (otherwise the
-    //   endpoint would just echo back the DB's last known value — useless).
-    // • Skips polling when the browser tab is hidden (saves provider quota
-    //   and rate limit budget).
-    // • No polling during a full chart reload (``loading === true``) to
-    //   avoid interleaving fetches on the same chartData array.
+    // • Only with a provider assigned (otherwise the endpoint just echoes back
+    //   the DB's last known value — nothing to merge).
+    // • Not during a full chart reload (``loading === true``), to avoid
+    //   interleaving writers of the same chartData array.
     // • Point merge is idempotent: if close == last known close for the
     //   same as_of_date, we skip the state update (no render, no network).
     // • Converted-currency chart (displayCurrency ≠ asset currency): the
@@ -2007,82 +2037,41 @@
     //   a silent full reload (single loadChartData) as the fallback.
     // =========================================================================
 
-    const CURRENT_PRICE_POLL_INTERVAL_MS = 60_000; // 1 minute — conservative
-    let livePollTimerId: ReturnType<typeof setInterval> | null = null;
-
-    async function pollCurrentPriceOnce() {
-        // Guards: skip if tab hidden, no provider, or a full reload is in
-        // progress. Also skip if the asset changed between schedule and
-        // tick (route navigation races).
-        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    async function applyLiveChartHead(item: any, newClose: number) {
         if (!providerAssignment?.provider_code) return;
         if (loading || (primaryMode === 'calendar-return' && calendarReturnView.state === 'loading')) return;
-        const assetIdAtTick = data.assetId;
+        if (item.error || !item.as_of_date) return;
 
-        try {
-            const response = await zodiosApi.get_current_prices_bulk_api_v1_assets_prices_current_post([assetIdAtTick]);
-            // Route changed mid-request: drop the result.
-            if (assetIdAtTick !== data.assetId) return;
-
-            const item: any = (response as any)?.results?.[0];
-            if (!item || item.error || item.value == null || !item.as_of_date) return;
-
-            const newClose = Number(item.value);
-            if (!Number.isFinite(newClose)) return;
-
-            // Idempotent guard: compare with the point for the same date.
-            const existingIdx = chartData.findIndex((p: any) => p.date === item.as_of_date);
-            if (existingIdx >= 0) {
-                const existingClose = Number((chartData[existingIdx] as any).close);
-                if (Number.isFinite(existingClose) && Math.abs(existingClose - newClose) < 1e-9) return;
-            }
-
-            // Converted-currency chart: the polled close is in the asset's
-            // native currency and would flash wrong numbers mid-series. A
-            // single silent full reload is the pragmatic fallback here.
-            const isConvertedChart = !!(displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency);
-            if (isConvertedChart || primaryMode === 'calendar-return') {
-                invalidateAssetPriceStore(data.assetId);
-                await loadChartData(true);
-                return;
-            }
-
-            // Point-level merge: update today's close + currency + as_of_date
-            // via mergeChartPointsIncremental. Enriched fields on the existing
-            // point (original_close, backward_fill_info, …) are preserved by
-            // the shallow-merge rule (the polled item does not carry them,
-            // so they are not overwritten). Signal derivatives ($derived
-            // from chartData) recompute automatically.
-            const polledPoint: any = {
-                date: item.as_of_date,
-                close: newClose,
-                currency: item.currency,
-            };
-            chartData = mergeChartPointsIncremental(chartData, [polledPoint]);
-        } catch {
-            // Silent: polling is best-effort. Next tick will retry.
+        // Idempotent guard: compare with the point for the same date.
+        const existingIdx = chartData.findIndex((p: any) => p.date === item.as_of_date);
+        if (existingIdx >= 0) {
+            const existingClose = Number((chartData[existingIdx] as any).close);
+            if (Number.isFinite(existingClose) && Math.abs(existingClose - newClose) < 1e-9) return;
         }
-    }
 
-    $effect(() => {
-        // Track provider assignment + asset id so the timer restarts on
-        // route change or when a provider is (un)assigned.
-        const hasProvider = !!providerAssignment?.provider_code;
-        const assetId = data.assetId;
-        if (!hasProvider || !assetId) return;
+        // Converted-currency chart: the polled close is in the asset's
+        // native currency and would flash wrong numbers mid-series. A
+        // single silent full reload is the pragmatic fallback here.
+        const isConvertedChart = !!(displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency);
+        if (isConvertedChart || primaryMode === 'calendar-return') {
+            invalidateAssetPriceStore(data.assetId);
+            await loadChartData(true);
+            return;
+        }
 
-        livePollTimerId = setInterval(pollCurrentPriceOnce, CURRENT_PRICE_POLL_INTERVAL_MS);
-        // Kick an initial poll after a short delay so the first tick feels
-        // contextual (but not simultaneous with the page's own initial
-        // loadChartData).
-        const warmupId = setTimeout(pollCurrentPriceOnce, 5_000);
-
-        return () => {
-            if (livePollTimerId) clearInterval(livePollTimerId);
-            clearTimeout(warmupId);
-            livePollTimerId = null;
+        // Point-level merge: update today's close + currency + as_of_date
+        // via mergeChartPointsIncremental. Enriched fields on the existing
+        // point (original_close, backward_fill_info, …) are preserved by
+        // the shallow-merge rule (the polled item does not carry them,
+        // so they are not overwritten). Signal derivatives ($derived
+        // from chartData) recompute automatically.
+        const polledPoint: any = {
+            date: item.as_of_date,
+            close: newClose,
+            currency: item.currency,
         };
-    });
+        chartData = mergeChartPointsIncremental(chartData, [polledPoint]);
+    }
 
     // =========================================================================
     // Actions
@@ -2708,7 +2697,13 @@
     }
 </script>
 
-<div class="space-y-4" data-testid="asset-detail-page" aria-busy={loading || (primaryMode === 'calendar-return' && calendarReturnView.state === 'loading')} data-busy={loading || (primaryMode === 'calendar-return' && calendarReturnView.state === 'loading') ? 'true' : 'false'}>
+<div
+    class="space-y-4"
+    data-testid="asset-detail-page"
+    data-live-updates={liveUpdatesState}
+    aria-busy={loading || (primaryMode === 'calendar-return' && calendarReturnView.state === 'loading')}
+    data-busy={loading || (primaryMode === 'calendar-return' && calendarReturnView.state === 'loading') ? 'true' : 'false'}
+>
     <!-- ======================================================================= -->
     <!-- Header: asset info + back button -->
     <!-- ======================================================================= -->
@@ -2760,6 +2755,7 @@
                             <ExternalLink size={14} />
                         </a>
                     {/if}
+                    <LiveUpdatesStatus state={liveUpdatesState} />
                 </div>
             </div>
         {:else if loading}
