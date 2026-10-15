@@ -68,7 +68,7 @@ migrations need no command.
 | Session cookie setting | `backend/app/config/__init__.py` |
 | ECB provider | `backend/app/services/fx_providers/ecb/plugin.py` |
 | SNB provider | `backend/app/services/fx_providers/snb/plugin.py` |
-| Migrations at startup | `backend/app/main.py` |
+| Migrations at startup | `backend/app/services/platform/database_bootstrap.py` |
 | Gallery fallback base | `mkdocs_src/overrides/main.html` |
 | Admin page (migrations need no command) | `mkdocs_src/docs/admin/docker_advanced.en.md` |
 | Journal | `LibreFolio_developer_journal/Release_2/Phase_0/32_docsEnglish12/plan-phase00DocsEnglish12.prompt.md` |

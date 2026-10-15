@@ -411,6 +411,16 @@ def services_transaction(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "Transaction service tests", verbose=verbose)
 
 
+def services_transaction_cost_basis_rule(verbose: bool = False, test_names: list = None) -> bool:
+    """Test which transaction rows need a cost basis (read from TX_TYPE_METADATA) and when a batch holds them to it."""
+    print_section("Services: Transaction Cost Basis Rule")
+    print_info("Testing: backend/app/services/transactions/validation.py (_requires_cost_basis) + batch_costs.py (validate_cost_basis)")
+    print_info("Tests: the rule follows TX_TYPE_METADATA; creates without a cost refused on their row; updates held to it when they change type, quantity or cost; notes/tags edits of rows stored without a cost")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_cost_basis_rule.py", test_names)
+    return run_command(cmd, "Transaction cost basis rule tests", verbose=verbose)
+
+
 def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> bool:
     """Test that parsing off-loads to a process pool and degrades safely."""
     print_section("Services: BRIM Parse Pool")
@@ -910,6 +920,30 @@ def services_platform_readiness(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Instance readiness tests", verbose=verbose)
 
 
+def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the app's startup and shutdown steps and their runner, the middleware stack and the static site's routes."""
+    print_section("Services: App Lifecycle")
+    print_info("Testing: backend/app/services/platform/lifecycle.py, app_lifespan.py, middleware.py, static_site.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_app_lifecycle.py", test_names)
+    return run_command(cmd, "App lifecycle tests", verbose=verbose)
+
+
+def services_backup_archive(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance backup archive: layout, consistent database copy, manifest, build and check."""
+    print_section("Services: Instance Backup Archive")
+    print_info("Testing: backend/app/services/platform/instance_backup/paths.py, snapshot.py, manifest.py, archive.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_archive.py", test_names)
+    return run_command(cmd, "Instance backup archive tests", verbose=verbose)
+
+
+def services_backup_jobs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance backup jobs: background and foreground runs, one at a time, state on disk, retention."""
+    print_section("Services: Instance Backup Jobs")
+    print_info("Testing: backend/app/services/platform/instance_backup/jobs.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_jobs.py", test_names)
+    return run_command(cmd, "Instance backup jobs tests", verbose=verbose)
+
+
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the credential mask of uvicorn's request lines: the rule, the filter on any record, uvicorn's HTTP and WebSocket records, configure_logging installing it once on each logger."""
     print_section("Services: Credentials in uvicorn's Request Lines")
@@ -1250,6 +1284,13 @@ Note: No backend server required.
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
+    add_test(
+        cat,
+        "transaction-cost-basis-rule",
+        services_transaction_cost_basis_rule,
+        name="Transaction Cost Basis Rule",
+        desc="Which rows need a cost basis, read from TX_TYPE_METADATA; creates refused without one; updates held to it only when they change type, quantity or cost; notes/tags edits of rows stored without a cost commit",
+    )
     add_test(cat, "broker", services_broker, name="Broker Service", desc="CRUD, initial deposits, summaries")
     add_test(cat, "user-profile", services_user_profile, name="User Profile", desc="Username/email update, validation")
     add_test(
@@ -1520,6 +1561,27 @@ Note: No backend server required.
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
     add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
+    add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
+    add_test(
+        cat,
+        "backup-archive",
+        services_backup_archive,
+        name="Instance Backup Archive",
+        desc="Layout and job ids, private folders never written through a link; VACUUM INTO copy as of one instant beside a WAL writer it never blocks, in rollback mode with nothing beside it; read-only description (integrity, foreign keys, rows, revision); manifest round trip, unknown fields ignored, UTC dates, database first, no entry twice, entry paths, every from_bytes code; an archive of the database and custom-uploads, broker_reports, scenario_catalog only (no logs, secrets, scheduler state, backups, -wal/-shm or post-migration files), the -wal's rows included, links, FIFOs and non-UTF-8 names left out and never followed, 0600, written as .part then renamed, space checked first; a file that fails before its entry starts left out with no descriptor left open, one that fails after it (read or write) stops the build (PartialEntryError); check_archive: missing, mismatched, unexpected and duplicated entries, archive_unreadable, manifest codes, reads bounded by the declared size",
+        # PURE: every data directory, database and archive is built under tmp_path; the concurrent WAL writer is a
+        # thread of this process on its own file. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-jobs",
+        services_backup_jobs,
+        name="Instance Backup Jobs",
+        desc="start_backup to done in the background, job_archive, delete_job; run_backup in the calling thread; busy for both while the run lock is held; a running state with a free lock read as backup_interrupted and written down; a failed build (backup_failed) and no space (backup_no_space) end with the work files removed and the lock free, the final state on disk before the lock is released; one-hour retention of finished, dead and unreadable jobs, never links or other entries, a running job holding the lock kept; job ids never paths; state round trip, unknown keys ignored, 50 left-out entries kept; the process-local lock without fcntl; a full disk or quota during the build (ENOSPC, EDQUOT, SQLITE_FULL, through causes and contexts) ends as backup_no_space, any other failure as backup_failed",
+        # PURE: data directories under tmp_path, every call given its data_dir (jobs.get_data_dir is a guard that fails
+        # the test); every background run ends, joined, inside its test. No lane DB, no server, no network.
+        isolation="pure",
+    )
     add_test(
         cat,
         "logging-access-filter",

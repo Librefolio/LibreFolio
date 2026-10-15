@@ -81,8 +81,8 @@ ARG GID=1000
 #   - gosu: privilege drop in entrypoint (like postgres/mysql/redis images)
 #   - sqlite3: CLI for manual DB inspection / ad-hoc one-off fixes on a prod
 #     volume. Schema migrations are now applied automatically at startup — the
-#     app runs `alembic upgrade head` in its lifespan (see backend/app/main.py::
-#     ensure_database_exists), so upgrading the image over an existing data
+#     app runs `alembic upgrade head` in its lifespan (see backend/app/services/
+#     platform/database_bootstrap.py::ensure_database_exists), so upgrading the image over an existing data
 #     volume no longer needs manual migration; sqlite3 stays for inspection only.
 #   - tzdata, tzdata-legacy: the IANA time zone database, old names included
 #     (Asia/Calcutta, US/Eastern…). Python's zoneinfo reads it from the system,
