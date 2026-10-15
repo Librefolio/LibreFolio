@@ -1,0 +1,49 @@
+{
+  "backup": {
+    "tab": "Sauvegarde",
+    "intro": "Les données de ce LibreFolio dans une seule archive, à conserver en lieu sûr ou à transférer vers une autre installation.",
+    "download": {
+      "title": "Sauvegarder l'instance",
+      "description": "Une archive avec la base de données, les fichiers téléversés, les relevés des courtiers et les scénarios de risque. Les journaux et la clé de l'instance ne sont pas inclus.",
+      "privacy": "L'archive contient les données de tous les utilisateurs et n'est pas chiffrée : conservez-la en lieu sûr.",
+      "create": "Créer une sauvegarde",
+      "createAgain": "Créer une nouvelle sauvegarde",
+      "creating": "Création de la sauvegarde…",
+      "checking": "Vérification de la sauvegarde…",
+      "phase": {
+        "preparing": "Préparation",
+        "database": "Copie de la base de données",
+        "files": "Ajout des fichiers",
+        "finalizing": "Finalisation"
+      },
+      "progress": "{done} sur {total}",
+      "ready": "Sauvegarde prête",
+      "readyDetails": "{name}, {size}, créée le {date}",
+      "download": "Télécharger",
+      "delete": "Supprimer du serveur",
+      "deleting": "Suppression de la sauvegarde…",
+      "retention": "L'archive reste sur le serveur pendant une heure, puis elle est supprimée.",
+      "recheck": "Vérifier à nouveau",
+      "retry": "Réessayer",
+      "warningsTitle": "Sauvegarde terminée, avec des avertissements",
+      "warnings": {
+        "database_integrity": "La base de données a échoué au contrôle d'intégrité : elle a été archivée telle quelle.",
+        "foreign_key_violations": "La base de données contient des références invalides entre tables : elle a été archivée telle quelle.",
+        "files_skipped": "Certains fichiers ont été exclus : liens, fichiers spéciaux, fichiers ou dossiers illisibles, ou fichiers supprimés pendant la sauvegarde."
+      },
+      "errors": {
+        "backup_busy": "Une autre sauvegarde est en cours : réessayez quand elle sera terminée.",
+        "backup_no_space": "Espace libre insuffisant sur le serveur pour la sauvegarde.",
+        "backup_folder_unusable": "Le dossier des sauvegardes sur le serveur est un lien ou un fichier : LibreFolio crée les sauvegardes uniquement dans un vrai dossier de son répertoire de données.",
+        "backup_failed": "La sauvegarde a échoué : le journal du serveur donne les détails.",
+        "backup_interrupted": "La sauvegarde a été interrompue, par exemple par un redémarrage : créez-en une nouvelle.",
+        "backup_job_not_found": "Cette sauvegarde n'est plus sur le serveur : créez-en une nouvelle.",
+        "network": "Le serveur ne répond pas.",
+        "unexpected": "Le serveur a répondu par une erreur : rechargez la page et réessayez."
+      },
+      "toast": {
+        "warnings": "Sauvegarde prête, avec des avertissements : vérifiez-les avant de vous y fier."
+      }
+    }
+  }
+}
