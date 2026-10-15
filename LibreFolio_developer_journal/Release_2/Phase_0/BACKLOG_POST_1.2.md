@@ -2390,6 +2390,15 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Da TC-2: guadagno e perdita distinti da successo ed errore.
 
   Dettagli: piano di T, passo T-8 nell'avanzamento.
+- **TC-9 · Il `background_color` del manifest resta il beige delle icone** — basso; T, 15/10. Da decidere.
+  - D-T7 vuole splash, pagina offline e `background_color` del manifest sullo sfondo pagina, che col giro 2 è
+    `#F3F5F3`. Splash e pagina offline lo seguono (T-8).
+  - Il manifest no: `test_pwa_assets.py` (K) lo fissa a `#F5F4EF`, il colore in cui sono dipinte fino al bordo le icone
+    maskable (`icon-maskable-{192,512}.png`), così il ritaglio del launcher incontra lo splash di sistema senza cucitura.
+  - Per seguire D-T7 servono le icone ridipinte e la costante del test aggiornata, nello stesso commit. La differenza
+    fra i due colori è minima.
+
+  Dettagli: piano di T, passo T-8, punto 15.
 
 ---
 
