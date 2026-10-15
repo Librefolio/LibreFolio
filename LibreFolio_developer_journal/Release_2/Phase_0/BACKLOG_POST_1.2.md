@@ -2139,7 +2139,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     checkpoint di J. La voce nella sezione di J la scrive J.
 
   Dettagli: piano della 56, passo 6.
-- **G-9 · La gallery può fotografare un indicatore non applicato** — basso-medio; coordinatore, 15/10 (candidata di L,
+- ✅ **G-9 · La gallery può fotografare un indicatore non applicato** — basso-medio; coordinatore, 15/10 (candidata di L,
   `assets/detail-signals-macd`, mobile it chiaro: menu degli indicatori ancora aperto, MACD non applicato, 1 variante su
   16).
   - Causa (G, verificata nel codice): `selectIndicatorFromTree` (`frontend/e2e/gallery.spec.ts:165`) clicca l'opzione e
@@ -2152,8 +2152,26 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
     Un clic perso diventa un rosso con un messaggio chiaro, invece di uno scatto sbagliato. Vale per tutti i chiamanti:
     EMA, RSI, MACD, Bollinger.
+  - *15/10, diagnosi completata (G, sola lettura):*
+    - l'impronta dello scatto sbagliato ha il focus su `signal-tree-option-macd` e la pagina 342 px più corta: il
+      mousedown è arrivato, il clic no;
+    - `TreeSelect.open()` rimanda con due `setTimeout(0)` focus della ricerca e `scrollIntoView`; sotto carico l'input
+      passa prima dei timer, e il mouseup cade su un'altra voce;
+    - la correzione sceglie da tastiera tramite `aria-activedescendant`, dopo `settledToOpen`, e verifica l'esito;
+    - chiamanti: 5, con il drawdown.
 
-  Dettagli: piano della 56, passo 7.
+    Via del coordinatore alle 13:01: correzione e run filtrata nella corsia 6153.
+  - *15/10, correzione fatta (test-author, `gallery.spec.ts`):* scelta da tastiera dopo `settledToOpen` e il puntatore
+    parcheggiato, con l'esito verificato (menu chiuso, card del tipo). Nella run filtrata (`g-g9-w5`, 5 worker, carico
+    86–150) l'helper è riuscito in tutti i 63 scatti presi: `focus` "-" in tutti, frame identici a `g-final3-r1`, MACD
+    verde sui due progetti. 5 rossi fuori dall'helper (lista asset, clic sul tema, `textStill`, cattura), tutti di
+    carico.
+  - ✅ **15/10, chiusa (DoD 10/10):** codice in `5da3c9eba`, che entra in `dev_release2` con l'ingresso di G-9. Sulla
+    revisione fusa `6f0198a08`, i 5 test con rossi di carico rifatti da soli a 1 worker sono verdi: EMA, RSI e Bollinger
+    desktop, drawdown desktop e mobile. Su 40 scatti: nessuna opzione con il focus, frame identici a `g-final3-r1`,
+    `live_price_check` 0.
+
+  Dettagli: piano della 56, passo 8.
 - **G-10 · Ordine casuale delle immagini del seed nelle liste di file** — medio-basso; G, 15/10, su segnalazione del
   coordinatore (`files/static-grid`: miniatura `men_04` in una corsia, `woman_07` in un'altra).
   - Causa (prodotto, verificata nel codice):
@@ -2169,7 +2187,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     una corsia all'altra. Oggi è contenuto accettato.
   - Correzione proposta (fuori dal perimetro di G): una chiave secondaria deterministica nell'ordinamento di
     `list_uploads`, per esempio il nome originale a parità di `uploaded_at`. Non cambia lo stile. Per un utente conta
-    solo fra file caricati nello stesso istante. Da instradare dal coordinatore.
+    solo fra file caricati nello stesso istante. **Instradata alla 1.3 dal coordinatore il 15/10** (difetto del
+    prodotto, probabilmente H, che ha `services/files`): la voce nella sezione di chi la prende la scrive lui.
 
   Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md).
 - **G-11 · Su mobile, a scroll fermo in fondo alla pagina, l'header resta a volte visibile, solo in spagnolo** — basso;
@@ -2190,6 +2209,28 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     Se la causa è nel prodotto, va segnalata e non corretta qui.
 
   Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md), «Verifica delle correzioni».
+- **G-12 · Due commenti nel codice descrivono ancora il vecchio helper della gallery** — minimo; G, 15/10, handoff di
+  G-9; voce aperta su richiesta del coordinatore. **Proprietario da instradare.**
+  - Da G-9 (`5da3c9eba`), `selectIndicatorFromTree` (`frontend/e2e/gallery.spec.ts`) non tocca più il menu con il
+    puntatore. Apre con ↓, aspetta il focus sulla ricerca, sposta l'evidenziazione con ↓/↑ leggendo
+    `aria-activedescendant`, apre la famiglia chiusa con → e sceglie con Invio.
+  - `frontend/src/lib/components/charts/SignalTreeSelect.test.ts`, la rete di caratterizzazione D-K1 (workstream K):
+    - righe 16–17, l'elenco «Who leans on the contract»: attribuisce all'helper la prima famiglia aperta da sola, che
+      oggi serve allo scatto `assets/detail-signals-tree`, e la famiglia chiusa aperta con un clic, che oggi si apre
+      con →;
+    - righe 306–310: il titolo «the way the gallery helper drives it» e il commento «expand the family only when it is
+      collapsed, then click the option» descrivono il percorso vecchio.
+
+    La riga 213 resta vera. Le asserzioni restano giuste: la scelta con il clic è un percorso degli utenti. Il percorso
+    nuovo della gallery è già fissato dal blocco `keyboard` dello stesso file: ↓ sul trigger chiuso apre con il focus
+    sulla ricerca, poi ↓/↑, → sulla famiglia chiusa, Invio sceglie. Va aggiornato solo il testo, nessuna asserzione.
+  - `frontend/src/lib/components/ui/select/TreeSelect.svelte`, commento alle righe 17–19: resta vero, perché lo scatto
+    `assets/detail-signals-tree` conta sulla prima famiglia aperta da sola (`defaultExpanded`). Da rileggere insieme
+    all'elenco del test: ora la gallery si appoggia anche al contratto da tastiera.
+  - L'intestazione del test vieta di cambiarlo «to accommodate the refactor». Qui il refactor non c'entra: cambia chi
+    usa il contratto, non il contratto. Decide comunque il proprietario.
+
+  Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), passo 8.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
