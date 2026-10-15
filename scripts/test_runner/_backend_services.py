@@ -513,6 +513,26 @@ def services_session_version(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Session version tests", verbose=verbose)
 
 
+def services_address_probe(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the address probe: the signed nonce of the Invite dialog's server-address check (A6a, D-A3)."""
+    print_section("Services: Address Probe")
+    print_info("Testing: backend/app/services/accounts/address_probe.py (issue_probe_nonce, verify_probe_nonce)")
+    print_info("Tests: 56-byte layout under derive_key('accounts.address-probe.v1'), valid while expiry >= now, every forgery and malformed text refused, another instance refused, hmac.compare_digest, never raises")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_address_probe.py", test_names)
+    return run_command(cmd, "Address probe tests", verbose=verbose)
+
+
+def services_account_deletion_preview(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what deleting an account would take, the one helper both deletions use, and the hook of lot A7 (A6a)."""
+    print_section("Services: Account Deletion Preview")
+    print_info("Testing: backend/app/services/accounts/user_service.py (preview_user_deletion, delete_account, account_protection)")
+    print_info("Tests: the preview is what delete_user then deletes in seven scenarios, transaction counts, transfers left unpaired in both directions, writes nothing; report files removed once after the commit, off the loop, never when nothing is deleted or the deletion fails; the hook protects nobody")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_deletion_preview.py", test_names)
+    return run_command(cmd, "Account deletion preview service tests", verbose=verbose)
+
+
 def services_edge_cases(verbose: bool = False, test_names: list = None) -> bool:
     """Test edge cases and regression scenarios for transactions."""
     print_section("Services: Transaction Edge Cases")
@@ -1258,6 +1278,28 @@ Note: No backend server required.
         desc="sv claim: SessionClaims round trip, no sv = version 0, untrusted tokens are None, get_current_user refuses another version, end_sessions, +1 by reset/deactivate/demote only, refusals change nothing",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server. The JWT secret and hash_password are replaced with monkeypatch, in this process only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "address-probe",
+        services_address_probe,
+        name="Address Probe",
+        desc="issue_probe_nonce/verify_probe_nonce: base64url(rand16 ‖ expiry_be8 ‖ HMAC-SHA256(derive_key('accounts.address-probe.v1'))), 120 s while expiry >= now, every altered, malformed, oversized, non-canonical or foreign nonce refused, hmac.compare_digest, never raises",
+        # PURE: no lane DB, no server, no network; the instance key is set with monkeypatch and the data directory points
+        # to tmp_path, where the generated keys of the «another instance» case live.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "account-deletion-preview",
+        services_account_deletion_preview,
+        name="Account Deletion Preview",
+        desc="preview_user_deletion = what delete_user deletes (sole owner, two owners, owner over editor and viewer, editor/viewer only, inactive co-owner, mixed, no broker), transaction counts, transfers_unpaired both directions, writes nothing; delete_account: report files once after the commit, off the loop, not when nothing is deleted, nothing on failure; account_protection None",
+        # PURE: every database is a private file under tmp_path, copied from one taken to head by the real migrations in a
+        # child process (create_all lacks the ON DELETE CASCADE of broker_user_access that delete_user relies on); no session
+        # on the lane DB, no server. The BRIM report directory is moved under tmp_path and the report cleanup replaced with
+        # monkeypatch, in this process only.
         isolation="pure",
     )
     add_test(cat, "edge-cases", services_edge_cases, name="Transaction Edge Cases", desc="Decimal precision, currency validation, date edge cases")
