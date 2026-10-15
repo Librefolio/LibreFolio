@@ -117,8 +117,9 @@ pattern is used across `schemas/signals.py`, `schemas/ai_export_runtime.py`, `sc
 
 ## 🗜️ Response Compression
 
-`backend/app/main.py` installs Starlette's `GZipMiddleware` on the whole application
-(`minimum_size=1024`, `compresslevel=6`), so it covers API JSON as well as the SvelteKit
+Starlette's `GZipMiddleware` (`minimum_size=1024`, `compresslevel=6`) is the first, outermost entry
+of `MIDDLEWARE_STACK` (`backend/app/services/platform/middleware.py`), which `install_middleware(app)`
+puts on the whole application, so it covers API JSON as well as the SvelteKit
 bundle and the documentation served by the same process.
 
 - A response is compressed only when the request's `Accept-Encoding` header contains `gzip`.
