@@ -178,12 +178,12 @@ Contraddetta: **B12** (sezione I), i tre chiamanti di `_get_transactions` passan
 
 | # | Domanda | Proposta | Stato |
 |---|---|---|---|
-| D-J1 | T-B5: P&L dei lotti in valuta estera | **B**: ogni gamba nella sua valuta alla sua data (proventi dalla valuta della chiusura alla data di chiusura, costo dalla valuta del lotto alla data d'apertura; `LotClosure` porta la valuta della chiusura) | al developer (punto 26) |
-| D-J2 | P-10: lo SPLIT riclassificato | **A**: rifiutare il cambio di tipo di uno SPLIT con rettifiche legate senza costo, con un messaggio tradotto | al developer (punto 27) |
-| D-J3 | B11: i giorni di solo cambio dei titoli | curarla in un lotto proprio; valori dichiarati, golden rigenerato | al developer (punto 28) |
+| D-J1 | T-B5: P&L dei lotti in valuta estera | **B**: ogni gamba nella sua valuta alla sua data (proventi dalla valuta della chiusura alla data di chiusura, costo dalla valuta del lotto alla data d'apertura; `LotClosure` porta la valuta della chiusura) | ✅ developer, punto 26 (15/10 13:05): «ok, per il 26 mi hai convinto, segnalo anche sul file però. per altro se ci sono altre aree di codice che fanno una cosa simile, magari duplicando, segna che bisogna fattorizzare e ottenere il meglio dalle 2 con la policy corretta.» |
+| D-J2 | P-10: lo SPLIT riclassificato | **A**: rifiutare il cambio di tipo di uno SPLIT con rettifiche legate senza costo, con un messaggio tradotto | ✅ developer, punto 27 (15/10): «si buona idea, per coerenza» |
+| D-J3 | B11: i giorni di solo cambio dei titoli | curarla in un lotto proprio; valori dichiarati, golden rigenerato | ✅ developer, punto 28 (15/10): «si si, mi pare corretto, bisogna ricalcolare ogni volta che cambia uno dei termini della formula, mi pare ovvio, credo che per ora non sia saltato fuori perchè i provider danno dati tutti i gironi, ma meglio correggere l'algoritmo.» |
 | D-J4 | V-3: chi scrive | W scrive il percorso e la migrazione dei dati; J i rossi su lotti e Dashboard | ✅ coordinatore |
 | D-J5 | Il renderer dell'AI Export | `features/ai-export/**` a J; la sola sezione legale di `promptRenderer.ts` la scrive A, in un lotto concordato | ✅ coordinatore |
-| D-J6 | C-71: due «Rolling Return» | chiavi distinte, nessun ritiro; il testo «(calendar days)» nel catalogo `charts` lo scrive J | scrittura ✅ coordinatore; scelta al developer (punto 29) |
+| D-J6 | C-71: due «Rolling Return» | ~~chiavi distinte, nessun ritiro~~ sostituita dal punto 29: **un solo Rolling Return, a giorni di calendario, ovunque**; `RISK_ROLLING_RETURN` esce; le configurazioni salvate (localStorage, v2→v3) con D = N; riga nel CHANGELOG; la matematica del rendimento sulla finestra nella casa | ✅ developer, punto 29 (15/10 13:05): «29 si sono daccordo, uno solo, ovunque, di calendario, e anche qui, se c'è della matematica fattorizzabile, fallo, abbiamo fatto il service layer finanziario apposta»; opzione (a), D = N, riferita dal coordinatore |
 | D-J7 | Nomi dei moduli | C1 (§2); `series_preparation.py` resta | ✅ coordinatore |
 | D-J8 | `signal_plugins/base.py` e le basi pigre | li sposta X nel PL2 | ✅ (analisi di X) |
 | D-J9 | Schemi | C3 (§2) | ✅ coordinatore |
@@ -192,7 +192,7 @@ Contraddetta: **B12** (sezione I), i tre chiamanti di `_get_transactions` passan
 | D-J12 | U10 | il file del plugin SI è di J per quel lotto, X informato | ✅ coordinatore |
 | D-J13 | `npm ci` | regola C5 | ✅ coordinatore |
 | D-J14 | Versioni dell'AI Export | regola già scritta («Versions» di `ai-development.instructions.md`): +1 al massimo su `v1.2.0`, mappa compatta nello stesso cambio | regola |
-| D-J15 | V-11 | curare la regola: la grazia parte dall'ultima quotazione di mercato; senza quotazioni dal primo BUY/SELL, come oggi | al developer (punto 30) |
+| D-J15 | V-11 | curare la regola: la grazia parte dall'ultima quotazione di mercato; senza quotazioni dal primo BUY/SELL, come oggi | ✅ developer, punto 30 (15/10): «si mi pare ottima!» |
 | D-J16 | La cassa della pagina broker | a W | ✅ coordinatore |
 | D-J17 | X6, X7, X8, `fx.py:717` | restano a J, scritti nei file di X dopo il suo PL4, con X informato | ✅ coordinatore |
 | D-J18 | Guardia del motore del PAC | test `ast` (test-author): i moduli del motore non importano `pac_allocator.source`, `sqlalchemy` né `db.models` | ✅ coordinatore |
@@ -1142,3 +1142,1125 @@ intorno a ogni test e il fuso porta i test di cinque lotti che non ci sono mai p
 > - `pytest --collect-only` (ambiente della corsia): fuso 14 211, `6cd64b71b` estratto 14 202: esattamente i 9 self-test
 >   della guardia, nessun test perso.
 > - Porta 6185 libera.
+
+### C-94 — le build del server di test prima del tempo massimo d'avvio ✅ (2026-10-15) — `1c67dd5d9`, validata sul merge `4a246613e`
+
+Via del coordinatore (15/10, ~07:42): C-94 della sezione C, mentre aspetto le decisioni 26–30. Nessun ramo aperto tocca
+`scripts/test_runner/_server.py`, `frontend/playwright.config.ts` o `dev.py` (verificato dal coordinatore su tutti i
+worktree, colori compresi). Obiettivo:
+
+- le build che servono al server di test (frontend di debug, sito) si fanno prima che parta `STARTUP_TIMEOUT`, con un
+  messaggio che dica cosa si costruisce;
+- senza `frontend/node_modules` ci si ferma subito con un messaggio chiaro, senza mai arrivare a `npx`;
+- `LIBREFOLIO_TEST_STARTUP_TIMEOUT` mantiene il suo senso.
+
+Finestra della galleria dalle 09:00 per ~2 h: il codice si scrive; durante la finestra si lancia solo il file di test
+nuovo (non avvia il server condiviso). Prova end-to-end, `all-backend` e una categoria frontend dopo l'avviso di fine.
+
+#### Disegno ✅ (2026-10-15) — approvato dal coordinatore, tutti e 6 i punti (~07:46)
+
+> **Note implementazione** (stato reale letto prima del disegno):
+> - `dev.py` `cmd_server` (`:176`): in modalità test `debug_mode = True`, poi `auto_build_frontend(debug)` (`:233-238`),
+>   `auto_build_mkdocs()` e `update_js_cache()` (`:240-241`), tutto prima del bind. Il runner lo avvia con stdout e stderr
+>   su `DEVNULL` (`_server.py:274-275`) e fa partire la scadenza subito dopo il `Popen` (`:282`): le build cadono dentro
+>   `STARTUP_TIMEOUT` e non si vedono.
+> - `cmd_fe_build` (`:614`) arriva a `npx svelte-check` (`:643`) e, attraverso `cmd_api_sync` → `cmd_api_client`
+>   (`:705`), a `npm run generate-api`, che chiama `npx openapi-zod-client`: senza `node_modules`, npx va al registro.
+> 1. `dev.py server --build-only`: fa esattamente quello che il server fa prima di uvicorn (frontend nel modo giusto,
+>    sito, cache JS) ed esce senza toccare la porta.
+> 2. `SharedTestServer.start()`: dopo il controllo della porta e prima del `Popen` e della scadenza, lancia
+>    `dev.py server --test --build-only` con l'output visibile e un messaggio; se fallisce, nessun server. Il commento di
+>    `STARTUP_TIMEOUT` (`:43-47`) si aggiorna: misura solo l'avvio.
+> 3. Controllo di `frontend/node_modules/.bin/{openapi-zod-client,svelte-check,vite}` in testa a `cmd_fe_build` e a
+>    `cmd_api_client`: se mancano, exit 1 con «`npm ci` in `frontend/`», senza alcuna chiamata a npm o npx.
+> 4. Playwright: il suo `webServer` avvia il server solo con `--no-shared-server` o `playwright test` diretto; solo
+>    commento. **Corretto subito dopo**: vedi «Galleria».
+> 5. Prove: rossi prima, con `test-author`, in `test_utilities/test_test_server_preparation.py` registrato sotto `utils`;
+>    dopo la finestra, una sorgente frontend toccata e `LIBREFOLIO_TEST_STARTUP_TIMEOUT=20`.
+> 6. File: `dev.py`, `_server.py`, `playwright.config.ts` (commento), il test nuovo, `_backend_utils.py`; il testo per
+>    `.github/copilot-instructions.md` lo propongo nell'handoff e lo scrive il coordinatore.
+>
+> Le tre note del coordinatore: (1) ingresso dopo la finestra, con avviso al coordinatore colori, e nell'handoff una
+> riga su cosa cambia per chi lancia la galleria (l'output della build si vede, il tempo massimo misura solo l'avvio);
+> (2) la doppia build produzione/debug va registrata come J-7 nella mia sezione, con file e righe, senza toccarla qui;
+> (3) durante la finestra solo il file di test nuovo.
+
+#### Galleria ✅ via libera (2026-10-15, ~08:04) — d'accordo il coordinatore e il coordinatore colori
+
+> **⚠️ Fuori pista**: il punto 4 del disegno era sbagliato per la galleria. `cmd_mkdocs_gallery` (`dev.py:933`) non usa
+> `SharedTestServer` (da `_server.py` importa solo le costanti di dimensionamento, `:1005`): lancia `npm run test:e2e`
+> (`:1056`) e il server lo avvia il `webServer` di Playwright, quindi le sue build stanno dentro `STARTUP_TIMEOUT_S`. In
+> CI succede a ogni rilascio: `release.yml:172` fa `front build` di produzione prima della galleria (`:224`), e il server
+> di test la ricostruisce in debug dentro i 300 s (il commento a `release.yml:194` racconta lo stesso per il sito, il
+> timeout del 04/09).
+>
+> Proposta accettata nel merito dal coordinatore: in `cmd_mkdocs_gallery`, dopo la preparazione del DB (`:975-996`) e
+> il controllo della porta (`:1012`), prima di `npm run test:e2e`, lo stesso passo `--build-only` con `gallery_env`
+> (`:1073`), l'env che riceve il webServer; se fallisce, `return 1` prima di Playwright. Condizioni: il via del
+> coordinatore colori (lo chiede lui), e come prova una sola categoria o un sottoinsieme della galleria nella mia corsia,
+> dopo la finestra, che mostri il passo prima di Playwright e un webServer che parte in pochi secondi.
+> `--no-shared-server` e `playwright test` diretto restano fuori, in J-7: lì l'env del webServer porta la
+> strumentazione della copertura JS.
+>
+> **Via del coordinatore colori** (relayed alle ~08:04), con una condizione: `LF_APP_VERSION` deve arrivare al passo
+> `server --test --build-only`. La esporta `scripts/visual_review/gallery_snapshot.sh` (`:61-62`, predefinita
+> `v0.0.0-review`); se la build non la contiene, la galleria rifà la build in debug con `git describe` e il confronto
+> fra commit torna sporco. Verificato: `gallery_env` nasce da `os.environ.copy()` (`dev.py:1073`), quindi il passo la
+> riceve passandogli `env=gallery_env`. La barra laterale legge `APP_VERSION` di `$lib/version`, cioè
+> `__APP_VERSION__`, fissato da `vite.config.ts:87-88` al momento della build. Quindi la prova deve far ricostruire
+> davvero il frontend durante il passo: una sorgente frontend toccata prima. Prova: `LF_APP_VERSION=x-c94`, una sola
+> categoria della galleria nella mia corsia, la barra laterale dello scatto deve mostrare `x-c94`. Quando: dopo la
+> chiusura della finestra annunciata dal coordinatore colori (fino alle ~12:30, 5 gallerie complete in fila);
+> l'ingresso dopo R e L. Le PNG della galleria sono ignorate da git (`.gitignore:79`): la prova non sporca il worktree.
+
+#### Altre superfici trovate (2026-10-15)
+
+> **Note implementazione**:
+> - `mkdocs_src/docs/developer/dev_workflow.en.md:153` («Why the image cannot run test mode»): «`server --test` …
+>   rebuilds, which runs `npm` (API client generation, then the build itself), and the image has no Node.js». Con il
+>   controllo di `node_modules` la build si ferma prima di npm, con il messaggio: frase da aggiornare (docs-writer,
+>   modifica puntuale, timbro della traduzione).
+> - Le guardie che leggono `dev.py` col solo testo o con l'AST (`test_release_image_contract.py:1621-1647`: gli argv di
+>   `cmd_install`, le costanti letterali; `test_dev_cli_image.py` IMG-010 su `cmd_server`) non toccano le funzioni
+>   cambiate in modo incompatibile; la guardia d'ambiente di H scandisce solo `backend/app/`
+>   (`test_config_package.py:93`).
+> - `test_runtime_isolation.py:1431-1465` confronta il tempo di Playwright con quello del runner leggendo
+>   `playwright.config.ts` senza i commenti a riga intera, e i controlli negativi cercano ancore esatte
+>   (`timeout: STARTUP_TIMEOUT_S * 1000,`, `?? '300'`, `Number(STARTUP_TIMEOUT_RAW)`), che devono comparire una sola
+>   volta: il commento nuovo non le deve ripetere.
+> - Rimangono `npx` diretti nel runner frontend (Vitest e `_consolidate.py`): registrati come J-8, fuori da C-94.
+
+#### Scelte di dettaglio (2026-10-15)
+
+> **Note implementazione**:
+> - **Env del passo di build nel runner**: quello del runner, senza il cablaggio della copertura Python
+>   (`apply_subprocess_coverage_env`) che riceve il server. Le build escono identiche: il cablaggio aggiunge solo
+>   `COVERAGE_PROCESS_START` e la `sitecustomize` al `PYTHONPATH`, e la strumentazione JS (`COVERAGE_INSTRUMENT`) non sta in
+>   `os.environ` quando parte il server (`_frontend_common.py` la mette solo durante la sua build). Così l'attrezzatura non
+>   entra nella copertura: `cli_base.configure_test_runtime` importa `backend.app.config` (`:206`, `:246`), che sta nel
+>   `source` di `.coveragerc`; gli hook di MkDocs non importano il backend.
+> - **Porta**: un solo controllo, prima delle build (fallire subito invece di costruire per minuti e poi rifiutare). Fra
+>   le build e il `Popen` protegge il controllo che `cmd_server` fa subito prima del bind, e la salute autenticata per
+>   corsia impedisce di agganciarsi a un server altrui. I test di proprietà esistenti contano le chiamate a
+>   `port_holders`: restano invariate.
+> - **Nessun limite di tempo sulle build**: prima una build appesa falliva a 300 s; ora si vede dove è ferma e si
+>   interrompe a mano. Un limite separato sarebbe una variabile nuova: punto aperto per il coordinatore.
+> - `update_js_cache.py` controlla la rete a ogni avvio e stampa ~20 righe: gira una volta in più, fuori dal tempo
+>   massimo; il server lo rifà dentro, come oggi.
+
+#### Galleria, worker predefiniti ✅ (2026-10-15, 10:35–11:00) — richiesta del coordinatore colori, in C-94
+
+> **Note implementazione**: senza `--workers`, `cmd_mkdocs_gallery` usa `max(2, os.cpu_count() or 2)` worker browser.
+> Su questo Mac (10 CPU) sono 10 browser più 3 worker del server: r1 è arrivata a carico 65, con 8 rossi in 10 minuti
+> per saturazione. Con 6 worker, due run da 30 minuti verdi a carico 11–16. Proposta del coordinatore colori, presa in
+> C-94 perché piccola e nella stessa funzione:
+> - `default_gallery_workers()` = `max(1, round(0.6 × CPU))`, con la costante `GALLERY_BROWSER_WORKERS_PER_CPU`;
+> - i worker del server restano `server_workers_for` (uno ogni quattro): su questo Mac 6 e 2 invece di 10 e 3;
+> - l'aiuto di `--workers` e una riga della skill `devpy-mkdocs`.
+>
+> I rossi li scrive un `test-author` nuovo (quello di prima non esiste più): la tabella, la lettura delle CPU al momento
+> della chiamata, la galleria senza `--workers` (`--workers 6`, `GALLERY_SERVER_WORKERS=2`), il `--workers` esplicito
+> che vince. La prova della galleria si fa senza `--workers`, così l'uscita mostra «Browser workers: 6 | Server
+> workers: 2».
+>
+> **Note implementazione** (`test-author` nuovo, log `/tmp/libreFolio_j/c94/tb_*.log`, poi J):
+> - **Rossi**: `test_test_server_preparation.py` da 630 a 730 righe, con la classe
+>   `TestGalleryDefaultBrowserWorkers` (6 test, 16 casi), e una riga nella `desc` di `test-server-preparation`. Sul codice
+>   di prima 12 falliti per la ragione attesa (8 casi della tabella e 2 test con `AttributeError`; galleria a 10 CPU
+>   `('10', '3')` invece di `('6', '2')`, a 16 CPU `('16', '4')` invece di `('10', '3')`), 49 verdi (i 45 di prima e 4
+>   guardie: `--workers` esplicito 3 e 12, parser). `check-orphans` verde.
+> - **Aggiunte di `test-author`, giuste**: il caso a 16 CPU (un 6 scritto fisso passerebbe a 10) e la doppia chiamata
+>   10 → 6 poi `None` → 1, che distingue una lettura a ogni chiamata da una fatta all'import; `--workers 12`, sopra il
+>   predefinito, prova che l'esplicito non viene limitato.
+> - **Codice** (`dev.py`): la costante `GALLERY_BROWSER_WORKERS_PER_CPU = 0.6` e `default_gallery_workers(cpu_count=None)`
+>   (`os.cpu_count() or 2` letto alla chiamata, `max(1, round(0.6 × CPU))`) prima di `cmd_mkdocs_gallery`, che la usa
+>   senza `--workers`. Aiuto di `--workers`: «default: 60%% of the CPU count, at least 1»; argparse lo mostra come
+>   «60%»; l'albero di `dev.py --help` non elenca le opzioni della galleria. Skill `devpy-mkdocs`: «browser workers:
+>   60% of the CPUs».
+> - **Verdi**: `utils test-server-preparation` **61 passed** (`j_green_3.log`), `utils runtime-isolation` **175 passed**
+>   (`j_green_4_runtime_isolation.log`). Ruff su `dev.py`, `_server.py`, `_backend_utils.py` uguale a HEAD: solo i due
+>   C901 già sopra soglia, a +1 ciascuno, come prima. `dev.py lint` pulito, `git diff --check` pulito.
+
+#### Passi
+
+1. ✅ (2026-10-15) Rossi con `test-author`: file nuovo, registrazione `utils`, i finti di `test_runtime_isolation.py` per il seam nuovo.
+   > **Note implementazione** (`test-author`, log in `/tmp/libreFolio_j/c94/ta_*.log`):
+   > - `backend/test_scripts/test_utilities/test_test_server_preparation.py` (nuovo, 630 righe, 45 test in 5 classi, un
+   >   contratto ciascuna): `--build-only` (passi prima del bind nell'ordine e nel modo di oggi, nessun controllo della
+   >   porta, nessun comando, nessun `execvpe`; il comando dei prerequisiti del runner è una tale esecuzione); controllo di
+   >   `frontend/node_modules/.bin` (link di npm e file shim, ordine chiesto, silenzio quando c'è tutto, `npm ci` nel
+   >   messaggio, nessun passo di `cmd_fe_build` e nessun npm in `cmd_api_client` quando manca qualcosa);
+   >   `SharedTestServer.start()` (porta → build → spawn, una build più lunga di `STARTUP_TIMEOUT` non fa fallire
+   >   l'avvio, build fallita = nessuno spawn, porta occupata = nessuna build, env della build senza il cablaggio della
+   >   copertura); `build_server_prerequisites()` (in primo piano: niente `capture_output`/`stdout`/`stderr`, `cwd`
+   >   esplicito, `check=False`, il codice d'uscita nominato); galleria (`lane-db → port-check → build → playwright`,
+   >   env della build uguale a quello di Playwright con `LF_APP_VERSION` e `TEST_PORT`, build fallita = exit 1 senza
+   >   Playwright, `--list` senza build). Una fixture autouse vieta ogni processo e segnale veri.
+   > - `test_runtime_isolation.py` (+7): `build_server_prerequisites` finto (`raising=False`) in `patch_spawn`, nel
+   >   test di `TestExecUnmaskedWrapper` (che conta le chiamate a lsof) e in `run_gallery` (`TestGalleryHandsTheSetupToPlaywright`,
+   >   quarta modifica trovata da `test-author`); vietato nel test della porta occupata.
+   > - `scripts/test_runner/_backend_utils.py` (+20): `utils test-server-preparation`, `isolation="pure"`.
+   > - **Rosso sul codice di prima**: 44 falliti per la ragione attesa (argparse rifiuta `--build-only`;
+   >   `AttributeError` su `dev.FRONTEND_NODE_BIN`, `_server.prerequisites_command`, `_server.build_server_prerequisites`;
+   >   l'ordine sbagliato: «the backend was spawned on a path that must spawn nothing»), 1 verde di proposito (la
+   >   guardia di `--list`). `utils runtime-isolation` 175 verdi dopo l'adattamento. Con l'interfaccia applicata solo in
+   >   memoria (un conftest temporaneo, poi cancellato): 45/45, e sette difetti voluti presi ciascuno dai test giusti
+   >   (scadenza prima della build, env di copertura alla build, output su DEVNULL, `--build-only` senza documenti e
+   >   cache, controllo dopo la cache JS, mancanti riordinati, build della galleria prima di `gallery_env`).
+   >   `check-orphans` verde (277 file). Nessun file di prodotto scritto da `test-author` (sha256 prima e dopo).
+2. ✅ (2026-10-15) Codice: `dev.py` (`--build-only`, controllo di `node_modules`, passo della galleria), `_server.py`,
+   commento di `playwright.config.ts`.
+   > **Note implementazione**:
+   > - `dev.py`: `FRONTEND_NODE_BIN`, `FRONTEND_BUILD_BINARIES = ("openapi-zod-client", "svelte-check", "vite")`,
+   >   `API_CLIENT_BINARIES = ("openapi-zod-client",)`, `missing_frontend_binaries()`, `require_frontend_dependencies()`
+   >   (exit 1, l'errore nomina i mancanti, poi «cd frontend && npm ci» e perché mai npx); il controllo è la prima
+   >   istruzione di `cmd_fe_build` e di `cmd_api_client`. `cmd_server`: `build_only`; dopo `update_js_cache()`, se
+   >   `--build-only`, un messaggio ed exit 0 (la build fallita del frontend esce già prima con il suo codice); parser
+   >   `--build-only` (`dest="build_only"`). `cmd_mkdocs_gallery`: `build_server_prerequisites(env=gallery_env)` dopo
+   >   che `gallery_env` è completo e prima di `npm run test:e2e`, exit 1 se fallisce; la riga «📸 Running screenshots»
+   >   spostata dopo la build, perché venga stampata dopo l'output della build.
+   > - `_server.py`: `prerequisites_command()`, `build_server_prerequisites(env=None)` (`subprocess.run` in primo piano,
+   >   `cwd=PROJECT_ROOT`, `check=False`, tempo trascorso nel messaggio); in `start()` la chiamata fra il controllo della
+   >   porta e il «Starting shared test backend», senza env (eredita quello del runner, senza il cablaggio della
+   >   copertura); commento di `STARTUP_TIMEOUT`: misura il solo avvio.
+   > - `playwright.config.ts`: solo il commento sopra `STARTUP_TIMEOUT_RAW`, senza ripetere le ancore dei controlli
+   >   negativi di `test_runtime_isolation.py`.
+3. ✅ (2026-10-15, 08:29) Verdi: `utils test-server-preparation` **45 passed** (`j_green_1.log`), `utils runtime-isolation`
+   **175 passed** (`j_green_2_runtime_isolation.log`).
+   > **Note implementazione** (statici): `dev.py lint` (ruff su `backend/`, test compresi) «All checks passed». Su
+   > `dev.py`, `_server.py`, `_backend_utils.py`, confrontati con HEAD: ruff 42 = 42, stesse regole per file; salgono
+   > di uno solo i C901 già oltre soglia di `cmd_mkdocs_gallery` (42 → 43) e `cmd_server` (31 → 32). Black segnala
+   > `dev.py` e `_server.py` già su HEAD, con lo stesso numero di blocchi (43 e 6): le mie righe seguono lo stile locale
+   > di `dev.py` (apici singoli nei `getattr`, `add_argument` su due righe). `git diff --check` pulito.
+4. ✅ (2026-10-15) J-7 nella sezione J del backlog.
+   > **Note implementazione**: «J-7 · Il frontend dei test si costruisce in produzione e in debug», con file e righe
+   > verificati: `dev.py:204`, `:2110`, `:2124`; `_frontend_common.py:71-74`, `:93`; `cli_base.py:620`;
+   > `release.yml:172`; `playwright.config.ts:31-39`. Verificato anche che adapter-static svuota `build/`
+   > (`builder.rimraf`), quindi la build di debug del server cancella `.coverage-instrumented`. Nel codice risulta che
+   > col server condiviso non c'è doppia build fuori dalla copertura JS: i test frontend girano sul bundle di debug del
+   > server. Dentro J-7 anche `--no-shared-server` e `playwright test` diretto, con la ragione della copertura JS
+   > (d'accordo il coordinatore). Aggiunta anche **J-8**: le chiamate dirette a `npx` del runner frontend (Vitest in
+   > `_frontend_*.py`, `_consolidate.py:179,265`), che C-94 non copre; le azioni Playwright passano da
+   > `_ensure_frontend_build` → `cmd_fe_build`, che ora si ferma.
+5. ✅ (2026-10-15) Galleria (via libera ~08:04): il passo in `cmd_mkdocs_gallery` con `env=gallery_env` (nota al passo
+   2); la prova con `LF_APP_VERSION=x-c94` è nel passo 6.
+5b. ✅ (2026-10-15, 08:40) Documentazione con `docs-writer` (solo inglese, nessuna build durante la finestra).
+   > **Note implementazione**: `developer/dev_workflow.en.md:153` (nell'immagine Docker `server --test` si ferma al
+   > controllo di `node_modules`, col messaggio); `developer/test-walkthrough/runner_architecture.md:797` (la riga di
+   > `_server.py`: porta → build in primo piano senza cablaggio di copertura → spawn; `STARTUP_TIMEOUT` misura il solo
+   > avvio); `developer/test-walkthrough/front-overview.md:42` (il backend condiviso costruisce prima di partire; con
+   > `--no-shared-server` la build resta dentro l'attesa del webServer); `developer/docs/release-pipeline.md:207-254` (la
+   > ricostruzione di debug della galleria è del suo passo di build, con `LF_APP_VERSION`; i fatti della CI invariati).
+   > `dev.py mkdocs check-links`: exit 0 (95 validi, 8 risolti a runtime). Nessun timbro di traduzione: il manuale per
+   > sviluppatori è solo inglese (`EN_ONLY_SECTIONS`), un timbro avrebbe dichiarato tre traduzioni inesistenti.
+   > La `mkdocs build` stretta resta da fare dopo la finestra.
+   >
+   > **⚠️ Fuori pista**: testi diventati inesatti fuori dal mio perimetro, da proporre al coordinatore nell'handoff:
+   > `.github/copilot-instructions.md:89` (il rimedio «build once with `front build --debug` and `mkdocs build`»);
+   > i commenti di `.github/workflows/release.yml:136-141, 196-201, 230-233, 238` (la ricostruzione di debug e il sito
+   > attribuiti al webServer; i passi restano giusti, il file è letto con `yaml.safe_load`, quindi nessun test guarda i
+   > commenti); `.github/skills/devpy-tools/devpy-mkdocs/SKILL.md:50-55` («Gallery Pipeline» senza il passo di build) e
+   > `devpy-server/SKILL.md` senza `--build-only`. Due docstring di `test_release_image_contract.py` (`:3-5`, `:1314`)
+   > affidati a `test-author`, solo testo.
+5c. ✅ (2026-10-15, 08:50) Testi `.github` assegnati a J dal coordinatore (08:46): i 4 commenti di `release.yml` e le due
+   skill. `copilot-instructions.md:89` resta una proposta per l'handoff (lo scrive il coordinatore).
+   > **Note implementazione**:
+   > - `.github/workflows/release.yml`, solo commenti: «Freeze the app version» (la ricostruzione di debug è del passo
+   >   di build della galleria), «Build MkDocs Documentation» (il sito costruito qui è già aggiornato per il passo; fino
+   >   al 15/10 la build stava nel budget d'avvio del webServer, storia del 04/09 conservata), «Rebuild SvelteKit
+   >   Frontend» (il passo `--build-only` prima del webServer ricostruisce in debug), «Rebuild MkDocs» (tolto «fast
+   >   webServer start»). `yaml.safe_load` di HEAD e del worktree: identici. Tutti i consumatori di test passano da
+   >   `yaml.safe_load`.
+   > - `devpy-server/SKILL.md`: la riga `server --test --build-only`; l'elenco «What `server` does automatically»
+   >   nell'ordine vero (build, documenti, cache JS, poi la porta subito prima del bind: l'ordine scritto metteva la
+   >   porta per prima, superato da un cambio precedente), con cosa fa `--build-only` e chi lo lancia; nel blocco
+   >   Frontend il controllo di `node_modules` di `front build` e `api client|sync`.
+   > - `devpy-mkdocs/SKILL.md`, «Gallery Pipeline»: il passo di build (3) prima del webServer (4).
+   > - Nessun test legge le skill; una sola copia di ciascuna.
+6. ⏳ Dopo l'avviso di fine finestra: prova end-to-end con `LIBREFOLIO_TEST_STARTUP_TIMEOUT=20`, un sottoinsieme della
+   galleria, `all-backend`, una categoria frontend.
+   > **Note implementazione** (preparazione, 08:45): sequenza comunicata al coordinatore, una alla volta sulla 6185:
+   > (1) `mkdocs build` stretta; (2) `touch` di una sorgente frontend (cambia la data, non il contenuto) e un'azione `api`
+   > con `LIBREFOLIO_TEST_STARTUP_TIMEOUT=20`: build visibili prima di «Starting shared test backend», server pronto
+   > entro 20 s; (3) un altro `touch`, poi `LF_APP_VERSION=x-c94 … mkdocs gallery --test-port 6185 --desktop-only
+   > --no-populate -f "about tab"` (1 test, 8 scatti; senza `--workers` dalle 10:35, perché l'uscita mostri il valore
+   > predefinito nuovo, «Browser workers: 6 | Server workers: 2»): ricostruzione di debug nel passo, prima di Playwright;
+   > barra laterale e scheda About con `x-c94`; (4) `all-backend --workers 2`; (5) `front-user all` (3 spec). Le righe
+   > con l'ora (`perl -MPOSIX`) per misurare build e avvio. `tee_output` copia a livello di descrittore (`dup2`):
+   > l'output della build, ereditato dal figlio, finisce anche nei log del runner.
+   > Docstring di `test_release_image_contract.py` (`:3-10`, `:1315`) corretti da `test-author`, solo testo, nessuna
+   > esecuzione.
+   >
+   > **Fine finestra (coordinatore, 13:01)**, con la regola nuova per tutte le corsie: al massimo 2 suite pesanti alla
+   > volta sulla macchina (`all-backend`, una categoria `front-*` intera, `utils all`, la galleria), assegnate dal
+   > coordinatore; libere con `nice -n 10` le azioni singole, Vitest, una spec E2E con `--workers 2`, `front build`,
+   > `front check`, `mkdocs build`.
+   > - ✅ (1) **`mkdocs build`** stretto, 13:04–13:05 (carico 25): exit 0, «Documentation built in 37.11 seconds»;
+   >   l'unica riga «Warning» è l'avviso informativo di Material for MkDocs (`p1_mkdocs_build.log`).
+   > - ✅ (2) **Prova di contatto**: `touch` di `frontend/src/lib/version.ts` e di
+   >   `mkdocs_src/docs/user/assets/detail/chart.en.md` (git non vede differenze), poi
+   >   `LIBREFOLIO_TEST_STARTUP_TIMEOUT=20 … nice -n 10 … api system`, 13:06:24–13:11:09 (carico 42). Il passo di build ha
+   >   ricostruito sito e frontend in debug: «Test server builds ready in 262s», poi «Shared backend ready on port 6185»
+   >   entro i 20 s; `api system` verde, exit 0 (`p2_e2e_timeout20.log`, con l'ora su ogni riga). Prima di C-94 la
+   >   stessa corsa sarebbe fallita a 20 s con le build dentro l'attesa.
+   >
+   > **⚠️ Fuori pista**: nel log della prova le righe escono in disordine. «Preparing the test server…» compare dopo
+   > tutta la build, e i messaggi del figlio (`dev.py`, «📦 Frontend sources changed, rebuilding…») dopo l'output di
+   > npm e di mkdocs che introducono. Causa: quando stdout è una pipe (CI, il `tee` di `gallery_snapshot.sh`, i log del
+   > runner) Python lo bufferizza a blocchi. Sul terminale l'ordine è giusto. Cura dentro C-94: `sys.stdout.flush()`
+   > e `sys.stderr.flush()` prima di `subprocess.run` in `build_server_prerequisites`, e il figlio con `python -u`
+   > (`prerequisites_command`). I rossi li scrive un `test-author` nuovo. Segnalato al coordinatore.
+   >
+   > **Pausa per la finestra delle dipendenze** (coordinatore, ~13:12: il developer installa `cryptography`
+   > nell'ambiente condiviso): nessun comando Python fino all'avviso; risposto «fermo» (nulla in corso, porta 6185 libera).
+   > Restano pesanti, su slot assegnato: (3) la galleria con `LF_APP_VERSION=x-c94` e i worker predefiniti,
+   > (4) `all-backend --workers 2`, (5) `front-user all`.
+   >
+   > **Slot pesante 2 assegnato dal coordinatore (15:58)**, in quest'ordine, con `nice -n 10`: `all-backend --workers 2`,
+   > `front-user all`, la galleria (questa solo dopo il suo via: passa dallo slot del programma colori); in più
+   > `api pac-planner-tool` di CP-2. HEAD `f87ad04c6` (stesso codice dell'ultima run validata, `c7a2b050e`), con C-94 e
+   > CP-2 non committati.
+   > - ✅ (4) **`all-backend --workers 2`**, 16:00:11–16:18:03 (carico 31 all'avvio): 7/7, «ALL BACKEND TESTS PASSED»,
+   >   17 min 49 s; totali, lavoratori paralleli compresi, **14 283 passed, 28 skipped, 0 failed**; 6 avvisi (quelli
+   >   della sessione `schemas`); nessun `PytestUnhandledThreadExceptionWarning`. Rispetto all'ultima run validata
+   >   (14 199 / 29): +84 = +63 di C-94 (`test_test_server_preparation.py`) +14 di C-75 (`test_pac_planner_report.py`)
+   >   +6 di C-76 (`test_cash_amount_issues_name_the_field_that_is_wrong`) +1 dello skip di `css_scraper`, che a mercato
+   >   aperto gira. I file nuovi e cambiati sono nei log dei lavoratori (`.testLog/backend-parallel__worker*.log`, tutti
+   >   `exit=0`). **Il passo di build di C-94 sotto carico vero**: «Preparing the test server…», «📦 Frontend sources
+   >   changed, rebuilding…» (i file di CP-2), vite di debug, «✅ Test server builds ready in 140s», poi «Starting shared
+   >   test backend» e «Shared backend ready» subito; le righe escono nell'ordine giusto anche sul `tee`, quindi la cura
+   >   dell'ordine dell'output è provata. Log `/tmp/libreFolio_j/c94/h1_all_backend.log`.
+   > - ✅ **`api pac-planner-tool`** (CP-2), 16:19:49–16:20:19: **12/12**; passo di build in 3 s senza nulla da
+   >   ricostruire, server pronto subito (`h2_api_pac_planner_tool.log`). Era già nel passaggio API di `all-backend`.
+   > - ✅ (5) **`front-user all`**, 16:20:29–16:22:09: Playwright **20/20**, 3 spec in una run desktop con 1 worker
+   >   (account-deletion, broker-sharing, multi-user; 59,5 s), poi `user-unit`, Vitest **78/78** su 2 file; passo di build
+   >   3 s (`h3_front_user_all.log`).
+   > - ✅ (3) **La galleria** (via del coordinatore alle 16:36, dentro lo slot 2, carico ~46), 16:36:20–16:39:35, script
+   >   `/tmp/libreFolio_j/c94/h4_gallery.sh`, log `h4_gallery.log` con l'ora su ogni riga: **1 passed** (38,3 s, 8
+   >   scatti `desktop/{en,it,fr,es}/{light,dark}/settings/about.png`), exit 0. In ordine: «Browser workers: 6 | Server
+   >   workers: 2» (il valore predefinito nuovo), «Preparing the test server…», «📦 Frontend sources changed,
+   >   rebuilding…» (il `touch`), «✅ Test server builds ready in 108s», poi «📸 Running screenshots» e «Running 1 test
+   >   using 1 worker». Lo scatto `en/light` mostra **`x-c94` in tutti e due i posti**: «Version x-c94» nella scheda
+   >   About (dal backend) e `x-c94` in fondo alla barra laterale (dalla build del frontend). Quindi `LF_APP_VERSION`
+   >   arriva al passo di build; la build porta `x-c94` in 1 file e nessuna traccia della versione di `git describe`.
+   >   PNG spostati in `/tmp/libreFolio_j/c94/gallery_shots/`, nessun file tracciato toccato. La build di debug della
+   >   corsia resta con `x-c94` fino alla prossima modifica del frontend: nessun test ne legge il valore
+   >   (`changelog-locale.spec.ts` clicca `sidebar-version`, `settings.spec.ts:673` controlla che `about-version` sia
+   >   visibile). Un altro `touch` avrebbe fatto partire una build non richiesta nella prossima prova leggera.
+   >
+   > **⚠️ Fuori pista** (osservazione, non toccata): nel log della galleria le righe dopo il passo di build («builds
+   > ready», «Running screenshots» e tutto l'output di Playwright) hanno la stessa ora, 16:39:35. Arrivano tutte alla
+   > fine, nell'ordine giusto: `cmd_mkdocs_gallery` ristampa l'output di Playwright con `print(line, end='')` senza
+   > flush, e su una pipe Python lo bufferizza a blocchi. È così anche in HEAD, e non è di C-94: la cura di C-94 tocca
+   > l'ordine del passo di build, che è giusto e con l'ora vera. Riga J-15 nel backlog (la galleria è del programma
+   > colori).
+   >
+   > **MathJax** (coordinatore, 16:36): è la VPN aziendale che rifirma il TLS, la stessa causa per cui qui falliscono le
+   > build Docker; in CI non succede. Nessuna riga nel backlog.
+7. ✅ (15/10, 16:45) Handoff FROZEN al coordinatore, con lo slot 2 liberato: checkpoint di C-94 e CP-2 con i percorsi
+   espliciti e tre commit proposti (C-94, CP-2, giornale), il testo per `.github/copilot-instructions.md:89`, la riga
+   per chi lancia la galleria, i rapporti delle revisioni W N1, CP-15, l'ok su `derived_views.py`, J-15, e la
+   previsione dei conflitti con `dev_release2` `dae4de4fa` (161 commit dopo la mia base):
+   - due conflitti testuali certi in `scripts/test_runner/_backend_utils.py`, perché le due parti inseriscono negli
+     stessi punti (`:270` e `:553`): si tengono tutte e due, le 3 funzioni e registrazioni loro e la 1 mia;
+   - unione automatica attesa in `dev.py` (funzioni diverse: loro `_check_env_file`, Docker,
+     `_read_frontend_build_mode_marker`), `test_runtime_isolation.py` (classi diverse), `release-pipeline.md` (righe
+     separate da righe invariate), le altre 3 pagine e il backlog;
+   - poiché `--build-only` passa da `cmd_server` e `_check_env_file`, sulla revisione fusa vanno rifatti
+     `utils test-server-preparation`, `utils runtime-isolation` e `check-orphans`.
+   > N1 di W è in `dev_release2` (`14d58cc61`, `native_balances` a `native_cash.py:424`): dopo il prossimo
+   > aggiornamento di base si possono fare CP-15 e la sostituzione della chiamata di W (J-14, ora
+   > `brokers/summary.py:141`), col diff approvato da W.
+
+#### Checkpoint C-94 + CP-2 ✅ (2026-10-15) — committato dal coordinatore
+
+`1c67dd5d9` fix(test-runner): build test server before timeout · `5810e03d2` fix(pac): exact percent ties, sign and -0
+checks · `506042729` docs(journal): J C-94 and CP-2 checkpoint. Il testo per `.github/copilot-instructions.md:89` e le
+righe del CHANGELOG di CP-2 li mette il coordinatore all'ingresso; J-15 resta nel backlog.
+
+#### Aggiornamento di base 6 — `dev_release2` `dae4de4fa` ✅ (2026-10-15) — merge `4a246613e`
+
+Merge aperto dal coordinatore (`MERGE_HEAD` `dae4de4fa`, 161 commit dopo `f87ad04c6`: W N1/N1b/FE8a/E1a/E1c, Z1, L-10,
+G-9/G-10, H CP7a, Y1, A5, C-96 e i loro giornali), commit del merge suo: `4a246613e`, genitori `506042729` e
+`dae4de4fa`, albero pulito.
+
+> **Note implementazione**:
+> - **Conflitto**: solo `scripts/test_runner/_backend_utils.py`, due zone, come previsto: le due parti inseriscono negli
+>   stessi punti, una funzione e una registrazione dopo `runtime-isolation`. Risolto tenendo tutte e due: prima le loro
+>   (`confined-path`, `static-route-confinement`, `jwt-secret-blank`), come sul bersaglio, poi la mia
+>   (`test-server-preparation`). Risolto con uno script sui marcatori esatti (copia del file in conflitto in
+>   `/tmp/libreFolio_j/c94/merge_backend_utils_conflicted.py`), poi `git add` del solo file, come chiesto. **Prova**:
+>   il file risolto differisce da `dae4de4fa` esattamente per le mie modifiche (`f87ad04c6..HEAD`) e da HEAD esattamente
+>   per le loro (`f87ad04c6..dae4de4fa`); compila; `diff --check` pulito.
+> - **File condivisi uniti da git**: con la stessa prova a due lati, tutti identici: `dev.py`, `test_runtime_isolation.py`,
+>   `release-pipeline.md`, `dev_workflow.en.md`, `front-overview.md`, `runner_architecture.md`, `BACKLOG_POST_1.2.md`.
+> - **Semantica**, letta nel codice:
+>   - `_check_env_file` (cambiato da loro) si chiama solo in `cmd_docker_build` e `cmd_docker_rebuild`, non nel
+>     percorso di `server --test --build-only`;
+>   - accanto a `_read_frontend_build_mode_marker`, invariato, hanno aggiunto il marcatore `.build-version`. Lo scrive
+>     solo la build Docker; la build di debug svuota `frontend/build/`, e quindi la build Docker rifà quella di
+>     produzione. È coerente;
+>   - il loro `_docker_ensure_frontend_built` chiama `cmd_fe_build(BuildArgs())`. Il mio controllo di `node_modules`
+>     viene prima e non legge `args`, così anche la build Docker si ferma subito senza `node_modules`.
+> - **Cancelli sulla revisione fusa** (`4a246613e`), uno alla volta con `nice -n 10`, log in `/tmp/libreFolio_j/merge_dae4/`:
+>   - `utils test-server-preparation` 63/63;
+>   - `utils runtime-isolation` 195/195 (175 sul mio ramo, più le aggiunte di `dev_release2` al file);
+>   - `check-orphans`: tutti registrati e raggiungibili da un'azione `all` (298 file del backend, 410 Vitest, 123 E2E);
+>   - `services pac-planner-report` 56/56;
+>   - `services pac-planner-core test_pac_planner_normalize` 113/113 (non esiste un'azione `pac-planner-normalize`:
+>     il file è in `pac-planner-core`, filtrato com'era prima);
+>   - Vitest del planner, uno alla volta: `format` 107, `request` 34, `modeText` 13, `result/text` 95,
+>     `result/ResultCell` 7, `result/model` 11, `pluralCountSites` 19, `privacy/moneyRenderSites` 6.
+>
+>   Stessi conteggi del ramo prima del merge, tranne `runtime-isolation`. Porta 6185 libera.
+>
+> **⚠️ Fuori pista**: nessuno.
+
+#### Domande di W N1 dal coordinatore (2026-10-15, 09:06) — fuori da C-94
+
+> **Note implementazione**:
+> - **«Oggi» per cassa e posizioni della pagina broker (W-B5 = B15/D-J16)**: la regola del backend è
+>   `date_to or date.today()` (`portfolio_service.py:682-683`, cassa `:920` `native_cash.balances(valuation_date)`;
+>   `:1461`, `:1641-1642`, `:2024-2028`; lotti `lots_analysis_service.py:84`). La Dashboard manda
+>   `date_range.end = todayIso()`, il giorno di calendario dell'utente (`dateRangeStore.svelte.ts:20-26`; `max` →
+>   `resolveDateSentinel` → `todayIso()`), e così i pannelli del report della pagina broker
+>   (`brokers/[id]/+page.svelte:189`); usano la data del server solo il pannello dei lotti (nessuna `date_range`,
+>   `LotsAnalysisPanel.svelte:222-227`) e la lista dei broker (`brokers/+page.svelte:175`). L'immagine Docker non
+>   imposta `TZ`: server in UTC. Risposto al coordinatore: con la data del server la scheda della cassa si allinea
+>   ai lotti ma non alla Dashboard; differenza solo nella finestra in cui i giorni divergono (a ovest di UTC, la sera,
+>   la scheda conterebbe una transazione ancora futura per l'utente). Proposta: parametro facoltativo `as_of` sul
+>   riepilogo del broker, `todayIso()` dal frontend, `date.today()` di ripiego; altrimenti data del server con la
+>   finestra dichiarata. Stessa regola per le posizioni (`transactions/balances.py:159-163`). Decide W (D-J16).
+> - **Revisione dei rossi di V-3 (D-J4)**: li scrive il `test-author` di W; io rivedo i numeri attesi in sola lettura
+>   quando W mi manda file e valori, rispondo a W e lo riporto nel prossimo handoff.
+>
+> **Revisione per W (09:40–10:00, sola lettura, nulla eseguito)**: scenario di
+> `test_orphan_transfer_after_broker_delete.py` (`services orphan-transfer-numbers`), tutto in EUR, letture al 5/10.
+> Risposta mandata a W.
+> 1. **Numeri giusti**: oggi investito 100 = 4×25 (TRANSFER «normal», `_transfer_leg_capital`,
+>    `daily_state.py:1193-1213`), P&L 20; dopo investito 80 (`_is_capital_adjustment`, `:1119-1133`, il costo del
+>    passo), P&L 40 = guadagno della posizione = P&L del lotto. WAC e posizione invariati. Da fissare nei test:
+>    - la data del lotto: con la coppia intera FIFO sposta il lotto di A con la sua data d'acquisto (`engine.py:440-465`);
+>      dopo, un lotto nuovo al 3/10;
+>    - il prezzo di riferimento dell'ADJUSTMENT+ al 3/10;
+>    - la copia di `cost_basis_currency` insieme all'override.
+> 2. **Il co-proprietario (100/20 → 80/40)**: da accettare e dichiarare.
+>    - Perché: cancellato A, non resta una vista con cui B debba sommarsi (D2/D5 del lotto 41), e l'ADJUSTMENT porta il
+>      capitale al costo.
+>    - Alternative scartate: il prezzo di mercato come costo, che falsificherebbe il costo; una seconda regola dentro
+>      ADJUSTMENT.
+>    - Dove dichiararlo: conferma della cancellazione, doc, CHANGELOG.
+> 3. **Caso 2 (gamba senza costo)**:
+>    - dall'app non nasce più: `_requires_cost_basis` (`validation.py:33-41`), e l'Auto scrive il costo nella riga;
+>    - **b** per le cancellazioni nuove, riusando la funzione dell'Auto (`_auto_cost_source()`), prima di cancellare le
+>      righe di A; eredita P-1;
+>    - **a** solo per gli orfani già nei DB, senza A (Dashboard da 100/20 a 0/120, da dichiarare). L'alternativa del
+>      valore di mercato come costo la decide il developer;
+>    - anche gli orfani con costo già nei DB cambiano alla migrazione (100/20 → 80/40).
+> 4. **N1a** (`native_balances` puro in `native_cash.py`, la scheda della pagina broker legge da lì): sì, è la regola 10.
+>    - Solo aggiunte, con il golden di `test_native_cash_guard.py` identico.
+>    - Movimenti con `cash_movement_from_transaction` a quota 1: stessa popolazione della somma SQL.
+>    - «Oggi» come D-J16.
+>    - Il diff lo rivedo io prima del loro checkpoint.
+>
+> Fuori da N1, sui miei file: **J-9** (valuta del lotto da ADJUSTMENT-in, `engine.py:353` contro
+> `lots/conversions.py:59-60`) e **J-10** (lotti `FAILED` quando il mittente è fuori dallo scope, anche sulla pagina del
+> broker per il proprietario; letto, non provato), registrate nella sezione J del backlog.
+>
+> **Seconda revisione per W (09:54–10:10, sola lettura)**:
+> - **Diff di `native_cash.py`: approvato.** Nella funzione pura `native_balances(movements, as_of)` il corpo è
+>   spostato identico, e `NativeCash.balances` la chiama. Import già presenti (`:31`, `:34`), nessun `__all__`, la mappa
+>   della casa dice già «balances». Il chiamante (`transactions/balances.py:get_cash_balances(broker_id, as_of)`, quota
+>   1) conta le stesse righe della somma SQL; unico chiamante il riepilogo del broker, usato solo dalla sua pagina. Prove
+>   di W: `services roi-fifo-utils` 657 (golden di `test_native_cash_guard.py` identico, 4 rossi di N1b),
+>   `services financial-math` 212 (guardia dello strato compresa). Conflitto previsto: `compute_wac_iterative` del mio
+>   `portfolio_service.py`, che sposto in CP-8; aggiorna l'import chi entra per secondo.
+> - **Caso speculare, nuovo**: cancellato il broker che riceve, la gamba in uscita senza costo diventerebbe un
+>   ADJUSTMENT che si legge come unità distrutte. Per A: Dashboard da +80 a −20, lotti da `FAILED` a −20, posizione
+>   invariata a 60. Lo split di una coppia lo fa già oggi.
+>   - **J-11** nel backlog.
+>   - Decisione chiesta al coordinatore: raccomandata l'opzione 1 (override dalla funzione dell'Auto più regola FIFO
+>     per l'`ADJUSTMENT_OUT` con costo, lotto mio), con la 2 nel frattempo (solo gambe in entrata).
+>   - Detto a W di non convertire le gambe in uscita e di fissare nei test i valori di oggi del caso speculare.
+>
+> **Decisione del coordinatore (10:04)**: per ora la 2. Si convertono solo le gambe di titoli in arrivo; quelle in
+> uscita restano come oggi. La scelta definitiva va al developer come **punto 47**, con la mia raccomandazione (la 1) e
+> la domanda sullo split di una coppia. Se sceglie la 1, è un mio lotto con il rosso prima, e la correzione degli orfani
+> in uscita viene dopo. J-11 va bene nella mia sezione.
+>
+> **⚠️ Fuori pista**: «la cassa non ha costo, quindi il problema non c'è» vale per capitale e P&L, perché un orfano di
+> cassa conta già come flusso esterno (`classifier.py:101-107`). Cambiano però due serie della Dashboard, entrambe verso
+> la coerenza:
+> - il finanziamento degli acquisti del `GrowthChart`: i pool K/R/W per broker si muovono per DEPOSIT e WITHDRAWAL, e
+>   per le gambe di cassa solo se `linked_internal` (`daily_state.py:265-305`, `:522-570`);
+> - i punti dei depositi: `get_deposit_history` legge solo DEPOSIT (`portfolio_service.py:1560`).
+>
+> Detto a W, che le dichiara e le fissa nei test; va nel mio prossimo handoff.
+>
+> **Terza revisione per W (10:30–10:45, sola lettura)**: la cura di V-3 è verde nel worktree di W
+> (`services orphan-transfer-numbers` 16/16, `services broker` 64/64, `roi-fifo-utils` 671/671 con il golden intatto).
+> Rivisti a mano, nel ramo di frame (`daily_state.py:451-570`), i numeri delle serie di cassa di
+> `TestOrphanCashLeg`, letti al 7/10:
+> - **C1** (gamba in arrivo, A cancellato): acquisto del 6/10, oggi 300/0, dopo 100/200 (la DEPOSIT rimette 200 da W in
+>   R); depositi da {1/10: 1000} a {1/10: 1000, 5/10: 300}; capitale 100, NAV 300 e P&L 200 invariati. Giusto.
+> - **C2** (gamba in uscita, B cancellato): acquisto del 6/10, oggi 400/200, dopo 500/100 (la WITHDRAWAL prende 500 da
+>   K e 100 da R, W 100); depositi invariati; capitale 400, NAV 600 e P&L 200 invariati. Giusto.
+>
+> **⚠️ Fuori pista**: i miei riferimenti `:265-305` erano il codice del pre-frame. La serie parte dalla prima riga,
+> quindi vale `:505-570`, e nella stessa giornata gli acquisti vengono prima delle righe di cassa (`:451-455`).
+> Correzioni giuste del test-author di W: C1 ha bisogno di rendimenti ritirati prima, C2 di una seconda vendita.
+>
+> Altri punti della stessa revisione:
+> - Pin dei lotti giusti: `total_return` 40/80 = 0.5, `relative_return` 30/25 − 1 = 0.2.
+> - **J-12**, dall'osservazione di W sul caso speculare: con `FAILED` il pannello disegna lo stesso lotti e cifre.
+> - **W-B19** (la validazione dei saldi somma la cassa per conto suo): è una copia per la metà della cassa.
+>   `_get_balances_before_date` e `get_balances_at_end_of` sono `native_balances` a una data scritto in SQL; il replay
+>   è la stessa aritmetica in forma di percorso, quindi nella casa serve una funzione pura per il percorso, e la
+>   validazione tiene solo l'attribuzione alla riga del lotto.
+> - La metà delle quantità non ha una funzione nella casa: va come domanda d'inventario in J-1.
+
+### Decisioni 26–30 (15/10) e piano dei lotti sbloccati
+
+Decisioni del developer riferite alla lettera dal coordinatore (tabella del §3): **26** (D-J1, 13:05), **27** (D-J2),
+**28** (D-J3), **29** (D-J6 sostituita, 13:05, opzione (a) D = N), **30** (D-J15). Via del coordinatore (12:54, 13:01,
+13:05): CP-2 e CP-4 con codice e test e prove leggere; le prove pesanti solo su slot assegnato (al massimo 2 suite pesanti
+alla volta sulla macchina). Il codice del 29 è autorizzato dalla risposta del developer delle 13:05.
+
+#### Dove cade ogni decisione
+
+| Punto | Voce | Lotto | Note |
+|---|---|---|---|
+| 26 | T-B5 (D-J1, opzione B) | CP-7 | più l'inventario qui sotto: «segna che bisogna fattorizzare» (developer); un rosso per ogni comportamento che cambia |
+| 27 | P-10 (D-J2, opzione A) | CP-14 | il cambio di tipo sta ora in `services/assets/event_store.py`, file di X (spostato dal CP2b di X): da decidere col coordinatore chi scrive (J nel file di X con X informato, come D-J17, oppure X) |
+| 28 | B11 (D-J3) | CP-6 | «ricalcolare ogni volta che cambia uno dei termini della formula»: giorni «dirty» anche per i soli cambi delle valute dei titoli; golden di cassa EUR invariato, valori che cambiano dichiarati prima |
+| 29 | C-71 (D-J6) | lotto nuovo **CP-10a** | indipendente da PL1 e CP-9: non sposta il runtime dei segnali |
+| 30 | V-11 (D-J15) | CP-4 | qui sotto |
+
+#### CP-2 — difetti piccoli del PAC (piano, 15/10)
+
+Righe verificate sul codice di oggi (dopo CP-1). Rossi prima, con `test-author`.
+
+- **C-75** (backend): `_decimal_text` (`pac_allocator/planner_report.py:1068-1072`) scrive `Decimal("-0.0")` come «-0»,
+  che `PlannerFixedDecimal` (`schemas/pac_allocator/base.py:221`) rifiuta. Rosso TP-11: `_float_text(-0.0)` e una
+  prova di stadio con un limite −0.0 che deve validare. Cura: lo zero, di qualunque segno o esponente, si scrive «0».
+  Nessun valore cambia.
+- **C-76** (frontend `planner/request.ts:145-195`, backend `normalize.py:436-441`):
+  - `localProblems` controlla solo «vuoto» e «non è un numero»; il resto arriva al codec o al backend col messaggio
+    generico «A field does not match the planner contract: {path}»;
+  - **la tabella dei segni la detta il contratto, non la invento**: il backend rifiuta `selected` e la liquidità
+    dichiarata < 0 (`allocation.negative_cash_unsupported`), il contributo < 0 (`negative_contribution`), il passo ≤ 0
+    (`nonpositive_quantity_step`, `nonpositive_order_amount_step`), le commissioni in denaro < 0
+    (`negative_fee_amount`); lo zero è valido per importo usato e contributo. Da allineare anche ai vincoli del codec
+    generato (`tool-contracts`), letti all'implementazione;
+  - rosso TP-12: una tabella campo × {negativo, zero, positivo} → problema locale atteso o nessuno; chiavi nuove nei 4
+    cataloghi di `pacAllocator`;
+  - le quattro chiavi nuove, sotto `tools.pacAllocator.planner.problems.` (da scrivere con `dev.py i18n add` dopo la
+    finestra delle dipendenze; le etichette dei campi al maschile, come le chiavi sorelle «è vuoto»):
+    - `selectedNegative`: EN «'Amount to use' cannot be negative.» · IT ««Importo da usare» non può essere negativo.» ·
+      FR «« Montant à utiliser » ne peut pas être négatif.» · ES ««Importe a usar» no puede ser negativo.»
+    - `declaredNegative`: EN «'Declared liquidity' cannot be negative.» · IT ««Liquidità dichiarata» non può essere
+      negativo.» · FR «« Liquidités déclarées » ne peut pas être négatif.» · ES ««Liquidez declarada» no puede ser
+      negativo.»
+    - `contributionAmountNegative`: EN «The contribution amount cannot be negative.» · IT «L’importo del versamento non
+      può essere negativo.» · FR «Le montant du versement ne peut pas être négatif.» · ES «El importe de la aportación no
+      puede ser negativo.»
+    - `modeStepNotPositive`: EN «The order step must be greater than zero.» · IT «Il passo d’ordine deve essere
+      maggiore di zero.» · FR «Le pas d’ordre doit être supérieur à zéro.» · ES «El paso de orden debe ser mayor que
+      cero.»
+  - le commissioni (`negative_fee_amount`, `fee_rate_out_of_range`) non sono nel testo di C-76: restano fuori, salvo
+    che la tabella del codec mostri lo stesso difetto (allora una riga nel backlog, non un allargamento);
+  - backend: un `selected` negativo è riportato sul percorso di `available`; va sul suo (`…selected`). Rosso sul percorso
+    (backend, `test-author`, dopo la finestra: è Python), nella suite del PAC che copre `normalize.py`.
+- **C-73** (frontend `planner/format.ts:223-236`): `formatPlannerPercent` e `formatPlannerPercentUnits` passano da
+  `Number` e `toFixed`; la regola del planner è «half away from zero, exactly» (`planner/decimal.ts:106`,
+  `roundDecimal`). Cura: spostare la virgola sul testo decimale, `roundDecimal`, poi la formattazione locale. Rosso TP-2
+  in `format.test.ts`: 0,30595 → «30,60 %» (oggi «30,59 %») e la passata dei pareggi fra 0,1 e 0,9 (oggi 3 864 errati
+  su 8 000). **Valori che cambiano**: solo l'ultima cifra mostrata, sui pareggi esatti.
+- **C-74** (solo i 4 cataloghi, nessuna chiave nuova): `finalValueHelp` e `targetValueHelp` di
+  `tools.pacAllocator.planner.result.assets` dicono «le unità che avevi» e «già investito», che nel PAC valgono zero.
+  Il backend conosce anche il Rebalancer (`schemas/pac_allocator/request.py:400`), ma il frontend espone solo il PAC
+  (nessuna richiesta Rebalancer in `features/tools/pac-allocator`, e il catalogo dice «This Tool does not sell.»): i
+  testi seguono il PAC, semplici per chi non è esperto; un'interfaccia Rebalancer futura porterà i suoi. Testi
+  applicati (15/10, `dev.py i18n update`, l'ultima frase di `finalValueHelp` ricalca la sorella `buyMidHelp` e nomina la
+  colonna «Value bought»):
+  - EN `finalValueHelp`: «What the Asset is worth after the plan: the units the plan buys, at the quote price and, when
+    needed, at the rate of the FX step. In a PAC, which starts from zero, it equals the value bought.»
+  - EN `targetValueHelp`: «What the Asset would be worth with exactly its target share: target share × base of the
+    targets. In a PAC, which starts from zero, the base is the usable cash.»
+  - IT: «Quanto vale l’Asset dopo il piano: le unità che il piano compra, al prezzo di quotazione e, se serve, al tasso
+    del passo FX. In un PAC, che parte da zero, coincide con il valore comprato.» / «Quanto varrebbe l’Asset con
+    esattamente la sua quota obiettivo: quota obiettivo × base degli obiettivi. In un PAC, che parte da zero, la base è
+    la liquidità utilizzabile.»
+  - FR: «Ce que vaut l’actif après le plan : les unités que le plan achète, au prix coté et, si nécessaire, au taux de
+    l’étape Change. Dans un PAC, qui part de zéro, ce montant est égal à la valeur achetée.» / «Ce que vaudrait l’actif
+    avec exactement sa part cible : part cible × base des cibles. Dans un PAC, qui part de zéro, la base est constituée
+    des liquidités utilisables.»
+  - ES: «Lo que vale el activo después del plan: las unidades que compra el plan, al precio de cotización y, cuando hace
+    falta, al tipo de cambio del paso Cambio. En un PAC, que parte de cero, coincide con el valor comprado.» / «Lo que
+    valdría el activo con exactamente su parte objetivo: parte objetivo × base de los objetivos. En un PAC, que parte de
+    cero, la base es el efectivo utilizable.»
+
+  ✅ 15/10. **Note implementazione**: i due testi aggiornati nei 4 cataloghi; nessuna chiave nuova. Le bozze avevano
+  un'ultima frase debole: in IT e ES «Un PAC parte da zero, quindi coincide…» faceva del PAC il soggetto, in FR «elle»
+  non aveva antecedente; corrette sul modello di `buyMidHelp` («In un PAC, che parte da zero, coincide con…»), in FR
+  «ce montant est égal à…». Gli spazi prima dei «:» francesi restano quelli normali delle due chiavi in HEAD.
+
+  **⚠️ Fuori pista** (15/10, chiavi di C-76): `$'\u00a0'` non funziona nella bash 3.2 di macOS, e le due chiavi FR
+  `selectedNegative` e `declaredNegative` erano state scritte con il testo letterale `\u00a0`. Riscritte con un piccolo
+  script che passa il carattere vero a `dev.py i18n update`; verificato `'«\xa0Montant à utiliser\xa0» …'`, come la
+  sorella `declaredMissing`.
+
+  **⚠️ Fuori pista** (15/10, durante la finestra delle dipendenze): per leggere questi testi ho lanciato due volte
+  `python3` (l'interprete di sistema di Homebrew, 3.15, non l'ambiente condiviso `LibreFolio-SAUMUTtc`), in sola
+  lettura sui JSON. Nessun effetto sull'ambiente che si stava aggiornando, ma la regola diceva «niente Python»: da lì in
+  poi solo `jq`/`grep` fino all'avviso.
+- **Cancelli leggeri**: `services pac-planner-report`, `services pac-planner-core`, `api pac-planner-tool`; Vitest dei
+  file del planner dal `node_modules`; `front check`; Prettier sui file toccati; `dev.py i18n` (controllo) e
+  `utils i18n-catalog-gate`, `utils i18n-usage-gate`. Nessuna suite pesante propria: entra nell'`all-backend` successivo.
+
+**Esecuzione CP-2 (15/10)** — ✅ C-73, C-74, C-75, C-76, sui cancelli leggeri e su `front check`; resta
+`api pac-planner-tool` (avvia il server, che ricostruisce il frontend): nello slot pesante di C-94, dopo A, Y e Z.
+
+- **`front check`** (via del coordinatore, `nice -n 15`): svelte-check 0 errori e 0 avvisi; log
+  `/tmp/libreFolio_j/cp2/j_front_check.log`. Osservato, fuori perimetro: nel log la riga di `dev.py` «Running
+  svelte-check for type errors...» esce dopo l'output del figlio, lo stesso buffering che C-94 cura per il passo di
+  build del server; qui è solo estetica.
+
+- **Rossi** (`test-author`, prima della cura):
+  - frontend: `format.test.ts` 8/107 rossi (sweep 3 864/8 000 pareggi errati), `request.test.ts` 8/34 rossi; log
+    `/tmp/libreFolio_j/cp2/v_1_format.log`, `v_2_request.log`;
+  - backend: `services pac-planner-report` 7 rossi/49 verdi (`_float_text`, `_decimal_text` ×3, la prova di stadio ×3:
+    `string_pattern_mismatch` su «-0» a `planner_report.py:895`); `services pac-planner-core
+    test_cash_amount_issues_name_the_field_that_is_wrong` 2 rossi/4 verdi (`[negative-selected]` sul percorso di
+    `available`, `[both-negative]` con un solo problema); log `b_1.log`, `b_2.log`.
+- **Cure**:
+  - C-73 `planner/format.ts`: `formatPlannerPercent`/`Units` spostano la virgola sul testo decimale e arrotondano con
+    `roundDecimal` (metà lontano da zero, esatto); `formatExactPercent` arrotonda una volta il rapporto esatto
+    (`roundRatio(…, digits + 2)`), non il suo `display_decimal` (doppio arrotondamento segnalato da test-author);
+  - C-76 frontend `planner/request.ts`: `isNegative()`; `selectedNegative`, `declaredNegative`,
+    `contributionAmountNegative`, `modeStepNotPositive` (passo ≤ 0, prima del controllo «intero»); «supera il
+    disponibile» non si segnala quando il disponibile è < 0, come l'`elif` del backend (decisione mia, riga fissata
+    da test-author: solo `declaredNegative`, `built: false`); lo zero e «-0» restano validi;
+  - C-76 backend `normalize.py:validate_cash`: ogni campo negativo ha il suo `allocation.negative_cash_unsupported`
+    sul proprio percorso (`available`, `selected`), `cash_selection_invalid` solo con entrambi ≥ 0;
+  - C-75 backend `planner_report.py:_decimal_text`: lo zero di qualunque segno o esponente si scrive «0»;
+  - C-74: sopra.
+- **Verdi**: `services pac-planner-report` 56/56; `services pac-planner-core test_pac_planner_normalize` 113/113 (157
+  deselezionati, gli altri due file); Vitest uno alla volta: `format` 107/107, `request` 34/34 (riga fissata),
+  `modeText` 13, `result/text` 95, `result/ResultCell` 7, `result/model` 11, `pluralCountSites` 19,
+  `privacy/moneyRenderSites` 6; `dev.py i18n check` (4 396 chiavi, stretto); `utils gate-i18n-catalog` 176,
+  `utils gate-i18n-usage` 195; `dev.py lint` pulito; black sui 4 file Python invariato; Prettier sui 7 file del
+  frontend pulito; `git diff --check` pulito. Log in `/tmp/libreFolio_j/cp2/j_*`.
+- **Valori che cambiano**: solo l'ultima cifra delle percentuali del planner sui pareggi esatti (C-73), e una quota
+  negativa minuscola si mostra 0,00 % invece di −0,00 %. C-75: un piano il cui solutore riporta un limite −0,0 non
+  fallisce più. C-76: il messaggio arriva sul campo giusto prima dell'invio.
+- **CHANGELOG** (proposta per l'handoff, sezione 🐛 Fixed della 1.3.0):
+  - «PAC Allocator: percentages at an exact tie round half away from zero, like every other planner number (30.595 %
+    shows 30.60 %).»
+  - «PAC Allocator: a plan no longer fails when the solver reports a bound of minus zero.»
+  - «PAC Allocator: a negative amount to use, declared liquidity or contribution, and an order step of zero or less,
+    are reported on their own field before the request is sent.»
+  - «PAC Allocator: the help texts of "Value after the plan" and "Ideal value" describe a PAC, which starts from
+    zero.»
+- **Fuori perimetro, annotato**: il testo di `allocation.negative_cash_unsupported` dice «saldo» anche sul percorso di
+  `selected` (l'importo da usare); dal frontend non arriva più, perché il controllo locale lo ferma prima.
+
+#### CP-4 — U4b + V-11 (piano, 15/10)
+
+Nessun valore cambia per U4b (spostamenti nella casa, provati con parità); cambia solo l'avviso di V-11.
+
+| Voce | Oggi | Nella casa | Prova |
+|---|---|---|---|
+| R1 | ribasamento del periodo scritto due volte: summary `portfolio_service.py:968-993`, history `:1244-1268`; i due rami `if/else` sono identici in entrambi; solo history antepone lo snapshot d'inizio, condizione che non si avvera finché le date non si ripetono (il primo snapshot tenuto è proprio quello d'inizio) | `returns.py`: una funzione pura che restituisce snapshot e flussi del periodo (flusso sintetico −NAV iniziale, flussi dopo l'inizio, snapshot dall'inizio) | parità summary/history sullo stesso risultato del motore, anche con date ripetute; golden di cassa identico |
+| R2 | riprova MWRR a freddo quando summary e serie divergono (`:2145-2191`) | sparisce **solo** se la parità è provata: ultimo punto della serie = soluzione singola, a caldo e a freddo, su tutto il corpus dei test del motore | se un caso diverge, resta (classe c) col perché scritto |
+| R3 | rendimento netto della posizione aperta e CAGR (`:870-883`) | `returns.py`: `(non realizzato + proventi − costi) / costo`, poi `cumulative_to_annualized` | test puro + valori identici sui test delle posizioni |
+| R5, `:824`, `:939` | `total_gl / invested` (0 se ≤ 0), G/L % della posizione (None se costo 0), G/L % del broker (0 se capitale ≤ 0) | un solo rapporto nella casa, con la guardia esplicita per chiamante (oggi 0 o None: si conservano, nessun cambio di API) | test puro dei tre casi limite |
+| P1 | P&L di periodo `_compute_period_summary_metrics` (`:585-665`) | un modulo nuovo in `financial_math/portfolio/`, accanto alle viste derivate e non dentro `derived_views.py` (impegno col coordinatore, 15/10 16:26): stato d'inizio e fine e identità del periodo | valori identici |
+| C1 | costo unitario per passo dell'anteprima WAC (`_wac_qualifying_txs`, `:240-272`) | un campo di `CostStep` calcolato da `average_cost.py` | test puro per effetto (ADD, REDUCE, SPLIT, costo ignoto) |
+| V-11 | grazia di `TRANSACTION_IMPLIED` dal primo BUY/SELL (`:1083-1089`), mentre `AssetPriceSeries.resolve` (`price_marks.py:197-223`) fa vincere il trade del giorno sulla quotazione di ieri | `price_marks.py`: la data dell'ultima quotazione di mercato fino a un giorno; il motore la porta per asset; la grazia (14 giorni, `platform/data_quality_thresholds.py:22`) parte da lì; senza quotazioni dal primo BUY/SELL, come oggi (decisione 30) | rossi: quotato ieri + BUY oggi con il primo BUY oltre 14 giorni → oggi l'avviso, dopo no; ultima quotazione 20 giorni fa → avviso prima e dopo; mai quotato: 10 giorni no, 20 sì, prima e dopo. Riga nel CHANGELOG (🐛 Fixed) |
+
+- **Cancelli leggeri**: `services financial-math`, `services roi-fifo-utils` (golden di cassa identico), le azioni del
+  motore e del portafoglio, `api portfolio`, `services ai-export` (legge summary e posizioni); pesante: `all-backend` su
+  slot.
+- **Conflitti**: `native_cash.py` di W (N1a, solo aggiunte, altre righe); `compute_wac_iterative` resta dove sta fino a
+  CP-8.
+
+**Avvio di CP-4 (15/10, sera)**: J è entrato in `dev_release2` (`2faa88a34`). Ordine confermato dal coordinatore:
+CP-4, poi CP-15, poi la sostituzione della G/L % di W; per le prove pesanti chiedo lo slot.
+
+- ✅ **Righe ricontrollate sulla nuova base** (HEAD `7b720ee12`; il codice è uguale a `dev_release2`, che ha in più solo
+  giornale, CHANGELOG e istruzioni). Dalla mia lettura del 15/10 (`f87ad04c6`) `portfolio_service.py`,
+  `price_marks.py`, `returns.py` e `data_quality_thresholds.py` non sono cambiati; il merge ha toccato solo
+  `brokers/summary.py` e `native_cash.py` (N1). Riletti sul codice:
+  - R1: `:968-993` (summary) e `:1244-1268` (history);
+  - R2: `:2145-2191`;
+  - R3: `:870-883`;
+  - R5: `:824`, `:939`, `:1040`;
+  - P1: `:585`;
+  - C1: `_wac_qualifying_txs` a `:239`;
+  - V-11: `:1069-1089` (la grazia a `:1086`), `price_marks.py:197` (`resolve`), soglia a
+    `data_quality_thresholds.py:22`.
+- **Passi brevi**, ognuno coi suoi rossi e l'albero verde alla fine:
+  - **CP-4a**: R1, R3, R5 in `returns.py`, tre funzioni pure. Valori identici; solo con date ripetute, che il motore
+    non produce mai (uno stato al giorno), il periodo parte dallo snapshot d'inizio stesso. Regole:
+    - `rebase_to_period(nav_snapshots, cash_flows, date_from)`: la regola di oggi;
+    - `net_holding_return(market_pnl, income, costs, cost_basis)`;
+    - `gain_loss_ratio(gain, base, *, positive_base)`: `None` sulla base 0 (o ≤ 0 con `positive_base`). I chiamanti
+      tengono il loro ripiego: 0 per la sintesi e il broker, `None` per la posizione.
+
+    ✅ 15/10 sera. **Note implementazione**:
+    - **Rossi** (`test-author`): `test_financial_math/test_returns_rebase_and_ratios.py`, nuovo, 53 test, tutti rossi
+      sui nomi mancanti (`a_returns_red.log`). Le copie di oggi dei due blocchi sono nel file come oracolo: summary e
+      history coincidono già sui 16 casi della griglia a date uniche.
+    - **Cura**:
+      - `returns.py`: `PeriodRebase` (dataclass congelata di tuple), `rebase_to_period`, `net_holding_return`,
+        `gain_loss_ratio` (`positive_base` obbligatorio e solo per nome);
+      - `portfolio_service.py`: i due blocchi di ribasamento (summary e history, ~45 righe) diventano una chiamata;
+        il summary tiene il suo ripiego `today` quando non ci sono snapshot;
+      - R3: la variabile locale ora si chiama `holding_return`, per non coprire la funzione;
+      - le tre G/L %: la posizione con `positive_base=False`; il broker e la sintesi con `positive_base=True` e il
+        ripiego esplicito `… if ratio is not None else Decimal("0")`. Niente `or`: con `or` un rapporto zero come
+        `Decimal("0.00")` diventerebbe `Decimal("0")`, con un'altra rappresentazione;
+      - tolti dagli import `CashFlowInput` e `NAVSnapshot`, non più usati; nessuno li importava da lì.
+    - **Mappe aggiornate**: tabella dei moduli di `financial-math.instructions.md`, mappa di `backend.instructions.md`,
+      docstring di `financial_math/__init__.py`, albero della pagina dev `financial_math.md`.
+    - **Verdi**, un file alla volta con `nice -n 10`, log in `/tmp/libreFolio_j/cp4/j_*`:
+      - il file nuovo 53/53, la guardia del layer 37/37;
+      - parità sui file che leggono summary, history e posizioni: `test_portfolio_service.py` 96 + 1 rosso, cioè R1
+        di V-11, atteso fino a CP-4b; `test_portfolio_service_native_cash.py` 21; `test_native_cash_guard.py`, il
+        golden, 1; `test_portfolio_cost_currency.py` 25; `test_orphan_transfer_after_broker_delete.py` 19;
+        `test_roi_utils.py` 60;
+      - AI Export: `portfolio_broker_financial` 126, `portfolio_broker_integration` 58, `asset` 66; `services broker`
+        65;
+      - `dev.py lint` pulito; black invariato sui 4 file; `diff --check` pulito.
+    - **Fuori perimetro, annotato**: in `get_positions_contribution` restano due rapporti (`:1780`, `:1791`, P&L su
+      `|valore d'inizio|` e la sua base d'annualizzazione). Sono della famiglia dei contributi (U5a, CP-3), non della
+      G/L %, e restano lì per CP-3.
+  - **CP-4b**: V-11, il solo cambio di valore (un avviso). Rossi sui tre scenari della tabella.
+    - **Angolo dichiarato** (la regola approvata, D-J15, alla lettera: «la grazia parte dall'ultima quotazione di
+      mercato; senza quotazioni dal primo BUY/SELL, come oggi»): un asset con una quotazione vecchia (V−100) e un
+      primo BUY recente (V−5), valutato al trade in V. Oggi non compare, perché la grazia parte dal BUY; dopo compare,
+      perché parte dalla quotazione: un flusso di prezzi fermo si segnala subito, invece che solo 14 giorni dopo il
+      primo acquisto dell'asset (oggi la grazia parte dal primo BUY/SELL, e un acquisto nuovo non la fa ripartire:
+      correzione del test-author). Rosso R2.
+    - **Disegno**:
+      - `AssetPriceSeries.last_market_date(day)` (lista precalcolata in `__init__`, una bisezione per domanda);
+      - `DailyPortfolioState.transaction_implied_last_quote_dates`, riempito dove l'asset diventa «implied» e copiato
+        nei giorni saltati;
+      - la regola della grazia come funzione pura in `financial_math/portfolio/data_quality.py`, con `grace_days`
+        passato dal servizio. Il servizio resta il consumatore della soglia, e la guardia `CONSUMERS` di
+        `test_data_quality_thresholds.py` non cambia.
+
+    ✅ 15/10 sera. **Note implementazione**:
+    - **Rossi** (`test-author`, in `test_portfolio_service.py`, classe `TestTransactionImpliedGraceFromLastQuote`):
+      - R1 rosso a `:1585`, R2 rosso a `:1612`;
+      - G1, G2, G3 e i 3 test esistenti verdi;
+      - ognuno prova prima, sulla riga della posizione, che in V l'asset è valutato al prezzo di un trade e da quando
+        manca la quotazione (`b_v11_red.log`, `b_v11_red2.log`).
+    - **Cura**:
+      - `price_marks.py`: `AssetPriceSeries.last_market_date()`, con `_last_market` precalcolata;
+      - `models.py`: il campo `transaction_implied_last_quote_dates`;
+      - `daily_state.py`: riempito dove l'asset diventa «implied», copiato nei giorni saltati;
+      - `data_quality.py`: `transaction_implied_assets_to_report(…, grace_days)`, pura;
+      - `portfolio_service.py`: il ciclo della grazia diventa una chiamata, con la soglia passata dal servizio.
+    - **Verdi**, un file alla volta:
+      - i test di V-11, 8/8;
+      - `test_portfolio_service.py` 98;
+      - `test_price_resolver.py` 24;
+      - i file del motore `test_broker_internal_flows` 47, `test_cash_decomposition` 9, `test_broker_pnl_contributions`
+        9, `test_pnl_candles` 20, `test_data_quality_report` 38;
+      - `dev.py lint` pulito (dopo `strict=True` sullo `zip`); black invariato sui 5 file.
+    - **⚠️ Fuori pista**: il golden di cassa (`test_native_cash_guard.py`) si ferma sul campo nuovo, com'è progettato:
+      un dizionario con chiavi d'asset va dichiarato nelle tabelle del dump. Il test-author aggiunge
+      `_ASSET_KEYED_FIELDS` e rigenera il golden, e prova che il JSON nuovo, tolto il campo, è identico al vecchio.
+      - **Esito**: il golden aggiunge 116 righe, tutte del campo nuovo, e nessuna tolta. Tolto il campo, il file è
+        identico al vecchio, anche byte per byte; le chiavi del campo sono quelle di `transaction_implied_asset_ids` in
+        ogni stato.
+      - **Valori**: MAN → null ogni giorno; EQ e IDX → null il 2/1; EQ → 3/1 dal 7/1 al 19/1, perché la vendita del 7/1
+        è più recente della quotazione. EQ era già «implied» quei giorni nel golden vecchio.
+      - **Seconda deviazione, trovata dal test-author**: l'interruttore `LIBREFOLIO_REGEN_NATIVE_CASH_GUARD` non
+        funzionava più, in silenzio. Da `901fa33f6` le corsie tolgono ogni `LIBREFOLIO_*` tranne `TEST_LANE_KEEPS` e
+        `LIBREFOLIO_TEST_*` (`scripts/cli_base.py:160-168`). Rinominato in `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD`,
+        nel solo file di test, con la spiegazione nella docstring. Il nome vecchio non è citato in nessun file vivo,
+        solo nel piano archiviato 41. Le altre variabili non `TEST_` lette dai test sono quelle della sonda dell'AI
+        Export, che non passa mai dal runner (skill): non tocca.
+      - Rieseguiti da me: il golden verde (un passaggio vero, non uno skip); `services risk-all
+        test_data_quality_thresholds` 31/31 (la guardia `CONSUMERS` non cambia); nessuna costruzione posizionale di
+        `DailyPortfolioState`.
+      - **Coordinatore (17:43)**: la rinomina va bene e chiude DV-1, che era di H. **Conflitto in arrivo sul golden**:
+        DV dei colori ha cambiato a mano 4 righe di `eur_only_golden.json` sul suo ramo (Liquidità 💵 → 💰, la mappa
+        unica delle emoji dei settori, S1), non ancora entrato. Se J entra prima, DV rigenera con la variabile nuova;
+        se DV entra prima, al merge J rigenera: il golden non si unisce a mano. W non ha lotti aperti su quei file.
+    - **Documentazione**: le pagine di teoria `price-resolution` e `nav` (EN e 3 traduzioni) parlano di valutazioni da
+      trade «older than the 14-day grace period» per l'avviso «no market price for more than two weeks». È proprio la
+      regola nuova: era il codice a non seguire la pagina, quindi nessuna pagina cambia.
+    - **CHANGELOG** (proposta, 🐛 Fixed): «Data quality: the "valued at cost" warning counts its two weeks from the
+      asset's last market quote, as its text says. An asset quoted the day before and bought again is no longer
+      flagged, and a price feed that stopped long ago is flagged at once; an asset never quoted still counts from its
+      first purchase.»
+  - **Checkpoint CP-4a + CP-4b** 🧊 (15/10, 18:15): slot pesante 2 dal coordinatore (17:43).
+    - **`all-backend --workers 2`** (17:44–18:09, 25 min, carico 36): 7/7, «ALL BACKEND TESTS PASSED»; totali, lavoratori
+      paralleli compresi, **15 863 passed, 28 skipped, 0 failed**.
+      - Passo di build di C-94: 164 s, poi server pronto.
+      - Nessun `PytestUnhandledThreadExceptionWarning`.
+      - 7 avvisi: i 6 della sessione `schemas`, più 1 nel passaggio API, una deprecazione di Starlette
+        (`HTTP_422_UNPROCESSABLE_ENTITY`) in `test_registration_api.py`, un test arrivato con `dev_release2`, non di CP-4.
+      - Log: `/tmp/libreFolio_j/cp4/h_all_backend.log`.
+    - **Previsione dei conflitti** con `dev_release2` `695e6ad12` (38 commit dopo HEAD `7b720ee12`): in comune solo
+      `.github/instructions/backend.instructions.md`, con hunk separati (loro `:16`, `:91-92`, `:102`; mio `:75`).
+      Unione automatica attesa. Per il golden vale la regola del coordinatore (sopra).
+    - Slot liberato, porta 6185 libera, handoff FROZEN mandato.
+    - **Committato** dal coordinatore: `58f8e3967` fix(portfolio), `71c93da22` docs(journal).
+    - **Aggiornamento di base 7**: merge di `dev_release2` `695e6ad12` senza conflitti, HEAD `1ce3cc85c` (sono entrati
+      A6a, H, Z7a e Y2; nessuno tocca `financial_math`).
+      - Cancelli sulla revisione fusa, uno alla volta con `nice -n 10`, log in `/tmp/libreFolio_j/cp4m/`:
+        `test_portfolio_service` 98, golden 1 (file invariato), `test_data_quality_report` 38,
+        `test_data_quality_thresholds` 31, `test_returns_rebase_and_ratios` 53, la guardia del layer 37,
+        `check-orphans` (305 file del backend, tutti raggiungibili).
+      - Handoff d'ingresso mandato; via del coordinatore a CP-4c.
+    - **Avviso del coordinatore (18:11)**: `backend/app/main.py` è congelato fino a CP2b di H, che lo divide in
+      `services/platform/{lifecycle,middleware,static_site,database_bootstrap}.py`. Un passo d'avvio o di spegnimento, o
+      un middleware, aspetta CP2b; dopo basta una riga nel modulo giusto. H ripunterà sui moduli nuovi due test miei,
+      `test_signal_runtime.py` e `test_risk_scenario_catalog.py`, dichiarando le righe. Riguarda CP-9 e CP-10.
+  - **CP-4c**: P1, in un modulo nuovo di `financial_math/portfolio/`, non dentro `derived_views.py`; C1, il costo unitario
+    del passo in `CostStep`.
+    - **Disegno** (letto il 15/10 sera, in attesa dello slot, nessun codice):
+      - **P1 → `financial_math/portfolio/period.py`**, nuovo:
+        - `state_as_of(daily_states, as_of)`, oggi `_daily_state_as_of` (`portfolio_service.py:367`, 3 chiamanti:
+          `:336`, `:612`, `:706`). La casa non può importare dal servizio;
+        - `PeriodPnl` (congelata): NAV d'inizio, flussi netti, P&L, non realizzato d'inizio e di fine e delta, valore
+          contabile e di mercato d'inizio;
+        - `period_pnl(daily_states, date_from, as_of) -> PeriodPnl | None`, la regola di
+          `_compute_period_summary_metrics` (`:585-660`): l'inizio è l'ultimo stato ≤ `date_from`, altrimenti zeri;
+          P&L = NAV di fine − NAV d'inizio − ΔECF;
+        - `period_other_result(pnl, ugl_delta, realized, income, fees_taxes)`, l'identità del periodo, oggi in
+          `get_summary` (`:1043-1048`). È la funzione che serve a CP-12 per le due copie dell'AI Export
+          (`portfolio_financial.py:489`, `broker_financial.py:434`, J-14).
+        - Valori identici; rossi: test puri in `test_financial_math/`, caratterizzati con la copia di oggi.
+      - **C1 → `average_cost.py`**: il costo unitario del movimento, per effetto (ADD: costo aggiunto/quantità; REDUCE:
+        il costo medio prima del passo; SPLIT_RESCALE: il medio corrente; altrimenti 0), oggi calcolato dall'anteprima
+        (`_wac_qualifying_txs`, `:239-272`), insieme al costo unitario originale della conversione. Per REDUCE serve il
+        medio *prima*: il passo deve portarlo esplicito, perché costo tolto/quantità non è esatto in Decimal. Da leggere
+        `CostStep` (`average_cost.py:139`) prima dei rossi.
+    - **Disegno rivisto** (15/10, 18:20, letto il codice):
+      - **Una copia gemella**: `_unrealized_breakdown_rows` (`:325-364`) ricalcola gli stessi stati di confine del
+        periodo di `_compute_period_summary_metrics`, con una docstring che dice «same boundary states». In
+        `period.py`, quindi, anche `period_boundaries(daily_states, date_from, as_of) -> PeriodBoundaries | None`
+        (`start` o None, `end`), usata da `period_pnl` e dal servizio per le righe del non realizzato per valuta. Le
+        righe restano nel servizio: sono lo schema della risposta; la sottrazione per parte la porterà CP-8.
+      - **C1 è una funzione, non un campo**: `movement_unit_costs(steps) -> tuple[MovementUnitCost, ...]` sulla linea
+        dei passi, con il medio precedente portato dal ciclo, come oggi: aritmetica identica. Un campo nuovo di
+        `CostStep` cambierebbe di nuovo il golden di cassa, che scarica `average_costs`.
+      - Nessun test chiama i tre aiutanti privati; due docstring nominano `_compute_period_summary_metrics`
+        (`data_quality.py:102`, mia; `test_data_quality_report.py:339`, la cambia il test-author).
+      - **Rossi chiesti** al test-author (18:20): un file nuovo in `test_financial_math/`, con le copie di oggi come
+        oracolo.
+
+    ✅ 15/10 sera. **Note implementazione**:
+    - **Rossi** (`test-author`): `test_financial_math/test_period_and_unit_costs.py`, nuovo, 25 test, tutti rossi sui
+      nomi mancanti (17 del modulo `period`, 8 di `movement_unit_costs`). L'oracolo è nel file: le due copie della
+      regola di confine coincidono su 315 casi; stati veri, con un valore «veleno» nei campi che la regola non legge;
+      confronto su `str()`, quindi stessi zeri e stesso ordine delle operazioni. In `test_data_quality_report.py:339`
+      la docstring nomina ora `period.period_pnl`.
+    - **Cura**:
+      - `financial_math/portfolio/period.py`, nuovo: `state_as_of`, `PeriodBoundaries` e `period_boundaries`,
+        `PeriodPnl` e `period_pnl`, `period_other_result`;
+      - `average_cost.py`: `MovementUnitCost` e `movement_unit_costs`;
+      - `portfolio_service.py`:
+        - via `_daily_state_as_of` (17 righe) e `_compute_period_summary_metrics` (71 righe);
+        - `_unrealized_breakdown_rows` usa `period_boundaries`, cioè la copia gemella tolta;
+        - `get_summary` e `get_positions_contribution` usano `period_pnl`, e il residuo usa `period_other_result`;
+        - `_wac_qualifying_txs` usa `movement_unit_costs`;
+        - tolto `import bisect`, non più usato;
+      - docstring di `data_quality.py:102` aggiornata.
+    - **⚠️ Fuori pista**: la prima parità era rossa (27 test). In `get_positions_contribution` c'è una variabile
+      locale `period_pnl` (`period_pnl = sum(...)`), e Python la vede locale in tutta la funzione: la chiamata alla
+      funzione della casa prendeva un Decimal, o niente (`TypeError`, `UnboundLocalError`). Cura: il servizio importa
+      il modulo (`from …portfolio import period as period_math`) e chiama `period_math.<nome>`. I nomi della casa
+      restano quelli pinnati dai test, e nessuna variabile locale li può più coprire.
+    - **Mappe**: tabella dei moduli di `financial-math.instructions.md` (`period`, `movement_unit_costs`), mappa di
+      `backend.instructions.md`, docstring di `financial_math/__init__.py`, albero di `financial_math.md`.
+    - **Verdi**, un file alla volta con `nice -n 10`, log in `/tmp/libreFolio_j/cp4c/j_*`:
+      - il file nuovo 25/25, la guardia del layer 38 (un caso in più per `period.py`);
+      - `test_portfolio_service` 98, `test_portfolio_service_native_cash` 21, golden 1 (file invariato),
+        `test_portfolio_cost_currency` 25, `test_data_quality_report` 38;
+      - AI Export: `portfolio_broker_financial` 126, `portfolio_broker_integration` 58;
+      - `services portfolio-allocation-source` 89, `api transactions-wac` 20, `api portfolio` 51;
+      - `dev.py lint` pulito, black invariato; porta libera.
+    - **`all-backend --workers 2`** (slot 1, 19:39–20:20, 40 min 44 s; carico 37 all'avvio, 77 alla fine): 6/7
+      categorie; totali, lavoratori paralleli compresi, **16 225 passed, 28 skipped, 2 failed**; i 7 avvisi soliti;
+      nessun C-93; passo di build di C-94 69 s.
+      - **I 2 rossi**: `test_api/test_brim_api.py::TestParseEndpoint::test_parse_file_success` e
+        `::test_parse_returns_asset_mappings`, entrambi `httpx.ReadTimeout`, con il timeout fisso del client a 30 s
+        (`TIMEOUT = 30`, `:53`).
+      - **Triage** (skill `test-triage`, prove raccolte prima di qualsiasi giudizio):
+        - BRIM non importa nessun modulo toccato da CP-4c;
+        - la run è durata 40 minuti contro i soliti 25, e il carico della macchina è salito a 77;
+        - `api brim` rieseguito da solo nella corsia, sotto carico 77: **87/87**, i due test compresi
+          (`h_brim_alone.log`).
+        - Causa: il server ha risposto oltre i 30 s del client per il sovraccarico della macchina, non per una
+          regressione. La decisione (accettare con questa prova o rifare `all-backend` a carico normale) è del
+          coordinatore.
+  - **CP-4d**: R2. La riprova a freddo esce solo con la parità provata sul corpus del motore; altrimenti resta, col
+    perché scritto.
+    - **Piano d'indagine** (15/10 sera, mandato al coordinatore, in attesa del suo via):
+      - **Cos'è R2** (`portfolio_service.py:2003+`, `get_report`): l'MWRR della sintesi è una soluzione sola a freddo
+        (`calculate_mwrr`); quello della storia è una serie con partenza «calda», dove ogni punto parte dalla
+        soluzione precedente (`calculate_mwrr_series`). Se l'ultimo punto e la sintesi divergono oltre
+        `max(0,5 pp, 5 %)`, R2 rifà la storia a freddo; se divergono ancora, annulla la serie e scrive un problema.
+        La matematica è già tutta nella casa: R2 è una guardia di coerenza, non una copia.
+      - **Perché possono divergere**: con flussi che cambiano segno più volte lo XIRR ha più radici, e Newton
+        converge a quella vicina al punto di partenza.
+      - **Passi**:
+        1. un controesempio puro (−100 / +230 / −132, con radici 10 % e 20 %), con le sole funzioni della casa;
+        2. se esiste, R2 resta (classe c) col perché scritto, un test pinnato dal test-author e, se il coordinatore
+           vuole, la regola di divergenza nella casa;
+        3. se non esiste, una prova casuale su migliaia di sequenze e un controllo sul DB popolato prima di toglierlo.
+    - **Passo 1 eseguito** (15/10 sera, via del coordinatore; solo le funzioni della casa, nessun DB né corsia; script e
+      log in `/tmp/libreFolio_j/cp4d/`: `search.py`, `verify.py`, `classify.py`). Su 20 000 scenari casuali (seme
+      20261015; prelievi grandi frequenti, mosse del ±10 %), costruiti come li chiamano sintesi e storia:
+
+      | | casi |
+      |---|---|
+      | la soluzione singola (sintesi, `calculate_mwrr`) **non è una radice** | 818 (4,1 %); 758 valgono esattamente 0,100110 |
+      | l'ultimo punto della serie «calda» non è una radice | 691 (3,5 %) |
+      | la serie «fredda» non è una radice | 818: parte dallo stesso punto della singola |
+      | divergenti oltre la tolleranza di R2 | 952: 455 sintesi sbagliata e serie giusta, 330 il contrario, 167 entrambe sbagliate |
+      | divergenze fra **due radici vere** | **0** |
+
+      - **Verifica sui casi n. 1, 16, 17**: il VAN ha una sola radice reale (−0,4375, −0,4305, −0,5605) e la serie
+        calda la trova (VAN ≈ 0). La singola restituisce 0,100110, dove il VAN vale −624, −1 189 e −2 102: non è una
+        soluzione. 0,100110 è il secondo punto di partenza del metodo delle secanti di scipy, `x0·(1+10⁻⁴)+10⁻⁴`; il
+        risolutore si ferma lì dopo un overflow (`RuntimeWarning: overflow encountered in scalar power`), e
+        `calculate_mwrr` controlla solo che il numero sia finito.
+      - **Cosa vuol dire**: il controesempio atteso (due radici vere) non c'è. C'è un difetto di numeri: i due
+        risolutori possono restituire un tasso che non risolve l'equazione. R2 lo peggiora: nei 455 casi rifà la storia
+        a freddo, prende lo stesso valore sbagliato della sintesi, e la Dashboard mostra circa +10 % annuo invece di circa
+        −44 %.
+      - Riportato al coordinatore con i numeri, come chiesto, prima di toccare qualsiasi cosa.
+    - **Decisione del coordinatore (19:08)**: via a CP-4d così come proposto. XIRR verificato in `returns.py`: Newton
+      con la derivata analitica, poi `brentq` sull'intervallo dove il segno cambia, la radice più vicina al punto di
+      partenza, `None` → «—», un'implementazione sola per sintesi e serie. Prima i rossi: i tre casi fissati, il test di
+      proprietà, la parità. Poi di nuovo le 20 000 prove: R2 si toglie solo con 0 divergenze. Valori che cambiano
+      dichiarati, riga 🐛 nel CHANGELOG. Il developer lo informa il coordinatore («correzione di un numero sbagliato,
+      dentro le regole che ha già dato»). **Ordine**: CP-4c entra prima (`all-backend` in coda sullo slot 1); CP-4d è un
+      lotto a sé, dopo. I suoi rossi non si scrivono prima del commit di CP-4c, perché renderebbero rosso il suo
+      `all-backend`.
+    - **Disegno di CP-4d**:
+      - `returns.py`: un risolutore privato, `_solve_xirr(flows, x0) -> float | None`, per i due chiamanti:
+        1. Newton con la derivata analitica, d/dr Σ a·(1+r)^(−t) = Σ −t·a·(1+r)^(−t−1), con t = giorni/365;
+        2. il tasso vale solo se è finito e |VAN(r)| ≤ ε · Σ|flussi|;
+        3. altrimenti si cercano i cambi di segno del VAN su una griglia in (−1, R_max], con passo geometrico su 1+r;
+           per ogni intervallo `brentq`, poi la radice più vicina a `x0`;
+        4. nessuna radice: `None`.
+        Il VAN lavora in float di Python, così un overflow è un `OverflowError` trattato come «non valutabile» e non un
+        `inf` silenzioso di numpy.
+      - `calculate_mwrr` lo usa con `x0 = 0,1`; `calculate_mwrr_series` con il punto precedente (calda, con il tetto di
+        oggi) o con 0,1 (fredda). Quantizzazione invariata.
+      - **R2**: rifatta la classificazione delle 20 000 prove con il risolutore nuovo, se le divergenze sono 0 esce il
+        blocco di `get_report` (`portfolio_service.py:2003+`) col parametro `_mwrr_use_warm_start` di `get_history`,
+        che serve solo a R2.
+      - **Valori che cambiano**: l'MWRR (sintesi, storia, fatti di portafoglio dell'AI Export) solo dove il risolutore
+        sbagliava. Prima un tasso falso, spesso +10,011 % annuo, o una serie sbagliata; dopo la radice vera, o «—».
+      - **CHANGELOG** (🐛 Fixed, proposta): «Portfolio: the money-weighted return (MWRR) comes from a checked solver,
+        and a rate is shown only when it solves its equation. In some portfolios with large withdrawals the Dashboard
+        showed a wrong rate (often +10.01% a year); it now shows the true one, or "—" when there is none.»
+    - **Prototipo, fuori dal worktree** (15/10 sera, mentre CP-4c aspetta lo slot; `/tmp/libreFolio_j/cp4d/proto.py`,
+      `bench.py`): il disegno sopra, con le funzioni copiate e il solo risolutore cambiato.
+      - **Le 20 000 prove di nuovo**: 0 divergenze oltre la tolleranza di R2, 0 «None», serie calda e fredda sempre
+        uguali. I tre casi fissati danno sintesi = calda = fredda = la radice vera (−0,437404, −0,430962, −0,560105). Con
+        il risolutore verificato R2 non ha più ragione d'essere: esce nell'implementazione, come deciso.
+      - **Costo**, su serie giornaliere lunghe, vecchio contro nuovo: 0,04 contro 0,05 s su 365 giorni, 0,25 contro
+        0,22 s e 0,21 contro 0,20 s su 1 095 giorni. Il ripiego sulla griglia è raro (1/365, 0/1 103, 2/1 095 punti) e i
+        valori su queste serie sono identici.
+- **`derived_views.py` e DV dei colori** (coordinatore, 15/10 16:25; ok di J alle 16:26): DV cambia 3 righe, l'import di
+  `SECTOR_EMOJIS`, che diventa unica in `utils/asset/sector.py`; la guardia del layer ammette `utils`, e chiude la nota
+  «Presentazione» del piano 43, §4. Nessun lotto di J sposta o riscrive il file: CP-4 non lo tocca (P1 in un modulo
+  accanto); CP-11 (U7, i pesi) e forse CP-13 (U8) toccheranno il corpo di `_alloc` (`:231-243`): lì si tiene la loro
+  chiamata dell'emoji.
+- **`planner/categoryLabels.svelte.ts:22` e DV** (avviso del coordinatore, 15/10 19:10, nessuna risposta richiesta): DV
+  cambia una riga nel suo lotto, dichiarata. Lo spazio prima dell'etichetta c'è solo se c'è l'emoji del settore, che
+  ora arriva dal backend. Nessun lotto aperto di J tocca quel file (CP-2 ha cambiato `format.ts` e `request.ts`).
+
+#### CP-6 — B11, i giorni in cui si muove solo il cambio di un titolo (piano, 15/10, nessun codice)
+
+Decisione 28 (§3, alla lettera): «bisogna ricalcolare ogni volta che cambia uno dei termini della formula».
+
+- **Oggi**: `DailyStateBuilder` (`financial_math/portfolio/daily_state.py:342-379`) ricalcola solo i giorni «dirty»:
+  movimenti, flussi, bordi in transito, cambi di prezzo, split e, dal lotto 41 F, i cambi delle valute tenute in
+  **cassa** (`NativeCash.rate_change_days`). Mancano i cambi che il giorno legge per i titoli:
+  - il valore di mercato di un titolo estero (`_market_value_for`, `fx_rate_map[(valuta, target, dt)]`, `:1031`);
+  - la ripartizione del non realizzato (`:895`);
+  - il valore in transito, del titolo e della cassa (`_compute_in_transit`, `_convert(…, dt)`, `:1077`).
+
+  Un giorno in cui si muove solo il cambio ricopia il giorno prima, anche `date_to`. Quindi il valore di oggi di un
+  titolo estero senza prezzo nuovo (NAV settimanale, obbligazioni, prezzi manuali) usa il cambio dell'ultimo giorno
+  «dirty», e la scheda del broker può non coincidere con l'ultimo punto della sua linea (devWiki
+  `problems/dirty-days-ignore-fx-only-moves`, stato «securities: open»).
+- **Cura**: diventa «dirty» ogni giorno del frame in cui il cambio che il motore legge da `fx_rate_map`, per una
+  qualunque delle sue valute, differisce da quello del giorno prima.
+  - La lettura del motore è a giorno esatto (`fx_rate_map.get`): un cambio che compare o sparisce conta.
+  - La mappa ha già una voce per giorno per le valute dei titoli e dei prezzi, e per la cassa in transito
+    (`engine.py:500-532`, `_preload_fx_rates`): nessun cambio letto in più, nessun `convert_bulk` in più.
+  - Il pre-frame non valuta il mercato: non cambia.
+- **Una casa sola** (regola 10): `native_cash._change_days` calcola già i giorni di cambio, per la cassa, con la
+  lettura «ultimo cambio noto» (`_rate_at`). Una sola funzione pura nella casa, che riceve la lettura del chiamante e
+  il calendario: giorno esatto per il motore, ultimo noto per la cassa. Ciascuno resta coerente con la propria
+  valutazione.
+  - Parità: `NativeCash.rate_change_days` identico su tutti i test della cassa (per costruzione: con la lettura
+    «ultimo noto» un giorno cambia solo su un punto della serie).
+  - Le due letture di un buco nei cambi (`None` nel motore, l'ultimo noto nella cassa) sono una differenza vera fra
+    la valutazione dei titoli e quella della cassa: non è di B11. Va in J-1, da unificare con U1 (CP-11).
+- **Valori che cambiano** (dichiarati prima):
+  - gli stati giornalieri (NAV, valore di mercato, linee dei broker, parti cambio/titolo del non realizzato, valori in
+    transito) nei giorni in cui si muove solo il cambio di un titolo, fino al giorno «dirty» seguente;
+  - la sintesi a `date_to`, quando quel giorno muove solo un cambio, e tutto ciò che deriva dalla serie: TWRR, MWRR,
+    drawdown, grafici storici, fatti di portafoglio dell'AI Export;
+  - **golden** `fixtures/native_cash_guard/eur_only_golden.json`: la finestra **W1** cambia, perché l'ETF `IDX` è
+    quotato in IDR e i cambi EUR/IDR dei giorni 4, 18 e 22 cadono in giorni senza transazioni né prezzi (fatto apposta
+    dal lotto 41). **W2** (giorni 8–14, cambio costante) resta identica. Si rigenera W1 con il diff dei valori
+    nell'handoff;
+  - invariati: i portafogli con soli titoli nella valuta del report, e i titoli con un prezzo nuovo ogni giorno (il
+    giorno era già «dirty»).
+- **Rossi** (`test-author`, prima della cura):
+  - R1: titolo in USD, report EUR, una quota il giorno 1 portata avanti, cambio 0,90 · 0,90 · 0,80 nei giorni 1–3,
+    nessuna transazione dopo il giorno 1 → valore del giorno 3 = qty × prezzo × 0,80 (oggi × 0,90);
+  - R2: lo stesso con `date_to` = giorno 3, sulla sintesi: valore corrente a 0,80; la scheda del broker uguale
+    all'ultimo punto della sua linea;
+  - R3: cassa in USD in transito su un giorno in cui si muove solo il cambio → cassa in transito al cambio del giorno;
+  - R4: titolo in USD in transito, lo stesso;
+  - R5: la parte «cambio» del non realizzato nel giorno del solo cambio;
+  - guardie: soli titoli in EUR → stati identici; titolo estero con prezzo ogni giorno → stati identici; parità di
+    `rate_change_days` sui test della cassa; il golden W2 identico.
+  - Dove: `test_portfolio_engine/test_foreign_cash_revaluation.py` o un file nuovo registrato nel runner (lo decide
+    test-author col catalogo).
+- **Cancelli leggeri**: il file dei rossi, `services roi-fifo-utils` (golden: W1 rigenerata, W2 identica),
+  `services financial-math`, le azioni del motore e del portafoglio, `services ai-export`. Pesante: `all-backend` su
+  slot.
+- **Doc e altro**: la pagina dev del motore (giorni «dirty»), EN; la pagina devWiki passa a «fixed» (`wiki-file` alla
+  fine); CHANGELOG 🐛 Fixed: «Portfolio: on a day when only an exchange rate moves, foreign securities and cash in
+  transit are revalued at that day's rate; before, they kept the previous day's value until their price changed.»
+- **Conflitti**: `native_cash.py` (N1a di W: solo `native_balances`, righe diverse); `daily_state.py` non è nei file
+  di W né di X.
+- **Aggiunta del 15/10 sera** (trovata leggendo V-11 per CP-4, stessa famiglia, decisione 28): il segnale di
+  «dirty» per i prezzi (`daily_state.py:366-375`) confronta solo le chiusure di mercato fra loro. Ma il motore legge
+  l'osservazione più recente, di mercato o di una transazione (`price_marks.py`, `AssetPriceSeries`), e da lì
+  vengono valore e sorgente. Un esempio: un BUY il giorno d−1 fissa il segno al prezzo del trade; il giorno d arriva
+  una quotazione con la stessa chiusura della quotazione precedente. Il giorno d allora non è «dirty», e ricopia d−1:
+  valore al prezzo del trade e asset «implied», mentre in d vince la quotazione.
+  - **Cura**: «dirty» il giorno di una quotazione di mercato quando cambia il segno che il motore legge: la sorgente
+    (da trade a mercato) o il valore rispetto all'osservazione precedente, di mercato o di trade.
+  - **Rosso**: lo scenario sopra; valore e insieme «implied» del giorno d.
+  - **Valori che cambiano**: solo in quei giorni.
+
+#### CP-15 — totali di controllo del backup (richiesta di B, 15/10 14:17, col via del coordinatore)
+
+- **Richiesta di B** (Backup e Docker, sessione `5618ecee-…`): il manifest dello zip porta dei totali calcolati sulla
+  copia del DB; al ripristino (diretto, o dopo `alembic upgrade head` su una copia) B li ricalcola e li confronta; una
+  differenza è un avviso nel report, non un rifiuto. Requisiti: deterministica e in sola lettura (nessun prezzo, cambio,
+  rete o `today`; tutto il registro); tutta l'istanza, quota 100 %; su un altro file SQLite nello stesso processo, senza
+  cache di modulo né DB scelto da `get_settings()`; serializzabile (ordine stabile, Decimal canonici, versione del
+  metodo); costo lineare. Il codice è mio, B lo chiama (regola 10).
+- **Modulo nuovo** `financial_math/ledger_totals.py`: i totali del registro che non chiedono né prezzi né cambi.
+  - `position_quantities(transactions, as_of=None) -> dict[int, dict[int, Decimal]]`, puro: la quantità di ogni
+    (broker, asset) con la regola del motore (`daily_state.py:184-187`: ogni riga con asset e quantità ≠ 0; split e
+    trasferimenti sono righe ADJUSTMENT e TRANSFER), quota 1, la forma di `native_balances`. È la casa che J-1 cercava
+    per la metà delle quantità; le copie (W `get_asset_holdings`, `SUM` SQL in virgola mobile su SQLite; il
+    `cumulative_qty` del motore, che scala per la quota) passano su di essa solo in J-1.
+  - `CONTROL_TOTALS_VERSION = 1`; `ControlTotals(version, cash, quantities)` congelata, con `to_json()` e
+    `from_json()` (che rifiuta un'altra versione).
+  - `control_totals(transactions) -> ControlTotals`, puro: la cassa da `native_balances` (N1 di W) su
+    `cash_movement_from_transaction`, le quantità da `position_quantities`. Somme esatte (contesto decimale locale che
+    solleva invece di arrotondare), righe a zero escluse, ordine per (broker, valuta) e (broker, asset), Decimal senza
+    esponente né zeri finali.
+  - `async compute_control_totals(session) -> ControlTotals`: un punto di lettura del DB con nome (regola 1, come i
+    caricatori dello YoC). Una sola `select` delle colonne necessarie su tutta `transactions`, ordinata per id, letta a
+    blocchi; mai `SUM` in SQL.
+- **Proprietà dichiarate a B**:
+  - indipendenti dal tipo di riga: una migrazione che riclassifica righe (la correzione degli orfani di V-3: TRANSFER →
+    ADJUSTMENT, CASH_TRANSFER → DEPOSIT o WITHDRAWAL) non li cambia. Una differenza vuol dire righe perse, aggiunte o
+    alterate in broker, asset, valuta, importo o quantità;
+  - chiavi per id: valgono per il ripristino dell'istanza intera;
+  - le quantità tengono anche i residui sotto `QUANTITY_DUST_THRESHOLD`, che la Dashboard nasconde: un totale di
+    controllo vede ogni unità.
+- **Fuori**: il costo nativo. Serve un cambio quando un acquisto è pagato in una valuta diversa da quella dell'asset, e
+  dipende dalle regole di WAC e FIFO, che cambiano più spesso: la versione salirebbe più spesso e i backup vecchi
+  diventerebbero «non confrontabili».
+- **Dipendenza**: `native_balances` (N1 di W) in `dev_release2` e nella mia base. Fino ad allora nessun codice.
+- **Rossi** (`test-author`):
+  - puri: cassa e quantità con split, una coppia di trasferimento, righe che si annullano (escluse), più valute per lo
+    stesso broker, «-0» mai scritto, ordine, testo canonico, JSON andata e ritorno, `from_json` che rifiuta un'altra
+    versione;
+  - su file: un SQLite temporaneo con lo schema dell'app e un engine suo, `get_settings` che solleva, le cache di
+    modulo (`_portfolio_blob_cache` compresa) identiche prima e dopo;
+  - parità: le quantità a fine registro uguali a quelle del motore su un portafoglio di test, la cassa uguale a
+    `NativeCash.balances()`.
+- **Doc**: la tabella dei moduli e la regola 1 (il nuovo punto di lettura) in `financial-math.instructions.md`, la mappa
+  in `backend.instructions.md`, la docstring di `financial_math/__init__.py`, la pagina dev `financial_math.md` (EN).
+- **Cancelli**: il file dei test nuovo e `services financial-math` (la guardia); nessuna suite pesante propria.
+- **Peso**: basso. L'ordine lo decide il coordinatore. Il campo `control_totals` del manifest e i test sulle fixture
+  sono di B.
+
+#### CP-10a — un solo Rolling Return (decisione 29)
+
+- Backend: esce `signal_plugins/rolling_return/` (`RISK_ROLLING_RETURN`); `ASSET_CALENDAR_ROLLING_RETURN` diventa
+  `catalog_visible = True`, con un limite superiore su `window_days` per il selettore e una chiave di tooltip nuova
+  (`signals.tooltips.riskWindow` dice «osservazioni» ed è condivisa con Volatilità, Sharpe e Beta).
+- Matematica nella casa: il rendimento semplice fra due prezzi (R10: `series_preparation.py:355-359` e il plugin a
+  calendario) va in `financial_math/returns.py`; `rolling_compounded_return_values` (`risk/signal_helpers.py:175`),
+  usato solo dal plugin che esce, sparisce come codice morto: il plugin a calendario confronta i due prezzi, la
+  composizione dei rendimenti sulla finestra gli è equivalente e non serve.
+- Frontend: la migrazione v2→v3 delle configurazioni salvate (`chartSettingsStore.svelte.ts`, file non mio: funzione
+  pura, righe dichiarate nell'handoff): `risk-rolling-return` → `asset-calendar-rolling-return`, `{window: N}` →
+  `{window_days: N}`, `componentStyles.rolling_return` → `calendar_return`; idempotente; Vitest.
+- Rischio: il plugin a calendario non è mai stato disegnato come overlay (punti vuoti con provenienza, avviso
+  `UNDEFINED_METRIC_WINDOW`): Vitest e la spec E2E della pagina asset.
+- Riga nel CHANGELOG: sulle borse l'orizzonte di una finestra salvata di 30 passa da circa 42 a 30 giorni.
+- Con J-13 (solo l'etichetta «osservazioni» per Volatilità, Sharpe e Beta). Doc: 3 pagine dev, 5 utente e teoria (con
+  debito di traduzione), didascalie della galleria.
+- **Rossi** (`test-author`, prima della cura):
+  - backend: il catalogo dei segnali non elenca più `RISK_ROLLING_RETURN` ed elenca `ASSET_CALENDAR_ROLLING_RETURN`
+    visibile, con i limiti di `window_days`; la funzione della casa (rendimento semplice fra due prezzi) con i suoi casi
+    limite (prezzo iniziale zero o mancante → nessun valore, mai una divisione); parità prima del taglio: sulla stessa
+    serie senza buchi, il plugin a calendario a D giorni e il vecchio helper composto su N = D osservazioni danno gli
+    stessi valori dove le due finestre coincidono (prova che il helper non porta via nulla);
+  - frontend (Vitest, funzione pura): una configurazione v2 con `risk-rolling-return` e `{window: 30}` diventa v3 con
+    `asset-calendar-rolling-return`, `{window_days: 30}` e lo stile `calendar_return`; gli altri segnali restano
+    identici; una v3 passa invariata (idempotenza); una v2 senza il segnale cambia solo la versione.
+- **Valori che cambiano** (dichiarati prima): solo per chi aveva salvato il Rolling Return «a osservazioni». Una finestra
+  di N osservazioni diventa di N giorni di calendario: sulle borse e sui cambi (circa 5 osservazioni su 7 giorni)
+  l'orizzonte di 30 passa da circa 42 a 30 giorni; sulle cripto (7 su 7) non cambia. Nessun valore nel DB.
+- **Da verificare all'implementazione**: le chiavi `signals.riskRollingReturn.*` sono fra quelle «condivise da più
+  plugin» (skill `devpy-i18n`): prima di toglierle, `dev.py i18n search` e il cancello di proprietà dei plugin; la chiave
+  di tooltip nuova va nel frammento del plugin a calendario.
+- **Cancelli**: le azioni dei segnali e del rischio toccate, `utils gate-plugin-i18n-ownership`, `gate-i18n-catalog`,
+  `gate-i18n-usage`, Vitest dello store e del registro dei segnali, `api sync` (se il catalogo è nel contratto) e
+  `front check`, che vanno chiesti; la spec E2E della pagina asset con `--workers 2`, da chiedere; `all-backend` su slot.
+- **CHANGELOG** (🔄 Changed): «Charts: one Rolling Return, measured in calendar days. A saved Rolling Return of N
+  observations becomes N days: on exchanges a 30-observation window (about 42 days) becomes 30 days.»
+
+#### Inventario del punto 26 (per CP-7, letto nel codice il 15/10, nulla toccato)
+
+Regola corretta (26): il costo si converte al cambio dell'acquisto, i proventi al cambio della vendita; un lotto chiuso
+ha «di mercato» = 0; il realizzato coincide con la Dashboard.
+
+| # | Dove | Cosa fa oggi | Classe |
+|---|---|---|---|
+| 1 | motore della Dashboard: `financial_math/portfolio/daily_state.py` (`_realized_sale`, `unrealized_by_currency`) | proventi al cambio della vendita − costo WAC storico: **già la regola giusta**, con il costo WAC | riferimento: la regola di conversione va nella casa e il motore la usa |
+| 2 | lotti: `financial_math/lots/histories.py:160-182` (`known_realized_pnl`, `known_cumulative_proceeds`), righe di chiusura `lots_analysis_service.py:1042-1045`, fabbisogno dei cambi `lots/conversions.py:168-176` | realizzato e proventi convertiti con la valuta del lotto alla data di chiusura (T-B5) | da curare (CP-7) con la regola del motore, sul costo FIFO |
+| 3 | sintesi del lotto `lots_analysis_service.py:728-770` | `pnl = total_value − opening_value`, `market_pnl = pnl − realized`: eredita l'errore del 2 | segue la cura del 2; rosso: lotto chiuso con «di mercato» = 0 |
+| 4 | AI Export: `components/payloads/portfolio_broker.py:604-606`, `:775-776` | somma `realized_pnl` e `market_pnl` dei lotti | eredita la cura; versione e sonda (skill delle sonde, D-J14) |
+| 5 | AI Export: identità del periodo in `portfolio_financial.py:489` e `broker_financial.py:434` | lo stesso residuo calcolato due volte | duplicato: una funzione (CP-12) |
+| 6 | posizioni: `portfolio_service.py:824` e broker `:939` | G/L % calcolata sul posto | CP-4 (qui sopra) |
+| 7 | pagina del broker: `brokers/summary.py:119-135` (W) | non realizzato = valore − costo totale nella valuta dell'asset, % × 100: terza copia della G/L % | duplicato in un file di W: da segnalare al coordinatore |
+
+Un rosso per ogni comportamento che cambia (2, 3, 4) prima di toccare; 5–7 sono duplicati senza cambio di valore.
+
+**Risposte del coordinatore (15/10, dopo le 13:15)**:
+- 26 va in CP-7 (non in CP-2), confermato.
+- Riga 7 (`brokers/summary.py:119-135`, W): la funzione unica la scrivo io in `financial_math/` col suo test; la
+  chiamata nel file di W la sostituisco io **solo dopo che N1 di W è entrato in `dev_release2`** (N1 ha cambiato quel
+  file), col diff approvato da W, come per `native_cash`. Fino ad allora la riga resta com'è.
+- 27 (P-10): lo scrivo io in `services/assets/event_store.py` di X, col diff mandato a X per approvazione (come D-J17).
+- 29: CP-10a approvato così.
+- Ordine approvato: CP-2 a passi brevi, albero verde a ogni slot pesante assegnato; CP-4 dopo `all-backend` di C-94.

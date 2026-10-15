@@ -235,6 +235,35 @@ describe('SettingToggle', () => {
         expect(screen.getByText('OFF')).toBeInTheDocument();
     });
 
+    it('keeps a «Coming soon» placeholder read-only even with the section unlocked', async () => {
+        // How the global tab draws `require_email_verification`: `disabled` plus a badge, whatever the page lock says.
+        // The E2E reached it only by accident, as «the first toggle of the tab», and now names editable settings by key.
+        // Unlocked and non-default on purpose: without `disabled` the switch would be live and Reset on offer, so every
+        // assertion below is the placeholder's doing, not the lock's. The badge has a test id of its own and renders
+        // the text it is handed (the tab hands it `$_('settings.comingSoon')`, the key itself under this file's mock).
+        const reports = HARNESSES[0].mount({value: false, isLocked: false, isNonDefault: true, disabled: true, badge: 'settings.comingSoon'});
+        const button = toggle();
+
+        expect(button).toBeDisabled();
+        expect(screen.getByTestId('setting-badge')).toHaveTextContent('settings.comingSoon');
+        expect(actionsOffered()).toEqual([]);
+
+        // A click dispatched on the button itself still reaches the handler (Svelte delivers it to a disabled target),
+        // so this checks the guard in `toggle()`, here driven by `disabled` alone, and not only the attribute.
+        await fireEvent.click(button);
+
+        expect(reports.change).not.toHaveBeenCalled();
+        expect(button).toHaveAttribute('aria-checked', 'false');
+    });
+
+    it('draws no badge on an ordinary setting', () => {
+        // The other half of `{#if badge}`, behind a presence barrier: the switch is there and live, and badge-less.
+        HARNESSES[0].mount({value: false});
+
+        expect(toggle()).toBeEnabled();
+        expect(screen.queryByTestId('setting-badge')).toBeNull();
+    });
+
     it('keeps the switch live while a save is in flight', async () => {
         // Characterisation. `isSaving` disables the Save button only; the switch
         // stays enabled, so the value can be flipped again while the previous

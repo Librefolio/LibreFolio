@@ -12,6 +12,16 @@ Asset events represent significant occurrences that affect an asset's price or g
 | ✂️     | **SPLIT**                     | Changes quantity, not total value  | Provider (yfinance) or manual                        | Stock/unit split                               |
 | 🏁     | **MATURITY_SETTLEMENT**       | Final capital return               | Scheduled Investment (`generate_interest`) or manual | Asset reaches maturity — no further calculations |
 
+The type is always one of these five values (`AssetEventType`). `FAAssetEventPoint`
+(`schemas/assets/events.py`), the event point of the API, of the provider output and of the
+Scheduled Investment `asset_events`, trims and upper-cases it (`normalize_type()`: `dividend`
+becomes `DIVIDEND`) and refuses anything else: `POST /api/v1/assets/events` answers 422. Until 1.3
+a type was stored as it came (a hand-written CSV could store `dividend`), and one the enum does not
+know broke every later read of the asset's events (`LookupError`, a 500). The post-migration fix
+`event_types` repairs the rows stored that way, once, at the first start after the upgrade
+(decision 23 of release 1.3; see
+[Post-migration fixes](../../architecture/database/index.md#post-migration-fixes)).
+
 ---
 
 ## 🗃️ Database Model
@@ -41,13 +51,15 @@ erDiagram
 
 ## 🔄 Dedup Strategy
 
-`_upsert_asset_events()` (`assets/event_store.py`) writes both kinds of events **in place**,
-one source per call: a sync passes the assignment's id, the manual upsert passes `None`. It groups
-the incoming events by `(date, type)` and matches each key against the stored rows of the **same**
-source only (same `asset_id` and `provider_assignment_id`, `IS NULL` for manual events):
+`_write_asset_events()` (`assets/event_store.py`) writes both kinds of events **in place**,
+one source per call: a sync passes the assignment's id through `_upsert_asset_events()`, which
+returns their count; the manual upsert passes `None` and gets back the id of the row each event
+wrote. It groups the incoming events by `(date, type)` and matches each key against the stored rows
+of the **same** source only (same `asset_id` and `provider_assignment_id`, `IS NULL` for manual
+events):
 
 ```python
-# Simplified logic of _upsert_asset_events() and _write_event_group(), for each (date, type) key
+# Simplified logic of _write_asset_events() and _write_event_group(), for each (date, type) key
 stored = rows on the key with this asset_id and provider_assignment_id, ORDER BY id
 for row, evt in zip(stored, incoming):  # paired lowest id first: updated, id kept
     row.value, row.currency = evt.value.amount, evt.value.code or default_currency
@@ -60,8 +72,10 @@ surplus = stored[len(incoming):]  # legacy same-key duplicates of this source
 
 A key thus ends with as many rows as the batch brings, the lowest ids kept, and the transactions of
 a collapsed duplicate move to the row that stays. Rows of another source on that key are never
-touched, and a stored key the batch does not mention is kept. Keys are committed in slices of
-`PRICE_UPSERT_CHUNK_SIZE` (1,000).
+touched, and a stored key the batch does not mention is kept. Keys are written in slices of
+`PRICE_UPSERT_CHUNK_SIZE` (1,000), each one flushed: a sync commits every slice (`commit=True`,
+the default of `_upsert_asset_events()`), while the manual upsert (`commit=False`) leaves the
+commit to `bulk_upsert_events()`, which commits once for the whole request.
 
 The upsert used to DELETE the stored rows of each key and INSERT the new ones. But
 `transactions.asset_event_id` is `ON DELETE RESTRICT`, so that failed as soon as a transaction
@@ -83,39 +97,89 @@ asset's prices and that assignment's events, first unlinking the transactions th
 (`asset_event_id = NULL`); manual events stay.
 
 The data editor shows these events read-only: the events of `POST /assets/prices/query` carry
-`is_auto` (`provider_assignment_id IS NOT NULL`). An edit would be overwritten by the next sync, and
-a deletion lasts only until the provider returns the event again.
+`is_auto` (`provider_assignment_id IS NOT NULL`). An edit would be overwritten by the next sync.
+The editor can still delete one, through `delete_ids` like a manual event (below), but the
+deletion lasts only until the provider returns the event again.
 
 ### ✋ Manual Events (`provider_assignment_id IS NULL`)
 
 `POST /api/v1/assets/events` (`bulk_upsert_events()`) takes a list of `FAEventUpsert` items,
-`{asset_id, events}`, whose points are `FAEventUpsertPoint`: an `FAAssetEventPoint` with an
-optional `id` (`schemas/assets/events.py`). For each item:
+`{asset_id, mode, events, delete_ids}`, whose points are `FAEventUpsertPoint`: an
+`FAAssetEventPoint` with an optional `id` (`schemas/assets/events.py`).
 
-- An event with an explicit currency other than the asset's → HTTP 400 `EVENT_CURRENCY_MISMATCH`.
+The request is **all or nothing** (decision 22 of release 1.3). Its items run in order in one
+transaction: `_write_manual_item()` checks an item, then writes and flushes it, so a later item
+sees what the earlier ones wrote, and a single commit closes the request. Any refusal rolls the
+whole request back, the items before it included: nothing of it is stored.
+
+An item's `mode` (decision 20) is `"upsert"` by default; the data editor and its CSV import send
+none:
+
 - An event **with `id`** edits that manual row in place, every field included (`date`, `type`,
   value and currency, `notes`), and the row keeps its id. The data editor sends the id of every
   saved row, so changing the Type of a saved event no longer adds a second event.
-- Events **without `id`** go through `_upsert_asset_events(provider_assignment_id=None)`: matched
+- Events **without `id`** go through `_write_asset_events(provider_assignment_id=None)`: matched
   on `(date, type)` among the manual rows and updated in place, so a manual event still replaces
-  the manual event of the same date and type, now keeping its id.
-- Each item is committed on its own: a refused item writes nothing and ends the request, while the
-  items before it stay stored.
+  the manual event of the same date and type, keeping its id.
 
-The whole item is checked before anything is written:
+With `mode: "create"`, an item only adds events, and none of them may carry an `id`. An event on a
+`(date, type)` the asset already has, manual **or** from a provider, is refused with
+`EVENT_EXISTS` (`_reject_existing_events()`): a new event never overwrites another one. The
+transaction form's **+ New event** (`EventCreateMiniModal`) sends this mode. On `EVENT_EXISTS` it
+shows `params.existing` (`EventExistsPanel`): **Use this** links the stored event and writes
+nothing; **Edit this**, for a manual event only, loads it into the form, which then saves it by
+`id` in an `upsert` item.
+
+`delete_ids` (`upsert` items only) lists events of the item's asset to delete, manual or from a
+provider: a provider's event comes back at the provider's next sync.
+`_delete_item_events()` runs first in `_write_manual_item()`, right after the asset lookup and
+before every other check, and flushes: an edit of the item may then take the `(date, type)` of an
+event the item deletes. Every id must be an event of the item's asset (`EVENT_NOT_DELETABLE`), and
+none may be linked to a transaction (`EVENT_IN_USE`). An item may only delete, with no `events`.
+The data editor saves its Events tab this way, in one request: the rows marked deleted in
+`delete_ids`, the edited and new rows in `events`.
+
+In both modes, an event in a currency other than the asset's is refused
+(`EVENT_CURRENCY_MISMATCH`). Each result carries `event_ids`: the id of the event each point of
+the item wrote, in request order. An edit keeps its id, an event matched on its date and type gets
+the id of the row it updated, and an added event the id of its new row. `deleted_ids` lists the
+ids of `delete_ids`, all deleted, in request order; `success_count` also counts an item that only
+deletes.
+
+Every refusal below stops the whole request:
 
 | Refused | Answer |
 |---|---|
-| The same `id` twice in the item | HTTP 422 *Duplicate event id in one upsert item*, from the `FAEventUpsert` validator: the whole request is refused |
-| An `id` that is unknown, belongs to another asset, or names a provider event | HTTP 400 `EVENT_NOT_EDITABLE` |
-| An edit that changes its date or type (a *mover*) landing on a key another edit of the item ends on, or on a key held by a manual row the item does not edit | HTTP 400 `EVENT_KEY_CONFLICT` |
-| An event without `id` on a key an edit of the item ends on | HTTP 400 `EVENT_KEY_CONFLICT` |
+| A `type` that, trimmed and upper-cased, is not one of the five [event types](#event-types) | HTTP 422, from `FAAssetEventPoint.normalize_type()` |
+| The same `id` twice in one item | HTTP 422 *Duplicate event id in one upsert item*, from the `FAEventUpsert` validator |
+| An `id` in a `create` item | HTTP 422 *A create item cannot name an event id*, from the `FAEventUpsert` validator |
+| `delete_ids` in a `create` item | HTTP 422 *A create item cannot delete events*, from the `FAEventUpsert` validator |
+| The same id twice in `delete_ids` | HTTP 422 *Duplicate id in delete_ids*, from the `FAEventUpsert` validator |
+| An id both in `delete_ids` and on an event of the same item | HTTP 422 *An event cannot be deleted and edited in one item*, from the `FAEventUpsert` validator |
+| An item with neither `events` nor `delete_ids` | HTTP 422 *An upsert item needs at least one event or one id to delete*, from the `FAEventUpsert` validator |
+| An item whose asset does not exist | HTTP 400 `EVENT_ASSET_NOT_FOUND` (until 1.3, a 200 whose result had `count` 0) |
+| An id of `delete_ids` that is not an event of the item's asset: unknown, already gone, or another asset's | HTTP 400 `EVENT_NOT_DELETABLE`; `params.ids`: those ids |
+| An id of `delete_ids` whose event a transaction is linked to | HTTP 409 `EVENT_IN_USE`; `params.events`: one `{id, date, type, linked_transactions}` per such event, ordered by date, type and id. Counts only, no transaction id: the transactions may belong to other users |
+| An event in a currency other than the asset's | HTTP 400 `EVENT_CURRENCY_MISMATCH`; `params`: `expected` (the asset's currency) and `events`, one `{event_index, date, type, currency}` per such event of the item |
+| An `id` that is unknown, belongs to another asset, or names a provider event | HTTP 400 `EVENT_NOT_EDITABLE`; `params.ids`: those ids |
+| An edit that changes its date or type (a *mover*) landing on a key another edit of the item ends on, or on a key held by a manual row the item does not edit | HTTP 400 `EVENT_KEY_CONFLICT`; `params`: the `date` and `type` of the key |
+| An event without `id` on a key an edit of the item ends on | HTTP 400 `EVENT_KEY_CONFLICT`; `params`: `date` and `type` |
+| In a `create` item, an event on a `(date, type)` the asset already has, manual or from a provider | HTTP 409 `EVENT_EXISTS`; `params.existing`: the stored events on every such key of the item, ordered by date, type and id, each `{id, date, type, value: {code, amount}, notes, is_auto, linked_transactions}`, the last one the number of transactions linked to the event |
+
+A 400 or a 409 answers `detail = {error_code, message, params}` (`_REFUSAL_STATUS` in
+`api/v1/assets/events.py`): `message` is the English text, which starts with the code, and
+`params` always holds `item_index` (the item's position in the request, from 0) and `asset_id`,
+plus the fields above. Any other `AssetSourceError` stays a 500 with a string `detail`. A 422 is
+FastAPI's validation error: nothing has run, and its `loc` points at the item, or at the event for
+a type. `_split_manual_events()` also raises `EVENT_KEY_CONFLICT`, with `params.ids`, for an id
+repeated in one item: over HTTP the 422 comes first, so only a caller that skips the schema meets
+it.
 
 Allowed: two edits swapping their keys, edits that keep a shared key (legacy duplicates stay
-editable), and an event without `id` on a key a mover vacates. These checks only cover keys an
-edit ends on: an event without `id` on the key of a manual row the item does not edit updates
-that row, and two events without `id` on one key are both stored. `api/v1/assets/events.py` maps
-the three codes to HTTP 400; any other `AssetSourceError` is a 500.
+editable), an event without `id` on a key a mover vacates, and an edit landing on the key of an
+event the item deletes: that deletion is flushed before the checks run. These checks only cover
+keys an edit ends on: in an `upsert` item, an event without `id` on the key of a manual row the
+item does not edit updates that row, and two events without `id` on one key are both stored.
 
 A type change is allowed even when a transaction is linked to the event: the link stays, and the
 transaction is then read according to the new type. `compute_wac_iterative()`
@@ -128,10 +192,23 @@ cases are pinned by the `test_*_split_relabelled_as_price_adjustment_*` tests in
 `test_scripts/test_api/test_portfolio_wac.py`.
 
 Manual events are **never deleted** by the sync process. They survive provider re-syncs, provider
-changes, and bulk refreshes. Only an explicit user deletion removes them
-(`DELETE /api/v1/assets/events?ids=…`, which reports an event a transaction uses as `in_use`
-instead of deleting it), or the market-data wipe of a currency change
-(`POST /api/v1/assets/{asset_id}/market-data/wipe`), which deletes every event of the asset.
+changes, and bulk refreshes. Only an explicit user deletion removes them, or the market-data wipe
+of a currency change (`POST /api/v1/assets/{asset_id}/market-data/wipe`), which deletes every event
+of the asset. A user deletes events in two ways:
+
+- **`delete_ids` of `POST /api/v1/assets/events`**, the data editor's save: all or nothing, so an
+  event a transaction uses stops the whole request (`EVENT_IN_USE`). Until 1.3 the editor sent the
+  deletions apart, through the `DELETE` below, after the upsert: the rest of the save was stored,
+  the used event was skipped with a warning, and an edit could not take the key of an event deleted
+  in the same save.
+- **`DELETE /api/v1/assets/events?asset_id=…&ids=…`**, which the frontend no longer calls: per id,
+  `deleted`, `not_found` or `in_use` (an event a transaction uses is reported, not deleted), and
+  the deletable ones are committed even when others are blocked.
+
+Both are scoped to one asset (decision 21 of release 1.3). The `DELETE` requires `asset_id`, so a
+request with `ids` alone, the form API clients sent before, is now a 422, and an id of another
+asset answers `not_found` and leaves its event alone; in `delete_ids`, such an id is
+`EVENT_NOT_DELETABLE`.
 
 ---
 

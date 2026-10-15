@@ -48,14 +48,16 @@ node frontend/scripts/designer-lab/verify-export.mjs <export.json> --json   # ma
 
 | `layer` | What it is | How it is applied |
 |---|---|---|
-| `css-var` | A CSS custom property: Tailwind's palette (`--color-emerald-600`), `--theme-*`, the brand `--color-libre-*`, future role tokens | Defined in the sources (`definitions[]`) → change the definition for the scope. A Tailwind palette primitive has no definition in the sources: changing it redefines it for **every** use (`impact.classes`). Prefer mapping the uses that matter to a role token, as the token plan says; redefine the primitive only if the designer explicitly wants the whole shade changed |
+| `css-var` | A CSS custom property: Tailwind's palette (`--color-emerald-600`), `--theme-*`, the brand `--color-libre-*`, the role tokens `--lf-<group>-<name>` | Defined in the sources (`definitions[]`) → change the definition for the scope. A Tailwind palette primitive has no definition in the sources: changing it redefines it for **every** use (`impact.classes`). Prefer mapping the uses that matter to a role token, as the token plan says; redefine the primitive only if the designer explicitly wants the whole shade changed. A role token is defined in `tokens.css` (workstream T): its utilities (`bg-lf-card`…, the `raw` of its `occurrences[]`) read it through `@theme inline` and follow the definition, with no edit at their lines |
 | `css-literal` | A colour written in a stylesheet: a component `<style>`, `app.css`, a Tailwind arbitrary class | Edit each occurrence (`file`, `line`, `selector`, `property`). `granularity: occurrence` means one rule only. `alpha_variants: true` means translucent writings of the colour change too, keeping their alpha. Many occurrences of one meaning → introduce a CSS variable, consistently with the token plan |
 | `chart-color` | A colour of an ECharts option, built in TypeScript | Edit the occurrences, in the central chart-colour module when it exists. Hex helpers that only accept `#rrggbb` break on `oklch()`: canvas colours must stay sRGB (the Lab's preview clamped them) |
 | `proposal` | No live preview: inline styles, generated colours (`getIndexColor`…), `static/offline.html`, `manifest.json`, the `theme-color` meta | Edit the occurrences; for generated colours change the generator's inputs, and say so |
 | `element` | A **specialisation**: one colour property of one component, decided on an element the designer pointed at in the app. The shared source (`anchor.source`) stays as it is: only this component changes | Create a component-scoped variable (or role token) and bind it at the places `occurrences[]` lists — see «Specialisations» below. `target` is the selector the preview wrote: context, not code to paste |
 
 Values may be any CSS colour. `oklch()` outside sRGB is legitimate in CSS (the Lab warned the designer); a
-`var(--x)` target means "use this variable here" — an unification proposal.
+`var(--x)` target means "use this variable here" — an unification proposal. `color-mix(in <space>, <base> p%,
+transparent)` is the base at opacity p, the form the role tokens use for shadows and the backdrop: apply it as written,
+which keeps a `var()` base referenced — usually only the percentage changed.
 
 ### Specialisations (`element`)
 

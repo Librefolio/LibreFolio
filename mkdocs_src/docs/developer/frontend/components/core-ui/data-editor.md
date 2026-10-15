@@ -60,8 +60,8 @@ An **inline tabular editor** for structured data (add, edit, delete rows).
 | | FX (`FxDataEditorSection`) | Asset (`AssetDataEditorSection`) |
 |---|---|---|
 | Tables and columns | one table: `rate` | **Prices**: `close` (required), `open`, `high`, `low`, `volume` (erasable). **Events**: `type` (one of the five event types) and `amount` (required), `notes` |
-| Written through | `POST /api/v1/fx/currencies/rate`; a pair shown inverted (its base after its quote in alphabetical order) stores `1 / rate` under the alphabetical pair | `POST /api/v1/assets/prices`; `POST /api/v1/assets/events`, a saved event with its `id` (edited in place, type included), a new one without |
-| Deleted through | `DELETE /api/v1/fx/currencies/rate` | `DELETE /api/v1/assets/prices`; `DELETE /api/v1/assets/events` by id, whose per-item `in_use` result (an event a transaction uses) is reported, not deleted. An event row never saved sends no DELETE |
+| Written through | `POST /api/v1/fx/currencies/rate`; a pair shown inverted (its base after its quote in alphabetical order) stores `1 / rate` under the alphabetical pair | `POST /api/v1/assets/prices`; for events, **one** `POST /api/v1/assets/events` per save, with one item `{asset_id, delete_ids, events}`: a saved event with its `id` (edited in place, type included), a new one without |
+| Deleted through | `DELETE /api/v1/fx/currencies/rate` | `DELETE /api/v1/assets/prices`; events in that same POST: the ids of the saved rows marked deleted, as `delete_ids`, which the server deletes first. No `DELETE` is sent during a save, and an event row never saved is not sent at all |
 | Rows not sent | A rate that is not a number above 0, counted as *skipped (invalid)*. When every row is invalid and none is deleted, the save stops with *Rate must be strictly greater than zero (0 is not allowed).* | A price whose close is not a number above 0, counted as *skipped (invalid)*; an event without a type or a numeric amount |
 
 Both wrappers:
@@ -80,20 +80,30 @@ Asset only:
   **Save (n)** / **Cancel** bar. The chart jump picks the Events tab when the date has an event
   marker, the Prices tab otherwise.
 - **No currency column.** The backend rejects a price or event in a currency other than the
-  asset's (HTTP 400); the editor sends no currency with prices and the asset's with events, and a
-  label beside the tabs reads *Prices in USD* / *Events in USD*.
+  asset's (HTTP 400); the editor sends no currency with prices, and a label beside the tabs reads
+  *Prices in USD* / *Events in USD*. An event goes with its row's `currency` when it has one, the
+  value an imported CSV line brought, and with the asset's otherwise: a line in another currency is
+  refused with its row (`EVENT_CURRENCY_MISMATCH`), not relabelled with an amount that would be
+  wrong.
 - **Auto events** (`is_auto`) are `readonly`: a provider rewrites them at its next sync (see
   [Asset Events](../../../backend/assets/events.md#dedup-strategy)).
 - **Saved events travel with their id.** A saved event row's `rowId` is its DB id, read back by
   `dbEventId(row)` (`null` for a row never saved, whose `rowId` is a date: `2026-03-15`,
   `2026-03-15#2`). The upsert sends that `id`, so the server edits the row in place, its type
   included: changing the Type of a saved event no longer adds an event and leaves the old one. A
-  row deleted before its first save sends no DELETE. The events `DataEditor` gets
+  row deleted before its first save is not sent. Since the server deletes first, one save can
+  delete an event and retype another onto its date and type. The events `DataEditor` gets
   `importMatchKeys={['type']}`: an imported line merges into the row of the same date and type,
   under the Import CSV rules above, and a line of another type on that date is added.
-- **A refused save** (HTTP 400, such as `EVENT_KEY_CONFLICT`) shows *Save failed: …* and does not
-  call `onsave`: the editor stays open with the pending rows. Prices are sent before events, so
-  the prices of that save may already be stored.
+- **A refused save** keeps no event change, its deletions included: the events request is one
+  transaction (decision 22). `eventSaveErrorMessage()` (`transactions/events/eventSaveError.ts`,
+  keys `events.saveError.*`) turns the refusal into one sentence in the user's language, which
+  names the row at fault when the refusal points at one: its date and type, with the currency for
+  `EVENT_CURRENCY_MISMATCH`, the number of linked transactions for `EVENT_IN_USE`, and the value
+  typed for a 422 on a type (`EVENT_NOT_EDITABLE`, `EVENT_NOT_DELETABLE` and
+  `EVENT_ASSET_NOT_FOUND` ask for a reload instead). It shows as a *Save failed: …* toast and a
+  banner above the tabs, and `onsave` is not called: the editor stays open with the pending rows.
+  Prices are sent before events, so the prices of that save may already be stored.
 - **Refresh while editing**: a `chartData` or `events` refresh that lands while a tab has dirty
   rows is held back until it is clean, so pending edits are never discarded. The FX wrapper
   rebuilds its rows on every refresh.

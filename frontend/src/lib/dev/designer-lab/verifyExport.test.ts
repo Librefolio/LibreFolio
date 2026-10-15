@@ -28,6 +28,8 @@ const INDEX = {statics: ['tx-table', 'tx-row'], prefixes: ['filter-currency-row-
 const DATA_TABLE = 'src/lib/components/table/DataTable.svelte';
 const TX_TABLE = 'src/lib/components/transactions/TransactionsTable.svelte';
 const APP_CSS = 'src/app.css';
+const CARD = 'src/lib/components/ui/Card.svelte';
+const TOKENS = 'src/lib/theme/tokens.css';
 const TH = '[data-testid="tx-table"] > div > table > thead > tr > th';
 
 /** The synthetic frontend: one line per entry, so every line number can be read off the array. */
@@ -35,6 +37,9 @@ const TREE: Record<string, string[]> = {
     [DATA_TABLE]: ['<script lang="ts">', '    let {rows} = $props();', '</script>', '', '<table class="text-gray-500">', '</table>', '', '<style>', '    th {', '        color: #64748b;', '    }', '    td {', '        border-color: #E2E8F0;', '    }', '</style>'],
     [APP_CSS]: [':root, html.light {', '    --theme-text-muted: #6b7280;', '    --theme-bg-card: #ffffff;', '}', 'html.dark {', '    --theme-text-muted: #94a3b8;', '}'],
     [TX_TABLE]: ['<div data-testid="tx-table">', '    <Row testid="tx-row" />', '</div>'],
+    // A colour role: its classes name the alias of `@theme inline` (`bg-lf-card`), never the role itself.
+    [CARD]: ['<div class="rounded-lg bg-lf-card">', '    <slot />', '</div>', '<p class="hover:border-lf-card/50">x</p>'],
+    [TOKENS]: [':root,', 'html.light,', '.light {', '    --lf-surface-card: #f5f5f4;', '}', 'html.dark,', '.dark {', '    --lf-surface-card: #1c1917;', '}', '@theme inline {', '    --color-lf-card: var(--lf-surface-card);', '}'],
 };
 
 interface OccurrenceReport {
@@ -175,6 +180,39 @@ describe('verifyExport — occurrences', () => {
     it('looks for a palette use by its family and shade, written without a value', () => {
         const report = verify(exportOf([{id: 'css-var:--color-gray-500@both', layer: 'css-var', scope: 'both', target: '--color-gray-500', from: '', to: '#475569', occurrences: [{file: DATA_TABLE, line: 5}]}]));
         expect(only(report)).toMatchObject({ok: 1, moved: [], missing: []});
+    });
+
+    it('looks for a class that reads a role through its inline alias by the class the occurrence carries', () => {
+        const change = {
+            id: 'css-var:--lf-surface-card@both',
+            layer: 'css-var',
+            scope: 'both',
+            target: '--lf-surface-card',
+            from: '#f5f5f4',
+            to: '#ffffff',
+            occurrences: [
+                {file: CARD, line: 1, raw: 'bg-lf-card'},
+                {file: CARD, line: 4, raw: 'hover:border-lf-card/50'},
+                {file: CARD, line: 2, raw: 'bg-lf-card'},
+                {file: CARD, line: 3, raw: 'bg-lf-panel'},
+            ],
+            definitions: [
+                {file: TOKENS, line: 4, selector: ':root, html.light, .light', theme: 'both', value: '#f5f5f4'},
+                {file: TOKENS, line: 8, selector: 'html.dark, .dark', theme: 'dark', value: '#1c1917'},
+            ],
+        };
+        const report = verify(exportOf([change]));
+        const c = only(report);
+        // In place where the line holds the class; else found elsewhere in the file, or nowhere (a class renamed).
+        expect(c).toMatchObject({layer: 'css-var', target: '--lf-surface-card', ok: 2});
+        expect(c.moved).toEqual([{file: CARD, line: 2, raw: 'bg-lf-card', to_line: 1}]);
+        expect(c.missing).toEqual([{file: CARD, line: 3, raw: 'bg-lf-panel'}]);
+        // The definitions are the role's own.
+        expect(c.definitions).toEqual([
+            {file: TOKENS, line: 4, status: 'ok'},
+            {file: TOKENS, line: 8, status: 'ok'},
+        ]);
+        expect(report.totals).toMatchObject({changes: 1, ok: 2, moved: 1, missing: 1, definitions_changed: 0});
     });
 
     it('checks the definitions of a variable and reports the value it has now', () => {

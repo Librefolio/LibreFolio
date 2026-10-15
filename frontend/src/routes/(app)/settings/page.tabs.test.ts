@@ -31,7 +31,7 @@
  *     `props` and `alignEnd` (admin);
  *   - each synthetic body is `SettingsTabProbe` (`src/__tests__/harness`), told which tab it stands for
  *     and handed the props object the page passed; each call of a body is one mount, logged in `mounts`;
- *   - the four real tab modules are no-ops: the real registry imports them, as the page did, and they
+ *   - the real tab modules are no-ops: the real registry imports them, as the page did, and they
  *     reach the API client and the stores, none of which is the subject;
  *   - the `page` store and the auth store are writables the test holds; `$_` marks what it translated,
  *     `⟦key⟧`, so a label is proven to have gone through the translator without naming any language;
@@ -99,6 +99,9 @@ vi.mock('$lib/features/settings/tabs/ProfileTab.svelte', () => ({default: mocks.
 vi.mock('$lib/features/settings/tabs/PreferencesTab.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/settings/tabs/AboutTab.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/settings/tabs/GlobalSettingsTab.svelte', () => ({default: mocks.noopComponent}));
+vi.mock('$lib/features/settings/tabs/UsersTab.svelte', () => ({default: mocks.noopComponent}));
+vi.mock('$lib/features/email/EmailSettingsTab.svelte', () => ({default: mocks.noopComponent}));
+vi.mock('$lib/features/backup/BackupTab.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$app/stores', () => ({page: {subscribe: mocks.page.subscribe}}));
 vi.mock('$lib/stores/app/auth', () => ({auth: {subscribe: mocks.auth.subscribe}}));
 vi.mock('$lib/i18n', async () => {

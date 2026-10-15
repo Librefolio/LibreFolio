@@ -43,7 +43,7 @@ class JustETFProvider(AssetSourceProvider):
 
 `AbstractProviderRegistry.shutdown_all_providers()` iterates all registered providers and calls `shutdown()` — no `hasattr` checks needed.
 
-`main.py` lifespan now calls:
+The lifespan now calls, in its `providers` shutdown step (`services/platform/app_lifespan.py` since CP2b of 1.3.0):
 ```python
 AssetProviderRegistry.shutdown_all_providers()
 FXProviderRegistry.shutdown_all_providers()
@@ -64,4 +64,4 @@ BRIMProviderRegistry.shutdown_all_providers()
 |------|------|
 | Provider registry | `backend/app/services/provider_registry.py` |
 | Asset service (thread isolation) | `backend/app/services/assets/core.py` |
-| FastAPI app lifecycle | `backend/app/main.py` |
+| FastAPI app lifecycle | `backend/app/services/platform/app_lifespan.py` |

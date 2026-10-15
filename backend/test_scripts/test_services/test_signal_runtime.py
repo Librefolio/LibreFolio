@@ -6,8 +6,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.app import main
+from backend.app.main import app
 from backend.app.services import signal_runtime
+from backend.app.services.platform import app_lifespan
 from backend.app.services.signal_runtime import SignalRuntimeUnavailable, validate_signal_runtime
 
 
@@ -84,11 +85,11 @@ async def test_lifespan_fails_before_database_startup_when_signal_runtime_is_mis
         nonlocal ensure_dirs_called
         ensure_dirs_called = True
 
-    monkeypatch.setattr(main, "validate_signal_runtime", fail_runtime)
-    monkeypatch.setattr(main, "ensure_data_dirs", track_ensure_dirs)
+    monkeypatch.setattr(app_lifespan, "validate_signal_runtime", fail_runtime)
+    monkeypatch.setattr(app_lifespan, "ensure_data_dirs", track_ensure_dirs)
 
     with pytest.raises(SignalRuntimeUnavailable, match="stack unavailable"):
-        async with main.lifespan(main.app):
+        async with app_lifespan.lifespan(app):
             pass
 
     assert ensure_dirs_called is False

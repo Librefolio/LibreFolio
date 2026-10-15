@@ -511,9 +511,13 @@ test.describe('Settings', () => {
             await navigateTo(page, '/settings');
             await page.getByTestId('settings-tab-admin').click();
 
-            await expect(page.getByTestId('global-settings-tab')).toBeVisible();
-            // Lock button should not be visible for non-admin (read-only mode)
-            // The component shows ShieldOff icon instead of Lock/Unlock for non-admins
+            const tab = page.getByTestId('global-settings-tab');
+            await expect(tab).toBeVisible();
+            // Read-only mode: where an administrator finds the lock, the header shows the read-only mark (ShieldOff), and
+            // there is no lock to open. The mark comes first: it proves the header is drawn, so the absence that follows
+            // is about the lock and not about a header still on its way.
+            await expect(tab.getByTestId('settings-readonly-indicator')).toBeVisible();
+            await expect(tab.getByTestId('settings-lock-toggle')).toHaveCount(0);
         });
     });
 
@@ -523,8 +527,9 @@ test.describe('Settings', () => {
             await navigateTo(page, '/settings');
             await page.getByTestId('settings-tab-admin').click();
             await expect(page.getByTestId('global-settings-tab')).toBeVisible();
-            // Wait for settings to load (async API call)
-            await page.waitForSelector('[data-testid="global-settings-tab"] .setting-row', {timeout: 10_000});
+            // The tab publishes its load on its root: `data-busy` is 'true' from the first render until the settings
+            // are in. Wait for that state, not for a row's CSS class to turn up.
+            await expect(page.getByTestId('global-settings-tab')).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
         });
 
         /** Helper: scope all locators within global-settings-tab */
@@ -536,11 +541,25 @@ test.describe('Settings', () => {
          * The row of `scheduler_enabled` (category «sync»): the bool that is editable on every lane, named by its key.
          * Since A5b turned `enable_registration` into the `registration_mode` select, «the first toggle» of the tab is
          * `require_email_verification`, a «Coming soon» placeholder whose switch is disabled whatever the lock says: it
-         * can be neither clicked nor used to prove the lock. The setting is global and shared by every worker on the
-         * lane, so these tests flip and undo a local draft and never press Save.
+         * can be neither clicked nor used to prove the lock (its own test is the placeholder case in
+         * `SettingControls.test.ts`). The setting is global and shared by every worker on the lane, so these tests flip
+         * and undo a local draft and never press Save.
          */
         function schedulerRow(page: Page) {
             return gs(page).getByTestId('global-setting-scheduler_enabled');
+        }
+
+        /**
+         * The row of `session_ttl_hours` (category «session»), named by its key: «the first number input of the tab» was
+         * this row only by the server's insertion order. Like the toggle, it is edited and undone, never saved.
+         */
+        function sessionTtlRow(page: Page) {
+            return gs(page).getByTestId('global-setting-session_ttl_hours');
+        }
+
+        /** The tab's lock, by test id: its title is translated. Every mount starts locked, so one click unlocks it. */
+        function lockToggle(page: Page) {
+            return gs(page).getByTestId('settings-lock-toggle');
         }
 
         /** What the switch says now, once it says a boolean, and what one click must turn it into. */
@@ -551,15 +570,21 @@ test.describe('Settings', () => {
         }
 
         test('admin can unlock global settings for editing', async ({page}) => {
-            const unlockBtn = gs(page).locator('button[title="Click to unlock and edit"]');
-            await expect(unlockBtn).toBeVisible();
-            await unlockBtn.click();
-            await expect(gs(page).locator('button[title*="Click to lock"]')).toBeVisible();
+            // The button tells its state only by its translated title, its icon and its colour. The tab tells it too: while
+            // unlocked it raises its editing warning (`InfoBanner` publishes its variant as a test id), locked it has none.
+            const lock = lockToggle(page);
+            const editingWarning = gs(page).getByTestId('info-banner-warning');
+            await expect(lock).toBeVisible();
+            // Locked on arrival. The lock is on screen, drawn by the same template as the warning, so the warning's
+            // absence is the lock's state and not a late render.
+            await expect(editingWarning).toHaveCount(0);
+            await lock.click();
+            await expect(editingWarning).toBeVisible();
         });
 
         test('toggle switch changes value when clicked (SettingToggle)', async ({page}) => {
             // Unlock
-            await gs(page).locator('button[title="Click to unlock and edit"]').click();
+            await lockToggle(page).click();
 
             const toggle = schedulerRow(page).getByTestId('setting-toggle-switch');
             // The unlock's post-condition, and the premise of the click below.
@@ -574,7 +599,7 @@ test.describe('Settings', () => {
 
         test('save and undo buttons appear after toggling', async ({page}) => {
             // Unlock
-            await gs(page).locator('button[title="Click to unlock and edit"]').click();
+            await lockToggle(page).click();
 
             const row = schedulerRow(page);
             const toggle = row.getByTestId('setting-toggle-switch');
@@ -593,7 +618,7 @@ test.describe('Settings', () => {
 
         test('undo reverts toggle to original value', async ({page}) => {
             // Unlock
-            await gs(page).locator('button[title="Click to unlock and edit"]').click();
+            await lockToggle(page).click();
 
             const row = schedulerRow(page);
             const toggle = row.getByTestId('setting-toggle-switch');
@@ -613,21 +638,24 @@ test.describe('Settings', () => {
 
         test('number input can be edited and undone (SettingNumber)', async ({page}) => {
             // Unlock
-            await gs(page).locator('button[title="Click to unlock and edit"]').click();
+            await lockToggle(page).click();
 
-            const numberInput = gs(page).locator('.setting-row input[type="number"]').first();
+            const row = sessionTtlRow(page);
+            const numberInput = row.getByRole('spinbutton');
             await expect(numberInput).toBeVisible();
             await expect(numberInput).toBeEnabled();
 
+            // Read once it holds a number (`inputValue()` does not retry), and edit to a value it cannot already hold
+            // rather than to a literal the shared setting might carry.
+            await expect(numberInput).toHaveValue(/^\d+$/);
             const originalValue = await numberInput.inputValue();
-            await numberInput.fill('99');
+            await numberInput.fill(String(Number(originalValue) + 1));
 
-            // Save button should appear
-            const settingRow = numberInput.locator('xpath=ancestor::div[contains(@class, "setting-row")]');
-            await expect(settingRow.locator('button[title="Save"]')).toBeVisible();
+            // Save button should appear: by test id, inside this row, since its title is translated. Never pressed.
+            await expect(row.getByTestId('setting-save')).toBeVisible();
 
             // Undo
-            await settingRow.locator('button[title="Undo"]').click();
+            await row.getByTestId('setting-undo').click();
             await expect(numberInput).toHaveValue(originalValue);
         });
 
@@ -638,12 +666,12 @@ test.describe('Settings', () => {
             await expect(toggle).toBeDisabled();
 
             // Control: the lock is what disabled it, since unlocking brings the same switch to life.
-            await gs(page).locator('button[title="Click to unlock and edit"]').click();
+            await lockToggle(page).click();
             await expect(toggle).toBeEnabled();
         });
 
         test('number inputs are disabled when locked', async ({page}) => {
-            const numberInput = gs(page).locator('.setting-row input[type="number"]').first();
+            const numberInput = sessionTtlRow(page).getByRole('spinbutton');
             await expect(numberInput).toBeVisible();
             await expect(numberInput).toBeDisabled();
         });
@@ -654,13 +682,19 @@ test.describe('Settings', () => {
             await login(page, TEST_USER);
             await navigateTo(page, '/settings');
             await page.getByTestId('settings-tab-admin').click();
-            await expect(page.getByTestId('global-settings-tab')).toBeVisible();
-            await page.waitForSelector('[data-testid="global-settings-tab"] .setting-row', {timeout: 10_000});
-
             const gs = page.getByTestId('global-settings-tab');
+            await expect(gs).toBeVisible();
+            // The tab's load state, not a row's CSS class.
+            await expect(gs).toHaveAttribute('data-busy', 'false', {timeout: 10_000});
+
             // `scheduler_enabled`, an editable bool: the tab's first toggle is now a placeholder, disabled for everyone.
             await expect(gs.getByTestId('global-setting-scheduler_enabled').getByTestId('setting-toggle-switch')).toBeDisabled();
-            await expect(gs.locator('.setting-row input[type="number"]').first()).toBeDisabled();
+            // `session_ttl_hours` by key, not «the first number input».
+            await expect(gs.getByTestId('global-setting-session_ttl_hours').getByRole('spinbutton')).toBeDisabled();
+            // Disabled is also what an administrator sees before unlocking. Read-only is that nothing here unlocks them:
+            // the read-only mark stands where the lock would, and the lock is not there.
+            await expect(gs.getByTestId('settings-readonly-indicator')).toBeVisible();
+            await expect(gs.getByTestId('settings-lock-toggle')).toHaveCount(0);
         });
     });
 

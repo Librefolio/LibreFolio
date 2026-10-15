@@ -152,7 +152,7 @@ class AssetPriceSeries:
     LOCF, else MISSING). O(log n) per query via ``bisect``.
     """
 
-    __slots__ = ("_dates", "_values", "_is_market", "_currencies", "_ohlc")
+    __slots__ = ("_dates", "_values", "_is_market", "_currencies", "_ohlc", "_last_market")
 
     def __init__(self, observations: Sequence[PriceObservation]) -> None:
         market_by_day: dict[date_type, Decimal] = {}
@@ -189,10 +189,26 @@ class AssetPriceSeries:
         self._currencies: list[str] = [collapsed[day][2] for day in self._dates]
         # G1b: OHLC only ever exists for an exact MARKET day (None for TRADE_AVG/CARRIED days).
         self._ohlc: list[Optional[tuple[Decimal, Decimal, Decimal]]] = [market_ohlc_by_day.get(day) if collapsed[day][1] else None for day in self._dates]
+        # The last MARKET day at or before each observation day (None before the first quote).
+        self._last_market: list[Optional[date_type]] = []
+        latest_market: Optional[date_type] = None
+        for day, is_market in zip(self._dates, self._is_market, strict=True):
+            if is_market:
+                latest_market = day
+            self._last_market.append(latest_market)
 
     @property
     def has_observations(self) -> bool:
         return bool(self._dates)
+
+    def last_market_date(self, query_date: date_type) -> Optional[date_type]:
+        """The last day on or before ``query_date`` with a market quote; None when there is none.
+
+        A trade observed after it does not move it: the mark may come from the trade, but the
+        market price the asset last had is still the one of that day.
+        """
+        idx = bisect.bisect_right(self._dates, query_date) - 1
+        return self._last_market[idx] if idx >= 0 else None
 
     def resolve(self, query_date: date_type) -> ResolvedMark:
         """Resolve the per-unit mark for ``query_date`` under the daily model."""

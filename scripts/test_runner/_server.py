@@ -40,15 +40,20 @@ from ._common import PROJECT_ROOT, Colors, apply_subprocess_coverage_env, print_
 #: Read by backend/test_scripts/test_server_helper.py — see shared_server_mode().
 SHARED_SERVER_ENV = "LIBREFOLIO_TEST_SHARED_SERVER"
 
-#: Generous on purpose. `dev.py server` first rebuilds a stale frontend and MkDocs (about 130 s
-#: after a large merge), and a loaded machine slows the Python start-up too. A server that exits
-#: is caught at once by the poll in start(), so only a start that hangs waits this long.
-#: LIBREFOLIO_TEST_STARTUP_TIMEOUT overrides it, in seconds. frontend/playwright.config.ts
-#: (STARTUP_TIMEOUT_S) applies the same default and override to the webServer Playwright starts.
+#: How long the spawned backend may take to answer. It measures the start only: start() first runs
+#: `dev.py server --test --build-only` in the foreground (build_server_prerequisites), so the server it then
+#: spawns finds its frontend and MkDocs builds up to date (they took about 130 s after a large merge) and binds
+#: in seconds. Still generous, because a loaded machine slows the Python start-up and the app import; a server
+#: that exits is caught at once by the poll in start(), so only a start that hangs waits this long.
+#: LIBREFOLIO_TEST_STARTUP_TIMEOUT overrides it, in seconds. frontend/playwright.config.ts (STARTUP_TIMEOUT_S)
+#: applies the same default and override to the webServer Playwright starts; `dev.py mkdocs gallery` runs the
+#: same build step before Playwright.
 STARTUP_TIMEOUT = int(os.environ.get("LIBREFOLIO_TEST_STARTUP_TIMEOUT", "300"))
 #: Flushing coverage takes real time; a SIGKILL during it loses everything.
 SHUTDOWN_GRACE_COVERAGE = 30
-SHUTDOWN_GRACE_PLAIN = 5
+#: The server's own shutdown budget (LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS, 8 s by default) plus a margin, like
+#: Docker's 10 s: a server still alive after it has broken its budget, and the warning below says so.
+SHUTDOWN_GRACE_PLAIN = 10
 
 #: How many concurrent clients one uvicorn worker is expected to serve.
 #: Browser workers spend most of their time rendering, so the gallery has long
@@ -154,6 +159,38 @@ def port_holders(port: int | None = None) -> list[str]:
         return []
 
 
+def prerequisites_command() -> list[str]:
+    """``dev.py server --test --build-only``: what the test server builds before it binds, and nothing else.
+
+    ``-u``: unbuffered, so on a pipe (CI, a tee'd log) dev.py's own messages come out among the npm, vite and mkdocs
+    output they introduce, instead of all at its exit.
+    """
+    return [sys.executable, "-u", "dev.py", "server", "--test", "--build-only"]
+
+
+def build_server_prerequisites(env: dict | None = None) -> bool:
+    """Build what the test server serves, in the foreground, before anyone waits for it to answer.
+
+    ``dev.py server --test`` rebuilds a stale frontend (debug) and MkDocs and refreshes the JS cache before it
+    binds: minutes after a merge. Done inside the server, that counted against ``STARTUP_TIMEOUT`` and printed
+    nowhere (the server's output goes to DEVNULL). Done here, on the terminal, the server started next finds it
+    all up to date. ``env`` is the build's environment; None inherits this process's.
+    """
+    print_info("Preparing the test server before its startup timeout: frontend (debug) and documentation builds when stale, JS cache")
+    # On a pipe this process's output is block-buffered: without the flush the line above comes out after the
+    # whole build, which writes to the same stdout and stderr.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    started = time.monotonic()
+    result = subprocess.run(prerequisites_command(), cwd=PROJECT_ROOT, env=env, check=False)
+    elapsed = time.monotonic() - started
+    if result.returncode != 0:
+        print_error(f"Test server builds failed (exit code {result.returncode}, after {elapsed:.0f}s): server not started")
+        return False
+    print_success(f"Test server builds ready in {elapsed:.0f}s")
+    return True
+
+
 class SharedTestServer:
     """Start one backend for the run and hand its address to every test unit."""
 
@@ -243,6 +280,13 @@ class SharedTestServer:
                 f"Test port {self.port} is already owned by PID(s) "
                 f"{', '.join(holders)}; refusing to reuse or terminate another lane"
             )
+            return False
+
+        # Build first, outside the deadline below. The port was free a moment ago; if another lane
+        # claims it during a long build, dev.py's own check right before binding refuses it, and the
+        # lane-authenticated health check never adopts a foreign server.
+        # No coverage wiring here: only the backend measures itself, and the builds come out the same.
+        if not build_server_prerequisites():
             return False
 
         print_info(

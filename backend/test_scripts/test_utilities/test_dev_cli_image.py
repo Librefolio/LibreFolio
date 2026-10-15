@@ -81,37 +81,47 @@ The contract:
   breaks the rules, or a username already taken, it prints ``❌``, exits 1 and creates or
   changes nobody (**IMG-012b**); ``create-superuser``, which still creates the E2E
   administrators, keeps creating an active administrator (**IMG-012c**);
-* **IMG-013**: ``user invite [--admin] [--email E]`` (plan phase01Accounts A5.1, point 6)
+* **IMG-027**: ``user invite [--admin] [--email E]`` (plan phase01Accounts A5.1, point 6)
   issues a live invitation and prints its link: without ``LIBREFOLIO_PUBLIC_URL`` the path
   alone (``/invite#token=…``: the token travels in the URL fragment, which a browser never
   sends, so it stays out of access and proxy logs) with a note naming the variable
-  (**IMG-013**); with it, the URL without its trailing slash plus the path (**IMG-013b**).
+  (**IMG-027**); with it, the URL without its trailing slash plus the path (**IMG-027b**).
   The row holds the hash of the
   printed token for 7 days, ``--admin`` sets ``grants_admin`` and ``--email`` the e-mail
-  (**IMG-013c**). While registration is ``disabled``, by ``LIBREFOLIO_REGISTRATION`` or by
-  the ``registration_mode`` row, it prints ``❌``, exits 1 and issues nothing (**IMG-013d**);
-  at ``LIBREFOLIO_MAX_USERS`` it warns and issues anyway (**IMG-013e**). An invalid
+  (**IMG-027c**). While registration is ``disabled``, by ``LIBREFOLIO_REGISTRATION`` or by
+  the ``registration_mode`` row, it prints ``❌``, exits 1 and issues nothing (**IMG-027d**);
+  at ``LIBREFOLIO_MAX_USERS`` it warns and issues anyway (**IMG-027e**). An invalid
   ``LIBREFOLIO_PUBLIC_URL`` is not reported as unset: ``invite`` and ``reset-link`` print the
   path alone and a note saying the variable "is not valid (" with the reason, and exit 0
-  (**IMG-013f**);
-* **IMG-014**: ``user reset-link <username>`` prints the link of a live reset token of that
-  account (``/reset-password#token=…``), for 30 minutes, built the same way (**IMG-014**); a
-  second link revokes the first (**IMG-014b**); an unknown user is ``❌``, exit 1, and no token
-  (**IMG-014c**);
-* **IMG-015**: ``user reset-onboarding <username>`` puts every flow and every step back to
-  pending (**IMG-015**), ``--flow F`` only that flow and its steps (**IMG-015b**); an unknown
+  (**IMG-027f**);
+* **IMG-028**: ``user reset-link <username>`` prints the link of a live reset token of that
+  account (``/reset-password#token=…``), for 30 minutes, built the same way (**IMG-028**); a
+  second link revokes the first (**IMG-028b**); an unknown user is ``❌``, exit 1, and no token
+  (**IMG-028c**);
+* **IMG-029**: ``user reset-onboarding <username>`` puts every flow and every step back to
+  pending (**IMG-029**), ``--flow F`` only that flow and its steps (**IMG-029b**); an unknown
   user (``❌``, exit 1) or an unknown flow (exit 1, or argparse's 2) resets nothing
-  (**IMG-015c**). Pending is read as the app reads it: no row at all, or a pending row with
+  (**IMG-029c**). Pending is read as the app reads it: no row at all, or a pending row with
   neither a completion nor a skip time;
-* **IMG-016**: at ``LIBREFOLIO_MAX_USERS`` the command line warns with one line, the same for
+* **IMG-030**: at ``LIBREFOLIO_MAX_USERS`` the command line warns with one line, the same for
   every command, the action as a phrase — ``⚠️  The instance is at its limit
   (LIBREFOLIO_MAX_USERS: {used} of {max} places taken): the command line {action} anyway``,
   the places counted before the action — and goes on: ``user create``,
   ``user create --role user`` and ``user_cli.py create-user`` still create the account, ``✅``
-  and exit 0 (**IMG-016**); below the limit there is no warning (**IMG-016b**); ``user
+  and exit 0 (**IMG-030**); below the limit there is no warning (**IMG-030b**); ``user
   activate`` of an inactive account at the limit warns, "reactivates the account", and
-  reactivates it (**IMG-016c**); below the limit it is silent (**IMG-016d**), and ``user
-  deactivate`` never warns, not even at the limit (**IMG-016e**).
+  reactivates it (**IMG-030c**); below the limit it is silent (**IMG-030d**), and ``user
+  deactivate`` never warns, not even at the limit (**IMG-030e**);
+* **IMG-025**: ``dev.py --help`` lists ``backup`` among the commands it registered (its
+  epilog names it in prose too, which does not count); **IMG-025b**: ``dev.py backup
+  --help`` exits 0 with the usage of the group;
+* **IMG-026**: on the image's database, ``backup create`` exits 0 and writes exactly one
+  ``librefolio-backup-*.zip`` into ``backups/`` of the image's data directory, where
+  ``docker compose exec librefolio python dev.py backup create`` leaves it, with no job
+  folder left in ``backups/.jobs/``; the archive holds that database (a user this test
+  created there, and its Alembic revision in the manifest), which no exit code can prove;
+  ``backup inspect`` of the archive exits 0. **IMG-026b**: ``backup inspect`` of a file
+  that does not exist prints ``❌`` and exits 1.
 
 IMG-002b, IMG-004 and IMG-007 pin decision 1 of plan 35_devCliImage §0.1, IMG-008 its
 decision 4: a group whose sources the image lacks stays listed and answers for itself,
@@ -121,16 +131,17 @@ backlog 38, item L12 (plan A3 of workstream A): ``user create`` mapped to ``crea
 and so did the runner's ``_ensure_test_users`` and ``e2e/global-setup.ts`` for every E2E
 user, so on an empty database the users meant to be ordinary were administrators; a
 populated database hid it, because ``populate_mock_data.py`` creates them first with the
-right role. The messages are English CLI output, not UI text, so the fragments above are the
-contract: "not available in this installation", "last active administrator" and "invalid
-choice" (case aside), the missing directory, the option argparse names, ``❌`` and ``✅``,
-nothing more. Roles are read from the database itself: no exit code tells an administrator
-from an ordinary user.
+right role. IMG-025 and IMG-026 pin lot B1 of workstream B (plan 07_backupDocker §3.10): the
+``backup`` group works in the image, as ``docker compose exec`` runs it. The messages are
+English CLI output, not UI text, so the fragments above are the contract: "not available in
+this installation", "last active administrator" and "invalid choice" (case aside), the
+missing directory, the option argparse names, ``❌`` and ``✅``, nothing more. Roles are read
+from the database itself: no exit code tells an administrator from an ordinary user.
 
 "Without a traceback" means none of ``Traceback (most recent call last)``,
 ``ModuleNotFoundError`` and ``No module named`` in the combined output.
 
-PURE for the runner: the tree, its databases and its environment are private to
+PURE for the runner: the tree, its databases, its backups and its environment are private to
 ``tmp_path``; the lane's database and server are never touched, nothing goes over the
 network, nothing is written in the repository. IMG-010 loads the repository's ``dev.py``
 into this process under a private name, and undoes the ``sys.path`` entries and the change
@@ -148,6 +159,7 @@ import sqlite3
 import subprocess
 import sys
 import uuid
+import zipfile
 from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import dataclass
@@ -243,6 +255,18 @@ WEAK_PASSWORD = "weakpassword"
 DEVPY_MODULE = "_test_dev_cli_image_devpy"
 #: Characters; ``secrets.token_urlsafe(64)``, what dev.py hands out, is 86 of them.
 MIN_SECRET_LENGTH = 32
+
+#: Lot B1 of workstream B (plan 07_backupDocker §3.10): ``dev.py backup``, as ``docker compose
+#: exec librefolio python dev.py backup …`` runs it in the image. Without ``--output`` an
+#: archive goes into ``backups/`` of the data directory; while it is built, the backup keeps
+#: its state and work files in a job folder of ``backups/.jobs/``, which the command removes
+#: once the archive is in place.
+BACKUPS = "backups"
+BACKUP_JOBS = ".jobs"
+BACKUP_ARCHIVES = "librefolio-backup-*.zip"
+#: An archive's database entry, and its manifest.
+ARCHIVED_DATABASE = "sqlite/app.db"
+ARCHIVE_MANIFEST = "manifest.json"
 
 
 # ---------------------------------------------------------------------------
@@ -657,6 +681,19 @@ def user_row(listed: Run, username: str) -> str:
     rows = [line for line in listed.output.splitlines() if username in line.split()]
     assert len(rows) == 1, f"user list must show {username} exactly once: {listed}"
     return rows[0]
+
+
+def job_folders(backups: Path) -> set[Path]:
+    """The folders in ``backups/.jobs/``: a backup's job folder while it is built, none once its command has ended."""
+    jobs = backups / BACKUP_JOBS
+    return {path for path in jobs.iterdir() if path.is_dir()} if jobs.is_dir() else set()
+
+
+def alembic_revision(db_path: Path) -> str | None:
+    """The revision ``alembic_version`` records, read from the database itself; None unless it records exactly one."""
+    with closing(sqlite3.connect(db_path)) as conn:
+        rows = conn.execute("SELECT version_num FROM alembic_version").fetchall()
+    return rows[0][0] if len(rows) == 1 else None
 
 
 @pytest.fixture(scope="module")
@@ -1235,7 +1272,7 @@ class TestAccountRole:
 
 
 # ---------------------------------------------------------------------------
-# IMG-013..IMG-016: invitations, reset links, onboarding and the user limit (A5a)
+# IMG-027..IMG-030: invitations, reset links, onboarding and the user limit (A5a)
 # ---------------------------------------------------------------------------
 
 #: Plan phase01Accounts A5.1, point 6. The variables reach the tree's environment only.
@@ -1418,8 +1455,8 @@ def admin_and_member(image: ImageTree, database: Database, *, member_active: boo
 
 class TestInvitationFromTheCommandLine:
     def test_invite_prints_the_path_and_a_note_without_a_public_url(self, image, image_db):
-        """IMG-013: user invite without LIBREFOLIO_PUBLIC_URL prints the path alone, with a note naming the variable, and the token is a live invitation."""
-        print_section("IMG-013: user invite, no public URL, in the image")
+        """IMG-027: user invite without LIBREFOLIO_PUBLIC_URL prints the path alone, with a note naming the variable, and the token is a live invitation."""
+        print_section("IMG-027: user invite, no public URL, in the image")
 
         run = run_dev(image, "user", "invite", env=image_db.env)
 
@@ -1431,8 +1468,8 @@ class TestInvitationFromTheCommandLine:
         print_success("the path, a note, a live invitation")
 
     def test_invite_prints_the_public_url_plus_the_path(self, image, image_db):
-        """IMG-013b: with LIBREFOLIO_PUBLIC_URL (trailing slash included) the link is the URL without the slash plus the path, and no other URL of it."""
-        print_section("IMG-013b: user invite with a public URL, in the image")
+        """IMG-027b: with LIBREFOLIO_PUBLIC_URL (trailing slash included) the link is the URL without the slash plus the path, and no other URL of it."""
+        print_section("IMG-027b: user invite with a public URL, in the image")
 
         run = run_dev(image, "user", "invite", env={**image_db.env, PUBLIC_URL_VARIABLE: CLI_PUBLIC_URL})
 
@@ -1445,8 +1482,8 @@ class TestInvitationFromTheCommandLine:
 
     @pytest.mark.parametrize(("flags", "grants_admin", "email"), INVITE_FLAGS)
     def test_invite_stores_the_role_and_the_email(self, image, image_db, flags, grants_admin, email):
-        """IMG-013c: the invitation's row holds the hash of the printed token, for 7 days, with grants_admin from --admin and the e-mail from --email."""
-        print_section(f"IMG-013c: user invite {' '.join(flags)}, in the image")
+        """IMG-027c: the invitation's row holds the hash of the printed token, for 7 days, with grants_admin from --admin and the e-mail from --email."""
+        print_section(f"IMG-027c: user invite {' '.join(flags)}, in the image")
 
         run = run_dev(image, "user", "invite", *flags, env=image_db.env)
 
@@ -1458,8 +1495,8 @@ class TestInvitationFromTheCommandLine:
 
     @pytest.mark.parametrize("source", ["variable", "row"])
     def test_invite_is_refused_while_registration_is_disabled(self, image, fresh_db, source):
-        """IMG-013d: registration disabled by LIBREFOLIO_REGISTRATION, or by the registration_mode row: user invite prints ❌, exits 1, prints no link and issues nothing."""
-        print_section(f"IMG-013d: user invite while registration is disabled by the {source}, in the image")
+        """IMG-027d: registration disabled by LIBREFOLIO_REGISTRATION, or by the registration_mode row: user invite prints ❌, exits 1, prints no link and issues nothing."""
+        print_section(f"IMG-027d: user invite while registration is disabled by the {source}, in the image")
         env = {**fresh_db.env, REGISTRATION_VARIABLE: "disabled"} if source == "variable" else fresh_db.env
         if source == "row":
             set_registration_mode(fresh_db.path, "disabled")
@@ -1472,8 +1509,8 @@ class TestInvitationFromTheCommandLine:
         print_success(f"{FAILED}, exit 1, nothing issued")
 
     def test_invite_at_the_limit_warns_and_issues(self, image, fresh_db):
-        """IMG-013e: LIBREFOLIO_MAX_USERS=1 with one account: user invite warns about the limit and still issues a live invitation, exit 0."""
-        print_section("IMG-013e: user invite at the limit, in the image")
+        """IMG-027e: LIBREFOLIO_MAX_USERS=1 with one account: user invite warns about the limit and still issues a live invitation, exit 0."""
+        print_section("IMG-027e: user invite at the limit, in the image")
         name = unique_username()
         assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, env=fresh_db.env))
 
@@ -1487,8 +1524,8 @@ class TestInvitationFromTheCommandLine:
 
     @pytest.mark.parametrize(("command", "value", "page"), INVALID_PUBLIC_URLS)
     def test_an_invalid_public_url_is_reported_as_invalid_not_as_unset(self, image, image_db, command, value, page):
-        """IMG-013f: an invalid LIBREFOLIO_PUBLIC_URL (not an http(s) address) is not reported as unset: user invite and user reset-link print a note saying the variable «is not valid (» with the accessor's reason, never «is not set», then the path alone, and exit 0."""
-        print_section(f"IMG-013f: user {command} with {PUBLIC_URL_VARIABLE}={value!r}, in the image")
+        """IMG-027f: an invalid LIBREFOLIO_PUBLIC_URL (not an http(s) address) is not reported as unset: user invite and user reset-link print a note saying the variable «is not valid (» with the accessor's reason, never «is not set», then the path alone, and exit 0."""
+        print_section(f"IMG-027f: user {command} with {PUBLIC_URL_VARIABLE}={value!r}, in the image")
         argv = ["user", command]
         if command == "reset-link":
             name = unique_username()
@@ -1509,8 +1546,8 @@ class TestInvitationFromTheCommandLine:
 class TestResetLinkFromTheCommandLine:
     @pytest.mark.parametrize("public_url", [pytest.param(None, id="path"), pytest.param(CLI_PUBLIC_URL, id="public-url")])
     def test_reset_link_prints_a_live_link_of_that_account(self, image, image_db, public_url):
-        """IMG-014: user reset-link <username> prints the link of a live reset token of that account, 30 minutes: the path with a note, or the public URL plus the path."""
-        print_section(f"IMG-014: user reset-link, public URL {public_url}, in the image")
+        """IMG-028: user reset-link <username> prints the link of a live reset token of that account, 30 minutes: the path with a note, or the public URL plus the path."""
+        print_section(f"IMG-028: user reset-link, public URL {public_url}, in the image")
         name = unique_username()
         assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, "--role", "user", env=image_db.env))
         env = image_db.env if public_url is None else {**image_db.env, PUBLIC_URL_VARIABLE: public_url}
@@ -1527,8 +1564,8 @@ class TestResetLinkFromTheCommandLine:
         print_success(f"a live reset link of {name}")
 
     def test_a_second_reset_link_revokes_the_first(self, image, image_db):
-        """IMG-014b: two user reset-link of the same account: the first link is revoked, the second is live."""
-        print_section("IMG-014b: a second reset link, in the image")
+        """IMG-028b: two user reset-link of the same account: the first link is revoked, the second is live."""
+        print_section("IMG-028b: a second reset link, in the image")
         name = unique_username()
         assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, "--role", "user", env=image_db.env))
         first_run, second_run = run_dev(image, "user", "reset-link", name, env=image_db.env), run_dev(image, "user", "reset-link", name, env=image_db.env)
@@ -1542,8 +1579,8 @@ class TestResetLinkFromTheCommandLine:
         print_success("the first revoked, the second live")
 
     def test_reset_link_of_an_unknown_user_fails(self, image, image_db):
-        """IMG-014c: user reset-link of a user who does not exist prints ❌, exits 1, prints no link and issues no token."""
-        print_section("IMG-014c: user reset-link of an unknown user, in the image")
+        """IMG-028c: user reset-link of a user who does not exist prints ❌, exits 1, prints no link and issues no token."""
+        print_section("IMG-028c: user reset-link of an unknown user, in the image")
         before = token_count(image_db.path, PASSWORD_RESET)
 
         run = run_dev(image, "user", "reset-link", unique_username(), env=image_db.env)
@@ -1556,8 +1593,8 @@ class TestResetLinkFromTheCommandLine:
 
 class TestResetOnboardingFromTheCommandLine:
     def test_reset_onboarding_puts_every_flow_and_step_back_to_pending(self, image, image_db):
-        """IMG-015: user reset-onboarding <username> puts every flow and every step of that account back to pending."""
-        print_section("IMG-015: user reset-onboarding, in the image")
+        """IMG-029: user reset-onboarding <username> puts every flow and every step of that account back to pending."""
+        print_section("IMG-029: user reset-onboarding, in the image")
         name, user_id = completed_user(image, image_db)
 
         run = run_dev(image, "user", "reset-onboarding", name, env=image_db.env)
@@ -1569,8 +1606,8 @@ class TestResetOnboardingFromTheCommandLine:
 
     @pytest.mark.parametrize("flow", [OnboardingFlow.INTRO_TOUR.value, OnboardingFlow.IMPORT_GUIDE.value])
     def test_reset_onboarding_of_one_flow(self, image, image_db, flow):
-        """IMG-015b: --flow F puts that flow, and its steps when it has any, back to pending; every other flow and step stays completed."""
-        print_section(f"IMG-015b: user reset-onboarding --flow {flow}, in the image")
+        """IMG-029b: --flow F puts that flow, and its steps when it has any, back to pending; every other flow and step stays completed."""
+        print_section(f"IMG-029b: user reset-onboarding --flow {flow}, in the image")
         name, user_id = completed_user(image, image_db)
 
         run = run_dev(image, "user", "reset-onboarding", name, "--flow", flow, env=image_db.env)
@@ -1583,8 +1620,8 @@ class TestResetOnboardingFromTheCommandLine:
 
     @pytest.mark.parametrize("target", ["unknown-user", "unknown-flow"])
     def test_reset_onboarding_refuses_and_resets_nothing(self, image, image_db, target):
-        """IMG-015c: an unknown user (❌, exit 1) or an unknown --flow (exit 1, or argparse's 2) is refused, and the account's onboarding stays completed."""
-        print_section(f"IMG-015c: user reset-onboarding, {target}, in the image")
+        """IMG-029c: an unknown user (❌, exit 1) or an unknown --flow (exit 1, or argparse's 2) is refused, and the account's onboarding stays completed."""
+        print_section(f"IMG-029c: user reset-onboarding, {target}, in the image")
         name, user_id = completed_user(image, image_db)
         argv = ("reset-onboarding", unique_username()) if target == "unknown-user" else ("reset-onboarding", name, "--flow", "no_such_flow")
 
@@ -1601,9 +1638,9 @@ class TestResetOnboardingFromTheCommandLine:
 class TestUserLimitFromTheCommandLine:
     @pytest.mark.parametrize(("command", "options"), LIMITED_CREATIONS)
     def test_creation_at_the_limit_warns_and_creates(self, image, fresh_db, command, options):
-        """IMG-016: LIBREFOLIO_MAX_USERS=1 with one account: the command warns about the limit, creates the account anyway, ✅ and exit 0."""
+        """IMG-030: LIBREFOLIO_MAX_USERS=1 with one account: the command warns about the limit, creates the account anyway, ✅ and exit 0."""
         label = " ".join((*command, *options))
-        print_section(f"IMG-016: {label} at the limit, in the image")
+        print_section(f"IMG-030: {label} at the limit, in the image")
         first = unique_username()
         assert_succeeds(run_dev(image, "user", "create", first, f"{first}@example.com", OLD_PASSWORD, env=fresh_db.env))
         name = unique_username()
@@ -1618,8 +1655,8 @@ class TestUserLimitFromTheCommandLine:
         print_success(f"{label}: warned, created")
 
     def test_creation_below_the_limit_does_not_warn(self, image, fresh_db):
-        """IMG-016b: LIBREFOLIO_MAX_USERS=5 on an empty database: user create creates the account without any warning."""
-        print_section("IMG-016b: user create below the limit, in the image")
+        """IMG-030b: LIBREFOLIO_MAX_USERS=5 on an empty database: user create creates the account without any warning."""
+        print_section("IMG-030b: user create below the limit, in the image")
         name = unique_username()
 
         run = run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, env={**fresh_db.env, MAX_USERS_VARIABLE: "5"})
@@ -1630,8 +1667,8 @@ class TestUserLimitFromTheCommandLine:
         print_success("created, no warning")
 
     def test_activate_at_the_limit_warns_and_reactivates(self, image, fresh_db):
-        """IMG-016c: LIBREFOLIO_MAX_USERS=1, one active account and one inactive (1 of 1 places taken): user activate of the inactive one prints the limit line — the command line reactivates the account anyway —, reactivates it, ✅ and exit 0."""
-        print_section("IMG-016c: user activate at the limit, in the image")
+        """IMG-030c: LIBREFOLIO_MAX_USERS=1, one active account and one inactive (1 of 1 places taken): user activate of the inactive one prints the limit line — the command line reactivates the account anyway —, reactivates it, ✅ and exit 0."""
+        print_section("IMG-030c: user activate at the limit, in the image")
         _, member = admin_and_member(image, fresh_db, member_active=False)
 
         run = run_dev(image, "user", "activate", member, env={**fresh_db.env, MAX_USERS_VARIABLE: "1"})
@@ -1643,8 +1680,8 @@ class TestUserLimitFromTheCommandLine:
         print_success("warned, reactivated")
 
     def test_activate_below_the_limit_is_silent(self, image, fresh_db):
-        """IMG-016d: LIBREFOLIO_MAX_USERS=3, one active account and one inactive: user activate reactivates it without any warning."""
-        print_section("IMG-016d: user activate below the limit, in the image")
+        """IMG-030d: LIBREFOLIO_MAX_USERS=3, one active account and one inactive: user activate reactivates it without any warning."""
+        print_section("IMG-030d: user activate below the limit, in the image")
         _, member = admin_and_member(image, fresh_db, member_active=False)
 
         run = run_dev(image, "user", "activate", member, env={**fresh_db.env, MAX_USERS_VARIABLE: "3"})
@@ -1655,8 +1692,8 @@ class TestUserLimitFromTheCommandLine:
         print_success("reactivated, no warning")
 
     def test_deactivate_at_the_limit_is_silent(self, image, fresh_db):
-        """IMG-016e: LIBREFOLIO_MAX_USERS=2 with two active accounts (2 of 2 places taken): user deactivate deactivates without any warning, as it never warns."""
-        print_section("IMG-016e: user deactivate at the limit, in the image")
+        """IMG-030e: LIBREFOLIO_MAX_USERS=2 with two active accounts (2 of 2 places taken): user deactivate deactivates without any warning, as it never warns."""
+        print_section("IMG-030e: user deactivate at the limit, in the image")
         _, member = admin_and_member(image, fresh_db, member_active=True)
 
         run = run_dev(image, "user", "deactivate", member, env={**fresh_db.env, MAX_USERS_VARIABLE: "2"})
@@ -1665,3 +1702,79 @@ class TestUserLimitFromTheCommandLine:
         assert silent(run), f"a deactivation frees a place: it never warns: {run}"
         assert account(fresh_db.path, member) == {"is_superuser": False, "is_active": False}, f"the account must be deactivated: {account(fresh_db.path, member)}"
         print_success("deactivated, no warning")
+
+
+# ---------------------------------------------------------------------------
+# IMG-025..IMG-026: the instance backup, from the image's command line (B1)
+# ---------------------------------------------------------------------------
+
+
+class TestBackup:
+    """``dev.py backup`` in the image (lot B1 of workstream B, plan 07_backupDocker §3.10).
+
+    What an administrator runs on a Docker install, ``docker compose exec librefolio python
+    dev.py backup create``: the archive goes where the image keeps its data, and ``inspect``
+    checks an archive against its manifest.
+    """
+
+    def test_top_level_help_lists_backup(self, top_help):
+        """IMG-025: dev.py --help lists backup among the commands it registered."""
+        print_section("IMG-025: dev.py --help lists backup, in the image")
+
+        assert_succeeds(top_help)
+        listed = command_entries(top_help.output)
+
+        assert "backup" in listed, f"backup must be among the registered commands, listed: {sorted(listed)}; {top_help}"
+        print_success(f"backup: {listed['backup']}")
+
+    def test_group_help(self, image):
+        """IMG-025b: dev.py backup --help exits 0 with the usage of the backup group."""
+        print_section("IMG-025b: dev.py backup --help in the image")
+
+        run = run_dev(image, "backup", "--help")
+
+        assert_succeeds(run)
+        assert re.search(r"^usage: dev\.py backup\b", run.output, re.M), f"not the help of the backup group: {run}"
+        print_success("dev.py backup --help: exit 0")
+
+    def test_create_then_inspect(self, image, image_db, tmp_path):
+        """IMG-026: backup create on the image's database exits 0, writes exactly one archive into backups/ of its data directory, leaves no job folder, and the archive holds that database; backup inspect of it exits 0."""
+        print_section("IMG-026: backup create, then backup inspect, on the image's database")
+        backups = image.data_dir / BACKUPS
+        archives_before, folders_before = set(backups.glob(BACKUP_ARCHIVES)), job_folders(backups)
+        name = unique_username()
+        assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, env=image_db.env))
+
+        created = run_dev(image, "backup", "create", env=image_db.env)
+
+        assert_succeeds(created)
+        written = set(backups.glob(BACKUP_ARCHIVES)) - archives_before
+        assert len(written) == 1, f"backup create must write exactly one {BACKUP_ARCHIVES} into {backups}, it wrote {sorted(path.name for path in written)}: {created}"
+        (archive,) = written
+        left = job_folders(backups) - folders_before
+        assert not left, f"backup create must remove its job folder from {backups / BACKUP_JOBS}, left: {sorted(path.name for path in left)}; {created}"
+        archived_db = tmp_path / "archived-app.db"
+        with zipfile.ZipFile(archive) as zf:
+            manifest = json.loads(zf.read(ARCHIVE_MANIFEST))
+            with zf.open(ARCHIVED_DATABASE) as source, archived_db.open("wb") as target:
+                shutil.copyfileobj(source, target)
+        assert name in usernames(archived_db), f"the archive must hold the image's database, with the user {name} this test created there: {archive}"
+        assert manifest["alembic_revision"] == alembic_revision(image_db.path), f"the manifest must give the revision of the image's database, {alembic_revision(image_db.path)!r}: {manifest['alembic_revision']!r}"
+
+        inspected = run_dev(image, "backup", "inspect", str(archive), env=image_db.env)
+
+        assert_succeeds(inspected)
+        print_success(f"{archive.name}: in {BACKUPS}/, no job folder left, {name} inside, inspect exit 0")
+
+    def test_inspect_of_a_missing_file_exits_1(self, image):
+        """IMG-026b: backup inspect of a file that does not exist reports it with ❌ and exits 1."""
+        print_section("IMG-026b: backup inspect of a missing file, in the image")
+        missing = image.root / f"{unique_username()}.zip"
+        assert not missing.exists(), f"premise: {missing} must not exist"
+
+        run = run_dev(image, "backup", "inspect", str(missing))
+
+        assert_no_crash(run)
+        assert FAILED in run.output, f"expected the missing file to be reported with {FAILED}: {run}"
+        assert run.returncode == 1, f"backup inspect of a missing file must exit 1: {run}"
+        print_success(f"backup inspect {missing.name}: {FAILED}, exit 1")

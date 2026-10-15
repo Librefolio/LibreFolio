@@ -33,7 +33,7 @@
     "cashBalances": "Soldes de Trésorerie",
     "noCashBalances": "Aucune position de trésorerie",
     "confirmDelete": "Êtes-vous sûr de vouloir supprimer ce courtier ?",
-    "confirmDeleteWithTransactions": "Ce courtier a {n} transactions. La suppression forcée supprimera toutes les transactions. Continuer ?",
+    "confirmDeleteWithTransactions": "Ce courtier a {n} transactions. La suppression forcée les supprimera toutes. Les actifs que ce courtier a transférés vers d'autres courtiers, y compris partagés, y restent comme position d'ouverture à leur coût de transfert : le gain de ces courtiers comptera aussi ce que les actifs avaient gagné avant le transfert. Les virements avec d'autres courtiers y deviennent des dépôts ou des retraits. Continuer ?",
     "createFailed": "Échec de la création du courtier",
     "updateFailed": "Échec de la mise à jour du courtier",
     "assets": "{n} actif(s)",

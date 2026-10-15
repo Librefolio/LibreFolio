@@ -464,12 +464,12 @@ test.describe('Asset Data Editor', () => {
             return mine[0].id;
         }
 
-        /** Delete every event this test may have left behind, by id. Never throws. */
+        /** Delete every event this test may have left behind, by id, on its asset (the delete is scoped by asset: decision 21). Never throws. */
         async function cleanUp(page: Page, assetId: number, date: string, marker: string, knownIds: number[]): Promise<void> {
             const found = await markerEvents(page, assetId, date, marker).catch((): StoredEvent[] => []);
             const ids = [...new Set([...knownIds, ...found.map((e) => e.id)])];
             if (ids.length === 0) return;
-            await page.request.delete(`${EVENTS_URL}?${ids.map((id) => `ids=${id}`).join('&')}`).catch(() => undefined);
+            await page.request.delete(`${EVENTS_URL}?asset_id=${assetId}&${ids.map((id) => `ids=${id}`).join('&')}`).catch(() => undefined);
         }
 
         /** Open the editor of the asset page already loaded, on its Events tab. */
@@ -583,7 +583,8 @@ test.describe('Asset Data Editor', () => {
         test('a new event row deleted before saving sends no delete to the server', async ({page}) => {
             // S1. A new row deleted before it was ever saved stayed dirty, and Save read
             // its rowId — the row's date — as an event id: "2026-09-20" became
-            // DELETE /assets/events?ids=2026, on an endpoint not scoped by asset.
+            // DELETE /assets/events?ids=2026, on an endpoint then not scoped by asset. Since
+            // decision 21 (I-12a) it is, so the same bug would hit this asset's event 2026.
             const assetId = await appleAssetId(page);
             await navigateTo(page, `/assets/${assetId}`);
             const panel = await openEventsEditor(page);
@@ -604,29 +605,44 @@ test.describe('Asset Data Editor', () => {
             await deleteAction.click();
             await expect(deleteAction).toBeHidden();
 
-            // Every DELETE the page sends from here on is recorded and answered here, never
-            // by the backend: unfixed, it would delete whichever event has the year as its
-            // id. Every other request falls through to the routes and network as before.
+            // Every write the page sends from here on is recorded, and none that could delete
+            // reaches the backend: unfixed, it would delete this asset's event whose id is the
+            // year, if it has one. A DELETE is answered here. Since E1b a save deletes through
+            // the POST's `delete_ids` (no DELETE at all): a POST carrying any is answered here
+            // too, writing nothing. Every other request falls through to the routes and network.
             const deletes: string[] = [];
+            const sentDeleteIds: number[] = [];
             const isApi = (url: URL) => url.pathname.startsWith(`${API_BASE}/`);
             const handler = async (route: Route) => {
-                if (route.request().method() === 'DELETE') {
-                    deletes.push(route.request().url());
+                const request = route.request();
+                if (request.method() === 'DELETE') {
+                    deletes.push(request.url());
                     await route.fulfill({status: 200, json: {results: [], deleted_count: 0, not_found_count: 0, in_use_count: 0}});
-                } else {
-                    await route.fallback();
+                    return;
                 }
+                if (request.method() === 'POST' && new URL(request.url()).pathname === EVENTS_URL) {
+                    const ids = (request.postDataJSON() as Array<{delete_ids?: number[]}>).flatMap((item) => item.delete_ids ?? []);
+                    if (ids.length > 0) {
+                        sentDeleteIds.push(...ids);
+                        await route.fulfill({status: 200, json: {results: [{asset_id: assetId, count: 0, message: 'answered by the spec', event_ids: [], deleted_ids: []}], success_count: 0}});
+                        return;
+                    }
+                }
+                await route.fallback();
             };
             await page.route(isApi, handler);
             try {
                 // The kept new row is blank: it keeps Save available however the deleted
-                // row is handled, and Save skips it instead of writing it.
+                // row is handled, and Save skips it instead of writing it. Since E1b an item
+                // with neither events nor deletions is a 422: with nothing to write the save
+                // must send no item at all, or the editor stays open below.
                 const saveButton = panel.getByTestId('asset-editor-save-btn');
                 await expect(saveButton).toBeEnabled();
                 await saveButton.click();
                 // The page closes the editor only once every write has been answered.
                 await expect(panel).toBeHidden({timeout: 15_000});
                 expect(deletes, 'a row that was never saved must not reach the server').toEqual([]);
+                expect(sentDeleteIds, 'nor travel in a save as an id taken from its date (the year)').toEqual([]);
             } finally {
                 await page.unroute(isApi, handler);
             }

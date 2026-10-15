@@ -97,14 +97,15 @@ users start from the **Default Currency** in [Global Settings](settings.md).
 
 ## 🔐 Secrets {: #secrets }
 
-Three options are secrets: keep them as private as the database. Each one can be written in `.env` or
+Four options are secrets: keep them as private as the database. Each one can be written in `.env` or
 read from a file.
 
 | Secret | From a file | What it is |
 | --- | --- | --- |
 | `JWT_SECRET` | `JWT_SECRET_FILE` | The key that signs login sessions, in the main options above. |
 | `LIBREFOLIO_INSTANCE_KEY` | `LIBREFOLIO_INSTANCE_KEY_FILE` | The [instance key](#instance-key). Not set: LibreFolio creates one in the data directory. |
-| `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` | The key of a paid search service, for the `apikey` engine of the web search below. Unlike the other two, a file that cannot give it does not stop the server: it only turns the web search off. |
+| `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` | The key of a paid search service, for the `apikey` engine of the web search below. Unlike the first two, a file that cannot give it does not stop the server: it only turns the web search off. |
+| `LIBREFOLIO_SMTP_PASSWORD` | `LIBREFOLIO_SMTP_PASSWORD_FILE` | The password of the SMTP server that sends LibreFolio's emails: see [Email](email.md). Like the web-search key, a file that cannot give it does not stop the server: it only turns email off. |
 
 ### 📄 Secrets in Files {: #secret-files }
 
@@ -127,6 +128,9 @@ and out of the container's environment.
   file that cannot give the key does not stop the server: the search goes on without the web search,
   with a warning in the log (`web_link_finder: …; disabling`), and the providers' own search keeps
   working.
+- `LIBREFOLIO_SMTP_PASSWORD_FILE` is read only when `LIBREFOLIO_SMTP_HOST` is set. Like the web-search
+  key file, a file that cannot give the password does not stop the server: email stays off, with an
+  error in the log (`Email configuration cannot be used: email stays off`).
 - LibreFolio reads these variables from its environment: `./dev.py` and Docker Compose
   (`env_file: .env`) put the values of `.env` there, so `.env` works with both.
 
@@ -218,8 +222,10 @@ each finding is one line of the log, at its level, with the name of the check in
 | ⚠️ `warning` | `… is open to other users (…): the folder should be 0700 and the file 0600` | Restrict them: `chmod 700` on the `secrets/` folder, `chmod 600` on `instance.key`. |
 | ⚠️ `warning` | `SESSION_COOKIE_SECURE=never: the session cookie is sent over plain HTTP too; prefer auto` | Go back to `auto` unless you really need `never`: see [HTTPS and reverse proxies](#session-cookie-secure). |
 | ℹ️ `info` | `The log level is DEBUG: the log records operational detail; …` (or `TRACE`) | Go back to `INFO` once you are done troubleshooting. |
+| ❌ `error` | `LIBREFOLIO_SMTP_… cannot be used (SMTP_…): email stays off until it is fixed` (`check` is `email.smtp`) | Email is off, nothing else is: fix the variable the line names, then restart. What each code means: [Configuration Problems](email.md#configuration-problems). The server starts anyway. |
+| ⚠️ `warning` | `LIBREFOLIO_SMTP_TLS=none with …: emails, their links and the SMTP password travel unencrypted; use starttls or tls` | Set `LIBREFOLIO_SMTP_TLS` to `starttls` or `tls`, or send through a relay on your own network: see [Security Notes](email.md#security). |
 
-A secret you configured that cannot be used stops the start instead: a `JWT_SECRET_FILE` or a
+Some secrets you configured stop the start instead when they cannot be used: a `JWT_SECRET_FILE` or a
 `LIBREFOLIO_INSTANCE_KEY_FILE` that cannot give its secret (see [Secrets in Files](#secret-files)),
 or an instance key of your own shorter than 32 characters. In the `managed` profile, a `JWT_SECRET`
 shorter than 32 characters stops it too. The error is in the server's console
@@ -259,8 +265,8 @@ decides who may sign up, and there is no limit. All four are optional: uncomment
 | --- | --- | --- |
 | `LIBREFOLIO_REGISTRATION` | _not set_ | Who may create an account: `open` (anyone), `invite` (only with an invitation link) or `disabled` (nobody). Not set: the **Registration** global setting decides, **Open** unless an administrator changed it. Set: this value wins, and the global setting cannot be changed from the app. Case and spaces around the value do not matter. On a new instance, `invite` and `disabled` leave the login page without **Register here**: see [Who Can Sign Up](settings.md#registration) to create the first administrator. |
 | `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
-| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. The [command line](cli_tools.md#invite) puts it in front of the invitation and password-reset links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. |
-| `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. LibreFolio gives it to administrators only, with the numbers of the user limit; the app does not show it yet. |
+| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md#invite) puts it in front of the invitation and password-reset links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. |
+| `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. Only administrators see it, as **Manage subscription**: in the [Users](users.md) tab of Settings, next to the count of places taken and in the banner shown when the instance is full, and on the block page of a [blocked instance](hosting_providers.md#instance-block). Not set: no such link. |
 
 An empty value counts as not set. A wrong value does not stop the server, unlike the main options:
 LibreFolio stays on the safe side, and writes an error to its log the first time each server
@@ -271,7 +277,7 @@ process needs the value: `Invalid account configuration`, with the variable and 
 | --- | --- | --- |
 | `LIBREFOLIO_REGISTRATION` other than the three modes | Registration is closed, and the global setting stays locked | `registration stays closed until it is fixed` |
 | `LIBREFOLIO_MAX_USERS` that is not a whole number of at least 1, `0` included | A limit of 0: nobody can sign up without an invitation | `registration stays closed until it is fixed` |
-| `LIBREFOLIO_PUBLIC_URL` without `http://` or `https://` | Ignored: links show the path only, and the [command line](cli_tools.md#invite) says why under each link | `links show the bare path until it is fixed` |
+| `LIBREFOLIO_PUBLIC_URL` without `http://` or `https://` | Ignored, as if it were not set: the [command line](cli_tools.md#invite) prints the path only and says why under each link, and the dialogs of the [Users](users.md) tab start from the browser's address | `links show the bare path until it is fixed` |
 | `LIBREFOLIO_BILLING_URL` without `http://` or `https://` | Ignored, as if it were not set | `the billing link stays hidden until it is fixed` |
 
 ### 📏 When the Instance Is Full {: #user-limit }

@@ -12,14 +12,14 @@ lives where, inside and outside the layer, is in `backend.instructions.md`, sect
 
 | Module | Calculation |
 |---|---|
-| `average_cost.py` | average purchase cost (WAC): pools, cost-basis steps, conversions, the conversions that could not be made |
+| `average_cost.py` | average purchase cost (WAC): pools, cost-basis steps, conversions, the conversions that could not be made, the unit cost of each movement (`movement_unit_costs`) |
 | `native_cash.py` | cash per broker and currency: balances, value in the report currency on any day, period flows, FX results |
-| `returns.py` | simple ROI, TWRR and MWRR, as point values and daily series; cumulative and annualized returns |
+| `returns.py` | simple ROI, TWRR and MWRR, as point values and daily series; cumulative and annualized returns; a period's start (`rebase_to_period`); net holding return; gain or loss as a fraction of its base (`gain_loss_ratio`) |
 | `valuation.py` | value of a holding from quantity, price and `quote_base_quantity` |
 | `price_marks.py` | daily mark of an asset: market quote, same-day trade average, last observation carried forward |
 | `yield_on_cost.py` | Yield on Cost of holdings, replayed from the transaction ledger |
 | `fifo/` | FIFO lots: `models`, `eligibility`, `engine` (`run_fifo_lot_engine`) |
-| `portfolio/` | daily portfolio state: `models`, `classifier`, `daily_state`, `derived_views`, `data_quality`, `engine` |
+| `portfolio/` | daily portfolio state: `models`, `classifier`, `daily_state`, `derived_views`, `data_quality`, `period` (a period's boundary states, P&L and identity), `engine` |
 | `lots/` | lots analysis math: `prices`, `conversions`, `economic_events`, `histories`, `average_cost_lines` |
 
 ## Rules

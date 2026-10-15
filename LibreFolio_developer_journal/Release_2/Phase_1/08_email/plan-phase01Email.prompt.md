@@ -416,3 +416,331 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 >   **79 passati, nessun saltato**; `EMD-017` (STARTTLS, poi autenticazione, poi invio) ed `EMD-018` (certificato non
 >   fidato → `TLS_FAILED`, nulla inviato) verdi. Log `/tmp/libreFolio_e1tls_email-delivery.log`. E-1 chiusa nel
 >   backlog.
+
+### E2 — stato e email di prova per l'admin (la parte senza A5a)
+
+#### E2.0 — Via e ambiente ✅ (2026-10-15)
+> **Note implementazione**: commit di E1 `2534cbd97`, `1e2f4b2f3`, merge di base `fc99e9bfe`, journal `918e8d4f0`; E1
+> entra in `dev_release2` dopo CP6 di H. Via del coordinatore (13:37): «preparare E2 solo dove non serve A5a, con prove
+> leggere». Risposte alle mie tre domande (13:40):
+> - `npm ci` dal lock sì, poi `front build --debug` e `mkdocs build` una volta, con `nice -n 10`, uno alla volta;
+> - la voce della scheda «Email» in `features/settings/settingsTabs.ts` la scrivo io nel checkpoint di E2, solo righe
+>   aggiunte, **dopo** che A5 è nella mia base (avvisa il coordinatore);
+> - la classificazione di `POST /email/test` nel file di CP6 di H (e il test che fissa l'elenco) la scrivo io, appena
+>   CP6 è nella mia base.
+>
+> Fatto, uno alla volta con `nice -n 10`:
+> - `npm ci --no-audit --no-fund` in `frontend/`: uscita 0 (log `/tmp/libreFolio_e2_npm_ci.log`); gli stessi avvisi
+>   di A sugli script d'installazione (`esbuild`, `fsevents`, `es5-ext`), non approvati;
+> - `dev.py front build --debug`: uscita 0, 8 minuti sotto carico (log `/tmp/libreFolio_e2_front_build_debug.log`);
+> - `dev.py mkdocs build` sulla base fusa: uscita 0, nessuna riga `WARNING` o `ERROR`, 3 028 URL risolti.
+>
+> **⚠️ Fuori pista**: dalle 13:55 il carico della macchina è a 110–139; il coordinatore ammette solo test di un file
+> (Vitest con `--maxWorkers 2`), niente build, `svelte-check` né categorie, fino al suo prossimo messaggio. Il codice
+> si scrive, le prove aspettano.
+
+#### E2.1 — Backend: `GET /email/status`, `POST /email/test` ✅ scritto (2026-10-15), prove ⏳
+> **Note implementazione**:
+> - `schemas/email.py`: `EmailCheckRead` (mai il `summary` del log, che può nominare il server), `EmailBudgetRead`,
+>   `EmailStatusResponse` (`state` off/ready/invalid, `problem`, `variable`, `checks`, `budget` solo se pronta),
+>   `EmailTestResponse` (`language`).
+> - `api/v1/email.py`, `prefix="/email"`, `require_admin`: lo stato è un `def` (la configurazione può leggere il file
+>   della password: gira nel pool di thread); la prova risponde 409 `EMAIL_UNAVAILABLE` con il `problem`, 429
+>   `EMAIL_RATE_LIMITED` con `Retry-After`, 502 `EMAIL_DELIVERY_FAILED` con lo `smtp_code`, 422
+>   `EMAIL_RECIPIENT_INVALID`. L'istanza nel testo è l'host della richiesta: è un'etichetta, nessun link (punto 45).
+> - `services/email/flows.py`: `account_language` (la lingua dell'account, poi `default_language`, poi l'inglese; non
+>   crea righe) e `send_test_email`.
+> - `delivery.send_email`: la configurazione ora si legge con `asyncio.to_thread` (il file della password non si legge
+>   più sul ciclo di eventi).
+> - `api/v1/router.py` (condiviso): l'import e `include_router(email.router)`, due righe.
+> - `ruff` e `black` puliti; l'OpenAPI ha le due rotte e i 4 schemi.
+> - Test affidati a `test-author`: `test_api/test_email_api.py` (app nel processo su un SQLite privato, come i test di
+>   A5a) e `test_services/test_email_flows.py`; `api email` aspetta il via sul carico (avvia il server condiviso).
+
+#### E2.2 — Frontend: la scheda «Email» ✅ scritto (2026-10-15), prove ⏳
+> **Note implementazione** (file nuovi, solo ruoli `*-lf-*`, nessuna classe di palette né colore scritto a mano):
+> - `features/email/emailApi.ts` (la cucitura sul client generato, `readTestFailure`);
+> - `features/email/emailText.ts` (codici → chiavi i18n e stati → classi, tutte stringhe intere, per l'audit i18n e le
+>   guardie dei colori);
+> - `features/email/EmailSettingsTab.svelte` (Svelte 5: stato, problema con la variabile, avvisi dei controlli che non
+>   sono `ok`, invii rimasti, «Spedisci un'email di prova» con l'esito in linea; `data-busy`, `data-testid` e `data-*`
+>   per i test; `notify` senza toast, perché l'esito si vede);
+> - sorgente i18n nuova `lib/i18n/email/` (`prefixes.txt`: `email`), 41 chiavi nelle 4 lingue, in forma canonica,
+>   stessi segnaposto (controllo usa e getta).
+> - Aspettano: `api sync` (i tipi del client), `svelte-check`, `i18n check`, il Vitest della scheda, la riga del
+>   registro (dopo A5), la pagina admin `admin/email.en.md` (`docs-writer`, in corso), la galleria.
+
+#### E2.3 — Doc admin `admin/email.en.md` ✅ scritta (2026-10-15), build ⏳
+> **Note implementazione**: `docs-writer` ha scritto la pagina (355 righe, solo EN): dove vive la configurazione, le
+> variabili, i modi di cifratura, tre esempi a schede (Docker Compose con segreto, provider, relay locale), la scheda
+> Impostazioni › Email, i problemi di configurazione e d'invio, il log, le note di sicurezza. Ho verificato sul codice:
+> i messaggi del log, i 20 s per passo, i suffissi e gli intervalli locali, `secrets_set_twice` (generico su
+> `LIBREFOLIO_*`: l'avviso «impostata due volte» c'è davvero all'avvio), il caricamento di `.env` da `dev.py`,
+> l'utente `1000:1000` dell'entrypoint, il servizio `librefolio` dei compose, la riapertura dello stato dopo ogni prova.
+> - Link a `configuration.md` **senza** àncore: le versioni IT/FR/ES di quella pagina non hanno ancora le sezioni
+>   (`anchors: warn` + `--strict` farebbe fallire la build).
+> - Corretti da me: l'introduzione della scheda (`email.tab.intro`, 4 lingue) non promette più reset, inviti e
+>   attivazione, che arrivano con E3/E4; la riga `# Docs: mkdocs_src → admin/email.md` nella sezione Email di
+>   `.env.example`; l'esito della prova si rende dallo stato (segue un cambio di lingua).
+> - Chiesti a `docs-writer`: il rimando ad Advanced Docker per UID/GID diversi; il riallineamento della pagina
+>   sviluppatore `developer/backend/email.md` a E2.
+> - Da proporre al coordinatore (pagine condivise e tradotte): la riga di nav «Email: admin/email.md» sotto
+>   «Environment Variables» con le `nav_translations` (IT «Email», FR «E-mail», ES «Correo»); una riga in
+>   `admin/index.en.md`; in `configuration.en.md` (di H) «tre segreti» → quattro, con il file della password SMTP che
+>   non ferma mai il server, e, dopo la registrazione in `CONFIG_CHECKS`, due righe nella tabella dei controlli d'avvio.
+
+#### E2.4 — Test di E2a e correzioni dalla revisione di `test-author` ✅ scritti (2026-10-15), prove ⏳
+> **Note implementazione**: `test-author` ha scritto `test_services/test_email_flows.py` (EMF-001…007) e
+> `test_api/test_email_api.py` (EMA-001…016, nel processo su un SQLite privato, guardia su `getaddrinfo` che ammette
+> solo il loopback) e le voci `services email-flows` e `api email` (entrambe `pure`, con la riga del motivo).
+> `services email-flows`: 19 passati in 10,8 s (log `/tmp/libreFolio_e2a_email-flows.log`). `api email` aspetta il via
+> sul carico (la categoria `api` avvia il server condiviso). `ruff` e `black` puliti sui 9 file.
+>
+> **⚠️ Fuori pista** — difetti trovati dalla revisione, corretti:
+> - il 422 `EMAIL_RECIPIENT_INVALID` catturava ogni `ValueError` di `send_test_email`: una riga di `user_settings` che
+>   non valida più (un tema vecchio) dava «indirizzo non valido». Ora un'eccezione propria,
+>   `messages.EmailRecipientError(ValueError)`, e la rotta cattura solo quella;
+> - `account_language` leggeva le impostazioni attraverso `UserSettingsRead` (validazione intera): ora legge la sola
+>   colonna `language`; una lingua che non nomina nessuna delle quattro vale come assente (→ `default_language` →
+>   inglese), come la lingua vuota. Nuovo `messages.supported_email_language`;
+> - lo stato leggeva la configurazione quattro volte: `budget_status(max_per_hour)` riusa lo stato già letto.
+> Test da adeguare affidati di nuovo a `test-author` (EMF-002 `unknown-de` → la lingua dell'istanza; riga con tema
+> fuori elenco → 200; il contratto di `EmailRecipientError`).
+>
+> Esito (15/10, uno alla volta, `nice -n 10`, corsia 6188):
+> - `services email-flows` 42/42, `email-messages` 245/245, `email-delivery` 79/79 (log `/tmp/libreFolio_e2a_*.log`);
+> - `api email` 52/52 con `--no-shared-server`: per un'azione sola la categoria `api` non ripopola il DB
+>   (`_api_setup` gira solo per `api all` e per il passo consolidato), e senza il server condiviso è una prova di un
+>   file solo; la porta 6188 è rimasta libera (`lsof` vuoto). Log `/tmp/libreFolio_e2a_api_email.log`.
+>
+> **⚠️ Fuori pista**: il primo giro di `api email` dava un avviso di deprecazione di Starlette su
+> `status.HTTP_422_UNPROCESSABLE_ENTITY`; nel file nuovo ora c'è `HTTP_422_UNPROCESSABLE_CONTENT` (stesso 422).
+> Secondo giro: 52 passati, nessun avviso. Il vecchio nome resta solo in `api/v1/settings.py` (4 risposte): non è il
+> mio perimetro, va nel backlog (E-4).
+>
+> Doc: corretti da me nella pagina sviluppatore la regola della lingua, `EmailRecipientError`, `budget_status`,
+> gli EMF/EMA e «Coming next» secondo la tabella dei lotti (§5); aggiunta la riga `email` (19 sottosistemi) in
+> `developer/frontend/i18n.md`.
+
+#### E2.5 — Le 4 prove medie e i cancelli leggeri ✅ (2026-10-15)
+> **Note implementazione**: via del coordinatore (14:50): «Sì alle 4 prove medie, in fila e con `nice -n 10`»; il
+> checkpoint E2a va bene; le righe in `configuration.en.md` di H le scrivo io, dichiarandole. In fila, con
+> `nice -n 10`:
+> - `api sync`: uscita 0; il client generato ha `get_email_status_api_v1_email_status_get`,
+>   `send_test_api_v1_email_test_post` e gli schemi `Email*` (file ignorati da git);
+> - `i18n build` e `i18n check`: 4 433 chiavi × 4 lingue da 91 sorgenti, 19 sottosistemi, stretto, uscita 0;
+> - `front check` (`svelte-check`): il primo giro dava 10 errori, tutti nella scheda (vedi sotto); dopo la
+>   correzione, 0 errori e 0 avvisi;
+> - `mkdocs build` (stretto): uscita 0, nessuna riga `WARNING` o `ERROR`; `admin/email.en.md` compare solo nella
+>   riga INFO delle pagine fuori dalla nav, finché il coordinatore non aggiunge la riga;
+>   `mkdocs check-links`: 96 link validi (95 + il `DocsLink` della scheda verso `admin/email/`);
+> - cancelli leggeri: `services config-env-example` 36, `services config-package` 603 (639 sulla base del
+>   coordinatore, che ha CP6), `utils gate-i18n-usage` 195, `check-orphans` verde, Vitest
+>   `src/themeRoles.gate.test.ts` 36 con `--maxWorkers 2`. Tutti i 25 ruoli `lf-*` dei file nuovi sono dichiarati in
+>   `tokens.css`. Log `/tmp/libreFolio_e2a_*.log`.
+>
+> **⚠️ Fuori pista**: il tipo TypeScript generato per un campo facoltativo (`anyOf [string, null]`) è
+> `(string | null) | Array<string | null>`, più largo dello schema zod a runtime (che è giusto). Lo stesso schema c'è
+> in altre 315 righe del client: chi lo legge stringe il tipo dove lo usa (`ProfileTab`: `typeof === 'string'`).
+> Qui `emailApi.fetchEmailStatus()` normalizza una volta sola la risposta in `EmailStatus` (`problem` e `variable`
+> stringa o `null`, `checks` sempre lista, `budget` oggetto o `null`); la scheda legge solo il tipo pulito.
+> Il `test-author` della scheda è stato avvisato del contratto nuovo.
+
+#### E2.6 — Vitest della scheda e difetti trovati ✅ (2026-10-15)
+> **Note implementazione**: un secondo `test-author` ha scritto `emailText.test.ts` (94 casi, node),
+> `emailApi.test.ts` (42, node; il client vero con il solo trasporto finto) ed `EmailSettingsTab.test.ts` (25,
+> jsdom), registrati in `front-utility core-unit` e `component-unit` (righe aggiunte, più una frase nelle `desc`).
+>
+> **⚠️ Fuori pista** — difetti trovati dai test, corretti:
+> - **alto**: il client generato rifiuta con l'`AxiosError` di axios (l'intercettore lo lascia passare), non con
+>   `ApiError`, che nessuno costruisce; `readTestFailure` leggeva solo `ApiError`, quindi ogni 409/429/502/422 sarebbe
+>   apparso come errore generico. Ora `refusalBody()` legge `isAxiosError(error) ? error.response?.data`, come
+>   `ProfileTab`, `tools/client.ts` e `aiExportClient.ts`, e regge anche `ApiError`;
+> - `problemKey`/`testFailureMessage` cercavano nelle mappe anche i nomi ereditati (`constructor`): ora
+>   `Object.hasOwn`;
+> - la scheda: `data-busy` copre anche l'invio; il pulsante è spento mentre gira una richiesta qualsiasi (anche la
+>   rilettura dopo la prova: un clic, un'email); solo l'ultima lettura scrive (contatore di generazione); una
+>   rilettura fallita mostra l'errore sopra l'ultimo stato e lascia l'esito della prova.
+> - Decisione: il pulsante resta acceso quando il budget mostrato è finito (il budget è per processo; il 429 lo
+>   dice chiaro).
+> - Doc sviluppatore allineata (sezione «The Email Tab»). `prettier --check` pulito sui file della scheda.
+>
+> Esito, uno alla volta con `nice -n 10`, Vitest con `--maxWorkers 2`: `emailText.test.ts` 106, `emailApi.test.ts` 62
+> (i quattro rifiuti col client vero, rossi prima della correzione, ora verdi), `EmailSettingsTab.test.ts` 29;
+> `prettier --check` pulito; `check-orphans` verde (394 file di unità del frontend registrati); `front check`
+> (`svelte-check`, test compresi) 0 errori e 0 avvisi. Log `/tmp/libreFolio_e2a_vitest_*.log`,
+> `/tmp/libreFolio_e2a_svelte_check2.log`.
+> - Non fissato da un test: il contatore di generazione di `load()`. Dalla scheda due letture non si sovrappongono
+>   mai (la prima gira prima che esista il pulsante, la prova parte solo a scheda ferma): è difesa, documentata
+>   nell'intestazione del test.
+> - Decisione: nessun pulsante «riprova» dopo una prima lettura fallita: la pagina Impostazioni monta solo la scheda
+>   attiva (`<active.component>` in `routes/(app)/settings/+page.svelte`), quindi cambiare scheda e tornare rilegge.
+
+### Checkpoint E2a 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+> **Base**: HEAD `918e8d4f0` (E1 chiuso; `dev_release2` è a `f46a93ffd`, con E1, CP6 di H, FE5b di X e
+> `cryptography`). Delta: 12 file tracciati modificati, 17 nuovi.
+>
+> **Giro finale sull'albero di E2a** (corsia 6188, `/tmp/librefolio-r13-e`, uno alla volta, `nice -n 10`):
+> `services email-config` 144, `email-messages` 245, `email-delivery` 79, `email-checks` 48, `email-flows` 42;
+> `api email` 52 (`--no-shared-server`); `services config-env-example` 36, `config-package` 603;
+> `utils gate-i18n-usage` 195; `check-orphans` verde; Vitest 106 + 62 + 29 e `themeRoles.gate` 36; `front check` 0/0;
+> `i18n build` + `check` (stretto, 19 sottosistemi); `api sync`; `mkdocs build` stretto senza `WARNING`/`ERROR`;
+> `check-links` 96 validi; `prettier --check`; `ruff` e `black` puliti; `git diff --check` pulito; porta 6188 libera.
+>
+> **Resta per E2b** (dopo la base con CP6 e A5): `EMAIL_CONFIG_CHECKS` in `CONFIG_CHECKS` (più le due righe nella
+> tabella dei controlli d'avvio di `configuration.en.md` e il paragrafo «A secret … stops the start»); la
+> classificazione di `POST /email/test` nell'elenco di CP6 e il suo test; la voce della scheda in `settingsTabs.ts`
+> con `email.tab.label`; `/system/instance.email`; l'E2E simulato; la galleria; il testo del CHANGELOG (la scheda
+> diventa visibile solo allora).
+
+### E2b — registrazioni dopo la base con CP6, A5 e i colori
+
+#### E2b.0 — Base e via ✅ (2026-10-15)
+> **Note implementazione**: E2a committato dal coordinatore (`b33654f22`, `c1d1c3c2d`). Merge di base aperto dal
+> coordinatore (`dev_release2` `d22eb6f43`: CP6 di H, A5, W, J, i colori), un conflitto in
+> `scripts/test_runner/_frontend_utility.py` (lista Vitest di `core-unit`): uniti i due lati, le 7 righe di
+> `dev_release2` e poi le mie 2, nessun percorso doppio nuovo (310 + 3 = 313); in stage solo quel file. Merge
+> committato: `d42b4c32f`. Giro sulla revisione unita, tutto verde (vedi messaggio al coordinatore):
+> `utils rate-window` 26, `gate-i18n-usage` 195, `services email-*` 144/245/79/48/42, `config-package` 645,
+> `config-env-example` 36, `api email` 52, `check-orphans`, `api system` 117 (con il server condiviso: il prerequisito
+> ha ricostruito frontend e doc in 358 s; avviso esterno: lo scarico di MathJax da jsDelivr fallisce per SSL).
+>
+> Via del coordinatore per E2b (15:25 e 16:57): la riga `CONFIG_CHECKS`, la classificazione CP6, la voce Email in
+> `settingsTabs.ts` (solo righe aggiunte), la riga di nav con le tre `nav_translations`, la riga in
+> `admin/index.en.md`, `/system/instance.email`, le E2E (in coda per uno slot pesante), la riga del CHANGELOG, il conto
+> dei sottosistemi di `developer/frontend/i18n.md` corretto a 20.
+>
+> **⚠️ Fuori pista**:
+> - nel merge, `developer/frontend/i18n.md` aveva da entrambi i lati «18 → 19» (`liveUpdates` loro, `email` mio):
+>   git ha tenuto 19, i sottosistemi sono 20; il loro lato cambiava anche «(18)» nell'albero in cima, che io avevo
+>   lasciato. Corretto in E2b, non nel merge;
+> - CP6 è un elenco di **permessi** (`ALLOWED_WHEN_BLOCKED`): ogni rotta di `/api/v1` fuori elenco risponde 423 su
+>   un'istanza bloccata. Le due rotte email sono quindi già rifiutate, come vuole il piano (niente invii a istanza
+>   bloccata): nessuna riga in `instance_block.py` né nel test che fissa l'elenco (aggiungerle vorrebbe dire
+>   permetterle). Le copre il test di H che percorre ogni rotta
+>   (`test_every_route_under_api_v1_is_an_api_route_resolving_the_block_first`).
+
+#### E2b.1 — Backend: `CONFIG_CHECKS` e `/system/instance.email` ✅ scritto (2026-10-15), test ⏳
+> **Note implementazione**:
+> - `services/email/checks.py` non importa più `config_audit` a livello di modulo: ogni controllo importa
+>   `ConfigCheck` quando gira (più un import sotto `TYPE_CHECKING` per l'annotazione). Così `config_audit` (di H)
+>   importa `EMAIL_CONFIG_CHECKS` e chiude `CONFIG_CHECKS` con `*EMAIL_CONFIG_CHECKS` (2 righe più un commento):
+>   all'avvio `log_configuration_audit()` scrive `email.smtp` (`error`) e `email.smtp_encryption` (`warning`); per
+>   l'email non ferma mai l'avvio. Provato l'ordine d'import nei due sensi, più `api.v1.email` e `main` per primi.
+>   L'import «come modulo» di E1 bastava solo in un verso: con `email.checks` caricato per primo, `config_audit` avrebbe
+>   trovato `EMAIL_CONFIG_CHECKS` non ancora definito.
+> - `/system/instance` (file di H): `email: EmailInstanceConfig` (`schemas/email.py`, `available: bool = False`;
+>   in `schemas/system.py` con `default_factory`, quindi facoltativo nell'OpenAPI: i finti di `/system/instance` di
+>   altri test restano validi e `DEFAULT_INSTANCE_CONFIG` del frontend non cambia), riempito in
+>   `api/v1/system/instance.py` con `await asyncio.to_thread(delivery.email_available)`. Nessun consumatore nel
+>   frontend fino a E3/E4.
+> - Classificazione CP6: nessuna riga (vedi E2b.0).
+> - `ruff`/`black` puliti; `api sync`: `InstanceConfigResponse.email?: EmailInstanceConfig`.
+
+#### E2b.2 — Frontend: la scheda nel registro ✅ scritto (2026-10-15), test ⏳
+> **Note implementazione**: `features/settings/settingsTabs.ts` (di A), solo righe aggiunte:
+> `import {Mail} from 'lucide-svelte';` (riga a sé, per non toccare quella delle icone di A),
+> `import EmailSettingsTab from '$lib/features/email/EmailSettingsTab.svelte';` e la voce
+> `{id: 'email', labelKey: 'email.tab.label', icon: Mail, order: 110, component: EmailSettingsTab,
+> visible: (ctx) => ctx.isSuperuser}` dopo `admin` (gruppo di destra). `email.tab.label`: Email / Email / E-mail /
+> Correo. Il test di A che fissa le schede (`settingsTabs.test.ts`), l'E2E `e2e/settings/email-tab.spec.ts` e lo
+> scatto della galleria sono affidati a `test-author`; E2E e galleria girano nello slot pesante che assegna il
+> coordinatore.
+
+#### E2b.3 — Doc e CHANGELOG ✅ scritto (2026-10-15)
+> **Note implementazione**: nav (`Email: admin/email.md` sotto «Environment Variables», `nav_translations` IT «Email»,
+> FR «E-mail», ES «Correo»); `admin/index.en.md` (la riga Email); `admin/configuration.en.md` (di H): le due righe dei
+> controlli d'avvio e «Some secrets you configured stop the start instead…» (la frase di prima diceva che ogni
+> segreto illeggibile ferma l'avvio: non vale per la chiave della ricerca web né per la password SMTP);
+> `developer/frontend/i18n.md`: 20 sottosistemi nei due punti; CHANGELOG, `[Unreleased]` › «✨ Added»: la voce
+> «Email, optional». Le pagine `admin/email.en.md`, `developer/backend/email.md` e
+> `developer/frontend/components/features/settings.md` sono affidate a `docs-writer`.
+>
+> `docs-writer` (E2b): `admin/email.en.md` (i controlli all'avvio: due righe nel log, quella di `_report_invalid` e
+> quella del controllo; la scheda dopo Admin, solo per gli amministratori; un punto su `/api/v1/system/instance`, che
+> dice solo se l'email è pronta), `developer/backend/email.md` (registrazione in `CONFIG_CHECKS` e import pigro,
+> parte nuova `#instance-email`, la scheda registrata, «Coming Next»),
+> `developer/frontend/components/features/settings.md` (cinque schede, la riga `email`). Corretti da me, perché
+> resi falsi dal lotto: in `developer/architecture/settings.md` (di H) «two fields» → «three» e la riga `email`;
+> in `developer/architecture/security.md` (di H) il file della password SMTP «from a later lot» → mostrato in
+> Impostazioni › Email, e «publishes only the registration mode» → «About accounts, … publishes only…».
+
+#### E2b.4 — Test di E2b ✅ (2026-10-15)
+> **Note implementazione** — frontend (`test-author`):
+> - `settingsTabs.test.ts` (di A): mock del corpo Email, la riga Email in `TODAY`, le schede attese per contesto
+>   (utente: profile, preferences, about, admin; amministratore: le stesse e poi email), il caso «email is visible to
+>   administrators only and takes no props»; titoli senza «four». 18 passati.
+> - `page.tabs.test.ts` (di A): un mock in più (il corpo Email), perché le sue schede finte stanno sul modulo vero del
+>   registro, che ora importa la scheda Email. 18 passati (prima del mock il file non si caricava).
+> - Nuovi: `e2e/settings/email-tab.spec.ts` (5 test: amministratore e utente sul backend vero, stato `off` come
+>   precondizione esplicita; tre flussi con API finte 200/502/429) e la voce `front-utility email-tab`; nella
+>   galleria lo scatto `settings/email` dopo «global settings (admin)», con lo stato `ready` finto. Non lanciati:
+>   aspettano lo slot pesante.
+> - Vitest: `EmailSettingsTab` 29, `emailApi` 62, `settingsTabs` 18, `page.tabs` 18; `prettier --check` pulito.
+>
+> **⚠️ Fuori pista**: dopo `api sync` il client generato non si caricava più (`TypeError: "The email part of " is not
+> a function`): `openapi-zod-client` scrive una descrizione su più righe come template literal senza sfuggire i
+> backtick, e la docstring di `EmailInstanceConfig` era su più righe con ``` ``GET /system/instance`` ```. Corretto con
+> una docstring su una riga (la spiegazione del default è passata in un commento). Nel backlog: E-5 (il generatore) ed
+> E-6 (ogni nuova scheda obbliga i test del registro a un mock in più).
+>
+> **Note implementazione** — backend (`test-author`):
+> - `test_email_checks.py`: EMK-010…015 (i due controlli chiudono `CONFIG_CHECKS`; `run_config_checks()`; i tre
+>   ordini d'import in un interprete nuovo; il registro d'avvio: un `error` `email.smtp` senza eccezione, un
+>   `warning` `email.smtp_encryption`, niente a email spenta, mai la password). 64 passati.
+> - `test_email_api.py`: EMA-019…022 (`/system/instance` senza sessione, `email` esattamente `{available}` in 8
+>   stati, mai un valore della configurazione né una ricerca di nomi, il file della password fuori dal ciclo di
+>   eventi, `available: false` per una risposta costruita senza). 63 passati.
+> - File di H: `test_config_audit.py` (l'import dei due controlli, le due voci di `CHECK_IDS`, in `_configure` la
+>   rimozione di ogni `LIBREFOLIO_SMTP_*`): 90 passati; `test_system_api.py` (le chiavi esatte di
+>   `/system/instance` con `email`, dal vivo e nel processo): 117 passati. File di A: `test_registration_api.py`
+>   (INSTANCE-002, le chiavi esatte): 65 passati.
+>
+> **⚠️ Fuori pista**: il primo giro di `api registration` dava un rosso
+> (`test_an_invitation_opens_its_account_and_is_consumed_by_it`: l'invitato risultava amministratore). Causa: le
+> prove `services` ricreano vuoto il DB della corsia, e su un'istanza senza amministratore il primo account lo
+> diventa; `api all` ripopola il DB (`_api_setup`), un'azione sola no. Dopo
+> `db populate --force` sulla corsia (`/tmp/librefolio-r13-e`): 65 passati. Nessun difetto del prodotto né del lotto.
+
+#### E2b.5 — Giro finale ✅ (2026-10-15)
+> Corsia 6188, una prova alla volta, `nice -n 10`, log `/tmp/libreFolio_e2b_*.log`:
+> `services email-config` 144, `email-messages` 245, `email-delivery` 79, `email-checks` 64, `email-flows` 42,
+> `config-audit` 90, `config-env-example` 36, `config-package` 645; `utils rate-window` 26, `gate-i18n-usage` 195;
+> `api email` 63 (`--no-shared-server`), `api system` 117, `api registration` 65, `api instance-block` 44 (su DB
+> ripopolato); `check-orphans` verde (124 spec, 413 file di unità); Vitest `EmailSettingsTab` 29, `emailApi` 62,
+> `settingsTabs` 18, `page.tabs` 18; `i18n build` + `check` (4 464 chiavi, 20 sottosistemi, stretto); `front check`
+> 0/0; `prettier --check`; `api sync`; `mkdocs build` stretto senza `WARNING`/`ERROR` (e `admin/email` ora nella
+> nav); `check-links` 96 validi; `ruff`/`black`; `git diff --check`; porta 6188 libera.
+> Non lanciati: l'E2E `front-utility email-tab` e lo scatto `settings/email` della galleria (slot pesante del
+> coordinatore).
+
+### Checkpoint E2b 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+> **Base**: HEAD `d42b4c32f`. Delta: 34 file tracciati modificati, 1 nuovo (`e2e/settings/email-tab.spec.ts`).
+> Righe nei file altrui dichiarate nel messaggio di consegna. Resta di E2: far girare l'E2E e lo scatto della galleria
+> nello slot che assegna il coordinatore, poi la pagina admin può mostrare lo scatto.
+
+#### E2b.6 — Base `da3e06e1c` e tre correzioni ✅ (2026-10-15)
+> **Note implementazione**: E2b committato (`fab8e2d09`, `f4f995ce7`). Merge di base aperto dal coordinatore
+> (`dev_release2` `a718e5281`: A6a, H billing e link, Z7a, J, il banner del Lab), un conflitto in
+> `scripts/test_runner/_backend_services.py`: due funzioni nello stesso punto, tenute entrambe (`services_email_flows`,
+> poi `services_provider_cooldown`), nessun nome doppio (105 azioni); in stage solo quel file. Controllati i file fusi
+> da git: `billing_url` di H sta in `InstanceBlockResponse`, `/system/instance` resta `{profile, accounts, email}`;
+> `*EMAIL_CONFIG_CHECKS` resta l'ultima riga; `security.md`, `configuration.en.md`, CHANGELOG con i due lati.
+> Merge committato: `da3e06e1c`.
+>
+> Le tre correzioni chieste dal coordinatore (dopo A6b di A):
+> 1. ordine della scheda Email **130** (110 è Users di A6b, 120 Backup di B): `settingsTabs.ts` e le due pagine
+>    sviluppatore che lo citavano;
+> 2. lo scatto `email (admin)` contro la checklist di G (via `test-author`): rotta registrata prima della navigazione,
+>    solo `GET` del suo path, il resto `route.fallback()`, nessun `unroute`, corpo validato con
+>    `schemas.EmailStatusResponse.parse` in un file nuovo `e2e/fixtures/galleryEmail.ts`, i passi e la cornice di G,
+>    tolti gli attesi in più già coperti da `screenshot()`. Lo stesso filtro di metodo e la stessa validazione
+>    nell'E2E `email-tab.spec.ts`;
+> 3. CHANGELOG: tolta la mia voce (superficie del coordinatore), il testo va nel messaggio.
+>
+> Prove, una alla volta con `nice -n 10`: `api sync`; `front check` 0/0; `api system` 117, `api instance-block` 54,
+> `services config-audit` 90; Vitest `settingsTabs` 18, `page.tabs` 18; `check-orphans` (124 spec, 413 unità);
+> `tsc -p tsconfig.e2e.json` con i soli 2 errori di base (`onboarding-tour.spec.ts:863`, `src/lib/types/files.ts:9`);
+> `prettier --check`. **Slot pesante 1**: `front-utility email-tab` con `--workers 2`: 5 passati in 34 s; porta 6188
+> libera prima e dopo. Log `/tmp/libreFolio_e2b2_*.log`. Resta lo scatto della galleria, due volte con il diff vuoto,
+> nello slot che assegna il coordinatore.
