@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The import wizard counts assets in the singular too ("1 unique asset, 1 needs resolution").
 - The data editor's counters (modified, deleted, new), its stale-rows switch and the import window's Help and Close buttons follow your language instead of English.
 - The transaction form lists a cash or quantity shortfall under its own heading, as the bulk editor does, instead of among the field problems.
+- The Tools catalogue and the plugin diagnostics in Settings › About no longer fail with "Tool request deadline exceeded" when the server is busy: their request budget now covers sign-in too.
 
 ---
 
