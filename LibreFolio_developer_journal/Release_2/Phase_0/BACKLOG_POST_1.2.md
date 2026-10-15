@@ -2704,6 +2704,16 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `settings`/`admin-users` E2E e lo scatto della galleria da ricontrollare (il corpo arriva dopo un `await`).
   - Nello stesso giro, nota di G (15/10): i corpi e le rotte dello scatto `settings/users` in `fixtures/galleryUsers.ts`,
     come `galleryEmail.ts`.
+- **A-19 · Su un'istanza su invito «Register here» lampeggia al caricamento del login** — basso; deciso dal
+  coordinatore in A6d (15/10).
+  - Finché `GET /system/instance` non risponde, `LoginCard` usa `DEFAULT_INSTANCE_CONFIG` (`open`) e offre il link;
+    poi lo ritira. Il default resta `open` per non mettere in corsa gli scatti del login (G, theme-roles) e per lasciare
+    alle E2E negative di `auth.spec.ts` il loro controllo «prima».
+  - Possibile cura: nascondere il link finché l'istanza non risponde, con uno stato `data-*` sulla scheda che le prove
+    e la galleria possano aspettare. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
+    «A6d.1».
+- **A-20 · `black` fallisce su `scripts/test_runner/_backend_services.py`** — minimo; da E tramite il coordinatore
+  (15/10). Il `print_info` di `services_account_deletion_preview` (A6a, `5928176cf`) ha 305 caratteri: si spezza in A6d.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -2761,15 +2771,18 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   il coordinatore gira al coordinatore colori. **Chiusa nel CP3b il 15/10** per le 13 righe del perimetro deciso; i due
   commenti di `AssetModal` restano in X-R3, le 3 fixture sono passate a G. Dettagli:
   [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», quinto aggiornamento di base e CP3b.
-- **X-R6 · `web_link_finder`: timeout e numero massimo di URL non validati** — piccolo; segnalato da H il 15/10 (lotto
+- ✅ **X-R6 · `web_link_finder`: timeout e numero massimo di URL non validati** — piccolo; segnalato da H il 15/10 (lotto
   `web_link_finder`), girato a X dal coordinatore. Preesistente e invariato dagli spostamenti. `config/plugins.py:46-52`
   accetta `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` a `nan` o `inf` (`float()`), e `services/assets/web_link_finder.py:108`
   (`DDGS(timeout=int(timeout) or None)`) allora solleva: la ricerca rende `[]` scrivendo solo un debug (`:244-245`); un
   timeout sotto 1 diventa `int(…) == 0`, cioè nessun timeout; con `LIBREFOLIO_WEB_LINK_FINDER_MAX=0` il controllo di
   `:259` arriva dopo il primo `append`, e torna comunque un URL. Cura: valori finiti e ≥ 1 negli accessori di
   `config/plugins.py` (file di H: d'accordo con H) e un timeout non intero rispettato; con il CP6 (F05) o il CP10, che
-  toccano la configurazione dei plugin. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
-  sezione «15», quinto aggiornamento di base.
+  toccano la configurazione dei plugin. **Chiusa nel CP10 il 15/10** (commit al checkpoint del CP10): i due accessori di
+  `config/plugins.py` danno il default per un valore non finito o sotto 1, `DDGS(timeout=math.ceil(timeout))` rispetta un
+  timeout non intero, `.env.example` e la docstring dicono «at least 1»; i sei casi di `test_config_package.py` che
+  fissavano il vecchio comportamento aggiornati. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», quinto aggiornamento di base, e sezione «CP10», passo 8.
 - ✅ **X-R7 · La pagina di Borsa Italiana elenca le variabili del `web_link_finder` senza `_FILE`** — minimo, doc; segnalato
   da H il 15/10. `mkdocs_src/docs/developer/backend/assets/provider_borsa_italiana.md:123` cita `_API_KEY` ma non
   `_API_KEY_FILE` (segreti Docker, `env_secret()`); la fonte di verità è `search_link_finder.md`: la riga va ridotta a un
@@ -2859,6 +2872,29 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   `asyncio.Runner.close()`; test `test_provider_core_cache.py::TestRunProviderInThread::test_worker_thread_does_not_keep_closed_event_loop`,
   rosso prima della riga e verde dopo (`7794e2fb0`, in `dev_release2` con `743fca514`). Dettagli:
   [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», J-5.
+
+- **X-R12 · Un evento del fornitore datato oggi arriva solo il giorno dopo** — piccolo, prodotto; trovata da W in E1b,
+  girata a X dal coordinatore il 15/10, valutata da X lo stesso giorno, fuori dal CP10. Il refresh chiede la storia fino
+  a ieri (`services/assets/refresh.py:227`, `history_end = today - 1` quando `end >= today`), e gli eventi arrivano
+  solo con la storia: un dividendo o uno split con la data di oggi entra il giorno dopo.
+  - **Perché c'è il taglio**: protegge i prezzi. La chiusura di oggi non c'è ancora, e il valore di oggi arriva da
+    `get_current_value`.
+  - **Gli eventi non hanno questa ragione**: una data di stacco annunciata è un fatto. Restano legati al taglio solo
+    perché viaggiano nella stessa chiamata.
+  - **Effetto**: nessun errore di valore. Uno split sposta le posizioni solo con la transazione ADJUSTMENT legata
+    all'evento (`portfolio/engine.py:213-223`). Ritarda di un giorno la comparsa dell'evento, il suo collegamento da una
+    transazione e i dati di AI Export.
+  - **Cura proposta**: chiedere la storia fino a oggi e scartare il prezzo di oggi prima della cache e della scrittura,
+    tenendo gli eventi fino a oggi. Va rivisto il calcolo della copertura della cache (`dates`), che non deve contare
+    oggi. Va verificato per ogni plugin che `end_date` sia inclusivo, e con `scheduled_investment`, che i punti futuri
+    li genera da sé.
+  - Un lotto con un test di regressione su `mockprov`, dopo X1–X8, che toccano lo stesso percorso.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», nota su X-R12.
+- **X-R13 · La pagina dell'asset calcola ancora `emoji` per il grafico dei settori** — minimo, frontend; dal programma
+  colori (DV-3, innocua), girata a X dal coordinatore il 15/10. Con DV il campo `emoji` di `AllocationEntry` sparisce,
+  ma `routes/(app)/assets/[id]/+page.svelte:3496` (su `dev_release2`, il `map` dei dati di `AllocationPieChart` per i
+  settori) lo calcola ancora: un dato morto, che `front check` non vede. Da togliere nel FE5c, col taglio della pagina.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», note della sera.
 
 ## W · Import e transazioni (fase 01)
 
@@ -3290,6 +3326,15 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 
   Le variabili esistono da Z7a ma non hanno effetto finché X non aggancia il confine (X1–X4): la doc va scritta con
   l'aggancio. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7a», passo 5.
+- **Z-10 · Ctrl+C su `./dev.py server` uccide il server dopo 0,25 s** — basso; docs-writer di Z, 15/10 (Z6b), letto nel
+  codice e non provato. `run_command_live` (`scripts/cli_base.py:455`) usa `subprocess.run`, che a un
+  `KeyboardInterrupt` aspetta il figlio 0,25 s e poi lo uccide con SIGKILL. Con `--no-reload` o `--workers` il figlio è
+  il server stesso, che muore senza il suo spegnimento: niente budget, worker BRIM orfani, scritture tagliate. Con
+  `--reload` muore solo il supervisore, e il server vero ha già ricevuto il suo SIGINT dal terminale. Docker e il
+  runner non c'entrano. Cura possibile: in `run_command_live`, un `Popen` che dopo il Ctrl+C aspetta il figlio fino al
+  budget più un margine. Superficie del coordinatore. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z6b — spegnimento con un tempo
+  massimo».
 
 ## B · Backup e Docker (fase 01)
 
@@ -3414,10 +3459,13 @@ da Y il 15/10.
 - **Le voci di Y vivono nelle loro sezioni** (C-85, C-62 e C-38 nella C; B10, 47-1, 48-1 e 54-1 nella I; T-U8 e
   T-FE2…FE11 nella T; K-13, K-15, C-15, C-34, I-01, I-03 e O-16 nel backlog 38; i difetti 2 e 5 nel README della 13):
   le chiude il coordinatore a ogni treno. Stato all'analisi e lotto di ciascuna: piano di Y, §2.
-- **Y-1 · I-03 è curata solo a metà** — basso; Y, 15/10 (analisi). Il ripiego da % ad Abs scatta solo per la vista %
-  ripristinata al caricamento (`GrowthChart.svelte:785-789`, dal 24/09); cambiando periodo o broker verso una storia
-  senza dati in percentuale, il bottone resta premuto e disabilitato (`:2539-2546`). Da confermare nel browser, nel lotto
-  Y8. Dettagli: piano di Y, §2.
+- ✅ **Y-1 · I-03 è curata solo a metà** — chiusa da Y8 il 15/10 (commit al checkpoint di Y8): un `$effect`, a ogni
+  caricamento finito, ripiega da `%` ad Abs quando la storia non ha dati in percentuale, e torna al `%` quando li
+  ritrova, salvo una scelta esplicita nel frattempo. Rosso prima in `GrowthChart.test.ts` («% view without % data,
+  after every load»); provata in Vitest, non ancora nel browser. Era: basso; Y, 15/10 (analisi). Il ripiego da % ad Abs
+  scattava solo per la vista % ripristinata al caricamento (`GrowthChart.svelte:785-789`, dal 24/09); cambiando periodo
+  o broker verso una storia senza dati in percentuale, il bottone restava premuto e disabilitato (`:2539-2546`).
+  Dettagli: piano di Y, §2 e §7 «Y8 — passo 2».
 - **Y-2 · Nella cascata settimanale una linea di broker che finisce a metà settimana diventa un buco** — basso, da
   verificare; `test-author` di Y, 15/10 (Y1). Comportamento preesistente, spostato alla lettera in
   `dashboard/growthChartData.ts` (`aggregateMetric`): il valore di un secchio si cerca sull'ultimo giorno della settimana
@@ -3442,3 +3490,23 @@ da Y il 15/10.
   15/10. `dashboard/AllocationPanel.svelte:65` (`toAllocEntries`) mette `emoji` in ogni voce, e il tipo `AllocEntry`
   (`:23`) lo dichiara: dopo l'ingresso di DV la torta non lo legge più, quindi è un dato morto. Da togliere in Y10,
   dopo DV. Dettagli: piano di Y, §2.
+- **Y-7 · Dopo Y4a le primitive dei grafici importeranno dalla feature dei segnali** — medio-basso; Y (analisi di Y3 e
+  Y4), approvata come residuo dal coordinatore, 15/10 (D-Y15).
+  - Con `lib/charts` in `features/signals`, restano fuori i generici: `LineChart`, `CandlestickChart`,
+    `PriceChartCompact`, `PriceChartFull`, `chartCoreHelpers`, `lineChartHelpers`, `priceChartHelpers`,
+    `timeSeriesAggregation` di `components/charts`, e `stores/chartSettingsStore`.
+  - Questi importano da `$lib/features/signals`: quasi solo `type RenderedSignal`, più `signalLabelToHtml` e, in
+    `priceChartHelpers`, `backendSignalSchemas` e `getBackendSignalProblem`.
+  - È un'inversione di livello: la UI generica dipende da una feature.
+  - Da chiudere in FE9, spostando il contratto fra grafico e segnale in `components/charts` o in un modulo neutro.
+  - Dettagli: piano di Y, §0.3 e §7 «Y3 e Y4 — analisi».
+- **Y-8 · `updateArrowRotations()` legge `getOption()` a ogni passo dello zoom** — basso, prestazioni; `test-author` di
+  Y, 15/10 (Y8). `charts/lineChartHelpers.ts:594` chiama `chart.getOption()`, che clona tutta l'opzione, e i tre
+  gestori di `dataZoom` la chiamano a ogni passo del gesto: `LineChart.svelte:399`, `CandlestickChart.svelte:290` e
+  `PriceChartFull.svelte:612`.
+  - Contraddice la nota di `PriceChartFull.svelte:604-609` («do NOT read chartInstance.getOption() here»), scritta
+    proprio contro gli scatti sui grafici con anni di dati giornalieri.
+  - È preesistente, e 47-1 non la peggiora: le sue letture aspettano che il gesto si fermi.
+  - Prima un rosso che conti le chiamate a `getOption()` per passo; poi la rotazione delle frecce letta in altro modo,
+    o rinviata come le etichette.
+  - Dettagli: piano di Y, §7 «Y8 — passo 3».

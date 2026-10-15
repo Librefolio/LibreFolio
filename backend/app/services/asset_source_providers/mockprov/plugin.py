@@ -6,6 +6,10 @@ It's registered in the provider registry for testing the asset source framework
 without external dependencies.
 
 WARNING: This provider is for TESTING ONLY. Do not use in production code.
+
+It declares one plugin setting of every kind (system and user, plain and secret), so that the settings infrastructure is
+exercised end to end. Searching for ``SETTINGS_ECHO_QUERY`` answers with one item that describes the settings the call
+received: the plain values, and for each secret only whether it is set — never its value.
 """
 
 from datetime import date, timedelta
@@ -27,7 +31,11 @@ from backend.app.schemas.prices import (
 )
 from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
 from backend.app.services.provider_registry import register_provider
+
+#: The search query that makes the mock describe the settings it received.
+SETTINGS_ECHO_QUERY = "lf-settings-echo"
 
 
 @register_provider(AssetProviderRegistry)
@@ -37,6 +45,39 @@ class MockProvider(AssetSourceProvider):
 
     WARNING: FOR TESTING ONLY - DO NOT USE IN PRODUCTION
     """
+
+    test_only = True
+    settings_fields = (
+        PluginSettingField(
+            key="api_key",
+            type=SettingType.STRING,
+            scope=SettingScope.SYSTEM,
+            secret=True,
+            label="API key (testing)",
+            description="A secret the tests set: the mock only reports whether it is set.",
+            env="LIBREFOLIO_MOCKPROV_API_KEY",
+        ),
+        PluginSettingField(
+            key="region",
+            type=SettingType.SELECT,
+            scope=SettingScope.SYSTEM,
+            label="Region (testing)",
+            default="eu",
+            options=(SettingOption("eu", "Europe"), SettingOption("us", "United States")),
+        ),
+        PluginSettingField(key="price_tolerance", type=SettingType.NUMBER, scope=SettingScope.SYSTEM, label="Price tolerance (testing)", default=0.5, minimum=0, maximum=10),
+        PluginSettingField(key="verbose", type=SettingType.BOOLEAN, scope=SettingScope.SYSTEM, label="Verbose (testing)", default=False),
+        PluginSettingField(
+            key="preferred_language",
+            type=SettingType.SELECT,
+            scope=SettingScope.USER,
+            label="Preferred language (testing)",
+            default="all",
+            options=(SettingOption("all", "All"), SettingOption("it", "Italian"), SettingOption("en", "English")),
+        ),
+        PluginSettingField(key="results_limit", type=SettingType.INTEGER, scope=SettingScope.USER, label="Results limit (testing)", default=10, minimum=1, maximum=50),
+        PluginSettingField(key="personal_token", type=SettingType.STRING, scope=SettingScope.USER, secret=True, label="Personal token (testing)"),
+    )
 
     @property
     def provider_code(self) -> str:
@@ -133,7 +174,11 @@ class MockProvider(AssetSourceProvider):
     async def search(self, query: str) -> list[dict]:
         """
         Mock search - returns dummy result for any query.
+
+        ``SETTINGS_ECHO_QUERY`` returns one item whose display name describes the settings this call received.
         """
+        if query == SETTINGS_ECHO_QUERY:
+            return [{"identifier": "MOCK_SETTINGS", "identifier_type": IdentifierType.TICKER, "display_name": self._settings_summary(), "currency": "USD", "type": "MOCK"}]
         return [
             {
                 "identifier": f"MOCK_{query.upper()}",
@@ -143,6 +188,16 @@ class MockProvider(AssetSourceProvider):
                 "type": "MOCK",
             }
         ]
+
+    def _settings_summary(self) -> str:
+        """The settings of this call, in a stable order: plain values as they are, secrets only as set or unset."""
+        parts = []
+        for declared in self.settings_fields:
+            if declared.secret:
+                parts.append(f"{declared.key}={'set' if self.settings.secret(declared.key) else 'unset'}")
+            else:
+                parts.append(f"{declared.key}={self.settings.get(declared.key)}")
+        return "settings: " + "; ".join(parts)
 
     def validate_params(self, params: Dict | None) -> None:
         """

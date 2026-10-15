@@ -3340,7 +3340,7 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   dello snapshot del runner).
 > - Handoff d'ingresso mandato; stato **FROZEN** fino all'ingresso e al via di A6d.
 
-### A6d — Decisione 36: registrazione su invito per le istanze nuove, impostazioni globali solo con il login — in attesa del via (dopo l'ingresso di A6b)
+### A6d — Decisione 36: registrazione su invito per le istanze nuove, impostazioni globali solo con il login — in corso
 
 #### A6d.0 — Analisi e risposte del coordinatore ✅ (2026-10-15)
 > **La decisione 36** (dal coordinatore):
@@ -3407,3 +3407,187 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   3. corpi e rotte in `fixtures/galleryUsers.ts`: rimandato ad A-18, quando lo scatto si ricontrolla comunque.
 >   - `tsc -p tsconfig.e2e.json` sulla revisione combinata (HEAD `97fb199f1`, con il client generato dal mio
 >     `api sync`): i soli 2 errori di base (`e2e/onboarding-tour.spec.ts:863`, `src/lib/types/files.ts:9`).
+
+#### A6d.1 — Via, base e vincoli ✅ (2026-10-15, 20:30)
+> - **Via del coordinatore** (20:30): A6b è entrato (`dev_release2` = `09ca36b9d`, CHANGELOG `e4edb39a2`). HEAD =
+>   `e4edb39a2` = base, worktree pulito. Testa di Alembic: `006_registration_mode`.
+> - **Le risposte**:
+>   1. `populate_mock_data.py` scrive `registration_mode=open`; la guardia di `conftest.py` (L81-92) forza `open` anche
+>      quando la riga manca. File condivisi assegnati a me: li dichiaro.
+>   2. `DEFAULT_INSTANCE_CONFIG` resta `open`; il lampo di «Register here» va nel backlog (A-19).
+>   3. Il ripiego di `effective_registration_mode` e la docstring di `models.py` seguono il default unico.
+>   4. `first_account_open` facoltativo, default `false`.
+>   5. Migrazione per ultima, sulla testa che trovo: X entra a breve con la 007.
+> - **Prove chieste**: rossi prima; `core-unit`; E2E `auth`, `auth-links` e `settings`; `all-backend` su richiesta.
+> - **In più** (coordinatore, 20:30, da E): `black` fallisce su `scripts/test_runner/_backend_services.py`, il
+>   `print_info` di `services_account_deletion_preview` (305 caratteri, da `5928176cf`): va spezzato in questo lotto
+>   (A-20).
+> - Carico della macchina ~168: lavoro leggero, un comando alla volta, `nice -n 10`.
+
+#### A6d.2 — Contratto ✅ (2026-10-15)
+> **Verificato** in sola lettura su `b4597efad` e poi su `e4edb39a2`:
+> - `get_setting_value` ripiega già su `GLOBAL_SETTINGS_DEFAULTS`: il `"open"` letterale di
+>   `effective_registration_mode` (`registration_service.py:87`) non si usa mai, e inganna.
+> - La corsia è `open` solo perché il default lo è: `populate_mock_data.py` non scrive impostazioni globali, e la
+>   guardia di `conftest.py` inserisce il default mancante e calcola `registration_closed` prima dell'inserimento.
+> - `test_instance_block.py` registra i suoi utenti sul DB della corsia: regge finché la corsia resta `open`.
+> - EMA-022 di E legge solo `["email"]`: il campo nuovo non lo tocca.
+> - Nessuna chiave i18n: K-5 si chiude con il flag (il link compare su un'istanza vuota in ogni modalità), e
+>   l'etichetta «Crea l'account amministratore» di §4.7 non serve più.
+>
+> **Il contratto**:
+> - **C1 · Default `invite`**: `GLOBAL_SETTINGS_DEFAULTS["registration_mode"]` vale `invite`. Un'installazione nuova lo
+>   semina con `value_type` `str`; senza riga e senza variabile `effective_registration_mode` dà `invite`, non bloccato.
+>   Una riga presente non cambia mai.
+> - **C2 · Il primo account**: su un'istanza senza account si crea comunque, admin, in ogni modalità (già oggi). Dopo,
+>   in `invite` una registrazione senza invito risponde 403 `INVITE_REQUIRED`.
+> - **C3 · `accounts.first_account_open`** in `GET /system/instance`: `true` se e solo se `users` è vuota (un account
+>   disattivo conta; l'admin in attesa di F02, con A7, è una riga di `users`). Facoltativo, default `false`. Pubblico:
+>   lo dice `security.md`.
+> - **C4 · Impostazioni globali con il login**: `GET /settings/global` e `GET /settings/global/{key}` rispondono 401
+>   `{"detail": "Not authenticated"}` senza sessione o con una sessione falsa; 200, con lo stesso corpo di prima, a ogni
+>   utente con il login, admin o no. Le scritture restano admin. Su un'istanza bloccata valgono le regole delle rotte
+>   protette (401 a chi non ha sessione, 423 a chi ce l'ha).
+> - **C5 · La corsia resta `open`**: `populate_mock_data.py` scrive (upsert) `registration_mode=open`; la guardia di
+>   `conftest.py`, se la riga manca, la inserisce `open`, e rimette `open` ogni altro valore, come prima.
+> - **C6 · `LoginCard`**: «Register here» se `registration_mode === 'open'` **o** `first_account_open === true`. Prima
+>   della risposta, i default (`open`): il link c'è, come oggi.
+> - **C7 · `GlobalSettingsTab`**: `SETTING_DEFAULTS.registration_mode` = `invite`; «Reset all» manda `invite`.
+> - **C8 · Il default unico**: niente ripiego letterale in `effective_registration_mode`; la docstring di `models.py`
+>   dice `invite`.
+> - **C9 · Migrazione** (ultimo passo, sulla testa che trovo; nome `0NN_registration_invite_default`, 31 caratteri): solo
+>   dati, idempotente. Se manca la riga `registration_mode` e `users` ha almeno un account, scrive `open` (`str`, la
+>   descrizione congelata, `updated_by_user_id` nullo). Se la riga c'è, non la tocca; senza account non scrive niente.
+>   Downgrade: nessuna operazione, documentata (la riga `open` è il default di prima).
+> - **C10 · A-20**: il `print_info` sotto i 300 caratteri, nello stile di `black`.
+>
+> **Superfici dichiarate** (file non miei o condivisi):
+> - `backend/test_scripts/conftest.py`, `backend/test_scripts/test_db/populate_mock_data.py`: assegnati dal coordinatore;
+> - `backend/test_scripts/test_api/test_instance_block.py` (il parametro `/settings/global` passa da
+>   `PUBLIC_READS_OUTSIDE_THE_LIST` a `REFUSED_READS`) e la docstring di `backend/app/api/v1/instance_block.py`: di H,
+>   approvati;
+> - `frontend/e2e/fixtures/instance-config.ts`: mio di A5b, con `plainInstanceConfig` di G; solo un'opzione in più a
+>   `serveRegistrationMode`;
+> - `scripts/test_runner/_backend_services.py` (A-20) e `_backend_db.py` (la registrazione della migrazione, alla fine).
+>
+> **Categorie**: `LoginCard.test.ts` e `GlobalSettingsTab.test.ts` stanno in `component-unit`; `instanceConfig.test.ts`
+> in `core-unit`.
+
+#### A6d.3 — Test rossi (tre `test-author` in parallelo, solo scrittura) ✅ (2026-10-15)
+> - **B1** (default e primo account): `test_registration_service.py`, `test_global_settings_service.py`,
+>   `test_registration_api.py`, `test_auth_api.py` (LOOP-002: riga `open` esplicita). Spazzati senza cambi:
+>   `test_users_admin_api.py`, `test_account_deletion_api.py`.
+>   - Nuovi: il caso C2 di servizio; SETTING-002 (la semina non tocca una riga che c'è); FIRST-001…005 (istanza
+>     vuota: `invite` e `first_account_open`; il primo account admin, il secondo 403 `INVITE_REQUIRED`; il flag in ogni
+>     modalità, dalla riga o dalla variabile; un account disattivo conta; un cookie falso non cambia niente).
+>   - Riscritti: SETTING-001 (legge la riga dal DB: la GET vuole il login), LOCK-001, URL-001, INSTANCE-001/002, e i
+>     casi che contavano su «nessuna riga = open» (riga `open` esplicita).
+>   - Le risposte ai suoi dubbi: con una `LIBREFOLIO_REGISTRATION` non valida su un'istanza vuota il flag resta `true`
+>     (la regola del primo account del backend); la corsia lasciata `disabled` da `services global-settings` (già
+>     così) la ripara la guardia di C5, che ora inserisce `open`.
+> - **B2** (letture e forma): `test_settings_api.py` (GSET-001/003 con un utente normale; GSET-002, 002b, 002c: 401
+>   come `GET /settings/user`, anche per una chiave che non esiste e con un cookie falso), `test_system_api.py` (tre
+>   chiavi in `accounts`; nuovo: il flag facoltativo e `false` per default, anche nell'OpenAPI, come EMA-022),
+>   `test_instance_block.py` (il parametro spostato). `test_uploads_api.py` fa già il login: invariato.
+>   - Il 401 con un cookie falso ha il corpo di `get_current_user` («Session expired or invalid»), non «Not
+>     authenticated»: GSET-002c chiede lo stesso corpo di `GET /settings/user`. Corretto.
+> - **F1** (frontend): `LoginCard.test.ts` (il flag con `invite` e `disabled`, `false` esplicito, `open` con `false`,
+>   il cambio senza rimontare), `GlobalSettingsTab.test.ts` («Reset all» e il reset di riga propongono `invite`; i casi
+>   bloccati partono da `open`), `fixtures/instance-config.ts` (opzione `firstAccountOpen`, solo in aggiunta),
+>   `auth.spec.ts` (due caricamenti `invite` che differiscono solo per il flag).
+>   - Il limite noto: la scheda non dice quando ha applicato la risposta, quindi il caricamento con `true` può passare
+>     per caso nel rosso (finestra di un poll). Va con A-19 (uno stato `data-*` sulla scheda).
+> - **Fuori pista — `settings/scheduler.spec.ts`** (segnalato da B2): FSCH-006 e FSCH-006b leggono
+>   `GET /settings/global` con il `request` di Playwright prima del login (nessun `storageState`): dopo A6d sarebbe
+>   401. Riparazione affidata a F1 (lettura con un contesto API con il login, senza dipendere dal browser). In più la
+>   docstring del modulo `test_instance_block.py` (L9-10) elencava le impostazioni globali fra le rotte pubbliche:
+>   tolte, dichiarato.
+> - **Rossi osservati** (corsia 6182, `nice -n 10`, log in `/tmp/libreFolio_a6d/logs/`):
+>   - `services registration`: ❌ 3 su 147, i tre attesi (il registro, `no-row-no-variable-is-invite`, il caso C2);
+>   - `services global-settings`: ❌ 1 su 19, `test_registration_mode_default`;
+>   - `db populate --force` ✅;
+>   - `api registration`: ❌ 21 su 77, i 21 attesi (FIRST-*, INSTANCE-*, SETTING-001, LOCK-001, URL-001).
+>   - Fermati dalla seconda pausa del coordinatore (21:00–21:25), con la corsia ferma. Dopo la ripresa (21:09):
+>   - `api auth`: ✅ 60 (lo spazzamento di B1 non rompe niente);
+>   - `api settings`: ❌ 3 su 97, GSET-002, 002b, 002c;
+>   - `api system`: ❌ 6 su 118, le due letture vive, i tre profili in processo, il nuovo caso del flag facoltativo;
+>   - `api instance-block`: ❌ 2 su 62, `global-settings` senza cookie e con un cookie falso;
+>   - Vitest `LoginCard` e `GlobalSettingsTab`: ❌ 6 su 132, i tre casi del flag e i tre del reset a `invite`;
+>   - E2E `auth` (`--workers 2`): ❌ 1 su 34, il nuovo caso A6d, sulla sua precondizione («the stub could not answer
+>     … first_account_open false»: il backend non ha ancora il campo).
+> - **Interruzione**: il coordinatore manda prima G-15, un lotto piccolo sulla barra delle schede di Settings (sotto).
+>   A6d riprende da A6d.4, applicare l'implementazione (bozza pronta: `/tmp/libreFolio_a6d/apply_a6d.py`).
+
+### G-15 — Settings: la barra delle schede non taglia più l'ultima scheda — lotto piccolo, prima di riprendere A6d
+
+#### G-15.0 — Richiesta e analisi ✅ (2026-10-15, 21:25)
+> - **Dal coordinatore** (trovato da G nel doppio lancio, da correggere prima di G-13): con le 7 schede dell'admin, su
+>   desktop a 1280 px e in spagnolo, «Copia de seguridad» spinge «Correo» fuori dal bordo (se ne vede la «C», anche da
+>   attiva); fra 640 e ~1200 px anche in altre lingue (stima di G). La card della barra in
+>   `routes/(app)/settings/+page.svelte` ha `overflow-hidden` e `TabBar` non scorre: la scheda si raggiunge solo con
+>   `?tab=` o con la tastiera. Proposta: `shrinkLabelsToFit`; se non basta a 640 px, lo scorrimento orizzontale con la
+>   scheda attiva sempre in vista. Facoltativo: nello scatto mobile `settings/users` il pannello aperto di marco è
+>   tagliato sotto la piega → `frameTarget` sulla riga.
+> - **Verificato sul codice**:
+>   - sopra `sm` i bottoni di `TabBar` hanno la larghezza naturale (`flex-1 sm:flex-none`): la riga è più larga della
+>     card (stima in spagnolo a 1280 px: ~1030 px per 7 schede contro ~960 disponibili), e la card la taglia;
+>   - `shrinkLabelsToFit` da solo non basta: misura il riquadro del bottone stesso, che con la larghezza naturale
+>     contiene sempre la sua etichetta, quindi non rimpicciolisce mai; e anche al suo minimo (0,75) sette etichette non
+>     stanno in 640 px in nessuna lingua;
+>   - `fillWidth` romperebbe il gruppo di destra (`sm:ml-auto` della scheda admin: con `flex-1` non resta spazio).
+> - **Il disegno**: `TabBar` ha una prop nuova, `scrollable`, facoltativa (default `false`: gli altri 5 usi di `TabBar`
+>   non cambiano, markup identico).
+>   - Con `scrollable`, la riga sta in un contenitore che scorre di lato (`overflow-x-auto`, barra sottile); la riga è
+>     `min-w-full w-max`, così il `ml-auto` del gruppo di destra spinge ancora quando c'è spazio.
+>   - La scheda attiva resta intera in vista: alla scelta, al ridimensionamento e al cambio di lingua scorre solo il
+>     contenitore (`scrollLeft`), mai la pagina. Una scheda raggiunta con la tastiera la porta in vista il browser.
+>   - Settings passa `scrollable`. Nessuna classe di colore cambia (il ratchet dei colori resta uguale).
+> - **Prove** (rosse prima): E2E in `e2e/settings.spec.ts` (admin, spagnolo dal selettore della lingua, che scrive solo
+>   in `localStorage`; 1280 e 640 px): con `?tab=email` la scheda Email sta intera dentro la barra; ogni scheda o sta
+>   nella barra o la barra si può scorrere, e una volta scelta è intera in vista. Vitest `TabBar.test.ts`: senza
+>   `scrollable` nessun contenitore in più; con `scrollable` la scheda attiva oltre il bordo fa scorrere il contenitore
+>   della differenza. Poi `theme-roles --check`, `front check`, Vitest `TabBar` e `page.tabs`, E2E `settings`,
+>   `core-unit` (slot).
+> - **Galleria**: `frameTarget` sulla riga di marco nello scatto mobile `settings/users`, dichiarato. Gli scatti desktop
+>   spagnoli di Settings e quelli mobile di `users` li rifà G-13.
+> - **Commit**: separato da A6d (i file di G-15 non toccano quelli di A6d).
+
+#### G-15.1 — Rossi, implementazione, prove ✅ (2026-10-15, 21:30–22:05)
+> - **Rossi** (un `test-author`, solo scrittura):
+>   - Vitest `TabBar.test.ts`, describe «scrollable (G-15)»: due guardie (senza `scrollable` nessun contenitore e
+>     nessuno scorrimento) e 8 casi del contenitore e del riposizionamento (al montaggio, al cambio di scheda da prop e
+>     da clic, una scheda già dentro, il bordo sinistro, il ridimensionamento, il cambio delle etichette), ognuno senza
+>     scorrere la pagina. ❌ 8 su 16, i previsti.
+>   - E2E `settings.spec.ts`, describe «G-15»: admin, spagnolo dal selettore (solo `localStorage`), 1280×800 e
+>     640×800; la scheda aperta con `?tab=email` sta intera nella barra; ogni scheda o sta nella barra o la barra scorre
+>     fino a lei, e scelta sta intera in vista. ❌ 4 su 4: a 1280 Email tagliata, a 640 Users ed Email.
+> - **Implementazione** (bozza `/tmp/libreFolio_g15/apply_g15.py`): `TabBar` con `scrollable` (uno snippet per la riga,
+>   avvolta nel contenitore solo con la prop; `revealActiveTab()` sposta solo `scrollLeft`; ResizeObserver sul
+>   contenitore e sulla riga, `requestAnimationFrame` al cambio di scheda o di etichette); Settings passa `scrollable`;
+>   nello scatto mobile `settings/users`, `frameTarget` sulla riga di marco.
+>   - **Fuori pista** (dal rapporto del test-author): niente `cancelAnimationFrame` (jsdom potrebbe non averlo, e il
+>     riposizionamento si può ripetere senza danno); il ResizeObserver guarda anche la riga, che può allargarsi senza
+>     che la barra cambi (un font che arriva tardi).
+> - **Verdi**: Vitest `TabBar`, `page.tabs`, `settingsTabs` ✅ 57; `theme-roles --check` pulito; `front check` 0 errori, 0
+>   avvisi; `tsc` degli e2e con i soli 2 errori di base; E2E `settings` (`--workers 2`) ✅ 50 su 50.
+> - **Fuori pista — `scrollable` invece di `shrinkLabelsToFit`** (approvato dal coordinatore, 22:04): la proposta era
+>   `shrinkLabelsToFit`, ma misura il riquadro del bottone stesso, che con la larghezza naturale contiene sempre la sua
+>   etichetta, quindi non rimpicciolisce mai; e al suo minimo (0,75) sette etichette non stanno in 640 px. Il
+>   coordinatore aveva previsto lo scorrimento come ripiego: è diventato la cura.
+> - **`core-unit`** (slot del coordinatore, 22:04, `nice -n 10`): ✅ 5139 su 157 file, 56 s.
+>   - **Correzione**: `TabBar.test.ts` e `page.tabs.test.ts` stanno in `component-unit`, non in `core-unit` (come
+>     avevo scritto al coordinatore): li ho lanciati da soli, ✅ 57 con `settingsTabs`. `component-unit` intera non è
+>     stata lanciata: la decide il coordinatore.
+> - **Doc**: `docs-writer` su dev `features/settings.md` (la barra) e `core-ui/toolbar.md` (la prop `scrollable`).
+
+#### G-15.2 — Doc e handoff FROZEN ✅ (2026-10-15, 22:10)
+> - **Doc** (`docs-writer`): dev `features/settings.md` (la barra è `scrollable`, con il rimando) e `core-ui/toolbar.md`
+>   (sezione nuova `#tabbar-scrollable`: facoltativa, cosa fa, perché non `shrinkLabelsToFit` né `fillWidth`; un arco nel
+>   mermaid verso Settings). `mkdocs build` strict ✅, `check-links` ✅ 96. Pagine solo inglesi: nessun debito.
+> - **Handoff**: i 7 file di G-15 (`TabBar.svelte`, `TabBar.test.ts`, `settings/+page.svelte`, `e2e/settings.spec.ts`,
+>   `e2e/gallery.spec.ts`, le due pagine) separati dai file di A6d; `git diff --check` pulito; porta 6182 libera.
+> - **Per riprendere A6d** (proposto al coordinatore): `dev_release2` (`209dc6bec`) ha la 007 di X e tocca
+>   `test_system_api.py` (E3: la forma di `email`), che è anche fra i miei rossi non committati; un merge della base li
+>   troverebbe sporchi. Sequenza proposta: commit di G-15, checkpoint dei rossi di A6d, aggiornamento della base,
+>   poi l'implementazione di A6d sui file aggiornati (la bozza combacia ancora: le righe toccate da E3 in `instance.py`
+>   non sono le mie) e la 008 sopra la 007.

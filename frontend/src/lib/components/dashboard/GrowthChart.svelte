@@ -126,8 +126,8 @@
     // picker is rendered (data-testid growth-pnl-submode-*); 'candles' is where the
     // synthetic OHLC series is shown.
     let pnlSubmode: PnlSubmode = $state(restoredSubmode);
-    /** A restored % view still has to be checked against the loaded history (see below). */
-    let restoredPctUnchecked = restoredMode === 'pct';
+    /** The view fell back from % to Abs because the loaded history has no % data (see the effect below). */
+    let pctFallback = false;
 
     function isIncomeView(): boolean {
         return viewMode === 'pnl' && pnlSubmode === 'income';
@@ -136,7 +136,7 @@
     function selectMode(mode: GrowthMode) {
         const wasIncome = isIncomeView();
         viewMode = mode;
-        restoredPctUnchecked = false;
+        pctFallback = false;
         setUserStorage(MODE_STORAGE_KEY, mode);
         if (!wasIncome && isIncomeView()) incomeOpeningPending = true;
     }
@@ -560,13 +560,19 @@
     const hasPctData = $derived(history.some((pt) => pt.mwrr_cumulative != null || pt.twrr != null || pt.roi != null));
     const hasNonZeroPctData = $derived(history.some((pt) => Number(pt.mwrr_cumulative ?? 0) !== 0 || Number(pt.twrr ?? 0) !== 0 || Number(pt.roi ?? 0) !== 0));
 
-    // The % button is disabled without % data, so a restored % view must not outlive the
-    // first completed load that has none. It falls back to Abs for display only: the stored
-    // choice is kept, and comes back once the history can draw it.
+    // The % button is disabled without % data, so a % view must not outlive a completed load that has none — a %
+    // view restored from storage, or one the user picked before switching to a period or a broker without %
+    // (I-03). It falls back to Abs for display only: the stored choice is kept, and the view returns to % once
+    // a loaded history can draw it again, unless the user has picked another mode meanwhile (`selectMode`).
     $effect(() => {
-        if (!restoredPctUnchecked || loading) return;
-        restoredPctUnchecked = false;
-        if (!hasPctData) viewMode = 'eur';
+        if (loading) return;
+        if (viewMode === 'pct' && !hasPctData) {
+            viewMode = 'eur';
+            pctFallback = true;
+        } else if (pctFallback && hasPctData) {
+            pctFallback = false;
+            viewMode = 'pct';
+        }
     });
 
     function resetResolutionState(preservedRange: GrowthLogicalRange | null = null) {
