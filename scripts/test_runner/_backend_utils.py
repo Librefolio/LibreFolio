@@ -115,6 +115,15 @@ def utils_cache_utils(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Cache utils tests", verbose=verbose)
 
 
+def utils_rate_window(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the sliding-window limiter shared by the e-mail budget and the login limits."""
+    print_section("Utils: Rate Window")
+    print_info("Testing: backend/app/utils/runtime/rate_window.py")
+    print_info("Tests: window edge, peek never counts, refused hits not recorded, retry_after, per-call limit, independent keys, LRU eviction, thread safety (fake clock, no sleeps)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_rate_window.py", test_names)
+    return run_command(cmd, "Rate window tests", verbose=verbose)
+
+
 def utils_provider_core_cache(verbose: bool = False, test_names: list = None) -> bool:
     """Test provider core cache & thread isolation infrastructure."""
     print_section("Utils: Provider Core Cache & Thread Isolation")
@@ -203,6 +212,15 @@ def utils_dev_cli_image(verbose: bool = False, test_names: list = None) -> bool:
     print_info("Tests: help and user commands run, unavailable groups say so and exit 2, password reset on a temporary DB, the role user create and create-user give an account (L12)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_cli_image.py", test_names)
     return run_command(cmd, "dev.py image tests", verbose=verbose)
+
+
+def utils_dev_cli_docker(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Docker lot (CP7a): the image's packages and port, the compose files, docker exec, and one version per image build."""
+    print_section("Utils: dev.py docker commands and the image contract")
+    print_info("Testing: Dockerfile, docker-compose*.yml, dev.py cmd_docker_exec, _docker_frontend_stale_reason, _docker_ensure_frontend_built, _docker_ensure_assets_built, _get_docker_tag, cmd_docker_build, _check_env_file")
+    print_info('Tests: tzdata-legacy, EXPOSE and compose ports, compose environment, exec through gosu and "$@", the frozen version in the bundle, VERSION and the tag')
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_cli_docker.py", test_names)
+    return run_command(cmd, "dev.py docker tests", verbose=verbose)
 
 
 def utils_gate_i18n_usage(verbose: bool = False, test_names: list = None) -> bool:
@@ -438,6 +456,15 @@ Tests for utility modules and helper functions:
     add_test(cat, "cache-utils", utils_cache_utils, name="Cache Utils", desc="NamedCache, TTL, registry, stats")
     add_test(
         cat,
+        "rate-window",
+        utils_rate_window,
+        name="Rate Window",
+        desc="SlidingWindowLimiter: a hit counts until exactly window_seconds later, peek never counts, a refused hit records nothing, retry_after waits for enough hits to leave (per-call limit too), independent keys with None among them, reset/clear/len, LRU eviction at max_keys, exactly N allowed under concurrent threads",
+        # PURE: no lane DB, no server, no environment read; an injected fake clock, threads of its own, no sleeps.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "container-registry",
         utils_container_registry,
         name="Container Registry",
@@ -487,6 +514,18 @@ Tests for utility modules and helper functions:
         desc="dev.py on a copy of the image's /app file set (no backend/test_scripts): help, user and db run; test, i18n and mkdocs translate answer «not available in this installation» and exit 2; user create/reset/list on a temporary DB; the role of a created account (L12): user create is an administrator by default and with --role admin, an ordinary account with --role user even alone in an empty DB, an unknown role an argparse error that creates nobody, and user_cli.py create-user an ordinary account (❌ and exit 1 on a weak password or a taken username) while create-superuser stays an administrator; the Dockerfile HEALTHCHECK probes the port the CMD binds, like compose",
         # A copy of the image tree and a temporary DB under tmp_path, dev.py in
         # subprocesses: no lane DB, no server, no network, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "dev-cli-docker",
+        utils_dev_cli_docker,
+        name="dev.py docker commands and the image contract",
+        desc="The Docker lot (CP7a): the final image installs tzdata and tzdata-legacy (P-4); EXPOSE and service librefolio of every compose file publish only the CMD's port, 6040 (C-37); both compose files pin PORT, HOST and LIBREFOLIO_DATA_DIR in environment to what the image binds and mounts (N-8); docker exec runs sh -c 'exec gosu \"${LIBREFOLIO_UID:-1000}:${LIBREFOLIO_GID:-1000}\" python dev.py \"$@\"' sh <args>, each argument one element and verbatim through a real sh, as the ids of the image's ENV or, with neither set, entrypoint.sh's 1000:1000, exit 1 without a command (32-3); docker build freezes the version once, rebuilds the frontend when its sources changed, it is not production, has no recorded version or another one, sets LF_APP_VERSION around that build only and gives it back, records .build-version only on success, writes the same version to VERSION, and tags the image from VERSION, not from a later -dirty git answer (M-25); _check_env_file compares PORT only; each static check with synthetic negative controls",
+        # Reads the Dockerfile, compose files and entrypoint.sh; dev.py loaded in-process with its
+        # commands stood in for, a fake project and build markers under tmp_path,
+        # a local sh with stand-ins for gosu and python: no DB, no server, no
+        # network, no Docker, no repo writes.
         isolation="pure",
     )
     add_test(

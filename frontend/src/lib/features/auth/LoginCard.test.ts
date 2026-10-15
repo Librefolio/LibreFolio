@@ -47,15 +47,28 @@
  * it translated: the identity cannot tell a key that went through `$_` from one
  * printed as it is.
  *
- * The second describe ties «Register here» to the instance setting (K, step
- * 22). Once an admin closes registration (`enable_registration` = 'false') the
- * backend refuses `POST /auth/register` with a 403, yet the card kept offering
- * the link, so the refusal came only after a filled-in form. The contract: on
- * mount the card asks `globalSettings.load()` once (a public read), and draws
- * the register block, the `auth.noAccount` text and `goto-register`, unless the
- * store says closed; open, or the key missing as in an older cache, leaves it.
- * The store is a writable the test holds, reset to open before every test, and
- * `load` is a spy, so every other test mounts the card as on an open instance.
+ * The second describe ties «Register here» to the registration mode of the
+ * instance (accounts lot A5b; it was K, step 22, on the bool setting
+ * `enable_registration`, which A5a replaced). An instance is `open` (anyone),
+ * `invite` (an invitation link) or `disabled` (nobody), and only an open one has
+ * a use for the link: elsewhere the backend refuses `POST /auth/register`
+ * without an invitation, and the refusal came only after a filled-in form. The
+ * contract: on mount the card asks `instanceConfig.load()` once (the public
+ * `GET /system/instance`, the shared request of the page load) and no longer
+ * `globalSettings.load()`; it draws the register block — the `auth.noAccount`
+ * text and `goto-register` — exactly while
+ * `instanceConfig.config.accounts.registration_mode` is `open`. Until the
+ * server answers the store holds `DEFAULT_INSTANCE_CONFIG`, whose mode is
+ * `open`, so the link is there; it goes as soon as an answer says otherwise,
+ * without a remount. The store is a fake with the real one's shape — enumerable
+ * getters over `$state` (`reactiveBox`) and a `load` spy — open before every
+ * test, so every other test mounts the card as on an open instance. The global
+ * settings are still mocked, with the old «closed» value in them: the card must
+ * not read them any more.
+ *
+ * The third describe gives the success message a handle (A5b): `login-success`,
+ * the box the login page fills from a registration or from the flash a link
+ * page left (`authFlash.ts`). Its text is a prop this file passes in.
  *
  * The last describe pins the field icons of the designer's round 1 (workstream
  * T, step T-2): a User beside the username and a Lock beside the password, drawn
@@ -68,6 +81,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick} from 'svelte';
 import {readable, writable} from 'svelte/store';
 import type {AuthError, AuthErrorKey} from '$lib/types';
+import type {InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {cleanup, render, screen} from '$test/component';
 
 // The identity translator: components render i18n keys verbatim, so the tests
@@ -85,20 +99,43 @@ vi.mock('$lib/stores/app/auth', () => ({
     isAuthLoading: readable(false),
 }));
 vi.mock('$app/navigation', () => ({goto: vi.fn()}));
-// `$globalSettings` held by the test: the two parts of the store the card is
-// meant to use, a subscription and `load()`. Open by default, like the store's
-// own default; `load` resolves at once and changes nothing, so what the card
-// shows is whatever the test put in the store.
-const settingsMock = await vi.hoisted(async () => {
-    const {writable} = await import('svelte/store');
+// The instance configuration held by the test: a fake with the real store's shape — enumerable getters over `$state`
+// (`reactiveBox`), so a template reading `instanceConfig.config` re-renders when the test changes it, as it would when
+// the server answers — and a `load` spy that resolves at once. Open before every test (`beforeEach`), like
+// `DEFAULT_INSTANCE_CONFIG`. `globalSettings` is still mocked, holding the old «closed» value: the card must neither
+// follow it nor load it any more.
+const mocks = await vi.hoisted(async () => {
+    const {reactiveBox} = await import('$test/runes.svelte');
+    const accounts = (registration_mode: 'open' | 'invite' | 'disabled', registration_locked = false) => ({registration_mode, registration_locked});
+    const OPEN: InstanceConfig = {profile: 'selfhosted', accounts: accounts('open')};
     return {
-        store: writable<Record<string, unknown>>({enable_registration: true}),
-        load: vi.fn<() => Promise<void>>().mockResolvedValue(undefined).mockName('globalSettings.load'),
+        OPEN,
+        INVITE: {profile: 'selfhosted', accounts: accounts('invite')} as InstanceConfig,
+        DISABLED: {profile: 'selfhosted', accounts: accounts('disabled')} as InstanceConfig,
+        instance: reactiveBox<{config: InstanceConfig}>({config: OPEN}),
+        instanceLoad: vi.fn<(options?: {force?: boolean}) => Promise<void>>().mockName('instanceConfig.load'),
+        settingsLoad: vi.fn<() => Promise<void>>().mockResolvedValue(undefined).mockName('globalSettings.load'),
     };
 });
-vi.mock('$lib/stores/app/globalSettings', () => ({
-    globalSettings: {subscribe: settingsMock.store.subscribe, load: settingsMock.load},
+vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({
+    DEFAULT_INSTANCE_CONFIG: mocks.OPEN,
+    instanceConfig: {
+        get config() {
+            return mocks.instance.config;
+        },
+        get loaded() {
+            return true;
+        },
+        get failed() {
+            return false;
+        },
+        load: mocks.instanceLoad,
+    },
 }));
+vi.mock('$lib/stores/app/globalSettings', async () => {
+    const {readable} = await import('svelte/store');
+    return {globalSettings: {subscribe: readable({enable_registration: false}).subscribe, load: mocks.settingsLoad}};
+});
 
 import LoginCard from './LoginCard.svelte';
 
@@ -110,8 +147,8 @@ const translator = writable<(key: string) => string>(identity);
 const signInError = writable<AuthError | null>(null);
 
 /** Mounts the card and returns the element everything it rendered lives in. */
-function mount(): HTMLElement {
-    return render(LoginCard).container;
+function mount(props: {successMessage?: string} = {}): HTMLElement {
+    return render(LoginCard, props).container;
 }
 
 function field(testId: string): HTMLInputElement {
@@ -143,13 +180,6 @@ function duplicateIds(root: Element): string[] {
     return [...new Set(ids.filter((id, index) => ids.indexOf(id) !== index))];
 }
 
-/** `$globalSettings` on an instance open to registration: the backend's default, and the store's. */
-const REGISTRATION_OPEN = {enable_registration: true};
-/** ...once an admin closed it: `load()` reads the server's `'false'` as `false`. */
-const REGISTRATION_CLOSED = {enable_registration: false};
-/** An object cached before the store knew the field: other settings, no `enable_registration` at all. */
-const CACHED_WITHOUT_THE_KEY = {default_language: 'en', default_currency: 'EUR', default_theme: 'auto'};
-
 type RegisterOffer = Record<'goto-register' | 'auth.noAccount', boolean>;
 const OFFERED: RegisterOffer = {'goto-register': true, 'auth.noAccount': true};
 const WITHDRAWN: RegisterOffer = {'goto-register': false, 'auth.noAccount': false};
@@ -167,9 +197,11 @@ function registerOffer(): RegisterOffer {
 }
 
 beforeEach(() => {
-    // Every test starts on an open instance, with no read of the settings asked yet.
-    settingsMock.store.set({...REGISTRATION_OPEN});
-    settingsMock.load.mockClear();
+    // Every test starts on an open instance, with no read of the configuration or of the settings asked yet.
+    mocks.instance.config = mocks.OPEN;
+    mocks.instanceLoad.mockReset();
+    mocks.instanceLoad.mockResolvedValue(undefined);
+    mocks.settingsLoad.mockClear();
 });
 
 afterEach(cleanup);
@@ -245,9 +277,22 @@ describe("LoginCard — the markup Chrome's password manager reads", () => {
     });
 });
 
-describe('LoginCard — «Register here» follows the instance setting', () => {
-    it('offers no registration once an admin closed it', async () => {
-        settingsMock.store.set(REGISTRATION_CLOSED);
+describe('LoginCard — «Register here» follows the registration mode of the instance (A5b)', () => {
+    it('offers registration while the instance is open', async () => {
+        // And only the instance decides: the mocked global settings still hold `enable_registration: false`, the key
+        // A5a removed, which the card used to follow.
+        mocks.instance.config = mocks.OPEN;
+        mount();
+        await tick();
+
+        expect(registerOffer()).toEqual(OFFERED);
+    });
+
+    it.each([
+        ['invite', mocks.INVITE],
+        ['disabled', mocks.DISABLED],
+    ])('offers no registration on an instance whose mode is %s', async (_mode, config) => {
+        mocks.instance.config = config;
         mount();
         await tick();
 
@@ -257,44 +302,55 @@ describe('LoginCard — «Register here» follows the instance setting', () => {
         expect(registerOffer()).toEqual(WITHDRAWN);
     });
 
-    it('offers registration while it is open', async () => {
-        settingsMock.store.set(REGISTRATION_OPEN);
+    it('offers it before the server has answered: the defaults are open', async () => {
+        // `load()` never settles here, and the store still holds DEFAULT_INSTANCE_CONFIG. The backend refuses a
+        // registration it does not allow anyway.
+        mocks.instanceLoad.mockReturnValue(new Promise<void>(() => {}));
         mount();
         await tick();
 
         expect(registerOffer()).toEqual(OFFERED);
     });
 
-    it('still offers registration when the setting is missing, as in a cache written before the field existed', async () => {
-        // Open in case of doubt: the link goes only when the server said «closed».
-        // The backend still refuses a registration it does not allow.
-        settingsMock.store.set(CACHED_WITHOUT_THE_KEY);
+    it('follows the answer as soon as it lands, both ways, without a remount', async () => {
         mount();
         await tick();
+        expect(registerOffer(), 'open at mount: the defaults').toEqual(OFFERED);
 
-        expect(registerOffer()).toEqual(OFFERED);
-    });
-
-    it('withdraws the offer as soon as the store says closed, without a remount', async () => {
-        mount();
+        // What the server's answer brings on an invite-only instance.
+        mocks.instance.config = mocks.INVITE;
         await tick();
-        expect(registerOffer(), 'open at mount: the default, or a cache from an open instance').toEqual(OFFERED);
-
-        // What a fresh `load()` brings when an admin closed registration since the cache was written.
-        settingsMock.store.set(REGISTRATION_CLOSED);
-        await tick();
-
         expect(screen.getByTestId('goto-forgot')).toBeInTheDocument();
-        expect(registerOffer()).toEqual(WITHDRAWN);
+        expect(registerOffer(), 'the answer says invite').toEqual(WITHDRAWN);
+
+        mocks.instance.config = mocks.OPEN;
+        await tick();
+        expect(registerOffer(), 'a later answer says open again').toEqual(OFFERED);
     });
 
-    it('asks the server for fresh settings once, on mount', async () => {
-        // The cache may predate the admin's decision, and `GET /settings/global`
-        // is public: a signed-out visitor can ask.
+    it('asks for the instance configuration once, on mount, not forced — and no longer for the global settings', async () => {
+        // `GET /system/instance` is public, and `load()` without force shares the one request of the page load.
         mount();
         await tick();
 
-        expect(settingsMock.load).toHaveBeenCalledTimes(1);
+        expect(mocks.instanceLoad).toHaveBeenCalledTimes(1);
+        expect(mocks.instanceLoad.mock.calls[0][0]?.force, 'the shared request of the page load, not a forced one').not.toBe(true);
+        expect(mocks.settingsLoad, 'the global settings no longer decide anything here').not.toHaveBeenCalled();
+    });
+});
+
+describe('LoginCard — the success message has a handle (A5b)', () => {
+    it('draws the message it is given in login-success', () => {
+        mount({successMessage: 'A message the page handed over'});
+
+        expect(screen.getByTestId('login-success')).toHaveTextContent('A message the page handed over');
+    });
+
+    it('draws no login-success without a message', () => {
+        mount();
+
+        expect(screen.getByTestId('login-form'), 'premise: the card is drawn').toBeInTheDocument();
+        expect(screen.queryByTestId('login-success')).toBeNull();
     });
 });
 

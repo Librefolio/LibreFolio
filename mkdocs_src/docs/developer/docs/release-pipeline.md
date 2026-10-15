@@ -253,7 +253,16 @@ LF_APP_VERSION=v1.2.0 ./dev.py mkdocs gallery    # its server rebuilds in debug 
 
 - **It reaches only the builds and servers the command starts.** The gallery's server rebuilds `frontend/build/` only when it is missing, older than its sources, or not a debug build, hence the production build first: a debug build already up to date would be reused, with the version it carries.
 - **It changes the backend's version too.** `get_git_version()` reads it first, so the server the gallery starts shows it in Settings → About, like the sidebar.
-- **It leaves no file behind**, only the version compiled into `frontend/build/` until its next build. A `VERSION` file would change neither version: in a checkout `get_git_version()` reads it only when `git describe` fails, and the app's version never reads it. `./dev.py docker build` is different: it writes `get_git_version()`, and so the variable, into `VERSION` and the image tags.
+- **It leaves no file behind**, only the version compiled into `frontend/build/` until its next build. A `VERSION` file would change neither version: in a checkout `get_git_version()` reads it only when `git describe` fails, and the app's version never reads it. `./dev.py docker build` is different: it writes `get_git_version()`, and so the variable, into `VERSION`, `frontend/build/.build-version` and the image tags (see [Local image builds](#local-image-builds)).
+
+#### Local image builds {: #local-image-builds }
+
+`./dev.py docker build` and `./dev.py docker rebuild` freeze the version of a local image too, without the job (all the steps: [What `./dev.py docker build` Does](../dev_workflow.md#docker-build-steps)). `_docker_ensure_assets_built()` asks `get_git_version()` once, before any step that could write a tracked file, and gives the answer to both versions of the image:
+
+- **The app.** `_docker_ensure_frontend_built()` rebuilds `frontend/build/` in production mode, with `LF_APP_VERSION` set to the frozen version for that build only, unless `_docker_frontend_stale_reason()` finds that the bundle already fits: sources not newer than the build, `.build-debug` saying it is a production build, and `frontend/build/.build-version` holding the frozen version. It writes `.build-version` after its build. Every frontend build empties `frontend/build/`, so the file exists only when the last build was made for an image: any other build is rebuilt once, and so is the bundle of an earlier image after a new commit, even one that touched no frontend file.
+- **The backend.** `VERSION` receives the same version at the end, and the `Dockerfile` copies it.
+
+The sidebar and `GET /api/v1/system/info` therefore report the same version in a locally built image. The image tags are computed apart: `_get_docker_tag()` clears `get_git_version()`'s cache and asks again after the asset steps, so a step that changed a tracked file adds `-dirty` to the tags, not to the versions inside the image.
 
 #### Checkout checks {: #checkout-checks }
 

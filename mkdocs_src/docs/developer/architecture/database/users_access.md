@@ -81,14 +81,15 @@ erDiagram
 
 ### 👤 `USER`
 
-The core identity table. Each user has a unique `username` and `email`. The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`); from the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers)).
+The core identity table. Each user has a unique `username` and `email`. The `hashed_password` is stored using `bcrypt`. The first account registered through `POST /api/v1/auth/register` becomes a superuser (`is_superuser = true`), whatever the registration mode; a later one gets the role of its invitation (`grants_admin`), or a regular account without one. From the command line, `./dev.py user create` makes a superuser unless given `--role user` (see [Superusers and the User CLI](../access_control.md#superusers) and [Registration, Invitations and the Admin API](../access_control.md#registration)).
 
 Migration `005_accounts_invites` added three columns:
 
 - 🔄 **`session_version`** (`INTEGER NOT NULL DEFAULT 0`): the session generation of the account. Each session
   cookie carries the version it was issued at (the JWT's `sv` claim), and `get_current_user()` refuses, on every
   request, a cookie whose version is not the account's. `user_service.end_sessions()` raises it by one on a password
-  change or reset, a deactivation or a demotion, ending every older session of the account. See
+  change or reset (a reset link included), a deactivation or a demotion (from the CLI or the administrator API), and
+  when an administrator signs the account out everywhere, ending every older session of the account. See
   [Session Revocation](../security.md#session-revocation).
 - ✅ **`email_verified_at`** (`DATETIME`, nullable): when the email address was verified. The accounts that
   existed before the migration stay `NULL` — not verified, which is true — with no backfill: how they are
@@ -107,9 +108,19 @@ rewrites the table in place and fires no foreign-key action.
 
 One-to-one with `USER`. Stores user-specific preferences: display language, base currency (`base_currency`), theme (`light`, `dark` or `auto`), and avatar URL. When a setting is not defined here, the system falls back to the corresponding `GLOBAL_SETTING`.
 
-### 🌍 `GLOBAL_SETTING`
+### 🌍 `GLOBAL_SETTING` {: #global-setting }
 
-System-wide configuration managed by the admin. Includes settings like `session_ttl_hours`, `max_file_upload_mb`, and default values for user preferences.
+System-wide configuration managed by the admin. Includes settings like `session_ttl_hours`, `max_file_upload_mb`, `registration_mode` (who may create an account), and default values for user preferences.
+
+Migration `006_registration_mode` changes data only: the row `enable_registration` (`bool`) becomes
+`registration_mode` (`value_type` `str`). The new value is `open` when the old one, lower-cased, was `true`, `1`,
+`yes` or `on` — what the settings service read as true — and `disabled` otherwise, so an odd value stays closed; the
+`updated_at` and `updated_by_user_id` of the row are kept. A database without the old row has nothing to convert: the
+startup seeding creates `registration_mode` with its default, `open`. The downgrade writes `true` for `open`, and
+`false` for `invite` and `disabled`, since the old setting had no middle ground. Each direction checks before it acts,
+so an interrupted run can be repeated. `./dev.py test db migration-006`
+(`backend/test_scripts/test_db/test_migration_006_registration.py`) covers both directions, the metadata and the
+idempotence, on temporary databases.
 
 ### 🔑 `BROKER_USER_ACCESS`
 
@@ -197,6 +208,19 @@ The three foreign keys reference `users.id`:
 | `created_by_user_id` | `SET NULL` | It only records who issued the token: deleting that account keeps the token as it is and forgets the name |
 | `consumed_by_user_id` | `SET NULL` | It only records who spent the token, likewise |
 
+Two purposes are in use, with the rules of
+[Registration, Invitations and the Admin API](../access_control.md#registration). This is how they use the table:
+
+| | `invite` | `password_reset` |
+|---|---|---|
+| `user_id` | `NULL` | The account whose password the link resets |
+| `email` | What the administrator wrote, if anything: a note, never compared with the address of the new account | `NULL` |
+| `grants_admin` | Whether the account it opens is an administrator | false |
+| `created_by_user_id` | The administrator who created it; `NULL` from the command line | The same |
+| Issuing | While live, it takes a place of the user limit (`user_usage()` counts the live invitations) | First revokes the account's live reset links |
+| `consumed_at`, `consumed_by_user_id` | Set by the registration that creates the account, to that account, in the same transaction | Set by `POST /api/v1/auth/password-reset`; `consumed_by_user_id` stays `NULL`, as the account is `user_id` |
+| `revoked_at` | Set by `DELETE /api/v1/users/invites/{invite_id}` | Set on the account's other live reset links when a new link is issued, or when one is spent |
+
 Two indexes: `ix_account_tokens_purpose_expires_at` on `(purpose, expires_at)`, and `ix_account_tokens_user_id`
 on `user_id`, used by the revocation of an account's tokens and by the cascade when the account is deleted. The
 model declares the indexes and constraints in `__table_args__`, under the same names as the migration.
@@ -219,5 +243,6 @@ into no other table), an upgrade interrupted half way, and that `SQLModel.metada
 - 🔐 [Access Control (RBAC)](../access_control.md) — Permission matrix for Owner/Editor/Viewer
 - ⚙️ [Settings System](../settings.md) — Global vs user settings, fallback logic
 - 🎟️ [Single-use Account Tokens](../security.md#account-tokens) — How the tokens of `account_tokens` are issued, checked, spent and revoked
+- ✉️ [Registration, Invitations and the Admin API](../access_control.md#registration) — Who may register, the user limit, invitations and reset links
 - 🚪 [From login to the first guide](../../frontend/onboarding.md#layout-gate) — How the app loads onboarding progress, sends the user to Welcome while it is due, and completes or skips it
 - 🧑‍🏫 [The contextual import guide](../../frontend/components/features/import-wizard.md#import-guide-wiring) — The step-managed `import_guide` flow in the Import Wizard

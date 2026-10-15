@@ -10,6 +10,10 @@ first broker statement — and your dashboard fills up by itself.
 Open your LibreFolio address (for example `http://localhost:6040`): the login page appears. Click
 **Register here** to create an account.
 
+If the login page shows no **Register here**, your administrator lets people in only with an
+invitation link, or has closed sign-ups: ask them for an invitation, or for an account. With an
+invitation, follow [If You Received an Invitation Link](#invitation-link).
+
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="auth" data-name="02-register-empty" alt="Registration Form" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
@@ -30,6 +34,25 @@ Fill in your details:
     The very first account to register becomes the **administrator**: it manages the instance-wide
     **[Global Settings](../admin/settings.md)** and every admin feature.
 
+### ✉️ If You Received an Invitation Link {: #invitation-link }
+
+An administrator can invite you with a link of your own.
+
+1. Open the link. LibreFolio checks it, then shows the registration form with a note that you have
+   been invited; a second note tells you when the invitation makes you an administrator.
+2. If the administrator wrote your email address on the invitation, it is already filled in: you
+   can change it.
+3. Choose your username and password, then click **Register**.
+4. You are back on the login page, with a confirmation: log in with your new account.
+
+- ⏱️ An invitation link works once, for 7 days. If the page says the link has expired, has already
+  been used, has been withdrawn or is not valid, ask your administrator for a new one.
+- 🔒 As soon as the page opens, the address bar loses the secret part of the link: keep the message
+  you received in case you need to open the link again. If the page says the link is incomplete,
+  open it again from that message.
+- 🚪 If the page says that registration is disabled, the administrator has closed sign-ups for now:
+  ask them.
+
 ---
 
 ## 🔐 2. Log In
@@ -40,6 +63,20 @@ password.
 <div class="screenshot-container" style="max-width: 600px; margin: 1rem auto;">
     <img class="gallery-img" data-category="auth" data-name="01-login" alt="Login Page" style="width: 100%; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.1);">
 </div>
+
+### 🔑 If an Administrator Sent You a Password-Reset Link {: #password-reset-link }
+
+Forgot your password? Your administrator can send you a link to choose a new one yourself.
+
+1. Open the link: the page shows the account it belongs to.
+2. Type the new password twice: it must meet the rules shown under the field.
+3. Click **Set the new password**. You are back on the login page, with a confirmation: log in with
+   the new password.
+
+- ⏱️ The link works once, for 30 minutes. If the page says it has expired, has already been used or
+  has been withdrawn, ask for a new one: each new link withdraws the ones sent before it.
+- 🚪 Setting the new password signs your account out on every device: log in again with the new
+  password on each of them.
 
 ---
 

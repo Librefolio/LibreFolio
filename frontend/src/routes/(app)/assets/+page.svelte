@@ -13,7 +13,7 @@
      *
      * Svelte 5 runes throughout.
      */
-    import {onDestroy, onMount, tick, untrack} from 'svelte';
+    import {onDestroy, onMount, tick} from 'svelte';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
@@ -25,6 +25,9 @@
     import AssetBrowseOrder from '$lib/components/assets/AssetBrowseOrder.svelte';
     import {fetchCurrentPrices, computeDirection} from '$lib/services/livePriceService';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
+    import {startActivePolling, type ActivePolling, type ActivePollingState} from '$lib/features/live-updates/activePolling';
+    import {ASSET_LIST_LIVE_INTERVAL_MS} from '$lib/features/live-updates/cadence';
+    import LiveUpdatesStatus from '$lib/features/live-updates/LiveUpdatesStatus.svelte';
     import AssetSyncModal from '$lib/components/assets/AssetSyncModal.svelte';
     import AssetModal from '$lib/components/assets/AssetModal.svelte';
     import {entityDetailLinkHtml} from '$lib/utils/core/entityLink';
@@ -126,6 +129,10 @@
 
     /** Live prices from bulk current-price endpoint (asset_id → {value, direction}) */
     let livePriceMap = $state<Map<number, {value: number; direction: LivePriceDirection}>>(new Map());
+    /** The live poll of the list, while the range ends today and the list is not empty (F26). */
+    let livePoller: ActivePolling | null = null;
+    /** Its state, for the page root (`data-live-updates`) and the «Updates paused» pill. */
+    let liveUpdatesState = $state<ActivePollingState>('stopped');
 
     // Delete dialog (single)
     let deleteDialogOpen = $state(false);
@@ -431,22 +438,36 @@
      * One live poll, now — for the refreshes a user asks for. The poll used to
      * re-fire on those as a side effect of the reassignments above; keeping that
      * immediacy is deliberate, and it costs one write per click instead of four.
+     * The cadence restarts from it, so a refresh is never followed by a tick a
+     * few seconds later. No poller, no poll: the range does not end today, or
+     * the list is empty.
      */
     function refreshLivePricesNow(): void {
-        if (isHeadToday && liveAssetIdsKey !== '') void fetchLivePrices();
+        livePoller?.pollNow();
     }
 
-    // Live price polling — only active when dateEnd includes today
+    // Live price polling — while the date range ends today, every minute, and only
+    // while someone uses the page: hidden tab or two minutes without input pause it,
+    // and it resumes by itself (F26, decision 31).
     $effect(() => {
         if (!isHeadToday || liveAssetIdsKey === '') {
             livePriceMap = new Map();
+            liveUpdatesState = 'stopped';
             return;
         }
-        // Untracked: its synchronous head reads `assets`, which would subscribe this
-        // effect to the whole list again (see `liveAssetIdsKey`).
-        untrack(() => void fetchLivePrices());
-        const id = setInterval(fetchLivePrices, 30_000);
-        return () => clearInterval(id);
+        // The poller calls `fetchLivePrices` from a timer, never inside this effect: its
+        // synchronous head reads `assets`, which would subscribe the effect to the whole
+        // list again (see `liveAssetIdsKey`).
+        const poller = startActivePolling({
+            run: fetchLivePrices,
+            intervalMs: ASSET_LIST_LIVE_INTERVAL_MS,
+            onstatechange: (state) => (liveUpdatesState = state),
+        });
+        livePoller = poller;
+        return () => {
+            poller.stop();
+            if (livePoller === poller) livePoller = null;
+        };
     });
 
     // Close type filter dropdown on outside click
@@ -1212,19 +1233,23 @@
     let busy = $derived(loading || assetEditLoading || assets.some((a) => a.loadingPrices));
 </script>
 
-<div class="space-y-6" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-testid="assets-page">
+<div class="space-y-6" aria-busy={busy} data-busy={busy ? 'true' : 'false'} data-live-updates={liveUpdatesState} data-testid="assets-page">
     <!-- Header: Title left, ViewModeToggle + Add Asset right. Round 14.1 bugfix: `lg:` is a
          VIEWPORT breakpoint (1024px) — wraps unconditionally below that width regardless of
          whether the actual header row has room. Plain `flex-wrap` reacts to the row's OWN
          available width instead (see fx/+page.svelte's equivalent header for the full note). -->
     <div class="flex flex-wrap items-start justify-between gap-4">
         <div use:guideAnchor={'asset.page.overview'} data-testid="asset-page-overview-guide-target">
-            <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-                {$t('common.assets')}
-                {#if assets.length > 0}
-                    <span data-testid="assets-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{assets.length}</span>
-                {/if}
-            </h2>
+            <!-- The pill sits beside the heading, not inside it: a status is not part of the title. -->
+            <div class="flex flex-wrap items-center gap-2">
+                <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                    {$t('common.assets')}
+                    {#if assets.length > 0}
+                        <span data-testid="assets-count-badge" class="text-xs font-mono px-1.5 py-0.5 rounded-full bg-libre-green/10 text-libre-green dark:bg-libre-green/20 dark:text-emerald-400">{assets.length}</span>
+                    {/if}
+                </h2>
+                <LiveUpdatesStatus state={liveUpdatesState} />
+            </div>
             <p class="text-gray-500 dark:text-gray-400 text-sm">{$t('assets.subtitle')}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2 justify-end ml-auto">
