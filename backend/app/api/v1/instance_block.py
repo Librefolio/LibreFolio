@@ -6,9 +6,9 @@ endpoint answers only when it is in ``ALLOWED_WHEN_BLOCKED``. FastAPI does not g
 ``Route``, a ``WebSocketRoute`` or a ``Mount``, so none of them belongs under ``/api/v1``; a test checks it. The only
 exceptions are FastAPI's own documentation routes, ``/api/v1/openapi.json``, ``/api/v1/docs`` and ``/api/v1/redoc``
 (``main.py``): they carry the API's schema and no data, and answer as they do for anyone; the test pins them. The list is
-short on purpose: signing in and out, the block page, the deletion of one's own account, and the probes. The full backup
-for the admin and the scheduled wake-up join it, one line each, when their routes exist; anything else goes through the
-developer first. A test pins the list.
+short on purpose: signing in and out, the block page, the deletion of one's own account, the probes, and the full backup
+of an administrator (decision 12: on a blocked instance an administrator can still take the data away). The scheduled
+wake-up joins it when its route exists; anything else goes through the developer first. A test pins the list.
 
 FastAPI hands a dependency the endpoint function of the matched route (``scope["endpoint"]``), not its full path, so
 the list holds endpoint functions. The refusal is ``423 Locked`` with the code ``instance_blocked``, and only a
@@ -25,6 +25,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1 import auth
+from backend.app.api.v1.backup import instance as backup_instance
 from backend.app.api.v1.system import block, health, info, instance, ready
 from backend.app.config.platform import instance_blocked
 from backend.app.db.session import get_session_generator
@@ -39,6 +40,11 @@ ALLOWED_WHEN_BLOCKED = frozenset(
         auth.get_me,
         # The deletion of one's own account
         auth.delete_own_account,
+        # The full backup, for an administrator (decision 12): start, poll, download, delete
+        backup_instance.start_instance_backup,
+        backup_instance.get_instance_backup_job,
+        backup_instance.download_instance_backup,
+        backup_instance.delete_instance_backup_job,
         # The block page
         block.get_instance_block,
         instance.get_instance_config,
