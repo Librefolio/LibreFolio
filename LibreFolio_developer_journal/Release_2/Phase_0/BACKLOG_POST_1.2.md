@@ -2388,6 +2388,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `auth/RegisterCard.svelte` e `validate_password` di `scripts/user_cli.py`.
   - L'API chiede solo 8 caratteri (`schemas/auth.py:31`, `:38`). Da decidere se applicare le stesse regole anche lì.
   - Si fa nel lotto A5, che aggiunge i moduli d'invito e di reset con le stesse regole.
+  - 15/10: **aspetta la decisione 37 del developer** (coordinatore, via di A5). Intanto A5a lascia all'API il minimo di
+    8 caratteri anche nei corpi nuovi (`AuthRegisterRequest` con l'invito, `PasswordResetRequest`).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A1.9».
 - **A-7 · Doc per sviluppatori non allineate al codice, trovate in A3** — minimo; A (15/10, `docs-writer`).
   - `architecture/access_control.md:116-123`:
@@ -2415,7 +2417,60 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Probabile causa: `lib/stores/app/language.ts`, `init()`.
   - Si corregge in un lotto di A che tocca la pagina d'accesso o le preferenze, con il rosso visto prima (E2E con il
     locale del browser `it-IT`).
+  - ✅ **Corretta in A5b** (15/10; commit all'ingresso di A5). Il negozio della lingua segue `locale` di
+    svelte-i18n finché non c'è una preferenza salvata e nessuno ne sceglie una. Il selettore pubblica
+    `data-language`. Rosso visto prima: `language.test.ts` (6 rossi su 7, poi 7 ✅). L'E2E `it-IT`/`fr-FR` in
+    `auth.spec.ts` gira dopo la finestra.
   - Dettagli: idem, «A3.0».
+- **A-9 · Il runner non toglie le variabili degli account dall'ambiente della corsia** — basso; A (15/10, trovata da
+  `test-author` in A5).
+  - `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL` e `LIBREFOLIO_BILLING_URL`: se la shell
+    che lancia il runner ne imposta una, il server della corsia la legge, e cambiano la registrazione o i link per
+    tutti i test che girano lì.
+  - I casi che cambiano queste variabili girano già nel processo del test, con `monkeypatch`: il rischio è solo
+    l'ambiente di chi lancia.
+  - È infrastruttura condivisa dei test (`configure_test_runtime`): decide il coordinatore.
+  - ➡️ **Passa a H come C-96** (coordinatore, 15/10). E ha trovato che il problema è più largo: ogni `LIBREFOLIO_*`
+    del `.env` arriva alle corsie dei test, comprese le future variabili SMTP. La cura generale di H copre anche
+    queste quattro. A non ha scritto né codice né test per A-9.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5.2».
+- **A-10 · Debito di traduzione delle pagine toccate da A5** — basso; A, 15/10.
+  - Le pagine EN di A5a e A5b sono nel lotto; IT, FR ed ES sono indietro su 6 pagine: `admin/configuration`,
+    `admin/cli_tools`, `admin/settings`, `admin/service_exposure`, `community/faq`, `user/getting-started`.
+  - Vanno tradotte insieme: si linkano con ancore esplicite nuove (`#accounts`, `#user-limit`, `#registration`,
+    `#invite`, `#reset-link`, `#reset-onboarding`, `#invitation-link`, `#password-reset-link`), da tenere uguali
+    in ogni lingua.
+  - Finché non sono tradotte il build stretto resta verde: le pagine vecchie non puntano alle ancore nuove.
+  - Si fa dopo A6–A9, che toccano di nuovo le stesse pagine. La prepara il lotto A10, solo su richiesta
+    esplicita del developer (coordinatore, 15/10).
+
+  Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
+- **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
+  letta nel codice e non ancora provata; segnalata dal coordinatore.
+  - Una riga di `user_settings` con un `theme` diverso da `light`, `dark` e `auto` farebbe rispondere 500 a
+    `/auth/login` e a `/settings/user`.
+  - Prima della correzione serve un rosso. È piccola: va in un lotto dopo A5.
+- **A-12 · `e2e/settings.spec.ts`: selettori ancora fragili nei test non toccati da A5b** — minimo; A (15/10,
+  `test-author` della riparazione).
+  - I test dei numeri usano `.first()` su `.setting-row input[type="number"]`, i `title` tradotti «Save» e
+    «Undo» e un XPath su una classe CSS.
+  - Lo sblocco usa il `title` tradotto, mentre esiste `settings-lock-toggle`.
+  - I due `beforeEach` aspettano la classe `.setting-row` invece di `data-busy` della scheda.
+  - Il segnaposto «Coming soon» (disabilitato sempre) non ha più un test: lo copriva per caso il vecchio
+    `.first()`. Basta un test di componente (`SettingToggle`, `disabled` e `badge`).
+  - I test «non admin» non provano la sola lettura: manca l'asserzione che `settings-lock-toggle` non c'è.
+  - Si fa con la scheda Utenti (A6), che tocca la stessa pagina.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.9».
+- **A-13 · Su un'istanza bloccata, `/invite` mostra il modulo e la registrazione finisce al login** — minimo;
+  A (15/10, dal merge di H CP6; accettato dal coordinatore).
+  - Contesto: per non perdere l'accesso, `auth.inspect_link_token` e `auth.reset_password_with_link` entrano in
+    `ALLOWED_WHEN_BLOCKED` (lotto piccolo di H dopo A5); `auth.register` resta fuori.
+  - Effetto: `tokens/inspect` risponde anche per gli inviti, quindi `/invite` mostra il modulo. La registrazione
+    riceve poi un 401 (anonimo su una rotta bloccata), e l'interceptor del client porta al login senza spiegare.
+  - Possibile cura: la pagina d'invito che riconosce il blocco (per esempio un campo pubblico e innocuo in
+    `/system/instance`, da concordare con H e con la decisione 15), oppure `tokens/inspect` che sul blocco
+    risponde come per un link non valido quando lo scopo è `invite`.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.10».
 
 ## X · Plugin, asset e ricerca (fase 01)
 

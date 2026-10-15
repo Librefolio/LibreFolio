@@ -34,18 +34,25 @@ from backend.app.db.models import GlobalSetting, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.auth import AuthLoginRequest, AuthLoginResponse, AuthRegisterRequest, ChangePasswordRequest
 from backend.app.services.accounts import auth_service, user_service
-from backend.app.services.accounts.global_settings_service import is_registration_enabled
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
 API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 10.0
+#: The global setting that decides who may register (release 1.3: open, invite or disabled), and its row's key.
+REGISTRATION_MODE_KEY = "registration_mode"
 
 
-async def set_registration_enabled(enabled: bool) -> None:
+def _error_code(response: httpx.Response) -> Optional[str]:
+    """``detail.error_code`` of a coded refusal (as ACCOUNT_DISABLED is given), or None."""
+    detail = response.json().get("detail")
+    return detail.get("error_code") if isinstance(detail, dict) else None
+
+
+async def set_registration_mode(mode: str) -> None:
     """
-    Put the registration gate in the state this module needs.
+    Put the registration gate in the state this module needs: ``open`` or ``disabled``.
 
     The row is created when missing instead of being asserted into existence.
     Asserting worked only by accident: every module used to start its own server,
@@ -58,17 +65,17 @@ async def set_registration_enabled(enabled: bool) -> None:
 
     engine = get_async_engine()
     async with AsyncSession(engine) as session:
-        result = await session.execute(select(GlobalSetting).where(GlobalSetting.key == "enable_registration"))
+        result = await session.execute(select(GlobalSetting).where(GlobalSetting.key == REGISTRATION_MODE_KEY))
         setting = result.scalar_one_or_none()
         if setting is None:
-            spec = GLOBAL_SETTINGS_DEFAULTS.get("enable_registration", {})
+            spec = GLOBAL_SETTINGS_DEFAULTS.get(REGISTRATION_MODE_KEY, {})
             setting = GlobalSetting(
-                key="enable_registration",
-                value="true",
-                value_type=spec.get("type", "bool"),
+                key=REGISTRATION_MODE_KEY,
+                value="open",
+                value_type=spec.get("type", "string"),
                 description=spec.get("description"),
             )
-        setting.value = "true" if enabled else "false"
+        setting.value = mode
         session.add(setting)
         await session.commit()
 
@@ -83,11 +90,11 @@ def test_server():
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def registration_enabled_by_default(test_server):
+async def registration_open_by_default(test_server):
     """Keep global registration state isolated between auth API tests."""
-    await set_registration_enabled(True)
+    await set_registration_mode("open")
     yield
-    await set_registration_enabled(True)
+    await set_registration_mode("open")
 
 
 class TestRegister:
@@ -133,10 +140,10 @@ class TestRegister:
 
     @pytest.mark.asyncio
     async def test_register_succeeds_when_registration_enabled(self, test_server):
-        """REG-005: Registration succeeds when enable_registration is true."""
-        print_section("REG-005: Registration enabled allows new user")
+        """REG-005: Registration succeeds when registration_mode is open."""
+        print_section("REG-005: Registration open allows new user")
 
-        await set_registration_enabled(True)
+        await set_registration_mode("open")
 
         async with httpx.AsyncClient() as client:
             timestamp = int(datetime.now().timestamp() * 1000)
@@ -158,10 +165,10 @@ class TestRegister:
 
     @pytest.mark.asyncio
     async def test_register_disabled_rejects_when_users_exist(self, test_server):
-        """REG-006: Disabled registration returns 403 when at least one user exists."""
+        """REG-006: Disabled registration returns 403 REGISTRATION_DISABLED when at least one user exists."""
         print_section("REG-006: Disabled registration rejects non-bootstrap user")
 
-        await set_registration_enabled(True)
+        await set_registration_mode("open")
 
         async with httpx.AsyncClient() as client:
             timestamp = int(datetime.now().timestamp() * 1000)
@@ -179,7 +186,7 @@ class TestRegister:
             assert seed_response.status_code == 201, f"Setup failed: {seed_response.text}"
 
             try:
-                await set_registration_enabled(False)
+                await set_registration_mode("disabled")
                 username = f"disabledreg_{timestamp}"
 
                 response = await client.post(
@@ -192,35 +199,37 @@ class TestRegister:
                     timeout=TIMEOUT,
                 )
 
-                assert response.status_code == 403
-                assert "registration is disabled" in response.json()["detail"].lower()
+                assert (response.status_code, _error_code(response)) == (403, "REGISTRATION_DISABLED"), f"Expected 403 REGISTRATION_DISABLED, got {response.status_code}: {response.text}"
                 print_success("Disabled registration rejected non-bootstrap user")
             finally:
-                await set_registration_enabled(True)
+                await set_registration_mode("open")
 
     @pytest.mark.asyncio
-    async def test_register_disabled_allows_bootstrap_when_no_users(self, tmp_path):
+    async def test_register_disabled_allows_bootstrap_when_no_users(self, tmp_path, monkeypatch):
         """REG-007: Disabled registration still allows bootstrap when user count is zero.
 
         On a private database (a fresh SQLite file under tmp_path with the whole ORM schema), zero
-        users and enable_registration=false are its real state, not a patched counter. The lane's
+        users and registration_mode=disabled are its real state, not a patched counter. The lane's
         users and global settings are never touched, and the bootstrap administrator no longer
-        stays behind in the shared database.
+        stays behind in the shared database. LIBREFOLIO_REGISTRATION is removed from this process,
+        so that the row alone decides, whatever the shell that started the run had set.
         """
         print_section("REG-007: Disabled registration allows bootstrap user")
+        from backend.app.services.accounts.registration_service import effective_registration_mode  # noqa: PLC0415 — release 1.3 module: only this test needs it, and its absence must fail this test alone
 
+        monkeypatch.delenv("LIBREFOLIO_REGISTRATION", raising=False)
         engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'bootstrap.db'}", poolclass=NullPool)
         try:
             async with engine.begin() as connection:
                 await connection.run_sync(SQLModel.metadata.create_all)
             async with AsyncSession(engine) as session:
-                session.add(GlobalSetting(key="enable_registration", value="false", value_type="bool"))
+                session.add(GlobalSetting(key=REGISTRATION_MODE_KEY, value="disabled", value_type="string"))
                 await session.commit()
 
             username = "bootstrapreg"
             async with AsyncSession(engine, expire_on_commit=False) as session:
                 assert await user_service.count_users(session) == 0, "Precondition: the private database must have no user"
-                assert await is_registration_enabled(session) is False, "Precondition: registration must be disabled"
+                assert (await effective_registration_mode(session)).mode == "disabled", "Precondition: registration must be disabled"
                 response = await auth_api.register(
                     AuthRegisterRequest(
                         username=username,
@@ -1808,23 +1817,28 @@ class TestPasswordWorkLeavesTheEventLoopFree:
 
     @pytest.mark.asyncio
     async def test_register_hashes_the_password_off_the_event_loop(self, private_account, monkeypatch):
-        """LOOP-002 — NEW, red today: POST /auth/register hashes the password in a worker thread; the event loop keeps beating meanwhile.
+        """LOOP-002 — POST /auth/register hashes the password in a worker thread; the event loop keeps beating meanwhile.
 
-        The hash is computed by user_service.create_user, which register calls (the CLI too): the
-        stand-in replaces the name create_user calls, and the new user must be stored with the
-        stand-in's hash. Today the hash runs in the loop (user_service.py, create_user).
+        Whichever service computes the hash — user_service.create_user until 1.2, the registration
+        service from 1.3, under whatever name it imports the function — the call ends in bcrypt's own
+        hashpw: the stand-in replaces that one, answering bytes as bcrypt does, and the new user must be
+        stored with the stand-in's hash. The accounts variables are removed from this process, so that
+        open registration on the private database (no mode row, no limit) is what register meets.
         """
         print_section("LOOP-002: register hashes the password off the event loop")
-        hashing = _block(monkeypatch, user_service, "hash_password", result="stand-in-hash-of-loop_newcomer")
+        for variable in ("LIBREFOLIO_REGISTRATION", "LIBREFOLIO_MAX_USERS"):
+            monkeypatch.delenv(variable, raising=False)
+        stand_in_hash = b"stand-in-hash-of-loop_newcomer"
+        hashing = _block(monkeypatch, auth_service.bcrypt, "hashpw", result=stand_in_hash)
         username, password = "loop_newcomer", "NewcomerPass123!"
 
         async with AsyncSession(private_account.engine, expire_on_commit=False) as session, _heartbeat() as ticks:
             response = await auth_api.register(AuthRegisterRequest(username=username, email=f"{username}@example.com", password=password), session)
 
         assert response.user.username == username, f"register must answer with the new user: got {response!r}"
-        assert hashing.calls == [{"password": password}], f"register must hash the chosen password, once: {hashing.calls}"
+        assert [call["password"] for call in hashing.calls] == [password.encode("utf-8")], f"register must hash the chosen password, once: {hashing.calls}"
         stored = await _stored_hash(private_account.engine, username)
-        assert stored == hashing.result, f"The new user must be stored with the hash create_user computed, {hashing.result!r}: got {stored!r}"
+        assert stored == stand_in_hash.decode("utf-8"), f"The new user must be stored with the hash bcrypt computed, {stand_in_hash!r}: got {stored!r}"
         measured = _assert_the_loop_kept_beating("register", ticks, hashing)
 
         print_success(f"✓ register: the user stored with the stand-in's hash, the loop kept beating ({measured})")

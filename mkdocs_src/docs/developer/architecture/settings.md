@@ -21,10 +21,11 @@ catalogue, `SETTINGS_REGISTRY`.
     - Keys outside the class — `LIBREFOLIO_DATA_DIR`, `LIBREFOLIO_TEST_DATA_DIR`,
       `LIBREFOLIO_TEST_MODE`, `LIBREFOLIO_LOG_LEVEL`, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY` (both
       also as `_FILE`), `LIBREFOLIO_NO_SCHEDULER`, `LIBREFOLIO_DISABLE_DONATION_POPUP`,
-      `LIBREFOLIO_TEST_LANE_ID`, `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key also as `_FILE`) — are
-      read in `backend/app/config/` (base or section module), from `os.environ` only.
-      pydantic-settings does not export `.env` there, so they arrive through the launcher:
-      `./dev.py server` copies `.env` into the environment (shell values win), Compose uses
+      `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`,
+      `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key
+      also as `_FILE`) — are read in `backend/app/config/` (base or section module), from
+      `os.environ` only. pydantic-settings does not export `.env` there, so they arrive through the
+      launcher: `./dev.py server` copies `.env` into the environment (shell values win), Compose uses
       `env_file:`.
     - Secrets go through `env_secret(name)` in `__init__.py`: `NAME` when it is not blank, otherwise
       the content of the file named by `NAME_FILE` when that is not blank (Docker and Kubernetes
@@ -44,13 +45,19 @@ catalogue, `SETTINGS_REGISTRY`.
       `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
       `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`,
       `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`),
-      `accounts.py` (A: `donation_popup_disabled()`), `plugins.py` (X: `web_link_finder_enabled()`,
-      `web_link_finder_engine()`, `web_link_finder_api_key()`, `web_link_finder_ddgs_region()`,
-      `web_link_finder_ddgs_backend()`, `web_link_finder_timeout()`,
+      `accounts.py` (A: `donation_popup_disabled()`, `registration_mode_override()`,
+      `registration_mode_pinned()`, `max_users()`, `public_url()`, `billing_url()`), `plugins.py`
+      (X: `web_link_finder_enabled()`, `web_link_finder_engine()`, `web_link_finder_api_key()`,
+      `web_link_finder_ddgs_region()`, `web_link_finder_ddgs_backend()`, `web_link_finder_timeout()`,
       `web_link_finder_max_results()`) and `email.py` (E: `smtp_host()`, `smtp_tls_mode()`,
       `smtp_port()`, `smtp_user()`, `smtp_password()`, `smtp_sender()`, `smtp_reply_to()`,
       `smtp_max_per_hour()`; see [Email Service](../backend/email.md#configuration)). `sleep_wake.py`
-      and `backup.py` will follow when their areas add variables.
+      and `backup.py` will follow when their areas add variables. Unlike a `Settings` field, an
+      invalid `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL` or
+      `LIBREFOLIO_BILLING_URL` never stops the startup: its accessor raises `ValueError`, and
+      `registration_service.py` logs it and falls back safely — registration closed for the first
+      two, the bare path or no billing link for the URLs
+      ([Registration Modes](access_control.md#registration-modes)).
     - The rule: every environment variable of the application is read inside
       `backend/app/config/`. A module elsewhere calls a function there instead of reading
       `os.environ`. The rule holds with no exception, and a guard test checks it (runner selector
@@ -69,7 +76,7 @@ catalogue, `SETTINGS_REGISTRY`.
 |---|---|---|
 | Storage | **Typed columns** on the per-user `UserSettings` row | **Key-value rows** in the `GlobalSetting` table |
 | Who writes | The user themselves (`PUT /api/v1/settings/user`) | Admins only (**Admin** tab of Settings, or `PATCH /api/v1/settings/global/bulk`) |
-| Examples | `language`, `base_currency`, `theme`, `avatar_url` | `session_ttl_hours`, `enable_registration`, `scheduler_*`, `default_currency` … |
+| Examples | `language`, `base_currency`, `theme`, `avatar_url` | `session_ttl_hours`, `registration_mode`, `scheduler_*`, `default_currency` … |
 
 The split is a deliberate design decision (P2-9), not an accident of history: per-user
 preferences are fixed in number and benefit from typed columns with defaults on row creation,
@@ -96,9 +103,19 @@ How global values behave at runtime:
   `GLOBAL_SETTINGS_DEFAULTS`.
 - Every read goes to the database, with no cache, so a saved value reaches all workers at once:
   this is why admin changes need no restart.
-- `PATCH /api/v1/settings/global/bulk` stores values as sent, with no type or range check. The
-  ranges live in the UI: the scheduler dialog accepts 1–1440 minutes and 1–365 days, and needs
-  at least one time and one day.
+- `PATCH /api/v1/settings/global/bulk` (`update_global_settings()` in `settings_service.py`) is all
+  or nothing: a key that does not exist answers `404`; a key an environment variable pins answers
+  `409` `SETTING_LOCKED_BY_ENV`, with `key` and `variable` in `detail` (today only
+  `registration_mode`, pinned while `LIBREFOLIO_REGISTRATION` is set, valid or not: `_PINNED_BY_ENV`);
+  a value refused by its type or by its entry in `GLOBAL_SETTINGS_CONSTRAINTS` (ranges, choices,
+  formats) answers `422`, naming every refused key. Only then are all the values written, in one
+  commit. The scheduler dialog also checks its own ranges before saving: 1–1440 minutes, 1–365
+  days, at least one time and one day.
+- While its variable is set, a pinned row decides nothing and cannot be written:
+  `GET /api/v1/settings/global` still returns the stored `registration_mode`, and the mode in force
+  is in `GET /system/instance` ([below](#public-instance-configuration)). The Admin tab shows that
+  one, read-only, and its **Reset All to Defaults** leaves the field alone
+  ([Settings components](../frontend/components/features/settings.md)).
 
 ## 📖 SETTINGS_REGISTRY — the single declaration point
 
@@ -128,7 +145,7 @@ The global keys declared today, and where the **Admin** tab shows them
 | Key | Type | Default | In the Admin tab |
 |-----|------|---------|------------------|
 | `session_ttl_hours` | int | `24` | Session → **Session Duration** |
-| `enable_registration` | bool | `true` | Security → **Enable Registration** |
+| `registration_mode` | str | `open` | Security → **Registration**: `open`, `invite` or `disabled` (`SettingConstraint(choices=…)`). Read-only while `LIBREFOLIO_REGISTRATION` is set: see [Registration Modes](access_control.md#registration-modes) |
 | `require_email_verification` | bool | `false` | Security → **Require Email Verification** — read-only placeholder (`PLACEHOLDER_KEYS`) |
 | `max_file_upload_mb` | int | `10` | Memory → **Max File Upload Size** |
 | `scheduler_enabled` | bool | `true` | Update Job → **Scheduler Enabled** (label from `settings.globalSettingNames.scheduler_enabled`) |
@@ -191,11 +208,12 @@ explicit user choice always wins afterwards.
 instance before anyone signs in. The app reads it at startup: the `(app)` layout calls
 `instanceConfig.load()` when it mounts, before the auth check, and works with a self-hosted default
 until the server answers (see [Instance configuration](../frontend/state/app-state.md#instance-config)).
-Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and today it has one field:
+Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and today it has two fields:
 
 | Field | Values | Source |
 |-------|--------|--------|
 | `profile` | `selfhosted`, an install run by its owner, or `managed`, an instance a hosting provider runs for its customers | `LIBREFOLIO_PROFILE`, a field of `Settings`, so it comes from `.env` or the environment like `PORT`. Default `selfhosted`; case and spaces around the value are ignored, and any other value stops the startup. Admin side: [Configuration](../../admin/configuration.md). |
+| `accounts` | `{registration_mode, registration_locked}` (`AccountsInstanceConfig`, `backend/app/schemas/auth.py`): the registration mode in force, `open`, `invite` or `disabled`, and whether `LIBREFOLIO_REGISTRATION` pins it | `effective_registration_mode()` (workstream A, `registration_service.py`): the variable, otherwise the `registration_mode` row, so the endpoint is `async`, with a database session. No count and no limit. Details: [Registration Modes](access_control.md#registration-modes). |
 
 The rule for a workstream that owns part of the public configuration:
 

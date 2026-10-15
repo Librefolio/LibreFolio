@@ -10,7 +10,7 @@ The **App & UI State** category contains stores responsible for the global user 
 |:------|:-----|:--------|
 | **Auth** | `app/auth.ts` | Holds the session state — the current user (`null` when signed out) and the loading, error and initialized flags — through `login()`, `logout()` and `checkAuth()` (`GET /auth/me`). The session itself is the HttpOnly `session` cookie the backend sets: the frontend never sees the token. |
 | **Settings** | `app/settings.ts` | User-specific preferences (language, theme, base currency, avatar). Syncs with the backend. |
-| **Global Settings** | `app/globalSettings.ts` | Application-wide settings (admin-only writes), like max upload sizes. |
+| **Global Settings** | `app/globalSettings.ts` | Application-wide settings (admin-only writes), like max upload sizes, loaded by the app bootstrap. It no longer types `enable_registration`, and nothing reads the registration mode from it: the login page asks the instance configuration instead, which holds the mode in force, `LIBREFOLIO_REGISTRATION` included. |
 | **Language** | `app/language.ts` | The interface language. `currentLanguage.set()` also sets the `svelte-i18n` locale and saves the choice in this browser (`librefolio-locale`), which the next load starts from. Nothing listens to the Settings store: the language is set explicitly — by the auth store at login, from the user's settings in the login response, and by the UI: the Preferences tab and the Welcome page after their write, or the header selector (this browser only). |
 | **Interface locale** | `app/uiLocale.ts` | The locale every figure is written in: the interface language, plus the browser's region when the browser's primary tag is in that language. Derived from Language, so it follows every switch. Two faces: `uiLocale()` for runes code and as the default of every figure formatter; `uiLocaleStore`, read as `$uiLocaleStore` in a legacy template. See [Numbers, amounts and dates](../i18n.md#ui-locale). |
 | **Theme** | `app/themeStore.ts` | Manages dark/light mode toggling and system-preference detection. |
@@ -84,24 +84,36 @@ and readable without a session (backend side:
 [Public instance configuration](../../architecture/settings.md#public-instance-configuration)).
 
 - **When**: the `(app)` layout calls `void instanceConfig.load()` at the top of its `onMount`, before
-  the auth check, and does not wait for it. A page outside the layout, such as the login page, may call
-  it too.
+  the auth check, and does not wait for it. Pages outside the layout call it too: `LoginCard` on
+  mount, and the `/invite` page, which waits for it together with the inspection of its link
+  ([Account Link Pages](../components/features/auth.md#link-pages)).
 - **One request per page load**: concurrent and later calls share the same request;
   `load({force: true})` asks again, and `fetchConfig` replaces the API call (tests).
-- **Never blocking**: `config` is always the configuration in force: `DEFAULT_INSTANCE_CONFIG`, a
-  self-hosted instance, until the server answers, then its last answer. A failed request changes
-  nothing but `failed`, and the next `load()` retries. Only the latest request writes its answer (a
-  generation counter), so a forced reload outruns an older request.
+  `GlobalSettingsTab` forces it after saving `registration_mode`, so the rest of the app follows the
+  new mode.
+- **Never blocking**: `config` is always the configuration in force: `DEFAULT_INSTANCE_CONFIG` until
+  the server answers, then its last answer. A failed request changes nothing but `failed`, and the
+  next `load()` retries. Only the latest request writes its answer (a generation counter), so a forced
+  reload outruns an older request.
+- **The default**: a self-hosted instance where anyone may register,
+  `{profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}}`. So
+  until the answer, and when there is none, the login page offers **Register here**; a registration
+  the server refuses gets its own message.
 - **Getters**: `config`; `loaded`, true once the server answered on this page load; `failed`, true when
   the last request failed.
 - **Type**: `InstanceConfig` is `z.infer<typeof schemas.InstanceConfigResponse>` from the generated
   client, so a field added to the backend response appears after `./dev.py api sync`.
+- **Readers of `accounts`**: `LoginCard` (**Register here** only while `registration_mode` is
+  `open`), the `/invite` page (`closed` while it is `disabled`) and `GlobalSettingsTab` (the select
+  locked, showing the mode in force, while `registration_locked`).
 
 ```ts
 import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 
 await instanceConfig.load();
 instanceConfig.config.profile; // 'selfhosted' | 'managed'
+instanceConfig.config.accounts.registration_mode; // 'open' | 'invite' | 'disabled'
+instanceConfig.config.accounts.registration_locked; // true while LIBREFOLIO_REGISTRATION pins it
 ```
 
 ## 📢 Instance notices {: #instance-notices }

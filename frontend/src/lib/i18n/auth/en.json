@@ -57,6 +57,28 @@
     "loginServerError": "The server ran into an error: try again in a moment, and if it happens again, tell an administrator.",
     "tooManyAttempts": "Too many login attempts: wait a few minutes and try again.",
     "showPassword": "Show password",
-    "hidePassword": "Hide password"
+    "hidePassword": "Hide password",
+    "registrationInviteOnly": "This server accepts new accounts only through an invitation link. Ask an administrator for one.",
+    "userLimitReached": "This server has reached its maximum number of accounts. Contact the administrator.",
+    "invite": {
+      "notice": "You have been invited to this LibreFolio server: create your account.",
+      "adminNotice": "This invitation creates an administrator account."
+    },
+    "link": {
+      "expired": "This link has expired.",
+      "consumed": "This link has already been used.",
+      "revoked": "This link has been withdrawn.",
+      "unknown": "This link is not valid.",
+      "missing": "This link is incomplete: open it again from the message you received.",
+      "checkFailed": "The link could not be checked. Try again in a moment.",
+      "askAdmin": "Ask an administrator for a new link."
+    },
+    "resetPassword": {
+      "title": "Choose a new password",
+      "account": "Account:",
+      "submit": "Set the new password",
+      "done": "Your password has been changed: sign in with the new one.",
+      "failed": "The password could not be changed. Try again."
+    }
   }
 }
