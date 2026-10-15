@@ -24,7 +24,7 @@ do not hold without a gate that fails the build when the level regresses.*
 | `PLC0415` | import-outside-toplevel | Imports belong at module top; the few legitimate function-local imports carry a justified `# noqa: PLC0415` |
 | `S110` | try-except-pass | No silent `except: pass` swallows — audit 08/P0-3 fixed the instances, the gate keeps them from coming back |
 | `C901` | cyclomatic complexity | Gated at **10** (`[tool.ruff.lint.mccabe] max-complexity = 10`) — see the policy below |
-| `RUF022` | sorted `__all__` | Barrel modules keep `__all__` sorted — with 4 deliberate exceptions, see below |
+| `RUF022` | sorted `__all__` | Barrel modules keep `__all__` sorted — with 3 deliberate exceptions, see below |
 
 `ruff check backend/` is green under these gates; a regression is a lint failure, not a discussion.
 
@@ -73,15 +73,14 @@ grep -rn "TODO(P2-refactor)" backend/ scripts/ --include="*.py" | wc -l
     with the flat-shape justification. If you found real nesting, mark it `TODO(P2-refactor)` —
     or better, extract a helper and drop the noqa entirely.
 
-## 🛢️ The 4 RUF022 exceptions
+## 🛢️ The 3 RUF022 exceptions
 
-`__all__` is kept sorted everywhere **except** four barrel modules that group their exports by
+`__all__` is kept sorted everywhere **except** three barrel modules that group their exports by
 domain with section comments — sorting would scatter related names away from their group:
 
 - `backend/app/db/__init__.py`
 - `backend/app/db/base.py`
 - `backend/app/schemas/__init__.py`
-- `backend/app/schemas/assets/assets.py`
 
 Each carries `# noqa: RUF022 — grouped by domain with section comments; sorting would scatter related names`.
 

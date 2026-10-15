@@ -1118,7 +1118,7 @@ da quando parte lo schedule.
 
 ### File candidati (quando si apre il ticket)
 
-- `backend/app/schemas/assets/assets.py` — `FAInterestRatePeriod`,
+- `backend/app/schemas/assets/scheduled_investment.py` — `FAInterestRatePeriod`,
   nuovo enum `CouponAnchor`.
 - `backend/app/services/asset_source_providers/scheduled_investment/plugin.py`
   — Step 3/4 rifattorizzati.
