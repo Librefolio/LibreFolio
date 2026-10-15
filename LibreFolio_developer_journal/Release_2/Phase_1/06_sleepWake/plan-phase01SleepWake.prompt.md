@@ -1152,5 +1152,22 @@ tool.
    >
    > Restano per la parte 2, dopo CP2b: i test di processo, le tre righe in `app_lifespan.py`, gli import di
    > `lifecycle` in cima al modulo e il ciclo di vita vero.
+   >
+   > **Ingresso della parte 1** (15/10, 18:41–18:56). Il coordinatore ha committato `f0b9bcad2` e `a014ec482`, poi ha
+   > fuso `dev_release2` a `bcd680868` (Y2, W E1b, J CP-4, E2): HEAD `c92fe1a93`. Le prove sulla revisione combinata,
+   > una alla volta con `nice -n 10`:
+   > - `utils test-server-preparation` 63/63, `utils runtime-isolation` 195/195, `services shutdown-budget` 178/178;
+   > - `api system` 117/117, con un ciclo di vita vero del backend condiviso:
+   >   - nell'ambiente del processo uvicorn c'è `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=3`, letto con `ps eww` sul listener;
+   >   - il gruppo di processi si svuota 760 ms dopo la chiusura del listener;
+   >   - nel log dell'app «Shutting down LibreFolio» e «All caches closed on shutdown»;
+   >   - nessun avviso «Shared backend ignored SIGTERM»;
+   > - `front-utility settings` 46/46 con `--workers 2`: stessa variabile nel processo, gruppo vuoto dopo 109 ms, nessun
+   >   avviso;
+   > - `check-orphans` verde: 126 spec, 415 file Vitest, 308 file backend;
+   > - porta 6186 libera.
+   >
+   > Il carico era alto (fino a 95 al minuto): prima delle due run col backend ho aspettato che scendesse sotto 60.
+   > Strumenti fuori dal repo: `/tmp/libreFolio_z6b_run.sh` e l'osservatore di Z6a. Log in `/tmp/libreFolio_z6b_*`.
 5. `.env.example`, la doc admin (`docs-writer`), il CHANGELOG proposto. ⏳
 6. Checkpoint FROZEN. ⏳
