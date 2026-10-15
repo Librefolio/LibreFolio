@@ -1273,3 +1273,13 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >
 > **⚠️ Fuori pista**: al developer avevo detto che gli import creano trasferimenti senza costo; era sbagliato (avevo
 > letto i plugin, non il Bulk che li completa). Corretto in chat e ritirata la voce di backlog a W.
+>
+> **⚠️ Fuori pista (2)**: anche «nasce solo da chiamate dirette all'API» era sbagliato. L'analisi N2 di W (16:25) mostra
+> che il backend la regola la controlla già: `validate_cost_basis` (`batch_costs.py`) gira dopo il WAC su ogni percorso
+> di `execute_batch` (validate, commit, `promote-transfer`) e una creazione senza costo dà `costBasisRequired`, con il
+> batch non committato. Le righe senza costo nascono dai dati vecchi, dalle due conversioni di N1, dall'Auto senza
+> media (P-1) e dalle ADJUSTMENT di uno SPLIT. Il controllo sulle modifiche è invece più stretto del deciso: rifiuta
+> anche la modifica delle sole note di una riga senza costo, che con N1b-2 esistono. **N2 ridefinito**: la regola letta
+> da `TX_TYPE_METADATA` (`cost_basis_required(type, quantity)`), e il controllo sulle modifiche solo quando cambiano
+> tipo, quantità (segno compreso) o costo, confrontando i valori con la riga salvata. Auto senza media e split restano
+> fuori. Parte dopo E1b.
