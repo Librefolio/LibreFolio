@@ -55,9 +55,13 @@ The database is organized into four logical subsystems. Each has its own detaile
 ## 🧬 Migrations {: #migrations }
 
 Schema changes ship as Alembic revisions in `backend/alembic/versions/` (workflow:
-[Database Migrations](../patterns/alembic.md)). At startup, `ensure_database_exists()` in
-`backend/app/main.py` builds a missing, empty or table-less database from scratch, and runs
-`alembic upgrade head` when the revision stored in `alembic_version` is not the head of the scripts.
+[Database Migrations](../patterns/alembic.md)). At startup, the `database` step of the
+[lifespan](../overview.md#server-startup) runs `ensure_database_exists()`
+(`backend/app/services/platform/database_bootstrap.py`), which builds a missing, empty or table-less
+database from scratch, and runs `alembic upgrade head` when the revision stored in `alembic_version`
+is not the head of the scripts. The head comes from `alembic_head_revision()`
+(`backend/app/services/platform/readiness.py`), the reader
+[`GET /system/ready`](../security.md#system-info-and-readiness) uses too.
 
 The chain is linear:
 
@@ -86,9 +90,10 @@ Some repairs cannot be Alembic revisions. Rebuilding a table that others referen
 listener turns foreign keys on, and dropping the old table would then empty the tables that point
 at it. These repairs live in `backend/app/db/post_migration/` as ordered `PostMigrationFix`
 subclasses (`FIXES`: a new fix is appended, never inserted before an older one). Right after
-`ensure_database_exists()`, the lifespan calls `run_post_migration_fixes_at_startup()`, which never
-lets an error stop the startup. `run_post_migration_fixes()` works on a direct `sqlite3`
-connection:
+the `database` step, the `post-migration-fixes` step of the lifespan runs
+`run_post_migration_fixes_at_startup()` (`backend/app/services/platform/database_bootstrap.py`) in a
+worker thread; it never lets an error stop the startup. `run_post_migration_fixes()` works on a
+direct `sqlite3` connection:
 
 1. It holds an exclusive `fcntl.flock` on `<db file>.post-migration.lock`, beside the database,
    from the integrity check to the cleanup, dry runs included: the workers of a multi-worker server

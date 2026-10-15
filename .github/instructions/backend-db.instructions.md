@@ -123,12 +123,13 @@ Two migrations authored in parallel that declare the same `down_revision` produc
 conflict** and a fork that only bites on a fresh install. Resolve it by re-parenting one onto
 the other, not with a merge node.
 
-This is not a style preference. `main.py:_alembic_head_revision()` calls
+This is not a style preference. `alembic_head_revision()` (`services/platform/readiness.py`,
+read at startup by `database_bootstrap.ensure_database_exists()` and by `GET /system/ready`) calls
 `ScriptDirectory.get_current_head()` (singular), which **raises `CommandError` on multiple
 heads**; the caller swallows it and returns `None`, so the pending-migration check at startup
 silently evaluates to false and **the server boots without migrating** — the exact failure the
 check exists to prevent. A fork therefore disables auto-upgrade for every install while
-leaving only a warning in the log.
+leaving only a warning in the log, and `/system/ready` answering `migrations: unknown`.
 
 `db_schema_validate.py` enforces `len(ScriptDirectory.get_heads()) == 1`.
 

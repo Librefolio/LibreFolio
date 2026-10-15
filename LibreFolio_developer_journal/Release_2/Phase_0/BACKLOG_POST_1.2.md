@@ -1941,8 +1941,14 @@ plugin.
   - Il pannello del contrasto del Lab confronta solo `--theme-text-*` con `--theme-bg-*`, più i bordi sulla card. I componenti migrati da T leggono i ruoli `--lf-*`, che il pannello non considera.
   - T ha già un gate di contrasto sui ruoli. Al Lab servirebbe per vedere dal vivo l'effetto di una modifica.
   - Le coppie vanno prese dalla tabella di T, non indovinate.
+  - **Decisione D3 (coordinatore, 15/10):** T sposta `CONTRAST_PAIRS` da `themeTokens.gate.test.ts` a un modulo condiviso dopo T-8; il pannello lo legge da lì, senza copie.
 
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-10 — Ruoli di T nel Lab».
+- **L-16 · Giro 3 della designer nel Lab: ruoli di T-8 e colori di categoria** — medio; coordinatore, 15/10 (decisioni D1–D4). Il cursore dell'opacità (D2) è fatto e validato il 15/10.
+  - **Dopo l'ingresso di T-8:** verifica del catalogo sui ruoli nuovi (barra verde, stati espliciti, terminale, interruttore, ombre, viola AI, hover dei campi) e una prova L1 a mano. Niente isole `.dark`/`.light`: T usa ruoli dedicati (D2).
+  - **Dopo l'ingresso del modulo di DV** (`lib/theme/chartCategories.ts`, contratto C1–C4): livello `category` (scheda «Categorie», aggancio C3 con `categoryColor` su `LabHook`, segnale C4 `notifyChartColorsChange()`, export e `verify-export`, una riga nella skill, test unit ed E2E). «Per valore» non basta: tipi e settori condividono 7 esadecimali in chiaro e 11 in scuro.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Giro 3 della designer nel Lab» e «Cursore dell'opacità nell'editor».
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 
@@ -2464,6 +2470,19 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     (`-sTCP:LISTEN`), come fa il runner.
 
   Dettagli: piano H, §14 «Due aggiornamenti di base … e la verifica di C-96».
+- **H-13 · `LIBREFOLIO_REGEN_NATIVE_CASH_GUARD` non arriva al test: la corsia la toglie (C-96)** — basso; DV dei colori
+  (DV-1), 15/10. ✅ 15/10: chiusa da J in CP-4, con la variabile rinominata `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD`.
+  - Il comando documentato per rigenerare `backend/test_scripts/fixtures/native_cash_guard/eur_only_golden.json`
+    (`test_native_cash_guard.py`, la docstring e `_REGEN_COMMAND`) esporta la variabile nella shell.
+    `configure_test_runtime()` toglie ogni `LIBREFOLIO_*` che la corsia non tiene (`_test_lane_drops`), quindi pytest non la
+    vede e il golden non si rigenera.
+  - È l'unica variabile di rigenerazione del repo. Le password del probe AI Export non passano da una corsia: il probe si
+    lancia con `pipenv run python`.
+  - Cura proposta: rinominarla `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD`, il prefisso che la corsia già tiene, senza un
+    elenco nuovo; aggiornare la docstring e `_REGEN_COMMAND`; un caso di `utils runtime-isolation` che fissi il passaggio di
+    `LIBREFOLIO_TEST_REGEN_*`. In alternativa, un elenco esplicito `LIBREFOLIO_REGEN_*` in `TEST_LANE_KEEPS`.
+
+  Dettagli: piano H, §14 «Ingresso dopo A6a».
 
 ## A · Account e accessi (fase 01)
 
@@ -2931,6 +2950,18 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   con un marcatore `Date.now()`: se i progetti desktop e mobile lo eseguono insieme, il secondo upsert sovrascrive la riga
   del primo. Lo scenario 2 marca le righe con una sonda `isVisible().catch`. Cura: un asset proprio per test, come in
   `asset-event-editor-save.spec.ts`. Dettagli: piano 04, sezione E1, passo 3.
+- **W-B30 · Svuotare un costo manuale non lo toglie: la modifica lo tiene in silenzio** — basso, numeri; W, 15/10 (N2,
+  test-author). In un aggiornamento `cost_basis_override: null` vale «invariato», come un campo assente
+  (`_apply_update_values`, `backend/app/services/transactions/batch_edits.py`): il modulo, quando l'utente svuota un costo
+  manuale, manda `null` e il backend tiene il costo di prima senza dirlo. Da decidere: un modo esplicito di togliere il
+  costo (con la regola del costo obbligatorio che poi lo rifiuta dove serve) o un messaggio. Dettagli: piano 04, sezione
+  N2.
+- **W-B31 · La regola 12 del costo è una seconda copia scritta a mano** — minimo, codice; W, 15/10 (N2, test-author).
+  `validate_transaction_business_rules` (`backend/app/schemas/transactions/transactions.py`, regola 12,
+  `costBasisModeIncompatible`) ammette `cost_basis_mode` solo per TRANSFER e ADJUSTMENT con quantità > 0, a mano, mentre
+  N2 legge dai metadati il costo obbligatorio (`cost_basis_required`). Leggerla da `TX_TYPE_METADATA` porterebbe un
+  import circolare (`type_metadata.py` importa `transactions.py`): serve spostare la funzione o un import tardivo.
+  Dettagli: piano 04, sezione N2.
 
 ## J · Numeri e analisi (fase 01)
 
@@ -3174,6 +3205,64 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md). Sessione avviata il 15/10 alle
 07:10, solo analisi, sulla base `ee5d81a6f`. Codice autorizzato il 15/10 alle 11:25 (delega del developer): B0 e B1,
 sulla base `23f6578f3`.
+
+- ✅ **B-1 · devWiki: F-073 e `domains/infrastructure` danno per fatto il backup completo** — minimo, doc; B, 15/10
+  (analisi). **Chiusa il 15/10 con B1**: F-073 racconta il backup dell'istanza e il ripristino che manca, la nota sullo
+  streaming è giusta, la riga di Impostazioni rimanda a B5; la riga di `domains/infrastructure.md` dice lo stesso.
+  - `features/F-073.md` è `implemented`, ma il backup completo risponde 501; dice «streaming, nessun accumulo», ma gli
+    export per serie materializzano le righe; chiama `GET /backup/export`, che è un `POST`; cita una sezione di
+    backup in Impostazioni che non esiste.
+  - `domains/infrastructure.md`, riga F-073: «export and import the full SQLite database — implemented».
+  - Le righe «Source files» sono giuste da B0 (15/10); la prosa si corregge con B1, che fa il backup vero, o con
+    `project-historian`.
+
+  Dettagli: [piano 07](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md), §2, punto 1.
+- **B-2 · Un commento di `DataEditor.test.ts` cita `backend/app/api/v1/backup.py`** — minimo; B, 15/10 (B0).
+  `frontend/src/lib/components/ui/data-editor/DataEditor.test.ts:802`: l'export degli eventi ora sta in
+  `backend/app/api/v1/backup/exports.py`. Il file è di T (`ui/data-editor`): non lo tocco. Dettagli: piano 07, §13, B0
+  passo 3.
+- ✅ **B-3 · La docstring di `backup_asset_prices` cita `backup_service.PRICE_COLUMNS`, ed è nell'OpenAPI** — minimo, doc;
+  B, 15/10 (B0). **Chiusa il 15/10 con B1**, che cambia comunque l'API. `backend/app/api/v1/backup/exports.py:71`: il modulo ora è `series_export.py`. Un lotto di riordino
+  lascia lo schema identico, quindi la correggo in B1, che cambia comunque l'API. Dettagli: piano 07, §13, B0 passo 2.
+- **B-4 · I comandi dell'immagine elencati senza `backup`** — minimo, doc; B, 15/10 (B6a, segnalato da docs-writer).
+  `docker_advanced.en.md#docker-exec` («In the image, `user`, `db` and `info` work»), il commento in testa a
+  `docker-compose.yml` e `admin/index.en.md:21` («user management, database upgrades») non dicono che anche
+  `dev.py backup` funziona nell'immagine. I file Docker sono di H fino al CP7a. **Passata ad H dal coordinatore** (15/10,
+  14:37). Dettagli: piano 07, §13, B6a.
+- **B-5 · `filesystem.en.md` «💾 Backup» non conosce `dev.py backup`** — piccolo, doc; B, 15/10 (B6a). Il file è di H
+  (CP3). Mancano:
+  - un rimando a `cli_tools.md#backup`, l'unico modo di fare un backup coerente a server acceso senza `sqlite3`;
+  - la nota che la copia della cartella dati prende anche `backups/`, con gli archivi;
+  - `backups/` nell'albero della cartella;
+  - un'ancora esplicita `{: #what-to-back-up }` sul titolo «✅ What to Back Up», nelle 4 lingue: i titoli tradotti hanno
+    slug diversi, quindi la pagina della CLI ora punta a `filesystem.md#backup`.
+
+  Testo proposto da docs-writer nel piano 07, §13, B6a. **Passata ad H dal coordinatore** (15/10, 14:37).
+- **B-6 · Il polling della scheda Backup ha il suo ciclo** — minimo; B, 15/10 (B5a). `BackupJobController` legge il
+  job con un suo `setTimeout`, perché nella base non c'è ancora l'aiuto comune di Z (F26, «un solo aiuto di polling per
+  tutti i cicli»). Quando entra, il controller lo usa. Il ciclo è breve e solo durante un backup avviato dall'admin.
+  Dettagli: piano 07, §13, B5a.
+- **B-7 · Debito di traduzione di `cli_tools.{it,fr,es}.md`** — piccolo, doc; B, 15/10 (B6a). Mancano la sezione
+  «💾 Back Up the Instance» (5 sottosezioni), una frase dell'introduzione e il punto Docker del suggerimento. La pagina
+  inglese non è timbrata: la traduzione passa dalla pipeline Aphra, su richiesta del developer.
+- **B-8 · Un backup avviato dalla UI la cui risposta si perde resta invisibile alla scheda** — minimo; B, 15/10 (B5a,
+  segnalato da test-author). Se la risposta di `POST /backup/instance` si perde (rete, timeout), il job gira sul server
+  ma la scheda non conosce il suo id. Nessuna rotta elenca il job in corso, e il rifiuto `backup_busy` non lo porta.
+  - Effetto: «busy» finché quel job finisce; il suo archivio scade dopo un'ora senza essere offerto; lo spazio su disco
+    resta occupato per quell'ora.
+  - Cura possibile: l'id (e l'origine) del job in corso nel dettaglio di `backup_busy`, così la scheda lo segue. Con
+    un'attenzione: un job della CLI si sposta fuori da `.jobs/` alla fine.
+
+  Dettagli: piano 07, §13, B5a, terza tornata.
+- **B-9 · Il token del pannello non è fra i controlli della configurazione** — piccolo; B, 15/10 (B8).
+  - Oggi un `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` inutilizzabile (corto, non ASCII visibile, `_FILE` illeggibile) si vede
+    solo alla prima richiesta del pannello: 503 `backup_panel_unavailable` e una riga d'errore nel log.
+  - All'avvio, `log_configuration_audit()` non lo nomina, e la futura scheda «Sicurezza» non lo mostrerà.
+  - Cura possibile, come ha fatto E per l'email: `BACKUP_CONFIG_CHECKS` in un modulo di B (stato `ok`, `info` se
+    spento, `error` se inutilizzabile, mai il valore), una riga in `config_audit.CONFIG_CHECKS` (file di H) e le
+    chiavi `backup.checks.*` nelle 4 lingue.
+
+  Dettagli: piano 07, §13, «B8 — il token del pannello, rimesso sopra `ef61f0e7f`».
 
 ## E · Email (fase 01)
 
