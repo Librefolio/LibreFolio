@@ -752,6 +752,14 @@ def services_config_env_example(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, ".env.example guard tests", verbose=verbose)
 
 
+def services_platform_readiness(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the readiness checks: database and migration codes, the head read once, no detail in the response."""
+    print_section("Services: Instance Readiness")
+    print_info("Testing: backend/app/services/platform/readiness.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_platform_readiness.py", test_names)
+    return run_command(cmd, "Instance readiness tests", verbose=verbose)
+
+
 def services_donation_popup(verbose: bool = False, test_names: list = None) -> bool:
     """Test donation-popup trigger decision logic (should_show_donation_popup, record_login_and_maybe_show_popup)."""
     print_section("Services: Donation Popup")
@@ -1195,6 +1203,7 @@ Note: No backend server required.
     add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
+    add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
     add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
     add_test(cat, "file-preview", services_file_preview, name="File Preview", desc="CSV/Excel/text preview detection helpers")
