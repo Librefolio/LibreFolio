@@ -82,6 +82,31 @@
       "TIMEOUT": "Le serveur SMTP n'a pas répondu à temps.",
       "SEND_FAILED": "Le serveur SMTP n'a pas accepté le message."
     },
-    "loadError": "L'état de l'e-mail n'a pas pu être lu."
+    "loadError": "L'état de l'e-mail n'a pas pu être lu.",
+    "verification": {
+      "page": {
+        "checking": "Vérification de votre adresse e-mail…",
+        "expired": "Ce lien a expiré. Connectez-vous avec votre nom d'utilisateur et votre mot de passe : un nouveau lien vous sera proposé.",
+        "consumed": "Ce lien a déjà été utilisé. Si votre compte est actif, connectez-vous.",
+        "revoked": "Ce lien ne fonctionne plus : connectez-vous pour en demander un nouveau.",
+        "unknown": "Ce lien n'est pas valide : rouvrez-le en entier depuis l'e-mail. S'il échoue encore, connectez-vous pour en demander un nouveau.",
+        "missing": "Ce lien est incomplet : rouvrez-le depuis l'e-mail.",
+        "error": "Le lien n'a pas pu être vérifié : réessayez."
+      },
+      "verified": "Votre adresse e-mail est vérifiée, {username} : vous pouvez vous connecter.",
+      "loginRequired": "Votre adresse e-mail n'est pas encore vérifiée : ouvrez le lien de l'e-mail que nous vous avons envoyé, puis connectez-vous.",
+      "resend": "Renvoyer le lien",
+      "resending": "Envoi…",
+      "resent": "Un nouveau lien est en route : vérifiez votre boîte de réception, et les spams. Les liens précédents ne fonctionnent plus.",
+      "resendErrors": {
+        "INVALID_CREDENTIALS": "Le nom d'utilisateur ou le mot de passe n'est pas correct : vérifiez-les dans le formulaire ci-dessus.",
+        "EMAIL_RATE_LIMITED": "Trop de demandes pour le moment : réessayez dans {minutes} min.",
+        "EMAIL_VERIFICATION_NOT_NEEDED": "Votre compte est déjà actif : connectez-vous.",
+        "USER_LIMIT_REACHED": "Votre lien a expiré, et cette instance est complète maintenant : demandez à son administrateur.",
+        "ACCOUNT_DISABLED": "Ce compte est désactivé : demandez à l'administrateur de cette instance.",
+        "unavailable": "L'e-mail ne peut pas partir pour le moment : réessayez plus tard, ou demandez à l'administrateur de cette instance.",
+        "generic": "Le lien n'a pas pu être envoyé : réessayez."
+      }
+    }
   }
 }
