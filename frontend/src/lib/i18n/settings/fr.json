@@ -80,7 +80,6 @@
     },
     "globalSettingNames": {
       "session_ttl_hours": "Durée de Session",
-      "enable_registration": "Activer l'Inscription",
       "require_email_verification": "Vérification Email Requise",
       "max_file_upload_mb": "Taille Max Téléversement",
       "default_language": "Langue par Défaut",
@@ -89,11 +88,11 @@
       "scheduler_history_sync_times": "Horaires de Synchronisation Historique",
       "scheduler_history_sync_days": "Jours de Synchronisation Historique",
       "scheduler_history_sync_horizon_days": "Horizon de Récupération",
-      "scheduler_enabled": "Planificateur Activé"
+      "scheduler_enabled": "Planificateur Activé",
+      "registration_mode": "Inscription"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "Durée de validité d'une session utilisateur avant reconnexion",
-      "enable_registration": "Autoriser les nouveaux utilisateurs à créer des comptes",
       "require_email_verification": "Exiger la vérification email pour les nouveaux comptes",
       "max_file_upload_mb": "Taille maximale des fichiers autorisée pour les téléversements",
       "default_currency": "Devise par défaut pour les nouveaux utilisateurs",
@@ -103,7 +102,8 @@
       "scheduler_current_price_frequency_minutes": "Fréquence de mise à jour des prix actuels (en minutes)",
       "scheduler_history_sync_times": "Heures auxquelles les données historiques sont synchronisées (dans le fuseau horaire du planificateur)",
       "scheduler_history_sync_days": "Jours de la semaine pendant lesquels les données historiques sont synchronisées",
-      "scheduler_history_sync_horizon_days": "Nombre de jours en arrière pour chercher les données historiques manquantes"
+      "scheduler_history_sync_horizon_days": "Nombre de jours en arrière pour chercher les données historiques manquantes",
+      "registration_mode": "Qui peut créer un compte : tout le monde (ouverte), seulement les personnes qui ont un lien d'invitation (sur invitation), ou personne (fermée)."
     },
     "globalSettingUnits": {
       "session_ttl_hours": "heures",
@@ -216,6 +216,12 @@
       "confirmClearTitle": "Vider le cache {name} ?",
       "confirmClearAllTitle": "Vider tous les caches ?",
       "confirmWarning": "Après le vidage, la prochaine récupération de ces données subira des ralentissements comparables à un redémarrage du serveur."
-    }
+    },
+    "registrationModes": {
+      "open": "Ouverte",
+      "invite": "Sur invitation",
+      "disabled": "Fermée"
+    },
+    "lockedByEnv": "Défini sur le serveur par {variable} : modifiez-le là-bas."
   }
 }

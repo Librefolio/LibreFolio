@@ -57,6 +57,28 @@
     "loginServerError": "Le serveur a rencontré une erreur : réessayez dans un instant et, si cela se reproduit, prévenez un administrateur.",
     "tooManyAttempts": "Trop de tentatives de connexion : patientez quelques minutes et réessayez.",
     "showPassword": "Afficher le mot de passe",
-    "hidePassword": "Masquer le mot de passe"
+    "hidePassword": "Masquer le mot de passe",
+    "registrationInviteOnly": "Ce serveur n'accepte de nouveaux comptes que par un lien d'invitation. Demandez-en un à un administrateur.",
+    "userLimitReached": "Ce serveur a atteint son nombre maximal de comptes. Contactez l'administrateur.",
+    "invite": {
+      "notice": "Vous avez reçu une invitation pour ce serveur LibreFolio : créez votre compte.",
+      "adminNotice": "Cette invitation crée un compte administrateur."
+    },
+    "link": {
+      "expired": "Ce lien a expiré.",
+      "consumed": "Ce lien a déjà été utilisé.",
+      "revoked": "Ce lien a été révoqué.",
+      "unknown": "Ce lien n'est pas valide.",
+      "missing": "Ce lien est incomplet : ouvrez-le à nouveau depuis le message que vous avez reçu.",
+      "checkFailed": "Impossible de vérifier le lien. Réessayez dans un instant.",
+      "askAdmin": "Demandez un nouveau lien à un administrateur."
+    },
+    "resetPassword": {
+      "title": "Choisissez un nouveau mot de passe",
+      "account": "Compte :",
+      "submit": "Définir le nouveau mot de passe",
+      "done": "Votre mot de passe a été modifié : connectez-vous avec le nouveau.",
+      "failed": "Le mot de passe n'a pas pu être modifié. Réessayez."
+    }
   }
 }

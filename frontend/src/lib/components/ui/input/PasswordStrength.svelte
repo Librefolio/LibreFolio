@@ -7,6 +7,8 @@
 
     export let password: string = '';
     export let showRules: boolean = true;
+    /** Every rule is met. A form that needs a valid password binds to it (`bind:valid`) instead of keeping its own copy of the rules. */
+    export let valid: boolean = false;
 
     // Initialize zxcvbn with dictionaries
     const options = {
@@ -44,6 +46,7 @@
     }));
 
     $: allRulesPassed = ruleResults.every((r) => r.passed);
+    $: valid = allRulesPassed;
 
     // Strength labels and colours: three states for five scores (decision D-T13). The label says the level in words;
     // the colours of the bar only repeat it.

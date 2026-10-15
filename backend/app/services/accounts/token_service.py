@@ -75,8 +75,12 @@ def hash_token(token: str) -> str:
 
 
 def token_path(purpose: AccountTokenPurpose, token: str) -> str:
-    """The path of the web page that takes this token, query string included."""
-    return f"{_TOKEN_PATHS[purpose]}?{urlencode({'token': token})}"
+    """The path of the web page that takes this token, the token in the fragment.
+
+    A browser never sends the fragment to the server: the token stays out of access logs, proxy logs and the
+    ``Referer`` of a link followed from the page, which reads it with JavaScript.
+    """
+    return f"{_TOKEN_PATHS[purpose]}#{urlencode({'token': token})}"
 
 
 async def issue_token(
