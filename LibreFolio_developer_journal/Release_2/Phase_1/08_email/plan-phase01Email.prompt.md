@@ -907,3 +907,102 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 > **Base**: HEAD `7f735af7c`. Delta: 22 file tracciati modificati, 2 nuovi (`services/email/links.py`,
 > `test_services/test_email_links.py`). Righe nei file altrui dichiarate nel messaggio di consegna. Restano di E3: la
 > verifica dell'indirizzo nella scheda Email con l'helper di A6b; l'email d'attivazione dell'admin iniziale dopo A7.
+
+### E3 — revisione di sicurezza (cancello di rilascio)
+
+#### E3.5 — `security-review` sulle superfici nuove ✅ (2026-10-15), correzioni ✅, prove ✅ (2026-10-15, 21:20)
+> **Note implementazione**: E3 committato (`fd530372d`, `cf12cac9c`), base aggiornata dal coordinatore
+> (`cc4758dce`: CP2b di H, B, B8, W N2, Z6b parte 1). Giro leggero sulla base unita, tutto verde: `email-links` 71,
+> `email-flows` 104, `config-audit` 90, `api email` 154, `api system` 117, `api instance-block` 60, `check-orphans`.
+> Revisione di sicurezza chiesta dal coordinatore (agente `security-review`, sola lettura) su
+> `POST /email/password-reset`, `POST /email/links`, `links.py` e i limiti, con i tre punti già segnalati.
+>
+> Esito e decisioni:
+> - **Alert 1, MEDIA (fiducia 8), verificato**: `PUT /auth/profile` cambia l'email con il solo cookie (niente password
+>   attuale, nessun avviso, sessioni aperte); con «password dimenticata» un momento dentro la sessione di un altro
+>   diventerebbe una presa permanente dell'account. **Decisione del coordinatore** (15/10): (a) A chiede la password
+>   attuale per cambiare l'email e chiude le altre sessioni, lotto piccolo dopo A6d; E4 aggiungerà l'avviso al vecchio
+>   indirizzo; (b) **subito**: `POST /email/password-reset` risponde 409 `FORGOT_PASSWORD_DISABLED` finché (a) non è
+>   entrato (`flows.FORGOT_PASSWORD_HELD`), e lo tolgo con E4.
+> - **Alert 2, BASSA**: con la registrazione aperta, un account con l'email di un altro e uno username di phishing fa
+>   partire email vere verso il terzo. In E: ogni valore nel testo delle email su una riga (`messages._one_line`:
+>   caratteri di controllo e separatori di riga → spazio, controlli bidi tolti); un limite per casella di posta
+>   (`FORGOT_BY_MAILBOX`, 3/h). In A (backlog, deciso dal coordinatore): i caratteri dello username.
+> - **Punto 1** (revoca del link dell'admin): il flusso anonimo non manda niente mentre un link di reset creato da un
+>   admin è vivo (`_admin_link_live`).
+> - **Punto 2** (reset di un account disattivo): `POST /email/links` risponde 409 `EMAIL_ACCOUNT_INACTIVE`.
+> - **Punto 3** (limite per indirizzo): 10 ogni 15 minuti, IPv6 per /64 (`address_key`); nella doc
+>   `FORWARDED_ALLOW_IPS` con gli indirizzi esatti dei proxy, mai `*`.
+> - Altri: il conteggio per account si rifà dentro la transazione di scrittura dopo la creazione (due richieste
+>   simultanee non mandano due email; un link dell'admin revocato dalla creazione torna con il rollback); il log
+>   d'errore del lavoro in background senza traceback (i parametri SQL avrebbero mostrato l'identificativo);
+>   `urlsplit` dentro il `try` (`https://[::1` non dà più 500).
+> - Verificato dalla revisione senza rilievi: avvelenamento dei link, fuga dei token, enumerazione, iniezione di
+>   intestazioni e di HTML, confusione degli scopi, CSRF (cookie SameSite=Lax, nessun CORS), istanza bloccata.
+>
+> **⚠️ Fuori pista** (autorevisione durante la seconda pausa, 21:00): due difetti nelle correzioni appena scritte,
+> trovati prima di ogni prova.
+> - `address_key` leggeva `ip.ipv4_mapped` anche su un `IPv4Address`, che non l'ha: ogni client IPv4 avrebbe preso
+>   un 500 a feature aperta (la sospensione lo nascondeva). Ora: IPv4 così com'è, IPv4 mappato → l'IPv4, IPv6 → il
+>   suo /64 calcolato dall'intero (la zona di `fe80::1%eth0` non disturba), `None` o `""` → `None`, il resto com'è
+>   scritto. Verificato con uno snippet sui nove casi; i casi sono girati a test-author.
+> - Nel ramo della corsa, dopo `session.rollback()`, `logger.info(..., user_id=user.id)` avrebbe ricaricato `user`
+>   scaduto → `MissingGreenlet` → il catch-all avrebbe loggato «the request failed» al posto della riga giusta (niente
+>   inviato comunque). Ora `user_id` si legge subito dopo la ricerca dell'account e si usa ovunque dopo.
+>
+> Doc (docs-writer, solo EN, nessuno stamp): `admin/email.en.md` e `developer/backend/email.md` coprono sospensione e
+> motivo, limiti nuovi, `EMAIL_ACCOUNT_INACTIVE`, `FORWARDED_ALLOW_IPS` mai `*`, log senza traceback, valori su una
+> riga; in più l'istanza bloccata e le regole intere di `_usable_base` (già nel codice di E3, non ancora scritte).
+>
+> **Rimandato al lotto della scheda Email (sonda)**: il testo dell'avviso `email.links` «non è un indirizzo http(s)» è
+> più stretto di `_usable_base`, che rifiuta anche credenziali, `?`/`#`, spazi, host mancante o porta sbagliata. Va
+> riscritto («non si può usare per i link nelle email») nel log, nei 4 cataloghi `email.checks.links.invalid` e nelle
+> due righe di `admin/configuration.en.md`: tocca i cataloghi, quindi `core-unit`, che quel lotto fa comunque.
+>
+> **Test** (test-author, scritti durante le pause, nessuno lanciato prima della ripresa delle 21:09):
+> - nuovi: EMF-035 (la sospensione per prima, in ogni stato; esce `True`), EMF-036 (`address_key`), EMF-037 (10 per
+>   /64; IPv4 e la sua forma mappata, un conteggio), EMF-038 (casella di posta, 4 account e 4 maiuscole), EMF-039
+>   (link vivo dell'admin; consumato, revocato o scaduto no), EMF-040 (corsa: link rivale fatto da un'altra sessione
+>   dentro `create_password_reset` → rollback, il rivale di nuovo vivo), EMF-041 (account disattivo), EMF-042 (errore
+>   del DB con l'identificativo nei parametri → solo `error="OperationalError"`); EMA-046 (sospesa: stessa 409 per
+>   tre account, niente contato né programmato), EMA-047 (/64 dalla rotta), EMA-048 (`EMAIL_ACCOUNT_INACTIVE`);
+>   EMM-031…033 (una riga per valore, bidi tolti, markup spezzato ancora escapato);
+> - adattati: EMF-021/024/027/029/030/031/032/033, EMA-035/041/042/043, EML-011/012 (`https://[::1`); i moduli
+>   flows e api tolgono la sospensione con una fixture autouse, i test della sospensione la rimettono;
+> - runner (file condivisi, solo le descrizioni delle mie voci): `_backend_api.py:900`, `_backend_services.py:490,
+>   1335, 1363, 1373`.
+> - EMF-040 regge su un'ipotesi verificata: il motore del test passa dal listener `connect` globale (WAL,
+>   `busy_timeout`), e pysqlite apre la transazione solo prima di una scrittura, quindi le letture del lavoro non
+>   tengono lock quando il rivale fa commit.
+>
+> Doc: tabella Testing di `developer/backend/email.md` aggiornata (EMF-042, EMA-048, EMM-033, la parentesi IPv6, la
+> fixture della sospensione); «Coming Next» con la decisione 44 al posto di «ancora da decidere».
+>
+> **Prove** (dopo la ripresa delle 21:09, una alla volta, `nice -n 10`, corsia 6188, carico sotto 70 a ogni lancio):
+>
+> | Comando | Esito |
+> |---|---|
+> | `services email-links` | 74 ✅ (71 + 3) |
+> | `services email-flows` | 132 ✅ (104 + 28), EMF-040 compreso, le due forme della corsa |
+> | `services email-messages` | 267 ✅ (245 + 22) |
+> | `services email-delivery` | 104 ✅ |
+> | `--no-shared-server api email` | 160 ✅ (154 + 6) |
+> | `services config-audit` | 90 ✅ |
+> | `check-orphans` | ✅ (316 file backend raggiungibili) |
+> | `dev.py mkdocs build` (stretto) | uscita 0, nessuna riga `WARNING`/`ERROR`, 3 044 URL risolti |
+> | `dev.py mkdocs check-links` | 96 link validi |
+>
+> - `ruff` e `black --check` puliti sui file di produzione e sui test; `black` segnala in `_backend_services.py` solo
+>   la riga lunga di A (già girata ad A dal coordinatore). `git diff --check` pulito, porta 6188 libera, nessun file
+>   nuovo né ignorato da escludere oltre ai log di `/tmp` e allo snapshot del DB nella cartella dei log del runner.
+> - **Non rieseguiti**: `api system` e `api instance-block`, verdi sulla revisione combinata `cc4758dce` prima delle
+>   correzioni; il delta non tocca i loro percorsi (senza `LIBREFOLIO_PUBLIC_URL` `links_state` esce prima di
+>   `_usable_base`; su un'istanza bloccata le rotte email rispondono 423 dal middleware prima del gestore). Nessun
+>   catalogo i18n toccato → niente `core-unit`.
+
+### Checkpoint E3s 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+> **Base**: HEAD `cc4758dce`. Delta: 13 file tracciati modificati, nessuno nuovo. Codice: `services/email/{flows,
+> messages,links}.py`, `api/v1/email.py`. Test: `test_email_{flows,messages,links}.py`, `test_email_api.py`; runner
+> (solo descrizioni delle voci E): `_backend_api.py`, `_backend_services.py`. Doc EN: `admin/email.en.md` (senza
+> traduzioni), `developer/backend/email.md`. Questo piano. Resta aperta la sospensione di «password dimenticata»
+> (409 `FORGOT_PASSWORD_DISABLED`) fino al lotto di A sulla password attuale per cambiare l'email; la toglie E4.
