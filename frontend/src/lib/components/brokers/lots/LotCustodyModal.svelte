@@ -14,7 +14,7 @@
     import {ArrowRightLeft, Info, Minus, Plus, X} from 'lucide-svelte';
     import type {z} from 'zod';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
-    import {compareHistoryEvents, eventMarkerKind, getBroker as sharedGetBroker, groupCustodySlices, historyKey, multiplyOrNull, unwrapScalar, type EventMarkerKind} from './lotCustodyModalHelpers';
+    import {closureValueLabelKey, compareHistoryEvents, eventMarkerKind, getBroker as sharedGetBroker, groupCustodySlices, historyKey, multiplyOrNull, unwrapScalar, type EventMarkerKind} from './lotCustodyModalHelpers';
     import {isUnknownOrNonZero} from './lotChartShared';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
@@ -178,7 +178,7 @@
                 items.push({label: $_('brokers.lots.modal.historyDetail.closePrice'), value: formatUnitPrice(closePrice)});
             }
             if (proceeds != null) {
-                items.push({label: $_('brokers.lots.modal.historyDetail.proceeds'), value: formatSignedCurrency(proceeds), tone: proceeds >= 0 ? 'positive' : 'negative'});
+                items.push({label: $_(closureValueLabelKey(event.kind)), value: formatSignedCurrency(proceeds), tone: proceeds >= 0 ? 'positive' : 'negative'});
             }
             if (realizedPnl != null) {
                 items.push({label: $_('brokers.lots.modal.historyDetail.realizedPnl'), value: formatSignedCurrency(realizedPnl), tone: realizedPnl >= 0 ? 'positive' : 'negative'});
