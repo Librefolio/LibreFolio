@@ -1,0 +1,49 @@
+{
+  "backup": {
+    "tab": "Copia de seguridad",
+    "intro": "Los datos de este LibreFolio en un solo archivo, para guardarlo en un lugar seguro o llevarlo a otra instalación.",
+    "download": {
+      "title": "Copia de seguridad de la instancia",
+      "description": "Un archivo con la base de datos, los archivos subidos, los informes de los brókers y los escenarios de riesgo. No incluye los registros ni la clave de la instancia.",
+      "privacy": "El archivo contiene los datos de todos los usuarios y no está cifrado: guárdalo en un lugar privado.",
+      "create": "Crear copia de seguridad",
+      "createAgain": "Crear una nueva copia",
+      "creating": "Creando la copia de seguridad…",
+      "checking": "Comprobando la copia de seguridad…",
+      "phase": {
+        "preparing": "Preparando",
+        "database": "Copiando la base de datos",
+        "files": "Añadiendo los archivos",
+        "finalizing": "Finalizando"
+      },
+      "progress": "{done} de {total}",
+      "ready": "Copia de seguridad lista",
+      "readyDetails": "{name}, {size}, creada el {date}",
+      "download": "Descargar",
+      "delete": "Eliminar del servidor",
+      "deleting": "Eliminando la copia de seguridad…",
+      "retention": "El archivo se queda en el servidor una hora y después se elimina.",
+      "recheck": "Comprobar de nuevo",
+      "retry": "Reintentar",
+      "warningsTitle": "Copia completada, con avisos",
+      "warnings": {
+        "database_integrity": "La base de datos no superó la comprobación de integridad: se archivó tal cual.",
+        "foreign_key_violations": "La base de datos tiene referencias no válidas entre tablas: se archivó tal cual.",
+        "files_skipped": "Se omitieron algunos archivos: enlaces, archivos especiales, archivos o carpetas que no se pudieron leer, o archivos eliminados durante la copia."
+      },
+      "errors": {
+        "backup_busy": "Ya hay otra copia de seguridad en curso: inténtalo de nuevo cuando termine.",
+        "backup_no_space": "No hay suficiente espacio libre en el servidor para la copia de seguridad.",
+        "backup_folder_unusable": "La carpeta de copias de seguridad del servidor es un enlace o un archivo: LibreFolio crea las copias solo en una carpeta real de su directorio de datos.",
+        "backup_failed": "La copia de seguridad falló: el registro del servidor tiene los detalles.",
+        "backup_interrupted": "La copia de seguridad se interrumpió, por ejemplo por un reinicio: crea una nueva.",
+        "backup_job_not_found": "Esta copia de seguridad ya no está en el servidor: crea una nueva.",
+        "network": "El servidor no responde.",
+        "unexpected": "El servidor respondió con un error: recarga la página e inténtalo de nuevo."
+      },
+      "toast": {
+        "warnings": "Copia de seguridad lista, con avisos: revísalos antes de confiar en ella."
+      }
+    }
+  }
+}

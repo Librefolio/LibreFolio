@@ -2457,7 +2457,9 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     (`RUN --mount=type=secret,id=extra_ca,required=false`), documentato in `admin/docker_advanced`.
 
   Dettagli: piano H, §14 «Validazione unica dei quattro lotti e prova Docker».
-- **H-12 · Un avvio fallito del server condiviso dei test non dice perché** — basso; H (verifica di A5), 15/10.
+- **H-12 · Un avvio fallito del server condiviso dei test non dice perché** — basso; H (verifica di A5), 15/10. Metà ✅
+  15/10 (lotto «billing_url e rotte dei link»): `check_port_in_use` conta solo i listener, come il runner. Resta
+  l'output scartato del server condiviso.
   - `scripts/test_runner/_server.py` avvia `dev.py server --test` con stdout e stderr su `DEVNULL`: il runner stampa
     solo «Shared backend exited during startup (code 1)».
   - Le due verifiche della porta sono diverse: il runner guarda solo i listener; `cmd_server` usa `lsof -i :PORT -t`,
@@ -2912,6 +2914,29 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   apposta, è un rischio necessario che uno sbagli, è noto e accettato» — nella 1.3 resta così. Per il futuro (istanze
   cloud con più famiglie?): un modello fra solo gli admin, solo chi ha creato l'asset, solo chi ne ha posizioni, o un
   registro delle modifiche con l'autore. Dettagli: file delle decisioni, punto 25.
+- **W-B26 · Una tendina aperta verso l'alto in una tabella finisce sotto l'intestazione fissa** — basso, UI (componenti
+  condivisi); W, 15/10 (E1b, trovato dal test-author). La lista di `SimpleSelect` è `fixed z-[9999]` ma non è portata nel
+  `body` (`frontend/src/lib/components/ui/select/SimpleSelect.svelte:328`): dentro una tabella resta nel contesto di
+  sovrapposizione di un antenato, sotto la `th` fissa (`z-index: 15`, `components/table/DataTable.svelte:1621`). Quando
+  si apre verso l'alto vicino all'intestazione (poco spazio sotto) le opzioni sono coperte e non si cliccano: visto
+  nell'editor degli eventi, sul tipo di una riga. Cura possibile: portare la lista nel `body`, come gli altri menu
+  fissi. File condivisi (UI e tabella): da assegnare. Dettagli: piano 04, sezione E1, passo 3.
+- **W-B27 · L'editor dei dati dell'asset: il prefisso «Save failed:» in inglese e le date ISO nel messaggio** — minimo,
+  chiarezza; W, 15/10 (E1b, docs-writer). Dopo E1b il motivo di un rifiuto degli eventi è tradotto, ma il `catch` del
+  salvataggio in `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` lo antepone a «Failed to save: » /
+  «Save failed: » scritti a mano in inglese, e la frase porta le date in ISO. In più le chiavi `events.deleteBlocked` e
+  `events.deleteNotFound` (sorgente i18n `assets`) non le usa più nessuno: da togliere. Righe di X: da assegnare.
+  Dettagli: piano 04, sezione E1, passo 3.
+- **W-B28 · Debito di traduzione delle pagine utente di E1b** — minimo, doc; W, 15/10 (E1b). Cambiate solo in inglese,
+  senza stamp: `user/assets/detail/data-editor.en.md` (§ 📅 Events tab: il salvataggio tutto o niente e l'elenco dei
+  rifiuti; § 📥 Import from CSV: il `type` e la colonna `currency`), `user/assets/detail/events.en.md` («From you» e il
+  nuovo H3 `#new-event`, da tenere con quell'àncora in ogni lingua: `form` la cita), `user/transactions/form.en.md`
+  («Missing event?»). IT, FR ed ES con la pipeline, su richiesta del developer. Dettagli: piano 04, sezione E1, passo 5.
+- **W-B29 · `asset-event-delete.spec.ts`: lo scenario 1 scrive su Apple condivisa a una data fissa** — minimo, test; W,
+  15/10 (E1b, segnalato dal test-author). Lo scenario 1 salva un DIVIDEND sull'asset Apple condiviso a una data fissa,
+  con un marcatore `Date.now()`: se i progetti desktop e mobile lo eseguono insieme, il secondo upsert sovrascrive la riga
+  del primo. Lo scenario 2 marca le righe con una sonda `isVisible().catch`. Cura: un asset proprio per test, come in
+  `asset-event-editor-save.spec.ts`. Dettagli: piano 04, sezione E1, passo 3.
 
 ## J · Numeri e analisi (fase 01)
 
@@ -3104,6 +3129,9 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 - **C-49 (sezione C) · presa in carico da Z** — prove senza codice in Z6a (autorizzate il 15/10), cura in Z6b con il
   punto 35 delle decisioni. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione
   «Z6a — prove su C-49, senza codice di prodotto».
+  - 15/10, Z: 9 cicli di vita puliti su spec singole; il coordinatore cerca l'avviso nelle sue run di categoria. Dalla
+    lettura di uvicorn 0.52.4, con SIGTERM l'ipotesi dei thread è esclusa; restano le richieste in volo (la più
+    probabile), i passi del lifespan e i processi figli. Disegno della cura: piano 06, sezione «Z6b — disegno».
 - ✅ **Z-1 · Il ciclo del grafico del dettaglio asset gira anche su un intervallo passato** — chiusa da Z1 il 15/10
   (commit `74d028ec6`): il ciclo unico del dettaglio ha la guardia `isHeadToday`; il test E2E `front-asset live-pause`
   (f) prova che un intervallo passato non chiede nulla (rosso prima: richieste a +2,1 e +57,1 s). Era: basso, da
@@ -3139,12 +3167,68 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   portafoglio (`portfolioMutation.ts`). La testa del grafico invece salta senza fornitore. Cura possibile: non avviare il
   ciclo senza un fornitore assegnato. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
   sezione «Passi di Z1».
+- **Z-9 · Doc delle pause dei fornitori** — basso; Z, 15/10 (Z7a). Due pagine:
+  - la pagina admin `admin/configuration.en.md`, con le due variabili, il default acceso e l'eccezione della decisione
+    34;
+  - la pagina d'architettura degli asset: il confine e le pause.
+
+  Le variabili esistono da Z7a ma non hanno effetto finché X non aggancia il confine (X1–X4): la doc va scritta con
+  l'aggancio. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7a», passo 5.
 
 ## B · Backup e Docker (fase 01)
 
 Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md). Sessione avviata il 15/10 alle
 07:10, solo analisi, sulla base `ee5d81a6f`. Codice autorizzato il 15/10 alle 11:25 (delega del developer): B0 e B1,
 sulla base `23f6578f3`.
+
+- ✅ **B-1 · devWiki: F-073 e `domains/infrastructure` danno per fatto il backup completo** — minimo, doc; B, 15/10
+  (analisi). **Chiusa il 15/10 con B1**: F-073 racconta il backup dell'istanza e il ripristino che manca, la nota sullo
+  streaming è giusta, la riga di Impostazioni rimanda a B5; la riga di `domains/infrastructure.md` dice lo stesso.
+  - `features/F-073.md` è `implemented`, ma il backup completo risponde 501; dice «streaming, nessun accumulo», ma gli
+    export per serie materializzano le righe; chiama `GET /backup/export`, che è un `POST`; cita una sezione di
+    backup in Impostazioni che non esiste.
+  - `domains/infrastructure.md`, riga F-073: «export and import the full SQLite database — implemented».
+  - Le righe «Source files» sono giuste da B0 (15/10); la prosa si corregge con B1, che fa il backup vero, o con
+    `project-historian`.
+
+  Dettagli: [piano 07](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md), §2, punto 1.
+- **B-2 · Un commento di `DataEditor.test.ts` cita `backend/app/api/v1/backup.py`** — minimo; B, 15/10 (B0).
+  `frontend/src/lib/components/ui/data-editor/DataEditor.test.ts:802`: l'export degli eventi ora sta in
+  `backend/app/api/v1/backup/exports.py`. Il file è di T (`ui/data-editor`): non lo tocco. Dettagli: piano 07, §13, B0
+  passo 3.
+- ✅ **B-3 · La docstring di `backup_asset_prices` cita `backup_service.PRICE_COLUMNS`, ed è nell'OpenAPI** — minimo, doc;
+  B, 15/10 (B0). **Chiusa il 15/10 con B1**, che cambia comunque l'API. `backend/app/api/v1/backup/exports.py:71`: il modulo ora è `series_export.py`. Un lotto di riordino
+  lascia lo schema identico, quindi la correggo in B1, che cambia comunque l'API. Dettagli: piano 07, §13, B0 passo 2.
+- **B-4 · I comandi dell'immagine elencati senza `backup`** — minimo, doc; B, 15/10 (B6a, segnalato da docs-writer).
+  `docker_advanced.en.md#docker-exec` («In the image, `user`, `db` and `info` work»), il commento in testa a
+  `docker-compose.yml` e `admin/index.en.md:21` («user management, database upgrades») non dicono che anche
+  `dev.py backup` funziona nell'immagine. I file Docker sono di H fino al CP7a. **Passata ad H dal coordinatore** (15/10,
+  14:37). Dettagli: piano 07, §13, B6a.
+- **B-5 · `filesystem.en.md` «💾 Backup» non conosce `dev.py backup`** — piccolo, doc; B, 15/10 (B6a). Il file è di H
+  (CP3). Mancano:
+  - un rimando a `cli_tools.md#backup`, l'unico modo di fare un backup coerente a server acceso senza `sqlite3`;
+  - la nota che la copia della cartella dati prende anche `backups/`, con gli archivi;
+  - `backups/` nell'albero della cartella;
+  - un'ancora esplicita `{: #what-to-back-up }` sul titolo «✅ What to Back Up», nelle 4 lingue: i titoli tradotti hanno
+    slug diversi, quindi la pagina della CLI ora punta a `filesystem.md#backup`.
+
+  Testo proposto da docs-writer nel piano 07, §13, B6a. **Passata ad H dal coordinatore** (15/10, 14:37).
+- **B-6 · Il polling della scheda Backup ha il suo ciclo** — minimo; B, 15/10 (B5a). `BackupJobController` legge il
+  job con un suo `setTimeout`, perché nella base non c'è ancora l'aiuto comune di Z (F26, «un solo aiuto di polling per
+  tutti i cicli»). Quando entra, il controller lo usa. Il ciclo è breve e solo durante un backup avviato dall'admin.
+  Dettagli: piano 07, §13, B5a.
+- **B-7 · Debito di traduzione di `cli_tools.{it,fr,es}.md`** — piccolo, doc; B, 15/10 (B6a). Mancano la sezione
+  «💾 Back Up the Instance» (5 sottosezioni), una frase dell'introduzione e il punto Docker del suggerimento. La pagina
+  inglese non è timbrata: la traduzione passa dalla pipeline Aphra, su richiesta del developer.
+- **B-8 · Un backup avviato dalla UI la cui risposta si perde resta invisibile alla scheda** — minimo; B, 15/10 (B5a,
+  segnalato da test-author). Se la risposta di `POST /backup/instance` si perde (rete, timeout), il job gira sul server
+  ma la scheda non conosce il suo id. Nessuna rotta elenca il job in corso, e il rifiuto `backup_busy` non lo porta.
+  - Effetto: «busy» finché quel job finisce; il suo archivio scade dopo un'ora senza essere offerto; lo spazio su disco
+    resta occupato per quell'ora.
+  - Cura possibile: l'id (e l'origine) del job in corso nel dettaglio di `backup_busy`, così la scheda lo segue. Con
+    un'attenzione: un job della CLI si sposta fuori da `.jobs/` alla fine.
+
+  Dettagli: piano 07, §13, B5a, terza tornata.
 
 ## E · Email (fase 01)
 
@@ -3160,6 +3244,32 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   - 15/10, E: chiusa. Con `cryptography` 50.0.2 nell'ambiente condiviso (`dc9a5d232`), sulla base `fc99e9bfe`,
     `services email-delivery` dà 79 passati e nessun saltato: `EMD-017` consegna dopo STARTTLS ed `EMD-018` rifiuta
     il certificato non fidato. Dettagli: piano 08, «E1.8».
+- **E-2 · Nel client generato il tipo di un campo facoltativo ammette anche una lista** — piccolo; E, 15/10 (E2a).
+  `openapi-zod-client` traduce `anyOf [X, null]` in `(X | null) | Array<X | null>` nei tipi esportati (315 righe
+  di `generated.ts`), più largo dello schema zod a runtime, che è giusto. Ogni lettore stringe il tipo da sé
+  (`ProfileTab`: `typeof === 'string'`; `emailApi.fetchEmailStatus()`: normalizza una volta). Da correggere alla
+  fonte (opzione del generatore o un passo come `fix-openapi-discriminators.mjs`), con `svelte-check` su tutto il
+  frontend. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E2.5».
+- **E-3 · `ApiError` non lo costruisce nessuno: le rotte rifiutano con `AxiosError`** — piccolo; E, 15/10 (E2a).
+  L'intercettore di `zodios-client.ts` dice «wrap in ApiError» ma lascia passare l'`AxiosError`; chi legge solo
+  `error instanceof ApiError` vede ogni rifiuto come errore generico (la scheda Email ci era caduta: corretta, legge
+  `isAxiosError`). Da decidere: convertire nell'intercettore, oppure togliere `ApiError` e il commento.
+  Dettagli: piano 08, «E2.6».
+- **E-4 · `status.HTTP_422_UNPROCESSABLE_ENTITY` è deprecato in Starlette** — minimo; E, 15/10 (E2a). Dà un
+  `StarletteDeprecationWarning` a ogni 422 delle quattro risposte di `api/v1/settings.py` che lo usano; il nome nuovo
+  è `HTTP_422_UNPROCESSABLE_CONTENT` (lo usa `api/v1/email.py`); gli altri router scrivono `422`.
+  Dettagli: piano 08, «E2.4».
+- **E-5 · `api sync` non sfugge i backtick delle descrizioni su più righe** — piccolo; E, 15/10 (E2b).
+  `openapi-zod-client` scrive una descrizione di più righe come template literal JavaScript senza sfuggire i
+  backtick: una docstring di schema su più righe con ``` ``codice`` ``` rompe `generated.ts` al caricamento
+  (`TypeError: "…" is not a function`), e con lui ogni pagina. Successo con `EmailInstanceConfig` (corretto: docstring
+  su una riga). Le docstring di `backend/app/schemas` hanno 131 tratti tra doppi backtick: da sfuggire in
+  `api sync` (un passo come `fix-openapi-discriminators.mjs`) o da vietare con un test sullo schema.
+  Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E2b.4».
+- **E-6 · Il registro delle schede di Impostazioni importa ogni corpo di scheda** — minimo; E, 15/10 (E2b). Ogni
+  scheda nuova obbliga ogni test che importa il registro vero ad aggiungere un mock, o il file non si carica
+  (`page.tabs.test.ts` con la scheda Email); toccherà anche B e X. Da valutare con A: corpi caricati pigri o un
+  aiuto di mock comune. Dettagli: piano 08, «E2b.4».
 
 ## Y · Cruscotto e grafici (fase 01)
 
@@ -3187,3 +3297,15 @@ da Y il 15/10.
   `growthChartTooltip.ts`, il traduttore si chiama `t`, e una chiave come `dashboard.totalPnl` conta come token
   numerico. Rende il gate più severo, non più cieco: oggi c'è un solo reperto, registrato. Da decidere se aggiungere
   `\bt\(` alla forma, misurando prima il rumore. Dettagli: come Y-2.
+- **Y-4 · I commenti di `SignalTreeSelect.test.ts` descrivono ancora la scelta a clic della galleria** — minimo; G
+  (G-12), via il coordinatore, 15/10. Righe 16–17 e 306–310: `selectIndicatorFromTree` della galleria vi espande la
+  famiglia con un clic e clicca l'opzione, mentre da G-9 (`1470bd693`) la galleria sceglie l'indicatore da tastiera. Va
+  corretto solo il testo dei commenti, quando Y passa da quei file (FE2, lotto Y4). Dettagli: piano di Y, §2.
+- **Y-5 · Il commento di `headerTooltip` in `table/types.ts:291` promette un'icona che non c'è** — minimo; `docs-writer`
+  di Y, 15/10 (Y2). Dice «(info icon)», ma `headerTooltip` da solo mette un tooltip sull'etichetta dell'intestazione:
+  l'icona compare solo con `headerTooltipUrl`. La pagina `core-ui/data-table.md` è già corretta (Y2). Va corretto solo
+  il commento, quando Y o altri toccano `types.ts`. Dettagli: piano di Y, §7 «Y2 — passi 5–6».
+- **Y-6 · `AllocationPanel` passa ancora `emoji` alla torta, che dopo DV non lo legge più** — minimo; coordinatore (DV),
+  15/10. `dashboard/AllocationPanel.svelte:65` (`toAllocEntries`) mette `emoji` in ogni voce, e il tipo `AllocEntry`
+  (`:23`) lo dichiara: dopo l'ingresso di DV la torta non lo legge più, quindi è un dato morto. Da togliere in Y10,
+  dopo DV. Dettagli: piano di Y, §2.

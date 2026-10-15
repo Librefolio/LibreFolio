@@ -8,6 +8,7 @@ related:
   - features/F-107
   - problems/bulk-modal-sticky-z-index
   - problems/datatable-column-resize-noop
+  - problems/select-list-under-the-sticky-table-header
   - sources/phase00-pac-implementation-2026-10
 ---
 
@@ -42,6 +43,9 @@ Open, in the post-1.2 backlog of `13_pacAllocator/` (defects 2 and 5, 2026-10-10
 in batch 10 (a blur and a horizontal scroll reset). `DataTable` is shared and is not the PAC's: the cure must be
 agreed with its owner, and the same effect is possible in any table whose actions column is wider than a phone. For
 defect 5 a decision is pending: a phone layout for the planner's tables, or the cure of defect 2 in `DataTable`.
+
+The same sticky header causes another defect: a `SimpleSelect` list opened upward in a row falls under it
+([[problems/select-list-under-the-sticky-table-header]], W-B26, 2026-10-15).
 
 ## Source files
 

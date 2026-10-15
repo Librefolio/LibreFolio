@@ -77,47 +77,32 @@ from scripts.cli_tree_parser import TreeParser, format_help
 # =============================================================================
 
 def check_port_in_use(port: int) -> list:
-    """Check if port is in use and return list of (PID, process_name) tuples."""
+    """The processes listening on ``port``, as (PID, process_name) tuples; empty when nothing listens.
 
-    processes = []
+    Only a listener counts, as in the test runner's ``port_holders`` (``scripts/test_runner/_server.py``): a client
+    connected to the port, or the accepted connection of a server that closed its listener, keeps nobody from binding
+    it (H-12). ``lsof`` answers that wherever it exists. On Linux without ``lsof``, ``fuser`` is the fallback, and it
+    also names a process that only holds an accepted connection on the port.
+    """
+    pids = []
     try:
-        if platform.system() == "Darwin":  # macOS
-            # Get PIDs first
-            result = subprocess.run(
-                ["lsof", "-i", f":{port}", "-t"],
-                capture_output=True, text=True
-                )
-            if result.stdout.strip():
-                pids = [int(p) for p in result.stdout.strip().split('\n') if p]
-                # Get process name for each PID
-                for pid in pids:
-                    try:
-                        ps_result = subprocess.run(
-                            ["ps", "-p", str(pid), "-o", "comm="],
-                            capture_output=True, text=True
-                            )
-                        proc_name = ps_result.stdout.strip() or "unknown"
-                        processes.append((pid, proc_name))
-                    except Exception:
-                        processes.append((pid, "unknown"))
+        if shutil.which("lsof"):
+            result = subprocess.run(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"], capture_output=True, text=True)
+            pids = [int(p) for p in result.stdout.split() if p.isdigit()]
         elif platform.system() == "Linux":
             # fuser prints the PIDs on stdout and the "port/tcp:" label on stderr. `capture_output`
             # cannot be combined with `stderr=`: Python raises ValueError before running anything.
             result = subprocess.run(["fuser", f"{port}/tcp"], stdout=subprocess.PIPE, text=True, stderr=subprocess.DEVNULL)
-            if result.stdout.strip():
-                pids = [int(p) for p in result.stdout.strip().split() if p]
-                for pid in pids:
-                    try:
-                        ps_result = subprocess.run(
-                            ["ps", "-p", str(pid), "-o", "comm="],
-                            capture_output=True, text=True
-                            )
-                        proc_name = ps_result.stdout.strip() or "unknown"
-                        processes.append((pid, proc_name))
-                    except Exception:
-                        processes.append((pid, "unknown"))
+            pids = [int(p) for p in result.stdout.split() if p.isdigit()]
     except Exception:
         pass
+    processes = []
+    for pid in dict.fromkeys(pids):
+        try:
+            ps_result = subprocess.run(["ps", "-p", str(pid), "-o", "comm="], capture_output=True, text=True)
+            processes.append((pid, ps_result.stdout.strip() or "unknown"))
+        except Exception:
+            processes.append((pid, "unknown"))
     return processes
 
 
@@ -131,7 +116,7 @@ def _print_port_help(port: int, processes: list):
         print(f"  • PID {pid} ({proc_name})")
     print()
     print(f"{Colors.BLUE}To view details:{Colors.NC}")
-    print(f"  lsof -i :{port}")
+    print(f"  lsof -nP -iTCP:{port} -sTCP:LISTEN")
     print()
     print(f"{Colors.BLUE}To kill these processes:{Colors.NC}")
     print(f"  kill -9 {' '.join(pids)}")
@@ -330,6 +315,11 @@ def cmd_server(args):
     # uvicorn worker is a fresh process. Without a shared env var, each worker
     # would generate its own random secret → tokens invalid across workers.
     _ensure_shared_jwt_secret(env)
+    # Shutdown budget (decision 35): uvicorn drains the requests in flight for 3/8 of
+    # LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS, unless UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN is set by hand.
+    from backend.app.config.sleep_wake import uvicorn_drain_env  # noqa: PLC0415 — CLI-only import
+
+    env.update(uvicorn_drain_env(env))
 
     # uvicorn closes idle keep-alive connections after 5 s by default. A test
     # client that reuses a socket the server has just closed gets ECONNRESET on
@@ -2568,6 +2558,9 @@ Commands by Category:
   👤  Users
       user                User management (create, list, reset, promote...)
 
+  💾  Backup
+      backup              Instance backup (create, inspect)
+
   📚  Documentation
       mkdocs              MkDocs commands (build, serve, clean, deploy)
 
@@ -2694,6 +2687,13 @@ Examples:
 
     from scripts.user_cli import register_subparser as register_user_parser
     register_user_parser(subparsers)
+
+    # =========================================================================
+    # 💾 Backup Commands - Import from backup_cli
+    # =========================================================================
+
+    from scripts.backup_cli import register_subparser as register_backup_parser
+    register_backup_parser(subparsers)
 
     # =========================================================================
     # 📚 Documentation Commands
