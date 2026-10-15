@@ -963,3 +963,16 @@ tool.
    > l'ho scritta ora. Descriverebbe un comportamento che non esiste finché X non aggancia il confine: senza X1–X4 le
    > variabili non hanno effetto. È nel backlog come Z-9, da fare con l'aggancio.
 6. Checkpoint FROZEN. ✅ 2026-10-15
+7. Ingresso: base aggiornata, file condivisi, revisione combinata. ✅ 2026-10-15
+
+   > **Note implementazione**:
+   > - il coordinatore ha committato Z7a (`9dbd1cc34` codice, `ce2763c4c` journal) e approvato le scelte 1–3: un
+   >   valore non valido finisce nel log senza fermare l'avvio, la doc va con l'aggancio (Z-9), il CHANGELOG con X o
+   >   con Z7b. Poi ha fuso `dev_release2` a `a4d1884b4` (J, A6a, il banner del Lab): HEAD `ef013ba18`, senza
+   >   conflitti, con le mie voci del catalogo intatte accanto alle loro;
+   > - file condivisi, scritti su suo via: le docstring di `utils/runtime/__init__.py` (con `rate_window`, che mancava)
+   >   e di `services/platform/__init__.py` (con la sonda di prontezza, che mancava), e
+   >   `.github/instructions/backend.instructions.md`, nei tre punti che elencano quei pacchetti;
+   > - revisione combinata, una prova alla volta con `nice -n 15`: `check-orphans` verde (410 frontend, 304
+   >   backend); `utils cooldown` 112/112; `services provider-cooldown` 66/66; `services config-env-example` 36/36;
+   >   `utils runtime-isolation` 195/195; ruff e black puliti sui due `__init__`; porta 6186 libera.
