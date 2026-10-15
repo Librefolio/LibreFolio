@@ -992,7 +992,7 @@ senza `all-backend`.
 >   esatta: i 4 test nuovi di C-93 (la prova di presenza della guardia e i 3 del percorso di successo degli scenari).
 > - Porta 6185 libera.
 
-### G-8 — il catalogo dei Tool oltre i 2 s d'ingresso 🧊 (2026-10-15)
+### G-8 — il catalogo dei Tool oltre i 2 s d'ingresso ✅ (2026-10-15) — `47e0f9eec`, in `dev_release2` con `c75f08101`
 
 Via del coordinatore dopo l'ingresso di C-93 (`c412f8dad`, record `a628147a0`): G-8, poi J-6, un checkpoint FROZEN per
 voce. Riga d'origine di G: «`GET /api/v1/tools/catalog` ha impiegato 2 649 ms con carico 35 su 10 core», 503, pannello
@@ -1041,8 +1041,104 @@ Impostazioni › About › diagnostica dei plugin in errore; da solo il test pas
 > - Non provato: un carico vero come quello della galleria. La prova è il meccanismo, deterministico; dopo la cura il
 >   catalogo ha 20 s anche per l'autenticazione.
 
-#### Checkpoint G-8 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+#### Checkpoint G-8 ✅ (2026-10-15) — committato dal coordinatore
 
 - Delta: `backend/app/api/v1/tools.py`, `backend/test_scripts/test_api/test_tools_api.py`,
   `mkdocs_src/docs/developer/architecture/patterns/tool_plugins.en.md`, questo piano, la riga G-8 della sezione J.
 - La riga G-8 della sezione G (di G) la chiude il coordinatore. Poi J-6.
+- Record del coordinatore `780434177`: la riga del CHANGELOG sotto «🐛 Fixed» e la chiusura di G-8 anche nella
+  sezione G, d'accordo col coordinatore dei colori.
+
+### J-6 — la guardia di suite per le connessioni aiosqlite lasciate aperte 🧊 (2026-10-15)
+
+Via del coordinatore (15/10, ~06:24): la guardia nel `conftest.py` condiviso, con un elenco esplicito delle eccezioni
+per le connessioni volute e `test-author`; l'handoff elenca i file di altri che tocca. Dalle ~08:45 niente
+`all-backend` né build pesanti.
+
+#### Progetto ✅ (2026-10-15)
+
+> **Note implementazione**:
+> - **Regola**: nessun test lascia aperta una connessione aiosqlite che ha creato. Una connessione aperta che
+>   sopravvive al suo test la chiude il GC, e quella chiusura può legarsi a un loop chiuso (C-93); controllata qui,
+>   la stessa perdita diventa un ERROR al teardown del test che l'ha causata, con lo stack di creazione.
+> - **Cosa c'è di legittimamente lungo nella suite, verificato**: il motore globale dell'app
+>   (`backend/app/db/session.py:105-140`) usa `NullPool`, quindi non tiene connessioni fra un test e l'altro;
+>   l'unica fixture di sessione del conftest (`restore_registration_setting`) usa `sqlite3` della libreria standard;
+>   fuori dal runner `_TestingServerManager` può far girare uvicorn in un thread dello stesso processo
+>   (`test_server_helper.py:316`), le cui connessioni nascono in quel thread. La sonda di C-93 dopo la riparazione:
+>   0 connessioni aperte dopo il loro test in tutta la suite. Quindi l'elenco delle eccezioni parte vuoto.
+> - **Forma**: si tracciano solo le connessioni nate nel thread principale (quello dei test); una finestra per test,
+>   aperta da una fixture autouse di funzione (impostata per prima, smontata per ultima: le fixture che fanno
+>   `dispose()` hanno già finito; le fixture di portata più larga si aprono prima della finestra e non sono
+>   attribuite al test); la guardia segnala soltanto, non chiude (chiudere da un teardown sincrono potrebbe
+>   incontrare a sua volta un loop corrente chiuso).
+
+#### Implementazione ✅ (2026-10-15)
+
+> **Note implementazione** (`test-author`, corsia 6185):
+> - `backend/test_scripts/test_aiosqlite_guard.py` (nuovo, 320 righe; aiuto alla radice di `test_scripts/`, secondo
+>   la convenzione dell'inventario, senza funzioni `test_*`): `install()` avvolge una volta
+>   `aiosqlite.core.Connection.__init__`; `leak_window`, `find_leaks`, `format_leak_report`; l'elenco esplicito
+>   `AIOSQLITE_LEAK_EXCEPTIONS = ()`, con la regola nella docstring (un'eccezione è per una connessione che deve
+>   sopravvivere al test per progetto, con una riga di motivo; «è più comodo» non lo è); `find_leaks` rifiuta voci con
+>   prefisso o motivo vuoti, e i prefissi valgono ai confini del nodeid. Se aiosqlite cambia l'attributo privato
+>   `_connection`, la guardia fallisce forte (`AiosqliteGuardOutdated`), mai in silenzio.
+> - Lo stack di creazione attraversa il greenlet di SQLAlchemy fino alla riga del test; lo stato del tracciatore
+>   sta sul wrapper installato, perché `backend/` non ha `__init__.py` e pytest può importare l'aiuto con due nomi.
+> - `backend/test_scripts/conftest.py` (+37, solo aggiunte): l'import, `install()` all'import del conftest, la
+>   fixture autouse `_aiosqlite_leak_guard` che fallisce al teardown con il rapporto.
+> - `backend/test_scripts/test_utilities/test_aiosqlite_leak_gate.py` (nuovo, 401 righe, 9 test): la forma di C-93
+>   segnalata finché il motore non è smaltito; connessioni chiuse tracciate ma non segnalate; altri thread non
+>   tracciati; nessuna attribuzione prima della finestra; eccezioni ai confini del nodeid; voci malformate
+>   rifiutate; installazione unica; un pytest figlio col conftest vero in cui solo il test che perde ha l'ERROR al
+>   teardown. I self-test cadono se si rompe la guardia (provato tre volte, poi ripristinata).
+> - `scripts/test_runner/_backend_utils.py` (+20): azione `utils gate-aiosqlite-leak`, `isolation="pure"`.
+> - Prove di `test-author`: `utils gate-aiosqlite-leak` 9; `services ai-export` 1 025, nessun rapporto della
+>   guardia; `services brim-report-sets` 259; `check-orphans` verde (273 file del backend raggiungibili).
+> - Punti fragili segnalati: cinque file dell'AI Export creano motori in memoria con `_make_async_session()` senza
+>   smaltirli; passano perché su quelle sessioni non gira SQL. Se un loader ne eseguisse, la guardia nominerebbe il
+>   test.
+
+#### Verifica ✅ (2026-10-15)
+
+> **Note implementazione** (log in `/tmp/libreFolio_j/j6/`):
+> - **`all-backend --workers 2`** con la guardia attiva intorno a ogni test (06:58–07:14): 7/7, «ALL BACKEND TESTS
+>   PASSED»; totali, lavoratori paralleli compresi, **14 009 passed, 29 skipped, 0 failed, 0 errors**; nessun rapporto
+>   della guardia né ERROR al teardown nel log e nei log delle unità; nessun `PytestUnhandledThreadExceptionWarning`.
+>   Porta 6185 libera.
+> - Lo skip in più rispetto ai giri di C-93 non è un test nuovo: nella stessa sessione seriale (36 test) un test
+>   esterno è passato da verde a saltato, quello live di `css_scraper` su borsaitaliana.it, che si salta da solo a
+>   mercato chiuso («Retry this test when the market is open, 9:00-17:30 CET»). Ambiente, non guardia.
+> - `pytest --collect-only` (ambiente della corsia): worktree 14 021, `git archive` di `780434177` 14 012:
+>   **esattamente i 9 self-test** di `test_aiosqlite_leak_gate.py`, nessun test perso.
+> - Non fatto: documentazione per sviluppatori. Nessuna pagina descrive le fixture del conftest condiviso; una riga
+>   in `.github/instructions/backend-testing.instructions.md` è proposta al coordinatore (file condiviso).
+
+#### Checkpoint J-6 ✅ (2026-10-15) — committato dal coordinatore (`b49a54645`, journal `1edcedbfe`)
+
+- Delta: 2 file nuovi (`backend/test_scripts/test_aiosqlite_guard.py`,
+  `backend/test_scripts/test_utilities/test_aiosqlite_leak_gate.py`), 2 condivisi modificati solo con aggiunte
+  (`backend/test_scripts/conftest.py` +37, `scripts/test_runner/_backend_utils.py` +20), questo piano, la riga J-6
+  della sezione J.
+
+#### Revisione combinata con la guardia — `dev_release2` `6cd64b71b` 🧊 (2026-10-15) — FROZEN, validata
+
+Merge del coordinatore `c7a2b050e` (genitori `1edcedbfe` e `6cd64b71b`): X CP4, W K2a, A4b, X J-5, H CP5a, coi loro
+record. Un conflitto nel solo backlog (la chiusura di J-5 del coordinatore accanto alla mia J-6), risolto dal
+coordinatore tenendo le due: la mia riga J-6 è come la volevo. Richiesta: la validazione completa, perché la guardia gira
+intorno a ogni test e il fuso porta i test di cinque lotti che non ci sono mai passati (il più vicino,
+`test_platform_readiness.py` di H, crea DB su file).
+
+> **Note implementazione** (log in `/tmp/libreFolio_j/j6m/`):
+> - `dev.py front build --debug` (CP5a cambia l'API): svelte-check 0 errori e 0 avvisi; `dev.py mkdocs build`
+>   stretto: 0 avvisi; `utils gate-aiosqlite-leak` 9; `check-orphans` verde (276 file del backend raggiungibili).
+> - Lettura dei test nuovi o cambiati dal merge: creano motori aiosqlite e li smaltiscono `test_platform_readiness.py`
+>   (`_session(path)`, `:140-147`), `test_session_version.py`, `test_auth_api.py`, `populate_mock_data.py`. L'unico senza
+>   `dispose()` è `test_ai_export_components_asset.py` (cambiato da X), col suo `_make_async_session()` «tableless» su
+>   cui non gira SQL.
+> - **`all-backend --workers 2`** (07:25–07:38, carico fino a 48 all'avvio): 7/7, «ALL BACKEND TESTS PASSED»;
+>   **14 199 passed, 29 skipped, 0 failed, 0 errors**. **Nessun rapporto della guardia**, nessun ERROR al teardown,
+>   nessun `PytestUnhandledThreadExceptionWarning`; lo skip in più è ancora quello di `css_scraper` a mercato chiuso.
+> - `pytest --collect-only` (ambiente della corsia): fuso 14 211, `6cd64b71b` estratto 14 202: esattamente i 9 self-test
+>   della guardia, nessun test perso.
+> - Porta 6185 libera.

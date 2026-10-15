@@ -1634,10 +1634,10 @@ def _docker_ensure_assets_built():
     # into a plain file that gets COPYed into the image.
     from backend.app.utils.runtime.version import get_git_version
 
-    # get_git_version() prefers an existing VERSION file over `git describe` (so
-    # it works with no .git/ inside the container). Remove any stale VERSION file
-    # from a previous build first, so this recomputes a true fresh value instead
-    # of just re-reading what's already there.
+    # get_git_version() reads VERSION only where there is no .git/ (inside the
+    # container) or when `git describe` fails. Remove any VERSION file from a
+    # previous build first, so a checkout where git cannot answer writes
+    # "unknown" instead of copying the old value forward.
     version_file = PROJECT_ROOT / "VERSION"
     version_file.unlink(missing_ok=True)
     get_git_version.cache_clear()
