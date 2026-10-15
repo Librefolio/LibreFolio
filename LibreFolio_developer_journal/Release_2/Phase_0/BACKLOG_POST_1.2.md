@@ -2702,3 +2702,11 @@ da Y il 15/10.
   `growthChartTooltip.ts`, il traduttore si chiama `t`, e una chiave come `dashboard.totalPnl` conta come token
   numerico. Rende il gate più severo, non più cieco: oggi c'è un solo reperto, registrato. Da decidere se aggiungere
   `\bt\(` alla forma, misurando prima il rumore. Dettagli: come Y-2.
+- **Y-4 · I commenti di `SignalTreeSelect.test.ts` descrivono ancora la scelta a clic della galleria** — minimo; G
+  (G-12), via il coordinatore, 15/10. Righe 16–17 e 306–310: `selectIndicatorFromTree` della galleria vi espande la
+  famiglia con un clic e clicca l'opzione, mentre da G-9 (`1470bd693`) la galleria sceglie l'indicatore da tastiera. Va
+  corretto solo il testo dei commenti, quando Y passa da quei file (FE2, lotto Y4). Dettagli: piano di Y, §2.
+- **Y-5 · Il commento di `headerTooltip` in `table/types.ts:291` promette un'icona che non c'è** — minimo; `docs-writer`
+  di Y, 15/10 (Y2). Dice «(info icon)», ma `headerTooltip` da solo mette un tooltip sull'etichetta dell'intestazione:
+  l'icona compare solo con `headerTooltipUrl`. La pagina `core-ui/data-table.md` è già corretta (Y2). Va corretto solo
+  il commento, quando Y o altri toccano `types.ts`. Dettagli: piano di Y, §7 «Y2 — passi 5–6».
