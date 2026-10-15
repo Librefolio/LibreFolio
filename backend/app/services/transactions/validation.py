@@ -7,6 +7,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import AssetEvent, Transaction, TransactionType
+from backend.app.schemas.transactions.type_metadata import cost_basis_required
 
 
 class TransactionValidationMixin:
@@ -31,14 +32,8 @@ class TransactionValidationMixin:
 
     @staticmethod
     def _requires_cost_basis(tx: Transaction) -> bool:
-        """True if this Transaction type+quantity requires cost_basis_override to be set."""
-        if tx.quantity is None:
-            return False
-        if tx.type == TransactionType.TRANSFER and tx.quantity > 0:
-            return True
-        if tx.type == TransactionType.ADJUSTMENT and tx.quantity > 0:
-            return True
-        return False
+        """True if this Transaction's type and quantity require ``cost_basis_override``: the rule of ``TX_TYPE_METADATA``."""
+        return cost_basis_required(tx.type, tx.quantity)
 
     @staticmethod
     def _validate_linked_pair(a: Transaction, b: Transaction) -> Optional[tuple[str, str, dict]]:

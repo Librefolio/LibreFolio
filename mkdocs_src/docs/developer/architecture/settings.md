@@ -88,8 +88,9 @@ for global keys) stay separate services for the same reason.
 
 Admins manage global settings from the **Admin** tab of Settings (`GlobalSettingsTab.svelte`:
 lock-gated, with the scheduler dialogs and `CachePanel`, writing through the bulk-update endpoint).
-Missing rows are seeded at every startup by the lifespan (`_initialize_global_settings()` in
-`main.py`); the same idempotent seeding is available from the CLI:
+Missing rows are seeded at every startup by the `global-settings` step of the lifespan
+(`_initialize_global_settings()` in `backend/app/services/platform/app_lifespan.py`); the same
+idempotent seeding is available from the CLI:
 
 ```bash
 ./dev.py user init-settings        # creates only missing keys (INSERT ... ON CONFLICT DO NOTHING)
