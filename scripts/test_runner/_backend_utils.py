@@ -277,6 +277,15 @@ def utils_static_route_confinement(verbose: bool = False, test_names: list = Non
     return run_command(cmd, "Static route confinement tests", verbose=verbose)
 
 
+def utils_jwt_secret_blank(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a blank JWT_SECRET never becomes the key that signs session cookies."""
+    print_section("Utils: JWT Secret Blank")
+    print_info("Testing: backend/app/services/auth_service.py (_JWT_SECRET, decode_jwt_token)")
+    print_info("Tests: a whitespace-only JWT_SECRET replaced by a random key and tokens signed with it refused; a non-blank secret kept as written; unset or empty still random")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_jwt_secret_blank.py", test_names)
+    return run_command(cmd, "JWT secret blank tests", verbose=verbose)
+
+
 def utils_test_runner_cli(verbose: bool = False, test_names: list = None) -> bool:
     """Test the test-runner CLI's own command-building contract."""
     print_section("Utils: Test Runner CLI")
@@ -568,6 +577,16 @@ Tests for utility modules and helper functions:
         # Raw ASGI calls on the global app (the lifespan never runs) and on a fresh app holding the
         # uploads router with sign-in overridden; folders under tmp_path swapped in for the module
         # globals by monkeypatch. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "jwt-secret-blank",
+        utils_jwt_secret_blank,
+        name="JWT Secret Blank",
+        desc="The JWT_SECRET read at import signs session cookies only when it holds something besides whitespace: a value made only of whitespace (three spaces, tab-space-newline, one space) is replaced by a random URL-safe key of at least 64 characters, new in every process, and a token signed with the blank value is refused by decode_jwt_token; a non-blank value is the key exactly as written, surrounding spaces included, and a token signed with it decodes to its user id; an unset or empty JWT_SECRET gives a random key, new in every process",
+        # Each case imports auth_service in a fresh interpreter run in tmp_path, with a copy of the
+        # environment carrying the case's JWT_SECRET. No DB, no server, no network.
         isolation="pure",
     )
     add_test(
