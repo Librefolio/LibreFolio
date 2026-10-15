@@ -1612,6 +1612,13 @@ decisioni). Durante la finestra: codice e singoli file pytest senza server, uno 
    > «costo mancante» con l'avviso». N1b-2 ed N1b-3 entrano con il resto del ramo, così come sono: la metà senza costo
    > diventa una rettifica senza costo, con l'avviso `MISSING_COST_BASIS`. Il punto 47 (la gamba in uscita) resta aperto,
    > e la gamba resta com'è oggi.
+   > **Domanda del developer sul 46** (coordinatore, 16:15, corretta alle 16:25): quando nasce una metà ricevuta senza
+   > costo? Nei metadati dei tipi il lato ricevente di `TRANSFER` ha `cost_basis_pair: ["forbidden",
+   > "required_qty_pos"]` (`schemas/transactions/type_metadata.py:286`): il modulo e il Bulk, dove passano anche gli
+   > import, obbligano a scegliere un costo (manuale o Auto). Una metà ricevuta senza costo nasce solo dall'API chiamata
+   > direttamente, o da dati più vecchi della 1.0. Per N1b-2 non cambia nulla: il caso «senza costo» resta una rete di
+   > sicurezza. Nessuna voce di backlog: quella scritta alle 16:15 su una lettura sbagliata è ritirata dal coordinatore e
+   > tolta (il suo id, W-B25, entrato in `d7c7dcab7`, non si riusa).
    > **Note implementazione** (10:00): `OrphanPairHalfFix` (`fix_id` `orphan_pair_halves`): `detect` trova le righe
    > TRANSFER/CASH_TRANSFER/FX_CONVERSION senza la metà (link NULL o verso una riga assente) e logga un **warning** con
    > le conversioni per tipo, le righe che resteranno senza costo, quelle lasciate come sono (gamba in uscita di un
@@ -1934,6 +1941,13 @@ del 15/10 12:30–12:44):
    > cambia note o importo potrebbe mostrare i valori vecchi — da verificare in `AssetEventPicker.svelte`
    > (`fetchEvents`, :115); (6) l'editor E2E semina due chiusure per asset (senza prezzi il pulsante non ha test id);
    > (7) le chiavi i18n nuove (`/tmp/libreFolio_w_e1b_i18n.sh`).
+   > **Decisione sul salvataggio dell'editor** (coordinatore, 16:20, sulla mia domanda): **no** alle due richieste. La
+   > decisione 22 del developer è «tutto o niente e se fallisce ti dice dove», e cancellazioni fatte con un upsert
+   > rifiutato la rompono per l'utente. L'API degli eventi cambia già nella 1.3 (`asset_id`), quindi **`delete_ids` nella
+   > richiesta di upsert**: prima le cancellazioni, poi gli upsert, in una sola transazione con un solo commit (I-10
+   > continua a funzionare, il salvataggio è atomico). La `DELETE` separata resta per l'eliminazione semplice. In E1b,
+   > con i rossi prima: da decidere nel disegno come si dice un evento cancellato in uso (oggi `in_use` per riga, non un
+   > errore) dentro un salvataggio tutto o niente.
 4. ✅ E1c (14:35): rossi visti → cura → verdi; commit a parte.
    > **Rossi scritti, non eseguiti** (test-author, 14:10, carico alto): nuovo
    > `test_db/test_post_migration_event_types.py` (20 funzioni, 35 casi: 33 rossi attesi, 2 guardie), nessun import dai
@@ -1960,3 +1974,45 @@ del 15/10 12:30–12:44):
    > **E1a entra da solo** (coordinatore, 16:00, dopo il punto 46): doc sviluppatore di E1a ✅ (passo 2), handoff
    > FROZEN d'ingresso con il CHANGELOG di FE8a, N1, N1b-2/3, E1a ed E1c (16:10). Le pagine utente, la devWiki e il resto
    > con E1b.
+   > **Committati** (coordinatore): `a2fb6936f` `fix(events)!: all-or-nothing upsert, scoped delete` (con `BREAKING
+   > CHANGE`) e `d7c7dcab7` (journal); il cambio di `detail` in oggetto va sotto ⚠️ Breaking changes, come proposto; il
+   > CHANGELOG lo scrive il coordinatore. **Secondo merge di base** (`MERGE_HEAD` `243c8c9ff`: E1, Y1, A5, H C-96 e G-10,
+   > Z1, G-9, colori), committato come `15a8355cc`. Conflitti risolti da me e messi in stage: `themeRoles.baseline.tsv`
+   > (`--resolve`, `--check` pulito senza ripetere l'`--accept` D3; vince il lato più stretto: 222, 88, 35 per i miei
+   > split, GrowthChart 86 uguale) e `_backend_db.py` (in `db_order` sia `post-migration-orphan-pairs` sia
+   > `migration-006`; 18 azioni senza doppioni). Rivisti gli uniti da git sui due lati: `test_post_migration.py`,
+   > `_backend_services.py`, `cli_tools.en.md`, `database/index.md`, `.translate-hashes.json`, il backlog (`T-B4` doppio
+   > già sui due lati, non mio: lo sistema il coordinatore).
+   > **Prove sulla revisione combinata `15a8355cc`** (16:12–16:18, `nice -n 10`, una alla volta, lista del coordinatore):
+   > `api sync` (393 righe del client cambiate, tutte di account e accessi arrivati col merge: utenti, inviti, token;
+   > nessuna mia); `front check` svelte-check **0/0**; `theme-roles --check` pulito; `db post-migration` **41**,
+   > `post-migration-orphan-pairs` **47**, `post-migration-event-types` **36**; `db populate --force --clean`; `api brokers`
+   > **34**, `api account-deletion` **6**, `api assets-events` **37**; `services broker` **65**, `services config-package`
+   > **642**. Porta 6184 libera. Pronto all'ingresso.
+
+### N2 — il costo obbligatorio anche nell'API: TRANSFER ricevuto e ADJUSTMENT in entrata ⏳ (2026-10-15)
+
+**Richiesta** (coordinatore, 15/10 ~16:30, dopo il punto 46). Il developer, in chat alle 16:12, alla lettera: «sarei
+daccordo a metterci una protezione in caso di chiamate dirette dalle api, ma non certo metterci a fare bonifiche o
+altro». Lotto piccolo dopo l'ingresso (o dentro E1b):
+
+- il backend applica la regola dei metadati dei tipi, che oggi controlla solo il frontend: `cost_basis_pair`
+  `required_qty_pos` per il lato che riceve un `TRANSFER`, `cost_basis_mode` `required_qty_pos` per un `ADJUSTMENT` con
+  quantità > 0 (`schemas/transactions/type_metadata.py:286`, `:331`);
+- senza modalità di costo la richiesta è rifiutata (422) con un codice chiaro, e il messaggio dice quale riga;
+- la regola si legge dai metadati, non si riscrive a mano;
+- prima i rossi; i test e le fixture che creano queste righe dall'API senza costo li sistema il test-author;
+- **nessuna bonifica**: le righe già salvate restano come sono (`orphan_pair_halves` non cambia);
+- una riga del CHANGELOG sotto 🔄 Changed: l'API rifiuta un trasferimento ricevuto o una rettifica in entrata senza
+  modalità di costo, come già fa l'app.
+
+**Prima lettura** (da completare nell'analisi): il posto naturale è `validate_transaction_business_rules`
+(`schemas/transactions/transactions.py:83`), la funzione pura delle regole 5–12 condivisa da creazione
+(`TXCreateItem`) e modifica (il ciclo di `TransactionService`); la regola 12 controlla già dove `cost_basis_mode` è
+ammesso. «Un costo» = `cost_basis_override` presente oppure `cost_basis_mode` `auto`/`auto-detail`; oggi la funzione
+non riceve `cost_basis_override`. **Da decidere nell'analisi**: la modifica di una riga già salvata senza costo (dati
+vecchi, o una metà convertita da `orphan_pair_halves`): rifiutarla finché non ha un costo bloccherebbe anche la
+modifica delle sole note via API; il disegno proposto la applica alla creazione e alla modifica che **tocca** tipo,
+quantità o costo, e lo verifico contro quello che fanno il modulo e il Bulk.
+
+**Passi**: 1. ⏳ analisi e disegno al coordinatore; 2. rossi (test-author); 3. cura; 4. prove; 5. doc e CHANGELOG.

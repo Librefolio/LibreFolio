@@ -2868,14 +2868,6 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   apposta, è un rischio necessario che uno sbagli, è noto e accettato» — nella 1.3 resta così. Per il futuro (istanze
   cloud con più famiglie?): un modello fra solo gli admin, solo chi ha creato l'asset, solo chi ne ha posizioni, o un
   registro delle modifiche con l'autore. Dettagli: file delle decisioni, punto 25.
-- **W-B25 · Gli import dei trasferimenti ricevuti salvano la metà senza costo** — medio-basso, numeri; coordinatore,
-  15/10 (domanda del developer sul punto 46). Il modulo salva sempre il costo Auto della gamba in arrivo
-  (`cost_basis_override`, `services/transactions/auto_cost.py`), mentre gli import possono crearla senza
-  `cost_basis_mode`: il CSV generico (`brim_providers/broker_generic_csv/`), Directa/delta (`broker_directa/`), e Intesa
-  quando il file non riporta il costo (`broker_intesa/plugin.py:386`); così anche l'API. Finché la coppia esiste il costo
-  si ricava dalla storia del mittente; cancellato il mittente si perde, e la metà resta «costo mancante» (punto 46).
-  Cura: gli import dei trasferimenti ricevuti in modalità Auto come il modulo, con la fotografia del costo, salvo un costo
-  già nel file. Non ora: un lotto W successivo. Dettagli: piano 04, sezione N1.
 
 ## J · Numeri e analisi (fase 01)
 
