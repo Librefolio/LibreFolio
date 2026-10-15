@@ -192,6 +192,7 @@ async def commit_transactions(
 async def query_transactions(
     broker_id: Optional[int] = Query(None, gt=0, description="Filter by broker"),
     asset_id: Optional[int] = Query(None, gt=0, description="Filter by asset"),
+    asset_event_id: Optional[int] = Query(None, gt=0, description="Only transactions linked to this asset event (reverse lookup)"),
     types: Optional[List[TransactionType]] = Query(None, description="Filter by types"),
     date_start: Optional[str] = Query(None, description="Start date (YYYY-MM-DD)"),
     date_end: Optional[str] = Query(None, description="End date (YYYY-MM-DD)"),
@@ -212,7 +213,8 @@ async def query_transactions(
 
     When `ids` is provided, results are returned in the exact input order
     (useful for preserving client-side sort); other filters besides access
-    are ignored.
+    are ignored. `asset_event_id` is the reverse lookup of an asset event:
+    the transactions linked to it.
     """
     date_range = None
     if date_start:
@@ -223,6 +225,7 @@ async def query_transactions(
     params = TXQueryParams(
         broker_id=broker_id,
         asset_id=asset_id,
+        asset_event_id=asset_event_id,
         types=types,
         date_range=date_range,
         tags=tags,

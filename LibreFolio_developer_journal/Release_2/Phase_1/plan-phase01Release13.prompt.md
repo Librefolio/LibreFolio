@@ -806,3 +806,15 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > **Fuori pista**:
 > - X, partito con due lotti dalla base iniziale, ha avuto 35 conflitti d'import, tutti risolti nel suo worktree.
 > - Gli ingressi frontend seguono la finestra della galleria del 15/10: prima delle 08:45 o dopo la chiusura.
+
+### W I1, integrità, integrato ✅ (2026-10-15, 03:10)
+
+> **Note implementazione**: `dc7e4e48e`, merge di `625e3dacc` su `ae998da78`. Il commit è creato con `git commit-tree`
+> sull'albero della simulazione (`1153296e3`), così l'avviso al coordinatore colori porta già lo SHA; poi
+> `merge --ff-only`. Validazione di W sulla revisione combinata `123c21efc`:
+> - `all-backend` 13 458 passed, 28 skipped, 0 failed;
+> - `api schema` cambia solo `asset_event_id` di `GET /api/v1/transactions`.
+>
+> CHANGELOG `[Unreleased]` aggiornato; chiuse V-23, C-79, la ricerca inversa di C-65, L5 e C-3; W-B9 nella sezione X.
+>
+> **Fuori pista**: due avvisi di aiosqlite sotto carico in un test dell'AI Export, non rossi: C-93, a J.

@@ -182,6 +182,9 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   nel form. Mancano il modale al cambio di provider (vecchio evento → nuovo, con la proposta di ricollegare) e la
   ricerca inversa `GET /transactions?asset_event_id=`. Vicina ma diversa: «🔗 Suggerimento eventi collegabili nella
   bulk modal» in [`TODO_FUTURI.md`](../../../TODO_FUTURI.md). Dettagli: [F-090](../../../LibreFolio_devWiki/wiki/features/F-090.md).
+  - ✅ **Ricerca inversa chiusa il 15/10** da W (lotto I1 della 1.3, `5e96df752`; in `dev_release2` con `dc7e4e48e`):
+    `GET /transactions?asset_event_id=`, nei broker che l'utente vede (C-65b nel piano 04). Resta aperta la modale al
+    cambio di provider (C-65a, X e W).
 - **C-66 · Sync: l'avviso prima di sovrascrivere i dati (F-094)** — basso; W (C-64), 12/10. Il dialogo c'è già ed è
   comune a cambi e asset: `SyncModalBase`, con `FxSyncModal`, `AssetSyncModal` (lista degli asset) e `PageSyncModal`
   (pagine di dettaglio), che sincronizzano l'intervallo della pagina. Manca solo l'avviso quando l'intervallo scelto
@@ -308,11 +311,13 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
     `modeText.test.ts:11-16`, `pluralCountSites.test.ts:13-19` e `pac-allocator-real.spec.ts:19`.
 
   Dettagli: piano della 53, §4 e §5.
-- **C-79 · Cancellare un broker lascia il suo lock e la sua cartella vuota in `broker_reports`** — minimo; R, 14/10, run
+- ✅ **C-79 · Cancellare un broker lascia il suo lock e la sua cartella vuota in `broker_reports`** — minimo; R, 14/10, run
   finale. Alla cancellazione di un broker restano `.locks/broker_N.lock` e la cartella vuota `uploaded/broker_N/`: nella
   run finale, 89 lock e circa 107 cartelle dei broker temporanei delle spec di import. Nessun file di report resta
   orfano. Cura: la pulizia del file system nella cancellazione del broker (BRIM/import), dopo la 1.2. Dettagli:
   [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md), §3.
+  - ✅ **Chiusa il 15/10** da W (lotto I1 della 1.3, `5e96df752`; in `dev_release2` con `dc7e4e48e`): la cancellazione
+    del broker toglie anche le sue cartelle di stato vuote e il suo lock. Con lei C-3 del backlog 38.
 - **C-80 · Backend: i moduli sotto l'80 %** — basso; R, run finale del 13/10 (§4.1). In 1.2 la copertura
   complessiva è 91,55 %, ma alcuni moduli restano indietro:
   - `services/scheduler/scheduler.py` 60,18 %;
@@ -381,6 +386,13 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   Italiana, e l'import CSV delle distribuzioni per settore e paese sono nella 1.2.0, ma il capitolo non li nomina. Due
   strade: aggiungerle come correzione dopo il rilascio, in 4 lingue con lo stamp del pezzo (il capitolo è rilasciato,
   quindi `translate-validate` è severo), oppure lasciare il capitolo com'è. Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voci 8 e 17.
+- **C-93 · Un test dell'AI Export lascia un thread di aiosqlite dopo la chiusura del loop, sotto carico** — minimo, da
+  verificare; W, 15/10 (`all-backend` della revisione combinata di I1). Due `PytestUnhandledThreadExceptionWarning`
+  («Event loop is closed») nel gruppo parallelo, worker 1, in
+  `test_ai_export_components_portfolio_broker_financial.py::TestPerformanceBuckets::test_performance_path_uses_detail_owned_uniform_density[broker-broker.performance-components1-full-30]`.
+  Non è un rosso; da solo il test passa senza avvisi. Dominio dell'AI Export: a J dopo il CP-1, con la skill
+  `test-triage`. Dettagli: [piano 04](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md),
+  «Revisione combinata `123c21efc`», passo 6.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
@@ -1395,7 +1407,7 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 
   Un dividendo «nuovo» nello stesso giorno di uno esistente, magari del provider, ne sovrascrive importo e note. Da
   decidere se è voluto. Se non lo è, il rosso va scritto prima della cura. Dettagli: piano della 46, §12.8.
-- **V-23 · Il bulk editor nasconde il broker di sola lettura e attacca l'errore d'accesso alla riga sbagliata** — basso,
+- ✅ **V-23 · Il bulk editor nasconde il broker di sola lettura e attacca l'errore d'accesso alla riga sbagliata** — basso,
   UX; test-author di V (triage di WB5), 12/10:
   - un TRANSFER verso un broker di sola lettura mostra il ricevente come «To: —». `renderBrokerHtml`
     (`TransactionBulkModal.svelte` ~`:1608`) cerca il broker solo nella lista dei broker modificabili
@@ -1405,6 +1417,9 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     `operation="create", index=0`. La griglia lo mette sulla riga 1a (IB, modificabile) e non sulla 1b (DEGIRO).
 
   Dettagli: piano della 46, §12.8.
+
+  ✅ **Chiusa il 15/10** da W (lotto I1 della 1.3, `5e96df752`; in `dev_release2` con `dc7e4e48e`): un rifiuto per
+  riga e per broker negato, sulla riga che lo causa; il bulk editor nomina anche i broker di sola lettura.
 
 - **V-24 · Nel bulk editor la cella del costo in Auto può mostrare per un attimo «💡 0.00» come `ready`** — basso, UX;
   test-author di V (lacuna 5), 12/10, letto nel codice e non visto a schermo. Appena un TRANSFER in Auto passa dal form
@@ -2102,16 +2117,21 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
 - **W-B8 · `DataImportModal`: «Help» e «Close» in inglese** — minimo; W, 14/10 (analisi). Gli `aria-label` di
   `components/ui/data-editor/DataImportModal.svelte:211` e `:220` sono scritti nel codice; vanno con P-15 (lotto K1).
   Dettagli: piano 04, §2 (P-15).
-- **W-B9 · `test_fx_api.py` raggiunge ECB via rete** — basso, test; W, 15/10 (triage del CP1); **dominio dei cambi, da
-  spostare nella sezione X**. `test_providers_include_target_currencies` chiama `GET /fx/providers`, che legge dal vivo
-  le valute di ECB (`fx_providers/ecb/plugin.py:94-150`) e su un errore di rete risponde con la lista vuota
-  (`api/v1/fx.py:147-151`). Rosso d'ambiente nella run del CP1, verde rilanciato da solo: va contro la regola 6 delle
-  istruzioni dei test backend. Dettagli: piano 04, §12, W1 passo 8.
+- ↪ **W-B9 · `test_fx_api.py` raggiunge ECB via rete** — spostata nella sezione X dal coordinatore il 15/10
+  (dominio dei cambi), dove X l'ha già ripresa con i dettagli.
 - **W-B10 · `access_control.md`: l'elenco degli endpoint d'accesso non è quello dell'API** — minimo, doc; W, 15/10 (W2).
   `mkdocs_src/docs/developer/architecture/access_control.md`, «API Endpoints», elenca `POST /brokers/{id}/access` e
   `PATCH`/`DELETE /brokers/{id}/access/{user_id}`; l'API ha `GET` e `PUT /brokers/{broker_id}/access` (tutta la
   configurazione in un colpo), `PATCH` e `DELETE /brokers/{broker_id}/access/me` (`backend/app/api/v1/brokers.py:408`,
   `:440`, `:493`, `:519`). L'elenco dei metodi sopra è stato corretto in W2. Dettagli: piano 04, §12, W2 passo 5.
+- **W-B11 · `TransactionBulkModal.svelte`: `brokerName()` non ha chiamanti** — minimo, codice morto; W, 15/10 (I1). La
+  funzione (`frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte:1597`) non è usata da nessuna
+  parte del file né altrove; i nomi dei broker passano da `renderBrokerHtml`. Si toglie col taglio della modale (FE8a).
+  Dettagli: piano 04, §12, I1.
+- **W-B12 · `test_cross_broker_access_failure_is_atomic` lascia i suoi broker nel DB condiviso** — minimo, test; W
+  (test-author di I1), 15/10. Il test (`backend/test_scripts/test_api/test_broker_multiuser_api.py`, MULTI-008d) crea
+  due broker e non li cancella; i test V-23 della stessa classe nuova (`TestAccessRefusalPlacement`) puliscono anche dopo
+  un rosso, e possono fargli da modello. Dettagli: piano 04, §12, I1.
 
 ## J · Numeri e analisi (fase 01)
 
