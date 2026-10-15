@@ -2515,7 +2515,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
       giusta.
     - ✅ **Chiuse il 15/10** con A4b: `docs-writer` le ha corrette insieme alle righe sulle sessioni.
   - `frontend/components/features/settings.md`: il titolo «GlobalSettingsTab (Admin only)», ma la scheda la vedono
-    tutti. Si sistema in A6, con le schede Utenti e Sicurezza (attenzione all'ancora).
+    tutti. Si sistema in A6, con le schede Utenti e Sicurezza (attenzione all'ancora). ✅ **Chiusa il 15/10** con A6b:
+    titolo «🌍 GlobalSettingsTab (read by everyone, edited by administrators)», ancora esplicita
+    `#globalsettingstab-admin-only` per i link vecchi.
   - `frontend/state/app-state.md:11`: dice che lo store dell'autenticazione gestisce token JWT, ma usa il cookie
     HttpOnly. ✅ **Chiusa il 15/10** con A4b.
   - La prop `icon` di `PasswordInput`, aggiunta da T, manca in `core-ui/atoms.md` e `features/auth.md`. È di T:
@@ -2559,6 +2561,12 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Finché non sono tradotte il build stretto resta verde: le pagine vecchie non puntano alle ancore nuove.
   - Si fa dopo A6–A9, che toccano di nuovo le stesse pagine. La prepara il lotto A10, solo su richiesta
     esplicita del developer (coordinatore, 15/10).
+  - Da A6b (15/10) in più: la pagina nuova `admin/users` (senza traduzioni: IT, FR ed ES mostrano l'inglese) e le
+    sezioni cambiate di `user/settings/profile` («Delete Account»), `admin/cli_tools` («Manage Users», «Invite
+    Someone»), `admin/settings` («Who Can Sign Up», Related), `admin/configuration` (righe `LIBREFOLIO_PUBLIC_URL` e
+    `LIBREFOLIO_BILLING_URL`), `admin/index` e `user/settings/index`. La pagina nuova non usa ancore che esistono solo
+    in inglese; quando le traduzioni avranno `#accounts`, `#user-limit`, `#registration`, `#invite`, `#reset-link` e
+    `#reset-onboarding`, si potranno aggiungere i link precisi.
   - In `admin/configuration` IT, FR ed ES manca tutta la sezione «Accounts and Sign-ups» (`#accounts`): nessuna
     delle tre variabili `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`. Il coordinatore
     (15/10, 16:56) conferma che è debito di A.
@@ -2579,6 +2587,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `.first()`. Basta un test di componente (`SettingToggle`, `disabled` e `badge`).
   - I test «non admin» non provano la sola lettura: manca l'asserzione che `settings-lock-toggle` non c'è.
   - Si fa con la scheda Utenti (A6), che tocca la stessa pagina.
+  - ✅ **Chiusa il 15/10** con A6b (`test-author` E2): `data-busy`, `settings-lock-toggle`, righe per chiave,
+    `setting-save`/`setting-undo`, prova della sola lettura (nuovo `settings-readonly-indicator`), il segnaposto in
+    `SettingControls.test.ts`; `front-utility settings` 46 ✅. Commit al checkpoint A6b; dettagli in «A6b.2».
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.9».
 - **A-13 · Su un'istanza bloccata, `/invite` mostra il modulo e la registrazione finisce al login** — minimo;
   A (15/10, dal merge di H CP6; accettato dal coordinatore).
@@ -2604,6 +2615,15 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Una riga, da mettere nel lotto piccolo di H su `ALLOWED_WHEN_BLOCKED`, o da A al prossimo aggiornamento di base.
   - **Girata ad H** dal coordinatore (15/10, 16:56).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6.5».
+- **A-16 · L'unico admin che elimina il proprio account riceve 400 senza `error_code`** — minimo; A (15/10, dal
+  `test-author` V4 di A6b).
+  - `DELETE /auth/users/me` risponde `400 "Cannot delete account: you are the only administrator"`: una frase
+    inglese e nessun codice.
+  - Dal frontend di A6b, `accountErrors.ts` mostra la frase del server per un 400/409 senza codice, come faceva il
+    dialogo di prima. Funziona, ma non è tradotta.
+  - **Cura**: un `detail` con `error_code` (per esempio `LAST_ADMIN`) e un messaggio tradotto nel dialogo. Cambia la
+    forma della risposta, quindi servono un rosso e l'aggiornamento dei casi ACCDEL sull'unico amministratore.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6b.2».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
