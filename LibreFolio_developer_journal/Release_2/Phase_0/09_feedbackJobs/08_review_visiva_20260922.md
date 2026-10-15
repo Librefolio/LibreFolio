@@ -55,6 +55,7 @@ Severità: 🔴 blocca o falsa un dato · 🟠 rompe un flusso · 🟡 attrito �
 > - R1, R3 e R5–R21 sono chiusi; i piani e i commit sono citati nelle sezioni.
 > - R4 non si riproduce (`21_onboarding`, Round 8).
 > - **R2 resta aperto come difetto di design**: `backend/app/utils/version.py:36-39` legge `VERSION` prima di `git describe`, e la build Docker lo lascia nella radice (`dev.py:1628-1637`).
+>   ✅ Chiusa il 15/10 nella 1.3 (H, CP5a, `9deb0ea08`): in un checkout vince `git describe`.
 > - Fra i non-difetti: il PAC ora ha una UI (`0210f9848`); la valuta sotto privacy è diventata un difetto ed è chiusa (`176f19707`); il benchmark resta un non-difetto.
 
 ---
