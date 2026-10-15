@@ -135,6 +135,11 @@ The second fix, **`orphan_pair_halves`**, repairs, once, the transfers that an e
 - 💶 Cash transfers with the deleted broker become deposits or withdrawals: capital and gain do not change.
 - ⏳ Transfers that sent securities **to** the deleted broker are left as they are for now: the log lists them at every start.
 
+The fix **`event_types`** repairs, once, the asset events stored with a type LibreFolio does not know, such as `dividend` or `dividendo` written by hand in a CSV file. Until now such an event made the whole list of that asset's events fail to load, so none of them was shown:
+
+- ✅ A type that only differs in letter case or spaces (`dividend`, ` Split `) is corrected.
+- 🗑️ An event whose type is still unknown is deleted. A transaction linked to it stays, without its linked event: link it again to the right event if you need to.
+
 ??? tip "⌨️ Run the fixes by hand — to preview them or retry a failed one"
 
     **Stop the server** first (the script does not check it), then run from the project root:

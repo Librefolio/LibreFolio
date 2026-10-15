@@ -10,8 +10,9 @@ migrations, and only when it finds the anomaly it corrects:
 2. every fix ``detect``s, in order; nothing found, nothing written;
 3. the WAL is checkpointed and a backup copy made next to the database;
 4. each fix with an anomaly runs in one transaction with foreign keys off (switched outside the
-   transaction, the only place SQLite allows it), then verifies: ``foreign_key_check`` empty, the
-   row count of every table unchanged, its own checks;
+   transaction, the only place SQLite allows it), then verifies: no ``foreign_key_check`` row it did not
+   find there (one the database already held stays, and is logged once), the row count of every table
+   unchanged but for the changes the fix declares (``row_count_changes``), its own checks;
 5. all verified: the backup is deleted. Any error: rollback, the backup is kept and logged.
 
 Every worker of a multi-worker server runs them as it starts, so runs take turns: each holds an
@@ -40,6 +41,7 @@ except ImportError:  # pragma: no cover - not POSIX: runs are not serialised the
 from backend.app.config import PROJECT_ROOT, get_settings
 from backend.app.db.post_migration.autoincrement import AUTOINCREMENT_TABLES, AutoincrementFix
 from backend.app.db.post_migration.base import FixContext, PostMigrationError, PostMigrationFix, PostMigrationReport
+from backend.app.db.post_migration.event_types import EventTypesFix
 from backend.app.db.post_migration.orphan_pair_halves import OrphanPairHalfFix
 from backend.app.logging_config import get_logger
 
@@ -75,14 +77,19 @@ def _fk_violations(conn: sqlite3.Connection) -> set[tuple]:
     return {tuple(row) for row in conn.execute("PRAGMA foreign_key_check").fetchall()}
 
 
-def _common_problems(conn: sqlite3.Connection, counts_before: dict[str, int], violations_before: set[tuple]) -> list[str]:
+def _expected_counts(counts: dict[str, int], changes: dict[str, int]) -> dict[str, int]:
+    """The row count each table must have after a fix: the one it has now, plus the change the fix declares."""
+    return {**counts, **{name: counts.get(name, 0) + delta for name, delta in changes.items()}}
+
+
+def _common_problems(conn: sqlite3.Connection, counts_expected: dict[str, int], violations_before: set[tuple]) -> list[str]:
     """What a fix broke: a foreign key violation that was not there before it (one already there stays, and is not
-    the fix's), or a table whose row count changed."""
+    the fix's), or a table whose row count is not the expected one (unchanged, but for the rows the fix declares)."""
     problems = [f"foreign_key_check: {row}" for row in sorted(_fk_violations(conn) - violations_before, key=repr)]
     counts_after = _row_counts(conn)
-    if counts_after != counts_before:
-        changed = sorted(name for name in set(counts_before) | set(counts_after) if counts_before.get(name) != counts_after.get(name))
-        problems.append(f"row counts changed: {', '.join(changed)}")
+    if counts_after != counts_expected:
+        changed = sorted(name for name in set(counts_expected) | set(counts_after) if counts_expected.get(name) != counts_after.get(name))
+        problems.append("row counts not as expected: " + ", ".join(f"{name} (expected {counts_expected.get(name)}, found {counts_after.get(name)})" for name in changed))
     return problems
 
 
@@ -111,9 +118,11 @@ def _apply_one(conn: sqlite3.Connection, fix: PostMigrationFix, anomaly: Any, ct
     violations_before = _fk_violations(conn)
     conn.execute("PRAGMA foreign_keys = OFF")
     try:
+        # What the fix declares it deletes or adds: asked here, so that a fix failing to say is reported, not raised.
+        counts_expected = _expected_counts(counts_before, fix.row_count_changes(anomaly, ctx))
         conn.execute("BEGIN IMMEDIATE")
         fix.apply(conn, anomaly, ctx)
-        problems = fix.verify(conn, anomaly, ctx) + _common_problems(conn, counts_before, violations_before)
+        problems = fix.verify(conn, anomaly, ctx) + _common_problems(conn, counts_expected, violations_before)
         if problems:
             raise PostMigrationError("; ".join(problems))
         conn.execute("COMMIT")
@@ -130,7 +139,7 @@ def _apply_one(conn: sqlite3.Connection, fix: PostMigrationFix, anomaly: Any, ct
 
 
 # The fixes, in the order they run. A new fix is appended, never inserted before an older one.
-FIXES: tuple[PostMigrationFix, ...] = (AutoincrementFix(), OrphanPairHalfFix())
+FIXES: tuple[PostMigrationFix, ...] = (AutoincrementFix(), OrphanPairHalfFix(), EventTypesFix())
 
 
 def _apply_pending(conn: sqlite3.Connection, pending: list[tuple[PostMigrationFix, Any]], ctx: FixContext) -> None:
