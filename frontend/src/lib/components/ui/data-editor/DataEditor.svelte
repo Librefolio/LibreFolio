@@ -137,8 +137,14 @@
         return '';
     }
 
-    /** Set of all existing dates for duplicate prevention */
-    let existingDates = $derived(new Set(rows.map((r) => r.date)));
+    /**
+     * The dates `row` may not move to: those of the other rows, or, with `importMatchKeys`
+     * (events), only those of the rows with the same key values: one date holds a DIVIDEND
+     * and an INTEREST.
+     */
+    function takenDates(row: DataRow): Set<string> {
+        return new Set(rows.filter((other) => other.rowId !== row.rowId && importMatchKeys.every((k) => String(other.values[k] ?? '') === String(row.values[k] ?? ''))).map((other) => other.date));
+    }
 
     /** Catalog keys of the status badges and of the status filter's options: one wording for both. */
     const STATUS_LABEL_KEYS: Record<RowStatus, string> = {
@@ -157,8 +163,8 @@
                 cell: (r) => {
                     // Editable date for appended rows
                     if (r.status === 'appended' && !isReadonly) {
-                        // disabledDates: all dates except this row's current date
-                        const disabled = new Set(existingDates);
+                        // disabledDates: the dates taken for this row, except its current date
+                        const disabled = takenDates(r);
                         disabled.delete(r.date);
                         return {
                             type: 'custom',
@@ -416,7 +422,7 @@
     function handleDateChange(rowId: string, newDate: string) {
         const row = rows.find((r) => r.rowId === rowId && r.status === 'appended');
         if (!row || row.date === newDate) return;
-        if (rows.some((r) => r.date === newDate)) return;
+        if (takenDates(row).has(newDate)) return;
         row.date = newDate;
         row.rowId = uniqueRowId(newDate); // the date itself for price rows
         rows = [...rows];
