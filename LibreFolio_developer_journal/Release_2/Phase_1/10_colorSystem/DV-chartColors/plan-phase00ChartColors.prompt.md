@@ -542,6 +542,108 @@ Prove leggere dopo i ritocchi:
 
 **49 path**, nessuno in stage. Stato FROZEN.
 
+### TD-1 — Barre «Esposizioni — ideale vs reale» del PAC ⏳ (dal 15/10/2026)
+
+**Origine.** Dalla review unica del developer sull'anteprima `ec1ddba96` (15/10, 22:08–22:20), il coordinatore ha
+assegnato a DV un compito tecnico: il PAC usava ancora `PAC_EXPOSURE_BAR_COLORS`, cioè il verde vecchio `#1a4031` e, in
+scuro, il fluo `#00d681`. Rientra in GR1, il colore di un tipo riconoscibile «in qualsiasi vista» (D-T22: «Sì, approva
+DV così»). Il via è arrivato dopo l'ingresso unico di T e DV (`dev_release2` = `a0915bef9`, 15/10 alle 22:51).
+
+**Decisioni del coordinatore** (15/10: alle 22:27 sull'analisi in sola lettura, e dopo la rimisura su T-8b):
+1. **«Ideale» nel ruolo neutro `--lf-text-secondary`,** con un test che lo tiene a ΔE00 ≥ 10 da ogni categoria.
+   - Rimisurato sui valori di T-8b, con il resolver di T.
+     - **Chiaro:** `#4a5550`, 7.48:1 sulla card, categoria più vicina Industriali a 13.40.
+     - **Scuro:** `#9ba8a2`, 7.08:1, ma a **9.05 da «Altro»** (`#7F8C87`, che è sia il tipo `OTHER` sia il settore
+       `Other`).
+   - Su 92 ruoli, solo `--lf-text-primary` e `--lf-surface-inverse` passano ovunque: troppo forti per una barra.
+   - **Scelta (a):** una sola eccezione registrata, «Altro» in scuro a 9.0. Il test fallisce se quella distanza scende
+     ancora, o se un'altra categoria va sotto 10.
+   - L'eccezione è annotata anche nel pacchetto del giro 3, `package/grafici-giro3-2026-10-15/`, al punto 2.7, sia
+     nel `.md` sia nell'`.html`. Lo zip non è ricostruito.
+2. **`ChartRole`:** il ruolo lo aggiunge DV, col ripiego uguale al `tokens.css` della base. B4 di T partirà da lì.
+3. **Sottotipi:** le sfumature GR4 della famiglia, come nell'anello della torta.
+   - Il membro generico prende il colore base.
+   - Gli altri prendono `familyShade` per rango di peso ideale decrescente, a pari peso per id; mai il colore base.
+4. **Legenda:** «ideale» col quadratino neutro pieno, «reale» bordato nel colore del testo.
+5. **Galleria (a):** lo scatto `tools/pac-result-exposures` lo scrive G (G-16), nel suo perimetro. L'evidenza di TD-1
+   sarà quello scatto in una galleria filtrata, più i test di componente.
+- Si fanno anche il modulo puro `exposureBarColours.ts` e la rimozione di `PAC_EXPOSURE_BAR_COLORS`. I file del PAC
+  sono di J, che ora non ci lavora: si dichiarano all'ingresso.
+
+**Passi:**
+- [x] `api sync` sulla base `a0915bef9`: rc 0, nessun file tracciato cambiato.
+- [x] Rimisura del neutro su T-8b, ed eccezione decisa.
+- [x] `roleColors.ts`: `--lf-text-secondary` in `ChartRole`, col ripiego uguale a `tokens.css` (`#4a5550` / `#9ba8a2`).
+  Il commento del modulo cita TD-1. `roleColors.test.ts` 26/26: la parità copre il ruolo nuovo, e il controllo «ogni
+  ruolo è letto da un grafico» è soddisfatto.
+- [x] Nuovo `exposureBarColours.ts`, con `idealColour(roles)` e `actualColours(rows, dimension, dark, poles)`, e il
+  cablaggio di `ExposureBars.svelte`:
+  - colori della serie «reale» per riga;
+  - legenda;
+  - dots del tooltip;
+  - segnale C4;
+  - `chartRoles(dark, container)`.
+
+  Il compilatore Svelte dà 0 avvisi, e Prettier è pulito.
+- [x] `exposureTooltip.ts`, solo il commento di `dots`. `PAC_EXPOSURE_BAR_COLORS` tolto da `chartTheme.ts`: nessun altro
+  riferimento in `src`, `e2e` o `mkdocs_src`. `theme-roles --check` pulito.
+- [x] **Richiesta di L (L-16), dentro TD-1:** `lookupKey` esportata da `chartCategories.ts` e documentata nel commento
+  del modulo. Il controllo C1 (`DOCUMENTED_EXPORTS`) diventa rosso finché `test-author` non lo aggiorna.
+- [x] Test, scritti da `test-author` (15/10):
+  - **TA-1:**
+    - `exposureBarColours.test.ts` (nuovo, node): 24. Ogni regola nei due temi; il controllo ΔE00 su 27 colori di
+      categoria per tema; l'unica eccezione, «Altro» in scuro a 9.0 (misurato 9.047; il secondo più vicino in scuro è
+      Holding/Industriali a 12.997, in chiaro 13.404). Ogni via di fallimento è dimostrata su grigi sintetici.
+    - `chartCategories.test.ts`: 88, con `DOCUMENTED_EXPORTS` + `lookupKey`, il comportamento di `lookupKey`, e
+      `growthBrokerColor` che segue una modifica del Lab.
+    - `chartTheme.test.ts`: 6. I controlli positivi spostati su tabelle che esistono; la funzione si salta.
+    - Catalogo: riga 158 (`core-unit`, `exposureBarColours`) e riga 357 (`component-unit`, `ExposureBars`), solo
+      aggiunte.
+  - **TA-2:**
+    - `ExposureBars.test.ts` (nuovo, jsdom, ECharts registrato): 12. Due fixture nei due temi, con ruoli inventati sul
+      contenitore del grafico; serie, legenda, dots del tooltip, cambio di tema, C4; nessun verde vecchio.
+    - `GrowthChart.test.ts`: 166, con un caso C4 in coda (solo aggiunte, 75 righe). Fallirebbe senza il `true` di
+      `renderChart(true)`.
+- [x] Prove leggere: 18 file, uno per volta, 629 test verdi.
+  - I nuovi e gli aggiornati, sopra.
+  - Invariati: `roleColors` 26, `roleColors.dom` 11, `GrowthChart.tooltip` 6, `ResultCell` 7, `StateNotice` 6, `model`
+    11, `text` 95, `categoryLabels` 9, i gate `themeRoles` 47, `themeTokens` 16, `themeComponentTokens` 18,
+    `designerLabImports` 27, e `scanColors` 54.
+  - Statici: compilatore Svelte 0 avvisi su `ExposureBars` e `GrowthChart`; Prettier; `theme-roles --check`;
+    `git diff --check`; ruff e black sul catalogo, uguali a HEAD.
+- [ ] Prove pesanti, al via del coordinatore (chiesto il 15/10): `front check`, `core-unit`, `component-unit`, poi gli
+  E2E `front-utility pac-allocator-real` e `front-portfolio dashboard`.
+- [ ] Dopo G-16: galleria filtrata su `tools/pac-result-exposures`, nei due temi. Poi il checkpoint, con le righe «dove
+  guardarlo» per il developer.
+
+> **⚠️ Fuori pista:**
+> - **Il ruolo si legge con una chiamata letterale.** Il controllo di TA-1 sui ruoli cerca
+>   `.color('--lf-…')` nei sorgenti, e una costante `IDEAL_ROLE` lo nascondeva. Ora è `idealColour(roles)`, che contiene
+>   la chiamata letterale e serve anche al test ΔE.
+> - **TD-1b, dopo TD-1** (richiesta di L, 15/10): `GROWTH_BROKER_PALETTE` è calcolata all'import, e `GrowthChart` non
+>   ascolta C4. L'elenco dei file è andato al coordinatore per la 1.3:
+>   - `chartPalettes.ts`;
+>   - `growthChartSeries.ts` (Y), circa 4 righe;
+>   - `GrowthChart.svelte` (Y), circa 3 righe;
+>   - il commento di `chartTheme.ts`;
+>   - i test `chartCategories`, `chartTheme` e `GrowthChart` (Y).
+>
+>   Si tocca solo con l'OK.
+> - **TD-1b unito a TD-1** (coordinatore, 15/10 alle 23:10, con l'OK della 1.3 sui file di Y): un lotto, un checkpoint
+>   e una validazione, così entra prima di Y3 (FE6b). Dopo le 01:30 circa Y3 sposta `GrowthChart.svelte`,
+>   `growthChartSeries.ts` e il test in un'altra cartella. Fatto:
+>   - `chartPalettes.ts`: al posto di `GROWTH_BROKER_PALETTE`, calcolata all'import, c'è `growthBrokerColor(index,
+>     dark)`, che chiama `categoryColor` a ogni disegno;
+>   - `growthChartSeries.ts` (Y): `brokerColor` delega a `growthBrokerColor`;
+>   - `GrowthChart.svelte` (Y): `onChartColorsChange(() => renderChart(true))`. Il `true` serve:
+>     `renderChart()` prende la via dei soli dati quando modo, tema, mascheramento e serie non cambiano, cioè la
+>     scorciatoia che C4 esclude;
+>   - `chartTheme.ts`: solo il commento.
+>
+>   Prove: compilatore Svelte 0 avvisi; `GrowthChart.test.ts` 165 e `GrowthChart.tooltip.test.ts` 6, come prima;
+>   Prettier e `theme-roles --check` puliti. I test di TD-1b li scrivono TA-1 (`chartCategories`, `chartTheme`) e TA-2
+>   (un caso C4 in `GrowthChart.test.ts`).
+
 | Passo | Contenuto | File | Conflitti |
 |---|---|---|---|
 | S2 | Fondamenta in `lib/theme` e gate | `lib/theme/chartCategories.ts`, `chartShades.ts`, `roleColors.ts` (nuovi), `themeMode.ts`, `colorAlpha.ts` | nessuno |
@@ -553,6 +655,7 @@ Prove leggere dopo i ritocchi:
 | S8 | Linee dei broker | `chartPalettes.ts`, solo valori | nessuno |
 | S9 | Indicatori per tema (via a parte) | `lib/charts/signals/*`, UI dei segnali, `chartSettingsStore`, pagina asset riga 916 | Y4, Y8, X |
 | S10 | Verifiche e gallery (strumenti di G, slot pesante), checkpoint | — | — |
+| TD-1 + TD-1b | Barre «Esposizioni — ideale vs reale» del PAC; linee dei broker lette al disegno, con C4 | `ExposureBars.svelte`, `exposureTooltip.ts`, `exposureBarColours.ts` (nuovo), `chartTheme.ts`, `roleColors.ts`, `chartCategories.ts` (`lookupKey`), `chartPalettes.ts`, `growthChartSeries.ts`, `GrowthChart.svelte` | J (PAC, non attivo), Y (Y3 sposta i file della crescita dopo le 01:30), T (B4 su `ChartRole`), G (G-16, lo scatto) |
 
 **Gallery che cambia:**
 - `dashboard/allocation-{type,sector,geo}-{now,history}`;
