@@ -20,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `GET /api/v1/system/instance`: the public configuration of the instance, read by the app at startup.
 - A currency exchange explains its two dates, in the form and in the guide: they usually match, and differ when the broker credits the new currency on another day.
 - `GET /api/v1/system/ready`: 200 when the database answers and its schema is at the latest migration, 503 otherwise, one code per check — for Docker health checks, Uptime Kuma and hosting panels.
+- `LIBREFOLIO_PROFILE`: `selfhosted` (the default, nothing changes) or `managed`, for whoever hosts LibreFolio for others. In the managed profile a `JWT_SECRET` shorter than 32 characters stops the server at startup; elsewhere it stays a warning in the log. Documented in the new admin page "Hosting for Others".
+- **Instance block, for hosting providers**: with `LIBREFOLIO_BLOCKED=1` the data stays, and whoever signs in sees a page saying the instance is blocked, with the deletion date when `LIBREFOLIO_DELETION_DATE` is set. To a signed-in user the API answers `423 instance_blocked` to everything except signing in and out, deleting their own account, the block page, the public configuration and the health, readiness and version probes. A malformed value of either variable stops the server at startup, naming the variable.
+- `GET /api/v1/system/block`: the block state behind that page, for signed-in users.
 
 ### 🔄 Changed
 
@@ -51,6 +54,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A parse that a plugin refuses names the plugin and the file as you know them, not the plugin code and the stored file id.
 - Asset data editor: an events CSV with events of different types on the same day (a dividend and a split) imports them all, instead of leaving them out as duplicates; a new event can move to a day that holds only an event of another type.
 - In a source checkout the app version follows `git describe` again: a `VERSION` file left by an earlier Docker build no longer hides newer commits.
+- Settings › About no longer breaks when the server answers with the version only (an expired session): it waits for the sign-in instead of reading that answer as the full report.
+- The asset form's comparison with the data provider shows the "Description" row in your language.
 
 ---
 

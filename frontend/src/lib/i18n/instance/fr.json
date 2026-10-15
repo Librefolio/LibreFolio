@@ -27,6 +27,12 @@
         "ok": "Le niveau de journalisation convient à la production.",
         "verbose": "Le niveau de journalisation est {log_level} : le journal enregistre des détails de fonctionnement ; INFO suffit en production."
       }
+    },
+    "block": {
+      "title": "Cette instance est bloquée",
+      "adminDescription": "L'hébergeur a bloqué cette instance, par exemple parce que son abonnement n'est pas payé. Régularisez la situation auprès de l'hébergeur pour la débloquer.",
+      "userDescription": "L'hébergeur a bloqué cette instance, par exemple parce que son abonnement n'est pas payé. Demandez à votre administrateur une sauvegarde de vos données.",
+      "deletionDate": "L'instance et ses données seront supprimées le {date}."
     }
   }
 }

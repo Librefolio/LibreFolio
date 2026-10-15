@@ -21,7 +21,7 @@ The library is split into two architectural layers: **Core UI** (generic atoms a
 | **[Import Wizard](features/import-wizard.md)** | Multi-file staged broker import: duplicate detection (vs DB and in-batch), the file-priority batch resolver, and the N-way compare modal. |
 | **[Brokers](features/brokers/index.md)** | `BrokerCard`, `BrokerForm`, `BrokerModal`, `DeleteBrokerDialog`, and Broker Sharing. |
 | **[Settings](features/settings.md)** | `SettingsLayout`, `PreferencesTab`, `GlobalSettingsTab`. |
-| **[Authentication](features/auth.md)** | `LoginCard`, `RegisterCard`, `ForgotPasswordCard`, the password-manager contract. |
+| **[Authentication](features/auth.md)** | `LoginCard`, `RegisterCard`, `ForgotPasswordCard`, the account link pages (`LinkStatusCard`, `ResetPasswordCard`), the password-manager contract. |
 | **[Live Prices](features/live-ticker.md)** | How the Assets list (every 60 s) and the asset detail page (every 30 s, one request for the price summary and the chart head) poll `POST /assets/prices/current`, how the polls pause while nobody uses the page, and how a price change is shown. |
 | **[Lots Analysis](features/lots-analysis.md)** | `LotsAnalysisPanel` and its chart/table/modal group: per-lot WAC vs market price, custody Gantt, unified lots table, value/return comparison, custody drill-down modal. |
 | **[Risk UI](features/risk-lab.md)** | The Correlation tab of the Assets page and the Dashboard's Risk tab: the selection, the requests over one shared window, the section frames and notices, and each block's rules. |

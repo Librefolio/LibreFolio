@@ -1,4 +1,4 @@
-import {type APIRequestContext, type BrowserContext, expect, type Page, type Request, type Response, test} from './fixtures/playwright';
+import {type APIRequestContext, type BrowserContext, expect, type Locator, type Page, type Request, type Response, test} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
 import {eventSeq, waitForEvent} from './fixtures/app-events';
@@ -532,6 +532,24 @@ test.describe('Settings', () => {
             return page.getByTestId('global-settings-tab');
         }
 
+        /**
+         * The row of `scheduler_enabled` (category «sync»): the bool that is editable on every lane, named by its key.
+         * Since A5b turned `enable_registration` into the `registration_mode` select, «the first toggle» of the tab is
+         * `require_email_verification`, a «Coming soon» placeholder whose switch is disabled whatever the lock says: it
+         * can be neither clicked nor used to prove the lock. The setting is global and shared by every worker on the
+         * lane, so these tests flip and undo a local draft and never press Save.
+         */
+        function schedulerRow(page: Page) {
+            return gs(page).getByTestId('global-setting-scheduler_enabled');
+        }
+
+        /** What the switch says now, once it says a boolean, and what one click must turn it into. */
+        async function checkedState(toggle: Locator): Promise<{initial: string; flipped: string}> {
+            await expect(toggle).toHaveAttribute('aria-checked', /^(true|false)$/);
+            const initial = (await toggle.getAttribute('aria-checked')) === 'true' ? 'true' : 'false';
+            return {initial, flipped: initial === 'true' ? 'false' : 'true'};
+        }
+
         test('admin can unlock global settings for editing', async ({page}) => {
             const unlockBtn = gs(page).locator('button[title="Click to unlock and edit"]');
             await expect(unlockBtn).toBeVisible();
@@ -543,62 +561,54 @@ test.describe('Settings', () => {
             // Unlock
             await gs(page).locator('button[title="Click to unlock and edit"]').click();
 
-            // Find toggle within global-settings-tab (excludes mobile menu toggle)
-            const toggleBtn = gs(page).locator('button[aria-label^="Toggle"]').first();
-            await expect(toggleBtn).toBeVisible();
-            await expect(toggleBtn).toBeEnabled();
+            const toggle = schedulerRow(page).getByTestId('setting-toggle-switch');
+            // The unlock's post-condition, and the premise of the click below.
+            await expect(toggle).toBeEnabled();
+            const {flipped} = await checkedState(toggle);
 
-            // Read ON/OFF state from sibling span
-            const toggleContainer = toggleBtn.locator('xpath=..');
-            const stateText = toggleContainer.locator('span').filter({hasText: /^(ON|OFF)$/});
-            const initialState = await stateText.textContent();
+            await toggle.click();
 
-            // Click toggle
-            await toggleBtn.click();
-
-            // State should have changed — the retrying assertion *is* the wait
-            await expect(stateText).not.toHaveText(initialState ?? '', {timeout: 5_000});
+            // The retrying assertion *is* the wait.
+            await expect(toggle).toHaveAttribute('aria-checked', flipped);
         });
 
         test('save and undo buttons appear after toggling', async ({page}) => {
             // Unlock
             await gs(page).locator('button[title="Click to unlock and edit"]').click();
 
-            // Click a toggle
-            await gs(page).locator('button[aria-label^="Toggle"]').first().click();
+            const row = schedulerRow(page);
+            const toggle = row.getByTestId('setting-toggle-switch');
+            await expect(toggle).toBeEnabled();
+            const {flipped} = await checkedState(toggle);
+            // Control: unlocked and still clean, the row offers nothing to save, so what appears below is the toggle's doing.
+            await expect(row.getByTestId('setting-save')).toBeHidden();
 
-            // Save/Undo should appear within the setting row
-            const settingRow = gs(page)
-                .locator('.setting-row')
-                .filter({has: page.locator('button[aria-label^="Toggle"]')})
-                .first();
-            await expect(settingRow.locator('button[title="Save"]')).toBeVisible();
-            await expect(settingRow.locator('button[title="Undo"]')).toBeVisible();
+            await toggle.click();
+            await expect(toggle).toHaveAttribute('aria-checked', flipped);
+
+            // By test id, inside this row: their titles are translated. Save is never pressed, the setting is shared.
+            await expect(row.getByTestId('setting-save')).toBeVisible();
+            await expect(row.getByTestId('setting-undo')).toBeVisible();
         });
 
         test('undo reverts toggle to original value', async ({page}) => {
             // Unlock
             await gs(page).locator('button[title="Click to unlock and edit"]').click();
 
-            // Find first toggle setting-row
-            const settingRow = gs(page)
-                .locator('.setting-row')
-                .filter({has: page.locator('button[aria-label^="Toggle"]')})
-                .first();
-            const toggleBtn = settingRow.locator('button[aria-label^="Toggle"]');
-            const stateText = toggleBtn
-                .locator('xpath=..')
-                .locator('span')
-                .filter({hasText: /^(ON|OFF)$/});
-            const initialState = await stateText.textContent();
+            const row = schedulerRow(page);
+            const toggle = row.getByTestId('setting-toggle-switch');
+            await expect(toggle).toBeEnabled();
+            const {initial, flipped} = await checkedState(toggle);
 
             // Toggle
-            await toggleBtn.click();
-            await expect(stateText).not.toHaveText(initialState ?? '', {timeout: 5_000});
+            await toggle.click();
+            await expect(toggle).toHaveAttribute('aria-checked', flipped);
 
             // Undo
-            await settingRow.locator('button[title="Undo"]').click();
-            await expect(stateText).toHaveText(initialState!);
+            await row.getByTestId('setting-undo').click();
+            await expect(toggle).toHaveAttribute('aria-checked', initial);
+            // Reverted, not just redrawn: the draft is gone, so nothing is left to save.
+            await expect(row.getByTestId('setting-save')).toBeHidden();
         });
 
         test('number input can be edited and undone (SettingNumber)', async ({page}) => {
@@ -622,9 +632,14 @@ test.describe('Settings', () => {
         });
 
         test('toggles are disabled when locked', async ({page}) => {
-            const toggleBtn = gs(page).locator('button[aria-label^="Toggle"]').first();
-            await expect(toggleBtn).toBeVisible();
-            await expect(toggleBtn).toBeDisabled();
+            // An editable setting, not the placeholder: that one is disabled locked or not, so it proved nothing here.
+            const toggle = schedulerRow(page).getByTestId('setting-toggle-switch');
+            await expect(toggle).toBeVisible();
+            await expect(toggle).toBeDisabled();
+
+            // Control: the lock is what disabled it, since unlocking brings the same switch to life.
+            await gs(page).locator('button[title="Click to unlock and edit"]').click();
+            await expect(toggle).toBeEnabled();
         });
 
         test('number inputs are disabled when locked', async ({page}) => {
@@ -643,7 +658,8 @@ test.describe('Settings', () => {
             await page.waitForSelector('[data-testid="global-settings-tab"] .setting-row', {timeout: 10_000});
 
             const gs = page.getByTestId('global-settings-tab');
-            await expect(gs.locator('button[aria-label^="Toggle"]').first()).toBeDisabled();
+            // `scheduler_enabled`, an editable bool: the tab's first toggle is now a placeholder, disabled for everyone.
+            await expect(gs.getByTestId('global-setting-scheduler_enabled').getByTestId('setting-toggle-switch')).toBeDisabled();
             await expect(gs.locator('.setting-row input[type="number"]').first()).toBeDisabled();
         });
     });
