@@ -47,7 +47,7 @@ backend/app/services/financial_math/
 ├── __init__.py              docstring only: the rule and the module map
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
 ├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result
-├── returns.py               simple ROI, TWRR, MWRR (values and daily series), annualization
+├── returns.py               simple ROI, TWRR, MWRR (values and daily series), annualization, period rebasing, G/L ratio
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
@@ -63,6 +63,7 @@ backend/app/services/financial_math/
 │   ├── daily_state.py       DailyStateBuilder: the daily state vector, without I/O
 │   ├── derived_views.py     DerivedViewsBuilder (history, P&L, allocation…), cost positions
 │   ├── data_quality.py      FX pair slug, configured pair sets, build_data_quality_report()
+│   ├── period.py            a period's boundary states, its P&L and the identity that closes it
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py
     ├── __init__.py          docstring only

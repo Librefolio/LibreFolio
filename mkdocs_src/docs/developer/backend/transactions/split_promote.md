@@ -52,6 +52,14 @@ The rows keep their IDs. No create or delete is involved.
 | `TRANSFER` | `ADJUSTMENT` | `ADJUSTMENT` |
 | `FX_CONVERSION` | `WITHDRAWAL` | `DEPOSIT` |
 
+Deleting a broker with its transactions converts the surviving half of each pair
+with another broker by the same rules, through the same helpers of
+`batch_edits.py`: `pair_sides()` (step 3) and `make_standalone()` (steps 4–6). Two
+differences: a received `TRANSFER` without a cost basis first gets its sender's
+Auto cost, and the giving leg of a `TRANSFER` only loses its link until point 47
+of release 1.3 is answered. See
+[Transaction Service — Broker Deletion](service.md#broker-deletion).
+
 ### 📦 Request shape
 
 Split is a first-class item in the unified batch:
@@ -200,7 +208,8 @@ create or update in Auto that the promote makes the receiving side averages its
 partner's broker, as of the partner's date and without the partner's outgoing leg.
 
 `validate_cost_basis()` then checks the receiving side like any other row: a new
-row as a create and a saved row also in `updates[]` as that update, both unless in
+row as a create and a saved row also in `updates[]` as that update (the promote
+changes its type, so even an update of its notes alone is checked), both unless in
 Auto; any other saved row without a cost basis gets `costBasisRequired` on
 operation `promote`, with the promote's index and `ref_id` set to that row. See
 [WAC & Cost Basis](wac.md#promote-boundary).

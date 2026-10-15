@@ -40,6 +40,19 @@ anomaly and rebuilds the census tables with AUTOINCREMENT. The contract pinned h
     once): the closing event of a run that applies fixes — ``Post-migration fixes applied and
     verified`` or ``Post-migration fix failed: the database was left as it was``, logger
     ``backend.app.db.post_migration`` — carries ``seconds``, a float >= 0, beside its usual fields.
+14. A foreign-key violation already in the database (W-B22) blocks no fix: the run's foreign-key check, like
+    its row counts, compares with the database just before each fix, and only a violation the fix brings
+    is a problem. A received TRANSFER whose partner was deleted with foreign keys off — its link names a row
+    that no longer exists — no longer fails ``autoincrement``: both fixes ``applied``, the half an ADJUSTMENT
+    without a link, nothing left broken, no backup, a second run ``clean``. A violation in another table — a
+    price of a deleted asset — stays as it is and is reported once per run, in a warning of logger
+    ``backend.app.db.post_migration`` whose event starts with ``Foreign key violations``, with its count and
+    rows; ``applied``, no backup, a second run ``clean``. RED until the cure: today either fails
+    ``autoincrement`` at every start, a backup kept each time, and ``orphan_pair_halves`` never runs. Guard,
+    green before and after: a fix that breaks a link itself still fails, the database as it was, the backup kept.
+15. The offline script logs to the console only (W-B23, guard, green before and after): a run through
+    ``python -m backend.app.db.post_migration`` writes no file in the configured data dir — no ``logs/`` —
+    and leaves its canary as it was.
 
 The 1.1 database is real: ``fixtures/db/schema_v1_1_0.sql`` (the v1.1.0 schema at revision
 5b1333fa6b07), populated here with foreign keys on — every table, rows of non-census tables pointing
@@ -867,21 +880,21 @@ def test_the_kept_backup_is_named_after_the_database_the_fix_and_the_utc_time(re
 def test_the_startup_hook_survives_a_run_that_raises_and_returns_none(configured_sandbox: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Contract 5: ``run_post_migration_fixes_at_startup()`` swallows an exception of the run and returns ``None``: startup never blocks.
 
-    ``run_post_migration_fixes`` is replaced, in ``backend.app.main`` where the hook reaches it, by one
-    that raises. Barrier first: the hook did call it — otherwise "it did not raise" proves nothing.
+    ``run_post_migration_fixes`` is replaced, in ``backend.app.services.platform.database_bootstrap`` where the hook
+    reaches it, by one that raises. Barrier first: the hook did call it — otherwise "it did not raise" proves nothing.
     """
     _install_v110(configured_sandbox / "sqlite" / "app.db")
-    main = importlib.import_module("backend.app.main")
+    database_bootstrap = importlib.import_module("backend.app.services.platform.database_bootstrap")
     calls: list[Any] = []
 
     def raising_run(db_path: Path, data_dir: Optional[Path] = None, *, dry_run: bool = False) -> PostMigrationReport:
         calls.append(db_path)
         raise RuntimeError("provoked: the post-migration run itself failed")
 
-    monkeypatch.setattr(main, "run_post_migration_fixes", raising_run, raising=False)
+    monkeypatch.setattr(database_bootstrap, "run_post_migration_fixes", raising_run)
 
     try:
-        result = main.run_post_migration_fixes_at_startup()
+        result = database_bootstrap.run_post_migration_fixes_at_startup()
     except Exception as exc:
         pytest.fail(f"the startup hook raised {exc!r}: startup must never block")
 
@@ -1070,10 +1083,10 @@ def test_the_startup_hook_runs_the_fixes_on_the_configured_database_and_data_dir
     The configuration is the sandbox (``LIBREFOLIO_TEST_MODE=1``, ``LIBREFOLIO_TEST_DATA_DIR``), whose
     ``sqlite/app.db`` is a 1.1 database needing the conversion; it is read when the hook runs, as
     ``ensure_database_exists`` reads it. ``run_post_migration_fixes`` is replaced in
-    ``backend.app.main``, where the hook reaches it, by a spy returning a report of its own.
+    ``backend.app.services.platform.database_bootstrap``, where the hook reaches it, by a spy returning a report of its own.
     """
     db = _install_v110(configured_sandbox / "sqlite" / "app.db")
-    main = importlib.import_module("backend.app.main")
+    database_bootstrap = importlib.import_module("backend.app.services.platform.database_bootstrap")
     report = PostMigrationReport(outcomes={FIX: "applied"})
     calls: list[tuple[Any, Any, bool]] = []
 
@@ -1081,9 +1094,9 @@ def test_the_startup_hook_runs_the_fixes_on_the_configured_database_and_data_dir
         calls.append((db_path, data_dir, dry_run))
         return report
 
-    monkeypatch.setattr(main, "run_post_migration_fixes", spy, raising=False)
+    monkeypatch.setattr(database_bootstrap, "run_post_migration_fixes", spy)
 
-    result = main.run_post_migration_fixes_at_startup()
+    result = database_bootstrap.run_post_migration_fixes_at_startup()
 
     assert len(calls) == 1, f"the hook must call run_post_migration_fixes once, it called it {len(calls)} times"
     db_path, data_dir, as_dry_run = calls[0]
@@ -1098,7 +1111,7 @@ def test_the_startup_hook_runs_the_fixes_on_the_configured_database_and_data_dir
 # =============================================================================
 
 
-def _quiet_the_rest_of_the_lifespan(monkeypatch: pytest.MonkeyPatch, main: ModuleType, events: list[str]) -> None:
+def _quiet_the_rest_of_the_lifespan(monkeypatch: pytest.MonkeyPatch, app_lifespan: ModuleType, events: list[str]) -> None:
     """Everything else the lifespan starts or stops reduced to nothing, as the lifespan tests of ``test_market_calendar`` do.
 
     Two steps are recorded instead: the migrations (``ensure_database_exists``) and the first
@@ -1122,26 +1135,26 @@ def _quiet_the_rest_of_the_lifespan(monkeypatch: pytest.MonkeyPatch, main: Modul
     async def scheduler(event: asyncio.Event) -> None:
         await event.wait()
 
-    monkeypatch.setattr(main, "validate_signal_runtime", lambda: SimpleNamespace(pandas_ta_classic_version="test", talib_version="test"))
-    monkeypatch.setattr(main.SignalPluginRegistry, "auto_discover", lambda: None)
-    monkeypatch.setattr(main.SignalPluginRegistry, "list_plugin_codes", lambda: [])
-    monkeypatch.setattr(main.ToolPluginRegistry, "get_snapshot", lambda: SimpleNamespace(definitions=[], failures=[]))
-    monkeypatch.setattr(main, "ensure_data_dirs", lambda: None)
-    monkeypatch.setattr(main, "initialize_risk_scenario_catalog", catalog)
-    monkeypatch.setattr(main, "seed_default_avatars", lambda: 0)
-    monkeypatch.setattr(main, "ensure_database_exists", lambda: events.append("migrations"))
-    monkeypatch.setattr(main, "_initialize_global_settings", first_connection)
-    monkeypatch.setattr(main, "_prewarm_provider_caches", nothing)
-    monkeypatch.setattr(main, "start_market_holiday_prewarm", prewarm)
-    monkeypatch.setattr(main, "get_shutdown_event", lambda: shutdown_event)
-    monkeypatch.setattr(main, "scheduler_loop", scheduler)
-    monkeypatch.setattr(main, "shutdown_tool_executor", nothing)
-    for registry in (main.AssetProviderRegistry, main.FXProviderRegistry, main.BRIMProviderRegistry):
+    monkeypatch.setattr(app_lifespan, "validate_signal_runtime", lambda: SimpleNamespace(pandas_ta_classic_version="test", talib_version="test"))
+    monkeypatch.setattr(app_lifespan.SignalPluginRegistry, "auto_discover", lambda: None)
+    monkeypatch.setattr(app_lifespan.SignalPluginRegistry, "list_plugin_codes", lambda: [])
+    monkeypatch.setattr(app_lifespan.ToolPluginRegistry, "get_snapshot", lambda: SimpleNamespace(definitions=[], failures=[]))
+    monkeypatch.setattr(app_lifespan, "ensure_data_dirs", lambda: None)
+    monkeypatch.setattr(app_lifespan, "initialize_risk_scenario_catalog", catalog)
+    monkeypatch.setattr(app_lifespan, "seed_default_avatars", lambda: 0)
+    monkeypatch.setattr(app_lifespan, "ensure_database_exists", lambda: events.append("migrations"))
+    monkeypatch.setattr(app_lifespan, "_initialize_global_settings", first_connection)
+    monkeypatch.setattr(app_lifespan, "_prewarm_provider_caches", nothing)
+    monkeypatch.setattr(app_lifespan, "start_market_holiday_prewarm", prewarm)
+    monkeypatch.setattr(app_lifespan, "get_shutdown_event", lambda: shutdown_event)
+    monkeypatch.setattr(app_lifespan, "scheduler_loop", scheduler)
+    monkeypatch.setattr(app_lifespan, "shutdown_tool_executor", nothing)
+    for registry in (app_lifespan.AssetProviderRegistry, app_lifespan.FXProviderRegistry, app_lifespan.BRIMProviderRegistry):
         monkeypatch.setattr(registry, "shutdown_all_providers", lambda: None)
-    monkeypatch.setattr(main, "shutdown_brim_parse_pool", lambda wait=False: None)
-    monkeypatch.setattr(main, "shutdown_quant_worker_pools", nothing)
-    monkeypatch.setattr(main, "shutdown_market_holidays", nothing)
-    monkeypatch.setattr(main, "close_all_caches", lambda: None)
+    monkeypatch.setattr(app_lifespan, "shutdown_brim_parse_pool", lambda wait=False: None)
+    monkeypatch.setattr(app_lifespan, "shutdown_quant_worker_pools", nothing)
+    monkeypatch.setattr(app_lifespan, "shutdown_market_holidays", nothing)
+    monkeypatch.setattr(app_lifespan, "close_all_caches", lambda: None)
 
 
 @pytest.mark.asyncio
@@ -1153,18 +1166,20 @@ async def test_the_server_runs_the_fixes_right_after_the_migrations_and_starts_e
     hook, so the fixes never appear.
     """
     _install_v110(configured_sandbox / "sqlite" / "app.db")
-    main = importlib.import_module("backend.app.main")
+    app_lifespan = importlib.import_module("backend.app.services.platform.app_lifespan")
+    database_bootstrap = importlib.import_module("backend.app.services.platform.database_bootstrap")
+    app = importlib.import_module("backend.app.main").app
     events: list[str] = []
 
     def raising_run(db_path: Path, data_dir: Optional[Path] = None, *, dry_run: bool = False) -> PostMigrationReport:
         events.append("post_migration_fixes")
         raise RuntimeError("provoked: the post-migration run itself failed")
 
-    _quiet_the_rest_of_the_lifespan(monkeypatch, main, events)
-    monkeypatch.setattr(main, "run_post_migration_fixes", raising_run, raising=False)
+    _quiet_the_rest_of_the_lifespan(monkeypatch, app_lifespan, events)
+    monkeypatch.setattr(database_bootstrap, "run_post_migration_fixes", raising_run)
 
     async def serve() -> None:
-        async with main.lifespan(main.app):
+        async with app_lifespan.lifespan(app):
             events.append("serving")
 
     try:
@@ -1463,3 +1478,144 @@ def test_a_run_that_fails_logs_how_long_it_took(tmp_path: Path) -> None:
     assert (event.get("db_path"), event.get("backup"), event.get("errors")) == (str(db), str(report.backup_path), report.errors)
     assert report.errors, "a failed run must say why"
     assert _seconds_problem(event) is None, _seconds_problem(event)
+
+
+# =============================================================================
+# 14. A FOREIGN-KEY VIOLATION ALREADY IN THE DATABASE (W-B22)
+# =============================================================================
+
+ORPHAN_FIX = "orphan_pair_halves"
+FK_WARNING = "Foreign key violations"  # how the warning listing the violations found before a fix starts — pinned loosely
+
+
+def _leave_a_received_half_whose_partner_is_gone(db: Path) -> int:
+    """A TRANSFER pair of 2 Apple from broker 1 to broker 2, then its giving half deleted with foreign keys off: the received half's link names a row that no longer exists. Its id."""
+    stamp = "2025-08-01 10:00:00.000000"
+    columns = "broker_id, asset_id, type, date, quantity, amount, cost_basis_override, cost_basis_currency, description, created_at, updated_at"
+    with _connect(db) as conn:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        giving = conn.execute(f"INSERT INTO transactions ({columns}) VALUES (1, 1, 'TRANSFER', '2025-08-01', -2, 0, NULL, NULL, 'To Broker Beta', ?, ?)", (stamp, stamp)).lastrowid
+        received = conn.execute(f"INSERT INTO transactions ({columns}) VALUES (2, 1, 'TRANSFER', '2025-08-01', 2, 0, 243.36, 'USD', 'From Broker Alpha', ?, ?)", (stamp, stamp)).lastrowid
+        conn.execute("UPDATE transactions SET related_transaction_id = ? WHERE id = ?", (received, giving))
+        conn.execute("UPDATE transactions SET related_transaction_id = ? WHERE id = ?", (giving, received))
+        conn.execute("DELETE FROM transactions WHERE id = ?", (giving,))
+        conn.commit()
+    found = [(table, rowid, parent) for table, rowid, parent, _key in _foreign_key_violations(db)]
+    assert found == [("transactions", received, "transactions")], f"setup: the received half's link is the only broken one; found {found}"
+    return received
+
+
+def _leave_a_price_of_a_deleted_asset(db: Path) -> list[tuple[Any, ...]]:
+    """A price of Delisted Corp — asset 2, deleted — written with foreign keys off: a row of ``price_history`` whose parent is missing. The violations after it."""
+    with _connect(db) as conn:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute("INSERT INTO price_history (asset_id, date, close, currency, source_plugin_key, fetched_at) VALUES (2, '2025-01-02', 1.5, 'EUR', 'justetf', '2025-01-03 06:00:00.000000')")
+        conn.commit()
+    violations = _foreign_key_violations(db)
+    assert [(table, parent) for table, _rowid, parent, _key in violations] == [("price_history", "assets")], f"setup: the price is the only broken link; found {violations}"
+    return violations
+
+
+def _foreign_key_warnings(logs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [entry for entry in logs if entry.get("logger") == LOGGER and entry.get("log_level") == "warning" and str(entry.get("event", "")).startswith(FK_WARNING)]
+
+
+def _carries(event: dict[str, Any], violation: tuple[Any, ...]) -> bool:
+    """Whether a field of ``event`` beyond its name, logger, level and count names ``violation``: its table, its row and its parent."""
+    table, rowid, parent, _key = violation
+    return any(table in str(value) and parent in str(value) and str(rowid) in str(value) for name, value in event.items() if name not in {"event", "logger", "log_level", "count"})
+
+
+def test_a_broken_link_already_there_no_longer_blocks_the_fixes(tmp_path: Path) -> None:
+    """Contract 14 (RED): a 1.1 database at head with a received TRANSFER whose partner is gone — both fixes ``applied``, the half an ADJUSTMENT without a link, nothing broken, no backup; a second run ``clean``.
+
+    Today ``autoincrement`` meets the half's broken link in the foreign key check of the whole database,
+    which must be empty after it: ``failed``, the backup kept, and ``orphan_pair_halves``, which would mend
+    that very link, never runs — ``would_apply`` — at every start.
+    """
+    db = _build_v110_db(tmp_path / "sqlite" / "app.db")
+    half = _leave_a_received_half_whose_partner_is_gone(db)
+
+    first = post_migration.run_post_migration_fixes(db, None)
+    with _connect(db) as conn:
+        half_after = conn.execute("SELECT type, related_transaction_id FROM transactions WHERE id = ?", (half,)).fetchone()
+    broken_after = _foreign_key_violations(db)
+    second = post_migration.run_post_migration_fixes(db, None)
+    print(f"first: {first.outcomes} {first.errors} backup {first.backup_path}; the half: {half_after}; broken: {broken_after}; second: {second.outcomes} {second.errors}")
+
+    assert ([first.outcomes.get(FIX), first.outcomes.get(ORPHAN_FIX)], first.backup_path, first.errors) == (["applied", "applied"], None, [])
+    assert half_after == ("ADJUSTMENT", None)
+    assert broken_after == []
+    assert ([second.outcomes.get(FIX), second.outcomes.get(ORPHAN_FIX)], second.backup_path) == (["clean", "clean"], None)
+    assert _backups(db) == []
+
+
+def test_a_broken_link_in_another_table_is_left_as_it_is_and_reported(tmp_path: Path) -> None:
+    """Contract 14 (RED): a 1.1 database at head with a price of a deleted asset — ``autoincrement`` ``applied``, the price and its broken link as they were, listed once in the run's warning, no backup; a second run ``clean``.
+
+    Today the run fails at every start on a violation no fix brought or can mend: ``failed`` twice, a
+    backup kept each time (one file when both runs fall in the same second: the name is stamped to it).
+    """
+    db = _build_v110_db(tmp_path / "sqlite" / "app.db")
+    violations = _leave_a_price_of_a_deleted_asset(db)
+    prices = _rows(db)["price_history"]
+
+    with capture_logs(processors=[structlog.stdlib.add_logger_name]) as logs:
+        first = post_migration.run_post_migration_fixes(db, None)
+    second = post_migration.run_post_migration_fixes(db, None)
+    print(f"first: {first.outcomes} {first.errors} backup {first.backup_path}; second: {second.outcomes} {second.errors} backup {second.backup_path}; beside the database: {_backups(db)}")
+
+    assert ([first.outcomes.get(FIX), second.outcomes.get(FIX)], [first.backup_path is not None, second.backup_path is not None]) == (["applied", "clean"], [False, False])
+    assert (first.errors, second.errors, _backups(db)) == ([], [], [])
+    assert _foreign_key_violations(db) == violations, "the violation stays as it was: no fix mends a price"
+    assert _rows(db)["price_history"] == prices
+    assert _closing_events(logs), "barrier: the capture saw no closing event of the run"
+    warnings = _foreign_key_warnings(logs)
+    assert [(warning.get("count"), _carries(warning, violations[0])) for warning in warnings] == [(1, True)], f"one warning per run, with the count and the violating row: {warnings}"
+
+
+def test_a_fix_that_breaks_a_link_itself_still_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Contract 14 (guard, green before and after): ``autoincrement`` made to point an access at a broker that does not exist, after its own work — ``failed`` with that link named, the database as it was, the backup kept and equal to it.
+
+    The link is broken by an UPDATE, not a deletion: a deleted parent would also change a row count, which
+    fails the fix on its own, and the guard would hold without the foreign key check.
+    """
+    db = _build_v110_db(tmp_path / "sqlite" / "app.db")
+    original_apply = AutoincrementFix.apply
+    broken: list[int] = []
+
+    def apply_then_break_a_link(self: AutoincrementFix, conn: sqlite3.Connection, anomaly: Any, ctx: Any) -> None:
+        original_apply(self, conn, anomaly, ctx)
+        conn.execute("UPDATE broker_user_access SET broker_id = 999 WHERE id = 1")
+        broken.append(1)
+
+    monkeypatch.setattr(AutoincrementFix, "apply", apply_then_break_a_link)
+
+    run = _observe_run(db)
+
+    assert broken, "barrier: the fix never reached its apply, so nothing was broken"
+    assert run.report.outcomes.get(FIX) == "failed", NOT_FAILED
+    assert any("broker_user_access" in error for error in run.report.errors), run.report.errors
+    assert run.master_after == run.master_before
+    assert run.rows_after == run.rows_before
+    assert run.report.backup_path is not None and run.backups_after == [Path(run.report.backup_path).name]
+    assert _rows(Path(run.report.backup_path)) == run.rows_before
+
+
+# =============================================================================
+# 15. THE OFFLINE SCRIPT LOGS TO THE CONSOLE ONLY (W-B23)
+# =============================================================================
+
+
+def test_the_offline_script_writes_no_file_in_the_configured_data_dir(configured_sandbox: Path, tmp_path: Path) -> None:
+    """Contract 15 (guard, green before and after): a real run through ``python -m`` converts and leaves the configured data dir — the sandbox — as it was: no ``logs/``, the canary alone; no ``logs/`` in the data dir it was given either."""
+    data_dir = tmp_path / "data"
+    db = _build_v110_db(data_dir / "sqlite" / "app.db")
+    before = _tree(configured_sandbox)
+
+    completed = _run_script("--db", str(db), "--data-dir", str(data_dir))
+
+    assert completed.returncode == 0, _output(completed)
+    assert _autoincrement_tables(_master(db)) == CENSUS, f"barrier: the script converted, so it had lines to log\n{_output(completed)}"
+    assert _tree(configured_sandbox) == before, f"a file appeared in the configured data dir\n{_output(completed)}"
+    assert not (data_dir / "logs").exists(), _output(completed)

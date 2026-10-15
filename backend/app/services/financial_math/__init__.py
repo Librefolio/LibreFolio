@@ -22,11 +22,13 @@ the object the code actually reads.
 Modules:
 
 * ``average_cost`` — average cost of positions: historical cost in the report and asset
-  currencies, the pool after every movement, and the conversions that could not be made.
+  currencies, the pool after every movement, the unit cost each movement carried, and the
+  conversions that could not be made.
 * ``native_cash`` — every broker's cash in the currencies it was recorded in: the balances,
   their value in the report currency on any day, and the period flows by type and position.
-* ``returns`` — simple ROI, TWRR and MWRR, as point values and daily series, and the
-  conversion between cumulative and annualized returns.
+* ``returns`` — simple ROI, TWRR and MWRR, as point values and daily series, the
+  conversion between cumulative and annualized returns, a period's start (rebasing), the
+  net return of a holding and a gain or loss as a fraction of its base.
 * ``valuation`` — the value of a holding from its quantity, price and quote base quantity.
 * ``price_marks`` — the daily mark of an asset for valuation: the market quote, the
   same-day trade average, or the last observation carried forward.
@@ -35,7 +37,7 @@ Modules:
   income and costs to lots (``models``, ``eligibility``, ``engine``).
 * ``portfolio`` — the daily portfolio state (NAV, capital, P&L, per-broker contributions)
   and the views derived from it (``models``, ``classifier``, ``daily_state``,
-  ``derived_views``, ``data_quality``, ``engine``).
+  ``derived_views``, ``data_quality``, ``period``, ``engine``).
 * ``lots`` — the math of the lots analysis: price lookups, conversions, economic events,
   lot histories and average cost lines (``prices``, ``conversions``, ``economic_events``,
   ``histories``, ``average_cost_lines``).

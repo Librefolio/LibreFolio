@@ -1,11 +1,17 @@
 /**
- * Asset Event Delete E2E Tests — Phase 07 · Part 1
+ * Asset Event Delete E2E Tests — Phase 07 · Part 1, retargeted for release 1.3 (W E1b)
  *
  * Covers:
  * 1. Delete unlinked event → success (via combined data-editor)
- * 2. Delete event with linked transaction → RESTRICT warning (in_use)
+ * 2. Delete event with linked transaction → the save is refused whole (409 EVENT_IN_USE): nothing
+ *    deleted, an error toast. Before E1b: the delete went out apart, came back `in_use` per row with
+ *    a warning toast, and any unlinked row beside it was deleted anyway.
  * 3. Delete asset with events → cascade/block behavior
  * 4. ●evt badge in transactions table reflects linked state
+ *
+ * Since E1b a save is ONE `POST /assets/events`: the rows marked deleted travel as `delete_ids`
+ * beside the edited rows, and no `DELETE` is sent (decision of 15/10 16:20). Before E1b the editor
+ * deletes through `DELETE /assets/events`, so scenarios 1 and 2 wait for a POST that never comes.
  *
  * Prerequisites: backend in test mode (port 6041), mock data with asset events populated.
  *
@@ -17,12 +23,15 @@
  *   → row action: kebab button (data-testid="row-actions-{rowId}") → context menu item
  *     (data-testid="context-menu-action-delete")
  *   → click Save (data-testid="asset-editor-save-btn")
- *   → the outcome is reported in a toast (data-testid="toast-success" | "toast-warning")
+ *   → the outcome is reported in a toast (data-testid="toast-success" | "toast-error")
  */
-import {expect, test, type Page} from '../fixtures/playwright';
+import {expect, test, type Page, type Request, type Response} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
+
+/** The path of the save, and of the old delete: the same, told apart by the method. */
+const EVENTS_PATH = '/api/v1/assets/events';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,12 +82,27 @@ async function clickDeleteRowAction(page: Page, row: import('@playwright/test').
  * only come from what the test does next. The ✕ is pressed by its DOM handler, not the
  * pointer: if a toast leaves on its own timer first, no click lands on the editor beneath.
  */
-async function closeToasts(page: Page, variant: 'success' | 'warning') {
+async function closeToasts(page: Page, variant: 'success' | 'warning' | 'error') {
     const shown = page.getByTestId(`toast-${variant}`);
     await shown.evaluateAll((toasts) => {
         for (const toast of toasts) toast.querySelector<HTMLElement>('[data-testid="toast-dismiss"]')?.click();
     });
     await expect(shown, `no ${variant} toast is left from before the save`).toHaveCount(0, {timeout: 5_000});
+}
+
+/** The save: a POST to exactly the events path (not `/query`). */
+function isEventsSave(response: Response): boolean {
+    return response.request().method() === 'POST' && new URL(response.url()).pathname === EVENTS_PATH;
+}
+
+/** The methods of every write the page sends to the events path from now on; `stop()` disarms it. */
+function recordEventWrites(page: Page): {methods: string[]; stop: () => void} {
+    const methods: string[] = [];
+    const listener = (request: Request) => {
+        if (request.method() !== 'GET' && new URL(request.url()).pathname === EVENTS_PATH) methods.push(request.method());
+    };
+    page.on('request', listener);
+    return {methods, stop: () => page.off('request', listener)};
 }
 
 /** `n` as a number of its own, not a digit inside a longer number. */
@@ -172,23 +196,22 @@ test.describe('Asset Event Delete', () => {
             // The editor reports the outcome in a toast: none left over, so the next is this save's.
             await closeToasts(page, 'success');
 
-            // Intercept the delete API call to verify it succeeds
-            const responsePromise = page.waitForResponse((resp) => resp.url().includes('/api/v1/assets/events') && resp.request().method() === 'DELETE', {timeout: 10_000});
+            // The save is one POST carrying the deletion (E1b). Before E1b the editor deleted
+            // through DELETE /assets/events, and this POST never came.
+            const recorder = recordEventWrites(page);
+            const responsePromise = page.waitForResponse(isEventsSave, {timeout: 10_000});
 
             // Click save to commit deletion
             await saveBtn.click();
-
-            // Wait for the API response
             const response = await responsePromise;
             expect(response.status()).toBe(200);
+            const sent = (response.request().postDataJSON() as Array<{asset_id: number; delete_ids?: number[]}>).find((item) => item.asset_id === assetId);
+            expect(sent?.delete_ids, 'the row marked deleted travels in the save as delete_ids').toEqual([eventId]);
 
             // The event we own must come back as deleted — not merely "something was".
-            const body = await response.json();
-            const deletedResults = body.results?.filter((r: any) => r.status === 'deleted') ?? [];
-            expect(
-                deletedResults.some((r: any) => r.event_id === eventId),
-                `event ${eventId} should be reported deleted, got ${JSON.stringify(body.results)}`,
-            ).toBeTruthy();
+            const body = (await response.json()) as {results?: Array<{asset_id: number; deleted_ids?: number[]}>};
+            const ours = body.results?.find((r) => r.asset_id === assetId);
+            expect(ours?.deleted_ids ?? [], `event ${eventId} should be reported deleted, got ${JSON.stringify(body.results)}`).toContain(eventId);
 
             // The toast is where the user learns how many events went: the one row this test
             // marked. Every catalogue spells the count `{n}`; a value passed under any other
@@ -199,16 +222,20 @@ test.describe('Asset Event Delete', () => {
             await expect(toast, 'the count is interpolated, not left as the raw {n}').not.toContainText('{n}');
             await expect(toast, 'no ICU placeholder is left unresolved').not.toContainText('{');
             await expect(toast, 'the toast says how many events were deleted: the one this test marked').toContainText(standaloneNumber(1));
+            // The toast closes the save: whatever it sent is in by now.
+            recorder.stop();
+            expect(recorder.methods, 'a save is one POST, and never a DELETE').toEqual(['POST']);
         } finally {
-            // If anything above failed before the UI deleted it, do not leave it behind.
-            await page.request.delete(`${API}/assets/events?ids=${eventId}`).catch(() => {});
+            // If anything above failed before the UI deleted it, do not leave it behind. The
+            // delete is scoped by asset (decision 21): without asset_id it is a 422, and the event stays.
+            await page.request.delete(`${API}/assets/events?asset_id=${assetId}&ids=${eventId}`).catch(() => {});
         }
     });
 
     // ===================================================================
-    // Scenario 2: Delete event with linked transaction → RESTRICT warning
+    // Scenario 2: Delete event with linked transaction → the save is refused whole
     // ===================================================================
-    test('delete event with linked transaction shows warning', async ({page}) => {
+    test('deleting an event a transaction realises refuses the save: nothing deleted, an error toast', async ({page}) => {
         // Navigate to Apple detail (has a DIVIDEND event linked to a transaction)
         await navigateTo(page, '/assets');
         await page.waitForSelector('[data-testid="assets-page"]', {timeout: 15_000});
@@ -221,6 +248,8 @@ test.describe('Asset Event Delete', () => {
         await expect(appleCard).toBeVisible({timeout: 5_000});
         await appleCard.click();
         await page.waitForSelector('[data-testid="asset-detail-page"]', {timeout: 15_000});
+        const assetId = Number(new URL(page.url()).pathname.split('/').filter(Boolean).pop());
+        expect(Number.isFinite(assetId), 'asset detail URL must end with the asset id').toBeTruthy();
 
         // Open events editor
         await openEventsEditor(page);
@@ -232,48 +261,60 @@ test.describe('Asset Event Delete', () => {
         await expect.poll(() => eventRows.count(), {timeout: 10_000, message: 'Apple must have events — check populate_mock_data.py'}).toBeGreaterThan(0);
         const count = await eventRows.count();
 
-        // Mark ALL events for deletion (one of them is linked → will be blocked)
+        // Mark ALL events for deletion (one of them is linked → the whole save is refused)
+        const markedIds: number[] = [];
         for (let i = 0; i < count; i++) {
             const row = eventRows.nth(i);
             const kebabBtn = row.getByTestId(/^row-actions-/);
             if (await kebabBtn.isVisible({timeout: 1_000}).catch(() => false)) {
+                markedIds.push(Number(await row.getAttribute('data-row-id')));
                 await clickDeleteRowAction(page, row);
             }
         }
+        expect(markedIds.length, 'at least one Apple event can be marked deleted').toBeGreaterThan(0);
 
         // Save should be enabled
         const saveBtn = page.locator('[data-testid="asset-editor-save-btn"]');
         await expect(saveBtn).toBeEnabled({timeout: 3_000});
 
         // The editor reports the outcome in a toast: none left over, so the next is this save's.
-        await closeToasts(page, 'warning');
+        await closeToasts(page, 'error');
 
-        // Intercept the delete API response
-        const responsePromise = page.waitForResponse((resp) => resp.url().includes('/api/v1/assets/events') && resp.request().method() === 'DELETE', {timeout: 10_000});
+        // The save is one POST carrying the deletions (E1b). Before E1b the editor deleted through
+        // DELETE /assets/events, answered in_use per row with a warning, and this POST never came.
+        const responsePromise = page.waitForResponse(isEventsSave, {timeout: 10_000});
 
         await saveBtn.click();
 
         const response = await responsePromise;
-        expect(response.status()).toBe(200);
+        expect(response.status(), 'an event in use cannot be deleted: the save is refused whole').toBe(409);
 
-        // Response must contain at least one "in_use" result (the linked event)
-        const body = await response.json();
-        const blockedResults = body.results?.filter((r: any) => r.status === 'in_use') ?? [];
-        expect(blockedResults.length, 'At least one event should be blocked (in_use)').toBeGreaterThan(0);
+        // The refusal names the events in use, with how many transactions realise each — counts,
+        // never the ids of transactions that may belong to other users.
+        const body = (await response.json()) as {detail?: {error_code?: string; params?: {events?: Array<Record<string, unknown>>}}};
+        expect(body.detail?.error_code).toBe('EVENT_IN_USE');
+        const inUse = body.detail?.params?.events ?? [];
+        expect(inUse.length, 'at least one marked event is in use').toBeGreaterThan(0);
+        for (const event of inUse) {
+            expect(Object.keys(event).sort(), 'an event in use is named by id, date, type and a count').toEqual(['date', 'id', 'linked_transactions', 'type']);
+            expect(markedIds, 'only events this save marked are named').toContain(event.id);
+            expect(Number(event.linked_transactions)).toBeGreaterThan(0);
+        }
 
-        // Find a blocked result with accessible_transactions (some may be hidden behind broker access)
-        const withAccessible = blockedResults.find((r: any) => r.accessible_transactions?.length > 0);
-        expect(withAccessible, 'At least one in_use result should have accessible_transactions for this user').toBeTruthy();
-        expect(withAccessible.accessible_transactions.length).toBeGreaterThan(0);
+        // The error is how the user learns that nothing was saved, and why: every placeholder of
+        // its sentence filled in. The words are never asserted.
+        const errorToast = page.getByTestId('toast-error');
+        await expect(errorToast, 'a refused save is reported in an error toast').toBeVisible({timeout: 5_000});
+        await expect(errorToast, 'no ICU placeholder is left unresolved').not.toContainText('{');
 
-        // The warning is how the user learns that nothing was deleted, and why. It says how
-        // many events are still in use (the count the API just reported), with every
-        // placeholder filled in. The number is asserted, never the words around it.
-        const warning = page.getByTestId('toast-warning');
-        await expect(warning, 'a blocked delete is reported in a warning toast').toBeVisible({timeout: 5_000});
-        await expect(warning, 'the count is interpolated, not left as the raw {n}').not.toContainText('{n}');
-        await expect(warning, 'no ICU placeholder is left unresolved').not.toContainText('{');
-        await expect(warning, `the warning says how many events are still in use: ${blockedResults.length}`).toContainText(standaloneNumber(blockedResults.length));
+        // Nothing deleted: every marked event is still there, the unlinked ones included.
+        const stored = await page.request.get(`${API}/assets/events?${markedIds.map((id) => `ids=${id}`).join('&')}`);
+        expect(stored.ok(), `read the marked events back: HTTP ${stored.status()}`).toBeTruthy();
+        const storedIds = ((await stored.json()) as {items: Array<{asset_id: number; events: Array<{id: number}>}>}).items.flatMap((item) => item.events.map((e) => e.id));
+        expect(
+            [...storedIds].sort((a, b) => a - b),
+            'all or nothing: no marked event was deleted',
+        ).toEqual([...markedIds].sort((a, b) => a - b));
     });
 
     // ===================================================================

@@ -24,7 +24,6 @@
     "deleteAccountWarning": "This action cannot be undone. The brokers you are the only owner of are deleted with all their transactions and imported reports, even if you shared them with viewers or editors. A broker with another owner stays with them: only your access is removed. Your settings are deleted.",
     "typeUsernameToConfirm": "Type \"{username}\" to confirm",
     "deleteAccountPermanently": "Delete Permanently",
-    "deleteAccountFailed": "Failed to delete account",
     "currentPassword": "Current Password",
     "newPassword": "New Password",
     "confirmNewPassword": "Confirm New Password",
@@ -222,6 +221,155 @@
       "invite": "By invitation",
       "disabled": "Closed"
     },
-    "lockedByEnv": "Set on the server by {variable}: change it there."
+    "lockedByEnv": "Set on the server by {variable}: change it there.",
+    "users": "Users",
+    "usersTab": {
+      "title": "Users",
+      "usage": "{used} / {max} accounts",
+      "usageUnlimited": "{used} accounts",
+      "usageHint": "Active accounts and open invitations take a place; deactivated accounts do not.",
+      "billing": "Manage subscription",
+      "limitBanner": "The instance is full: no new invitation until you deactivate or delete an account, or revoke an invitation.",
+      "createdOn": "Created {date}",
+      "selfHint": "This is your account. Manage it from:",
+      "done": "Done",
+      "accounts": {
+        "title": "Accounts"
+      },
+      "badges": {
+        "you": "You",
+        "admin": "Admin",
+        "inactive": "Deactivated",
+        "protected": "Protected"
+      },
+      "actions": {
+        "deactivate": "Deactivate",
+        "reactivate": "Reactivate",
+        "promote": "Make administrator",
+        "demote": "Remove administrator",
+        "resetLink": "Password-reset link",
+        "signOut": "Sign out everywhere",
+        "restartGuides": "Restart the guides",
+        "delete": "Delete"
+      },
+      "reasons": {
+        "protected": "This account is protected: nobody can deactivate, demote or delete it.",
+        "lastAdmin": "It is the only active administrator: it cannot be deactivated or demoted.",
+        "limit": "The instance is full: free a place to reactivate it.",
+        "demoteFirst": "An administrator must be demoted before it can be deleted."
+      },
+      "confirm": {
+        "deactivate": {
+          "title": "Deactivate {username}?",
+          "message": "The account can no longer sign in and every session ends. Its brokers and transactions stay: you can reactivate it later.",
+          "confirm": "Deactivate"
+        },
+        "promote": {
+          "title": "Make {username} an administrator?",
+          "message": "Administrators manage the instance: its settings, its users and its invitations.",
+          "confirm": "Make administrator"
+        },
+        "demote": {
+          "title": "Remove the administrator rights of {username}?",
+          "message": "The account stays, as a regular user, and its sessions end.",
+          "confirm": "Remove"
+        },
+        "signOut": {
+          "title": "Sign {username} out everywhere?",
+          "message": "Every session of the account ends: it must sign in again on each device.",
+          "confirm": "Sign out"
+        },
+        "restartGuides": {
+          "title": "Restart the guides of {username}?",
+          "message": "The introduction and the page guides show again, as for a new account.",
+          "confirm": "Restart"
+        },
+        "revokeInvite": {
+          "title": "Revoke the invitation for {email}?",
+          "message": "The link stops working at once.",
+          "confirm": "Revoke"
+        }
+      },
+      "errors": {
+        "LAST_ADMIN": "The last active administrator can be neither deactivated nor demoted.",
+        "USER_LIMIT_REACHED": "The instance is full: free a place first (deactivate or delete an account, or revoke an invitation).",
+        "REGISTRATION_DISABLED": "Registration is closed: no invitation can be created.",
+        "ACCOUNT_PROTECTED": "This account is protected: nobody can deactivate, demote or delete it.",
+        "SELF_DELETION": "Delete your own account from the Profile tab.",
+        "DEMOTE_FIRST": "An administrator must be demoted before it can be deleted.",
+        "NOT_FOUND": "This account no longer exists: the list is reloaded.",
+        "DELETION_FAILED": "The deletion failed: nothing was deleted.",
+        "INVALID_INPUT": "Check what you entered: the e-mail address may not be valid.",
+        "generic": "The action failed. Try again.",
+        "load": "The accounts could not be loaded."
+      },
+      "invite": {
+        "button": "Invite",
+        "blocked": "Registration is closed, so invitations are too: change it in the global settings.",
+        "blockedLocked": "Registration is closed on the server by {variable}, so invitations are too.",
+        "title": "Invite someone",
+        "emailLabel": "E-mail (optional)",
+        "emailHint": "For your reference only: the link works for whoever opens it.",
+        "adminLabel": "Administrator",
+        "adminHint": "The account it creates manages the instance.",
+        "create": "Create the link",
+        "ready": "Share this link: it works once, for 7 days."
+      },
+      "invites": {
+        "title": "Open invitations",
+        "empty": "No open invitation.",
+        "noEmail": "No e-mail",
+        "dates": "Created {created} · expires {expires}",
+        "revoke": "Revoke"
+      },
+      "reset": {
+        "title": "Password-reset link for {username}",
+        "message": "A single-use link to set a new password, valid 30 minutes. The links created before for this account stop working.",
+        "create": "Create the link",
+        "ready": "Share this link with {username}: it works once."
+      },
+      "toasts": {
+        "signedOut": "{username} is signed out everywhere.",
+        "guidesRestarted": "The guides of {username} start again.",
+        "resetLinkCreated": "Reset link created for {username}."
+      }
+    },
+    "linkShare": {
+      "addressLabel": "Server address",
+      "addressHint": "Change it if your users reach LibreFolio at another address.",
+      "linkLabel": "Link",
+      "copy": "Copy",
+      "copied": "Link copied.",
+      "expires": "Valid until {date}.",
+      "probe": {
+        "checking": "Checking that this LibreFolio answers at this address…",
+        "match": "This instance answers at this address.",
+        "mismatch": "Something answers at this address, but not this instance: check it before sharing.",
+        "unverifiable": "This address could not be checked from this browser: you can still share the link.",
+        "invalid": "Enter an address that starts with http:// or https://, without ? or #."
+      }
+    },
+    "accountDeletion": {
+      "titleAdmin": "Delete {username}",
+      "warningAdmin": "This cannot be undone. The brokers this account is the only owner of are deleted with all their transactions and files; from the shared ones only its access goes.",
+      "deactivateTitle": "Deactivate instead?",
+      "deactivateText": "Deactivating keeps every broker and transaction and can be undone: the account just can no longer sign in.",
+      "deactivateAction": "Deactivate",
+      "loading": "Checking what the deletion would take…",
+      "brokersDeleted": "Deleted, with all their transactions and files:",
+      "noBrokersDeleted": "No broker is deleted.",
+      "brokersLeft": "Shared brokers that stay (only the access goes):",
+      "transactions": "{count, plural, =0 {no transactions} one {# transaction} other {# transactions}}",
+      "unpaired": "{count, plural, one {# transaction on another broker is half of a transfer with these brokers} other {# transactions on other brokers are halves of transfers with these brokers}}. {count, plural, one {It stays} other {They stay}}, without the other half: assets received from these brokers become an opening position at their transfer cost, and cash transfers become deposits or withdrawals.",
+      "irreversible": "This cannot be undone.",
+      "previewFailed": "What the deletion would take could not be loaded.",
+      "deletedSelf": "Your account was deleted.",
+      "deletedAdmin": "{username} deleted, with {count, plural, =0 {no broker} one {# broker} other {# brokers}}.",
+      "roles": {
+        "OWNER": "Owner",
+        "EDITOR": "Editor",
+        "VIEWER": "Viewer"
+      }
+    }
   }
 }

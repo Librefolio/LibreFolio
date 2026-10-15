@@ -45,9 +45,28 @@ the caller received an exception implying the batch had rolled back. The fix
 restores atomic failure semantics without changing production data during the
 transaction-starting statement.
 
+## Seen again (2026-10-15, backlog W-B20)
+
+Workstream W met the trap again in lot N1, on broker deletion. `DELETE /brokers` commits when `errors` is empty, and
+`BrokerService.delete_bulk` catches errors broker by broker without ever filling it. Whatever a failed broker already
+wrote in the session goes into the commit.
+
+- A savepoint per broker would not be enough, for the reason above. W reproduced it on a scratch SQLite with
+  `aiosqlite`: a `SELECT`, then `begin_nested()` with an `INSERT`, then an outer rollback, and the row stays. With a
+  write before the savepoint, no row.
+- Workstream X's finding: a general SQLAlchemy `begin` listener that emits `BEGIN` up front is ruled out. A session
+  that reads, sees another writer commit, then writes, fails at once with `SQLITE_BUSY_SNAPSHOT`, which
+  `busy_timeout` does not wait for.
+- The cure decided by the coordinator, **not built** at filing: a helper in the database session module that opens
+  the transaction before a write path's first savepoint (this page's no-op `UPDATE`, or `BEGIN IMMEDIATE`).
+  `delete_bulk` would use it per broker, with a red test first, and `crud.py`'s local trick could move to it.
+
 ## Source files
 
 | Role | Path |
 |------|------|
 | Implementation | `backend/app/services/assets/crud.py` |
 | Regression test | `backend/test_scripts/test_services/test_asset_source.py` |
+| W-B20: the broker bulk delete, errors caught per broker | `backend/app/services/brokers/broker_service.py` |
+| W-B20: the commit when `errors` is empty | `backend/app/api/v1/brokers.py` |
+| Backlog W-B20 | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |

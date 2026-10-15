@@ -8,6 +8,7 @@
 import {test as base, expect} from './fixtures/playwright';
 import type {Locator, Page} from './fixtures/playwright';
 import {setLanguage} from './fixtures/auth-helpers';
+import {INSTANCE_CONFIG_PATH, plainInstanceConfig} from './fixtures/instance-config';
 import {t} from './fixtures/i18n-data';
 import {schemas} from '../src/lib/api/generated';
 import type {BrimFile, UploadedFile} from '../src/lib/types/files';
@@ -154,6 +155,8 @@ const test = base.extend<{uploaderPage: Page}>({
             ['/api/v1/settings/global', {body: {items: []}}],
             ['/api/v1/settings/onboarding', {body: everyFlowCompleted()}],
             ['/api/v1/system/connection', {body: loopbackConnection()}],
+            // The instance configuration, read by the (app) layout on every page load (instanceConfig.load()): a plain one.
+            [INSTANCE_CONFIG_PATH, {body: plainInstanceConfig()}],
             // The Files page's contracts.
             ['/api/v1/brokers/import/plugins', {body: []}],
             [

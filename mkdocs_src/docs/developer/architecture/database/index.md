@@ -55,9 +55,13 @@ The database is organized into four logical subsystems. Each has its own detaile
 ## 🧬 Migrations {: #migrations }
 
 Schema changes ship as Alembic revisions in `backend/alembic/versions/` (workflow:
-[Database Migrations](../patterns/alembic.md)). At startup, `ensure_database_exists()` in
-`backend/app/main.py` builds a missing, empty or table-less database from scratch, and runs
-`alembic upgrade head` when the revision stored in `alembic_version` is not the head of the scripts.
+[Database Migrations](../patterns/alembic.md)). At startup, the `database` step of the
+[lifespan](../overview.md#server-startup) runs `ensure_database_exists()`
+(`backend/app/services/platform/database_bootstrap.py`), which builds a missing, empty or table-less
+database from scratch, and runs `alembic upgrade head` when the revision stored in `alembic_version`
+is not the head of the scripts. The head comes from `alembic_head_revision()`
+(`backend/app/services/platform/readiness.py`), the reader
+[`GET /system/ready`](../security.md#system-info-and-readiness) uses too.
 
 The chain is linear:
 
@@ -86,9 +90,10 @@ Some repairs cannot be Alembic revisions. Rebuilding a table that others referen
 listener turns foreign keys on, and dropping the old table would then empty the tables that point
 at it. These repairs live in `backend/app/db/post_migration/` as ordered `PostMigrationFix`
 subclasses (`FIXES`: a new fix is appended, never inserted before an older one). Right after
-`ensure_database_exists()`, the lifespan calls `run_post_migration_fixes_at_startup()`, which never
-lets an error stop the startup. `run_post_migration_fixes()` works on a direct `sqlite3`
-connection:
+the `database` step, the `post-migration-fixes` step of the lifespan runs
+`run_post_migration_fixes_at_startup()` (`backend/app/services/platform/database_bootstrap.py`) in a
+worker thread; it never lets an error stop the startup. `run_post_migration_fixes()` works on a
+direct `sqlite3` connection:
 
 1. It holds an exclusive `fcntl.flock` on `<db file>.post-migration.lock`, beside the database,
    from the integrity check to the cleanup, dry runs included: the workers of a multi-worker server
@@ -100,9 +105,13 @@ connection:
    backup API to `<db file>.pre-<fix ids>-<UTC %Y%m%dT%H%M%SZ>.bak`. No copy, no fix.
 5. Each pending fix runs `prepare()` outside the transaction (filesystem work to undo on failure),
    then, with `foreign_keys = OFF` (SQLite switches it only outside a transaction),
-   `BEGIN IMMEDIATE`, `apply()`, `verify()` and the common checks — `PRAGMA foreign_key_check`
-   empty, the row count of every table unchanged — before `COMMIT`. Any problem rolls back.
-   `finish()` runs after either outcome, and a failed fix stops the ones after it.
+   `BEGIN IMMEDIATE`, `apply()`, `verify()` and the common checks — no `PRAGMA foreign_key_check`
+   row that was not there just before the fix, the row count of every table unchanged but for the
+   changes the fix declares (`row_count_changes()`, `{table: delta}`, checked exactly) — before
+   `COMMIT`. Any problem rolls back. `finish()` runs after either outcome, and a failed fix stops
+   the ones after it. A broken reference the database already held is not the fix's to judge: it
+   stays, and the run logs those it found once, as the WARNING *Foreign key violations already in
+   the database, left as they are* (`count`, and up to 20 of the rows `foreign_key_check` gives).
 6. All applied: the backup is deleted and *Post-migration fixes applied and verified* is logged.
    Otherwise the backup is kept and *Post-migration fix failed: the database was left as it was*
    gives its path and the errors. Both lines carry `seconds`.
@@ -110,7 +119,11 @@ connection:
 `python -m backend.app.db.post_migration [--db PATH] [--data-dir PATH] [--dry-run]`
 (`__main__.py`) runs the same function with the server stopped, which it does not check. Each fix
 reports `clean`, `would_apply` (dry run), `applied` or `failed` (`PostMigrationReport`); the exit
-code is `1` when a fix or the integrity check failed.
+code is `1` when a fix or the integrity check failed. Run that way, it also logs what the server
+logs at startup — the warnings, each fix's own lines, the closing line with `seconds` — on the
+console only (`configure_logging(LOG_LEVEL, enable_file_logging=False)`, as JSON on stdout between
+its summary lines), so it writes no log file in the data directory; `main()` called from code
+configures nothing.
 
 The first fix, `autoincrement` (`autoincrement.py`), gives `AUTOINCREMENT` to the id of the tables
 whose ids leave the backend (`AUTOINCREMENT_TABLES`: `users`, `brokers`, `assets`, `transactions`,
@@ -131,6 +144,74 @@ databases get it from `001_initial.py`; the fix converts existing ones, once.
   `.quarantine-autoincrement-<UTC>-broker_<n>` (out of the listing's `broker_*` glob), deleted
   once the fix is verified, renamed back if it fails: the first broker created afterwards may
   reuse `<n>` once, and must not inherit them.
+
+The second fix, `orphan_pair_halves` (`orphan_pair_halves.py`), converts the half of a pair whose
+partner is gone. Until 1.3, deleting a broker left the other half of each pair it had with another
+broker as a `TRANSFER`, `CASH_TRANSFER` or `FX_CONVERSION` without its partner: its link cleared
+(`related_transaction_id` NULL) or, when foreign keys were off, naming a row that no longer exists.
+The FIFO lots refuse such a `TRANSFER` (`TRANSFER_PAIR_MISSING`), and the Dashboard counts it as
+capital at its market value on its date. Since 1.3, `delete_by_broker()` converts that half as it
+deletes the broker ([Broker Deletion](../../backend/transactions/service.md#broker-deletion)); this
+fix converts, once, the halves already in a database.
+
+- `detect()` writes nothing. It selects the rows of the three paired types whose link is NULL or
+  names a missing row, and the rows of any other type whose link names a missing row. A row whose
+  partner exists is never selected.
+- It converts a half as a split of the pair leaves it (`STANDALONE_TYPES`, the values of
+  `TransactionService.SPLIT_TYPE_MAP`). A received `TRANSFER` (positive quantity) becomes an
+  `ADJUSTMENT` with its quantity, asset, cost basis and its currency. When no cost basis was
+  recorded it stays without one, since the sender is gone: `MISSING_COST_BASIS` until the user
+  enters it (the 1.3 deletion writes the sender's Auto cost instead). A `CASH_TRANSFER` or
+  `FX_CONVERSION` becomes a `WITHDRAWAL` when its amount is negative, a `DEPOSIT` otherwise, without
+  asset. The link goes, `updated_at` moves to now, every other column stays.
+- It leaves the giving leg of a `TRANSFER` (negative quantity) as it is: counted, not changed, until
+  the developer answers point 47 of release 1.3, since an `ADJUSTMENT` taking units out without a
+  cost would read them as destroyed. It also leaves a row whose quantity or amount sign cannot be
+  read, and the rows of other types (an `ADJUSTMENT` can carry a link). Each of these keeps its
+  type, and loses its link only when that link names a missing row, so that the run's
+  `foreign_key_check` can pass.
+- Its own checks, on top of the common ones: no convertible half left, and each row it changed has
+  its expected type and no link.
+- Its detection logs whenever it finds such a row, dry runs included, even with nothing to change: a
+  WARNING with `count` (every row found), `conversions` (the ids per `TYPE->TYPE`),
+  `without_cost_basis`, `unlinked_only`, `left_giving_transfer_legs` and `left_unreadable_sign`.
+  It comes back at every start while a giving leg, or a row of unreadable sign, remains; with
+  nothing left to change, the outcome is `clean`. After the commit, `finish()` logs one INFO line
+  per row changed — *Transaction without its pair converted* or *… unlinked* — with
+  `transaction_id`, `broker_id`, `date`, `from_type`, `to_type`, `quantity`, `amount`, `currency`,
+  `asset_id`, `cost_basis`, `cost_basis_currency`, `missing_cost_basis` and `former_partner_id`
+  (the missing row the link named, `null` when the link was already cleared). The offline script
+  prints them too, on the console.
+
+`./dev.py test db post-migration-orphan-pairs`
+(`backend/test_scripts/test_db/test_post_migration_orphan_pairs.py`) pins this contract.
+
+The fix `event_types` (`event_types.py`) repairs the asset events stored with a type the app does
+not know. Until 1.3 an event type was saved as it came — a CSV written by hand could store `dividend`
+or `dividendo` — while the column is the `AssetEventType` enum: every later read of that asset's
+events failed (`LookupError`, a 500) and none of them was shown. Since 1.3 `FAAssetEventPoint`
+trims and upper-cases the type on the way in and refuses one that is still unknown (422); this fix
+repairs the rows already stored, once (decision 23 of release 1.3).
+
+- `detect()` writes nothing. It selects the events whose `type` is not exactly one of the enum's
+  values.
+- A type that becomes valid once trimmed and upper-cased (Python's `str.strip().upper()`, the
+  schema's own rule) is corrected in place: the event keeps its id, and its transactions stay
+  linked.
+- Any other event is deleted, a provider's included (they are not shown already). Its transactions
+  are unlinked first — `asset_event_id` NULL, `updated_at` now — and stay, without their event.
+- It declares its deletions (`row_count_changes()` → `{"asset_events": -n}`), so the framework checks
+  that exactly those rows went; its own `verify()` wants no unknown type left, each correction in
+  place, each deleted event gone and named by no transaction.
+- Logs: the detection WARNING (dry runs included) with `count`, `corrections` (ids per
+  `stored->CORRECTED`), `deletions` (ids per stored type) and `unlinked_transactions`; after the
+  commit, one INFO line per corrected event (*Asset event type corrected*), per unlinked transaction
+  (*Transaction unlinked from an asset event of unknown type*) and per deleted event (*Asset event of
+  unknown type deleted*, with its date, value, currency, `is_auto` and the transactions unlinked).
+
+`./dev.py test db post-migration-event-types`
+(`backend/test_scripts/test_db/test_post_migration_event_types.py`) pins this contract and the
+declared row counts.
 
 The admin side (log lines, the offline run) is in [Command-Line Tools](../../../admin/cli_tools.md).
 
