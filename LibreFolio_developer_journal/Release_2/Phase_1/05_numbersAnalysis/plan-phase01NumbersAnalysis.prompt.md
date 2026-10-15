@@ -2375,3 +2375,267 @@ Un rosso per ogni comportamento che cambia (2, 3, 4) prima di toccare; 5–7 son
 - 27 (P-10): lo scrivo io in `services/assets/event_store.py` di X, col diff mandato a X per approvazione (come D-J17).
 - 29: CP-10a approvato così.
 - Ordine approvato: CP-2 a passi brevi, albero verde a ogni slot pesante assegnato; CP-4 dopo `all-backend` di C-94.
+
+#### CP-16 — decisione 47: la rettifica in uscita con il costo, nei lotti (analisi, 15/10 22:45, nessun codice)
+
+**Base**: HEAD `07ca32ca4` (CP-4d entrato: merge di `dev_release2` `2415faf33`), worktree pulito, porta 6185 libera.
+Ingresso di CP-4d verde sulla revisione combinata (golden 1, `services financial-math` 329, `test_portfolio_service`
+98, `api portfolio` 51, `check-orphans`, `front-utility core-unit` 158 file / 5 248 test).
+
+**Decisione 47** (J-11, alla lettera): «sono daccordo, si va mantenuto lo stesso principio nel senso opposto». La gamba
+in uscita rimasta senza coppia diventa una rettifica in uscita con il costo medio con cui le unità partono, dalla
+funzione del costo «Auto»; nell'esempio guadagno 60 sia in Dashboard sia nei lotti.
+
+**Stato reale (letto nel codice)**:
+- **Dashboard: già a posto.** `cost_movement_from_transaction` (`average_cost.py`) tratta ogni quantità negativa come
+  riduzione al costo medio del pool e ignora il valore dell'override; `_is_capital_adjustment`
+  (`portfolio/daily_state.py:1124-1138`) legge l'override come segnale, e il costo tolto esce dal capitale
+  (`:333-337`, `:498-503`). Nell'esempio: 60.
+- **Lotti**: `classify_events` (`fifo/engine.py:231-232`) dà `unit_price=0` a ogni ADJUSTMENT negativo, con o senza
+  override; `_apply_adjustment_out` (`:374-403`) chiude a 0; `_close_position_piece` (`:602-638`) dà proventi solo
+  alla SELL. La sintesi (`lots_analysis_service.py:728-770`) fa `pnl = open_value + Σ proventi − costo`: chiudere al
+  prezzo giusto non basta, il valore ceduto deve entrare nei proventi, altrimenti il lotto resta a −20.
+- **Storico della performance dei lotti** (`lots/histories.py:83-88`, fabbisogno dei cambi `lots/conversions.py:168-171`):
+  un ADJUSTMENT con costo è un flusso esterno solo se entra (`quantity > 0`); `_adjustment_native_cost` (`:526-532`)
+  è già con segno.
+- **Chi scrive oggi un ADJUSTMENT negativo con override**: nessun percorso dell'interfaccia (`txPayloadHelpers.ts:263,290,348`,
+  `TransactionBulkModal.svelte:800`), nessun plugin BRIM (Intesa, Crédit Agricole e `brim_gap_fix` solo su quantità
+  positive; il CSV generico non scrive mai l'override): solo l'API diretta. Lo scriverà W (cancellazione del broker che
+  riceve, orfani già nei database, «dividi la coppia»).
+- **Altri lettori del motore**: `yield_on_cost.py:340` legge solo i lotti aperti (nessun cambio). L'AI Export legge le
+  sintesi dei lotti (`asset_core.py:561-564`, `payloads/portfolio_broker.py:773-776`): cambiano solo per le righe con
+  l'override in uscita, che i dati delle sonde non hanno.
+
+**Il punto aperto: due letture con più lotti.** Su A: BUY 10 a 10 (lotto 1), BUY 10 a 20 (lotto 2), rettifica −10 con
+il costo Auto 15 (la media), prezzo finale 30.
+
+| | (a) costo FIFO del pezzo | (b) costo medio della riga — raccomandata |
+|---|---|---|
+| lotto 1 | chiude a 10: realizzato 0, proventi 100 | chiude a 15: realizzato +50, proventi 150 |
+| lotto 2 | aperto, 10 a 20: non realizzato 100 | uguale |
+| totale dei lotti | 100 | **150** |
+| Dashboard | 150 | 150 |
+| «dividi la coppia», vista combinata | il totale dei lotti cambia di 10 × (10 − 15) = −50 | **invariato** (A cede a 15, B apre a 15) |
+
+- (b) è la lettera della decisione («il costo medio con cui le unità partono») e tiene le due uguaglianze: lotti =
+  Dashboard, e lo split di una coppia non crea né distrugge P&L nella vista combinata. (a) le rompe entrambe appena i
+  lotti hanno prezzi diversi.
+- Il prezzo di (b): un «realizzato» su una rettifica, la differenza fra il costo FIFO e la media con cui le unità escono.
+- Con un lotto solo le due letture coincidono: è l'esempio della decisione, 60.
+
+**Valuta.** L'override sta in `cost_basis_currency` (per l'Auto, la valuta dell'ultimo acquisto sul broker:
+`compute_wac_iterative`), il lotto nella sua `currency`.
+- **Stessa valuta** — il caso reale, una valuta per titolo e broker: (b) esatta.
+- **J-9 è il prerequisito**: il lotto aperto da un ADJUSTMENT-in prende la `currency` della riga (spesso nulla), non
+  quella del costo, quindi i lotti dei seed (Intesa, Crédit Agricole) non hanno una valuta da confrontare. Cura (una
+  riga in `_apply_adjustment_in`): valuta del lotto = `cost_basis_currency` quando il prezzo viene dall'override.
+  Proposta: dentro CP-16, col suo rosso.
+- **Lotto senza valuta** (ADJUSTMENT-in senza costo): il risolutore dei cambi lo legge nella valuta del report
+  (`lots/conversions.py:59-60`); il motore farà lo stesso.
+- **Valute diverse** (raro: lo stesso titolo comprato in due valute sullo stesso broker, o arrivato da un altro broker
+  in un'altra valuta): senza un cambio il motore non confronta un costo in un'altra valuta col prezzo del lotto. La
+  chiusura con la sua valuta è D-J1 (decisione 26), in CP-7. Fino ad allora, **ripiego**: quel pezzo esce al suo costo
+  FIFO (realizzato 0, proventi = costo), dichiarato; CP-7 lo porta alla regola. Alternativa: portare adesso la valuta
+  della chiusura solo per questa chiusura (~40 righe nelle conversioni dei lotti, che CP-7 rifà).
+
+**Proposta**:
+1. **Motore** (`fifo/engine.py`): l'ADJUSTMENT negativo con override porta l'override come prezzo; `_apply_adjustment_out`
+   chiude ogni pezzo all'override (b) se la valuta coincide, altrimenti al costo del pezzo; `_close_position_piece` dà
+   proventi anche all'ADJUSTMENT_OUT (senza override il prezzo è 0, quindi proventi 0 come oggi). J-9 in
+   `_apply_adjustment_in`. Il secondo giro del motore per la performance (`lots_analysis_service.py:219`) riceve anche
+   la valuta del report.
+2. **Storico della performance dei lotti**: l'ADJUSTMENT con costo è un flusso esterno nei due sensi
+   (`histories.py:83`, `conversions.py:168-171`), all'importo della riga.
+3. **Dashboard**: niente.
+4. **Doc EN** (docs-writer): `adjustment.en.md` («Impact on Cost Basis», il lato in uscita) e `fifo-engine/index.en.md`
+   (la riga «Adjustment in / out … at zero cost», già inesatta per l'entrata).
+5. **CHANGELOG** 🐛, proposto nell'handoff.
+6. **Facoltativo**, chiarezza per i non esperti: nella cronologia del lotto (`LotCustodyModal.svelte`), per una rettifica
+   in uscita «Incasso» diventa «Valore ceduto al costo» (4 lingue).
+
+**Valori che cambiano (dichiarati)**: (i) i lotti di un titolo con una rettifica in uscita con override, oggi solo da
+API: proventi, realizzato, P&L, valore e performance; (ii) J-9: i lotti aperti da una rettifica col costo in una valuta
+diversa dalla `currency` della riga, quando quella valuta non è la valuta del report.
+
+**Rossi** (test-author): motore puro (prezzo e proventi; guardia senza override; più lotti in (a) e in (b), un rosso per
+lettura, resta quello scelto; coppia intera contro coppia divisa; ripiego in valuta diversa; J-9); servizio con DB
+(l'esempio della decisione: lotti 60 come la Dashboard); storico della performance; J-9 nel servizio.
+
+**Firma con W** (da accordare quando W ci arriva): la gamba in uscita convertita è un ADJUSTMENT −q con
+`cost_basis_override` e `cost_basis_currency` dal costo Auto **del suo broker** — `compute_wac_iterative(broker della
+riga, data della riga, esclusa la riga)`, come `_auto_cost_source` fa per una riga che non è un TRANSFER; per un
+TRANSFER col partner ancora legato sceglierebbe il broker del partner. Il motore legge solo quantità < 0,
+`cost_basis_override`, `cost_basis_currency`. Per W, inoltre: un promote che riporta la riga in un TRANSFER deve
+togliere il costo dal lato che cede (`_apply_promote_cost_basis` lo toglie solo con `resolved_fields`, e il
+classificatore preferisce l'override della partenza, `classifier.py:213-214`).
+
+**Decisioni del coordinatore (15/10, ~23:00) — notturne, «da rivedere»: le porta al developer domattina.**
+1. **(b), il costo medio della riga**: è la lettera della decisione 47, e lotti e Dashboard restano uguali. Va dichiarato,
+   qui e nel CHANGELOG, il realizzato della rettifica: nell'esempio il lotto 1 (10 unità a 10) cede a 15 e realizza
+   **+50**, la differenza fra il suo costo FIFO e la media con cui le unità partono. Niente rosso per (a).
+2. **J-9 dentro CP-16**, col suo rosso.
+3. **Valute diverse**: il pezzo esce al suo costo FIFO (realizzato 0), dichiarato, fino a CP-7. Niente valuta della
+   chiusura adesso.
+4. **«Valore ceduto al costo»** al posto di «Incasso» nella cronologia del lotto, per la rettifica in uscita, nelle 4
+   lingue; siccome tocca i cataloghi, `front-utility core-unit` prima dell'handoff. Unico punto: il dettaglio della
+   cronologia in `LotCustodyModal.svelte` (`eventDetailItems`, `:172-187`); il tooltip di `LotWacPriceChart.svelte` non
+   mostra proventi per le rettifiche (`:1437-1441`). La scelta della chiave va in un aiutante puro di
+   `lotCustodyModalHelpers.ts`, provato da Vitest come gli altri.
+- La firma per W la gira il coordinatore quando W arriva al punto 47.
+
+**CHANGELOG proposto** (🐛 Fixed): «Lots: an adjustment that takes units away while carrying a cost now hands them over
+at that cost, as the Dashboard already did, so the lots show the same gain instead of reading the units as destroyed.
+Units from a lot bought at another price realize the difference between the lot's cost and that average cost: 10 units
+bought at 10 and handed over at an average cost of 15 realize +50. In the lot's history these rows show the value handed
+over at cost instead of proceeds. Lots opened by an adjustment whose cost is in another currency now convert that cost
+from its own currency.»
+
+**Superfici trovate dopo l'analisi (15/10, 23:00–23:10, sola lettura)**:
+- **J-9 nella cronologia del lotto**: la riga d'apertura (`lots_analysis_service.py:895-896`,
+  `_build_opening_and_split_rows`) converte il prezzo con la valuta della **riga**, non del lotto; il fabbisogno dei cambi
+  della cronologia (`lots/conversions.py`, ramo `CUSTODY_HISTORY`/`EVENT_HISTORY`) la registra per valuta della riga.
+  Dopo J-9 nel solo motore, la sintesi convertirebbe il costo da USD e la cronologia mostrerebbe ancora il prezzo in USD
+  come se fosse EUR: è lo stesso difetto di J-9 in un altro punto. Cura: la riga d'apertura usa la valuta del lotto (per
+  una BUY è la stessa della riga), e la cronologia registra il cambio del lotto alla data d'apertura. Due rossi in più
+  (14, 15) chiesti al test-author.
+- **Allocazione economica**: legge le chiusure solo per quantità e solo per BUY/SELL (`_split_trade_cost`), e
+  `sale_proceeds` non si accumula mai: i proventi nuovi della rettifica non spostano commissioni, tasse né proventi.
+- **AI Export**: passa le sintesi dei lotti senza una descrizione propria di `cumulative_proceeds` (solo lo schema,
+  `schemas/portfolio.py:810`): nessuna versione da alzare, i dati delle sonde non hanno rettifiche in uscita con costo.
+- **Doc da allineare** (docs-writer, solo EN): `developer/backend/transactions/fifo_lot_engine.md` (`:90`, `:124-129`
+  «proventi solo per SELL», `:199-211` «ADJUSTMENT_IN … zero-price», «ADJUSTMENT_OUT … close_unit_price = 0», `:251`),
+  `lots_analysis_service.md` (`:153`, il flusso della rettifica; `:162`), più `adjustment.en.md` e
+  `fifo-engine/index.en.md` (pagine tradotte: niente stamp, il debito di traduzione resta vero).
+
+**✅ Rossi (15/10, 22:55–23:17, test-author)**: 26 rossi su un valore, nessun errore; guardie verdi; la Dashboard
+dell'esempio già a 60 (120 investiti, 180 di valore), come diceva J-11.
+- `test_financial/test_fifo_adjustment_out_with_cost.py` (nuovo, motore puro): un lotto (decisione 47), più lotti in
+  (b) (+50; oltre due lotti +25 e 225), lo split di una coppia neutro (300 = 300, A da solo 150), valuta diversa (esce a
+  20, il suo costo), costo senza valuta (nella valuta del lotto), lotto senza valuta (valuta del report; guardia in USD),
+  J-9 nel motore (più tre guardie), la guardia senza override.
+- `test_lots_analysis_pure.py` (sezione CP-16): il flusso +80 della performance, ROI/TWRR, il fabbisogno del cambio in
+  uscita, J-9 nella sintesi (405 €), nella riga d'apertura (81 €) e nel fabbisogno della cronologia.
+- `test_financial/test_adjustment_out_with_cost_numbers.py` (nuovo, DB): l'esempio, lotti 60 = Dashboard 60.
+- `lotCustodyModalHelpers.closureValueLabel.test.ts` (nuovo, Vitest; registrato in `core-unit`, riga additiva in
+  `scripts/test_runner/_frontend_utility.py`, superficie condivisa).
+- Nota del test-author, dichiarata: col flusso al costo, il 3/10 (prezzo 25, costo 20) il TWRR legge +15 % e non +25 %:
+  il guadagno delle unità che escono esce con loro, come per una rettifica in entrata al costo. Coerente con la
+  Dashboard, dove il P&L di A scende da 50 a 30 quel giorno.
+
+**✅ Implementazione (15/10, 23:17–23:26)**:
+- `fifo/engine.py`: l'evento ADJUSTMENT_OUT porta l'override come prezzo; `_apply_adjustment_out` chiude ogni pezzo con
+  `_handover_unit_price` (il costo della riga se è nella valuta del lotto, altrimenti il costo FIFO del pezzo), passato a
+  `_consume_broker_fragments` come `close_unit_price_of`; `_close_position_piece` dà proventi anche all'ADJUSTMENT_OUT
+  (0 senza costo); J-9 in `_apply_adjustment_in`.
+- `lots/histories.py`: la rettifica in uscita con costo è un flusso esterno (il costo con segno di
+  `_adjustment_native_cost`, docstring aggiornata); `lots/conversions.py`: il suo cambio per la performance, e il cambio
+  del lotto sugli eventi d'apertura della cronologia.
+- `lots_analysis_service.py`: il secondo giro del motore (performance su tutti i broker accessibili) riceve la valuta
+  del report; la riga d'apertura converte con la valuta del lotto, quindi `_build_lot_event_rows` e
+  `_build_opening_and_split_rows` non prendono più `tx_by_id`.
+- Frontend: `closureValueLabelKey` in `lotCustodyModalHelpers.ts`, usata da `LotCustodyModal.svelte`; la chiave
+  `brokers.lots.modal.historyDetail.handedOverAtCost` con `dev.py i18n add` nelle 4 lingue (sorgente `brokers/`):
+  «Value handed over at cost», «Valore ceduto al costo», «Valeur cédée au coût», «Valor cedido al coste».
+- **⚠️ Fuori pista**: (a) tolto `tx_by_id` da `_build_lot_event_rows`, ho tolto io l'argomento dall'aiutante
+  `_opening_rows` del test 14 (una riga, detto al test-author per la revisione). (b) **J-17**: `price_marks.py:307-309`
+  prende ogni rettifica col costo, anche in uscita, come prezzo osservato; con le conversioni di W segnerebbe il prezzo al
+  costo nei giorni senza quotazione. Non è la regola FIFO di CP-16: nel backlog, con la proposta, da decidere.
+
+**✅ Verifica (15/10, 23:23–23:35)**, una prova alla volta con `nice -n 10`, carico 29–56:
+- rossi: motore + FIFO + parità DB 85/85; `services lots-analysis-pure` 129/129; Vitest dei due file d'aiuto 47/47;
+- `services roi-fifo-utils` 698/698 (golden, servizio dei lotti, Yield on Cost, orfani, costo in valuta);
+  `services financial-math` 329/329 (guardia dello strato); `api portfolio` 51/51; AI Export (asset, portafoglio dei
+  broker, adeguatezza) 325/325; `check-orphans` ✓ (430 front, 329 backend); `front-utility core-unit` 159 file / 5 251
+  test; `dev.py i18n check` stretto, 4 634 chiavi;
+- ruff, black `--check`, prettier `--check` puliti; `git diff --check` pulito.
+
+**Valori che cambiano (dichiarati)**:
+- i lotti di un titolo con una rettifica in uscita con costo (oggi solo da API): realizzato, proventi, P&L, valore,
+  cronologia e performance. Nell'esempio della decisione: realizzato −80 → 0, proventi 0 → 80, P&L −20 → 60, come la
+  Dashboard. Con più lotti la rettifica realizza la differenza fra il costo FIFO e il suo costo medio (+50
+  nell'esempio). Nella performance l'uscita al costo è un flusso esterno;
+- J-9: i lotti aperti da una rettifica col costo in una valuta diversa dalla `currency` della riga, quando quella
+  valuta non è la valuta del report: costo, prezzo d'apertura e tutto ciò che ne deriva, ora convertiti (nel test 450 →
+  405 €);
+- Dashboard, golden e AI Export (sui dati delle prove): invariati.
+- **Dati di prova (`populate_mock_data.py`, «wac-test»)**: AAPL su Interactive Brokers ha BUY 10 a 150, BUY 5 a 180 e
+  una rettifica −3 col costo 160 USD (`:2216-2227`), proprio il caso di CP-16. Il primo lotto cede 3 unità a 160:
+  realizzato −450 → +30, proventi 0 → 480 (USD), P&L del lotto +480. Nessun test ne fissa i valori (prove verdi), ma
+  cambiano le schermate della galleria sui lotti FIFO di Apple (`gallery.spec.ts:1566-1590`, `fifo-lots-*`) e gli export
+  AI di AAPL e di IB. La galleria G-13 di stanotte gira su `dev_release2` senza CP-16: le immagini cambiano alla
+  galleria dopo l'ingresso. J-9 sui dati di prova: nessun effetto (le rettifiche in entrata col costo hanno la riga e il
+  costo nella stessa valuta).
+- **AI Export**: nessun codice, contratto o versione cambia; i lotti esportati portano i valori nuovi (sopra). Sonde
+  non lanciate (la skill le chiede per componenti, dataset, analisi, contratti e renderer). Il testo
+  `valuation_semantics` (`portfolio_financial.py:302`, `broker_financial.py:272`) non definisce `cumulative_proceeds`;
+  se si vuole dire che contiene anche il valore ceduto al costo, è CP-12.
+
+**✅ Rifinitura e doc (15/10, 23:35–23:47)**:
+- test-author: la forma finale dei docstring («Before CP-16: …» al posto di «RED today»), il test Vitest importa
+  l'aiutante direttamente; la mia riga in `_opening_rows` rivista e confermata. Verdi: 19 (motore + DB), 129
+  (`lots-analysis-pure`), 3 (Vitest); ruff, black, prettier puliti.
+- docs-writer (solo EN, niente stamp): `adjustment.en.md` (nuova «📤 Outgoing Adjustments», con l'esempio +50 e la
+  nota sulla valuta; la valuta del lotto nel punto «With override»), `fifo-engine/index.en.md` (la tabella degli eventi
+  in due righe e il prezzo di chiusura), `fifo-lot-analysis.en.md` (una frase del Total Return),
+  `developer/backend/transactions/fifo_lot_engine.md` (campi, eventi, `close_unit_price_of`, «Hand-over at cost»),
+  `lots_analysis_service.md` (valute della cronologia, flussi della performance, limite noto),
+  `developer/frontend/components/features/lots-analysis.md` (l'etichetta). `mkdocs build` stretto verde (23:44, carico
+  47), `check-links` verde (96 link). Debito di traduzione vero su `adjustment`, `fifo-engine/index` e
+  `fifo-lot-analysis` (IT/FR/ES), da `translate-validate`. Resta datata `developer/backend/transactions/service.md:261-265`
+  («waits for … point 47»): pagina di W, la aggiorna la sua conversione.
+- Conflitti previsti con `dev_release2` `de349d4c3`: nessuno testuale (backlog e runner in punti separati).
+- Stato: handoff FROZEN mandato al coordinatore (15/10, ~23:50); porta 6185 libera.
+
+#### Checkpoint CP-16 ✅ (2026-10-15) — committato dal coordinatore (`335fb89cf`, journal `206bbabc3`)
+
+- CP-4d in `dev_release2` col treno 64 (merge `40f44f364`, registri `45499dec4`), con la riga 🐛 MWRR nel CHANGELOG.
+- **Aggiornamento di base 7** — merge di `dev_release2` `de349d4c3`, HEAD `b7d1a2bb7`, pulito (backlog e
+  `_frontend_utility.py` fusi da soli). Dentro: T+DV, W3-a dei colori, H CP-U1, X-RL, E5a, W-B20.
+- **Regola della notte** (coordinatore, 23:49): una decisione del developer va al coordinatore in 3-4 righe con la
+  proposta per prima, e il punto si mette in pausa; una scelta tecnica nel mio perimetro la decido io, annotata come
+  «Decisione notturna, da rivedere»; slot pesanti chiesti, checkpoint FROZEN come sempre.
+- **J-17** nella lista del developer per il mattino, con la proposta; il punto 3 (CP-12) e il debito di traduzione
+  restano nel backlog.
+- **Ingresso, prove leggere** (15/10, 23:50–23:56, una alla volta, `nice -n 10`, carico 19–32): `dev.py api sync`
+  (nessun file tracciato cambiato), `dev.py front check` (svelte-check 0 errori, 0 avvisi), `front-utility core-unit` 168
+  file / 5 661 test, `theme-roles.mjs --check` («Colour gates: clean»), `services roi-fifo-utils` 706,
+  `services lots-analysis-pure` 129, `api portfolio` 51. Resta `all-backend --workers 2` sullo slot 1, quando il
+  coordinatore lo assegna.
+
+#### CP-15 — analisi sulla base `b7d1a2bb7` (15/10, 23:57–00:10, sola lettura, durante `all-backend`)
+
+Il disegno qui sopra regge sul codice d'oggi. Verificato:
+- `native_balances(movements, as_of=None)` e `cash_movement_from_transaction(tx, *, share=1)` sono in
+  `native_cash.py:89,424` (N1 di W). `cash_movement_from_transaction` salta le righe senza valuta; `native_balances`
+  tiene le linee a zero, che `control_totals` toglie.
+- La regola del motore per le quantità: `daily_state.py:184-187`, ogni riga con asset e quantità ≠ 0.
+- `Transaction` non ha cancellazioni logiche; `quantity` e `amount` sono `Numeric(18, 6)` non nulli. Su SQLite
+  SQLAlchemy li legge come Decimal a 6 decimali: la somma in Python è esatta, quella in SQL passerebbe dai float.
+- La guardia dello strato vieta servizi, API e funzioni, e ammette `db.models`. Il «punto di lettura con nome» (regola
+  1) è una convenzione, documentata in 4 posti: docstring di `financial_math/__init__.py`, `financial-math.instructions.md`
+  (tabella e regola 1), mappa di `backend.instructions.md`, `developer/backend/financial_math.md` (albero, punti di
+  lettura, tabella dei test).
+- `QUANTITY_DUST_THRESHOLD` ora sta in `services/platform/data_quality_thresholds.py` (H): non serve a CP-15, che tiene
+  ogni residuo.
+- In `dev_release2` nessuno chiama ancora l'API (B2 usa un sostituto della stessa forma).
+
+**Decisioni notturne, da rivedere** (scelte tecniche nel mio perimetro):
+1. `to_json()` dà un dict pronto per JSON (la forma concordata con B: `version`, `cash`, `quantities`, Decimal come
+   testo canonico); `from_json(data)` lo riceve. B lo mette nel manifest col suo `json.dumps`. Glielo scrivo
+   all'integrazione.
+2. Lettura a blocchi da 5 000 righe per chiave (`id > ultimo ORDER BY id LIMIT`): lineare, nessun `OFFSET`.
+3. Somme in un contesto decimale locale a precisione alta con `Inexact` intrappolato: mai un arrotondamento muto.
+4. Test in `test_financial_math/test_ledger_totals.py`, nell'unità pura `services financial-math`. Il test su file usa
+   un SQLite in `tmp_path` con un engine suo, chiuso alla fine (guardia J-6), senza toccare DB o server condivisi.
+   Le parità restano pure: quantità contro il fold del costo medio a quota 1, cassa contro `NativeCash.balances()` con
+   `convert_bulk` sostituito.
+
+**Ordine**: rossi (test-author), modulo, doc nei 4 posti, cancelli (il file nuovo e `services financial-math`).
+Peso basso; nessuna suite pesante propria.
+
+**✅ Ingresso CP-16, `all-backend --workers 2`** (slot 1, 15/10 23:57 → 16/10 00:38, `nice -n 10`, carico all'avvio 26):
+7/7 categorie verdi; passate parallele 16 306 passed, 4 skipped, 0 failed, più la passata consolidata per categoria,
+verde. Le «❌» del log sono test dei percorsi d'errore dei provider; l'avviso SSL di MathJax è la VPN. Porta 6185 libera.
+- **⚠️ Fuori pista**: il primo lancio (23:57:24) è uscito in 4 s con exit 2, perché avevo messo `--workers 2` dopo la
+  categoria (`dev.py test … all-backend --workers 2`): l'opzione va prima, con `--test-port` e `--data-dir`. Nessun
+  test partito, nessun dato toccato; rilanciato subito.
