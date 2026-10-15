@@ -346,8 +346,10 @@ unchanged. Override it when the user should read your reason in their own langua
   add. A `can_parse` that raises counts as `false`, and a `cannot_parse_detail` that raises leaves
   `refusal` empty: both are logged, never a 500. As in the parse guard, a refusal on a path that a
   concurrent parse has just moved is asked again on the new path.
-- **Access**: any user with access to the file's broker (VIEWER+), 403 otherwise. 404 for an
-  unknown file, an unknown plugin, or a file whose content is gone.
+- **Access**: any user with a role on the file's broker (VIEWER+), the uploader of a file with no
+  broker, and the administrator; 403 otherwise
+  ([Who reaches a report file](../../backend/brim/architecture.md#file-access)). 404 for an id that
+  is not a UUID, an unknown file, an unknown plugin, or a file whose content is gone.
 
 **In the import wizard.** Right after an upload, the wizard asks the endpoint about the broker's
 default import plugin. When that plugin refuses the file, the wizard shows the reason under *Notes
@@ -1199,16 +1201,20 @@ plugin has nothing to implement, but it is the contract every set lives in:
 A file taken out by mistake goes back when the set's plugin is chosen for it again
 ([Import Wizard → How a set is read](../../frontend/components/features/import-wizard.md#set-read-as)).
 
-All routes live under `/api/v1/brokers/import` and require EDITOR or OWNER access on the broker.
+All routes live under `/api/v1/brokers/import`. The upload, `/sets/preview`, `/sets/combine` and the
+parse require EDITOR or OWNER access on their broker (the parse on the file's broker and on the
+`broker_id` it imports into), and the administrator passes; `GET /files` lists only the files the
+caller may see ([Who reaches a report file](../../backend/brim/architecture.md#file-access)).
 
 - **`POST /upload`** takes an optional form field `batch_id`, a UUID (anything else is a 422),
   stored in the file's sidecar. The wizard sends one per session, the Files page and a broker's
   *Uploaded Reports* one per upload action, and *Upload the missing file* reuses the set's own.
   A file uploaded without one belongs to no set: the wizard lists it as a single file, and its
   parse answers that the exports must be uploaded together.
-- **`GET /files`** returns `BRIMFileInfo` with `batch_id`, `kind` (`original` or `combined`),
-  `derived_from` (`file_id`, `role`, `filename` and `deleted` of each original), `combined_into`
-  and `combine_is_stale`. **`GET /plugins`** returns the `report_roles` of each plugin.
+- **`GET /files`** returns `BRIMFileListItem` (`BRIMFileInfo` plus `can_delete`) with `batch_id`,
+  `kind` (`original` or `combined`), `derived_from` (`file_id`, `role`, `filename` and `deleted` of
+  each original), `combined_into` and `combine_is_stale`. **`GET /plugins`** returns the
+  `report_roles` of each plugin.
 - **`POST /sets/preview`** — body `BRIMSetRequest`
   `{broker_id, plugin_code, batch_id, exclude_file_ids}`, the last one defaulting to `[]` —
   collects the members with `collect_members` (the original, non-failed files of that batch and
