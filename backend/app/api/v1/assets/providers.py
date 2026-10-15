@@ -59,7 +59,8 @@ async def list_providers(
         code = provider_info["code"]  # Extract code from dict
 
         # Hide testing-only providers from the public list
-        if code == "mockprov":
+        provider_class = AssetProviderRegistry.get_plugin(code)
+        if provider_class is None or provider_class.test_only:
             continue
 
         # Apply filter if specified
@@ -98,7 +99,7 @@ async def search_assets_via_providers(
     q: str = Query(..., min_length=1, description="Search query"),
     providers: Optional[str] = Query(None, description="Comma-separated provider codes (default: all)"),
     hints: Optional[List[str]] = Query(None, description="Extra search terms (ISIN + candidate names) used only by the link-finder fallback to disambiguate when on-site search finds nothing"),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Search for assets across one or more providers in parallel.
@@ -150,7 +151,7 @@ async def search_assets_via_providers(
         provider_codes = [p.strip() for p in providers.split(",") if p.strip()]
 
     # Delegate to service layer (parallel execution via asyncio.gather)
-    return await AssetSearchService.search(q, provider_codes, hints)
+    return await AssetSearchService.search(q, provider_codes, hints, user_id=current_user.id)
 
 
 @provider_router.get("/search/stream")
@@ -158,7 +159,7 @@ async def search_assets_stream(  # pragma: no cover
     q: str = Query(..., min_length=1, description="Search query"),
     providers: Optional[str] = Query(None, description="Comma-separated provider codes (default: all)"),
     hints: Optional[List[str]] = Query(None, description="Extra search terms (ISIN + candidate names) used only by the link-finder fallback to disambiguate when on-site search finds nothing"),
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Stream search results via Server-Sent Events (SSE).
@@ -177,7 +178,7 @@ async def search_assets_stream(  # pragma: no cover
         provider_codes = [p.strip() for p in providers.split(",") if p.strip()]
 
     return StreamingResponse(
-        AssetSearchService.search_stream(q, provider_codes, hints),
+        AssetSearchService.search_stream(q, provider_codes, hints, user_id=current_user.id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -190,7 +191,7 @@ async def search_assets_stream(  # pragma: no cover
 @provider_router.post("/probe", response_model=FAProviderProbeResponse)
 async def probe_provider_config(
     request: FAProviderProbeRequest,
-    _current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Probe a provider configuration without persisting anything (dry-run).
@@ -211,6 +212,7 @@ async def probe_provider_config(
         result = await AssetSourceManager.probe_provider_config(
             config=request,
             operations=request.operations,
+            user_id=current_user.id,
         )
         return result
     except AssetSourceError as e:

@@ -626,6 +626,14 @@ something. `backend/app/services/accounts/address_probe.py` does it with a signe
    public and answers `200` `{"match": true}` only when the instance there issued the nonce,
    `{"match": false}` otherwise (`AddressProbeResult`), and nothing else.
 
+**In the app.** `LinkShare`, the panel of the Users tab's invitation and password-reset dialogs, runs the check
+through `checkAddress()` (`frontend/src/lib/features/settings/users/addressProbe.ts`), and only for an address the
+administrator changed, 500 ms after the last keystroke. The nonce comes through the Zodios client; the check is a bare
+`fetch`, a CORS simple request (see [the warning below](#address-probe-cors)), abandoned after 8 s. A readable
+`{"match": true}` or `{"match": false}` reads *match* or *mismatch*; anything else reads *unverifiable*, never *no*.
+No verdict stops the administrator from copying the link. Component side:
+[LinkShare](../frontend/components/features/settings.md#linkshare).
+
 ### 🎯 Why a Signed Nonce {: #address-probe-threat-model }
 
 A stable instance id readable from any origin would have been simpler, and was set aside: any page visited

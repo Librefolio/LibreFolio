@@ -22,6 +22,7 @@ from decimal import Decimal
 from backend.app.logging_config import get_logger
 from backend.app.services.fx.base import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError
 from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType
 from backend.app.services.provider_registry import register_provider
 
 logger = get_logger(__name__)
@@ -42,6 +43,12 @@ class MockFXProvider(FXRateProvider):
 
     WARNING: FOR TESTING ONLY — DO NOT USE IN PRODUCTION
     """
+
+    test_only = True
+    settings_fields = (
+        PluginSettingField(key="api_key", type=SettingType.STRING, scope=SettingScope.SYSTEM, secret=True, label="API key (testing)"),
+        PluginSettingField(key="decimals", type=SettingType.INTEGER, scope=SettingScope.SYSTEM, label="Decimals (testing)", default=6, minimum=0, maximum=10),
+    )
 
     @property
     def code(self) -> str:
@@ -106,6 +113,8 @@ class MockFXFailProvider(FXRateProvider):
 
     WARNING: FOR TESTING ONLY — DO NOT USE IN PRODUCTION
     """
+
+    test_only = True
 
     # Distinctive error message — tests assert on this string
     FAIL_MESSAGE = "MOCKFX_FAIL: simulated provider failure for testing"
