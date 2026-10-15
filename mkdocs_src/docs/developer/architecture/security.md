@@ -163,8 +163,8 @@ curl -b cookies.txt -X POST \
 
 ### 📄 Secrets from Files {: #secrets-from-files }
 
-Every secret of LibreFolio, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY` and
-`LIBREFOLIO_WEB_LINK_FINDER_API_KEY` today, is read by `env_secret(name)` in
+Every secret of LibreFolio, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY`,
+`LIBREFOLIO_WEB_LINK_FINDER_API_KEY` and `LIBREFOLIO_SMTP_PASSWORD` today, is read by `env_secret(name)` in
 `backend/app/config/__init__.py`:
 
 1. `NAME`, when not blank, is the secret as written, spaces included;
@@ -192,6 +192,9 @@ The caller decides what a `SecretFileError` means. A broken `JWT_SECRET_FILE` or
 does not: `web_link_finder_api_key()` in `backend/app/config/plugins.py` reads it only when a search
 builds the `apikey` engine, and `_build_engine()` in `backend/app/services/assets/web_link_finder.py`
 then logs `web_link_finder: <error>; disabling` and returns no engine, so that search finds no links.
+Nor does a broken `LIBREFOLIO_SMTP_PASSWORD_FILE`: email is optional, so `email_config_state()` turns
+it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged and, from a later lot,
+shown to administrators ([Email Service](../backend/email.md#config-state)).
 
 When `NAME` and `NAME_FILE` are both set, neither blank, `NAME` wins. `secrets_set_twice()` lists those
 names for the [configuration checks](#configuration-checks). It covers `JWT_SECRET` and every
