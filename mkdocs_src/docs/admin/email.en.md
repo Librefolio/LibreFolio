@@ -124,9 +124,10 @@ used, nor from anything else in a request.
   stays out of server and proxy logs.
 - **To check it**: with email **Ready**, Settings › Email shows a notice when
   `LIBREFOLIO_PUBLIC_URL` is not set or cannot be used, and the start log has a line
-  ([What the Log Says](#logs)). From anywhere, `/api/v1/system/instance` shows `"links": true` once
-  both are fine. LibreFolio does not check that this address leads to it: open it in a browser
-  yourself.
+  ([What the Log Says](#logs)). Once it can be used, the tab shows the address and checks, from
+  your browser, that this instance answers there: see [The Address in Emailed Links](#links-check).
+  From anywhere, `/api/v1/system/instance` shows `"links": true` once email and the address are
+  both fine.
 
 ---
 
@@ -253,7 +254,7 @@ page.
 | State | What it means | What the tab shows |
 | --- | --- | --- |
 | **Off** | `LIBREFOLIO_SMTP_HOST` is not set: nothing is sent. This is the default. | A short explanation, and a pointer to this guide. |
-| **Ready** | Every variable can be used. | The emails left this hour, the notices that apply, and **Send a test email**. |
+| **Ready** | Every variable can be used. | The emails left this hour, the notices that apply, the address emailed links start with and [its check](#links-check), and **Send a test email**. |
 | **Not working** | A variable cannot be used: email stays off until it is fixed. | The problem, naming the variable at fault, and a reminder to restart after the fix. |
 
 !!! note "✅ Ready is not yet a delivered email"
@@ -270,8 +271,35 @@ page.
 - The encryption warning appears when `LIBREFOLIO_SMTP_TLS=none` points to a server outside your
   local network: see [Security Notes](#security).
 - A notice about `LIBREFOLIO_PUBLIC_URL` appears when it is not set (information: emails work, but
-  none with a link can go out) or is not an `http://` or `https://` address (warning): see
-  [Emails with a Link](#public-url).
+  none with a link can go out) or cannot start a link (warning): see [Emails with a Link](#public-url).
+
+### 🧭 The Address in Emailed Links {: #links-check }
+
+With the state **Ready** and a usable `LIBREFOLIO_PUBLIC_URL`, the tab shows *Links in emails start
+with …*, followed by that address, and checks from this browser that **this** instance answers
+there. It is the same signed check as the invitation and reset dialogs
+([The Server Address of a Link](users.md#server-address)).
+
+| Message | What it means |
+| --- | --- |
+| *Checking from this device that this instance answers there…* | The check is running. |
+| *This instance answers there, from this device.* | Fine: the links reach this LibreFolio, at least from here. |
+| *From this device, another server answers at that address, not this instance.* … | Something answers there, but not this LibreFolio. |
+| *This device cannot reach this instance at that address.* … | Nothing answered that this browser could read: a wrong or closed address, a name this device cannot resolve, no answer within 8 seconds, a browser that blocks a public page from reaching a local address or asks your permission first, or an older LibreFolio that cannot answer the check. |
+| *This page uses https:// while LIBREFOLIO_PUBLIC_URL starts with http://* … | This browser cannot check an `http://` address from an `https://` page, and the links in emails would travel unencrypted: set the variable to the `https://` address. |
+| *This browser cannot read LIBREFOLIO_PUBLIC_URL as an address* … | The browser reads addresses a little more strictly than the server: the links may not open. Check the value. |
+
+!!! warning "📱 This device only"
+
+    The check runs from the browser you are using, so it tells what this device sees. A VPN, a
+    direct IP address, its DNS or its network can differ from your users': after a warning, check
+    from another device before you change the variable. **Check again** runs the check once more,
+    for example after you changed network.
+
+- The check runs once when the tab opens, not after each test email. **Check again** comes with a
+  warning.
+- Nothing is checked while email is **Off** or **Not working**, nor when `LIBREFOLIO_PUBLIC_URL` is
+  not set or cannot be used, which the notice above reports.
 
 ### ✉️ The Test Email {: #test-email }
 
@@ -447,7 +475,7 @@ the start.
 | `LIBREFOLIO_SMTP_… cannot be used (SMTP_…): email stays off until it is fixed` | `error` | At startup, after the line above, with `check` set to `email.smtp`: the startup checks report the same problem. |
 | `LIBREFOLIO_SMTP_TLS=none with …: emails, their links and the SMTP password travel unencrypted; use starttls or tls` | `warning` | At startup, with `check` set to `email.smtp_encryption`: `none` towards a server outside your local network, which the line names ([Security Notes](#security)). |
 | `LIBREFOLIO_PUBLIC_URL is not set: emails work, but none with a link (forgotten password, invitation, reset) can go out` | `info` | At startup, with `check` set to `email.links`: email works, but `LIBREFOLIO_PUBLIC_URL` is not set ([Emails with a Link](#public-url)). |
-| `LIBREFOLIO_PUBLIC_URL is not an http(s) address: no email with a link (forgotten password, invitation, reset) can go out` | `warning` | At startup, with `check` set to `email.links`: email works, but the variable does not start with `http://` or `https://`. |
+| `LIBREFOLIO_PUBLIC_URL cannot start a link (it needs http:// or https:// and a host, with no user name, password, ? or #): no email with a link (forgotten password, invitation, reset) can go out` | `warning` | At startup, with `check` set to `email.links`: email works, but the variable cannot start a link ([Emails with a Link](#public-url)). |
 | `Email sent` | `info` | The server accepted an email; `kind` says which: `test`, `invite` or `password_reset`. |
 | `Email not sent` | `warning` | The server refused the email or did not answer: `code`, as in [Sending Errors](#sending-errors), and `detail`, the server's own reply, the most precise clue. |
 | `Email not sent: the hourly limit of the instance is reached` | `warning` | The hourly limit stopped an email; `retry_after` is in seconds. |
