@@ -1,12 +1,12 @@
 """Main scheduler loop — asyncio task embedded in FastAPI lifespan."""
 
 import asyncio
-import os
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import structlog
 
+from backend.app.config.platform import scheduler_disabled
 from backend.app.services.platform.scheduler.jobs import run_current_price_refresh, run_history_sync
 from backend.app.services.platform.scheduler.leader import am_i_leader
 from backend.app.services.platform.scheduler.settings import SchedulerSettings, load_scheduler_settings
@@ -94,7 +94,7 @@ async def scheduler_loop(shutdown_event: asyncio.Event) -> None:
     Disabled entirely when LIBREFOLIO_NO_SCHEDULER=1 is set (e.g. during
     gallery screenshot generation to prevent data changes mid-run).
     """
-    if os.getenv("LIBREFOLIO_NO_SCHEDULER"):
+    if scheduler_disabled():
         logger.info("Scheduler disabled via LIBREFOLIO_NO_SCHEDULER — loop not started")
         return
 

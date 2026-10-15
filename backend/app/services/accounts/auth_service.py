@@ -5,7 +5,6 @@ Provides password hashing/verification and JWT token management.
 """
 
 import functools
-import os
 import secrets
 from datetime import timedelta
 from typing import Optional
@@ -14,6 +13,7 @@ import bcrypt
 import jwt
 import structlog
 
+from backend.app.config.platform import configured_jwt_secret
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
@@ -101,7 +101,7 @@ def verify_password_or_dummy(plain_password: str, hashed_password: str | None) -
 # =============================================================================
 
 # Shared secret: from env var (multi-worker safe) or random (single-worker fallback)
-_JWT_SECRET: str = os.environ.get("JWT_SECRET") or secrets.token_urlsafe(64)
+_JWT_SECRET: str = configured_jwt_secret() or secrets.token_urlsafe(64)
 _JWT_ALGORITHM: str = "HS256"
 
 

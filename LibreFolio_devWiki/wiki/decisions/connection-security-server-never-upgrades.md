@@ -58,7 +58,7 @@ behind a reverse proxy even that is a header anyone can forge.
 | Response schema | `backend/app/schemas/system.py` |
 | Address classes (never returned) | `backend/app/utils/runtime/network.py` |
 | Cookie `Secure` decision | `backend/app/api/v1/auth.py` |
-| Cookie mode setting | `backend/app/config.py` |
+| Cookie mode setting | `backend/app/config/__init__.py` |
 | E2E | `frontend/e2e/layout/connection-security.spec.ts` |
 | User doc | `mkdocs_src/docs/user/connection-security.en.md` |
 | Admin doc (checking a deployment, since 2026-10-12) | `mkdocs_src/docs/admin/connection_checks.en.md` |
