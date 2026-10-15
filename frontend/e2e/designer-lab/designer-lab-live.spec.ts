@@ -9,14 +9,17 @@
  * and resume, reset all, import of the exported file.
  *
  * The elements are the app's own and exist whatever the data: the subtitle of the transactions page (a Tailwind
- * colour class, so a palette variable), the date header of the transactions table (a colour the stylesheets write as a
- * literal — in DataTable's `th` rule once, in the `:root` token that rule reads since R-3), the dashboard's growth
- * chart. Which colour to change is read from them at run time, never written down: a designer will change these
- * colours, and the tests must keep following them. Where the code writes a colour is not written down either: the
- * export is held to the verifier the Lab ships, which finds each occurrence in today's code.
+ * colour class: a palette class today, a colour-role utility once workstream T migrates the page), the login card a
+ * visitor who is not logged in gets at `/` (a colour-role utility of workstream T), the date header of the transactions
+ * table (a colour the stylesheets write as a literal — in DataTable's `th` rule once, in the `:root` token that rule
+ * reads since R-3), the dashboard's growth chart. Which colour to change is read from them at run time, never written
+ * down: a designer will change these colours, and the tests must keep following them. A colour class is followed to
+ * what the Lab edits for it (`colourSourceOf`): a palette class to its variable, a role utility to the role its rule
+ * reads in the page's CSSOM, through the chip of its `@theme inline` alias. Where the code writes a colour is not written
+ * down either: the export is held to the verifier the Lab ships, which finds each occurrence in today's code.
  *
- * Nothing is written server-side: TEST_USER only reads, the theme toggle and the Lab keep their state in this
- * context's localStorage, and the context dies with the test.
+ * Nothing is written server-side: TEST_USER only reads, the visitor never signs in, the theme toggle and the Lab keep
+ * their state in this context's localStorage, and the context dies with the test.
  */
 import {expect, test} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
@@ -25,6 +28,7 @@ import {
     applyChange,
     chartColourValues,
     chooseTheme,
+    colourSourceOf,
     computedStyle,
     CROSS_TAB,
     dateColumnHeader,
@@ -37,14 +41,18 @@ import {
     labActive,
     labStats,
     listedKeys,
+    LOGIN_CARD,
+    newColourFor,
     opaqueHexOf,
     opaqueKeysOf,
     openDashboardGrowthChart,
     openLab,
+    openSignIn,
     openTransactions,
-    textPaletteClassOf,
+    placesInComponent,
     transactionsSubtitle,
     verifyExport,
+    waitForLabClient,
 } from './lab-helpers';
 
 test.setTimeout(60_000);
@@ -55,6 +63,13 @@ const PINK_RGB = 'rgb(255, 0, 170)';
 const BLUE = '#00aaff';
 const BLUE_RGB = 'rgb(0, 170, 255)';
 const GREEN = '#00ff00';
+const GREEN_RGB = 'rgb(0, 255, 0)';
+/** The new colours a colour-role test may apply, in order: the first the role has in neither theme. */
+const NEW_COLOURS = [
+    {hex: PINK, rgb: PINK_RGB},
+    {hex: BLUE, rgb: BLUE_RGB},
+    {hex: GREEN, rgb: GREEN_RGB},
+];
 const GROWTH_CHART = '[data-testid="growth-chart"]';
 
 test.describe('Designer Lab — live preview in another tab', () => {
@@ -112,6 +127,79 @@ test.describe('Designer Lab — live preview in another tab', () => {
         await expect.poll(() => labStats(page)).toEqual(IDLE_STATS);
     });
 
+    test('L1: a colour role recolours an element of another tab, through the chip of its utility', async ({page, context}, testInfo) => {
+        const card = await openSignIn(page);
+        await waitForLabClient(page);
+        await chooseTheme(page, 'light');
+        // The card's background class, followed to what the Lab edits for it: the role its rule reads in the CSSOM.
+        const source = await colourSourceOf(card, 'bg');
+        expect(source.role, `${source.className} must be a colour-role utility: the login card reads the roles of workstream T`).toBe(true);
+        expect(source.target, `${source.className} reads a role`).toMatch(/^--lf-/);
+        const original = await computedStyle(card, 'background-color');
+        // A colour the role has in neither theme, read from the page: T changes the values of the roles.
+        const fresh = await newColourFor(page, source.target, NEW_COLOURS, [original]);
+
+        const lab = await openLab(context);
+        await editLightTheme(lab);
+        // The palette lists the utility under its alias, and the chip edits the role: either name finds it.
+        await lab.getByTestId('lab-tab-palette').click();
+        const search = lab.getByTestId('lab-search');
+        const chip = lab.getByTestId(`lab-item-var-${source.chipVar}`);
+        for (const name of [source.target, source.chipVar]) {
+            await search.fill(name);
+            await expect(search).toHaveValue(name);
+            await expect(chip, `searching ${name} finds the chip of ${source.className}`).toBeVisible();
+        }
+        await expect(chip, `the chip of ${source.chipVar} edits the role the alias stands for`).toHaveAttribute('data-target', source.target);
+        await applyChange(lab, {tab: 'palette', search: source.chipVar, item: `lab-item-var-${source.chipVar}`, layer: 'css-var', target: source.target, to: fresh.hex});
+
+        await expect(card, `${source.className} reads ${source.target}: the app tab follows the Lab`).toHaveCSS('background-color', fresh.rgb, CROSS_TAB);
+        await expect.poll(() => labActive(page)).toBe(true);
+        await expect.poll(() => labStats(page)).toMatchObject({varOverrides: 1, elementRules: 0});
+
+        // The export names the role and finds its utilities in the code: each occurrence carries the class to look for,
+        // since the line names neither the role nor a palette shade.
+        const {text, doc} = await downloadExport(lab);
+        expect(doc.schema).toBe('lf-designer-lab/1');
+        expect(doc.changes.map((c) => [c.id, c.layer, c.scope, c.target, c.to])).toEqual([[`css-var:${source.target}@light`, 'css-var', 'light', source.target, fresh.hex]]);
+        const [change] = doc.changes;
+        expect(Object.keys(change.impact?.classes ?? {}), `the impact lists the utilities that read ${source.target}`).toContain(source.className);
+        expect(change.occurrences.length, `the export lists where the code writes the utilities of ${source.target}`).toBeGreaterThan(0);
+        expect(
+            change.occurrences.filter((o) => !o.raw).map((o) => `${o.file}:${o.line}`),
+            'every occurrence of a role names the class to find on its line',
+        ).toEqual([]);
+        const classUses = change.occurrences.filter((o) => o.raw === source.className);
+        const inCard = await placesInComponent(classUses, source.className, LOGIN_CARD);
+        expect(inCard.length, `an occurrence of ${source.className} in the component of ${LOGIN_CARD} — read from disk: the line writes the class, the file the test id. Occurrences of the class: ${classUses.map((o) => `${o.file}:${o.line}`).join(', ') || 'none'}`).toBeGreaterThan(0);
+        const definitions = change.definitions ?? [];
+        expect(definitions.length, `the export says where the sources define ${source.target}`).toBeGreaterThan(0);
+        expect(
+            definitions.filter((d) => !/(^|\/)tokens\.css$/.test(d.file)).map((d) => `${d.file}:${d.line}`),
+            'a role is defined in the token file of workstream T only',
+        ).toEqual([]);
+        const verified = await verifyExport(text, testInfo.outputPath('designer-lab-changes.json'));
+        const report = verified.report;
+        if (!report) throw new Error(`verify-export.mjs printed no JSON report (exit ${verified.status}): ${verified.stderr}`);
+        expect(
+            report.changes.flatMap((c) => c.missing.map((m) => `${c.id} ${m.file}:${m.line} ${m.raw ?? ''}`)),
+            'every occurrence the export lists is still written in the code',
+        ).toEqual([]);
+        expect(report.totals.missing).toBe(0);
+        expect(
+            report.changes.flatMap((c) => c.definitions.filter((d) => d.status !== 'ok').map((d) => `${d.file}:${d.line} ${d.status}`)),
+            `the definitions of ${source.target} are where the export says`,
+        ).toEqual([]);
+        expect(verified.status, `verify-export.mjs exits 0 when nothing is missing: ${verified.stderr}`).toBe(0);
+        expect(report.totals.ok, 'positive control: the verifier found occurrences in place').toBeGreaterThan(0);
+
+        await lab.getByTestId('lab-reset-all').click();
+        await expectChanges(lab, 0);
+        await expect(card, 'reset: the card shows its own background again').toHaveCSS('background-color', original, CROSS_TAB);
+        await expect.poll(() => labActive(page), CROSS_TAB).toBe(false);
+        await expect.poll(() => labStats(page)).toEqual(IDLE_STATS);
+    });
+
     test.describe('on the transactions page', () => {
         test.beforeEach(async ({page}) => {
             await login(page, TEST_USER);
@@ -121,14 +209,14 @@ test.describe('Designer Lab — live preview in another tab', () => {
 
         test('L1: a palette variable recolours an element of another tab', async ({page, context}) => {
             const subtitle = transactionsSubtitle(page);
-            const {className, variable} = await textPaletteClassOf(subtitle);
+            const source = await colourSourceOf(subtitle, 'text');
             expect(await computedStyle(subtitle), 'precondition: the new colour is not the subtitle colour').not.toBe(PINK_RGB);
 
             const lab = await openLab(context);
             await editLightTheme(lab);
-            await applyChange(lab, {tab: 'palette', search: variable, item: `lab-item-var-${variable}`, layer: 'css-var', target: variable, to: PINK});
+            await applyChange(lab, {tab: 'palette', search: source.chipVar, item: `lab-item-var-${source.chipVar}`, layer: 'css-var', target: source.target, to: PINK});
 
-            await expect(subtitle, `${className} reads ${variable}: the app tab follows the Lab`).toHaveCSS('color', PINK_RGB, CROSS_TAB);
+            await expect(subtitle, `${source.className} reads ${source.target}: the app tab follows the Lab`).toHaveCSS('color', PINK_RGB, CROSS_TAB);
             await expect.poll(() => labActive(page)).toBe(true);
             await expect.poll(() => labStats(page)).toMatchObject({varOverrides: 1, elementRules: 0});
         });
@@ -150,12 +238,12 @@ test.describe('Designer Lab — live preview in another tab', () => {
 
         test('suspend shows the original colours, resume brings the changes back', async ({page, context}) => {
             const subtitle = transactionsSubtitle(page);
-            const {variable} = await textPaletteClassOf(subtitle);
+            const source = await colourSourceOf(subtitle, 'text');
             const original = await computedStyle(subtitle);
 
             const lab = await openLab(context);
             await editLightTheme(lab);
-            await applyChange(lab, {tab: 'palette', search: variable, item: `lab-item-var-${variable}`, layer: 'css-var', target: variable, to: PINK});
+            await applyChange(lab, {tab: 'palette', search: source.chipVar, item: `lab-item-var-${source.chipVar}`, layer: 'css-var', target: source.target, to: PINK});
             await expect(subtitle).toHaveCSS('color', PINK_RGB, CROSS_TAB);
 
             const suspend = lab.getByTestId('lab-suspend');
@@ -189,7 +277,7 @@ test.describe('Designer Lab — live preview in another tab', () => {
         test('export JSON, reset all, import back: the same changes on the same elements', async ({page, context}, testInfo) => {
             const subtitle = transactionsSubtitle(page);
             const header = dateColumnHeader(page);
-            const {variable} = await textPaletteClassOf(subtitle);
+            const source = await colourSourceOf(subtitle, 'text');
             const subtitleOriginal = await computedStyle(subtitle);
             const headerOriginal = await computedStyle(header);
             const key = opaqueHexOf(headerOriginal);
@@ -201,7 +289,7 @@ test.describe('Designer Lab — live preview in another tab', () => {
             // values the chart sources write is not this test's subject, and they move.
             const chartKey = (await listedKeys(lab, 'charts')).find((k) => k !== key);
             if (!chartKey) throw new Error(`the catalogue must list a chart colour other than ${key}`);
-            await applyChange(lab, {tab: 'palette', search: variable, item: `lab-item-var-${variable}`, layer: 'css-var', target: variable, to: PINK});
+            await applyChange(lab, {tab: 'palette', search: source.chipVar, item: `lab-item-var-${source.chipVar}`, layer: 'css-var', target: source.target, to: PINK});
             await applyChange(lab, {tab: 'sheets', search: key, item: `lab-item-value-css-literal-${key}`, layer: 'css-literal', target: key, to: BLUE});
             await applyChange(lab, {tab: 'charts', search: chartKey, item: `lab-item-value-chart-color-${chartKey}`, layer: 'chart-color', target: chartKey, to: GREEN});
             await expect(subtitle).toHaveCSS('color', PINK_RGB, CROSS_TAB);
@@ -211,7 +299,7 @@ test.describe('Designer Lab — live preview in another tab', () => {
             expect(doc.schema).toBe('lf-designer-lab/1');
             expect(doc.catalog_hash).toBe(await lab.getByTestId('designer-lab').getAttribute('data-catalog-hash'));
             expect(doc.changes.map((c) => [c.id, c.layer, c.scope, c.target, c.to])).toEqual([
-                [`css-var:${variable}@light`, 'css-var', 'light', variable, PINK],
+                [`css-var:${source.target}@light`, 'css-var', 'light', source.target, PINK],
                 [`css-literal:${key}@light`, 'css-literal', 'light', key, BLUE],
                 [`chart-color:${chartKey}@light`, 'chart-color', 'light', chartKey, GREEN],
             ]);

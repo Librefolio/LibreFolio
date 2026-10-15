@@ -463,7 +463,7 @@
     }
   },
   "user/brokers/index.en.md": {
-    "md5": "cca4cef05a0a21936c2ccc94c87caa78",
+    "md5": "dd496310fdb7789daab79926a56c811e",
     "langs_done": [
       "es",
       "fr",
@@ -483,7 +483,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 237.3,
-        "stamped_at": "2026-10-13T20:38:32.735359+00:00",
+        "stamped_at": "2026-10-15T08:03:12.300589+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -498,7 +498,7 @@
         "elapsed_s": 222.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=69, translated=70 (Δ+1)\n  L109: src=1 trn=2\n    EN: The Brokers page, the **Add Broker** form and the broker page each have a short contextual guide: replay them from [Sett\n    TR: La page **Courtiers**, le formulaire **Ajouter un courtier** et la page du courtier disposent chacun d'un bref guide con\n\nSOURCE_OUTLINE (for reference):\n  # 🏦 Brokers\n    ## ➕ Create a broker\n    ## ✏️ Edit or delete a broker\n    ## 🗂️ Inside a broker\n    ## 📈 Overview tab\n    ## 🔍 Positions tab\n    ## 📑 In this section",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-13T20:38:32.735359+00:00",
+        "stamped_at": "2026-10-15T08:03:12.300589+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -511,7 +511,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 260.4,
-        "stamped_at": "2026-10-13T20:38:32.735359+00:00",
+        "stamped_at": "2026-10-15T08:03:12.300589+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -1891,7 +1891,7 @@
     }
   },
   "user/assets/index.en.md": {
-    "md5": "75048ee414885def633fa5c594c59b27",
+    "md5": "dd8e5487e328b993f8e8e163caec3f13",
     "langs_done": [
       "es",
       "fr",
@@ -1910,7 +1910,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminologia obbligatoria — provider → provider**: la traduzione usa sempre “fornitore”, ma il glossario impone “provider”. Correzioni richieste:\n  - “un fornitore di prezzi” → “un provider di prezzi”\n  - “ogni asset che ha un fornitore” → “ogni asset che ha un provider”\n  - “Richiede un fornitore” → “Richiede un provider”\n  - “collegalo a un fornitore di prezzi” → “collegalo a un provider di prezzi”\n\n- **Terminologia obbligatoria — settings → impostazioni**: “Settings” e “Chart Settings” non sono stati tradotti. Correzioni richieste:\n  - “**Settings** nella barra degli strumenti” → “**Impostazioni** nella barra degli strumenti”\n  - “[Chart Settings](../fx/chart-settings.md)” → “[Impostazioni grafico](../fx/chart-settings.md)” (URL invariato)\n\n- **Terminologia obbligatoria — viewer → visualizzatore**: “**Viewer**” deve diventare “**Visualizzatore**” in “I broker condivisi con te come **Editor** o **Viewer**...”.\n\n- **Terminologia obbligatoria — split → split**: “frazionamenti” è errato rispetto al glossario. Correzione:\n  - “dividendi, frazionamenti, interessi…” → “dividendi, split, interessi…”\n\n- **Terminologia obbligatoria — scheduled investment → investimento programmato**: “Scheduled Investment engine” non è tradotto. Correzione:\n  - “il motore Scheduled Investment” → “il motore di investimento programmato”\n\n- **Terminologia obbligatoria — live price → prezzo live**: “Live prices” e “[Live Prices]” devono usare “Prezzi live”. Correzioni:\n  - “**Live prices** — mentre questa pagina...” → “**Prezzi live** — mentre questa pagina...”\n  - “[Live Prices](...)” → “[Prezzi live](...)” (URL invariato)\n\n- **Terminologia obbligatoria — transaction → transazione**: il link **Transactions** va tradotto. Correzione:\n  - “con un link **Transactions** filtrato su quell'asset” → “con un link **Transazioni** filtrato su quell'asset”\n\n- **Terminologia obbligatoria — data editor → editor dati**: “l'editor dei dati” non segue la mappatura. Correzione:\n  - “l'editor dei dati e la classificazione” → “l'editor dati e la classificazione”\n\n- **Terminologia obbligatoria — sector distribution / geographic breakdown**: “ripartizione per settore e paese” va reso con i termini del glossario. Correzione:\n  - “una ripartizione per settore e paese, opzionale” → “una distribuzione settoriale e geografica, opzionale”\n\n- **Terminologia obbligatoria — tab → scheda**: il titolo “Correlation Tab” non usa “scheda”. Correzione:\n  - “### 🧪 [Correlation Tab](correlation.md)” → “### 🧪 [Scheda Correlazione](correlation.md)”\n\n- **Accuratezza semantica**: “conto di deposito” non è la traduzione corretta di “savings account”. Correzione:\n  - “un conto di deposito con interessi programmati” → “un conto di risparmio con interessi programmati”\n\n- **Grammatica e naturalezza**:\n  - “in fino a tre pannelli” → “in un massimo di tre pannelli”\n  - “Asset detenuti attualmente da nessuno” → “Asset che attualmente non sono detenuti da nessuno”\n  - “una posizione chiusa fino a un residuo trascurabile” → “una posizione ridotta a un residuo trascurabile”\n  - “Tassi di cambio valutario” → “Tassi di cambio” oppure “Tassi di cambio valutari”\n  - “potrebbe elencare meno transazioni del conteggio” → “potrebbe elencare meno transazioni rispetto al conteggio”\n  - “la tabella la blocca anche per un asset archiviato” → “la tabella blocca questa azione anche per un asset archiviato”\n  - “è salito dall'aggiornamento precedente” → “è salito rispetto all'aggiornamento precedente”\n  - “solo in percentuali” → “solo in percentuale”\n  - “finché **qualsiasi** transazione lo utilizza” → “finché **una qualsiasi** transazione lo utilizza” oppure “finché lo utilizza anche una sola transazione”\n  - “Lì, le frecce **‹ ›** scorrono gli asset” → “Lì, le frecce **‹ ›** permettono di scorrere gli asset”\n  - “i due pulsanti ... alternano tra schede” → “i due pulsanti ... consentono di alternare tra schede”\n\n- **Coerenza delle etichette di pagina/link**: molti titoli di pagina/feature restano in inglese mentre il corpo del testo li traduce o li spiega in italiano. Se l’obiettivo è una localizzazione completa, uniformare:\n  - “[Create & Edit](create-edit.md)” → “[Crea e modifica](create-edit.md)”\n  - “[Correlation Tab](correlation.md)” → “[Scheda Correlazione](correlation.md)”\n  - “[Asset Detail Page](detail/index.md)” → “[Pagina di dettaglio asset](detail/index.md)”\n  - “[Financial Theory — Asset Types](...)” → “[Teoria finanziaria — Tipi di asset](...)”\n  - “Stock, ETF, Bond, Crypto, etc.” → “Azioni, ETF, Obbligazioni, Criptovalute, ecc.”\n  - “[FX Rates](../fx/index.md)” → “[Tassi di cambio](../fx/index.md)”\n  - “[Live Prices](...)” → “[Prezzi live](...)”\n\n- **Coerenza delle etichette UI**: se le etichette dell’interfaccia vanno tradotte, uniformare anche:\n  - “l'elenco parte con i soli asset **Active**: attiva **Inactive**...” → “l'elenco parte con i soli asset **Attivi**: attiva **Inattivi**...” oppure, se si mantengono le etichette inglesi, “attiva il filtro **Inactive**”\n  - “**Your assets**”, “**Other users' assets**”, “**Watched**” nella tabella → “**I tuoi asset**”, “**Asset di altri utenti**”, “**Osservati**” (la traduzione del titolo usa già “osservati”)\n  - “solo grid view” → “solo nella vista griglia” se “Grid view” viene localizzato come “Vista griglia”\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 281.4
+        "elapsed_s": 281.4,
+        "stamped_at": "2026-10-15T13:50:51.316122+00:00",
+        "stamped_by": "translate-stamp"
       },
       "fr": {
         "translated_at": "2026-10-10T00:03:24.652130+00:00",
@@ -1921,7 +1923,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminologie obligatoire : `splits` → `divisions`.** Dans « dividendes, splits, intérêts… », remplacer par « dividendes, divisions, intérêts… ».\n- **Terminologie obligatoire : `settings` → `paramètres`.** « remplace les réglages propres à chaque actif » doit devenir « remplace les paramètres propres à chaque actif ». De même, le lien `Chart Settings` doit être « Paramètres du graphique » (glossaire : chart settings → paramètres du graphique), et non « Paramètres des graphiques ».\n- **Terminologie obligatoire : `live price(s)` → `prix live`.** Remplacer « **Prix en direct** » par « **Prix live** » dans la section de mise à jour des prix, et dans « Voir aussi » : « comment les pages interrogent les prix en direct » → « comment les pages interrogent les prix live ».\n- **Terminologie obligatoire : `scheduled investment` → `investissement programmé`.** « le moteur Scheduled Investment » doit être traduit, par exemple : « le moteur d’investissement programmé ».\n- **Ambiguïté sémantique : « la liste commence par les seuls actifs **Actif** ».** Cette formulation peut signifier que la liste débute par des actifs actifs, alors que le sens est « affiche initialement uniquement les actifs actifs ». Préférer : « au départ, la liste n’affiche que les actifs **Actif** » ou « la liste n’affiche d’abord que les actifs **Actif** ».\n- **Accord grammatical :** « redimensionner, déplacer ou masquer une colonne s’applique aux trois » doit être « redimensionner, déplacer ou masquer une colonne s’appliquent aux trois », ou reformulé : « ces opérations s’appliquent aux trois ».\n- **Cohérence des libellés d’interface dans le carrousel HTML :** `data-title=\"🔲 Vue en grille de cartes\"` et `data-title=\"📋 Vue en tableau de données\"` ne correspondent pas aux libellés du corps « **Vue grille** » et « **Vue tableau** ». Si ce sont des libellés visibles de l’interface, les aligner : utiliser « Vue grille » et « Vue tableau » partout, ou conserver la distinction du source de façon cohérente.\n- **Redondance stylistique :** « **Taux de change** — Taux de change des devises utilisés… » répète « taux de change ». Préférer « **Taux de change** — Taux utilisés pour la conversion entre devises » ou « Taux de change utilisés pour la conversion entre devises ».\n- **Cohérence terminologique secondaire :** « scheduled interest » est rendu par « intérêts planifiés » ; comme le glossaire traduit « scheduled investment » par « investissement programmé », envisager « intérêts programmés ».\n- **Améliorations stylistiques mineures :** « les graphiques d’actifs » se lirait mieux en « les graphiques des actifs » ou « les graphiques d’actif » ; dans l’avertissement, « n’importe quelle transaction » peut être renforcé par « la moindre transaction » pour rendre l’insistance de **any**.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 275.4
+        "elapsed_s": 275.4,
+        "stamped_at": "2026-10-15T13:50:51.316122+00:00",
+        "stamped_by": "translate-stamp"
       },
       "es": {
         "translated_at": "2026-10-10T00:03:24.652474+00:00",
@@ -1932,7 +1936,9 @@
         "critique": "<translation_critique>\n<improvements>\n- **Terminología obligatoria — “Viewer”:** El glosario exige `viewer → lector`. La traducción usa `**Editor** o **Visor**`; debe corregirse a `**Editor** o **Lector**`.\n- **Terminología obligatoria — “split”:** El glosario exige `split (corporate action) → desdoblamiento`. La traducción mantiene `splits`; debe corregirse a `desdoblamientos`: `**eventos** — dividendos, desdoblamientos, intereses…`\n- **Terminología obligatoria — “historical replay”:** El glosario exige `historical replay → repetición histórica`. La traducción dice `reproducción histórica`; debe corregirse a `repetición histórica`.\n- **Terminología obligatoria — “scheduler”:** El glosario exige `scheduler → planificador`. La traducción usa `Programador de datos de mercado`; debe corregirse a `Planificador de datos de mercado`, manteniendo intacto el ancla `../../admin/settings.md#market-data-scheduler`.\n- **Terminología obligatoria — “Chart Settings”:** El glosario exige `chart settings → ajustes del gráfico`. La traducción usa `[Configuración de gráficos](../fx/chart-settings.md)`; debe corregirse a `[Ajustes del gráfico](../fx/chart-settings.md)`.\n- **Gramática/ colocación:** `con un enlace **Transacciones** filtrado a ese activo` suena poco natural. Debe ser `con un enlace **Transacciones** filtrado por ese activo`.\n- **Gramática/ colocación:** `una posición cerrada hasta un remanente insignificante` no refleja bien “closed down to a negligible leftover”. Debe ser `una posición reducida a un remanente insignificante`.\n- **Redundancia/ claridad:** `la lista comienza solo con activos **Activos**` es redundante y confuso. Debe ser `la lista comienza mostrando solo los **Activos**`.\n- **Coherencia de acción/UI:** La acción se describe como `fusiona un duplicado...`, pero la etiqueta es `**Combinar con…**`. Para mantener coherencia, conviene usar `**Fusionar con…** — fusiona un duplicado...`.\n- **Claridad:** `de 1S a 5A, que encaje en el rango` puede mejorarse como `de 1S a 5A, que quepa dentro del rango`.\n</improvements>\n</translation_critique>",
         "structural_diff": "",
         "structural_issues": 0,
-        "elapsed_s": 213.1
+        "elapsed_s": 213.1,
+        "stamped_at": "2026-10-15T13:50:51.316122+00:00",
+        "stamped_by": "translate-stamp"
       }
     }
   },

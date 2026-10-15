@@ -33,7 +33,7 @@
     "cashBalances": "Cash Balances",
     "noCashBalances": "No cash positions",
     "confirmDelete": "Are you sure you want to delete this broker?",
-    "confirmDeleteWithTransactions": "This broker has {n} transactions. Force delete will remove all transactions. Continue?",
+    "confirmDeleteWithTransactions": "This broker has {n} transactions. Force delete will remove all of them. Assets this broker transferred to other brokers, shared ones included, stay there as an opening position at their transfer cost: those brokers' gain will also count what the assets gained before the transfer. Cash transfers with other brokers become deposits or withdrawals there. Continue?",
     "createFailed": "Failed to create broker",
     "updateFailed": "Failed to update broker",
     "assets": "{n} asset(s)",

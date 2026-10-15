@@ -11,6 +11,7 @@ Provides shared utilities for all CLI modules:
 """
 
 import os
+import re
 import secrets
 import socket
 import subprocess
@@ -151,6 +152,43 @@ def _load_project_dotenv() -> None:
         os.environ.setdefault(name, value)
 
 
+#: What a test lane keeps of the developer's configuration (.env or shell): its port and the production one it must stay
+#: away from, the production data directory, the bind address, the log level, the version a release job froze for its
+#: gallery, and the server workers of Playwright's webServer. Every LIBREFOLIO_TEST_* name is kept too: the runner's
+#: and the tests' own (data directory, mode, lane id, startup timeout…). Every other setting of the instance
+#: (secrets, profile, block, mail, accounts, plugins…) takes its default in a lane: configure_test_runtime drops it.
+TEST_LANE_KEEPS = frozenset({"PORT", "TEST_PORT", "LIBREFOLIO_DATA_DIR", "HOST", "LOG_LEVEL", "LIBREFOLIO_LOG_LEVEL", "LF_APP_VERSION", "LIBREFOLIO_SERVER_WORKERS"})
+TEST_LANE_KEPT_PREFIX = "LIBREFOLIO_TEST_"
+# A variable line of .env.example, commented out or not: «NAME=…» or «# NAME=…».
+_ENV_EXAMPLE_VARIABLE = re.compile(r"^(?:#\s*)?([A-Z_][A-Z0-9_]*)=")
+
+
+def kept_in_a_test_lane(name: str) -> bool:
+    """Whether a test lane keeps ``name`` from the developer's configuration: ``TEST_LANE_KEEPS`` or ``LIBREFOLIO_TEST_*``."""
+    return name in TEST_LANE_KEEPS or name.startswith(TEST_LANE_KEPT_PREFIX)
+
+
+def documented_instance_variables() -> frozenset[str]:
+    """Every variable ``.env.example`` documents, commented out or not: the configuration of an instance.
+
+    Empty when the file cannot be read (the Docker image ships it as ``.env``, and runs no test lane).
+    """
+    try:
+        lines = (get_project_root() / ".env.example").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return frozenset()
+    return frozenset(match.group(1) for line in lines if (match := _ENV_EXAMPLE_VARIABLE.match(line)))
+
+
+def _test_lane_drops() -> set[str]:
+    """The names configure_test_runtime removes, whatever their origin (.env or shell): every documented variable, the
+    instance's secrets and every ``LIBREFOLIO_*`` name in the environment, but those ``kept_in_a_test_lane``."""
+    from backend.app.config import INSTANCE_TRUST_SECRETS  # noqa: PLC0415 — keep bootstrap-only CLI commands stdlib-only
+
+    names = documented_instance_variables() | set(INSTANCE_TRUST_SECRETS) | {name for name in os.environ if name.startswith("LIBREFOLIO_")}
+    return {name for name in names if not kept_in_a_test_lane(name)}
+
+
 def resolve_data_dir(value: str | os.PathLike[str]) -> Path:
     """Resolve a configured data directory relative to the project root."""
     raw = os.fspath(value).strip()
@@ -243,16 +281,17 @@ def configure_test_runtime(
         raw_data_dir = _configured_env_value("LIBREFOLIO_TEST_DATA_DIR") or DEFAULT_TEST_DATA_DIR
     resolved_data_dir = resolve_data_dir(raw_data_dir)
 
-    from backend.app.config import INSTANCE_TRUST_SECRETS, validate_test_data_dir  # noqa: PLC0415 — keep bootstrap-only CLI commands stdlib-only
+    from backend.app.config import validate_test_data_dir  # noqa: PLC0415 — keep bootstrap-only CLI commands stdlib-only
 
     resolved_data_dir = validate_test_data_dir(
         resolved_data_dir,
         production_data_dir=get_data_dir(test_mode=False),
     )
 
+    # A test lane runs on the instance's defaults: no setting of the developer's .env or shell reaches it, only what
+    # kept_in_a_test_lane() keeps and what the runner sets below. Other keys of .env (not LibreFolio's) stay.
     _load_project_dotenv()
-    # A test lane uses secrets of its own, never the instance's
-    for name in INSTANCE_TRUST_SECRETS:
+    for name in _test_lane_drops():
         os.environ.pop(name, None)
     os.environ["TEST_PORT"] = str(resolved_port)
     os.environ["LIBREFOLIO_TEST_DATA_DIR"] = str(resolved_data_dir)

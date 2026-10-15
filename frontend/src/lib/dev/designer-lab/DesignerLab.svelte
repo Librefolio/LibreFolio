@@ -6,7 +6,7 @@
     import ColorEditor from './ColorEditor.svelte';
     import ContrastPanel from './ContrastPanel.svelte';
     import PickedElementPanel from './PickedElement.svelte';
-    import {appVars, matchesSearch, paletteFamilies, valueGroups, type ValueGroup} from './catalogView';
+    import {appVars, editTarget, matchesSearch, paletteFamilies, valueGroups, type ValueGroup} from './catalogView';
     import {applyNow} from './client';
     import {contrastRows} from './contrast';
     import {buildExport, downloadText, parseImport, renderMarkdown, renderSummary, type LabExport} from './export';
@@ -303,14 +303,15 @@
             {:else if tab === 'palette'}
                 <section class="families">
                     {#each families as f (f.family)}
-                        {@const entries = f.entries.filter((e) => (!pickFilter || pickFilter.vars.has(e.var)) && matchesSearch(query, [e.var, ...Object.keys(e.classes)]))}
+                        {@const entries = f.entries.filter((e) => (!pickFilter || pickFilter.vars.has(e.var)) && matchesSearch(query, [e.var, e.role ?? '', ...Object.keys(e.classes)]))}
                         {#if entries.length}
                             <div class="family">
                                 <h3>{f.family}</h3>
                                 <div class="chips">
                                     {#each entries as e (e.var)}
-                                        <button type="button" class="chip" class:modified={changed.has(`css-var:${e.var}`)} onclick={() => select('css-var', e.var)} data-testid="lab-item-var-{e.var}" title={e.var}>
-                                            <span class="swatch" style:background={`var(${e.var})`}></span>
+                                        {@const target = editTarget(e)}
+                                        <button type="button" class="chip" class:modified={changed.has(`css-var:${target}`)} onclick={() => select('css-var', target)} data-testid="lab-item-var-{e.var}" data-target={target} title={e.role ? `${e.var} → ${e.role}` : e.var}>
+                                            <span class="swatch" style:background={`var(${target})`}></span>
                                             <span>{e.shade}</span>
                                             <span class="muted">{e.uses}</span>
                                         </button>

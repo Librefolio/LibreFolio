@@ -9,6 +9,7 @@ These Playwright tests cover fundamental UI components that are used across the 
 | Test Suite | Description |
 |------------|-------------|
 | **Authentication** | Login, registration, logout, session persistence |
+| **Account links** | The invitation and password-reset pages, `/invite` and `/reset-password` (`auth-links`) |
 | **Settings** | Profile editing, preferences tabs, password change |
 | **Files** | File upload, file list, drag & drop, file deletion |
 | **Select Components** | `SearchSelect`, `SimpleSelect`, currency pickers |
@@ -38,6 +39,7 @@ These Playwright tests cover fundamental UI components that are used across the 
 ```
 frontend/e2e/
 ├── auth.spec.ts          # Login, register, logout
+├── auth-links.spec.ts    # Invitation and password-reset link pages
 ├── settings.spec.ts      # Settings tabs and profile
 ├── files.spec.ts         # File upload and management
 ├── select.spec.ts        # Dropdown and search select

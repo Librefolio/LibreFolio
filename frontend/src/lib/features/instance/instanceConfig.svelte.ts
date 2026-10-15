@@ -23,8 +23,8 @@ import {debug} from '$lib/debug';
 
 export type InstanceConfig = z.infer<typeof schemas.InstanceConfigResponse>;
 
-/** What the app assumes until the server answers, and when it cannot: a self-hosted instance. */
-export const DEFAULT_INSTANCE_CONFIG: InstanceConfig = {profile: 'selfhosted'};
+/** What the app assumes until the server answers, and when it cannot: a self-hosted instance where anyone may register. */
+export const DEFAULT_INSTANCE_CONFIG: InstanceConfig = {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}};
 
 export interface LoadInstanceConfigOptions {
     /** Ask the server again even if it already answered on this page load. */

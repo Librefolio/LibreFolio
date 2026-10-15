@@ -5,7 +5,7 @@
 !!! tip "Where to run the commands"
 
     - **Host installation**: in the Pipenv environment, with the `pipenv run` prefix used on this page, or after `pipenv shell`.
-    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`). No `pipenv run` there: the image installs the dependencies globally. User commands, `db current` and `db check` work there; `db upgrade` and `db downgrade` do not, as they need the server stopped ([Apply Migrations](#apply-migrations)). Development commands such as `test` are not part of the image ([details](docker_advanced.md#docker-exec)).
+    - **Docker**: in the running container, with `docker compose exec librefolio python dev.py <command>` (from a source checkout, `./dev.py docker exec <command>`, which runs it as the server's user instead of root). No `pipenv run` there: the image installs the dependencies globally. User commands, `db current` and `db check` work there; `db upgrade` and `db downgrade` do not, as they need the server stopped ([Apply Migrations](#apply-migrations)). Development commands such as `test` are not part of the image ([details](docker_advanced.md#docker-exec)).
 
 ---
 
@@ -63,8 +63,29 @@ pipenv run ./dev.py user create <username> <email> <password> --role user
 pipenv run ./dev.py user list
 ```
 
-- 👑 `user create` makes an **administrator** unless you add `--role user`, which makes a regular account. A person can also get a regular account with **Register here** on the login page, when registration is open in the [Global Settings](settings.md).
+- 👑 `user create` makes an **administrator** unless you add `--role user`, which makes a regular account. People can also create their own account: with **Register here** on the login page while **Registration** is **Open**, or with an [invitation link](#invite) (see [Who Can Sign Up](settings.md#registration)).
 - 🔒 The password needs at least 8 characters, with an upper-case letter, a lower-case letter, a digit and a symbol.
+- 📏 When the instance has reached its [user limit](configuration.md#user-limit), `user create` warns `The instance is at its limit (LIBREFOLIO_MAX_USERS: 5 of 5 places taken): the command line creates the account anyway`, then creates it: the command line is how you go past the limit.
+
+### ✉️ Invite Someone {: #invite }
+
+```bash
+# An invitation link for a regular account
+pipenv run ./dev.py user invite
+
+# An invitation for an administrator, with a note of whom it is for
+pipenv run ./dev.py user invite --admin --email anna@example.com
+```
+
+The command prints a link that works once, for 7 days. Send it to the person: they open it and create their account, with the username, email and password they choose ([what they see](../user/getting-started.md#invitation-link)).
+
+- 👑 `--admin` makes the new account an administrator; without it, the account is a regular one.
+- ✉️ `--email` is only a note of whom the invitation is for: the person can sign up with another address.
+- 🌐 With [`LIBREFOLIO_PUBLIC_URL`](configuration.md#accounts) set, the link is complete, such as `https://librefolio.example.com/invite#token=…`. Without it, the command prints the path only, `/invite#token=…`, and reminds you to put the address of your server in front of it, such as `http://192.168.1.10:6040`. If the variable is set but is not an `http://` or `https://` address, the reminder says `LIBREFOLIO_PUBLIC_URL is not valid (…)` instead, with the reason.
+- 🔒 The secret part of the link comes after `#`: browsers never send that part to the server, so it does not end up in server or proxy logs. Send the link whole.
+- 🚪 Invitations work while **Registration** is **Open** or **By invitation**. While it is **Closed**, the command stops with the error `Registration is disabled: invitations cannot be created` and exits with `1`, and the links already sent do not work either.
+- 📏 An invitation takes a place of the [user limit](configuration.md#user-limit) until it is used or revoked, or expires. At the limit, the command warns, then creates the invitation anyway.
+- ⏳ There is no command to cancel an invitation: a link nobody used stops working after 7 days. An administrator can revoke it sooner through the API: `GET /api/v1/users/invites` lists the pending invitations, `DELETE /api/v1/users/invites/<id>` revokes one.
 
 ### 🔑 Reset a Password or Lock an Account
 
@@ -79,7 +100,20 @@ pipenv run ./dev.py user activate <username>
 
 - ⏱️ A reset ends the sessions already open: every device signed in to the account is signed out at its next request. To lock someone out for good, deactivate the account: it is refused from its next request, and activating it again does not bring its old sessions back.
 - 👑 `deactivate` refuses the last active administrator: it stops with the error `User '<username>' is the last active administrator: promote or activate another administrator first` and exits with `1`.
+- 📏 When the instance has reached its [user limit](configuration.md#user-limit), `activate` of a deactivated account warns `… the command line reactivates the account anyway`, then reactivates it.
 - 💬 The app's **Forgot Password?** screen shows this command for both installations: `docker compose exec librefolio python dev.py user reset …` for Docker, and `./dev.py user reset …` for a host installation, to run after `pipenv shell` or with `pipenv run` in front.
+
+### 🔗 Send a Password-Reset Link {: #reset-link }
+
+```bash
+pipenv run ./dev.py user reset-link <username>
+```
+
+Instead of choosing a new password for someone with `user reset`, send them this link: they open it and choose the new password themselves ([what they see](../user/getting-started.md#password-reset-link)).
+
+- ⏱️ The link works once, for 30 minutes. A new link for the same account cancels the earlier ones.
+- 🚪 Once the new password is set, every device signed in to the account is signed out, as with `user reset`. Creating the link signs nobody out.
+- 🌐 As for [invitations](#invite), the link is complete when `LIBREFOLIO_PUBLIC_URL` is set, and the path only (`/reset-password#token=…`) when it is not.
 
 ### 👑 Grant or Remove Administrator Rights
 
@@ -89,6 +123,18 @@ pipenv run ./dev.py user demote <username>
 ```
 
 `demote` refuses the last active administrator: it stops with the error `User '<username>' is the last active administrator: promote another user first` and exits with `1`. A demotion signs the account out of every device.
+
+### 🧭 Restart the Guides of a User {: #reset-onboarding }
+
+```bash
+# Every guide, the Welcome setup included
+pipenv run ./dev.py user reset-onboarding <username>
+
+# One guide only
+pipenv run ./dev.py user reset-onboarding <username> --flow intro_tour
+```
+
+The next time the user opens LibreFolio, the Welcome setup and the guides start again, as on their first visit; their data and preferences stay as they are. `--flow` restarts one guide only: `pipenv run ./dev.py user reset-onboarding --help` lists the names, such as `welcome`, `intro_tour` or `import_guide`.
 
 ---
 
@@ -123,10 +169,22 @@ Right after the migrations, every start also runs the **post-migration fixes**: 
 - ✅ `Post-migration fixes applied and verified`: a repair was made. On a large database that start is slower, once.
 - ⚠️ `Post-migration fix failed`: the database was left as it was and the server started normally. The warning gives the error and the copy of the database kept next to it until you delete it, such as `app.db.pre-autoincrement-20261008T101500Z.bak`. The fix is tried again at the next start.
 - 🩺 `Post-migration fixes skipped`: the copy could not be made, or the database fails SQLite's integrity check. Nothing was changed.
+- 🔗 `Foreign key violations already in the database, left as they are`: the database holds references to rows that no longer exist, listed in the warning. The fixes leave them alone and still run: a fix fails only on a broken reference it would add itself.
 
 The empty file `app.db.post-migration.lock`, next to the database, makes the runs take turns when several workers start together: leave it in place.
 
 The first fix, **`autoincrement`**, makes sure the id of a deleted user, broker, asset, transaction, FX conversion route or asset event is never given to a new one. While converting a database, it deletes the report folders of brokers that no longer exist, so that a new broker cannot inherit them.
+
+The second fix, **`orphan_pair_halves`**, repairs, once, the transfers that an earlier broker deletion left without their other half on the brokers that remain:
+
+- 📈 Securities received from the deleted broker become an opening position at their transfer cost, starting on the transfer date. That broker's capital then counts them at that cost instead of their market value on arrival, so its gain also counts what they gained before the transfer. When no cost was recorded, they stay without one and the app reports an acquisition without a purchase cost: enter the cost in the transaction.
+- 💶 Cash transfers with the deleted broker become deposits or withdrawals: capital and gain do not change.
+- ⏳ Transfers that sent securities **to** the deleted broker are left as they are for now: the log lists them at every start.
+
+The fix **`event_types`** repairs, once, the asset events stored with a type LibreFolio does not know, such as `dividend` or `dividendo` written by hand in a CSV file. Until now such an event made the whole list of that asset's events fail to load, so none of them was shown:
+
+- ✅ A type that only differs in letter case or spaces (`dividend`, ` Split `) is corrected.
+- 🗑️ An event whose type is still unknown is deleted. A transaction linked to it stays, without its linked event: link it again to the right event if you need to.
 
 ??? tip "⌨️ Run the fixes by hand — to preview them or retry a failed one"
 
@@ -141,6 +199,8 @@ The first fix, **`autoincrement`**, makes sure the id of a deleted user, broker,
     ```
 
     The script prints each fix as `clean` (nothing to do), `would_apply` (dry run), `applied` or `failed`, with the orphan broker folders, a kept copy and any error, and exits with `1` when something failed. `--db PATH` and `--data-dir PATH` point it at another database or data directory.
+
+    To see what `orphan_pair_halves` will change on your database, preview it before the first start of the new version: `--dry-run` prints `Fix orphan_pair_halves: would_apply` when there is something to repair, and a warning lists the transactions by id, grouped by conversion (such as `TRANSFER->ADJUSTMENT`), with those that will stay without a cost and the transfers left as they are. The script also prints, on the console, what the server would log: the warning and, on a real run, one line per transaction changed (with `LOG_LEVEL` at `INFO`, the default). It writes no log file: keep its output if you want a record of a repair made by hand.
 
 🔗 How the fixes work inside: [Database Schema — Post-migration fixes](../developer/architecture/database/index.md#post-migration-fixes).
 

@@ -80,7 +80,6 @@
     },
     "globalSettingNames": {
       "session_ttl_hours": "Session Duration",
-      "enable_registration": "Enable Registration",
       "require_email_verification": "Require Email Verification",
       "max_file_upload_mb": "Max File Upload Size",
       "default_language": "Default Language",
@@ -89,11 +88,11 @@
       "scheduler_history_sync_times": "History Sync Times",
       "scheduler_history_sync_days": "History Sync Days",
       "scheduler_history_sync_horizon_days": "Lookback Horizon",
-      "scheduler_enabled": "Scheduler Enabled"
+      "scheduler_enabled": "Scheduler Enabled",
+      "registration_mode": "Registration"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "How long a user session remains valid before requiring re-login",
-      "enable_registration": "Allow new users to create accounts",
       "require_email_verification": "Require email verification for new accounts",
       "max_file_upload_mb": "Maximum file size allowed for uploads",
       "default_currency": "Default currency for new users",
@@ -103,7 +102,8 @@
       "scheduler_current_price_frequency_minutes": "How often current prices are refreshed (in minutes)",
       "scheduler_history_sync_times": "Times of day when historical data is synced (in the scheduler timezone)",
       "scheduler_history_sync_days": "Days of the week when historical data is synced",
-      "scheduler_history_sync_horizon_days": "How many days back to look for missing historical data"
+      "scheduler_history_sync_horizon_days": "How many days back to look for missing historical data",
+      "registration_mode": "Who can create an account: anyone (open), only people with an invitation link (by invitation), or nobody (closed)."
     },
     "globalSettingUnits": {
       "session_ttl_hours": "hours",
@@ -216,6 +216,12 @@
       "confirmClearTitle": "Clear cache {name}?",
       "confirmClearAllTitle": "Clear all caches?",
       "confirmWarning": "After clearing, the next fetch of this data will experience slowdowns comparable to a server restart."
-    }
+    },
+    "registrationModes": {
+      "open": "Open",
+      "invite": "By invitation",
+      "disabled": "Closed"
+    },
+    "lockedByEnv": "Set on the server by {variable}: change it there."
   }
 }

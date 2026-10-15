@@ -5,7 +5,7 @@ This guide is for administrators who customize their Docker deployment, build th
 LibreFolio comes with two Compose files:
 
 - **`docker-compose.prod.yml`** runs the official image from GHCR: the installation guide saves it as `docker-compose.yml`.
-- **`docker-compose.yml`**, in the repository, runs an image you build yourself with `./dev.py docker build`, and also maps the test port `6041`.
+- **`docker-compose.yml`**, in the repository, runs an image you build yourself with `./dev.py docker build`.
 
 ## ⚠️ Prerequisites
 
@@ -52,10 +52,10 @@ In Docker, `.env` reaches the container through `env_file`, and the `environment
 
 - 🏷️ **`image`**: the official `ghcr.io/librefolio/librefolio:latest` (production file) or your local `librefolio:latest` (repository file); `LIBREFOLIO_IMAGE` in `.env` picks another tag.
 - 🏗️ **`build`** (repository file only): builds the root `Dockerfile` with the `UID`, `GID` and `DOCS_VARIANT` arguments.
-- 🔌 **`ports`**: host `${PORT:-6040}` → container `6040`; the repository file also maps `${TEST_PORT:-6041}` → `6041` for [test mode](#test-mode).
+- 🔌 **`ports`**: host `${PORT:-6040}` → container `6040`, the only port the image listens on. `PORT` chooses the host side; inside the container the server always listens on `6040`.
 - 📂 **`volumes`**: the bind mount `./LibreFolio-data` → `/app/backend/data/prod-docker`.
 - 📝 **`env_file: .env`**: loads your configuration (copied from `.env.example`).
-- 🌍 **`environment`**: the Docker-specific `LIBREFOLIO_DATA_DIR` (container path) and `HOST=0.0.0.0`; leave them as they are.
+- 🌍 **`environment`**: the Docker-specific `LIBREFOLIO_DATA_DIR` (container path), `HOST=0.0.0.0` and `PORT=6040`; leave them as they are. Inside the container, `PORT=6040` replaces the host port your `.env` may set, so the `dev.py` commands you run there ([`docker exec`](#docker-exec)) look for the server on the port it listens on: `db upgrade`, for example, sees it running and refuses to start.
 - 🩺 **`healthcheck`**: polls `GET /api/v1/system/health` every 30 seconds.
 
 !!! tip "📈 Monitoring LibreFolio: `/api/v1/system/ready`"
@@ -73,7 +73,7 @@ A **bind mount** directory next to the Compose file, holding the SQLite database
 
 ### 👤 User & Permissions
 
-The container starts as root only to hand the data directory over to the LibreFolio user, then runs the server as that **non-root** user: files it creates in `LibreFolio-data/` belong to that UID/GID on the host. The hand-over runs at every start and covers everything in the directory.
+The container starts as root only to hand the data directory over to the LibreFolio user, then runs the server as that **non-root** user: files it creates in `LibreFolio-data/` belong to that UID/GID on the host. The hand-over runs at every start and covers everything in the directory. Commands run with `./dev.py docker exec` use the same UID/GID ([details](#docker-exec)).
 
 That UID/GID comes from the `UID` and `GID` **build arguments**: the image keeps them as `LIBREFOLIO_UID` and `LIBREFOLIO_GID`, which the entrypoint reads at every start. The official GHCR image is built with `1000:1000`. `./dev.py docker build` uses the ids of the user who runs it, whatever `.env` says, while `docker compose build` reads `UID` and `GID` from `.env` (default `1000`): set them to match the host user, or dedicated user, that should own the data files:
 
@@ -182,14 +182,14 @@ Without a checkout, the plain commands do the day-to-day work: `docker compose u
 
     The **first build requires internet access** (or a pre-warmed cache). Once the network is back, run the build again; `./dev.py cache js` refreshes the cache by hand (`--force` re-downloads everything).
 
-    **The frontend is a debug build.** The image must ship the production build of the web app. If `frontend/build/` was last built in debug mode (for example by `./dev.py server --test`, `./dev.py server --debug` or the test runner) or instrumented for coverage, the image build stops with an error like:
+    **The frontend is a debug build.** The image must ship the production build of the web app. `./dev.py docker build` sees to it: it rebuilds `frontend/build/` in production mode when the last build was a debug one (for example by `./dev.py server --test`, `./dev.py server --debug` or the test runner), when its sources have changed, or when it was not built for this version ([details](../developer/dev_workflow.md#docker-build-steps)). An image built directly with `docker build` or `docker compose build` skips that step: if `frontend/build/` was last built in debug mode or instrumented for coverage, the image build stops with an error like:
 
     ```text
     ERROR: /build is not a production frontend build: it is a debug build (.build-debug = 1)
     Rebuild it with './dev.py front build', then build the image again.
     ```
 
-    Run `./dev.py front build`, then build the image again: `./dev.py docker build` rebuilds the frontend on its own only when its sources have changed, not when the last build was a debug one.
+    Run `./dev.py front build`, then build the image again, or build it with `./dev.py docker build`.
 
 ??? tip "🖼️ Building a full image with the documentation screenshots"
 
@@ -197,21 +197,28 @@ Without a checkout, the plain commands do the day-to-day work: `docker compose u
 
     ```bash
     ./dev.py mkdocs gallery   # generate the screenshots
-    ./dev.py front build      # the gallery leaves a debug frontend build: rebuild it for production
     ./dev.py mkdocs build     # rebuild the documentation with the screenshots
-    ./dev.py docker build     # build the full image
+    ./dev.py docker build     # build the full image; it rebuilds for production the debug frontend the gallery leaves
     ```
 
     `./dev.py mkdocs gallery` requires a fully installed environment (with `pipenv`) and Playwright browsers. It starts its own test server and populates the test database automatically (`--no-populate` skips reseeding). Gallery generation takes a few minutes.
 
 ### 📡 `docker exec` — Running Commands Inside the Container {: #docker-exec }
 
-`./dev.py docker exec <cmd>` runs a `dev.py` command inside the **running** container: it is the same as `docker compose exec librefolio python dev.py <cmd>`. For example, to manage users:
+`./dev.py docker exec <cmd>` runs a `dev.py` command inside the **running** container, as the same user as the server: the numeric `LIBREFOLIO_UID:LIBREFOLIO_GID` of the image (see User & Permissions above), not root. Files a command creates in `LibreFolio-data/` therefore belong to that user straight away, like the server's own. For example, to manage users:
 
 ```bash
 ./dev.py docker exec user create admin admin@example.com Pass123!
 ./dev.py docker exec user list
 ```
+
+Behind the scenes, `./dev.py docker exec user list` runs the line below, which also works without a checkout. `gosu`, which the entrypoint uses too, switches to the image's ids before `dev.py` starts:
+
+```bash
+docker compose exec librefolio sh -c 'exec gosu "${LIBREFOLIO_UID:-1000}:${LIBREFOLIO_GID:-1000}" python dev.py "$@"' sh user list
+```
+
+A plain `docker compose exec librefolio python dev.py <cmd>` runs the command as root instead: what it creates in `LibreFolio-data/` belongs to root until the container's next start, when the entrypoint hands the directory back to the image's user.
 
 In the image, `user`, `db` and `info` work. The development commands (`test`, `i18n`, `mkdocs translate` and `mkdocs translate-validate`) are listed too, but they only answer that they are *not available in this installation*: the image ships the application, not the development tree.
 
@@ -253,14 +260,9 @@ Each fix is `clean` (nothing to do), `would_apply` (dry run), `applied` or `fail
 
 ## 🧪 Test Mode
 
-The repository's `docker-compose.yml` exposes **two ports**:
+The image has no test mode: it listens only on `6040`, the production server started with the container, and both Compose files publish only that port. The test server (`./dev.py server --test`, on port `6041` by default) is a developer tool that runs from a source checkout, on the host. Its database, `backend/data/test/sqlite/app.db` by default, is separate from `LibreFolio-data/`: `./dev.py test db populate --force` deletes and recreates it with mock data.
 
-| Port | Purpose | Database |
-|------|---------|----------|
-| `6040` | Production server, started with the container | `LibreFolio-data/sqlite/app.db` (persistent bind mount) |
-| `6041` | Test server, a developer tool | None: the test server does not start in the container. In a development checkout it uses `backend/data/test/sqlite/app.db` by default, which `./dev.py test db populate --force` deletes and recreates with mock data |
-
-The test server is meant for developers: how to start it, and why it does not start with the current image, is in the [Developer Workflow](../developer/dev_workflow.md#docker-test-mode). `docker-compose.prod.yml` has no test port; in the repository's file, remove the `TEST_PORT` line from `ports:` to close it.
+How to start it, and why it does not start in the container, is in the [Developer Workflow](../developer/dev_workflow.md#docker-test-mode).
 
 ## 🏭 Production Considerations
 
@@ -272,10 +274,9 @@ The most common changes:
 |---|------|-----|
 | (1) | Match host UID/GID | Rebuild the image with them: run `./dev.py docker build` as the user who should own the files, or set `UID=1001` and `GID=1001` in `.env` and run `docker compose build` |
 | (2) | Change production port | Set `PORT=3000` in `.env` |
-| (3) | Disable test port | Remove the `TEST_PORT` line from `ports:` |
-| (4) | Custom data path | Change bind mount: `./my-data:/app/backend/data/prod-docker` |
-| (5) | All configuration | Edit `.env` file (copied from `.env.example`) |
-| (6) | Run another image tag | Set `LIBREFOLIO_IMAGE` in `.env`, for example `LIBREFOLIO_IMAGE=ghcr.io/librefolio/librefolio:1.1.0` |
+| (3) | Custom data path | Change bind mount: `./my-data:/app/backend/data/prod-docker` |
+| (4) | All configuration | Edit `.env` file (copied from `.env.example`) |
+| (5) | Run another image tag | Set `LIBREFOLIO_IMAGE` in `.env`, for example `LIBREFOLIO_IMAGE=ghcr.io/librefolio/librefolio:1.1.0` |
 
 The first account created in the browser automatically becomes the administrator: no command needed.
 
@@ -284,7 +285,7 @@ The first account created in the browser automatically becomes the administrator
     ```yaml
     services:
       librefolio:
-        image: ${LIBREFOLIO_IMAGE:-librefolio:latest}  # (6) Built by ./dev.py docker build
+        image: ${LIBREFOLIO_IMAGE:-librefolio:latest}  # (5) Built by ./dev.py docker build
         build:
           context: .
           args:
@@ -293,17 +294,17 @@ The first account created in the browser automatically becomes the administrator
             DOCS_VARIANT: ${DOCS_VARIANT:-full}  # light = no documentation screenshots
         container_name: librefolio
         # No 'user:' directive — entrypoint starts as root, fixes permissions,
-        # then drops to 'librefolio' user via gosu (same pattern as postgres/redis).
+        # then drops to the numeric LIBREFOLIO_UID:LIBREFOLIO_GID via gosu, like ./dev.py docker exec.
         restart: unless-stopped
         ports:
           - "${PORT:-6040}:6040"           # (2) Production port — change via PORT in .env
-          - "${TEST_PORT:-6041}:6041"      # (3) Test server port (optional)
         volumes:
-          - ./LibreFolio-data:/app/backend/data/prod-docker  # (4) Persistent data (bind mount)
-        env_file: .env                     # (5) All config from .env file
+          - ./LibreFolio-data:/app/backend/data/prod-docker  # (3) Persistent data (bind mount)
+        env_file: .env                     # (4) All config from .env file
         environment:
           - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker  # Docker-specific override
           - HOST=0.0.0.0
+          - PORT=6040                      # The container's port; (2) sets the host side
         healthcheck:
           test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
           interval: 30s
@@ -312,7 +313,7 @@ The first account created in the browser automatically becomes the administrator
           retries: 3
     ```
 
-    `docker-compose.prod.yml` has the same service without `build:` and without the test port, and its image defaults to `ghcr.io/librefolio/librefolio:latest`.
+    `docker-compose.prod.yml` has the same service without `build:`, and its image defaults to `ghcr.io/librefolio/librefolio:latest`.
 
 ### 🔒 2. Security and Exposure (Tailscale and Reverse Proxy)
 
