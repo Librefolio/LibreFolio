@@ -140,7 +140,8 @@ Step 1's broker scope comes from `_get_scope_broker_ids()`: every broker the use
 Service converts:
 
 - lot opening cost and opening unit price
-- closure proceeds / realized P&L
+- event-history opening rows (`BUY` / `ADJUSTMENT_IN`, `_build_opening_and_split_rows()`): the opening unit price, from the **lot's** currency at the opening date — a `BUY`'s own currency, the cost basis's for an `ADJUSTMENT_IN` priced by its `cost_basis_override` (see `FifoLot.currency` in [FIFO Lot Engine](fifo_lot_engine.md)); for these rows `collect_fx_needs()` registers the lot's currency on every opening event
+- closure proceeds / realized P&L, from the lot's currency at the closure date — an `ADJUSTMENT_OUT`'s value handed over at cost included
 - Gantt fragment unit prices
 - native resolver marks from `build_asset_price_series()`
 - dividend / interest and FEE / TAX amounts, and the BUY / SELL amounts that weight the FEE / TAX split (economic-stage inputs)
@@ -150,7 +151,7 @@ Service converts:
 
 - **Daily valuation**: a mark whose rate is missing leaves that day unvalued, like a `MISSING` mark — `market_prices[date]` is `None` and the day has no price-history point. Only `estimated_mode` (an asset with no price at all) values an open lot at cost on such a day; see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback).
 - **Value and return histories** (`_lot_value_basis()` and `_lot_snapshot_on_date()`, shared by both builders): a lot whose original cost — or, for a SHORT, its proceeds — has no rate gets no point; a LONG lot's series stops the day before the first closure whose proceeds have no rate (`_closure_proceeds_prefix()` returns the converted prefix and that date). Same rule as the [WAC Lines](#wac-lines): a point that cannot be computed is omitted. Within an emitted point, the income, fee and tax fields that a degraded economic pool withholds — and the figures read from them — are `None` instead (see [Economic events and degraded pools](#degraded-economic-pools)).
-- **Performance history**: a BUY amount, an ADJUSTMENT-in's money (`_adjustment_native_cost()` / `adjustment_cash_flow_cost()`) or a SELL closure's proceeds without a rate set `invalid_external_flow_from`: ROI and TWRR are `None` from that date.
+- **Performance history**: a BUY amount, an ADJUSTMENT's money — an ADJUSTMENT-in's, or the cost an ADJUSTMENT-out with a cost basis hands over (`_adjustment_native_cost()` / `adjustment_cash_flow_cost()`) — or a SELL closure's proceeds without a rate set `invalid_external_flow_from`: ROI and TWRR are `None` from that date. `collect_performance_fx_needs()` registers each of those rates; for an ADJUSTMENT-out with a non-zero cost basis, `cost_basis_currency` (the asset's currency when empty) at the row's date.
 - **Lot summary**: `original_cost` and `opening_unit_price` are `None` when the rate at the opening date is missing; `realized_pnl` (`known_realized_pnl()`) and `cumulative_proceeds` (`known_cumulative_proceeds()`) are `None` when one closure's rate is missing — for a SHORT lot's proceeds, the opening-date rate. `total_value` (when the proceeds have no rate), `pnl`, `market_pnl`, `total_pnl`, `cash_yield`, `total_return`, `net_total_pnl`, `net_total_return` and `annualized_return` are `None` when one of their inputs is unknown — an amount above, or the income, fees or taxes a degraded economic pool withholds — and the estimated-at-cost branch values no lot without a converted cost.
 - **Gantt topology**: `GanttSegmentSchema.unit_price` is `None` when the rate at the fragment's `start_date` is missing.
 - **Economic events** (income, FEE, TAX): a missing rate on an event degrades its pool, and one on a trade can degrade a FEE / TAX pool that the trade weights; the figures a degraded pool feeds are withheld — see [Economic events and degraded pools](#degraded-economic-pools).
@@ -160,6 +161,8 @@ The misses are reported once, after every builder: `_report_gaps()` merges `miss
 The WAC lines do not go through `FxRateResolver`: `compute_average_costs()` converts each acquisition itself, at its own date.
 
 **Known limit (pre-existing).** The engine's `_close_position_piece()` (`financial_math/fifo/engine.py`) computes a closure's realized P&L from the sale's unit price minus the lot's, and its proceeds from the sale's unit price, with no conversion: a lot opened in one currency and closed by a sale in another mixes the two currencies, and the service converts the closure with the lot's currency.
+
+An ADJUSTMENT-out's cost basis does not mix them: `_handover_unit_price()` applies the cost only to a lot in its currency — a lot without a currency counts in the report currency, a cost basis without a currency in the lot's — and hands a lot in any other currency over at its own FIFO cost, realizing nothing on it: a declared fallback, until closures carry their own currency (see [Hand-over at cost](fifo_lot_engine.md#handover-at-cost)). The performance history reads the row instead, so its outflow is always the whole `|quantity| × cost_basis_override`, converted from the cost basis's currency.
 
 #### 🧾 Economic events and degraded pools {: #degraded-economic-pools }
 
@@ -418,7 +421,7 @@ and in `financial_math/lots/`:
 - `build_return_history()` — same continuity rule, plus `relative_return`
 - `build_price_history()` — truncates at closure date, no post-close points
 - `build_broker_wac_history()` / `build_cumulative_wac_history()` — WAC points read from the average-cost lines via `average_cost_points()` (see [WAC Lines](#wac-lines))
-- `build_performance_history()` — asset-wide ROI/TWRR from NAV + external cash flows
+- `build_performance_history()` — asset-wide ROI/TWRR from NAV + external cash flows. Money in: a BUY's amount and an ADJUSTMENT-in's money. Money out: a LONG SELL closure's proceeds and, for an ADJUSTMENT-out carrying a cost basis, the cost it hands over — `|quantity| × cost_basis_override`, converted from `cost_basis_currency` (the asset's currency when empty) at the row's date; the flow is read from the row, never from the `ADJUSTMENT_OUT` closures' proceeds. Transfer legs crossing the broker scope count at market value. An ADJUSTMENT-out without a cost basis is a quantity correction, never a flow. The units of an ADJUSTMENT-out leave at cost, so on a day the asset is quoted above that cost the gain they carried leaves with them — the same principle as an ADJUSTMENT-in valued at cost.
 
 Important nuance: `date_from` trims emitted rows only. Engine still starts from earliest in-scope asset transaction so FIFO state stays correct.
 

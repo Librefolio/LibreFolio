@@ -76,6 +76,14 @@ export function eventMarkerKind(event: {kind: string}): EventMarkerKind {
     return 'close';
 }
 
+/**
+ * The i18n key of a closure row's value: an outbound adjustment hands its units over at
+ * their cost (nothing was sold), every other closure brings proceeds.
+ */
+export function closureValueLabelKey(kind: string): string {
+    return kind === 'ADJUSTMENT_OUT' ? 'brokers.lots.modal.historyDetail.handedOverAtCost' : 'brokers.lots.modal.historyDetail.proceeds';
+}
+
 /** The subset of a custody slice needed to group it. */
 interface CustodySlice {
     // Optional to match the generated client (`broker_id?`); the redundant array arm is unwrapped.
