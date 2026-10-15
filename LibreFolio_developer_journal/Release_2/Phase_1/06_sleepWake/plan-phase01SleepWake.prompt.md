@@ -1364,3 +1364,19 @@ tool.
    > something still holds the server when the time is up, it ends anyway and its log says what was still running.
    > `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` changes the budget (`0`: no limit, as before). Docker waits 10 seconds by
    > default: if you raise the budget, give the container more time too (`stop_grace_period`).»
+6. Ingresso della parte 2. ✅ 2026-10-15
+
+   > **Note implementazione**: il coordinatore ha committato `fb3f98a0c` e `5b945a712`, poi ha fuso `dev_release2` a
+   > `f98c20f1b` (A6b, X CP10, J CP-4c, Y8, lo scatto di B): HEAD `7e491dd2e`, senza conflitti. Prove sulla
+   > revisione combinata, una alla volta con `nice -n 10`:
+   > - `services shutdown-budget` 188/188, `services app-lifecycle` 42/42;
+   > - `services shutdown-process` 7/7, con i tempi di prima (1,21, 1,30, 2,06, 0,67, 4,17 e 0,19 s);
+   > - `services signal-runtime` 6/6, `db post-migration` 41/41;
+   > - `check-orphans` verde: 128 spec, 428 file Vitest, 325 file backend;
+   > - porta 6186 libera, nessun server di prova rimasto.
+   >
+   > **Il filtro di X CP10 sul logging** (`utils/runtime/secret_masking.py`, il processore `mask_event_dict` e il
+   > filtro `SecretMaskingFilter`) maschera solo i segreti «in volo», che un `ContextVar` porta dentro una chiamata a
+   > un plugin. Senza segreti lascia l'evento com'è. Il thread del watchdog è un `threading.Thread` semplice, che non
+   > eredita il `ContextVar`, quindi il suo rapporto non cambia. La prova da capo a fondo è SDP-003: il rapporto del
+   > watchdog nomina ancora il thread bloccato, nell'uscita del server.
