@@ -50,6 +50,7 @@ class AdminUserRead(StrictModel):
     is_active: bool
     is_superuser: bool
     created_at: UTCDateTime
+    protected: bool = Field(..., description="Nobody may delete, deactivate or demote this account (the paying administrator of a managed instance)")
 
 
 class AdminUserListResponse(BaseListResponse[AdminUserRead]):
@@ -105,6 +106,39 @@ class InviteCreateResponse(StrictModel):
     token: str
     path: str = Field(..., description="The path of the page that takes the token, the token in the fragment")
     url: Optional[str] = Field(None, description="LIBREFOLIO_PUBLIC_URL followed by the path; null when the variable is not set")
+
+
+class BrokerDeletionItemRead(StrictModel):
+    """A broker that goes with the account, with its transactions."""
+
+    id: int
+    name: str
+    transactions: int
+
+
+class BrokerAccessItemRead(StrictModel):
+    """A broker that stays: only the account's access to it goes."""
+
+    id: int
+    name: str
+    role: str = Field(..., description="The account's role on it: OWNER, EDITOR or VIEWER")
+
+
+class AccountDeletionPreviewRead(StrictModel):
+    """What deleting the account would take with it, before anything is deleted."""
+
+    user_id: int
+    username: str
+    brokers_deleted: list[BrokerDeletionItemRead] = Field(..., description="The brokers the account is the last owner of: deleted with their transactions and report files")
+    brokers_left: list[BrokerAccessItemRead] = Field(..., description="The other brokers: only the account's access goes")
+    transfers_unpaired: int = Field(..., description="Transactions that stay but lose the other half of their transfer, which goes with a deleted broker")
+
+
+class AddressProbeIssued(StrictModel):
+    """A nonce for the address probe: send it to ``GET <address>/api/v1/auth/address-probe``."""
+
+    nonce: str
+    expires_at: UTCDateTime
 
 
 class OnboardingResetRequest(StrictModel):
