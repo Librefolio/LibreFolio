@@ -80,7 +80,6 @@
     },
     "globalSettingNames": {
       "session_ttl_hours": "Duración de Sesión",
-      "enable_registration": "Habilitar Registro",
       "require_email_verification": "Verificación Email Requerida",
       "max_file_upload_mb": "Tamaño Máx. Subida",
       "default_language": "Idioma Predeterminado",
@@ -89,11 +88,11 @@
       "scheduler_history_sync_times": "Horarios de Sincronización Histórica",
       "scheduler_history_sync_days": "Días de Sincronización Histórica",
       "scheduler_history_sync_horizon_days": "Horizonte de Recuperación",
-      "scheduler_enabled": "Planificador Activado"
+      "scheduler_enabled": "Planificador Activado",
+      "registration_mode": "Registro"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "Tiempo de validez de una sesión de usuario antes de requerir nuevo login",
-      "enable_registration": "Permitir que nuevos usuarios creen cuentas",
       "require_email_verification": "Requerir verificación de email para nuevas cuentas",
       "max_file_upload_mb": "Tamaño máximo de archivo permitido para subidas",
       "default_currency": "Divisa predeterminada para nuevos usuarios",
@@ -103,7 +102,8 @@
       "scheduler_current_price_frequency_minutes": "Frecuencia de actualización de precios actuales (en minutos)",
       "scheduler_history_sync_times": "Horas del día en que se sincronizan los datos históricos (en la zona horaria del planificador)",
       "scheduler_history_sync_days": "Días de la semana en que se sincronizan los datos históricos",
-      "scheduler_history_sync_horizon_days": "Cuántos días atrás buscar datos históricos faltantes"
+      "scheduler_history_sync_horizon_days": "Cuántos días atrás buscar datos históricos faltantes",
+      "registration_mode": "Quién puede crear una cuenta: cualquiera (abierto), solo quien tenga un enlace de invitación (por invitación) o nadie (cerrado)."
     },
     "globalSettingUnits": {
       "session_ttl_hours": "horas",
@@ -216,6 +216,12 @@
       "confirmClearTitle": "¿Vaciar la caché {name}?",
       "confirmClearAllTitle": "¿Vaciar todas las cachés?",
       "confirmWarning": "Después de vaciar, la próxima recuperación de estos datos sufrirá ralentizaciones comparables a un reinicio del servidor."
-    }
+    },
+    "registrationModes": {
+      "open": "Abierto",
+      "invite": "Por invitación",
+      "disabled": "Cerrado"
+    },
+    "lockedByEnv": "Lo define {variable} en el servidor: cámbialo allí."
   }
 }
