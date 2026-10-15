@@ -1,0 +1,467 @@
+# Piano — fase 01, Z · Sospensione e risveglio (F26, F07, C-49)
+
+> Workstream Z della 1.3.0 «Cloud-ready core». Piano generale: [`plan-phase01Release13.prompt.md`](../plan-phase01Release13.prompt.md)
+> (§4 «Z · Sospensione e risveglio», §5, §6, §9, §10 n. 10); stato vivo della fase: [README](../README.md); decisioni
+> del developer: [`decisioni-analisi-20261014.md`](../decisioni-analisi-20261014.md), punti 31–35; backlog:
+> [`BACKLOG_POST_1.2.md`](../../Phase_0/BACKLOG_POST_1.2.md), sezione «Z · Sospensione e risveglio (fase 01)».
+>
+> - **Sessione**: `Z - Sospensione e risveglio` (`d401e062`), agente `coordinated-workstream`. Coordinatore: «Release 1.3
+>   planning» (`928ffa97`).
+> - **Ramo**: `e-alfy-z-sospensione-e-risveglio`. Base dell'analisi `459131eb8`; poi `1e9e567f7` (avanzamento
+>   veloce del coordinatore, 15/10: riordino di X, W, J, A e H, lotti A–D dei colori, Designer Lab, 1.2.1); poi il merge
+>   di `dev_release2` a `8f1abf89e` dopo Z1 (`4618a2116`, 15/10: H CP6, X FE5b, E1, Y1, A5, commit dei colori).
+> - **Corsia**: porta 6186, data-dir `/tmp/librefolio-r13-z`. Preambolo:
+>   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6186 --data-dir /tmp/librefolio-r13-z <CATEGORIA> <AZIONE>`,
+>   una invocazione alla volta, con `nice`.
+>
+> **Autorizzazione del developer, alla lettera** (15/10 ~12:47, inoltrata dal coordinatore): «Sì: avvia tu Y (i due
+> tagli) e Z (Z6a subito, Z1 quando decido il 31)». Autorizzato ora: **Z6a** (prove su C-49, senza codice di prodotto).
+> Z1 aspetta il punto 31; i punti 32–35 servono ai lotti dopo.
+
+## Stato dei passi
+
+| Passo | Cosa | Stato |
+|---|---|---|
+| A | Analisi d'implementazione (sola lettura), inviata al coordinatore | ✅ 14/10 |
+| A2 | Riverifica dell'analisi sul codice di `1e9e567f7`, questo piano, la mia sezione del backlog | ✅ 15/10 |
+| Z6a | C-49: prove senza codice di prodotto (`npm ci` dal lock, `front build --debug`, tre gate nella mia corsia) | ⏳ passo 1 ✅ (15/10); i gate dopo la finestra delle dipendenze |
+| Z1 | Pausa degli aggiornamenti nel frontend (F26) | ✅ 15/10: commit `74d028ec6` (journal `a6199d0e7`); merge di base `4618a2116` con i cancelli d'ingresso verdi; FROZEN di ingresso al coordinatore |
+| Z2 | Attività dell'utente e sospensione su Fly (F26, backend) | ⏸ attende gli agganci di H (punto 32 deciso il 15/10) |
+| Z3 | Scheduler: recupero immediato al risveglio e lock condiviso con `wake-sync` (`next_wake_at` e jitter nel backlog, punto 33) | ⏸ attende lo scheduler spostato da H |
+| Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ⏸ attende gli agganci di H |
+| Z5 | «Aggiornamento prezzi…» | ⏸ attende l'area avvisi e la configurazione pubblica di H |
+| Z6b | C-49: la cura | ⏸ attende Z6a e il punto 35 |
+| Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | ⏸ attende il codice d'errore `RATE_LIMITED` di X |
+
+Checkpoint FROZEN a fine Z6a; poi un checkpoint per lotto.
+
+### A — Analisi ✅ (2026-10-14)
+
+> **Note implementazione**: analisi in sola lettura, inviata al coordinatore il 14/10 sera con le decisioni D1–D11.
+> Il developer ne ha raccolte cinque nel suo elenco: D2 → punto 31 (🔴, da decidere), D4 → 32, D7 → 33, D9 → 34,
+> D10 → 35.
+>
+> **Fuori pista**: l'app ha rinominato il ramo da `e-alfy-potential-sniffle` a `e-alfy-z-sospensione-e-risveglio`;
+> un riavvio dell'app ha interrotto il turno della pausa del 14/10 sera (nessun comando in corso, nessun file toccato);
+> l'approvazione del piano nella UI della sessione chiedeva di partire subito, ma vale l'autorizzazione inoltrata dal
+> coordinatore: Z1 non è partito.
+
+### A2 — Riverifica su `1e9e567f7` ✅ (2026-10-15)
+
+> **Note implementazione**: HEAD `1e9e567f7`, worktree pulito, porta 6186 libera. Rilette sul codice nuovo tutte le
+> righe citate (`grep`, `git diff -U0 459131eb8 HEAD`). I tre cicli sono gli stessi; R ha toccato
+> `assets/[id]/+page.svelte` in tre punti (r. 496, 2752, 3538) lontani dai cicli, che scendono di 10 righe. Il backend
+> è stato riordinato: scheduler in `services/platform/scheduler/`, asset in `services/assets/`, BRIM in
+> `services/brim/`, configurazione in `config/`; il lifespan e i middleware sono ancora in `main.py`. Nessuna run.
+
+## Analisi (aggiornata a `1e9e567f7`)
+
+### 1. Stato reale
+
+**Frontend.** Tre cicli, tutti nelle due pagine degli asset, nessun altro polling di rete (`SyncModalBase` conta in
+locale, `updateCheck` gira una volta al login con cache di un'ora, `static/sw.js` serve solo il fallback offline,
+nessun EventSource né WebSocket, SvelteKit senza `version.pollInterval`).
+
+| Ciclo | Dove | Ritmo | Guardie | Scheda nascosta |
+|---|---|---|---|---|
+| C1 lista | `routes/(app)/assets/+page.svelte:439-450` | subito, poi 30 s | `isHeadToday`, `liveAssetIdsKey` | nessun controllo |
+| C2 dettaglio, riepilogo | `routes/(app)/assets/[id]/+page.svelte:1481-1513` | subito, poi 30 s | `isHeadToday` | nessun controllo |
+| C3 dettaglio, grafico | stesso file `:1977-2083` | 60 s, primo dopo 5 s | provider assegnato | salta il giro, il timer resta acceso |
+
+- C3 non ha la guardia `isHeadToday`: chiede il prezzo anche su un intervallo passato, e `mergeChartPointsIncremental`
+  (`:2553`) non taglia sull'intervallo, quindi può aggiungere il punto di oggi a un grafico del passato (Z-1).
+- Tutti chiamano `POST /api/v1/assets/prices/current`, che scrive l'OHLC di oggi ed è una mutazione del portafoglio
+  (`lib/stores/portfolio/portfolioMutation.ts`): nel dettaglio sono tre scritture al minuto (Z-2). C1 e C2 passano da
+  `lib/services/livePriceService.ts`, C3 dal client zodios.
+- Stub dell'endpoint in `asset-detail`, `toolbar-width-sweep`, onboarding, `app-start-auth`, `fx-detail`;
+  `asset-list.spec.ts` e altri spec della categoria asset non lo stubbano e chiamano i provider veri (conta per C-49).
+  Nessuno spec avanza `page.clock` di dieci minuti o più.
+
+**Backend.**
+
+- Scheduler `services/platform/scheduler/`: giro di 60 s a passi di 5 s (`scheduler.py:129-132`), attesa iniziale di
+  5 s (`:104`), `am_i_leader()` sul loop (`:108`). Recupera già i giri persi: entro 5 s dall'avvio, entro 60 s da una
+  ripresa.
+- Lifespan in `main.py:243-334`: lo scheduler parte a `:307-308`; allo spegnimento `await shutdown_tool_executor()`
+  (`:313`), `shutdown_event.set()` (`:316`), **`await scheduler_task` senza limite** (`:317`), poi provider, pool BRIM
+  con `wait=True` (`:328`), pool quant (`:329`), festività (`:331`), cache (`:334`).
+- Nessun concetto di attività dell'utente. Docker a un worker, uvicorn PID 1 via `exec gosu` (`entrypoint.sh`).
+- `_run_provider_in_thread` (`services/assets/core.py:90`): `asyncio.to_thread` più `wait_for`; allo scadere il thread
+  continua.
+- uvicorn 0.52 legge `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN` (`auto_envvar_prefix`); il default attende per sempre le
+  richieste in volo. httpx 0.28 parla col socket Unix di Fly senza dipendenze nuove.
+- Nessun codice d'errore comune per i 429; gli errori dello storico finiscono nel log.
+- Runner (`scripts/test_runner/_server.py`): grazia 5 s, 30 s con coverage (`:50-51`); avviso «Shared backend ignored
+  SIGTERM» a `:329`; l'output del backend passa solo in modalità verbosa (`:274`), che è il default.
+
+### 2. Già fatto o contraddetto
+
+- Già fatto: il recupero dei prezzi dopo un fermo, in background, senza bloccare la UI. Mancano la spinta immediata al
+  ritorno dell'utente e «Aggiornamento prezzi…» (`next_wake_at` è uscito dal perimetro con il punto 33: Z-7).
+- C-49 diceva «nessun endpoint SSE»: falso, `GET /api/v1/assets/search/stream` è SSE
+  (`api/v1/assets/providers.py:156`).
+- Il docstring dello scheduler dice che l'elezione del leader gira in un thread; gira sul loop (Z-6).
+- Fly: la sospensione dall'interno, senza token, è confermata (`POST http://flaps/v1/apps/$FLY_APP_NAME/machines/$FLY_MACHINE_ID/suspend`
+  sul socket `/.fly/api`). Il proxy di Fly chiude una connessione che resta 60 s senza byte (punto 33).
+
+### 3. Lotti e superfici
+
+- **Z1 · Pausa degli aggiornamenti (F26)**: `frontend/src/lib/features/live-updates/` (`cadence.ts`,
+  `activityTracker.ts`, `activePolling.ts`, `LiveUpdatesStatus.svelte`), sottosistema i18n `lib/i18n/liveUpdates/`;
+  C1 sull'helper ogni 60 s, C2 e C3 fusi in un ciclo ogni 30 s con la guardia `isHeadToday` (decisione 31); la pillola
+  fuori dalla `PageToolbar`, nella riga d'intestazione delle due pagine. Test: vitest `front-utility core-unit`, jsdom
+  `front-utility component-unit`, E2E `e2e/assets/asset-live-pause.spec.ts` (`front-asset live-pause`). Doc EN:
+  `live-ticker.md`, `user/assets/index.en.md`.
+- **Z2 · Attività e sospensione**: `services/platform/sleep_wake/` (`activity.py`, `idle_monitor.py`, `suspend.py`),
+  middleware ASGI puro dagli agganci di H; `LIBREFOLIO_IDLE_SUSPEND_MINUTES` (0), `LIBREFOLIO_IDLE_SUSPEND_MODE=none|fly`.
+  Test `services sleep-wake`; pagina admin nuova.
+- **Z3 · Scheduler** (ripianificato il 15/10, punto 33): recupero immediato dei giri persi alla prima richiesta dopo
+  l'inattività o un risveglio, senza aspettare il giro di 60 s; lock condiviso con `wake-sync` (un job alla volta); stato
+  «occupato» per Z2 e cancellazione con un limite per Z6b. Fuori, nel backlog (Z-7): la prossima esecuzione per job,
+  `next_wake_at` e il jitter, «quando il pannello terrà un calendario». Test `services scheduler-catchup`.
+- **Z4 · `wake-sync`** (ripianificato il 15/10, punto 33): `POST /system/wake-sync` in un router nuovo
+  `api/v1/system_wake.py`, attivo solo con `LIBREFOLIO_WAKE_TOKEN(_FILE)` (senza token, 404; token sbagliato, 401);
+  esegue subito i lavori in scadenza e risponde con l'esito, in streaming, uno spazio ogni ~15 s per il proxy di Fly e
+  alla fine un JSON estendibile: l'esito complessivo e un elenco generico di job (nome, esito, durata, elementi), così
+  un job di notifiche futuro è solo un job in più e `next_wake_at` si aggiunge dopo senza rompere niente; un solo
+  `wake-sync` alla volta; sospensione dopo la risposta (Z2). Niente `GET /system/next-wake`. Lo chiamerà il pannello del
+  cloud, anche a turno ogni 2 ore per le notifiche future (punto 32). Test `api system-wake` (PURE); `security-review`.
+- **Z5 · «Aggiornamento prezzi…»**: `GET /system/price-refresh`, avviso nell'area di H, `requestPortfolioRefresh()` a
+  fine sincronizzazione; `LIBREFOLIO_CLIENT_IDLE_MINUTES` nella configurazione pubblica.
+- **Z6 · C-49**: prove (Z6a), poi la cura (Z6b) con un rosso PURE (`services shutdown-budget`).
+- **Z7 · 429** (punto 34): attesa crescente per fornitore, nello scheduler e nelle richieste dal vivo; il polling del
+  frontend rispetta `retry_after` e rallenta in modo esponenziale sugli errori; i ritentativi dello scheduler nel suo
+  giro (`services scheduler-backoff`).
+
+### 4. Decisioni
+
+| # | Decisione | Proposta | Stato |
+|---|---|---|---|
+| D1 | Dove sta «Aggiornamento in pausa» | Locale, vicino al prezzo live; nell'area di H solo «Aggiornamento prezzi…» | proposta |
+| D2 | Pausa del client per tutti | Sì, 10 minuti, 0 = mai | ✅ deciso (punto 31, 15/10): **2 minuti**, ripresa automatica, lista 60 s, dettaglio 30 s — sezione «Z1» |
+| D3 | C3 senza `isHeadToday` | Guardia aggiunta in Z1 dopo un rosso; fusione C2/C3 a X (FE5) | in Z1: la fusione la fa Z, coordinata con X dal coordinatore (punto 31) |
+| D4 | Il polling conta come presenza | Sì (evita sospensioni a raffica) | ✅ deciso (punto 32, 15/10): sì; sospensione dopo **5 minuti** senza richieste come default del cloud |
+| D5 | Sospensione e lavoro in corso | Mai con job, `wake-sync`, recupero o richiesta in volo; un solo worker; pannello con `auto_stop_machines="off"` | confermato dal punto 32: «mai mentre c'è lavoro in corso» |
+| D6 | `next_wake_at` | Lo legge il pannello (risposta di `wake-sync`, GET a macchina accesa); opzione metadati della macchina Fly | ✅ deciso (punto 33, 15/10): **per ora non si fa**, nel backlog (Z-7); la risposta resta estendibile |
+| D7 | Risposta di `wake-sync` oltre 60 s | JSON in streaming con spazi d'attesa | ✅ deciso (punto 33, 15/10): streaming, uno spazio ogni ~15 s |
+| D8 | Politica dei risvegli (D-19) | Prossimo slot storico; intraday spento di default; per titolo nel backlog; jitter 0 | superata dal punto 33: senza calendario, i risvegli li decide il pannello; jitter nel backlog (Z-7) |
+| D9 | Attesa crescente sui 429 | Accesa di default | ✅ deciso (punto 34, 15/10): sì, nello scheduler **e** nel polling del frontend (Z7 si allarga) |
+| D10 | Tempo massimo di spegnimento | Per tutti, circa 8 s, `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` | ✅ deciso (punto 35, 15/10): sì, per tutti |
+| D11 | Configurazione | Solo variabili d'ambiente (`*_FILE` per il token); moduli accanto allo scheduler | proposta |
+
+> **Decisione 32 del developer, alla lettera** (chat, 15/10 14:46, inoltrata dal coordinatore): «riguardo lo scheduler
+> mentre dorme l'istanza, è corretto che al risveglio subito ci pensa lui ad aggiornare, lo avevamo progettato sin
+> dall'inizio così. serve però lasciarsi aperta la possibilità che il risveglio possa essere chiamato anche
+> esternamente, magari a round robin ogni 2 ore, quando implementeremo un sistema di notifiche e avvisi, per dare modo
+> alle istanze di elaborare i dati nuovi e capire se ci sono notifiche da mandare». Dalla sua nota nel file delle
+> decisioni: «il backend direi che deve spegnersi o comnque andare a riposo, dopo 5 min dall'ultimo pacchetto ricevuto».
+>
+> Per Z2–Z4 (lettura del coordinatore): sospensione dopo 5 minuti senza richieste dell'utente come default del cloud,
+> mai con lavoro in corso, il polling conta come presenza (con la pausa di 2 minuti del 31 il ciclo sospensione e
+> risveglio non si forma); al risveglio lo scheduler recupera da solo i giri persi, come oggi; `wake-sync` resta il punto
+> d'ingresso dei risvegli esterni e deve reggere un giro a turno ogni 2 ore fatto dal pannello: «esegui i job in
+> scadenza, rispondi con l'esito e con `next_wake_at`». Un job di notifiche sarà un job in più: il contratto della
+> risposta elenca i job in modo generico, non solo i prezzi.
+>
+> **Decisione 33 del developer, alla lettera** (chat, 15/10 14:50, dopo una spiegazione): «ok va bene, aggiorna il
+> documento, solo, il next_wakeup per ora non serve, giusto, è una cosa per il futuro quando servirà». Lettura del
+> coordinatore: `wake-sync` è un endpoint di ogni istanza, attivo solo con `LIBREFOLIO_WAKE_TOKEN` (senza token, 404);
+> esegue subito i lavori in scadenza e risponde con l'esito in streaming, uno spazio ogni ~15 s; `next_wake_at` per ora
+> non si fa (niente campo, niente `GET next-wake`); di Z3 restano il recupero immediato e il lock condiviso con
+> `wake-sync`; prossima esecuzione per job e jitter nel backlog; la risposta resta un JSON estendibile. Z3 e Z4
+> ripianificati sopra (§3); al prossimo checkpoint dirò al coordinatore cosa cambia nei lotti.
+
+### 5. Conflitti previsti
+
+H (agganci di `main.py`, lettore dei segreti, configurazione pubblica, area avvisi, `router.py`, `.env.example`,
+Dockerfile, `/system/ready`, sola lettura che lascia passare `wake-sync`) · X (le due pagine prima del taglio FE5,
+`services/assets/core.py`, `RATE_LIMITED`, `_frontend_asset.py`) · A (import di `SESSION_COOKIE_NAME`) · W (pool BRIM
+nella sequenza di spegnimento) · J (solo se C-49 indica gli spawn) · B (Litestream e budget di spegnimento; ripristino
+prima dello scheduler) · G (galleria con `page.clock` di dieci minuti o più) · coordinatore (CHANGELOG, nav MkDocs,
+`dev.py` e runner se C-49 li tocca).
+
+## Z6a — prove su C-49, senza codice di prodotto
+
+**Obiettivo.** Capire chi trattiene lo spegnimento del backend condiviso oltre la grazia di 5 s del runner
+(`_server.py:329`), prima di scegliere la cura (Z6b, punto 35).
+
+**Ipotesi, in ordine.**
+
+1. **H1 · thread dei provider vivi all'uscita.** `asyncio.run` aspetta l'executor fino a 300 s, poi l'atexit di
+   `concurrent.futures` unisce i thread senza limite; i thread di `_run_provider_in_thread` sopravvivono ai loro
+   timeout (fino a 55-60 s). Gli spec senza stub di `/prices/current` chiamano provider veri.
+2. **H2 · richieste in volo.** uvicorn le drena senza limite (SSE della ricerca, provider lenti).
+3. **H3 · passi del lifespan senza scadenza** (executor dei tool, pool BRIM con `wait=True`, pool quant, festività).
+4. **H4 · altri membri del gruppo di processi** (worker spawn del rischio, build delle festività).
+5. **H5 · scrittura della coverage** (solo in modalità coverage: non usata nelle prove).
+
+**Come si legge.** La fase in cui uvicorn resta fermo dice l'ipotesi: «Waiting for connections to close» → H2;
+«Waiting for application shutdown» senza «Application shutdown complete» → H3; «Finished server process» seguito
+dall'avviso del runner → H1 o H4. I log per unità vanno in `.testLog` (default di `--log-dir`); l'uscita completa di
+ogni run in `/tmp/libreFolio_z6a_<gate>_<n>.log`.
+
+> **Fuori pista** (15/10, prima delle run): il runner avvia il backend condiviso con `verbose=False`
+> (`scripts/test_runner/_cli.py:596-599`), quindi il suo stdout e stderr vanno in `/dev/null` (`_server.py:274`): le
+> righe di uvicorn sulle fasi dello spegnimento non arrivano in nessun log. Senza toccare codice restano tre fonti:
+> (1) il log del runner con i tempi (la riga «Shared backend ignored SIGTERM»); (2) il log dell'app nel data-dir della
+> corsia, `/tmp/librefolio-r13-z/logs/librefolio.log` (structlog, ISO in UTC, livello DEBUG in test): «Shutting down
+> LibreFolio» compare solo dopo il drenaggio di uvicorn e dopo `shutdown_tool_executor`, quindi la sua assenza indica
+> H2 o l'executor dei tool; (3) l'osservatore in sola lettura del gruppo di processi (membri, thread, socket in entrata
+> e in uscita, `sample` dei superstiti). Le specifiche per cui servisse il log di uvicorn richiederebbero una modifica
+> del runner (superficie del coordinatore): solo con un via esplicito.
+>
+> Esposizione delle tre spec (grep in sola lettura): `asset-classification` apre `/assets` senza stub di
+> `/prices/current`, quindi il poll della lista chiama i provider veri (H1, H2); `asset-detail` stubba l'endpoint solo
+> in alcuni test e usa sync e rischio (H1–H4); `dashboard` non chiama né provider né rischio: se l'avviso compare lì da
+> solo, la causa non sono i thread dei provider.
+>
+> Regole del carico del 15/10 (coordinatore): Z è una corsia «altra», quindi ogni E2E richiede il suo via.
+
+**Passi.**
+
+1. Dopo l'avviso di fine finestra del coordinatore: `npm ci` dal lock in `frontend/` (autorizzato il 15/10), poi
+   `pipenv run python dev.py front build --debug`. ✅ 2026-10-15
+
+   > **Note implementazione**: `npm ci` alle 13:05, exit 0, 433 pacchetti in 17 s (`/tmp/libreFolio_z6a_npm_ci.log`);
+   > l'errore di partenza era `frontend/node_modules/.bin/vitest: No such file or directory`. npm 11 avvisa che gli
+   > script d'installazione di 5 pacchetti (`esbuild`, `fsevents`, `es5-ext`) non sono nella sua `allowScripts`: la build
+   > funziona comunque. `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py front build --debug`:
+   > exit 0, vite 1 min 18 s + 1 min 52 s, svelte-check senza errori (`/tmp/libreFolio_z6a_front_build.log`). Worktree
+   > pulito dopo entrambi.
+   >
+   > Strumenti delle prove, fuori dal repo: `/tmp/libreFolio_z6a_watch.sh` osserva in sola lettura il gruppo di processi
+   > del backend della corsia (membri, thread, socket TCP; un `sample` di macOS per ogni superstite a +2 s dallo
+   > spegnimento); `/tmp/libreFolio_z6a_run.sh <categoria> <azione> <n>` lancia un gate con `--workers 2`, l'osservatore e
+   > il log completo con i tempi al millisecondo (`/tmp/libreFolio_z6a_<azione>_<n>.log`, `PYTHONUNBUFFERED=1` perché le
+   > righe arrivino in ordine).
+   >
+   > **Fuori pista**: alle 13:10 il coordinatore ha aperto la finestra delle dipendenze (il developer installa
+   > `cryptography` nell'ambiente condiviso): nessun comando Python fino al suo via. La build era già finita; nessun
+   > comando in corso.
+2. Gate, uno alla volta, con `nice`: `front-asset asset-classification`, `front-asset asset-detail`, poi
+   `front-portfolio dashboard` (prima di lanciarlo avviso il coordinatore). L'avviso è intermittente: se non compare,
+   ripeto il gate al massimo due volte e registro la frequenza.
+
+   > **Via del coordinatore** (15/10, 13:38): «Ti do un via unico per le tre, di fila, con `nice -n 15`, `--workers 2`
+   > e al massimo due ripetizioni per gate. Non serve che mi scrivi a ogni avvio: mandami un messaggio solo alla fine,
+   > con le prove. Se alla partenza il carico (`uptime`) è sopra 30, aspetta qualche minuto.»
+
+   | Gate | Run | Inizio | Esito | Avviso «ignored SIGTERM» | Spegnimento osservato | Carico all'avvio (1 min) |
+   |---|---|---|---|---|---|---|
+   | `front-asset asset-classification` | 1 | 13:39 | 4/4 in 28 s; invocazione 3 min 27 s | no | gruppo vuoto 338 ms dopo la chiusura del listener; nel log dell'app 0,3 s fra «Shutting down LibreFolio» e «All caches closed on shutdown» | 27,99 |
+
+   > **Note implementazione** (run 1): il backend condiviso ha impiegato 2 min a rispondere (13:39:00 → 13:40:59),
+   > di cui 1 min 50 s prima di «Starting LibreFolio»: è `dev.py server` che prepara frontend e documentazione prima di
+   > uvicorn, non lo spegnimento. Popolamento del DB (31 s) e utenti (25 s) dopo l'avvio del backend, nello stesso ciclo
+   > di vita (un solo ciclo nell'osservatore). Un solo worker uvicorn per 2 client.
+   >
+   > **Fuori pista**: dalle 13:43 il carico della macchina è salito a 59–265 (1 min), per lavoro di altre corsie. La run 2
+   > non è partita: il wrapper `/tmp/libreFolio_z6a_when_calm.sh` aspettava il carico ≤ 30. Alle 13:55 il coordinatore ha
+   > rimandato le prove E2E finché non libera lui uno slot: wrapper fermato, nessun processo di Z6a attivo, porta 6186
+   > libera.
+3. Verdetto per ipotesi, con le prove; se il log non basta, propongo una diagnostica temporanea (richiede codice:
+   serve un via esplicito).
+4. Checkpoint FROZEN: porta 6186 libera, nessun file di prodotto toccato.
+
+## Righe nel backlog
+
+Le voci Z-1…Z-7 nella mia sezione di `BACKLOG_POST_1.2.md`; C-49 resta nella sezione C, presa in carico da Z.
+
+## Z1 — pausa degli aggiornamenti (F26), autorizzato il 15/10
+
+> **Decisione 31 del developer, alla lettera** (inoltrata dal coordinatore il 15/10 alle 14:18): «mi pare un contro
+> senso che in asset global sia ogni 30 e in detail ogni 60, al più lo invertirei. Comunque sono daccordo che a
+> schermata nascosta e dopo anche solo 2 min di mouse fermo, la richiesta di aggiornamenti venga mandata in pausa, ma
+> appena la schermata ritorna attiva o il mouse si muove, se il tempo passato supera la soglia, mandiamo subito la
+> richiesta senza scrivere nulla. e questo per quanto riguarda l'aggiornamento attivo, triggerato dall'utente mentre è
+> connesso»
+>
+> Lettura del coordinatore, che seguo: pausa a scheda nascosta e dopo **2 minuti** senza mouse né tastiera; ripresa
+> **automatica** (scheda di nuovo visibile o mouse mosso): se dall'ultima richiesta è passato più dell'intervallo, una
+> richiesta subito; la pillola «Aggiornamento in pausa» è un segnale, non un comando; intervalli invertiti: lista
+> **60 s**, dettaglio **30 s**, con C2 e C3 fusi in un ciclo solo (la fusione è di X, FE5: la coordina il coordinatore).
+> «Senza scrivere nulla» = senza che l'utente debba fare niente; il coordinatore lo sta chiedendo al developer.
+>
+> Autorizzazione: «Z1 è autorizzato con le regole del 31 qui sopra. Prima i rossi; per Vitest, svelte-check ed E2E
+> chiedimi lo slot, come al solito.» Decisioni 34 (attesa crescente anche nel polling del frontend) e 35 (spegnimento
+> con tempo massimo per tutti): lotti Z7 e Z6b.
+>
+> Risposte del coordinatore (15/10, 14:37): il developer conferma la lettura del 31 («senza scrivere nulla» vuol dire
+> che la ripresa parte da sola, senza cliccare niente); Vitest su un file singolo libero con `nice -n 15`, lo slot serve
+> solo all'E2E; la voce di `STATUS_TONES` la chiede lui al coordinatore dei colori: fino alla risposta le classi della
+> pillola stanno in un punto solo, nel componente.
+
+### Contratto
+
+File nuovi in `frontend/src/lib/features/live-updates/`:
+
+- `cadence.ts` — le costanti della decisione 31: `LIVE_UPDATES_IDLE_MS = 120_000`,
+  `ASSET_LIST_LIVE_INTERVAL_MS = 60_000`, `ASSET_DETAIL_LIVE_INTERVAL_MS = 30_000`.
+- `activityTracker.ts` — `createActivityTracker({target, document, now})` e `getActivityTracker()` (uno per pagina,
+  creato al primo uso). Ascolta `pointermove`, `pointerdown`, `keydown`, `wheel`, `touchstart` sul `target` (passivi) e
+  `visibilitychange` sul `document`. Espone `lastActivityAt()`, `isVisible()`, `touch()` (segna attività adesso),
+  `subscribe(listener)` con i segnali `'activity' | 'visible' | 'hidden'` (ritorna la funzione per disiscriversi),
+  `dispose()`. Il ritorno alla scheda (`visible`) conta come attività.
+- `activePolling.ts` — `startActivePolling({run, intervalMs, idleMs?, initialDelayMs?, onstatechange?, tracker?})`
+  → `{state, pollNow(), stop()}`; stati `'running' | 'paused-idle' | 'paused-hidden' | 'stopped'`.
+    1. All'avvio con la scheda visibile: `running`, `tracker.touch()`, primo giro dopo `initialDelayMs` (default 0) da un
+       timer, mai dentro la chiamata a `startActivePolling` (così non entra nel tracciamento di un `$effect`). Con la
+       scheda nascosta: `paused-hidden`, nessun giro.
+    2. I giri partono ogni `intervalMs` dall'inizio del precedente; se un giro è ancora in volo quando scade il
+       successivo, quel giro salta (niente sovrapposizioni).
+    3. Inattività: nessun giro parte a `lastActivityAt + idleMs` o dopo, finché non arriva un input; lo stato passa a
+       `paused-idle` alla soglia. `idleMs = 0` → mai in pausa per inattività.
+    4. Scheda nascosta: `paused-hidden` subito, timer cancellati; un giro in volo finisce, nessuno nuovo.
+    5. Ripresa (input in `paused-idle`, `visible` in `paused-hidden`): `running`; se dall'inizio dell'ultimo giro è
+       passato almeno `intervalMs` (o non c'è stato nessun giro), un giro subito; altrimenti il prossimo
+       all'inizio dell'ultimo più `intervalMs`.
+    6. `pollNow()`: segna attività, un giro subito (se nessuno è in volo), la cadenza riparte da lì; riprende se in pausa.
+    7. `stop()`: `stopped`, nessun giro e nessun ascoltatore dopo; la fine di un giro in volo non cambia nulla.
+    8. Un errore di `run` (eccezione o promessa rifiutata) non ferma la cadenza né cambia lo stato.
+    9. `onstatechange` riceve lo stato iniziale e ogni cambio.
+- `LiveUpdatesStatus.svelte` — prop `state`; solo in `paused-idle` mostra la pillola `data-testid="live-updates-status"`
+  con `data-state`, `role="status"`, testo `liveUpdates.paused`, `title` `liveUpdates.pausedHint`; nessun pulsante.
+  Colori dai ruoli: una voce nuova in `STATUS_TONES` (R), `liveUpdates: {paused: 'bg-lf-neutral text-lf-secondary'}`,
+  senza `dark:` e senza altre classi di colore legacy sull'elemento (G3), come chiesto dal coordinatore dei colori il
+  15/10 alle 14:40; contrasto 5,8:1 in chiaro e in scuro. Il chip del tipo accanto resta grigio legacy finché l'ondata
+  dei colori non migra la pagina di dettaglio: differenza voluta e temporanea.
+- i18n: sottosistema nuovo `frontend/src/lib/i18n/liveUpdates/` (`prefixes.txt` + 4 lingue).
+
+Pagine (solo i cicli di polling e il punto della pillola):
+
+- Lista (`routes/(app)/assets/+page.svelte`): C1 sull'helper ogni 60 s; `refreshLivePricesNow()` → `pollNow()`; la
+  radice `assets-page` pubblica `data-live-updates` con lo stato; la pillola accanto al titolo.
+- Dettaglio (`routes/(app)/assets/[id]/+page.svelte`): C2 e C3 fusi in un ciclo ogni 30 s, con la guardia di C2
+  (`isHeadToday` e asset caricato); una richiesta per giro alimenta il riepilogo (logica di C2) e la testa del grafico
+  (logica di C3: solo con un provider e senza un caricamento in corso); la radice `asset-detail-page` pubblica
+  `data-live-updates`; la pillola nella riga dei chip dell'intestazione.
+
+### Test (test-author), poi i rossi
+
+- Vitest node `activityTracker.test.ts`, `activePolling.test.ts` (timer finti, ambiente iniettato) in
+  `front-utility core-unit`; jsdom `LiveUpdatesStatus.test.ts` in `front-utility component-unit`.
+- E2E `frontend/e2e/assets/asset-live-pause.spec.ts`, azione nuova `front-asset live-pause`: `/prices/current` stubbato
+  e contato, `page.clock`; lista: un giro ogni 60 s, pausa dopo 2 min senza input e ripresa con una richiesta subito,
+  pausa a scheda nascosta e ripresa; dettaglio: una sola richiesta ogni 30 s, pausa per inattività e ripresa, nessuna
+  richiesta con un intervallo che finisce nel passato (Z-1).
+- Rossi attesi sul codice di oggi: le cadenze (lista 30 s, dettaglio 30 s + 60 s), le richieste durante la pausa,
+  quelle con un intervallo passato, la pillola assente; Vitest rosso perché i moduli non esistono.
+
+### Passi di Z1
+
+1. Test scritti da test-author ✅ 2026-10-15
+
+   > **Note implementazione**: `activityTracker.test.ts` (7 test), `activePolling.test.ts` (27 test, le regole 1–11
+   > e le costanti), `LiveUpdatesStatus.test.ts` (jsdom, 4 test), `e2e/assets/asset-live-pause.spec.ts` (6 test, solo
+   > desktop: (a)–(c) lista, (d)–(f) dettaglio); registrati in `_frontend_utility.py` (`core-unit`, `component-unit`) e
+   > in `_frontend_asset.py` (azione nuova `live-pause`). L'E2E ferma l'orologio della pagina dopo la richiesta
+   > d'apertura e lo muove solo con `runFor`; uno script iniettato segna l'ora di ogni richiesta sull'orologio della
+   > pagina; movimento ridotto emulato (il marquee dei nomi lunghi gira con `requestAnimationFrame`); `/prices/current`
+   > stubbato, niente scritture. Riletti da me: lo stato di `displayCurrency` e `assetInfo` cambia in un blocco solo
+   > (`loadAssetInfo`), quindi l'apertura del dettaglio fa una richiesta sola; il negozio delle date legge l'URL al
+   > caricamento, quindi il test (f) sull'intervallo passato è valido.
+   >
+   > **Fuori pista**: test-author ha usato due volte `python3` di sistema come strumento di testo (leggere il sorgente
+   > dell'orologio di Playwright in un file di `/tmp`, poi cancellato; una sostituzione nella sua spec), contro la
+   > regola che gli avevo dato; nessun effetto sull'ambiente condiviso. Ha formattato a mano: `format:check` e
+   > `check-orphans` entrano nella run di controllo.
+2. Rossi ✅ 2026-10-15
+
+   > **Note implementazione** (Vitest, 15/10, file singoli con `nice -n 15`): i tre file falliscono come atteso
+   > con «Cannot find module './activityTracker'», «./activePolling», «Failed to resolve import
+   > "./LiveUpdatesStatus.svelte"» (`/tmp/libreFolio_z1_red_vitest_*.log`).
+   >
+   > E2E (slot del coordinatore, 15:11, carico 26): `/bin/bash /tmp/libreFolio_z6a_run.sh front-asset live-pause red1`,
+   > cioè `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 15 pipenv run python dev.py test --test-port 6186
+   > --data-dir /tmp/librefolio-r13-z --workers 2 front-asset live-pause`: 6 falliti su 6 in 3 min 27 s, tutti sui conteggi
+   > delle richieste, cioè sul comportamento di oggi (`/tmp/libreFolio_z6a_live-pause_red1.log`):
+   > (a) e (b) la lista chiede a +0 e +30 s (ogni 30 s, non 60); (c) la lista continua ogni 30 s a scheda nascosta
+   > (+0…+150 s, 6 richieste); (d) ed (e) il dettaglio chiede a +0 e +4,8/4,9 s (il ciclo di 60 s con il riscaldamento di
+   > 5 s); (f) un intervallo passato riceve richieste a +2,1 e +57,1 s (il ciclo di 60 s senza `isHeadToday`). C-49:
+   > spegnimento pulito anche qui, gruppo vuoto 128 ms dopo la chiusura del listener.
+3. Implementazione ✅ 2026-10-15
+
+   > **Note implementazione**: file nuovi `cadence.ts`, `activityTracker.ts`, `activePolling.ts`,
+   > `LiveUpdatesStatus.svelte` in `frontend/src/lib/features/live-updates/`; sottosistema i18n
+   > `frontend/src/lib/i18n/liveUpdates/` (`prefixes.txt`, 2 chiavi × 4 lingue); voce `STATUS_TONES.liveUpdates` in
+   > `lib/theme/toneClasses.ts` (autorizzata dal coordinatore dei colori). Lista: C1 sull'helper ogni 60 s,
+   > `refreshLivePricesNow()` → `pollNow()`, `data-live-updates` sulla radice, pillola accanto al titolo (fuori
+   > dall'`h2`), `untrack` tolto dagli import. Dettaglio: C2 e C3 fusi in un effetto e una richiesta per giro
+   > (`pollLivePriceOnce` → `applyLiveSummary` con la logica di C2, `applyLiveChartHead` con quella di C3 e il suo
+   > perché), guardia `isHeadToday` per entrambi, `data-live-updates` sulla radice, pillola in fondo alla riga dei chip
+   > dell'intestazione; `fetchCurrentPrices` non serve più al dettaglio.
+   >
+   > Controlli (`nice -n 15`, file singoli liberi): Vitest verdi — `activityTracker` 19/19, `activePolling` 28/28,
+   > `LiveUpdatesStatus` 6/6 — e il cancello dei colori `src/themeRoles.gate.test.ts` 36/36 (R3: file nuovi senza
+   > classi legacy; G1–G3); Prettier pulito sui file toccati; `dev.py i18n check` verde (strict, 4394 chiavi);
+   > `dev.py test check-orphans` verde (122 spec, 394 unit, tutti raggiungibili da `all`).
+   >
+   > **Fuori pista**: un riparo in più nel dettaglio, dentro i cicli: una risposta che arriva dopo che l'effetto è
+   > ripartito (valuta cambiata, altro asset) non scrive più (`isCurrent`); prima C2 poteva mostrare un prezzo convertito
+   > nella valuta vecchia. La radice del dettaglio è andata a capo per Prettier (attributo nuovo oltre la larghezza).
+4. Verdi E2E, svelte-check e codice morto ✅ 2026-10-15 (slot pesante 1 del coordinatore, 15:20–15:47)
+
+   > **Note implementazione** (`nice -n 15`, `--workers 2`, una alla volta, tramite `/tmp/libreFolio_z6a_run.sh` con
+   > l'osservatore): `front-asset live-pause` **6/6 verde** in 31 s (invocazione 3 min 45 s; nessun «page timer
+   > error»); regressione `front-asset asset-list` 28/28 (2 min 05 s), `front-asset asset-detail` 33/33 (3 min 12 s),
+   > `front-utility toolbar-width-sweep` 24/24 (6 min 09 s), `front-portfolio dashboard-cache` 6/6 (3 min 44 s).
+   > `dev.py front check`: svelte-check 0 errori, 0 avvisi. `dev.py lint --dead-code --scope frontend`: esce 1 per
+   > reperti tutti fuori da Z1 (2 file, 19 export, 28 tipi, 4 devDependencies, 20 dipendenze non elencate; nessuno nei
+   > file toccati). Spegnimento del backend pulito in tutte le run (gruppo vuoto dopo 0,09–2,7 s; le due spec degli
+   > asset le più lente, 2,3–2,7 s, le più vicine alla grazia di 5 s del runner: dato per C-49).
+   >
+   > Non eseguiti in questo slot: `mkdocs build` e `check-links` (servono uno slot), le run di categoria, le altre spec
+   > che toccano il polling (`risk-lab`, `default-currency`, `onboarding-guides`, `app-start-auth`, che lo stubbano o lo
+   > tengono in attesa: alle run di categoria all'ingresso, per decisione del coordinatore), il progetto mobile.
+   >
+   > **Fuori pista**: nella fusione la guardia del ciclo è quella del vecchio riepilogo (`isHeadToday` e asset caricato),
+   > che non guardava il fornitore: un asset manuale chiede ancora il prezzo ogni 30 s (Z-8 nel backlog). Il grafico
+   > convertito in un'altra valuta si ricarica intero a ogni tick con prezzo cambiato, ora ogni 30 s invece di 60:
+   > conseguenza della decisione 31, invariata la logica.
+5. Documentazione EN (docs-writer) ✅ 2026-10-15
+
+   > **Note implementazione**: `developer/frontend/components/features/live-ticker.md` (tabella dei cicli, sezioni
+   > lista e dettaglio, sezione nuova «pause and resume» con il tracker, l'helper, gli stati, `data-live-updates`, la
+   > pillola e il perché del timer; «How it is tested»; ancore esistenti mantenute), `user/assets/index.en.md` (il punto
+   > «Live prices»), `developer/frontend/components/index.md` (la riga di Live Prices diceva 30 s e 60 s),
+   > `developer/frontend/i18n.md` (sottosistemi da 18 a 19, riga `liveUpdates`). Restano indietro le traduzioni del
+   > punto «Live prices» in `user/assets/index.{it,fr,es}.md` (riga 59): decisione del coordinatore. Build e
+   > `check-links` nella run di controllo.
+   >
+   > **Fuori pista**: anche docs-writer ha usato una volta `python3 -c` di sistema, in sola lettura, per leggere un
+   > valore JSON.
+6. Merge di base e cancelli d'ingresso ✅ 2026-10-15
+
+   > **Note implementazione**: il coordinatore ha committato Z1 (`74d028ec6`, `feat(assets): pause live prices when
+   > idle`; journal `a6199d0e7`) e aperto il merge di `dev_release2` a `8f1abf89e` (H CP6, X FE5b, E1, Y1, A5, commit
+   > del programma colori). Due conflitti, risolti tenendo i due lati. In `developer/frontend/components/index.md`,
+   > rispetto alla base del merge, ogni lato aveva cambiato una riga sola: Authentication viene dal loro (E1, le pagine
+   > dei link dell'account), Live Prices dal mio. In `scripts/test_runner/_frontend_utility.py`: in core-unit le loro 5
+   > voci e le mie 2, in component-unit `InstanceBlockedPage` e `LiveUpdatesStatus`; `py_compile` ok. Le traduzioni del
+   > punto «Live prices» in `user/assets/index.{it,fr,es}.md:59` sono riscritte a mano sulla frase EN, con le etichette
+   > dell'app («Aggiornamento in pausa», «Mises à jour en pause», «Actualizaciones en pausa»), poi
+   > `dev.py mkdocs translate-stamp --file user/assets/index.en.md` (md5 `75048ee4` → `dd8e5487`, it, fr ed es timbrati
+   > in `mkdocs_src/aphra-pipeline/.translate-hashes.json`). Merge committato dal coordinatore: `4618a2116`.
+   >
+   > Cancelli sull'albero unito, uno alla volta, con `nice -n 15`: `dev.py api sync` exit 0 in 23 s, nessun file
+   > tracciato cambiato; `dev.py front check` exit 0, svelte-check 0 errori e 0 avvisi; Vitest dei tre file 19/28/6, più
+   > `themeRoles.gate` 36/36 (il merge porta commit dei colori, il gate non è cambiato); `front-asset live-pause`
+   > **6/6** in 24,5 s (invocazione 3 min 42 s, con la build del frontend rifatta all'avvio del backend, non
+   > strumentata); `dev.py mkdocs build` exit 0 in 42 s, nessun avviso, 3036 URL relativi risolti;
+   > `dev.py mkdocs check-links` exit 0, 95 link validi e gli 8 risolti a runtime di sempre. Porta 6186 libera alla
+   > fine. Log in `/tmp/libreFolio_z1merge_*.log` e `/tmp/libreFolio_z6a_live-pause_merge1*.log`.
+   >
+   > Dato per C-49: nono ciclo di vita del backend della corsia, pulito. Nessun avviso «ignored SIGTERM», gruppo di
+   > processi vuoto 123 ms dopo la chiusura del listener, 0,8 ms fra «Shutting down LibreFolio» e «All caches closed on
+   > shutdown».
+   >
+   > Per Z2–Z4, dal codice unito: `backend/app/config/` è l'unica sede delle variabili d'ambiente (un modulo per
+   > proprietario, `config/platform.py` di H); il lettore dei segreti `NAME_FILE` c'è (`env_secret`, `read_secret_file`
+   > in `config/__init__.py`) e `secrets_set_twice` copre già ogni `LIBREFOLIO_*`; lo scheduler è in
+   > `services/platform/scheduler/` (con `leader.py`). Agganci per il ciclo di vita e per il middleware ancora no:
+   > `main.py` chiama `add_middleware` direttamente.
+   >
+   > **Fuori pista**: alle 15:56 il carico (1 min) era salito a 87; prima della spec E2E ho aspettato che tornasse sotto
+   > 65, il livello del via del coordinatore (soglia mia): è partita alle 15:57 a 38,8. Nel merge
+   > `frontend/package.json` e il lock cambiano solo la versione della radice (1.1.0 → 0.0.0): `node_modules` resta
+   > valido, nessun `npm ci`.

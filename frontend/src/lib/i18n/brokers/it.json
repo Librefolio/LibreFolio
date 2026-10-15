@@ -33,7 +33,7 @@
     "cashBalances": "Saldi di Cassa",
     "noCashBalances": "Nessuna posizione di cassa",
     "confirmDelete": "Sei sicuro di voler eliminare questo broker?",
-    "confirmDeleteWithTransactions": "Questo broker ha {n} transazioni. L'eliminazione forzata rimuoverà tutte le transazioni. Continuare?",
+    "confirmDeleteWithTransactions": "Questo broker ha {n} transazioni. L'eliminazione forzata le rimuoverà tutte. Gli asset che questo broker ha trasferito ad altri broker, anche condivisi, restano lì come posizione d'apertura al loro costo di trasferimento: il guadagno di quei broker conterà anche quanto gli asset avevano guadagnato prima del trasferimento. I giroconti con altri broker lì diventano depositi o prelievi. Continuare?",
     "createFailed": "Errore nella creazione del broker",
     "updateFailed": "Errore nell'aggiornamento del broker",
     "assets": "{n} asset",

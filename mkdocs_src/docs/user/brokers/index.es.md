@@ -46,7 +46,7 @@ La página **Brókeres** muestra una tarjeta por cada bróker, con su valor (**N
 ## ✏️ Editar o eliminar un bróker
 
 - **Editar** — el lápiz de la tarjeta del bróker o **Editar** en la barra de herramientas del bróker. Los Propietarios y los Editores pueden editar un bróker.
-- **Eliminar** — la papelera de la tarjeta del bróker. Solo un Propietario puede eliminar un bróker. Si aún contiene transacciones, LibreFolio indica cuántas y ofrece **Ir a transacciones** o **Eliminar bróker y transacciones**, que las elimina también.
+- **Eliminar** — la papelera de la tarjeta del bróker. Solo un Propietario puede eliminar un bróker. Si aún contiene transacciones, LibreFolio indica cuántas y ofrece **Ir a transacciones** o **Eliminar bróker y transacciones**, que las elimina también. Los activos que había transferido a otro bróker, incluido uno compartido, quedan allí como posición de apertura a su coste de transferencia, desde la fecha de la transferencia: la ganancia de ese bróker cuenta así también lo que ganaron antes de la transferencia. Las transferencias de fondos con otro bróker se convierten allí en un depósito o un retiro.
 
 ---
 

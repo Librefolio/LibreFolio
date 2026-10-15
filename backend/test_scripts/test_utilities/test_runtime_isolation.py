@@ -160,6 +160,8 @@ def httpx_lane_probe(lane_id: str | None, *, calls: list | None = None, on_call=
 def patch_spawn(monkeypatch, *, process=None, holders=(), pgid=None, healthy=None) -> None:
     """Wire ``SharedTestServer.start()``'s external seams to in-memory fakes."""
     monkeypatch.setattr(test_runner_server, "port_holders", holders if callable(holders) else (lambda port=None: list(holders)))
+    # The build step before the spawn (C-94) is otherwise a real `dev.py server --build-only`: it always succeeds here.
+    monkeypatch.setattr(test_runner_server, "build_server_prerequisites", lambda *_args, **_kwargs: True, raising=False)
     if process is not None:
         monkeypatch.setattr(test_runner_server.subprocess, "Popen", lambda *_args, **_kwargs: process)
     if pgid is not None:
@@ -1350,6 +1352,7 @@ class TestSharedTestServerOwnership:
         # even though health would answer if start() ever reached the poll loop.
         server = test_runner_server.SharedTestServer()
         patch_spawn(monkeypatch, holders=["918273"], healthy=True)
+        forbid(monkeypatch, test_runner_server, "build_server_prerequisites", "the build step must not run while the port is already held")
         forbid(monkeypatch, test_runner_server.subprocess, "Popen", "subprocess.Popen must not run while the port is already held")
         for name in ("kill", "killpg"):
             forbid(monkeypatch, test_runner_server.os, name, "no signal may be sent by a fail-closed start()")
@@ -1843,6 +1846,8 @@ class TestExecUnmaskedWrapper:
         monkeypatch.setattr(test_runner_server.signal, "pthread_sigmask", fake_pthread_sigmask)
         monkeypatch.setattr(test_runner_server.subprocess, "Popen", fake_popen)
         monkeypatch.setattr(test_runner_server.subprocess, "run", unavailable_lsof)
+        # The build step before the spawn (C-94) would otherwise reach this lsof stand-in: it always succeeds here.
+        monkeypatch.setattr(test_runner_server, "build_server_prerequisites", lambda *_args, **_kwargs: True, raising=False)
         monkeypatch.setattr(test_runner_server.os, "getpgid", lambda _pid: (order.append("getpgid"), 45010)[1])
         monkeypatch.setattr(test_runner_server.urllib.request, "build_opener", lambda *_handlers: AuthenticatedOpener())
         monkeypatch.setattr(test_runner_server, "print_success", ready.append)
@@ -2102,6 +2107,8 @@ def run_gallery(runtime_env, lane, *flags: str) -> tuple[int, dict]:
 
     runtime_env.setattr(dev, "HAS_ARGCOMPLETE", False)
     runtime_env.setattr(dev, "check_port_in_use", lambda _port: [])
+    # The gallery's build step before Playwright (C-94) is otherwise a real `dev.py server --build-only`: it always succeeds here.
+    runtime_env.setattr(test_runner_server, "build_server_prerequisites", lambda *_args, **_kwargs: True, raising=False)
     runtime_env.setattr(subprocess, "Popen", fake_popen)
     runtime_env.setattr(sys, "argv", [*GALLERY_ARGV, *flags])
     return dev.main(), launch

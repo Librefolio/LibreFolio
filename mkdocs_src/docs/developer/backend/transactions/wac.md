@@ -411,6 +411,13 @@ page explains how both reach the Dashboard.
 
 `GET /brokers/{broker_id}/summary` (`BrokerService.get_summary()`):
 
+- `as_of`, a query parameter, is the day the summary describes: the user's day,
+  which the broker page sends as `todayIso()`; when it is omitted, `date.today()`
+  on the server. Cash and quantities ([Balance Queries](service.md#balance-queries))
+  and the holdings' average cost (`_holding_average_costs()` filters
+  `date <= as_of`) count only the transactions dated up to `as_of`: one dated
+  later counts in none of them (W-B5). The price is not cut: it stays the latest
+  close in `price_history`.
 - `_holding_average_costs()` loads the broker's quantity-moving transactions of
   the held assets, ordered by date then id, detects the split-linked adjustments,
   and calls `compute_average_costs()` once per asset currency, with that currency
