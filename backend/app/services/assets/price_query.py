@@ -43,7 +43,7 @@ from backend.app.services.assets import core
 from backend.app.services.assets.base import AssetSourceProvider
 from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.assets.registry import AssetProviderRegistry
-from backend.app.services.fx.fx import convert_bulk
+from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.series_preparation import mark_market_closed_carries, prepare_asset_series_set
 from backend.app.services.signal_service import (
     SignalPreparedSeriesBundle,

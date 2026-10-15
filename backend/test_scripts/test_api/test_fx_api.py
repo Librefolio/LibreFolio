@@ -942,7 +942,7 @@ async def test_manual_cleanup_from_previous_tests(test_server):
 async def test_delete_rates_mixed_validity(test_server):
     """G7§5: DELETE /fx/currencies/rate with mixed valid+invalid items.
 
-    Contract under test (api/v1/fx.py L319-L327): the endpoint must collect
+    Contract under test (api/v1/fx/currencies.py, ``delete_rates_endpoint``): the endpoint must collect
     per-item errors (e.g. ``from == to``) into the ``errors`` array while
     still processing the valid items. Returns 200 with a partial result.
     """

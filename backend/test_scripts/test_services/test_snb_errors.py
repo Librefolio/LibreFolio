@@ -25,7 +25,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from backend.app.services.fx.fx import FXServiceError
+from backend.app.services.fx.base import FXServiceError
 from backend.app.services.fx_providers.snb import plugin as snb_mod
 from backend.app.services.fx_providers.snb.plugin import SNBProvider
 
