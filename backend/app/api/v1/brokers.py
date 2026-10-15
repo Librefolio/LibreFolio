@@ -692,7 +692,7 @@ async def get_brim_file_preview(
     """Get structured preview data for a BRIM file."""
     file_info = await _get_brim_file_with_access(file_id, current_user, session)
 
-    file_path = brim_provider.get_file_path(file_id)
+    file_path = await asyncio.to_thread(brim_provider.get_file_path, file_id)
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=404, detail="File content not found")
 
@@ -764,7 +764,7 @@ async def download_file(
     """
     file_info = await _get_brim_file_with_access(file_id, current_user, session)
 
-    file_path = brim_provider.get_file_path(file_id)
+    file_path = await asyncio.to_thread(brim_provider.get_file_path, file_id)
     if not file_path or not file_path.exists():
         raise HTTPException(status_code=404, detail="File content not found")
 
