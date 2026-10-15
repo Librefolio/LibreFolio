@@ -21,9 +21,11 @@ block_router = APIRouter()
 @block_router.get("/block", response_model=InstanceBlockResponse)
 async def get_instance_block(current_user: Annotated[User, Depends(get_current_user)]) -> InstanceBlockResponse:
     """Whether this instance is blocked by its hosting provider, the day it will be deleted when given, and, for an
-    administrator only, where the subscription is managed (``LIBREFOLIO_BILLING_URL``, A5)."""
+    administrator only, where the subscription is managed (``LIBREFOLIO_BILLING_URL``, A5) and that a full backup can
+    still be downloaded (decision 12)."""
     return InstanceBlockResponse(
         blocked=instance_blocked(),
         deletion_date=instance_deletion_date(),
         billing_url=billing_link() if current_user.is_superuser else None,
+        backup_available=current_user.is_superuser,
     )
