@@ -279,17 +279,8 @@ class NativeCash:
         return self._change_days[start:end]
 
     def balances(self, as_of: date_type | None = None) -> dict[int, dict[str, Decimal]]:
-        """Each broker's balance in each currency on ``as_of`` (every movement when None).
-
-        Zero and missing movements are included: a balance in its own currency needs no rate.
-        """
-        result: dict[int, dict[str, Decimal]] = {}
-        for movement in self.movements:
-            if as_of is not None and movement.date > as_of:
-                continue
-            by_currency = result.setdefault(movement.broker_id, {})
-            by_currency[movement.currency] = by_currency.get(movement.currency, _ZERO) + movement.native
-        return result
+        """Each broker's balance in each currency on ``as_of`` (every movement when None); see :func:`native_balances`."""
+        return native_balances(self.movements, as_of)
 
     def flows(self, date_from: date_type | None = None, date_to: date_type | None = None) -> CashFlows:
         """The movements dated in ``(date_from, date_to]``, converted at their own dates.
@@ -428,6 +419,22 @@ def _change_days(
                 days.add(day)
             previous = rate
     return tuple(sorted(days))
+
+
+def native_balances(movements: Iterable[CashMovement], as_of: date_type | None = None) -> dict[int, dict[str, Decimal]]:
+    """Each broker's balance in each currency on ``as_of`` (every movement when None).
+
+    Needs no rate, so a caller that only wants native balances calls it without building a
+    :class:`NativeCash`. Zero and missing movements are included: a balance in its own currency
+    needs no rate, and a currency with movements that cancel out keeps its line at zero.
+    """
+    result: dict[int, dict[str, Decimal]] = {}
+    for movement in movements:
+        if as_of is not None and movement.date > as_of:
+            continue
+        by_currency = result.setdefault(movement.broker_id, {})
+        by_currency[movement.currency] = by_currency.get(movement.currency, _ZERO) + movement.native
+    return result
 
 
 async def compute_native_cash(

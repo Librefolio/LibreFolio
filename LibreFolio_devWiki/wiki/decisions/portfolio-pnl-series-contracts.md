@@ -110,6 +110,7 @@ obvious implementation that gives a wrong answer.
 | `get_summary`, the per-broker breakdown (card capital from the engine, lot 41 H) | `backend/app/services/portfolio_service.py` |
 | Report flags (`include_*`) and series schemas | `backend/app/schemas/portfolio.py` |
 | Growth chart (P&L mode, sub-modes, candles, income) | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
+| Growth chart P&L series (sign split, candles, reference line) | `frontend/src/lib/components/dashboard/growthChartSeries.ts` |
 | Axis label planner | `frontend/src/lib/components/dashboard/growthLadderAxis.ts` |
 | Engine tests (identity, candles) | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_broker_pnl_contributions.py` |
 | Candle tests | `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_pnl_candles.py` |

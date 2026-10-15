@@ -495,6 +495,7 @@ Once the container has started, the one-time key is used up: it disappears from 
         environment:
           - LIBREFOLIO_DATA_DIR=/app/backend/data/prod-docker
           - HOST=0.0.0.0
+          - PORT=6040
         healthcheck:
           test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:6040/api/v1/system/health')"]
           interval: 30s

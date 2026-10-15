@@ -212,6 +212,28 @@ Test lanes never inherit the secrets that make the instance trust a session or d
 come from the shell or from `.env`. A test lane therefore signs sessions with a key made for its run and derives keys from an
 instance key generated in its own data directory.
 
+#### Test lanes and the instance's configuration {: #test-lanes-and-the-instances-configuration }
+
+The same rule covers the rest of the instance's configuration: a test lane runs on the defaults, so a
+setting of the developer's install (a mail server, the managed profile, an instance block, account
+limits) can neither reach the tests nor change their outcome.
+
+- `configure_test_runtime()` removes, whatever their origin (`.env`, loaded by `pipenv run` before
+  `dev.py` starts, or the shell): every variable `.env.example` documents
+  (`documented_instance_variables()`), every `LIBREFOLIO_*` name in the environment and the secrets
+  above. Keys of `.env` that are not LibreFolio's (a proxy, `PYTHONPATH`) stay.
+- It keeps only what `kept_in_a_test_lane()` keeps: `TEST_LANE_KEEPS` (the two ports, the production
+  data directory it must stay away from, `HOST`, the log level, `LF_APP_VERSION` frozen by a release
+  job for its gallery, and Playwright's `LIBREFOLIO_SERVER_WORKERS`) and every `LIBREFOLIO_TEST_*`
+  name, the runner's and the tests' own (data directory, mode, the lane's readiness token, startup
+  timeout).
+- In test mode `Settings` does not read `.env` at all (`settings_customise_sources`), so a setting
+  removed from the environment does not come back from the file.
+- A new variable is covered without a list to update: it is named `LIBREFOLIO_*` or documented in
+  `.env.example` (a test requires it). A test that needs a setting sets it in its own process, after
+  any helper that configures the lane (`setup_test_database()` and its siblings call
+  `configure_test_runtime()`, which would remove it again).
+
 ### 🧬 Instance Key {: #instance-key }
 
 One secret per installation, from which LibreFolio derives its encryption keys
@@ -779,6 +801,22 @@ challenge is never followed, so the token request can only go to `https://ghcr.i
 HTTP client uses a 5 s timeout and does not follow redirects. The frontend keeps the gate
 fail-closed as well (`frontend/src/lib/features/update-check/updateCheck.ts`): an error is
 never shown as "up to date".
+
+## 📜 Request Logs {: #request-logs }
+
+uvicorn writes one line per request, with its path and query string: HTTP requests on the `uvicorn.access` logger,
+WebSocket handshakes on `uvicorn.error`. A credential in a query string would reach that line in clear, so
+`configure_logging()` (`backend/app/logging_config.py`) adds a filter to both loggers. It replaces with `***` the value
+of every credential-like query parameter: one named exactly `code`, or whose name holds `token`, `secret`, `password`,
+`passwd`, `api_key`/`apikey`/`api-key` or `signature`, in any case, judged on the name percent-decoded as the app reads
+it. The filter masks every string argument of the record where it stands, so the line keeps its shape, and the log
+stays on everywhere. A value is not decoded: a URL encoded inside another parameter's value is not read.
+
+The links the app writes carry their tokens in the URL fragment, which the browser never sends, and the app's
+redirects (`?redirect=`, `?returnTo=`) carry a path and query, never a fragment: the filter covers a token typed by
+hand into a query string. `mask_query_credentials()` holds the rule. One mode is outside it: uvicorn's own
+`--log-level trace`, which LibreFolio never passes, logs every ASGI message on `uvicorn.asgi`, headers included. It is
+a debugging mode, not meant for a server with real users.
 
 ## 🌐 HTTPS & Deployment Architecture
 

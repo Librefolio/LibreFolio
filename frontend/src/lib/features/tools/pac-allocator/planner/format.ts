@@ -20,7 +20,7 @@ import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
 import {formatExactDecimal} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {maskable, shouldMaskAmount, type AmountSensitivity} from '$lib/utils/privacy/maskable';
-import {canonicalDecimal, decimalEqualsRatio, decimalScale, roundDecimal, roundRatio} from './decimal';
+import {canonicalDecimal, decimalEqualsRatio, decimalScale, roundDecimal, roundRatio, shiftDecimal} from './decimal';
 import {defaultAsOf} from './defaults';
 import type {PacExactMoney, PacExactNumber, PacExactPrice, PacObjectiveUnit} from './types';
 import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -219,20 +219,30 @@ export function formatExactFxRate(value: PacExactNumber): string {
     return formatPlannerFxRate(shown.text, {approx: shown.approx});
 }
 
-/** A fraction (0.6) shown as a percentage (60.00%): public. */
+/**
+ * A fraction (0.6) shown as a percentage (60.00%): public. R14: rounded once, half away from zero, exactly, on the
+ * decimal text, as the planner declares (`roundDecimal`); through `Number` a tie such as 0.30595 fell either way.
+ */
 export function formatPlannerPercent(fraction: string | null | undefined, options: {digits?: number; signed?: boolean; approx?: boolean} = {}): string {
     if (fraction === null || fraction === undefined) return EMPTY;
     const canonical = canonicalDecimal(fraction);
-    if (canonical === null) return EMPTY;
-    const text = maskable(formatPercent(Number(canonical), {scale: 100, signed: options.signed ?? false, digits: options.digits ?? 2}), 'public');
-    return options.approx ? '≈' + text : text;
+    const percent = canonical === null ? null : shiftDecimal(canonical, 2);
+    if (percent === null) return EMPTY;
+    const text = formatRoundedPercent(percent, options.digits ?? 2, options.signed ?? false);
+    return options.approx && text !== EMPTY ? '≈' + text : text;
 }
 
 /** A percentage already expressed in percent units (the draft inputs and their control total). */
 export function formatPlannerPercentUnits(percent: string | null | undefined, digits = 2): string {
     if (percent === null || percent === undefined) return EMPTY;
     const canonical = canonicalDecimal(percent);
-    return canonical === null ? EMPTY : maskable(formatPercent(Number(canonical), {scale: 1, signed: false, digits}), 'public');
+    return canonical === null ? EMPTY : formatRoundedPercent(canonical, digits, false);
+}
+
+/** `percent` (percent units) rounded exactly to `digits`, then written by the shared formatter, which no longer rounds it. */
+function formatRoundedPercent(percent: string, digits: number, signed: boolean): string {
+    const rounded = roundDecimal(percent, digits);
+    return rounded === null ? EMPTY : maskable(formatPercent(Number(rounded), {scale: 1, signed, digits}), 'public');
 }
 
 /**
@@ -242,7 +252,10 @@ export function formatPlannerPercentUnits(percent: string | null | undefined, di
  * currency changed it (R14). Amendments of the C0 rule, recorded in the plan.
  */
 export function formatExactPercent(value: PacExactNumber, digits = 2): string {
-    return formatPlannerPercent(exactDisplay(value).text, {digits});
+    // R14: the exact value, rounded once. A ratio's display_decimal is already a rounding (6 places): rounding it
+    // again could turn 30.5949995% into 30.60%.
+    const fraction = value.kind === 'finite_decimal' ? value.value : roundRatio(value.numerator, value.denominator, digits + 2);
+    return formatPlannerPercent(fraction, {digits});
 }
 
 /**

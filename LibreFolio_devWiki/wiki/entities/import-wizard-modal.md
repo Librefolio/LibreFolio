@@ -206,6 +206,7 @@ transaction payload; the wizard never commits directly.
 | Role | Path |
 |------|------|
 | Wizard orchestration | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
+| Step markup (upload, select, analyze, duplicates, review, footer) and the types the steps share | `frontend/src/lib/components/transactions/wizard/` |
 | Parse-to-merge and placeholder remapping | `frontend/src/lib/utils/transactions/importMerge.ts` |
 | Wizard transaction and resolution types | `frontend/src/lib/utils/transactions/importTypes.ts` |
 | Final duplicate request shaping | `frontend/src/lib/utils/transactions/duplicateRecheckPayload.ts` |

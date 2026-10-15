@@ -3,11 +3,13 @@
  *
  * Pure functions over a synthetic catalogue: grouping and ordering of the palette, the variables that hold a colour,
  * the hand-written colours grouped by value, the search filter, and the value a variable has in a theme before and
- * after the changes. Every expectation follows from the few entries written below, never from the real tree.
+ * after the changes; for the colour roles, the inline aliases of `@theme inline` (`--color-lf-card`), the role each
+ * stands for (`--lf-surface-card`, the variable the Lab edits), and what editing a variable reaches in the code.
+ * Every expectation follows from the few entries written below, never from the real tree.
  */
 
 import {describe, expect, it} from 'vitest';
-import {appVars, changedVarValue, matchesSearch, paletteFamilies, sourceVarValue, valueGroups} from './catalogView';
+import {appVars, changedVarValue, editTarget, isInlineAlias, matchesSearch, paletteFamilies, sourceVarValue, valueGroups, varImpact} from './catalogView';
 import type {CatalogLiteral, CatalogPaletteEntry, CatalogVar, CatalogVarDef, ColorCatalog, LabChange} from './types';
 
 function catalogOf(parts: Partial<ColorCatalog>): ColorCatalog {
@@ -35,6 +37,14 @@ function literal(id: number, fields: Partial<CatalogLiteral>): CatalogLiteral {
 }
 
 const varChange = (target: string, scope: LabChange['scope'], to: string, layer: LabChange['layer'] = 'css-var'): LabChange => ({id: `${layer}:${target}@${scope}`, layer, target, scope, from: '', to});
+
+/** A definition of `@theme inline`, as the scanner writes it: `aliasOf` the variable named when the value is only `var()`. */
+const aliasDef = (name: string, value: string, aliasOf: string | null): CatalogVarDef => def(name, value, {selector: null, scope: 'scoped', inline: true, alias_of: aliasOf});
+
+/** A palette entry with its class uses (`uses` is their sum, as in the scanner) and, for an inline alias, its role. */
+function usedEntry(name: string, classes: Record<string, number>, files: Record<string, number>, role?: string): CatalogPaletteEntry {
+    return {var: name, uses: Object.values(classes).reduce((n, c) => n + c, 0), dark: 0, classes, files, occ: [], ...(role ? {role} : {})};
+}
 
 describe('paletteFamilies', () => {
     // In catalogue order (by variable name), as the scanner writes it.
@@ -72,6 +82,30 @@ describe('paletteFamilies', () => {
             ['--color-white', 'white'],
         ]);
     });
+
+    it('groups the colour roles (`--color-lf-*`) as the family `lf`, each named by the rest of its variable, in alphabetical order', () => {
+        const roles = catalogOf({
+            palette: [
+                paletteEntry('--color-gray-500', 10),
+                {...paletteEntry('--color-lf-text-muted', 4), role: '--lf-text-muted'},
+                {...paletteEntry('--color-lf-card', 5), role: '--lf-surface-card'},
+                {...paletteEntry('--color-lf-action-hover', 3), role: '--lf-action-hover'},
+                paletteEntry('--color-libre-green', 30),
+            ],
+        });
+        const families = paletteFamilies(roles);
+        // lf 12 uses, gray 10: the roles rank as a family, by their uses; `other` (30 uses) still comes last.
+        expect(families.map((f) => f.family)).toEqual(['lf', 'gray', 'other']);
+        const lf = families.find((f) => f.family === 'lf');
+        expect(lf?.entries.map((e) => [e.var, e.shade])).toEqual([
+            ['--color-lf-action-hover', 'action-hover'],
+            ['--color-lf-card', 'card'],
+            ['--color-lf-text-muted', 'text-muted'],
+        ]);
+        // The chip of an entry edits its role: the grouping keeps it.
+        expect(lf?.entries.map((e) => editTarget(e))).toEqual(['--lf-action-hover', '--lf-surface-card', '--lf-text-muted']);
+        expect(families.find((f) => f.family === 'other')?.entries.map((e) => e.var)).toEqual(['--color-libre-green']);
+    });
 });
 
 describe('appVars', () => {
@@ -90,6 +124,83 @@ describe('appVars', () => {
             ],
         });
         expect(appVars(catalog).map((v) => v.name)).toEqual(['--brand', '--mix', '--named', '--ring', '--theme-text', '--two']);
+    });
+
+    it('leaves out the aliases of `@theme inline`, which no stylesheet defines at runtime, and keeps the roles they stand for', () => {
+        const catalog = catalogOf({
+            css_vars: [
+                cssVar('--color-lf-card', [aliasDef('--color-lf-card', 'var(--lf-surface-card)', '--lf-surface-card')]),
+                cssVar('--color-lf-overlay', [aliasDef('--color-lf-overlay', 'color-mix(in oklab, #0f1412 60%, transparent)', null)]),
+                // Defined in `:root` too: a stylesheet defines it at runtime, so editing it changes the page.
+                cssVar('--color-lf-shared', [def('--color-lf-shared', '#123456'), aliasDef('--color-lf-shared', 'var(--lf-surface-card)', '--lf-surface-card')]),
+                cssVar('--lf-surface-card', [def('--lf-surface-card', '#f5f5f4', {selector: ':root, html.light, .light'}), def('--lf-surface-card', '#1c1917', {selector: 'html.dark, .dark', theme: 'dark'})]),
+            ],
+        });
+        expect(appVars(catalog).map((v) => v.name)).toEqual(['--color-lf-shared', '--lf-surface-card']);
+    });
+});
+
+describe('isInlineAlias', () => {
+    it('is true when every definition of the variable is an alias of `@theme inline`, an expression included', () => {
+        expect(isInlineAlias(cssVar('--color-lf-card', [aliasDef('--color-lf-card', 'var(--lf-surface-card)', '--lf-surface-card')]))).toBe(true);
+        expect(isInlineAlias(cssVar('--color-lf-x', [aliasDef('--color-lf-x', 'var(--lf-a)', '--lf-a'), aliasDef('--color-lf-x', 'color-mix(in oklab, var(--lf-a) 50%, white)', null)]))).toBe(true);
+    });
+
+    it('is false for a variable without definitions, and for one a stylesheet defines as well or alone', () => {
+        expect(isInlineAlias(cssVar('--color-lf-card', []))).toBe(false);
+        expect(isInlineAlias(cssVar('--color-lf-x', [aliasDef('--color-lf-x', 'var(--lf-a)', '--lf-a'), def('--color-lf-x', '#123456')]))).toBe(false);
+        expect(isInlineAlias(cssVar('--theme-text', [def('--theme-text', '#111827')]))).toBe(false);
+    });
+});
+
+describe('editTarget', () => {
+    it('edits the role an inline alias stands for, and any other entry by its own variable', () => {
+        expect(editTarget({...paletteEntry('--color-lf-card', 3), role: '--lf-surface-card'})).toBe('--lf-surface-card');
+        expect(editTarget(paletteEntry('--color-gray-500', 1))).toBe('--color-gray-500');
+    });
+});
+
+describe('varImpact', () => {
+    const ROLE = '--lf-surface-card';
+    // Files: 0 app.css, 1 DataTable.svelte, 2 GrowthChart.svelte.
+    const gray = usedEntry('--color-gray-500', {'text-gray-500': 3, 'border-gray-500': 1}, {'1': 1, '2': 3});
+    const card = usedEntry('--color-lf-card', {'bg-lf-card': 2, 'hover:border-lf-card/50': 1}, {'1': 2, '2': 1}, ROLE);
+    const muted = usedEntry('--color-lf-muted', {'text-lf-muted': 4}, {'1': 4}, '--lf-text-muted');
+    const grayVar: CatalogVar = {...cssVar('--color-gray-500', []), uses: 1, files: {'0': 1}};
+    const role: CatalogVar = {...cssVar(ROLE, [def(ROLE, '#f5f5f4', {selector: ':root, html.light, .light'}), def(ROLE, '#1c1917', {selector: 'html.dark, .dark', theme: 'dark'})]), uses: 2, files: {'0': 1, '1': 1}};
+    const catalog = catalogOf({palette: [gray, card, muted], css_vars: [grayVar, role]});
+
+    it('reaches the classes of the alias standing for a role, and the stylesheets that read the role with `var()`', () => {
+        const impact = varImpact(catalog, ROLE);
+        expect(impact.entries).toEqual([card]);
+        expect(impact.variable).toBe(role);
+        // 3 class uses + 2 reads; the classes in DataTable and GrowthChart, the reads in app.css and DataTable.
+        expect([impact.uses, impact.files]).toEqual([5, 3]);
+        expect(impact.classes).toEqual({'bg-lf-card': 2, 'hover:border-lf-card/50': 1});
+    });
+
+    it('adds up a class that two aliases of one role share, and counts each file once', () => {
+        const surface = usedEntry('--color-lf-surface', {'bg-lf-card': 1, 'bg-lf-surface': 2}, {'2': 3}, ROLE);
+        const impact = varImpact(catalogOf({palette: [gray, card, muted, surface], css_vars: [grayVar, role]}), ROLE);
+        expect(impact.entries).toEqual([card, surface]);
+        // 3 + 3 class uses + 2 reads, in the files {1, 2} ∪ {2} ∪ {0, 1}.
+        expect([impact.uses, impact.files]).toEqual([8, 3]);
+        expect(impact.classes).toEqual({'bg-lf-card': 3, 'hover:border-lf-card/50': 1, 'bg-lf-surface': 2});
+    });
+
+    it('reaches a palette variable through its own classes and its `var()` reads', () => {
+        const impact = varImpact(catalog, '--color-gray-500');
+        expect(impact.entries).toEqual([gray]);
+        expect(impact.variable).toBe(grayVar);
+        // 4 class uses + 1 read, in the files {1, 2} ∪ {0}.
+        expect([impact.uses, impact.files]).toEqual([5, 3]);
+        expect(impact.classes).toEqual({'text-gray-500': 3, 'border-gray-500': 1});
+    });
+
+    it('reaches nothing for a variable the catalogue does not know', () => {
+        const impact = varImpact(catalog, '--lf-unknown');
+        expect(impact).toEqual({entries: [], variable: undefined, uses: 0, files: 0, classes: {}});
+        expect(impact.variable).toBeUndefined();
     });
 });
 
