@@ -2370,8 +2370,8 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   La sezione «Post-Migration Fixes» di `mkdocs_src/docs/admin/cli_tools.en.md` dice la seconda correzione solo in EN
   (coordinatore: niente IT/FR/ES né stamp, perché il file lo toccano anche A e H). Va nel debito di traduzione di A-10
   (sezione A), che nel mio ramo non c'è ancora: da riunire alla riconciliazione. N1b-3 aggiunge un punto (il warning
-  delle violazioni di FK già presenti) e cambia una frase del riquadro (lo script stampa il log). Dettagli: piano 04,
-  §12, N1.
+  delle violazioni di FK già presenti) e cambia una frase del riquadro (lo script stampa il log); E1c aggiunge il
+  paragrafo della correzione `event_types` (due punti). Dettagli: piano 04, §12, N1 ed E1.
 - ✅ **W-B22 · Correzioni post-migrazione: una violazione di FK già nel DB blocca ogni correzione, a ogni avvio** — basso,
   dati; W, 15/10 (N1b-2, provato da docs-writer su un DB di prova). Il controllo comune
   (`backend/app/db/post_migration/__init__.py`, `_common_problems`) vuole `PRAGMA foreign_key_check` **vuoto** sull'intero
@@ -2389,6 +2389,13 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   log nello script (console e `logs/` della data-dir configurata), con un test che non sporchi la sandbox dei test del
   piano 34. File del quadro, da assegnare. Dettagli: piano 04, §12, N1. **Chiusa** (N1b-3, 15/10, `0e4bd9790`): il log sulla console
   soltanto (JSON su stdout, nessun file nella data-dir), configurato solo quando lo script gira con `python -m`.
+- **W-B24 · Chi può modificare i dati condivisi degli asset: un modello per il futuro** — basso, decisione; W, 15/10
+  (decisione 25 del developer). Asset, prezzi manuali, eventi (dividendi, split) e classificazioni sono condivisi fra
+  tutti gli utenti di un'istanza: chiunque abbia fatto il login li crea, modifica, unisce e cancella, anche chi vede un
+  broker solo in lettura, e una correzione cambia i calcoli di tutti. Il developer (15/10): «l'istanza è condivisa
+  apposta, è un rischio necessario che uno sbagli, è noto e accettato» — nella 1.3 resta così. Per il futuro (istanze
+  cloud con più famiglie?): un modello fra solo gli admin, solo chi ha creato l'asset, solo chi ne ha posizioni, o un
+  registro delle modifiche con l'autore. Dettagli: file delle decisioni, punto 25.
 
 ## J · Numeri e analisi (fase 01)
 

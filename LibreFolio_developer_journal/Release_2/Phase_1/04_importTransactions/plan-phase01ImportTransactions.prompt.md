@@ -1726,3 +1726,142 @@ di N1b-2 (W-B22 è legata a N1b-2: un DB che chiede ancora `autoincrement` e ha 
    `admin/cli_tools.en.md` (un punto per il warning delle violazioni già presenti; nel riquadro, lo script stampa il
    log e non scrive file). Solo EN (W-B21). `mkdocs build` e `check-links` dopo la finestra.
 4. ⏳ Handoff FROZEN.
+
+### E1 — eventi: decisioni 20–23 del developer (V-22, I-09, I-10 S4 e resto, I-11c, I-12) ⏳ (2026-10-15)
+
+**Via del coordinatore** (15/10 12:44, base `05f2cb106`), con le decisioni del developer (file delle decisioni e chat
+del 15/10 12:30–12:44):
+
+- **20**: «+ Nuovo evento» non sovrascrive mai. Se esiste un evento con la stessa data e lo stesso tipo, manuale o del
+  fornitore, arriva un errore: la finestra mostra l'evento esistente e offre «Modifica questo», «Usa questo» e
+  «Annulla». **Niente «Crea comunque»** (developer: due eventi dello stesso tipo nello stesso giorno non capitano).
+  L'editor degli eventi e il CSV continuano ad aggiornare per data e tipo, come oggi.
+- **21**: la cancellazione degli eventi indica l'asset.
+- **22**: tutto o niente, e se fallisce dice dove.
+- **23**: il tipo in maiuscolo all'ingresso e, se ancora non va, salvataggio rifiutato; quelli già salvati male si
+  cancellano tutti; per quelli collegati a transazioni la proposta è mia (per esempio scollegare e poi cancellare, con
+  il log dei due passi); **prima il conteggio sulla copia del DB**.
+- **24**: K-1 chiusa senza codice. **25**: resta così; una voce nel backlog per un modello futuro.
+- Dipendenza: B0 (`api/v1/backup.py` → pacchetto `api/v1/backup/`) non è ancora in `dev_release2`; E1 non tocca
+  l'export degli eventi. Fino all'avviso di fine della finestra della galleria (~13:00) solo prove leggere.
+
+**Disegno** (verificato su `05f2cb106`; appunti dell'analisi del mattino in `files/e1-prep.md` della sessione):
+
+- **E1a, backend** (moduli miei da X CP2b: `api/v1/assets/events.py`, `services/assets/event_store.py`,
+  `schemas/assets/events.py`):
+  - **D23 / I-09**: validatore `before` su `FAAssetEventPoint.type` (spazi tolti, maiuscolo; fuori da
+    `AssetEventType` → errore di validazione, 422). Il tipo resta `str` nell'OpenAPI. Vale per API, editor, CSV,
+    pianificazioni dei parametri e uscite dei plugin (tutti già in maiuscolo).
+  - **D22 / I-12b**: `bulk_upsert_events` in **una transazione**: gli elementi in ordine, con flush e nessun commit fino
+    alla fine; ogni errore → rollback, niente scritto. Un asset inesistente → `EVENT_ASSET_NOT_FOUND` invece di «0
+    salvati». Gli errori dicono **dove** (elemento, asset, evento: indice, data, tipo) in un dettaglio strutturato
+    `{error_code, message, params}`, come gli altri errori di `api/v1/assets/`. `_upsert_asset_events(..., commit=True)`:
+    il percorso manuale passa `False`; il refresh dei fornitori (`refresh.py:557`, X) resta a blocchi.
+  - **D21 / I-12a**: `DELETE /assets/events?asset_id=&ids=` con `asset_id` obbligatorio; gli id di un altro asset
+    tornano `not_found`.
+  - **D20 / V-22**: `FAEventUpsert.mode`: `"upsert"` (oggi, predefinito) o `"create"`. In `create` solo eventi senza
+    id; se un evento con la stessa data e lo stesso tipo esiste già (manuale o del fornitore) → 409 `EVENT_EXISTS` con
+    gli eventi esistenti (id, data, tipo, valore, note, `is_auto`, transazioni collegate) e nulla scritto.
+  - **I-10 S4**: `FAEventUpsertResult.event_ids`, gli id scritti in ordine (aggiunta).
+- **E1b, frontend**:
+  - `EventCreateMiniModal.svelte` manda `mode: "create"`. Su `EVENT_EXISTS` un componente nuovo,
+    `EventExistsPanel.svelte` (solo ruoli `lf-*`), mostra l'evento o gli eventi esistenti: «Usa questo» (lo collega),
+    «Modifica questo» (solo manuale: il form passa a quell'evento, con i suoi valori, e salva per id), «Annulla» (torna
+    al form). Un evento del fornitore non si modifica (`EVENT_NOT_EDITABLE`): una nota e solo «Usa questo». Il
+    collegamento usa l'id restituito (S4).
+  - `AssetDataEditorSection.svelte` (righe di X concesse): la cancellazione con `asset_id` (D21); prima le
+    cancellazioni, poi le modifiche (I-10: spostarsi sulla chiave di un evento appena cancellato); l'errore del server
+    tradotto con la riga (D22, D23); la valuta della riga, se c'è (I-11c: un evento in un'altra valuta viene rifiutato
+    con la sua riga, invece di essere rietichettato in silenzio).
+  - i18n nelle 4 lingue; doc utente.
+- **E1c, dati (D23)**: una correzione post-migrazione `event_types` (come N1b-2: il dry run fa da conteggio, ogni riga
+  il suo log) che porta in maiuscolo i tipi correggibili e cancella gli sconosciuti, scollegando prima le transazioni
+  (log dei due passi). Il quadro vuole i conteggi delle righe invariati: serve una sua estensione (delta dichiarati
+  dalla correzione, controllati esatti).
+
+**Risposte del coordinatore** (15/10 ~12:58), disegno approvato:
+
+1. **Niente conteggio sulla copia del developer**: i dati di produzione non si toccano, la copia in `/tmp` non c'è più,
+   e il developer ha già deciso («l'unica è cancellarli»). Sui DB veri il conteggio è il dry run della correzione.
+   Lo script di conteggio (provato solo su un DB sintetico) è stato cancellato senza lanciarlo su dati veri.
+2. **E1c = correzione post-migrazione `event_types`** al posto della 008: prima il maiuscolo, poi scollegare e
+   cancellare i tipi sconosciuti, ogni riga con il suo log; l'estensione del quadro (delta dichiarati dalla
+   correzione, controllati esatti) con un rosso prima; commit a parte. **E1 staccato il più possibile da N1b-2**: se il
+   developer dice no al 46, E1 deve poter entrare senza N1b-2; `post_migration/__init__.py` solo per l'estensione (e la
+   registrazione), dichiarato nell'handoff.
+3. **«Modifica questo»** come proposto: il form passa all'evento esistente con i suoi valori e salva per id; per un
+   evento del fornitore la nota e solo «Usa questo»; «Annulla» torna al form.
+4. Colori: il coordinatore chiede al coordinatore colori dei due file; intanto E1a.
+5. W-B24 nella mia sezione. 6. K-1 la chiude il coordinatore nel README del 38.
+- Nell'handoff: la voce «⚠️ Breaking changes» del CHANGELOG per il 21 (`asset_id` obbligatorio).
+
+**Passi**:
+
+1. ⏳ Rossi E1a (test-author, test di servizio senza server; API scritti ora, eseguiti dopo la finestra).
+   > **Rossi del servizio visti** (13:38, `nice -n 10`, dopo la pausa delle dipendenze; `cryptography 50.0.2` e
+   > `pycparser 3.11` nell'ambiente condiviso, `dc9a5d232` su `dev_release2`): nuovo
+   > `test_services/test_asset_event_store.py` con l'azione `services asset-event-store` (`write-global`): **40 test, 34
+   > rossi, 6 guardie verdi** — tipi non normalizzati (`'dividend' == 'DIVIDEND'`, `DID NOT RAISE`, riga grezza
+   > `'dividend'`), elementi già salvati prima del rifiuto, asset mancante «0 salvati», `details == {}`, `mode`/`event_ids`
+   > campi sconosciuti, `delete_events_bulk()` senza `asset_id`. `services asset-source-guards` 29/29. `ruff`/`black`
+   > puliti. Le due azioni dei servizi ricreano vuoto il DB della corsia (comportamento normale).
+   > `test_api/test_assets_events.py`: 37 test, 18 rossi attesi (10 nuovi, `test_upsert_nonexistent_asset` e
+   > `_assert_rejected` ritarati sul contratto nuovo, i 5 test di cancellazione con `asset_id`). Nessun altro test del
+   > backend chiama `DELETE /assets/events`; gli E2E che lo fanno: `tx-bulk-promote-cost-basis.spec.ts:353`,
+   > `asset-event-delete.spec.ts:176,204,252`, `asset-data-editor.spec.ts:472,613`.
+   > **⚠️ Fuori pista** (13:41–13:46): `db populate --force --clean` (`nice -n 15`) verde; poi `api assets-events`
+   > (via del coordinatore, «con le due build dentro», `nice -n 15`): **il backend condiviso non ha risposto in 300 s**
+   > — la build del frontend (vecchia: 08:30) non è finita dentro `LIBREFOLIO_TEST_STARTUP_TIMEOUT`, con il carico della
+   > macchina a 77. Nessun test eseguito, nulla rimasto acceso, porta libera. Riferito al coordinatore con due strade:
+   > ripetere con `LIBREFOLIO_TEST_STARTUP_TIMEOUT=1200` a carico basso, o i rossi API nello slot dopo il merge.
+   > **Preparato, non applicato** (13:05–13:20): `/tmp/libreFolio_w_e1a_fix.py` (dry run: ancore trovate, i 3 file
+   > compilano) e `/tmp/libreFolio_w_e1c_fix.py` (dry run ok). E1a: `_upsert_asset_events` delega a
+   > `_write_asset_events`, che dà gli id scritti nell'ordine (letti dopo il flush, prima di un commit);
+   > `bulk_upsert_events` = `_write_manual_item` per elemento + un commit, rollback su qualunque errore, e i dettagli
+   > completati con `asset_id` e `item_index`; `_reject_currency_mismatches`, `_reject_existing_events` (409
+   > `EVENT_EXISTS` con gli esistenti e i collegamenti); `delete_events_bulk(asset_id, …)`; il validatore del tipo; il
+   > dettaglio HTTP `{error_code, message, params}`. E1c: `PostMigrationFix.row_count_changes()` in `base.py`; in
+   > `__init__.py` `_expected_counts()`, `_common_problems(conn, counts_expected, …)` con il messaggio «row counts not
+   > as expected: tabella (expected N, found M)», la registrazione; `post_migration/event_types.py` (`EventTypesFix`).
+   > I ruoli dei colori per `EventExistsPanel`: `tokens.css` e `app.css` uguali fra HEAD e `dev_release2`.
+   > **Via libera dei colori** (coordinatore colori, 13:00): nessun annuncio aperto sui due file; T li converte più
+   > avanti (ondata W4). Vincoli: in `AssetDataEditorSection.svelte` non spostare né togliere il letterale `#a855f7`
+   > della linea d'anteprima (eccezione R-6, `frontend/scripts/theme/theme-roles.mjs:73`); m1 17 lì e 42 in
+   > `EventCreateMiniModal`: nessuna classe nuova; `EventExistsPanel.svelte` solo con i ruoli già in `tokens.css`.
+   > **E1a porta anche il frontend che la rottura del 21 richiede**: la riga della cancellazione nell'editor
+   > (`queries: {asset_id: assetId, ids}`) e gli E2E che chiamano `DELETE /assets/events` senza `asset_id`
+   > (`tx-bulk-promote-cost-basis.spec.ts:353`, `asset-event-delete.spec.ts:204`, `asset-data-editor.spec.ts`): se E1a
+   > entrasse da solo, l'editor non cancellerebbe più (422).
+   > **Pausa delle dipendenze** (13:20, `cryptography` nell'ambiente condiviso): nessun comando Python; nella mia corsia
+   > non girava nulla («fermo» al coordinatore). ⚠️ Mia svista: un `python --version` (nessun import, nulla scritto).
+   > Intanto, solo codice: le bozze di E1b in `/tmp/libreFolio_w_e1b/` (`EventExistsPanel.svelte`, solo ruoli;
+   > `eventSaveError.ts`, puro) e `/tmp/libreFolio_w_e1b_fix.py` (mini-modale: `mode`, `event_ids`, pannello, «Modifica
+   > questo» con i valori dell'evento e i decimali conservati sul blur; editor: prima le cancellazioni, `asset_id`, la
+   > valuta della riga importata, l'errore tradotto con la riga), e le chiavi i18n in `/tmp/libreFolio_w_e1b_i18n.sh`.
+   > La riga registrata del toast della mini-modale (`moneyRenderSites.test.ts`) resta identica; il pannello mostra
+   > importo e valuta in due espressioni di markup (asset events = pubblici).
+2. ⏳ Cura E1a; `api sync`.
+3. ⏳ Rossi e cura E1b (dopo la risposta sui colori; Vitest ed E2E dopo la finestra).
+4. ✅ E1c (14:35): rossi visti → cura → verdi; commit a parte.
+   > **Rossi scritti, non eseguiti** (test-author, 14:10, carico alto): nuovo
+   > `test_db/test_post_migration_event_types.py` (20 funzioni, 35 casi: 33 rossi attesi, 2 guardie), nessun import dai
+   > test di N1b-2, `FIXES` controllato solo per `fix_id`; azione `db post-migration-event-types` in `_backend_db.py`,
+   > su righe proprie lontane da quelle di N1b-2 (anche in `db_order`, come prima riga). Più un perno chiesto dopo:
+   > un `row_count_changes` che solleva → `failed`, non un'eccezione.
+   > **Correzioni alla cura** dalla revisione del test-author: `FIXES` riconosciuto per forma (con o senza N1b-2);
+   > `row_count_changes()` chiesto dentro il `try` di `_apply_one`; la docstring del modulo `__init__.py` (punto 4: era
+   > ferma a «foreign_key_check vuoto», già superata da N1b-3); docstring in inglese; raggruppamento in un passaggio.
+   > Resta, dichiarato: l'import di `event_types` confina con quello di N1b-2 (conflitto banale se N1b-2 non entra); la
+   > parte della cura su `_common_problems` sta sulle righe di N1b-3.
+   > **Rossi visti** (14:33, `nice -n 10`, un file, senza server): `db post-migration-event-types` **34 rossi, 2 guardie
+   > verdi**, ognuno sull'asserzione prevista (A.1 `row counts changed`; A.2 solo sulle parole; A.4 nessun `boom`;
+   > registrazione assente; `event_types` senza esito). **Cura** (14:34, `/tmp/libreFolio_w_e1c_fix.py --apply`):
+   > `base.py` `row_count_changes()`; `__init__.py` `_expected_counts()`, i conteggi attesi chiesti dentro il `try`, il
+   > messaggio «row counts not as expected: tabella (expected N, found M)», la docstring del modulo, la registrazione;
+   > nuovo `event_types.py`. **Verdi**: `db post-migration-event-types` **36/36**; regressione `db post-migration` 41/41,
+   > `db post-migration-orphan-pairs` 47/47. Doc (solo EN, `/tmp/libreFolio_w_e1c_docs.py --apply`):
+   > `developer/architecture/database/index.md` (passo 5, paragrafo di `event_types`) e `admin/cli_tools.en.md` (due
+   > punti per l'amministratore); debito di traduzione in W-B21. `ruff`/`black` puliti.
+   > **Via (b) per i rossi API di E1a** (14:29, carico 32,8 alla scadenza): nello slot pesante dopo il merge. La cura E1a
+   > resta in `/tmp` fino ad allora; nel worktree ci sono i soli rossi di E1a.
+5. ⏳ Doc; handoff FROZEN (E1a+E1b; E1c a parte).
