@@ -22,7 +22,7 @@ from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel, SyncS
 from backend.app.services.asset_source_providers.mockprov.plugin import MockProvider
 from backend.app.services.assets.base import AssetHistoryStartDate
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.assets.refresh import AssetProviderRegistry
+from backend.app.services.assets.registry import AssetProviderRegistry
 
 
 def _unique(prefix: str) -> str:

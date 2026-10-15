@@ -1527,7 +1527,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >    `front check`, `check-orphans`, poi l'E2E `front-utility backup` da sola (una scheda in più nella barra).
 > 4. Poi B8 dalla patch, i suoi test e il FROZEN.
 
-### Aggiornamento di base — merge di `dev_release2` `bcd680868`, con E2 (2026-10-15, dalle 18:42)
+### Aggiornamento di base — merge di `dev_release2` `bcd680868`, con E2 (2026-10-15, 18:42-19:05) ✅ — committato
 
 > - **Piano committato dal coordinatore**: `ddf0c4035` (`docs(journal): all-backend green, B4 notes`). Merge aperto
 >   da lui: `MERGE_HEAD` `bcd680868`, con E2 (la scheda Email) e W (il salvataggio degli eventi).
@@ -1590,6 +1590,325 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > - E2E `front-utility backup` da sola;
 > - `front-utility core-unit`, nello slot 1. Rosso noto e accettato: `htmlInterpolation.gate.test.ts` sulla chiave
 >   `email.problems.SMTP_FROM_INVALID`, che E sta correggendo.
+>
+> **Committato dal coordinatore** (18:54):
+>
+> - il merge `b1f5b0fd1` (genitori `ddf0c4035` e `bcd680868`), con dentro la riga di `page.tabs.test.ts`: per lui è
+>   una correzione di significato del merge;
+> - il piano in `ef61f0e7f`;
+> - togliere `adminOnly` va bene: le liste per contesto di E fissano la stessa cosa.
+>
+> **Prove sulla revisione combinata `ef61f0e7f`** (18:55-19:05, `nice -n 10`, una alla volta; log in
+> `/tmp/libreFolio_b_post_b1f5_*.log`):
+>
+> - Vitest `settingsTabs` 20/20 e `page.tabs` 18/18.
+> - `api sync` 0, poi `front check` 0 errori e 0 avvisi. Il sync va prima perché il client generato è ignorato e il
+>   merge porta le rotte email di E.
+> - `check-orphans` verde: 127 E2E, 418 Vitest, 311 backend.
+> - E2E `front-utility backup` 5/5 (FBKP-001…004), con la scheda Email nella barra; 4 min 30 s, avvio della corsia
+>   compreso (carico 37).
+> - `front-utility core-unit` (slot 1): 5 046 passati e 1 rosso, quello noto: `htmlInterpolation.gate`, perché
+>   `email.problems.SMTP_FROM_INVALID` contiene `<` nei 4 cataloghi. La correzione di E (`be7de95b6`) è fuori dalla mia
+>   base. File: 154 su 155.
+> - Porta 6187 libera; in `.jobs` solo `.lock`; worktree pulito. Slot 1 liberato alle 19:05 (dopo B tocca a J).
+>
+> **B è entrato** (coordinatore, dopo le 19:05): `dev_release2` = `629d63306`, il merge di `ef61f0e7f`. Il CHANGELOG lo
+> scrive lui: in Added «Instance backup…», e fra le ⚠️ «the four placeholder backup endpoints are removed». Il mio HEAD
+> non si sposta: B8 va sopra `ef61f0e7f`, e la base la aggiorna lui al checkpoint di B8.
+>
+> **Ordine dopo B8**, dal coordinatore:
+>
+> 1. lo scatto `settings/backup-ready`, con la checklist di G (lo slot della galleria lo chiede lui);
+> 2. B2, la prova su copia, con le decisioni 41–43;
+> 3. B3, il ripristino e l'avvio, con `pending-restore` in `lifecycle.py` dopo l'ingresso di CP2b;
+> 4. B5, il resto della scheda;
+> 5. B4, il backup «sicuro» `.lfbk`;
+> 6. B7, Litestream, dopo CP7b di H e con il developer fuori dalla VPN.
+
+### B8 — il token del pannello, rimesso sopra `ef61f0e7f` (2026-10-15, 19:06-20:11) ✅ — 🧊 FROZEN
+
+> - **Rimesso**: `git apply` di `files/b8-wip/b8-on-23d284d3b.patch`, controllato prima con `--check`. Gli 8 file
+>   escluso `.env.example` sono identici al manifest `MANIFEST-23d284d3b.sha256`. `.env.example` differisce solo per la
+>   riga di E entrata col merge (`# Docs: mkdocs_src → admin/email.md`), fuori dal frammento di B8.
+> - **OpenAPI**: `api sync`, poi confronto con quello di `ef61f0e7f` salvato prima
+>   (`/tmp/libreFolio_b_openapi_pre_b8_ef61f0e7f.json`):
+>   - in più solo i 3 percorsi del pannello (4 operazioni, ciascuna con `BackupPanelToken`) e lo schema di sicurezza
+>     `BackupPanelToken`;
+>   - nessun percorso tolto o cambiato, e i 6 dell'admin identici;
+>   - in `info.version` c'è solo il suffisso `-dirty`.
+> - **Statici**: ruff e black puliti sugli 8 file Python; `git diff --check` pulito.
+>
+>   **⚠️ Fuori pista**: il primo ruff ha letto `.env.example` come Python, perché `MODIFIED.txt` tiene i percorsi su
+>   una riga sola e il filtro `\.py$` lo lasciava passare; rifatto con l'elenco a mano.
+> - **`Bearer` nei file**: nell'output del terminale compare `******` al posto di `Bearer <token>`, ma è solo il
+>   mascheramento dell'output. I byte di `.env.example` e di `panel.py` sono giusti; nei 9 file e nel brief non c'è
+>   nessun `******` letterale.
+> - **Test**: test-author in corso (dalle 19:10) con il brief v2 (`files/b8-test-brief-v2.txt`), aggiornato allo
+>   stato attuale:
+>   - 21 voci in `ALLOWED_ROUTES`;
+>   - il servizio finto di `test_instance_block.py` fa job d'origine `ui`, quindi va un parametro facoltativo `origin`,
+>     senza cambiare i test che ci sono;
+>   - la sequenza delle chiamate del pannello: start, poi `get_job`, poi `job_archive` o `delete_job`;
+>   - il corpo esatto del 401 del pannello, perché non passi per quello del blocco;
+>   - una sessione non sostituisce il token.
+>
+>   Gli ho dato la corsia, un selettore alla volta: io non lancio niente finché non ha finito.
+> - **Lasciati com'erano** (di H): `test_config_secrets.py`, i cui `ACCESSORS` sono solo quelli di
+>   `config/platform.py`, e l'elenco dei segreti che la corsia non eredita (firma JWT e chiave d'istanza). I casi del
+>   token sono nel file nuovo.
+>
+> **Esito di test-author** (19:10-19:43; log in `/tmp/libreFolio_b8ta_*.log`):
+>
+> - **⚠️ Fuori pista — B8 rompeva 2 test di CP6 in `test_instance_block.py`.** La precondizione di
+>   `_replace_the_backup_service` leggeva `backup_instance.jobs`, e B8 ha portato quell'import in `job_views.py`.
+>   - Base di test-author, prima di ogni sua modifica: `api instance-block` 54 passati e 2 rossi, con
+>     `AttributeError: … has no attribute 'jobs'`.
+>   - La mia prova di B8 era fatta su un'app piccola in un processo, senza lanciare `api instance-block`.
+>   - Cura, nel file di H (da dichiarare): la precondizione diventa
+>     `backup_instance.job_views.jobs is jobs and backup_panel.job_views.jobs is jobs`, il modulo che tutte e due le
+>     rotte chiamano davvero.
+> - **`test_backup_panel.py`**, nuovo, puro: 17 test e 42 casi, registrato come `api backup-panel` in `_backend_api.py`
+>   (+19 righe, solo in aggiunta). Ogni richiesta passa da un `send()` che controlla che il token, e quello che il
+>   chiamante presenta, non compaiano mai nel corpo, negli header o nel log catturato.
+>   - PANEL-001…006: l'accessore. Variabile, `_FILE`, precedenza, BOM e a capo, 31 contro 32 caratteri, file mancante,
+>     cartella, vuoto o bianco.
+>   - PANEL-010: token non impostato → 404 «Not Found» su 4 rotte × 4 header.
+>   - PANEL-011: token inutilizzabile → 503 con una riga di log che nomina la variabile.
+>   - PANEL-012: 9 varianti di header sbagliato → il 401 esatto, con `WWW-Authenticate: Bearer`. Fra le varianti:
+>     Basic, `Bearer` vuoto, prefisso, estensione, maiuscole, token nella query.
+>   - PANEL-013/014: il ciclo completo, con le chiamate esatte; il token preso dal `_FILE`.
+>   - PANEL-015/016/017: i job di un'altra origine (`ui`, `cli`, `pre-restore`) e gli id sconosciuti come «non
+>     esiste»; il job in corso con 409.
+>   - PANEL-018: gli errori d'avvio.
+>   - PANEL-019: le rotte dell'admin con le chiamate di prima di B8, verificate su `ef61f0e7f`.
+>   - PANEL-020: l'OpenAPI.
+> - **`test_instance_block.py`** (di H), in aggiunta nella sezione «(a) … the full backup»:
+>   - `origin` facoltativo nel servizio finto (default `ui`);
+>   - 4 test sull'istanza bloccata, senza sessione: 404 senza token impostato; il 401 del pannello, che il controllo
+>     del corpo esatto distingue da quello di `get_current_user`; il ciclo completo con il token; una sessione admin
+>     non sostituisce il token.
+>   - La barriera anonima è `GET /utilities/sectors`: 200 senza blocco, 401 col blocco.
+> - **Verdi**, una alla volta:
+>
+>   | Selettore | Esito |
+>   |---|---|
+>   | `api backup-panel` | 42 |
+>   | `api instance-block` | 60 (54 + 2 riparati + 4 nuovi) |
+>   | `api backup` | 23 |
+>   | `api backup-instance-errors` | 6 |
+>   | `services config-package` | 659 |
+>   | `services config-env-example` | 36 |
+>   | `check-orphans` | pulito |
+>
+>   Porta 6187 libera.
+> - **Mutazioni rosse**, ognuna ripristinata identica (sha256 e `cmp`):
+>   1. `require_panel_token` tolto dalla rotta del file: 11 rossi (il file servito senza token);
+>   2. `origin=None` sul download: 6 rossi (l'archivio dell'admin servito al pannello);
+>   3. il ramo 404 sostituito da `""`: 3 rossi (un backup avviato senza token);
+>   4. la rotta del file tolta da `ALLOWED_WHEN_BLOCKED`: 5 rossi, il perno di H compreso.
+>
+>   `==` al posto di `hmac.compare_digest` non si vede dai test funzionali: solo revisione del codice, come previsto.
+> - **Rilievo di test-author, curato** (19:45): un token con spazi intorno passava `backup_download_token()`, ma non
+>   poteva mai coincidere, perché HTTP toglie gli spazi in fondo a un header. Il pannello avrebbe preso un 401 per
+>   sempre, senza niente nel log. Ho allargato la cura:
+>   - in `config/backup.py`, `PANEL_TOKEN_CHARACTERS`: il token può contenere solo ASCII visibile (0x21-0x7E),
+>     controllato prima della lunghezza; altrimenti `BackupConfigError` con il codice
+>     `BACKUP_DOWNLOAD_TOKEN_NOT_VISIBLE_ASCII`, quindi 503 e una riga di log;
+>   - copre gli spazi (intorno e dentro), i caratteri fuori ASCII e quelli di controllo;
+>   - commento di `.env.example`: «At least 32 visible ASCII characters, no spaces».
+>
+>   test-author aggiunge i casi e la mutazione.
+> - **Seconda tornata di test-author** (19:48-20:00; log `/tmp/libreFolio_b8ta_r2_*.log`), solo in
+>   `test_backup_panel.py`, in aggiunta (+130 righe):
+>   - PANEL-007, 10 casi: spazio davanti, dietro, tab, spazio interno, `é`, `€`, U+00A0, DEL, `\x01` su un token
+>     valido di 40 caratteri, più un `_FILE` con spazi prima dell'a capo. Codice `…_NOT_VISIBLE_ASCII` e `variable`; il
+>     messaggio non contiene mai il valore, né una delle sue due metà.
+>   - PANEL-008: i caratteri si controllano prima della lunghezza.
+>   - PANEL-009: i token ai bordi, `!`…`~`, e uno con tutti i 94 caratteri visibili, presi come scritti, dalla
+>     variabile e dal file.
+>   - PANEL-021: un token con spazi intorno dà 503 sulle 4 rotte anche a chi presenta quel token, con una riga di log
+>     e mai il valore. Barriera: lo stesso token senza spazi apre la lettura.
+>
+>   Esito: `api backup-panel` 59 (42 + 17). La mutazione «controllo dei caratteri tolto» fa 13 rossi (PANEL-007 ×10,
+>   PANEL-008 ×2, PANEL-021, quest'ultimo con il 401 silenzioso di prima), ed è ripristinata identica: sha256
+>   `6b515315…` prima e dopo. `config-package` 659 e `config-env-example` 36.
+> - La descrizione di `api backup-panel` nel catalogo nomina la regola dei caratteri (ritocco mio, segnalato da
+>   test-author).
+> - **Rivisto da me**: `test_backup_panel.py` è puro, con un'app piccola con `backup_router`, `jobs` finto in un
+>   fixture automatico e log catturati con `structlog.testing.capture_logs`. `DATA_DIR = /srv/…` è solo una stringa
+>   nelle eccezioni finte, per provare che nessun percorso esce nelle risposte, e non viene mai creata. In
+>   `test_instance_block.py` le aggiunte sono quelle dichiarate.
+> - **Prove finali sullo stato finale** (20:02-20:10, `/tmp/libreFolio_b8_final.sh`, una alla volta, `nice -n 10`,
+>   carico 99; riepilogo in `/tmp/libreFolio_b8_final_summary.log`):
+>
+>   | Selettore | Esito |
+>   |---|---|
+>   | `api backup-panel` | 59 |
+>   | `api instance-block` | 60 |
+>   | `api backup` | 23 |
+>   | `api backup-instance-errors` | 6 |
+>   | `services config-package` | 659 |
+>   | `services config-env-example` | 36 |
+>   | `check-orphans` | 312 backend, 418 Vitest |
+>   | `api sync` | 0 |
+>   | `front check` | 0 errori e 0 avvisi |
+>
+>   Ruff e black puliti sugli 11 file Python toccati, `git diff --check` pulito, porta 6187 libera, in `.jobs` solo
+>   `.lock`.
+> - **Backlog**: B-9, il token del pannello fra i controlli della configurazione, come ha fatto E (sezione B).
+> - **Checkpoint** (20:11) 🧊 FROZEN: handoff al coordinatore, con i file di H dichiarati (`instance_block.py`,
+>   `test_instance_block.py`) e la voce del catalogo.
+> - **Nota per BZ**, solo informazione: senza token, un metodo che le rotte non servono (per esempio
+>   `PUT …/panel/jobs`) risponde 405, e l'OpenAPI elenca le rotte comunque. Il «404 come se non ci fossero» vale per le
+>   4 operazioni servite. Nessun effetto sulla sicurezza: il codice è pubblico.
+
+### Base `10697e618`, prove d'ingresso e decisioni 40–43 (2026-10-15, 20:12-20:25) ✅
+
+> - **B8 committato dal coordinatore**: `663e858f1` (`feat(backup): panel token for instance backups`) e `1f8385c0d`
+>   (journal). Il testo del CHANGELOG va bene. La precondizione nuova nel test di H gliela comunica il coordinatore
+>   all'ingresso.
+> - **Base aggiornata da lui**: merge di `dev_release2` `b4597efad`, senza conflitti; HEAD `10697e618`. Dentro ci sono
+>   CP2b di H (i passi d'avvio in `lifecycle.py`), N2 di W, L, le decisioni e i registri. Dei file di B8 cambia solo
+>   `.env.example`, con la sezione di Z sullo spegnimento: H non ha toccato `instance_block.py` dopo B8, e le 21 voci
+>   restano intere.
+> - **Prove d'ingresso** (20:13-20:21, una alla volta, `nice -n 10`, carico 67; riepilogo in
+>   `/tmp/libreFolio_b_entry_10697_summary.log`):
+>
+>   | Selettore | Esito |
+>   |---|---|
+>   | `api backup-panel` | 59 (5 min 43 s: la corsia rifà la build del frontend dopo il merge) |
+>   | `api instance-block` | 60 |
+>   | `api backup` | 23 |
+>   | `services config-env-example` | 36 |
+>   | `check-orphans` | 421 Vitest, 315 backend |
+>
+>   Porta 6187 libera; in `.jobs` solo `.lock`.
+> - **Decisioni 40–43** (file delle decisioni, righe «Decisione (15/10)» nella mia base). Cambiano il disegno di B2 e
+>   B3:
+>   - **40, approvata con tre precisazioni** (developer, 17:18: «direi che le tue proposte per la 40 lato mio sono
+>     tutte ok», «ok nell'usare la data»):
+>     - `JWT_SECRET` non cambia e non va nel backup;
+>     - il DB ripristinato registra l'ora del ripristino, e ogni cookie emesso prima viene rifiutato, qualunque sia il
+>       segreto. Il `+1` su `session_version` del §3.6 non basta, perché i numeri possono coincidere: serve l'ora,
+>       accanto al controllo `sv` di `auth.py`;
+>     - l'anteprima (B2) elenca per nome gli admin del backup, con l'avviso «dopo il ripristino entri con uno di
+>       questi, con la password di allora». Senza nessun admin nel backup, il ripristino si blocca;
+>     - recupero dell'admin: «password dimenticata» via email (E), o l'assistenza con `dev.py user reset-link`. Una
+>       riga nella doc del ripristino. Un pulsante del pannello che chiede il link all'istanza va nel backlog.
+>   - **41, approvata con una modifica**: la copia fatta prima del ripristino serve solo a tornare indietro. Si cancella
+>     se il primo avvio va bene; se fallisce, LibreFolio rimette da solo i dati di prima. Cambia il §3.4: niente
+>     `pre-restore` scaricabile dalla scheda, e niente `GET`/`DELETE …/pre-restore`.
+>   - **42, respinta**: dalla UI si ripristinano solo i backup di LibreFolio, con `manifest.json`. Cade D-B5, quindi
+>     niente archivi «a mano». Il passaggio dalla 1.2 alla 1.3 resta l'aggiornamento sul posto. La prova «revisione
+>     più vecchia» si fa con un archivio di LibreFolio con un DB a una revisione precedente.
+>   - **43, approvata**: `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`, `0` = senza limite (il default del self-hosted), 500 nel
+>     profilo gestito.
+>
+>   Il messaggio del coordinatore delle 20:12 dice «41–43 ancora aperte», ma è più vecchio di quanto sembri: è delle
+>   17:18, prima delle righe «Decisione» del treno 45 (17:40-18:10), che le danno decise.
+> - **Prossimo**: lo scatto `settings/backup-ready`, con la checklist di G. Lo slot della galleria lo chiede il
+>   coordinatore; il doppio lancio lo farà probabilmente la coppia G-13, come per Users ed Email.
+> - **B8 entrato** (coordinatore): `dev_release2` = `56d3d3182`; CHANGELOG in `6102d5097`. Le 41–43 seguono le righe
+>   «Decisione» del file: il suo messaggio era arrivato in ritardo dalla coda. Il pulsante del pannello per il link di
+>   reset è di B: **B-10** nel backlog, non per la 1.3 se non resta tempo. La precondizione nuova in
+>   `test_instance_block.py` la comunica lui ad H. **Ordine**: lo scatto, poi B2, poi B3 (con i passi in
+>   `app_lifespan.py`).
+
+### Scatto di galleria `settings/backup-ready` (2026-10-15, 20:25-20:45) ✅ — scritto, da girare nello slot di G
+
+> - **Fatti per il brief**, verificati sul codice:
+>   - la scheda ritrova un job finito dall'id in `sessionStorage`, chiave `librefolio.backup.job`, che deve rispettare
+>     `^[0-9a-f]{32}$`, e lo rilegge con `GET /api/v1/backup/instance/jobs/{id}`;
+>   - la scheda non mostra niente di relativo all'orologio: una data assoluta (`finished_at`) e frasi fisse;
+>   - il nome dell'archivio è in UTC (`jobs.archive_name`);
+>   - `waitForSettled` aspetta `data-busy="false"` sul primo elemento che lo porta, cioè la card.
+> - **Checklist di G**, come l'ha applicata E (piano 08): rotta registrata prima della prima navigazione e mai tolta;
+>   solo `GET` del suo percorso, il resto `route.fallback()`; corpo validato una volta con
+>   `schemas.InstanceBackupJob.parse` in `e2e/fixtures/galleryBackup.ts`; i passi e la cornice di G; nessun atteso in
+>   più oltre la prova che lo stato simulato è arrivato. Nota di G (registro dei colori, 18:27): ogni scheda nuova
+>   cambia i 13 scatti di `Settings`, e la riga Backup è già entrata.
+> - **test-author** (in background): fixture nuova con l'id nel `sessionStorage` (`addInitScript`) e la rotta del
+>   `GET`, più un test in `gallery.spec.ts` dopo quello dell'Email (file di G, solo in aggiunta). Solo prove statiche:
+>   `tsc -p tsconfig.e2e.json` (prima e dopo), prettier, `playwright test --list` se non avvia server. Niente galleria.
+> - **Esito di test-author** (20:25-20:41):
+>   - `frontend/e2e/fixtures/galleryBackup.ts`, nuovo. L'id fisso è `5c9e2f1a…`, 32 cifre esadecimali. Il job è `done`,
+>     46,0 MB, creato alle 09:41:12Z e finito alle 09:41:19Z; `file_name` è il nome UTC del backend; niente avvisi.
+>     Il corpo è validato una volta con `schemas.InstanceBackupJob.parse`. L'id va nel `sessionStorage` con
+>     `addInitScript`, in un try/catch per `about:blank`. Solo il `GET` del job ha risposta, il resto `fallback`; niente
+>     `unroute`.
+>   - `frontend/e2e/gallery.spec.ts` (di G): +24 righe in aggiunta, un import e il test
+>     `backup ready (admin) - all languages and themes` dopo quello dell'Email.
+>   - Prove statiche:
+>     - `tsc -p tsconfig.e2e.json`: gli stessi 2 errori di base prima e dopo (`onboarding-tour.spec.ts:863`,
+>       `src/lib/types/files.ts:9`), diff dei log vuoto;
+>     - prettier pulito;
+>     - `playwright test --list -g "backup ready"`: 2 test, desktop e mobile, senza server né browser. Con
+>       `--reporter=list`, perché il reporter HTML avrebbe rifatto `playwright-report/`;
+>     - in più, la fixture provata in memoria con Node e una `page` finta contro lo schema Zod vero: 16 controlli
+>       verdi.
+>   - Rivisto da me: il file segue la checklist, e i 5 attesi di `expectGalleryBackupReady` provano solo lo stato
+>     simulato.
+>   - **Fuso orario**: la card mostra l'ora nel fuso del browser, e la galleria non fissa `timezoneId`, come per le date
+>     della pagina File. Il doppio lancio va fatto su due macchine con lo stesso fuso: qui è 11:41 (Europe/Rome), in UTC
+>     sarebbe 09:41.
+
+### B2 — prova su copia: analisi aggiornata alle decisioni 40–43 (2026-10-15, 20:35) — in attesa del via
+
+> **Stato reale** (base `10697e618`, letto sul codice):
+>
+> - `alembic_head_revision()` sta in `services/platform/readiness.py:38`. Con CP2b, `ensure_database_exists()` sta in
+>   `services/platform/database_bootstrap.py`: lancia `alembic -c backend/alembic.ini upgrade head` in un
+>   sottoprocesso, senza `-x`. `alembic/env.py:19-32` accetta `-x sqlalchemy.url=…`.
+> - `run_post_migration_fixes(db_path, data_dir, *, dry_run)`: `db/post_migration/__init__.py:202`.
+> - I totali di controllo di J (CP-15, `compute_control_totals`) non sono ancora in base. B2 li chiama da un punto
+>   d'iniezione, con un sostituto nei test, come concordato.
+> - `User` ha `username`, `is_active`, `is_superuser` e `session_version` (`db/models.py:368-394`).
+> - `validate_test_data_dir` (H, `config/__init__.py:349-404`) non conosce `backups/` né `.restore/`.
+> - La CLI di B1 ha `create` e `inspect`.
+>
+> **Cosa cambia rispetto al §3.3**:
+>
+> 1. **Solo archivi di LibreFolio** (42): senza `manifest.json` l'archivio è rifiutato, con un codice suo. Niente
+>    archivi fatti a mano.
+> 2. **Gli admin del backup** (40): il report elenca per nome gli admin attivi della copia (`is_superuser` e
+>    `is_active`). Se non ce n'è nessuno, la prova finisce con `BACKUP_NO_ADMINISTRATOR`, e la conferma (B3) non è
+>    possibile.
+> 3. **Il limite** (43): `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` in `config/backup.py`. Il default è `0` (senza limite) nel
+>    self-hosted e 500 nel profilo `managed` quando non è impostata; riga in `.env.example`.
+> 4. **La busta `.lfbk`** arriva con B4. In B2 la si riconosce dalla firma e si risponde con un codice suo («archivio
+>    cifrato, non ancora supportato»), non con un generico «archivio non valido».
+> 5. **La prova «revisione più vecchia»**: un archivio di LibreFolio il cui DB sta a una revisione precedente, costruito
+>    nel test con le migrazioni vere fino a quella revisione.
+>
+> **Lotti proposti**:
+>
+> - **B2a, libreria e CLI**:
+>   - `staging.py`: lettura dello zip con l'elenco d'inclusione e i limiti (voci, dimensione, rapporto), mai `..`,
+>     percorsi assoluti, link, nomi doppi;
+>   - `sha256` di ogni file contro il manifest;
+>   - la decisione sulla revisione con `ScriptDirectory`: più nuova o sconosciuta → rifiuto; uguale → diretto; più
+>     vecchia → `alembic -x sqlalchemy.url=… upgrade head` sulla copia, in un sottoprocesso, poi i fix
+>     post-migrazione sulla copia;
+>   - i controlli: `integrity_check` e `foreign_key_check`, righe per tabella prima e dopo;
+>   - gli admin della copia e il report;
+>   - `backup_max_upload_mb()` in `config/backup.py`;
+>   - `dev.py backup restore FILE --dry-run`;
+>   - test: `services backup-staging` (puri, su `tmp_path`) e `utils backup-cli`.
+> - **B2b, API**:
+>   - `PUT /backup/restore/upload`: il corpo grezzo letto a pezzi; 413 su `Content-Length` e durante la lettura, 507
+>     sullo spazio;
+>   - `POST /backup/restore/stage`: un job in background, uno alla volta;
+>   - `GET` e `DELETE /backup/restore/stage/{id}`: il report; annulla e pulisce; scadenza a 24 ore;
+>   - nessuna di queste rotte in `ALLOWED_WHEN_BLOCKED`;
+>   - `api sync`; test `api backup-restore`.
+>
+> **Da decidere o chiedere**:
+>
+> - ad H: `backups` e `.restore` fra i percorsi controllati di `validate_test_data_dir`, prima di B3. Il
+>   `pending.json` di una corsia non deve mai poter toccare la cartella di produzione. Sono 2 righe: le scrive H,
+>   oppure io, dichiarate;
+> - per B3 (40): dove vive l'ora del ripristino. Una riga d'impostazione non chiede migrazioni; una colonna sì. Il
+>   controllo va in `auth.py`, che è di A. Lo porto nell'analisi di B3.
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 
