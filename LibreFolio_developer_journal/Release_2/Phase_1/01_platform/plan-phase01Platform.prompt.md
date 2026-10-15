@@ -179,35 +179,48 @@ backend/app/
 - **Divisione**: CP5a, il backend, che può entrare a qualunque ora; CP5b, il frontend (`package.json`, il lock e
   `AboutTab`, che deve riconoscere la risposta minima), dopo la finestra della galleria.
 
-### 3.6 Profilo gestito e sola lettura (F05, parte H)
+### 3.6 Profilo gestito e blocco dell'istanza (F05, parte H)
 
-- `LIBREFOLIO_PROFILE=selfhosted|managed` risolve i default.
-- Middleware ASGI `read_only`, default-deny per i metodi di scrittura sotto `/api/v1`:
-  - il middleware gira prima del routing, e FastAPI mette `scope["route"]` solo durante il matching
-    (`fastapi/routing.py:836`). Per questo cerca da sé la rotta con `route.matches(scope)`, solo per i metodi di
-    scrittura, e confronta metodo e template con una allow-list centrale;
-  - risposta 403 `{"detail": "<testo EN>", "code": "instance_read_only"}`;
-  - lo scheduler non passa da HTTP, quindi continua a scrivere i prezzi.
-- **Guardie**:
-  - ogni voce dell'allow-list deve esistere fra le rotte di `app`;
-  - ogni rotta di scrittura deve stare in una delle due liste, permesse o bloccate. Chi aggiunge una scrittura la
-    classifica nel suo lotto, e intanto resta bloccata.
-- **Bozza dell'allow-list**, 32 permessi e 38 bloccati su 70 (decisione §10 n. 1):
+> Riscritto all'avvio di CP6 (15/10). Il developer ha cambiato D4: niente sola lettura, l'istanza si blocca. Il disegno
+> che c'era qui (middleware di sola lettura, 32 permessi) è decaduto.
 
-| Permessi | Endpoint |
-|---|---|
-| Accesso | `POST /auth/login`, `/auth/logout`, `/auth/change-password` (D4) |
-| Preferenze personali | `PUT /settings/user` (lingua, tema, valuta base, avatar); onboarding ×4 (`complete`/`skip` di flusso e passo) |
-| Admin senza dati | `POST /settings/cache/clear-all`, `/settings/cache/clear/{name}` (D4) |
-| Letture via POST | `/ai-export/snapshot`; `/portfolio/{wac,allocation-source,report,lots/analysis}`; `/risk/{query,eligibility}`; `/signals/preview`; `/tools/compute`; `/transactions/{validate,events/suggest,promote-suggest}` (`validate` fa sempre rollback); `/brokers/import/{sets/preview,duplicates,asset-candidates,gap-fix}` (`gap-fix` calcola soltanto, verificato); `/assets/prices/query`; `/assets/events/query`; `/fx/currencies/convert`; `/assets/provider/probe` (prova senza salvare, verificato) |
-| Dati di mercato | `POST /assets/prices/current` (scrive la barra del giorno, C-83) |
-| Export | `POST /backup/export` |
-| **Bloccati** | creazione, modifica e cancellazione di asset, broker, accessi, prezzi, eventi, cambi, rotte, transazioni (commit, promote), upload, import (upload, parse, delete, combine), restore, impostazioni globali, registrazione, profilo, cancellazione dell'account; sync manuali di prezzi e cambi e refresh dei provider (D4) |
-
-- **Frontend**: avviso non chiudibile «istanza in sola lettura» nell'area avvisi; toast tradotto sulle scritture
-  rifiutate. Disattivare i pulsanti pagina per pagina resta alle sessioni proprietarie, che hanno un `isReadOnly()`.
-- **Default `managed`** proposti: idle dei worker di rischio 60 s (F27), CSP in sola segnalazione e frame-ancestors
-  `'self'` accesi (D5); popup di donazione spento (decide A).
+- **Variabili**, lette solo dall'ambiente in `config/platform.py`:
+  - `LIBREFOLIO_BLOCKED`: `1/0`, `true/false`, `yes/no`, `on/off`, in qualunque maiuscolo; vuota o assente = non
+    bloccata;
+  - `LIBREFOLIO_DELETION_DATE`: data ISO, facoltativa, mostrata nella pagina di blocco;
+  - un altro valore ferma l'avvio (`config_audit`);
+  - valgono in ogni profilo, perché servono a qualunque hoster.
+- **Guardia**: `refuse_when_blocked`, dipendenza del router `/api/v1` (`api/v1/router.py`, una riga a parte dagli
+  include). Niente middleware: andrebbe registrato in `main.py`, che resta fermo fino a CP2b.
+  - FastAPI 0.141 dà alla dipendenza la funzione dell'endpoint (`scope["endpoint"]`), non il percorso completo. Quindi
+    `ALLOWED_WHEN_BLOCKED` (`api/v1/instance_block.py`) è un insieme di funzioni.
+  - Rifiuto: `423 Locked` con `{"detail": {"code": "instance_blocked", "message": …}}`, solo a chi ha una sessione
+    valida. Gli altri ricevono il 401 di `get_current_user`: una rotta protetta risponde allo stesso modo col blocco e
+    senza. Le rotte pubbliche fuori dall'elenco (registrazione, liste di `utilities`, impostazioni globali, catalogo AI
+    Export) rispondono 401 solo col blocco: da quelle, chi non ha sessione capisce che l'istanza è bloccata, e nient'altro.
+  - La sessione è quella della richiesta, perché FastAPI mette in cache la dipendenza.
+- **Permessi** (decisione 12): `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `DELETE /auth/users/me`;
+  `GET /system/block`, `/system/instance`; le sonde `/system/health`, `/system/ready`, `/system/info` e
+  `/system/test-lane-health`.
+  - Ganci di una riga, quando le rotte esistono: il backup completo di B, il risveglio programmato di Z.
+  - Il reset della password resta fuori; un'aggiunta passa dal coordinatore al developer.
+- **`GET /system/block`**: con sessione, permesso col blocco; `{blocked, deletion_date}`. A ci aggiunge `billing_url`
+  solo per l'admin (D-A9), B la disponibilità del backup.
+- **`/system/instance` pubblico**: non dice niente del blocco.
+- **Frontend**:
+  - `instanceBlock`, un flag senza import dell'API, che l'interceptor accende al primo 423;
+  - nel layout, un ramo prima di quelli del bootstrap mostra la pagina di blocco a tutta pagina. Il guscio dell'app non
+    parte, quindi niente raffica di errori;
+  - la pagina dice che l'istanza è bloccata e la data di cancellazione; all'admin il backup e «Gestisci abbonamento»
+    quando A e B li danno; agli altri l'invito a chiedere il backup all'admin; «Esci»;
+  - la cancellazione del proprio account non c'è nella pagina, né come segnaposto: verrà col dialogo di A, estratto
+    dopo A5. L'API resta permessa.
+- **(C)**: nel profilo gestito un `JWT_SECRET` sotto i 32 caratteri ferma l'avvio (`WeakSecretError`); il controllo
+  per la scheda «Sicurezza» diventa `error`. Nel self-hosted resta un avviso.
+- **Lo scheduler** non passa da HTTP e continua: il risveglio programmato resta permesso.
+- **Test**: pytest e Vitest, niente E2E (il blocco richiederebbe un server dedicato).
+- **Revisione di sicurezza** (`security-review`) alla fine di CP6.
+- **Default del profilo gestito** di F27 e D5: in CP7b, dove servono.
 
 ### 3.7 Lotto operativo
 
@@ -238,7 +251,7 @@ Il lotto si divide in due:
 | CP3 | **Segreti (F03)**: sorgente `_FILE`, `JWT_SECRET_FILE` (e `dev.py`), `instance_key`, `config_audit` nei log, `.env.example` completo e a sezioni con la guardia «ogni variabile è in `.env.example`», doc admin (configuration, filesystem) | B, X (chiave), E | CP2 |
 | CP4 | **Config pubblica e avvisi**: due endpoint, `features/instance/`, layout, interceptor, i18n, Vitest, `api sync` | A (login, link), Z, X | CP3; `npm ci` approvato |
 | CP5 | **Prontezza e versione (F08)**: `/system/ready`, `/system/info` minimo senza sessione (D14 modificata), R2, C-84. CP5a backend, CP5b frontend | pannello di controllo | CP2a |
-| CP6 | **Profilo e sola lettura**: `PROFILE_DEFAULTS`, middleware, allow-list e guardia, avviso e toast, pagina admin «profilo gestito per gli hoster» | A e X (default del profilo) | CP4 |
+| CP6 | **Blocco dell'istanza (D4)**: variabili, guardia sul router v1 con un elenco corto di permessi, `/system/block`, pagina di blocco; (C) `JWT_SECRET` corto fatale nel profilo gestito; pagina admin per gli hoster | il pannello del cloud (blocco) | CP4, CP5 |
 | CP7a | **Lotto Docker**: P-4, M-25, C-37, N-8, 32-3, istruzioni per C-26. Poi i file Docker passano a B | B (Litestream) | Docker acceso; anticipabile subito dopo CP3 |
 | CP7b | **Lotto HTTP**: cache di `/_app` (F28), default di 60 s nel profilo gestito (F27), header con CSP in sola segnalazione (F15) | — | CP6 |
 | TS1 | Decisione sui test speculari, con i numeri (§13) | — | riordino del backend finito |
@@ -291,7 +304,10 @@ gli statici, la doc, il piano aggiornato e infine FROZEN.
   - CP5a: `api/v1/system/{__init__,info,ready}.py`, `services/platform/readiness.py`, `schemas/system.py`,
     `utils/runtime/version.py`, `pyproject.toml`, un commento di `dev.py`; i test di versione e di sistema; la doc;
   - CP5b: `frontend/package.json`, le due righe radice di `package-lock.json`, `AboutTab.svelte`.
-- **CP6**: `read_only.py`, `middleware.py`, `config.py`, `features/instance/**`; doc admin (pagina nuova) e sviluppatori.
+- **CP6**: `config/platform.py`, `api/v1/instance_block.py`, `api/v1/router.py` (una riga), `api/v1/system/block.py`,
+  `schemas/system.py`, `services/platform/config_audit.py`, `.env.example`; `lib/api/zodios-client.ts` (il ramo 423),
+  `features/instance/**`, `routes/(app)/+layout.svelte`, `lib/i18n/instance/**`; doc admin (pagina nuova) e
+  sviluppatori.
 - **CP7a e CP7b**: `Dockerfile`, `docker-compose*.yml`, `entrypoint.sh` (se serve), `dev.py` (docker build ed exec),
   `scripts/cli_base.py` (solo se serve per N-8), `static_site.py`, `security_headers.py`; test
   `utils dev-cli-image`, `release-image-contract`; doc `admin/docker_advanced.en.md`,
@@ -1438,3 +1454,194 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 >   - porta 6181 libera; `git diff --check` pulito.
 
 ### Checkpoint della correzione 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+
+> Committata dal coordinatore: `d80c0a091` (la correzione) e `5d1242ae5` (journal). CP5a è entrato in `dev_release2`
+> con il merge `9deb0ea08`, senza un nuovo controllo: nel frattempo era entrato solo X J-5, che non tocca file miei.
+> Il record del coordinatore è `6cd64b71b`: le tre righe del CHANGELOG, R2 chiusa (anche nel piano d'origine 09),
+> C-84 chiusa per metà, F08 in giallo nel README. Il mio ramo è avanzato a `6cd64b71b`.
+
+### CP6 — il blocco dell'istanza (D4) (2026-10-15, mattina) — in corso
+
+> **Via** del coordinatore (2026-10-15, 07:19): durante la finestra della galleria si scrive CP6, senza esecuzioni
+> pesanti; CP5b dopo l'avviso di fine finestra. CP6 ha una parte frontend, quindi entra dopo la finestra e dopo CP5b.
+>
+> **Risposte del coordinatore al disegno** (07:40):
+>
+> - sì a `api/v1/router.py` (solo la riga della dipendenza, separata dagli include, dove poi Z aggiungerà il suo) e al
+>   ramo 423 in `lib/api/zodios-client.ts`;
+> - (c): la pagina di blocco non offre la cancellazione dell'account, né come segnaposto. Dopo A5 il coordinatore
+>   registra ad A l'estrazione del dialogo da `ProfileTab.svelte`, e la pagina lo riuserà allora;
+> - il reset della password resta fuori dai permessi; i ganci di B e Z vanno bene;
+> - il resto del disegno va bene; alla fine di CP6 c'è la revisione di sicurezza.
+>
+> **Disegno**: §3.6, riscritto.
+
+#### CP6 passo 1 — il backend ✅ (2026-10-15, mattina)
+
+> **Note implementazione**:
+>
+> - `config/platform.py`: `instance_blocked()` e `instance_deletion_date()`, lette dall'ambiente; un valore illeggibile
+>   solleva `ValueError`.
+> - `config_audit.py`:
+>   - `log_configuration_audit()` legge le due variabili all'avvio, quindi un valore sbagliato ferma il server;
+>   - con il blocco attivo scrive un avviso nel log, con la data;
+>   - nel profilo gestito un `JWT_SECRET` corto solleva `WeakSecretError`; `check_jwt_secret()` lo segnala come `error`.
+> - `api/v1/instance_block.py`: `ALLOWED_WHEN_BLOCKED`, 10 funzioni, e la dipendenza `refuse_when_blocked`.
+> - `api/v1/router.py`: `APIRouter(dependencies=[Depends(refuse_when_blocked)])`, con un commento.
+> - `api/v1/system/block.py` (`GET /system/block`, con sessione), registrato per ultimo; schema
+>   `InstanceBlockResponse`.
+> - `.env.example`: la sezione «Instance Block (hosting providers)», con le due righe commentate.
+> - **Prova in processo** (TestClient, DB temporaneo poi cancellato):
+>   - senza blocco, `GET /brokers` anonimo dà 401;
+>   - col blocco, da anonimo: `GET /brokers` 401 «Not authenticated» e `POST /auth/register` 401;
+>   - col blocco, con sessione: `GET /brokers` 423 `instance_blocked`; `/system/block` 200
+>     `{blocked: true, deletion_date: 2026-11-14}`; `/auth/me` 200; `/system/info` completo;
+>   - sonde, `/system/instance` e il login rispondono come sempre;
+>   - `ture` e una data non ISO fermano i controlli d'avvio; `managed` con un segreto di 12 caratteri si ferma.
+> - Ruff e black puliti.
+>
+> **Fuori pista**:
+>
+> - La prima stesura rifiutava con 423 anche gli anonimi, perché la dipendenza del router gira prima dell'autenticazione
+>   della rotta. Così chiunque avrebbe visto da fuori che l'istanza è bloccata. Ora la guardia chiama
+>   `get_current_user` prima del 423.
+> - Le variabili non sono campi di `Settings`: `get_settings()` costruisce un'istanza nuova, e legge `.env`, a ogni
+>   chiamata. Una guardia su ogni richiesta legge invece l'ambiente, che costa una ricerca in un dizionario.
+> - In CP4 `zodios-client.ts` non era stato toccato: l'aggancio del §5 non era servito. Il ramo 423 è il primo.
+
+#### CP6 passo 2 — il frontend ✅ (2026-10-15, mattina)
+
+> **Note implementazione**:
+>
+> - `features/instance/instanceBlock.svelte.ts`:
+>   - un flag con `markBlocked()` e `clear()`, e `isInstanceBlockedError(status, data)`: vero solo per un 423 con
+>     `detail.code` `instance_blocked`;
+>   - nessun import dell'API, quindi l'interceptor lo importa senza ciclo;
+>   - un cambio d'account lo spegne (`registerClientSessionReset`).
+> - `lib/api/zodios-client.ts`: un ramo nell'interceptor degli errori accende il flag.
+> - `features/instance/components/InstanceBlockedPage.svelte`:
+>   - pagina a tutta pagina, con soli ruoli di colore;
+>   - testo per l'admin o per gli altri utenti, secondo `is_superuser`;
+>   - la data di cancellazione nel locale dell'interfaccia, letta e formattata in UTC, così nessun fuso la sposta;
+>   - «Esci», con la chiave `auth.logout`;
+>   - se `GET /system/block` dice che il blocco è tolto, spegne il flag e ricarica la pagina; se fallisce, la pagina
+>     resta senza data.
+> - `routes/(app)/+layout.svelte`: il ramo `$isAuthenticated && instanceBlock.blocked` sta prima di quelli del
+>   bootstrap.
+> - i18n: 4 chiavi `instance.block.*` nelle 4 lingue; `i18n check` stretto, 4396 chiavi.
+> - `api sync`, prettier senza modifiche; `front check` con svelte-check 0/0; porta dei colori pulita;
+>   `front build --debug` alle 07:36, così le corse di test-author sul server non ricostruiscono il frontend.
+> - **Test e doc** affidati a test-author e docs-writer, con la consegna di finire le esecuzioni pesanti entro le 08:40.
+
+#### CP6 passo 3 — revisione di sicurezza ✅ (2026-10-15, mattina)
+
+> **Note implementazione** (`security-review` sul codice di CP6, prima dei test):
+>
+> - Copertura:
+>   - le 133 rotte di `/api/v1` (130 `APIRoute`, 3 `ToolRoute`) hanno `refuse_when_blocked` come prima dipendenza,
+>     compresi i router annidati, lo stream SSE e il servizio dei file caricati;
+>   - le 10 voci dell'elenco corrispondono esattamente a 10 rotte, e nessuna funzione è registrata due volte;
+>   - il 423 arriva prima della validazione e prima delle dipendenze della rotta;
+>   - `get_current_user` non scrive niente.
+> - Valori non validi delle variabili fermano l'avvio; `WeakSecretError` dice l'origine e la lunghezza, mai il segreto.
+>   Nella pagina di blocco non c'è XSS.
+> - **Osservazione bassa**: le rotte pubbliche fuori dall'elenco rispondono 401 solo col blocco. Chi non ha sessione può
+>   quindi capire che l'istanza è bloccata (nessun dato).
+>   - Garanzia ristretta nella docstring di `instance_block.py`, nel §3.6 e nella doc.
+>   - **Decisione del coordinatore (08:04): (a), lasciare così.** La decisione 12 non promette che da fuori il blocco non
+>     si veda, e il segnale non porta dati. Permettere le GET pubbliche non lo chiuderebbe, perché la registrazione resta.
+>     Se il developer le vuole, è un cambio dell'elenco più avanti.
+> - FastAPI non dà le dipendenze del router a `Route`, `WebSocketRoute` e `Mount`. Il test della guardia fallisce se ne
+>   compare una sotto `/api/v1`.
+> - Il revisore ha trovato anche un caso già coperto da un commit del coordinatore in attesa.
+
+#### CP6 passo 4 — test e doc ✅ (2026-10-15, mattina)
+
+> **Note implementazione**:
+>
+> - **Test** (test-author). Il blocco si attiva solo in processo, con `monkeypatch`: il server della corsia non viene
+>   mai bloccato.
+>   - `test_config_package.py` +37 (valori accettati, rifiutati e vuoti delle due variabili);
+>   - `test_config_audit.py` +25 (gravità per profilo, `WeakSecretError` senza il segreto, arresto sui valori non
+>     validi, avviso col blocco);
+>   - nuovo `test_instance_block.py`, 44 test, registrato come `api instance-block`:
+>     - da anonimo, «stessa risposta col blocco e senza» vale per le rotte protette; un test documenta come sono le
+>       rotte pubbliche;
+>     - la guardia sulle rotte: fallisce per ogni rotta o mount sotto `/api/v1` che non sia un `APIRoute` con
+>       `refuse_when_blocked` per prima. Un'app di prova dimostra che la verifica coglie route semplici, WebSocket,
+>       mount e guardie mancanti o al secondo posto;
+>     - eccezioni fissate: le tre rotte della documentazione di FastAPI (`/api/v1/openapi.json`, `/docs`, `/redoc`),
+>       che portano lo schema e nessun dato;
+>   - `test_system_api.py` +1: `/system/block` registrata per ultima;
+>   - Vitest: `instanceBlock.test.ts` 21, `zodios-client.test.ts` 6, `InstanceBlockedPage.test.ts` 14. La data esce
+>     il 14 nei fusi di Los Angeles, Kiritimati e UTC. `layout.gate.test.ts` +6: la pagina vince su ogni stato del
+>     bootstrap;
+>   - verdi: `services config-package` 631, `services config-audit` 90, `api instance-block` 44, `api system` 117;
+>     `check-orphans` pulito.
+> - **Miei**, sulla corsia, prima delle 08:45:
+>   - `services config-env-example` 36;
+>   - `front check` 0/0; porta dei colori pulita; `i18n check` stretto, 4396 chiavi;
+>   - Vitest dal runner: `core-unit` 136 file e 4317 test (+27), `component-unit` 121 e 3223 (+14),
+>     `onboarding-component-unit` 15 e 447 (+6).
+> - **Doc** (docs-writer):
+>   - nuova `admin/hosting_providers.en.md`, nella navigazione di `mkdocs.yml` sotto «Deployment & Exposure»;
+>   - `admin/configuration.en.md` (righe delle due variabili, regola del `JWT_SECRET` nel profilo gestito, controlli
+>     d'avvio) e `admin/index.en.md`;
+>   - `security.md` (sezione «Instance Block», con la garanzia ristretta), `api/index.md`, `app-state.md`;
+>   - `mkdocs build` e `check-links` (95) passano. Debito di traduzione non timbrato: `hosting_providers` (solo
+>     inglese), `configuration`, `admin/index`.
+>
+> **Fuori pista**:
+>
+> - In `.env.example` una riga di prosa cominciava con `# LIBREFOLIO_BLOCKED=true`, e la guardia la leggeva come riga
+>   di variabile. Ho rifatto gli a capo.
+> - La docstring di `instance_block.py` ora nomina le tre rotte di documentazione di FastAPI come uniche eccezioni.
+> - Il database della corsia era vuoto, perché un selettore `api` da solo non lo popola. test-author ha adattato il test
+>   e ha tolto l'admin creato dalla prima corsa: la corsia è tornata a 0 utenti.
+
+### CP5b — la metà frontend di C-84 e `AboutTab` (2026-10-15, mattina) — scritto, da validare dopo la finestra
+
+> **Note implementazione**:
+>
+> - `frontend/package.json` e le due righe radice di `package-lock.json` a `0.0.0`. JSON non ha commenti: la
+>   spiegazione sta nel commento di `pyproject.toml` e in `release-pipeline.md`.
+> - `AboutTab.svelte`: la risposta di sola versione (senza sessione) non viene presa per il resoconto completo:
+>   `systemInfo` resta `null`. Prima la tab l'avrebbe letta come completa, e `backend_dependencies.length` avrebbe
+>   sollevato un errore.
+> - Il test nuovo in `AboutTab.test.ts` lo ha scritto test-author: «leaves the diagnostics grid out for a version-only
+>   answer, and still lists the providers». Il file passa 38 su 38.
+>   - Con la risposta di sola versione, l'intestazione mostra `...`: la risposta arriva solo a una sessione scaduta,
+>     che va comunque al login.
+>   - **Fuori pista**: due controlli d'assenza già presenti nello stesso file non possono fallire (H-6 nel backlog).
+> - CP5b e CP6 stanno insieme nel worktree, ma su file diversi: la validazione dopo la finestra vale per tutti e due,
+>   e i commit si dividono per percorso.
+
+### Dopo CP6: il lotto `billing_url` (deciso dal coordinatore, 2026-10-15 alle 08:40) — in attesa di A5
+
+> - Nell'ordine: A5a e A5b entrano insieme dopo la finestra, dopo R e L; l'handoff di CP6 arriva prima. Quindi CP6
+>   esce senza `billing_url`.
+> - Dopo l'aggiornamento di base che porta A5, un lotto piccolo:
+>   - `billing_url` in `InstanceBlockResponse`, solo per l'admin, da `registration_service.billing_link()` di A5a;
+>   - il link «Gestisci abbonamento» nella pagina di blocco, con la sua chiave i18n e i test;
+>   - `api instance-block` ripassato: A5a rende `get_instance_config` un `async` con una sessione del DB, e la guardia
+>     deve restare la prima dipendenza.
+
+#### CP5b e CP6 — i verdi prima della finestra ✅ (2026-10-15, mattina)
+
+> **Note implementazione** (corsia 6181, un'invocazione alla volta, tutto finito prima delle 08:45):
+>
+> - `front build --debug` rc 0, svelte-check 0/0. `mkdocs build` stretto senza avvisi, 3020 URL relativi;
+>   `check-links` 95.
+> - **`all-backend`** (`-q --fresh-run --workers 2`): 7/7 in 17 min 23 s, con la macchina carica. **12 606 passed, 3
+>   skipped, 0 failed**.
+>   - Sono 170 in più rispetto a CP5a (12 436). Circa 110 vengono da CP6 e dalla correzione di CP5a:
+>     `config-package` +39, `config-audit` +25, `instance-block` +44, `system` +1, `platform-readiness` +1.
+>   - Gli altri vengono dagli aggiornamenti di base: G-8, X CP4, W K2a, A4b, X J-5.
+> - Vitest: `core-unit` 4317, `component-unit` 3223, `onboarding-component-unit` 447; `AboutTab.test.ts` 38.
+> - **`api schema`** contro `6cd64b71b`: solo `+/api/v1/system/block` e `+InstanceBlockResponse`; Tool contracts
+>   identici; hash openapi `978bece3d1752e13`.
+> - Statici: ruff, black e prettier puliti; porta dei colori pulita; `i18n check` stretto, 4396 chiavi.
+> - **Dopo la finestra**: le E2E `front-utility auth`, `app-start-auth` e `settings` (il layout ha un ramo nuovo,
+>   l'interceptor un ramo, la scheda Informazioni una guardia).
+
+### Checkpoint CP5b e CP6 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore; E2E dopo la finestra
