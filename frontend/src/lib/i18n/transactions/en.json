@@ -93,7 +93,8 @@
       "eventPickerCreateNew": "New event",
       "eventCreateTitle": "Create event for {asset}",
       "eventCreateAmountRequired": "Amount is required",
-      "eventCreateDateRequired": "Date is required"
+      "eventCreateDateRequired": "Date is required",
+      "fxDatesHint": "The 'From' and 'To' dates usually match: they differ when the broker credits the new currency on another day."
     },
     "bulk": {
       "resetRow": "Reset row",

@@ -235,7 +235,7 @@ deleted.
 ## 🔎 Recognising the asset on the next import
 
 The election is only worth making if the stored value is actually used next time.
-`search_asset_candidates` in `backend/app/services/brim_provider.py` ranks candidates:
+`search_asset_candidates` in `backend/app/services/brim/brim_provider.py` ranks candidates:
 
 | Priority | Criterion | Confidence |
 |---|---|---|

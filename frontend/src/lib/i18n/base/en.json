@@ -184,7 +184,14 @@
       "edited": "Edited",
       "deleted": "Deleted",
       "appended": "New"
-    }
+    },
+    "counter": {
+      "edited": "{n} modified",
+      "deleted": "{n} deleted",
+      "appended": "{n} new"
+    },
+    "staleShow": "{n, plural, one {Show # stale row} other {Show # stale rows}}",
+    "staleHide": "{n, plural, one {Hide # stale row} other {Hide # stale rows}}"
   },
   "datePicker": {
     "presets": {

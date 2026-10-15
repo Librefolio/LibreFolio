@@ -74,7 +74,7 @@ from backend.app.db import (
 from backend.app.db.models import UserOnboardingStepProgress
 from backend.app.services.accounts.auth_service import hash_password
 from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
-from backend.app.services.brim_provider import save_uploaded_file
+from backend.app.services.brim.brim_provider import save_uploaded_file
 from backend.app.services.files.static_uploads import get_uploads_dir, save_upload, seed_default_avatars
 from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY
 from backend.app.services.portfolio_service import PortfolioService
@@ -1040,7 +1040,7 @@ def populate_asset_provider_assignments(session: Session):
         ("S&P 500", "yfinance", "^GSPC", IdentifierType.TICKER, None),
         ("MSCI World Index", "yfinance", "URTH", IdentifierType.TICKER, None),
         # Scheduled Investment — BTP Italia with interest schedule.
-        # Schema: FAScheduledInvestmentSchedule (see schemas/assets.py). Periods
+        # Schema: FAScheduledInvestmentSchedule (see schemas/assets/assets.py). Periods
         # must be contiguous + non-overlapping. `asset_events` is optional.
         # Config: DAILY maturation + generate_interest=False → smooth growing line
         # (no auto-coupon reset). Useful for visual regression testing and to

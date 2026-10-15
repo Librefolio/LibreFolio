@@ -102,7 +102,7 @@ What browser writes into measured lanes cost this campaign, during the look and 
 |------|------|
 | Live-price `$effect` — on mount, then every 30 s while the range ends today | `frontend/src/routes/(app)/assets/+page.svelte` |
 | `POST /api/v1/assets/prices/current` from the client | `frontend/src/lib/services/livePriceService.ts` |
-| The endpoint | `backend/app/api/v1/assets.py` |
+| The endpoint | `backend/app/api/v1/assets/prices.py` |
 | The `/prices/current` writer — F.2 bootstrap, F.3 intra-day extend (`_extend_ohlc_bounds`); the log lines above | `backend/app/services/assets/price_query.py` |
 | The equivalent bounds merge R2-64 cited (bulk upserts); every write stamps `fetched_at` | `backend/app/services/assets/price_store.py` |
 | Rule Ⓓ, the order, the gate | `LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/_comune.md` |

@@ -19,11 +19,12 @@ Price fetches (frequent, automated) must NEVER call this module. External search
 is only ever hit during interactive asset search. Once an asset is created, it is
 priced by its stored provider params (e.g. a fund's internal code), not by search.
 
-Configuration (environment variables, all optional)
-----------------------------------------------------
+Configuration (environment variables, all optional, read in ``backend/app/config/plugins.py``)
+------------------------------------------------------------------------------------------------
 - ``LIBREFOLIO_WEB_LINK_FINDER_ENABLED``  ``"1"``/``"0"`` (default ``"1"``)
 - ``LIBREFOLIO_WEB_LINK_FINDER_ENGINE``   ``"ddgs"`` | ``"apikey"`` (default ``"ddgs"``)
-- ``LIBREFOLIO_WEB_LINK_FINDER_API_KEY``  key for the ``"apikey"`` engine (default ``""``)
+- ``LIBREFOLIO_WEB_LINK_FINDER_API_KEY``  key for the ``"apikey"`` engine (default ``""``), or
+  ``LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE``, the path of a file holding it
 - ``LIBREFOLIO_WEB_LINK_FINDER_DDGS_REGION``   ddgs region, e.g. ``"wt-wt"``/``"it-it"`` (default ``"wt-wt"``)
 - ``LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND``  ddgs backend(s), e.g. ``"auto"``/``"google,bing"`` (default ``"auto"``)
 - ``LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT``  per-request timeout, seconds (default ``"6"``)
@@ -34,10 +35,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import time
 import urllib.parse
 from typing import Protocol, runtime_checkable
+
+from backend.app.config import SecretFileError
+from backend.app.config.plugins import (
+    web_link_finder_api_key,
+    web_link_finder_ddgs_backend,
+    web_link_finder_ddgs_region,
+    web_link_finder_enabled,
+    web_link_finder_engine,
+    web_link_finder_max_results,
+    web_link_finder_timeout,
+)
 
 try:  # optional metasearch dep (graceful degradation, mirrors css_scraper's defensive import)
     from ddgs import DDGS
@@ -121,9 +132,13 @@ class ApiKeyEngine:
 
 def _build_engine() -> _SearchEngine | None:
     """Instantiate the configured engine, or ``None`` if it can't be used."""
-    engine = os.environ.get("LIBREFOLIO_WEB_LINK_FINDER_ENGINE", "ddgs").strip().lower()
+    engine = web_link_finder_engine()
     if engine in ("apikey", "api", "brave", "bing", "serpapi"):
-        key = os.environ.get("LIBREFOLIO_WEB_LINK_FINDER_API_KEY", "").strip()
+        try:
+            key = web_link_finder_api_key()
+        except SecretFileError as err:
+            logger.warning("web_link_finder: %s; disabling", err)
+            return None
         if not key:
             logger.warning("web_link_finder: engine '%s' requires LIBREFOLIO_WEB_LINK_FINDER_API_KEY; disabling", engine)
             return None
@@ -136,9 +151,7 @@ def _build_engine() -> _SearchEngine | None:
     if not _DDGS_OK:  # pragma: no cover - ddgs is a hard dependency in the Pipfile
         logger.warning("web_link_finder: ddgs library not importable; link-finder disabled")
         return None
-    region = os.environ.get("LIBREFOLIO_WEB_LINK_FINDER_DDGS_REGION", "wt-wt").strip() or "wt-wt"
-    backend = os.environ.get("LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND", "auto").strip() or "auto"
-    return DdgsEngine(region=region, backend=backend)
+    return DdgsEngine(region=web_link_finder_ddgs_region(), backend=web_link_finder_ddgs_backend())
 
 
 # --------------------------------------------------------------------------- #
@@ -146,23 +159,7 @@ def _build_engine() -> _SearchEngine | None:
 # --------------------------------------------------------------------------- #
 def is_enabled() -> bool:
     """Whether the link-finder may run (default: on, as a last resort)."""
-    return os.environ.get("LIBREFOLIO_WEB_LINK_FINDER_ENABLED", "1").strip().lower() in ("1", "true", "yes", "on")
-
-
-def _env_float(name: str, default: float) -> float:
-    try:
-        raw = os.environ.get(name, "").strip()
-        return float(raw) if raw else default
-    except ValueError:
-        return default
-
-
-def _env_int(name: str, default: int) -> int:
-    try:
-        raw = os.environ.get(name, "").strip()
-        return int(raw) if raw else default
-    except ValueError:
-        return default
+    return web_link_finder_enabled()
 
 
 # --------------------------------------------------------------------------- #
@@ -224,7 +221,7 @@ async def find_candidate_urls(  # noqa: C901 — guard clauses + URL filter loop
         return []
 
     if max_results is None:
-        max_results = _env_int("LIBREFOLIO_WEB_LINK_FINDER_MAX", _DEFAULT_MAX_RESULTS)
+        max_results = web_link_finder_max_results(_DEFAULT_MAX_RESULTS)
 
     cache_key = (query.lower(), tuple(sorted(d.lower() for d in allowed_domains)), (path_hint or "").strip("/"), max_results)
     cached = _cache_get(cache_key)
@@ -236,7 +233,7 @@ async def find_candidate_urls(  # noqa: C901 — guard clauses + URL filter loop
         _cache_set(cache_key, [])
         return []
 
-    timeout = _env_float("LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT", _DEFAULT_TIMEOUT)
+    timeout = web_link_finder_timeout(_DEFAULT_TIMEOUT)
 
     primary = allowed_domains[0].lower()
     site = f"{primary}/{path_hint.strip('/')}" if path_hint else primary

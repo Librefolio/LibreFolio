@@ -6,8 +6,8 @@ catalogue, `SETTINGS_REGISTRY`.
 
 !!! info "A third layer, outside these two tiers: process configuration (`.env`)"
 
-    Startup values (ports, data folder, log level, risk-engine workers) come from `.env` and the
-    environment; the admin-facing list is [Configuration](../../admin/configuration.md). How they
+    Startup values (ports, data folder, log level, secrets, risk-engine workers) come from `.env` and
+    the environment; the admin-facing list is [Configuration](../../admin/configuration.md). How they
     load:
 
     - `Settings(BaseSettings)` in `backend/app/config/__init__.py` reads the project-root `.env`;
@@ -19,25 +19,45 @@ catalogue, `SETTINGS_REGISTRY`.
       `backend/data/test` (refused if it overlaps production), otherwise `LIBREFOLIO_DATA_DIR`,
       otherwise `backend/data/prod`.
     - Keys outside the class — `LIBREFOLIO_DATA_DIR`, `LIBREFOLIO_TEST_DATA_DIR`,
-      `LIBREFOLIO_TEST_MODE`, `LIBREFOLIO_LOG_LEVEL`, `JWT_SECRET`, `LIBREFOLIO_NO_SCHEDULER`,
-      `LIBREFOLIO_DISABLE_DONATION_POPUP`, `LIBREFOLIO_TEST_LANE_ID`,
-      `LIBREFOLIO_WEB_LINK_FINDER_*` — are read in `backend/app/config/` (base or section
-      module), still from `os.environ` only; the web link finder keys are the one exception,
-      see below. pydantic-settings does not export `.env` there, so they arrive through the
-      launcher: `./dev.py server` copies `.env` into the environment (shell values win),
-      Compose uses `env_file:`.
+      `LIBREFOLIO_TEST_MODE`, `LIBREFOLIO_LOG_LEVEL`, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY` (both
+      also as `_FILE`), `LIBREFOLIO_NO_SCHEDULER`, `LIBREFOLIO_DISABLE_DONATION_POPUP`,
+      `LIBREFOLIO_TEST_LANE_ID`, `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key also as `_FILE`) — are
+      read in `backend/app/config/` (base or section module), from `os.environ` only.
+      pydantic-settings does not export `.env` there, so they arrive through the launcher:
+      `./dev.py server` copies `.env` into the environment (shell values win), Compose uses
+      `env_file:`.
+    - Secrets go through `env_secret(name)` in `__init__.py`: `NAME` when it is not blank, otherwise
+      the content of the file named by `NAME_FILE` when that is not blank (Docker and Kubernetes
+      secrets), otherwise `None`. Blank means empty or whitespace only, so a stray space never becomes
+      a key. A `NAME_FILE` that cannot give its secret, an empty or blank file included, raises
+      `SecretFileError`; the full rules are in
+      [Security → Secrets from Files](security.md#secrets-from-files). A new secret is named
+      `LIBREFOLIO_*` and read with `env_secret()`: its `_FILE` form then works, and the startup check
+      of secrets set twice covers it without a list to update. `INSTANCE_TRUST_SECRETS` lists, in
+      both forms, the secrets that a test runtime never inherits (`configure_test_runtime()` in
+      `scripts/cli_base.py`).
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
-      `__init__.py` is the base: constants, data directories, test mode, `Settings` and
-      `get_settings()`. New variables go into one section module per topic. Two exist today:
-      `platform.py` (`scheduler_disabled()`, `configured_jwt_secret()`,
-      `owning_test_lane_id()`) and `accounts.py` (`donation_popup_disabled()`). `plugins.py`,
-      `sleep_wake.py`, `backup.py` and `email.py` will follow when their areas add variables.
+      `__init__.py` is the base: constants, data directories, test mode, the secret reader
+      `env_secret()`, `Settings` and `get_settings()`. New variables go into one section module per
+      topic, owned by the workstream of that area. Three exist today: `platform.py` (H:
+      `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
+      `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`),
+      `accounts.py` (A: `donation_popup_disabled()`) and `plugins.py` (X: `web_link_finder_enabled()`,
+      `web_link_finder_engine()`, `web_link_finder_api_key()`, `web_link_finder_ddgs_region()`,
+      `web_link_finder_ddgs_backend()`, `web_link_finder_timeout()`,
+      `web_link_finder_max_results()`). `sleep_wake.py`, `backup.py` and `email.py` will follow when
+      their areas add variables.
     - The rule: every environment variable of the application is read inside
       `backend/app/config/`. A module elsewhere calls a function there instead of reading
-      `os.environ`. A guard test checks it (runner selector `services config-package`, file
-      `backend/test_scripts/test_services/test_config_package.py`). One temporary exception:
-      the `LIBREFOLIO_WEB_LINK_FINDER_*` keys, still read by `services/assets/web_link_finder.py`
-      until they move into the package.
+      `os.environ`. The rule holds with no exception, and a guard test checks it (runner selector
+      `services config-package`, file `backend/test_scripts/test_services/test_config_package.py`).
+    - `.env.example`, at the repository root, documents the variables, grouped by function. A new
+      variable goes into its section as a commented line that shows the default: the uncommented
+      lines must not change, because the file becomes `/app/.env` in the Docker image. A guard test
+      checks that the variables the code reads, the `Settings` fields and the variables of the
+      compose files are documented there, and that the uncommented lines stay the same (runner
+      selector `services config-env-example`, file
+      `backend/test_scripts/test_services/test_env_example.py`).
 
 ## 🗃️ Two storage models, kept separate on purpose
 
