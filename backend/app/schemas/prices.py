@@ -358,6 +358,8 @@ class FACurrentPriceItem(StrictModel):
     as_of_date: Optional[date_type] = Field(None, description="Date/time the price refers to")
     source: Optional[str] = Field(None, description="Price source (e.g. 'provider:justetf', 'db:last_known')")
     error: Optional[str] = Field(None, description="Error message if price could not be fetched")
+    error_code: Optional[str] = Field(None, description="'RATE_LIMITED' when the provider refused for too many requests or is paused: the price is then the last one stored, if any")
+    retry_after: Optional[float] = Field(None, ge=0, description="With RATE_LIMITED: seconds until the provider may be called again")
 
 
 class FACurrentPriceResponse(BaseBulkResponse[FACurrentPriceItem]):

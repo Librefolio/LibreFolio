@@ -9,7 +9,7 @@
     const dispatch = createEventDispatcher();
 </script>
 
-<div class="w-full max-w-lg bg-lf-card text-lf-primary border border-lf-subtle rounded-2xl shadow-2xl overflow-hidden flex flex-col font-sans" data-testid="forgot-modal">
+<div class="w-full max-w-lg bg-lf-card text-lf-primary border border-lf-raised rounded-2xl shadow-2xl shadow-lf-shadow overflow-hidden flex flex-col font-sans" data-testid="forgot-modal">
     <!-- Header Section (Dark Green) -->
     <div class="bg-lf-brand p-8 flex flex-col items-center justify-center space-y-2">
         <div class="flex items-center space-x-3 text-lf-on-brand">
@@ -18,7 +18,6 @@
             </div>
             <span class="text-2xl font-bold tracking-wide">LibreFolio</span>
         </div>
-        <span class="text-lf-on-brand/80 text-sm">{$_('auth.passwordRecovery')}</span>
     </div>
 
     <!-- Body Section -->
@@ -38,10 +37,10 @@
                 <span class="font-medium text-sm">{$_('auth.serverTerminalInstructions')}</span>
             </div>
 
-            <div class="bg-gray-800 text-green-400 font-mono text-sm p-3 rounded-lg overflow-x-auto" data-testid="forgot-reset-commands">
-                <code class="block whitespace-pre text-gray-400"># Docker</code>
+            <div class="bg-lf-terminal border border-lf-terminal-line text-lf-terminal-prompt font-mono text-sm p-3 rounded-lg overflow-x-auto" data-testid="forgot-reset-commands">
+                <code class="block whitespace-pre text-lf-terminal-comment"># Docker</code>
                 <code class="block whitespace-pre">docker compose exec librefolio python dev.py user reset &lt;username&gt; &lt;new_password&gt;</code>
-                <code class="block whitespace-pre mt-2 text-gray-400"># Manual install</code>
+                <code class="block whitespace-pre mt-2 text-lf-terminal-comment"># Manual install</code>
                 <code class="block whitespace-pre">./dev.py user reset &lt;username&gt; &lt;new_password&gt;</code>
             </div>
 

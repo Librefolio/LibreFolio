@@ -6,7 +6,7 @@ Handles SQLite connection and session lifecycle with async support.
 from pathlib import Path
 from typing import AsyncGenerator
 
-from sqlalchemy import Engine, create_engine, event
+from sqlalchemy import Engine, create_engine, event, false, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -172,3 +172,17 @@ async def get_session_generator() -> AsyncGenerator[AsyncSession]:
     """
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         yield session
+
+
+async def begin_writes(session: AsyncSession, table: type) -> None:
+    """Make SQLite open the transaction now, before the first SAVEPOINT of a write path (backlog W-B20).
+
+    pysqlite defers ``BEGIN`` until the first write. A SAVEPOINT opened after only reads is then the outermost
+    transaction, and its RELEASE commits: a later rollback can no longer undo it, and one failing step of a bulk
+    operation cannot be rolled back on its own. An UPDATE of ``table`` that matches no row is a write to pysqlite, so it
+    emits ``BEGIN``, and the savepoints opened after it nest inside one transaction. With a transaction already open it
+    changes nothing. A global ``begin`` listener is not an option: a session that reads, sees another writer commit,
+    then writes, would fail at once with ``SQLITE_BUSY_SNAPSHOT``.
+    """
+    key = next(iter(table.__table__.primary_key.columns))
+    await session.execute(update(table).where(false()).values({key.name: key}).execution_options(synchronize_session=False))

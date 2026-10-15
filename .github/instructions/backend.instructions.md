@@ -101,7 +101,7 @@ at the root. The truncation to the database precision reads the models, so it li
 | API Schemas | `backend/app/schemas/*.py` |
 | Business Logic | `backend/app/services/*.py` |
 | App startup and shutdown: one line per step (`STARTUP_STEPS`, `SHUTDOWN_STEPS`), run by `lifecycle.py`; middleware, outermost first (`MIDDLEWARE_STACK`); MkDocs and SPA serving; DB create/migrate at startup. `main.py` only wires them | `backend/app/services/platform/app_lifespan.py`, `lifecycle.py`, `middleware.py`, `static_site.py`, `database_bootstrap.py` |
-| Platform services (scheduler, data-quality thresholds, per-series exports `series_export.py`, instance backup `instance_backup/`, instance key `derive_key()`, startup config checks, readiness `/system/ready`, provider pauses after HTTP 429 `provider_cooldown.py`) | `backend/app/services/platform/` |
+| Platform services (scheduler, data-quality thresholds, per-series exports `series_export.py`, instance backup `instance_backup/`, instance key `derive_key()`, startup config checks, readiness `/system/ready`, provider pauses after HTTP 429 `provider_cooldown.py`, shutdown budget `shutdown_budget.py`, sleep and wake `sleep_wake/`: the user's activity and the work in progress) | `backend/app/services/platform/` |
 | Uploads and file previews | `backend/app/services/files/` |
 | Email (optional SMTP: transport, hourly budget, templates in 4 languages, config checks) | `backend/app/services/email/` (config in `backend/app/config/email.py`; sliding-window limiter in `backend/app/utils/runtime/rate_window.py`) |
 | API Endpoints | `backend/app/api/v1/*.py` |
