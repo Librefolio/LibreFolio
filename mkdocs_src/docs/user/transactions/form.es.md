@@ -60,7 +60,7 @@ La [Guía de teoría financiera](../../financial-theory/instruments/transaction-
 
 ### 🔗 Transacciones emparejadas {: #composite-transactions }
 
-Una operación emparejada se registra como dos transacciones vinculadas, que el formulario muestra como una, con un lado **De** y un lado **A**. Cada lado tiene su propia fecha, y la flecha **Invertir lados** invierte la dirección.
+Una operación emparejada se registra como dos transacciones vinculadas, que el formulario muestra como una, con un lado **De** y un lado **A**. Cada lado tiene su propia fecha, y la flecha **Invertir lados** invierte la dirección. En un cambio de divisas las dos fechas suelen coincidir: difieren cuando el bróker abona la nueva divisa otro día.
 
 | Tipo | Qué registra | Teoría |
 |------|-----------------|--------|

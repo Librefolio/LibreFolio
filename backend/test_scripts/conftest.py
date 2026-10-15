@@ -124,7 +124,7 @@ def _release_process_pools():
     Looked up through sys.modules so a suite that never parsed a file does not
     import the module (and build a pool) just to tear it down.
     """
-    pool_module = sys.modules.get("backend.app.services.brim_parse_pool")
+    pool_module = sys.modules.get("backend.app.services.brim.brim_parse_pool")
     if pool_module is not None:
         with contextlib.suppress(Exception):
             pool_module.shutdown_pool(wait=True)

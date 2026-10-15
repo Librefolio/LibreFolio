@@ -159,11 +159,15 @@ def is_enabled() -> bool
 
 ### ⚙️ Configuration (env vars, all optional)
 
+The variables are read in `backend/app/config/plugins.py`, from the process environment only:
+`web_link_finder.py` calls its `web_link_finder_*()` accessors and reads no variable itself.
+
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `LIBREFOLIO_WEB_LINK_FINDER_ENABLED` | `1` | `1`/`0` master switch. |
 | `LIBREFOLIO_WEB_LINK_FINDER_ENGINE` | `ddgs` | `ddgs` \| `apikey` (`searxng` reserved for Fase B). |
 | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | `""` | Key for the `apikey` engine (engine self-disables if absent). |
+| `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` | `""` | Path of a file holding the API key instead: the key is a secret, read by `env_secret()` ([Secrets from Files](../../architecture/security.md#secrets-from-files)), so a blank value counts as unset. Read only when the `apikey` engine is built: a file that cannot give the key makes `_build_engine()` log `web_link_finder: <error>; disabling` and return no engine, so the search returns `[]` and the server keeps running. |
 | `LIBREFOLIO_WEB_LINK_FINDER_DDGS_REGION` | `wt-wt` | ddgs region (e.g. `wt-wt` worldwide, `it-it`). The worldwide default avoids US bias so IT pages aren't down-ranked. |
 | `LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND` | `auto` | ddgs backend(s): `auto` rotates/aggregates, or a comma list (e.g. `google,bing`). |
 | `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` | `6` | Per-request timeout, seconds. |

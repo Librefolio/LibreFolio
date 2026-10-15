@@ -273,7 +273,7 @@ results the backend computed from the user's own scenario, so it renders through
 
 The PAC allocator renders through `lib/features/tools/pac-allocator/planner/format.ts`, its only privacy
 adapter: every amount, quantity, price, rate and percentage the planner shows goes through it.
-An `exact_ratio` number — the `ExactRatio` branch of `backend/app/schemas/pac_allocator.py`, whose
+An `exact_ratio` number — the `ExactRatio` branch of `backend/app/schemas/pac_allocator/exact.py`, whose
 authoritative value is its reduced `numerator` and `denominator` — is shown through the backend's
 `display_decimal`, a projection the schema marks `non_authoritative`, with `≈` in front unless that
 projection equals the ratio; an amount is rounded exactly from the ratio to its currency's minor unit
