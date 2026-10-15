@@ -2068,6 +2068,13 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - È fail-closed, ma senza un messaggio chiaro: andrebbe trasformato in `ValueError` col percorso.
 
   Dettagli: piano H, §14 «CP3 passo 2», «Fuori pista».
+- **H-5 · Debito di traduzione delle pagine admin toccate da H** — basso; H, 15/10.
+  - `translate-validate --hide-localized` conta 102 errori nel repository. 33 vengono da CP5a: un riquadro su
+    `/api/v1/system/ready` in `docker_advanced` e in `service_exposure`, in IT, FR ed ES.
+  - Gli altri 69 c'erano già, in `configuration`, `filesystem` e `index`; ci sono anche le righe di CP3 e CP4.
+  - Si chiude con la traduzione, che parte solo su richiesta esplicita del developer.
+
+  Dettagli: piano H, §14 «CP5a passo 2».
 
 ## A · Account e accessi (fase 01)
 
