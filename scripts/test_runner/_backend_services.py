@@ -696,9 +696,17 @@ def services_brim_versioning(verbose: bool = False, test_names: list = None) -> 
 def services_config_misc(verbose: bool = False, test_names: list = None) -> bool:
     """Test config.get_data_dir test-mode/env-override branches."""
     print_section("Services: Config Helpers")
-    print_info("Testing: backend/app/config.py (get_data_dir)")
+    print_info("Testing: backend/app/config/__init__.py (get_data_dir)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_misc.py", test_names)
     return run_command(cmd, "Config helper tests", verbose=verbose)
+
+
+def services_config_package(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the config package: env vars read only in backend/app/config/, section accessors keep their semantics."""
+    print_section("Services: Config Package")
+    print_info("Testing: backend/app/config/ (env reads, section accessors)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_package.py", test_names)
+    return run_command(cmd, "Config package tests", verbose=verbose)
 
 
 def services_donation_popup(verbose: bool = False, test_names: list = None) -> bool:
@@ -1129,6 +1137,7 @@ Note: No backend server required.
         isolation="read",
     )
     add_test(cat, "config-misc", services_config_misc, name="Config Helpers", desc="get_data_dir test-mode/env-override branches")
+    add_test(cat, "config-package", services_config_package, name="Config Package", desc="Env vars read only in backend/app/config/, section accessors keep their semantics", isolation="pure")
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
     add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
     add_test(cat, "file-preview", services_file_preview, name="File Preview", desc="CSV/Excel/text preview detection helpers")

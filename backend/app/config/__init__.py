@@ -45,8 +45,8 @@ from backend.app.utils.runtime.version import get_git_version
 PROJECT_NAME: str = "LibreFolio"
 API_V1_PREFIX: str = "/api/v1"
 
-# Get project root (two levels up from this file)
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+# Project root: four directories up from backend/app/config/__init__.py
+PROJECT_ROOT = Path(__file__).parents[3]
 
 # Default data directories (relative to project root)
 DEFAULT_PROD_DATA_DIR = PROJECT_ROOT / "backend" / "data" / "prod"
