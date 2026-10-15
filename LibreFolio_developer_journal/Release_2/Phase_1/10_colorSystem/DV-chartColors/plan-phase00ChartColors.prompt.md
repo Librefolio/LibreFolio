@@ -404,6 +404,31 @@ Dopo Y4, Y8 e FE5c di X (decisione 6). Migrano solo i default salvati (decisione
 | 6 | `test … front-portfolio dashboard`, `front-portfolio risk`, `front-user broker-sharing` | E2E: torta e storico (GR1), correlazione e coppie, semi-ciambella |
 | 7 | Gallery filtrata, **sulla revisione fusa dopo l'ingresso di T**, con il ramo allineato dal coordinatore | `scripts/visual_review/gallery_snapshot.sh dv-cand --checkout <worktree> --port 6156 --data-dir /tmp/librefolio-r2-dv -- --workers 6 -f "<Dashboard\|Brokers\|Assets\|Tools\|Risk Analysis>"`, poi `gallery_tool diff` contro un riferimento dello stesso giorno, con `--common-only`, maschere e stabilità |
 
+**Prova 0, sulla revisione fusa `0182d890d`** (genitori `c5bca76ae` e `10d5ccd2d`, 15/10 alle 19:04): ✅
+- Il golden si era già unito da solo: il golden di J con le 4 righe 💰, nessun 💵, JSON valido, 14 513 righe.
+- `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1 … test --test-port 6156 --data-dir /tmp/librefolio-r2-dv services
+  roi-fifo-utils native_cash_guard`: il test salta per rigenerare, e il file viene riscritto (mtime 19:04:47).
+  **Il diff contro HEAD è vuoto**, cioè byte identico.
+- Lo stesso senza la variabile: 1 passato.
+- Categorie intere: `services roi-fifo-utils` 687 e `services financial-math` 265, entrambe più alte per i test di
+  CP-4; in più `utils sector-normalization` 73.
+- `dev.py api sync`: rc 0, nessun file tracciato cambiato. Il client generato ha `buckets` e `fallback_emoji`.
+- T non è nel target: i `STAND_INS` restano quelli della base.
+
+**Prova 0b, DV-6** (15/10): ✅
+- `stressBucketLabel.ts` (Y): ramo del settore con ``emoji ? `${emoji} ${name}` : name``; il doc di
+  `StressBucketVocabulary.sectorEmoji` dice che è `''` finché l'elenco non arriva.
+- `categoryLabels.svelte.ts` (PAC, J): lo stesso in `exposureCategoryLabel`.
+- Test di TA-1:
+  - nuovi `stressBucketLabel.test.ts` 9 e `categoryLabels.test.ts` 9, nessuno dei due aveva un test diretto;
+  - il mirror `expectedLabel` di `L4Shock.test.ts` allineato, 22;
+  - registrazione in `core-unit`, solo voci aggiunte in `_frontend_utility.py`: riga 93 (`stressBucketLabel`) e riga
+    157 (`categoryLabels`).
+- Riprova mia, un file per volta: i tre file sopra, più `riskAnalysisHelpers.test.ts` 96, tutti verdi. Prettier
+  pulito, `git diff --check` pulito, porta 6156 libera.
+- Osservazione di TA-1 per J, nessun cambio: `exposureCategoryLabel` ignora maiuscole e minuscole per tipi e paesi,
+  ma non per i settori. Le chiavi arrivano dagli enum del backend.
+
 **Riprova sull'insieme, prima del checkpoint (15/10):** un file per volta, senza corsia né server.
 - Comando: `/tmp/libreFolio_dv_vitest_batch.sh`, cioè `node_modules/.bin/vitest run <file>` con
   `PYTHON=$(PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv --py)`. Riepilogo in

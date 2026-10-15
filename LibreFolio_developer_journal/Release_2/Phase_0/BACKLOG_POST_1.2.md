@@ -2380,8 +2380,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - il ponte `roleColors`;
     - il segnale C4.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S2».
-- **DV-6 · Un'etichetta di settore comincia con uno spazio finché l'elenco dei settori non arriva** — minimo; DV, 15/10
-  (`test-author`, S10).
+- ✅ **DV-6 · Un'etichetta di settore comincia con uno spazio finché l'elenco dei settori non arriva** — minimo; DV,
+  15/10 (`test-author`, S10). **Chiusa il 15/10** (in attesa del commit del coordinatore).
   - Causa: la decisione 8. Senza il ripiego scritto a mano, `getSectorEmoji` restituisce `''` fino al caricamento, e
     due composizioni scrivono `` `${emoji} ${nome}` `` senza controllarlo:
     - `components/risk/stressBucketLabel.ts:37`, usato da `L4Shock` e `RiskAnalysisPanel` (zona di Y):
@@ -2392,6 +2392,10 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - **OK della 1.3** (coordinatore, 15/10): le due righe le fa DV, dopo il merge di base e la prova 0 e prima dello
     slot pesante; il test lo scrive `test-author`. I file sono di Y (`stressBucketLabel.ts`, che Y4b sposterà dopo
     l'ingresso di DV) e del PAC, di J.
+  - **Fatto** sulla revisione `0182d890d`:
+    - in entrambi i file, il ramo del settore mette l'emoji solo se c'è;
+    - test nuovi `stressBucketLabel.test.ts` e `categoryLabels.test.ts`, 9 e 9, registrati in `core-unit`;
+    - il mirror di `L4Shock.test.ts` è allineato, 22.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S10».
 
 ---

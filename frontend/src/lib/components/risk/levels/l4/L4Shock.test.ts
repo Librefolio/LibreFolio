@@ -424,7 +424,9 @@ function shipped(key: string): string | null {
 
 /**
  * The name a bucket must read in the language the app is in — the contract, restated once: the legacy
- * panel's `stressBucketLabel`, plus the rule that a code nobody knows is shown as written.
+ * panel's `stressBucketLabel`, plus the rule that a code nobody knows is shown as written. A sector with
+ * no emoji reads its name alone, no leading space (DV-6); the emoji here are the answer's, which lists
+ * one for every sector, so each expected sector label is the one drawn once the sectors have loaded.
  */
 function expectedLabel(bucket: string, dimension: Dimension): string {
     if (bucket === 'Other') return t('common.other');
@@ -432,7 +434,9 @@ function expectedLabel(bucket: string, dimension: Dimension): string {
     if (dimension === 'asset_class') return shipped(`assets.types.${bucket}`) ?? bucket;
     if (dimension === 'sector') {
         const name = shipped(`sectors.${sectorI18nKey(bucket)}`);
-        return name === null ? bucket : `${answeredSectorEmoji(bucket)} ${name}`;
+        if (name === null) return bucket;
+        const emoji = answeredSectorEmoji(bucket);
+        return emoji ? `${emoji} ${name}` : name;
     }
     const country = COUNTRIES[bucket];
     return country ? `${country.flag} ${country.names[lang()]}` : bucket;
