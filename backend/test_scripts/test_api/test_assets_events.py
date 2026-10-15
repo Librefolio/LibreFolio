@@ -8,6 +8,8 @@ Tests for event-related endpoints:
 - POST /api/v1/assets/events - editing a manual event in place (by key or by id)
 - Release 1.3 contract (W E1a, decisions 20-23): type normalisation, all or nothing with errors
   that say where, create mode, event_ids in the result, DELETE scoped by asset
+- Release 1.3, lot E1b: ``delete_ids`` in the upsert — the editor's save in ONE request,
+  deletions first (EVENT_NOT_DELETABLE 400, EVENT_IN_USE 409, ``deleted_ids`` in the result)
 """
 
 import uuid
@@ -1775,6 +1777,227 @@ async def test_delete_skips_an_event_of_another_asset(test_server):
             assert await _events_on(client, asset_id, EDIT_DAY) == []
             assert [e["id"] for e in await _events_on(client, other_asset_id, EDIT_DAY)] == [foreign_id], "the other asset's event was deleted"
             print_success(f"Event {foreign_id} of asset {other_asset_id} not deleted through asset {asset_id}")
+        finally:
+            leftovers = await owned.drop(client)
+    assert not leftovers, leftovers
+
+
+# ============================================================
+# Release 1.3, lot E1b: deletions inside the upsert (``delete_ids``)
+# ============================================================
+#
+# The editor saves in ONE request (decision of 15/10, 16:20): ``FAEventUpsert.delete_ids``, per
+# item, upsert mode only; deletions first, in the same transaction as the events, so an edit may
+# take the key a deletion frees (I-10) and a refusal anywhere keeps the deleted events (decision 22).
+# - an id that is not an event of the item's asset (unknown, gone, another asset's)
+#   → 400 EVENT_NOT_DELETABLE, ``params.ids``; any event of the asset may go, manual or provider
+#   (correction of 15/10 17:49: the next sync writes a provider event back, as after the 1.2 DELETE);
+# - an event a transaction realises, provider ones included → 409 EVENT_IN_USE, ``params.events`` =
+#   [{id, date, type, linked_transactions}]: counts only, never transaction ids;
+# - in a create item, an id both deleted and edited, or neither events nor deletions → 422;
+# - the result adds ``deleted_ids`` (request order).
+# ``DELETE /assets/events`` is unchanged (pinned above).
+#
+# Before E1b ``delete_ids`` is an unknown field: every request below is a 422 (extra_forbidden).
+
+
+def _not_an_unknown_field(resp: httpx.Response) -> None:
+    """A 422 for the rule under test, not today's "unknown field ``delete_ids``"."""
+    assert resp.status_code == 422, f"expected a 422, got {resp.status_code}: {resp.text}"
+    errors = resp.json()["detail"]
+    assert not [err for err in errors if err.get("type") == "extra_forbidden"], f"the 422 must be the rule, not an unknown field: {resp.text}"
+
+
+@pytest.mark.asyncio
+async def test_one_request_deletes_an_event_and_moves_another_onto_its_key(test_server):
+    """I-10 in one request: B, edited by id, takes the (date, type) the deletion of A frees.
+
+    Before E1b: 422 (``delete_ids`` unknown); the editor's two requests sent the move first,
+    refused (EVENT_KEY_CONFLICT) while A still held the key.
+    Contract: 200; A gone; B on A's date under its own id; ``deleted_ids == [A]``,
+    ``event_ids == [B]``.
+    """
+    print_section("E1b: delete_ids — a move onto the key a deletion frees")
+    owned = _OwnedRows()
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            asset_id = await _new_asset(client, owned, "DELMOVE")
+            await _seed(client, asset_id, [_point(EDIT_DAY, "DIVIDEND", "1.00", notes="A"), _point(EDIT_OTHER_DAY, "DIVIDEND", "2.00", notes="B")])
+            a_id = (await _the_event(client, asset_id, EDIT_DAY, "DIVIDEND"))["id"]
+            b_id = (await _the_event(client, asset_id, EDIT_OTHER_DAY, "DIVIDEND"))["id"]
+
+            resp = await _post_items(client, [{"asset_id": asset_id, "delete_ids": [a_id], "events": [_point(EDIT_DAY, "DIVIDEND", "2.50", event_id=b_id, notes="B moved")]}])
+
+            assert resp.status_code == 200, f"one save deletes A and moves B onto its key: {resp.status_code} {resp.text}"
+            row = next(r for r in resp.json()["results"] if r["asset_id"] == asset_id)
+            assert (row.get("deleted_ids"), row.get("event_ids")) == ([a_id], [b_id]), row
+            assert {e["id"]: (e["date"], e["type"], _amount(e), e.get("notes")) for e in await _events(client, asset_id)} == {b_id: (EDIT_DAY.isoformat(), "DIVIDEND", Decimal("2.50"), "B moved")}
+            print_success(f"Event {a_id} deleted and event {b_id} moved onto its key in one request")
+        finally:
+            leftovers = await owned.drop(client)
+    assert not leftovers, leftovers
+
+
+@pytest.mark.asyncio
+async def test_an_item_that_only_deletes_is_accepted(test_server):
+    """An item may carry deletions and no events. Before E1b: 422 (unknown field, and no events)."""
+    print_section("E1b: delete_ids — an item of deletions only")
+    owned = _OwnedRows()
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            asset_id = await _new_asset(client, owned, "DELONLY")
+            await _seed(client, asset_id, [_point(EDIT_DAY, "DIVIDEND", "1.00"), _point(EDIT_DAY, "INTEREST", "0.50")])
+            dividend_id = (await _the_event(client, asset_id, EDIT_DAY, "DIVIDEND"))["id"]
+            interest_id = (await _the_event(client, asset_id, EDIT_DAY, "INTEREST"))["id"]
+
+            resp = await _post_items(client, [{"asset_id": asset_id, "delete_ids": [interest_id]}])
+
+            assert resp.status_code == 200, f"an item of deletions only is valid: {resp.status_code} {resp.text}"
+            row = next(r for r in resp.json()["results"] if r["asset_id"] == asset_id)
+            assert row.get("deleted_ids") == [interest_id], row
+            assert [e["id"] for e in await _events(client, asset_id)] == [dividend_id]
+            print_success(f"Event {interest_id} deleted by an item with no events")
+        finally:
+            leftovers = await owned.drop(client)
+    assert not leftovers, leftovers
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "case",
+    [
+        pytest.param("create", id="deletions-in-a-create-item"),
+        pytest.param("both", id="an-id-deleted-and-edited"),
+        pytest.param("neither", id="no-events-no-deletions"),
+    ],
+)
+async def test_deletions_where_they_make_no_sense_are_a_422(test_server, case):
+    """A create item cannot delete; an event cannot be deleted and edited at once; an item must do something.
+
+    Before E1b: 422 too, but for the unknown field ``delete_ids``.
+    Contract: 422 for the rule itself; nothing written.
+    """
+    print_section(f"E1b: delete_ids — 422 ({case})")
+    owned = _OwnedRows()
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            asset_id = await _new_asset(client, owned, f"DEL422{case.upper()}")
+            await _seed(client, asset_id, [_point(EDIT_DAY, "DIVIDEND", "1.00")])
+            event_id = (await _the_event(client, asset_id, EDIT_DAY, "DIVIDEND"))["id"]
+            before = await _snapshot(client, asset_id)
+            item = {
+                "create": {"asset_id": asset_id, "mode": "create", "events": [_point(EDIT_OTHER_DAY, "DIVIDEND", "1.00")], "delete_ids": [event_id]},
+                "both": {"asset_id": asset_id, "events": [_point(EDIT_DAY, "DIVIDEND", "2.00", event_id=event_id)], "delete_ids": [event_id]},
+                "neither": {"asset_id": asset_id, "events": [], "delete_ids": []},
+            }[case]
+
+            resp = await _post_items(client, [item])
+
+            _not_an_unknown_field(resp)
+            assert await _snapshot(client, asset_id) == before
+            print_success(f"{case}: refused with 422")
+        finally:
+            leftovers = await owned.drop(client)
+    assert not leftovers, leftovers
+
+
+@pytest.mark.asyncio
+async def test_deleting_an_id_that_is_not_an_event_of_the_asset_is_a_400(test_server):
+    """Only events of the asset can go, and an id that is not there is not ignored.
+
+    delete_ids: an event of the asset (deletable), an unknown id, an event of another asset.
+    Before E1b: 422 (``delete_ids`` unknown).
+    Contract: 400 EVENT_NOT_DELETABLE, params {asset_id, item_index: 0, ids: the two refused};
+    nothing deleted on either asset. (A provider event of the asset is deleted like a manual one,
+    and refused only when in use: pinned in test_asset_event_store.py, where one can be written
+    without a refresh.)
+    """
+    print_section("E1b: delete_ids — EVENT_NOT_DELETABLE")
+    owned = _OwnedRows()
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            by_id = await client.get(f"{API_BASE}/assets/events", params={"ids": [UNKNOWN_EVENT_ID]}, timeout=TIMEOUT)
+            assert by_id.status_code == 200 and by_id.json()["items"] == [], f"precondition: event {UNKNOWN_EVENT_ID} must not exist, got {by_id.text}"
+            asset_id = await _new_asset(client, owned, "DELNOTMINE")
+            other_asset_id = await _new_asset(client, owned, "DELOTHERS")
+            await _seed(client, asset_id, [_point(EDIT_DAY, "DIVIDEND", "1.00")])
+            await _seed(client, other_asset_id, [_point(EDIT_DAY, "DIVIDEND", "1.00")])
+            own_id = (await _the_event(client, asset_id, EDIT_DAY, "DIVIDEND"))["id"]
+            foreign_id = (await _the_event(client, other_asset_id, EDIT_DAY, "DIVIDEND"))["id"]
+            before = (await _snapshot(client, asset_id), await _snapshot(client, other_asset_id))
+
+            resp = await _post_items(client, [{"asset_id": asset_id, "delete_ids": [own_id, UNKNOWN_EVENT_ID, foreign_id]}])
+
+            params = _assert_rejected(resp, "EVENT_NOT_DELETABLE", asset_id=asset_id)
+            assert {**params, "ids": sorted(params.get("ids") or [])} == {"asset_id": asset_id, "item_index": 0, "ids": sorted([UNKNOWN_EVENT_ID, foreign_id])}
+            assert (await _snapshot(client, asset_id), await _snapshot(client, other_asset_id)) == before
+            print_success("Unknown and foreign ids refused; nothing deleted")
+        finally:
+            leftovers = await owned.drop(client)
+    assert not leftovers, leftovers
+
+
+@pytest.mark.asyncio
+async def test_deleting_an_event_in_use_is_a_409_and_saves_nothing(test_server):
+    """An event a transaction realises cannot go, and the save is refused whole (decision 22).
+
+    One item deletes D (free) and L (linked to a transaction) and edits E.
+    Before E1b: 422 (``delete_ids`` unknown); through the separate DELETE, L was ``in_use`` and
+    D was deleted anyway.
+    Contract: 409 EVENT_IN_USE, params {asset_id, item_index: 0, events: [{id: L, date, type,
+    linked_transactions: 1}]} — no transaction id; D, L and E as they were.
+    """
+    print_section("E1b: delete_ids — EVENT_IN_USE")
+    owned = _OwnedRows()
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            asset_id = await _new_asset(client, owned, "DELINUSE")
+            await _seed(client, asset_id, [_point(EDIT_DAY, "DIVIDEND", "1.00"), _point(EDIT_DAY, "INTEREST", "0.50"), _point(EDIT_OTHER_DAY, "DIVIDEND", "2.00")])
+            linked_id = (await _the_event(client, asset_id, EDIT_DAY, "DIVIDEND"))["id"]
+            free_id = (await _the_event(client, asset_id, EDIT_DAY, "INTEREST"))["id"]
+            edited_id = (await _the_event(client, asset_id, EDIT_OTHER_DAY, "DIVIDEND"))["id"]
+            await _link_dividend_tx(client, owned, asset_id, linked_id, EDIT_DAY)
+            before = await _snapshot(client, asset_id)
+
+            resp = await _post_items(client, [{"asset_id": asset_id, "delete_ids": [free_id, linked_id], "events": [_point(EDIT_OTHER_DAY, "DIVIDEND", "2.75", event_id=edited_id)]}])
+
+            params = _error_detail(resp, 409, "EVENT_IN_USE")
+            assert params == {"asset_id": asset_id, "item_index": 0, "events": [{"id": linked_id, "date": EDIT_DAY.isoformat(), "type": "DIVIDEND", "linked_transactions": 1}]}
+            assert await _snapshot(client, asset_id) == before
+            print_success(f"Event {linked_id} in use: the whole save refused with 409")
+        finally:
+            leftovers = await owned.drop(client)
+    assert not leftovers, leftovers
+
+
+@pytest.mark.asyncio
+async def test_a_refused_event_keeps_the_events_its_item_deletes(test_server):
+    """All or nothing: the deletion of an item whose event is refused does not happen.
+
+    Before E1b: 422 (``delete_ids`` unknown).
+    Contract: 400 EVENT_CURRENCY_MISMATCH naming the EUR event; the event to delete still there.
+    """
+    print_section("E1b: delete_ids — a refused event keeps the deletions")
+    owned = _OwnedRows()
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        try:
+            asset_id = await _new_asset(client, owned, "DELKEPT")
+            await _seed(client, asset_id, [_point(EDIT_DAY, "DIVIDEND", "1.00")])
+            doomed_id = (await _the_event(client, asset_id, EDIT_DAY, "DIVIDEND"))["id"]
+            before = await _snapshot(client, asset_id)
+
+            resp = await _post_items(client, [{"asset_id": asset_id, "delete_ids": [doomed_id], "events": [_point(EDIT_OTHER_DAY, "DIVIDEND", "1.00", currency="EUR")]}])
+
+            params = _assert_rejected(resp, "EVENT_CURRENCY_MISMATCH", asset_id=asset_id)
+            assert [e["event_index"] for e in params["events"]] == [0]
+            assert await _snapshot(client, asset_id) == before, f"event {doomed_id} was deleted although the save was refused"
+            print_success("Refused save: the deletion did not happen")
         finally:
             leftovers = await owned.drop(client)
     assert not leftovers, leftovers
