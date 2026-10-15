@@ -1852,7 +1852,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >     della pagina File. Il doppio lancio va fatto su due macchine con lo stesso fuso: qui è 11:41 (Europe/Rome), in UTC
 >     sarebbe 09:41.
 
-### B2 — prova su copia: analisi aggiornata alle decisioni 40–43 (2026-10-15, 20:35) — in attesa del via
+### B2 — prova su copia: analisi aggiornata alle decisioni 40–43 (2026-10-15, 20:35) — via alle 20:50
 
 > **Stato reale** (base `10697e618`, letto sul codice):
 >
@@ -1909,6 +1909,299 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   oppure io, dichiarate;
 > - per B3 (40): dove vive l'ora del ripristino. Una riga d'impostazione non chiede migrazioni; una colonna sì. Il
 >   controllo va in `auth.py`, che è di A. Lo porto nell'analisi di B3.
+>
+> **Risposte del coordinatore** (20:50):
+>
+> - via a B2a, poi B2b; durante la pausa delle prove (20:42-20:55) si scrive codice, e le prove si fanno dopo la
+>   ripresa;
+> - `backups` e `.restore` in `validate_test_data_dir` li scrivo io, dichiarati: H è sul lotto della decisione 36;
+> - l'ora del ripristino va nell'analisi di B3. Il coordinatore preferisce una riga d'impostazione, senza migrazione;
+>   il controllo in `auth.py` è di A, va dichiarato e la forma va concordata con A, accanto al controllo `sv`.
+>
+> **Il suo messaggio delle 20:44** («H entra prima di te … `billing_url`, link di reset, anteprima di A6a») è vecchio,
+> arrivato in ritardo dalla coda: `9c8ee20c3`, con quelle tre cose, è nel mio HEAD dalle 17:52. Nessuna azione.
+
+### B2a — libreria e CLI della prova su copia (2026-10-15, 20:50-21:47) ✅
+
+> **Codice** (scritto durante la pausa, 20:45-20:55; solo ruff, black, un import e il `--help`):
+>
+> - `instance_backup/staging.py`, nuovo. `stage_archive(archive, data_dir, *, stage_id, progress) -> StagingReport`, più
+>   `read_report`, `remove_stage`, `new_stage_id` e `space_needed`. I cinque passi sono nella docstring:
+>   1. archivio di LibreFolio: zip dai primi byte, con un manifest suo (42);
+>   2. ogni voce controllata prima di scrivere: elencata nel manifest, file semplice (né cartella né link), non cifrata,
+>      compressione «stored» o «deflated», nome unico anche senza le maiuscole, dimensione uguale, spazio libero;
+>   3. scrittura in file nuovi (`O_EXCL`, `O_NOFOLLOW`), con lo SHA-256 confrontato mentre scrive;
+>   4. la revisione decide con `ScriptDirectory`: sconosciuta (quindi più nuova) → rifiuto; uguale → `same`; più vecchia
+>      → `alembic -x sqlalchemy.url=… upgrade head` in un sottoprocesso; poi i fix post-migrazione sulla copia;
+>   5. i controlli prima (integrità, revisione e righe uguali al manifest) e dopo (integrità, head), gli admin attivi
+>      della copia (40), il report in `report.json` (0600).
+>
+>   Ogni rifiuto ha un `code` stabile e un messaggio senza percorsi, e non lascia niente. Una prova alla volta (flock su
+>   `.restore/stage/.stage.lock`, il `_RunLock` di `jobs.py`).
+> - `paths.py`: `.restore/stage/<id>/{data,report.json}`, `restore_dir`, `stages_dir`, `stage_dir` (solo id di 32
+>   cifre esadecimali).
+> - `scripts/backup_cli.py`: `restore ARCHIVE --dry-run` controlla, stampa il report (revisioni, migrazioni, righe
+>   cambiate, file, chiave, admin, avvisi, blocchi) e toglie la copia. Senza `--dry-run` rifiuta.
+>   `_data_dir_for(…, need_database=False)`.
+> - **Dichiarati**: `config/__init__.py` (H), `backups` e `.restore` fra i `managed_paths` di `validate_test_data_dir`;
+>   `dev.py` (condiviso), la riga d'aiuto «backup (create, inspect, restore --dry-run)».
+> - **Fuori pista**: ruff segnalava `_checked_entries` troppo complessa (C901, 11 > 10); i controlli per voce sono
+>   passati in `_check_entry`. I 43 rilievi di ruff e il riformattamento di black su `dev.py` c'erano già su HEAD
+>   (verificato su `git show HEAD:dev.py`).
+> - **Cambi rispetto all'analisi**:
+>   - la busta `.lfbk` non si riconosce ancora: il suo formato nasce con B4, quindi in B2 tutto ciò che non è uno zip è
+>     `not_a_backup`;
+>   - `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` va con B2b, il caricamento;
+>   - i totali di J restano per quando entra CP-15: i manifest di B1 non li hanno.
+> - **Test**: test-author in background (dalle 20:56, dopo la ripresa), con la corsia:
+>   - `test_backup_staging.py`, nuovo (`services backup-staging`), con archivi veri fatti da B1 e DB veri, creati con
+>     Alembic alla head e alla revisione prima;
+>   - in `test_backup_cli.py`, i casi di `restore`;
+>   - in `test_runtime_isolation.py` (non mio, in aggiunta), `backups` e `.restore` nella parametrizzazione dei link;
+>   - 6 mutazioni.
+>
+> **⚠️ Fuori pista — seconda pausa delle prove** (21:00-21:25 circa, G lancia due volte i tre scatti nuovi, fra cui
+> `backup ready`): test-author fermo, senza comandi in esecuzione, poi rimesso a scrivere i test senza lanciarli.
+>
+> **Esito di test-author, prima tornata** (21:10-21:40, dopo la ripresa delle 21:09; log in
+> `/tmp/libreFolio_b2ata_*.log`):
+>
+> | Selettore | Esito |
+> |---|---|
+> | `services backup-staging` (nuovo) | 101 passati e 1 rosso voluto: il difetto qui sotto |
+> | `utils backup-cli` | 84 (14 nuovi, per `restore`) |
+> | `utils runtime-isolation` | 197, con `[backups]` e `[.restore]` |
+> | `services backup-archive` | 141 e 1 saltato (il nome non UTF-8 che macOS non regge, già prima) |
+> | `services backup-jobs` | 63 |
+> | `services config-package` | 668 |
+> | `check-orphans` | verde |
+>
+> - `test_backup_staging.py` usa DB veri, creati da Alembic alla head e a `005_accounts_invites`, più un aggiornamento
+>   che riesce e uno che fallisce (un trigger rifiuta il cambio di revisione); in tutto 4 processi Alembic. Copre ogni
+>   codice di rifiuto, con niente lasciato, il lock libero, nessun percorso nel messaggio e la fase raggiunta. Copre
+>   anche busy, link, avanzamento, avvisi, la cartella dati viva identica byte per byte e il lock passato di B2b.
+> - 6 mutazioni, tutte rosse. Senza `O_EXCL`, su APFS un nome in forma Unicode decomposta riscriveva in silenzio quella
+>   composta.
+> - **⚠️ Fuori pista — difetto trovato da test-author**: un archivio con `custom-uploads/x` come file e
+>   `custom-uploads/x/y` (`x` come cartella). Con il file prima, `ensure_private_dir` alzava `BackupPathError` invece di
+>   `StagingError`, con il percorso della prova nel messaggio, e la CLI dava la colpa alla cartella dati. Curato
+>   (21:42):
+>   - `_name_key()`, cioè NFC più casefold, per `_repeated`;
+>   - `_nested()` rifiuta durante il controllo una voce che è anche la cartella di un'altra (`duplicate_entry`);
+>   - di riserva, in `_unpack` un `BackupPathError` sotto la copia diventa `duplicate_entry`;
+>   - `progress if progress is not None` (nota di test-author).
+>
+>   **Contratto nuovo, voluto**: due forme Unicode dello stesso nome si rifiutano durante il controllo su ogni file
+>   system; prima venivano rifiutate in scrittura su APFS e scritte come due file altrove. Gli archivi veri non hanno
+>   nomi del genere, perché upload e report stanno come `{uuid}.{ext}`. Il mio `services backup-staging` dopo la cura:
+>   101 passati e 1 rosso, il test che fissava il comportamento di prima. test-author lo allinea e aggiunge 2
+>   mutazioni (`_nested` e NFC).
+>
+> **Seconda tornata di test-author** (21:42-21:46), verde:
+>
+> - il test delle forme Unicode è allineato al contratto nuovo: rifiuto in «checking» su ogni file system, in 3 varianti
+>   (nello zip, nel manifest, in tutti e due);
+> - nei casi annidati, in più `folder-in-another-case` (`custom-uploads/X` come file sopra `custom-uploads/x/y`);
+> - `services backup-staging` **105**; `utils backup-cli` **84**;
+> - mutazioni: senza `_nested`, 3 rossi (il rifiuto arriva solo in «unpacking», dalla riserva); senza la NFC, 3 rossi.
+>   `staging.py` è ripristinato identico (`14e32856…`).
+>
+> **B2a ✅** (21:47). In più, dopo i test: `api sync` 0; `front check` 0 errori e 0 avvisi, con il client generato che
+> conosce le rotte di B2b.
+
+### B2b — l'API della prova su copia (2026-10-15, 21:05-23:18) ✅ — 🧊 FROZEN
+
+> **Codice** (scritto durante la seconda pausa; ruff, black e un controllo d'import con l'OpenAPI):
+>
+> - `config/backup.py`: `backup_max_upload_mb()`, decisione 43. `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`; non impostata vale
+>   0 (senza limite) nel self-hosted e 500 con `LIBREFOLIO_PROFILE=managed`. Altrimenti solo cifre ASCII, se no
+>   `BackupConfigError` (`BACKUP_MAX_UPLOAD_MB_INVALID`). Riga commentata in `.env.example`.
+> - `instance_backup/restore_jobs.py`, nuovo:
+>   - `UploadWriter` scrive il corpo in `.restore/upload/<id>.part` (`O_EXCL`, 0600). Il limite si controlla sulla
+>     dimensione annunciata e a ogni pezzo, prima di scrivere; lo spazio prima di cominciare; ENOSPC dà «niente
+>     spazio». `finish` fa fsync e rinomina, e toglie gli upload precedenti, tranne quello che una prova sta leggendo.
+>   - `start_check`: il lock delle prove si prende nella richiesta (così un secondo avvio riceve subito il rifiuto) e
+>     passa al thread. Lo stato sta in `.restore/checks/<id>.json`, scritto in modo atomico a ogni fase e al più una
+>     volta al secondo. L'upload si toglie a fine prova.
+>   - `read_check`: uno stato «running» senza il lock tenuto da qualcuno vuol dire che il server si è fermato, quindi
+>     `restore_interrupted`, e la copia si toglie.
+>   - `remove_check` dà 409 mentre la prova gira; `prune` toglie quello che ha più di 24 ore.
+> - `paths.py`, solo in aggiunta: `upload/` e `checks/` dentro `.restore/`. `staging.py`: `stage_archive(…, lock=)`,
+>   per un lock già preso; `stage_dir()` controllato dentro il `try`, così il lock si rilascia sempre.
+> - `api/v1/backup/restore.py`, nuovo, solo admin:
+>
+>   | Rotta | Esito | Errori |
+>   |---|---|---|
+>   | `PUT /backup/restore/upload` | 201 | 413 `backup_too_large` (con `limit_mb`), 507 `backup_no_space`, 400 `backup_upload_empty` / `backup_upload_incomplete`, 503 `backup_upload_unavailable`, 500 `restore_folder_unusable` |
+>   | `POST /backup/restore/stage` | 202 | 404 `backup_upload_not_found`, 409 `restore_busy` |
+>   | `GET /backup/restore/stage/{id}` | 200 | 404 `restore_stage_not_found` |
+>   | `DELETE /backup/restore/stage/{id}` | 204 | 404, 409 `restore_stage_running` |
+>
+>   - Il PUT è `async`: il corpo si legge con `request.stream()` e si scrive a pezzi da 1 MB, ognuno con
+>     `asyncio.to_thread`, per la regola dell'I/O nel ciclo di eventi. Nell'OpenAPI il corpo è
+>     `application/octet-stream`.
+>   - Nessuna di queste rotte va in `ALLOWED_WHEN_BLOCKED`.
+> - `schemas/backup.py`: `RestoreUpload`, `RestoreStageRequest`, `RestoreStage` e `RestoreStageReport`, con
+>   `extra="forbid"`; i codici d'errore sono un `Literal`.
+> - **Fuori pista**: ruff segnalava la rotta di caricamento troppo complessa (C901, 13 > 10). Ne sono uscite tre parti:
+>   `_upload_limit`, `_receive` e `_upload_failure`. Il mio primo controllo d'import contava le rotte su `app.routes`,
+>   che in questa versione di FastAPI non le elenca piatte; ho contato sull'OpenAPI: 15 operazioni sotto `/backup`, le
+>   4 nuove fra il pannello e gli export.
+> - **Middleware**: solo gzip e CORS (`services/platform/middleware.py`), nessun limite al corpo nell'app. Un proxy
+>   davanti ha i suoi limiti: va nella guida (B6).
+> - **Da fare**: un brief per test-author (`api backup-restore`, in-process su una cartella dati temporanea;
+>   `BACKUP_ROUTES` +4 in `test_backup_api.py`), `api sync`, `front check`.
+> - **In corso** (dalle 21:48):
+>   - test-author con il brief di B2b (`files/b2b-test-brief.txt`), con la corsia. La rotazione del thread della prova
+>     è resa deterministica, senza attese sull'orologio. Ci sono 5 mutazioni, e `BACKUP_ROUTES` +4: finché non c'è,
+>     `api backup` resta rosso;
+>   - docs-writer, solo pagine inglesi, con la build MkDocs solo dopo il mio «GO BUILD», così non si sovrappone alle
+>     prove:
+>     - `cli_tools.en.md#backup`: `restore --dry-run`;
+>     - `hosting_providers.en.md`, con le ancore nuove `#panel-backups` (il token di B8) e `#restore-upload-limit` (la
+>       decisione 43);
+>     - `configuration.en.md`: le due variabili, e il `_FILE` del token fra i segreti.
+> - **docs-writer, prima tornata** (21:48-22:04), senza build, che aspetta il mio via perché i test girano:
+>   - `cli_tools.en.md`: la sezione nuova «🧪 Try a Restore on a Copy» (`#backup-restore-dry-run`), con i cinque passi,
+>     il report, i codici d'uscita, lo spazio e la tabella dei codici di rifiuto. `restore --dry-run` compare anche nel
+>     suggerimento Docker, nell'introduzione e nella sezione Docker. `#backup` e `#backup-docker` sono rimaste.
+>   - `hosting_providers.en.md`: due sezioni nuove, `#panel-backups` (con `#panel-token`, `#panel-jobs`,
+>     `#panel-refusals`) e `#restore-upload-limit`.
+>   - `configuration.en.md`: due righe in «Main Options» e il default di 500 MB nella riga del profilo; i segreti
+>     passano da quattro a cinque; il `_FILE` del token sta fra i «Secrets in Files».
+>   - **Errori di prima, corretti**: alla tabella «What Still Answers» della pagina hosting mancavano le 8 rotte di
+>     backup permesse sull'istanza bloccata; la pagina diceva «two things» per il profilo, e sono tre.
+>   - **Seconda richiesta**, sempre senza build: `developer/architecture/security.md` (di H, dichiarato) allineata ad
+>     `ALLOWED_WHEN_BLOCKED`, con le 8 rotte di backup al posto della frase «will join the list when their routes
+>     exist»; la riga di riepilogo in `admin/index.en.md`.
+>   - Resta per B6: nessuna pagina admin descrive la scheda Impostazioni › Backup.
+>   - Debito di traduzione: le sezioni nuove di `cli_tools`, `hosting_providers` e `configuration` (nessun timbro: è
+>     contenuto nuovo).
+>   - **Terza e quarta richiesta** (22:08-22:14), sempre senza build, in `security.md` (dichiarato): «Private Endpoints»
+>     (le rotte del pannello non usano la sessione, ma il token: 401, o 404 se il token non è impostato), «Secrets from
+>     Files» (il token è il quinto segreto; un token inutilizzabile dà 503 e una riga di log, e il server parte lo
+>     stesso), e la frase d'apertura di «Endpoint Protection». Il riepilogo di `admin/index.en.md` resta come debito di
+>     traduzione, senza timbro: le traduzioni erano già indietro dal 12/10.
+>   - **⚠️ Fuori pista — B-11 scritto e tolto**: docs-writer temeva che una corsia di test ereditasse il token del
+>     pannello, che non è in `INSTANCE_TRUST_SECRETS`. Falso: `scripts/cli_base.py`, `_test_lane_drops()`, toglie già
+>     ogni variabile documentata in `.env.example`, anche commentata, e ogni `LIBREFOLIO_*`, tranne
+>     `LIBREFOLIO_TEST_*`. La riga è tolta dal backlog.
+>   - **Build** (dopo il mio via, 22:38-22:48): la prima `mkdocs build` stretta dava 4 avvisi, tutti da link aggiunti in
+>     `hosting_providers.en.md`. La pagina non ha traduzioni, quindi le build it, fr ed es usano quella inglese, che
+>     puntava ad ancore che le pagine tradotte di `cli_tools` e `configuration` non hanno ancora. I 9 link ora vanno
+>     alla pagina, senza ancora, come la pagina fa già altrove. Dopo: `mkdocs build` pulita nelle 4 lingue;
+>     `check-links` 96 validi, nessuno rotto.
+>   - Aggiunta una frase sul 500 `backup_upload_failed` nella sezione del caricamento.
+>   - **File**: `cli_tools.en.md`, `configuration.en.md`, `hosting_providers.en.md`, `index.en.md` (admin) e
+>     `developer/architecture/security.md` (+264 e −26 righe). Nessun timbro. `hosting_providers` non ha traduzioni:
+>     tutta la pagina aspetta la traduzione.
+>
+> **Test di B2b, prima tornata** (test-author, 21:48-22:33; log `/tmp/libreFolio_b2bta_*.log`):
+>
+> | Selettore | Esito |
+> |---|---|
+> | `api backup-restore` (nuovo, puro) | 91 passati e 4 rossi voluti, uguali in due run |
+> | `api backup` | 23, con `BACKUP_ROUTES` +4: il pin dell'ordine vede 15 rotte |
+> | `api backup-panel` | 59 |
+> | `api backup-instance-errors` | 6 |
+> | `api instance-block` | 60 |
+> | `services backup-staging` | 105 |
+> | `services config-package` | 668 |
+> | `services config-env-example` | 36 |
+> | `check-orphans` | verde |
+>
+> Il thread della prova è reso sincrono nei test, senza attese sull'orologio. Gli aiuti di `test_backup_staging.py` sono
+> riusati direttamente. Le 5 mutazioni sono tutte rosse.
+>
+> **⚠️ Fuori pista — 4 difetti di `restore_jobs.py` trovati da test-author, curati** (22:33-22:37):
+>
+> 1. Il lock si rilasciava (in `stage_archive`) prima che `_run_check` scrivesse lo stato finale. Un poll in mezzo
+>    vedeva «running senza lock», segnava la prova interrotta e ne cancellava la copia. Cura: un lock passato resta al
+>    chiamante; `_run_check` scrive lo stato finale e solo dopo rilascia, in un `finally`.
+> 2. `read_check` giudicava sullo stato letto prima della sonda. Cura: se il lock è libero rilegge, e solo uno stato
+>    ancora «running» diventa `restore_interrupted`, come in `jobs.get_job`.
+> 3. `start_check` controllava l'upload, poi `prune` lo cancellava, e la colpa andava all'archivio
+>    (`archive_unreadable`). Cura: prima le cartelle (`ensure_private_dir`, con un link si ferma lì), poi `prune`, poi
+>    l'upload.
+> 4. Una prova interrotta non veniva mai potata. Cura: senza prove in corso, `prune` chiude con `read_check` quelle
+>    rimaste «running»; e toglie, oltre le 24 ore, gli upload e le copie che nessuna prova registra. È diviso in
+>    `_prune_checks` e `_prune_unrecorded`, per C901.
+>
+> Le note minori, curate anch'esse:
+>
+> - `HTTP_413_CONTENT_TOO_LARGE`;
+> - un altro `OSError` durante il caricamento dà 500 `backup_upload_failed`, con la riga di log, e nessun avanzo;
+> - `done_bytes` e `total_bytes` seguono solo lo spacchettamento, e lo stato finale tiene quei numeri.
+>
+> In più, mio: `paths.is_plain_dir()`, condivisa. `remove_stage` e `_checks()` non agiscono più attraverso un link
+> (`.restore`, `stage/`, `checks/`). `_a_check_runs` usa `jobs._lock_held`, che non crea il file del lock.
+>
+> **Seconda tornata**: test-author scrive gli adattamenti e i casi nuovi:
+>
+> - il lock passato resta al chiamante, in `test_backup_staging.py`;
+> - un errore di scrittura → `backup_upload_failed`;
+> - nessuna cancellazione attraverso un link; la potatura di quello che nessuno registra; i byte di una prova finita;
+> - `backup_in_progress()` in `test_backup_jobs.py`;
+> - 6 mutazioni.
+>
+> Le lancia dopo la build MkDocs di docs-writer, una cosa alla volta.
+>
+> **Seconda tornata di test-author** (22:49-23:08):
+>
+> | Selettore | Esito |
+> |---|---|
+> | `api backup-restore` | 109 passati e 5 rossi voluti: 3 difetti nuovi |
+> | `services backup-staging` | 112 |
+> | `services backup-jobs` | 69, con `backup_in_progress()` |
+> | `api backup` | 23 |
+> | `check-orphans` | verde |
+>
+> - I 4 rossi di prima passano senza cambiare il codice dei test.
+> - Adattati al contratto nuovo: il lock passato resta al chiamante; la potatura degli avanzi solo senza prove in corso;
+>   il finto `stage_archive` non rilascia più il lock.
+> - Le 6 mutazioni sono tutte rosse e i file ripristinati identici.
+>
+> **⚠️ Fuori pista — 3 difetti nuovi, curati** (23:10-23:13):
+>
+> 1. Un upload il cui file non si può creare (`.restore` in sola lettura) dava un 500 senza codice. Cura: `UploadWriter`
+>    trasforma in «niente spazio» un disco pieno, e la rotta fa passare ogni altro `OSError` da `_upload_failure` (500
+>    `backup_upload_failed`).
+> 2. Un DELETE cancellava attraverso un link: `.restore` o `checks/` sostituiti da un link, e il file di stato veniva
+>    tolto nel bersaglio. Cura: `_plain_folders(data_dir, folder)`. Lettura, scrittura e rimozione di stato e upload
+>    solo se `.restore` e la cartella sono cartelle vere; dietro un link la prova non si trova (404) e niente si scrive.
+> 3. Una prova tolta da un'altra richiesta mentre un poll sondava il lock risultava «running». Cura: se la seconda
+>    lettura non trova niente, `CheckNotFoundError`.
+>
+> **Prove finali** (23:13-23:16):
+>
+> - `api backup-restore` **114** passati: i 5 rossi sono verdi senza toccare i test;
+> - `api sync` 0; `front check` 0 errori e 0 avvisi;
+> - ruff pulito sui 19 file Python. Black segnala solo due righe `print_info` dei cataloghi, già su HEAD e non mie;
+> - `git diff --check` pulito; porta 6187 libera.
+>
+> Gli altri selettori sono già girati sulle versioni attuali dei loro file: `services backup-staging` 112, `backup-jobs`
+> 69, `api backup` 23, `api backup-panel` 59, `api instance-block` 60, `utils backup-cli` 84, `utils runtime-isolation`
+> 197, `services config-package` 668, `config-env-example` 36, `check-orphans` verde.
+>
+> **Backlog**: B-11, il debito di traduzione delle pagine admin di B2 e B8.
+>
+> **Checkpoint B2** (23:18) 🧊 FROZEN: B2a, B2b, la documentazione e `backup_in_progress()` per Z.
+
+### Richiesta di Z: `backup_in_progress()` (2026-10-15, 21:52-21:54) ✅ — testata, nel checkpoint di B2
+
+> - **Richiesta** (sessione «Z - sospensione e risveglio», `d401e062`): per la decisione D-S2 del coordinatore
+>   (l'istanza non si sospende mai durante un backup), una funzione in sola lettura per il monitor d'inattività di Z2b,
+>   chiamata ogni 30 s.
+> - **Fatto** in `instance_backup/jobs.py`:
+>   - `backup_in_progress(*, data_dir=None) -> bool`. È vera se è tenuto il lock dei backup (`backups/.jobs/.lock`:
+>     scheda, pannello, CLI) **o** quello delle prove su copia (`.restore/stage/.stage.lock`). La prova su copia gira in
+>     un thread dopo la risposta HTTP: un monitor basato sulle richieste non la vede.
+>   - La sonda di B1, `_run_lock_held`, è diventata generica, `_lock_held(path)`. Con il file del lock assente risponde
+>     falso e non crea niente; altrimenti fa `flock` non bloccante e rilascia subito.
+>   - Ruff e black puliti. Prova a mano su una cartella temporanea: vuota falso, senza file creati; lock libero falso;
+>     lock di backup o di prova tenuto vero; il lock è di nuovo libero dopo la sonda.
+> - **Da fare**: i test in `test_backup_jobs.py` con test-author, dopo B2b; lo SHA a Z quando il coordinatore committa.
+>   `restore_jobs._a_check_runs` può usare `_lock_held`: lo unisco quando test-author ha finito con `restore_jobs.py`.
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 
