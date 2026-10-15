@@ -12,9 +12,10 @@
  *     where the context is `{isSuperuser}`; `id` is both the `?tab=` value and the suffix of the
  *     `settings-tab-{id}` test id, `visible` absent means visible to everyone, `props` are spread on
  *     the body, `alignEnd` starts the right-hand group on a wide screen;
- *   - `SETTINGS_TABS`: today's four tabs and nothing else — profile, preferences, about, admin. Admin
- *     stays visible to everyone and editable only by an administrator (`props: ctx => ({canEdit:
- *     ctx.isSuperuser})`), and `alignEnd` takes the place of the inline class;
+ *   - `SETTINGS_TABS`: today's tabs and nothing else — profile, preferences, about, admin, and email
+ *     for administrators only (workstream E). Admin stays visible to everyone and editable only by an
+ *     administrator (`props: ctx => ({canEdit: ctx.isSuperuser})`), and `alignEnd` takes the place of
+ *     the inline class; email takes no props, and follows admin in the right-hand group;
  *   - `visibleSettingsTabs(tabs, ctx)`: the tabs whose `visible(ctx)` is not false, sorted by
  *     `order`. It takes the list explicitly, so that a test can hand it one of its own, and it leaves
  *     that list as it was.
@@ -23,7 +24,7 @@
  * the helper gives them, never a number. The `TODAY` table below is the registry's content; a
  * workstream that adds a tab adds its row there, in the same change.
  *
- * Why the four tab modules are mocked. Each tab body imports the API client, the stores and their own
+ * Why the tab modules are mocked. Each tab body imports the API client, the stores and their own
  * children, so importing the real modules would make this file depend on everything they reach (and
  * on whatever any of them does at import time) while it asks one thing of them: which module each tab
  * points at. Each module is replaced, by its path, with a function of its own, and the registry's
@@ -40,6 +41,7 @@
 import {describe, expect, it, vi} from 'vitest';
 import type {Component} from 'svelte';
 import {Info, Shield, Sliders, User} from 'lucide-svelte';
+import {Mail} from 'lucide-svelte';
 import type {SupportedLocale} from '$lib/i18n';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
@@ -54,6 +56,7 @@ const bodies = vi.hoisted(() => {
         preferences: body('PreferencesTab.svelte'),
         about: body('AboutTab.svelte'),
         admin: body('GlobalSettingsTab.svelte'),
+        email: body('EmailSettingsTab.svelte'),
     };
 });
 
@@ -61,6 +64,7 @@ vi.mock('$lib/features/settings/tabs/ProfileTab.svelte', () => ({default: bodies
 vi.mock('$lib/features/settings/tabs/PreferencesTab.svelte', () => ({default: bodies.preferences}));
 vi.mock('$lib/features/settings/tabs/AboutTab.svelte', () => ({default: bodies.about}));
 vi.mock('$lib/features/settings/tabs/GlobalSettingsTab.svelte', () => ({default: bodies.admin}));
+vi.mock('$lib/features/email/EmailSettingsTab.svelte', () => ({default: bodies.email}));
 
 import {SETTINGS_TABS, visibleSettingsTabs, type SettingsTab, type SettingsTabContext} from './settingsTabs';
 
@@ -68,17 +72,19 @@ import {SETTINGS_TABS, visibleSettingsTabs, type SettingsTab, type SettingsTabCo
 const USER: SettingsTabContext = {isSuperuser: false};
 /** An administrator. */
 const ADMIN: SettingsTabContext = {isSuperuser: true};
-const CONTEXTS: [string, SettingsTabContext][] = [
-    ['a user', USER],
-    ['an administrator', ADMIN],
+/** Who is signed in, the ids of the tabs they see, left to right, and their context. */
+const CONTEXTS: [string, string[], SettingsTabContext][] = [
+    ['a user', ['profile', 'preferences', 'about', 'admin'], USER],
+    ['an administrator', ['profile', 'preferences', 'about', 'admin', 'email'], ADMIN],
 ];
 
-/** Today's four tabs, left to right: the id, the catalogue key of the label, the lucide icon and the tab module. */
+/** Today's tabs, left to right: the id, the catalogue key of the label, the lucide icon and the tab module. */
 const TODAY = [
     {id: 'profile', labelKey: 'settings.profile', icon: User, component: bodies.profile},
     {id: 'preferences', labelKey: 'settings.preferences', icon: Sliders, component: bodies.preferences},
     {id: 'about', labelKey: 'settings.about', icon: Info, component: bodies.about},
     {id: 'admin', labelKey: 'settings.admin', icon: Shield, component: bodies.admin},
+    {id: 'email', labelKey: 'email.tab.label', icon: Mail, component: bodies.email},
 ];
 
 /** What an id must look like to be a `?tab=` value and a test-id suffix as it is. */
@@ -98,7 +104,7 @@ function registryTab(id: string): SettingsTab {
     return tab as SettingsTab;
 }
 
-describe('SETTINGS_TABS — today’s four tabs, and nothing else', () => {
+describe('SETTINGS_TABS — today’s tabs, and nothing else', () => {
     it('every id is unique and URL-safe: it is the ?tab= value and the suffix of settings-tab-{id}', () => {
         const ids = SETTINGS_TABS.map((tab) => tab.id);
 
@@ -119,15 +125,15 @@ describe('SETTINGS_TABS — today’s four tabs, and nothing else', () => {
         expect(new Set(orders).size, `no order is carried twice: ${orders.join(', ')}`).toBe(orders.length);
     });
 
-    it('holds exactly profile, preferences, about and admin: a new tab adds its row to TODAY', () => {
-        expect(SETTINGS_TABS.map((tab) => tab.id).sort(), 'the registry is today’s four tabs: a tab added (or lost) on the way changes what every user sees').toEqual(TODAY.map((tab) => tab.id).sort());
+    it('holds exactly profile, preferences, about, admin and email: a new tab adds its row to TODAY', () => {
+        expect(SETTINGS_TABS.map((tab) => tab.id).sort(), 'the registry is today’s tabs: a tab added (or lost) on the way changes what every user sees').toEqual(TODAY.map((tab) => tab.id).sort());
     });
 
-    it.each(CONTEXTS)('%s sees profile, preferences, about and admin, in this order', (_label, ctx) => {
+    it.each(CONTEXTS)('%s sees %j, in this order', (_label, expected, ctx) => {
         expect(
             visibleSettingsTabs(SETTINGS_TABS, ctx).map((tab) => tab.id),
-            'the four tabs of today, left to right, whoever is signed in: admin is visible to everyone',
-        ).toEqual(TODAY.map((tab) => tab.id));
+            'today’s tabs, left to right: admin is visible to everyone, email to administrators only',
+        ).toEqual(expected);
     });
 
     it.each(TODAY)('$id: labelled $labelKey, drawn with its lucide icon, rendering its own tab module', ({id, labelKey, icon, component}) => {
@@ -158,6 +164,14 @@ describe('SETTINGS_TABS — today’s four tabs, and nothing else', () => {
         expect(admin.visible?.(ADMIN) ?? true, 'an administrator sees the admin tab').toBe(true);
         expect(admin.props?.(USER), 'a user may read the global settings, not change them').toEqual({canEdit: false});
         expect(admin.props?.(ADMIN), 'an administrator may change them').toEqual({canEdit: true});
+    });
+
+    it('email is visible to administrators only and takes no props', () => {
+        const email = registryTab('email');
+
+        expect(email.visible?.(USER) ?? true, 'a user does not see the email tab').toBe(false);
+        expect(email.visible?.(ADMIN) ?? true, 'an administrator sees it').toBe(true);
+        expect(email.props, 'the email tab is rendered with no props').toBeUndefined();
     });
 
     it('only admin takes props, and only admin starts the right-hand group (alignEnd)', () => {
