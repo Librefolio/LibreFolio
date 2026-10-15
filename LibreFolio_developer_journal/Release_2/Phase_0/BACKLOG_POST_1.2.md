@@ -2318,6 +2318,60 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura: confrontare con `/settings\.assetProviders/`, come fa il test nuovo di CP5b.
 
   Dettagli: piano H, §14 «CP5b».
+- **H-7 · Senza `tzdata` di PyPI, su un sistema senza database dei fusi lo scheduler va in UTC** — basso; H (CP7a,
+  docs-writer), 15/10.
+  - `zoneinfo` legge il database del sistema, poi il pacchetto `tzdata` di PyPI, che non è nel lock.
+  - Nell'immagine Docker lo copre `tzdata-legacy` (CP7a). Su un host senza database (Windows), ogni fuso salvato
+    ricadrebbe in UTC (`scheduler.py:20-24`).
+  - Cura: `tzdata` nel Pipfile, nella finestra delle dipendenze.
+
+  Dettagli: piano H, §14 «CP7a passo 2».
+- **H-8 · La scheda «password dimenticata» mostra un `docker exec` che gira come root** — minimo; H (CP7a,
+  docs-writer), 15/10; il file è di A.
+  - `ForgotPasswordCard.svelte:43` mostra `docker compose exec … user reset`.
+  - Da CP7a, `./dev.py docker exec` passa per gosu con gli id numerici; il comando nudo gira come root, e i file che
+    crea restano di root fino al riavvio.
+  - Cura: mostrare il comando con gosu, come `admin/docker_advanced` (sezione «docker exec»), oppure
+    `./dev.py docker exec`.
+
+  Dettagli: piano H, §14 «CP7a passo 2».
+- **H-9 · Una seconda chiamata di `configure_logging()` lascia aperti i gestori che toglie** — minimo; H (test-author,
+  lotto del log di accesso), 15/10.
+  - `logging_config.py` toglie i gestori della radice con `removeHandler` senza `close()`; poi `basicConfig(force=True)`
+    non trova più niente da chiudere.
+  - Conta solo per il file di log, e in produzione la chiamata è una per processo.
+  - Cura: `close()` su ogni gestore tolto, oppure lasciare la pulizia a `basicConfig(force=True)`.
+
+  Dettagli: piano H, §14 «Lotto "credenziali nei log di accesso"».
+- **H-10 · `services static-uploads` è dichiarata `write-scoped`, ma svuota la cartella degli upload della corsia** —
+  basso; H (test-author, G-10), 15/10.
+  - Il fixture autouse di `test_static_uploads.py` cancella e ricrea `custom-uploads` della corsia, dove stanno anche gli
+    avatar del seed. Un'altra unità che li legge, in parallelo, li perde.
+  - Nessun rosso visto finora; c'era già prima di G-10.
+  - Cura: una cartella di upload temporanea per ogni test, sostituendo `get_uploads_dir`, oppure dichiarare l'unità
+    esclusiva.
+
+  Dettagli: piano H, §14 «Lotto piccolo: G-10 e due note di E».
+- **H-11 · Un build locale dell'immagine, dietro un proxy che ri-firma il TLS, si ferma a `pip install`** — basso; H
+  (prova Docker di CP7a), 15/10.
+  - Il container di build non conosce la CA del proxy: PyPI risponde «self-signed certificate in certificate chain».
+  - Le immagini di rilascio si costruiscono in CI: tocca solo chi costruisce in locale, in una rete aziendale o dietro un
+    proxy.
+  - Cura possibile: un secret di build facoltativo con una CA in più per pip
+    (`RUN --mount=type=secret,id=extra_ca,required=false`), documentato in `admin/docker_advanced`.
+
+  Dettagli: piano H, §14 «Validazione unica dei quattro lotti e prova Docker».
+- **H-12 · Un avvio fallito del server condiviso dei test non dice perché** — basso; H (verifica di A5), 15/10.
+  - `scripts/test_runner/_server.py` avvia `dev.py server --test` con stdout e stderr su `DEVNULL`: il runner stampa
+    solo «Shared backend exited during startup (code 1)».
+  - Le due verifiche della porta sono diverse: il runner guarda solo i listener; `cmd_server` usa `lsof -i :PORT -t`,
+    che conta ogni socket sulla porta, anche quelli del server precedente ancora in chiusura.
+  - Visto una volta, subito dopo un'altra invocazione sulla stessa corsia; non si è ripetuto. La causa resta
+    un'ipotesi.
+  - Cura: le ultime righe dell'output del server nel messaggio d'errore, e in `cmd_server` solo i listener
+    (`-sTCP:LISTEN`), come fa il runner.
+
+  Dettagli: piano H, §14 «Due aggiornamenti di base … e la verifica di C-96».
 
 ## A · Account e accessi (fase 01)
 
