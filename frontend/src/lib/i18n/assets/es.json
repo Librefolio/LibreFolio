@@ -414,6 +414,8 @@
     "UNSUPPORTED_PAGE": "El proveedor encontró este instrumento pero su página de mercado aún no se puede leer. Abre un issue en GitHub (Librefolio/LibreFolio) indicando este ISIN para que se añada el soporte.",
     "RATE_LIMITED": "Pausa por exceso de peticiones hasta las {time}",
     "RATE_LIMITED_NO_TIME": "Demasiadas peticiones: inténtalo más tarde",
-    "RATE_LIMITED_DAY": "Pausa por exceso de peticiones hasta el {time}"
+    "RATE_LIMITED_DAY": "Pausa por exceso de peticiones hasta el {time}",
+    "NOT_CONFIGURED": "Este proveedor debe configurarse antes de usarlo",
+    "PROVIDER_ERROR": "El proveedor falló: {detail}"
   }
 }
