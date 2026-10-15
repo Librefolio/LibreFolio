@@ -1103,6 +1103,7 @@ nav:
                   - BRIM Plugin Guide: developer/architecture/patterns/brim_plugin_guide.md
                   - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
                   - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
+                  - Plugin Settings: developer/architecture/patterns/plugin_settings.md
                   - Signal Plugin Guide: developer/architecture/patterns/signal_plugin_guide.md
                   - Tool Plugin Guide: developer/architecture/patterns/tool_plugins.md
               - 🧠 AI Export:
