@@ -770,20 +770,33 @@ Nota dev: si mi pare un ottima idea di coerenza.
   Account e accessi l'ha verificato, in sola lettura: con il login, un utente vede anche
     - le email degli admin, dalla ricerca degli utenti;
     - nome e icona di tutti i broker, anche di quelli non condivisi con lui;
-    - l'elenco, l'anteprima e lo scarico di **tutti i file caricati**, da chiunque: solo la cancellazione controlla il
-    proprietario.
-
-  Senza login, poi, si leggono le impostazioni globali: scheduler, durata della sessione, registrazione.
+    - l'elenco, l'anteprima e lo scarico di **tutti i file caricati**, da chiunque: solo la cancellazione controlla il proprietario. Senza login, poi, si leggono le impostazioni globali: scheduler, durata della sessione, registrazione.
 - **Proposta**: correggerlo nella 1.3.
     - Un file caricato lo vede solo chi l'ha caricato, o chi ha accesso al broker a cui appartiene.
     - Nomi e icone dei broker non condivisi solo per l'admin (prima si verifica dove li usa l'app).
     - Le email degli admin non escono dalla ricerca.
-    - Le impostazioni globali solo con il login, dopo che la configurazione pubblica di Piattaforma porta fuori quello
-    che serve alla pagina di login.
+    - Le impostazioni globali solo con il login, dopo che la configurazione pubblica di Piattaforma porta fuori quello che serve alla pagina di login.
     - Chi lo fa: i file Piattaforma, i broker Import e transazioni, ricerca utenti e impostazioni Account e accessi.
 - **Perché**: in un'istanza condivisa (famiglia, amici, cloud) i file possono essere documenti personali.
 - **Alternative**: correggere solo i file e lasciare il resto com'è.
 - **Per chi usa già LibreFolio**: chi condivide l'istanza smette di vedere i file e i broker degli altri.
+Nota dev: mmm non sono convinto, tutto quello che descrivi è un problema solo se si inscrive qualcuno di indesiderato, e si iscrive qualcuno di indesiderato solo se il tocken di invito viene perso, e comunque vale per 1 persona sola... Posso essere daccordo che i file del broker siano scaricabili solo da un utente che ha almeno il view in quel broker, ma per i file statici comuni, email, asset comuni come loghi o foto, il rischio che qualcuno di indesiderato li ottenga è inferiore rispetto alla scomodità di averli non accessibili, impedirebbero a varie cose della ui di disegnarsi. Cosa ne pensi? vedi altri problemi che non vedo? La filosofia dovrebbe essere di nascondere dati a cui non dovresti avere accesso senza però rompere la ui perchè mancano degli asset da scaricare comuni.
+
+**Decisione (15/10)**: approvata nella forma discussa in chat.
+- **File dei broker** (report, estratti): lista, anteprima e scarico solo a chi ha almeno la vista su quel broker.
+- **File comuni** (icone, loghi, foto degli asset, risorse statiche): visibili a ogni utente con il login, così la UI
+  si disegna sempre.
+- **File personali**: un'indicazione dello scopo al caricamento. Dai selettori di immagini il file è comune; dalla pagina
+  File è personale, con un interruttore per condividerlo. Un file personale lo vedono chi l'ha caricato e l'admin.
+  Per i file già caricati: le immagini diventano comuni, gli altri tipi personali.
+- **Restano visibili** i nomi dei broker e degli utenti, e le email.
+- **Registrazione**: il default diventa «su invito»; «aperta» solo per scelta dell'admin, segnalata nel pannello
+  Sicurezza. Il primo account resta creabile finché l'istanza non ne ha nessuno. Le istanze già «aperte» tengono la loro
+  scelta, con l'avviso.
+- **Impostazioni globali** solo con il login, dopo che la configurazione pubblica porta fuori quello che serve alla
+  pagina di login.
+- Chi lo fa: i file personali e comuni Piattaforma, i file dei broker Import e transazioni, registrazione e impostazioni
+  Account e accessi.
 
 #### 37. Le regole della password, uguali dappertutto — 🟢 (A-6)
 - **Oggi**: le regole della password (lunghezza, maiuscole, cifre…) sono scritte in quattro posti: l'indicatore di
@@ -795,18 +808,21 @@ Nota dev: si mi pare un ottima idea di coerenza.
 - **Alternative**: lasciare le copie e allinearle a mano.
 - **Per chi usa già LibreFolio**: niente di visibile nell'app, che le applica già.
 
+nota dev: si sono daccordi in questa centralizzazione, fai in modo che il backend esponga le regole così che il frontend possa correttamente mostrarle e se si aggiornano si aggiorna anche nella ui, però teniamo l'indicatore di sicurezza.
+
+**Decisione (15/10)**: approvata. Le regole della password stanno in un posto solo nel backend, che le espone; la UI
+le mostra leggendole da lì, così un cambio si vede subito anche nella UI. L'indicatore di robustezza resta (A6c).
+
 ### Backup e Docker (analisi di B, 15/10)
 
-> B ha verificato tutto sul codice: oggi il backup completo risponde «non ancora implementato», e la devWiki lo dava per
-> fatto. Il disegno: uno zip con la forma della cartella dei dati, il ripristino provato sempre prima su una copia, poi
+> B ha verificato tutto sul codice: oggi il backup completo risponde «non ancora implementato», e la devWiki lo dava per fatto. Il disegno: uno zip con la forma della cartella dei dati, il ripristino provato sempre prima su una copia, poi
 > un riavvio ordinato; Litestream spento finché non lo configuri. Il testo intero è nella cartella della sessione B, e
 > andrà nel piano 07 al primo via.
 
 #### 38. Il backup con password usa un formato di LibreFolio — 🟢 (D-B1)
 - **Oggi**: dalla UI non si fa nessun backup. La specifica dice «opzione: zip protetto da password».
 - **Proposta**: con la password, tutto lo zip va dentro una busta cifrata `.lfbackup`.
-    - La password diventa una chiave con scrypt, un metodo lento apposta, così indovinarla costa molto; poi si cifra con
-    AES-256-GCM.
+    - La password diventa una chiave con scrypt, un metodo lento apposta, così indovinarla costa molto; poi si cifra con AES-256-GCM.
     - Serve solo `cryptography`, che entra comunque per le impostazioni dei plugin: **nessuna dipendenza nuova**.
     - La busta si apre con LibreFolio: dalla UI, o con `dev.py backup decrypt`, anche dentro l'immagine Docker.
 - **Perché**: lo zip con password «classico» si apre solo con 7-Zip o Keka, non con il Finder né con Esplora risorse.
@@ -816,19 +832,29 @@ Nota dev: si mi pare un ottima idea di coerenza.
 - **Alternative**: lo zip con password classico (`pyzipper`); nessuna cifratura, solo un avviso forte.
 - **Per chi usa già LibreFolio**: niente, è una funzione nuova.
 
+Note dev: ho bisogno che mi spieghi meglio come l'utente viene a sapere della pw, il punto è che scarichiamo il backup chi lo scarica deve averne diritto, zipare serve principalmente per trasferire meno dati, la pw può aiutare, ma dobbiamo fornirla all'utente, quindi... ne vale la pena? riflettiamo su questo punto assieme.
+
+**Decisione (15/10)**: approvata la busta, con l'estensione **`.lfbk`** al posto di `.lfbackup`. La password non la
+genera LibreFolio: la sceglie chi fa il backup, e la ridà per ripristinarlo; se la perde, il backup non si apre più.
+La password è facoltativa: senza, il backup è un normale `.zip`. Lotto B4, dopo il ripristino (B3) e la scheda (B5): è
+l'unico pezzo di B che può slittare.
+
 #### 39. La chiave d'istanza dentro un backup — 🟢 (D-B2, precisa il punto 18)
 - **Oggi**: in `secrets/` c'è solo la chiave d'istanza. Ancora nessuna funzione la usa: la useranno le impostazioni dei
   plugin, per cifrare le chiavi d'accesso ai fornitori.
 - **Proposta**:
-    - la chiave entra nel backup solo se c'è la password, e solo se l'ha generata LibreFolio. Una chiave data con una
-    variabile, per esempio dal pannello del cloud, non esce mai: la custodisce chi l'ha data;
-    - al ripristino l'istanza tiene la sua chiave. I segreti dei plugin del backup si ricifrano con quella; se manca la
-    chiave vecchia, restano «impostato ma illeggibile: reinseriscilo».
+    - la chiave entra nel backup solo se c'è la password, e solo se l'ha generata LibreFolio. Una chiave data con una variabile, per esempio dal pannello del cloud, non esce mai: la custodisce chi l'ha data;
+    - al ripristino l'istanza tiene la sua chiave. I segreti dei plugin del backup si ricifrano con quella; se manca la  chiave vecchia, restano «impostato ma illeggibile: reinseriscilo».
 - **Perché**: una chiave per istanza, mai due istanze con la stessa. E uno zip con i dati e la chiave insieme, senza
   password, vale come avere i segreti in chiaro (punto 18).
 - **Alternative**: adottare la chiave del backup. È più semplice, ma due istanze finiscono con la stessa chiave, ed è
   impossibile quando la chiave arriva da una variabile.
 - **Per chi usa già LibreFolio**: niente.
+
+**Decisione (15/10)**: approvata. Nella scheda l'utente sceglie fra un backup «in chiaro» e uno «sicuro», e il testo
+gli spiega la differenza: in chiaro, chi ha il file vede tutti i dati e, su un'altra istanza, le chiavi dei fornitori
+vanno reinserite; sicuro, serve la password per aprirlo, non si recupera se la si perde, e porta con sé anche le chiavi
+dei fornitori.
 
 #### 40. Dopo un ripristino tutte le sessioni si chiudono — 🟢 (D-B3)
 - **Proposta**: dopo un ripristino si rientra con un account dei dati ripristinati. La UI lo dice prima della conferma.
@@ -837,12 +863,28 @@ Nota dev: si mi pare un ottima idea di coerenza.
 - **Alternative**: nessuna sicura.
 - **Per chi usa già LibreFolio**: tocca solo chi ripristina.
 
+**Decisione (15/10)**: approvata, con tre precisazioni.
+- `JWT_SECRET` non cambia e non va nel backup. Il database ripristinato registra l'ora del ripristino, e ogni cookie
+  emesso prima viene rifiutato, qualunque sia il segreto. Senza `JWT_SECRET` il riavvio chiude già le sessioni.
+- L'anteprima del ripristino elenca per nome gli admin presenti nel backup e avvisa: «dopo il ripristino entri con uno
+  di questi, con la password di allora». Se il backup non ha nessun admin, il ripristino si blocca.
+- Recupero dell'admin: nel cloud l'email ci sarà, quindi il caso normale è «password dimenticata» fatta dall'admin
+  stesso. Nei casi gravi l'admin scrive all'assistenza, che gli fa mandare l'email di recupero o gli manda direttamente
+  il link di reset (`dev.py user reset-link`). In self-hosted ci sono i comandi da terminale (`reset-password`,
+  `reset-link`). Un pulsante nel pannello che chiede il link all'istanza va nel backlog.
+
 #### 41. Prima di un ripristino, un backup automatico — 🟢 (D-B4)
 - **Proposta**: prima di sostituire i dati, LibreFolio fa uno zip dei dati attuali e lo tiene (solo l'ultimo),
   scaricabile dalla scheda Backup. Se il primo avvio dopo il ripristino fallisce, per esempio per una migrazione,
   rimette da solo i dati di prima.
 - **Alternative**: tenere la cartella vecchia invece di uno zip: niente spazio in più, ma niente file da scaricare.
 - **Per chi usa già LibreFolio**: niente.
+
+nota dev: si è un ottimo modo di procedere, se tutto va bene il backup si cancella.
+
+**Decisione (15/10)**: approvata, con una modifica. La copia dei dati fatta prima del ripristino serve solo a tornare
+indietro: se il primo avvio dopo il ripristino va bene, viene cancellata; se fallisce, LibreFolio rimette da solo i
+dati di prima.
 
 #### 42. Si ripristinano anche le copie fatte a mano — 🟢 (D-B5)
 - **Oggi**: la 1.2 non ha un backup; la guida dice di copiare a mano la cartella dei dati.
@@ -852,12 +894,25 @@ Nota dev: si mi pare un ottima idea di coerenza.
   cosa vera.
 - **Per chi usa già LibreFolio**: chi ha una copia della cartella la porta nella 1.3 dalla UI.
 
+
+nota dev: Non mi complicherei la vita, no, se uno vuole fare un ripristino a mano, va e modifica il docker-compose, noi occupiamoci solo dei flussi "standard"
+
+**Decisione (15/10)**: respinta. Il ripristino dalla UI accetta solo i backup fatti da LibreFolio (con
+`manifest.json`). Chi ha una copia a mano della cartella dei dati la rimette da sé, per esempio puntando il
+docker-compose a quella cartella; all'avvio le migrazioni la portano alla versione nuova. Il passaggio dalla 1.2 alla
+1.3 resta l'aggiornamento sul posto, già coperto dalle migrazioni e dalle correzioni dopo le migrazioni.
+
 #### 43. Il limite al caricamento di un backup lo decide chi ospita — 🟢 (D-B6)
 - **Proposta**: la variabile `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB`; 0 vuol dire senza limite, ed è il default del
   self-hosted; 500 MB nel profilo gestito.
 - **Perché**: nel cloud il cliente è admin, quindi il limite lo deve decidere l'hoster, non chi usa l'istanza.
 - **Alternative**: un'impostazione nella UI, che però l'admin potrebbe alzare.
 - **Per chi usa già LibreFolio**: niente.
+
+nota dev: si mi piace.
+
+**Decisione (15/10)**: approvata.
+
 
 **Decise dal coordinatore, salvo tue obiezioni**:
 - le proposte 6–9 del §10 del piano reggono sul codice: password facoltativa (formato al 38); scaricamento per il
@@ -877,16 +932,12 @@ copia) non ne dipendono.
 
 ### Email (analisi di E, 15/10)
 
-> E ha verificato sul codice: oggi non c'è nessun codice email, e l'opzione «verifica dell'email» delle impostazioni
-> globali è un segnaposto che nessuno legge. Il disegno: SMTP solo da variabili o file, mai nel database né nella UI né
-> nei backup; senza SMTP tutto funziona come oggi (l'admin copia i link). **Nessuna dipendenza nuova.** Il testo
-> intero è nella cartella della sessione E, e andrà nel piano 08 al primo via.
+> E ha verificato sul codice: oggi non c'è nessun codice email, e l'opzione «verifica dell'email» delle impostazioni globali è un segnaposto che nessuno legge. Il disegno: SMTP solo da variabili o file, mai nel database né nella UI né nei backup; senza SMTP tutto funziona come oggi (l'admin copia i link). **Nessuna dipendenza nuova.** Il testo intero è nella cartella della sessione E, e andrà nel piano 08 al primo via.
 
 #### 44. Cosa vuol dire «richiedi la verifica dell'email» — 🟢 (D-E7)
 - **Oggi**: l'opzione c'è nelle impostazioni globali, ma è un segnaposto: non fa niente.
 - **Proposta**:
-    - vale per chi si registra mentre è accesa (non per il primo account): l'account nasce disattivo, riceve un link
-    valido 24 ore (si può rispedire), e il link lo attiva;
+    - vale per chi si registra mentre è accesa (non per il primo account): l'account nasce disattivo, riceve un link    valido 24 ore (si può rispedire), e il link lo attiva;
     - chi prova ad entrare prima vede «verifica la tua email», con «rispedisci»;
     - l'admin può attivarlo a mano dalla scheda Utenti;
     - gli account di oggi, e quelli creati da riga di comando, non vengono mai bloccati;
@@ -896,6 +947,10 @@ copia) non ne dipendono.
 - **Alternative**: una colonna nuova nel database con la sua migrazione; oppure lasciarla segnaposto anche nella 1.3.
 - **Per chi usa già LibreFolio**: niente, finché un admin non la accende.
 
+nota dev: mi torna quello che scrivi, non ho capito cosa intendi però quando dici "chi entra prima"
+
+**Decisione (15/10)**: approvata. «Chi prova ad entrare prima» è chi si è registrato e prova il login prima di aver
+cliccato il link arrivato per email: al posto della sua pagina vede «verifica la tua email», con «rispedisci».
 #### 45. I link nelle email dei visitatori solo con `LIBREFOLIO_PUBLIC_URL` — 🟢 (D-E3)
 - **Proposta**: le email che partono da una richiesta senza login (password dimenticata, verifica, attivazione
   dell'admin) costruiscono il link solo con l'indirizzo dichiarato in `LIBREFOLIO_PUBLIC_URL`. Senza la variabile, la
@@ -906,6 +961,17 @@ copia) non ne dipendono.
 - **Alternative**: sempre e solo `LIBREFOLIO_PUBLIC_URL`, anche per l'admin.
 - **Per chi usa già LibreFolio**: niente; per avere «password dimenticata» via email serve impostare la variabile, ed è
   scritto nella guida.
+
+Nota dev: mmm ma sai che forse forse è meglio fare solo librefolio\_public\_url, in fondo è una questione di configurazione, al massimo facciamo che all'avvio parte un ping usando il valore impostato in quella variabile e se non raggiunge il server, sul pannello admin compare come altra notifica di miss configuration.
+
+**Decisione (15/10)**: approvata l'alternativa, solo `LIBREFOLIO_PUBLIC_URL`, con un controllo dal browser.
+- Ogni link dentro un'email, anche quelle mandate dall'admin, si costruisce solo con `LIBREFOLIO_PUBLIC_URL`. Senza la
+  variabile non partono email con link; i link copiati dalla UI restano come oggi (l'indirizzo del browser).
+- Il controllo non lo fa il server ma il **browser dell'admin**, perché conta da dove si apre il link: il client può
+  parlare con l'istanza da un altro indirizzo (VPN, IP diretto). Usa la sonda dell'indirizzo di A6a: il browser chiede
+  un codice firmato e lo verifica su `LIBREFOLIO_PUBLIC_URL`, quindi sa anche se risponde proprio questa istanza.
+- Se non risponde, o risponde un'altra istanza, compare un avviso di configurazione nel pannello admin. Dice che vale
+  per questo dispositivo: può essere un problema di DNS o di rete, da approfondire.
 
 **Decise dal coordinatore, salvo tue obiezioni** (E):
 - invio con la libreria standard in un thread, nessuna dipendenza nuova; nei test un server SMTP finto scritto nei test,
@@ -937,16 +1003,11 @@ senza UI) non dipende da 44 e 45.
   delle correzioni dopo le migrazioni, piano 34): prima una copia del database, poi una transazione sola, i controlli
   (chiavi esterne, conteggi, nessuna metà spaiata rimasta) e il ritorno indietro se qualcosa non torna; una riga di log
   per ogni transazione convertita, anche in Docker.
-    - Una metà con il suo costo diventa una rettifica a quel costo. Sul broker rimasto il capitale investito passa dal
-    valore di mercato all'arrivo al costo, e il guadagno di prima del trasferimento si conta su quel broker (esempio
-    verificato da Numeri e analisi: investito 100 → 80, guadagno 20 → 40).
-    - **Una metà senza costo** (dati vecchi: oggi l'app non ne crea più) diventa una rettifica senza costo, segnalata
-    come «costo mancante» con il suo avviso, così l'utente lo inserisce (esempio: investito 100 → 0, guadagno 20 → 120).
+    - Una metà con il suo costo diventa una rettifica a quel costo. Sul broker rimasto il capitale investito passa dal  valore di mercato all'arrivo al costo, e il guadagno di prima del trasferimento si conta su quel broker (esempio verificato da Numeri e analisi: investito 100 → 80, guadagno 20 → 40).
+    - **Una metà senza costo** (dati vecchi: oggi l'app non ne crea più) diventa una rettifica senza costo, segnalata come «costo mancante» con il suo avviso, così l'utente lo inserisce (esempio: investito 100 → 0, guadagno 20 → 120).
     **Domanda per te**: oppure usare come costo il prezzo di mercato del giorno d'arrivo? È più comodo, ma è un costo
-    inventato.
-    - Nelle cancellazioni nuove il costo non si perde mai: prima di cancellare il broker si calcola il costo medio della
-    metà che parte, come già fa l'app quando il costo è «Auto». Il cambio dei numeri per chi condivide un broker è
-    scritto nella conferma della cancellazione e nella guida.
+inventato.
+- Nelle cancellazioni nuove il costo non si perde mai: prima di cancellare il broker si calcola il costo medio della metà che parte, come già fa l'app quando il costo è «Auto». Il cambio dei numeri per chi condivide un broker è scritto nella conferma della cancellazione e nella guida.
 - **Prima di decidere puoi vedere cosa cambierebbe nel tuo database**, a server fermo:
   `python -m backend.app.db.post_migration --dry-run` (non scrive niente; elenca le righe, con e senza costo).
 - **Perché**: senza, chi ha già cancellato un broker con dei trasferimenti tiene i lotti in errore.
@@ -955,6 +1016,15 @@ senza UI) non dipende da 44 e 45.
 - **Per chi usa già LibreFolio**: chi ha delle metà spaiate vede i lotti tornare calcolati e la Dashboard senza quel
   capitale fasullo. Chi non ne ha non vede niente.
 - La correzione entra solo con il tuo ok; il resto del lotto non la aspetta.
+
+nota dev: credo di averti già risposto, comunque si, se una transazione di coppia si rompe, la cosa giusta è trasformare la metà che rimane affinchè dal punto di vista del broker rimasto, continui ad avere lo stesso senso di prima, confermami che la tua proposta mantiene questa filosofia.
+
+**Decisione (15/10)**: approvata; la proposta segue questa filosofia. Per il broker rimasto, la metà che resta ha lo
+stesso senso di prima: un trasferimento ricevuto diventa una rettifica in entrata con la stessa quantità e lo stesso
+costo; un trasferimento di cassa o un cambio diventa un deposito o un prelievo. Una metà senza costo resta senza costo,
+con l'avviso «costo mancante»: nessun costo inventato dal prezzo di mercato. Entrata il 15/10 con W
+(`orphan_pair_halves`). Una metà ricevuta senza costo oggi nasce solo da dati vecchi: modulo, Bulk e backend chiedono
+il costo; il lotto N2 di W permette di correggere le sole note di quelle righe.
 
 #### 47. Le unità che escono da un broker quando sparisce quello che le riceve — 🟡 (V-3, J-11)
 - **Il caso**: il broker A compra 10 titoli X a 20; il 3/10 ne trasferisce 4 al broker B (X vale 25); poi B viene
@@ -1025,9 +1095,10 @@ senza UI) non dipende da 44 e 45.
 
 ## 4. Cose che servono da te più avanti
 
-- Una sola finestra per installare `cryptography` (impostazioni dei plugin e, se approvi la 38, password dei backup), a
-  corsie ferme. Facoltativa `tzdata`.
-- Docker acceso quando Piattaforma arriva al lotto dell'immagine, e poi per Litestream (Backup e Docker).
+- ~~Una sola finestra per installare `cryptography`~~ **fatto il 15/10** (`dc9a5d232`, `cryptography 50.0.2`). Facoltativa
+  `tzdata`.
+- Docker acceso quando Piattaforma arriva al lotto dell'immagine, e poi per Litestream (Backup e Docker). **Le build Docker
+  qui falliscono dentro la VPN aziendale**: la prova dell'immagine 1.3 va fatta fuori dalla VPN, con gli script di H.
 - Togliere il tag `test` da GHCR (C-26): è un'azione sul remoto.
 - Lato pannello di controllo (repo privato): **una chiave d'istanza diversa per ogni istanza**, generata a caso e mai
   ricavata da una parola d'ordine. Con la stessa chiave, i segreti cifrati di un'istanza sarebbero leggibili da
