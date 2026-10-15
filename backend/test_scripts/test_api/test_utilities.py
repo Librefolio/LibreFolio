@@ -11,6 +11,7 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
+from backend.app.utils.asset.sector import SECTOR_EMOJI
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_info, print_section, print_success
 
@@ -65,6 +66,17 @@ def test_server():
 # ============================================================
 
 
+def _assert_emoji_from_shared_map(items: list[dict]) -> None:
+    """Every listed sector wears the glyph of SECTOR_EMOJI.
+
+    The endpoint and the portfolio engine read that one map, so a sector shows the same glyph in the
+    allocation history (fed by this list) and in the dashboard pie (fed by the engine's allocation view).
+    """
+    for item in items:
+        assert item["key"] in SECTOR_EMOJI, f"{item['key']!r} has no entry in SECTOR_EMOJI"
+        assert item["emoji"] == SECTOR_EMOJI[item["key"]], f"{item['key']}: the endpoint says {item['emoji']!r}, SECTOR_EMOJI says {SECTOR_EMOJI[item['key']]!r}"
+
+
 @pytest.mark.asyncio
 async def test_list_sectors_with_other(test_server):
     """Test 1: GET /utilities/sectors - Include 'Other'."""
@@ -104,6 +116,7 @@ async def test_list_sectors_with_other(test_server):
 
         assert items_by_key["Corporate Bonds"]["emoji"] == "🏢"
         assert items_by_key["Government Bonds"]["emoji"] == "🏛️"
+        _assert_emoji_from_shared_map(data["items"])
 
         print_info(f"  Found {len(data['items'])} sectors")
         print_success("✓ Sectors list with Other returned correctly")
@@ -126,6 +139,7 @@ async def test_list_sectors_without_other(test_server):
         assert "Other" not in items_by_key
         assert items_by_key["Corporate Bonds"]["emoji"] == "🏢"
         assert items_by_key["Government Bonds"]["emoji"] == "🏛️"
+        _assert_emoji_from_shared_map(data["items"])
 
         print_info(f"  Found {len(data['items'])} sectors (excluding Other)")
         print_success("✓ Sectors list without Other returned correctly")
