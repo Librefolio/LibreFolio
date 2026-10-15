@@ -9,9 +9,11 @@
  * and resume, reset all, import of the exported file.
  *
  * The elements are the app's own and exist whatever the data: the subtitle of the transactions page (a Tailwind
- * colour class, so a palette variable), the date header of the transactions table (DataTable's `th` rule, a
- * stylesheet literal), the dashboard's growth chart. Which colour to change is read from them at run time, never
- * written down: a designer will change these colours, and the tests must keep following them.
+ * colour class, so a palette variable), the date header of the transactions table (a colour the stylesheets write as a
+ * literal — in DataTable's `th` rule once, in the `:root` token that rule reads since R-3), the dashboard's growth
+ * chart. Which colour to change is read from them at run time, never written down: a designer will change these
+ * colours, and the tests must keep following them. Where the code writes a colour is not written down either: the
+ * export is held to the verifier the Lab ships, which finds each occurrence in today's code.
  *
  * Nothing is written server-side: TEST_USER only reads, the theme toggle and the Lab keep their state in this
  * context's localStorage, and the context dies with the test.
@@ -36,11 +38,13 @@ import {
     labStats,
     listedKeys,
     opaqueHexOf,
+    opaqueKeysOf,
     openDashboardGrowthChart,
     openLab,
     openTransactions,
     textPaletteClassOf,
     transactionsSubtitle,
+    verifyExport,
 } from './lab-helpers';
 
 test.setTimeout(60_000);
@@ -139,7 +143,7 @@ test.describe('Designer Lab — live preview in another tab', () => {
             await editLightTheme(lab);
             await applyChange(lab, {tab: 'sheets', search: key, item: `lab-item-value-css-literal-${key}`, layer: 'css-literal', target: key, to: BLUE});
 
-            await expect(header, `DataTable's th rule writes ${key}: the app tab follows the Lab`).toHaveCSS('color', BLUE_RGB, CROSS_TAB);
+            await expect(header, `the stylesheets write ${key}, which the DataTable header shows: the app tab follows the Lab`).toHaveCSS('color', BLUE_RGB, CROSS_TAB);
             await expect.poll(() => labActive(page)).toBe(true);
             await expect.poll(async () => (await labStats(page))?.cssRules ?? 0, {message: 'declarations rewritten in the app tab'}).toBeGreaterThan(0);
         });
@@ -182,7 +186,7 @@ test.describe('Designer Lab — live preview in another tab', () => {
             await expect.poll(() => labActive(page)).toBe(false);
         });
 
-        test('export JSON, reset all, import back: the same changes on the same elements', async ({page, context}) => {
+        test('export JSON, reset all, import back: the same changes on the same elements', async ({page, context}, testInfo) => {
             const subtitle = transactionsSubtitle(page);
             const header = dateColumnHeader(page);
             const {variable} = await textPaletteClassOf(subtitle);
@@ -213,11 +217,29 @@ test.describe('Designer Lab — live preview in another tab', () => {
             ]);
             const [varChange, literalChange, chartChange] = doc.changes;
             expect(varChange.impact?.uses, 'a variable change says how many uses it reaches').toBeGreaterThan(0);
-            expect(
-                literalChange.occurrences.some((o) => o.file.endsWith('lib/components/table/DataTable.svelte')),
-                'the occurrences of a stylesheet colour name the files that write it, DataTable.svelte among them',
-            ).toBe(true);
+            // Where the stylesheets write the colour is the code's business, and it moves — DataTable's own `th` rule
+            // once, a `:root` token since R-3. So the export is held to what an agent does with it: each occurrence is a
+            // literal of the changed colour (an alpha variant counts), placed at a file and a line…
+            expect(literalChange.occurrences.length, `the export lists where the stylesheets write ${key}`).toBeGreaterThan(0);
+            const raws = literalChange.occurrences.map((o) => o.raw ?? '');
+            const rawKeys = await opaqueKeysOf(page, raws);
+            const placed = (o: {file: string; line: number}) => typeof o.file === 'string' && o.file !== '' && Number.isInteger(o.line) && o.line > 0;
+            const strays = literalChange.occurrences.map((o, i) => ({at: `${o.file}:${o.line}`, raw: o.raw, key: rawKeys[i], placed: placed(o)})).filter((o) => !o.placed || o.key !== key);
+            expect(strays, `every occurrence has a file, a line and a raw colour that is ${key}, alpha aside`).toEqual([]);
             expect(chartChange.occurrences.length).toBeGreaterThan(0);
+            // …and the verifier the Lab ships finds every occurrence the export lists still written in today's code.
+            // Not its `catalog_hash_match`: a developer editing `src` during a run changes the hash, not the export.
+            const verified = await verifyExport(text, testInfo.outputPath('designer-lab-changes.json'));
+            const report = verified.report;
+            if (!report) throw new Error(`verify-export.mjs printed no JSON report (exit ${verified.status}): ${verified.stderr}`);
+            expect(report.totals.changes, 'the verifier read the three changes').toBe(3);
+            expect(
+                report.changes.flatMap((c) => c.missing.map((m) => `${c.id} ${m.file}:${m.line} ${m.raw ?? ''}`)),
+                'every occurrence the export lists is still written in the code',
+            ).toEqual([]);
+            expect(report.totals.missing).toBe(0);
+            expect(verified.status, `verify-export.mjs exits 0 when nothing is missing: ${verified.stderr}`).toBe(0);
+            expect(report.totals.ok, 'positive control: the verifier found occurrences in place').toBeGreaterThan(0);
 
             await lab.getByTestId('lab-reset-all').click();
             await expectChanges(lab, 0);

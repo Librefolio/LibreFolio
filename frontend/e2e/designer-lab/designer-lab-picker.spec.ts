@@ -10,9 +10,15 @@
  * of the page. Esc cancels a pick; Alt+Shift+D starts one from an app tab, but only in a browser where the Lab has
  * been opened (the neutral spec proves the converse).
  *
- * The elements are the app's own and exist whatever the data: the date header of the transactions table (DataTable's
- * `th` rule) and the subtitle of the transactions page (a Tailwind text colour, overridden by `app.css` in the dark
- * theme). Where to click is computed at run time: a point of the element where the element itself is on top.
+ * The elements are the app's own and exist whatever the data: the date header of the transactions table, which
+ * DataTable styles, and the subtitle of the transactions page (a Tailwind text colour, overridden by `app.css` in the
+ * dark theme). Where to click is computed at run time: a point of the element where the element itself is on top.
+ *
+ * How DataTable writes the header colour — a literal in its `th` rule, a `:root` token that rule reads (R-3), a role
+ * utility — is not this spec's subject, and it moves. The date-header test reads it from the facts the app tab reported
+ * (`picker/describe.ts`), applies the documented classification rules to the proved winner, and holds the Lab's
+ * «Element» tab (`pickView.ts`) and its export to them: two modules checked against each other, whatever the code says
+ * today.
  *
  * Nothing is written server-side: TEST_USER only reads, the theme toggle and the Lab keep their state in this
  * context's localStorage, and the context dies with the test.
@@ -20,7 +26,27 @@
 import {expect, test, type Page} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
-import {chooseTheme, computedStyle, CROSS_TAB, dateColumnHeader, DESKTOP_ONLY, downloadExport, expectChanges, labPicking, labStats, openLab, openTransactions, pickedProperty, pickVeil, pointOnItself, textPaletteClassOf, transactionsSubtitle, waitForLabClient} from './lab-helpers';
+import {
+    chooseTheme,
+    computedStyle,
+    CROSS_TAB,
+    dateColumnHeader,
+    DESKTOP_ONLY,
+    downloadExport,
+    expectChanges,
+    labPicking,
+    labStats,
+    openLab,
+    openTransactions,
+    pickedFacts,
+    pickedProperty,
+    pickVeil,
+    pointOnItself,
+    textPaletteClassOf,
+    transactionsSubtitle,
+    waitForLabClient,
+    type PickedDeclarationFacts,
+} from './lab-helpers';
 
 test.setTimeout(60_000);
 
@@ -28,6 +54,26 @@ test.setTimeout(60_000);
 const FRESH = '#ff00aa';
 const FRESH_RGB = 'rgb(255, 0, 170)';
 const SOURCE_KINDS = ['var', 'tailwind-class', 'rule-literal', 'inline', 'attribute', 'current-color', 'chart', 'unknown'];
+/** The component that renders the transactions table and styles its header cells. */
+const DATA_TABLE = 'lib/components/table/DataTable.svelte';
+/** The candidates that bind a colour where the code sets it; a `testid` candidate only says where the component is. */
+const BINDING_CANDIDATES = ['matched-rule', 'class-use', 'var-use'];
+
+/** The variable a declared value reads first (`var(--x, #fff)` → `--x`), or null when it reads none. */
+function varReadBy(value: string): string | null {
+    return /var\(\s*(--[\w-]+)/.exec(value)?.[1] ?? null;
+}
+
+/**
+ * The source kind of a winning stylesheet rule by the rules the developer page documents («Source kinds», `classify()`),
+ * applied here on the app tab's facts, independently of `pickView.ts`: a rule in Tailwind's cascade layer `utilities` —
+ * or a dotted layer name ending in it — is a `tailwind-class`; any other rule is a `var` when its value reads a
+ * variable, a `rule-literal` when it writes the colour.
+ */
+function kindOfRule(winner: PickedDeclarationFacts): 'tailwind-class' | 'var' | 'rule-literal' {
+    if (winner.layer !== null && /(^|\.)utilities$/.test(winner.layer)) return 'tailwind-class';
+    return varReadBy(winner.value) ? 'var' : 'rule-literal';
+}
 
 /** How many elements of the app tab `selector` takes. */
 async function countIn(page: Page, selector: string): Promise<number> {
@@ -92,12 +138,24 @@ test.describe('Designer Lab — the element picker', () => {
         const ownSelector = ((await lab.getByTestId('lab-picked-selector').textContent()) ?? '').trim();
         await expect(lab.getByTestId('lab-picked-matches'), 'the element selector takes what the app tab counted').toHaveAttribute('data-matches', String(await countIn(page, ownSelector)));
 
-        // Every colour listed says where it comes from; the text colour is DataTable's `th` rule.
+        // Every colour listed says where it comes from.
         const kinds = await lab.getByTestId('lab-picked-property').evaluateAll((items) => items.map((item) => item.getAttribute('data-kind')));
         expect(kinds.length, 'the Element tab lists the colours of the element').toBeGreaterThan(0);
         for (const kind of kinds) expect(SOURCE_KINDS).toContain(kind);
+        // The text colour: what the app tab proved sets it, read from its facts, and the kind the rules give for that
+        // winner. The Element tab must agree — and when the winner reads a variable, its chain starts there.
+        const facts = await pickedFacts(page);
+        expect(facts, 'the facts in the pick channel are those of this pick').toMatchObject({route: '/transactions', theme: 'light'});
+        const winner = facts.properties.find((p) => p.property === 'color')?.declarations.find((d) => d.wins);
+        if (!winner) throw new Error(`the app tab must prove the declaration that sets the header's text colour: no \`color\` winner among its facts (${facts.properties.map((p) => p.property).join(', ')})`);
+        expect(winner.origin, 'the header text colour is set by a stylesheet rule: the component, a token it reads, or a utility on the cell').toBe('rule');
+        const sourceKind = kindOfRule(winner);
+        const readVar = varReadBy(winner.value);
         const colour = pickedProperty(lab, 'color');
-        await expect(colour, 'a DataTable header takes its text colour from the th rule of DataTable.svelte').toHaveAttribute('data-kind', 'rule-literal');
+        await expect(colour, `the Element tab classifies \`${winner.selector} { color: ${winner.value} }\` (layer ${winner.layer ?? 'none'}) as the rules do`).toHaveAttribute('data-kind', sourceKind);
+        const shownKind = await colour.getAttribute('data-kind');
+        if (readVar) await expect(colour.getByTestId('lab-picked-var').first(), 'the variable chain starts with the variable the winner reads').toHaveText(readVar);
+        else await expect(colour.getByTestId('lab-picked-var'), 'a winner that reads no variable has no variable chain').toHaveCount(0);
 
         // «Specialise here»: the component selector, and how many elements of the app tab it takes.
         const selector = ((await colour.getByTestId('lab-picked-specialise-selector').textContent()) ?? '').trim();
@@ -116,7 +174,7 @@ test.describe('Designer Lab — the element picker', () => {
             },
             {sel: selector, value: original},
         );
-        expect(await control.evaluate((els) => els.length), `precondition: other elements of the page show ${original} too — DataTable's row actions and pagination, on TEST_USER's transactions from populate_mock_data`).toBeGreaterThan(0);
+        expect(await control.evaluate((els) => els.length), `precondition: elements outside the component element show ${original} too, so that a specialisation travelling with the colour would show — on the transactions page of TEST_USER's populate_mock_data rows`).toBeGreaterThan(0);
 
         await colour.getByTestId('lab-picked-specialise').click();
         const editor = lab.getByTestId('lab-editor');
@@ -151,10 +209,12 @@ test.describe('Designer Lab — the element picker', () => {
         expect(anchor).toMatchObject({route: '/transactions', theme: 'light', selector, breadth: 'component', matches, property: 'color', computed: original});
         expect(anchor.testids[0], 'the nearest test id first, as the code writes it').toMatch(/^dt-header-/);
         expect(anchor.testids).toContain('tx-table');
-        expect(anchor.source.kind).toBe('rule-literal');
+        // The source the export names is the one the Element tab showed, and the winner the app tab proved.
+        expect(anchor.source, 'the anchor names the source the Element tab showed: its kind, the winning rule, the variable it reads').toMatchObject({kind: shownKind, selector: winner.selector, var: readVar});
+        const where = anchor.candidates.map((c) => `${c.file}:${c.line} ${c.why}`).join(', ');
         expect(
-            anchor.candidates.some((c) => c.why === 'matched-rule' && c.file.endsWith('lib/components/table/DataTable.svelte')),
-            'the rule that sets the colour is a candidate place to bind the specialisation',
+            anchor.candidates.some((c) => BINDING_CANDIDATES.includes(c.why) && c.file.endsWith(DATA_TABLE)),
+            `DataTable styles its header whatever the kind: a place in ${DATA_TABLE} that binds the colour (${BINDING_CANDIDATES.join(', ')}) is a candidate — test-id places do not count. Candidates: ${where}`,
         ).toBe(true);
         expect(change.occurrences).toEqual(anchor.candidates.map((c) => ({file: c.file, line: c.line, raw: c.needle, why: c.why})));
         const texts = await page.getByTestId('tx-table').evaluate((table) => [
