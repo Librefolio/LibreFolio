@@ -855,7 +855,7 @@ def services_scheduler_due(verbose: bool = False, test_names: list = None) -> bo
     """Test scheduler due-check logic (due_current_price, due_history_sync)."""
     print_section("Services: Scheduler Due-Check Logic")
     print_info("Testing: backend/app/services/platform/scheduler/scheduler.py")
-    print_info("Tests: SD-001..010 — never run, overdue, wrong day, multi-slot, midnight crossing")
+    print_info("Tests: SD-001..022 — never run, overdue, wrong day, multi-slot, midnight crossing, time zones, DST, missed slots of the last 7 days (D-Z3-1)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_due.py", test_names)
     return run_command(cmd, "Scheduler due-check tests", verbose=verbose)
 
@@ -876,6 +876,15 @@ def services_scheduler_loop(verbose: bool = False, test_names: list = None) -> b
     print_info("Tests: SLO-001..003 — both jobs due, enabled flag, state serialization roundtrip")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_loop.py", test_names)
     return run_command(cmd, "Scheduler loop integration tests", verbose=verbose)
+
+
+def services_scheduler_catchup(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduler's catch-up on return and its shared lock: run_due_jobs and scheduler_loop (lot Z3)."""
+    print_section("Services: Scheduler Catch-up and Lock")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (run_due_jobs, scheduler_loop), with sleep_wake/activity.py")
+    print_info("Tests: SCU-001..032 — constants, types, busy span, settle before clock and lock, a lock per event loop, short circuits in order, off-loop I/O, jobs and outcomes, failures by class name, cancellation, status, blocked then caught up, the loop: listener, nudges, shutdown")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_catchup.py", test_names)
+    return run_command(cmd, "Scheduler catch-up tests", verbose=verbose)
 
 
 def services_brim_versioning(verbose: bool = False, test_names: list = None) -> bool:
@@ -1481,7 +1490,7 @@ Note: No backend server required.
         "sleep-wake-activity",
         services_sleep_wake_activity,
         name="Sleep and Wake Activity",
-        desc="request_kind: the probes (system/health, ready, test-lane-health) and system/wake-sync under API_V1_PREFIX, trailing slashes ignored, then exact and case-sensitive, anything else user; Activity on an injected clock (time.time by default): request(presence) in flight for its whole body, an exception or a cancellation included, presence stamped at start and at end, return listeners at or below the silence called with it in registration order on the calling thread before the body (one that raises logged and skipped, a name registered again replaced), presence=False only in flight, idle_seconds from started_at or the last user request and never below 0; busy(reason) nestable across threads, a blank reason refused; busy checks read at every call, true or raising = busy, a raising one warned once per streak; busy_reasons without duplicates, is_busy; thread safety; current_activity read at call time; ActivityMiddleware: other scopes untouched, probes uncounted, wake-sync in flight without presence, any other path (a 404 included) presence and in flight through the last chunk of a stream and its background tasks, errors and cancellations propagate, current_activity read per request without activity=; activity the outermost entry of MIDDLEWARE_STACK",
+        desc="request_kind: the probes (system/health, ready, test-lane-health) and system/wake-sync under API_V1_PREFIX, trailing slashes ignored, then exact and case-sensitive, anything else user; Activity on an injected clock (time.time by default): request(presence) in flight for its whole body, an exception or a cancellation included, presence stamped at start and at end, return listeners at or below the silence called with it in registration order on the calling thread before the body (one that raises logged and skipped, a name registered again replaced, remove_return_listener: never called again, an unknown name a no-op, a blank one refused), presence=False only in flight, idle_seconds from started_at or the last user request and never below 0; busy(reason) nestable across threads, a blank reason refused; busy checks read at every call, true or raising = busy, a raising one warned once per streak; busy_reasons without duplicates, is_busy; thread safety; current_activity read at call time; ActivityMiddleware: other scopes untouched, probes uncounted, wake-sync in flight without presence, any other path (a 404 included) presence and in flight through the last chunk of a stream and its background tasks, errors and cancellations propagate, current_activity read per request without activity=; activity the outermost entry of MIDDLEWARE_STACK",
         # PURE: no DB, no server, no lane port, no network; every Activity is the test's own, on a fake clock, and the
         # process's ACTIVITY is replaced only through monkeypatch; the FastAPI apps are built in the test and served in
         # this process by httpx.ASGITransport (no socket); its threads are daemon threads joined within a deadline.
@@ -1629,9 +1638,21 @@ Note: No backend server required.
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
     add_test(cat, "scheduler-state", services_scheduler_state, name="Scheduler State", desc="Load/save/atomic write, corrupt/partial JSON recovery")
     add_test(cat, "scheduler-settings", services_scheduler_settings, name="Scheduler Settings", desc="_parse_times, _parse_days pure functions")
-    add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases")
+    add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases; a missed slot of a configured day in the last 7 days is due once a run exists (D-Z3-1)")
     add_test(cat, "scheduler-leader", services_scheduler_leader, name="Scheduler Leader Election", desc="Mock psutil, multi-worker, Docker PID1, --reload, exception safe")
     add_test(cat, "scheduler-loop", services_scheduler_loop, name="Scheduler Loop Integration", desc="due_* + state roundtrip, no real loop")
+    add_test(
+        cat,
+        "scheduler-catchup",
+        services_scheduler_catchup,
+        name="Scheduler Catch-up and Lock",
+        desc="run_due_jobs: an unknown reason refused before anything; busy 'scheduler' from start to end (settle and lock wait included, also on an exception or a cancellation); return/wake settle the clock before the due checks and before the lock; one asyncio.Lock per event loop (no overlap, the second run loads what the first saved, two loops in a row); under the lock disabled, blocked, not_leader, setting off, in order, without loading the state; am_i_leader/load_state/save_state off the loop; one now for both due checks; jobs in order, each saved, outcomes copied from JobState; a job or a save raising is an error outcome by class name only, logged, the next job runs; report status ok/partial/error; blocked runs nothing, then the missed slot is caught up (D-Z3-4, D-Z3-1). scheduler_loop: disabled registers nothing; listener scheduler-catch-up at 60 s; startup after the first delay or a nudge; tick or return; a nudge from any thread; two nudges, one run; a failing run logged; shutdown ends it and removes the listener",
+        # PURE: no DB, no server, no lane port, no network. Every collaborator of run_due_jobs (switches, leader, settings, state
+        # store, jobs, due functions, utc_now, settle_clock) is a fake set with monkeypatch; the process's ACTIVITY is replaced
+        # only through monkeypatch by an Activity on a fake clock. The loop runs as a task of the test's own event loop, against
+        # a recorder in place of run_due_jobs, and is stopped and awaited within a deadline; its worker threads are asyncio's.
+        isolation="pure",
+    )
     add_test(
         cat,
         "scheduler-jobs",
