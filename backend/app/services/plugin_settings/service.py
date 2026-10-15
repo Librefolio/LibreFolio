@@ -51,7 +51,7 @@ from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.platform.instance_key import InstanceKeyError
 from backend.app.services.plugin_settings.crypto import encrypt_secret, key_id_of, secret_aad, settings_subkey
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType, SettingValueError, env_variables, validate_value
-from backend.app.services.plugin_settings.resolver import FieldState, StoredValue, resolve_plugin_fields
+from backend.app.services.plugin_settings.resolver import FieldState, StoredValue, missing_field_keys, resolve_plugin_fields
 from backend.app.services.plugin_settings.runtime import stored_value
 from backend.app.services.provider_registry import AbstractProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
@@ -179,7 +179,9 @@ async def read_catalogue(session: AsyncSession, user: User, *, family: str | Non
     for plugin, states in zip(plugins, all_states, strict=True):
         fields = [_field_read(state, is_admin=user.is_superuser) for state in states if not (managed and state.locked)]
         if fields:
-            entries.append(PluginSettingsPluginRead(family=plugin.family, plugin_code=plugin.code, plugin_name=plugin.name, fields=fields))
+            # Judged on every field, the hidden ones too: a yes or no, which names none of them (decision N2).
+            configured = not missing_field_keys(states)
+            entries.append(PluginSettingsPluginRead(family=plugin.family, plugin_code=plugin.code, plugin_name=plugin.name, configured=configured, fields=fields))
     return PluginSettingsCatalogResponse(plugins=entries)
 
 

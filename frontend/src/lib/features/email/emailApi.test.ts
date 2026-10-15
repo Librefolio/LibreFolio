@@ -20,6 +20,10 @@
  *     EMAIL_DELIVERY_FAILED with its smtp_code, 422 EMAIL_RECIPIENT_INVALID; a field of the wrong type is left out;
  *     a body without a `detail` object, and anything that carries no body (a network error, a plain Error), is
  *     `UNKNOWN`;
+ *   - the refusal helpers it is built on, exported for `verificationApi.ts` (lot E5a): `refusalBody` is the body of a
+ *     refusal (an `AxiosError`'s `response.data`, an `ApiError`'s `data`, else undefined), `refusalStatus` its HTTP
+ *     status (undefined without an answer), `refusalDetail` its `detail` when that is an object — not an array, not
+ *     text —, else null, and `retryAfterOf` a `retry_after` that is a finite number, else undefined;
  *   - through the real client, only the transport faked: what a refused `sendTestEmail()` rejects with is read by
  *     `readTestFailure` — the composition the tab performs.
  *
@@ -41,7 +45,7 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {AxiosError, AxiosHeaders, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
 import {ApiError, axiosInstance, zodiosApi} from '$lib/api';
-import {fetchEmailStatus, issueProbeNonce, readTestFailure, sendTestEmail, type EmailBudget, type EmailCheck, type EmailLinks, type EmailStatus, type EmailTestFailure} from './emailApi';
+import {fetchEmailStatus, issueProbeNonce, readTestFailure, refusalBody, refusalDetail, refusalStatus, retryAfterOf, sendTestEmail, type EmailBudget, type EmailCheck, type EmailLinks, type EmailStatus, type EmailTestFailure} from './emailApi';
 
 /** What `GET /email/status` answers, as the generated client types it: wider than its schema. */
 type StatusAnswer = Awaited<ReturnType<typeof zodiosApi.get_email_status_api_v1_email_status_get>>;
@@ -299,6 +303,56 @@ describe('readTestFailure — what carries no body is UNKNOWN', () => {
         {label: 'null', make: () => null},
     ])('$label', ({make}) => {
         expect(readTestFailure(make())).toEqual({errorCode: 'UNKNOWN'});
+    });
+});
+
+// =====================================================================================================================
+describe('the refusal helpers — exported for verificationApi (lot E5a)', () => {
+    const DETAIL = {error_code: 'EMAIL_RATE_LIMITED', retry_after: 180};
+
+    it('EAP-08: refusalBody is the body of the answer, whichever carries it, else undefined', () => {
+        const body = {detail: DETAIL};
+        expect(refusalBody(axiosRefusal(429, 'Too Many Requests', body))).toBe(body);
+        expect(refusalBody(new ApiError(429, 'Too Many Requests', body))).toBe(body);
+        expect(refusalBody(new AxiosError('Network Error', AxiosError.ERR_NETWORK, REQUEST, {}))).toBeUndefined();
+        for (const other of [new Error('boom'), 'boom', null, undefined, {response: {data: body}}]) expect(refusalBody(other)).toBeUndefined();
+    });
+
+    it('EAP-09: refusalStatus is the status of the answer, whichever carries it, else undefined', () => {
+        expect(refusalStatus(axiosRefusal(401, 'Unauthorized', {detail: 'Invalid credentials'}))).toBe(401);
+        expect(refusalStatus(new ApiError(409, 'Conflict', {detail: DETAIL}))).toBe(409);
+        expect(refusalStatus(new AxiosError('timeout of 30000ms exceeded', AxiosError.ECONNABORTED, REQUEST, {}))).toBeUndefined();
+        for (const other of [new Error('boom'), 'boom', null, undefined, {status: 401}]) expect(refusalStatus(other)).toBeUndefined();
+    });
+
+    it.each<{label: string; body: unknown; read: Record<string, unknown> | null}>([
+        {label: 'an object detail', body: {detail: DETAIL}, read: DETAIL},
+        {label: 'a plain-text detail', body: {detail: 'Invalid credentials'}, read: null},
+        {label: 'a validation list', body: {detail: [{loc: ['body'], msg: 'Field required'}]}, read: null},
+        {label: 'a null detail', body: {detail: null}, read: null},
+        {label: 'no detail', body: {}, read: null},
+        {label: 'a body that is text', body: '<html>502</html>', read: null},
+        {label: 'no body', body: undefined, read: null},
+    ])('EAP-10: refusalDetail of $label', ({body, read}) => {
+        expect(refusalDetail(axiosRefusal(409, 'Conflict', body))).toEqual(read);
+        expect(refusalDetail(new ApiError(409, 'Conflict', body))).toEqual(read);
+    });
+
+    it('EAP-10: refusalDetail of what carries no answer is null', () => {
+        for (const other of [new AxiosError('Network Error', AxiosError.ERR_NETWORK, REQUEST, {}), new Error('boom'), 'boom', null, undefined]) expect(refusalDetail(other)).toBeNull();
+    });
+
+    it.each<{label: string; fields: Record<string, unknown>; read: number | undefined}>([
+        {label: 'a whole number', fields: {retry_after: 180}, read: 180},
+        {label: 'zero', fields: {retry_after: 0}, read: 0},
+        {label: 'a fraction', fields: {retry_after: 0.5}, read: 0.5},
+        {label: 'a numeric string', fields: {retry_after: '180'}, read: undefined},
+        {label: 'NaN', fields: {retry_after: Number.NaN}, read: undefined},
+        {label: 'Infinity', fields: {retry_after: Number.POSITIVE_INFINITY}, read: undefined},
+        {label: 'null', fields: {retry_after: null}, read: undefined},
+        {label: 'nothing', fields: {}, read: undefined},
+    ])('EAP-11: retryAfterOf $label', ({fields, read}) => {
+        expect(retryAfterOf(fields)).toBe(read);
     });
 });
 

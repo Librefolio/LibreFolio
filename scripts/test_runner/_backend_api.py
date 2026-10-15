@@ -709,6 +709,16 @@ def api_email(verbose: bool = False, test_names: list[str] | None = None) -> boo
     return run_command(cmd, "Email administration API tests", verbose=verbose)
 
 
+def api_email_verification(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the email verification API tests: POST /email/verification/confirm and POST /email/verification/resend, in-process."""
+    print_section("Email Verification API Tests")
+    print_info("Testing POST /email/verification/confirm (anonymous: 200 {username}, 400 TOKEN_INVALID with the token's status, 422) and POST /email/verification/resend (anonymous: 200 {language}, the login's 401/403, 409 without problem, 429 with Retry-After, 502, 422)")
+    print_info("In-process: the real auth and email routers on a private SQLite, SMTP and public URL variables by monkeypatch, a fake SMTP server on 127.0.0.1; the lane's backend is never called")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_email_verification_api.py", test_names)
+    return run_command(cmd, "Email verification API tests", verbose=verbose)
+
+
 def _api_setup() -> bool:
     """Reseed the fixture data the API units assert against.
 
@@ -920,6 +930,17 @@ Tests for REST API endpoints (server auto-started):
         desc="GET /email/status (admin: off/ready/invalid, three checks, hourly budget, links from LIBREFOLIO_PUBLIC_URL, never the SMTP configuration) and POST /email/test (to the admin's own address in their language; 409 off or unusable, 429 with Retry-After, 502 with the SMTP code, 422 not one address; no secret in an answer); POST /email/links (admin: invite/reset link built from LIBREFOLIO_PUBLIC_URL alone, never the request; 409 email/links/token, 409 an inactive account's reset link, 422 recipient, 429, 502; token never logged); POST /email/password-reset (anonymous: ships held, 409 FORGOT_PASSWORD_DISABLED with one answer for everyone and nothing scheduled; lifted: same 202 for every identifier, 409 without the problem, 429 per address (an IPv6 client by its /64, a mapped IPv4 as the IPv4)/identifier/budget, the background work emails a live link, makes nothing when the configuration went away, revokes a link it could not send and never raises; a client without an address is limited per identifier only); a public URL no link can start from is invalid on every route; on a blocked instance sending refuses (409 INSTANCE_BLOCKED) and /system/instance offers no email; GET /system/instance email.available/links (public, never the configuration nor the public URL, read off the event loop, optional in the OpenAPI)",
         # PURE: the real auth and email routers and the instance route run in-process on a private SQLite file under tmp_path, the
         # SMTP and LIBREFOLIO_PUBLIC_URL variables are set with monkeypatch in this process, the limiters are private on a fake clock
+        # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "email-verification",
+        api_email_verification,
+        name="Email Verification API",
+        desc="POST /email/verification/confirm (anonymous, no cookie set: 200 {username} and the account signs in; 400 TOKEN_INVALID with expired/consumed/revoked/unknown, the hold refused as revoked and left live, a link emailed to another address revoked; 422 body) and POST /email/verification/resend (anonymous: 200 {language} and the verification email; 401 and 403 byte for byte the login's; 409 NOT_NEEDED, EMAIL_UNAVAILABLE and EMAIL_LINKS_UNAVAILABLE without problem, USER_LIMIT_REACHED; 429 with Retry-After per address before the password, per account, budget; 502 then resend at once; 422; an IPv6 /64 is one client, no address no count; accounts before the configuration); no token, password, identifier or address in the logs",
+        # PURE: the real auth and email routers run in-process on a private SQLite file under tmp_path, the SMTP, public URL,
+        # block and user-limit variables are set with monkeypatch in this process, the limiters are private on a fake clock
         # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
         isolation="pure",
     )
