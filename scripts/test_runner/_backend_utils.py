@@ -232,6 +232,15 @@ def utils_gate_plugin_i18n_ownership(verbose: bool = False, test_names: list = N
     return run_command(cmd, "Plugin i18n ownership gate tests", verbose=verbose)
 
 
+def utils_gate_event_loop_io(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the event-loop gate: no API async handler calls a synchronous BRIM file-store function directly."""
+    print_section("Utils: Event Loop BRIM I/O Gate")
+    print_info("Testing: backend/app/api/v1/**/*.py against the synchronous functions of backend/app/services/brim_provider.py")
+    print_info("Tests: a direct call in an async def is flagged; asyncio.to_thread(fn, ...), nested def/lambda bodies, awaited coroutines and sync handlers are not; every import form is followed; the scan reaches the store's importers")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_event_loop_brim_io_gate.py", test_names)
+    return run_command(cmd, "Event loop BRIM I/O gate tests", verbose=verbose)
+
+
 def utils_tools_wire(verbose: bool = False, test_names: list = None) -> bool:
     """Test bounded Tool JSON encoding and sanitized validation errors."""
     print_section("Utils: Tool Wire")
@@ -492,6 +501,16 @@ Tests for utility modules and helper functions:
         name="Plugin i18n Ownership Gate",
         desc="Each plugin's translations live in its own i18n/ fragment, judged by the metadata its registry publishes: a plugin's space is brimPlugins.<code> (the code being its folder), assets.providerParams.<provider code>, the parent of a signal's display_name_key or of a risk analytic's name_i18n_key, or exactly a tool's name_i18n_key and description_i18n_key (FX plugins have none), and it is exclusive when no other plugin has it; R1 every fragment key lies in its plugin's space; R2 every key a plugin declares in its exclusive space (display_name_key, description_key, name_i18n_key, description_i18n_key, label_key, x-i18n-key, x-tooltip-key, the BRIM name and description) lives in its fragment; R3 no fragment key lies in another plugin's space or is declared by another plugin; R4 every catalogue key under an exclusive space lives in that plugin's fragment, tools aside; every rule proven both ways on synthetic trees, and a sentinel fails on a published key field the gate does not read",
         # Imports the registries (discovery instantiates the plugins) and reads what they publish; synthetic trees under tmp_path. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gate-event-loop-io",
+        utils_gate_event_loop_io,
+        name="Event Loop BRIM I/O Gate",
+        desc="No async def under backend/app/api/v1 calls a synchronous function of backend/app/services/brim_provider.py (its top-level defs and their aliases) directly: such I/O runs on the event loop and must go through await asyncio.to_thread(fn, ...); a reference handed to to_thread, the body of a nested def or lambda, an awaited coroutine of the module and a sync handler are allowed; every import form is followed (from-import, import as, plain, relative, lazy, a function imported by name); the detector is proven both ways on in-memory sources, and the scan must reach an API module that imports the store",
+        # ast and filesystem reads of the repository's sources, never imported; the control
+        # cases are in-memory strings. No DB, no server, no network, no writes.
         isolation="pure",
     )
     add_test(
