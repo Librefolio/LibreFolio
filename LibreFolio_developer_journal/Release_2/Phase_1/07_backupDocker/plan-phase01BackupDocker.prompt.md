@@ -120,7 +120,7 @@
 - **`manifest.json` v1**: `format`, `format_version`, `app_version`, `alembic_revision`, `created_at` (UTC), `origin`
   (`ui`, `cli`, `pre-restore`, `panel`); DB (`sha256`, dimensione, `integrity_check`, righe per tabella); file
   (`path`, dimensione, `sha256`); totali di controllo (§3.2); chiave (`included`, `source`, `check`).
-- **Archivio con password**: l'intero zip dentro una busta cifrata `.lfbackup` (§3.5).
+- **Archivio con password**: l'intero zip dentro una busta cifrata `.lfbk` (§3.5; estensione del developer, 38).
 
 ### 3.2 Creazione
 
@@ -142,7 +142,7 @@
 1. **Caricamento**: `PUT` con il corpo grezzo, letto a pezzi e scritto in `<DATA_DIR>/.restore/upload/`. Il limite
    `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` si controlla su `Content-Length` e durante la lettura (413); lo spazio libero
    prima (507). Niente multipart, quindi niente copia in `/tmp`.
-2. **Riconoscimento**: zip (`PK\x03\x04`) o busta `.lfbackup`. Senza manifest: archivio «a mano», se contiene
+2. **Riconoscimento**: zip (`PK\x03\x04`) o busta `.lfbk`. Senza manifest: archivio «a mano», se contiene
    `sqlite/app.db`, anche sotto una sola cartella.
 3. **Estrazione** in `.restore/stage/<id>/`:
    - solo i percorsi dell'elenco d'inclusione;
@@ -414,7 +414,7 @@ Ogni default lascia il self-hosted com'è; ogni segreto accetta `_FILE`.
 **Nuove**:
 
 1. **D-B1, formato della password**:
-   - **(a) busta `.lfbackup` con `cryptography`**: nessuna dipendenza nuova, scrypt; si apre con LibreFolio (UI, o CLI
+   - **(a) busta `.lfbk` con `cryptography`**: nessuna dipendenza nuova, scrypt; si apre con LibreFolio (UI, o CLI
      anche nell'immagine);
    - (b) zip AES con `pyzipper`: dipendenza nuova, più `pycryptodomex`; si apre con 7-Zip o Keka, ma non con Esplora
      risorse né con il Finder, e la derivazione è debole (PBKDF2-SHA1 ×1000);
@@ -1296,7 +1296,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >
 > **Decisioni del developer**, alla lettera, dal treno 41 del piano generale:
 >
-> - **38**: «ok all'idea della busta» (`.lfbackup`, scrypt + AES-256-GCM, solo `cryptography`).
+> - **38**: «ok all'idea della busta» (`.lfbk`, scrypt + AES-256-GCM, solo `cryptography`).
 > - **39**: «così l'utente sceglie se fare un backup in "chiaro" o un backup "sicuro" e nel messaggio gli viene detto
 >   la differenza».
 > - **B4 dopo B3 e B5**: è l'unico pezzo di B che può slittare.
@@ -1526,6 +1526,70 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > 3. Sulla revisione combinata: Vitest `settingsTabs` e `page.tabs` (le schede finte sul registro vero: E-6),
 >    `front check`, `check-orphans`, poi l'E2E `front-utility backup` da sola (una scheda in più nella barra).
 > 4. Poi B8 dalla patch, i suoi test e il FROZEN.
+
+### Aggiornamento di base — merge di `dev_release2` `bcd680868`, con E2 (2026-10-15, dalle 18:42)
+
+> - **Piano committato dal coordinatore**: `ddf0c4035` (`docs(journal): all-backend green, B4 notes`). Merge aperto
+>   da lui: `MERGE_HEAD` `bcd680868`, con E2 (la scheda Email) e W (il salvataggio degli eventi).
+> - **Correzione della 38**, dal developer (coordinatore, 18:40): «come formato facciamo lfbk, mi piace di più».
+>   Nel piano passano a `.lfbk` il §3.1, il §3.3, il D-B1 e la nota della 38; `dev.py backup decrypt`, test e doc
+>   quando arriva B4.
+>
+> **4 conflitti, risolti tenendo i due lati** (18:42-18:58). Ho usato lo script `/tmp/libreFolio_b_resolve_e2.py`,
+> che controlla ogni lato sul testo letto prima di scrivere. Le copie con i marcatori sono in
+> `/tmp/libreFolio_b_merge_bcd680868_conflicted/`.
+>
+> - `settingsTabs.ts`:
+>   - l'import delle icone di ciascun ramo, com'è: il mio con `DatabaseBackup`, quello di E con `Mail` a parte, così
+>     un cambio futuro di E non fa conflitto;
+>   - i due corpi;
+>   - le righe Backup (120) ed Email (130), con i loro commenti.
+> - `settingsTabs.test.ts`:
+>   - import, `bodies`, `vi.mock` e righe di `TODAY` per Backup ed Email;
+>   - le liste esplicite per contesto di E (`CONTEXTS`, entrate col merge automatico), con `backup` nella lista
+>     dell'amministratore;
+>   - il nome generico del caso del registro (mio);
+>   - i due casi della visibilità solo admin, Backup ed Email.
+>
+>   **Colonna `adminOnly` tolta**: le liste di E fissano la stessa cosa, chi vede cosa e in che ordine. Allineata
+>   l'intestazione: backup ed email sono per gli amministratori, e una scheda nuova aggiunge la sua riga a `TODAY` e il
+>   suo id alle liste di `CONTEXTS`.
+> - `_frontend_utility.py` (file del programma colori). Quello che c'è già in `dev_release2` resta al suo posto, e le
+>   righe di B vengono dopo quelle di E:
+>   - liste Vitest di `core-unit`: `emailText` ed `emailApi`, poi `backupApi` e `backupJob`;
+>   - funzioni: `front_email_tab`, poi `front_backup`;
+>   - voci del catalogo: `email-tab`, poi `backup`.
+>
+>   Le righe di W (`eventSaveError`, `EventExistsPanel`) e le descrizioni di `core-unit` e `component-unit` arrivano
+>   dal merge automatico.
+> - `LibreFolio_devWiki/log.md`: la voce di W, che è già in `dev_release2`, poi la mia.
+> - **Verifica**:
+>   - contro `MERGE_HEAD` cambiano solo le mie righe; contro `HEAD` solo quelle di E e W;
+>   - prettier, ruff, black e `git diff --check` puliti;
+>   - `git add` dei soli 4 file.
+>
+> **⚠️ Fuori pista — `page.tabs.test.ts` rosso sul mio ramo da `b7a4d35e6`** (il caso previsto da E-6):
+>
+> - Il test carica il registro vero con `importOriginal`, quindi tutti i corpi di scheda. E ha aggiunto il mock di
+>   `EmailSettingsTab`; quello di `BackupTab` non c'era.
+> - Senza il mock il file non si carica: la catena `BackupDownloadCard` → `formatDateTime` → `stores/app/language.ts`
+>   chiede `DEFAULT_LOCALE` al mock parziale di `$lib/i18n`.
+> - Il rosso è mio, non del merge: è nato con la riga della scheda (`b7a4d35e6`), che avevo validato solo con Vitest
+>   `settingsTabs`. Il merge non tocca né la catena del backup né questo test.
+> - Cura: una riga, `vi.mock('$lib/features/backup/BackupTab.svelte', …)` dopo quella di E (il modello di E-6). **Non
+>   è nell'indice**: il coordinatore decide se va nel merge o in un commit a parte.
+> - Prove sul worktree del merge (Vitest, `nice -n 10`):
+>   - `page.tabs` senza la riga: file non caricato; con la riga, 18 su 18;
+>   - `settingsTabs`: 20 su 20.
+>
+> **Dopo il commit del merge**, sulla revisione combinata, una prova alla volta:
+>
+> - Vitest `settingsTabs` e `page.tabs`;
+> - `front check`;
+> - `check-orphans`;
+> - E2E `front-utility backup` da sola;
+> - `front-utility core-unit`, nello slot 1. Rosso noto e accettato: `htmlInterpolation.gate.test.ts` sulla chiave
+>   `email.problems.SMTP_FROM_INVALID`, che E sta correggendo.
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 
