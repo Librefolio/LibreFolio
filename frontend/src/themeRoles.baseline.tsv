@@ -159,6 +159,8 @@ lib/components/table/DataTablePagination.svelte	0	#0f172a×3	#1a4031×4	#1e293b�
 lib/components/table/DataTableToolbar.svelte	0	#0f172a	#1a4031	#334155	#475569	#4ade80	#64748b	#7f1d1d	#94a3b8	#b91c1c	#dc2626	#e2e8f0	#f1f5f9×2	#f87171	#fecaca	#fef2f2	rgba(26,64,49,0.1)	rgba(26,64,49,0.15)	rgba(26,64,49,0.2)	rgba(74,222,128,0.1)	rgba(74,222,128,0.15)	rgba(74,222,128,0.2)
 lib/components/table/SelectionBar.svelte	23
 lib/components/transactions/TransactionsTable.svelte	6	#0f0f18×2	#1e293b	#334155×3	#475569×2	#cbd5e1	#e2e8f0×5	rgb(0 0 0/0.05)	rgb(139 92 246)	rgb(139 92 246/0.18)	rgb(196 181 253)	rgb(196 181 253/0.22)	rgb(255 255 255/0.08)	rgb(99 102 241/0)×2	rgb(99 102 241/0.25)	white×2
+lib/components/transactions/bulk/TxBulkBanners.svelte	54
+lib/components/transactions/bulk/TxBulkToolbar.svelte	48
 lib/components/transactions/events/AssetEventPicker.svelte	72
 lib/components/transactions/events/EventCreateMiniModal.svelte	42
 lib/components/transactions/form/TxFormBanners.svelte	6
@@ -179,7 +181,7 @@ lib/components/transactions/modals/ParseDetailModal.svelte	141
 lib/components/transactions/modals/PromoteAllModal.svelte	32
 lib/components/transactions/modals/PromoteMergeModal.svelte	100	#334155×2	#e2e8f0×2
 lib/components/transactions/modals/TransactionActionModal.svelte	146	#334155×2	#e2e8f0×2
-lib/components/transactions/modals/TransactionBulkModal.svelte	190
+lib/components/transactions/modals/TransactionBulkModal.svelte	88
 lib/components/transactions/modals/TransactionCompareModal.svelte	82
 lib/components/transactions/modals/TransactionFormModal.svelte	35
 lib/components/transactions/modals/TransactionPickerModal.svelte	20
@@ -317,4 +319,5 @@ routes/(app)/settings/+page.svelte	3
 routes/(app)/transactions/+page.svelte	37
 routes/(app)/welcome/+page.svelte	4
 routes/+page.svelte	1
+~split	lib/components/transactions/modals/TransactionBulkModal.svelte	lib/components/transactions/bulk/TxBulkBanners.svelte,lib/components/transactions/bulk/TxBulkToolbar.svelte	190
 ~split	lib/components/transactions/modals/TransactionFormModal.svelte	lib/components/transactions/form/TxFormBanners.svelte,lib/components/transactions/form/TxFormPairSection.svelte,lib/components/transactions/form/TxFormSingleSection.svelte,lib/components/transactions/form/TxFormOptionalSection.svelte	218
