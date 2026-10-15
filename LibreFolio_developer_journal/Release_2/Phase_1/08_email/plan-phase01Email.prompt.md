@@ -220,6 +220,9 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 - Nella finestra della galleria solo prove leggere: `nice`, nessun server, una alla volta (le categorie `services` e
   `utils` non avviano il server condiviso; `services` ricrea il DB della corsia).
 
+- **Regola fissa (15/10)**: ogni lotto che tocca `frontend/src/lib/i18n/email/` fa girare anche `front-utility core-unit`
+  (gate di markup, ICU e lingua) e `i18n check`.
+
 ## 10. Specialisti
 
 `test-author` (file distinti, corsia 6188, nessuna suite senza il via), `docs-writer` (EN), `project-historian` o
@@ -744,3 +747,274 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 > `prettier --check`. **Slot pesante 1**: `front-utility email-tab` con `--workers 2`: 5 passati in 34 s; porta 6188
 > libera prima e dopo. Log `/tmp/libreFolio_e2b2_*.log`. Resta lo scatto della galleria, due volte con il diff vuoto,
 > nello slot che assegna il coordinatore.
+
+### E3 — le email con un link
+
+#### E3.0 — Via, decisioni e disegno ✅ (2026-10-15)
+> **Note implementazione**: E2 entrato in `dev_release2` (`755158aad`, CHANGELOG `6c427eb4e`); avanzamento veloce del
+> mio ramo a `6c427eb4e`. Via del coordinatore (18:28): «Via a E3–E5, nell'ordine del tuo piano, con le decisioni 44 e
+> 45 e il contratto della sonda concordato con A. L'helper di A arriva con A6b, verso le 19:30–19:45: la parte della
+> scheda che lo usa falla dopo».
+>
+> **Decisioni del developer** (15/10, 17:55):
+> - **44 (D-E7) approvata**: chi si è registrato e prova il login prima di cliccare il link vede «verifica la tua email»,
+>   con «rispedisci» (E5).
+> - **45 (D-E3), l'alternativa**: ogni link dentro un'email, anche quelle mandate dall'admin, si costruisce solo con
+>   `LIBREFOLIO_PUBLIC_URL`; senza la variabile non partono email con link; i link copiati dalla UI restano come oggi.
+>   Il controllo lo fa il browser dell'admin con la sonda di A6a (`POST /users/address-probe`, poi
+>   `GET <PUBLIC_URL>/api/v1/auth/address-probe?nonce=…`); l'avviso dice che vale per questo dispositivo (DNS o rete).
+>
+> **Contratto con A** (risposta di A, 15/10): l'helper è `frontend/src/lib/features/settings/users/addressProbe.ts`
+> (A6b), TS puro: `normalizeBase(input): string | null`, `checkAddress(base, {issueNonce, fetchImpl?, timeoutMs?})
+> → 'match' | 'mismatch' | 'unverifiable'`, mai eccezioni; il nonce lo passo io (`issue_address_probe_…_post`). Una
+> pagina HTTPS verso `http://` la controllo prima. `LIBREFOLIO_PUBLIC_URL` nel browser non c'è: la base la dà
+> `/email/status`. Le azioni in più dei link: `users/linkShareActions.ts` (`LINK_SHARE_ACTIONS`, props
+> `{link, purpose, context}`).
+>
+> **Disegno di E3** (backend ora; la scheda con la sonda dopo A6b; l'attivazione dell'admin dopo A7, che porta F02):
+> - `services/email/links.py`: `links_state()` (`ready`, `base`, `problem`: `PUBLIC_URL_MISSING` o
+>   `PUBLIC_URL_INVALID`), `email_link(purpose, token)` solo con `public_link(token_path(…))` di A, l'etichetta
+>   dell'istanza nelle email = l'host di `LIBREFOLIO_PUBLIC_URL` (niente che venga dalla richiesta).
+> - `POST /email/links` (admin, D-E10/D-E15): riceve il token in chiaro che le rotte di A gli hanno appena dato
+>   (nel corpo, mai nel log), lo verifica per il suo scopo (`inspect_token`: solo `valid`), costruisce il link da sé,
+>   e spedisce: l'invito all'indirizzo scelto dall'admin (o a quello dell'invito), il reset solo all'email
+>   dell'account. Lingua: invito → quella chiesta (la UI dell'admin), poi `default_language`; reset → la lingua
+>   dell'account. Errori: 409 `EMAIL_UNAVAILABLE`, 409 `EMAIL_LINKS_UNAVAILABLE`, 409 `EMAIL_LINK_INVALID` (con lo
+>   stato), 422 sul destinatario, 429, 502.
+> - `POST /email/password-reset` (anonimo, D-E16): 409 se l'email o i link non sono pronti (dipende solo dalla
+>   configurazione, che `/system/instance` già pubblica); limiti prima di ogni ricerca: per indirizzo
+>   (`request.client.host`, cioè la vista di uvicorn che rispetta `FORWARDED_ALLOW_IPS`; un `X-Forwarded-For`
+>   falsificato non lo sposta) 5 ogni 15 minuti, per identificativo scritto (minuscolo) 3 l'ora, budget d'istanza
+>   finito → 429 per tutti; poi **202** sempre uguale e il lavoro in background con una sessione propria: ricerca come
+>   il login, account attivo, al più un reset ogni 5 minuti e 3 l'ora contati sulle righe dei token (in silenzio),
+>   `create_password_reset` di A, email nella lingua dell'account.
+> - `/system/instance.email` (D-E17): costruito da una sola funzione mia, `email_instance_config()` (una riga di H
+>   cambia una volta, i campi futuri non la toccano più), con `links` (email pronta e link pronti): servirà al login
+>   per offrire «password dimenticata» (E4).
+> - `/email/status` (D-E18): `links: {ready, base, problem}`, solo admin: la base serve alla sonda della scheda.
+
+#### E3.1 — Backend dei link per email ✅ scritto (2026-10-15), test ⏳
+> **Note implementazione**:
+> - Nuovo `services/email/links.py`: `links_state()` / `require_links()` (`LIBREFOLIO_PUBLIC_URL` pronta, mancante o
+>   non valida; `EmailLinksUnavailableError`), `email_link(purpose, token)` con `public_link(token_path(…))` di A,
+>   `LinksState.instance` (l'host della base, con la porta), `email_instance_config()` (la parte email di
+>   `/system/instance`: `available` e `links`).
+> - `services/email/flows.py`: `instance_language()`; `send_link_email()` (l'email di un link appena creato
+>   dall'admin: `inspect_token` solo `valid`, invito a `to` o all'indirizzo dell'invito nella lingua chiesta o
+>   dell'istanza, reset solo all'email dell'account nella sua lingua; errori `EmailLinkInvalidError`,
+>   `EmailRecipientRequiredError`, `EmailRecipientNotAllowedError`); `admit_forgotten_password()` (configurazione,
+>   poi i limitatori per indirizzo 5/15 min e per identificativo 3/h, poi il budget d'istanza letto senza spenderlo);
+>   `forgotten_password_work()` (in background, sessione propria sul motore della richiesta, ricerca come il login,
+>   account attivo, al più un reset ogni 5 minuti e 3 l'ora contati su tutte le righe di reset dell'account,
+>   `create_password_reset` di A, email; ogni esito in silenzio nel log, senza l'identificativo, mai eccezioni).
+> - `api/v1/email.py`: `GET /email/status` con `links`; `POST /email/links` (admin); `POST /email/password-reset`
+>   (anonimo, 202 sempre uguale, il lavoro in `BackgroundTasks`; i 409 anonimi senza il `problem`).
+> - Schemi nuovi in `schemas/email.py`, ciascuno con una docstring su una riga (E-5): `EmailLinksRead` (in
+>   `EmailStatusResponse.links`, con default), `EmailInstanceConfig.links`, `EmailLinkRequest`/`Response`,
+>   `PasswordResetEmailRequest`, `PasswordResetEmailAccepted`.
+> - `api/v1/system/instance.py` (H): `email=await asyncio.to_thread(email_instance_config)`; tolti l'import di
+>   `EmailInstanceConfig` e `email_available` (che sparisce da `delivery.py`): un campo futuro non tocca più il file.
+> - `.env.example`, sezione Email: tre righe di commento su `LIBREFOLIO_PUBLIC_URL`.
+> - `ruff`/`black` puliti; l'import funziona con `email.links`, `main` e `config_audit` per primi.
+
+#### Correzione fuori lotto — un rosso di E2 in `dev_release2` ✅ (2026-10-15)
+> **Note implementazione**: T dei colori ha trovato `core-unit` a 4 880 verdi su 4 881 in `dev_release2`:
+> `src/htmlInterpolation.gate.test.ts` («finds no markup in any translation outside the reviewed sanit…») sulla chiave
+> `email.problems.SMTP_FROM_INVALID`, il cui esempio `LibreFolio <noreply@example.com>` porta un `<` (il gate vieta ogni
+> `<` nei cataloghi: alcune traduzioni finiscono in HTML fatto a mano senza `escapeHtml`). Riformulata nelle 4 lingue
+> senza `<` né `>` («… such as noreply@example.com, optionally after a name, with the address in angle brackets»),
+> invece di aggiungerla all'elenco rivisto del gate. Prove: il gate da solo 26/26; `front-utility core-unit` intero
+> nello slot pesante 1: 153 file, 4 863 test verdi; `i18n build` + `check` stretti; `prettier --check`.
+>
+> **⚠️ Fuori pista / lezione**: un lotto che cambia i cataloghi i18n fa girare anche `front-utility core-unit` (i gate
+> di markup, ICU e lingua stanno lì): da ora è nelle mie prove fisse (§9) ogni volta che tocco `lib/i18n/email/`.
+
+#### E3.2 — Il terzo controllo, `email.links` ✅ scritto (2026-10-15), test ⏳
+> **Note implementazione**: dalla revisione di `docs-writer`: con l'email pronta, una `LIBREFOLIO_PUBLIC_URL`
+> mancante o sbagliata non diceva niente da nessuna parte (né all'avvio né nella scheda). Nuovo
+> `checks.check_email_links` (id `email.links`), terzo in `EMAIL_CONFIG_CHECKS` e quindi in fondo a `CONFIG_CHECKS`:
+> `ok` con l'email spenta o i link pronti; `info` («emails work, but none with a link can go out») con la variabile
+> mancante; `warning` con un valore non http(s). Importa `links_state` solo quando gira (come `ConfigCheck`), così
+> `config_audit` non tira dentro i servizi degli account all'import. Chiavi `email.checks.links.{ok,missing,invalid}`
+> nelle 4 lingue, senza `<` né `>`; la scheda le mostra fra gli avvisi senza cambiare codice. Provati i quattro stati
+> (con `email_instance_config()` accanto). Test e doc affidati (`test-author`: EMK, `CHECK_IDS` di H; `docs-writer`:
+> pagine email e `configuration.en.md`).
+>
+> Decisioni sulle altre osservazioni di `docs-writer`: un link di reset non accetta `to` (E4 non lo manderà); una
+> richiesta «password dimenticata» revoca anche un link di reset dell'admin vecchio di più di 5 minuti (è la semantica
+> di `create_password_reset` di A; la regola dei 5 minuti protegge un link appena dato): voluto, documentato, da
+> guardare nella revisione di sicurezza finale.
+
+#### E3.3 — Test di E3 e quattro correzioni dalla revisione di `test-author` ✅ scritte (2026-10-15), prove ⏳
+> **Note implementazione**: `test-author` ha scritto `test_services/test_email_links.py` (EML-001…010, voce nuova
+> `services email-links`, pure), EMF-011…031, EMK-016/017 e gli adattamenti a tre controlli, EMA-023…041 (ogni link
+> confrontato con quello di `LIBREFOLIO_PUBLIC_URL` mentre la richiesta porta Host, Origin, X-Forwarded-Host e
+> Referer falsi); `CHECK_IDS` di H con `check_email_links`; in `test_system_api.py` di H le righe 880 e 913
+> (`set(body["email"]) == {"available", "links"}`). Primo giro: `email-links` 30, `email-flows` 91, `api email` 137,
+> `email-checks` 79, `config-env-example` 36, `config-audit` 90.
+>
+> **⚠️ Fuori pista** — difetti trovati, corretti:
+> - una `LIBREFOLIO_PUBLIC_URL` malformata contava come pronta (`public_url()` di A guarda solo il prefisso): con
+>   `https://` o un indirizzo con uno spazio, `POST /email/links` rispondeva 500 e «password dimenticata» creava una
+>   riga di reset e falliva in silenzio. Ora `links_state()` valida la base (`_usable_base`: http(s), un host, niente
+>   spazi, query o frammento), ed `email_link()` passa da `require_links()`;
+> - `forgotten_password_work()` creava la riga di reset (revocando i link vivi) prima di sapere se l'email poteva
+>   partire: ora riverifica configurazione, link e budget prima di crearla, e revoca il token nuovo se l'invio fallisce;
+> - D-E13 «un'istanza bloccata non spedisce niente» valeva solo per le rotte (CP6): ora `send_email()` rifiuta per primo
+>   con `INSTANCE_BLOCKED`, anche con un `LIBREFOLIO_BLOCKED` illeggibile;
+> - senza indirizzo del client (socket unix) il limite per indirizzo sarebbe stato un conteggio unico per tutti: ora
+>   in quel caso si salta, restano i limiti per identificativo, per account e il budget.
+> - Osservato, lasciato: un admin può spedire il link di reset di un account disattivo (A crea quei link); «password
+>   dimenticata» li salta. `black` segnala una riga di A in `_backend_services.py` (preesistente, non mia).
+>
+> Secondo giro con le correzioni: `email-links` 52, `email-flows` 98, `email-delivery` 97, `email-checks` 84,
+> `api email` 145, `config-audit` 90, `api system` 117 (le righe 880/913 di H girate e verdi; porta libera).
+>
+> **⚠️ Fuori pista** — altri quattro casi trovati da `test-author`, corretti:
+> - `_usable_base` rifiuta anche un `?` o un `#` vuoti in fondo (inghiottirebbero il percorso), una porta non valida
+>   (letta in un `try`) e le credenziali nell'indirizzo (finirebbero in ogni link e nel testo dell'email); un IPv6 fra
+>   parentesi resta valido;
+> - `delivery.sending_blocked()` (bloccata, o `LIBREFOLIO_BLOCKED` illeggibile) vale per `send_email` e per
+>   `flows._require_email()`: su un'istanza bloccata nessuna riga di reset viene creata, nessun link revocato;
+> - il `try` dopo il commit del link copre ogni errore (`Exception`: rollback, revoca del token nuovo, commit) e
+>   comprende `account_language()`;
+> - `/system/instance` dice `available` e `links` falsi a istanza bloccata (la pagina di login non offrirà «password
+>   dimenticata» a vuoto).
+> Gate i18n come file singoli: `htmlInterpolation.gate` 26, `catalogIcuLocale` 17, `emailText` 106.
+>
+> Terzo giro, dopo i quattro casi: `email-links` 71, `email-delivery` 104 verdi; `email-flows` 4 rossi e `api email`
+> 5 rossi, tutti sulla revoca del token dopo un invio fallito.
+>
+> **⚠️ Fuori pista**: la correzione «ogni errore revoca» aveva un difetto: il `session.rollback()` scade ogni oggetto
+> caricato, e rileggere `issued.record.id` nel gestore chiede un refresh che la sessione asincrona rifiuta
+> (`MissingGreenlet`): il gestore stesso crollava, e il link restava vivo. `test-author` l'ha visto con una
+> riproduzione usa e getta. Ora l'id si legge subito dopo il commit (`token_id`). `email-flows` 104 e `api email`
+> 154 verdi.
+
+#### E3.4 — Giro finale ✅ (2026-10-15)
+> Corsia 6188, una prova alla volta, `nice -n 10`, log `/tmp/libreFolio_e3f_*.log`: `services email-config` 144,
+> `email-messages` 245, `email-delivery` 104, `email-checks` 84, `email-flows` 104, `email-links` 71, `config-audit` 90,
+> `config-package` 649, `config-env-example` 36; `utils rate-window` 26, `gate-i18n-usage` 195; `api email` 154
+> (`--no-shared-server`), `api system` 117, `api instance-block` 54 (su DB ripopolato); `check-orphans` verde;
+> `front check` 0/0; `i18n build` + `check` (4 485 chiavi, 20 sottosistemi, stretto); Vitest `EmailSettingsTab` 29,
+> `emailApi` 62, `htmlInterpolation.gate` 26, `catalogIcuLocale` 17, `emailText` 106; `prettier --check`;
+> `mkdocs build` stretto senza `WARNING`/`ERROR`, `check-links` 96; `ruff`/`black` sui file miei; `git diff --check`;
+> porta 6188 libera. Manca `front-utility core-unit` intero (i cataloghi i18n sono cambiati): chiesto lo slot.
+> `front-utility core-unit` intero nello slot pesante (contato come slot 2 dal coordinatore): 153 file, 4 863 test verdi;
+> slot liberato subito.
+
+### Checkpoint E3 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+> **Base**: HEAD `7f735af7c`. Delta: 22 file tracciati modificati, 2 nuovi (`services/email/links.py`,
+> `test_services/test_email_links.py`). Righe nei file altrui dichiarate nel messaggio di consegna. Restano di E3: la
+> verifica dell'indirizzo nella scheda Email con l'helper di A6b; l'email d'attivazione dell'admin iniziale dopo A7.
+
+### E3 — revisione di sicurezza (cancello di rilascio)
+
+#### E3.5 — `security-review` sulle superfici nuove ✅ (2026-10-15), correzioni ✅, prove ✅ (2026-10-15, 21:20)
+> **Note implementazione**: E3 committato (`fd530372d`, `cf12cac9c`), base aggiornata dal coordinatore
+> (`cc4758dce`: CP2b di H, B, B8, W N2, Z6b parte 1). Giro leggero sulla base unita, tutto verde: `email-links` 71,
+> `email-flows` 104, `config-audit` 90, `api email` 154, `api system` 117, `api instance-block` 60, `check-orphans`.
+> Revisione di sicurezza chiesta dal coordinatore (agente `security-review`, sola lettura) su
+> `POST /email/password-reset`, `POST /email/links`, `links.py` e i limiti, con i tre punti già segnalati.
+>
+> Esito e decisioni:
+> - **Alert 1, MEDIA (fiducia 8), verificato**: `PUT /auth/profile` cambia l'email con il solo cookie (niente password
+>   attuale, nessun avviso, sessioni aperte); con «password dimenticata» un momento dentro la sessione di un altro
+>   diventerebbe una presa permanente dell'account. **Decisione del coordinatore** (15/10): (a) A chiede la password
+>   attuale per cambiare l'email e chiude le altre sessioni, lotto piccolo dopo A6d; E4 aggiungerà l'avviso al vecchio
+>   indirizzo; (b) **subito**: `POST /email/password-reset` risponde 409 `FORGOT_PASSWORD_DISABLED` finché (a) non è
+>   entrato (`flows.FORGOT_PASSWORD_HELD`), e lo tolgo con E4.
+> - **Alert 2, BASSA**: con la registrazione aperta, un account con l'email di un altro e uno username di phishing fa
+>   partire email vere verso il terzo. In E: ogni valore nel testo delle email su una riga (`messages._one_line`:
+>   caratteri di controllo e separatori di riga → spazio, controlli bidi tolti); un limite per casella di posta
+>   (`FORGOT_BY_MAILBOX`, 3/h). In A (backlog, deciso dal coordinatore): i caratteri dello username.
+> - **Punto 1** (revoca del link dell'admin): il flusso anonimo non manda niente mentre un link di reset creato da un
+>   admin è vivo (`_admin_link_live`).
+> - **Punto 2** (reset di un account disattivo): `POST /email/links` risponde 409 `EMAIL_ACCOUNT_INACTIVE`.
+> - **Punto 3** (limite per indirizzo): 10 ogni 15 minuti, IPv6 per /64 (`address_key`); nella doc
+>   `FORWARDED_ALLOW_IPS` con gli indirizzi esatti dei proxy, mai `*`.
+> - Altri: il conteggio per account si rifà dentro la transazione di scrittura dopo la creazione (due richieste
+>   simultanee non mandano due email; un link dell'admin revocato dalla creazione torna con il rollback); il log
+>   d'errore del lavoro in background senza traceback (i parametri SQL avrebbero mostrato l'identificativo);
+>   `urlsplit` dentro il `try` (`https://[::1` non dà più 500).
+> - Verificato dalla revisione senza rilievi: avvelenamento dei link, fuga dei token, enumerazione, iniezione di
+>   intestazioni e di HTML, confusione degli scopi, CSRF (cookie SameSite=Lax, nessun CORS), istanza bloccata.
+>
+> **⚠️ Fuori pista** (autorevisione durante la seconda pausa, 21:00): due difetti nelle correzioni appena scritte,
+> trovati prima di ogni prova.
+> - `address_key` leggeva `ip.ipv4_mapped` anche su un `IPv4Address`, che non l'ha: ogni client IPv4 avrebbe preso
+>   un 500 a feature aperta (la sospensione lo nascondeva). Ora: IPv4 così com'è, IPv4 mappato → l'IPv4, IPv6 → il
+>   suo /64 calcolato dall'intero (la zona di `fe80::1%eth0` non disturba), `None` o `""` → `None`, il resto com'è
+>   scritto. Verificato con uno snippet sui nove casi; i casi sono girati a test-author.
+> - Nel ramo della corsa, dopo `session.rollback()`, `logger.info(..., user_id=user.id)` avrebbe ricaricato `user`
+>   scaduto → `MissingGreenlet` → il catch-all avrebbe loggato «the request failed» al posto della riga giusta (niente
+>   inviato comunque). Ora `user_id` si legge subito dopo la ricerca dell'account e si usa ovunque dopo.
+>
+> Doc (docs-writer, solo EN, nessuno stamp): `admin/email.en.md` e `developer/backend/email.md` coprono sospensione e
+> motivo, limiti nuovi, `EMAIL_ACCOUNT_INACTIVE`, `FORWARDED_ALLOW_IPS` mai `*`, log senza traceback, valori su una
+> riga; in più l'istanza bloccata e le regole intere di `_usable_base` (già nel codice di E3, non ancora scritte).
+>
+> **Rimandato al lotto della scheda Email (sonda)**: il testo dell'avviso `email.links` «non è un indirizzo http(s)» è
+> più stretto di `_usable_base`, che rifiuta anche credenziali, `?`/`#`, spazi, host mancante o porta sbagliata. Va
+> riscritto («non si può usare per i link nelle email») nel log, nei 4 cataloghi `email.checks.links.invalid` e nelle
+> due righe di `admin/configuration.en.md`: tocca i cataloghi, quindi `core-unit`, che quel lotto fa comunque.
+>
+> **Test** (test-author, scritti durante le pause, nessuno lanciato prima della ripresa delle 21:09):
+> - nuovi: EMF-035 (la sospensione per prima, in ogni stato; esce `True`), EMF-036 (`address_key`), EMF-037 (10 per
+>   /64; IPv4 e la sua forma mappata, un conteggio), EMF-038 (casella di posta, 4 account e 4 maiuscole), EMF-039
+>   (link vivo dell'admin; consumato, revocato o scaduto no), EMF-040 (corsa: link rivale fatto da un'altra sessione
+>   dentro `create_password_reset` → rollback, il rivale di nuovo vivo), EMF-041 (account disattivo), EMF-042 (errore
+>   del DB con l'identificativo nei parametri → solo `error="OperationalError"`); EMA-046 (sospesa: stessa 409 per
+>   tre account, niente contato né programmato), EMA-047 (/64 dalla rotta), EMA-048 (`EMAIL_ACCOUNT_INACTIVE`);
+>   EMM-031…033 (una riga per valore, bidi tolti, markup spezzato ancora escapato);
+> - adattati: EMF-021/024/027/029/030/031/032/033, EMA-035/041/042/043, EML-011/012 (`https://[::1`); i moduli
+>   flows e api tolgono la sospensione con una fixture autouse, i test della sospensione la rimettono;
+> - runner (file condivisi, solo le descrizioni delle mie voci): `_backend_api.py:900`, `_backend_services.py:490,
+>   1335, 1363, 1373`.
+> - EMF-040 regge su un'ipotesi verificata: il motore del test passa dal listener `connect` globale (WAL,
+>   `busy_timeout`), e pysqlite apre la transazione solo prima di una scrittura, quindi le letture del lavoro non
+>   tengono lock quando il rivale fa commit.
+>
+> Doc: tabella Testing di `developer/backend/email.md` aggiornata (EMF-042, EMA-048, EMM-033, la parentesi IPv6, la
+> fixture della sospensione); «Coming Next» con la decisione 44 al posto di «ancora da decidere».
+>
+> **Prove** (dopo la ripresa delle 21:09, una alla volta, `nice -n 10`, corsia 6188, carico sotto 70 a ogni lancio):
+>
+> | Comando | Esito |
+> |---|---|
+> | `services email-links` | 74 ✅ (71 + 3) |
+> | `services email-flows` | 132 ✅ (104 + 28), EMF-040 compreso, le due forme della corsa |
+> | `services email-messages` | 267 ✅ (245 + 22) |
+> | `services email-delivery` | 104 ✅ |
+> | `--no-shared-server api email` | 160 ✅ (154 + 6) |
+> | `services config-audit` | 90 ✅ |
+> | `check-orphans` | ✅ (316 file backend raggiungibili) |
+> | `dev.py mkdocs build` (stretto) | uscita 0, nessuna riga `WARNING`/`ERROR`, 3 044 URL risolti |
+> | `dev.py mkdocs check-links` | 96 link validi |
+>
+> - `ruff` e `black --check` puliti sui file di produzione e sui test; `black` segnala in `_backend_services.py` solo
+>   la riga lunga di A (già girata ad A dal coordinatore). `git diff --check` pulito, porta 6188 libera, nessun file
+>   nuovo né ignorato da escludere oltre ai log di `/tmp` e allo snapshot del DB nella cartella dei log del runner.
+> - **Non rieseguiti**: `api system` e `api instance-block`, verdi sulla revisione combinata `cc4758dce` prima delle
+>   correzioni; il delta non tocca i loro percorsi (senza `LIBREFOLIO_PUBLIC_URL` `links_state` esce prima di
+>   `_usable_base`; su un'istanza bloccata le rotte email rispondono 423 dal middleware prima del gestore). Nessun
+>   catalogo i18n toccato → niente `core-unit`.
+
+### Checkpoint E3s 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+> **Base**: HEAD `cc4758dce`. Delta: 13 file tracciati modificati, nessuno nuovo. Codice: `services/email/{flows,
+> messages,links}.py`, `api/v1/email.py`. Test: `test_email_{flows,messages,links}.py`, `test_email_api.py`; runner
+> (solo descrizioni delle voci E): `_backend_api.py`, `_backend_services.py`. Doc EN: `admin/email.en.md` (senza
+> traduzioni), `developer/backend/email.md`. Questo piano. Resta aperta la sospensione di «password dimenticata»
+> (409 `FORGOT_PASSWORD_DISABLED`) fino al lotto di A sulla password attuale per cambiare l'email; la toglie E4.
+>
+> **Committato** dal coordinatore: `5608193b5` fix(email) e `734bb6706` docs(journal).
+>
+> **Merge di base** (2026-10-15, 21:20): `dev_release2` `b09776a3d` (A6b, X CP10, J CP-4c, lo scatto di B), commit del
+> coordinatore `cd12482fc`. Un conflitto, `admin/configuration.en.md`: le righe di `LIBREFOLIO_PUBLIC_URL` riscritte da
+> A6b (dialoghi di Users, «Server address») + le mie frasi sulle email con un link; `LIBREFOLIO_BILLING_URL` di
+> `dev_release2`; la sezione Plugin Settings di X e le mie righe `email.links` unite da git, senza doppioni. Controllo
+> di significato: il filtro di mascheramento di X agisce solo sui segreti «in volo» di una chiamata di plugin, mai
+> attivi nel codice email. Prove sulla revisione unita, una alla volta, `nice -n 10`: `services email-flows` 132 ✅,
+> `email-delivery` 104 ✅, `email-messages` 267 ✅, `--no-shared-server api email` 160 ✅, `api system` 117 ✅ (server
+> di corsia, spento a fine run), `check-orphans` ✅ (325 file backend, 428 unit, 128 E2E raggiungibili). Porta 6188
+> libera.

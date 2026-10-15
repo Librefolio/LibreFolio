@@ -38,6 +38,11 @@
         "ok": "Emails travel encrypted, or email is off.",
         "localPlain": "Emails go unencrypted to a server of the local network.",
         "plain": "Emails, their links and the SMTP password travel unencrypted to a server outside the local network: set LIBREFOLIO_SMTP_TLS to starttls or tls."
+      },
+      "links": {
+        "ok": "Emails can carry links: LIBREFOLIO_PUBLIC_URL is set, or email is off.",
+        "missing": "LIBREFOLIO_PUBLIC_URL is not set: emails work, but none with a link (forgotten password, invitation, reset) can go out.",
+        "invalid": "LIBREFOLIO_PUBLIC_URL is not an http:// or https:// address: no email with a link can go out."
       }
     },
     "budget": {

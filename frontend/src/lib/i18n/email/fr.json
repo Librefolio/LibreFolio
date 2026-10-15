@@ -38,6 +38,11 @@
         "ok": "Les e-mails circulent chiffrés, ou l'e-mail est désactivé.",
         "localPlain": "Les e-mails partent en clair vers un serveur du réseau local.",
         "plain": "Les e-mails, leurs liens et le mot de passe SMTP circulent en clair vers un serveur hors du réseau local : réglez LIBREFOLIO_SMTP_TLS sur starttls ou tls."
+      },
+      "links": {
+        "ok": "Les e-mails peuvent contenir des liens : LIBREFOLIO_PUBLIC_URL est définie, ou l'e-mail est désactivé.",
+        "missing": "LIBREFOLIO_PUBLIC_URL n'est pas définie : les e-mails fonctionnent, mais aucun avec un lien (mot de passe oublié, invitation, réinitialisation) ne peut partir.",
+        "invalid": "LIBREFOLIO_PUBLIC_URL n'est pas une adresse http:// ou https:// : aucun e-mail avec un lien ne peut partir."
       }
     },
     "budget": {

@@ -38,6 +38,11 @@
         "ok": "Le email viaggiano cifrate, oppure l'email è spenta.",
         "localPlain": "Le email vanno in chiaro a un server della rete locale.",
         "plain": "Le email, i loro link e la password SMTP viaggiano in chiaro verso un server fuori dalla rete locale: imposta LIBREFOLIO_SMTP_TLS a starttls o tls."
+      },
+      "links": {
+        "ok": "Le email possono contenere link: LIBREFOLIO_PUBLIC_URL è impostata, oppure l'email è spenta.",
+        "missing": "LIBREFOLIO_PUBLIC_URL non è impostata: le email funzionano, ma nessuna con un link (password dimenticata, invito, reset) può partire.",
+        "invalid": "LIBREFOLIO_PUBLIC_URL non è un indirizzo http:// o https://: nessuna email con un link può partire."
       }
     },
     "budget": {
