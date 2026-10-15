@@ -13,8 +13,9 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from backend.app.config import get_data_dir
+from backend.app.config import get_data_dir, get_settings
 from backend.app.db.post_migration import configured_sqlite_path, run_post_migration_fixes
+from backend.app.logging_config import configure_logging
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -46,4 +47,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 
 if __name__ == "__main__":
+    # A run by hand logs as the server does at startup: one line per row a fix changes, and how long it took. On the
+    # console only, so the script writes nothing in the data dir but what the fixes change. main() called from code
+    # configures nothing.
+    configure_logging(get_settings().LOG_LEVEL, enable_file_logging=False)
     sys.exit(main())

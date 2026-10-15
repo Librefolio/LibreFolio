@@ -165,8 +165,14 @@ lib/components/table/DataTablePagination.svelte	0	#0f172a×3	#1a4031×4	#1e293b�
 lib/components/table/DataTableToolbar.svelte	0	#0f172a	#1a4031	#334155	#475569	#4ade80	#64748b	#7f1d1d	#94a3b8	#b91c1c	#dc2626	#e2e8f0	#f1f5f9×2	#f87171	#fecaca	#fef2f2	rgba(26,64,49,0.1)	rgba(26,64,49,0.15)	rgba(26,64,49,0.2)	rgba(74,222,128,0.1)	rgba(74,222,128,0.15)	rgba(74,222,128,0.2)
 lib/components/table/SelectionBar.svelte	23
 lib/components/transactions/TransactionsTable.svelte	6	#0f0f18×2	#1e293b	#334155×3	#475569×2	#cbd5e1	#e2e8f0×5	rgb(0 0 0/0.05)	rgb(139 92 246)	rgb(139 92 246/0.18)	rgb(196 181 253)	rgb(196 181 253/0.22)	rgb(255 255 255/0.08)	rgb(99 102 241/0)×2	rgb(99 102 241/0.25)	white×2
+lib/components/transactions/bulk/TxBulkBanners.svelte	54
+lib/components/transactions/bulk/TxBulkToolbar.svelte	48
 lib/components/transactions/events/AssetEventPicker.svelte	72
 lib/components/transactions/events/EventCreateMiniModal.svelte	42
+lib/components/transactions/form/TxFormBanners.svelte	6
+lib/components/transactions/form/TxFormOptionalSection.svelte	25
+lib/components/transactions/form/TxFormPairSection.svelte	96
+lib/components/transactions/form/TxFormSingleSection.svelte	56
 lib/components/transactions/import/AssetGroupStep.svelte	126
 lib/components/transactions/import/BrimEvidenceTable.svelte	52
 lib/components/transactions/import/BrimNoticeList.svelte	8
@@ -176,18 +182,24 @@ lib/components/transactions/import/GapFixToggle.svelte	4
 lib/components/transactions/import/ImportAssetPicker.svelte	20
 lib/components/transactions/import/ReportSetCard.svelte	95
 lib/components/transactions/modals/ImportBrokerMismatchModal.svelte	1	#0f172a×2	#153428	#166534	#1a4031×3	#334155×5	#475569×2	#4ade80×2	#64748b×2	#7f1d1d×2	#86efac	#92400e	#94a3b8×3	#991b1b	#dc2626	#dcfce7	#e2e8f0×6	#f0fdf4	#f1f5f9×3	#f59e0b	#f87171	#f8fafc	#fca5a5×2	#fcd34d	#fecaca	#fee2e2	#fef2f2×2	#fffbeb	rgba(127,29,29,0.15)	rgba(15,23,42,0.4)	rgba(22,101,52,0.18)	rgba(220,38,38,0.12)	rgba(220,38,38,0.2)	rgba(245,158,11,0.12)	rgba(34,197,94,0.18)	white
-lib/components/transactions/modals/ImportWizardModal.svelte	595	#dc2626
+lib/components/transactions/modals/ImportWizardModal.svelte	222	#dc2626
 lib/components/transactions/modals/ParseDetailModal.svelte	141
 lib/components/transactions/modals/PromoteAllModal.svelte	32
 lib/components/transactions/modals/PromoteMergeModal.svelte	100	#334155×2	#e2e8f0×2
 lib/components/transactions/modals/TransactionActionModal.svelte	146	#334155×2	#e2e8f0×2
-lib/components/transactions/modals/TransactionBulkModal.svelte	190
+lib/components/transactions/modals/TransactionBulkModal.svelte	88
 lib/components/transactions/modals/TransactionCompareModal.svelte	82
-lib/components/transactions/modals/TransactionFormModal.svelte	218
+lib/components/transactions/modals/TransactionFormModal.svelte	35
 lib/components/transactions/modals/TransactionPickerModal.svelte	20
 lib/components/transactions/shared/TransactionResultBanner.svelte	18
 lib/components/transactions/shared/TransactionTypeSearchSelect.svelte	4
 lib/components/transactions/wac/WacPreviewSection.svelte	96
+lib/components/transactions/wizard/AnalyzeStep.svelte	67
+lib/components/transactions/wizard/DuplicatesStep.svelte	77
+lib/components/transactions/wizard/ReviewStep.svelte	86
+lib/components/transactions/wizard/SelectFilesStep.svelte	22
+lib/components/transactions/wizard/UploadStep.svelte	20
+lib/components/transactions/wizard/WizardFooter.svelte	101
 lib/components/ui/AnimatedBackground.svelte	0	#00ff9a	#11151c	#1a4031×3	#4ade80	#9caf9c	#f5f4ef
 lib/components/ui/ContextMenu.svelte	0	#1e293b	#334155×4	#450a0a	#dc2626	#e2e8f0×3	#f1f5f9	#f87171	#fef2f2	rgb(0 0 0/0.05)	rgb(0 0 0/0.1)	rgb(0 0 0/0.2)	rgb(0 0 0/0.4)	white
 lib/components/ui/DocsLink.svelte	4
@@ -323,3 +335,6 @@ routes/+page.svelte	1
 ~split	lib/components/assets/AssetModal.svelte	lib/components/assets/AssetModal.svelte,lib/components/assets/AssetModalImportNotices.svelte,lib/components/assets/AssetModalDetails.svelte,lib/components/assets/AssetModalIdentifiers.svelte,lib/components/assets/AssetModalProvider.svelte,lib/components/assets/AssetModalFooter.svelte,lib/components/assets/AssetModalSelectionPrompts.svelte	214
 ~split	lib/components/dashboard/GrowthChart.svelte	lib/components/dashboard/GrowthChart.svelte,lib/components/dashboard/growthChartData.ts,lib/components/dashboard/growthChartSeries.ts,lib/components/dashboard/growthChartTooltip.ts	86	#0891b2	#0d9488	#10b981	#16a34a×3	#1a4031×2	#1e293b×2	#22d3ee	#2563eb×2	#2dd4bf	#34d399	#3b82f6	#4ade80×5	#60a5fa×3	#64748b×2	#65a30d	#6b7280	#6b8e6b	#7c3aed×2	#94a3b8	#9ca3af×2	#9caf9c×2	#a3e635	#a78bfa×2	#b08d00	#cbd5e1	#d97706	#db2777	#dc2626×3	#e2e8f0	#ea580c	#f1f5f9	#f472b6	#f87171×3	#facc15	#fb923c	#fbbf24
 ~split	lib/components/table/DataTable.svelte	lib/components/table/DataTable.svelte,lib/components/table/DataTableColumnHeader.svelte,lib/components/table/DataTableCellContent.svelte	4	#0f172a×8	#14532d×2	#166534	#1a2e35	#1a4031×10	#1a403140×2	#1e293b×8	#1e3a5f	#1e3a8a	#1e40af	#334155×9	#475569×9	#4ade80×8	#4ade8040×2	#64748b×5	#78350f	#7e22ce	#7f1d1d	#86efac	#92400e	#94a3b8×9	#991b1b	#bfdbfe	#cbd5e1×2	#d1fae5	#dbeafe	#dcfce7×2	#e2e8f0×14	#e9d5ff×2	#ecfdf5	#ef4444	#eff6ff	#f0fdf4	#f1f5f9×6	#f3e8ff×3	#f87171	#f8fafc×5	#fde68a	#fecaca	#fee2e2	#fef3c7	rgba(147,51,234,0.25)×3	rgba(147,51,234,0.4)	rgba(16,185,129,0.06)	rgba(16,185,129,0.15)	rgba(16,185,129,0.2)	rgba(16,185,129,0.25)	rgba(239,68,68,0.06)	rgba(239,68,68,0.08)	rgba(239,68,68,0.2)	rgba(239,68,68,0.22)	rgba(245,158,11,var(--stale-opacity,0.04))	rgba(245,158,11,var(--stale-opacity,0.08))	rgba(59,130,246,0.06)	rgba(59,130,246,0.2)	rgba(99,102,241,0.06)	rgba(99,102,241,0.15)	white×8
+~split	lib/components/transactions/modals/ImportWizardModal.svelte	lib/components/transactions/wizard/UploadStep.svelte,lib/components/transactions/wizard/SelectFilesStep.svelte,lib/components/transactions/wizard/AnalyzeStep.svelte,lib/components/transactions/wizard/DuplicatesStep.svelte,lib/components/transactions/wizard/ReviewStep.svelte,lib/components/transactions/wizard/WizardFooter.svelte	595	#dc2626
+~split	lib/components/transactions/modals/TransactionBulkModal.svelte	lib/components/transactions/bulk/TxBulkBanners.svelte,lib/components/transactions/bulk/TxBulkToolbar.svelte	190
+~split	lib/components/transactions/modals/TransactionFormModal.svelte	lib/components/transactions/form/TxFormBanners.svelte,lib/components/transactions/form/TxFormPairSection.svelte,lib/components/transactions/form/TxFormSingleSection.svelte,lib/components/transactions/form/TxFormOptionalSection.svelte	218

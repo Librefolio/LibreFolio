@@ -5,6 +5,10 @@
 > **Scopo:** la gallery della documentazione è la rete di sicurezza dei lavori sui colori: il workstream R deve
 > dimostrare «stesso aspetto» con un diff dello stesso giorno. Oggi la gallery cambia anche da sola: questo lavoro la
 > rende ripetibile.
+>
+> **✅ Chiusa il 15/10/2026:** DoD raggiunta con la misura `g-final3`
+> ([piano](plan-phase00GalleryDeterminism.prompt.md), passo 6 e §1). Resta nel backlog G-11. Il prossimo compito di G è
+> G-13, la nuova coppia di riferimento dopo l'ingresso di T.
 
 ## Il problema, misurato
 
@@ -59,4 +63,4 @@ worker (`g-final3-r1`, `g-final3-r2`), entrambe pulite per `live_price_check`. A
   screenshot senza l'accordo del coordinatore.
 - I test li scrive `test-author`.
 - **Definition of done:** una nuova misura di rumore (due esecuzioni dello stesso giorno) con le instabili ridotte al
-  minimo spiegabile, e i fallimenti sotto carico analizzati, corretti o documentati.
+  minimo spiegabile, e i fallimenti sotto carico analizzati, corretti o documentati. ✅ 15/10, con `g-final3`.

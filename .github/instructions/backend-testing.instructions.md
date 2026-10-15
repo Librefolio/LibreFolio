@@ -207,8 +207,8 @@ category when it holds for the whole category:
 ```python
 add_test(
     "auth", ...,
-    exclusive_because="flips global_settings.enable_registration to False; every "
-                      "concurrent user creation fails while it is down",
+    exclusive_because="rewrites global_settings.registration_mode; while it is not "
+                      "open every concurrent user creation fails",
 )
 ```
 
