@@ -194,9 +194,13 @@ Three namespaces, in the four catalogues:
   `cannotRead`, `reasonTitle`, `toLabel`, `canRead`, `targetMany`, `noTarget`, `noReader`, `move`,
   `keep`, `remove`, `moveFailed`, `removeFailed`;
 - `importWizard.parseRefusal.<code>` — the plugins' refusals by code, with the refusal's `context`
-  as parameters: today the four Scalable codes (`scalable_deposit_file`, `scalable_broker_file`,
-  `scalable_prime_file`, `scalable_mixed_file`), the first three with `{plugin_name}`. A refusal
-  whose code has no key is shown in the plugin's English;
+  as parameters: the four Scalable codes (`scalable_deposit_file`, `scalable_broker_file`,
+  `scalable_prime_file`, `scalable_mixed_file`), the first three with `{plugin_name}`; the shared
+  codes `csv_only` (with `{plugin_name}`), `file_unreadable`, `no_header_row`, `missing_columns`
+  (with `{columns}`, and a plural on `count`) and `no_movement_rows`; DEGIRO's `degiro_csv_only`
+  and `degiro_not_account_statement` (see
+  [Saying why with a code](../../../architecture/patterns/brim_plugin_guide.md#cannot-parse-detail)).
+  A refusal whose code has no key is shown in the plugin's English;
 - `brimPlugins.<code>.name` — every plugin name the prompt shows: the default plugin, the targets'
   plugins, the `noTarget` list, and the `{plugin_name}` of a refusal, which the backend writes in
   English and `resolveParseRefusalMessage` replaces from the refusal's `plugin_code`. The lookup is

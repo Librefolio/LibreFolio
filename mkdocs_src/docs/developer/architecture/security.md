@@ -8,7 +8,7 @@ LibreFolio is a **self-hosted** application. The primary security assumption is 
 
 ### ✅ In Scope
 
-- **🔐 Authentication**: Stateless JWT-based authentication via HTTP-only session cookies with configurable expiration.
+- **🔐 Authentication**: Stateless JWT-based authentication via HTTP-only session cookies with configurable expiration, and [session revocation](#session-revocation) per account.
 - **🛡️ Data Segregation**: Strict isolation between users via Role-Based Access Control (RBAC).
 - **✏️ Input Validation**: Preventing injection attacks via strict Pydantic schemas.
 - **🧼 Output Escaping**: User- and provider-supplied text is escaped or sanitized before the browser can render it as HTML.
@@ -27,7 +27,8 @@ LibreFolio uses **stateless JWT (JSON Web Token)** authentication stored in **HT
 ### 🔄 How Login Works
 
 1. User sends credentials to `POST /api/v1/auth/login`
-2. Server validates credentials and sets an **HTTP-only cookie** containing the JWT
+2. Server validates credentials and sets an **HTTP-only cookie** containing the JWT, whose payload is `sub` (the user
+   id), `sv` (the account's session version, see [Session Revocation](#session-revocation)), `iat` and `exp`
 3. The browser **automatically includes** this cookie on all subsequent requests
 4. `<img>` tags, `fetch()` calls, and page navigations all send the cookie seamlessly
 
@@ -75,15 +76,68 @@ Tokens are signed with HS256 and one key per process, `_JWT_SECRET` in
 ### ⏰ Token Expiration
 
 - Configurable via [Global Settings](../../admin/settings.md): `session_ttl_hours` (default: 24 hours)
-- Read at login, it sets both the token's `exp` and the cookie's `max_age`: a new value applies from the next login
+- Read each time a session cookie is issued — at login, and when a password change re-issues it — it sets both the
+  token's `exp` and the cookie's `max_age` (24 hours when the setting cannot be read): a new value applies to the
+  cookies issued after it
 - After expiration, the user must log in again
-- There is no token refresh mechanism — a new login is required
+- There is no token refresh mechanism — a new login is required. The only cookie issued without a login is the one a
+  password change sends back to the device that made it ([Session Revocation](#session-revocation))
 
 ### 🚪 Logout
 
 - Frontend calls `POST /auth/logout` which clears the session cookie
-- **No server-side blacklist** — the token remains technically valid until expiration
-- This is acceptable for a self-hosted application with short TTL
+- **No server-side blacklist** — logout leaves the session version alone: a copy of the token remains technically
+  valid until it expires, or until the account's sessions are ended ([Session Revocation](#session-revocation))
+- This is acceptable for a self-hosted application with short TTL: a user who fears a copied cookie changes the
+  password, which ends every other session of the account
+
+### 🔁 Session Revocation {: #session-revocation }
+
+Each account has a session generation, `users.session_version` (`0` on a new account), and each session cookie carries
+the generation it was issued at, the `sv` claim. Raising the account's version ends every session issued before it, on
+every device, at its next request. There is still no session store: the check compares one integer column of the user
+row that `get_current_user()` already loads on every request.
+
+`user_service.end_sessions(user)` (`backend/app/services/accounts/user_service.py`) raises the version by one and does
+not commit: the caller commits it with the change that asks for it. Four changes call it:
+
+| Change | Entry point | Sessions ended |
+|--------|-------------|----------------|
+| Password change | `POST /api/v1/auth/change-password` (`PasswordChangeModal`, Profile tab) | Every other session of the account: the same response sets a new cookie at the new version, so the device that made the change stays signed in |
+| Password reset | `./dev.py user reset` → `user_service.reset_password()` | All of them |
+| Deactivation | `./dev.py user deactivate` → `user_service.set_user_active(…, False)` | All of them: a later `user activate` does not bring them back |
+| Demotion | `./dev.py user demote` → `user_service.set_user_admin(…, False)` | All of them |
+
+Activation, promotion, logout and every refused operation leave the version alone: a wrong current password, or a new
+password equal to it, on `change-password`; an unknown user; the last active administrator; *already an admin* or
+*not an admin*.
+
+- **The token.** `create_jwt_token(user_id, ttl_hours, session_version)`
+  (`backend/app/services/accounts/auth_service.py`) writes `sub` (the user id, as a string), `sv`, `iat` and `exp`.
+  `decode_jwt_token()` returns `SessionClaims(user_id, session_version)`, or `None` for a token that is expired or
+  badly signed, that has no numeric `sub`, or whose `sv` is not an integer — a boolean included: `true` is not
+  version 1.
+- **Cookies issued before session versions.** A token without `sv` is session version `0`, the starting value of every
+  account: the upgrade signs nobody out, and the first raise of an account's version ends those cookies like any other.
+- **The check.** `get_current_user()` (`backend/app/api/v1/auth.py`) keeps its checks of the account (*User not
+  found*, *User account is disabled*), then refuses a token whose version differs from the account's, behind or
+  ahead, with `401` *Session expired or invalid*: the answer to an invalid token, so nothing tells the holder why.
+  While an account is deactivated, its cookies get *User account is disabled* first.
+- **The re-issued cookie.** Login and password change set the cookie through one helper, `_issue_session_cookie()`:
+  a JWT at the account's current version, lasting `session_ttl_hours` (24 hours when the setting cannot be read),
+  with the same name and attributes as the login cookie, so the browser replaces the old cookie instead of keeping
+  both.
+
+!!! note "A request in flight during a password change"
+
+    A request the same device sent with its old cookie, and that reaches the server after the change is committed,
+    gets `401`. The frontend's 401 interceptor (`frontend/src/lib/api/zodios-client.ts`) sends it to the login page,
+    where the new cookie signs it straight back in. The race is benign, and the code does not try to close it.
+
+Tests: `./dev.py test services session-version` (`backend/test_scripts/test_services/test_session_version.py`: the
+token, the check, the four callers and the refusals, in-process) and `./dev.py test api session-revocation`
+(`backend/test_scripts/test_api/test_session_revocation_api.py`: the password change over HTTP, with two devices and a
+second account).
 
 ### 💻 Using curl
 
@@ -261,11 +315,46 @@ All endpoints that access or modify user data require a valid session cookie (`D
 | `/auth/login` | POST | User login |
 | `/auth/logout` | POST | Clear session cookie |
 | `/auth/register` | POST | New user registration |
-| `/system/health` | GET | Health check |
-| `/system/info` | GET | System information |
+| `/system/health` | GET | Health check: the server answers |
+| `/system/info` | GET | System information, the app version only without a valid session (`SystemInfoPublicResponse`) and everything with one (`SystemInfoResponse`): see [System information and readiness](#system-info-and-readiness) |
 | `/system/instance` | GET | Public instance configuration, needed before sign-in: see [Public instance configuration](settings.md#public-instance-configuration) |
+| `/system/ready` | GET | Readiness for health checks and orchestrators (`200` when the database answers and its schema is at the head revision of the migrations, `503` otherwise): see [System information and readiness](#system-info-and-readiness) |
 | `/utilities/*` | GET | Reference data (countries, currencies, sectors) |
 | `/ai-export/catalog` | GET | Static AI Export catalogue (no user data) |
+
+### 🩺 System Information and Readiness {: #system-info-and-readiness }
+
+**`GET /system/info`** (`backend/app/api/v1/system/info.py`) runs the checks of `get_current_user` through its
+`signed_in_user` dependency, where a `401` means anonymous instead of an error. Without a valid session cookie (none,
+an expired or invalid token, an unknown or disabled account), the answer is the app version only,
+`{"app_version": "..."}` (`SystemInfoPublicResponse`). With one, it is the full `SystemInfoResponse`: app, Python and
+OS versions, platform, deployment mode, backend and frontend dependency versions. The OpenAPI `200` response is the
+`anyOf` of the two schemas, the full one first.
+
+**`GET /system/ready`** (`backend/app/api/v1/system/ready.py`) tells whether the instance can serve requests, for
+Docker health checks, Uptime Kuma, orchestrators and hosting panels. `check_readiness()`
+(`backend/app/services/platform/readiness.py`) runs two checks, and the body (`ReadinessResponse`,
+`backend/app/schemas/system.py`) carries one code for each:
+
+| Check | Codes |
+|-------|-------|
+| `database` | `ok`: the database answers a query; `unreachable`: it does not |
+| `migrations` | `ok`: the database's revision, in `alembic_version`, is the head revision of the migration scripts; `mismatch`: it is another revision; `unknown`: a revision cannot be read (no `alembic_version` table or not exactly one row in it, several heads or no scripts), and whenever `database` is `unreachable` |
+
+`status` is `ready`, with `200`, only when both checks are `ok`; otherwise it is `not_ready`, with `503` and the same
+shape:
+
+```json
+{"status": "ready", "checks": {"database": "ok", "migrations": "ok"}}
+```
+
+- **Codes only.** The body never carries an error message, a path or a revision id. The details go to the server
+  log, once per change of state: `Instance not ready` (warning, with both codes and the problem) or `Instance ready`
+  (info). A monitor that asks every few seconds adds no log line while the state holds.
+- **The head revision is read once per process**, from the migration scripts of `backend/alembic.ini`. A failed read
+  is not cached: the next check tries again.
+- **`/system/health` is a different question**: it answers `{"status": "ok"}` as soon as the server answers, without
+  touching the database. The image's `HEALTHCHECK` and both Compose files call it.
 
 ### 🔒 Private Endpoints (auth required)
 
@@ -345,7 +434,7 @@ revoked — expired ones included — and returns how many; consumed and revoked
 Without a `token_id` or a `user_id` it raises `ValueError` rather than revoke every token. An invitation has no
 `user_id`: it is revoked by its id.
 
-### 🔁 Transactions and Logs
+### 🧾 Transactions and Logs
 
 - The service never commits. `issue_token()` flushes, so the new row has its id; `consume_token()` and
   `revoke_tokens()` run their `UPDATE` in the session's transaction. The caller commits: spending an invitation

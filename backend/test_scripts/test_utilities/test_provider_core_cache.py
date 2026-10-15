@@ -12,10 +12,14 @@ Tests the canonical asset-source core contracts:
 """
 
 import asyncio
+import contextvars
+import functools
 import subprocess
 import sys
 import textwrap
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -259,6 +263,56 @@ class TestRunProviderInThread:
         result = await _run_provider_in_thread(sync_in_async_provider, timeout=5.0)
         assert result == "fetched"
         print_success("Sync code inside async def works correctly")
+
+    async def test_worker_thread_does_not_keep_closed_event_loop(self, monkeypatch):
+        """J-5: the thread that ran a provider must be left without a current event loop, as it was found.
+
+        _sync_runner makes a new loop current in its executor thread and closes it on the way out: unless it also
+        unsets it, as asyncio.Runner.close() does, every later asyncio.get_event_loop() in that pooled thread gets
+        the closed loop (J saw an aiosqlite connection collected there die with "Event loop is closed"). The
+        default executor has many threads, so asyncio.to_thread is pinned, for this one call only, to a private
+        single-worker executor: both probes run in the very thread that ran the provider, and the test loop's
+        default executor is never involved.
+        """
+        print_section("_run_provider_in_thread: no closed loop left in the worker thread (J-5)")
+
+        pinned = ThreadPoolExecutor(max_workers=1, thread_name_prefix="pinned-provider")
+
+        async def to_pinned_thread(func, /, *args, **kwargs):
+            # asyncio.to_thread() itself, on the pinned executor instead of the loop's default one.
+            call = functools.partial(contextvars.copy_context().run, func, *args, **kwargs)
+            return await asyncio.get_running_loop().run_in_executor(pinned, call)
+
+        def current_loop_here():
+            # Off the main thread get_event_loop() never creates a loop: it raises when none is set.
+            try:
+                return threading.current_thread(), asyncio.get_event_loop()
+            except RuntimeError:
+                return threading.current_thread(), None
+
+        provider_threads = []
+
+        async def provider():
+            provider_threads.append(threading.current_thread())
+            return "priced"
+
+        test_loop = asyncio.get_running_loop()
+        try:
+            thread_before, loop_before = await test_loop.run_in_executor(pinned, current_loop_here)
+            assert loop_before is None, f"precondition: the fresh {thread_before.name} already has {loop_before!r} as its current loop"
+
+            with monkeypatch.context() as patch:
+                patch.setattr(asset_source_core.asyncio, "to_thread", to_pinned_thread)
+                assert await _run_provider_in_thread(provider, timeout=5.0) == "priced"
+
+            thread_after, loop_after = await test_loop.run_in_executor(pinned, current_loop_here)
+        finally:
+            pinned.shutdown(wait=True)
+
+        assert provider_threads == [thread_before], f"the provider ran in {provider_threads}, not in the pinned {thread_before.name}"
+        assert thread_after is thread_before, f"the second probe ran in {thread_after.name}, not in the pinned {thread_before.name}"
+        assert loop_after is None, f"{thread_after.name} still has {loop_after!r} as its current loop after _run_provider_in_thread() returned: every later asyncio.get_event_loop() in that pooled thread gets it"
+        print_success(f"{thread_after.name} ran the provider and was left with no current event loop")
 
 
 # ============================================================================
