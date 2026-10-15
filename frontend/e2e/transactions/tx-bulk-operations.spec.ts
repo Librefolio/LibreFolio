@@ -424,11 +424,10 @@ test.describe('Transaction Bulk Operations', () => {
         const menuVisible = await contextMenu.isVisible({timeout: 500}).catch(() => false);
         expect(menuVisible).toBe(false);
 
-        // Close picker
-        const closePicker = pickerModal.locator('button:has-text("Cancel"), button:has-text("Close"), [aria-label="Close"]').first();
-        if (await closePicker.isVisible({timeout: 1_000}).catch(() => false)) {
-            await closePicker.click();
-        }
+        // Close picker: its Cancel button is always in the footer, so it is clicked, not probed for,
+        // and the step ends on the state it promises.
+        await pickerModal.getByTestId('tx-picker-cancel').click();
+        await expect(pickerModal).toBeHidden({timeout: 3_000});
 
         await closeModals(page);
     });
