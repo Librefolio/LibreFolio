@@ -128,8 +128,10 @@ Another `OWNER` row counts whether or not its account is active: an inactive co-
 - **`transfers_unpaired`** counts the transactions that stay but are linked by `related_transaction_id`, in
   either direction, to a transaction that goes: the halves of transfers left without their pair (backlog
   V-3). Each staying half counts once, whatever broker it is on. What becomes of a staying half is the rule
-  of deleting a broker, `TransactionService.delete_by_broker()`: it loses its link and is no longer part of
-  a pair.
+  of deleting a broker, `TransactionService.delete_by_broker()`: it loses its link, and becomes the
+  standalone row a split of the pair leaves — a received `TRANSFER` an `ADJUSTMENT`, a `CASH_TRANSFER` or
+  `FX_CONVERSION` a `DEPOSIT` or a `WITHDRAWAL` (backlog V-3, D-J4) — except the giving leg of a `TRANSFER`,
+  which only loses its link. See [Broker Deletion](../backend/transactions/service.md#broker-deletion).
 - **Sessions.** `get_current_user()` no longer finds a deleted account: its sessions get `401` at their next
   request.
 
