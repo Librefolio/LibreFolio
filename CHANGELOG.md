@@ -95,6 +95,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An events CSV line in another currency is refused instead of being relabelled.** The Events tab saved it in the asset's currency, with an amount that was wrong.
 - **The transaction form's event picker shows an event's new values** right after it is edited from the form.
 - Data quality: the "valued at cost" warning counts its two weeks from the asset's last market quote, as its text says. An asset quoted the day before and bought again is no longer flagged, and a price feed that stopped long ago is flagged at once; an asset never quoted still counts from its first purchase.
+- **The growth chart's % view comes back by itself.** With a period or a broker that has no rate-of-return data, the chart shows **Abs**, and returns to **%** as soon as the data has percentages again, unless you pick another view meanwhile. Before, only the view restored at opening fell back; otherwise **%** stayed pressed and greyed out.
+- **Zoomed date axes keep their labels.** Zooming into a long period on the price charts of the asset and FX pages, or on the risk charts, left two or three dates on the axis, on phones especially: the labels are now spaced on the days you see.
+- The **Lot Life & Custody** tooltip says "1 share open out of 10" in the singular, in every language, and stays plural while amounts are hidden.
 
 ### ⚠️ Breaking changes
 
