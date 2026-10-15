@@ -2142,8 +2142,9 @@ test.describe('Gallery Screenshots', () => {
         });
 
         // The Users tab (lot A6b, administrators only), one account's actions open. Both lists are fixed bodies, answered on
-        // this page only: the lane's accounts and invitations change with every test that registers its own (G-10), so the
-        // real lists would draw another picture on every run. The admin's row keeps the admin's real account, read from
+        // this page only: the lane's accounts and invitations change with every test that registers its own (the gallery's
+        // too, registerGalleryAccount in galleryReportSets.ts), so the real lists would draw another picture on every run.
+        // The admin's row keeps the admin's real account, read from
         // /auth/me: the tab tells the signed-in account's row («You», no actions) by its id. Another account is open, so the
         // picture shows what an administrator can do to it. Every date is drawn absolute (formatDateTime): no clock is set.
         test('users - all languages and themes', async ({page}, testInfo) => {
