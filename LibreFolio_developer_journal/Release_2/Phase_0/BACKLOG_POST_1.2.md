@@ -2552,9 +2552,16 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   dell'analisi di J, con B15 lato broker). `TransactionService.get_cash_balances`
   (`backend/app/services/transactions/transaction_service.py:476-480`) somma tutte le transazioni del broker, anche
   quelle con una data futura. Dettagli: piano 04; analisi di J.
+  ✅ 15/10, `6be11ecf3` (N1a): il riepilogo del broker prende `as_of`, il giorno dell'utente, per cassa, quantità e costo
+  medio; la cassa dalla casa unica (`native_balances`). Il resto della copia per la convalida del batch è W-B19.
 - **W-B6 · V-3, TRANSFER orfano: la scrittura e la migrazione dei dati** — basso; coordinatore, 14/10 (D-J4). A W la
   conversione in ADJUSTMENT della metà rimasta quando si cancella un broker, e la correzione degli orfani già presenti
   nei DB; a J i rossi su lotti e Dashboard. Dettagli: voce V-3 nella sezione V.
+  ✅ 15/10, `6be11ecf3` (N1b-1, la cancellazione) e `5e19c6018` + `0e4bd9790` (N1b-2/N1b-3, la correzione
+  post-migrazione `orphan_pair_halves`, entrata col punto 46 del developer): la gamba in arrivo di un TRANSFER diventa un
+  ADJUSTMENT col suo costo (Auto se mancava, finché c'è il mittente; senza, «costo mancante» con l'avviso), quelle di
+  cassa un DEPOSIT o un WITHDRAWAL. **Resta aperto il punto 47** del developer: la gamba in uscita di un TRANSFER perde
+  solo il link, come prima; se si decide di convertirla, è un lotto nuovo.
 - **W-B7 · `TODO_FUTURI`, eventi collegabili: percorso e conteggi superati** — minimo; W, 14/10 (analisi). L'endpoint è
   `POST /transactions/events/suggest`, i test API sono 10 e non 8, `suggest_events_bulk` sta in
   `services/transactions/transaction_service.py:492`. Si aggiorna quando la voce entra nel lotto K3. Dettagli: piano 04,
@@ -2668,6 +2675,14 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   apposta, è un rischio necessario che uno sbagli, è noto e accettato» — nella 1.3 resta così. Per il futuro (istanze
   cloud con più famiglie?): un modello fra solo gli admin, solo chi ha creato l'asset, solo chi ne ha posizioni, o un
   registro delle modifiche con l'autore. Dettagli: file delle decisioni, punto 25.
+- **W-B25 · Gli import dei trasferimenti ricevuti salvano la metà senza costo** — medio-basso, numeri; coordinatore,
+  15/10 (domanda del developer sul punto 46). Il modulo salva sempre il costo Auto della gamba in arrivo
+  (`cost_basis_override`, `services/transactions/auto_cost.py`), mentre gli import possono crearla senza
+  `cost_basis_mode`: il CSV generico (`brim_providers/broker_generic_csv/`), Directa/delta (`broker_directa/`), e Intesa
+  quando il file non riporta il costo (`broker_intesa/plugin.py:386`); così anche l'API. Finché la coppia esiste il costo
+  si ricava dalla storia del mittente; cancellato il mittente si perde, e la metà resta «costo mancante» (punto 46).
+  Cura: gli import dei trasferimenti ricevuti in modalità Auto come il modulo, con la fotografia del costo, salvo un costo
+  già nel file. Non ora: un lotto W successivo. Dettagli: piano 04, sezione N1.
 
 ## J · Numeri e analisi (fase 01)
 
