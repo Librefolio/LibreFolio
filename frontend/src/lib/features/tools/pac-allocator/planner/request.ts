@@ -72,6 +72,11 @@ function wireDecimal(text: string): string | null {
     return canonicalInput(text);
 }
 
+/** A typed amount below zero; `-0` is zero, and an empty or non-numeric text is not negative. */
+function isNegative(decimal: string | null): boolean {
+    return decimal !== null && decimalSign(decimal) === -1;
+}
+
 function wireFraction(percentText: string): string | null {
     const canonical = canonicalInput(percentText);
     return canonical === null ? null : percentToFraction(canonical);
@@ -151,15 +156,22 @@ export function localProblems(draft: PlannerDraft): LocalProblem[] {
     if (data.cash.length === 0 && data.contributions.length === 0) problems.add('liquidity', 'noLiquidity', 'Add at least one cash row or contribution.');
     for (const cash of data.cash) {
         const label = cashLabel(draft, cash.brokerKey, cash.currency);
-        if (cash.origin === 'manual' && wireDecimal(cash.available) === null) problems.add('liquidity', 'declaredMissing', "'Declared liquidity' is empty or not a number.", label);
+        const available = wireDecimal(cash.available);
+        const selected = wireDecimal(cash.selected);
+        if (cash.origin === 'manual' && available === null) problems.add('liquidity', 'declaredMissing', "'Declared liquidity' is empty or not a number.", label);
+        else if (cash.origin === 'manual' && isNegative(available)) problems.add('liquidity', 'declaredNegative', "'Declared liquidity' cannot be negative.", label);
         if (cash.selected.trim() === '') problems.add('liquidity', 'selectedMissing', "'Amount to use' is empty.", label);
-        else if (wireDecimal(cash.selected) === null) problems.add('liquidity', 'selectedInvalid', "'Amount to use' is not a number.", label);
-        else if (selectionExceedsAvailable(cash)) problems.add('liquidity', 'selectedExceedsAvailable', "'Amount to use' exceeds the available amount in the same currency.", label);
+        else if (selected === null) problems.add('liquidity', 'selectedInvalid', "'Amount to use' is not a number.", label);
+        else if (isNegative(selected)) problems.add('liquidity', 'selectedNegative', "'Amount to use' cannot be negative.", label);
+        // As in the backend (normalize.py, validate_cash): against a negative balance, «exceeds» adds nothing to the negative.
+        else if (!isNegative(available) && selectionExceedsAvailable(cash)) problems.add('liquidity', 'selectedExceedsAvailable', "'Amount to use' exceeds the available amount in the same currency.", label);
     }
     for (const item of data.contributions) {
         const label = item.label.trim() || item.currency;
         if (item.label.trim() === '') problems.add('liquidity', 'contributionLabelMissing', 'The contribution label is empty.', label);
-        if (wireDecimal(item.amount) === null) problems.add('liquidity', 'contributionAmountMissing', 'The contribution amount is empty or not a number.', label);
+        const amount = wireDecimal(item.amount);
+        if (amount === null) problems.add('liquidity', 'contributionAmountMissing', 'The contribution amount is empty or not a number.', label);
+        else if (isNegative(amount)) problems.add('liquidity', 'contributionAmountNegative', 'The contribution amount cannot be negative.', label);
     }
 
     // Brokers
@@ -174,6 +186,7 @@ export function localProblems(draft: PlannerDraft): LocalProblem[] {
             currencies.add(mode.currency);
             const step = wireDecimal(mode.step);
             if (step === null) problems.add('brokers', 'modeStepMissing', 'The order step is empty or not a number.', label);
+            else if (decimalSign(step) !== 1) problems.add('brokers', 'modeStepNotPositive', 'The order step must be greater than zero.', label);
             else if (mode.kind === 'whole_quantity' && !isWholeDecimal(step)) problems.add('brokers', 'modeStepNotWhole', 'Whole-unit mode: the step must be a whole number of units.', label);
             for (const [field, value] of [
                 ['fixedFee', mode.fixedFee],
