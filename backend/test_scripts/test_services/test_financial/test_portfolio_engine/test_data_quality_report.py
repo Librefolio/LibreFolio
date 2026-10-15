@@ -336,7 +336,7 @@ class TestNavIncompleteIssue:
     def test_nav_incomplete_on_the_opening_day_is_reported(self):
         """The state at ``period_from`` is the opening balance of the period.
 
-        ``_compute_period_summary_metrics`` reads it to derive period P&L, so an
+        ``financial_math.portfolio.period.period_pnl`` reads it to derive period P&L, so an
         incomplete NAV there does move what the user is looking at.
         """
         states = [_incomplete_state("2025-06-01"), _complete_state("2025-06-30")]

@@ -910,6 +910,14 @@ def services_platform_readiness(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Instance readiness tests", verbose=verbose)
 
 
+def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the app's startup and shutdown steps and their runner, the middleware stack and the static site's routes."""
+    print_section("Services: App Lifecycle")
+    print_info("Testing: backend/app/services/platform/lifecycle.py, app_lifespan.py, middleware.py, static_site.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_app_lifecycle.py", test_names)
+    return run_command(cmd, "App lifecycle tests", verbose=verbose)
+
+
 def services_backup_archive(verbose: bool = False, test_names: list = None) -> bool:
     """Test the instance backup archive: layout, consistent database copy, manifest, build and check."""
     print_section("Services: Instance Backup Archive")
@@ -1532,6 +1540,7 @@ Note: No backend server required.
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
     add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
+    add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
     add_test(
         cat,
         "backup-archive",

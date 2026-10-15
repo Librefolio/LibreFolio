@@ -54,6 +54,7 @@ suites of the lane take.
 
 from __future__ import annotations
 
+import secrets
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -73,6 +74,7 @@ from starlette.routing import Mount, Route, WebSocketRoute
 
 from backend.app.api.v1.auth import SESSION_COOKIE_NAME
 from backend.app.api.v1.backup import instance as backup_instance
+from backend.app.api.v1.backup import panel as backup_panel
 from backend.app.api.v1.instance_block import ALLOWED_WHEN_BLOCKED, refuse_when_blocked
 from backend.app.config import API_V1_PREFIX, TEST_LANE_HEADER, get_settings, is_test_mode
 from backend.app.config.platform import instance_blocked
@@ -138,6 +140,10 @@ ALLOWED_ROUTES = {
     "backend.app.api.v1.backup.instance.get_instance_backup_job": ("GET", "/api/v1/backup/instance/jobs/{job_id}"),
     "backend.app.api.v1.backup.instance.download_instance_backup": ("GET", "/api/v1/backup/instance/jobs/{job_id}/file"),
     "backend.app.api.v1.backup.instance.delete_instance_backup_job": ("DELETE", "/api/v1/backup/instance/jobs/{job_id}"),
+    "backend.app.api.v1.backup.panel.start_panel_backup": ("POST", "/api/v1/backup/panel/jobs"),
+    "backend.app.api.v1.backup.panel.get_panel_backup_job": ("GET", "/api/v1/backup/panel/jobs/{job_id}"),
+    "backend.app.api.v1.backup.panel.download_panel_backup": ("GET", "/api/v1/backup/panel/jobs/{job_id}/file"),
+    "backend.app.api.v1.backup.panel.delete_panel_backup_job": ("DELETE", "/api/v1/backup/panel/jobs/{job_id}"),
     "backend.app.api.v1.system.block.get_instance_block": ("GET", "/api/v1/system/block"),
     "backend.app.api.v1.system.instance.get_instance_config": ("GET", "/api/v1/system/instance"),
     "backend.app.api.v1.system.health.health_check": ("GET", "/api/v1/system/health"),
@@ -788,18 +794,20 @@ class FakeBackupService:
     calls: list[tuple[str, str]]
 
 
-def _replace_the_backup_service(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeBackupService:
+def _replace_the_backup_service(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, origin: str = "ui") -> FakeBackupService:
     """Replace ``start_backup``, ``get_job``, ``job_archive`` and ``delete_job`` of ``jobs``, the module the routes of
-    ``api/v1/backup/instance.py`` call (``jobs.<name>(...)``), in this process only: no backup runs on the lane's data
-    directory, whose run lock other suites of the lane take. Any job id but the fake's is unknown, as to the service."""
-    assert backup_instance.jobs is jobs, "Precondition: the routes call the very module replaced here, so no real backup can run"
+    ``api/v1/backup/instance.py`` and ``panel.py`` call through ``job_views.py`` (``jobs.<name>(...)``), in this process
+    only: no backup runs on the lane's data directory, whose run lock other suites of the lane take. Any job id but the
+    fake's is unknown, as to the service. The fake's job is of ``origin``: ``ui``, an administrator's, unless a test of
+    the hosting panel asks for ``panel``, the only origin the panel's routes serve (B8)."""
+    assert backup_instance.job_views.jobs is jobs and backup_panel.job_views.jobs is jobs, "Precondition: the routes of instance.py and panel.py call the very module replaced here, through job_views.py, so no real backup can run"
     job_id = uuid4().hex
     created_at = datetime(2026, 10, 15, 10, 15, tzinfo=UTC)
     archive = tmp_path / jobs.archive_name(created_at)
     archive.write_bytes(job_id.encode() + bytes(range(256)))
     size = archive.stat().st_size
-    first = jobs.BackupJob(job_id=job_id, origin="ui", status="running", phase="preparing", done_bytes=0, total_bytes=0, created_at=created_at)
-    done = jobs.BackupJob(job_id=job_id, origin="ui", status="done", phase=None, done_bytes=size, total_bytes=size, created_at=created_at, finished_at=datetime(2026, 10, 15, 10, 16, tzinfo=UTC), file_name=archive.name, file_size=size)
+    first = jobs.BackupJob(job_id=job_id, origin=origin, status="running", phase="preparing", done_bytes=0, total_bytes=0, created_at=created_at)
+    done = jobs.BackupJob(job_id=job_id, origin=origin, status="done", phase=None, done_bytes=size, total_bytes=size, created_at=created_at, finished_at=datetime(2026, 10, 15, 10, 16, tzinfo=UTC), file_name=archive.name, file_size=size)
     fake = FakeBackupService(job_id, archive, [])
 
     def record_job_call(name: str, asked: str) -> None:
@@ -879,6 +887,137 @@ async def test_a_regular_user_meets_the_admin_check_of_the_backup_not_the_block(
     assert answers == dict.fromkeys(answers, (403, ADMIN_REQUIRED_ANSWER)), f"each route of the full backup must refuse a regular user with the 403 of require_admin, never the 423 of the block: {answers}"
     assert fake.calls == [], f"the backup service must never be reached for a regular user: {fake.calls}"
     print_success("blocked: start, poll, download, delete each answer a regular user 403 Admin access required, never 423; the service untouched")
+
+
+# The same full backup for the hosting panel (B8, ``api/v1/backup/panel.py``): its four routes are allowed on a blocked
+# instance, since that is when the provider hands the data back, and answer on their own terms only. No token set: 404,
+# as a path that does not exist. A token set: its own 401 without it, whatever else the request carries, a session
+# included; with it, the panel's own jobs. Its callers carry no session, so the barrier of these cases is the anonymous
+# one: a public route outside the list (GET /utilities/sectors) answers 200 with the block off for that request, then
+# the 401 of get_current_user with the block on.
+
+#: The variable of the hosting panel's token (``config/backup.py``); its ``_FILE`` form is cleared with it.
+PANEL_TOKEN_VARIABLE = "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN"
+#: The panel's answer without its token, whole: a 401 of its own, so neither the 401 of get_current_user nor the 423 of
+#: the block can pass for it.
+PANEL_UNAUTHORIZED_ANSWER = {"detail": {"code": "backup_panel_unauthorized", "message": "A valid panel token is required"}}
+#: The panel's answer while no token is set, whole: the answer of a path that does not exist.
+PANEL_OFF_ANSWER = {"detail": "Not Found"}
+#: A public route outside the list: 200 to anyone when not blocked, the 401 of get_current_user while blocked.
+PUBLIC_BARRIER = "/utilities/sectors"
+
+
+def _panel_token(monkeypatch: pytest.MonkeyPatch, token: str | None) -> None:
+    """The hosting panel's token, in this process only: ``token``, or none at all (neither the variable nor its ``_FILE``,
+    so nothing comes from the runner's environment)."""
+    monkeypatch.delenv(PANEL_TOKEN_VARIABLE, raising=False)
+    monkeypatch.delenv(f"{PANEL_TOKEN_VARIABLE}_FILE", raising=False)
+    if token is not None:
+        monkeypatch.setenv(PANEL_TOKEN_VARIABLE, token)
+
+
+def _panel_routes(job_id: str) -> list[tuple[str, str]]:
+    """The four routes of the hosting panel (``api/v1/backup/panel.py``) for one job: start, poll, download, delete."""
+    return [("POST", "/backup/panel/jobs"), ("GET", f"/backup/panel/jobs/{job_id}"), ("GET", f"/backup/panel/jobs/{job_id}/file"), ("DELETE", f"/backup/panel/jobs/{job_id}")]
+
+
+async def _panel_request(app: FastAPI, method: str, path: str, *, authorization: str | None = None, session: dict[str, str] | None = None) -> httpx.Response:
+    """``method`` ``/api/v1<path>`` on the app in process, as a hosting panel sends it: ``Authorization`` only when given,
+    a session cookie only in ``session``."""
+    headers = {**(session or {}), **({} if authorization is None else {"Authorization": authorization})}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://librefolio.test") as client:
+        return await client.request(method, f"{API_V1_PREFIX}{path}", headers=headers, timeout=TIMEOUT)
+
+
+async def _blocked_for_anonymous_callers(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> tuple[int, int, object]:
+    """The barrier of the panel's cases: ``PUBLIC_BARRIER`` without a session, with the block off for that request only,
+    then with the block on. ``(usual status, blocked status, blocked body)``: (200, 401, Not authenticated) proves the
+    block is on."""
+    usual, blocked = await _usual_then_blocked(app, monkeypatch, [PUBLIC_BARRIER])
+    return usual[PUBLIC_BARRIER].status_code, blocked[PUBLIC_BARRIER].status_code, blocked[PUBLIC_BARRIER].json()
+
+
+@pytest.mark.asyncio
+async def test_the_panel_routes_answer_404_on_a_blocked_instance_while_no_token_is_set(app, monkeypatch, tmp_path):
+    """(a) B8: with no token set, each route of the hosting panel answers a caller without a session 404 Not Found, as a
+    path that does not exist, with or without a Bearer token: never the archive, never the 401 of the block. The backup
+    service is never reached."""
+    print_section("Instance block: the hosting panel's backup")
+    fake = _replace_the_backup_service(monkeypatch, tmp_path, origin="panel")
+    _panel_token(monkeypatch, None)
+    _block(monkeypatch)
+
+    barrier = await _blocked_for_anonymous_callers(app, monkeypatch)
+    requests = [("no Authorization", None), ("a Bearer token", f"Bearer {secrets.token_hex(32)}")]
+    answers = {f"{method} {path}, {label}": _status_and_body(await _panel_request(app, method, path, authorization=authorization)) for method, path in _panel_routes(fake.job_id) for label, authorization in requests}
+
+    assert barrier == (200, 401, {"detail": "Not authenticated"}), f"Barrier: the block refuses an anonymous caller outside the list, GET {PUBLIC_BARRIER} answers 200 when not blocked and 401 when blocked: {barrier}"
+    assert answers == dict.fromkeys(answers, (404, PANEL_OFF_ANSWER)), f"with no token set, each route of the panel must answer 404 Not Found on a blocked instance, never the archive: {answers}"
+    assert fake.calls == [], f"the backup service must never be reached while the panel's routes are off: {fake.calls}"
+    print_success("blocked, no token set: the panel's four routes answer 404 Not Found; the service untouched")
+
+
+@pytest.mark.asyncio
+async def test_the_panel_routes_answer_their_own_401_on_a_blocked_instance_without_the_token(app, monkeypatch, tmp_path):
+    """(a) B8: a token set, each route of the hosting panel answers a caller without a session and without the token, or
+    with another one, the panel's own 401 (``backup_panel_unauthorized``, ``WWW-Authenticate: Bearer``), whole, so neither
+    the 401 of get_current_user nor the 423 of the block passes for it: never the archive. The service is never
+    reached."""
+    fake = _replace_the_backup_service(monkeypatch, tmp_path, origin="panel")
+    _panel_token(monkeypatch, secrets.token_hex(32))
+    _block(monkeypatch)
+
+    barrier = await _blocked_for_anonymous_callers(app, monkeypatch)
+    requests = [("no Authorization", None), ("another token", f"Bearer {secrets.token_hex(32)}")]
+    responses = {f"{method} {path}, {label}": await _panel_request(app, method, path, authorization=authorization) for method, path in _panel_routes(fake.job_id) for label, authorization in requests}
+
+    answers = {name: _status_and_body(response) for name, response in responses.items()}
+    challenges = {name: response.headers.get("www-authenticate") for name, response in responses.items()}
+    assert barrier == (200, 401, {"detail": "Not authenticated"}), f"Barrier: the block refuses an anonymous caller outside the list, GET {PUBLIC_BARRIER} answers 200 when not blocked and 401 when blocked: {barrier}"
+    assert answers == dict.fromkeys(answers, (401, PANEL_UNAUTHORIZED_ANSWER)), f"without the token each route of the panel must answer its own 401 on a blocked instance, never the archive: {answers}"
+    assert challenges == dict.fromkeys(challenges, "Bearer"), f"each 401 of the panel asks for a Bearer token: {challenges}"
+    assert fake.calls == [], f"the backup service must never be reached without the token: {fake.calls}"
+    print_success("blocked, token set: the panel's four routes answer their own 401 without it; the service untouched")
+
+
+@pytest.mark.asyncio
+async def test_the_hosting_panel_takes_the_backup_of_a_blocked_instance_with_its_token(app, monkeypatch, tmp_path):
+    """(a) B8, decision 12: on a blocked instance the hosting panel, with its token and no session, starts a backup (202
+    with the job), polls it (200, done), downloads its archive (200, its very bytes) and deletes it (204); each route
+    reads the job first and asks the service for the panel's jobs only."""
+    fake = _replace_the_backup_service(monkeypatch, tmp_path, origin="panel")
+    token = secrets.token_hex(32)
+    _panel_token(monkeypatch, token)
+    _block(monkeypatch)
+
+    barrier = await _blocked_for_anonymous_callers(app, monkeypatch)
+    started, polled, downloaded, deleted = [await _panel_request(app, method, path, authorization=f"Bearer {token}") for method, path in _panel_routes(fake.job_id)]
+
+    assert barrier == (200, 401, {"detail": "Not authenticated"}), f"Barrier: the block refuses an anonymous caller outside the list, GET {PUBLIC_BARRIER} answers 200 when not blocked and 401 when blocked: {barrier}"
+    assert started.status_code == 202 and started.json()["job_id"] == fake.job_id, f"POST /backup/panel/jobs with the token on a blocked instance: 202 with the job started: {_status_and_body(started)}"
+    assert polled.status_code == 200 and (polled.json()["job_id"], polled.json()["status"]) == (fake.job_id, "done"), f"GET /backup/panel/jobs/{{job_id}} with the token on a blocked instance: 200, done: {_status_and_body(polled)}"
+    assert (downloaded.status_code, downloaded.content) == (200, fake.archive.read_bytes()), f"GET /backup/panel/jobs/{{job_id}}/file with the token on a blocked instance: 200 with exactly the archive's bytes: {_status_and_body(downloaded)}"
+    assert deleted.status_code == 204, f"DELETE /backup/panel/jobs/{{job_id}} with the token on a blocked instance: 204: {_status_and_body(deleted)}"
+    job_id = fake.job_id
+    assert fake.calls == [("start_backup", "panel"), ("get_job", job_id), ("get_job", job_id), ("job_archive", job_id), ("get_job", job_id), ("delete_job", job_id)], f"start asks for a run of the panel; poll, download and delete read the job first: {fake.calls}"
+    print_success("blocked, with the token: start 202, poll 200 done, download 200 with the archive's bytes, delete 204, the panel's jobs only")
+
+
+@pytest.mark.asyncio
+async def test_a_session_never_stands_in_for_the_panel_token_on_a_blocked_instance(app, monkeypatch, administrator, tmp_path):
+    """(a) B8: the panel's routes want its token, never a session. A token set, an administrator's session without it gets
+    the panel's own 401 from each of the four routes, never the archive; the service is never reached."""
+    fake = _replace_the_backup_service(monkeypatch, tmp_path, origin="panel")
+    _panel_token(monkeypatch, secrets.token_hex(32))
+    _block(monkeypatch)
+
+    refused = await _request(app, "GET", "/brokers", session=administrator.session)
+    answers = {f"{method} {path}": _status_and_body(await _panel_request(app, method, path, session=administrator.session)) for method, path in _panel_routes(fake.job_id)}
+
+    assert (refused.status_code, refused.json()) == (423, BLOCKED_ANSWER), f"Barrier: the block refuses this administrator's session outside the list, GET /brokers answers 423: {refused.status_code} {refused.text}"
+    assert answers == dict.fromkeys(answers, (401, PANEL_UNAUTHORIZED_ANSWER)), f"an administrator's session must never stand in for the panel's token: each route answers the panel's 401: {answers}"
+    assert fake.calls == [], f"the backup service must never be reached with a session in place of the token: {fake.calls}"
+    print_success("blocked: an administrator's session without the token gets the panel's 401 on its four routes; the service untouched")
 
 
 # =============================================================================
