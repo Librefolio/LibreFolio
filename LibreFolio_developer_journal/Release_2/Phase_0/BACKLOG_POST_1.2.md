@@ -3491,3 +3491,15 @@ da Y il 15/10.
   - Prima un rosso che conti le chiamate a `getOption()` per passo; poi la rotazione delle frecce letta in altro modo,
     o rinviata come le etichette.
   - Dettagli: piano di Y, §7 «Y8 — passo 3».
+- **Y-9 · Il layout del PAC da telefono, da rivedere sugli scatti mobile dopo Y7** — basso; Y, 15/10 (Y7), per la
+  decisione 50 del developer. Y7 fa scorrere con la tabella le colonne di selezione e azioni sotto i 768 px (D-Y17).
+  Restano le larghezze dichiarate di `TargetsStep` (`features/tools/pac-allocator/planner/steps/TargetsStep.svelte`:
+  la tabella supera i 500 px). Va giudicato sugli scatti mobile `pac-step-targets` e `pac-step-review` della galleria
+  d'ingresso di Y7, insieme alle altre note del developer. Dettagli: piano di Y, §4 «Y7».
+- **Y-10 · Su un telefono la maniglia di ridimensionamento è invisibile** — minimo, UX; `test-author` di Y, 15/10 (Y7).
+  - Dopo Y7 un dito ridimensiona una colonna (D-Y18). Ma la maniglia
+    (`table/DataTableColumnHeader.svelte`, `.resize-handle`) resta trasparente finché la cella non è in hover, e un dito
+    non fa hover: sul telefono funziona, ma non si vede.
+  - Da decidere se mostrarla su `@media (hover: none)`. Cambierebbe gli scatti mobile, e il colore
+    `--lf-cmp-datatable-resize-handle-bg` c'è già.
+  - Dettagli: piano di Y, §7 «Y7».
