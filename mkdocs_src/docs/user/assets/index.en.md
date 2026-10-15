@@ -56,7 +56,7 @@ In the table view each panel is a table with its own pages; resizing, moving or 
 ## 🔄 Keep prices up to date
 
 - **Sync All** opens a window where **Start Sync** downloads the latest prices of every asset that has a provider; **Reload All** reloads the list from what LibreFolio has stored. On the **[Correlation](correlation.md)** tab they become **Sync selection**, which also downloads the exchange rates that convert the selected assets, and **Reload All**, which recomputes every analysis.
-- **Live prices** — while this page or an asset's page is open and the date range ends today, prices refresh by themselves every now and then. A price turns green when it went up since the previous refresh, red when it went down; when the market is closed you see the last close, uncoloured.
+- **Live prices** — while the date range ends today, prices refresh by themselves: every minute on this page, every 30 seconds on an asset's page. A price turns green when it went up since the previous refresh, red when it went down; when the market is closed you see the last close, uncoloured. To spare the server and the price providers, refreshing pauses while the browser tab is in the background, and after two minutes without using the page: then a small **Updates paused** label shows at the top of the page. There is nothing to click: as soon as you come back to the tab, move the mouse or press a key, prices refresh again on their own.
 - **In the background**, the server refreshes prices on a schedule your administrator sets ([Market Data Scheduler](../../admin/settings.md#market-data-scheduler)). The Dashboard shows the stored prices.
 
 ## 🖱️ Act on one asset
