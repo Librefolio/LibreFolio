@@ -2912,9 +2912,14 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   14/10. `_get_brim_file_with_access` (`backend/app/api/v1/brokers.py:119`) salta il controllo dei ruoli quando il file
   non ha un broker (i file vecchi, alla radice delle cartelle). Prima un rosso: se quei file possono ancora esistere, e
   chi li vede. Dettagli: piano 04.
+  ✅ 15/10 (F36, decisione 36): confermata (lista, lettura, parse e cancellazione aperti a chiunque con il login) e chiusa:
+  un file senza broker lo raggiungono solo chi l'ha caricato e l'admin (senza caricatore registrato, come i file di prima
+  del 24/01/2026, solo l'admin); 403 per gli altri, assente dalle loro liste. Dettagli: piano 04, sezione F36.
 - **W-B4 · Gli id dei file BRIM accettati senza controllo del formato** — basso, sicurezza; coordinatore, 14/10. Le rotte
   `/brokers/import/files/{file_id}` accettano una stringa qualsiasi: un controllo del formato UUID all'ingresso è una
   difesa in più sui percorsi. Dettagli: piano 04.
+  ✅ 15/10 (F36): un `file_id` che non è un UUID nella forma canonica minuscola risponde 404 prima di ogni ricerca (prima
+  un id di 300 caratteri dava 500, un file `<uuid>-1` veniva servito, e su macOS anche l'id in maiuscolo).
 - **W-B5 · La cassa del broker conta le transazioni future** — da verificare, numeri; coordinatore, 14/10 (D-J16
   dell'analisi di J, con B15 lato broker). `TransactionService.get_cash_balances`
   (`backend/app/services/transactions/transaction_service.py:476-480`) somma tutte le transazioni del broker, anche
@@ -3077,6 +3082,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   N2 legge dai metadati il costo obbligatorio (`cost_basis_required`). Leggerla da `TX_TYPE_METADATA` porterebbe un
   import circolare (`type_metadata.py` importa `transactions.py`): serve spostare la funzione o un import tardivo.
   Dettagli: piano 04, sezione N2.
+- **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
+  docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
+  (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
+  caricatore e l'admin, ma nella lista «Uploaded Reports» di **ogni** broker (tutti per l'admin, i propri per gli altri).
+  Da decidere: con un filtro di broker esplicito, escluderli (restano nella vista senza filtro della pagina File).
+  Dettagli: piano 04, sezione F36.
 
 ## J · Numeri e analisi (fase 01)
 

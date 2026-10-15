@@ -79,8 +79,8 @@ Every API endpoint declares an explicit `response_model` Pydantic schema: the ge
 is only as typed as the OpenAPI schema, and an endpoint without a model silently degrades to
 `unknown`. The audit (08) closed the last stragglers; the deliberate exceptions are endpoints
 that do not return JSON documents — the SSE stream (`GET /assets/provider/search/stream`),
-binary file downloads (`FileResponse` under `/uploads/file/…`, `/brim/files/…/download`), and a
-handful of legacy `dict` returns.
+binary file downloads (`FileResponse` under `/uploads/file/…`, `/brokers/import/files/…/download`),
+and a handful of legacy `dict` returns.
 
 ### 2. New discriminated-union members register in `fix-openapi-discriminators.mjs`
 
