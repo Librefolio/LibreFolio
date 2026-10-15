@@ -441,7 +441,7 @@ def test_drawdown_full_history_default_and_opt_out():
 
 def test_prepare_plan_marks_full_history_when_any_computation_declares_it():
     """A drawdown request in a mixed batch flips the plan-level flag; the fetch
-    path (asset_source.get_prices_bulk) reads exactly this flag to decide
+    path (assets.price_query.get_prices_bulk) reads exactly this flag to decide
     between full-history load and points-derived warm-up days."""
     context = _context(_dates(7))
     plan = SignalService().prepare_plan(

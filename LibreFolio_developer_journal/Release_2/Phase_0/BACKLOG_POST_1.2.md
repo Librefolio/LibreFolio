@@ -1962,11 +1962,16 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
 Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
-- **H-1 · Nella prosa della devWiki restano 9 menzioni dei percorsi spostati da CP1** — minimo; H, 14/10.
-  - Stanno in 8 pagine, fuori dalle tabelle «Source files»: `domains/scheduler.md:13`, `features/F-011.md:20`,
-    `F-014.md:20`, `F-052.md:22`, `F-073.md:25`, `entities/market-data-scheduler.md:22-23`.
-  - Due sono storiche: `features/F-078.md:34` e `sources/phase00-brim-danske-bank-2026-10.md:37`.
-  - Nella tabella di `domains/scheduler.md:82` la riga dice ancora «(planned) … (not yet created)».
+- **H-1 · Nella prosa della devWiki restano menzioni dei percorsi spostati da CP1 e CP2a** — minimo; H, 14-15/10.
+  - **CP1**: 9 menzioni in 8 pagine, fuori dalle tabelle «Source files»: `domains/scheduler.md:13`,
+    `features/F-011.md:20`, `F-014.md:20`, `F-052.md:22`, `F-073.md:25`, `entities/market-data-scheduler.md:22-23`.
+    - Due sono storiche: `features/F-078.md:34` e `sources/phase00-brim-danske-bank-2026-10.md:37`.
+    - Nella tabella di `domains/scheduler.md:82` la riga dice ancora «(planned) … (not yet created)».
+  - **CP2a**: 9 menzioni di `backend/app/config.py` (oggi `backend/app/config/__init__.py`) in 8 pagine:
+    `concepts/runtime-lanes.md:29`, `decisions/prod-test-data-separation.md:28`, `utils-leaf-functions-only.md:83`,
+    `port-6040-scheme.md:34`, `problems/db-path-argument-ignored-by-alembic.md:22`, `features/F-011.md:20`,
+    `F-064.md:20`, `sources/r2-parallel-features-pwa-borsa-fx.md:82` e `:91`. L'ultima è una tabella sotto un
+    titolo che il controllo dei percorsi non legge.
   - È lo stesso caso di T-W1.
 
   Dettagli: [piano H](../Phase_1/01_platform/plan-phase01Platform.prompt.md), §14 «CP1 passo 1».
@@ -2046,9 +2051,67 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
 
 Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md).
 
+- ✅ **Voce 5 di `TODO_ProssimeAttivita` · Link alle transazioni nella modale di cancellazione dell'asset** — chiusa da X il
+  14/10 senza codice: già fatta il 10/09 in `e50d66408` (conteggio e link nella cancellazione singola e in quella multipla,
+  `FAAssetDeleteResult.transaction_count`, E2E in `e2e/assets/asset-list.spec.ts`); nella devWiki F-095 era già
+  `documented`, e `domains/assets.md` non la elenca più fra le cose da fare. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «2.5».
+- **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1).
+  La docstring di `api/v1/fx.py:767` cita ancora «``services/fx.py``», che dal CP1 è `services/fx/fx.py`: è nella
+  descrizione dell'endpoint in `openapi.json`, quindi resta fino al PL4, che dà alla funzione la sua casa definitiva.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1.
+- **X-R2 · Il vecchio percorso degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a). Le docstring
+  di `BackwardFillInfo` (`schemas/common.py:369`) e di `IdentifierType` (`db/models.py:123`) citano ancora `asset_source.py`,
+  tolto nel CP2a. Il testo finisce in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima).
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a.
+- **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
+  `test_api/test_fx_api.py::test_providers_include_target_currencies` passa da `GET /fx/providers`, che chiama dal vivo
+  `get_supported_currencies` di `fx_providers/ecb/plugin.py`; su un errore di rete il gestore in `api/v1/fx.py` (righe
+  ~139-143) rende una lista vuota. Va contro la regola dei test senza rete. Da sistemare con il CP3 (PL4, router dei cambi)
+  o prima. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a.
+
 ## W · Import e transazioni (fase 01)
 
 Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md).
+
+- **W-B1 · L'icona dei plugin servita con un controllo `startswith`** — basso, sicurezza; W, 14/10 (analisi).
+  `serve_plugin_static` (`backend/app/api/v1/uploads.py:541`) confronta i percorsi come stringhe: una cartella sorella
+  che comincia con lo stesso nome passerebbe il controllo. Oggi non ce n'è nessuna, e la rotta chiede il login. Cura:
+  `Path.is_relative_to`, con U-B3 (lotto W5), d'accordo con H. Dettagli: piano 04, §1.1 e §7.
+- **W-B2 · Il cambio di provider scollega in silenzio le transazioni dagli eventi automatici** — medio-basso, dati; W,
+  14/10 (analisi). `asset_sources/provider_management.py:186-195` (di X): cambiando i parametri o il provider di un
+  asset, gli eventi del provider si cancellano e le transazioni collegate perdono il collegamento senza avviso. È il
+  caso che la modale di C-65 deve mostrare (C-65a, X e W). Dettagli: piano 04, §2 (C-65).
+- **W-B3 · Un file BRIM senza `target_broker_id` è aperto a ogni utente** — da verificare, sicurezza; coordinatore,
+  14/10. `_get_brim_file_with_access` (`backend/app/api/v1/brokers.py:119`) salta il controllo dei ruoli quando il file
+  non ha un broker (i file vecchi, alla radice delle cartelle). Prima un rosso: se quei file possono ancora esistere, e
+  chi li vede. Dettagli: piano 04.
+- **W-B4 · Gli id dei file BRIM accettati senza controllo del formato** — basso, sicurezza; coordinatore, 14/10. Le rotte
+  `/brokers/import/files/{file_id}` accettano una stringa qualsiasi: un controllo del formato UUID all'ingresso è una
+  difesa in più sui percorsi. Dettagli: piano 04.
+- **W-B5 · La cassa del broker conta le transazioni future** — da verificare, numeri; coordinatore, 14/10 (D-J16
+  dell'analisi di J, con B15 lato broker). `TransactionService.get_cash_balances`
+  (`backend/app/services/transactions/transaction_service.py:476-480`) somma tutte le transazioni del broker, anche
+  quelle con una data futura. Dettagli: piano 04; analisi di J.
+- **W-B6 · V-3, TRANSFER orfano: la scrittura e la migrazione dei dati** — basso; coordinatore, 14/10 (D-J4). A W la
+  conversione in ADJUSTMENT della metà rimasta quando si cancella un broker, e la correzione degli orfani già presenti
+  nei DB; a J i rossi su lotti e Dashboard. Dettagli: voce V-3 nella sezione V.
+- **W-B7 · `TODO_FUTURI`, eventi collegabili: percorso e conteggi superati** — minimo; W, 14/10 (analisi). L'endpoint è
+  `POST /transactions/events/suggest`, i test API sono 10 e non 8, `suggest_events_bulk` sta in
+  `services/transactions/transaction_service.py:492`. Si aggiorna quando la voce entra nel lotto K3. Dettagli: piano 04,
+  §2.
+- **W-B8 · `DataImportModal`: «Help» e «Close» in inglese** — minimo; W, 14/10 (analisi). Gli `aria-label` di
+  `components/ui/data-editor/DataImportModal.svelte:211` e `:220` sono scritti nel codice; vanno con P-15 (lotto K1).
+  Dettagli: piano 04, §2 (P-15).
+- **W-B9 · `test_fx_api.py` raggiunge ECB via rete** — basso, test; W, 15/10 (triage del CP1); **dominio dei cambi, da
+  spostare nella sezione X**. `test_providers_include_target_currencies` chiama `GET /fx/providers`, che legge dal vivo
+  le valute di ECB (`fx_providers/ecb/plugin.py:94-150`) e su un errore di rete risponde con la lista vuota
+  (`api/v1/fx.py:147-151`). Rosso d'ambiente nella run del CP1, verde rilanciato da solo: va contro la regola 6 delle
+  istruzioni dei test backend. Dettagli: piano 04, §12, W1 passo 8.
+- **W-B10 · `access_control.md`: l'elenco degli endpoint d'accesso non è quello dell'API** — minimo, doc; W, 15/10 (W2).
+  `mkdocs_src/docs/developer/architecture/access_control.md`, «API Endpoints», elenca `POST /brokers/{id}/access` e
+  `PATCH`/`DELETE /brokers/{id}/access/{user_id}`; l'API ha `GET` e `PUT /brokers/{broker_id}/access` (tutta la
+  configurazione in un colpo), `PATCH` e `DELETE /brokers/{broker_id}/access/me` (`backend/app/api/v1/brokers.py:408`,
+  `:440`, `:493`, `:519`). L'elenco dei metodi sopra è stato corretto in W2. Dettagli: piano 04, §12, W2 passo 5.
 
 ## J · Numeri e analisi (fase 01)
 

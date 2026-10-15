@@ -41,8 +41,8 @@ from backend.app.schemas.brim import (
     BRIMVerification,
 )
 from backend.app.services import brim_provider
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError
-from backend.app.services.provider_registry import BRIMProviderRegistry
 
 logger = structlog.get_logger(__name__)
 

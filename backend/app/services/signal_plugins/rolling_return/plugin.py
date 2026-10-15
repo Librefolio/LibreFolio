@@ -24,13 +24,14 @@ from backend.app.schemas.signals import (
     SignalUnit,
     SignalWarmupRequirement,
 )
-from backend.app.services.provider_registry import SignalPluginRegistry, register_plugin
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.signal_helpers import (
     build_line_computation,
     prepared_primary_returns,
     rolling_compounded_return_values,
 )
 from backend.app.services.signal_plugins.base import SignalPlugin
+from backend.app.services.signals.registry import SignalPluginRegistry
 
 
 class RollingReturnParams(BaseModel):

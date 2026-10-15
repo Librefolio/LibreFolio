@@ -51,11 +51,11 @@ Caches register lazily at import time, so the list below is the full registry as
 
 | Cache | maxsize | TTL | Owner |
 |-------|--------:|----:|-------|
-| `search_results` | 5000 | 24 h | `asset_source` — individual search items |
-| `search_queries` | 500 | 15 min | `asset_source` — query → results |
-| `asset_history_fetch` | 500 | 15 min | `asset_source` |
-| `asset_current_fetch` | 300 | 2 min | `asset_source` |
-| `asset_metadata_fetch` | 200 | 30 min | `asset_source` |
+| `search_results` | 5000 | 24 h | `assets/core.py` — individual search items |
+| `search_queries` | 500 | 15 min | `assets/core.py` — query → results |
+| `asset_history_fetch` | 500 | 15 min | `assets/core.py` |
+| `asset_current_fetch` | 300 | 2 min | `assets/core.py` |
+| `asset_metadata_fetch` | 200 | 30 min | `assets/core.py` |
 | `fx_provider_responses` | 200 | 5 min | `fx` |
 | `portfolio_blob` | 30 | 24 h | `financial_math/portfolio/engine.py` |
 | `portfolio_layer2` | 20 | 30 min | `portfolio_service` |
@@ -70,7 +70,7 @@ Caches register lazily at import time, so the list below is the full registry as
 Two module-local caches stay outside the registry, so the admin panel does not list them: the
 image-preview cache (`PreviewCache` in `backend/app/api/v1/uploads.py`, sized by
 `PREVIEW_CACHE_MAX_MB`, 1 h TTL) and the link-finder's 15-minute query cache in
-`backend/app/services/web_link_finder.py`.
+`backend/app/services/assets/web_link_finder.py`.
 
 ## 🌐 The three admin endpoints
 

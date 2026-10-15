@@ -54,8 +54,8 @@ over-threshold function:
 The transaction batch refactor demonstrates the preferred outcome:
 `TransactionService.execute_batch()` no longer has a C901 exemption or
 `TODO(P2-refactor)`. Its former 637-line body is now an approximately 50-line
-orchestrator over `TransactionBatchContext` and ordered functions in
-`transaction_batch_stages.py`.
+orchestrator over `TransactionBatchContext` and ordered functions in the batch stage modules
+(`transaction_batch_stages.py`, `batch_edits.py`, `batch_creates.py`, `batch_costs.py`).
 
 As of 2026-09-11, the current tree carries **201** `# noqa: C901` sites and **24**
 `TODO(P2-refactor)` markers. Relative to the tracked pre-refactor tree,
@@ -102,7 +102,7 @@ Two JSON-safety helpers coexist with **opposite** error policies, and they must 
   checks a value is natively JSON-serializable and raises `ValueError` otherwise. Used by Pydantic
   `field_validator`s on contract boundaries (signals, AI Export payloads), where a non-JSON value
   means the *producer* is broken and must be rejected.
-- **`_json_safe_details`** (local to `backend/app/services/asset_source.py`) — the **sanitizer**:
+- **`_json_safe_details`** (defined in `backend/app/services/assets/core.py`) — the **sanitizer**:
   stringifies anything non-primitive and never raises. It exists for one field
   (`AssetSourceError.details` in provider diagnostics), preserves `None`/empty as "omit the field",
   and sanitizes one list level deep — exactly what provider-error localization needs.

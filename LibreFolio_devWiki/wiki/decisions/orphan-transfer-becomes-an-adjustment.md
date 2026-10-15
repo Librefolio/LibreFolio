@@ -48,7 +48,7 @@ longer fail.
 
 | Role | Path |
 |------|------|
-| Where the orphan is born | `backend/app/services/transaction_service.py` (`delete_by_broker`) |
+| Where the orphan is born | `backend/app/services/transactions/transaction_service.py` (`delete_by_broker`) |
 | The Dashboard's reading today | `backend/app/services/financial_math/portfolio/classifier.py` |
 | The in-kind capital booking | `backend/app/services/financial_math/portfolio/daily_state.py` (`_transfer_leg_capital`) |
 | The lots' failure code | `backend/app/services/financial_math/fifo/models.py` (`TRANSFER_PAIR_MISSING`) |

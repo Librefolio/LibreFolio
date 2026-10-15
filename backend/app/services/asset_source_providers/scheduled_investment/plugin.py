@@ -59,8 +59,9 @@ from backend.app.schemas.assets import (
 from backend.app.schemas.common import Currency
 from backend.app.schemas.prices import FAAssetEventPoint
 from backend.app.schemas.provider import FAProviderKind
-from backend.app.services.asset_source import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
-from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
+from backend.app.services.assets.core import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.provider_registry import register_provider
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 # ============================================================================

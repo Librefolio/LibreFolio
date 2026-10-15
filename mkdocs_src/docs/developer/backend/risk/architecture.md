@@ -49,11 +49,12 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/risk/quant/` | The simulation and optimization boundary: engine request and result models, content-keyed caches, spawn worker pools, the QuantLib and Riskfolio workers, the NumPy block bootstrap. |
 | `backend/app/services/risk/scenario_catalog/` | Built-in YAML scenarios and the loader that runs at startup. |
 | `backend/app/services/risk_plugins/` | The analytics, one folder each: the code in `<analytic_code>/plugin.py`, the `risk.analytics.*` name and description in its `i18n/` fragment. |
-| `backend/app/services/provider_registry.py` | `RiskAnalyticRegistry` and the `register_plugin` decorator. |
+| `backend/app/services/risk/registry.py` | `RiskAnalyticRegistry`. |
+| `backend/app/services/provider_registry.py` | The `register_plugin` decorator and the folder discovery shared by every plugin registry. |
 | `backend/app/services/series_preparation.py` | Joint calendar, target-currency conversion, simple returns, carried points. |
-| `backend/app/services/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
+| `backend/app/services/assets/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
 | `backend/app/services/platform/data_quality_thresholds.py` | Thresholds shared with the portfolio's data-quality banner. |
-| `backend/app/config.py` | `RISK_SIMULATION_*` and `RISK_OPTIMIZATION_*` worker settings. |
+| `backend/app/config/__init__.py` | `RISK_SIMULATION_*` and `RISK_OPTIMIZATION_*` worker settings. |
 | `frontend/src/lib/risk/riskRequest.ts` | Request builders and canonicalization. |
 | `frontend/src/lib/stores/risk/` | `riskStore` (session cache), `riskPanelController` (the plumbing behind every panel), `riskBenchmarkStore` (the shared benchmark). |
 | `frontend/src/lib/components/risk/` | Panels, levels, the lab, `BenchmarkSelect`, eligibility wording. |
@@ -272,7 +273,7 @@ to the context's values when left at `None`.
 
 ### 🔌 Registration and Discovery {: #registry }
 
-`RiskAnalyticRegistry` (`backend/app/services/provider_registry.py`) specializes the shared plugin
+`RiskAnalyticRegistry` (`backend/app/services/risk/registry.py`) specializes the shared plugin
 registry described in [Registry Pattern](../../architecture/patterns/registry_pattern.md):
 
 - **Discovery** loads every analytic folder's `plugin.py`, as
@@ -359,7 +360,7 @@ behind stored carries is in [Data Quality](../../../financial-theory/technical-a
 
 Some price sources store a row for every calendar day, repeating Friday's close on weekends and
 on exchange holidays. Read as quotes, those rows would add zero-return observations to every
-joint calendar. `backend/app/services/market_calendar.py` defines the rule once, for risk and
+joint calendar. `backend/app/services/assets/market_calendar.py` defines the rule once, for risk and
 signals alike: **a row dated on a weekend or on a market holiday whose close equals exactly the
 close of the row before it is a carry, not a quote** (`is_market_closed_repeat`). A crypto asset
 that moves on a Saturday, or a genuinely flat weekday, stays a quote.
@@ -375,7 +376,7 @@ that moves on a Saturday, or a genuinely flat weekday, stays a quote.
 - `RiskService` awaits the table once per request and passes it to every preparation.
   `series_preparation.mark_market_closed_carries()` turns stored carries into carried points,
   `eligibility.load_price_window_facts()` applies the same rule in SQL, and the signal price query
-  (`backend/app/services/asset_sources/price_query.py`) applies it when signals are requested.
+  (`backend/app/services/assets/price_query.py`) applies it when signals are requested.
 
 ### ✅ Analysis Eligibility {: #eligibility }
 
@@ -532,7 +533,7 @@ every input that can change the result (for the bootstrap, the history through i
 `analytic_code@algorithm_version`. Pools are created lazily on first use and shut down by the
 application lifespan.
 
-| Setting (`backend/app/config.py`, environment variable of the same name) | Default | Effect |
+| Setting (`backend/app/config/__init__.py`, environment variable of the same name) | Default | Effect |
 |---|---|---|
 | `RISK_SIMULATION_WORKERS`, `RISK_OPTIMIZATION_WORKERS` | 1 (1–8) | Spawned processes per pool. |
 | `RISK_SIMULATION_QUEUE_CAPACITY`, `RISK_OPTIMIZATION_QUEUE_CAPACITY` | 2 (0–64) | Jobs that may wait; beyond workers + queue the answer is `worker_busy`. |
@@ -714,9 +715,10 @@ from pydantic import BaseModel, ConfigDict
 
 from backend.app.schemas.risk import RiskMode, RiskOutputKind, RiskScopeKind
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import require_primary_returns
 from backend.app.services.risk.base import RiskAnalytic, RiskComputation, RiskExecutionContext, RiskSeriesInputs
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 class MyAnalyticParams(BaseModel):

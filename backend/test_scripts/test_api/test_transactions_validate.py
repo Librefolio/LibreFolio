@@ -3,7 +3,7 @@ Test Suite: POST /transactions/validate (dry-run mixed batch)
 
 Covers Phase 7 Part 3 Blocco C.1 + Blocco G.3.
 
-Contract under test (see ``backend/app/services/transaction_service.py``
+Contract under test (see ``backend/app/services/transactions/transaction_service.py``
 L558 ``validate_batch`` + ``backend/app/api/v1/transactions.py`` L228):
 
 - **Pure dry-run**: applies deletes → updates → creates in ONE session

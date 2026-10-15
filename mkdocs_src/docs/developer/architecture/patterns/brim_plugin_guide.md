@@ -387,8 +387,9 @@ Defined on `BRIMProvider` — call these instead of re-implementing:
 # backend/app/services/brim_providers/broker_mybroker/plugin.py
 
 from pathlib import Path
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_provider import BRIMProvider
-from backend.app.services.provider_registry import register_provider, BRIMProviderRegistry
+from backend.app.services.provider_registry import register_provider
 from backend.app.schemas.brim import BRIMExtractedAssetInfo, BRIMParseOutput
 from backend.app.schemas.transactions import TXCreateItem
 
@@ -503,8 +504,9 @@ from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMAssetNotice, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
+from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 ```
@@ -693,8 +695,9 @@ gives them the same `link_uuid`; the batch turns the shared id into reciprocal
 `broker_degiro/plugin.py` is the first plugin to emit pairs (`_pair_fx_legs`, `_fx_pair`): Swissquote
 skips its conversion legs with a warning, and the Generic CSV refuses the paired types.
 
-**What the batch accepts** — `resolve_create_links` in `transaction_batch_stages.py`, with
-`_validate_linked_pair` and `_validate_pair_description_tags` in `transaction_service.py`:
+**What the batch accepts** — `resolve_create_links` in `batch_creates.py`, with
+`_validate_linked_pair` and `_validate_pair_description_tags` in `validation.py` (all in
+`backend/app/services/transactions/`):
 
 - exactly **two** creates per `link_uuid`: a leg alone, or a third one, is `linkUuidPairCount`;
 - the **same type** on both legs (`pairTypeMismatch`);

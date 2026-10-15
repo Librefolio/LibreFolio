@@ -8,7 +8,7 @@ This module provides:
 - Helper functions for decimal precision
 
 Nothing here backward-fills prices: history is stored exactly as providers return
-it, and gaps are filled only when prices are read (asset_sources/price_query.py).
+it, and gaps are filled only when prices are read (assets/price_query.py).
 
 Similar to fx.py but for price_history table (asset prices vs FX rates).
 
@@ -295,7 +295,7 @@ class AssetSourceProvider(ABC):
     3. Plugin returns FAHistoricalData with prices list (may have gaps)
     4. Core stores the points exactly as returned: nothing is filled on write
     5. Gaps (weekends, holidays) are filled only when prices are read: the read
-       path (asset_sources/price_query.py) adds the missing days with
+       path (assets/price_query.py) adds the missing days with
        backward_fill_info, and valuation carries the last observation forward
        (financial_math/price_marks.py)
 
@@ -570,7 +570,7 @@ class AssetSourceProvider(ABC):
 
         CORE WILL:
         - Store the returned points as they are (no gap filling on write)
-        - Fill gaps only on read (asset_sources/price_query.py): each missing day
+        - Fill gaps only on read (assets/price_query.py): each missing day
           repeats the last known price and carries backward_fill_info
         - Handle date range chunking for large requests
 

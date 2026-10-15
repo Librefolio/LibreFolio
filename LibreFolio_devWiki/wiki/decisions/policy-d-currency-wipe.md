@@ -121,7 +121,7 @@ raising HTTP 500 instead of 404. Fixed in G-batch6 — see
 
 | Role | Path |
 |------|------|
-| Wipe service | `backend/app/services/asset_source.py::wipe_market_data_for_currency_change` |
+| Wipe service | `backend/app/services/assets/price_store.py::wipe_market_data_for_currency_change` |
 | PATCH handler | `backend/app/api/v1/assets.py` (currency-change branch) |
 | Backup router | `backend/app/api/v1/backup.py` |
 | Currency-change modal | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |

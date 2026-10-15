@@ -57,6 +57,6 @@ appears (inline validate)» went red: after the clone, the WAC «auto» cell sta
 | Role | Path |
 |------|------|
 | The spec (WB4, WB5, `cleanupOwned`) | `frontend/e2e/transactions/tx-wac-bulk.spec.ts` |
-| WAC and FX issues of a batch | `backend/app/services/transaction_batch_stages.py` |
+| WAC and FX issues of a batch | `backend/app/services/transactions/batch_costs.py` |
 | Plan 46 (step 2b) | `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` |
 | Backlog (V-23) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
