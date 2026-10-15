@@ -781,6 +781,22 @@ def services_platform_readiness(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Instance readiness tests", verbose=verbose)
 
 
+def services_backup_archive(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance backup archive: layout, consistent database copy, manifest, build and check."""
+    print_section("Services: Instance Backup Archive")
+    print_info("Testing: backend/app/services/platform/instance_backup/paths.py, snapshot.py, manifest.py, archive.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_archive.py", test_names)
+    return run_command(cmd, "Instance backup archive tests", verbose=verbose)
+
+
+def services_backup_jobs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance backup jobs: background and foreground runs, one at a time, state on disk, retention."""
+    print_section("Services: Instance Backup Jobs")
+    print_info("Testing: backend/app/services/platform/instance_backup/jobs.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_jobs.py", test_names)
+    return run_command(cmd, "Instance backup jobs tests", verbose=verbose)
+
+
 def services_donation_popup(verbose: bool = False, test_names: list = None) -> bool:
     """Test donation-popup trigger decision logic (should_show_donation_popup, record_login_and_maybe_show_popup)."""
     print_section("Services: Donation Popup")
@@ -1245,6 +1261,26 @@ Note: No backend server required.
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
     add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
+    add_test(
+        cat,
+        "backup-archive",
+        services_backup_archive,
+        name="Instance Backup Archive",
+        desc="Layout and job ids, private folders never written through a link; VACUUM INTO copy as of one instant beside a WAL writer it never blocks, in rollback mode with nothing beside it; read-only description (integrity, foreign keys, rows, revision); manifest round trip, unknown fields ignored, UTC dates, database first, no entry twice, entry paths, every from_bytes code; an archive of the database and custom-uploads, broker_reports, scenario_catalog only (no logs, secrets, scheduler state, backups, -wal/-shm or post-migration files), the -wal's rows included, links, FIFOs and non-UTF-8 names left out and never followed, 0600, written as .part then renamed, space checked first; check_archive: missing, mismatched, unexpected and duplicated entries, archive_unreadable, manifest codes, reads bounded by the declared size",
+        # PURE: every data directory, database and archive is built under tmp_path; the concurrent WAL writer is a
+        # thread of this process on its own file. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-jobs",
+        services_backup_jobs,
+        name="Instance Backup Jobs",
+        desc="start_backup to done in the background, job_archive, delete_job; run_backup in the calling thread; busy for both while the run lock is held; a running state with a free lock read as backup_interrupted and written down; a failed build (backup_failed) and no space (backup_no_space) end with the work files removed and the lock free, the final state on disk before the lock is released; one-hour retention of finished, dead and unreadable jobs, never links or other entries, a running job holding the lock kept; job ids never paths; state round trip, unknown keys ignored, 50 left-out entries kept; the process-local lock without fcntl",
+        # PURE: data directories under tmp_path, every call given its data_dir (jobs.get_data_dir is a guard that fails
+        # the test); every background run ends, joined, inside its test. No lane DB, no server, no network.
+        isolation="pure",
+    )
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
     add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
     add_test(cat, "file-preview", services_file_preview, name="File Preview", desc="CSV/Excel/text preview detection helpers")
