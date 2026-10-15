@@ -2223,6 +2223,18 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   com'erano prima del riordino: `features/F-107.md:49-50`, `features/F-108.md:31`,
   `problems/i18n-audit-false-dead-and-false-used.md:48`. Da rinfrescare in un passaggio di `wiki-lint`. Dettagli: piano
   J, §10 «A — rinomina», «Restano di proposito».
+- **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — basso, robustezza; J, 15/10 (C-93),
+  file di X. `services/assets/core.py:114-119` (`_sync_runner`, dentro `asyncio.to_thread`) imposta un loop nuovo, lo
+  chiude e non lo toglie: chi poi, nello stesso thread, chiama `asyncio.get_event_loop()` riceve un loop chiuso. È il
+  contesto in cui una connessione aiosqlite raccolta dal GC muore con «Event loop is closed». Cura di una riga:
+  `asyncio.set_event_loop(None)` nel `finally`, oppure `asyncio.Runner`. Lo assegna il coordinatore. Dettagli: piano
+  J, §10 «C-93», «Triage».
+- **J-6 · Nessuna guardia di suite per le connessioni aiosqlite lasciate aperte** — basso, facoltativa; J, 15/10
+  (C-93). Oggi le connessioni aperte dopo un test sono 0 in tutta la suite, ma lo garantisce solo la guardia del file
+  d'integrazione dell'AI Export. Una fixture autouse nel `conftest.py` condiviso potrebbe far fallire ogni test che
+  lascia aperta una `aiosqlite.Connection` creata durante il test (registrando le connessioni create e controllando
+  al teardown, come la sonda usata per C-93). Il conftest è condiviso: decide il coordinatore. Dettagli: piano J, §10
+  «C-93».
 
 ## Z · Sospensione e risveglio (fase 01)
 
