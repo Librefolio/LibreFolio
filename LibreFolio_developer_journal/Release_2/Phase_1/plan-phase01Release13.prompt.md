@@ -558,8 +558,8 @@ fermati all'handoff, porta verificata libera.
   |---|---|---|---|---|
   | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | ~~X, FE5b (`AssetModal`), dal 15/10 alle 08:20~~ **chiuso: entrato in `dev_release2` il 15/10 alle 14:22 (`ec0dc7ebd`)**. La pagina (FE5c) dopo il lotto di Z sul polling |
   | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | **W, dal 15/10 alle 07:55** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
-  | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | **Y, FE6a (taglio sul posto in moduli `.ts` puri), dal 15/10 alle 12:47** (via libera del coordinatore colori: nessun annuncio loro; T lo converte in W5; restano `data-testid="growth-chart"` e la forma dell'opzione ECharts, letta dalla E2E del Lab) |
-  | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | nessuno |
+  | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | ~~Y, FE6a, dal 15/10 alle 12:47~~ **chiuso: entrato il 15/10 alle 15:12 (`badec1465`)** (via libera del coordinatore colori: nessun annuncio loro; T lo converte in W5; restano `data-testid="growth-chart"` e la forma dell'opzione ECharts, letta dalla E2E del Lab) |
+  | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | **Y, Y2 (due figli: `DataTableColumnHeader`, `DataTableCellContent`), dal 15/10 alle 15:24** (via libera del coordinatore colori; le 4 classi di `editable-checkbox` passano al figlio con il record ereditato) |
 
 ## 8. Traguardi, in ordine di dipendenza
 
@@ -1248,3 +1248,16 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >
 > **⚠️ Fuori pista**: `--resolve` del cricchetto dei colori perde un `~accept` presente da un solo lato (R-8); ripetuto
 > l'`--accept` D3 di `themeStore.ts` nei merge di X e W, con l'ok del coordinatore colori (TC-7 di T per la cura).
+
+### Treni 36–38 e decisioni 18–37 (2026-10-15, 15:00–15:55)
+
+> **Note implementazione**: entrati Y1 (`badec1465`, galleria filtrata contro `g-final3-r1` senza differenze dal
+> taglio, 96/96 scatti del grafico di crescita), A5 (`8bcb23502`, validato da A sulla revisione combinata con CP6 e E1)
+> e i quattro lotti di H (`744f5a0ee`: CP7a, C-96, filtro del log d'accesso, G-10, più la riparazione di
+> `test_instance_block.py`, rosso in `dev_release2` per un conflitto semantico CP6 × A5a). Prova Docker parziale: il
+> build si ferma a `pip install` per il proxy TLS della rete (H-11); `tzdata-legacy` e i compose verificati a parte; la
+> prova a runtime dell'immagine resta al developer, fuori dalla VPN, con gli script di H. Decisioni 18–35 scritte nel
+> file (`8fc44558c`); 37 girata ad A (lotto A6c); 36 in discussione (file comuni e personali, registrazione «su invito»
+> di default). Avviati A6 (scheda Utenti; verifica dell'indirizzo con un nonce firmato al posto del CORS su
+> `/system/instance`) e Y2 (`DataTable`). Checkpoint committati: E2a (`c1d1c3c2d`), Z1 (`a6199d0e7`, base aggiornata
+> `4618a2116`).

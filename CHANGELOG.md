@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LIBREFOLIO_PROFILE`: `selfhosted` (the default, nothing changes) or `managed`, for whoever hosts LibreFolio for others. In the managed profile a `JWT_SECRET` shorter than 32 characters stops the server at startup; elsewhere it stays a warning in the log. Documented in the new admin page "Hosting for Others".
 - **Instance block, for hosting providers**: with `LIBREFOLIO_BLOCKED=1` the data stays, and whoever signs in sees a page saying the instance is blocked, with the deletion date when `LIBREFOLIO_DELETION_DATE` is set. To a signed-in user the API answers `423 instance_blocked` to everything except signing in and out, deleting their own account, the block page, the public configuration and the health, readiness and version probes. A malformed value of either variable stops the server at startup, naming the variable.
 - `GET /api/v1/system/block`: the block state behind that page, for signed-in users.
+- **Who can sign up**: in Settings › Admin, «Registration» is Open, By invitation or Closed. `LIBREFOLIO_REGISTRATION` can set it from the server; the field then shows the mode in force, read-only.
+- **Invitation links**: an administrator creates single-use links, valid 7 days, with `./dev.py user invite [--admin] [--email …]` or the admin API. The link opens the registration form with the role and, if given, the suggested address, which can be changed.
+- **Password-reset links**: `./dev.py user reset-link <username>`, or the admin API, creates a single-use link valid 30 minutes. The user chooses a new password there, and every session of the account ends.
+- `LIBREFOLIO_MAX_USERS` caps the number of accounts (unset: no cap). `LIBREFOLIO_PUBLIC_URL` prints full links instead of bare paths. `LIBREFOLIO_BILLING_URL` is for hosting providers.
+- Admin API under `/api/v1/users`: list accounts, activate and deactivate, promote and demote, sign out of every device, restart the guides, reset links, invitations.
+- `./dev.py user reset-onboarding <username> [--flow …]` restarts an account's guides.
 
 ### 🔄 Changed
 
@@ -32,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Import wizard: when a broker's default plugin, DEGIRO or the Generic CSV, cannot read an uploaded file, the wrong-broker prompt gives the reason in your language.
 - `GET /api/v1/system/info` without a session answers only the app version; signed-in users still get the full report.
 - The list of exchange-rate providers no longer waits for the ECB and the SNB every time it opens: each provider's currency list is kept for a day, and a slow or unreachable provider is given up after 5 seconds, showing the last list it gave.
+- «Enable registration» becomes «Registration»: the upgrade keeps an open instance open and a closed one closed. The login page offers «Register here» only when registration is open.
+- `./dev.py user create`, `invite` and `activate` warn, then go ahead, when the instance has reached `LIBREFOLIO_MAX_USERS`.
+- API: refusals of `POST /auth/register` carry an error code (`REGISTRATION_DISABLED`, `INVITE_REQUIRED`, `INVITE_INVALID`, `USER_LIMIT_REACHED`). `GET /system/instance` carries `accounts`.
+- Docker: the image exposes only port 6040, and both compose files set `PORT=6040` inside the container; `PORT` in `.env` still chooses the host port. The unused 6041 mapping is gone.
 
 ### 🧹 Repository cleanup
 
@@ -56,6 +66,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In a source checkout the app version follows `git describe` again: a `VERSION` file left by an earlier Docker build no longer hides newer commits.
 - Settings › About no longer breaks when the server answers with the version only (an expired session): it waits for the sign-in instead of reading that answer as the full report.
 - The asset form's comparison with the data provider shows the "Description" row in your language.
+- On a first visit, the language selector of the login page shows the language the page is in. With a browser in another language it showed English.
+- The Docker image includes the legacy time zone names (`tzdata-legacy`): a scheduler time zone saved under an old name (`Asia/Calcutta`, `US/Eastern`) no longer falls back to UTC.
+- `./dev.py docker exec` runs commands as the container's user, not as root, so the files they create keep the right owner.
+- A locally built image carries one version in its tag, its `VERSION` file and the sidebar, even when a build step changes a tracked file.
+- The server's request log masks the value of credential-like query parameters (`token`, `password`, `api_key`, `code`…).
+- Files uploaded in the same instant (the default avatars) are listed in a stable order, by name.
+
+### ⚠️ Breaking changes
+
+- The global setting `enable_registration` becomes `registration_mode` (`open`, `invite`, `closed`): an API client that read the old key must read the new one.
 
 ---
 
