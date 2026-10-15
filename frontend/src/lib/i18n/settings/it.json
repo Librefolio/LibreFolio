@@ -80,7 +80,6 @@
     },
     "globalSettingNames": {
       "session_ttl_hours": "Durata Sessione",
-      "enable_registration": "Abilita Registrazione",
       "require_email_verification": "Richiedi Verifica Email",
       "max_file_upload_mb": "Dimensione Max Upload",
       "default_language": "Lingua Predefinita",
@@ -89,11 +88,11 @@
       "scheduler_history_sync_times": "Orari Sincronizzazione Storico",
       "scheduler_history_sync_days": "Giorni Sincronizzazione Storico",
       "scheduler_history_sync_horizon_days": "Orizzonte di Recupero",
-      "scheduler_enabled": "Scheduler Abilitato"
+      "scheduler_enabled": "Scheduler Abilitato",
+      "registration_mode": "Registrazione"
     },
     "globalSettingDescriptions": {
       "session_ttl_hours": "Per quanto tempo una sessione utente rimane valida prima di richiedere un nuovo login",
-      "enable_registration": "Consenti ai nuovi utenti di creare account",
       "require_email_verification": "Richiedi verifica email per i nuovi account",
       "max_file_upload_mb": "Dimensione massima file consentita per gli upload",
       "default_currency": "Valuta predefinita per i nuovi utenti",
@@ -103,7 +102,8 @@
       "scheduler_current_price_frequency_minutes": "Ogni quanti minuti vengono aggiornati i prezzi correnti",
       "scheduler_history_sync_times": "Orari giornalieri in cui vengono sincronizzati i dati storici (nel fuso orario dello scheduler)",
       "scheduler_history_sync_days": "Giorni della settimana in cui vengono sincronizzati i dati storici",
-      "scheduler_history_sync_horizon_days": "Quanti giorni indietro cercare dati storici mancanti"
+      "scheduler_history_sync_horizon_days": "Quanti giorni indietro cercare dati storici mancanti",
+      "registration_mode": "Chi può creare un account: chiunque (aperta), solo chi ha un link d'invito (su invito) o nessuno (chiusa)."
     },
     "globalSettingUnits": {
       "session_ttl_hours": "ore",
@@ -216,6 +216,12 @@
       "confirmClearTitle": "Svuotare la cache {name}?",
       "confirmClearAllTitle": "Svuotare tutte le cache?",
       "confirmWarning": "Dopo lo svuotamento, il prossimo recupero di questi dati subirà rallentamenti paragonabili a un riavvio del server."
-    }
+    },
+    "registrationModes": {
+      "open": "Aperta",
+      "invite": "Su invito",
+      "disabled": "Chiusa"
+    },
+    "lockedByEnv": "Impostato sul server da {variable}: va cambiato lì."
   }
 }

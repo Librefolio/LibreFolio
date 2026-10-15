@@ -105,7 +105,8 @@ class IdentifierType(StrEnum):
     ⚠️  DEPENDENT SCHEMAS - If you add/remove values, update these files:
 
     1. DATABASE SCHEMA:
-       - backend/alembic/versions/001_initial.py
+       - a new incremental Alembic migration (./dev.py db migrate "..."), never
+         001_initial.py: the assets table has already shipped
          → Add column: identifier_{value.lower()} in assets table
          → Add index if frequently searched (ISIN, TICKER have indexes)
 
@@ -114,17 +115,17 @@ class IdentifierType(StrEnum):
          → Add field: identifier_{value.lower()}: Optional[str]
          → Add validator if needed (e.g., ISIN requires 12 chars)
 
-    3. PYDANTIC SCHEMAS (backend/app/schemas/assets.py):
+    3. PYDANTIC SCHEMAS (backend/app/schemas/assets/assets.py):
        - FAAssetCreateItem: Add identifier_{value.lower()} field
        - FAAssetPatchItem: Add identifier_{value.lower()} field
        - FAinfoResponse: Add identifier_{value.lower()} field
        - FAAinfoFiltersRequest: Add filter field (exact or partial match)
 
-    4. SERVICE LAYER (backend/app/services/asset_source.py):
+    4. SERVICE LAYER (backend/app/services/assets/crud.py):
        - list_assets(): Add condition for new filter
        - create_assets_bulk(): Pass new field to Asset()
 
-    5. BRIM PROVIDER (backend/app/services/brim_provider.py):
+    5. BRIM PROVIDER (backend/app/services/brim/brim_provider.py):
        - search_asset_candidates(): Add search priority if relevant
 
     6. TESTS:
@@ -560,7 +561,7 @@ class GlobalSetting(SQLModel, table=True):
     Predefined keys:
     - session_ttl_hours: Session cookie TTL in hours (int, default: 24)
     - max_file_upload_mb: Max file upload size in MB (int, default: 10)
-    - enable_registration: Allow new user registration (bool, default: true)
+    - registration_mode: Who may create an account: open, invite or disabled (string, default: open)
     """
 
     __tablename__ = "global_settings"
