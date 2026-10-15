@@ -849,7 +849,7 @@ chiede un controllo leggero, senza `all-backend`.
 >
 > **⚠️ Fuori pista**: nessuno.
 
-### C-93 — il thread di aiosqlite dopo la chiusura del loop 🧊 (2026-10-15)
+### C-93 — il thread di aiosqlite dopo la chiusura del loop ✅ (2026-10-15) — `12bcf7e99`, journal `f29e82af5`
 
 Via del coordinatore (15/10, ~04:30, dopo l'ingresso di CP-1), a bassa priorità finché il developer non risponde su D-J1,
 D-J2, D-J3, D-J6 e D-J15: C-93 con la skill `test-triage` (prima la prova che lo riproduce sotto carico, poi la causa;
@@ -964,10 +964,30 @@ all'avviso del coordinatore, niente `all-backend` né build pesanti.
 >   riproduzione deterministica, perché il GC nel contesto sbagliato è raro; la perdita invece c'era a ogni giro, e dopo
 >   la riparazione non c'è più.
 
-#### Checkpoint C-93 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+#### Checkpoint C-93 ✅ (2026-10-15) — committato dal coordinatore
 
 - Delta: 2 file di test dell'AI Export modificati
   (`test_ai_export_components_broker_adequacy.py`, `test_ai_export_components_portfolio_broker_integration.py`),
   questo piano, la sezione J del backlog (J-5 e J-6).
 - La riga C-93 sta nella sezione C: la chiusura la scrive il coordinatore, col testo proposto nell'handoff.
 - Poi G-8, al via del coordinatore.
+- Commit del coordinatore: `12bcf7e99` (`test(ai-export): dispose aiosqlite engines, hermetic scenarios`) e
+  `f29e82af5` (journal). Decisioni: **J-5** passa a X (`services/assets/core.py` è suo), come lotto piccolo con un test;
+  la sposta il coordinatore nella sezione di X. **J-6** è di J, dopo G-8, a bassa priorità, con `test-author`: la
+  guardia sta nel `conftest.py` condiviso, con un elenco esplicito delle eccezioni per le connessioni di sessione
+  volute, e l'handoff dice quali file di altri tocca. Il limite di `patch_effect.py` entra nei controlli dei merge.
+
+#### Aggiornamento di base 5 — A4, X CP3, W7, `dev_release2` `58be885a9` 🧊 (2026-10-15) — FROZEN, validato
+
+Merge del coordinatore `a9fa704c9` (genitori `f29e82af5` e `58be885a9`): A4 (migrazione `005_accounts_invites.py`),
+X CP3 (cambi per tema), W7 (`schemas/transactions/` per tema). Unione automatica del solo backlog. Controllo leggero,
+senza `all-backend`.
+
+> **Note implementazione** (log in `/tmp/libreFolio_j/merge5/` e `/tmp/libreFolio_j/c93/merge5_ai_export.log`):
+> - Il delta di `a9fa704c9` sul bersaglio sono i soli 4 file di C-93 (i due test dell'AI Export, questo piano, il
+>   backlog).
+> - `services ai-export` sulla 6185: **1 025 passed** (la corsia ricrea il DB dalle migrazioni, `005` compresa),
+>   nessun `PytestUnhandledThreadExceptionWarning`.
+> - `pytest --collect-only` (ambiente della corsia): fuso 13 985, bersaglio `58be885a9` estratto 13 981. Differenza
+>   esatta: i 4 test nuovi di C-93 (la prova di presenza della guardia e i 3 del percorso di successo degli scenari).
+> - Porta 6185 libera.
