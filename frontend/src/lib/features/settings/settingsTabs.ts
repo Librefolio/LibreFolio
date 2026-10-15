@@ -13,12 +13,13 @@
  *     on the right. One tab carries it.
  */
 import type {Component, ComponentType} from 'svelte';
-import {Info, Shield, Sliders, User} from 'lucide-svelte';
+import {DatabaseBackup, Info, Shield, Sliders, User} from 'lucide-svelte';
 import {Mail} from 'lucide-svelte';
 import ProfileTab from '$lib/features/settings/tabs/ProfileTab.svelte';
 import PreferencesTab from '$lib/features/settings/tabs/PreferencesTab.svelte';
 import AboutTab from '$lib/features/settings/tabs/AboutTab.svelte';
 import GlobalSettingsTab from '$lib/features/settings/tabs/GlobalSettingsTab.svelte';
+import BackupTab from '$lib/features/backup/BackupTab.svelte';
 import EmailSettingsTab from '$lib/features/email/EmailSettingsTab.svelte';
 
 /** What a tab may depend on: who is signed in. */
@@ -44,6 +45,8 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     {id: 'about', labelKey: 'settings.about', icon: Info, order: 30, component: AboutTab},
     // Everyone reads the global settings; only an administrator changes them.
     {id: 'admin', labelKey: 'settings.admin', icon: Shield, order: 100, component: GlobalSettingsTab, props: (ctx) => ({canEdit: ctx.isSuperuser}), alignEnd: true},
+    // Administrators only: the archive holds every user's data.
+    {id: 'backup', labelKey: 'backup.tab', icon: DatabaseBackup, order: 120, component: BackupTab, visible: (ctx) => ctx.isSuperuser},
     // Administrators only: the state of the instance's email and a test email (workstream E).
     {id: 'email', labelKey: 'email.tab.label', icon: Mail, order: 130, component: EmailSettingsTab, visible: (ctx) => ctx.isSuperuser},
 ];

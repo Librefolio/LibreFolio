@@ -8,9 +8,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from backend.app import main
 from backend.app.db.models import AssetType
+from backend.app.main import app
 from backend.app.schemas.risk_scenarios import RiskScenarioCatalogEntry, RiskScenarioCatalogResponse, RiskScenarioDimension, RiskScenarioKind, RiskScenarioSource
+from backend.app.services.platform import app_lifespan
 from backend.app.services.risk.scenario_catalog import (
     BUILT_IN_SCENARIO_CATALOG_DIR,
     RiskScenarioCatalogLoadError,
@@ -207,15 +208,15 @@ async def test_lifespan_fails_before_mutating_state_when_builtin_catalog_is_inva
         avatars_called = True
         return 0
 
-    monkeypatch.setattr(main, "validate_signal_runtime", fake_signal_runtime)
-    monkeypatch.setattr(main.SignalPluginRegistry, "auto_discover", lambda: None)
-    monkeypatch.setattr(main.SignalPluginRegistry, "list_plugin_codes", lambda: [])
-    monkeypatch.setattr(main, "ensure_data_dirs", lambda: None)
-    monkeypatch.setattr(main, "initialize_risk_scenario_catalog", fail_catalog)
-    monkeypatch.setattr(main, "seed_default_avatars", track_avatars)
+    monkeypatch.setattr(app_lifespan, "validate_signal_runtime", fake_signal_runtime)
+    monkeypatch.setattr(app_lifespan.SignalPluginRegistry, "auto_discover", lambda: None)
+    monkeypatch.setattr(app_lifespan.SignalPluginRegistry, "list_plugin_codes", lambda: [])
+    monkeypatch.setattr(app_lifespan, "ensure_data_dirs", lambda: None)
+    monkeypatch.setattr(app_lifespan, "initialize_risk_scenario_catalog", fail_catalog)
+    monkeypatch.setattr(app_lifespan, "seed_default_avatars", track_avatars)
 
     with pytest.raises(RiskScenarioCatalogLoadError, match="invalid built-in catalog"):
-        async with main.lifespan(main.app):
+        async with app_lifespan.lifespan(app):
             pass
 
     assert catalog_called is True
