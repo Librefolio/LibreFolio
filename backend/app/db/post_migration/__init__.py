@@ -19,7 +19,7 @@ Every worker of a multi-worker server runs them as it starts, so runs take turns
 exclusive lock on ``<db file name>.post-migration.lock``, beside the database, from the integrity
 check to the cleanup, dry runs included. The first converts; the next find nothing to do.
 
-The server runs them at startup (``backend.app.main.run_post_migration_fixes_at_startup``, which
+The server runs them at startup (``backend.app.services.platform.database_bootstrap.run_post_migration_fixes_at_startup``, which
 never lets an error stop the startup); ``python -m backend.app.db.post_migration`` runs them with
 the server stopped. Plan ``34_accountAndIdReuse`` §2.3.
 """
