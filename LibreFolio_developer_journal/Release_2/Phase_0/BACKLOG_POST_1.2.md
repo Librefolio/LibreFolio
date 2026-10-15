@@ -3149,6 +3149,17 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   `StarletteDeprecationWarning` a ogni 422 delle quattro risposte di `api/v1/settings.py` che lo usano; il nome nuovo
   è `HTTP_422_UNPROCESSABLE_CONTENT` (lo usa `api/v1/email.py`); gli altri router scrivono `422`.
   Dettagli: piano 08, «E2.4».
+- **E-5 · `api sync` non sfugge i backtick delle descrizioni su più righe** — piccolo; E, 15/10 (E2b).
+  `openapi-zod-client` scrive una descrizione di più righe come template literal JavaScript senza sfuggire i
+  backtick: una docstring di schema su più righe con ``` ``codice`` ``` rompe `generated.ts` al caricamento
+  (`TypeError: "…" is not a function`), e con lui ogni pagina. Successo con `EmailInstanceConfig` (corretto: docstring
+  su una riga). Le docstring di `backend/app/schemas` hanno 131 tratti tra doppi backtick: da sfuggire in
+  `api sync` (un passo come `fix-openapi-discriminators.mjs`) o da vietare con un test sullo schema.
+  Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E2b.4».
+- **E-6 · Il registro delle schede di Impostazioni importa ogni corpo di scheda** — minimo; E, 15/10 (E2b). Ogni
+  scheda nuova obbliga ogni test che importa il registro vero ad aggiungere un mock, o il file non si carica
+  (`page.tabs.test.ts` con la scheda Email); toccherà anche B e X. Da valutare con A: corpi caricati pigri o un
+  aiuto di mock comune. Dettagli: piano 08, «E2b.4».
 
 ## Y · Cruscotto e grafici (fase 01)
 
