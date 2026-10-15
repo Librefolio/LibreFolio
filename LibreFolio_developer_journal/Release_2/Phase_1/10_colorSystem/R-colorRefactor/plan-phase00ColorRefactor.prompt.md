@@ -433,6 +433,8 @@ si può rilanciare.
 > - 3 file con colori disegnati fuori dal CSS → `drawnColors.ts`.
 > - CSS compilato identico.
 > - Aspetta il merge di G e il via del coordinatore per la gallery, eventualmente insieme ad A e B.
+> - **Deciso il 14/10 alle 23:35:** un solo cancello gallery per A+B+C+D, dopo la misura di G e l'aggiornamento della
+>   base con G (vedi «Merge della base con T-1», «Prossimi passi»).
 >
 > **Inventario** (`scripts/visual_review/color_inventory.py`, solo codice di prodotto). Letterali fuori da `lib/theme/**`
 > e da `app.css`, dalla base `b631308` al lotto C:
@@ -626,6 +628,48 @@ si può rilanciare.
 > - i 6 CSS cambiati rispetto al lotto C contengono tutti token di W9;
 > - Prettier pulito; `svelte-check` 0/0;
 > - Vitest correlati: 1.388 test verdi; gate `themeComponentTokens` e `themeColorMeta`: 28 test verdi.
+
+#### Merge della base con T-1 ✅ (14/10/2026, 23:35)
+
+> **Note implementazione**: il coordinatore ha committato il lotto D (`98731240d`, 32 file) e ha aperto il merge di
+> `dev_release2` (`6ab653dd4`, con T-1 dentro). R l'ha risolto e validato senza committare; il coordinatore l'ha
+> chiuso in **`418ea8042`**, con genitori `98731240d` e `6ab653dd4`.
+> - **Conflitto, solo nel runner** (`_frontend_utility.py`, lista di `core-unit` dopo `clipboardSink`). Tenute tutte
+>   e cinque le righe, le tre di R (`themeColorMeta`, `themeComponentTokens`, `themeModeReads`) e le due di T
+>   (`themeRoles`, `themeTokens`); il `desc` è quello di T. Stage del solo file risolto.
+> - **Fusi da soli:** in `BACKLOG_POST_1.2.md` la sezione R è identica al lotto D e la sezione T è presente alla
+>   lettera; nessun marcatore di conflitto nell'albero.
+> - **Un rosso, deciso dal coordinatore.** Il cricchetto di T (`theme-roles.mjs --check`, gate `themeRoles`)
+>   segnalava `R2 m2 lib/stores/app/themeStore.ts: colour literals beyond its record: #166534`.
+>   - La correzione D3 del lotto A (`#156534` → `#166534`) è uno scambio di colore. La baseline di T, registrata
+>     prima di R, la leggeva come una crescita.
+>   - Su autorizzazione del coordinatore (23:33): `--accept src/lib/stores/app/themeStore.ts --reason "D3
+>     (developer, 14/10): …"`. Cambia una riga della baseline e se ne aggiunge una `~accept` con la motivazione;
+>     stage di quel file solo.
+>   - Quando T-4 sposterà la meta sul verde della testata, la riga cambierà di nuovo: lo farà T.
+>
+> Evidenze sulla revisione combinata:
+> - `theme-roles.mjs --check`: pulito («81 files dropped below their record»: stringe T);
+> - `core-unit` nella corsia 6154: **136 file e 4.335 test verdi**, con i gate di T e di R;
+> - `svelte-check` 0/0;
+> - **nuovo CSS di riferimento** = la build del merge (sessione, `merge-css`), 23 file;
+> - **prova combinata.** Il target `dev_release2` è stato costruito in una copia usa e getta in `/tmp`, poi
+>   cancellata: `git archive` più gli stessi input generati, cioè API e cataloghi i18n, senza differenze nei
+>   sorgenti backend o i18n (script `build_target.sh` nella sessione). Il confronto tra target e merge con
+>   `r3_css_compare.py`, con i 728 token sostituiti, dà **OK**: 11 file identici regola per regola e 12 byte per
+>   byte. T-1 e R non si toccano nel CSS compilato;
+> - `r3_reach.py` sul merge: 36 entry OK.
+>
+> **⚠️ Fuori pista**:
+> - La build del target nella copia chiedeva anche `scripts/` (l'hook `prebuild` di npm genera il catalogo i18n) e
+>   `CHANGELOG.md` (importato con `?raw` dal changelog). Estratti anche questi da `dev_release2`.
+> - T-1 ha aggiunto `@source not './theme*.gate.test.ts'` ad `app.css`. Copre anche i gate di R: Tailwind non legge
+>   più le loro stringhe sintetiche, e il CSS compilato resta identico.
+>
+> **Prossimi passi** (coordinatore, 23:35):
+> - un solo cancello gallery per i lotti A+B+C+D, domani, dopo la misura di G;
+> - prima di quel cancello il coordinatore aggiorna la base con G;
+> - W10 (chiusura) dopo il cancello; fino ad allora niente lavoro nuovo sul codice.
 
 ## 5. Test da adattare (`test-author`)
 
