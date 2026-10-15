@@ -82,7 +82,8 @@ your users sign in again after each restart. See
 ## 🔒 Blocking an Instance {: #instance-block }
 
 A hosting provider can block an instance, for example when its subscription is not paid. Users can
-still sign in, read why the instance is blocked and sign out; the rest of the app is closed.
+still sign in, follow a password-reset link already sent to them, read why the instance is blocked
+and sign out; the rest of the app is closed.
 LibreFolio deletes nothing: the data stays as it is. The block works in both profiles.
 
 ### ⚙️ The Variables {: #block-variables }
@@ -126,6 +127,9 @@ After signing in, users get a full page instead of the app, **This instance is b
   other users, that they should ask their administrator for a backup of their data;
 - with `LIBREFOLIO_DELETION_DATE`, it adds the date, in the user's language: *The instance and its
   data will be deleted on …*;
+- with `LIBREFOLIO_BILLING_URL` ([Environment Variables](configuration.md)),
+  administrators also get a **Manage subscription** link to your subscription page, which opens in
+  a new tab; the other users do not see it;
 - **Logout** signs out.
 
 A user still signed in after the restart gets the page as soon as the app asks the server for data.
@@ -138,6 +142,7 @@ On a blocked instance, only these API calls answer as usual:
 | For | Endpoints |
 | --- | --- |
 | Signing in and out, and who is signed in | `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` |
+| Following a link already sent: checking it, and setting a new password with a reset link | `POST /api/v1/auth/tokens/inspect`, `POST /api/v1/auth/password-reset` |
 | Deleting one's own account | `DELETE /api/v1/auth/users/me`: the block page has no button for it yet |
 | The block page | `GET /api/v1/system/block` (signed-in users only), `GET /api/v1/system/instance` |
 | Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info` |
