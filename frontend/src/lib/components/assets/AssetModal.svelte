@@ -39,11 +39,12 @@
     import {userSettings} from '$lib/stores/app/settings';
     import {get} from 'svelte/store';
     import {trySave} from '$lib/utils/trySave';
-    import {ASSET_TYPES, IDENTIFIER_TYPES, isFamilyOnlyProposal} from '$lib/utils/assetTypes';
-    import {generateUUID} from '$lib/utils/core/uuid';
-    import {columnsToIdentifierRows, identifierRowsToColumns, fieldToIdType} from './assetIdentifiers';
+    import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
+    import {columnsToIdentifierRows, fieldToIdType, identifierValue, withIdentifier, mergeOtherIdentifierValues, withElectedPrimary} from './assetIdentifiers';
+    import {searchResultAssetType, searchResultIdentifier, searchResultProviderParams} from './assetSearchSelection';
+    import {compareMetadata, type ComparisonAction, type ComparisonSnapshot} from './assetMetadataComparison';
     import {isCurrencyChangeBlockedMessage, parseCurrencyChangeBlocker} from './currencyBlocker';
-    import {normalizeQuoteBaseQuantity, normalizeDistribution, sameDistribution, buildClassificationParams, buildClassificationPatch, type ClassificationParams} from './assetPayload';
+    import {buildClassificationParams, buildCreateItem, buildPatchItem, buildProviderAssignItem, type AssetFormFields, type ClassificationParams, type ProviderAssignment} from './assetPayload';
     import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, shouldSeedBondQuoteBase, computeHasProvider, computeProviderDirty, groupImportNotices} from './assetFormState';
     import {ensureAssetProvidersCached, getAssetProviderName, isParametricProvider} from '$lib/utils/providerHelpers';
     import {mergeAssets, invalidateAfterMutation} from '$lib/stores/reference/assetStore';
@@ -496,7 +497,7 @@
 
     /** Get identifier value by type from rows */
     function getIdentifierByType(type: string): string {
-        return identifierRows.find((r) => r.type === type)?.value ?? '';
+        return identifierValue(identifierRows, type);
     }
 
     // =========================================================================
@@ -696,26 +697,19 @@
         let question: IdentifierQuestion | null = null;
         // Auto-fill form
         displayName = result.display_name || displayName;
-        if (result.asset_type) assetType = (ASSET_TYPES as readonly string[]).includes(result.asset_type.toUpperCase()) ? result.asset_type.toUpperCase() : 'OTHER';
+        if (result.asset_type) assetType = searchResultAssetType(result.asset_type);
         if (result.currency) currency = result.currency;
 
         // Auto-fill identifier based on identifier_type
-        const idType = (result.identifier_type ?? '').toUpperCase();
-        if (idType && result.identifier) {
-            const existing = identifierRows.find((r) => r.type === idType);
-            const incoming = String(result.identifier).trim();
-            const current = (existing?.value ?? '').trim();
-            if (existing && current !== '' && current.toUpperCase() !== incoming.toUpperCase()) {
-                // Two codes of the same type, both legitimate: don't pick for the user.
-                // The provider link below is established regardless — the search did its job;
-                // only the *identity* question is deferred to the chooser.
-                askIdentifierPrimary(idType, incoming, current, result.provider_code);
-                question = identifierQuestion(idType, [incoming, current]);
-            } else if (existing) {
-                identifierRows = identifierRows.map((r) => (r.type === idType ? {...r, value: incoming} : r));
-            } else {
-                identifierRows = [...identifierRows, {id: generateUUID(), type: idType, value: incoming}];
-            }
+        const identifier = searchResultIdentifier(identifierRows, result.identifier_type, result.identifier);
+        if (identifier.kind === 'conflict') {
+            // Two codes of the same type, both legitimate: don't pick for the user.
+            // The provider link below is established regardless — the search did its job;
+            // only the *identity* question is deferred to the chooser.
+            askIdentifierPrimary(identifier.type, identifier.incoming, identifier.current, result.provider_code);
+            question = identifierQuestion(identifier.type, [identifier.incoming, identifier.current]);
+        } else if (identifier.kind === 'rows') {
+            identifierRows = identifier.rows;
         }
 
         // Auto-fill provider
@@ -723,14 +717,9 @@
         providerIdentifier = result.identifier;
         providerIdentifierType = result.identifier_type;
         providerNoProvider = false;
-        // Carry over provider_params from search result (e.g. language, currency).
-        // Provider-supplied params take priority; currency is added as fallback
-        // only when the provider didn't already include it.
-        const searchParams: Record<string, any> = {...(result.provider_params ?? {})};
-        if (result.currency && !('currency' in searchParams)) {
-            searchParams.currency = result.currency;
-        }
-        providerParams = Object.keys(searchParams).length > 0 ? searchParams : null;
+        // Carry over provider_params from search result (e.g. language, currency): the provider's own take priority,
+        // the result's currency is the fallback.
+        providerParams = searchResultProviderParams(result.provider_params, result.currency);
         resetDraftReads(result.provider_url ?? null);
         // After the reset, which clears the previous selection's questions: these are this one's.
         selectionQuestions = question ? [question] : [];
@@ -779,16 +768,12 @@
         const idType = identifierChoiceType;
         const primary = identifierChoicePrimary;
         if (!idType || !primary) return;
-        const alternates = identifierChoiceOptions.map((c) => c.value).filter((v) => v.toUpperCase() !== primary.toUpperCase());
-        const known = new Set(identifierRows.filter((r) => r.type === 'OTHER').map((r) => r.value.trim().toUpperCase()));
-        const rows = identifierRows.map((r) => (r.type === idType ? {...r, value: primary} : r));
-        for (const value of alternates) {
-            const key = value.toUpperCase();
-            if (known.has(key)) continue;
-            known.add(key);
-            rows.push({id: generateUUID(), type: 'OTHER', value});
-        }
-        identifierRows = rows;
+        identifierRows = withElectedPrimary(
+            identifierRows,
+            idType,
+            primary,
+            identifierChoiceOptions.map((c) => c.value),
+        );
         moreInfoExpanded = true;
         closeIdentifierPrimary();
     }
@@ -893,15 +878,9 @@
     // Ask Provider (metadata) — unified fetch + compare logic (C1+C2 refactoring)
     // =========================================================================
 
-    /** Helper: field name like 'identifier_ticker' → type 'TICKER' */
     /** Set or update an identifier row by type */
     function setIdentifierByType(type: string, val: string) {
-        const existing = identifierRows.find((r) => r.type === type);
-        if (existing) {
-            identifierRows = identifierRows.map((r) => (r.type === type ? {...r, value: val, autoFilled: true} : r));
-        } else {
-            identifierRows = [...identifierRows, {id: generateUUID(), type, value: val, autoFilled: true}];
-        }
+        identifierRows = withIdentifier(identifierRows, type, val);
     }
 
     /**
@@ -911,17 +890,9 @@
      * Returns how many new rows were added.
      */
     function mergeOtherIdentifiers(raw: unknown): number {
-        const values = Array.isArray(raw) ? raw : raw != null ? [raw] : [];
-        const seen = new Set(identifierRows.filter((r) => r.type === 'OTHER').map((r) => (typeof r.value === 'string' ? r.value.trim() : String(r.value ?? '').trim())));
-        const additions: IdentifierRow[] = [];
-        for (const v of values) {
-            const s = (typeof v === 'string' ? v : String(v ?? '')).trim();
-            if (!s || seen.has(s)) continue;
-            seen.add(s);
-            additions.push({id: generateUUID(), type: 'OTHER', value: s, autoFilled: true});
-        }
-        if (additions.length > 0) identifierRows = [...identifierRows, ...additions];
-        return additions.length;
+        const merged = mergeOtherIdentifierValues(identifierRows, raw);
+        if (merged.added > 0) identifierRows = merged.rows;
+        return merged.added;
     }
 
     /**
@@ -950,131 +921,15 @@
                 toasts.info($t('assets.identifiers.askProviderHint') + ' — no data from provider');
                 return;
             }
-            const pd = meta.patch_data;
-            const differences: DiffItem[] = [];
-            const missingFields: string[] = [];
-
-            // COVERAGE NOTE (branch): the two compare-helpers below and their call
-            // sites (~1029-1201) sit inside the async "Ask Provider" metadata flow.
-            // They mutate closure state (differences, autoFilledFields, the two
-            // distributions) as a side-effect of a live fetch+compare against a
-            // provider response. Their uncovered branches are the auto-fill /
-            // matched / differs three-way splits — reachable only by mocking a full
-            // provider metadata round-trip with three contrived response shapes.
-            // Left uncovered on purpose: extracting the decision would push
-            // offsetting dispatch branches back into this component (roughly
-            // coverage-neutral) while risking a real network path. The pure,
-            // testable half of this section (identifier reconciliation, payload
-            // building, notice grouping) already lives in the sibling .ts modules.
-            // --- Helper: compare a string field — auto-fill if empty, diff if different ---
-            function compareStringField(field: string, label: string, currentVal: string, providerVal: string | null | undefined) {
-                if (!providerVal) return;
-                const touched = manuallyChanged(field);
-                if (!currentVal && !touched) {
-                    setFieldValue(field, providerVal);
-                    autoFilledFields = new Set([...autoFilledFields, field]);
-                } else if (currentVal === providerVal || (field === 'asset_type' && isFamilyOnlyProposal(currentVal, providerVal))) {
-                    // A provider that only knows the family of the stored subtype (ETF for an
-                    // ETF_STOCK) agrees with it: no row, the subtype stays (K step 17, item 17).
-                    if (!touched) autoFilledFields = new Set([...autoFilledFields, field]);
-                } else {
-                    // Name/casing noise: the on-site search title and the metadata page title
-                    // differ only in case (e.g. "T-bond" vs "T-Bond") — same instrument, not a
-                    // real difference. Skip instead of showing a false diff.
-                    const isCaseOnly = currentVal.trim().toLowerCase() === providerVal.trim().toLowerCase();
-                    // Currency not explicitly chosen: on a fresh asset the search may leave the
-                    // currency unset, so the form still shows the base-currency default (e.g. EUR)
-                    // while the provider knows the real one (e.g. a USD-denominated EuroTLX bond).
-                    // The user never picked that value — auto-fill it rather than flag a fake diff.
-                    const isUnsetCurrencyDefault = field === 'currency' && !currencyUserSet;
-                    if (!touched && (isCaseOnly || isUnsetCurrencyDefault)) {
-                        setFieldValue(field, providerVal);
-                        autoFilledFields = new Set([...autoFilledFields, field]);
-                    } else {
-                        differences.push({field, label, type: 'string', currentValue: currentVal, providerValue: providerVal, selected: true});
-                    }
-                }
-            }
-
-            // --- Helper: compare a distribution — auto-fill if empty, diff if different ---
-            function compareDistribution(field: string, label: string, currentDist: Record<string, number>, providerDist: Record<string, number>) {
-                const hasCurrent = Object.keys(currentDist).length > 0;
-                const touched = manuallyChanged(field);
-                if (!hasCurrent && !touched) {
-                    if (field === 'sector_area') sectorDistribution = providerDist;
-                    else geographicDistribution = providerDist;
-                    autoFilledFields = new Set([...autoFilledFields, field]);
-                } else if (!sameDistribution(currentDist, providerDist)) {
-                    differences.push({field, label, type: 'distribution', currentValue: currentDist, providerValue: providerDist, selected: true});
-                } else if (!touched) {
-                    autoFilledFields = new Set([...autoFilledFields, field]);
-                }
-            }
-
-            // --- IDENTIFIERS (scope 'all' or 'identifiers') ---
-            if (scope === 'all' || scope === 'identifiers') {
-                for (const idType of IDENTIFIER_TYPES) {
-                    // OTHER is a JSON list of soft identifiers, not a scalar string — handled below.
-                    if (idType === 'OTHER') continue;
-                    const dbKey = `identifier_${idType.toLowerCase()}`;
-                    const provVal = pd[dbKey];
-                    if (provVal) {
-                        const currentVal = getIdentifierByType(idType);
-                        compareStringField(dbKey, idType, currentVal, provVal);
-                    }
-                }
-                // OTHER: merge each list element as its own row (additive, deduped) instead of
-                // routing the array through the string compare path.
-                if (!manuallyChanged('identifier_other') && mergeOtherIdentifiers(pd.identifier_other) > 0) {
-                    autoFilledFields = new Set([...autoFilledFields, 'identifier_other']);
-                }
-            }
-
-            // --- ASSET DETAILS (scope 'all' only) ---
-            if (scope === 'all') {
-                compareStringField('display_name', $t('common.name'), displayName, pd.display_name);
-                compareStringField('asset_type', $t('common.type'), assetType, pd.asset_type);
-                compareStringField('currency', $t('common.currency'), currency, pd.currency);
-            }
-
-            // --- CLASSIFICATION: description, sector, geographic ---
-            const cpData = pd.classification_params;
-
-            if (scope === 'all') {
-                if (cpData?.short_description) {
-                    const provDesc = cpData.short_description;
-                    // BRIM prefill (auto-populated identified-names, not user-typed): merge the
-                    // provider enrichment (head) with the identified-names prefill (tail) instead
-                    // of routing to the diff modal, so the rich description always lands even
-                    // though the import wizard pre-populated the field.
-                    if (!manuallyChanged('short_description') && descriptionFromPrefill && shortDescription.trim() && shortDescription.trim() !== provDesc.trim()) {
-                        const tail = shortDescription.trim();
-                        shortDescription = provDesc.includes(tail) ? provDesc : `${provDesc}\n\n${tail}`;
-                        descriptionFromPrefill = false;
-                        autoFilledFields = new Set([...autoFilledFields, 'short_description']);
-                    } else {
-                        compareStringField('short_description', 'Description', shortDescription, provDesc);
-                    }
-                }
-            }
-
-            if (scope === 'all' || scope === 'sector') {
-                if (cpData?.sector_area) {
-                    const provDist = normalizeDistribution(cpData.sector_area.distribution ?? cpData.sector_area);
-                    compareDistribution('sector_area', $t('common.sectorDistribution'), sectorDistribution, provDist);
-                } else {
-                    missingFields.push($t('common.sectorDistribution'));
-                }
-            }
-
-            if (scope === 'all' || scope === 'geographic') {
-                if (cpData?.geographic_area) {
-                    const provDist = normalizeDistribution(cpData.geographic_area.distribution ?? cpData.geographic_area);
-                    compareDistribution('geographic_area', $t('common.geoDistribution'), geographicDistribution, provDist);
-                } else {
-                    missingFields.push($t('common.geoDistribution'));
-                }
-            }
+            // The decision is pure (./assetMetadataComparison.ts); the writes are applied here, in order.
+            const {actions, differences, missingFields} = compareMetadata(meta.patch_data, comparisonSnapshot(), scope, manuallyChanged, {
+                name: $t('common.name'),
+                type: $t('common.type'),
+                currency: $t('common.currency'),
+                sector: $t('common.sectorDistribution'),
+                geographic: $t('common.geoDistribution'),
+            });
+            for (const action of actions) applyComparisonAction(action);
 
             // --- RESULTS: consistent toast logic (Fix 3) ---
             if (missingFields.length > 0) {
@@ -1129,6 +984,44 @@
     /** Per-section "Ask Provider" — compares only the given section */
     function handleAskProviderSection(section: 'identifiers' | 'sector' | 'geographic') {
         fetchAndCompareMetadata(section);
+    }
+
+    /** The form values a metadata comparison reads (see ./assetMetadataComparison.ts). */
+    function comparisonSnapshot(): ComparisonSnapshot {
+        return {
+            identifiers: Object.fromEntries(IDENTIFIER_TYPES.filter((type) => type !== 'OTHER').map((type) => [type, getIdentifierByType(type)])),
+            displayName,
+            assetType,
+            currency,
+            currencyUserSet,
+            shortDescription,
+            descriptionFromPrefill,
+            sectorDistribution,
+            geographicDistribution,
+        };
+    }
+
+    /** Apply one write of a metadata comparison and mark its field auto-filled. */
+    function applyComparisonAction(action: ComparisonAction) {
+        switch (action.kind) {
+            case 'fill':
+                setFieldValue(action.field, action.value);
+                break;
+            case 'fillDistribution':
+                if (action.field === 'sector_area') sectorDistribution = action.value;
+                else geographicDistribution = action.value;
+                break;
+            case 'mergeDescription':
+                shortDescription = action.value;
+                descriptionFromPrefill = false;
+                break;
+            case 'mergeOther':
+                if (mergeOtherIdentifiers(action.values) === 0) return;
+                break;
+            case 'agree':
+                break;
+        }
+        autoFilledFields = new Set([...autoFilledFields, action.field]);
     }
 
     /** Generic setter used by comparison logic */
@@ -1286,26 +1179,20 @@
         saving = false;
     }
 
-    async function saveCreate() {
-        const normalizedQuoteBaseQuantity = normalizeQuoteBaseQuantity(quoteBaseQuantity);
-        // Build classification_params if any fields are set
-        const classificationParams = buildClassificationParams(shortDescription, sectorDistribution, geographicDistribution);
+    /** The form's values, as the save requests are built from them (./assetPayload.ts). */
+    function formFields(): AssetFormFields {
+        return {displayName, currency, assetType, iconUrl, quoteBaseQuantity, active, isBenchmark, userUrl: providerUserUrl, shortDescription, sectorDistribution, geographicDistribution, identifierRows};
+    }
 
+    /** The provider the save assigns to the asset. */
+    function providerAssignment(): ProviderAssignment {
+        return {code: providerCode, identifier: providerIdentifier, identifierType: providerIdentifierType, params: providerParams};
+    }
+
+    async function saveCreate() {
         // Step 1: Create asset
-        const createPayload = [
-            {
-                display_name: displayName.trim(),
-                currency: currency,
-                asset_type: assetType,
-                icon_url: iconUrl || undefined,
-                quote_base_quantity: normalizedQuoteBaseQuantity,
-                active: active,
-                is_benchmark: isBenchmark,
-                user_url: providerUserUrl || undefined,
-                classification_params: classificationParams,
-                ...identifierRowsToColumns(identifierRows),
-            },
-        ];
+        const createItem = buildCreateItem(formFields());
+        const createPayload = [createItem];
 
         const createResp = (await zodiosApi.create_assets_bulk_api_v1_assets_post(createPayload as any)) as any;
         const result = createResp?.results?.[0];
@@ -1313,28 +1200,20 @@
             throw new Error(result?.message || 'Failed to create asset');
         }
         const assetId = result.asset_id;
-        naLog(`created asset #${assetId} "${displayName.trim()}" type=${assetType} currency=${currency} qbq=${normalizedQuoteBaseQuantity} · identifiers: ${identifiersSummary()} · provider=${hasProvider ? providerCode : 'none'}`);
+        naLog(`created asset #${assetId} "${displayName.trim()}" type=${assetType} currency=${currency} qbq=${createItem.quote_base_quantity} · identifiers: ${identifiersSummary()} · provider=${hasProvider ? providerCode : 'none'}`);
 
         // Upsert the new asset into the shared cache so other pages
         // (transactions cell, AssetCard, AssetTable, …) reflect the entry
         // immediately. The BE response only carries `asset_id`; we merge the
         // fields the FE just submitted (no extra round-trip).
-        mergeAssets([{id: assetId, ...(createPayload[0] as Record<string, unknown>)}]);
+        mergeAssets([{id: assetId, ...(createItem as Record<string, unknown>)}]);
 
         // Step 2: Assign provider (separate try/catch — asset already created)
         // Skip assignment for scheduled_investment if no schedule is configured yet
         const skipProviderAssignment = providerCode === 'scheduled_investment' && (!providerParams || !providerParams.schedule?.length);
         if (hasProvider && !skipProviderAssignment) {
             try {
-                const assignPayload = [
-                    {
-                        asset_id: assetId,
-                        provider_code: providerCode,
-                        identifier: providerIdentifier,
-                        identifier_type: providerIdentifierType,
-                        provider_params: providerParams,
-                    },
-                ];
+                const assignPayload = [buildProviderAssignItem(assetId, providerAssignment())];
                 await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
             } catch (assignErr: any) {
                 console.error('Provider assignment failed after asset creation:', assignErr);
@@ -1391,7 +1270,6 @@
     }
 
     async function saveEdit(assetId: number) {
-        const normalizedQuoteBaseQuantity = normalizeQuoteBaseQuantity(quoteBaseQuantity);
         // #R3-4 — for PARAMETRIC_GENERATION providers (e.g. scheduled_investment), if the
         // user changed `provider_params` intercept the save flow to show an explicit
         // regenerate confirmation. Confirming will: (1) PATCH/assign through the normal
@@ -1424,31 +1302,8 @@
             return; // wait for confirm; the modal will re-invoke saveEdit()
         }
 
-        // Build classification_params
-        const classificationParams = buildClassificationParams(shortDescription, sectorDistribution, geographicDistribution);
-        const classificationPatch = buildClassificationPatch(initialClassification, classificationParams);
-
-        // Step 1: Patch asset
-        const idCols = identifierRowsToColumns(identifierRows);
-        const patchItem = {
-            asset_id: assetId,
-            display_name: displayName.trim(),
-            currency: currency,
-            asset_type: assetType,
-            icon_url: iconUrl,
-            quote_base_quantity: normalizedQuoteBaseQuantity,
-            active: active,
-            is_benchmark: isBenchmark,
-            user_url: providerUserUrl || null,
-            ...(classificationPatch !== undefined ? {classification_params: classificationPatch} : {}),
-            identifier_isin: idCols.identifier_isin || null,
-            identifier_ticker: idCols.identifier_ticker || null,
-            identifier_cusip: idCols.identifier_cusip || null,
-            identifier_sedol: idCols.identifier_sedol || null,
-            identifier_figi: idCols.identifier_figi || null,
-            identifier_uuid: idCols.identifier_uuid || null,
-            identifier_other: idCols.identifier_other || null,
-        };
+        // Step 1: Patch asset (classification_params only when it changed since the modal opened)
+        const patchItem = buildPatchItem(assetId, formFields(), initialClassification);
         const patchPayload = [patchItem];
 
         // I.3 + R3-3 Policy D — PATCH returns a per-item failure with the structured
@@ -1501,15 +1356,7 @@
                 queries: {asset_ids: [assetId]},
             });
         } else if (hasProvider) {
-            const assignPayload = [
-                {
-                    asset_id: assetId,
-                    provider_code: providerCode,
-                    identifier: providerIdentifier,
-                    identifier_type: providerIdentifierType,
-                    provider_params: providerParams,
-                },
-            ];
+            const assignPayload = [buildProviderAssignItem(assetId, providerAssignment())];
             await zodiosApi.assign_providers_bulk_api_v1_assets_provider_post(assignPayload as any);
         }
 
