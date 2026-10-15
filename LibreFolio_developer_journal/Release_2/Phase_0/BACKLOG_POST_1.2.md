@@ -2486,7 +2486,15 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - I1: le righe evidenziate delle liste su `bg-lf-selected`, più quiete in scuro della vecchia piena verde; il bordo
     quasi nero del selettore dei segnali su `border-lf-input` (manca un bordo di campo forte); il filtro attivo di
     `CheckMenu` sui ruoli `info`; l'avviso dentro il tooltip di `FxProviderSelect` resta `#fbbf24` finché
-    `ui/feedback/Tooltip.svelte` non passa a `bg-lf-inverse` (Q10 li lega: da proporre come lotto a parte).
+    `ui/feedback/Tooltip.svelte` non passa a `bg-lf-inverse` (Q10 li lega: da proporre come lotto a parte). ✅ Q10 fatto
+    il 16/10.
+  - Q10: in scuro tutti i tooltip diventano chiari col testo scuro; tre ruoli `-on-inverse` nuovi (pericolo, info,
+    attenuato) col valore del tema opposto, la regola di Q10 estesa; info e attenuato a 4,54:1 in chiaro; l'ombra dei
+    tooltip è quella dei menu.
+  - W1-d: il suggerimento evidenziato di `TagInput` passa dal blu a `bg-lf-selected`.
+  - Rimandati da W1-d: `ui/input/ExactDecimalInput.svelte` ed `ExactQuantityInput.svelte`, insieme ai chiamanti che gli
+    passano classi di palette (`INPUT` del pianificatore PAC, `ui.ts:39`; `!bg-white` in `TxFormSingleSection` e
+    `TxFormPairSection`) e ai test che leggono i loro colori, con l'OK dei proprietari.
 
   Dettagli: piano di T, voci «da rivedere» di ogni lotto nell'avanzamento (da W3-a in poi).
 - **TC-11 · Una select disabilitata a lista aperta accetta ancora un clic su un'opzione** — basso; trovata da
