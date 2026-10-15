@@ -5,10 +5,11 @@
  * libraries need concrete sRGB, so chart targets are resolved and clamped. A translucent occurrence keeps its alpha.
  */
 
-import {clampToSrgb, formatOklch, inSrgbGamut, parseColor, rgbaToOklch, type Rgba} from '../color.js';
+import {clampToSrgb, formatOklch, inSrgbGamut, rgbaToOklch, type Rgba} from '../color.js';
+import {baseVar, joinTransparentMix, parseTransparentMix, resolveValue} from '../colorValue';
 
 export interface Target {
-    /** The CSS text of the target, as typed (`oklch(…)`, `#…`, `var(--…)`). */
+    /** The CSS text of the target, as typed (`oklch(…)`, `#…`, `var(--…)`, `color-mix(in …, <base> p%, transparent)`). */
     css: string;
     /** The resolved colour, when it can be resolved (a `var()` is read from the page). */
     rgba: Rgba | null;
@@ -29,12 +30,10 @@ export function isSafeSelector(selector: string): boolean {
 export function resolveTarget(to: string): Target | null {
     const css = to.trim();
     if (!isSafeCssValue(css)) return null;
-    const ref = /^var\(\s*(--[\w-]+)\s*\)$/.exec(css);
-    if (ref) {
-        const value = typeof document === 'undefined' ? '' : getComputedStyle(document.documentElement).getPropertyValue(ref[1]).trim();
-        return {css, rgba: parseColor(value)};
-    }
-    const rgba = parseColor(css);
+    const lookup = (name: string) => (typeof document === 'undefined' ? '' : getComputedStyle(document.documentElement).getPropertyValue(name).trim());
+    const rgba = resolveValue(css, lookup);
+    // A value that names a variable stays valid CSS when the page cannot resolve it now: the stylesheets still take it.
+    if (baseVar(css)) return {css, rgba};
     return rgba ? {css, rgba} : null;
 }
 
@@ -43,6 +42,9 @@ const round = (v: number, digits: number) => Math.round(v * 10 ** digits) / 10 *
 /** The target as a CSS value, carrying the alpha of the occurrence it replaces. */
 export function cssWithAlpha(target: Target, alpha: number): string {
     if (alpha >= 0.9995) return target.css;
+    // A translucent mix takes the occurrence's alpha into its share: its base stays live, a `var()` still one.
+    const mix = parseTransparentMix(target.css);
+    if (mix) return joinTransparentMix({...mix, percent: round(mix.percent * alpha, 2)});
     if (target.rgba && !target.css.startsWith('var(')) {
         const a = round(target.rgba.alpha * alpha, 4);
         if (inSrgbGamut(target.rgba)) {

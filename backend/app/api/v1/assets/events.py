@@ -32,6 +32,8 @@ _REFUSAL_STATUS = {
     "EVENT_NOT_EDITABLE": 400,
     "EVENT_KEY_CONFLICT": 400,
     "EVENT_EXISTS": 409,
+    "EVENT_NOT_DELETABLE": 400,
+    "EVENT_IN_USE": 409,
 }
 
 
@@ -67,7 +69,16 @@ async def upsert_events_bulk(
       an edit ends on;
     - 409 ``EVENT_EXISTS``, ``mode: "create"`` only: ``existing``, the events already
       on that date and type (manual or provider), with their values, ``is_auto`` and
-      ``linked_transactions``.
+      ``linked_transactions``;
+    - 400 ``EVENT_NOT_DELETABLE``: ``ids`` of ``delete_ids`` that are not an event of the
+      asset;
+    - 409 ``EVENT_IN_USE``: ``events`` of ``delete_ids`` linked to transactions, each with
+      ``linked_transactions``, their number.
+
+    ``delete_ids`` (upsert items only) deletes events of the asset first, manual or from a
+    provider (one comes back with its next sync), in the same transaction: an edit may then
+    take the date and type of a deleted event (the event editor's save). Each result's
+    ``deleted_ids`` lists them.
 
     ``mode: "upsert"`` (default): an event without ``id`` is matched on (date, type)
     and updated in place, so transactions linked to it stay linked; two events without

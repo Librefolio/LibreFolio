@@ -94,7 +94,8 @@
       "eventCreateTitle": "Crear evento para {asset}",
       "eventCreateAmountRequired": "El importe es obligatorio",
       "eventCreateDateRequired": "La fecha es obligatoria",
-      "fxDatesHint": "Las fechas 'De' y 'A' suelen coincidir: difieren cuando el bróker abona la nueva divisa otro día."
+      "fxDatesHint": "Las fechas 'De' y 'A' suelen coincidir: difieren cuando el bróker abona la nueva divisa otro día.",
+      "eventEditTitle": "Editar evento para {asset}"
     },
     "bulk": {
       "resetRow": "Restablecer fila",
