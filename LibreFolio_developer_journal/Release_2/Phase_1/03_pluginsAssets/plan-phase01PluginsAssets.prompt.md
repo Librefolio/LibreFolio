@@ -1380,7 +1380,7 @@ Passi:
 > - Un file `frontend/src/lib/api/.tools-codegen.lock` compare durante la build del frontend e sparisce alla fine
 >   (`frontend/scripts/tools-generation-io.mjs:94`): non è un artefatto da escludere.
 
-### Checkpoint CP4 🧊 (2026-10-15) — FROZEN, handoff al coordinatore
+### Checkpoint CP4 ✅ (2026-10-15) — in `dev_release2` come `7f4618494` (merge del mio `805f2f112`), record `786f3e216`
 
 - **Base**: HEAD `c81670354`; `dev_release2` nel frattempo a `6d67fdaac` (J C-93, H CP4): nessun file in comune, nessun import
   nuovo dei nomi spostati (55 coppie su tutti e due gli alberi).
@@ -1392,3 +1392,62 @@ Passi:
   `TODO_FUTURI.md` (1 riga), `pyproject.toml` (commento), `.github` 1, MkDocs 2, devWiki 2.
 - **Messaggi di commit proposti**: `refactor(schemas): split asset schemas by theme` (36 percorsi: tutto tranne il piano) e
   `docs(journal): X CP4 log` (il piano).
+
+Il coordinatore ha integrato il CP4 con un merge (`7f4618494`): nel frattempo erano entrati J C-93, H CP4 e J G-8, senza
+file in comune; il suo controllo sull'AST: 49/49 nomi identici, tolto solo `__all__`. `schemas/fx.py` resta intero (sotto
+soglia): niente lotto di simmetria. La riga `transactions.py` dell'albero delle istruzioni la gira lui a W. Il mio ramo è
+avanzato a `786f3e216`, che porta J-5 nella mia sezione del backlog.
+
+### J-5 — `_run_provider_in_thread` non lascia un loop chiuso come corrente ✅ (2026-10-15)
+
+Via del coordinatore alle ~06:34 («una riga più il test di test-author; poi X-R8»). Base: HEAD `786f3e216`.
+
+**Il difetto** (triage di J, piano 05 §10 «C-93»): `services/assets/core.py:114-119`, `_sync_runner` (dentro
+`asyncio.to_thread`), crea un loop, lo imposta come corrente, lo chiude e non lo toglie. Nel thread dell'executor resta
+così un loop chiuso come corrente: una connessione aiosqlite raccolta dal GC in quel thread crea il suo future con
+`asyncio.get_event_loop()`, lo lega al loop chiuso e muore con «Event loop is closed» (`PytestUnhandledThreadExceptionWarning`
+attribuito a un test estraneo). Nel backend è l'unico punto che lo fa.
+
+**La cura**: `asyncio.set_event_loop(None)` nel `finally`, prima di `loop.close()`, come fa `asyncio.Runner.close()`.
+
+Passi:
+1. ✅ Test (test-author) in `test_utilities/test_provider_core_cache.py`, classe `TestRunProviderInThread`: dopo una
+   chiamata, il thread che l'ha eseguita non ha un loop chiuso come corrente. Rosso sul codice di oggi.
+   > **Note implementazione**: `test_worker_thread_does_not_keep_closed_event_loop` (righe 267–315). Il thread si fissa con
+   > un `ThreadPoolExecutor(max_workers=1)` privato: `asyncio.to_thread` è sostituito, solo per quella chiamata
+   > (`monkeypatch.context()`), con il suo stesso corpo su quell'executor; una sonda prima e una dopo nello stesso thread
+   > (verificato, non supposto: il fornitore e le due sonde registrano il thread). L'executor di default del loop del test
+   > non c'entra. Asserzione stretta: nessun loop corrente, come il thread era stato trovato. **Rosso sul codice di oggi**:
+   > 1 fallito, 28 passati, «pinned-provider_0 still has <_UnixSelectorEventLoop running=False closed=True …> as its current
+   > loop» (`/tmp/libreFolio_x_j5_ta_red_current.log`).
+2. ✅ La riga in `core.py`; il test diventa verde.
+   > **Note implementazione**: `asyncio.set_event_loop(None)` nel `finally` di `_sync_runner`, prima di `loop.close()`
+   > (`core.py:120`). `utils provider-core-cache` 29/29 (`/tmp/libreFolio_x_j5_green.log`); ruff e black puliti.
+3. ✅ Verifiche: `utils provider-core-cache`, ruff e black, i test dei chiamanti; journal e handoff.
+   > **Note implementazione**: la riga sta nel percorso di ogni chiamata ai fornitori (prezzi, storico, metadati, ricerca),
+   > quindi la run completa: `front build --debug` (97 s) e `mkdocs build` (47 s), resi vecchi dall'integrazione del CP4 (14
+   > file di `frontend/src`, 8 di MkDocs, il CHANGELOG), poi **`all-backend` sulla 6183, 06:46–07:08, 7/7, 14 003 passati,
+   > 29 saltati**, 0 falliti (`/tmp/libreFolio_x_j5_heavy.sh`, log `/tmp/libreFolio_x_j5_allbackend.log`). Rispetto al CP4
+   > (13 972 / 28) il +32 è la differenza di raccolta (13 983 → 14 015, +33 −1): il mio test più 32 arrivati con
+   > l'aggiornamento di base (H CP4: `test_system_api` 8, `test_config_misc` 8, 7 casi della guardia `config-package`,
+   > uno tolto, `api/v1/system.py`; `test_tools_api` 5; J: 4 in `test_ai_export_components_portfolio_broker_integration`).
+   > Il saltato in più è `test_external/test_asset_providers.py::test_current_value[css_scraper]`: la pagina di Borsa
+   > Italiana senza prezzo («market closed or in Call status», 07:00), dipende dall'ora, non dalla riga. Porta 6183 libera.
+
+### Checkpoint J-5 🧊 (2026-10-15) — FROZEN, handoff al coordinatore
+
+- **Base**: HEAD `786f3e216`.
+- **Elenchi**: nessuna rinomina, nessun taglio, nessun file nuovo. Modificati 4: `backend/app/services/assets/core.py` (1 riga),
+  `backend/test_scripts/test_utilities/test_provider_core_cache.py` (il test e 4 import), il piano e il backlog (J-5 chiusa).
+- **Messaggi di commit proposti**: `fix(assets): unset the provider thread's closed event loop` (i 2 file di codice) e
+  `docs(journal): X J-5 log, W agreements` (piano e backlog).
+
+> **Accordi con W, comunicati dal coordinatore il 15/10 (~07:00), da rispettare nel FE5:**
+> - Lotto E1b degli eventi (dopo le decisioni 20–23 del developer): W modifica in
+>   `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` il salvataggio degli eventi (righe 349–438: prima le
+>   cancellazioni, poi gli upsert; `asset_id` nella cancellazione; la valuta della riga quando c'è; la conferma per gli
+>   eventi collegati) e il toast d'errore con il `detail` (461–466). Finché il lotto non entra, quelle righe non le tocco.
+> - Lotto E0 (dopo la finestra della galleria): W scrive in `frontend/src/lib/components/assets/EventDataImportModal.svelte:38`
+>   `matchKey: true` sulla colonna `type`, così che i doppioni del CSV degli eventi siano solo le righe con stessa data e
+>   stesso tipo (I-11a). Prezzi, cambi e distribuzioni non cambiano.
+> Nessuna obiezione da parte mia: non ho modifiche previste su quelle righe.
