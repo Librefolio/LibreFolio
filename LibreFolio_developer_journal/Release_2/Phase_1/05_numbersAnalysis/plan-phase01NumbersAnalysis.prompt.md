@@ -1784,6 +1784,154 @@ Nessun valore cambia per U4b (spostamenti nella casa, provati con parità); camb
   slot.
 - **Conflitti**: `native_cash.py` di W (N1a, solo aggiunte, altre righe); `compute_wac_iterative` resta dove sta fino a
   CP-8.
+
+**Avvio di CP-4 (15/10, sera)**: J è entrato in `dev_release2` (`2faa88a34`). Ordine confermato dal coordinatore:
+CP-4, poi CP-15, poi la sostituzione della G/L % di W; per le prove pesanti chiedo lo slot.
+
+- ✅ **Righe ricontrollate sulla nuova base** (HEAD `7b720ee12`; il codice è uguale a `dev_release2`, che ha in più solo
+  giornale, CHANGELOG e istruzioni). Dalla mia lettura del 15/10 (`f87ad04c6`) `portfolio_service.py`,
+  `price_marks.py`, `returns.py` e `data_quality_thresholds.py` non sono cambiati; il merge ha toccato solo
+  `brokers/summary.py` e `native_cash.py` (N1). Riletti sul codice:
+  - R1: `:968-993` (summary) e `:1244-1268` (history);
+  - R2: `:2145-2191`;
+  - R3: `:870-883`;
+  - R5: `:824`, `:939`, `:1040`;
+  - P1: `:585`;
+  - C1: `_wac_qualifying_txs` a `:239`;
+  - V-11: `:1069-1089` (la grazia a `:1086`), `price_marks.py:197` (`resolve`), soglia a
+    `data_quality_thresholds.py:22`.
+- **Passi brevi**, ognuno coi suoi rossi e l'albero verde alla fine:
+  - **CP-4a**: R1, R3, R5 in `returns.py`, tre funzioni pure. Valori identici; solo con date ripetute, che il motore
+    non produce mai (uno stato al giorno), il periodo parte dallo snapshot d'inizio stesso. Regole:
+    - `rebase_to_period(nav_snapshots, cash_flows, date_from)`: la regola di oggi;
+    - `net_holding_return(market_pnl, income, costs, cost_basis)`;
+    - `gain_loss_ratio(gain, base, *, positive_base)`: `None` sulla base 0 (o ≤ 0 con `positive_base`). I chiamanti
+      tengono il loro ripiego: 0 per la sintesi e il broker, `None` per la posizione.
+
+    ✅ 15/10 sera. **Note implementazione**:
+    - **Rossi** (`test-author`): `test_financial_math/test_returns_rebase_and_ratios.py`, nuovo, 53 test, tutti rossi
+      sui nomi mancanti (`a_returns_red.log`). Le copie di oggi dei due blocchi sono nel file come oracolo: summary e
+      history coincidono già sui 16 casi della griglia a date uniche.
+    - **Cura**:
+      - `returns.py`: `PeriodRebase` (dataclass congelata di tuple), `rebase_to_period`, `net_holding_return`,
+        `gain_loss_ratio` (`positive_base` obbligatorio e solo per nome);
+      - `portfolio_service.py`: i due blocchi di ribasamento (summary e history, ~45 righe) diventano una chiamata;
+        il summary tiene il suo ripiego `today` quando non ci sono snapshot;
+      - R3: la variabile locale ora si chiama `holding_return`, per non coprire la funzione;
+      - le tre G/L %: la posizione con `positive_base=False`; il broker e la sintesi con `positive_base=True` e il
+        ripiego esplicito `… if ratio is not None else Decimal("0")`. Niente `or`: con `or` un rapporto zero come
+        `Decimal("0.00")` diventerebbe `Decimal("0")`, con un'altra rappresentazione;
+      - tolti dagli import `CashFlowInput` e `NAVSnapshot`, non più usati; nessuno li importava da lì.
+    - **Mappe aggiornate**: tabella dei moduli di `financial-math.instructions.md`, mappa di `backend.instructions.md`,
+      docstring di `financial_math/__init__.py`, albero della pagina dev `financial_math.md`.
+    - **Verdi**, un file alla volta con `nice -n 10`, log in `/tmp/libreFolio_j/cp4/j_*`:
+      - il file nuovo 53/53, la guardia del layer 37/37;
+      - parità sui file che leggono summary, history e posizioni: `test_portfolio_service.py` 96 + 1 rosso, cioè R1
+        di V-11, atteso fino a CP-4b; `test_portfolio_service_native_cash.py` 21; `test_native_cash_guard.py`, il
+        golden, 1; `test_portfolio_cost_currency.py` 25; `test_orphan_transfer_after_broker_delete.py` 19;
+        `test_roi_utils.py` 60;
+      - AI Export: `portfolio_broker_financial` 126, `portfolio_broker_integration` 58, `asset` 66; `services broker`
+        65;
+      - `dev.py lint` pulito; black invariato sui 4 file; `diff --check` pulito.
+    - **Fuori perimetro, annotato**: in `get_positions_contribution` restano due rapporti (`:1780`, `:1791`, P&L su
+      `|valore d'inizio|` e la sua base d'annualizzazione). Sono della famiglia dei contributi (U5a, CP-3), non della
+      G/L %, e restano lì per CP-3.
+  - **CP-4b**: V-11, il solo cambio di valore (un avviso). Rossi sui tre scenari della tabella.
+    - **Angolo dichiarato** (la regola approvata, D-J15, alla lettera: «la grazia parte dall'ultima quotazione di
+      mercato; senza quotazioni dal primo BUY/SELL, come oggi»): un asset con una quotazione vecchia (V−100) e un
+      primo BUY recente (V−5), valutato al trade in V. Oggi non compare, perché la grazia parte dal BUY; dopo compare,
+      perché parte dalla quotazione: un flusso di prezzi fermo si segnala subito, invece che solo 14 giorni dopo il
+      primo acquisto dell'asset (oggi la grazia parte dal primo BUY/SELL, e un acquisto nuovo non la fa ripartire:
+      correzione del test-author). Rosso R2.
+    - **Disegno**:
+      - `AssetPriceSeries.last_market_date(day)` (lista precalcolata in `__init__`, una bisezione per domanda);
+      - `DailyPortfolioState.transaction_implied_last_quote_dates`, riempito dove l'asset diventa «implied» e copiato
+        nei giorni saltati;
+      - la regola della grazia come funzione pura in `financial_math/portfolio/data_quality.py`, con `grace_days`
+        passato dal servizio. Il servizio resta il consumatore della soglia, e la guardia `CONSUMERS` di
+        `test_data_quality_thresholds.py` non cambia.
+
+    ✅ 15/10 sera. **Note implementazione**:
+    - **Rossi** (`test-author`, in `test_portfolio_service.py`, classe `TestTransactionImpliedGraceFromLastQuote`):
+      - R1 rosso a `:1585`, R2 rosso a `:1612`;
+      - G1, G2, G3 e i 3 test esistenti verdi;
+      - ognuno prova prima, sulla riga della posizione, che in V l'asset è valutato al prezzo di un trade e da quando
+        manca la quotazione (`b_v11_red.log`, `b_v11_red2.log`).
+    - **Cura**:
+      - `price_marks.py`: `AssetPriceSeries.last_market_date()`, con `_last_market` precalcolata;
+      - `models.py`: il campo `transaction_implied_last_quote_dates`;
+      - `daily_state.py`: riempito dove l'asset diventa «implied», copiato nei giorni saltati;
+      - `data_quality.py`: `transaction_implied_assets_to_report(…, grace_days)`, pura;
+      - `portfolio_service.py`: il ciclo della grazia diventa una chiamata, con la soglia passata dal servizio.
+    - **Verdi**, un file alla volta:
+      - i test di V-11, 8/8;
+      - `test_portfolio_service.py` 98;
+      - `test_price_resolver.py` 24;
+      - i file del motore `test_broker_internal_flows` 47, `test_cash_decomposition` 9, `test_broker_pnl_contributions`
+        9, `test_pnl_candles` 20, `test_data_quality_report` 38;
+      - `dev.py lint` pulito (dopo `strict=True` sullo `zip`); black invariato sui 5 file.
+    - **⚠️ Fuori pista**: il golden di cassa (`test_native_cash_guard.py`) si ferma sul campo nuovo, com'è progettato:
+      un dizionario con chiavi d'asset va dichiarato nelle tabelle del dump. Il test-author aggiunge
+      `_ASSET_KEYED_FIELDS` e rigenera il golden, e prova che il JSON nuovo, tolto il campo, è identico al vecchio.
+      - **Esito**: il golden aggiunge 116 righe, tutte del campo nuovo, e nessuna tolta. Tolto il campo, il file è
+        identico al vecchio, anche byte per byte; le chiavi del campo sono quelle di `transaction_implied_asset_ids` in
+        ogni stato.
+      - **Valori**: MAN → null ogni giorno; EQ e IDX → null il 2/1; EQ → 3/1 dal 7/1 al 19/1, perché la vendita del 7/1
+        è più recente della quotazione. EQ era già «implied» quei giorni nel golden vecchio.
+      - **Seconda deviazione, trovata dal test-author**: l'interruttore `LIBREFOLIO_REGEN_NATIVE_CASH_GUARD` non
+        funzionava più, in silenzio. Da `901fa33f6` le corsie tolgono ogni `LIBREFOLIO_*` tranne `TEST_LANE_KEEPS` e
+        `LIBREFOLIO_TEST_*` (`scripts/cli_base.py:160-168`). Rinominato in `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD`,
+        nel solo file di test, con la spiegazione nella docstring. Il nome vecchio non è citato in nessun file vivo,
+        solo nel piano archiviato 41. Le altre variabili non `TEST_` lette dai test sono quelle della sonda dell'AI
+        Export, che non passa mai dal runner (skill): non tocca.
+      - Rieseguiti da me: il golden verde (un passaggio vero, non uno skip); `services risk-all
+        test_data_quality_thresholds` 31/31 (la guardia `CONSUMERS` non cambia); nessuna costruzione posizionale di
+        `DailyPortfolioState`.
+      - **Coordinatore (17:43)**: la rinomina va bene e chiude DV-1, che era di H. **Conflitto in arrivo sul golden**:
+        DV dei colori ha cambiato a mano 4 righe di `eur_only_golden.json` sul suo ramo (Liquidità 💵 → 💰, la mappa
+        unica delle emoji dei settori, S1), non ancora entrato. Se J entra prima, DV rigenera con la variabile nuova;
+        se DV entra prima, al merge J rigenera: il golden non si unisce a mano. W non ha lotti aperti su quei file.
+    - **Documentazione**: le pagine di teoria `price-resolution` e `nav` (EN e 3 traduzioni) parlano di valutazioni da
+      trade «older than the 14-day grace period» per l'avviso «no market price for more than two weeks». È proprio la
+      regola nuova: era il codice a non seguire la pagina, quindi nessuna pagina cambia.
+    - **CHANGELOG** (proposta, 🐛 Fixed): «Data quality: the "valued at cost" warning counts its two weeks from the
+      asset's last market quote, as its text says. An asset quoted the day before and bought again is no longer
+      flagged, and a price feed that stopped long ago is flagged at once; an asset never quoted still counts from its
+      first purchase.»
+  - **Checkpoint CP-4a + CP-4b** 🧊 (15/10, 18:15): slot pesante 2 dal coordinatore (17:43).
+    - **`all-backend --workers 2`** (17:44–18:09, 25 min, carico 36): 7/7, «ALL BACKEND TESTS PASSED»; totali, lavoratori
+      paralleli compresi, **15 863 passed, 28 skipped, 0 failed**.
+      - Passo di build di C-94: 164 s, poi server pronto.
+      - Nessun `PytestUnhandledThreadExceptionWarning`.
+      - 7 avvisi: i 6 della sessione `schemas`, più 1 nel passaggio API, una deprecazione di Starlette
+        (`HTTP_422_UNPROCESSABLE_ENTITY`) in `test_registration_api.py`, un test arrivato con `dev_release2`, non di CP-4.
+      - Log: `/tmp/libreFolio_j/cp4/h_all_backend.log`.
+    - **Previsione dei conflitti** con `dev_release2` `695e6ad12` (38 commit dopo HEAD `7b720ee12`): in comune solo
+      `.github/instructions/backend.instructions.md`, con hunk separati (loro `:16`, `:91-92`, `:102`; mio `:75`).
+      Unione automatica attesa. Per il golden vale la regola del coordinatore (sopra).
+    - Slot liberato, porta 6185 libera, handoff FROZEN mandato.
+  - **CP-4c**: P1, in un modulo nuovo di `financial_math/portfolio/`, non dentro `derived_views.py`; C1, il costo unitario
+    del passo in `CostStep`.
+    - **Disegno** (letto il 15/10 sera, in attesa dello slot, nessun codice):
+      - **P1 → `financial_math/portfolio/period.py`**, nuovo:
+        - `state_as_of(daily_states, as_of)`, oggi `_daily_state_as_of` (`portfolio_service.py:367`, 3 chiamanti:
+          `:336`, `:612`, `:706`). La casa non può importare dal servizio;
+        - `PeriodPnl` (congelata): NAV d'inizio, flussi netti, P&L, non realizzato d'inizio e di fine e delta, valore
+          contabile e di mercato d'inizio;
+        - `period_pnl(daily_states, date_from, as_of) -> PeriodPnl | None`, la regola di
+          `_compute_period_summary_metrics` (`:585-660`): l'inizio è l'ultimo stato ≤ `date_from`, altrimenti zeri;
+          P&L = NAV di fine − NAV d'inizio − ΔECF;
+        - `period_other_result(pnl, ugl_delta, realized, income, fees_taxes)`, l'identità del periodo, oggi in
+          `get_summary` (`:1043-1048`). È la funzione che serve a CP-12 per le due copie dell'AI Export
+          (`portfolio_financial.py:489`, `broker_financial.py:434`, J-14).
+        - Valori identici; rossi: test puri in `test_financial_math/`, caratterizzati con la copia di oggi.
+      - **C1 → `average_cost.py`**: il costo unitario del movimento, per effetto (ADD: costo aggiunto/quantità; REDUCE:
+        il costo medio prima del passo; SPLIT_RESCALE: il medio corrente; altrimenti 0), oggi calcolato dall'anteprima
+        (`_wac_qualifying_txs`, `:239-272`), insieme al costo unitario originale della conversione. Per REDUCE serve il
+        medio *prima*: il passo deve portarlo esplicito, perché costo tolto/quantità non è esatto in Decimal. Da leggere
+        `CostStep` (`average_cost.py:139`) prima dei rossi.
+  - **CP-4d**: R2. La riprova a freddo esce solo con la parità provata sul corpus del motore; altrimenti resta, col
+    perché scritto.
 - **`derived_views.py` e DV dei colori** (coordinatore, 15/10 16:25; ok di J alle 16:26): DV cambia 3 righe, l'import di
   `SECTOR_EMOJIS`, che diventa unica in `utils/asset/sector.py`; la guardia del layer ammette `utils`, e chiude la nota
   «Presentazione» del piano 43, §4. Nessun lotto di J sposta o riscrive il file: CP-4 non lo tocca (P1 in un modulo
@@ -1850,6 +1998,16 @@ Decisione 28 (§3, alla lettera): «bisogna ricalcolare ogni volta che cambia un
   transit are revalued at that day's rate; before, they kept the previous day's value until their price changed.»
 - **Conflitti**: `native_cash.py` (N1a di W: solo `native_balances`, righe diverse); `daily_state.py` non è nei file
   di W né di X.
+- **Aggiunta del 15/10 sera** (trovata leggendo V-11 per CP-4, stessa famiglia, decisione 28): il segnale di
+  «dirty» per i prezzi (`daily_state.py:366-375`) confronta solo le chiusure di mercato fra loro. Ma il motore legge
+  l'osservazione più recente, di mercato o di una transazione (`price_marks.py`, `AssetPriceSeries`), e da lì
+  vengono valore e sorgente. Un esempio: un BUY il giorno d−1 fissa il segno al prezzo del trade; il giorno d arriva
+  una quotazione con la stessa chiusura della quotazione precedente. Il giorno d allora non è «dirty», e ricopia d−1:
+  valore al prezzo del trade e asset «implied», mentre in d vince la quotazione.
+  - **Cura**: «dirty» il giorno di una quotazione di mercato quando cambia il segno che il motore legge: la sorgente
+    (da trade a mercato) o il valore rispetto all'osservazione precedente, di mercato o di trade.
+  - **Rosso**: lo scenario sopra; valore e insieme «implied» del giorno d.
+  - **Valori che cambiano**: solo in quei giorni.
 
 #### CP-15 — totali di controllo del backup (richiesta di B, 15/10 14:17, col via del coordinatore)
 
