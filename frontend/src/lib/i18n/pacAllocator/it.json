@@ -425,7 +425,11 @@
           "structureInvalid": "Un campo non rispetta il contratto del pianificatore: {path}.",
           "targetInvalid": "L’obiettivo non è un numero da 0.",
           "targetTotalNotHundred": "Il totale degli obiettivi è {total}%, deve essere 100% (controllo).",
-          "valuationCurrencyMissing": "Manca la valuta di valutazione."
+          "valuationCurrencyMissing": "Manca la valuta di valutazione.",
+          "selectedNegative": "«Importo da usare» non può essere negativo.",
+          "declaredNegative": "«Liquidità dichiarata» non può essere negativo.",
+          "contributionAmountNegative": "L’importo del versamento non può essere negativo.",
+          "modeStepNotPositive": "Il passo d’ordine deve essere maggiore di zero."
         },
         "removal": {
           "cash": "Riga di cassa {broker} · {currency}",
@@ -451,8 +455,8 @@
             "finalShare": "Quota dopo il piano",
             "targetShareHelp": "La quota che hai scelto per questo Asset nel passo Obiettivi.",
             "finalShareHelp": "La quota dell’Asset sul valore di tutti questi Asset dopo il piano. Confrontala con la quota obiettivo per vedere come cambia l’equilibrio fra gli Asset.",
-            "targetValueHelp": "Quanto varrebbe l’Asset con esattamente la sua quota obiettivo: quota obiettivo × base degli obiettivi (già investito in questi Asset più la liquidità utilizzabile).",
-            "finalValueHelp": "Quanto vale l’Asset dopo il piano: le unità che avevi più quelle comprate, al prezzo di quotazione e, se serve, al tasso del passo FX."
+            "targetValueHelp": "Quanto varrebbe l’Asset con esattamente la sua quota obiettivo: quota obiettivo × base degli obiettivi. In un PAC, che parte da zero, la base è la liquidità utilizzabile.",
+            "finalValueHelp": "Quanto vale l’Asset dopo il piano: le unità che il piano compra, al prezzo di quotazione e, se serve, al tasso del passo FX. In un PAC, che parte da zero, coincide con il valore comprato."
           },
           "badges": {
             "decimalVerified": "Verificato in Decimal",
