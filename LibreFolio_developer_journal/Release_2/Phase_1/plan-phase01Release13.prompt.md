@@ -1009,3 +1009,15 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > leggero con le E2E `tx-import-broker-mismatch` e `tx-import-degiro` sul layout nuovo di H. CHANGELOG con due righe.
 > C-95 nuova (l'albero degli schemi nelle istruzioni). W prepara E1 in sola lettura; K2b, CP7, W3 e W5–W6 aspettano
 > un commit del coordinatore su `brokers.py` e `uploads.py`.
+
+### A4b, versione di sessione, integrato ✅ (2026-10-15, 07:05)
+
+> **Note implementazione**: `dbf89cdd5`, merge di `3d6ecb2fe` su `e7cf1ae80` (A4b `3ac4114d5`, decisione D-A17). Il
+> JWT porta `sv`, la versione di sessione dell'account; un token senza `sv` vale 0, quindi l'aggiornamento non
+> disconnette nessuno. Il cambio della password alza la versione e riemette il cookie del dispositivo corrente; un
+> reset da CLI, una disattivazione o un declassamento la alzano. A-3 chiusa (bcrypt in un thread); la voce «🔑
+> Sessioni» passa da `TODO_FUTURI.md` a `TODO_Completati.md`. Validazione di A sulla revisione con X CP3, W7, X CP3b,
+> J C-93 e H CP4: `all-backend` 14 046 passed, 28 skipped, 0 failed; E2E auth 29, settings 46, con un test nuovo che
+> invia davvero il cambio password e prova il secondo dispositivo. **Senza nuovo controllo di A** dopo J G-8, X CP4 e
+> W K2a: nessun test nuovo conia token (quelli dei Tool sostituiscono `get_current_user`); `models.py`,
+> `TODO_FUTURI.md` e il backlog si fondono da soli; controlli statici puliti. CHANGELOG con due righe in «🔄 Changed».
