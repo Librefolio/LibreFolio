@@ -34,7 +34,7 @@ Ramo di integrazione: `dev_release2` (condiviso con il programma colori). Corsie
 | J | J - Numeri e analisi | 6185 | `/tmp/librefolio-r13-j` | `e-alfy-j-numeri-e-analisi` | `e2cb55054` | ✅ CP-1 (`e1fbc801f`: PAC per tema in `schemas/pac_allocator/` e `services/pac_allocator/`, guardia dei confini D-J18), C-93 (`c412f8dad`), G-8 (`c75f08101`) e J-6 (`e2cb55054`: guardia di suite sulle connessioni aiosqlite) integrati; CP-2 e seguenti aspettano le decisioni 26–30 (D-J1, D-J2, D-J3, D-J6, D-J15) (sessione `4c677a01`) |
 | Z | Z - Sospensione e risveglio | 6186 | `/tmp/librefolio-r13-z` | `e-alfy-z-sospensione-e-risveglio` | `459131eb8` | analisi consegnata; aspetta le decisioni 31 e 32 del developer (sessione `d401e062`) |
 | B | B - Backup e Docker | 6187 | `/tmp/librefolio-r13-b` | `e-alfy-b-backup-e-docker` | `ee5d81a6f` | analisi consegnata il 15/10; aspetta il via del developer e i punti 38–43 delle decisioni (sessione `5618ecee`) |
-| E | E - Email | 6188 | `/tmp/librefolio-r13-e` | — | — | parte in sola analisi al checkpoint A5a (inviti); i token monouso di A4 sono già integrati |
+| E | E - Email | 6188 | `/tmp/librefolio-r13-e` | `e-alfy-stunning-fortnight` | `380a3e768` | avviata il 15/10 alle 08:37, solo analisi, sul contratto di A5a (`2d4708578`) (sessione `877410cd`) |
 | Y | Y - Cruscotto e grafici | 6189 | `/tmp/librefolio-r13-y` | — | — | dopo il lotto B dei colori |
 
 Corsie del programma colori, da non usare: 6150–6154 e 6160. Lettere riservate ai colori:
@@ -51,7 +51,7 @@ L, R, G, T, C, U, S, P.
 | 1 | Disclaimer e link legali (F09) | A | ⏳ |
 | 1 | Admin iniziale da variabili (F02) | A | ⏳ |
 | 1 | Inviti, registrazione e gestione utenti (F13) | A | ⏳ in corso (A5a e A5b); i token monouso sono già integrati (A4) |
-| 2 | Email facoltativa (F04) | E | ⏳ parte al checkpoint A5a |
+| 2 | Email facoltativa (F04) | E | ⏳ analisi in corso (dal 15/10) |
 | 2 | Backup e ripristino dalla UI (F01) | B | ⏳ analisi pronta; aspetta il via e i punti 38–43 |
 | 2 | Backup continuo con Litestream (F25) | B | ⏳ analisi pronta; il codice dopo il lotto Docker di H (CP7a) |
 | 2 | Avvio, aggiornamento all'accesso e risveglio (F07) | Z | ⏳ analisi pronta; aspetta le decisioni 31–35 e gli agganci d'avvio di H (CP2b) |
