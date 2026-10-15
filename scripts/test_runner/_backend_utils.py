@@ -124,6 +124,15 @@ def utils_rate_window(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Rate window tests", verbose=verbose)
 
 
+def utils_cooldown(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the per-key pauses after a remote refuses for too many calls (HTTP 429), shared by every provider boundary."""
+    print_section("Utils: Cooldown")
+    print_info("Testing: backend/app/utils/runtime/cooldown.py")
+    print_info("Tests: RateLimitedError + domain error, Retry-After (seconds, HTTP-date), doubling to the max, Retry-After floor, jitter, per-call base/max, decay, answers during a running pause, one trial at a time, succeeded/released, backwards clock, snapshot, LRU, threads (fake clock)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_cooldown.py", test_names)
+    return run_command(cmd, "Cooldown tests", verbose=verbose)
+
+
 def utils_provider_core_cache(verbose: bool = False, test_names: list = None) -> bool:
     """Test provider core cache & thread isolation infrastructure."""
     print_section("Utils: Provider Core Cache & Thread Isolation")
@@ -461,6 +470,15 @@ Tests for utility modules and helper functions:
         name="Rate Window",
         desc="SlidingWindowLimiter: a hit counts until exactly window_seconds later, peek never counts, a refused hit records nothing, retry_after waits for enough hits to leave (per-call limit too), independent keys with None among them, reset/clear/len, LRU eviction at max_keys, exactly N allowed under concurrent threads",
         # PURE: no lane DB, no server, no environment read; an injected fake clock, threads of its own, no sleeps.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "cooldown",
+        utils_cooldown,
+        name="Cooldown",
+        desc="Cooldowns: an unknown key may call and is not tracked; once a pause is over (its trial taken or not) the n-th refusal in a row waits min(base·2^(n−1), max), a positive finite Retry-After a floor honoured above the max up to the hard max, a jitter of up to 10 % on top and never below the floor, base/max given to a call for that call only, a refusal more than max after the end of the pause starts over, no overflow on any streak; while a pause runs, a refusal or a success of a call already in flight counts nothing and never shortens it, only a Retry-After ending later extends it (to now + floor, no jitter), so a burst of 429s counts one; check counts the pause down, then lets one trial through at a time for trial_seconds; succeeded after the pause forgets and returns the count, released frees the trial and keeps it; a backwards clock never lengthens a wait; snapshot, reset/clear/len, independent keys with None among them, LRU eviction at max_keys, one trial and one counted refusal under concurrent threads; retry_after_seconds reads delta-seconds and HTTP-dates, None otherwise; RateLimitedError combines with a domain exception",
+        # PURE: no lane DB, no server, no environment read; an injected fake clock and random source, threads of its own, no sleeps.
         isolation="pure",
     )
     add_test(
