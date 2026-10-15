@@ -38,9 +38,9 @@ from backend.app.schemas.brim import (
 )
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_provider import BRIMProvider
 from backend.app.services.brim_report_sets import GAP_FIX_TAG, BRIMSetPluginNotFound
-from backend.app.services.provider_registry import BRIMProviderRegistry
 from backend.app.services.transactions.transaction_service import TransactionService
 
 # Differences at or below one cent are rounding, not a gap.

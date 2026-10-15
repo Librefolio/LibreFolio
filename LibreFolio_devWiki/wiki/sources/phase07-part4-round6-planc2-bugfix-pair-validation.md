@@ -78,8 +78,8 @@ These are outside Phase 07 scope but landed in the same commit batch:
 | Page (+toast) | `frontend/src/routes/(app)/transactions/+page.svelte` |
 | E2E clone | `frontend/e2e/transactions/tx-clone.spec.ts` |
 | E2E bulk ops | `frontend/e2e/transactions/tx-bulk-operations.spec.ts` |
-| FX sync (fallback) | `backend/app/services/fx.py` |
+| FX sync (fallback) | `backend/app/services/fx/fx.py` |
 | Dockerfile | `Dockerfile` |
 | update_js_cache | `scripts/update_js_cache.py` |
-| Asset source (race fix) | `backend/app/services/asset_source.py` |
+| Asset source (race fix) | `backend/app/services/assets/provider_management.py` |
 

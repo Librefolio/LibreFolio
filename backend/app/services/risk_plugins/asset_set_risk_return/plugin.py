@@ -12,7 +12,7 @@ from backend.app.schemas.risk import (
     RiskScopeKind,
 )
 from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import (
     prepared_scope_series,
     require_annualization_factor,
@@ -22,6 +22,7 @@ from backend.app.services.risk.metrics import (
     annualized_expected_return,
     annualized_volatility,
 )
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 class AssetSetRiskReturnParams(BaseModel):

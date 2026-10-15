@@ -5,8 +5,8 @@ The external engine is always MOCKED — no live ddgs/network call is made.
 
 import pytest
 
-from backend.app.services import web_link_finder as wlf
-from backend.app.services.asset_source import AssetSearchService
+from backend.app.services.assets import web_link_finder as wlf
+from backend.app.services.assets.search import AssetSearchService
 
 
 class _FakeEngine:
