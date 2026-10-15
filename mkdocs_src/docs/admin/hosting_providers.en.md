@@ -143,7 +143,7 @@ On a blocked instance, only these API calls answer as usual:
 | --- | --- |
 | Signing in and out, and who is signed in | `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` |
 | Following a link already sent: checking it, and setting a new password with a reset link | `POST /api/v1/auth/tokens/inspect`, `POST /api/v1/auth/password-reset` |
-| Deleting one's own account | `DELETE /api/v1/auth/users/me`: the block page has no button for it yet |
+| Deleting one's own account, and seeing first what it would delete | `DELETE /api/v1/auth/users/me`, `GET /api/v1/auth/users/me/deletion-preview`: the block page has no button for it yet |
 | The block page | `GET /api/v1/system/block` (signed-in users only), `GET /api/v1/system/instance` |
 | Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info` |
 
@@ -172,10 +172,12 @@ For a caller without a session, most of the API answers as on any other instance
 - the calls of the list above answer as usual: `/system/instance`, `/system/info` and
   `/system/ready` do not reveal the block.
 
-A few calls are normally open to anyone: registration (`POST /api/v1/auth/register`), the reference
-lists (`GET /api/v1/utilities/*`), the global settings (`GET /api/v1/settings/global`, also by key)
-and the AI Export catalogue (`GET /api/v1/ai-export/catalog`). On a blocked instance they answer
-`401` too. From them, a caller without a session can tell that the instance is blocked, and nothing
+A few calls are normally open to anyone: registration (`POST /api/v1/auth/register`), the address
+probe (`GET /api/v1/auth/address-probe`), the reference lists (`GET /api/v1/utilities/*`), the global
+settings (`GET /api/v1/settings/global`, also by key) and the AI Export catalogue
+(`GET /api/v1/ai-export/catalog`). On a blocked instance they answer `401` too. The address probe
+then cannot confirm a public address, and the check of your instance's address reports it as not
+verifiable. From them, a caller without a session can tell that the instance is blocked, and nothing
 more: they return no data.
 
 ### 📅 The Deletion Date {: #deletion-date }
