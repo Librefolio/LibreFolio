@@ -3474,3 +3474,21 @@ uvicorn's access log (on in the Docker image) and in any proxy log; the token no
 A5a was integrated. Filed [[decisions/link-tokens-in-the-url-fragment]]; updated [[domains/auth]] (registration
 modes, invitations, admin API, limit, K-5 until A7, what comes next in workstream A) and [[features/F-001]] (the
 register link reads `GET /system/instance`). Graph: not updated (P-6).
+
+## [2026-10-15] file | Colours factored into lib/theme at pixel parity (workstream R)
+Workstream R of the colour programme (`Phase_1/10_colorSystem`) closed: lots A–D entered `dev_release2` with
+`8fd8e494b` after one gallery gate (2 370 identical, 454 changed, all content or the shots' own noise). The decision
+page records the modules of `frontend/src/lib/theme/`, the rules (same values, divergences kept under a name), the
+proofs and what phase B inherits. Two problems filed:
+- esbuild rewrites colours in some declarations but never in custom properties, so tokens hold the build's emitted
+  text;
+- the colour ratchet's `--resolve` drops a colour accepted on one side (backlog R-8, for T).
+
+Pages updated:
+- [[features/F-007]]: a drift corrected; charts follow the theme through `onThemeClassChange()`, not store
+  subscriptions;
+- [[features/F-098]]: a change to `offline.html` ships with `sw.js` restamped (`23f6578f3`);
+- [[problems/front-check-does-not-check-what-you-think]]: a merge can make the generated client stale.
+
+Filed: [[decisions/colour-factorisation-at-pixel-parity]], [[problems/esbuild-colour-minify-skips-custom-properties]],
+[[problems/colour-ratchet-resolve-drops-an-accept]]. Graph: not updated (P-6).

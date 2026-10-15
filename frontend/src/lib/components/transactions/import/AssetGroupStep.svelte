@@ -34,6 +34,7 @@
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {clusterSignature, groupSignature, isPrimary, memberKey, movePartition, orderedIdentifiers, partitionOf, splitPartition, summariseLinks, type AssetGroup, type ExtractedAsset, type GroupPrimary, type IdentifierKind, type LinkSummary, type PrimaryMap} from '$lib/utils/assetGrouping';
+    import {KIND_TONES} from '$lib/theme/toneClasses';
 
     interface Props {
         groups: AssetGroup[];
@@ -226,11 +227,7 @@
     }
 
     /** Badge palette, one hue per kind, so "which of these is an ISIN" needs no reading. */
-    const badgeTone: Record<IdentifierKind, string> = {
-        isin: 'border-sky-300 bg-sky-100 text-sky-900 dark:border-sky-700 dark:bg-sky-900/40 dark:text-sky-100',
-        symbol: 'border-violet-300 bg-violet-100 text-violet-900 dark:border-violet-700 dark:bg-violet-900/40 dark:text-violet-100',
-        name: 'border-slate-300 bg-slate-100 text-slate-800 dark:border-slate-600 dark:bg-slate-700/60 dark:text-slate-100',
-    };
+    const badgeTone: Record<IdentifierKind, string> = KIND_TONES.identifier;
 
     /** The kind's name as it appears in the tooltip. Literal `$t` calls so the audit sees them. */
     function kindLabel(kind: IdentifierKind): string {
