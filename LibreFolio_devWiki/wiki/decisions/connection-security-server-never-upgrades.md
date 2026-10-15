@@ -54,7 +54,7 @@ behind a reverse proxy even that is a header anyone can forge.
 | Verdict (`assessConnection`, `classifyHost`) | `frontend/src/lib/utils/security/connectionSecurity.ts` |
 | Store | `frontend/src/lib/stores/app/connectionSecurityStore.ts` |
 | Indicator (sidebar shield, admin cookie line) | `frontend/src/lib/components/layout/ConnectionSecurityIndicator.svelte` |
-| Endpoint `GET /system/connection` | `backend/app/api/v1/system.py` |
+| Endpoint `GET /system/connection` | `backend/app/api/v1/system/connection.py` |
 | Response schema | `backend/app/schemas/system.py` |
 | Address classes (never returned) | `backend/app/utils/runtime/network.py` |
 | Cookie `Secure` decision | `backend/app/api/v1/auth.py` |
