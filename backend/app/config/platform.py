@@ -55,3 +55,13 @@ def configured_instance_key_origin() -> str | None:
 def owning_test_lane_id() -> str | None:
     """``LIBREFOLIO_TEST_LANE_ID``: the token of the test process tree that owns this server, set by the test runner."""
     return os.environ.get("LIBREFOLIO_TEST_LANE_ID")
+
+
+def frozen_app_version() -> str | None:
+    """``LF_APP_VERSION``: the version a build is frozen at, reported instead of ``git describe`` or ``VERSION``.
+
+    The release workflow sets it from ``VERSION`` right after the checkout, for every later step of the job: the
+    frontend builds (``frontend/vite.config.ts`` reads it too) and the servers of the gallery. ``None`` when unset or
+    blank, as for every install.
+    """
+    return os.environ.get("LF_APP_VERSION", "").strip() or None
