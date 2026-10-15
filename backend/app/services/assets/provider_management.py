@@ -41,8 +41,27 @@ from backend.app.services.assets.base import (
     AssetSourceProvider,
 )
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.utils.runtime.cooldown import RateLimitedError
 
 logger = structlog.get_logger(__name__)
+
+
+def _probe_failure_fields(error: Exception) -> dict:
+    """The failure fields of a probe operation: the message, the code, its parameters, and the wait of a pause.
+
+    A ``RATE_LIMITED`` refusal (X8) carries ``retry_after``, the seconds before the provider may be called again: on
+    the result and in ``error_details``, so the interface can show the local time the pause ends.
+    """
+    retry_after = error.retry_after if isinstance(error, RateLimitedError) else None
+    details = dict(getattr(error, "details", None) or {})
+    if retry_after is not None:
+        details["retry_after"] = retry_after
+    return {
+        "error": str(error),
+        "error_code": getattr(error, "error_code", None),
+        "error_details": core._json_safe_details(details),
+        "retry_after": retry_after,
+    }
 
 
 class ProviderManagementOperations:
@@ -342,6 +361,8 @@ class ProviderManagementOperations:
 
         # Map ProviderInputType (from frontend) to IdentifierType (for provider methods)
         mapped_id_type = AssetSourceProvider.map_input_type_to_identifier_type(config.identifier_type)
+        # The part of the provider a pause after «too many requests» applies to (the host of a scraped site)
+        scope = core.cooldown_scope_for(provider, config.identifier, mapped_id_type, params)
 
         # Provider URL (always computed, synchronous)
         provider_url = provider.get_asset_url(config.identifier, mapped_id_type, params)
@@ -351,7 +372,7 @@ class ProviderManagementOperations:
         async def _probe_current_price() -> ProbeCurrentPriceResult:
             op_start = time.monotonic_ns()
             try:
-                value = await core.call_provider(provider, lambda: provider.get_current_value(config.identifier, mapped_id_type, params), timeout=15.0)
+                value = await core.call_provider(provider, lambda: provider.get_current_value(config.identifier, mapped_id_type, params), timeout=15.0, scope=scope)
                 return ProbeCurrentPriceResult(
                     success=True,
                     value=value.value,
@@ -369,9 +390,7 @@ class ProviderManagementOperations:
             except Exception as e:
                 return ProbeCurrentPriceResult(
                     success=False,
-                    error=str(e),
-                    error_code=getattr(e, "error_code", None),
-                    error_details=core._json_safe_details(getattr(e, "details", None)),
+                    **_probe_failure_fields(e),
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
 
@@ -380,7 +399,7 @@ class ProviderManagementOperations:
             try:
                 end_date = date_type.today()
                 start_date = end_date - timedelta(days=7)
-                hist = await core.call_provider(provider, lambda: provider.get_history_value(config.identifier, mapped_id_type, params, start_date, end_date), timeout=15.0)
+                hist = await core.call_provider(provider, lambda: provider.get_history_value(config.identifier, mapped_id_type, params, start_date, end_date), timeout=15.0, scope=scope)
                 points = hist.prices if hist else []
                 date_range_str = None
                 sample = None
@@ -405,16 +424,14 @@ class ProviderManagementOperations:
             except Exception as e:
                 return ProbeHistoryResult(
                     success=False,
-                    error=str(e),
-                    error_code=getattr(e, "error_code", None),
-                    error_details=core._json_safe_details(getattr(e, "details", None)),
+                    **_probe_failure_fields(e),
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
 
         async def _probe_metadata() -> ProbeMetadataResult:
             op_start = time.monotonic_ns()
             try:
-                patch = await core.call_provider(provider, lambda: provider.fetch_asset_metadata(config.identifier, mapped_id_type, params), timeout=15.0)
+                patch = await core.call_provider(provider, lambda: provider.fetch_asset_metadata(config.identifier, mapped_id_type, params), timeout=15.0, scope=scope)
                 return ProbeMetadataResult(
                     success=patch is not None,
                     patch_data=patch.model_dump(mode="json") if patch else None,
@@ -431,9 +448,7 @@ class ProviderManagementOperations:
             except Exception as e:
                 return ProbeMetadataResult(
                     success=False,
-                    error=str(e),
-                    error_code=getattr(e, "error_code", None),
-                    error_details=core._json_safe_details(getattr(e, "details", None)),
+                    **_probe_failure_fields(e),
                     execution_time_ms=(time.monotonic_ns() - op_start) // 1_000_000,
                 )
 

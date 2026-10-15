@@ -18,7 +18,7 @@ from backend.app.db.precision import truncate_fx_rate
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
 from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncLegDetail, FXSyncPairResult, SyncDateRangeModel, SyncStatus
-from backend.app.services.fx.base import FXProviderStartDate, FXServiceError
+from backend.app.services.fx.base import FXProviderStartDate, FXRateLimitedError, FXServiceError
 from backend.app.services.fx.conversion import compute_chain_rate
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx.runtime import call_fx_provider, configured_fx_provider, settings_cache_part
@@ -386,6 +386,30 @@ async def _count_actual_changes(
     return changed
 
 
+def _note_provider_failure(provider_code: str, error: Exception, provider_refusals: dict[str, float | None]) -> None:
+    """Log a provider's failed fetch; a pause after «too many requests» is recorded for the results, at INFO level."""
+    if isinstance(error, FXRateLimitedError):
+        provider_refusals[provider_code.upper()] = error.retry_after
+        logger.info("FX provider paused after too many requests: its legs fail, the next route is tried", provider=provider_code, retry_after=error.retry_after)
+        return
+    logger.exception(f"Provider {provider_code} fetch failed: {error}")
+
+
+def _with_fx_refusal(result: FXSyncPairResult, routes: list[FxConversionRoute], provider_refusals: dict[str, float | None]) -> FXSyncPairResult:
+    """``result`` marked ``RATE_LIMITED`` when it failed, wholly or partly, and one of its routes uses a provider that
+    refused for too many requests or was paused. ``retry_after`` is the shortest wait among them: the first moment a
+    route may work again. A pair another route served in full stays as it is.
+    """
+    if result.status not in (SyncStatus.FAILED, SyncStatus.PARTIAL) or not provider_refusals:
+        return result
+    providers = {step["provider"].upper() for route in routes for step in route.parsed_steps}
+    waits = [provider_refusals[code] for code in providers if code in provider_refusals]
+    if not waits:
+        return result
+    known = [wait for wait in waits if wait is not None]
+    return result.model_copy(update={"error_code": FXRateLimitedError.error_code, "retry_after": min(known) if known else None})
+
+
 async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurrent orchestrator with nested closures
     session,  # AsyncSession — used only for reading route config
     pairs: list[str],  # ["EUR-USD", "CHF-CNY"]
@@ -428,6 +452,7 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
     leg_events: dict[tuple[str, str, str], asyncio.Event] = {}  # (norm_base, norm_quote, provider) → Event
     leg_rates: dict[tuple, Decimal] = {}  # (norm_base, norm_quote, date) → rate
     leg_errors: dict[tuple[str, str, str], str] = {}  # (norm_base, norm_quote, provider) → error msg
+    provider_refusals: dict[str, float | None] = {}  # PROVIDER CODE (upper) → retry_after: paused or refused for too many requests
 
     for pair_slug in pairs:
         base, quote = pair_slug.split("-")
@@ -511,7 +536,7 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
                     leg_events[leg_key].set()
 
         except Exception as e:
-            logger.exception(f"Provider {provider_code} fetch failed: {e}")
+            _note_provider_failure(provider_code, e, provider_refusals)
             provider = FXProviderRegistry.get_provider_instance(provider_code)
             base_cur = provider.base_currency if provider else ""
             for target_cur in target_currencies:
@@ -815,7 +840,7 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
 
     # ── Dispatch all routes and assemble response ──
     pair_results = await asyncio.gather(*[_process_route(slug) for slug in pairs])
-    result_list = list(pair_results)
+    result_list = [_with_fx_refusal(result, pair_routes_map.get(result.pair, []), provider_refusals) for result in pair_results]
 
     success_count = sum(1 for r in result_list if r.status in (SyncStatus.OK, SyncStatus.PARTIAL, SyncStatus.SKIPPED))
     total_changed = sum(r.points_changed for r in result_list)
