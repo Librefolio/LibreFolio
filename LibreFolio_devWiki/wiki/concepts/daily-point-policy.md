@@ -34,4 +34,4 @@ LibreFolio stores **exactly one data record per day** per asset (price history) 
 |------|------|
 | DB model (PriceHistory, FxRate) | `backend/app/db/models.py` |
 | Asset API (price history) | `backend/app/api/v1/assets/prices.py` |
-| FX API (rate history) | `backend/app/api/v1/fx.py` |
+| FX API (rate history) | `backend/app/api/v1/fx/currencies.py` |

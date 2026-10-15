@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, Transaction, TransactionType
-from backend.app.schemas.transactions import (
+from backend.app.schemas.transactions.transactions import (
     TXCreateItem,
     TXUpdateItem,
 )

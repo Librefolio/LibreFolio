@@ -388,7 +388,7 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   Italiana, e l'import CSV delle distribuzioni per settore e paese sono nella 1.2.0, ma il capitolo non li nomina. Due
   strade: aggiungerle come correzione dopo il rilascio, in 4 lingue con lo stamp del pezzo (il capitolo è rilasciato,
   quindi `translate-validate` è severo), oppure lasciare il capitolo com'è. Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voci 8 e 17.
-- **C-93 · Un test dell'AI Export lascia un thread di aiosqlite dopo la chiusura del loop, sotto carico** — minimo, da
+- ✅ **C-93 · Un test dell'AI Export lascia un thread di aiosqlite dopo la chiusura del loop, sotto carico** — minimo, da
   verificare; W, 15/10 (`all-backend` della revisione combinata di I1). Due `PytestUnhandledThreadExceptionWarning`
   («Event loop is closed») nel gruppo parallelo, worker 1, in
   `test_ai_export_components_portfolio_broker_financial.py::TestPerformanceBuckets::test_performance_path_uses_detail_owned_uniform_density[broker-broker.performance-components1-full-30]`.
@@ -396,6 +396,13 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   `test-triage`. Dettagli: [piano 04](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md),
   «Revisione combinata `123c21efc`», passo 6.
   - 15/10: non riprodotto nella `all-backend` di J sulla revisione `b17f8fb85` (13 810 passed, nessun avviso).
+  - ✅ **Chiusa il 15/10** da J (`12bcf7e99`; in `dev_release2` con `c412f8dad`). Causa trovata, verdetto «stato
+    condiviso»: 7 test dell'AI Export lasciavano aperte connessioni aiosqlite. Erano 3 in `broker_adequacy`, senza
+    `engine.dispose()`, e 4 test di composizione in `portfolio_broker_integration`, che eseguivano SQL vero sulla
+    sessione senza tabelle e passavano per una via d'errore casuale. Riprodotto in modo deterministico: un GC in un
+    thread con un loop corrente chiuso dà i 2 avvisi identici. Curato con una fixture che chiude il motore, scenari
+    ermetici e una guardia sulla sessione senza tabelle. Verificato con `all-backend --workers 2`: 0 connessioni
+    lasciate aperte, nessun avviso. Dettagli: piano J, §10 «C-93».
 - **C-94 · Il server di test costruisce frontend e documentazione dentro i 300 s d'avvio** — basso, infrastruttura;
   J, 14/10 (era J-2), con una nota del coordinatore. In un worktree nuovo il primo `all-backend` cade anche dopo
   `npm ci`: prima di uvicorn `dev.py server --test` fa la build di debug del frontend (~4 min) e quella del sito, se
@@ -2121,14 +2128,17 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   14/10 senza codice: già fatta il 10/09 in `e50d66408` (conteggio e link nella cancellazione singola e in quella multipla,
   `FAAssetDeleteResult.transaction_count`, E2E in `e2e/assets/asset-list.spec.ts`); nella devWiki F-095 era già
   `documented`, e `domains/assets.md` non la elenca più fra le cose da fare. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «2.5».
-- **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1).
-  La docstring di `api/v1/fx.py:767` cita ancora «``services/fx.py``», che dal CP1 è `services/fx/fx.py`: è nella
-  descrizione dell'endpoint in `openapi.json`, quindi resta fino al PL4, che dà alla funzione la sua casa definitiva.
-  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1.
+- **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1,
+  CP3). La docstring di `create_routes_bulk` (oggi `api/v1/fx/providers.py:183`) cita ancora «``services/fx.py``»; la
+  funzione sta in `services/fx/storage.py` dal CP3. Il testo è nella descrizione dell'endpoint in `openapi.json`, e il PL4 è
+  un riordino a `openapi.json` invariato: come X-R2, si corregge in un lotto che cambia comunque l'API (il CP6, F05, o
+  prima). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1 e CP3.
 - **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
   docstring di `BackwardFillInfo` (`schemas/common.py:369`) e di `IdentifierType` (`db/models.py:117` e `:123`) citano ancora
   `schemas/assets.py` (diventato `schemas/assets/assets.py` nel CP2b) e `asset_source.py` (tolto nel CP2a). Il testo finisce
-  in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima). Dettagli:
+  in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima). Nella stessa docstring di
+  `db/models.py`, la riga `:127` cita `services/brim_provider.py`, spostato da W (W4 CP6) in `services/brim/`: per la stessa
+  ragione resta, e si corregge insieme alle altre (aggiunta il 15/10, validazione di `d1ef3ddeb`). Dettagli:
   [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a e CP2b.
 - **X-R3 · Tre commenti del frontend citano il modulo degli asset tolto** — minimo; X, 15/10 (CP2b, validazione di
   `eb245b624`). `AssetModal.svelte:1507` e `:1636` attribuiscono ad `asset_source.py` le cancellazioni di prezzi ed eventi
@@ -2136,16 +2146,85 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   per campo della classificazione (oggi in `services/assets/crud.py`, `patch_assets_bulk`). Fuori dal perimetro dei lotti
   del backend: si corregge nel FE5, con il taglio di `AssetModal`. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
   sezione «15», CP2b.
-- **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
+- **X-R4 · Il diagramma della guida dei plugin FX attribuisce al servizio la divisione per le valute multi-unità** —
+  minimo, doc; segnalato da docs-writer il 15/10 (CP3). In `mkdocs_src/docs/developer/architecture/patterns/fx_plugin_guide.md`
+  un riquadro Mermaid dice «Service normalizes … Multi-unit ÷100»; la stessa pagina dice che la divisione la fa il plugin, e
+  nessun codice di `services/fx/` la fa (`base.py` dichiara solo la proprietà `multi_unit_currencies`). Preesistente al
+  riordino. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3.
+- ✅ **X-R5 · Commenti e docstring con i percorsi tolti da CP2a, CP2b e CP3** — minimo; X, 15/10 (validazione di
+  `d1ef3ddeb`). Un grep più largo di quelli dei lotti (nomi di file nudi, nomi puntati dentro le docstring, il frontend e
+  `TODO_FUTURI.md`) trova 16 righe che citano un percorso che non c'è più; erano tutte già nel mio ramo prima del merge
+  (nessuna arriva dalle altre sessioni). Solo testo: nessuna è in `openapi.json` né cambia comportamento.
+  - Backend: `asset_source_providers/scheduled_investment/plugin.py:33-34` (`schemas.assets.FA…` → `schemas.assets.assets`,
+    CP2b); `services/assets/core.py:15` («fx.py» → `services/fx/`, CP3); `test_api/test_fx_compress_errors.py:1` (→
+    `api/v1/fx/currencies.py`, CP3); `test_services/test_fx_core.py:5` (→ `services/fx/storage.py` e `sync.py`, CP3).
+  - Frontend: `e2e/assets/asset-modal.spec.ts:526` («asset_source.py» → `services/assets/provider_management.py`, CP2a);
+    `e2e/fixtures/galleryOfflineData.ts:62` (→ `api/v1/fx/providers.py`, CP3); `e2e/fixtures/galleryProviderCompare.ts:40`
+    e `galleryReportSets.ts:398` («asset_sources/search.py» → `services/assets/search.py`, CP2a);
+    `components/assets/ScheduledInvestmentEditor.svelte:75`, `:81`, `:89` (→ `schemas/assets/assets.py`, CP2b);
+    `stores/app/auth.test.ts:574` (→ `api/v1/assets/crud.py`, CP2b); `stores/reference/fxRoutesStore.test.ts:8` («fx.py» →
+    `services/fx/sync.py`, `sync_pairs_bulk`, CP3).
+  - `TODO_FUTURI.md:1121` (→ `schemas/assets/assets.py`) e `:2067` (→ `services/assets/price_query.py:149`).
+  Decisione del coordinatore (15/10): nel lotto CP3b, compresi `auth.test.ts:574` (lo avvisa lui ad A) e le 2 righe di
+  `TODO_FUTURI.md`; restano fuori i due commenti di `AssetModal` (X-R3, FE5) e le 3 fixture della galleria, che sono di G e
+  il coordinatore gira al coordinatore colori. **Chiusa nel CP3b il 15/10** per le 13 righe del perimetro deciso; i due
+  commenti di `AssetModal` restano in X-R3, le 3 fixture sono passate a G. Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», quinto aggiornamento di base e CP3b.
+- **X-R6 · `web_link_finder`: timeout e numero massimo di URL non validati** — piccolo; segnalato da H il 15/10 (lotto
+  `web_link_finder`), girato a X dal coordinatore. Preesistente e invariato dagli spostamenti. `config/plugins.py:46-52`
+  accetta `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` a `nan` o `inf` (`float()`), e `services/assets/web_link_finder.py:108`
+  (`DDGS(timeout=int(timeout) or None)`) allora solleva: la ricerca rende `[]` scrivendo solo un debug (`:244-245`); un
+  timeout sotto 1 diventa `int(…) == 0`, cioè nessun timeout; con `LIBREFOLIO_WEB_LINK_FINDER_MAX=0` il controllo di
+  `:259` arriva dopo il primo `append`, e torna comunque un URL. Cura: valori finiti e ≥ 1 negli accessori di
+  `config/plugins.py` (file di H: d'accordo con H) e un timeout non intero rispettato; con il CP6 (F05) o il CP10, che
+  toccano la configurazione dei plugin. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», quinto aggiornamento di base.
+- ✅ **X-R7 · La pagina di Borsa Italiana elenca le variabili del `web_link_finder` senza `_FILE`** — minimo, doc; segnalato
+  da H il 15/10. `mkdocs_src/docs/developer/backend/assets/provider_borsa_italiana.md:123` cita `_API_KEY` ma non
+  `_API_KEY_FILE` (segreti Docker, `env_secret()`); la fonte di verità è `search_link_finder.md`: la riga va ridotta a un
+  rimando. **Chiusa nel CP3b il 15/10** (docs-writer): la riga rimanda a `search_link_finder.md#configuration-env-vars-all-optional`.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
+- **X-R8 · `GET /fx/providers` chiede alla BCE l'elenco delle valute a ogni richiesta** — piccolo, prodotto; X, 15/10
+  (preparazione del CP3b). `list_providers` (`api/v1/fx/providers.py:97-101`) chiama `get_supported_currencies` di ogni
+  fornitore pubblico; quello della BCE (`fx_providers/ecb/plugin.py:95`) fa una richiesta HTTP senza cache, con 30 s di
+  timeout: ogni apertura dell'elenco aspetta la BCE, e senza rete la BCE compare con zero valute (l'errore resta nel log).
+  Lo stesso vale per la SNB finché non riesce una volta nel processo (`fx_providers/snb/plugin.py:139-149`,
+  `_ensure_currency_map`, data.snb.ch, 15 s): trovato nel CP3b.
+  Il CP3b toglie la rete dai test che controllano le valute; le chiamate senza filtro (elenco completo, `MANUAL` nascosto)
+  restano, e sul server vanno comunque alla BCE. Proposta del coordinatore (15/10; il developer può cambiarla): una cache
+  dell'elenco delle valute dei fornitori, valida 24 ore; se la BCE non risponde si usa l'ultimo elenco noto, con un timeout
+  breve. In un lotto di X dopo il CP3b. Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», quinto aggiornamento di base.
+- ✅ **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
   `test_api/test_fx_api.py::test_providers_include_target_currencies` passa da `GET /fx/providers`, che chiama dal vivo
-  `get_supported_currencies` di `fx_providers/ecb/plugin.py`; su un errore di rete il gestore in `api/v1/fx.py` (righe
-  ~139-143) rende una lista vuota. Va contro la regola dei test senza rete. Da sistemare con il CP3 (PL4, router dei cambi)
-  o prima. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a.
-
-- **W-B13 · `fx-csv-import.spec.ts` prende la ✕ della modale d'importazione per testo** — minimo, test; trovato da W
+  `get_supported_currencies` di `fx_providers/ecb/plugin.py`; su un errore di rete il gestore in `api/v1/fx/providers.py`
+  (`list_providers`, righe ~97-101 dal CP3) rende una lista vuota. Va contro la regola dei test senza rete. Non nel CP3,
+  che è un riordino puro (`openapi.json` e test invariati): lotto di solo test CP3b, approvato dal coordinatore il 15/10,
+  dopo l'ingresso del CP3 e prima del CP4. **Chiusa nel CP3b il 15/10**: contratto e filtri su FED e BOE, le chiamate senza
+  filtro controllano solo i codici; `api fx` senza rete 21/21 (prima 19/21). La SNB è rimasta fuori perché scarica anche
+  lei il suo elenco (scostamento dalla decisione, confermato dal coordinatore il 15/10). Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a, CP3 e CP3b.
+- ✅ **W-B13 · `fx-csv-import.spec.ts` prende la ✕ della modale d'importazione per testo** — minimo, test; trovato da W
   il 15/10 (K1), assegnato a X dal coordinatore. `frontend/e2e/fx/fx-csv-import.spec.ts:247` e `:276` usano
   `button[aria-label="Close"]`; con P-15 l'etichetta viene da `common.close`, quindi il selettore regge solo in
-  inglese. Cura: il `data-testid` `data-import-modal-close`, aggiunto in K1. Dettagli: piano 04, §12, K1 passo 4.
+  inglese. Cura: il `data-testid` `data-import-modal-close`, aggiunto in K1; nel lotto CP3b, con W-B9. **Chiusa nel CP3b il
+  15/10** (`front-fx fx-csv-import` 21/21). Dettagli: piano 04, §12, K1 passo 4; piano 03, sezione «15», CP3b.
+- **X-R9 · `fx-csv-import.spec.ts`: altri quattro selettori validi solo in inglese** — minimo, test; X, 15/10 (CP3b,
+  segnalato da test-author). Oltre alla ✕ di W-B13: `:233` controlla il testo tradotto dell'errore
+  (`toHaveText("Header currencies don't match")` su `fx-import-header-mismatch-error`: basta la visibilità), `:234` prende il
+  pulsante con `hasText: 'Import (1)'` (c'è già `data-import-confirm`), `:250` cerca `text=Discard import` e `:261` il
+  pulsante `hasText: 'Cancel'`. Per questi ultimi due `DataImportModal.svelte` non ha test-id: il `ConfirmModal` di `:305`
+  accetta `testId` ma non lo riceve, e il pulsante Annulla di `:287` non ne ha. Cura: due test-id nel componente (condiviso,
+  toccato da W in K1) e le quattro righe della spec. Deciso dal coordinatore il 15/10: con il FE4; i due test-id li chiede
+  lui a W, proprietario di `DataImportModal.svelte`.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
+
+- **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — basso, robustezza; trovata da J il
+  15/10 (C-93), assegnata a X dal coordinatore. `services/assets/core.py:114-119` (`_sync_runner`, dentro
+  `asyncio.to_thread`) imposta un loop nuovo, lo chiude e non lo toglie: chi poi, nello stesso thread, chiama
+  `asyncio.get_event_loop()` riceve un loop chiuso. È il contesto in cui una connessione aiosqlite raccolta dal GC
+  muore con «Event loop is closed». Cura di una riga: `asyncio.set_event_loop(None)` nel `finally`, oppure
+  `asyncio.Runner`; un lotto piccolo con un test, dopo il CP4. Dettagli: piano J, §10 «C-93», «Triage».
 
 ## W · Import e transazioni (fase 01)
 
@@ -2202,6 +2281,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   a `services/asset_source.py` e `schemas/assets.py` di X. La docstring diventa la descrizione dell'enum nell'OpenAPI,
   quindi un lotto di riordino, che vuole lo schema identico, non la tocca. Cura: un lotto che accetta la differenza
   nella descrizione, insieme a X per le sue due righe. Dettagli: piano 04, §12, W4.
+- **W-B15 · `tx-bulk-operations.spec.ts` prende il pulsante di chiusura per testo** — minimo, test; trovato da X il 15/10
+  (CP3b), assegnato a W dal coordinatore. `frontend/e2e/transactions/tx-bulk-operations.spec.ts:428` usa
+  `button:has-text("Cancel"), button:has-text("Close"), [aria-label="Close"]`, che regge solo in inglese. Nella
+  stessa famiglia, X-R9 (sezione X) chiede due `data-testid` in `DataImportModal.svelte` di W: il `ConfirmModal` di
+  `:305` e il pulsante Annulla di `:287`. Dettagli: piano 03, §15, CP3b.
 
 ## J · Numeri e analisi (fase 01)
 
@@ -2236,6 +2320,14 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   com'erano prima del riordino: `features/F-107.md:49-50`, `features/F-108.md:31`,
   `problems/i18n-audit-false-dead-and-false-used.md:48`. Da rinfrescare in un passaggio di `wiki-lint`. Dettagli: piano
   J, §10 «A — rinomina», «Restano di proposito».
+- ↪ **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — spostata nella sezione X dal
+  coordinatore il 15/10 (file di X), come lotto piccolo con un test dopo il CP4.
+- **J-6 · Nessuna guardia di suite per le connessioni aiosqlite lasciate aperte** — basso, facoltativa; J, 15/10
+  (C-93). Oggi le connessioni aperte dopo un test sono 0 in tutta la suite, ma lo garantisce solo la guardia del file
+  d'integrazione dell'AI Export. Una fixture autouse nel `conftest.py` condiviso potrebbe far fallire ogni test che
+  lascia aperta una `aiosqlite.Connection` creata durante il test (registrando le connessioni create e controllando
+  al teardown, come la sonda usata per C-93). Il conftest è condiviso: decide il coordinatore. Dettagli: piano J, §10
+  «C-93».
 
 ## Z · Sospensione e risveglio (fase 01)
 

@@ -4,7 +4,7 @@ Tests for Transaction Pydantic schemas.
 Tests TXCreateItem, TXReadItem, TXUpdateItem validation rules.
 See checklist: 01_test_broker_transaction_subsystem.md - Category 1
 
-Reference: backend/app/schemas/transactions.py
+Reference: backend/app/schemas/transactions/transactions.py
 """
 
 from datetime import date
@@ -15,14 +15,8 @@ from pydantic import ValidationError
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import (
-    TXCreateItem,
-    TXPromoteBatchItem,
-    TXSplitBatchItem,
-    TXUpdateItem,
-    tags_to_csv,
-    validate_tags_list,
-)
+from backend.app.schemas.transactions.batch import TXPromoteBatchItem, TXSplitBatchItem
+from backend.app.schemas.transactions.transactions import TXCreateItem, TXUpdateItem, tags_to_csv, validate_tags_list
 
 # ============================================================================
 # 1.1 LINK UUID REQUIREMENTS
@@ -703,7 +697,7 @@ class TestAssetEventLink:
     def test_tx_read_item_roundtrip_with_asset_event_id(self):
         """TXReadItem.from_db_model propagates asset_event_id."""
         from backend.app.db.models import Transaction  # noqa: PLC0415
-        from backend.app.schemas.transactions import TXReadItem  # noqa: PLC0415
+        from backend.app.schemas.transactions.transactions import TXReadItem  # noqa: PLC0415
         from backend.app.utils.datetime_utils import utcnow  # noqa: PLC0415
 
         tx = Transaction(
@@ -724,7 +718,7 @@ class TestAssetEventLink:
 
     def test_tx_update_sentinel_zero_unlinks(self):
         """TXUpdateItem accepts asset_event_id=0 as unlink sentinel."""
-        from backend.app.schemas.transactions import TXUpdateItem  # noqa: PLC0415
+        from backend.app.schemas.transactions.transactions import TXUpdateItem  # noqa: PLC0415
 
         upd = TXUpdateItem(id=1, asset_event_id=0)
         assert upd.asset_event_id == 0
@@ -737,7 +731,8 @@ class TestAssetEventLink:
 
     def test_tx_type_metadata_event_compatible_flags(self):
         """Only DIVIDEND, INTEREST, ADJUSTMENT expose event_compatible=True."""
-        from backend.app.schemas.transactions import EVENT_COMPATIBLE_TYPES, TX_TYPE_METADATA  # noqa: PLC0415
+        from backend.app.schemas.transactions.transactions import EVENT_COMPATIBLE_TYPES  # noqa: PLC0415
+        from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA  # noqa: PLC0415
 
         expected_true = {TransactionType.DIVIDEND, TransactionType.INTEREST, TransactionType.ADJUSTMENT}
         assert EVENT_COMPATIBLE_TYPES == expected_true
