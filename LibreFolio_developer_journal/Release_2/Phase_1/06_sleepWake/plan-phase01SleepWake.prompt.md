@@ -7,8 +7,9 @@
 >
 > - **Sessione**: `Z - Sospensione e risveglio` (`d401e062`), agente `coordinated-workstream`. Coordinatore: «Release 1.3
 >   planning» (`928ffa97`).
-> - **Ramo**: `e-alfy-z-sospensione-e-risveglio`. Base dell'analisi `459131eb8`; base attuale `1e9e567f7` (avanzamento
->   veloce del coordinatore, 15/10: riordino di X, W, J, A e H, lotti A–D dei colori, Designer Lab, 1.2.1).
+> - **Ramo**: `e-alfy-z-sospensione-e-risveglio`. Base dell'analisi `459131eb8`; poi `1e9e567f7` (avanzamento
+>   veloce del coordinatore, 15/10: riordino di X, W, J, A e H, lotti A–D dei colori, Designer Lab, 1.2.1); poi il merge
+>   di `dev_release2` a `8f1abf89e` dopo Z1 (`4618a2116`, 15/10: H CP6, X FE5b, E1, Y1, A5, commit dei colori).
 > - **Corsia**: porta 6186, data-dir `/tmp/librefolio-r13-z`. Preambolo:
 >   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6186 --data-dir /tmp/librefolio-r13-z <CATEGORIA> <AZIONE>`,
 >   una invocazione alla volta, con `nice`.
@@ -24,8 +25,8 @@
 | A | Analisi d'implementazione (sola lettura), inviata al coordinatore | ✅ 14/10 |
 | A2 | Riverifica dell'analisi sul codice di `1e9e567f7`, questo piano, la mia sezione del backlog | ✅ 15/10 |
 | Z6a | C-49: prove senza codice di prodotto (`npm ci` dal lock, `front build --debug`, tre gate nella mia corsia) | ⏳ passo 1 ✅ (15/10); i gate dopo la finestra delle dipendenze |
-| Z1 | Pausa degli aggiornamenti nel frontend (F26) | ✅ 15/10: codice, test e doc EN verdi; checkpoint FROZEN al coordinatore |
-| Z2 | Attività dell'utente e sospensione su Fly (F26, backend) | ⏸ attende gli agganci di H e il punto 32 |
+| Z1 | Pausa degli aggiornamenti nel frontend (F26) | ✅ 15/10: commit `74d028ec6` (journal `a6199d0e7`); merge di base `4618a2116` con i cancelli d'ingresso verdi; FROZEN di ingresso al coordinatore |
+| Z2 | Attività dell'utente e sospensione su Fly (F26, backend) | ⏸ attende gli agganci di H (punto 32 deciso il 15/10) |
 | Z3 | Scheduler: recupero immediato al risveglio e lock condiviso con `wake-sync` (`next_wake_at` e jitter nel backlog, punto 33) | ⏸ attende lo scheduler spostato da H |
 | Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ⏸ attende gli agganci di H |
 | Z5 | «Aggiornamento prezzi…» | ⏸ attende l'area avvisi e la configurazione pubblica di H |
@@ -429,3 +430,38 @@ Pagine (solo i cicli di polling e il punto della pillola):
    >
    > **Fuori pista**: anche docs-writer ha usato una volta `python3 -c` di sistema, in sola lettura, per leggere un
    > valore JSON.
+6. Merge di base e cancelli d'ingresso ✅ 2026-10-15
+
+   > **Note implementazione**: il coordinatore ha committato Z1 (`74d028ec6`, `feat(assets): pause live prices when
+   > idle`; journal `a6199d0e7`) e aperto il merge di `dev_release2` a `8f1abf89e` (H CP6, X FE5b, E1, Y1, A5, commit
+   > del programma colori). Due conflitti, risolti tenendo i due lati. In `developer/frontend/components/index.md`,
+   > rispetto alla base del merge, ogni lato aveva cambiato una riga sola: Authentication viene dal loro (E1, le pagine
+   > dei link dell'account), Live Prices dal mio. In `scripts/test_runner/_frontend_utility.py`: in core-unit le loro 5
+   > voci e le mie 2, in component-unit `InstanceBlockedPage` e `LiveUpdatesStatus`; `py_compile` ok. Le traduzioni del
+   > punto «Live prices» in `user/assets/index.{it,fr,es}.md:59` sono riscritte a mano sulla frase EN, con le etichette
+   > dell'app («Aggiornamento in pausa», «Mises à jour en pause», «Actualizaciones en pausa»), poi
+   > `dev.py mkdocs translate-stamp --file user/assets/index.en.md` (md5 `75048ee4` → `dd8e5487`, it, fr ed es timbrati
+   > in `mkdocs_src/aphra-pipeline/.translate-hashes.json`). Merge committato dal coordinatore: `4618a2116`.
+   >
+   > Cancelli sull'albero unito, uno alla volta, con `nice -n 15`: `dev.py api sync` exit 0 in 23 s, nessun file
+   > tracciato cambiato; `dev.py front check` exit 0, svelte-check 0 errori e 0 avvisi; Vitest dei tre file 19/28/6, più
+   > `themeRoles.gate` 36/36 (il merge porta commit dei colori, il gate non è cambiato); `front-asset live-pause`
+   > **6/6** in 24,5 s (invocazione 3 min 42 s, con la build del frontend rifatta all'avvio del backend, non
+   > strumentata); `dev.py mkdocs build` exit 0 in 42 s, nessun avviso, 3036 URL relativi risolti;
+   > `dev.py mkdocs check-links` exit 0, 95 link validi e gli 8 risolti a runtime di sempre. Porta 6186 libera alla
+   > fine. Log in `/tmp/libreFolio_z1merge_*.log` e `/tmp/libreFolio_z6a_live-pause_merge1*.log`.
+   >
+   > Dato per C-49: nono ciclo di vita del backend della corsia, pulito. Nessun avviso «ignored SIGTERM», gruppo di
+   > processi vuoto 123 ms dopo la chiusura del listener, 0,8 ms fra «Shutting down LibreFolio» e «All caches closed on
+   > shutdown».
+   >
+   > Per Z2–Z4, dal codice unito: `backend/app/config/` è l'unica sede delle variabili d'ambiente (un modulo per
+   > proprietario, `config/platform.py` di H); il lettore dei segreti `NAME_FILE` c'è (`env_secret`, `read_secret_file`
+   > in `config/__init__.py`) e `secrets_set_twice` copre già ogni `LIBREFOLIO_*`; lo scheduler è in
+   > `services/platform/scheduler/` (con `leader.py`). Agganci per il ciclo di vita e per il middleware ancora no:
+   > `main.py` chiama `add_middleware` direttamente.
+   >
+   > **Fuori pista**: alle 15:56 il carico (1 min) era salito a 87; prima della spec E2E ho aspettato che tornasse sotto
+   > 65, il livello del via del coordinatore (soglia mia): è partita alle 15:57 a 38,8. Nel merge
+   > `frontend/package.json` e il lock cambiano solo la versione della radice (1.1.0 → 0.0.0): `node_modules` resta
+   > valido, nessun `npm ci`.
