@@ -249,6 +249,15 @@ def api_system(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "System API tests", verbose=verbose)
 
 
+def api_instance_block(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance block (workstream H, CP6): refuse_when_blocked, ALLOWED_WHEN_BLOCKED, GET /system/block."""
+    print_section("Instance Block Tests")
+    print_info("Testing: api/v1/instance_block.py and GET /system/block, blocked in process only (never the lane's backend)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_instance_block.py", test_names)
+    return run_command(cmd, "Instance block tests", verbose=verbose)
+
+
 def api_http_compression(verbose: bool = False, test_names: list = None) -> bool:
     """Test HTTP compression (GZipMiddleware) on the live backend."""
     print_section("HTTP Compression Tests")
@@ -744,6 +753,9 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "asset-merge", api_asset_merge, name="Asset Merge API", desc="POST /assets/merge: dry-run, execution, identifier union, refusals")
     add_test(api, "utilities", api_utilities, name="Utilities API", desc="Sectors, countries")
     add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready, route order")
+    # H CP6: the block is set in the test process only (ASGI app + monkeypatch); the lane's backend stays unblocked, and
+    # each test registers and deletes its own user, so the category's write-scoped holds.
+    add_test(api, "instance-block", api_instance_block, name="Instance Block", desc="423 on a blocked instance but the allowed routes, 401 first for anonymous callers, GET /system/block, route guard")
     add_test(api, "backup", api_backup, name="Backup API", desc="Placeholder endpoints")
     add_test(api, "transactions", api_transactions, name="Transactions API", desc="Bulk create, query, patch, delete")
     add_test(api, "transfer-promotion", api_transfer_promotion, name="Transfer Promotion", desc="DEPOSIT/WITHDRAWAL → TRANSFER")
