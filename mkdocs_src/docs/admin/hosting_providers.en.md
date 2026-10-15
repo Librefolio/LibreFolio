@@ -119,6 +119,10 @@ LIBREFOLIO_DELETION_DATE=2026-11-14
 - While the instance is blocked, every start logs a warning,
   `Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): only a few API routes answer`,
   with the deletion date when there is one.
+- While the instance is blocked, the [market data scheduler](settings.md#market-data-scheduler)
+  runs no job: prices and exchange rates are not updated. Once you lift the block, its first run
+  catches up the history sync missed in the meantime, over the **Lookback horizon** of the schedule
+  (14 days by default).
 
 ### 👀 What Users See {: #what-users-see }
 
@@ -152,8 +156,7 @@ On a blocked instance, only these API calls answer as usual:
 
 - Your monitoring keeps working: `/system/health` and `/system/ready` answer as on any other
   instance.
-- The web app itself is still served: the block covers the API only.
-- Scheduled jobs, such as the price and FX syncs, keep running: they do not go through the API.
+- The web app itself is still served: the block covers the API, not the pages of the app.
 
 The list is short on purpose, and it is fixed in the code: there is no setting to change it.
 

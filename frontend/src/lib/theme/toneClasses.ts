@@ -1,10 +1,15 @@
 /**
  * Tailwind classes that colour signed figures and states — the one home for them.
  *
- * Every string below is the exact class list a component wrote before it moved here, so moving changed no pixel.
- * The variants differ on purpose or by drift — emerald or green for a gain, red-500 or red-600 for a loss, bars whose
- * dark shades run the other way — and each keeps its own name, so the designer can see them side by side and decide.
- * The thresholds stay with the callers (`>= 0`, `> 0`, three-way with zero): only the colours live here.
+ * The entries on the colour roles (`text-lf-gain`, `bg-lf-loss`…) follow the theme by themselves, with no `dark:`
+ * half. The others are still the exact class lists the components wrote before they moved here, until their wave of
+ * the colour migration: their variants differ on purpose or by drift — emerald or green for a gain, red-500 or red-600
+ * for a loss — and each keeps its own name, so the designer can see them side by side and decide. The thresholds stay
+ * with the callers (`>= 0`, `> 0`, three-way with zero): only the colours live here.
+ *
+ * An entry is either all roles or all palette classes, and the element that takes a role entry carries no palette
+ * colour of its own: `app.css` exempts every element with a `-lf-` class from its legacy dark remap, so a mixed element
+ * would keep half of its light colours in dark.
  *
  * The strings stay complete literals: Tailwind generates a class only when it finds it written out in a source file,
  * so a class assembled from pieces would silently lose its CSS.
@@ -21,22 +26,25 @@ export const SIGN_TEXT = {
         /** No delta to show (asset and FX tables). */
         none: 'text-gray-400 dark:text-gray-500',
     },
-    /** Portfolio tables (exposure, contribution, lots, other effects) and the KPI deltas. */
+    /**
+     * Portfolio tables (exposure, contribution, lots, other effects) and the KPI deltas. This entry, `kpi` and
+     * `headline` share the gain and loss roles (TD-2); each keeps its name, so a surface can take a role of its own.
+     */
     portfolio: {
-        gain: 'text-green-600 dark:text-green-400',
-        loss: 'text-red-500 dark:text-red-400',
-        zero: 'text-gray-500 dark:text-gray-400',
+        gain: 'text-lf-gain',
+        loss: 'text-lf-loss',
+        zero: 'text-lf-muted',
     },
-    /** KPI breakdown rows and the KpiCard change badge: green, with a darker red. */
+    /** KPI breakdown rows and the KpiCard change badge. */
     kpi: {
-        gain: 'text-green-600 dark:text-green-400',
-        loss: 'text-red-600 dark:text-red-400',
+        gain: 'text-lf-gain',
+        loss: 'text-lf-loss',
     },
     /** The headline value of a KPI or risk metric card. */
     headline: {
-        gain: 'text-green-700 dark:text-green-400',
-        loss: 'text-red-700 dark:text-red-400',
-        neutral: 'text-gray-800 dark:text-gray-100',
+        gain: 'text-lf-gain',
+        loss: 'text-lf-loss',
+        neutral: 'text-lf-primary',
     },
     /** The broker card's gain/loss line: emerald, with the darker red. */
     brokerCard: {
@@ -45,22 +53,22 @@ export const SIGN_TEXT = {
     },
 } as const;
 
-/** Fill of a signed bar or accent line. */
+/** Fill of a signed bar or accent line: the gain and loss roles of the figures they stand beside. */
 export const SIGN_BAR = {
-    /** KPI magnitude bars: the loss shades run the other way round (red-400 in light, red-500 in dark). */
+    /** KPI magnitude bars. */
     kpi: {
-        gain: 'bg-green-500 dark:bg-green-400',
-        loss: 'bg-red-400 dark:bg-red-500',
+        gain: 'bg-lf-gain',
+        loss: 'bg-lf-loss',
     },
     /** The thin accent line on top of KPI and risk metric cards. */
     accent: {
-        gain: 'bg-green-500 dark:bg-green-400',
-        loss: 'bg-red-500 dark:bg-red-400',
+        gain: 'bg-lf-gain',
+        loss: 'bg-lf-loss',
     },
-    /** Stress-test tornado bars, translucent, the same in both themes. */
+    /** Stress-test tornado bars, translucent. */
     tornado: {
-        gain: 'bg-emerald-500/80',
-        loss: 'bg-red-500/80',
+        gain: 'bg-lf-gain/80',
+        loss: 'bg-lf-loss/80',
     },
 } as const;
 

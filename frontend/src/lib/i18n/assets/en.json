@@ -377,8 +377,6 @@
   },
   "events": {
     "deleteSuccess": "{n} event(s) deleted",
-    "deleteNotFound": "Event(s) not found: {ids}",
-    "deleteBlocked": "Cannot delete: {n} event(s) still in use by transactions ({accessible} visible to you, {hidden} in other users' portfolios)",
     "fxBannerContext": "for dividend/cash events",
     "exists": {
       "title": "This event already exists",
@@ -414,6 +412,8 @@
     "UNSUPPORTED_PAGE": "The provider found this instrument but its market page cannot be read yet. Please open an issue on GitHub (Librefolio/LibreFolio) reporting this ISIN so support can be added.",
     "RATE_LIMITED": "Paused for too many requests until {time}",
     "RATE_LIMITED_NO_TIME": "Too many requests: try again later",
-    "RATE_LIMITED_DAY": "Paused for too many requests until {time}"
+    "RATE_LIMITED_DAY": "Paused for too many requests until {time}",
+    "NOT_CONFIGURED": "This provider must be configured before use",
+    "PROVIDER_ERROR": "The provider failed: {detail}"
   }
 }
