@@ -316,7 +316,7 @@ def utils_confined_path(verbose: bool = False, test_names: list = None) -> bool:
 def utils_static_route_confinement(verbose: bool = False, test_names: list = None) -> bool:
     """Test that the routes serving files by request path never leave their folder."""
     print_section("Utils: Static Route Confinement")
-    print_info("Testing: backend/app/main.py (frontend_catchall, mkdocs_static), backend/app/api/v1/uploads.py (serve_plugin_static)")
+    print_info("Testing: backend/app/services/platform/static_site.py (frontend_catchall, mkdocs_static), backend/app/api/v1/uploads.py (serve_plugin_static)")
     print_info("Tests: raw ASGI requests landing outside the served folder → SPA fallback / 404 / 403, never the outside content; the files of each folder still served")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_static_route_confinement.py", test_names)
     return run_command(cmd, "Static route confinement tests", verbose=verbose)

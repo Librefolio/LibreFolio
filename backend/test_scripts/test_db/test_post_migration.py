@@ -880,21 +880,21 @@ def test_the_kept_backup_is_named_after_the_database_the_fix_and_the_utc_time(re
 def test_the_startup_hook_survives_a_run_that_raises_and_returns_none(configured_sandbox: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Contract 5: ``run_post_migration_fixes_at_startup()`` swallows an exception of the run and returns ``None``: startup never blocks.
 
-    ``run_post_migration_fixes`` is replaced, in ``backend.app.main`` where the hook reaches it, by one
-    that raises. Barrier first: the hook did call it — otherwise "it did not raise" proves nothing.
+    ``run_post_migration_fixes`` is replaced, in ``backend.app.services.platform.database_bootstrap`` where the hook
+    reaches it, by one that raises. Barrier first: the hook did call it — otherwise "it did not raise" proves nothing.
     """
     _install_v110(configured_sandbox / "sqlite" / "app.db")
-    main = importlib.import_module("backend.app.main")
+    database_bootstrap = importlib.import_module("backend.app.services.platform.database_bootstrap")
     calls: list[Any] = []
 
     def raising_run(db_path: Path, data_dir: Optional[Path] = None, *, dry_run: bool = False) -> PostMigrationReport:
         calls.append(db_path)
         raise RuntimeError("provoked: the post-migration run itself failed")
 
-    monkeypatch.setattr(main, "run_post_migration_fixes", raising_run, raising=False)
+    monkeypatch.setattr(database_bootstrap, "run_post_migration_fixes", raising_run)
 
     try:
-        result = main.run_post_migration_fixes_at_startup()
+        result = database_bootstrap.run_post_migration_fixes_at_startup()
     except Exception as exc:
         pytest.fail(f"the startup hook raised {exc!r}: startup must never block")
 
@@ -1083,10 +1083,10 @@ def test_the_startup_hook_runs_the_fixes_on_the_configured_database_and_data_dir
     The configuration is the sandbox (``LIBREFOLIO_TEST_MODE=1``, ``LIBREFOLIO_TEST_DATA_DIR``), whose
     ``sqlite/app.db`` is a 1.1 database needing the conversion; it is read when the hook runs, as
     ``ensure_database_exists`` reads it. ``run_post_migration_fixes`` is replaced in
-    ``backend.app.main``, where the hook reaches it, by a spy returning a report of its own.
+    ``backend.app.services.platform.database_bootstrap``, where the hook reaches it, by a spy returning a report of its own.
     """
     db = _install_v110(configured_sandbox / "sqlite" / "app.db")
-    main = importlib.import_module("backend.app.main")
+    database_bootstrap = importlib.import_module("backend.app.services.platform.database_bootstrap")
     report = PostMigrationReport(outcomes={FIX: "applied"})
     calls: list[tuple[Any, Any, bool]] = []
 
@@ -1094,9 +1094,9 @@ def test_the_startup_hook_runs_the_fixes_on_the_configured_database_and_data_dir
         calls.append((db_path, data_dir, dry_run))
         return report
 
-    monkeypatch.setattr(main, "run_post_migration_fixes", spy, raising=False)
+    monkeypatch.setattr(database_bootstrap, "run_post_migration_fixes", spy)
 
-    result = main.run_post_migration_fixes_at_startup()
+    result = database_bootstrap.run_post_migration_fixes_at_startup()
 
     assert len(calls) == 1, f"the hook must call run_post_migration_fixes once, it called it {len(calls)} times"
     db_path, data_dir, as_dry_run = calls[0]
@@ -1111,7 +1111,7 @@ def test_the_startup_hook_runs_the_fixes_on_the_configured_database_and_data_dir
 # =============================================================================
 
 
-def _quiet_the_rest_of_the_lifespan(monkeypatch: pytest.MonkeyPatch, main: ModuleType, events: list[str]) -> None:
+def _quiet_the_rest_of_the_lifespan(monkeypatch: pytest.MonkeyPatch, app_lifespan: ModuleType, events: list[str]) -> None:
     """Everything else the lifespan starts or stops reduced to nothing, as the lifespan tests of ``test_market_calendar`` do.
 
     Two steps are recorded instead: the migrations (``ensure_database_exists``) and the first
@@ -1135,26 +1135,26 @@ def _quiet_the_rest_of_the_lifespan(monkeypatch: pytest.MonkeyPatch, main: Modul
     async def scheduler(event: asyncio.Event) -> None:
         await event.wait()
 
-    monkeypatch.setattr(main, "validate_signal_runtime", lambda: SimpleNamespace(pandas_ta_classic_version="test", talib_version="test"))
-    monkeypatch.setattr(main.SignalPluginRegistry, "auto_discover", lambda: None)
-    monkeypatch.setattr(main.SignalPluginRegistry, "list_plugin_codes", lambda: [])
-    monkeypatch.setattr(main.ToolPluginRegistry, "get_snapshot", lambda: SimpleNamespace(definitions=[], failures=[]))
-    monkeypatch.setattr(main, "ensure_data_dirs", lambda: None)
-    monkeypatch.setattr(main, "initialize_risk_scenario_catalog", catalog)
-    monkeypatch.setattr(main, "seed_default_avatars", lambda: 0)
-    monkeypatch.setattr(main, "ensure_database_exists", lambda: events.append("migrations"))
-    monkeypatch.setattr(main, "_initialize_global_settings", first_connection)
-    monkeypatch.setattr(main, "_prewarm_provider_caches", nothing)
-    monkeypatch.setattr(main, "start_market_holiday_prewarm", prewarm)
-    monkeypatch.setattr(main, "get_shutdown_event", lambda: shutdown_event)
-    monkeypatch.setattr(main, "scheduler_loop", scheduler)
-    monkeypatch.setattr(main, "shutdown_tool_executor", nothing)
-    for registry in (main.AssetProviderRegistry, main.FXProviderRegistry, main.BRIMProviderRegistry):
+    monkeypatch.setattr(app_lifespan, "validate_signal_runtime", lambda: SimpleNamespace(pandas_ta_classic_version="test", talib_version="test"))
+    monkeypatch.setattr(app_lifespan.SignalPluginRegistry, "auto_discover", lambda: None)
+    monkeypatch.setattr(app_lifespan.SignalPluginRegistry, "list_plugin_codes", lambda: [])
+    monkeypatch.setattr(app_lifespan.ToolPluginRegistry, "get_snapshot", lambda: SimpleNamespace(definitions=[], failures=[]))
+    monkeypatch.setattr(app_lifespan, "ensure_data_dirs", lambda: None)
+    monkeypatch.setattr(app_lifespan, "initialize_risk_scenario_catalog", catalog)
+    monkeypatch.setattr(app_lifespan, "seed_default_avatars", lambda: 0)
+    monkeypatch.setattr(app_lifespan, "ensure_database_exists", lambda: events.append("migrations"))
+    monkeypatch.setattr(app_lifespan, "_initialize_global_settings", first_connection)
+    monkeypatch.setattr(app_lifespan, "_prewarm_provider_caches", nothing)
+    monkeypatch.setattr(app_lifespan, "start_market_holiday_prewarm", prewarm)
+    monkeypatch.setattr(app_lifespan, "get_shutdown_event", lambda: shutdown_event)
+    monkeypatch.setattr(app_lifespan, "scheduler_loop", scheduler)
+    monkeypatch.setattr(app_lifespan, "shutdown_tool_executor", nothing)
+    for registry in (app_lifespan.AssetProviderRegistry, app_lifespan.FXProviderRegistry, app_lifespan.BRIMProviderRegistry):
         monkeypatch.setattr(registry, "shutdown_all_providers", lambda: None)
-    monkeypatch.setattr(main, "shutdown_brim_parse_pool", lambda wait=False: None)
-    monkeypatch.setattr(main, "shutdown_quant_worker_pools", nothing)
-    monkeypatch.setattr(main, "shutdown_market_holidays", nothing)
-    monkeypatch.setattr(main, "close_all_caches", lambda: None)
+    monkeypatch.setattr(app_lifespan, "shutdown_brim_parse_pool", lambda wait=False: None)
+    monkeypatch.setattr(app_lifespan, "shutdown_quant_worker_pools", nothing)
+    monkeypatch.setattr(app_lifespan, "shutdown_market_holidays", nothing)
+    monkeypatch.setattr(app_lifespan, "close_all_caches", lambda: None)
 
 
 @pytest.mark.asyncio
@@ -1166,18 +1166,20 @@ async def test_the_server_runs_the_fixes_right_after_the_migrations_and_starts_e
     hook, so the fixes never appear.
     """
     _install_v110(configured_sandbox / "sqlite" / "app.db")
-    main = importlib.import_module("backend.app.main")
+    app_lifespan = importlib.import_module("backend.app.services.platform.app_lifespan")
+    database_bootstrap = importlib.import_module("backend.app.services.platform.database_bootstrap")
+    app = importlib.import_module("backend.app.main").app
     events: list[str] = []
 
     def raising_run(db_path: Path, data_dir: Optional[Path] = None, *, dry_run: bool = False) -> PostMigrationReport:
         events.append("post_migration_fixes")
         raise RuntimeError("provoked: the post-migration run itself failed")
 
-    _quiet_the_rest_of_the_lifespan(monkeypatch, main, events)
-    monkeypatch.setattr(main, "run_post_migration_fixes", raising_run, raising=False)
+    _quiet_the_rest_of_the_lifespan(monkeypatch, app_lifespan, events)
+    monkeypatch.setattr(database_bootstrap, "run_post_migration_fixes", raising_run)
 
     async def serve() -> None:
-        async with main.lifespan(main.app):
+        async with app_lifespan.lifespan(app):
             events.append("serving")
 
     try:
