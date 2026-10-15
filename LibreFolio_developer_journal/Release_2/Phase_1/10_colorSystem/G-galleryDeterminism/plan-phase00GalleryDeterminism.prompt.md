@@ -661,8 +661,9 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 > - *Statica, rifatta da G:* `tsc` e2e con i soli 2 errori di base; prettier pulito; `git diff --check` pulito.
 > - *Da verificare nella run:* il modello da tastiera in Chromium (in jsdom è fissato da `TreeSelect.test.ts:256–286`), i
 >   frame uguali a `g-final3-r1`, la durata entro i 240 s per test.
-> - *Fuori dal perimetro, non toccato:* `SignalTreeSelect.test.ts:306–311` descrive ancora il vecchio flusso a clic
->   dell'helper; `TreeSelect.svelte:17–19` resta vero per lo scatto con la tendina aperta.
+> - *Fuori dal perimetro, non toccato:* `SignalTreeSelect.test.ts` (righe 16–17 e 306–310) descrive ancora il vecchio
+>   flusso a clic dell'helper; `TreeSelect.svelte:17–19` resta vero per lo scatto con la tendina aperta. Su richiesta del
+>   coordinatore (15/10, 13:58) sono la voce **G-12** del backlog, con il proprietario da instradare.
 > **Ripresa (13:36):** `cryptography` installato (`dc9a5d232`); comandi Python di nuovo permessi.
 > **⚠️ Fuori pista — build scadute dopo il merge.** La base `9f3b141a8` porta sorgenti frontend più recenti della build
 > delle 12:26, e 6 pagine della documentazione. Il server di test le ricostruisce all'avvio se le date dei sorgenti sono
@@ -814,8 +815,13 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
   Node; la run filtrata di G-9 aspetta la «ripresa».
 - **15/10, 13:36 — Ripresa**; 13:46–13:56 run G-9 (passo 8). Alle 13:50 il coordinatore fissa il budget comune con la 1.3:
   al massimo 3 suite pesanti, 1 nostra. Dopo questa run, nessuna E2E, gallery o suite completa senza chiedere il posto.
-- **15/10, 14:00 — G-9 pronto per il checkpoint, FROZEN.**
+- **15/10, 13:58 — G-9 pronto per il checkpoint, FROZEN.**
   - HEAD `9f3b141a8`.
   - Delta: `gallery.spec.ts`, il piano, il backlog.
   - Commit proposto in `files/commit_g9.txt` della sessione.
   - Chiesto il posto per rifare da soli i 4 test con rossi di carico.
+- **15/10, 13:58 — G-9 committata dal coordinatore:** `5da3c9eba`, sopra `9f3b141a8`.
+  - Entra nel target dopo la ripetizione da soli, a 1 worker, dei 4 test con rossi di carico, quando la DoD è 10/10.
+  - G è in coda per il posto dopo L, che chiude L-10 in circa 25 minuti; il via lo dà il coordinatore.
+  - Le due note fuori perimetro diventano **G-12** nel backlog, con il proprietario da instradare.
+  - FROZEN; delta non committato: questa riga, il passo 8 e il backlog (G-9, G-12).
