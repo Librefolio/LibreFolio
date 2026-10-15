@@ -1143,7 +1143,7 @@ intorno a ogni test e il fuso porta i test di cinque lotti che non ci sono mai p
 >   della guardia, nessun test perso.
 > - Porta 6185 libera.
 
-### C-94 — le build del server di test prima del tempo massimo d'avvio ⏳ (2026-10-15)
+### C-94 — le build del server di test prima del tempo massimo d'avvio ✅ (2026-10-15) — `1c67dd5d9`, validata sul merge `4a246613e`
 
 Via del coordinatore (15/10, ~07:42): C-94 della sezione C, mentre aspetto le decisioni 26–30. Nessun ramo aperto tocca
 `scripts/test_runner/_server.py`, `frontend/playwright.config.ts` o `dev.py` (verificato dal coordinatore su tutti i
@@ -1471,6 +1471,50 @@ nuovo (non avvia il server condiviso). Prova end-to-end, `all-backend` e una cat
    > N1 di W è in `dev_release2` (`14d58cc61`, `native_balances` a `native_cash.py:424`): dopo il prossimo
    > aggiornamento di base si possono fare CP-15 e la sostituzione della chiamata di W (J-14, ora
    > `brokers/summary.py:141`), col diff approvato da W.
+
+#### Checkpoint C-94 + CP-2 ✅ (2026-10-15) — committato dal coordinatore
+
+`1c67dd5d9` fix(test-runner): build test server before timeout · `5810e03d2` fix(pac): exact percent ties, sign and -0
+checks · `506042729` docs(journal): J C-94 and CP-2 checkpoint. Il testo per `.github/copilot-instructions.md:89` e le
+righe del CHANGELOG di CP-2 li mette il coordinatore all'ingresso; J-15 resta nel backlog.
+
+#### Aggiornamento di base 6 — `dev_release2` `dae4de4fa` ✅ (2026-10-15) — merge `4a246613e`
+
+Merge aperto dal coordinatore (`MERGE_HEAD` `dae4de4fa`, 161 commit dopo `f87ad04c6`: W N1/N1b/FE8a/E1a/E1c, Z1, L-10,
+G-9/G-10, H CP7a, Y1, A5, C-96 e i loro giornali), commit del merge suo: `4a246613e`, genitori `506042729` e
+`dae4de4fa`, albero pulito.
+
+> **Note implementazione**:
+> - **Conflitto**: solo `scripts/test_runner/_backend_utils.py`, due zone, come previsto: le due parti inseriscono negli
+>   stessi punti, una funzione e una registrazione dopo `runtime-isolation`. Risolto tenendo tutte e due: prima le loro
+>   (`confined-path`, `static-route-confinement`, `jwt-secret-blank`), come sul bersaglio, poi la mia
+>   (`test-server-preparation`). Risolto con uno script sui marcatori esatti (copia del file in conflitto in
+>   `/tmp/libreFolio_j/c94/merge_backend_utils_conflicted.py`), poi `git add` del solo file, come chiesto. **Prova**:
+>   il file risolto differisce da `dae4de4fa` esattamente per le mie modifiche (`f87ad04c6..HEAD`) e da HEAD esattamente
+>   per le loro (`f87ad04c6..dae4de4fa`); compila; `diff --check` pulito.
+> - **File condivisi uniti da git**: con la stessa prova a due lati, tutti identici: `dev.py`, `test_runtime_isolation.py`,
+>   `release-pipeline.md`, `dev_workflow.en.md`, `front-overview.md`, `runner_architecture.md`, `BACKLOG_POST_1.2.md`.
+> - **Semantica**, letta nel codice:
+>   - `_check_env_file` (cambiato da loro) si chiama solo in `cmd_docker_build` e `cmd_docker_rebuild`, non nel
+>     percorso di `server --test --build-only`;
+>   - accanto a `_read_frontend_build_mode_marker`, invariato, hanno aggiunto il marcatore `.build-version`. Lo scrive
+>     solo la build Docker; la build di debug svuota `frontend/build/`, e quindi la build Docker rifà quella di
+>     produzione. È coerente;
+>   - il loro `_docker_ensure_frontend_built` chiama `cmd_fe_build(BuildArgs())`. Il mio controllo di `node_modules`
+>     viene prima e non legge `args`, così anche la build Docker si ferma subito senza `node_modules`.
+> - **Cancelli sulla revisione fusa** (`4a246613e`), uno alla volta con `nice -n 10`, log in `/tmp/libreFolio_j/merge_dae4/`:
+>   - `utils test-server-preparation` 63/63;
+>   - `utils runtime-isolation` 195/195 (175 sul mio ramo, più le aggiunte di `dev_release2` al file);
+>   - `check-orphans`: tutti registrati e raggiungibili da un'azione `all` (298 file del backend, 410 Vitest, 123 E2E);
+>   - `services pac-planner-report` 56/56;
+>   - `services pac-planner-core test_pac_planner_normalize` 113/113 (non esiste un'azione `pac-planner-normalize`:
+>     il file è in `pac-planner-core`, filtrato com'era prima);
+>   - Vitest del planner, uno alla volta: `format` 107, `request` 34, `modeText` 13, `result/text` 95,
+>     `result/ResultCell` 7, `result/model` 11, `pluralCountSites` 19, `privacy/moneyRenderSites` 6.
+>
+>   Stessi conteggi del ramo prima del merge, tranne `runtime-isolation`. Porta 6185 libera.
+>
+> **⚠️ Fuori pista**: nessuno.
 
 #### Domande di W N1 dal coordinatore (2026-10-15, 09:06) — fuori da C-94
 
