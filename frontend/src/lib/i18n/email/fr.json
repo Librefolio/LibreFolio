@@ -42,8 +42,20 @@
       "links": {
         "ok": "Les e-mails peuvent contenir des liens : LIBREFOLIO_PUBLIC_URL est définie, ou l'e-mail est désactivé.",
         "missing": "LIBREFOLIO_PUBLIC_URL n'est pas définie : les e-mails fonctionnent, mais aucun avec un lien (mot de passe oublié, invitation, réinitialisation) ne peut partir.",
-        "invalid": "LIBREFOLIO_PUBLIC_URL n'est pas une adresse http:// ou https:// : aucun e-mail avec un lien ne peut partir."
+        "invalid": "LIBREFOLIO_PUBLIC_URL ne peut pas commencer un lien : il faut http:// ou https:// et un nom d'hôte, sans nom d'utilisateur, mot de passe, ? ni #. Aucun e-mail avec un lien ne peut partir."
       }
+    },
+    "links": {
+      "base": "Les liens des e-mails commencent par {base}.",
+      "probe": {
+        "checking": "Vérification depuis cet appareil que cette instance répond à cette adresse…",
+        "match": "Cette instance répond à cette adresse, depuis cet appareil.",
+        "otherInstance": "Depuis cet appareil, un autre serveur répond à cette adresse, pas cette instance. Cette vérification ne vaut que pour cet appareil : la cause peut être son DNS ou son réseau. Si d'autres appareils voient la même chose, les liens des e-mails mènent ailleurs : vérifiez LIBREFOLIO_PUBLIC_URL.",
+        "unreachable": "Cet appareil ne parvient pas à joindre cette instance à cette adresse. Cette vérification ne vaut que pour cet appareil : la cause peut être son DNS ou son réseau. Si les autres appareils n'y parviennent pas non plus, les liens des e-mails ne s'ouvriront pas : vérifiez LIBREFOLIO_PUBLIC_URL.",
+        "insecure": "Cette page utilise https:// alors que LIBREFOLIO_PUBLIC_URL commence par http:// : ce navigateur ne peut pas la vérifier, et les liens des e-mails circuleraient en clair. Indiquez l'adresse https://.",
+        "invalid": "Ce navigateur ne parvient pas à lire LIBREFOLIO_PUBLIC_URL comme une adresse : les liens des e-mails risquent de ne pas s'ouvrir. Vérifiez sa valeur."
+      },
+      "recheck": "Vérifier à nouveau"
     },
     "budget": {
       "remaining": "Il reste {remaining} e-mails sur {max} pour cette heure.",

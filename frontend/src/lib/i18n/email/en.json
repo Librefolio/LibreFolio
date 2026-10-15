@@ -42,8 +42,20 @@
       "links": {
         "ok": "Emails can carry links: LIBREFOLIO_PUBLIC_URL is set, or email is off.",
         "missing": "LIBREFOLIO_PUBLIC_URL is not set: emails work, but none with a link (forgotten password, invitation, reset) can go out.",
-        "invalid": "LIBREFOLIO_PUBLIC_URL is not an http:// or https:// address: no email with a link can go out."
+        "invalid": "LIBREFOLIO_PUBLIC_URL cannot start a link: it needs http:// or https:// and a host name, with no user name, password, ? or #. No email with a link can go out."
       }
+    },
+    "links": {
+      "base": "Links in emails start with {base}.",
+      "probe": {
+        "checking": "Checking from this device that this instance answers there…",
+        "match": "This instance answers there, from this device.",
+        "otherInstance": "From this device, another server answers at that address, not this instance. This check covers this device only: the cause may be its DNS or its network. If other devices see the same, the links in emails lead elsewhere: check LIBREFOLIO_PUBLIC_URL.",
+        "unreachable": "This device cannot reach this instance at that address. This check covers this device only: the cause may be its DNS or its network. If other devices cannot either, the links in emails will not open: check LIBREFOLIO_PUBLIC_URL.",
+        "insecure": "This page uses https:// while LIBREFOLIO_PUBLIC_URL starts with http://: this browser cannot check it, and the links in emails would travel unencrypted. Set it to the https:// address.",
+        "invalid": "This browser cannot read LIBREFOLIO_PUBLIC_URL as an address: the links in emails may not open. Check its value."
+      },
+      "recheck": "Check again"
     },
     "budget": {
       "remaining": "{remaining} of {max} emails left this hour.",
