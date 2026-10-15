@@ -58,9 +58,10 @@ describe('KpiDivergingFlowBar', () => {
             expect(right.style.width).toBe('60%');
             expect(left.style.width).toBe('25%');
 
-            // The colours and the height are the visible identity of this bar.
-            expect(right.className).toContain('bg-green-500');
-            expect(left.className).toContain('bg-red-400');
+            // The colours and the height are the visible identity of this bar. The colours are the
+            // gain and loss roles, which take their value from the theme: no `dark:` half to pin.
+            expect(right.className).toContain('bg-lf-gain');
+            expect(left.className).toContain('bg-lf-loss');
             expect(track(container).className).toContain('h-1.5');
         });
 
@@ -199,7 +200,8 @@ describe('KpiDivergingFlowBar', () => {
 
             const {right} = fills(container);
             expect(right.className).toContain('bg-blue-500');
-            expect(right.className).not.toContain('bg-green-500');
+            // Replaced, not joined: the default gain role must be gone from the fill.
+            expect(right.className).not.toContain('bg-lf-gain');
             expect(right.style.width).toBe('44%');
             expect(track(container).className).toContain('h-5');
         });
