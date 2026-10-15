@@ -16,6 +16,7 @@
     import {buildDriftUncertainty} from './driftUncertainty';
     import {DEFAULT_SIMULATION_MODE, SIMULATION_MODES, simulationModeSpec, type SimulationMode} from './simulationModes';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {RISK_OVERLAY_COLORS} from '$lib/theme/chartTheme';
 
     /**
      * L4 rung 3 — simulation: a probabilistic model, on the model's assumptions.
@@ -92,7 +93,7 @@
                 id: 'risk-simulation-band',
                 label: $t('risk.simulation.simulated'),
                 data: coneData,
-                color: '#2563eb',
+                color: RISK_OVERLAY_COLORS.simulation,
                 lineWidth: 2,
                 lineType: 'solid',
                 markerStart: null,

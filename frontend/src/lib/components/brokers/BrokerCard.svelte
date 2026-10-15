@@ -11,6 +11,7 @@
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     type BrokerBreakdownCard = {
         broker_id: number;
@@ -153,7 +154,7 @@
             </div>
             <div class="flex items-center justify-between gap-3">
                 <span class="text-gray-500 dark:text-gray-400">{$_('brokers.gainLoss')}</span>
-                <span class="font-medium {summary && toNumber(summary.gain_loss.amount) < 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}">
+                <span class="font-medium {summary && toNumber(summary.gain_loss.amount) < 0 ? SIGN_TEXT.brokerCard.loss : SIGN_TEXT.brokerCard.gain}">
                     {#if summary}
                         <CurrencyAmount amount={toNumber(summary.gain_loss.amount)} code={targetCurrency} options={{showSign: true}} />
                         <span class="ml-1 text-xs">({formatPercent(toNumber(summary.gain_loss_percent), {scale: 100, signed: false, locale: $uiLocaleStore})})</span>

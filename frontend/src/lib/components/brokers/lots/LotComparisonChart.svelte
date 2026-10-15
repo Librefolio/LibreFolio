@@ -22,7 +22,8 @@
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal} from '$lib/types';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
-    import {resolveBrokerName, withAlpha} from './lotChartShared';
+    import {resolveBrokerName} from './lotChartShared';
+    import {withAlpha} from '$lib/theme/colorAlpha';
     import {
         aggregateReturnPoints as aggregateReturnPointsOf,
         aggregateValuePoints,
@@ -55,6 +56,9 @@
     } from './lotComparisonChartHelpers';
     import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {themed} from '$lib/theme/themePair';
+    import {CHART_GAIN_LOSS, LOT_CHART_COLORS, LOT_COMPARISON_COLORS} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotValueHistoryPoint = z.infer<typeof schemas.LotValueHistoryPoint>;
@@ -218,7 +222,7 @@
 
     function syncTheme() {
         if (typeof document === 'undefined') return;
-        isDark = document.documentElement.classList.contains('dark');
+        isDark = isDarkTheme();
     }
 
     // `parseDisplayDate` rather than `new Date`: the values here are bare
@@ -261,11 +265,11 @@
     }
 
     function valueEstimatedLineColor(): string {
-        return isDark ? '#94a3b8' : '#64748b';
+        return themed(LOT_COMPARISON_COLORS.estimatedValue, isDark);
     }
 
     function aggregateReturnColor(): string {
-        return isDark ? '#fbbf24' : '#d97706';
+        return themed(LOT_COMPARISON_COLORS.aggregateReturn, isDark);
     }
 
     function returnTooltipLotId(param: any): number | null {
@@ -783,7 +787,7 @@
         if (returnUnit === 'pct') {
             for (const lot of returnPctUndefinedLots) {
                 if (excludedLotIds.has(lot.lotId)) continue;
-                rows.push(buildTooltipRow(escapeHtml(lot.label), escapeHtml(modeLabels.returnPctUndefined), isDark ? '#94a3b8' : '#64748b'));
+                rows.push(buildTooltipRow(escapeHtml(lot.label), escapeHtml(modeLabels.returnPctUndefined), themed(LOT_COMPARISON_COLORS.undefinedReturn, isDark)));
             }
         }
 
@@ -852,7 +856,12 @@
                 if (exactValuePoint) {
                     rows.push(buildTooltipRow(escapeHtml(modeLabels.residualValue), escapeHtml(formatCurrencyAmountPlain(exactValuePoint.openValue, currency))));
                     rows.push(buildTooltipRow(escapeHtml(modeLabels.saleProceeds), escapeHtml(formatCurrencyAmountPlain(exactValuePoint.proceeds, currency))));
-                    rows.push(buildTooltipRow(escapeHtml(modeLabels.fifoPnl), `<span style="color:${exactValuePoint.pnl >= 0 ? (isDark ? '#4ade80' : '#16a34a') : isDark ? '#f87171' : '#dc2626'}">${escapeHtml(formatCurrencyAmountPlain(exactValuePoint.pnl, currency, {showSign: true}))}</span>`));
+                    rows.push(
+                        buildTooltipRow(
+                            escapeHtml(modeLabels.fifoPnl),
+                            `<span style="color:${exactValuePoint.pnl >= 0 ? themed(CHART_GAIN_LOSS.portfolio.gain, isDark) : themed(CHART_GAIN_LOSS.portfolio.loss, isDark)}">${escapeHtml(formatCurrencyAmountPlain(exactValuePoint.pnl, currency, {showSign: true}))}</span>`,
+                        ),
+                    );
                 }
 
                 return `${buildTooltipHeader(escapeHtml(`${lot.label} · ${formatLongDate(pointDate)}`), theme.textColor)}${rows.join('')}`;
@@ -867,14 +876,14 @@
     }
 
     function buildValueSeries(): echarts.SeriesOption[] {
-        const residualColor = isDark ? '#60a5fa' : '#2563eb';
-        const proceedsColor = isDark ? '#34d399' : '#059669';
-        const incomeColor = isDark ? '#a78bfa' : '#7c3aed';
-        const originalCostColor = isDark ? '#cbd5e1' : '#475569';
+        const residualColor = themed(LOT_COMPARISON_COLORS.residual, isDark);
+        const proceedsColor = themed(LOT_COMPARISON_COLORS.proceeds, isDark);
+        const incomeColor = themed(LOT_COMPARISON_COLORS.income, isDark);
+        const originalCostColor = themed(LOT_COMPARISON_COLORS.originalCost, isDark);
         const estimatedValueColor = valueEstimatedLineColor();
         const residualLineColor = hasEstimatedAtCostLots ? estimatedValueColor : residualColor;
         const residualSeriesName = hasEstimatedAtCostLots ? modeLabels.residualValueEstimatedAtCost : modeLabels.residualValue;
-        const aggregateTotalColor = hasEstimatedAtCostLots ? estimatedValueColor : isDark ? '#e2e8f0' : '#0f172a';
+        const aggregateTotalColor = hasEstimatedAtCostLots ? estimatedValueColor : themed(LOT_COMPARISON_COLORS.aggregateTotal, isDark);
         const aggregateLineType = hasEstimatedAtCostLots ? 'dashed' : 'solid';
         const residualData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.openValue)).filter((point): point is LineDataPoint => point != null));
         const proceedsData = toChartSeriesPoints(aggregatedValuePoints.map((point) => lineDataPoint(point.date, point.proceeds)).filter((point): point is LineDataPoint => point != null));
@@ -1055,7 +1064,7 @@
             tooltip: {show: false},
             animation: false,
             legendHoverLink: false,
-            itemStyle: {borderColor: isDark ? '#0f172a' : '#ffffff', borderWidth: 1.5},
+            itemStyle: {borderColor: themed(LOT_CHART_COLORS.markerRing, isDark), borderWidth: 1.5},
             emphasis: {disabled: true},
             z: 12,
             zlevel: 0,
@@ -1256,11 +1265,10 @@
 
     onMount(() => {
         syncTheme();
-        darkModeObserver = new MutationObserver(() => {
+        darkModeObserver = onThemeClassChange(() => {
             syncTheme();
             renderChart();
         });
-        darkModeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
 
         return () => {
             tooltipCleanup?.();

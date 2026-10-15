@@ -46,6 +46,7 @@ from backend.app.services.files.static_uploads import (
     list_uploads,
     save_upload,
 )
+from backend.app.utils.runtime.paths import confined_path
 
 logger = structlog.get_logger(__name__)
 
@@ -421,7 +422,8 @@ async def serve_file(  # noqa: C901 — flat preview-mode dispatch with early re
 
             from fastapi.responses import PlainTextResponse  # noqa: PLC0415 — lazy import / avoid circular
 
-            return PlainTextResponse(content=content, media_type=mime_type)
+            # Always plain text, whatever the stored type: an uploaded document is shown, never run.
+            return PlainTextResponse(content=content, headers={"X-Content-Type-Options": "nosniff"})
         except Exception as e:
             logger.exception("Failed to read text preview", error=str(e), file_id=file_id)
             raise HTTPException(status_code=500, detail="Failed to read file preview") from e
@@ -532,16 +534,11 @@ async def serve_plugin_static(
 
     # Build path and validate
     base_dir = PLUGIN_STATIC_DIRS[provider_type]
-    file_path = base_dir / path
 
-    # Security: prevent path traversal
-    try:
-        file_path = file_path.resolve()
-        base_resolved = base_dir.resolve()
-        if not str(file_path).startswith(str(base_resolved)):
-            raise HTTPException(status_code=403, detail="Access denied")
-    except (OSError, ValueError):
-        raise HTTPException(status_code=400, detail="Invalid path") from None
+    # Security: the requested path must stay inside the plugin's static folder
+    file_path = confined_path(base_dir, path)
+    if file_path is None:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")

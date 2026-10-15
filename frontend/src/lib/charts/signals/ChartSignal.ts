@@ -11,6 +11,7 @@
 import {fromStore} from 'svelte/store';
 import {_} from '$lib/i18n';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
+import {SIGNAL_DEFAULT_PALETTE} from '$lib/theme/chartPalettes';
 
 const trackCatalogue = () => fromStore(_);
 /** The catalogue's formatter, tracked like `uiLocale()`; created on the first label, so a module that never labels a signal never reads svelte-i18n. */
@@ -191,7 +192,7 @@ export interface SignalConfig {
 }
 
 /** Default color palette — cycled when adding new signals */
-export const DEFAULT_SIGNAL_COLORS = ['#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+export const DEFAULT_SIGNAL_COLORS = SIGNAL_DEFAULT_PALETTE;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // RENDERED SIGNAL — Output format for chart components
