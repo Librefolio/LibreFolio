@@ -2225,8 +2225,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   `get_supported_currencies_cached`, usato da `list_providers`: cache con nome `fx_provider_currencies` (24 h, nel pannello
   delle cache), timeout di 5 s, l'ultimo elenco noto quando il fornitore fallisce, riprovato dopo 5 minuti; una sola
   richiesta per fornitore con chiamate simultanee. API e `openapi.json` invariati; 8 test senza rete
-  (`services fx-catalog`). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione
-  «15», quinto aggiornamento di base e X-R8.
+  (`services fx-catalog`). In `dev_release2` con `173ba19e2` (X-R8 `1dfd4e657`). Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», quinto aggiornamento di base e X-R8.
 - **X-R10 · Commenti e pagine dei cambi un po' più ottimisti del codice** — minimo, doc; X, 15/10 (X-R8, segnalate da
   docs-writer). Preesistenti, nessuna cambia comportamento:
   - `frontend/src/lib/stores/currencyGraphStore.ts`: il commento dice che le risposte sono «stable» e che la cache

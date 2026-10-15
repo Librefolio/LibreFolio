@@ -1127,3 +1127,16 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >   per il server) va in J-7.
 > - **Finestra della galleria**: 5 gallerie complete in fila (r1, r2, le candidate di R, L e T), fino alle 12:30 circa.
 >   Dopo: prima R e L, poi i lotti della 1.3 (H CP5b, H CP6, FE8a, A5), poi T.
+
+### X-R8, le valute dei fornitori dei cambi in cache, integrato ✅ (2026-10-15, 08:18)
+
+> **Note implementazione**: `173ba19e2`, merge di `849c98dda` su `1dac6b326` (X-R8 `1dfd4e657`). `services/fx/catalog.py`:
+> l'elenco delle valute di ogni fornitore resta 24 ore nella cache `fx_provider_currencies` (visibile nel pannello
+> delle cache); un fornitore che fallisce o supera i 5 s risponde con l'ultimo elenco noto, riprovato dopo 5 minuti.
+> API invariata. Validazione di X: `all-backend` 14 119 passed sulla base `4fdc0d9c5`; sul fuso `38b913df3` (con H
+> CP5a, J-6, W E0) controllo leggero con la guardia di J-6 attiva: `fx-catalog` 8, `api fx-unit` 29, `api fx` 21,
+> `config-package` 593, `check-orphans`, `openapi.json` identico, `mkdocs build` stretto. Entrato prima delle 08:45:
+> dalle 08:45 alla fine delle gallerie r1 e r2 (verso le 10:15), che girano nel checkout principale, `dev_release2`
+> resta fermo (richiesta del coordinatore colori). CHANGELOG con una riga. La docstring con `services/fx.py` in
+> `api/v1/fx/providers.py` è X-R1: cambia `openapi.json`, la corregge X col CP6. Poi FE5b (taglio di `AssetModal`,
+> annuncio aperto nel §7).
