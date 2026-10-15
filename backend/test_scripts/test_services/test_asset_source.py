@@ -53,7 +53,8 @@ from backend.app.db.models import (
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas import FAGeographicArea, FASectorArea, SignalVolumeKind
-from backend.app.schemas.assets.assets import FAAssetCreateItem, FAAssetPatchItem, FAClassificationParams
+from backend.app.schemas.assets.assets import FAAssetCreateItem, FAAssetPatchItem
+from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
 from backend.app.schemas.provider import (

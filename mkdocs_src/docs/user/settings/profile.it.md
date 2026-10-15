@@ -44,7 +44,7 @@ Il pulsante **Cambia password** (sempre disponibile, non richiede lo sblocco) ap
 2. Una **nuova password** che soddisfi tutte le regole: minimo 8 caratteri, almeno una lettera maiuscola, una lettera minuscola, un numero e un carattere speciale — e deve essere diversa da quella attuale
 3. La **conferma** della nuova password
 
-Dopo la conferma, la tua sessione rimane attiva: non devi accedere di nuovo.
+Dopo la conferma, la tua sessione rimane attiva: non devi accedere di nuovo. Ogni altro dispositivo collegato al tuo account viene disconnesso.
 
 ### 🗑️ Elimina account
 

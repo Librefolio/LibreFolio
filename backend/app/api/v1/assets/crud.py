@@ -15,13 +15,15 @@ from backend.app.schemas.assets.assets import (
     FAAssetCreateItem,
     FAAssetMergeRequest,
     FAAssetMergeResponse,
-    FAAssetMetadataResponse,
     FAAssetPatchItem,
     FABulkAssetCreateResponse,
     FABulkAssetDeleteResponse,
     FABulkAssetPatchResponse,
-    FAClassificationParams,
     FAinfoResponse,
+)
+from backend.app.schemas.assets.metadata import (
+    FAAssetMetadataResponse,
+    FAClassificationParams,
 )
 from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.crud import AssetCRUDService

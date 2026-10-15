@@ -219,6 +219,12 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   arrivano in inglese in ogni lingua, e il rifiuto del Generic CSV nomina il codice `broker_generic_csv` invece del
   nome del plugin. Da fare: codici d'errore con parametri, tradotti nel frammento i18n del plugin. Dettagli:
   `/tmp/libreFolio_changelog_audit_T.md` §3 D13 (copia nella sessione del coordinatore).
+  - ✅ **Parte a chiusa il 15/10** da W (lotto K2a della 1.3, `0eac8e1b6`; in `dev_release2` con `62c964242`):
+    DEGIRO e il Generic CSV rifiutano un file con un `BRIMRefusal` a codice, tradotto in `importWizard.parseRefusal.*`
+    (le chiavi stanno nella sorgente `importWizard`, non nel frammento del plugin, per la regola R1 di
+    `gate-plugin-i18n-ownership`), e il rifiuto nomina il plugin col suo nome. Resta la parte b, il 400 del parse
+    tradotto nel wizard e il codice dell'anteprima illeggibile (K2b, dopo un commit del coordinatore su `brokers.py`
+    e `uploads.py`).
 - **C-71 · Due «Rolling Return» con lo stesso nome** — minimo; I, 13/10, controllo del CHANGELOG (D-I1). L'indicatore
   della 1.1 (`rolling_return`, finestra in osservazioni) resta nel catalogo dei segnali e usa la stessa chiave di nome,
   `signals.riskRollingReturn.name`, del modo nuovo del grafico dell'asset (`calendar_rolling_return`, giorni di
@@ -413,6 +419,11 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   che dica cosa sta costruendo. Nota: senza `node_modules` il runner arriva a `npx` attraverso `generate-api`, e
   dovrebbe fermarsi subito. Il runner è condiviso: va assegnato a una sessione. Dettagli: piano J, §10
   «`all-backend` — la base».
+- **C-95 · L'albero dei moduli in `backend-schemas.instructions.md` è indietro** — minimo, doc per gli agenti; W, 15/10
+  (K2a). L'albero di `.github/instructions/backend-schemas.instructions.md` non elenca `ai_export_runtime`,
+  `pac_allocator/`, `portfolio`, `risk`, `risk_scenarios`, `signals`, `system`, `tools`, `wac`; le righe di
+  `assets/` e `transactions/` le hanno già aggiornate X (CP4) e W (K2a). Da fare in una passata sola a fine
+  riordino. Dettagli: piano 04, §12, K2a.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
@@ -1941,7 +1952,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Tutte proteggono `POST /assets/prices/current`. Correzione: lasciare la pagina prima di togliere le rotte.
 
   Dettagli: piano della 56, passo 6.
-- **G-8 · Il catalogo dei Tools risponde 503 sotto carico** — medio-basso; G, 14/10, rosso della gallery
+- ✅ **G-8 · Il catalogo dei Tools risponde 503 sotto carico** — medio-basso; G, 14/10, rosso della gallery
   `about plugin diagnostics`.
   - Causa: `ToolRoute` (`backend/app/api/v1/tools.py:92`) limita ogni richiesta `/tools` a
     `ingress_timeout_ms = 2000` (`backend/app/schemas/tools.py:83`). `GET /api/v1/tools/catalog` ha impiegato 2.649 ms
@@ -1950,6 +1961,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     identici.
   - Per la regola [«un rosso solo sotto carico è un difetto del prodotto»](../../../LibreFolio_devWiki/wiki/concepts/load-only-red-is-a-product-defect.md)
     è un candidato difetto del prodotto: un host lento vedrebbe lo stesso errore.
+  - ✅ **Chiusa il 15/10** da J (`6ce5ea180`; in `dev_release2` con `c75f08101`): l'autenticazione girava dentro la
+    finestra d'ingresso di 2 s, prima che l'endpoint spostasse la scadenza. Le rotte senza corpo (catalogo,
+    diagnostica) partono con il loro budget di 20 s; il compute tiene la finestra. Dettagli: piano J, §10 «G-8».
   - **Instradata a J (1.3, «Numeri e analisi»)** dal coordinatore, il 14/10, a priorità bassa, dopo il primo
     checkpoint di J. La voce nella sezione di J la scrive J.
 
@@ -2107,11 +2121,11 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
       declassa né si disattiva;
     - dice che un account disattivato riceve un 401, ma riceve un 403 `ACCOUNT_DISABLED`, e solo con la password
       giusta.
-    - Si allinea con A6, che riscrive le regole dell'admin.
+    - ✅ **Chiuse il 15/10** con A4b: `docs-writer` le ha corrette insieme alle righe sulle sessioni.
   - `frontend/components/features/settings.md`: il titolo «GlobalSettingsTab (Admin only)», ma la scheda la vedono
     tutti. Si sistema in A6, con le schede Utenti e Sicurezza (attenzione all'ancora).
   - `frontend/state/app-state.md:11`: dice che lo store dell'autenticazione gestisce token JWT, ma usa il cookie
-    HttpOnly. Si sistema in A4 (sessioni).
+    HttpOnly. ✅ **Chiusa il 15/10** con A4b.
   - La prop `icon` di `PasswordInput`, aggiunta da T, manca in `core-ui/atoms.md` e `features/auth.md`. È di T:
     segnalata al coordinatore.
   - Trovata in A4 (15/10): `architecture/patterns/alembic.md` presenta il batch come modo normale di cambiare una
@@ -2119,7 +2133,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `foreign_keys=ON`, il batch ricostruisce la tabella e cancella a cascata le righe delle tabelle figlie: è il
     motivo per cui la 004 e la 005 lo evitano. Il nome della tabella è anche sbagliato: è `transactions`. La pagina è
     di tutti: segnalata al coordinatore.
-  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A3.5» e «A4.5».
+  - Trovata in A4b (15/10): `architecture/users_and_brokers.md`, «👤 User Roles», dice che un admin gestisce gli
+    utenti «via CLI or API». L'API non esiste ancora: la porta A5. Si verifica allora.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A3.5», «A4.5» e «A4b.4».
 - **A-8 · Richiama TC-6** della sezione «T (colori)»: alla prima visita con il browser in `it-IT`, il selettore della
   lingua mostra l'inglese — basso; programma colori (15/10).
   - Probabile causa: `lib/stores/app/language.ts`, `init()`.
@@ -2317,11 +2333,14 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   `risk/quant/resampling.py:235` contano 365 giorni all'anno, mentre il resto del rischio usa il fattore osservato. Può
   essere una convenzione di calendario coerente: prima un test che lo provi, poi l'eventuale cura in CP-10. Dettagli:
   [piano 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), §5.
-- **G-8 · Il catalogo dei Tool sotto carico supera i 2 s d'ingresso** — basso; G (galleria del programma colori),
+- ✅ **G-8 · Il catalogo dei Tool sotto carico supera i 2 s d'ingresso** — basso; G (galleria del programma colori),
   assegnata a J dal coordinatore il 14/10, dopo CP-1. Sotto carico la lettura del catalogo supera
   `ToolRoute.ingress_timeout_ms` (2 000 ms, `schemas/tools.py:83`, applicato in `api/v1/tools.py:92`) e la pagina
   «about plugin diagnostics» è andata in rosso nella galleria. Proposte di G: un limite proprio per il catalogo, oppure
   un catalogo in cache. Prima un rosso che lo riproduca. Dettagli: piano J, §10 «Checkpoint J-0».
+  - 15/10, J: chiusa al checkpoint G-8. Il tempo si perdeva prima del catalogo: l'autenticazione girava dentro la
+    finestra d'ingresso di 2 s. Le rotte senza corpo (catalogo, diagnostica) aprono ora sotto il loro budget di 20 s;
+    il compute tiene la finestra d'ingresso. Rosso prima, verde dopo (`api tools` 12). Dettagli: piano J, §10 «G-8».
 - **J-4 · Prosa della devWiki con i percorsi del PAC di prima del riordino** — basso, documentazione; J, 15/10 (CP-1).
   C6 riguarda le tabelle «Source files», aggiornate in CP-1; restano tre passi di prosa al presente che citano i file
   com'erano prima del riordino: `features/F-107.md:49-50`, `features/F-108.md:31`,

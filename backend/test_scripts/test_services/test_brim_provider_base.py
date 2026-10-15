@@ -17,6 +17,9 @@ the encoding chain ``TEXT_ENCODINGS``, the helpers built on it
 and the ``_brim_io`` readers, which must delegate to them.
 
 Plan: Release_2 Phase_0 journal step 26, §4 (CSV encoding fix), step 1a.
+
+And the words of the parse guard's refusal: the plugin by its name and the file
+by the name it was uploaded with (workstream W, lot K2a, backlog L6).
 """
 
 from __future__ import annotations
@@ -293,6 +296,59 @@ def test_delete_files_for_brokers_removes_the_empty_folders_of_a_broker_without_
 
     assert removed == 0
     assert _broker_paths(isolated_brim_dir, broker_id, existing=True) == [], f"broker {broker_id}'s empty folders must go, and no lock may be left behind"
+
+
+# =============================================================================
+# THE PARSE REFUSAL NAMES THE PLUGIN AND THE FILE AS THE USER KNOWS THEM (workstream W, lot K2a — backlog L6)
+# =============================================================================
+#
+# A parse forced with a plugin that refuses the file stops at the guard of ``parse_file``: a ``ValueError``, which
+# the API answers with a 400 and keeps as the failed file's ``error_message``. Before lot K2a it read
+# ``Plugin '<plugin_code>' cannot parse file '<file_id><ext>'``: the plugin's code and the name the store gave the
+# file, two names the user never saw. The contract: the plugin by its ``provider_name`` (``Generic CSV``), the file
+# by the name it was uploaded with (``get_file_info(file_id).filename``), neither the plugin code nor the file id
+# anywhere, and the plugin's reason still after the colon. The rest of the wording is free here; the whole message
+# is pinned in test_brim_parse_race.py («THE REFUSAL SAYS WHY») and by RS-G05 of test_api/test_brim_api.py.
+#
+# Written red, before the guard named them; the reason after the colon is a guard, true before K2a too.
+
+_GENERIC_CSV_CODE = "broker_generic_csv"
+
+# Two files the generic CSV refuses, each under the name the user uploads it with.
+_REFUSED_UPLOADS = [
+    pytest.param("my_statement.txt", b"date,type,amount\n2026-01-01,BUY,100\n2026-01-02,DEPOSIT,50\n", id="another-extension"),
+    pytest.param("my_statement.csv", b"amount,description\n10,first\n20,second\n", id="a-csv-without-date-and-type"),
+]
+
+
+@pytest.mark.parametrize(("original_filename", "content"), _REFUSED_UPLOADS)
+def test_the_parse_refusal_names_the_plugin_and_the_file_as_uploaded(isolated_brim_dir, original_filename: str, content: bytes) -> None:
+    """``parse_file`` forced with the generic CSV on a file it refuses: the refusal names ``Generic CSV`` and ``my_statement…``, never ``broker_generic_csv`` nor the file id."""
+    broker_id = 42
+    info = brim_provider.save_uploaded_file(content=content, original_filename=original_filename, user_id=7, broker_id=broker_id)
+    stored = brim_provider.get_file_path(info.file_id)
+    plugin = brim_provider.BRIMProviderRegistry.get_provider_instance(_GENERIC_CSV_CODE)
+    assert plugin is not None, f"{_GENERIC_CSV_CODE} is not registered"
+    # Premises: the generic CSV refuses the file and says why; the store keeps the user's name and files the content under the id.
+    assert _GENERIC_CSV_CODE not in info.compatible_plugins, f"premise: the generic CSV does not offer itself for {original_filename}, so the parse forces it: {info.compatible_plugins}"
+    reason = plugin.cannot_parse_reason(stored)
+    assert reason, f"premise: the generic CSV says why it refuses {original_filename}"
+    assert brim_provider.get_file_info(info.file_id).filename == original_filename, "premise: the upload keeps the name the user gave"
+    assert stored is not None and stored.name == f"{info.file_id}{Path(original_filename).suffix}", f"premise: the content is stored under the file id, {stored}"
+
+    with pytest.raises(ValueError) as refusal:
+        brim_provider.parse_file(info.file_id, _GENERIC_CSV_CODE, broker_id)
+
+    message = str(refusal.value)
+    assert message.endswith(f": {reason}"), f"the plugin's reason no longer follows the colon: {message!r}"
+    named = message[: -len(f": {reason}")]
+    said = {
+        f"names the plugin {plugin.provider_name!r}": plugin.provider_name in named,
+        f"names the file {original_filename!r}": original_filename in named,
+        f"never shows the plugin code {_GENERIC_CSV_CODE!r}": _GENERIC_CSV_CODE not in message,
+        "never shows the file id": info.file_id not in message,
+    }
+    assert said == dict.fromkeys(said, True), f"the refusal {message!r} breaks the contract: {[what for what, kept in said.items() if not kept]}"
 
 
 # =============================================================================

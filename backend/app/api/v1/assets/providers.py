@@ -12,7 +12,7 @@ from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import AssetProviderAssignment, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.assets.assets import FABulkMetadataRefreshResponse
+from backend.app.schemas.assets.metadata import FABulkMetadataRefreshResponse
 from backend.app.schemas.provider import (
     FABulkAssignResponse,
     FABulkRemoveResponse,

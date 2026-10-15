@@ -14,8 +14,8 @@ from typing import Dict
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
-from backend.app.schemas.assets.assets import (
-    FAAssetPatchItem,
+from backend.app.schemas.assets.assets import FAAssetPatchItem
+from backend.app.schemas.assets.metadata import (
     FAClassificationParams,
     FAGeographicArea,
     FASectorArea,
