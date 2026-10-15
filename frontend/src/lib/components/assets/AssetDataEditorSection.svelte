@@ -394,9 +394,9 @@
                     // first save just goes: its rowId is a date, never an id.
                     const idsToDelete = deleteEvents.map((r) => dbEventId(r)).filter((id): id is number => id !== null);
                     if (idsToDelete.length > 0) {
-                        // Single bulk call; backend returns per-item status (deleted/not_found/in_use).
+                        // Single bulk call, scoped to this asset (decision 21); per-item status (deleted/not_found/in_use).
                         const bulkResp = await zodiosApi.delete_events_bulk_api_v1_assets_events_delete(undefined, {
-                            queries: {ids: idsToDelete},
+                            queries: {asset_id: assetId, ids: idsToDelete},
                         });
                         const allResults = bulkResp.results ?? [];
 

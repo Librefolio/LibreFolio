@@ -65,5 +65,13 @@ class PostMigrationFix:
     def verify(self, conn: sqlite3.Connection, anomaly: Any, ctx: FixContext) -> list[str]:
         return []
 
+    def row_count_changes(self, anomaly: Any, ctx: FixContext) -> dict[str, int]:
+        """How ``apply`` changes the row count of each table, exactly: ``{table: delta}``, negative for rows it deletes.
+
+        The framework checks every table against it after ``apply``; a table not named keeps its row count. Most
+        fixes change none.
+        """
+        return {}
+
     def finish(self, ctx: FixContext, *, success: bool) -> None:
         return None

@@ -169,10 +169,22 @@ Right after the migrations, every start also runs the **post-migration fixes**: 
 - ✅ `Post-migration fixes applied and verified`: a repair was made. On a large database that start is slower, once.
 - ⚠️ `Post-migration fix failed`: the database was left as it was and the server started normally. The warning gives the error and the copy of the database kept next to it until you delete it, such as `app.db.pre-autoincrement-20261008T101500Z.bak`. The fix is tried again at the next start.
 - 🩺 `Post-migration fixes skipped`: the copy could not be made, or the database fails SQLite's integrity check. Nothing was changed.
+- 🔗 `Foreign key violations already in the database, left as they are`: the database holds references to rows that no longer exist, listed in the warning. The fixes leave them alone and still run: a fix fails only on a broken reference it would add itself.
 
 The empty file `app.db.post-migration.lock`, next to the database, makes the runs take turns when several workers start together: leave it in place.
 
 The first fix, **`autoincrement`**, makes sure the id of a deleted user, broker, asset, transaction, FX conversion route or asset event is never given to a new one. While converting a database, it deletes the report folders of brokers that no longer exist, so that a new broker cannot inherit them.
+
+The second fix, **`orphan_pair_halves`**, repairs, once, the transfers that an earlier broker deletion left without their other half on the brokers that remain:
+
+- 📈 Securities received from the deleted broker become an opening position at their transfer cost, starting on the transfer date. That broker's capital then counts them at that cost instead of their market value on arrival, so its gain also counts what they gained before the transfer. When no cost was recorded, they stay without one and the app reports an acquisition without a purchase cost: enter the cost in the transaction.
+- 💶 Cash transfers with the deleted broker become deposits or withdrawals: capital and gain do not change.
+- ⏳ Transfers that sent securities **to** the deleted broker are left as they are for now: the log lists them at every start.
+
+The fix **`event_types`** repairs, once, the asset events stored with a type LibreFolio does not know, such as `dividend` or `dividendo` written by hand in a CSV file. Until now such an event made the whole list of that asset's events fail to load, so none of them was shown:
+
+- ✅ A type that only differs in letter case or spaces (`dividend`, ` Split `) is corrected.
+- 🗑️ An event whose type is still unknown is deleted. A transaction linked to it stays, without its linked event: link it again to the right event if you need to.
 
 ??? tip "⌨️ Run the fixes by hand — to preview them or retry a failed one"
 
@@ -187,6 +199,8 @@ The first fix, **`autoincrement`**, makes sure the id of a deleted user, broker,
     ```
 
     The script prints each fix as `clean` (nothing to do), `would_apply` (dry run), `applied` or `failed`, with the orphan broker folders, a kept copy and any error, and exits with `1` when something failed. `--db PATH` and `--data-dir PATH` point it at another database or data directory.
+
+    To see what `orphan_pair_halves` will change on your database, preview it before the first start of the new version: `--dry-run` prints `Fix orphan_pair_halves: would_apply` when there is something to repair, and a warning lists the transactions by id, grouped by conversion (such as `TRANSFER->ADJUSTMENT`), with those that will stay without a cost and the transfers left as they are. The script also prints, on the console, what the server would log: the warning and, on a real run, one line per transaction changed (with `LOG_LEVEL` at `INFO`, the default). It writes no log file: keep its output if you want a record of a repair made by hand.
 
 🔗 How the fixes work inside: [Database Schema — Post-migration fixes](../developer/architecture/database/index.md#post-migration-fixes).
 

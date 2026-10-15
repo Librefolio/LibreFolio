@@ -8,7 +8,8 @@
  *
  * The cases mirror the three of the step 5b check: a component rule (`th { color: #64748b }` in `DataTable.svelte`,
  * test id `tx-table` in `TransactionsTable.svelte`), a Tailwind class reading a palette variable, and the dark P1
- * override of `app.css` sitting on top of a `dark:` class.
+ * override of `app.css` sitting on top of a `dark:` class. A fourth follows the colour roles: a utility (`bg-lf-card`)
+ * that reads its role (`--lf-surface-card`) directly, its alias of `@theme inline` existing in the sources only.
  */
 
 import {describe, expect, it} from 'vitest';
@@ -513,5 +514,80 @@ describe('pickView — filter', () => {
         expect([...view.filter.keys]).toEqual(['#64748b']);
         expect([...view.filter.vars]).toEqual([]);
         expect(view.element.selector).toBe(TH);
+    });
+});
+
+describe('pickView — a colour role, read by its utility through an inline alias', () => {
+    // `bg-lf-card` is listed under `--color-lf-card`, an alias of `@theme inline` that no stylesheet defines at runtime:
+    // Tailwind writes `var(--lf-surface-card)` into the utility itself, so the winning declaration reads the role.
+    const ROLE = '--lf-surface-card';
+    const alias = (name: string, role: string, classes: Record<string, number>, occ: [number, number, number][]): CatalogPaletteEntry => ({...paletteEntry(name, classes, occ), role});
+    const aliasVar = (name: string, role: string) => cssVar(name, [def(name, `var(${role})`, {selector: null, scope: 'scoped', inline: true, alias_of: role})]);
+    const ROLES: ColorCatalog = {
+        ...CATALOG,
+        palette: [
+            ...PALETTE,
+            alias('--color-lf-card', ROLE, {'bg-lf-card': 2, 'hover:border-lf-card/50': 1}, [
+                [F_ELSEWHERE, 60, 0],
+                [F_TX_TABLE, 1010, 0],
+                [F_TX_TABLE, 1011, 1],
+            ]),
+            alias('--color-lf-muted', '--lf-text-muted', {'text-lf-muted': 1}, [[F_TX_TABLE, 1012, 0]]),
+            alias('--color-lf-on-brand', '--lf-on-brand', {'text-lf-on-brand': 1}, [[F_TX_TABLE, 1014, 0]]),
+            // A second alias of the same role, after the first in the palette.
+            alias('--color-lf-surface', ROLE, {'bg-lf-surface': 1}, [[F_TX_TABLE, 1013, 0]]),
+        ],
+        css_vars: [
+            ...CSS_VARS,
+            aliasVar('--color-lf-card', ROLE),
+            aliasVar('--color-lf-muted', '--lf-text-muted'),
+            aliasVar('--color-lf-on-brand', '--lf-on-brand'),
+            aliasVar('--color-lf-surface', ROLE),
+            // A derived role, defined with another role.
+            cssVar('--lf-on-brand', [def('--lf-on-brand', `var(${ROLE})`, {selector: ':root, .light, .dark'})]),
+            cssVar(ROLE, [def(ROLE, '#f5f5f4', {selector: ':root, html.light, .light'}), def(ROLE, '#1c1917', {selector: 'html.dark, .dark', theme: 'dark'})]),
+            cssVar('--lf-text-muted', [def('--lf-text-muted', '#57534e', {selector: ':root, html.light, .light'})]),
+        ],
+    };
+
+    /** A background set by a role utility, as the app tab reports it: a winner in the `utilities` layer reading the role. */
+    const utility = (className: string) => prop({property: 'background-color', computed: 'rgb(245, 245, 244)', colors: ['rgb(245, 245, 244)'], declarations: [decl({selector: `.${className}`, value: `var(${ROLE})`, layer: 'utilities', declared_as: 'background-color'})]});
+
+    const roleView = (p: PickedProperty) => {
+        const view = pickView(ROLES, element([p]));
+        expect(view.properties).toHaveLength(1);
+        return view;
+    };
+
+    it('reads the utility as a Tailwind class and edits the role, bound to the uses of the alias near the test ids', () => {
+        const [view] = roleView(utility('bg-lf-card')).properties;
+        expect(view).toMatchObject({kind: 'tailwind-class', className: 'bg-lf-card'});
+        expect(view.varChain[0]).toBe(ROLE);
+        expect(view.edit).toMatchObject({layer: 'css-var', target: ROLE});
+        expect(view.edit?.anchor?.source).toEqual({kind: 'tailwind-class', selector: '.bg-lf-card', var: ROLE, class: 'bg-lf-card'});
+        // The use in Elsewhere.svelte is far from the test ids: not a candidate.
+        expect(view.candidates[0]).toEqual({file: TX_TABLE, line: 1010, why: 'class-use', needle: 'bg-lf-card'});
+        expect(places(view)).toEqual([`class-use ${TX_TABLE}:1010 bg-lf-card`, `testid ${TX_TABLE}:993 tx-table`]);
+    });
+
+    it('binds the utility to the alias that lists its class when two aliases stand for one role', () => {
+        // `--color-lf-card` comes first and stands for the same role, but it does not list `bg-lf-surface`.
+        const [view] = roleView(utility('bg-lf-surface')).properties;
+        expect(view).toMatchObject({kind: 'tailwind-class', className: 'bg-lf-surface', edit: {layer: 'css-var', target: ROLE}});
+        expect(places(view)).toEqual([`class-use ${TX_TABLE}:1013 bg-lf-surface`, `testid ${TX_TABLE}:993 tx-table`]);
+    });
+
+    it('keeps in the filter the role and every alias standing for it, never the alias of another role', () => {
+        const view = roleView(utility('bg-lf-card'));
+        expect([...view.filter.vars].sort()).toEqual(['--color-lf-card', '--color-lf-surface', ROLE]);
+        expect(view.filter.vars.has('--color-lf-muted')).toBe(false);
+    });
+
+    it('keeps the aliases of every role down the chain of a derived role', () => {
+        const view = roleView(prop({declarations: [decl({selector: '.text-lf-on-brand', value: 'var(--lf-on-brand)', layer: 'utilities'})]}));
+        const [on] = view.properties;
+        expect(on.varChain).toEqual(['--lf-on-brand', ROLE]);
+        expect(places(on)).toEqual([`class-use ${TX_TABLE}:1014 text-lf-on-brand`, `testid ${TX_TABLE}:993 tx-table`]);
+        expect([...view.filter.vars].sort()).toEqual(['--color-lf-card', '--color-lf-on-brand', '--color-lf-surface', '--lf-on-brand', ROLE]);
     });
 });

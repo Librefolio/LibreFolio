@@ -46,7 +46,7 @@ La page **Courtiers** affiche une carte par courtier, avec sa valeur (**NAV**) d
 ## ✏️ Modifier ou supprimer un courtier
 
 - **Modifier** — le crayon sur la carte du courtier, ou **Modifier** dans la barre d'outils du courtier. Les Propriétaires et les Éditeurs peuvent modifier un courtier.
-- **Supprimer** — la corbeille sur la carte du courtier. Seul un Propriétaire peut supprimer un courtier. S'il contient encore des transactions, LibreFolio indique combien et propose **Aller aux transactions** ou **Supprimer le courtier et les transactions**, ce qui les supprime également.
+- **Supprimer** — la corbeille sur la carte du courtier. Seul un Propriétaire peut supprimer un courtier. S'il contient encore des transactions, LibreFolio indique combien et propose **Aller aux transactions** ou **Supprimer le courtier et les transactions**, ce qui les supprime également. Les actifs qu'il avait transférés vers un autre courtier, y compris partagé, y restent comme position d'ouverture à leur coût de transfert, à partir de la date du transfert : le gain de ce courtier compte donc aussi ce qu'ils avaient gagné avant le transfert. Les virements avec un autre courtier y deviennent un dépôt ou un retrait.
 
 ---
 
