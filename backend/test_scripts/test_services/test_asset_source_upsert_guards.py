@@ -46,18 +46,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetProviderAssignment, AssetType, Broker, PriceHistory, Transaction, TransactionType
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.assets import FAAinfoFiltersRequest
+from backend.app.schemas.assets.assets import FAAinfoFiltersRequest
+from backend.app.schemas.assets.events import FAAssetEventPoint, FAEventUpsert
 from backend.app.schemas.common import Currency, DateRangeModel
-from backend.app.schemas.prices import FAAssetEventPoint, FAEventUpsert, FAHistoricalData, FAPricePoint, FAPriceQueryItem, FAUpsert
+from backend.app.schemas.prices import FAHistoricalData, FAPricePoint, FAPriceQueryItem, FAUpsert
 from backend.app.schemas.provider import ProviderInputType
 from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel, SyncStatus
 from backend.app.services.assets import core as asset_source_core
 from backend.app.services.assets import price_query as price_query_module
 from backend.app.services.assets import refresh as refresh_module
-from backend.app.services.assets.core import AssetSourceError
+from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.crud import AssetCRUDService
+from backend.app.services.assets.event_store import EventStoreOperations
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.assets.price_store import PriceStoreOperations
 from backend.test_scripts.test_utils import unique_id
 
 # A date window far from the mock dataset's, so a stray row of this unit can
@@ -764,7 +765,7 @@ def _dividend_payload(day_offset: int, amount: str, *, event_id: int | None = No
 async def _provider_upsert(rows: _EventRows, events: list[FAAssetEventPoint]) -> int:
     """What a provider refresh does with the events it fetched."""
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        count = await PriceStoreOperations._upsert_asset_events(session, rows.asset_id, events, rows.assignment_id, "USD")
+        count = await EventStoreOperations._upsert_asset_events(session, rows.asset_id, events, rows.assignment_id, "USD")
         await session.commit()
     return count
 
@@ -772,7 +773,7 @@ async def _provider_upsert(rows: _EventRows, events: list[FAAssetEventPoint]) ->
 async def _bulk_upsert_events(data: list[FAEventUpsert]) -> dict:
     """What ``POST /assets/events`` does, minus HTTP."""
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
-        result = await PriceStoreOperations.bulk_upsert_events(data, session)
+        result = await EventStoreOperations.bulk_upsert_events(data, session)
         await session.commit()
     return result
 
