@@ -426,6 +426,13 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   `pac_allocator/`, `portfolio`, `risk`, `risk_scenarios`, `signals`, `system`, `tools`, `wac`; le righe di
   `assets/` e `transactions/` le hanno già aggiornate X (CP4) e W (K2a). Da fare in una passata sola a fine
   riordino. Dettagli: piano 04, §12, K2a.
+- **C-96 · Le corsie dei test prendono la configurazione dell'istanza dal `.env` del developer** — medio, sicurezza dei
+  test; E, 15/10 (analisi). `scripts/cli_base.py:configure_test_runtime()` carica il `.env` e toglie solo
+  `INSTANCE_TRUST_SECRETS` (S2 di H): ogni altra `LIBREFOLIO_*` arriva alle corsie. Con la configurazione SMTP di E i
+  test spedirebbero email vere; con `LIBREFOLIO_BLOCKED` o il profilo gestito tutte le corsie cambierebbero
+  comportamento. Cura: la corsia tiene solo le variabili del runner e scarta il resto della configurazione d'istanza
+  venuta dal `.env`; un test usa `.env.example` come elenco. Assegnata a H dal coordinatore, prima del primo lotto di E;
+  comprende A-9 (le quattro variabili di account di A5a). Dettagli: analisi di E; piano H.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
