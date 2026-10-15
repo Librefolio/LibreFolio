@@ -709,6 +709,38 @@ def services_config_package(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Config package tests", verbose=verbose)
 
 
+def services_config_secrets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test secrets given as NAME or NAME_FILE: precedence, file rules and errors, secrets set twice."""
+    print_section("Services: Config Secrets")
+    print_info("Testing: backend/app/config/__init__.py (env_secret, read_secret_file, secrets_set_twice)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_secrets.py", test_names)
+    return run_command(cmd, "Config secrets tests", verbose=verbose)
+
+
+def services_config_instance_key(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance key: HKDF-SHA256, key sources, first-use generation, never replaced, race between processes."""
+    print_section("Services: Instance Key")
+    print_info("Testing: backend/app/services/platform/instance_key.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_instance_key.py", test_names)
+    return run_command(cmd, "Instance key tests", verbose=verbose)
+
+
+def services_config_audit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the startup configuration checks: states, no secret in results, startup stops on a broken configured secret."""
+    print_section("Services: Configuration Checks")
+    print_info("Testing: backend/app/services/platform/config_audit.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_audit.py", test_names)
+    return run_command(cmd, "Configuration checks tests", verbose=verbose)
+
+
+def services_config_env_example(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the .env.example guard: every variable read is documented, the uncommented lines unchanged."""
+    print_section("Services: .env.example Guard")
+    print_info("Testing: .env.example against backend/app/, Settings and the compose files")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_env_example.py", test_names)
+    return run_command(cmd, ".env.example guard tests", verbose=verbose)
+
+
 def services_donation_popup(verbose: bool = False, test_names: list = None) -> bool:
     """Test donation-popup trigger decision logic (should_show_donation_popup, record_login_and_maybe_show_popup)."""
     print_section("Services: Donation Popup")
@@ -1138,6 +1170,10 @@ Note: No backend server required.
     )
     add_test(cat, "config-misc", services_config_misc, name="Config Helpers", desc="get_data_dir test-mode/env-override branches")
     add_test(cat, "config-package", services_config_package, name="Config Package", desc="Env vars read only in backend/app/config/, section accessors keep their semantics", isolation="pure")
+    add_test(cat, "config-secrets", services_config_secrets, name="Config Secrets", desc="NAME / NAME_FILE secrets: precedence, file rules and errors, secrets set twice", isolation="pure")
+    add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
+    add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
+    add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
     add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
     add_test(cat, "file-preview", services_file_preview, name="File Preview", desc="CSV/Excel/text preview detection helpers")
