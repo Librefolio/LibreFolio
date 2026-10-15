@@ -42,8 +42,20 @@
       "links": {
         "ok": "Los correos pueden llevar enlaces: LIBREFOLIO_PUBLIC_URL está definida, o el correo está desactivado.",
         "missing": "LIBREFOLIO_PUBLIC_URL no está definida: el correo funciona, pero ninguno con enlace (contraseña olvidada, invitación, restablecimiento) puede salir.",
-        "invalid": "LIBREFOLIO_PUBLIC_URL no es una dirección http:// o https://: no puede salir ningún correo con enlace."
+        "invalid": "LIBREFOLIO_PUBLIC_URL no puede iniciar un enlace: necesita http:// o https:// y un nombre de host, sin nombre de usuario, contraseña, ? ni #. No puede salir ningún correo con enlace."
       }
+    },
+    "links": {
+      "base": "Los enlaces de los correos empiezan por {base}.",
+      "probe": {
+        "checking": "Comprobando desde este dispositivo que esta instancia responde en esa dirección…",
+        "match": "Esta instancia responde en esa dirección, desde este dispositivo.",
+        "otherInstance": "Desde este dispositivo, en esa dirección responde otro servidor, no esta instancia. Esta comprobación solo vale para este dispositivo: la causa puede ser su DNS o su red. Si otros dispositivos ven lo mismo, los enlaces de los correos llevan a otro sitio: comprueba LIBREFOLIO_PUBLIC_URL.",
+        "unreachable": "Este dispositivo no consigue llegar a esta instancia en esa dirección. Esta comprobación solo vale para este dispositivo: la causa puede ser su DNS o su red. Si los demás dispositivos tampoco llegan, los enlaces de los correos no se abrirán: comprueba LIBREFOLIO_PUBLIC_URL.",
+        "insecure": "Esta página usa https://, mientras que LIBREFOLIO_PUBLIC_URL empieza por http://: este navegador no puede comprobarla, y los enlaces de los correos viajarían sin cifrar. Pon la dirección https://.",
+        "invalid": "Este navegador no consigue leer LIBREFOLIO_PUBLIC_URL como una dirección: los enlaces de los correos podrían no abrirse. Comprueba su valor."
+      },
+      "recheck": "Comprobar de nuevo"
     },
     "budget": {
       "remaining": "Quedan {remaining} correos de {max} en esta hora.",

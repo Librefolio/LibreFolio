@@ -42,8 +42,20 @@
       "links": {
         "ok": "Le email possono contenere link: LIBREFOLIO_PUBLIC_URL è impostata, oppure l'email è spenta.",
         "missing": "LIBREFOLIO_PUBLIC_URL non è impostata: le email funzionano, ma nessuna con un link (password dimenticata, invito, reset) può partire.",
-        "invalid": "LIBREFOLIO_PUBLIC_URL non è un indirizzo http:// o https://: nessuna email con un link può partire."
+        "invalid": "LIBREFOLIO_PUBLIC_URL non può iniziare un link: serve http:// o https:// e un nome host, senza nome utente, password, ? né #. Nessuna email con un link può partire."
       }
+    },
+    "links": {
+      "base": "I link nelle email iniziano con {base}.",
+      "probe": {
+        "checking": "Verifico da questo dispositivo che lì risponda questa istanza…",
+        "match": "Lì risponde questa istanza, da questo dispositivo.",
+        "otherInstance": "Da questo dispositivo, a quell'indirizzo risponde un altro server, non questa istanza. La verifica vale solo per questo dispositivo: la causa può essere il suo DNS o la sua rete. Se gli altri dispositivi vedono lo stesso, i link nelle email portano altrove: controlla LIBREFOLIO_PUBLIC_URL.",
+        "unreachable": "Da questo dispositivo questa istanza non si raggiunge a quell'indirizzo. La verifica vale solo per questo dispositivo: la causa può essere il suo DNS o la sua rete. Se nemmeno gli altri dispositivi la raggiungono, i link nelle email non si apriranno: controlla LIBREFOLIO_PUBLIC_URL.",
+        "insecure": "Questa pagina usa https://, mentre LIBREFOLIO_PUBLIC_URL inizia con http://: questo browser non può verificarlo, e i link nelle email viaggerebbero in chiaro. Impostalo all'indirizzo https://.",
+        "invalid": "Questo browser non riesce a leggere LIBREFOLIO_PUBLIC_URL come indirizzo: i link nelle email potrebbero non aprirsi. Controllane il valore."
+      },
+      "recheck": "Verifica di nuovo"
     },
     "budget": {
       "remaining": "Restano {remaining} email su {max} in quest'ora.",
