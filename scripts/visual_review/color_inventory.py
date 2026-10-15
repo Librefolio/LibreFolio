@@ -3,7 +3,7 @@
 
 Counts every colour expression in .svelte/.ts/.js/.css sources (generated API files excluded):
 Tailwind palette classes (with variants and opacity), custom-token classes (libre-*, theme-*,
-primary-*, accent-*), arbitrary values, hex literals, rgb()/hsl()/oklch()/color-mix() calls,
+primary-*, accent-*, and the lf-* colour roles of lib/theme/tokens.css), arbitrary values, hex literals, rgb()/hsl()/oklch()/color-mix() calls,
 CSS custom-property definitions and var() uses. Test files are kept in the CSVs (is_test) but
 excluded from the summary.
 
@@ -36,7 +36,7 @@ PREFIXES = ("bg text border border-t border-b border-l border-r border-x border-
 
 tw_re = re.compile(r"(?<![\w-])((?:[a-z0-9-]+:)*)(" + "|".join(sorted(PREFIXES, key=len, reverse=True)) + r")-(" + "|".join(FAMILIES) + r")-(50|100|200|300|400|500|600|700|800|900|950)(/\d{1,3}|/\[[^\]]+\])?(?![\w-])")
 tw_bw_re = re.compile(r"(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via)-(white|black|transparent|current)(/\d{1,3})?(?![\w-])")
-tw_custom_re = re.compile(r"(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via|outline|divide)-(libre-[a-z-]+|theme-[a-z-]+|primary[a-z-]*|accent[a-z-]*)(/\d{1,3})?(?![\w-])")
+tw_custom_re = re.compile(r"(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via|outline|divide)-(libre-[a-z-]+|theme-[a-z-]+|primary[a-z-]*|accent[a-z-]*|lf-[a-z0-9-]+)(/\d{1,3})?(?![\w-])")
 tw_arbitrary_re = re.compile(r"(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via|outline|divide|shadow)-\[([^\]]*(?:#|rgb|hsl|var\(|oklch)[^\]]*)\]")
 hex_re = re.compile(r"(?<![\w&])#([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b")
 func_re = re.compile(r"\b(rgba?|hsla?|oklch|color-mix)\(([^()]*(?:\([^()]*\)[^()]*)*)\)")
@@ -171,7 +171,7 @@ def write_summary(out: Path, s: Scan) -> int:  # noqa: C901 — flat report: ind
     P(f"Source: `frontend/src` (generated API files excluded). Files scanned: {s.files}. Test files excluded from the stats below (kept in CSVs with `is_test`).\n")
     P("## Totals (production code)\n")
     P(f"- Tailwind palette + white/black/transparent color classes: **{len(prod_tw)}** (with `dark:`: {sum(1 for r in prod_tw if 'dark:' in r[3])})")
-    P(f"- Custom-token Tailwind classes (libre-*/theme-*/primary/accent): **{sum(prod_custom.values())}**")
+    P(f"- Custom-token Tailwind classes (libre-*/theme-*/primary/accent/lf-*): **{sum(prod_custom.values())}**")
     P(f"- Arbitrary-value color classes (`bg-[#...]`, `text-[var(--...)]`): **{sum(prod_arb.values())}**")
     P(f"- Hex literals: **{len(prod_hex)}** ({len(hex_c)} distinct)")
     P(f"- rgb()/rgba()/hsl()/oklch()/color-mix(): **{sum(fn_c.values())}** ({len(fn_c)} distinct)")

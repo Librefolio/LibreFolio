@@ -77,6 +77,28 @@ async def apply_deletes(
             )
 
 
+def pair_sides(transaction_a: Transaction, transaction_b: Transaction) -> tuple[Transaction, Transaction]:
+    """The (from, to) halves of a linked pair: the side giving the asset (TRANSFER, by quantity) or the cash (by amount)."""
+    if transaction_a.type == TransactionType.TRANSFER:
+        gives = transaction_a.quantity < Decimal("0")
+    else:
+        gives = transaction_a.amount < Decimal("0")
+    return (transaction_a, transaction_b) if gives else (transaction_b, transaction_a)
+
+
+def make_standalone(transaction: Transaction, standalone_type: TransactionType) -> None:
+    """Turn one half of a linked pair into a standalone row, in place, as a split does.
+
+    The row loses its link; a WITHDRAWAL or DEPOSIT also loses the asset (a cash row has none), an ADJUSTMENT
+    keeps it. Every other column stays: date, quantity, amount, currency, cost basis, description, tags.
+    """
+    transaction.type = standalone_type
+    transaction.related_transaction_id = None
+    if standalone_type != TransactionType.ADJUSTMENT:
+        transaction.asset_id = None
+    transaction.updated_at = utcnow()
+
+
 async def apply_splits(
     service: TransactionService,
     context: TransactionBatchContext,
@@ -123,30 +145,9 @@ async def apply_splits(
             continue
 
         from_type, to_type = split_types
-        if transaction_a.type == TransactionType.TRANSFER:
-            if transaction_a.quantity < Decimal("0"):
-                transaction_from, transaction_to = transaction_a, transaction_b
-            else:
-                transaction_from, transaction_to = transaction_b, transaction_a
-        elif transaction_a.amount < Decimal("0"):
-            transaction_from, transaction_to = transaction_a, transaction_b
-        else:
-            transaction_from, transaction_to = transaction_b, transaction_a
-
-        transaction_from.type = from_type
-        transaction_to.type = to_type
-        transaction_from.related_transaction_id = None
-        transaction_to.related_transaction_id = None
-
-        if split_types != (
-            TransactionType.ADJUSTMENT,
-            TransactionType.ADJUSTMENT,
-        ):
-            transaction_from.asset_id = None
-            transaction_to.asset_id = None
-
-        transaction_from.updated_at = utcnow()
-        transaction_to.updated_at = utcnow()
+        transaction_from, transaction_to = pair_sides(transaction_a, transaction_b)
+        make_standalone(transaction_from, from_type)
+        make_standalone(transaction_to, to_type)
 
         for transaction in (transaction_from, transaction_to):
             previous = context.earliest_date_by_broker.get(transaction.broker_id)

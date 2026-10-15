@@ -1,17 +1,20 @@
 """Pure contract tests for per-run test port and data-directory isolation.
 
 Covered here: data-directory resolution and its production guards, lane runtime
-configuration, CLI/runner wiring, shared-backend ownership, the
-``exec_unmasked`` spawn wrapper, and ``mkdocs gallery --no-populate`` reusing a
-lane's test database. Every test is PURE — no server, no database, no
-network — using ``tmp_path``, in-memory fakes, and (only where a real signal is
-the subject) short-lived subprocesses that just print or wait.
+configuration (including the instance configuration a lane drops, and
+``Settings`` reading no dotenv file in test mode), CLI/runner wiring,
+shared-backend ownership, the ``exec_unmasked`` spawn wrapper, and
+``mkdocs gallery --no-populate`` reusing a lane's test database. Every test is
+PURE — no server, no database, no network — using ``tmp_path``, in-memory
+fakes, and (only where a real signal is the subject) short-lived subprocesses
+that just print or wait.
 """
 
 from __future__ import annotations
 
 import argparse
 import contextlib
+import json
 import os
 import re
 import select
@@ -32,6 +35,7 @@ import scripts.cli_base as cli_base
 import scripts.exec_unmasked as exec_unmasked
 import scripts.list_api_endpoints as endpoint_listing
 import scripts.test_runner as test_runner_package
+from backend.app.config import platform as config_platform
 from backend.test_scripts import test_db_config
 from backend.test_scripts import test_server_helper as test_server_helper_module
 from scripts.test_runner import _backend_db as test_runner_backend_db
@@ -156,6 +160,8 @@ def httpx_lane_probe(lane_id: str | None, *, calls: list | None = None, on_call=
 def patch_spawn(monkeypatch, *, process=None, holders=(), pgid=None, healthy=None) -> None:
     """Wire ``SharedTestServer.start()``'s external seams to in-memory fakes."""
     monkeypatch.setattr(test_runner_server, "port_holders", holders if callable(holders) else (lambda port=None: list(holders)))
+    # The build step before the spawn (C-94) is otherwise a real `dev.py server --build-only`: it always succeeds here.
+    monkeypatch.setattr(test_runner_server, "build_server_prerequisites", lambda *_args, **_kwargs: True, raising=False)
     if process is not None:
         monkeypatch.setattr(test_runner_server.subprocess, "Popen", lambda *_args, **_kwargs: process)
     if pgid is not None:
@@ -198,6 +204,26 @@ def patch_fake_server_thread(monkeypatch, *, alive: bool) -> list:
 
     monkeypatch.setattr(test_server_helper_module, "threading", SimpleNamespace(Thread=FakeThread))
     return created
+
+
+def run_python_in_a_pipenv_child(code: str, env: dict[str, str]) -> subprocess.CompletedProcess:
+    """Run ``python -c code`` with ``env`` as the runner starts its children, through ``pipenv run``, never letting pipenv create an environment.
+
+    In Docker, where ``pipenv_prefix()`` is empty because packages are installed system-wide, the child is this
+    interpreter. Elsewhere ``pipenv run`` creates an empty virtualenv when the one it resolves does not exist, as in a
+    worktree run without ``PIPENV_CUSTOM_VENV_NAME``. So pipenv is first asked, with the child's own environment, for
+    ``pipenv --venv``, which prints the location or fails and never creates anything: unless it names the environment
+    this interpreter runs in, the test is skipped and no ``pipenv run`` starts.
+    """
+    prefix = cli_base.pipenv_prefix()
+    if prefix:
+        if shutil.which(prefix[0]) is None:
+            pytest.skip("pipenv is genuinely unavailable in this environment")
+        venv = subprocess.run([prefix[0], "--venv"], cwd=cli_base.get_project_root(), env=env, capture_output=True, text=True, timeout=120)
+        lines = venv.stdout.strip().splitlines()
+        if venv.returncode != 0 or not lines or Path(lines[-1]).resolve() != Path(sys.prefix).resolve():
+            pytest.skip(f"`pipenv run` here would not run this interpreter's environment ({sys.prefix}) and could create one: set PIPENV_CUSTOM_VENV_NAME")
+    return subprocess.run([*prefix, "python" if prefix else sys.executable, "-c", code], cwd=cli_base.get_project_root(), env=env, capture_output=True, text=True, timeout=120)
 
 
 def test_endpoint_listing_uses_lazy_openapi_operations_instead_of_route_markers(monkeypatch, capsys):
@@ -530,8 +556,9 @@ class TestConfigureTestRuntime:
     def test_no_args_normalizes_and_exports_the_effective_lane(self, runtime_env, source):
         # A lane with no explicit --test-port/--data-dir still forks children that
         # inherit os.environ, not this function's return value: the effective
-        # values must land there even when they are only defaults.
-        shell_probe, hydrated_probe = "LIBREFOLIO_RUNTIME_ISOLATION_SHELL_PROBE", "LIBREFOLIO_RUNTIME_ISOLATION_DOTENV_PROBE"
+        # values must land there even when they are only defaults. The probes are
+        # not LIBREFOLIO_* names, which a lane drops unless it keeps them.
+        shell_probe, hydrated_probe = "RUNTIME_ISOLATION_SHELL_PROBE", "RUNTIME_ISOLATION_DOTENV_PROBE"
         dotenv_values: dict[str, str] = {}
         if source == "shell":
             runtime_env.setenv("TEST_PORT", "06124")
@@ -553,8 +580,9 @@ class TestConfigureTestRuntime:
         assert os.environ["LIBREFOLIO_TEST_DATA_DIR"] == str(expected_dir)
         assert os.environ["LIBREFOLIO_TEST_MODE"] == "1"
         # Hydration fills only what the shell left unset; it never overwrites it.
+        hydrated = os.environ.get(hydrated_probe)
         assert os.environ[shell_probe] == "from-shell"
-        assert os.environ.get(hydrated_probe) == ("hydrated-from-dotenv" if source == "dotenv" else None)
+        assert hydrated == ("hydrated-from-dotenv" if source == "dotenv" else None)
 
     def test_explicit_lane_args_win_over_dotenv_values(self, runtime_env):
         runtime_env.setattr(cli_base, "_project_dotenv_values", lambda: {"TEST_PORT": "6041", "LIBREFOLIO_TEST_DATA_DIR": "runtime/dotenv-test-data"})
@@ -584,7 +612,8 @@ class TestTestLaneSecrets:
     the file was loaded, so the absence of the secrets after loading it means something.
     """
 
-    DOTENV_PROBE = "LIBREFOLIO_RUNTIME_ISOLATION_LANE_SECRETS_PROBE"
+    #: Not a LIBREFOLIO_* name, which a lane drops unless it keeps it: hydrated from the dotenv file and left there.
+    DOTENV_PROBE = "RUNTIME_ISOLATION_LANE_SECRETS_PROBE"
     LANE_PORT = 6197
 
     @staticmethod
@@ -619,8 +648,9 @@ class TestTestLaneSecrets:
 
         configured = cli_base.configure_test_runtime(port=self.LANE_PORT, data_dir=tmp_path / "lane-data")
 
+        probe = os.environ.get(self.DOTENV_PROBE)
         assert configured == (self.LANE_PORT, (tmp_path / "lane-data").resolve())
-        assert os.environ.get(self.DOTENV_PROBE) == "hydrated-from-dotenv", "the synthetic dotenv file was not loaded, so the absence below would prove nothing"
+        assert probe == "hydrated-from-dotenv", "the synthetic dotenv file was not loaded, so the absence below would prove nothing"
         inherited = sorted(name for name, value in self.exported().items() if value is not None)
         assert not inherited, f"the test lane kept secrets of the instance from the {source}: {inherited}"
         assert os.environ["PIPENV_DONT_LOAD_ENV"] == "1", "a nested pipenv run must not load the dotenv file again, or the removed secrets come back"
@@ -636,6 +666,318 @@ class TestTestLaneSecrets:
             cli_base.configure_test_runtime(**lane)
 
         assert (runtime_state(), self.exported()) == before
+
+
+# ── Contract 2b — a test lane runs on the instance's defaults ──────────────
+
+#: Read by the tests below on their own, not through ``cli_base``: a variable ``.env.example`` comes to document is
+#: covered here with no list to update.
+ENV_EXAMPLE = backend_config.PROJECT_ROOT / ".env.example"
+
+
+def env_example_variables() -> frozenset[str]:
+    """Every variable ``.env.example`` documents, commented out or not, read independently of ``cli_base``.
+
+    A variable line, once a leading ``#`` and the blanks after it are set aside, is ``NAME=...`` with ``NAME`` an
+    upper-case ASCII identifier: prose such as ``# For manual builds: UID=$(id -u) ...`` is not one.
+    """
+    names = set()
+    for line in ENV_EXAMPLE.read_text(encoding="utf-8").splitlines():
+        text = line[1:].lstrip() if line.startswith("#") else line
+        name, equals, _ = text.partition("=")
+        if equals and name.isascii() and name.isidentifier() and name == name.upper():
+            names.add(name)
+    return frozenset(names)
+
+
+def environment_changes(before: dict[str, str]) -> dict[str, tuple[str | None, str | None]]:
+    """The variables whose value differs from ``before``, as ``(before, now)``: a failure shows those, not the environment."""
+    now = dict(os.environ)
+    return {name: (before.get(name), now.get(name)) for name in sorted(before.keys() | now.keys()) if before.get(name) != now.get(name)}
+
+
+class TestTestLaneRunsOnTheInstanceDefaults:
+    """Of the developer's configuration, dotenv file or shell, a test lane keeps what ``kept_in_a_test_lane`` keeps.
+
+    ``configure_test_runtime`` hydrates the dotenv file without overwriting the shell, then removes every variable
+    ``.env.example`` documents, the instance's secrets and every ``LIBREFOLIO_*`` name, whichever of the two provided
+    them, but ``TEST_LANE_KEEPS`` and the ``LIBREFOLIO_TEST_*`` names: of those the lane's own value wins, then the
+    shell's, then the dotenv file's. A variable of another program (a proxy, ``PYTHONPATH``) is not the instance's
+    configuration and stays, hydrated from the dotenv file when the shell lacks it. The documented variables come from
+    ``env_example_variables()``, so a new one is covered as soon as ``.env.example`` lists it.
+
+    The dotenv file is a synthetic one in ``tmp_path``, named by ``PIPENV_DOTENV_LOCATION``. Where an absence is asserted
+    it also holds names the lane keeps: finding them hydrated proves the file was read. A value set in the shell stands
+    for an export of the developer as much as for the copy of the dotenv file that ``pipenv run`` puts in the
+    environment of the command it starts.
+    """
+
+    LANE_PORT = 6185
+    #: ``PORT`` and ``TEST_PORT`` of the instance, by origin: valid ports, none of them the lane's.
+    PORTS = {"instance": ("6186", "6187"), "dotenv": ("6188", "6189"), "shell": ("6190", "6191")}
+    #: ``LIBREFOLIO_TEST_*`` names the runner and the tests read, kept by their prefix: the lane's data directory and
+    #: mode (which the lane then sets), its readiness token, the startup timeout of its servers, the shared-server flag.
+    KEPT_BY_PREFIX = ("LIBREFOLIO_TEST_DATA_DIR", "LIBREFOLIO_TEST_MODE", "LIBREFOLIO_TEST_LANE_ID", "LIBREFOLIO_TEST_STARTUP_TIMEOUT", "LIBREFOLIO_TEST_SHARED_SERVER")
+    #: A LibreFolio variable ``.env.example`` does not document (yet).
+    UNDOCUMENTED = "LIBREFOLIO_NOT_YET_DOCUMENTED_SMTP_PASSWORD"
+    #: Variables of other programs: the first in the developer's dotenv file only, the second in both, exported as well.
+    OTHER_PROGRAMS = ("HTTP_PROXY", "HTTPS_PROXY")
+
+    @pytest.fixture
+    def lane(self, runtime_env, tmp_path) -> SimpleNamespace:
+        """The lane the runner configures, in an environment holding no ``LIBREFOLIO_*`` name and none of the names set here."""
+        names = env_example_variables() | cli_base.TEST_LANE_KEEPS | set(backend_config.INSTANCE_TRUST_SECRETS) | {*self.KEPT_BY_PREFIX, self.UNDOCUMENTED, *self.OTHER_PROGRAMS}
+        for name in names | {name for name in os.environ if name.startswith("LIBREFOLIO_")}:
+            runtime_env.delenv(name, raising=False)
+        return SimpleNamespace(port=self.LANE_PORT, data_dir=tmp_path / "lane-data", env=runtime_env, tmp_path=tmp_path)
+
+    def values(self, lane, origin: str, names) -> dict[str, str]:
+        """A value of ``origin`` for each name: a sentinel, but a valid port or directory for the keeps the runner reads."""
+        port, test_port = self.PORTS[origin]
+        valid = {"PORT": port, "TEST_PORT": test_port, "LIBREFOLIO_DATA_DIR": str(lane.tmp_path / f"{origin}-production-data"), "LIBREFOLIO_TEST_DATA_DIR": str(lane.tmp_path / f"{origin}-test-data")}
+        return {name: valid.get(name, f"{origin}-value-of-{name}") for name in sorted(names)}
+
+    @staticmethod
+    def configure_instance(lane, *, dotenv: dict[str, str], shell: dict[str, str]) -> None:
+        """Write ``dotenv`` to the synthetic dotenv file and export ``shell``."""
+        dotenv_file = lane.tmp_path / "instance.env"
+        dotenv_file.write_text("".join(f"{name}={value}\n" for name, value in dotenv.items()), encoding="utf-8")
+        lane.env.setenv("PIPENV_DOTENV_LOCATION", str(dotenv_file))
+        for name, value in shell.items():
+            lane.env.setenv(name, value)
+
+    @staticmethod
+    def lane_exports(lane) -> dict[str, str]:
+        """What ``configure_test_runtime`` itself sets, among the names these tests look at."""
+        return {"TEST_PORT": str(lane.port), "LIBREFOLIO_TEST_DATA_DIR": str(lane.data_dir.resolve()), "LIBREFOLIO_TEST_MODE": "1"}
+
+    @staticmethod
+    def present(names) -> dict[str, str]:
+        """The names the environment holds, with their values."""
+        return {name: os.environ[name] for name in sorted(names) if name in os.environ}
+
+    @staticmethod
+    def pipenv_child(env: dict[str, str], names) -> dict[str, str | None]:
+        """What a ``pipenv run python -c`` child started with ``env`` holds of ``names``: the probe only prints them."""
+        probe = f"import json, os; print(json.dumps({{name: os.environ.get(name) for name in {sorted(names)!r}}}))"
+        result = run_python_in_a_pipenv_child(probe, env)
+        lines = result.stdout.strip().splitlines()
+        assert result.returncode == 0 and lines, f"the pipenv run child failed: exit {result.returncode}, stderr={result.stderr[-2000:]!r}"
+        return json.loads(lines[-1])
+
+    def test_the_documented_variables_are_those_env_example_holds(self):
+        documented = env_example_variables()
+        from_cli = cli_base.documented_instance_variables()
+
+        # Presence barriers: both kinds of variable line are read
+        assert {"HOST", "PORT", "LOG_LEVEL", "PREVIEW_CACHE_MAX_MB"} <= documented, f"uncommented variable lines were not read: {sorted(documented)}"
+        assert {"JWT_SECRET", "LIBREFOLIO_PROFILE", "LIBREFOLIO_BLOCKED", "LIBREFOLIO_TEST_MODE"} <= documented, f"commented variable lines were not read: {sorted(documented)}"
+        assert from_cli == documented, f"documented_instance_variables() and .env.example disagree: only in the first {sorted(from_cli - documented)}, only in the file {sorted(documented - from_cli)}"
+
+    @pytest.mark.parametrize("origin", [pytest.param("dotenv", id="dotenv-file-and-shell"), pytest.param("shell", id="shell-only")])
+    def test_no_documented_variable_reaches_the_lane_but_the_kept_ones(self, lane, origin):
+        documented = env_example_variables()
+        instance = self.values(lane, "instance", documented)
+        kept = {name: value for name, value in instance.items() if cli_base.kept_in_a_test_lane(name)}
+        dropped = {name: value for name, value in instance.items() if not cli_base.kept_in_a_test_lane(name)}
+        if origin == "dotenv":
+            # Every one in the developer's dotenv file, and every second one of those to drop exported as well
+            self.configure_instance(lane, dotenv=instance, shell={name: dropped[name] for name in sorted(dropped)[::2]})
+        else:
+            # Those to drop exported only: the dotenv file holds the kept ones alone
+            self.configure_instance(lane, dotenv=kept, shell=dropped)
+
+        configured = cli_base.configure_test_runtime(port=lane.port, data_dir=lane.data_dir)
+
+        exports = self.lane_exports(lane)
+        reached_kept, reached_dropped = self.present(kept), self.present(dropped)
+        assert configured == (lane.port, lane.data_dir.resolve())
+        assert reached_kept == {name: exports.get(name, value) for name, value in kept.items()}, "the kept variables come from the dotenv file, the lane's own values over it: without them the absences below prove nothing"
+        assert not reached_dropped, f"documented variables of the instance reached the lane from the {origin}: {sorted(reached_dropped)}"
+
+    @pytest.mark.parametrize("origin", [pytest.param("dotenv", id="dotenv-file-only"), pytest.param("both", id="dotenv-file-and-shell"), pytest.param("shell", id="shell-only")])
+    def test_an_undocumented_librefolio_variable_is_dropped_wherever_it_comes_from(self, lane, origin):
+        assert self.UNDOCUMENTED not in env_example_variables() and not cli_base.kept_in_a_test_lane(self.UNDOCUMENTED), "the probe must be a LibreFolio name neither documented nor kept"
+        kept = self.values(lane, "instance", cli_base.TEST_LANE_KEEPS)
+        undocumented = self.values(lane, "instance", {self.UNDOCUMENTED})
+        self.configure_instance(lane, dotenv={**kept, **(undocumented if origin != "shell" else {})}, shell=undocumented if origin != "dotenv" else {})
+
+        cli_base.configure_test_runtime(port=lane.port, data_dir=lane.data_dir)
+
+        hydrated_names = cli_base.TEST_LANE_KEEPS - self.lane_exports(lane).keys()
+        hydrated, left = self.present(hydrated_names), self.present({self.UNDOCUMENTED})
+        assert hydrated == {name: kept[name] for name in hydrated_names}, "the dotenv file was not hydrated, so the absence below would prove nothing"
+        assert not left, f"{self.UNDOCUMENTED} must be dropped from the {origin}: every LIBREFOLIO_* name is, but those kept_in_a_test_lane keeps"
+
+    def test_a_variable_of_another_program_stays_hydrated_from_the_dotenv_file(self, lane):
+        """A proxy or ``PYTHONPATH`` in the developer's dotenv file or shell is not the instance's configuration: it stays."""
+        dotenv_only, exported = self.OTHER_PROGRAMS
+        dotenv = self.values(lane, "dotenv", self.OTHER_PROGRAMS)
+        shell = self.values(lane, "shell", {exported})
+        for name in self.OTHER_PROGRAMS:
+            assert not name.startswith("LIBREFOLIO_") and name not in env_example_variables() | set(backend_config.INSTANCE_TRUST_SECRETS), f"{name} must be neither LibreFolio's nor documented nor a secret"
+        self.configure_instance(lane, dotenv=dotenv, shell=shell)
+
+        cli_base.configure_test_runtime(port=lane.port, data_dir=lane.data_dir)
+
+        left = self.present(self.OTHER_PROGRAMS)
+        assert left == {dotenv_only: dotenv[dotenv_only], exported: shell[exported]}, "a variable of another program stays: hydrated from the dotenv file when the shell lacks it, the shell's value over the file's"
+
+    @pytest.mark.parametrize("origin", ["dotenv", "shell"])
+    def test_the_version_a_release_job_froze_reaches_the_lane(self, lane, origin):
+        """``LF_APP_VERSION`` is kept, so that the release gallery reports the version its job froze.
+
+        ``.github/workflows/release.yml`` freezes ``LF_APP_VERSION`` from ``VERSION`` for every later step of its job, the
+        gallery included: ``dev.py mkdocs gallery`` starts Playwright, whose webServer, ``dev.py server --test``, is a
+        test lane, and its debug frontend build reads the variable too. Dropped there, the gallery's screenshots would
+        show ``git describe``'s answer instead, ``-dirty`` after the steps of the job that write tracked files.
+        """
+        frozen = {"LF_APP_VERSION": "1.2.3-frozen-by-the-release-job"}
+        self.configure_instance(lane, dotenv=frozen if origin == "dotenv" else {}, shell=frozen if origin == "shell" else {})
+
+        cli_base.configure_test_runtime(port=lane.port, data_dir=lane.data_dir)
+
+        assert config_platform.frozen_app_version() == frozen["LF_APP_VERSION"], f"the lane lost LF_APP_VERSION from the {origin}: the backend would report git describe's answer"
+
+    @pytest.mark.parametrize("exported", [pytest.param(False, id="dotenv-file-only"), pytest.param(True, id="shell-and-dotenv-file")])
+    def test_the_kept_variables_are_kept_the_shell_over_the_dotenv_file_and_the_lane_over_both(self, lane, exported):
+        names = cli_base.TEST_LANE_KEEPS | set(self.KEPT_BY_PREFIX)
+        assert all(cli_base.kept_in_a_test_lane(name) for name in names), f"kept_in_a_test_lane must keep {sorted(name for name in names if not cli_base.kept_in_a_test_lane(name))}"
+        dotenv = self.values(lane, "dotenv", names)
+        shell = self.values(lane, "shell", names) if exported else {}
+        self.configure_instance(lane, dotenv=dotenv, shell=shell)
+
+        configured = cli_base.configure_test_runtime(port=lane.port, data_dir=lane.data_dir)
+
+        winner, exports = shell or dotenv, self.lane_exports(lane)
+        kept = self.present(names)
+        assert configured == (lane.port, lane.data_dir.resolve())
+        assert kept == {name: exports.get(name, winner[name]) for name in sorted(names)}, "each kept variable holds the lane's value when it has one, else the shell's, else the dotenv file's"
+
+    @pytest.mark.parametrize("nested", [pytest.param("inherited", id="no-args-as-the-shared-server"), pytest.param("explicit", id="the-same-lane-again")])
+    def test_a_nested_call_keeps_the_lane_id_and_drops_nothing_more(self, lane, nested):
+        # The runner: the developer's dotenv file, loaded by pipenv into its environment as well. Once the lane is
+        # configured it adds what its children inherit: the lane's database and the flag of its shared server.
+        instance = self.values(lane, "instance", env_example_variables() | cli_base.TEST_LANE_KEEPS | {self.UNDOCUMENTED, *self.OTHER_PROGRAMS})
+        self.configure_instance(lane, dotenv=instance, shell=instance)
+        cli_base.configure_test_runtime(port=lane.port, data_dir=lane.data_dir)
+        lane.env.setenv("DATABASE_URL", f"sqlite:///{lane.data_dir.resolve() / 'sqlite' / 'app.db'}")
+        lane.env.setenv(test_runner_server.SHARED_SERVER_ENV, "1")
+        inherited = dict(os.environ)
+        guard, lane_id = inherited.get("PIPENV_DONT_LOAD_ENV"), inherited.get("LIBREFOLIO_TEST_LANE_ID")
+
+        # The child: `dev.py server --test` of the shared server passes no lane argument, a direct entry point may
+        configured = cli_base.configure_test_runtime(**({} if nested == "inherited" else {"port": lane.port, "data_dir": lane.data_dir}))
+
+        nested_lane_id, changes = os.environ.get("LIBREFOLIO_TEST_LANE_ID"), environment_changes(inherited)
+        assert (guard, bool(lane_id)) == ("1", True), "the first call hides the dotenv file from the pipenv runs it starts and gives the lane an id"
+        assert configured == (lane.port, lane.data_dir.resolve())
+        assert nested_lane_id == lane_id, "a nested call keeps the lane's id: the shared server proves its readiness with it"
+        assert not changes, f"a nested call changed the lane's environment: {changes}"
+
+    def test_a_pipenv_run_child_of_the_lane_gets_no_dropped_setting_back(self, lane):
+        """The runner starts its pytest children with ``pipenv run``, which would load the dotenv file again, overriding.
+
+        pipenv loads the file ``PIPENV_DOTENV_LOCATION`` names (else the project's ``.env``) into the command it runs,
+        with ``override=True``, unless ``PIPENV_DONT_LOAD_ENV`` is set. ``configure_test_runtime`` sets it, so what the
+        lane dropped stays dropped in its children and what it kept reaches them. The control runs the same child
+        without the guard and gets the dropped settings back: the guard is what keeps them out.
+
+        As in ``test_configured_runtime_survives_a_nested_pipenv_run``, the child only prints, and starts through
+        ``run_python_in_a_pipenv_child``, which never lets pipenv create an environment.
+        """
+        if not cli_base.pipenv_prefix():
+            pytest.skip("no pipenv in the Docker image: no `pipenv run` child loads a dotenv file there")
+        dropped = {"LIBREFOLIO_PROFILE": "managed", self.UNDOCUMENTED: "instance-value-of-the-smtp-password"}
+        kept = {"LF_APP_VERSION": "1.2.3-frozen-by-the-release-job"}
+        assert not any(map(cli_base.kept_in_a_test_lane, dropped)) and all(map(cli_base.kept_in_a_test_lane, kept)), "the probes must be two settings the lane drops and one it keeps"
+        self.configure_instance(lane, dotenv={**dropped, **kept}, shell={})
+        cli_base.configure_test_runtime(port=lane.port, data_dir=lane.data_dir)
+        guarded = dict(os.environ)
+        unguarded = {name: value for name, value in guarded.items() if name != "PIPENV_DONT_LOAD_ENV"}
+
+        child = self.pipenv_child(guarded, [*dropped, *kept])
+        control = self.pipenv_child(unguarded, [*dropped, *kept])
+
+        in_process = self.present([*dropped, *kept])
+        assert (guarded.get("PIPENV_DONT_LOAD_ENV"), in_process) == ("1", kept), "the lane must set the guard, drop the two settings and keep LF_APP_VERSION in this process"
+        assert control == {**dropped, **kept}, "without PIPENV_DONT_LOAD_ENV, pipenv must load the dotenv file into the child again: otherwise the absences below prove nothing"
+        assert child == {**dict.fromkeys(dropped), **kept}, "a pipenv run child of the lane got dropped settings back from the dotenv file, or lost LF_APP_VERSION"
+
+    @pytest.mark.parametrize(
+        ("rejected", "error"),
+        [
+            pytest.param("invalid-port", "^--test-port must be between 1 and 65535$", id="invalid-port"),
+            pytest.param("production-port", "^Test port must not be the production server port$", id="production-port"),
+            pytest.param("production-data-dir", OVERLAP_ERROR, id="production-data-dir"),
+        ],
+    )
+    def test_a_rejected_lane_changes_nothing(self, lane, rejected, error):
+        # Everything in the dotenv file, and what the lane would drop exported as well: a drop made before the rejection
+        # would show as a removal, a hydration of the kept ones as an addition.
+        instance = self.values(lane, "instance", env_example_variables() | cli_base.TEST_LANE_KEEPS | {self.UNDOCUMENTED})
+        self.configure_instance(lane, dotenv=instance, shell={name: value for name, value in instance.items() if not cli_base.kept_in_a_test_lane(name)})
+        lane_args = {
+            "invalid-port": {"port": 0, "data_dir": lane.data_dir},
+            "production-port": {"port": int(instance["PORT"]), "data_dir": lane.data_dir},
+            "production-data-dir": {"port": lane.port, "data_dir": instance["LIBREFOLIO_DATA_DIR"]},
+        }[rejected]
+        before = dict(os.environ)
+
+        with pytest.raises(ValueError, match=error):
+            cli_base.configure_test_runtime(**lane_args)
+
+        changes = environment_changes(before)
+        assert not changes, f"a rejected lane changed the environment: {changes}"
+
+
+class TestSettingsReadNoDotenvFileInTestMode:
+    """In test mode ``Settings`` reads no dotenv file, not even one it is given; outside test mode it reads it as before.
+
+    A lane's settings are the defaults and what its runner exported. The dotenv file is a synthetic one in ``tmp_path``
+    whose values differ from the defaults: reading it outside test mode first proves it would be read. Every field of
+    ``Settings`` is cleared from the environment beforehand, and the fixtures restore the environment afterwards.
+    """
+
+    FILE_VALUES = {"LIBREFOLIO_PROFILE": "managed", "PREVIEW_CACHE_MAX_MB": 7}
+
+    @pytest.fixture
+    def instance_dotenv(self, runtime_env, tmp_path) -> Path:
+        for name in backend_config.Settings.model_fields:
+            runtime_env.delenv(name, raising=False)
+        dotenv_file = tmp_path / "instance.env"
+        dotenv_file.write_text("".join(f"{name}={value}\n" for name, value in self.FILE_VALUES.items()), encoding="utf-8")
+        return dotenv_file
+
+    def read(self, settings: backend_config.Settings) -> dict[str, object]:
+        return {name: getattr(settings, name) for name in self.FILE_VALUES}
+
+    def defaults(self) -> dict[str, object]:
+        return {name: backend_config.Settings.model_fields[name].default for name in self.FILE_VALUES}
+
+    @pytest.mark.parametrize("given", [pytest.param("argument", id="env-file-argument"), pytest.param("model-config", id="model-config-env-file")])
+    def test_the_dotenv_file_is_read_outside_test_mode_only(self, runtime_env, instance_dotenv, given):
+        if given == "model-config":
+            # Where get_settings() finds it: Settings() without argument reads model_config["env_file"]
+            runtime_env.setitem(backend_config.Settings.model_config, "env_file", str(instance_dotenv))
+
+        def settings_in(test_mode: str) -> dict[str, object]:
+            runtime_env.setenv("LIBREFOLIO_TEST_MODE", test_mode)
+            return self.read(backend_config.Settings(_env_file=instance_dotenv) if given == "argument" else backend_config.Settings())
+
+        outside, inside = settings_in("0"), settings_in("1")
+
+        assert self.FILE_VALUES != self.defaults(), "the file must set values other than the defaults, or reading it could not be told apart"
+        assert outside == self.FILE_VALUES, "outside test mode the dotenv file is read: without it, its absence in test mode would prove nothing"
+        assert inside == self.defaults(), "in test mode the dotenv file must not be read"
+
+    def test_in_test_mode_the_environment_is_still_read(self, runtime_env, instance_dotenv):
+        exported = {"LIBREFOLIO_PROFILE": "managed", "PREVIEW_CACHE_MAX_MB": 9}
+        runtime_env.setenv("LIBREFOLIO_TEST_MODE", "1")
+        for name, value in exported.items():
+            runtime_env.setenv(name, str(value))
+
+        assert self.read(backend_config.Settings(_env_file=instance_dotenv)) == exported, "a lane still reads what its runner exported"
 
 
 class TestConfigureServerRuntime:
@@ -682,9 +1024,6 @@ class TestProjectDotenvValues:
 @pytest.mark.parametrize(("lane", "port_name", "dir_name", "expected_mode", "port"), [pytest.param("test", "TEST_PORT", "LIBREFOLIO_TEST_DATA_DIR", "1", 6135, id="test-lane"), pytest.param("production", "PORT", "LIBREFOLIO_DATA_DIR", "0", 6226, id="production-lane")])
 def test_configured_runtime_survives_a_nested_pipenv_run(runtime_env, lane, port_name, dir_name, expected_mode, port):
     """The probe only prints inherited values: no server, no database, no files."""
-    prefix = cli_base.pipenv_prefix()
-    if prefix and shutil.which(prefix[0]) is None:
-        pytest.skip("pipenv is genuinely unavailable in this environment")
     if cli_base._project_dotenv_values().get(port_name) == str(port):
         port += 1
     # The nested Pipenv process still sees the real repository .env; the parent
@@ -693,7 +1032,7 @@ def test_configured_runtime_survives_a_nested_pipenv_run(runtime_env, lane, port
     configure = cli_base.configure_test_runtime if lane == "test" else cli_base.configure_server_runtime
     configured_port, configured_dir = configure(port=port, data_dir=f"runtime/pipenv-subprocess-{lane}-data")
     probe = f"import os; print(os.environ.get('{port_name}')); print(os.environ.get('{dir_name}')); print(os.environ.get('LIBREFOLIO_TEST_MODE'))"
-    result = subprocess.run([*prefix, "python" if prefix else sys.executable, "-c", probe], cwd=cli_base.get_project_root(), env=os.environ.copy(), capture_output=True, text=True, timeout=120)
+    result = run_python_in_a_pipenv_child(probe, os.environ.copy())
 
     assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
     assert result.stdout.strip().splitlines()[-3:] == [str(configured_port), str(configured_dir), expected_mode]
@@ -1013,6 +1352,7 @@ class TestSharedTestServerOwnership:
         # even though health would answer if start() ever reached the poll loop.
         server = test_runner_server.SharedTestServer()
         patch_spawn(monkeypatch, holders=["918273"], healthy=True)
+        forbid(monkeypatch, test_runner_server, "build_server_prerequisites", "the build step must not run while the port is already held")
         forbid(monkeypatch, test_runner_server.subprocess, "Popen", "subprocess.Popen must not run while the port is already held")
         for name in ("kill", "killpg"):
             forbid(monkeypatch, test_runner_server.os, name, "no signal may be sent by a fail-closed start()")
@@ -1506,6 +1846,8 @@ class TestExecUnmaskedWrapper:
         monkeypatch.setattr(test_runner_server.signal, "pthread_sigmask", fake_pthread_sigmask)
         monkeypatch.setattr(test_runner_server.subprocess, "Popen", fake_popen)
         monkeypatch.setattr(test_runner_server.subprocess, "run", unavailable_lsof)
+        # The build step before the spawn (C-94) would otherwise reach this lsof stand-in: it always succeeds here.
+        monkeypatch.setattr(test_runner_server, "build_server_prerequisites", lambda *_args, **_kwargs: True, raising=False)
         monkeypatch.setattr(test_runner_server.os, "getpgid", lambda _pid: (order.append("getpgid"), 45010)[1])
         monkeypatch.setattr(test_runner_server.urllib.request, "build_opener", lambda *_handlers: AuthenticatedOpener())
         monkeypatch.setattr(test_runner_server, "print_success", ready.append)
@@ -1765,6 +2107,8 @@ def run_gallery(runtime_env, lane, *flags: str) -> tuple[int, dict]:
 
     runtime_env.setattr(dev, "HAS_ARGCOMPLETE", False)
     runtime_env.setattr(dev, "check_port_in_use", lambda _port: [])
+    # The gallery's build step before Playwright (C-94) is otherwise a real `dev.py server --build-only`: it always succeeds here.
+    runtime_env.setattr(test_runner_server, "build_server_prerequisites", lambda *_args, **_kwargs: True, raising=False)
     runtime_env.setattr(subprocess, "Popen", fake_popen)
     runtime_env.setattr(sys, "argv", [*GALLERY_ARGV, *flags])
     return dev.main(), launch

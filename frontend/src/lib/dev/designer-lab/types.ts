@@ -43,6 +43,13 @@ export interface CatalogVarDef {
     theme: ThemeContext | null;
     /** `root`: inherited by the whole page, overridable on `<html>`; `scoped`: the defining rule must be rewritten. */
     scope: 'root' | 'scoped';
+    /**
+     * Defined in `@theme inline`: Tailwind writes the value into the utilities and emits no variable, so nothing on the
+     * page reads it. Absent for any other definition.
+     */
+    inline?: boolean;
+    /** With `inline`: the variable the alias names when its value is exactly `var(--x)`, else null. */
+    alias_of?: string | null;
 }
 
 export interface CatalogVar {
@@ -64,6 +71,11 @@ export interface CatalogPaletteEntry {
     files: Record<string, number>;
     /** `[fileIndex, line, classIndex]` of every use; `classIndex` indexes `Object.keys(classes)`. */
     occ: [number, number, number][];
+    /**
+     * The variable the classes really read, when `var` is an inline alias (`--color-lf-card` → `--lf-surface-card`, a
+     * colour role of workstream T): the one to edit and to show. Absent for an ordinary palette variable.
+     */
+    role?: string;
 }
 
 export interface ColorCatalog {

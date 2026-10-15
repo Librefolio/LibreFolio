@@ -1335,3 +1335,684 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
    `front-transaction tx-bulk-operations` 10.
 5. ✅ **Doc**: `mkdocs build` stretto con 0 avvisi; `check-links` 95 validi. `git diff --check` pulito; porta 6184 libera
    (07:44).
+
+   > **Note implementazione (coordinatore, 15/10 ~07:45–07:51)**: E0 validato e committato (`2326624c1`), poi entrato
+   > in `dev_release2` con `d226bc69e` alle 07:51, prima della finestra, su richiesta del coordinatore colori. **Via per
+   > FE8a** (annuncio nel §7 del piano generale, `2c699f85c`). Dal coordinatore colori: nessun loro annuncio aperto sui
+   > tre file; T li converte nell'ondata W4, sui pezzi già tagliati; conteggi da ripartire: `ImportWizardModal` m1 595
+   > più il letterale `#dc2626`, `TransactionBulkModal` 190, `TransactionFormModal` 218; comando `theme-roles.mjs --split
+   > <vecchio>:<nuovi>`, poi `--check`; il `#dc2626` in uno dei pezzi, classi nuove solo sui ruoli `lf-*`. Regole: solo
+   > tagli, niente `transactions/import/`, niente spostamento della cartella; la baseline del cricchetto nello stesso
+   > commit del taglio; W-B11 si chiude qui. Dalle 09:00, per circa 2 ore, la finestra della galleria: solo codice.
+
+### FE8a — i tagli delle tre modali ⏳ (2026-10-15)
+
+**Analisi** (07:45–07:50, su `2326624c1`):
+
+- Il peso sta negli script (righe di script / template): Form 1 378 / 790, Bulk 3 143 / 460, Wizard 4 414 / ~1 500.
+  Quasi tutte le funzioni chiudono sullo stato del componente (nel Form 2 pure su 39, script
+  `/tmp/libreFolio_w_fe8/purity.mjs`): accorciare gli script vorrebbe lo stato in una classe `.svelte.ts`, come
+  `features/tools/pac-allocator/planner/draft.svelte.ts`, cioè un ridisegno.
+- **Disegno, approvato dal coordinatore (07:51)**: si taglia il **template** per sezione (Form, Bulk) o per passo
+  (Wizard) in componenti figli con props esplicite; `bind:` solo dove il template già scriveva lo stato; stato, `$effect`
+  e handler restano nel padre; i tipi condivisi in un `.ts`. Il ridisegno dello stato non rientra nella 1.3. Cartelle
+  `components/transactions/form/`, `bulk/`, `wizard/` (`wizard/` confluisce in `import/` con FE8b). Tre
+  sotto-checkpoint, ognuno FROZEN e validato a parte; ogni taglio chiude con `--split` e `--check`. Dopo la finestra
+  entrano prima R e L dei colori, poi i lotti della 1.3.
+- **Strumenti** (fuori dal repo, `/tmp/libreFolio_w_fe8/`): `refs.mjs` legge l'AST di Svelte e dà, per un intervallo di
+  righe del template, i nomi dello script che usa (con chi è scritto: `bind:`, assegnazione), i componenti, le direttive
+  `use:` e gli store `$x`, e le righe d'import ridotte a quei nomi; `gen_form.py` genera i figli (import, `Props` con un
+  tipo per ogni nome, markup copiato alla lettera) e sostituisce le sezioni nel padre con la chiamata. svelte-check
+  verifica tutto il cablaggio.
+
+#### FE8a-1 — il Form ✅ (2026-10-15) — 🧊 FROZEN
+
+1. ✅ **Taglio** (07:52): `TransactionFormModal.svelte` 2 275 → 1 616 righe; in `components/transactions/form/`:
+   `TxFormBanners.svelte` (righe 1464-1542 del padre, 12 props, legati `commitFailed`, `formError`, `issuesDismissed`),
+   `TxFormPairSection.svelte` (1548-1817, 46 props, legati `costBasisMode`, `createAssetOpen`, `createBrokerOpen`,
+   `draft`), `TxFormSingleSection.svelte` (1823-2035, 40 props, gli stessi legati), `TxFormOptionalSection.svelte`
+   (2066-2131, 8 props, legati `createEventOpen`, `draft`, `optionalOpen`); `txFormTypes.ts` con `ValidationIssue`,
+   `FormDraft`, `DualDraftTo` (spostati dal padre) e `TxFormWacResult` (il tipo che il padre scriveva due volte in
+   linea). Restano nel padre header, footer, piè di pagina in sola lettura, il blocco del costo di un TRANSFER e le
+   modali impilate. Il DOM non cambia (un componente non aggiunge elementi); gli stili del padre sono tutti `:global`.
+2. ✅ **Cricchetto**: `theme-roles.mjs --split` del Form nei quattro pezzi; m1 218 = 35 (padre) + 6 + 96 + 56 + 25; riga
+   `~split` nella baseline; `--check` pulito.
+3. ✅ **Prove** (07:52–08:12, corsia 6184): `prettier --write` sui file toccati; `svelte-check` 0 errori, 0 avvisi su
+   5 667 file; Vitest `tx-unit` 903, `core-unit` 4 290 (con le guardie dell'HTML e dei colori), `component-unit` 3 225
+   (con `TransactionFormModal.test.ts`, i cui `vi.mock` sono su moduli condivisi); E2E `front-transaction all
+   --workers 4` (07:56–08:06; avviso al coordinatore): 46/46 azioni verdi, 337 + 34 (mobile) passed, 32 skipped del
+   progetto mobile; fuori dalle transazioni `front-broker detail` 37, `front-utility onboarding-tour` 10,
+   `front-utility tooltip` 9. Doc: `features/transaction-form.md` (i quattro componenti; `FormDraft` in
+   `txFormTypes.ts`); devWiki `problems/browser-autofill-numeric-fields.md` (la riga del Form punta anche ai pezzi; le
+   altre righe che citano la modale restano vere, la logica è nel padre); `check_source_paths.py` invariato (5 path di
+   prima); `mkdocs build` stretto con 0 avvisi; `check-links` verde.
+
+   > **Note implementazione (coordinatore, 15/10 ~08:18)**: FE8a-1 committato come `8a62cea7f` (`refactor(tx-form): cut
+   > form modal by section`, 9 file; baseline 218 = 35 + 6 + 96 + 56 + 25, `--check` pulito anche dal coordinatore) e
+   > `04a3b2691` (journal). Orari dal coordinatore colori: dalle 08:45 alle ~10:15 `dev_release2` è fermo (gallerie r1 e
+   > r2); dalle 08:45 alla fine della finestra (~12:30) niente run pesanti nella corsia (E2E delle transazioni, build).
+   > FE8a-1 entra dopo la finestra, dopo R e L, con il controllo leggero sul fuso.
+
+#### FE8a-2 — il Bulk ✅ (2026-10-15) — 🧊 FROZEN
+
+1. ✅ **Taglio** (08:18, `/tmp/libreFolio_w_fe8/gen_cut.py`, la versione generica di `gen_form.py`, con
+   `bulk_cfg.py`): `TransactionBulkModal.svelte` 3 760 → 3 332 righe; in `components/transactions/bulk/`:
+   `TxBulkBanners.svelte` (righe 3194-3454 del padre: errori, problemi di validazione, cose da sistemare, proposte di
+   unione; 36 props, legati `commitFailed`, `formError`, `issuesDismissed`, `promoteAllOpen`, `promoteBannerSeen`,
+   `todoBlockersExpanded`, `todoWarningsExpanded`), `TxBulkToolbar.svelte` (3462-3566: cerca e aggiungi, filtro dei
+   giorni, selezione e azioni; 17 props, legati `bulkTableSelectedRows`, `importWizardOpen`, `maxDeltaDays`);
+   `txBulkTypes.ts` con `DraftFields`, `PendingOp`, `WacResultEntry`, `SuggestEntry`, spostati alla lettera dal padre.
+   **W-B11 chiusa**: `brokerName()` (`:1597`) non aveva chiamanti ed è tolta. Header, tabella, footer e modali
+   impilate restano nel padre; restano anche le funzioni pure (i renderer delle celle), fuori dal disegno approvato.
+
+   > **⚠️ Fuori pista**: la prima prova ha dato 2 rossi in `core-unit` e 3 in `component-unit`.
+   > (1) `htmlSink.gate.test.ts`: la voce rivista di `formatCurrencyCodeHtml(…)` (`REVIEWED_SINKS`, `:69`) puntava a
+   > `TransactionBulkModal.svelte`; ora il `{@html}` sta in `TxBulkBanners.svelte`, e la voce segue il codice (stesso
+   > motivo, `CURRENCY_HTML`). (2) `ImportWizardModal.test.ts`, «Import success-only handoff»: `tx-bulk-import` non
+   > c'era. La sezione della barra cominciava **dentro** il commento HTML di più righe che la precede: nel padre il
+   > `<!--` restava aperto e inghiottiva la chiamata `<TxBulkToolbar/>` fino al `-->` successivo, e il figlio cominciava
+   > con il resto del commento. svelte-check non lo vede (è markup valido). Cura: il commento torna intero nel padre, la
+   > riga spuria esce dal figlio; il generatore ora rifiuta una sezione che comincia dentro un commento o che apre o chiude
+   > un commento che non contiene. Le sezioni del Form (FE8a-1) erano giuste: il loro commento era tutto dentro, e
+   > `front-transaction all` lo aveva provato.
+2. ✅ **Cricchetto**: `--split` del Bulk nei due pezzi; m1 190 = 88 (padre) + 54 + 48; riga `~split`; `--check`
+   pulito.
+3. ✅ **Prove** (08:19–08:43, corsia 6184): svelte-check 0 errori, 0 avvisi su 5 670 file; Vitest `tx-unit` 903,
+   `core-unit` 4 290, `component-unit` 3 225; `ImportWizardModal.test.ts` 26/26; E2E `front-transaction all --workers 4`
+   (08:29–08:39, avviso al coordinatore): 46/46 azioni verdi, 337 + 34 (mobile) passed, 32 skipped del progetto mobile;
+   fuori dalle transazioni `front-utility onboarding-tour` 10 (l'àncora `transaction.bulk.add_import` è ora nella
+   barra) e `front-broker detail` 37. Doc: `developer/frontend/state/transaction-draft.md` (dove sono dichiarati
+   `PendingOp` e `DraftFields`; i due componenti). devWiki: `concepts/import-todo-signals.md` e
+   `decisions/transfer-pair-same-asset-opposite-quantity.md` (le righe che descrivono i banner e la barra puntano anche
+   ai pezzi); `check_source_paths.py` invariato. `mkdocs build` stretto con 0 avvisi; `check-links` verde (08:43,
+   prima della finestra).
+
+   > **Note implementazione (coordinatore, 15/10 ~08:45)**: FE8a-2 committato come `464350cc7` (`refactor(tx-bulk): cut
+   > bulk modal banners, toolbar`, 9 file; 190 = 88 + 54 + 48, `--check` pulito anche dal coordinatore) e `ba9819ec0`
+   > (journal, W-B11 chiusa). Via per il Wizard, solo codice. svelte-check concesso durante la finestra: al massimo 3
+   > volte, una alla volta, con `nice -n 15`, niente Vitest, E2E né build; le righe-sonda fuori dal commit.
+
+#### FE8a-3 — il Wizard ⏳ (2026-10-15) — codice scritto, prove dopo la finestra
+
+1. ✅ **Tipi** (08:45–08:51): dei 123 nomi del padre usati dai cinque passi grandi, 93 hanno un tipo scritto nella
+   dichiarazione (generico di `$state`/`$derived`, annotazione, letterale, parametri tipati, `void` per le funzioni
+   senza `return` di un valore; `/tmp/libreFolio_w_fe8/autotypes.mjs`); i 30 `$derived` inferiti li ha stampati
+   svelte-check, con righe-sonda temporanee (`const __p_x: __Probe = x;`) e `noErrorTruncation` acceso solo per quella
+   corsa (svelte-check 1/3, 08:47); padre e `tsconfig.json` rimessi com'erano subito dopo. Lo stesso per i 12 della barra
+   in fondo (svelte-check 2/3, 08:50, insieme al primo controllo dei pezzi).
+2. ✅ **Taglio** (08:49–08:52, `gen_cut.py`): `ImportWizardModal.svelte` 5 984 → 5 053 righe; in
+   `components/transactions/wizard/`: `UploadStep.svelte` (20 props), `SelectFilesStep.svelte` (32), `AnalyzeStep.svelte`
+   (17), `DuplicatesStep.svelte` (24), `ReviewStep.svelte` (36), `WizardFooter.svelte` (i pulsanti di ogni passo, 39);
+   `wizardTypes.ts` con `StepId`, `PendingFileEntry`, `Step1SetWarning`, `FileSelection`, `SetPreviewEntry`,
+   `ParsedFileResult`, `ParsedSetInfo`, `BrokerOpeningIssue`, spostati alla lettera. I passi `assets`, `fix` e `gapFix`
+   erano già componenti in `components/transactions/import/` (non toccata). Restano nel padre la macchina a stati, gli
+   handler, le modali impilate e l'unico `{@html}` (con `sanitizeHtml`); il padre non ha `<style>`.
+
+   > **⚠️ Fuori pista**: (1) la prima configurazione della barra usava righe contate prima di `prettier`, e prendeva
+   > blocchi di altri passi: il generatore si è fermato sui tipi mancanti, e l'intervallo è stato ricalcolato sul file.
+   > (2) svelte-check 3/3 (08:52): 3 errori, tutti import di tipo mancanti in `WizardFooter.svelte`
+   > (`PendingFileEntry`, `FileSelection`, `ParseUnit`), più un `BrimFile` doppio in `SelectFilesStep.svelte` corretto
+   > prima: aggiunti; un controllo statico conferma che ogni nome di tipo nei `Props` dei sei pezzi è importato. Il
+   > generatore ora fonde anche nelle righe `import type {…}`. La conferma con svelte-check arriva dopo la finestra.
+3. ✅ **Cricchetto**: `--split` del Wizard nei sei pezzi; m1 595 = 222 (padre) + 20 + 22 + 67 + 77 + 86 + 101; il
+   letterale `#dc2626` (`dotColor` nello script) resta nella riga del padre; `--check` pulito.
+4. ✅ **Doc**: `developer/frontend/components/features/import-wizard.md` (i componenti dei passi e `wizardTypes.ts`).
+   devWiki: `decisions/brim-broker-scoped.md`, `problems/playwright-probes-ignore-timeout.md`,
+   `entities/import-wizard-modal.md` (le righe su ciò che ora sta nei passi); `check_source_paths.py` invariato. Nessun
+   pezzo muta in loco una prop ricevuta senza `bind:` (controllo statico).
+5. ✅ **Prove dopo l'avviso di fine finestra** (slot pesante 2, 15:28–15:58, revisione combinata `06459c1b3` + E1a):
+   svelte-check, Vitest `tx-unit`, `core-unit`, `component-unit`
+   (`ImportWizardModal.test.ts`), E2E `front-transaction all --workers 4`, `front-utility onboarding-tour` (la guida
+   dell'import ancora le sue àncore ai passi), `mkdocs build` e `check-links`; poi l'handoff FROZEN.
+   > **Note implementazione** (15:58): svelte-check 0/0 (nella `front build --debug`); `tx-unit` 903, `core-unit` 4 537,
+   > `component-unit` 3 240; `front-transaction all --workers 4` 337/337 desktop, 34 mobile; `onboarding-tour` 10. I
+   > dettagli e la doc nella sezione E1, passo 2. `mkdocs build` stretto (0 avvisi) e `check-links` (95) ✅ alle 16:05.
+
+   > **Note implementazione (coordinatore, 15/10 ~09:05)**: FE8a-3 committato come checkpoint prima delle prove,
+   > `b92e655d9` (`refactor(import-wizard): cut wizard steps and footer`, 13 file; 595 = 222 + 20 + 22 + 67 + 77 + 86 +
+   > 101, `#dc2626` nel padre, `--check` pulito) e `063e5b7cf` (journal). Le prove della lista dopo la finestra, prima
+   > dell'ingresso.
+
+### N1 — numeri e dati: la cassa della pagina broker (W-B5) e il TRANSFER orfano (V-3) ⏳ (2026-10-15)
+
+**Via del coordinatore** (15/10 ~09:05), con le risposte: (Q1) «oggi» ~~è la data del server~~ — **corretta alle ~09:12**
+dopo la verifica di J: è il giorno dell'utente, come nella Dashboard: l'endpoint accetta `as_of` facoltativo (senza,
+`date.today()`) e la pagina del broker passa `todayIso()`; (Q2) una CASH_TRANSFER orfana diventa
+DEPOSIT o WITHDRAWAL secondo il segno (decisione del coordinatore nello spirito di quella del developer del 13/10 sul
+TRANSFER; il developer può correggerla); (Q3) gli orfani già nei DB con una migrazione dei dati e il log di ogni riga
+(D-J4, 14/10), numero 006, il primo libero sulla mia base (C7: rinominata se entra prima la 006 di A). I rossi su lotti e
+Dashboard li scrive il mio test-author (J ha C-94 aperto); **J rivede i numeri attesi prima della cura** (sessione
+`4c677a01-…`, gli scrivo io). Alle ~09:08: **N1b in due**: N1b-1 (la cancellazione converte la metà rimasta) entra
+quando è pronto; N1b-2 (la migrazione) in un commit a parte, **solo con l'ok esplicito del developer** (punto 46 delle
+decisioni). Durante la finestra: codice e singoli file pytest senza server, uno alla volta, con `nice -n 15`; `api`,
+`all-backend` ed E2E dopo l'avviso di fine.
+
+**Disegno** (verificato sul codice di `063e5b7cf`):
+
+- **N1a · W-B5 (B15, D-J16)**: `BrokerSummaryOperations.get_summary` (`services/brokers/summary.py:74,78,86`) legge
+  `TransactionService.get_cash_balances` e `get_asset_holdings` (`services/transactions/balances.py:153-163`), due somme
+  SQL di ogni transazione del broker senza data, e `_holding_average_costs` (`summary.py:200-229`), che legge anche gli
+  acquisti futuri. Cura: un solo «oggi», `as_of` (il giorno dell'utente; `date.today()` se assente), per la cassa, le
+  quantità e il costo medio. La cassa da
+  `financial_math/native_cash.py` (la casa unica: «Cash per broker and currency»), che ha già `balances(as_of)`; le due
+  somme di `balances.py` sono una copia di quel calcolo e non hanno altri chiamanti. Le quantità: nessuna casa nella
+  tabella di `backend.instructions.md` (la segnalo); restano la somma per asset, con la data.
+- **N1b-1 · V-3 (D-J4)**: `TransactionService.delete_by_broker` (`services/transactions/transaction_service.py:60-79`),
+  chiamata da `broker_service.py:494` (anche dalla cancellazione dell'account), oggi toglie solo
+  `related_transaction_id` alla metà rimasta sull'altro broker. Cura: la metà rimasta di un TRANSFER diventa un
+  ADJUSTMENT con la stessa quantità e lo stesso `cost_basis_override`; quella di una CASH_TRANSFER un DEPOSIT o un
+  WITHDRAWAL secondo il segno dell'importo; in tutti e due i casi senza `related_transaction_id` né `link_uuid`.
+- **N1b-2 · gli orfani già nei DB**: ~~migrazione dei dati `006`~~ → **correzione post-migrazione**
+  (`db/post_migration/orphan_pair_halves.py`, decisione del coordinatore ~09:58), con una riga di log per ogni
+  transazione convertita; commit a parte, in attesa del punto 46.
+
+**Passi**:
+
+1. ✅ Rossi (test-author), 2026-10-15: N1a in `services broker`; N1b-1 in `services transaction` / `services broker`; lotti e
+   Dashboard dopo la cancellazione in `test_services/test_financial/`, numeri attesi rivisti da J.
+   > **Note implementazione** (prima tornata, 09:30, rossi visti prima della cura): `test_broker_service.py`
+   > (`TestGetSummaryAsOf` BR-U-090…093; `TestDeleteBulkCrossBrokerPair` BR-U-073…076) → `services broker` 13 rossi /
+   > 48 verdi; nuovo `test_financial/test_orphan_transfer_after_broker_delete.py` con l'azione `services
+   > orphan-transfer-numbers` (`in_all=False`; il file è anche dentro `roi-fifo-utils`) → 4 rossi / 2 controlli verdi.
+   > **API** (seconda tornata, 10:15, scritti senza eseguirli per la finestra; `py_compile`, `ruff`, `black` puliti):
+   > `test_brokers_api.py` `TestBrokerSummaryAsOf` BR-A-070…073 (verdi attesi: la cura di N1a c'è già; con una linea
+   > USD a zero contro «nessuna linea», e un controllo di mezzanotte su BR-A-070) e, rossi fino a N1b-1, BR-A-032C (la
+   > gamba in arrivo diventa ADJUSTMENT, quantità e costo invariati) e BR-A-032D nuovo (CASH_TRANSFER: la metà del
+   > mittente diventa WITHDRAWAL −300); `test_account_deletion_api.py` ACCDEL-001 (`[new]` sul tipo ADJUSTMENT), con
+   > docstring allineate al punto 47. I test nuovi puliscono i propri broker e asset (righe future nel DB condiviso).
+   > **Terza tornata, in corso**: opzione b (BR-U-077 costo Auto 25 con taglio alla data; BR-U-079 pool vuoto = P-1),
+   > caso speculare con i valori di oggi (BR-U-078 guardia; Dashboard 100/+80, lotti FAILED, posizione 6/20/180/60), i
+   > perni di J (data del lotto, prezzo di riferimento, valuta del costo) e le due serie della cassa (finanziamento degli
+   > acquisti, punto dei depositi) segnalate da J alle ~10:20.
+2. Cure:
+   - **N1a, backend** ✅ (2026-10-15 09:40). Q1 corretta dal coordinatore alle ~09:12, dopo la verifica di J: «oggi» è
+     il **giorno dell'utente**, come nella Dashboard. Ok del coordinatore (~09:18, opzione A) per le sole 3 righe di
+     `get_broker_summary` in `api/v1/brokers.py`; il resto del file aspetta il suo commit (W3, K2b, CP7).
+     > **Note implementazione**: `GET /brokers/{id}/summary` accetta `as_of` facoltativo (aggiunta, nessun campo
+     > tolto); `BrokerSummaryMixin.get_summary(..., as_of=None)` usa `as_of or date.today()` per cassa, quantità e costo
+     > medio (`_holding_average_costs` filtra `date <= as_of`). `get_cash_balances(broker_id, as_of=None)` ora legge
+     > la cassa dal layer: `native_balances(movements, as_of)`, funzione di modulo estratta da `NativeCash.balances`
+     > (che le delega, stesso risultato), sui movimenti di `cash_movement_from_transaction` — stesse righe della somma
+     > SQL di prima (valuta e importo presenti; la linea a zero resta). `get_asset_holdings(broker_id, as_of=None)`
+     > resta una somma SQL con la data (nessuna casa delle quantità nella tabella di `backend.instructions.md`: lo
+     > segnalo nell'handoff). Estrazione nel layer di J: approvazione chiesta a J, in attesa.
+     > Prove (`nice -n 15`, senza server): `ruff --select I`, `ruff`, `black --check` puliti sui 4 file;
+     > `services broker` 53 passed / 8 failed — verdi i 6 di `TestGetSummaryAsOf` (BR-U-090…093), rossi solo gli 8
+     > di N1b-1 (BR-U-073 ×4, BR-U-076 ×4); `services financial-math` 212 passed (guardie del layer).
+     > Resta per N1a: la riga di `routes/(app)/brokers/[id]/+page.svelte:281` (`as_of: todayIso()`), `api sync`, e un
+     > rosso/verde API del parametro, dopo l'avviso di fine finestra.
+   - ⏳ **N1b-1**, dopo l'ok di J sui numeri.
+     > **Esito di J** (15/10 ~09:50, letto nel codice): numeri giusti (investito 80, P&L 40); il cambio per il
+     > co-proprietario (100/20 → 80/40) accettato ma **da dichiarare** (conferma di cancellazione, doc, CHANGELOG);
+     > **caso 2 = opzione b** per le cancellazioni nuove: il costo **Auto** già esistente (`_auto_cost_source` +
+     > `compute_wac_iterative`), calcolato prima che spariscano le righe del mittente, override e valuta insieme
+     > (eredita P-1); i tre perni da fissare nei test: (a) il lotto riparte alla data del trasferimento, (b) prezzo di
+     > riferimento del giorno d'apertura (rendimento relativo +20 %, P&L % +50 %), (c) valuta del costo con l'override.
+     > Ok sul diff di `native_cash.py` (golden `test_native_cash_guard.py` byte-identico: `services roi-fifo-utils`
+     > 657 verdi, i 4 rossi sono i miei). J-9 e J-10 (fuori N1) li registra J.
+     > **⚠️ Fuori pista** (J, ~10:10): il caso speculare — cancellato il **destinatario**, resta la gamba in uscita del
+     > mittente — convertito alla lettera (ADJUSTMENT −4 senza costo: una gamba in uscita non può portarlo) farebbe
+     > leggere le unità spostate come distrutte (P&L di A da +80 a −20, lotti −20). Decisione chiesta da J al
+     > coordinatore; **intanto**: si convertono solo le metà **in arrivo** di un TRANSFER; quella in uscita perde solo il
+     > link, come oggi; CASH_TRANSFER e FX_CONVERSION per segno. Il caso speculare entra nei test coi valori di oggi.
+     > Lo split (`batch_edits.py:126-139`) produce già ADJUSTMENT in uscita senza costo: J lo porta al coordinatore.
+     > **Confermato dal coordinatore** (~10:12): in N1b-1 e N1b-2 solo le gambe in arrivo di un TRANSFER e quelle di
+     > cassa; le gambe in uscita restano come oggi fino alla risposta del developer al **punto 47**; il dry run le conta a parte.
+   - **N1b-1, cura** ✅ (2026-10-15 10:25; riordino «prima i costi» 10:51). `/tmp/libreFolio_w_n1b1_final.py --apply`, poi
+     `/tmp/libreFolio_w_n1b1_atomic.py --apply` (`_auto_cost()` calcola, `_write_auto_cost()` scrive; BR-U-080 verde).
+     > **Note implementazione**: `batch_edits.py`: `pair_sides()` (la regola del lato: quantità per un TRANSFER, importo
+     > per la cassa) e `make_standalone()` (tipo, link via, asset via se non è un ADJUSTMENT, `updated_at` adesso)
+     > estratti da `apply_splits()`, che li usa: stesso comportamento. `auto_cost.py`: `_write_auto_cost()` estratto da
+     > `_compute_wac_for_auto_items()` (asset, `compute_wac_iterative`, override e valuta insieme); nessun nuovo punto
+     > d'import di `compute_wac_iterative` (per il CP-8 di J). `transaction_service.delete_by_broker()`: carica le metà
+     > rimaste sugli altri broker (`related_transaction_id IN` le righe del broker), scrive il costo Auto sulle gambe in
+     > arrivo senza costo finché le righe del mittente ci sono, scollega le coppie interne del broker, poi converte in
+     > place con `SPLIT_TYPE_MAP` — salvo la gamba in uscita di un TRANSFER (punto 47) e un link ignoto allo split
+     > (ADJUSTMENT), che perdono solo il link (con `updated_at`) — e infine cancella. La FK `DEFERRABLE INITIALLY
+     > DEFERRED` regge l'ordine.
+     > Prove (`nice -n 15`, senza server): `services broker` **64/64** (prima 9 rossi), `services orphan-transfer-numbers`
+     > **16/16** (prima 6 rossi), `services transaction` 66/66 (copre `apply_splits`), `services roi-fifo-utils` 671/671
+     > (golden di J byte-identico). `ruff`, `black` puliti.
+     > **⚠️ Fuori pista** (docs-writer, 10:20): `DELETE /brokers` fa commit quando `response.errors` è vuoto
+     > (`api/v1/brokers.py:389`) e `delete_bulk` non lo riempie mai (cattura per broker): un errore a metà di
+     > `delete_by_broker` lascerebbe nel commit il costo Auto già scritto su una prima gamba. Un SAVEPOINT per broker non è
+     > sicuro qui: senza il listener `begin` di SQLAlchemy, pysqlite non apre la transazione prima del primo DML, e il
+     > RELEASE del savepoint più esterno farebbe commit (romperebbe l'atomicità della cancellazione dell'account di A).
+     > Cura scelta: **prima tutti i costi Auto, poi le modifiche** (`_auto_cost()` calcola, `_write_auto_cost()` scrive),
+     > con il rosso BR-U-080 prima (test-author, in corso). Il resto del difetto generale (nessuna atomicità per broker in
+     > `delete_bulk`) va nella sezione W del backlog.
+     > **Revisione di J delle serie di cassa** ✅ (~10:45, a mano sul ramo del frame, `daily_state.py:451-570`): C1 oggi
+     > 300/0 → dopo 100/200, depositi {1/10: 1000} → {1/10: 1000, 5/10: 300}; C2 oggi 400/200 → dopo 500/100; capitale e
+     > P&L fermi (C1 100/300/200, C2 400/600/200); giuste le correzioni del test-author (seconda vendita in C2, utili
+     > ritirati prima in C1, citazioni `:505-570`); W globale = semantica esistente. Perni (a), (b), (c), BR-U-077,
+     > BR-U-079 e speculare: ok. La lista dei lotti sotto FAILED la prende J (J-12); W-B19: copia per la metà di cassa.
+     > Provato (10:33) su un SQLite in `/tmp` con `aiosqlite` e un `AsyncSession` come quelli dell'app: SELECT, poi
+     > `begin_nested()` con un INSERT, poi il rollback esterno → la riga **resta** (il RELEASE ha fatto commit); con un
+     > DML prima del savepoint → nessuna riga. ~~Lo stesso vale per `assets/crud.py:392` (X), dove ogni asset cancellato
+     > in blocco entra subito nel commit: lo segnalo al coordinatore.~~ W-B19 e W-B20 nella sezione W del backlog.
+     > **Correzione** (11:19, reperti di X girati dal coordinatore): avevo letto solo la riga 392. `delete_assets_bulk` è
+     > già atomico: un `UPDATE` vuoto prima del primo savepoint (`assets/crud.py:349-351`, da `e50d66408`) fa emettere
+     > `BEGIN`, e lo fissa `test_asset_source.py::test_delete_assets_bulk_commit_failure_propagates_and_rolls_back_tentative_deletes`.
+     > Il listener `begin` generale è scartato (X: lettura, commit di un altro scrittore, poi scrittura → subito
+     > `SQLITE_BUSY_SNAPSHOT`, che `busy_timeout` non aspetta). Cura decisa per W-B20: un aiuto in `db/session.py` che apre
+     > la transazione prima del primo savepoint (lo stesso `UPDATE` vuoto, o `BEGIN IMMEDIATE`), usato da `delete_bulk`
+     > per broker, con un rosso prima: lotto piccolo di W dopo l'ingresso di N1.
+     > **Superfici concesse dal coordinatore** (~10:05): testo `brokers.confirmDeleteWithTransactions` (4 lingue, `i18n
+     > update`, nessun markup); frase in `user/brokers/index.{en,it,fr,es}.md:49` + `translate-stamp`; riga del
+     > CHANGELOG proposta nell'handoff. Fatte (10:03): il testo EN approvato, precisato dopo la restrizione di J (solo
+     > gli asset **trasferiti da** questo broker diventano posizioni d'apertura); `translate-stamp` sul file EN.
+     > Cura pronta in `/tmp/libreFolio_w_n1b1_final.py` (helper `pair_sides`/`make_standalone` estratti da
+     > `apply_splits`; `_write_auto_cost` estratto da `_compute_wac_for_auto_items`; nessun nuovo punto d'import di
+     > `compute_wac_iterative`), da applicare dopo i rossi aggiornati (test-author, opzione b e caso speculare).
+3. ✅ N1b-2 (scritta e provata, 11:00; entra solo con l'ok del developer sul **punto 46**) — **correzione post-migrazione**, non Alembic (coordinatore, ~09:58: il log di una migrazione Alembic si
+   perde all'avvio, `main.py:202-209` con `capture_output=True`, anche in Docker). `post_migration/orphan_pair_halves.py`
+   è mio; la voce in `FIXES` di `post_migration/__init__.py` concessa, solo in aggiunta. Commit a parte, entra solo con
+   l'ok del developer sul punto 46.
+   > **Punto 46 deciso** (developer, 15/10 16:00, alla lettera): «Sì: la correzione entra, e una metà senza costo resta
+   > «costo mancante» con l'avviso». N1b-2 ed N1b-3 entrano con il resto del ramo, così come sono: la metà senza costo
+   > diventa una rettifica senza costo, con l'avviso `MISSING_COST_BASIS`. Il punto 47 (la gamba in uscita) resta aperto,
+   > e la gamba resta com'è oggi.
+   > **Domanda del developer sul 46** (coordinatore, 16:15, corretta alle 16:25): quando nasce una metà ricevuta senza
+   > costo? Nei metadati dei tipi il lato ricevente di `TRANSFER` ha `cost_basis_pair: ["forbidden",
+   > "required_qty_pos"]` (`schemas/transactions/type_metadata.py:286`): il modulo e il Bulk, dove passano anche gli
+   > import, obbligano a scegliere un costo (manuale o Auto). Una metà ricevuta senza costo nasce solo dall'API chiamata
+   > direttamente, o da dati più vecchi della 1.0. Per N1b-2 non cambia nulla: il caso «senza costo» resta una rete di
+   > sicurezza. Nessuna voce di backlog: quella scritta alle 16:15 su una lettura sbagliata è ritirata dal coordinatore e
+   > tolta (il suo id, W-B25, entrato in `d7c7dcab7`, non si riusa).
+   > **Note implementazione** (10:00): `OrphanPairHalfFix` (`fix_id` `orphan_pair_halves`): `detect` trova le righe
+   > TRANSFER/CASH_TRANSFER/FX_CONVERSION senza la metà (link NULL o verso una riga assente) e logga un **warning** con
+   > le conversioni per tipo, le righe che resteranno senza costo, quelle lasciate come sono (gamba in uscita di un
+   > TRANSFER, in attesa della decisione; segno illeggibile) — visibile anche nel dry run della CLI, che mostra solo
+   > WARNING+; `apply` converte (tipo, link NULL, asset NULL per la cassa, `updated_at` adesso); `verify` richiede zero
+   > convertibili rimasti e il tipo atteso su ognuna; `finish` logga una riga per transazione convertita **solo dopo
+   > il commit**. Le righe senza costo restano senza (opzione a: il mittente non c'è più → `MISSING_COST_BASIS`).
+   > Prova a mano su un SQLite in `/tmp` (9 righe, ogni classe): conversioni giuste, coppia collegata intatta,
+   > seconda esecuzione `clean`. I test veri con test-author dopo i rossi di N1b-1. `ruff`/`black` puliti.
+   > **Ritocchi** (10:16): una metà **non** convertita (gamba in uscita di un TRANSFER, punto 47; segno illeggibile) il
+   > cui link nomina una riga che non c'è più perde solo il link, come la lascia la cancellazione: altrimenti il
+   > `foreign_key_check` del quadro farebbe fallire la correzione, e a ogni avvio resterebbe una copia del DB in più.
+   > Il warning della rilevazione esce **a ogni avvio** finché esistono gambe in uscita lasciate (il dry run deve
+   > contarle comunque, e la CLI mostra solo WARNING+), con un messaggio distinto quando non c'è nulla da convertire.
+   > Seconda prova attraverso il vero `run_post_migration_fixes` (FK dichiarata, una gamba in uscita con link
+   > pendente): dry run `would_apply`; poi `applied`, copia cancellata, `foreign_key_check` vuoto, una riga di log per
+   > ogni riga cambiata, seconda esecuzione `clean`. Nella CLI le righe INFO per riga non si vedono (il `__main__` non
+   > configura il livello INFO): si vede il warning con gli id per conversione; nel log del server (anche in Docker) ci
+   > sono tutte.
+   > **Test** (test-author, 10:48): `test_db/test_post_migration_orphan_pairs.py`, 42 test (un DB alla testa con
+   > alembic `-x sqlalchemy.url=`, copiato per test, data dir in sandbox con canarino come `test_post_migration.py`):
+   > registrazione dopo `autoincrement`; DB pulito; 16 conversioni (6 tipi × link NULL/pendente, più l'arrivo con e
+   > senza costo); 15 righe lasciate (gambe in uscita, segno illeggibile, coppie intere, altri tipi) e 3 che perdono solo
+   > il link pendente; esito `applied` con FK pulite e conteggi invariati; seconda esecuzione `clean`; dry run; il
+   > warning; una riga INFO per riga cambiata; verifica fallita → DB com'era, copia tenuta. Azione nuova `db
+   > post-migration-orphan-pairs` in `scripts/test_runner/_backend_db.py` (solo aggiunta, anche in `db_order`).
+   > **Rosso visto** (10:52): tolta la registrazione da `FIXES` → **42 rossi**; rimessa → `git diff` di `__init__.py`
+   > uguale a prima (import più la voce). Con la registrazione: **42/42** (due volte).
+   > **⚠️ Fuori pista** (test-author): una riga di un altro tipo (un ADJUSTMENT può portare un link) con il link
+   > pendente farebbe fallire il `foreign_key_check` del quadro a ogni avvio, con una copia del DB in più ogni volta.
+   > Cura: anche lei perde solo il link, come fa la cancellazione per «un link che lo split non conosce». Rossi prima
+   > (test-author), poi `/tmp/libreFolio_w_n1b2_otherlinks.py`.
+   > Fatto (10:58): 2 rossi visti (`failed` con la copia tenuta; `clean` con la violazione rimasta), poi l'estensione
+   > → **45/45**; un link verso una riga che esiste non si tocca (guardia verde).
+4. Verdi senza server durante la finestra ✅ (11:00); `api`, `all-backend` ed E2E dopo l'avviso di fine ✅ (slot pesante
+   2, 15:58); handoff FROZEN per N1a+N1b-1, e N1b-2 separato.
+   > **Prove dopo la finestra** (slot pesante 2, revisione combinata `06459c1b3` + E1a): `api sync` (il parametro
+   > `as_of` c'è nel client generato); `all-backend` 7/7 (comprende `api brokers`, `api account-deletion`, `api
+   > batch-split-promote`, `services broker`, `db post-migration-orphan-pairs` 47); `front check` dentro la `front build
+   > --debug` (0/0); E2E `front-broker detail` 37, `front-broker list` 9, `front-user account-deletion` 1. Dettagli
+   > nella sezione E1, passo 2.
+   > **Note implementazione** (11:00, tutto con `nice -n 15`, senza server): `services broker` 65/65 (con BR-U-080 dopo
+   > il riordino «prima i costi»: rosso visto alle 10:48), `services orphan-transfer-numbers` 19/19 (con il controllo
+   > dell'opzione a: un ADJUSTMENT +4 senza costo → lotti DEGRADED, Dashboard investito 0 / P&L 120 / MISSING_COST_BASIS),
+   > `services transaction` 66/66, `services roi-fifo-utils` 671/671, `services financial-math` 212/212,
+   > `db post-migration-orphan-pairs` 45/45 (rossi visti: 42 senza la registrazione, poi 2 per gli altri tipi con link
+   > pendente prima dell'estensione), `db post-migration` 37/37 (piano 34, invariato); `ruff`/`black` puliti sui 15
+   > file Python; `git diff --check` pulito; `i18n check` stretto pulito (4 392 chiavi); `check_source_paths` invariato
+   > (5 percorsi inesistenti, 8 occorrenze, nessuno mio). devWiki: `decisions/orphan-transfer-becomes-an-adjustment.md`,
+   > stato aggiornato (la correzione post-migrazione solo in prosa: il suo file entra con il commit a parte).
+   > **Dopo la finestra**, nell'ordine: `api sync` (atteso: solo il parametro `as_of`); `test db populate --force
+   > --clean` sulla mia data-dir; `api brokers` (BR-A-070…073 verdi, BR-A-032C/D), `api account-deletion` (ACCDEL-001),
+   > `api batch-split-promote` (il riordino di `apply_splits`); `all-backend`; `front check`; E2E `front-broker
+   > detail`, `front-broker list` (testo della conferma), `front-user account-deletion`; `mkdocs build` stretto e
+   > `check-links`. Prima di tutto questo, le prove di FE8a-3 già in fila.
+   > **Checkpoint** (coordinatore, 11:04): `6be11ecf3` fix(brokers): user-day summary, orphan pair halves (26 file);
+   > `0737055e0` docs(journal): W N1 checkpoint, W-B17..W-B20; `5e19c6018` fix(db): post-migration fix for orphan pair
+   > halves (4 file), **per ultimo**: senza l'ok sul 46 prima dell'ingresso il ramo entra fino a `0737055e0`. Risposte:
+   > doc di N1b-2 solo in inglese (`developer/architecture/database/index.md`, `admin/cli_tools.en.md`), in un commit
+   > sopra N1b-2, senza IT/FR/ES né stamp (il debito di `cli_tools` sta in A-10: W-B21 nella mia sezione, A-10 non è
+   > ancora nel mio ramo); W-B20 da decidere, non ora (poi, alle 11:19, cura decisa: vedi la correzione sopra);
+   > CHANGELOG all'ingresso, con le mie righe.
+5. ✅ Doc di N1b-2 (docs-writer, EN, 11:20), sopra `5e19c6018`; poi le prove dopo la finestra (punto 4).
+   > **Note implementazione**: `developer/architecture/database/index.md` (la seconda correzione: perché, cosa rileva,
+   > converte e lascia, i controlli, i log, il comando del test) e `admin/cli_tools.en.md` (tre punti per
+   > l'amministratore, e nel riquadro il dry run **prima del primo avvio della nuova versione**: dopo, la correzione è
+   > già passata). Solo EN, niente stamp (W-B21). Il docs-writer ha provato lo script su DB di prova in `/tmp`, poi
+   > cancellati. Corretta la docstring del contratto 8 del mio test (diceva ancora «RED until»).
+   > **⚠️ Fuori pista** (docs-writer): (1) una violazione di FK già nel DB fa fallire `autoincrement` e ferma il giro
+   > prima di `orphan_pair_halves`, a ogni avvio con una copia in più (quadro del piano 34, già prima di N1b-2): W-B22;
+   > (2) lo script a mano non configura il log, quindi niente righe INFO per transazione: W-B23. Tutte e due da
+   > assegnare: file del quadro.
+   > **Docs committate** (coordinatore, 11:19): `3f42dda9d` sopra `5e19c6018`. W-B22 e W-B23 **assegnate a me** come
+   > lotto **N1b-3**, sopra il commit delle docs (W-B22 è legata a N1b-2: un DB che chiede ancora `autoincrement` e ha
+   > un link pendente non arriva mai a `orphan_pair_halves`). Rossi prima; durante la finestra solo prove leggere.
+
+### N1b-3 — il quadro delle correzioni post-migrazione: violazioni di FK preesistenti (W-B22) e log dello script (W-B23) ✅ (2026-10-15)
+
+**Via del coordinatore** (15/10 ~11:25, base `eb3bb0529`): W-B22 e W-B23 assegnate a me, lotto sopra il commit delle docs
+di N1b-2 (W-B22 è legata a N1b-2: un DB che chiede ancora `autoincrement` e ha un link pendente non arriva mai a
+`orphan_pair_halves`). Rossi prima; durante la finestra solo prove leggere (`nice`, senza server).
+
+**Disegno** (verificato su `eb3bb0529`):
+
+- **W-B22**: `_apply_one` (`backend/app/db/post_migration/__init__.py`) aggiunge ai controlli della correzione
+  `_common_problems`, che vuole `PRAGMA foreign_key_check` **vuoto** sull'intero DB. Una violazione già presente fa
+  fallire qualunque correzione, a ogni avvio, con una copia `.bak` in più; e `_apply_pending` si ferma alla prima che
+  fallisce. Cura: come per i conteggi delle righe, si confronta con lo stato di prima: è un problema solo una violazione
+  **nuova** (l'insieme `(tabella, rowid, padre, fkid)` letto subito prima della correzione). Le violazioni già presenti
+  si dicono in un warning, una volta per giro, e restano. `autoincrement` ricopia le righe con gli stessi id e lo stesso
+  DDL più `AUTOINCREMENT`, quindi le tuple restano uguali; `orphan_pair_halves` poi toglie i link pendenti delle
+  transazioni.
+- **W-B23**: `python -m backend.app.db.post_migration` non configura il log: le righe INFO (una per transazione
+  cambiata, «applied and verified» con i secondi) si perdono, e il warning esce come testo su stderr (lastResort). Cura:
+  `configure_logging(LOG_LEVEL, enable_file_logging=False)` **solo nel blocco `if __name__ == "__main__"`**: la console
+  (stdout, righe JSON come il server) e nessuna scrittura nella data-dir, che i test del piano 34 proteggono con il
+  canarino; `main()` chiamato in-process (test, figlio della prova di concorrenza) non riconfigura nulla.
+
+**Passi**:
+
+1. ✅ Rossi (test-author, 11:32): W-B22 (DB 1.1 alla testa con un link pendente → oggi `autoincrement` `failed` e
+   `orphan_pair_halves` mai eseguita; una violazione in un'altra tabella → oggi `failed` a ogni avvio; guardia: una
+   correzione che **aggiunge** una violazione fallisce ancora); W-B23 (lo script stampa una riga per transazione e la
+   chiusura con i secondi; il dry run solo il warning; nessun file nella data-dir configurata).
+   > **Note implementazione**: `test_post_migration.py` (piano 34, **solo aggiunte**: 154 righe, nessuna asserzione
+   > toccata) contratto 14 — pin 1 `test_a_broken_link_already_there_no_longer_blocks_the_fixes` (rosso:
+   > `['failed', 'would_apply']`, errore `foreign_key_check: ('transactions', 12, 'transactions', 1)`, copia tenuta), pin 2
+   > `test_a_broken_link_in_another_table_is_left_as_it_is_and_reported` (rosso: una riga di `price_history` di un asset
+   > cancellato, `failed` due volte), pin 3 `test_a_fix_that_breaks_a_link_itself_still_fails` (guardia verde: un UPDATE
+   > che rompe un riferimento, non una DELETE, che fallirebbe già sui conteggi) — e contratto 15, la guardia `nessun
+   > file nella data-dir` (verde). `test_post_migration_orphan_pairs.py` contratto 9 — pin 4 (rosso: nessuna riga JSON
+   > per riga cambiata) e pin 5 (rosso: il warning del dry run solo come testo su stderr), con `LIBREFOLIO_LOG_LEVEL=INFO`
+   > forzato nel figlio. Prove: `db post-migration` 39/41, `db post-migration-orphan-pairs` 45/47, rossi solo i quattro.
+   > **⚠️ Fuori pista** (test-author): il nome della copia è al secondo, quindi due giri falliti nello stesso secondo
+   > lasciano una copia sola (la seconda sovrascrive la prima); fra secondi diversi le copie si accumulano. Solo nota.
+2. ✅ Cure (11:33), `/tmp/libreFolio_w_n1b3_fix.py --apply`.
+   > **Note implementazione**: `post_migration/__init__.py`: `_fk_violations()`; `_apply_one` legge le violazioni subito
+   > prima della correzione e `_common_problems` segnala solo quelle nuove (ordinate); `_apply_pending`, dopo la copia,
+   > logga una volta il WARNING «Foreign key violations already in the database, left as they are» (`count`, fino a 20
+   > righe). `__main__.py`: `configure_logging(get_settings().LOG_LEVEL, enable_file_logging=False)` nel solo blocco
+   > `if __name__ == "__main__"`. Prove (`nice -n 15`, senza server): `db post-migration` **41/41**,
+   > `db post-migration-orphan-pairs` **47/47**; `ruff`/`black` puliti.
+3. ✅ Doc EN (11:36), a mano (correzioni puntuali): `developer/architecture/database/index.md` (il passo 5 con la regola
+   delle violazioni nuove e il warning; lo script logga sulla console; tolta la frase delle righe INFO perse) e
+   `admin/cli_tools.en.md` (un punto per il warning delle violazioni già presenti; nel riquadro, lo script stampa il
+   log e non scrive file). Solo EN (W-B21). `mkdocs build` e `check-links` dopo la finestra.
+4. ✅ Handoff FROZEN (committati dal coordinatore: `0e4bd9790` fix(db), `05f2cb106` journal). `mkdocs build` stretto e
+   `check-links` sulla revisione combinata ✅ (16:05, sezione E1, passo 2).
+
+### E1 — eventi: decisioni 20–23 del developer (V-22, I-09, I-10 S4 e resto, I-11c, I-12) ⏳ (2026-10-15)
+
+**Via del coordinatore** (15/10 12:44, base `05f2cb106`), con le decisioni del developer (file delle decisioni e chat
+del 15/10 12:30–12:44):
+
+- **20**: «+ Nuovo evento» non sovrascrive mai. Se esiste un evento con la stessa data e lo stesso tipo, manuale o del
+  fornitore, arriva un errore: la finestra mostra l'evento esistente e offre «Modifica questo», «Usa questo» e
+  «Annulla». **Niente «Crea comunque»** (developer: due eventi dello stesso tipo nello stesso giorno non capitano).
+  L'editor degli eventi e il CSV continuano ad aggiornare per data e tipo, come oggi.
+- **21**: la cancellazione degli eventi indica l'asset.
+- **22**: tutto o niente, e se fallisce dice dove.
+- **23**: il tipo in maiuscolo all'ingresso e, se ancora non va, salvataggio rifiutato; quelli già salvati male si
+  cancellano tutti; per quelli collegati a transazioni la proposta è mia (per esempio scollegare e poi cancellare, con
+  il log dei due passi); **prima il conteggio sulla copia del DB**.
+- **24**: K-1 chiusa senza codice. **25**: resta così; una voce nel backlog per un modello futuro.
+- Dipendenza: B0 (`api/v1/backup.py` → pacchetto `api/v1/backup/`) non è ancora in `dev_release2`; E1 non tocca
+  l'export degli eventi. Fino all'avviso di fine della finestra della galleria (~13:00) solo prove leggere.
+
+**Disegno** (verificato su `05f2cb106`; appunti dell'analisi del mattino in `files/e1-prep.md` della sessione):
+
+- **E1a, backend** (moduli miei da X CP2b: `api/v1/assets/events.py`, `services/assets/event_store.py`,
+  `schemas/assets/events.py`):
+  - **D23 / I-09**: validatore `before` su `FAAssetEventPoint.type` (spazi tolti, maiuscolo; fuori da
+    `AssetEventType` → errore di validazione, 422). Il tipo resta `str` nell'OpenAPI. Vale per API, editor, CSV,
+    pianificazioni dei parametri e uscite dei plugin (tutti già in maiuscolo).
+  - **D22 / I-12b**: `bulk_upsert_events` in **una transazione**: gli elementi in ordine, con flush e nessun commit fino
+    alla fine; ogni errore → rollback, niente scritto. Un asset inesistente → `EVENT_ASSET_NOT_FOUND` invece di «0
+    salvati». Gli errori dicono **dove** (elemento, asset, evento: indice, data, tipo) in un dettaglio strutturato
+    `{error_code, message, params}`, come gli altri errori di `api/v1/assets/`. `_upsert_asset_events(..., commit=True)`:
+    il percorso manuale passa `False`; il refresh dei fornitori (`refresh.py:557`, X) resta a blocchi.
+  - **D21 / I-12a**: `DELETE /assets/events?asset_id=&ids=` con `asset_id` obbligatorio; gli id di un altro asset
+    tornano `not_found`.
+  - **D20 / V-22**: `FAEventUpsert.mode`: `"upsert"` (oggi, predefinito) o `"create"`. In `create` solo eventi senza
+    id; se un evento con la stessa data e lo stesso tipo esiste già (manuale o del fornitore) → 409 `EVENT_EXISTS` con
+    gli eventi esistenti (id, data, tipo, valore, note, `is_auto`, transazioni collegate) e nulla scritto.
+  - **I-10 S4**: `FAEventUpsertResult.event_ids`, gli id scritti in ordine (aggiunta).
+- **E1b, frontend**:
+  - `EventCreateMiniModal.svelte` manda `mode: "create"`. Su `EVENT_EXISTS` un componente nuovo,
+    `EventExistsPanel.svelte` (solo ruoli `lf-*`), mostra l'evento o gli eventi esistenti: «Usa questo» (lo collega),
+    «Modifica questo» (solo manuale: il form passa a quell'evento, con i suoi valori, e salva per id), «Annulla» (torna
+    al form). Un evento del fornitore non si modifica (`EVENT_NOT_EDITABLE`): una nota e solo «Usa questo». Il
+    collegamento usa l'id restituito (S4).
+  - `AssetDataEditorSection.svelte` (righe di X concesse): la cancellazione con `asset_id` (D21); prima le
+    cancellazioni, poi le modifiche (I-10: spostarsi sulla chiave di un evento appena cancellato); l'errore del server
+    tradotto con la riga (D22, D23); la valuta della riga, se c'è (I-11c: un evento in un'altra valuta viene rifiutato
+    con la sua riga, invece di essere rietichettato in silenzio).
+  - i18n nelle 4 lingue; doc utente.
+- **E1c, dati (D23)**: una correzione post-migrazione `event_types` (come N1b-2: il dry run fa da conteggio, ogni riga
+  il suo log) che porta in maiuscolo i tipi correggibili e cancella gli sconosciuti, scollegando prima le transazioni
+  (log dei due passi). Il quadro vuole i conteggi delle righe invariati: serve una sua estensione (delta dichiarati
+  dalla correzione, controllati esatti).
+
+**Risposte del coordinatore** (15/10 ~12:58), disegno approvato:
+
+1. **Niente conteggio sulla copia del developer**: i dati di produzione non si toccano, la copia in `/tmp` non c'è più,
+   e il developer ha già deciso («l'unica è cancellarli»). Sui DB veri il conteggio è il dry run della correzione.
+   Lo script di conteggio (provato solo su un DB sintetico) è stato cancellato senza lanciarlo su dati veri.
+2. **E1c = correzione post-migrazione `event_types`** al posto della 008: prima il maiuscolo, poi scollegare e
+   cancellare i tipi sconosciuti, ogni riga con il suo log; l'estensione del quadro (delta dichiarati dalla
+   correzione, controllati esatti) con un rosso prima; commit a parte. **E1 staccato il più possibile da N1b-2**: se il
+   developer dice no al 46, E1 deve poter entrare senza N1b-2; `post_migration/__init__.py` solo per l'estensione (e la
+   registrazione), dichiarato nell'handoff.
+3. **«Modifica questo»** come proposto: il form passa all'evento esistente con i suoi valori e salva per id; per un
+   evento del fornitore la nota e solo «Usa questo»; «Annulla» torna al form.
+4. Colori: il coordinatore chiede al coordinatore colori dei due file; intanto E1a.
+5. W-B24 nella mia sezione. 6. K-1 la chiude il coordinatore nel README del 38.
+- Nell'handoff: la voce «⚠️ Breaking changes» del CHANGELOG per il 21 (`asset_id` obbligatorio).
+
+**Passi**:
+
+1. ✅ Rossi E1a (test-author): servizio 13:38, API 14:44 (slot pesante 2).
+   > **Rossi del servizio visti** (13:38, `nice -n 10`, dopo la pausa delle dipendenze; `cryptography 50.0.2` e
+   > `pycparser 3.11` nell'ambiente condiviso, `dc9a5d232` su `dev_release2`): nuovo
+   > `test_services/test_asset_event_store.py` con l'azione `services asset-event-store` (`write-global`): **40 test, 34
+   > rossi, 6 guardie verdi** — tipi non normalizzati (`'dividend' == 'DIVIDEND'`, `DID NOT RAISE`, riga grezza
+   > `'dividend'`), elementi già salvati prima del rifiuto, asset mancante «0 salvati», `details == {}`, `mode`/`event_ids`
+   > campi sconosciuti, `delete_events_bulk()` senza `asset_id`. `services asset-source-guards` 29/29. `ruff`/`black`
+   > puliti. Le due azioni dei servizi ricreano vuoto il DB della corsia (comportamento normale).
+   > `test_api/test_assets_events.py`: 37 test, 18 rossi attesi (10 nuovi, `test_upsert_nonexistent_asset` e
+   > `_assert_rejected` ritarati sul contratto nuovo, i 5 test di cancellazione con `asset_id`). Nessun altro test del
+   > backend chiama `DELETE /assets/events`; gli E2E che lo fanno: `tx-bulk-promote-cost-basis.spec.ts:353`,
+   > `asset-event-delete.spec.ts:176,204,252`, `asset-data-editor.spec.ts:472,613`.
+   > **⚠️ Fuori pista** (13:41–13:46): `db populate --force --clean` (`nice -n 15`) verde; poi `api assets-events`
+   > (via del coordinatore, «con le due build dentro», `nice -n 15`): **il backend condiviso non ha risposto in 300 s**
+   > — la build del frontend (vecchia: 08:30) non è finita dentro `LIBREFOLIO_TEST_STARTUP_TIMEOUT`, con il carico della
+   > macchina a 77. Nessun test eseguito, nulla rimasto acceso, porta libera. Riferito al coordinatore con due strade:
+   > ripetere con `LIBREFOLIO_TEST_STARTUP_TIMEOUT=1200` a carico basso, o i rossi API nello slot dopo il merge.
+   > **Preparato, non applicato** (13:05–13:20): `/tmp/libreFolio_w_e1a_fix.py` (dry run: ancore trovate, i 3 file
+   > compilano) e `/tmp/libreFolio_w_e1c_fix.py` (dry run ok). E1a: `_upsert_asset_events` delega a
+   > `_write_asset_events`, che dà gli id scritti nell'ordine (letti dopo il flush, prima di un commit);
+   > `bulk_upsert_events` = `_write_manual_item` per elemento + un commit, rollback su qualunque errore, e i dettagli
+   > completati con `asset_id` e `item_index`; `_reject_currency_mismatches`, `_reject_existing_events` (409
+   > `EVENT_EXISTS` con gli esistenti e i collegamenti); `delete_events_bulk(asset_id, …)`; il validatore del tipo; il
+   > dettaglio HTTP `{error_code, message, params}`. E1c: `PostMigrationFix.row_count_changes()` in `base.py`; in
+   > `__init__.py` `_expected_counts()`, `_common_problems(conn, counts_expected, …)` con il messaggio «row counts not
+   > as expected: tabella (expected N, found M)», la registrazione; `post_migration/event_types.py` (`EventTypesFix`).
+   > I ruoli dei colori per `EventExistsPanel`: `tokens.css` e `app.css` uguali fra HEAD e `dev_release2`.
+   > **Via libera dei colori** (coordinatore colori, 13:00): nessun annuncio aperto sui due file; T li converte più
+   > avanti (ondata W4). Vincoli: in `AssetDataEditorSection.svelte` non spostare né togliere il letterale `#a855f7`
+   > della linea d'anteprima (eccezione R-6, `frontend/scripts/theme/theme-roles.mjs:73`); m1 17 lì e 42 in
+   > `EventCreateMiniModal`: nessuna classe nuova; `EventExistsPanel.svelte` solo con i ruoli già in `tokens.css`.
+   > **E1a porta anche il frontend che la rottura del 21 richiede**: la riga della cancellazione nell'editor
+   > (`queries: {asset_id: assetId, ids}`) e gli E2E che chiamano `DELETE /assets/events` senza `asset_id`
+   > (`tx-bulk-promote-cost-basis.spec.ts:353`, `asset-event-delete.spec.ts:204`, `asset-data-editor.spec.ts`): se E1a
+   > entrasse da solo, l'editor non cancellerebbe più (422).
+   > **Pausa delle dipendenze** (13:20, `cryptography` nell'ambiente condiviso): nessun comando Python; nella mia corsia
+   > non girava nulla («fermo» al coordinatore). ⚠️ Mia svista: un `python --version` (nessun import, nulla scritto).
+   > Intanto, solo codice: le bozze di E1b in `/tmp/libreFolio_w_e1b/` (`EventExistsPanel.svelte`, solo ruoli;
+   > `eventSaveError.ts`, puro) e `/tmp/libreFolio_w_e1b_fix.py` (mini-modale: `mode`, `event_ids`, pannello, «Modifica
+   > questo» con i valori dell'evento e i decimali conservati sul blur; editor: prima le cancellazioni, `asset_id`, la
+   > valuta della riga importata, l'errore tradotto con la riga), e le chiavi i18n in `/tmp/libreFolio_w_e1b_i18n.sh`.
+   > La riga registrata del toast della mini-modale (`moneyRenderSites.test.ts`) resta identica; il pannello mostra
+   > importo e valuta in due espressioni di markup (asset events = pubblici).
+2. ✅ Cura E1a; `api sync` (slot pesante 2, 14:41–14:51).
+   > **Checkpoint e merge** (coordinatore, 14:38–14:40): `c658119af` (rossi E1a), `313dde70e` (E1c), `87a034a89`
+   > (journal); merge di `dev_release2` a `ec0dc7ebd` (H CP6, X FE5b, `cryptography`, la 1.2.1) committato come
+   > `06459c1b3`. Conflitti risolti da me e messi in stage: `themeRoles.baseline.tsv` (`--resolve`; poi `--check` rosso
+   > sul caso R-8, `themeStore.ts` `#166534`; `--accept` con la ragione D3 autorizzata dal coordinatore colori; poi
+   > pulito, `~accept` una sola volta; unione esatta dei due lati) e il backlog (la nota di chiusura di W-B15 più le mie
+   > W-B17…W-B24). Uniti da soli e controllati: `api/v1/brokers.py` (i tipi dei report in linea; le righe `as_of`
+   > lontane), `.translate-hashes.json` (il JSON si legge, nessuna chiave cambiata dai due lati, lo stamp di N1 c'è),
+   > `_backend_services.py` (compila; `orphan-transfer-numbers`, `asset-event-store` e la `fx-catalog` di X).
+   > **Slot pesante 2** (`nice -n 10`, una cosa alla volta; `LIBREFOLIO_TEST_STARTUP_TIMEOUT=1200` sui comandi con il
+   > server): `db populate --force --clean` verde; **`api assets-events` sui rossi: 18 rossi, 19 verdi** (14:44, la build
+   > dentro l'avvio), ognuno per la ragione voluta (dettaglio stringa, 200 al posto di 400/422, il 500 di I-09 alla
+   > rilettura, `mode` campo sconosciuto, niente `event_ids`, cancellazione non limitata all'asset). **Cura** (14:44,
+   > `/tmp/libreFolio_w_e1a_fix.py` e `/tmp/libreFolio_w_e1a_fe.py`, la riga della cancellazione nell'editor): `ruff`
+   > (un C416 corretto: `dict(...)`), `black` puliti; `services asset-event-store` **40/40**, `services
+   > asset-source-guards` **29/29**; `api sync`: l'OpenAPI cambia solo nelle descrizioni del tipo, `FAEventUpsert.mode`,
+   > `FAEventUpsertResult.event_ids` e `asset_id` **obbligatorio** sulla `DELETE` (la sola rottura); `front build
+   > --debug` verde, **svelte-check 0 errori e 0 avvisi** (verifica anche gli import di tipo di `WizardFooter` di
+   > FE8a-3); `api assets-events` **37/37**. In corso: `all-backend` (14:51); gli E2E che chiamano la `DELETE` degli
+   > eventi senza `asset_id` li aggiusta il test-author (solo modifiche).
+   > **E2E per la rottura del 21** (test-author, 14:55, solo modifiche; poi rivisti da me): `asset_id` aggiunto alle tre
+   > chiamate `DELETE` dei test — `tx-bulk-promote-cost-basis.spec.ts` (gli eventi posseduti ora con il loro asset,
+   > `events: [{id, assetId}]`; l'asserzione `deleted` uguale), le pulizie di `asset-event-delete.spec.ts:203–205` e di
+   > `asset-data-editor.spec.ts:472`; due commenti di `asset-data-editor.spec.ts` (S1, :584–587 e :608–610) riallineati.
+   > Invariati, perché la `DELETE` dell'editor la osservano soltanto: `asset-event-delete.spec.ts:176,253` (il predicato
+   > sull'URL combacia anche con `?asset_id=…&ids=…`; lo `status === 200` ora prende anche un editor che dimenticasse
+   > `asset_id`) e `asset-data-editor.spec.ts:614`. Nessun'altra `DELETE` degli eventi nei test del frontend; nessun test
+   > fissa il `detail` stringa dell'upsert (`portfolioMutation.test.ts:16` classifica solo il percorso). `prettier
+   > --check` pulito sui file toccati.
+   > **⚠️ Fuori pista — la mini-modale con il `detail` oggetto** (segnalato dal test-author): `EventCreateMiniModal.svelte`
+   > mostrava `err.response.data.detail` così com'era, e dopo E1a un rifiuto avrebbe scritto «[object Object]» nel
+   > banner. Correzione ponte, accoppiata alla mia rottura: il banner legge `detail.message` (o la stringa, se il
+   > `detail` è ancora una stringa), cioè lo stesso testo inglese di prima senza il codice davanti. E1b la sostituisce
+   > con l'errore tradotto: l'ancora di `/tmp/libreFolio_w_e1b_fix.py` riallineata, dry run ok. L'editor non cambia: legge
+   > solo `e.message` di Axios, come prima.
+   > **Prove dello slot 2, revisione combinata** (HEAD `06459c1b3` + E1a e i ritocchi sopra, `nice -n 10`, una alla volta):
+   > `all-backend` **7/7 gruppi verdi** (14:51–15:27; 14 609 passati, 28 saltati, 0 rossi: servizi 7 627, utilità 2 369,
+   > schemi 1 705 con 6 avvisi preesistenti di `test_pac_planner_schemas.py`, API 1 120, db 16/16 compresi
+   > `post-migration-event-types`, `post-migration` 41 e `post-migration-orphan-pairs` 47); Vitest `front-utility
+   > core-unit` **4 537/4 537** (144 file, con i cancelli dei colori e quello del denaro), `component-unit` **3 240/3 240**
+   > (con `ImportWizardModal.test.ts` di FE8a-3), `front-transaction tx-unit` **903/903**; `test db populate --force
+   > --clean`; `front build --debug` (dopo il ritocco della mini-modale) con **svelte-check 0 errori e 0 avvisi**;
+   > `front-transaction all --workers 4` **337/337** su desktop (43 spec, compresi FE8a, `tx-event-picker` e
+   > `tx-bulk-promote-cost-basis` con `asset_id`) e 34 su mobile (32 saltati per disegno), 15:36–15:51.
+   > E2E con `--workers 2` (15:51–15:58): `front-asset asset-data-editor` **26**, `front-asset asset-event-delete` **4**,
+   > `front-broker detail` **37**, `front-broker list` **9**, `front-user account-deletion` **1**, `front-utility
+   > onboarding-tour` **10**; nessun rosso né flaky. Porta 6184 libera; slot pesante restituito al coordinatore (15:58).
+   > **Doc di E1a** (docs-writer, solo EN, pagine sviluppatore senza traduzioni): `developer/backend/assets/events.md`
+   > (§ Manual Events: tutto o niente, `mode`, `event_ids`, i rifiuti con stato e `params`, il tipo, la `DELETE` con
+   > `asset_id`), `developer/backend/assets/architecture.md` (tabella degli endpoint), `developer/frontend/components/
+   > core-ui/data-editor.md` (la `DELETE`). Le pagine utente aspettano E1b.
+   > **Fatto** (16:00–16:05): la doc come sopra (rivista da me; il docs-writer non ha lanciato nulla). Dai suoi reperti:
+   > tre descrizioni dello schema che finiscono nell'OpenAPI erano rimaste al contratto vecchio — `FAEventUpsertPoint`
+   > (docstring e `id`: senza id si confronta su data e tipo solo in un elemento `upsert`; in un `create` si aggiunge),
+   > `FAEventDeleteItemResult` (`not_found`: anche un evento di un altro asset, che resta) e
+   > `FAEventBulkDeleteResponse.not_found_count` — corrette; `ruff`/`black` puliti; `api sync` di nuovo: nel client
+   > generato cambiano solo quelle tre descrizioni. `mkdocs build` stretto verde, nessun avviso (47 s; 3 028 URL
+   > relativi risolti), `mkdocs check-links` 95 validi. `git diff --check` pulito; porta 6184 libera.
+   > Restano fuori, annotati dal docs-writer: «+ Nuovo evento» non usa ancora `create` (E1b); il caso limite di un
+   > `create` rifiutato da un evento scritto da un elemento precedente della stessa richiesta (gli `existing` mostrano
+   > un id che il rollback toglie: solo detto nella pagina); `assets_pricing.md:119` incompleta (non nomina `create`) e
+   > la frase vecchia «sync replaces» di `architecture.md`, non mia: nella doc di E1b.
+3. ⏳ Rossi e cura E1b (dopo la risposta sui colori; Vitest ed E2E dopo la finestra).
+   > **Rossi scritti in staging, non eseguiti** (test-author, ~16:00; il worktree resta fermo per l'ingresso di E1a):
+   > `/tmp/libreFolio_w_e1b_tests/` con `frontend/e2e/transactions/tx-event-create-exists.spec.ts` (8 test, la
+   > mini-modale), `frontend/e2e/assets/asset-event-editor-save.spec.ts` (3: prima le cancellazioni, la valuta della
+   > riga, il rifiuto con il toast — quest'ultimo guardia verde oggi), `eventSaveError.test.ts` (42, Vitest node),
+   > `EventExistsPanel.test.ts` (7, jsdom), e le copie con le registrazioni (solo aggiunte) di `_frontend_transaction.py`
+   > (`tx-event-create-exists`), `_frontend_asset.py` (`asset-event-editor-save`), `_frontend_utility.py` (i due Vitest
+   > in `core-unit` e `component-unit`). Un evento del fornitore su un asset proprio, senza stato condiviso:
+   > `scheduled_investment` con un DIVIDEND pianificato e `POST /assets/prices/sync` (calcolato in locale).
+   > **Reperti da sistemare nella cura**: (1) bozza: «Modifica questo» porta `1.500000` a `1.5`, non `1.50` — usare la
+   > stessa funzione del pannello (`amountText`) anche nel form; (2) I-10 fissato con un cambio di tipo, perché l'editor
+   > non cambia la data di una riga salvata (`DataEditor.svelte:163-179`); (3) **prima le cancellazioni** = un salvataggio
+   > che cancella e ha un upsert rifiutato lascia le cancellazioni fatte (due richieste): da dichiarare al coordinatore
+   > (il 22 parla della richiesta bulk), lo stato resta coerente col DB; (4) codici sconosciuti: frase generica col
+   > messaggio inglese; (5) il picker tiene in cache la lista per asset/data/intervallo: dopo «Modifica questo» che
+   > cambia note o importo potrebbe mostrare i valori vecchi — da verificare in `AssetEventPicker.svelte`
+   > (`fetchEvents`, :115); (6) l'editor E2E semina due chiusure per asset (senza prezzi il pulsante non ha test id);
+   > (7) le chiavi i18n nuove (`/tmp/libreFolio_w_e1b_i18n.sh`).
+   > **Decisione sul salvataggio dell'editor** (coordinatore, 16:20, sulla mia domanda): **no** alle due richieste. La
+   > decisione 22 del developer è «tutto o niente e se fallisce ti dice dove», e cancellazioni fatte con un upsert
+   > rifiutato la rompono per l'utente. L'API degli eventi cambia già nella 1.3 (`asset_id`), quindi **`delete_ids` nella
+   > richiesta di upsert**: prima le cancellazioni, poi gli upsert, in una sola transazione con un solo commit (I-10
+   > continua a funzionare, il salvataggio è atomico). La `DELETE` separata resta per l'eliminazione semplice. In E1b,
+   > con i rossi prima: da decidere nel disegno come si dice un evento cancellato in uso (oggi `in_use` per riga, non un
+   > errore) dentro un salvataggio tutto o niente.
+4. ✅ E1c (14:35): rossi visti → cura → verdi; commit a parte.
+   > **Rossi scritti, non eseguiti** (test-author, 14:10, carico alto): nuovo
+   > `test_db/test_post_migration_event_types.py` (20 funzioni, 35 casi: 33 rossi attesi, 2 guardie), nessun import dai
+   > test di N1b-2, `FIXES` controllato solo per `fix_id`; azione `db post-migration-event-types` in `_backend_db.py`,
+   > su righe proprie lontane da quelle di N1b-2 (anche in `db_order`, come prima riga). Più un perno chiesto dopo:
+   > un `row_count_changes` che solleva → `failed`, non un'eccezione.
+   > **Correzioni alla cura** dalla revisione del test-author: `FIXES` riconosciuto per forma (con o senza N1b-2);
+   > `row_count_changes()` chiesto dentro il `try` di `_apply_one`; la docstring del modulo `__init__.py` (punto 4: era
+   > ferma a «foreign_key_check vuoto», già superata da N1b-3); docstring in inglese; raggruppamento in un passaggio.
+   > Resta, dichiarato: l'import di `event_types` confina con quello di N1b-2 (conflitto banale se N1b-2 non entra); la
+   > parte della cura su `_common_problems` sta sulle righe di N1b-3.
+   > **Rossi visti** (14:33, `nice -n 10`, un file, senza server): `db post-migration-event-types` **34 rossi, 2 guardie
+   > verdi**, ognuno sull'asserzione prevista (A.1 `row counts changed`; A.2 solo sulle parole; A.4 nessun `boom`;
+   > registrazione assente; `event_types` senza esito). **Cura** (14:34, `/tmp/libreFolio_w_e1c_fix.py --apply`):
+   > `base.py` `row_count_changes()`; `__init__.py` `_expected_counts()`, i conteggi attesi chiesti dentro il `try`, il
+   > messaggio «row counts not as expected: tabella (expected N, found M)», la docstring del modulo, la registrazione;
+   > nuovo `event_types.py`. **Verdi**: `db post-migration-event-types` **36/36**; regressione `db post-migration` 41/41,
+   > `db post-migration-orphan-pairs` 47/47. Doc (solo EN, `/tmp/libreFolio_w_e1c_docs.py --apply`):
+   > `developer/architecture/database/index.md` (passo 5, paragrafo di `event_types`) e `admin/cli_tools.en.md` (due
+   > punti per l'amministratore); debito di traduzione in W-B21. `ruff`/`black` puliti.
+   > **Via (b) per i rossi API di E1a** (14:29, carico 32,8 alla scadenza): nello slot pesante dopo il merge. La cura E1a
+   > resta in `/tmp` fino ad allora; nel worktree ci sono i soli rossi di E1a.
+5. ⏳ Doc; handoff FROZEN (E1a+E1b; E1c a parte).
+   > **E1a entra da solo** (coordinatore, 16:00, dopo il punto 46): doc sviluppatore di E1a ✅ (passo 2), handoff
+   > FROZEN d'ingresso con il CHANGELOG di FE8a, N1, N1b-2/3, E1a ed E1c (16:10). Le pagine utente, la devWiki e il resto
+   > con E1b.
+   > **Committati** (coordinatore): `a2fb6936f` `fix(events)!: all-or-nothing upsert, scoped delete` (con `BREAKING
+   > CHANGE`) e `d7c7dcab7` (journal); il cambio di `detail` in oggetto va sotto ⚠️ Breaking changes, come proposto; il
+   > CHANGELOG lo scrive il coordinatore. **Secondo merge di base** (`MERGE_HEAD` `243c8c9ff`: E1, Y1, A5, H C-96 e G-10,
+   > Z1, G-9, colori), committato come `15a8355cc`. Conflitti risolti da me e messi in stage: `themeRoles.baseline.tsv`
+   > (`--resolve`, `--check` pulito senza ripetere l'`--accept` D3; vince il lato più stretto: 222, 88, 35 per i miei
+   > split, GrowthChart 86 uguale) e `_backend_db.py` (in `db_order` sia `post-migration-orphan-pairs` sia
+   > `migration-006`; 18 azioni senza doppioni). Rivisti gli uniti da git sui due lati: `test_post_migration.py`,
+   > `_backend_services.py`, `cli_tools.en.md`, `database/index.md`, `.translate-hashes.json`, il backlog (`T-B4` doppio
+   > già sui due lati, non mio: lo sistema il coordinatore).
+   > **Prove sulla revisione combinata `15a8355cc`** (16:12–16:18, `nice -n 10`, una alla volta, lista del coordinatore):
+   > `api sync` (393 righe del client cambiate, tutte di account e accessi arrivati col merge: utenti, inviti, token;
+   > nessuna mia); `front check` svelte-check **0/0**; `theme-roles --check` pulito; `db post-migration` **41**,
+   > `post-migration-orphan-pairs` **47**, `post-migration-event-types` **36**; `db populate --force --clean`; `api brokers`
+   > **34**, `api account-deletion` **6**, `api assets-events` **37**; `services broker` **65**, `services config-package`
+   > **642**. Porta 6184 libera. Pronto all'ingresso.
+
+### N2 — il costo obbligatorio anche nell'API: TRANSFER ricevuto e ADJUSTMENT in entrata ⏳ (2026-10-15)
+
+**Richiesta** (coordinatore, 15/10 ~16:30, dopo il punto 46). Il developer, in chat alle 16:12, alla lettera: «sarei
+daccordo a metterci una protezione in caso di chiamate dirette dalle api, ma non certo metterci a fare bonifiche o
+altro». Lotto piccolo dopo l'ingresso (o dentro E1b):
+
+- il backend applica la regola dei metadati dei tipi, che oggi controlla solo il frontend: `cost_basis_pair`
+  `required_qty_pos` per il lato che riceve un `TRANSFER`, `cost_basis_mode` `required_qty_pos` per un `ADJUSTMENT` con
+  quantità > 0 (`schemas/transactions/type_metadata.py:286`, `:331`);
+- senza modalità di costo la richiesta è rifiutata (422) con un codice chiaro, e il messaggio dice quale riga;
+- la regola si legge dai metadati, non si riscrive a mano;
+- prima i rossi; i test e le fixture che creano queste righe dall'API senza costo li sistema il test-author;
+- **nessuna bonifica**: le righe già salvate restano come sono (`orphan_pair_halves` non cambia);
+- una riga del CHANGELOG sotto 🔄 Changed: l'API rifiuta un trasferimento ricevuto o una rettifica in entrata senza
+  modalità di costo, come già fa l'app.
+
+**Prima lettura** (da completare nell'analisi): il posto naturale è `validate_transaction_business_rules`
+(`schemas/transactions/transactions.py:83`), la funzione pura delle regole 5–12 condivisa da creazione
+(`TXCreateItem`) e modifica (il ciclo di `TransactionService`); la regola 12 controlla già dove `cost_basis_mode` è
+ammesso. «Un costo» = `cost_basis_override` presente oppure `cost_basis_mode` `auto`/`auto-detail`; oggi la funzione
+non riceve `cost_basis_override`. **Da decidere nell'analisi**: la modifica di una riga già salvata senza costo (dati
+vecchi, o una metà convertita da `orphan_pair_halves`): rifiutarla finché non ha un costo bloccherebbe anche la
+modifica delle sole note via API; il disegno proposto la applica alla creazione e alla modifica che **tocca** tipo,
+quantità o costo, e lo verifico contro quello che fanno il modulo e il Bulk.
+
+**Passi**: 1. ⏳ analisi e disegno al coordinatore; 2. rossi (test-author); 3. cura; 4. prove; 5. doc e CHANGELOG.

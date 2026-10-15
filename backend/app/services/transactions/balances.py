@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Broker, Transaction
 from backend.app.schemas.transactions.batch import TXValidationCode
+from backend.app.services.financial_math.native_cash import cash_movement_from_transaction, native_balances
 from backend.app.services.transactions.transaction_batch_context import BalanceValidationError
 
 
@@ -150,14 +151,23 @@ class TransactionBalancesMixin:
     # BALANCE QUERIES (for BRSummary)
     # =========================================================================
 
-    async def get_cash_balances(self, broker_id: int) -> Dict[str, Decimal]:
-        """Get current cash balances for a broker (currency → balance)."""
-        stmt = select(Transaction.currency, func.sum(Transaction.amount)).where(Transaction.broker_id == broker_id).where(Transaction.currency.isnot(None)).group_by(Transaction.currency)
-        result = await self.session.execute(stmt)
-        return {currency: amount for currency, amount in result.all() if currency}
+    async def get_cash_balances(self, broker_id: int, as_of: Optional[date_type] = None) -> Dict[str, Decimal]:
+        """A broker's cash on ``as_of`` (every transaction when None): currency → balance.
 
-    async def get_asset_holdings(self, broker_id: int) -> Dict[int, Decimal]:
-        """Get current asset holdings for a broker (asset_id → quantity)."""
-        stmt = select(Transaction.asset_id, func.sum(Transaction.quantity)).where(Transaction.broker_id == broker_id).where(Transaction.asset_id.isnot(None)).group_by(Transaction.asset_id)
-        result = await self.session.execute(stmt)
+        Computed by the layer (``financial_math.native_cash``), the one home of cash per broker and
+        currency; a currency whose movements cancel out keeps its line at zero.
+        """
+        stmt = select(Transaction).where(Transaction.broker_id == broker_id, Transaction.currency.isnot(None), Transaction.amount.isnot(None))
+        if as_of is not None:
+            stmt = stmt.where(Transaction.date <= as_of)
+        transactions = (await self.session.execute(stmt)).scalars().all()
+        movements = [movement for movement in (cash_movement_from_transaction(tx) for tx in transactions) if movement is not None]
+        return native_balances(movements, as_of).get(broker_id, {})
+
+    async def get_asset_holdings(self, broker_id: int, as_of: Optional[date_type] = None) -> Dict[int, Decimal]:
+        """A broker's holdings on ``as_of`` (every transaction when None): asset_id → quantity."""
+        stmt = select(Transaction.asset_id, func.sum(Transaction.quantity)).where(Transaction.broker_id == broker_id).where(Transaction.asset_id.isnot(None))
+        if as_of is not None:
+            stmt = stmt.where(Transaction.date <= as_of)
+        result = await self.session.execute(stmt.group_by(Transaction.asset_id))
         return {asset_id: qty for asset_id, qty in result.all() if asset_id}
