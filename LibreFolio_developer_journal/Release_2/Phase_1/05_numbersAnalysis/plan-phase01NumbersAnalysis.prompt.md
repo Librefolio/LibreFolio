@@ -442,7 +442,7 @@ niente `./dev.py` nudo, niente `server --force`, niente altri checkout).
   catalogo dei Tool sotto carico supera i 2 s di `ToolRoute.ingress_timeout_ms`, `schemas/tools.py:83`), dopo CP-1,
   a priorità bassa: la riga va nella sezione J al prossimo checkpoint.
 
-### CP-1 — il PAC in pacchetti 🧊 (2026-10-14)
+### CP-1 — il PAC in pacchetti ✅ (2026-10-14 → 15) — in `dev_release2` (`e1fbc801f`, record `0bf727b1e`)
 
 Via del coordinatore dopo il commit di J-0 (`faa8ce01b`): CP-1 come proposto. Le patch vanno sul modulo dove la chiamata
 legge il nome (C4), con il controllo AST; i nomi letti fra moduli diventano pubblici; i due cicli dell'evaluator si
@@ -814,7 +814,7 @@ automatica (backlog e `_backend_services.py`), nessun conflitto. J valida la rev
 >
 > **⚠️ Fuori pista**: nessuno.
 
-#### Aggiornamento di base 4 — W K1, H `web_link_finder`, `dev_release2` `d9b853395` 🧊 (2026-10-15) — FROZEN, validato; ingresso di CP-1 al coordinatore
+#### Aggiornamento di base 4 — W K1, H `web_link_finder`, `dev_release2` `d9b853395` ✅ (2026-10-15) — merge `b8d604086`, nota `e1fbc801f`
 
 Merge del coordinatore `b8d604086` (genitori `d3c06d2d0` e `d9b853395`): W K1 (`d915c869f`, frontend dell'editor dei
 dati e una riga di `_frontend_utility.py`) e il lotto `web_link_finder` di H (`9dda5ccd9`: le letture d'ambiente in
@@ -848,3 +848,201 @@ chiede un controllo leggero, senza `all-backend`.
 > - `dev.py lint` pulito; patch del PAC 41, nessuna muta; equivalenza AST del taglio intatta; porta 6185 libera.
 >
 > **⚠️ Fuori pista**: nessuno.
+
+### C-93 — il thread di aiosqlite dopo la chiusura del loop ✅ (2026-10-15) — `12bcf7e99`, journal `f29e82af5`
+
+Via del coordinatore (15/10, ~04:30, dopo l'ingresso di CP-1), a bassa priorità finché il developer non risponde su D-J1,
+D-J2, D-J3, D-J6 e D-J15: C-93 con la skill `test-triage` (prima la prova che lo riproduce sotto carico, poi la causa;
+se resta un avviso raro senza effetti, documentarlo e chiuderlo), poi G-8. Un checkpoint FROZEN per voce. Dalle ~08:45,
+all'avviso del coordinatore, niente `all-backend` né build pesanti.
+
+#### Triage ✅ (2026-10-15)
+
+> **Note implementazione** (strumenti e log fuori dal repository, in `/tmp/libreFolio_j/c93/`):
+> - **Prove (§0)**: la riga C-93 e il piano di W (§«Revisione combinata `123c21efc`», passo 6): `all-backend` con
+>   **`--workers 2`**, gruppo parallelo, worker 1; due avvisi nello stesso test. Le mie `all-backend` giravano col
+>   predefinito `--workers 1` (`_cli.py:438`, seriale: nessun gruppo parallelo), ed ecco perché non lo vedevo.
+> - **§4, il sintomo più forte non è la causa**: il test accusato non apre connessioni. Una sonda passiva di pytest
+>   (`aiosqlite_probe.py`, caricata con `-p`, nessun cambio al repository) registra per ogni `aiosqlite.Connection` il
+>   test che la crea, il suo thread e chi la ferma. Sul file accusato da solo: **0 connessioni** (126 test). Le sue
+>   sessioni (`_make_async_session()`, «tableless») non eseguono mai nulla, come dice la docstring. pytest attribuisce
+>   un'eccezione di thread al test in corso quando il thread muore, non a chi ha creato la connessione.
+> - **Il meccanismo, letto nella libreria** (aiosqlite 0.22.1, SQLAlchemy 2.0.52, pytest-asyncio 1.4.0, Python
+>   3.13.16): una connessione aiosqlite ancora aperta raccolta dal GC passa da `Connection.__del__` (o dal `terminate`
+>   del pool di SQLAlchemy, `has_terminate = True`) a `Connection.stop()`, che crea il suo future con
+>   `asyncio.get_event_loop()`. Se il loop corrente del thread in cui gira il GC è un loop chiuso, il future si lega a
+>   quello; il thread della connessione chiude sqlite e chiama `call_soon_threadsafe` sul loop chiuso
+>   (`aiosqlite/core.py:66`), poi di nuovo per l'eccezione (`:75`), e muore con «Event loop is closed».
+> - **Chi lascia aperte le connessioni**: `services all --workers 2` con la sonda (04:35–04:40, 3 processi): l'unico
+>   file che lascia connessioni aperte dopo i suoi test è `test_ai_export_components_broker_adequacy.py`, i tre test di
+>   `TestCostEfficiencyPeriodActivityLoader` (righe ~616-673). `_make_real_db_session()` (`:80-85`) crea un motore
+>   in memoria con lo schema; i test chiudono la sessione (alla fine, fuori da un `finally`) ma nessuno chiama
+>   `engine.dispose()`: il pool tiene aperta la sua connessione, col suo thread, finché il GC non la trova. Nel giro
+>   il GC le ha fermate nel setup di un test asincrono, col loop in esecuzione e aperto: innocuo, nessun avviso.
+> - **Riproduzione deterministica** (esperimenti in `/tmp/libreFolio_j/c93/test_c93_gc_probe.py`, fuori dal
+>   repository): i tre test che perdono la connessione, poi un `gc.collect()`:
+>   - nel thread principale fra un test e l'altro o in un test sincrono: «nessun loop corrente» (pytest-asyncio chiude
+>     ogni loop con `asyncio.Runner`, che lo toglie prima di chiuderlo), nessun errore;
+>   - dentro un loop in esecuzione: innocuo;
+>   - in un thread dell'executor dopo un loop privato chiuso: loop corrente chiuso, e **2
+>     `PytestUnhandledThreadExceptionWarning`** «Exception in thread Thread-N (_connection_worker_thread)», «Event
+>     loop is closed», `core.py:66` poi `:75`, attribuiti al test successivo, estraneo. Stessa forma e stesso numero di
+>     quelli di W.
+> - **Chi lascia un loop chiuso come corrente**: nel backend un solo punto, `services/assets/core.py:114-119`
+>   (`_sync_runner`, dentro `asyncio.to_thread`): crea un loop, lo imposta, lo chiude e non lo toglie. Nel thread
+>   principale pytest-asyncio può fare lo stesso quando una fixture di portata più larga ripristina, in teardown, un
+>   loop di funzione nel frattempo chiuso (`_temporary_event_loop`, `pytest_asyncio/plugin.py:791-803`).
+> - **Verdetto (§8): `shared state`**. Un test (il nostro, dell'AI Export) lascia una risorsa viva nel processo
+>   condiviso; il vicino che la incontra nel momento sbagliato riceve l'avviso. «Sotto carico» non è la causa: conta
+>   quale test condivide il processo e dove scatta il GC, e `--workers 2` cambia entrambi.
+> - **Inventario completo**: `all-backend --workers 2` con la sonda (04:45–05:04, carico della macchina 15–22 su 10
+>   core, 29 processi pytest): in tutta la suite del backend **solo 7 test lasciano connessioni aperte**, tutti
+>   dell'AI Export: i 3 di `broker_adequacy` e 4 di
+>   `test_ai_export_components_portfolio_broker_integration.py` (`TestAnalysisComposition` ×2,
+>   `TestOptionalDatasetSemantics` ×2). L'avviso non si è ripresentato né qui né nel giro dei soli `services`: la perdita
+>   c'è ogni volta, il GC nel contesto sbagliato no.
+> - **Un difetto in più nei 4 test di composizione**: la loro sessione «tableless» (la docstring dice che non vi si
+>   esegue nulla) riceve SQL vero, che fallisce con `OperationalError: no such table` (sonda di SQLAlchemy sugli eventi
+>   `before_cursor_execute`/`handle_error`). I componenti trasformano l'errore in un payload «non disponibile» e i test
+>   passano su quel percorso di guasto accidentale, non su quello che dichiarano. È anche l'esecuzione di quel SQL ad
+>   aprire la connessione che poi resta aperta.
+
+#### Riparazione ✅ (2026-10-15)
+
+> **Note implementazione** (`test-author`, sincrono, corsia 6185, solo i due file di test dell'AI Export):
+> - `test_ai_export_components_broker_adequacy.py`: `_make_real_db_session()` diventa la fixture `real_db_session`
+>   (`pytest_asyncio`, portata di funzione): crea motore e schema, cede la sessione e nel `finally` la chiude e fa
+>   `await engine.dispose()`, come `db_session` in `test_brim_report_sets.py:1519`. I 3 test la ricevono come
+>   parametro; asserzioni invariate.
+> - `test_ai_export_components_portfolio_broker_integration.py`:
+>   - `_patch_drawdown`: doppi di `drawdown_context.resolve_date_sentinels` e `drawdown_context.RiskService`, sul
+>     modulo che li legge (C4), con un `drawdown_summary` riuscito e senza ribasso; `_patch_income_timeline`: doppio di
+>     `portfolio_income.resolve_accessible_broker_ids` (nessun broker accessibile, registro dei redditi vuoto). Li
+>     chiamano gli scenari (`_setup_portfolio_scenario`, `_setup_broker_scenario`), quindi ogni test che costruisce uno
+>     scenario è ermetico, non solo i quattro;
+>   - **guardia**: `_make_async_session()` registra ogni sessione «tableless» e conta le connessioni del suo motore
+>     (evento `connect`); la fixture autouse `_tableless_session_guard`, al teardown (fuori dal codice dei componenti,
+>     che inghiottirebbe un errore), chiude e smaltisce ogni sessione e fa fallire il test se una si è connessa:
+>     «a loader ran SQL on the tableless session: patch it»;
+>   - 4 test nuovi: la prova di presenza della guardia (una sessione che ha eseguito `SELECT 1` è segnalata, una
+>     inattiva no) e 3 test che fissano il percorso di successo degli scenari (`portfolio.drawdown_summary` e
+>     `broker.drawdown_summary` OK, `portfolio.income_timeline` EMPTY e non FAILED).
+>   - Le asserzioni dei 4 test di composizione restano valide e invariate: le analisi pubbliche non dichiarano
+>     dataset facoltativi, e drawdown e redditi sono sezioni facoltative che c'erano già, con un payload FAILED; ora
+>     sono OK ed EMPTY.
+> - `services ai-export`: **1 021 → 1 025 passed** (integrazione 54 → 58; `broker_adequacy` 23 invariato); ruff e
+>   black puliti sui due file.
+> - **Riproduzione dopo la riparazione**: la stessa sequenza deterministica (i test che perdevano, poi il GC nel thread
+>   dell'executor col loop chiuso): **0 avvisi, 0 connessioni aperte dopo il loro test**.
+>
+> **⚠️ Fuori pista**:
+> - **Attribuzione corretta da `test-author`**: l'istruzione isolata `SELECT broker_user_access.broker_id … WHERE
+>   user_id = ?` non veniva dalla sentinella delle date (la sua è una sottoquery dentro `min/max(transactions.date)`),
+>   ma da `portfolio.income_timeline`: il suo modulo importa `resolve_accessible_broker_ids` col proprio nome, e il
+>   doppio che il file metteva su `shared_payloads` non lo raggiungeva. L'ha trovato la guardia nuova, al primo giro.
+> - **Limite di `patch_effect.py`** (lo strumento dei controlli di base): verifica che qualcuno legga il nome
+>   sostituito, non che la sostituzione raggiunga ogni chiamante. La patch su `shared_payloads` è letta da altri moduli,
+>   quindi non è muta, ma un modulo che importa la funzione col proprio nome le sfugge. Da tenere a mente leggendo un
+>   suo «0 muti».
+> - Il primo doppio del drawdown costruiva una `RiskQueryResponse` validata, che rifà il controllo «un successo vuole
+>   i metadati» e falliva in silenzio dentro il componente; l'hanno fatto vedere i 3 test del percorso di successo.
+>   Corretto con `model_construct`, come il doppio di riferimento.
+
+#### Verifica ✅ (2026-10-15)
+
+> **Note implementazione** (log in `/tmp/libreFolio_j/c93/`):
+> - **`all-backend --workers 2`** con la sonda (05:35–05:49, le condizioni di W, carico 11–16): 7/7, «ALL BACKEND TESTS
+>   PASSED». Totali, lavoratori paralleli compresi: **13 874 passed, 28 skipped, 0 failed**, contro 13 870 / 28 / 0
+>   del giro prima della riparazione (04:45–05:04, stesse condizioni): +4, i test nuovi. Nei 29 processi pytest:
+>   **0 connessioni aiosqlite lasciate aperte dopo il loro test** (erano 7), 0 fermate dal GC, 0 eccezioni di thread,
+>   nessun `PytestUnhandledThreadExceptionWarning` nel log né nei log delle unità.
+> - `services ai-export` 1 025 (`test-author`, prima della verifica); `dev.py lint` pulito; black invariato sui due
+>   file; `patch_effect.py` sull'albero: 504 bersagli di modulo, 0 muti e 0 mancanti; le tre patch nuove sono lette
+>   nel modulo che colpiscono (`drawdown_context.RiskService`, `drawdown_context.resolve_date_sentinels`,
+>   `portfolio_income.resolve_accessible_broker_ids`); `git diff --check` pulito; porta 6185 libera.
+> - Cosa non è stato fatto: non ho riprodotto l'avviso nella suite vera prima della riparazione. È comparso solo nella
+>   riproduzione deterministica, perché il GC nel contesto sbagliato è raro; la perdita invece c'era a ogni giro, e dopo
+>   la riparazione non c'è più.
+
+#### Checkpoint C-93 ✅ (2026-10-15) — committato dal coordinatore
+
+- Delta: 2 file di test dell'AI Export modificati
+  (`test_ai_export_components_broker_adequacy.py`, `test_ai_export_components_portfolio_broker_integration.py`),
+  questo piano, la sezione J del backlog (J-5 e J-6).
+- La riga C-93 sta nella sezione C: la chiusura la scrive il coordinatore, col testo proposto nell'handoff.
+- Poi G-8, al via del coordinatore.
+- Commit del coordinatore: `12bcf7e99` (`test(ai-export): dispose aiosqlite engines, hermetic scenarios`) e
+  `f29e82af5` (journal). Decisioni: **J-5** passa a X (`services/assets/core.py` è suo), come lotto piccolo con un test;
+  la sposta il coordinatore nella sezione di X. **J-6** è di J, dopo G-8, a bassa priorità, con `test-author`: la
+  guardia sta nel `conftest.py` condiviso, con un elenco esplicito delle eccezioni per le connessioni di sessione
+  volute, e l'handoff dice quali file di altri tocca. Il limite di `patch_effect.py` entra nei controlli dei merge.
+
+#### Aggiornamento di base 5 — A4, X CP3, W7, `dev_release2` `58be885a9` ✅ (2026-10-15) — nota `3a03a1b2c`, in `dev_release2` con `c412f8dad`
+
+Merge del coordinatore `a9fa704c9` (genitori `f29e82af5` e `58be885a9`): A4 (migrazione `005_accounts_invites.py`),
+X CP3 (cambi per tema), W7 (`schemas/transactions/` per tema). Unione automatica del solo backlog. Controllo leggero,
+senza `all-backend`.
+
+> **Note implementazione** (log in `/tmp/libreFolio_j/merge5/` e `/tmp/libreFolio_j/c93/merge5_ai_export.log`):
+> - Il delta di `a9fa704c9` sul bersaglio sono i soli 4 file di C-93 (i due test dell'AI Export, questo piano, il
+>   backlog).
+> - `services ai-export` sulla 6185: **1 025 passed** (la corsia ricrea il DB dalle migrazioni, `005` compresa),
+>   nessun `PytestUnhandledThreadExceptionWarning`.
+> - `pytest --collect-only` (ambiente della corsia): fuso 13 985, bersaglio `58be885a9` estratto 13 981. Differenza
+>   esatta: i 4 test nuovi di C-93 (la prova di presenza della guardia e i 3 del percorso di successo degli scenari).
+> - Porta 6185 libera.
+
+### G-8 — il catalogo dei Tool oltre i 2 s d'ingresso 🧊 (2026-10-15)
+
+Via del coordinatore dopo l'ingresso di C-93 (`c412f8dad`, record `a628147a0`): G-8, poi J-6, un checkpoint FROZEN per
+voce. Riga d'origine di G: «`GET /api/v1/tools/catalog` ha impiegato 2 649 ms con carico 35 su 10 core», 503, pannello
+Impostazioni › About › diagnostica dei plugin in errore; da solo il test passa.
+
+#### Analisi e rosso ✅ (2026-10-15)
+
+> **Note implementazione**:
+> - **Dove si perdono i 2 s**: `ToolRoute.get_route_handler` (`api/v1/tools.py`) apre ogni richiesta `/tools` in
+>   `asyncio.timeout(ingress_timeout_ms)`, 2 s. Per catalogo e diagnostica il corpo dell'endpoint chiama subito
+>   `_execution_request()`, che sposta la scadenza al budget documentato di 20 s («The catalogue and diagnostics routes
+>   run under a 20 s request budget», `tool_plugins.en.md`). Ma FastAPI risolve le dipendenze prima del corpo, quindi
+>   `get_current_user` (cookie, JWT, una lettura) gira dentro la finestra d'ingresso. Sotto carico autenticazione e
+>   attesa del loop superano 2 s, e la richiesta muore in 503 prima di arrivare al catalogo.
+> - **Prova** (sonda in-process, fuori dal repository, `/tmp/libreFolio_j/g8/probe_ingress.py`: il router vero in
+>   un'app ASGI, ingresso 50 ms): autenticazione da 10 ms → 200; da 200 ms → **503 «Tool request deadline exceeded» e
+>   catalogo mai costruito (0 chiamate)**.
+> - **Scelta fra le due proposte di G**: il catalogo in cache non toglierebbe il 503, perché il tempo si perde prima
+>   che il catalogo sia costruito, e la costruzione avviene già sotto il budget di 20 s. Serve la prima proposta, resa
+>   precisa: una rotta senza corpo (`APIRoute.body_field is None`: catalogo e diagnostica) non ha una fase d'ingresso
+>   e apre direttamente sotto il suo budget; le rotte con corpo (compute) tengono la finestra d'ingresso com'è.
+> - **Rosso** (`test-author`, `test_tools_api.py`, app ASGI per test, nessun server né DB), sul codice di prima:
+>   - `test_read_routes_authenticate_within_their_own_budget_not_the_ingress_window[catalog, diagnostics]`: ingresso
+>     50 ms, autenticazione 250 ms → atteso 200; **rosso**: 503 e 0 costruzioni, per entrambe le rotte;
+>   - guardie verdi prima e dopo: `test_read_route_is_still_bounded_by_its_request_budget[catalog, diagnostics]`
+>     (budget di richiesta 100 ms, autenticazione bloccata → 503) e `test_compute_keeps_its_ingress_window`
+>     (ingresso 50 ms, autenticazione bloccata → 503, il percorso di calcolo non è mai raggiunto). Un tetto di 5 s per
+>     richiesta distingue la scadenza configurata da un ripiego sui 20 s.
+>   - `api tools`: 2 failed, 10 passed.
+
+#### Riparazione e verifica ✅ (2026-10-15)
+
+> **Note implementazione**:
+> - `api/v1/tools.py`: costante `_READ_ROUTE_TIMEOUT_MS = 20_000` (prima un letterale ripetuto nei valori predefiniti
+>   di `begin_execution` e `_execution_request`); in `ToolRoute` la finestra d'apertura è
+>   `ingress_timeout_ms` se la rotta ha un corpo, altrimenti `min(_READ_ROUTE_TIMEOUT_MS, request_timeout_ms)`. Il
+>   messaggio del 503, i controlli sulla dimensione del corpo e l'aritmetica dei budget del compute restano uguali.
+> - Doc (`docs-writer`): `tool_plugins.en.md`, §«📏 Supervisor and budgets», dice cosa limita la finestra d'ingresso
+>   (ricezione, decodifica e validazione della busta di un compute, con le dipendenze, autenticazione compresa) e che
+>   catalogo e diagnostica non ne hanno una; la riga della tabella diventa «Compute ingress / shared queue budget».
+>   Pagina del manuale per sviluppatori, solo in inglese: nessun timbro di traduzione.
+> - **Prove**: `api tools` **12 passed** (10 + i 5 casi nuovi, prima 2 rossi); `api pac-planner-tool` 12;
+>   `services tools-registry` 109; `utils tools-wire` 196; `api schema` contro `git archive` di `a628147a0`:
+>   `openapi.json` e `tool-contracts.openapi.json` identici a meno di `info.version`; ruff e black puliti;
+>   `mkdocs build` stretto (0 avvisi) e `check-links` (95); porta 6185 libera.
+> - Non provato: un carico vero come quello della galleria. La prova è il meccanismo, deterministico; dopo la cura il
+>   catalogo ha 20 s anche per l'autenticazione.
+
+#### Checkpoint G-8 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+
+- Delta: `backend/app/api/v1/tools.py`, `backend/test_scripts/test_api/test_tools_api.py`,
+  `mkdocs_src/docs/developer/architecture/patterns/tool_plugins.en.md`, questo piano, la riga G-8 della sezione J.
+- La riga G-8 della sezione G (di G) la chiude il coordinatore. Poi J-6.

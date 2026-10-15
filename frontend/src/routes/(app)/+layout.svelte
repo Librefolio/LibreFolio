@@ -27,6 +27,8 @@
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {loginUrl} from '$lib/utils/internalPath';
     import ServerUnreachable from '$lib/components/layout/ServerUnreachable.svelte';
+    import InstanceNotices from '$lib/features/instance/components/InstanceNotices.svelte';
+    import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 
     // Sidebar state for mobile
     let sidebarOpen = false;
@@ -63,6 +65,9 @@
 
     onMount(async () => {
         debug.log('AppLayout', 'onMount started');
+
+        // The public configuration of the instance: no session needed, and it never holds the start up
+        void instanceConfig.load();
 
         // Sync language store with i18n after mount
         currentLanguage.init();
@@ -257,6 +262,7 @@
                 {#if appBootstrap.state === 'degraded'}
                     <OnboardingBootstrapBanner error={appBootstrap.error} onretry={retryBootstrap} />
                 {/if}
+                <InstanceNotices />
                 <slot />
             </main>
         </div>

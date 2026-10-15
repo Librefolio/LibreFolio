@@ -1,8 +1,8 @@
 """Configuration checks: the settings that leave an instance weaker than it should be.
 
 Owner: workstream H (platform). Each check reads the configuration and returns its state as a ``ConfigCheck``: an id,
-a severity, the i18n key of its message for the admin interface, the parameters of that message and an English summary
-for the log. A check changes nothing, never raises and never puts a secret value in its result.
+a severity, the i18n key of its message for the admin interface (``instance.checks.*``, written whole so the i18n audit
+sees it), the parameters of that message and an English summary for the log. A check changes nothing, never raises and never puts a secret value in its result.
 
 At startup, ``log_configuration_audit()`` first stops on a configured secret that cannot be used, then logs every check
 that is not ``ok``. The «Security» tab of the admin settings will evaluate the same checks on demand.
@@ -24,7 +24,6 @@ logger = get_logger(__name__)
 Severity = Literal["ok", "info", "warning", "error"]
 
 JWT_SECRET_MIN_LENGTH = 32
-_I18N_PREFIX = "instance.checks"
 
 
 @dataclass(frozen=True)
@@ -44,12 +43,12 @@ def check_jwt_secret() -> ConfigCheck:
     try:
         secret = configured_jwt_secret()
     except SecretFileError as exc:
-        return ConfigCheck(check_id, "error", f"{_I18N_PREFIX}.jwtSecret.unreadable", {"reason": str(exc)}, f"The session signing key cannot be read: {exc}")
+        return ConfigCheck(check_id, "error", "instance.checks.jwtSecret.unreadable", {"reason": str(exc)}, f"The session signing key cannot be read: {exc}")
     if secret is None:
         return ConfigCheck(
             check_id,
             "info",
-            f"{_I18N_PREFIX}.jwtSecret.ephemeral",
+            "instance.checks.jwtSecret.ephemeral",
             summary="JWT_SECRET is not set: every start makes a new session signing key, so a restart signs every user out",
         )
     if len(secret) < JWT_SECRET_MIN_LENGTH:
@@ -57,11 +56,11 @@ def check_jwt_secret() -> ConfigCheck:
         return ConfigCheck(
             check_id,
             "warning",
-            f"{_I18N_PREFIX}.jwtSecret.short",
+            "instance.checks.jwtSecret.short",
             {"source": origin, "length": len(secret), "minimum": JWT_SECRET_MIN_LENGTH},
             f"The session signing key from {origin} is {len(secret)} characters long: use at least {JWT_SECRET_MIN_LENGTH} random characters",
         )
-    return ConfigCheck(check_id, "ok", f"{_I18N_PREFIX}.jwtSecret.ok")
+    return ConfigCheck(check_id, "ok", "instance.checks.jwtSecret.ok")
 
 
 def check_secrets_set_twice() -> ConfigCheck:
@@ -69,12 +68,12 @@ def check_secrets_set_twice() -> ConfigCheck:
     check_id = "platform.secrets_set_twice"
     names = secrets_set_twice()
     if not names:
-        return ConfigCheck(check_id, "ok", f"{_I18N_PREFIX}.secretsSetTwice.ok")
+        return ConfigCheck(check_id, "ok", "instance.checks.secretsSetTwice.ok")
     listed = ", ".join(names)
     return ConfigCheck(
         check_id,
         "warning",
-        f"{_I18N_PREFIX}.secretsSetTwice.found",
+        "instance.checks.secretsSetTwice.found",
         {"variables": listed},
         f"Set both directly and through a *_FILE variable: {listed}. The direct value wins and the file is ignored",
     )
@@ -85,17 +84,17 @@ def check_instance_key() -> ConfigCheck:
     check_id = "platform.instance_key"
     status = instance_key_status()
     if status.problem is not None:
-        return ConfigCheck(check_id, "error", f"{_I18N_PREFIX}.instanceKey.unusable", {"source": status.source, "reason": status.problem}, f"The instance key cannot be used: {status.problem}")
+        return ConfigCheck(check_id, "error", "instance.checks.instanceKey.unusable", {"source": status.source, "reason": status.problem}, f"The instance key cannot be used: {status.problem}")
     if status.loose_modes:
         modes = ", ".join(f"{target} {mode}" for target, mode in status.loose_modes.items())
         return ConfigCheck(
             check_id,
             "warning",
-            f"{_I18N_PREFIX}.instanceKey.permissions",
+            "instance.checks.instanceKey.permissions",
             {"path": str(status.path), **status.loose_modes},
             f"{status.path} is open to other users ({modes}): the folder should be 0700 and the file 0600",
         )
-    return ConfigCheck(check_id, "ok", f"{_I18N_PREFIX}.instanceKey.ok", {"source": status.source})
+    return ConfigCheck(check_id, "ok", "instance.checks.instanceKey.ok", {"source": status.source})
 
 
 def check_session_cookie() -> ConfigCheck:
@@ -105,10 +104,10 @@ def check_session_cookie() -> ConfigCheck:
         return ConfigCheck(
             check_id,
             "warning",
-            f"{_I18N_PREFIX}.sessionCookie.never",
+            "instance.checks.sessionCookie.never",
             summary="SESSION_COOKIE_SECURE=never: the session cookie is sent over plain HTTP too; prefer auto",
         )
-    return ConfigCheck(check_id, "ok", f"{_I18N_PREFIX}.sessionCookie.ok")
+    return ConfigCheck(check_id, "ok", "instance.checks.sessionCookie.ok")
 
 
 def check_log_level() -> ConfigCheck:
@@ -119,11 +118,11 @@ def check_log_level() -> ConfigCheck:
         return ConfigCheck(
             check_id,
             "info",
-            f"{_I18N_PREFIX}.logLevel.verbose",
+            "instance.checks.logLevel.verbose",
             {"log_level": level},
             f"The log level is {level}: the log records operational detail; INFO is enough in production",
         )
-    return ConfigCheck(check_id, "ok", f"{_I18N_PREFIX}.logLevel.ok")
+    return ConfigCheck(check_id, "ok", "instance.checks.logLevel.ok")
 
 
 CONFIG_CHECKS: tuple[Callable[[], ConfigCheck], ...] = (

@@ -104,5 +104,5 @@ at the root. The truncation to the database precision reads the models, so it li
 | FX Providers | `backend/app/services/fx_providers/` |
 | Asset Providers | `backend/app/services/asset_source_providers/` |
 | Broker Import | `backend/app/services/brim_providers/` |
-| System & Health | `backend/app/api/v1/system.py` |
+| System & Health | `backend/app/api/v1/system/` (one module per resource) |
 | Test Suite | `backend/test_scripts/` |

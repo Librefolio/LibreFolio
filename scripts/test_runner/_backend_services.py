@@ -705,9 +705,9 @@ def services_brim_versioning(verbose: bool = False, test_names: list = None) -> 
 
 
 def services_config_misc(verbose: bool = False, test_names: list = None) -> bool:
-    """Test config.get_data_dir test-mode/env-override branches."""
+    """Test config.get_data_dir test-mode/env-override branches and the LIBREFOLIO_PROFILE setting."""
     print_section("Services: Config Helpers")
-    print_info("Testing: backend/app/config/__init__.py (get_data_dir)")
+    print_info("Testing: backend/app/config/__init__.py (get_data_dir, LIBREFOLIO_PROFILE)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_misc.py", test_names)
     return run_command(cmd, "Config helper tests", verbose=verbose)
 
@@ -1189,7 +1189,7 @@ Note: No backend server required.
         # without ever calling save_state(), so nothing global is written.
         isolation="read",
     )
-    add_test(cat, "config-misc", services_config_misc, name="Config Helpers", desc="get_data_dir test-mode/env-override branches")
+    add_test(cat, "config-misc", services_config_misc, name="Config Helpers", desc="get_data_dir test-mode/env-override branches, LIBREFOLIO_PROFILE validation")
     add_test(cat, "config-package", services_config_package, name="Config Package", desc="Env vars read only in backend/app/config/, section accessors keep their semantics", isolation="pure")
     add_test(cat, "config-secrets", services_config_secrets, name="Config Secrets", desc="NAME / NAME_FILE secrets: precedence, file rules and errors, secrets set twice", isolation="pure")
     add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")

@@ -20,14 +20,14 @@ import pytest
 os.environ["LIBREFOLIO_TEST_MODE"] = "1"
 
 from backend.app.db.models import IdentifierType
-from backend.app.schemas.assets.assets import (
+from backend.app.schemas.assets.events import FAAssetEventPoint
+from backend.app.schemas.assets.scheduled_investment import (
     FAInterestRatePeriod,
     FALateInterestConfig,
     FAScheduledInvestmentSchedule,
     InterestType,
     MaturationFrequency,
 )
-from backend.app.schemas.assets.events import FAAssetEventPoint
 from backend.app.schemas.common import Currency
 from backend.app.services.asset_source_providers.scheduled_investment.plugin import ScheduledInvestmentProvider, _compute_value_at, _generate_schedule_values
 

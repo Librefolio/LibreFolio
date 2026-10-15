@@ -1,36 +1,20 @@
-"""
-System API endpoints.
-
-Provides system information, version data, and runtime details.
-"""
+"""System information (``GET /system/info``): app, Python and OS versions, deployment mode, dependency versions."""
 
 import json
 import platform
 import re
-import secrets
 import sys
 from importlib.metadata import version as pkg_version
 from pathlib import Path
-from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter
 
-from backend.app.api.v1.auth import get_current_user, session_cookie_secure
-from backend.app.config import PROJECT_ROOT, TEST_LANE_HEADER, is_test_mode
-from backend.app.config.platform import owning_test_lane_id
-from backend.app.db.models import User
+from backend.app.config import PROJECT_ROOT
 from backend.app.logging_config import get_logger
-from backend.app.schemas.system import ConnectionSecurityResponse, ContainerImageStatusResponse, DependencyInfo, HealthCheckResponse, PluginDiagnosticsResponse, PluginDiscoveryFailureInfo, SystemInfoResponse
-from backend.app.services.assets.registry import AssetProviderRegistry
-from backend.app.services.brim.registry import BRIMProviderRegistry
-from backend.app.services.fx.registry import FXProviderRegistry
-from backend.app.services.platform.container_registry import probe_container_image
-from backend.app.services.signals.registry import SignalPluginRegistry
-from backend.app.utils.runtime.network import classify_ip, client_address
+from backend.app.schemas.system import DependencyInfo, SystemInfoResponse
 from backend.app.utils.runtime.version import get_git_version
 
-router = APIRouter(prefix="/system", tags=["System"])
+info_router = APIRouter()
 logger = get_logger(__name__)
 
 
@@ -163,7 +147,7 @@ def get_deployment_mode() -> str:
     return "docker" if Path("/.dockerenv").exists() else "local"
 
 
-@router.get("/info", response_model=SystemInfoResponse)
+@info_router.get("/info", response_model=SystemInfoResponse)
 async def get_system_info() -> SystemInfoResponse:
     """
     Get system information including versions and dependencies.
@@ -179,91 +163,4 @@ async def get_system_info() -> SystemInfoResponse:
         deployment_mode=get_deployment_mode(),
         backend_dependencies=get_backend_deps(),
         frontend_dependencies=get_frontend_deps(),
-    )
-
-
-def _plugin_discovery_failures(system: str, registry) -> list[PluginDiscoveryFailureInfo]:
-    return [
-        PluginDiscoveryFailureInfo(
-            system=system,
-            filename=f"{failure.module_name.rsplit('.', 1)[-1]}.py",
-            error=f"{failure.error_type}: {failure.message}",
-        )
-        for failure in registry.get_discovery_errors()
-    ]
-
-
-@router.get("/plugin-diagnostics", response_model=PluginDiagnosticsResponse)
-def get_plugin_diagnostics(
-    _current_user: Annotated[User, Depends(get_current_user)],
-) -> PluginDiagnosticsResponse:
-    """Return plugin discovery import failures for all plugin registries.
-
-    Requires a session: the failures carry exception text that can name internal paths.
-    """
-    return PluginDiagnosticsResponse(
-        [
-            *_plugin_discovery_failures("asset", AssetProviderRegistry),
-            *_plugin_discovery_failures("fx", FXProviderRegistry),
-            *_plugin_discovery_failures("brim", BRIMProviderRegistry),
-            *_plugin_discovery_failures("signals", SignalPluginRegistry),
-        ]
-    )
-
-
-@router.get("/container-image-status", response_model=ContainerImageStatusResponse)
-async def get_container_image_status(
-    tag: Annotated[str, Query(pattern=r"^\d+\.\d+\.\d+$", description="Normalized stable image tag, without a leading v")],
-    _current_user: Annotated[User, Depends(get_current_user)],
-) -> ContainerImageStatusResponse:
-    """Check whether a stable LibreFolio image tag is pullable from GHCR."""
-    return await probe_container_image(tag)
-
-
-@router.get("/connection", response_model=ConnectionSecurityResponse)
-async def get_connection_security(
-    request: Request,
-    _current_user: Annotated[User, Depends(get_current_user)],
-) -> ConnectionSecurityResponse:
-    """How the server sees this request, for the connection-security indicator.
-
-    The client address is classified, never returned or logged. The class reads the last
-    X-Forwarded-For value when there is one, else the TCP peer: advisory only, since a forged
-    header misleads just the sender's own indicator. ``cookie_secure`` is the decision the session
-    cookie gets on this very request.
-    """
-    forwarded_for = ", ".join(request.headers.getlist("x-forwarded-for")) or None
-    peer = request.client.host if request.client else None
-    return ConnectionSecurityResponse(
-        client_class=classify_ip(client_address(forwarded_for, peer)),
-        cookie_secure=session_cookie_secure(request),
-    )
-
-
-@router.get("/health", response_model=HealthCheckResponse)
-async def health_check():
-    """
-    Health check endpoint for monitoring and load balancers.
-
-    Returns:
-        dict: Status message with "ok" status
-    """
-    return {"status": "ok"}
-
-
-@router.get(
-    "/test-lane-health",
-    response_model=HealthCheckResponse,
-    include_in_schema=False,
-)
-def test_lane_health(
-    token: Annotated[str, Query(min_length=16, max_length=128)],
-) -> JSONResponse:
-    """Confirm readiness only for the test process tree that owns this server."""
-    expected = owning_test_lane_id()
-    if not is_test_mode() or not expected or not secrets.compare_digest(token, expected):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
-    return JSONResponse(
-        content={"status": "ok"},
-        headers={TEST_LANE_HEADER: expected},
     )

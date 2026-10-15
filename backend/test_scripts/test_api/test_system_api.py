@@ -7,9 +7,11 @@ Covers:
 - get_backend_deps: backend dependency list
 - get_frontend_deps: frontend dependency list from package.json
 - GET /api/v1/system/info: system info endpoint
+- the /system router split one module per resource (C2): the routes of system.py, in their order
 - GET /api/v1/system/plugin-diagnostics: session required (live HTTP), failure-list shape for a logged-in user
 - classify_ip / client_address (utils/runtime/network.py): the class of a client address, and which address (plan 36, §2.1)
 - GET /api/v1/system/connection: session required, {client_class, cookie_secure} live and in-process (plan 36, §2.1)
+- GET /api/v1/system/instance: public, no session; {profile} live (the lane's default) and in-process (a profile set)
 """
 
 from collections.abc import AsyncIterator
@@ -19,18 +21,20 @@ from uuid import uuid4
 import httpx
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from fastapi.routing import APIRoute
+from fastapi.routing import iter_route_contexts
 
 import backend.app.api.v1.auth as auth_module
 import backend.app.api.v1.system as system_module
+import backend.app.api.v1.system.health as health_module
+import backend.app.api.v1.system.info as info_module
 from backend.app.api.v1.auth import SESSION_COOKIE_NAME, get_current_user
-from backend.app.api.v1.system import (
+from backend.app.api.v1.system.connection import get_connection_security
+from backend.app.api.v1.system.info import (
     BACKEND_NAME_MAP,
     FRONTEND_NAME_MAP,
     get_backend_deps,
-    get_connection_security,
     get_deployment_mode,
     get_display_name,
     get_frontend_deps,
@@ -103,7 +107,7 @@ class TestParsePipfile:
     def test_quoted_name_with_trailing_space(self, tmp_path, monkeypatch):
         pipfile = tmp_path / "Pipfile"
         pipfile.write_text("[packages]\n" 'fastapi = "*"\n' '"borsa-italiana-scraping " = {git = "https://example.com/repo.git"}\n' "[dev-packages]\n" 'pytest = "*"\n')
-        monkeypatch.setattr(system_module, "PROJECT_ROOT", tmp_path)
+        monkeypatch.setattr(info_module, "PROJECT_ROOT", tmp_path)
 
         packages = parse_pipfile()
 
@@ -127,8 +131,8 @@ class TestGetBackendDeps:
             assert dep.version, f"Dependency {dep.name} has no version"
 
     def test_fallback_display_name_for_unmapped_package(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setattr(system_module, "parse_pipfile", lambda: ["custom-lib"])
-        monkeypatch.setattr(system_module, "pkg_version", lambda name: "1.2.3")
+        monkeypatch.setattr(info_module, "parse_pipfile", lambda: ["custom-lib"])
+        monkeypatch.setattr(info_module, "pkg_version", lambda name: "1.2.3")
 
         deps = get_backend_deps()
 
@@ -156,11 +160,11 @@ class TestGetFrontendDeps:
 
 class TestGetDeploymentMode:
     def test_local_when_dockerenv_absent(self, monkeypatch):
-        monkeypatch.setattr(system_module, "Path", _FakePath(False))
+        monkeypatch.setattr(info_module, "Path", _FakePath(False))
         assert get_deployment_mode() == "local"
 
     def test_docker_when_dockerenv_present(self, monkeypatch):
-        monkeypatch.setattr(system_module, "Path", _FakePath(True))
+        monkeypatch.setattr(info_module, "Path", _FakePath(True))
         assert get_deployment_mode() == "docker"
 
 
@@ -177,9 +181,9 @@ class TestTestLaneHealth:
     def test_exact_token_is_accepted_in_test_mode(self, monkeypatch):
         lane_id = "0123456789abcdef0123456789abcdef"
         monkeypatch.setenv("LIBREFOLIO_TEST_LANE_ID", lane_id)
-        monkeypatch.setattr(system_module, "is_test_mode", lambda: True)
+        monkeypatch.setattr(health_module, "is_test_mode", lambda: True)
 
-        response = system_module.test_lane_health(lane_id)
+        response = health_module.test_lane_health(lane_id)
 
         assert isinstance(response, JSONResponse)
         assert response.status_code == 200
@@ -190,10 +194,10 @@ class TestTestLaneHealth:
         lane_id = "0123456789abcdef0123456789abcdef"
         wrong_token = "fedcba9876543210fedcba9876543210"
         monkeypatch.setenv("LIBREFOLIO_TEST_LANE_ID", lane_id)
-        monkeypatch.setattr(system_module, "is_test_mode", lambda: True)
+        monkeypatch.setattr(health_module, "is_test_mode", lambda: True)
 
         with pytest.raises(HTTPException) as exc_info:
-            system_module.test_lane_health(wrong_token)
+            health_module.test_lane_health(wrong_token)
 
         self.assert_generic_not_found(
             exc_info.value,
@@ -204,10 +208,10 @@ class TestTestLaneHealth:
     def test_missing_lane_context_is_generic_not_found(self, monkeypatch):
         supplied_token = "0123456789abcdef0123456789abcdef"
         monkeypatch.delenv("LIBREFOLIO_TEST_LANE_ID", raising=False)
-        monkeypatch.setattr(system_module, "is_test_mode", lambda: True)
+        monkeypatch.setattr(health_module, "is_test_mode", lambda: True)
 
         with pytest.raises(HTTPException) as exc_info:
-            system_module.test_lane_health(supplied_token)
+            health_module.test_lane_health(supplied_token)
 
         self.assert_generic_not_found(exc_info.value, supplied_token)
 
@@ -217,10 +221,10 @@ class TestTestLaneHealth:
     ):
         lane_id = "0123456789abcdef0123456789abcdef"
         monkeypatch.setenv("LIBREFOLIO_TEST_LANE_ID", lane_id)
-        monkeypatch.setattr(system_module, "is_test_mode", lambda: False)
+        monkeypatch.setattr(health_module, "is_test_mode", lambda: False)
 
         with pytest.raises(HTTPException) as exc_info:
-            system_module.test_lane_health(lane_id)
+            health_module.test_lane_health(lane_id)
 
         self.assert_generic_not_found(exc_info.value, lane_id)
 
@@ -237,6 +241,37 @@ class TestGetSystemInfoEndpoint:
         assert result.deployment_mode in ("local", "docker")
         assert len(result.backend_dependencies) > 0
         assert len(result.frontend_dependencies) > 0
+
+
+# ============================================================================
+# THE /system ROUTER, ONE MODULE PER RESOURCE (rule C2)
+# ============================================================================
+#
+# system.py became the package api/v1/system/, whose __init__.py composes one router per
+# resource. The composition must register the routes as the single module did: the
+# registration order is the order of the OpenAPI document and the order routes are tried
+# in. A route added after the split comes after these six, so the pin is on the first six.
+
+#: The routes of the single system.py, in registration order, each with the endpoint that serves it now,
+#: as <module>.<function> under backend.app.api.v1.system.
+SYSTEM_ROUTES_OF_THE_SPLIT = [
+    ("/system/info", "info.get_system_info"),
+    ("/system/plugin-diagnostics", "diagnostics.get_plugin_diagnostics"),
+    ("/system/container-image-status", "container_image.get_container_image_status"),
+    ("/system/connection", "connection.get_connection_security"),
+    ("/system/health", "health.health_check"),
+    ("/system/test-lane-health", "health.test_lane_health"),
+]
+
+
+def test_the_split_keeps_the_routes_of_system_py_in_their_order():
+    """C2: the composed router registers the six routes of system.py first, in their order, each a GET of the System tag served by its resource's module."""
+    contexts = list(iter_route_contexts(system_module.router.routes))[: len(SYSTEM_ROUTES_OF_THE_SPLIT)]
+    served = [(ctx.path, f"{getattr(ctx.endpoint, '__module__', '?').removeprefix(system_module.__name__ + '.')}.{getattr(ctx.endpoint, '__name__', '?')}") for ctx in contexts]
+    assert served == SYSTEM_ROUTES_OF_THE_SPLIT, f"the first routes of the /system router changed: the split must keep the routes of system.py, in their order:\n  expected {SYSTEM_ROUTES_OF_THE_SPLIT}\n  got      {served}"
+    shapes = [(ctx.path, sorted(ctx.methods or ()), list(getattr(ctx, "tags", []))) for ctx in contexts]
+    assert all(methods == ["GET"] and tags == ["System"] for _, methods, tags in shapes), f"each route of the split must stay a GET under the System tag: {shapes}"
+    print_success(f"{len(served)} routes of system.py, in their order: {[path for path, _ in served]}")
 
 
 # ============================================================================
@@ -302,11 +337,19 @@ async def _login_own_regular_user(client: httpx.AsyncClient) -> None:
     assert me.status_code == 200 and me.json()["user"]["username"] == username, me.text
 
 
-def _route_dependency_calls(path: str) -> set:
-    """Every callable FastAPI resolves before the handler of GET ``path`` on the system router."""
-    route = next((r for r in system_module.router.routes if isinstance(r, APIRoute) and r.path == path and "GET" in r.methods), None)
-    assert route is not None, f"GET {path} is not declared on the system router"
-    calls, pending = set(), list(route.dependant.dependencies)
+def _route_dependency_calls(path: str, routes: list | None = None) -> set:
+    """Every callable FastAPI resolves before the handler of GET ``path``, on the system router unless ``routes`` is given.
+
+    The router holds one included router per resource (C2), so the routes are walked as FastAPI serves them: their
+    effective route contexts, and the effective dependant of each, which adds to the handler's own dependencies those
+    declared where its router is included. The original route's dependant (``context.route.dependant``) misses those.
+    """
+    contexts = iter_route_contexts(system_module.router.routes if routes is None else routes)
+    context = next((ctx for ctx in contexts if ctx.path == path and "GET" in (ctx.methods or ())), None)
+    assert context is not None, f"GET {path} is not declared on the router"
+    dependant = getattr(context, "dependant", None)
+    assert dependant is not None, f"GET {path} has no dependant to walk: it is not an API route"
+    calls, pending = set(), list(dependant.dependencies)
     while pending:
         dependant = pending.pop()
         calls.add(dependant.call)
@@ -722,3 +765,91 @@ class TestConnectionSecurityInProcess:
         assert result.client_class == "lan", f"[new] X-Forwarded-For: garbage holds no address, so the class must be the TCP peer's, 192.168.1.20 → lan: got {result!r}"
 
         print_success("✓ An unreadable header: the peer decides, lan")
+
+
+# ============================================================================
+# GET /api/v1/system/instance — THE PUBLIC CONFIGURATION OF THE INSTANCE
+# ============================================================================
+#
+# What the app reads at startup, before anyone signs in: public by design, the same for
+# whoever asks, so behind no session. One field today, the profile from LIBREFOLIO_PROFILE
+# (selfhosted unless set). Live on the lane's backend for the lane's default, in-process for
+# a profile set through the environment, which the lane's server cannot be given from here.
+# The Settings field itself (default, normalisation, refusal) is in test_config_misc.py.
+
+INSTANCE_URL = f"{API_BASE}/system/instance"
+
+
+class TestInstanceConfigIsPublic:
+    """GET /system/instance resolves no session gate, wherever one could be declared."""
+
+    def test_the_walk_sees_a_gate_declared_where_a_router_is_included(self):
+        """Presence barrier of the next test: a gate added by include_router, not on the handler, is still found."""
+        resource = APIRouter()
+
+        @resource.get("/probe")
+        def probe() -> dict:
+            return {}
+
+        gated, open_router = APIRouter(prefix="/gated"), APIRouter(prefix="/open")
+        gated.include_router(resource, dependencies=[Depends(get_current_user)])
+        open_router.include_router(resource)
+
+        assert get_current_user in _route_dependency_calls("/gated/probe", gated.routes), "the walk missed a session gate declared on include_router: it would call public a route that is not"
+        assert get_current_user not in _route_dependency_calls("/open/probe", open_router.routes), "the walk found a session gate on a route that has none"
+
+    def test_route_depends_on_no_session(self):
+        """Structural: no get_current_user among the dependencies FastAPI resolves for GET /system/instance."""
+        # Control first: the walk finds the gate where it is declared, so a pass below means the gate is absent.
+        assert get_current_user in _route_dependency_calls("/system/container-image-status")
+        assert get_current_user not in _route_dependency_calls("/system/instance"), "GET /system/instance resolves get_current_user: the app reads it before anyone signs in, so it must need no session"
+
+
+class TestInstanceConfigLive:
+    """GET /system/instance on the lane's backend: anyone gets the declared fields, and nothing else."""
+
+    @pytest.fixture(autouse=True)
+    def lane_sets_no_profile(self):
+        """Precondition: the default profile. The server reads the same .env and environment as this process."""
+        profile = get_settings().LIBREFOLIO_PROFILE
+        assert profile == "selfhosted", f"Precondition: these tests read the default profile; this lane runs {profile!r} (LIBREFOLIO_PROFILE set in .env or in the environment)"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("forged_cookie", [False, True], ids=["no-cookie", "forged-session-cookie"])
+    async def test_anyone_gets_the_public_configuration(self, test_server, forged_cookie):
+        """No session, or a session cookie the server never issued: 200 and exactly {"profile": "selfhosted"}."""
+        async with httpx.AsyncClient() as client:
+            if forged_cookie:
+                client.cookies.set(SESSION_COOKIE_NAME, f"forged-{uuid4().hex}")
+            response = await client.get(INSTANCE_URL, timeout=TIMEOUT)
+
+        assert response.status_code == 200, f"GET /system/instance is public: expected 200 without a valid session, got {response.status_code}: {response.text}"
+        assert response.json() == {"profile": "selfhosted"}, f"the public configuration must be exactly the declared fields, the profile the lane's default: {response.text}"
+
+
+def _instance_app() -> FastAPI:
+    """The system router in an app of this test, as test_container_registry.py builds one; no session override, none needed."""
+    app = FastAPI()
+    app.include_router(system_module.router, prefix="/api/v1")
+    return app
+
+
+class TestInstanceConfigInProcess:
+    """GET /system/instance answers the profile LIBREFOLIO_PROFILE sets, as get_settings() reads it at each request."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("configured", "profile"),
+        [
+            pytest.param("managed", "managed", id="managed"),
+            pytest.param(" MANAGED ", "managed", id="stripped-and-lowercased"),
+            pytest.param("selfhosted", "selfhosted", id="selfhosted"),
+        ],
+    )
+    async def test_the_configured_profile_is_answered(self, monkeypatch, configured, profile):
+        monkeypatch.setenv("LIBREFOLIO_PROFILE", configured)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=_instance_app()), base_url="http://test") as client:
+            response = await client.get("/api/v1/system/instance")
+
+        assert response.status_code == 200, f"GET /system/instance with LIBREFOLIO_PROFILE={configured!r}: expected 200, got {response.status_code}: {response.text}"
+        assert response.json() == {"profile": profile}, f"LIBREFOLIO_PROFILE={configured!r} must be answered as exactly {{'profile': {profile!r}}}: {response.text}"
