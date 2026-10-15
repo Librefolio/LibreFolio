@@ -5,6 +5,7 @@ the event type metadata, and the ``GET /transactions/types`` response.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Literal
 
 from pydantic import Field
@@ -372,6 +373,23 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
 
 
 TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = _build_tx_type_metadata()
+
+
+def cost_basis_required(tx_type: TransactionType, quantity: Decimal | None) -> bool:
+    """Whether a transaction of ``tx_type`` with ``quantity`` needs a cost basis, as ``TX_TYPE_METADATA`` says.
+
+    A paired type reads the rule of its side — ``cost_basis_pair[0]`` for the sending one (quantity below zero),
+    ``[1]`` for the receiving one — and any other type its ``cost_basis_mode``; ``required_qty_pos`` asks for a cost
+    basis when the quantity is above zero. The frontend reads the same table (``GET /transactions/types``) to decide where
+    a cost basis may be sent.
+    """
+    if quantity is None:
+        return False
+    meta = TX_TYPE_METADATA.get(tx_type)
+    if meta is None:
+        return False
+    rule = meta.cost_basis_pair[1 if quantity > 0 else 0] if meta.cost_basis_pair else meta.cost_basis_mode
+    return rule == "required_qty_pos" and quantity > 0
 
 
 class EventTypeMetadata(StrictModel):

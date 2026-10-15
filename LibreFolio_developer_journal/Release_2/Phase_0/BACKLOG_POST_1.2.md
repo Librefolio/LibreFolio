@@ -2937,6 +2937,18 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   con un marcatore `Date.now()`: se i progetti desktop e mobile lo eseguono insieme, il secondo upsert sovrascrive la riga
   del primo. Lo scenario 2 marca le righe con una sonda `isVisible().catch`. Cura: un asset proprio per test, come in
   `asset-event-editor-save.spec.ts`. Dettagli: piano 04, sezione E1, passo 3.
+- **W-B30 · Svuotare un costo manuale non lo toglie: la modifica lo tiene in silenzio** — basso, numeri; W, 15/10 (N2,
+  test-author). In un aggiornamento `cost_basis_override: null` vale «invariato», come un campo assente
+  (`_apply_update_values`, `backend/app/services/transactions/batch_edits.py`): il modulo, quando l'utente svuota un costo
+  manuale, manda `null` e il backend tiene il costo di prima senza dirlo. Da decidere: un modo esplicito di togliere il
+  costo (con la regola del costo obbligatorio che poi lo rifiuta dove serve) o un messaggio. Dettagli: piano 04, sezione
+  N2.
+- **W-B31 · La regola 12 del costo è una seconda copia scritta a mano** — minimo, codice; W, 15/10 (N2, test-author).
+  `validate_transaction_business_rules` (`backend/app/schemas/transactions/transactions.py`, regola 12,
+  `costBasisModeIncompatible`) ammette `cost_basis_mode` solo per TRANSFER e ADJUSTMENT con quantità > 0, a mano, mentre
+  N2 legge dai metadati il costo obbligatorio (`cost_basis_required`). Leggerla da `TX_TYPE_METADATA` porterebbe un
+  import circolare (`type_metadata.py` importa `transactions.py`): serve spostare la funzione o un import tardivo.
+  Dettagli: piano 04, sezione N2.
 
 ## J · Numeri e analisi (fase 01)
 
