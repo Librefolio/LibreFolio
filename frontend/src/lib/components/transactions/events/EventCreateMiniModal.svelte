@@ -17,6 +17,8 @@
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
+    import EventExistsPanel from './EventExistsPanel.svelte';
+    import {eventSaveErrorMessage, existingAmountText, existingEvents, type ExistingEvent} from './eventSaveError';
     import {X} from 'lucide-svelte';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -58,6 +60,10 @@
     let confirmDiscardOpen = $state(false);
     let userTouched = $state(false);
     let initialAmount = $state('');
+    // Decision 20: «+ New event» never overwrites. On EVENT_EXISTS the panel shows the events already there.
+    let existing = $state<ExistingEvent[] | null>(null);
+    // «Edit this»: the form edits that manual event, saved by its id.
+    let editingId = $state<number | null>(null);
 
     // Track if form is dirty — only if user actively changed something
     let isDirty = $derived(userTouched && (eventNotes !== '' || eventType !== resolveDefaultEventType(defaultEventType) || eventDate !== defaultDate || eventAmount !== initialAmount));
@@ -71,11 +77,14 @@
         return diff;
     });
 
-    // Format amount on blur to 2 decimals
+    // Format amount on blur: two decimals at least, and never fewer than typed — an event edited here can carry
+    // a per-share amount with more (decision 20, «Edit this»), which rounding would change.
     function formatAmount() {
-        const n = parseFloat(normalizeDecimalInput(eventAmount));
+        const raw = normalizeDecimalInput(eventAmount);
+        const n = parseFloat(raw);
         if (!isNaN(n) && n >= 0) {
-            eventAmount = n.toFixed(2);
+            const typedDecimals = raw.includes('.') ? raw.split('.')[1].length : 0;
+            eventAmount = n.toFixed(Math.min(Math.max(2, typedDecimals), 8));
         }
     }
 
@@ -92,6 +101,8 @@
             error = '';
             saving = false;
             userTouched = false;
+            existing = null;
+            editingId = null;
         }
     });
 
@@ -132,11 +143,14 @@
 
         saving = true;
         try {
-            await zodiosApi.upsert_events_bulk_api_v1_assets_events_post([
+            const resp = await zodiosApi.upsert_events_bulk_api_v1_assets_events_post([
                 {
                     asset_id: assetId,
+                    // A new event never overwrites another (decision 20); an edit names the event it changes.
+                    mode: editingId === null ? 'create' : 'upsert',
                     events: [
                         {
+                            id: editingId ?? undefined,
                             date: eventDate,
                             type: eventType,
                             value: {code: assetCurrency, amount},
@@ -146,10 +160,8 @@
                 },
             ]);
 
-            // After upsert, fetch the event to get its ID
-            const resp = (await zodiosApi.query_events_bulk_api_v1_assets_events_query_post([{asset_id: assetId, date_range: {start: eventDate, end: eventDate}}])) as any;
-            const items = resp?.items?.[0]?.events ?? [];
-            const created = items.find((e: any) => e.type === eventType && e.date === eventDate);
+            // The event the save wrote, by its id (I-10 S4): re-reading the day by type could find another one.
+            const savedId = resp.results?.[0]?.event_ids?.[0] ?? editingId;
 
             // Build descriptive toast
             const typeLabel = $t(`assetDetail.eventType.${eventType}`) || eventType;
@@ -159,18 +171,38 @@
             const fmtAmt = !isNaN(amt) ? `${formatFixed(amt, 2)} ${assetCurrency}` : '';
             const toastMsg = `${emoji} ${typeLabel} · ${fmtDate}${fmtAmt ? ` · ${fmtAmt}` : ''}${eventNotes ? ` · 📝 ${eventNotes}` : ''}`;
             toasts.success(toastMsg);
-            if (created?.id) {
-                oncreated?.(created.id);
+            if (savedId) {
+                oncreated?.(savedId);
             }
             onclose?.();
-        } catch (err: any) {
-            // A refusal's detail is {error_code, message, params}: show its message.
-            const detail = err?.response?.data?.detail;
-            const msg = (typeof detail === 'string' ? detail : detail?.message) || err?.message || 'Error creating event';
-            error = msg;
+        } catch (err: unknown) {
+            const found = existingEvents(err);
+            if (found) {
+                existing = found;
+                return;
+            }
+            error = eventSaveErrorMessage(err, $t, [{date: eventDate, type: eventType}], (type) => $t(`assetDetail.eventType.${type}`) || type);
         } finally {
             saving = false;
         }
+    }
+
+    /** «Use this»: link the event already there, write nothing. */
+    function useExisting(event: ExistingEvent) {
+        existing = null;
+        oncreated?.(event.id);
+        onclose?.();
+    }
+
+    /** «Edit this»: the form now edits that manual event, with its own values, and saves it by id. */
+    function editExisting(event: ExistingEvent) {
+        editingId = event.id;
+        eventType = event.type;
+        eventDate = event.date;
+        eventAmount = existingAmountText(event.value.amount);
+        eventNotes = event.notes ?? '';
+        existing = null;
+        error = '';
     }
 </script>
 
@@ -179,7 +211,11 @@
         <!-- Header -->
         <div class="flex items-center justify-between p-5 pb-4 border-b border-gray-100 dark:border-slate-700 shrink-0">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
-                ✨ {$t('transactions.form.eventCreateTitle', {values: {asset: assetName}})}
+                {#if editingId === null}
+                    ✨ {$t('transactions.form.eventCreateTitle', {values: {asset: assetName}})}
+                {:else}
+                    ✏️ {$t('transactions.form.eventEditTitle', {values: {asset: assetName}})}
+                {/if}
             </h2>
             <button class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50" disabled={saving} onclick={requestClose} type="button">
                 <X size={20} />
@@ -193,90 +229,94 @@
                 <InfoBanner variant="error" message={error} dismissible ondismiss={() => (error = '')} />
             {/if}
 
-            <!-- Type -->
-            <div class="space-y-1.5">
-                <span class="block text-xs font-medium text-gray-500 dark:text-gray-400">
-                    {$t('common.type')}
-                </span>
-                <SimpleSelect
-                    value={eventType}
-                    options={typeOptions}
-                    testId="event-create-type"
-                    onchange={(v) => {
-                        eventType = v;
-                        userTouched = true;
-                    }}
-                />
-            </div>
-
-            <!-- Date -->
-            <div class="space-y-1.5">
-                <div class="flex items-center justify-between">
+            {#if existing}
+                <EventExistsPanel events={existing} onuse={useExisting} onedit={editExisting} oncancel={() => (existing = null)} />
+            {:else}
+                <!-- Type -->
+                <div class="space-y-1.5">
                     <span class="block text-xs font-medium text-gray-500 dark:text-gray-400">
-                        {$t('common.date')}
+                        {$t('common.type')}
                     </span>
-                    {#if deltaDays != null && deltaDays !== 0}
-                        <span class="text-xs font-mono text-amber-500">Δ{deltaDays > 0 ? '+' : ''}{deltaDays}d</span>
-                    {/if}
-                </div>
-                <SingleDatePicker
-                    value={eventDate}
-                    label=""
-                    inputStyle={true}
-                    allowFuture={false}
-                    onchange={(d) => {
-                        eventDate = d;
-                        userTouched = true;
-                    }}
-                />
-            </div>
-
-            <!-- Amount -->
-            <div class="space-y-1.5">
-                <label for="event-amount" class="block text-xs font-medium text-gray-500 dark:text-gray-400">
-                    {$t('transactions.fields.amount')}
-                </label>
-                <div class="flex items-center gap-2">
-                    <input
-                        id="event-amount"
-                        type="text"
-                        inputmode="decimal"
-                        class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-mono text-right focus:ring-2 focus:ring-libre-green/30 focus:border-libre-green [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
-                        bind:value={eventAmount}
-                        oninput={() => (userTouched = true)}
-                        onkeydown={(e) => {
-                            const stepped = decimalArrowStep(e, eventAmount, 0.01);
-                            if (stepped === null) return;
-                            eventAmount = stepped;
+                    <SimpleSelect
+                        value={eventType}
+                        options={typeOptions}
+                        testId="event-create-type"
+                        onchange={(v) => {
+                            eventType = v;
                             userTouched = true;
                         }}
-                        onblur={formatAmount}
-                        placeholder="0.00"
-                        data-testid="event-create-amount"
                     />
-                    <span class="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                        {currencyInfo.symbol}
-                        {currencyInfo.flag_emoji}
-                        {assetCurrency}
-                    </span>
                 </div>
-            </div>
 
-            <!-- Notes -->
-            <div class="space-y-1.5">
-                <label for="event-notes" class="block text-xs font-medium text-gray-500 dark:text-gray-400">
-                    {$t('common.notes')}
-                </label>
-                <input
-                    id="event-notes"
-                    type="text"
-                    class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-libre-green/30 focus:border-libre-green"
-                    bind:value={eventNotes}
-                    oninput={() => (userTouched = true)}
-                    placeholder={$t('common.optional')}
-                    data-testid="event-create-notes"
-                />
-            </div>
+                <!-- Date -->
+                <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                        <span class="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                            {$t('common.date')}
+                        </span>
+                        {#if deltaDays != null && deltaDays !== 0}
+                            <span class="text-xs font-mono text-amber-500">Δ{deltaDays > 0 ? '+' : ''}{deltaDays}d</span>
+                        {/if}
+                    </div>
+                    <SingleDatePicker
+                        value={eventDate}
+                        label=""
+                        inputStyle={true}
+                        allowFuture={false}
+                        onchange={(d) => {
+                            eventDate = d;
+                            userTouched = true;
+                        }}
+                    />
+                </div>
+
+                <!-- Amount -->
+                <div class="space-y-1.5">
+                    <label for="event-amount" class="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                        {$t('transactions.fields.amount')}
+                    </label>
+                    <div class="flex items-center gap-2">
+                        <input
+                            id="event-amount"
+                            type="text"
+                            inputmode="decimal"
+                            class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-mono text-right focus:ring-2 focus:ring-libre-green/30 focus:border-libre-green [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                            bind:value={eventAmount}
+                            oninput={() => (userTouched = true)}
+                            onkeydown={(e) => {
+                                const stepped = decimalArrowStep(e, eventAmount, 0.01);
+                                if (stepped === null) return;
+                                eventAmount = stepped;
+                                userTouched = true;
+                            }}
+                            onblur={formatAmount}
+                            placeholder="0.00"
+                            data-testid="event-create-amount"
+                        />
+                        <span class="text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                            {currencyInfo.symbol}
+                            {currencyInfo.flag_emoji}
+                            {assetCurrency}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Notes -->
+                <div class="space-y-1.5">
+                    <label for="event-notes" class="block text-xs font-medium text-gray-500 dark:text-gray-400">
+                        {$t('common.notes')}
+                    </label>
+                    <input
+                        id="event-notes"
+                        type="text"
+                        class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-libre-green/30 focus:border-libre-green"
+                        bind:value={eventNotes}
+                        oninput={() => (userTouched = true)}
+                        placeholder={$t('common.optional')}
+                        data-testid="event-create-notes"
+                    />
+                </div>
+            {/if}
         </div>
 
         <!-- Footer -->
@@ -284,8 +324,14 @@
             <button type="button" class="px-3 py-1.5 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" disabled={saving} onclick={requestClose}>
                 {$t('common.cancel')}
             </button>
-            <button type="button" class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" disabled={saving || !eventAmount} onclick={handleSubmit} data-testid="event-create-submit">
-                {saving ? $t('common.saving') : $t('common.create')}
+            <button
+                type="button"
+                class="px-3 py-1.5 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={saving || !eventAmount || existing !== null}
+                onclick={handleSubmit}
+                data-testid="event-create-submit"
+            >
+                {saving ? $t('common.saving') : editingId === null ? $t('common.create') : $t('common.save')}
             </button>
         </div>
     </div>
