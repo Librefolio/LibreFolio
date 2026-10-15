@@ -27,7 +27,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Transaction
-from backend.app.schemas.transactions import TXBatchResponse
+from backend.app.schemas.transactions.transactions import TXBatchResponse
 from backend.app.services.transactions.access import TransactionAccessMixin
 from backend.app.services.transactions.auto_cost import TransactionAutoCostMixin
 from backend.app.services.transactions.balances import TransactionBalancesMixin
