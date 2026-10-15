@@ -70,8 +70,15 @@ def _row_counts(conn: sqlite3.Connection) -> dict[str, int]:
     return {name: conn.execute(f'SELECT count(*) FROM "{name}"').fetchone()[0] for name in names}
 
 
-def _common_problems(conn: sqlite3.Connection, counts_before: dict[str, int]) -> list[str]:
-    problems = [f"foreign_key_check: {row}" for row in conn.execute("PRAGMA foreign_key_check").fetchall()]
+def _fk_violations(conn: sqlite3.Connection) -> set[tuple]:
+    """What ``PRAGMA foreign_key_check`` reports: one ``(table, rowid, parent table, foreign key index)`` per broken reference."""
+    return {tuple(row) for row in conn.execute("PRAGMA foreign_key_check").fetchall()}
+
+
+def _common_problems(conn: sqlite3.Connection, counts_before: dict[str, int], violations_before: set[tuple]) -> list[str]:
+    """What a fix broke: a foreign key violation that was not there before it (one already there stays, and is not
+    the fix's), or a table whose row count changed."""
+    problems = [f"foreign_key_check: {row}" for row in sorted(_fk_violations(conn) - violations_before, key=repr)]
     counts_after = _row_counts(conn)
     if counts_after != counts_before:
         changed = sorted(name for name in set(counts_before) | set(counts_after) if counts_before.get(name) != counts_after.get(name))
@@ -101,11 +108,12 @@ def _apply_one(conn: sqlite3.Connection, fix: PostMigrationFix, anomaly: Any, ct
         return False
 
     counts_before = _row_counts(conn)
+    violations_before = _fk_violations(conn)
     conn.execute("PRAGMA foreign_keys = OFF")
     try:
         conn.execute("BEGIN IMMEDIATE")
         fix.apply(conn, anomaly, ctx)
-        problems = fix.verify(conn, anomaly, ctx) + _common_problems(conn, counts_before)
+        problems = fix.verify(conn, anomaly, ctx) + _common_problems(conn, counts_before, violations_before)
         if problems:
             raise PostMigrationError("; ".join(problems))
         conn.execute("COMMIT")
@@ -141,6 +149,11 @@ def _apply_pending(conn: sqlite3.Connection, pending: list[tuple[PostMigrationFi
         report.errors.append(f"backup: {exc}")
         logger.warning("Post-migration fixes skipped: the backup copy could not be made", db_path=str(ctx.db_path), error=str(exc))
         return
+
+    # Broken references the database already holds are not the fixes' to judge: each fix is checked for the ones it adds.
+    existing = _fk_violations(conn)
+    if existing:
+        logger.warning("Foreign key violations already in the database, left as they are", db_path=str(ctx.db_path), count=len(existing), violations=[list(row) for row in sorted(existing, key=repr)[:20]])
 
     for fix, anomaly in pending:
         if not _apply_one(conn, fix, anomaly, ctx):

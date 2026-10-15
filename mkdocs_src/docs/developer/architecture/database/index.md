@@ -99,9 +99,12 @@ connection:
    backup API to `<db file>.pre-<fix ids>-<UTC %Y%m%dT%H%M%SZ>.bak`. No copy, no fix.
 5. Each pending fix runs `prepare()` outside the transaction (filesystem work to undo on failure),
    then, with `foreign_keys = OFF` (SQLite switches it only outside a transaction),
-   `BEGIN IMMEDIATE`, `apply()`, `verify()` and the common checks — `PRAGMA foreign_key_check`
-   empty, the row count of every table unchanged — before `COMMIT`. Any problem rolls back.
-   `finish()` runs after either outcome, and a failed fix stops the ones after it.
+   `BEGIN IMMEDIATE`, `apply()`, `verify()` and the common checks — no `PRAGMA foreign_key_check`
+   row that was not there just before the fix, the row count of every table unchanged — before
+   `COMMIT`. Any problem rolls back. `finish()` runs after either outcome, and a failed fix stops
+   the ones after it. A broken reference the database already held is not the fix's to judge: it
+   stays, and the run logs those it found once, as the WARNING *Foreign key violations already in
+   the database, left as they are* (`count`, and up to 20 of the rows `foreign_key_check` gives).
 6. All applied: the backup is deleted and *Post-migration fixes applied and verified* is logged.
    Otherwise the backup is kept and *Post-migration fix failed: the database was left as it was*
    gives its path and the errors. Both lines carry `seconds`.
@@ -109,7 +112,11 @@ connection:
 `python -m backend.app.db.post_migration [--db PATH] [--data-dir PATH] [--dry-run]`
 (`__main__.py`) runs the same function with the server stopped, which it does not check. Each fix
 reports `clean`, `would_apply` (dry run), `applied` or `failed` (`PostMigrationReport`); the exit
-code is `1` when a fix or the integrity check failed.
+code is `1` when a fix or the integrity check failed. Run that way, it also logs what the server
+logs at startup — the warnings, each fix's own lines, the closing line with `seconds` — on the
+console only (`configure_logging(LOG_LEVEL, enable_file_logging=False)`, as JSON on stdout between
+its summary lines), so it writes no log file in the data directory; `main()` called from code
+configures nothing.
 
 The first fix, `autoincrement` (`autoincrement.py`), gives `AUTOINCREMENT` to the id of the tables
 whose ids leave the backend (`AUTOINCREMENT_TABLES`: `users`, `brokers`, `assets`, `transactions`,
@@ -167,8 +174,7 @@ fix converts, once, the halves already in a database.
   `transaction_id`, `broker_id`, `date`, `from_type`, `to_type`, `quantity`, `amount`, `currency`,
   `asset_id`, `cost_basis`, `cost_basis_currency`, `missing_cost_basis` and `former_partner_id`
   (the missing row the link named, `null` when the link was already cleared). The offline script
-  does not call `configure_logging()`: Python's last-resort handler prints the WARNING on stderr,
-  and the INFO lines, *Post-migration fixes applied and verified* included, are dropped.
+  prints them too, on the console.
 
 `./dev.py test db post-migration-orphan-pairs`
 (`backend/test_scripts/test_db/test_post_migration_orphan_pairs.py`) pins this contract.
