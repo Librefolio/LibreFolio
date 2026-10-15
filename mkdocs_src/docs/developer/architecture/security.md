@@ -12,7 +12,7 @@ LibreFolio is a **self-hosted** application. The primary security assumption is 
 - **🛡️ Data Segregation**: Strict isolation between users via Role-Based Access Control (RBAC).
 - **✏️ Input Validation**: Preventing injection attacks via strict Pydantic schemas.
 - **🧼 Output Escaping**: User- and provider-supplied text is escaped or sanitized before the browser can render it as HTML.
-- **📁 File Upload Security**: MIME type validation, executable blocking, size limits.
+- **📁 File Upload Security**: MIME type validation, executable blocking, size limits, and a [scope](#upload-scope) per file: common, or personal to its uploader and the administrators.
 - **🚫 Endpoint Protection**: **All** data and file endpoints require a valid session cookie — including uploaded files and plugin assets.
 
 ### ⚠️ Out of Scope
@@ -404,9 +404,44 @@ All other endpoints — including Auth (profile, password), Settings (user setti
 
 !!! info "📁 Files are protected too"
 
-    Uploaded files (`/uploads/file/{id}`) and plugin assets (`/uploads/plugin/{type}/{path}`) **require authentication**. Since auth uses HTTP-only cookies, the browser includes the session automatically for `<img>` tags — no special handling needed.
+    Uploaded files (`/uploads/file/{id}`) and plugin assets (`/uploads/plugin/{type}/{path}`) **require authentication**. Since auth uses HTTP-only cookies, the browser includes the session automatically for `<img>` tags — no special handling needed. A personal file needs more than a session: see [Uploaded Files: Common and Personal](#upload-scope).
 
 For a complete endpoint reference, see the [API Overview](../api/overview.md).
+
+### 📁 Uploaded Files: Common and Personal {: #upload-scope }
+
+Each uploaded static file (`<data directory>/custom-uploads/<uuid>.<ext>`, with its JSON sidecar `<uuid>.json`, see
+[Data Directory on Disk](database/index.md#data-directory)) has a scope, `UploadScope`
+(`backend/app/schemas/uploads.py`): `common`, seen by every signed-in user (icons, logos, asset photos, avatars), or
+`personal`, seen only by its uploader and the administrators (`is_superuser`). The rule lives in
+`backend/app/services/files/static_uploads.py`, the routes in `backend/app/api/v1/uploads.py`:
+
+- **The scope.** The sidecar stores it. A sidecar written before scopes existed, or by the seeding of the default
+  avatars, has none, and `effective_scope()` applies the inheritance rule at every read, with no migration: the
+  application's own files (uploader id `0`, `SYSTEM_USER_ID`: the seeded default avatars) are common, `image/*` is
+  common, anything else is personal. `POST /uploads` takes an optional multipart field `scope`, `common` or
+  `personal`; without it, the same rule decides, and the result is stored.
+- **Seeing a file** (`can_view_upload()`). `GET /uploads` lists the common files and the user's own personal ones,
+  every file for an administrator; `my_files_only=true` keeps only one's own files, of both scopes. `GET /uploads/{id}`,
+  `GET /uploads/{id}/preview` and `GET /uploads/file/{id}` (download, `img_preview` thumbnail, text window) answer a
+  personal file of someone else with the `404` *File not found* of a file that does not exist, so its existence is not
+  revealed. The check runs first, before the thumbnail cache and before any type check.
+- **Changing a file** (`can_manage_upload()`). `DELETE /uploads/{id}` and `PATCH /uploads/{id}` with
+  `{"scope": "common"}` or `{"scope": "personal"}` (`UploadUpdateRequest`) belong to the uploader and the
+  administrators. Another user gets `403` on a common file, and the same `404` on a personal one. Every
+  `UploadFileInfo` carries `scope` and `can_delete`: whether the requesting user may delete the file and change its
+  scope.
+- **Private thumbnails.** `img_preview` answers carry `Cache-Control: private, max-age=3600`, never `public`: they are
+  signed-in content, which the browser may keep and a shared cache in front of the instance must not.
+- **Several workers** (`dev.py server --workers N`). Each worker caches a sidecar for up to an hour (`upload_metadata`),
+  but checks the sidecar's stamp (inode, mtime, size) at every read, and `_save_metadata()` replaces a sidecar
+  atomically (a temporary file in the same folder, then `os.replace`). A scope changed through one worker holds at
+  once in the others, and no reader sees half a file.
+
+The broker report files of [BRIM](../backend/brim/architecture.md) answer differently, and deliberately so: their
+routes (`/brokers/import/files/…`) give `403` to a user without access to the file's broker.
+
+Tests: `./dev.py test services static-uploads`, `./dev.py test api uploads` and `./dev.py test api uploads-serve-file`.
 
 ### 🚧 Instance Block {: #instance-block }
 
