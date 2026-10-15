@@ -158,3 +158,4 @@ Sono tutti locali: la push la fa il developer.
 | 69 | 15/10 23:45 | W: W-B20 (un savepoint per broker nella cancellazione multipla; `begin_writes` in `db/session.py`) | `23ff56b95` |
 | 70 | 16/10 00:42 | J: CP-16 (decisione 47 nei lotti: la rettifica in uscita con costo chiude i lotti al costo medio della riga, valore ceduto nei proventi; J-9; etichetta «Valore ceduto al costo») | `240675ad1` |
 | 71 | 16/10 00:55 | X: CP11a (impostazioni dei plugin, backend: `configured` nel catalogo, `providers_not_configured` e `error_code` nello stream di ricerca, preferenze justETF/Borsa D-X14, `PROVIDER_ERROR` mascherato; CHANGELOG con CP11b) | `a6453571d` |
+| 72 | 16/10 01:38 | W: lotto di doc (A-14 regola dell'ultimo OWNER, W-B10 rotte di accesso, W-B33; tolte due chiavi i18n inutilizzate di W-B27) | `6fa3f8936` |
