@@ -1006,3 +1006,15 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 > (solo descrizioni delle voci E): `_backend_api.py`, `_backend_services.py`. Doc EN: `admin/email.en.md` (senza
 > traduzioni), `developer/backend/email.md`. Questo piano. Resta aperta la sospensione di «password dimenticata»
 > (409 `FORGOT_PASSWORD_DISABLED`) fino al lotto di A sulla password attuale per cambiare l'email; la toglie E4.
+>
+> **Committato** dal coordinatore: `5608193b5` fix(email) e `734bb6706` docs(journal).
+>
+> **Merge di base** (2026-10-15, 21:20): `dev_release2` `b09776a3d` (A6b, X CP10, J CP-4c, lo scatto di B), commit del
+> coordinatore `cd12482fc`. Un conflitto, `admin/configuration.en.md`: le righe di `LIBREFOLIO_PUBLIC_URL` riscritte da
+> A6b (dialoghi di Users, «Server address») + le mie frasi sulle email con un link; `LIBREFOLIO_BILLING_URL` di
+> `dev_release2`; la sezione Plugin Settings di X e le mie righe `email.links` unite da git, senza doppioni. Controllo
+> di significato: il filtro di mascheramento di X agisce solo sui segreti «in volo» di una chiamata di plugin, mai
+> attivi nel codice email. Prove sulla revisione unita, una alla volta, `nice -n 10`: `services email-flows` 132 ✅,
+> `email-delivery` 104 ✅, `email-messages` 267 ✅, `--no-shared-server api email` 160 ✅, `api system` 117 ✅ (server
+> di corsia, spento a fine run), `check-orphans` ✅ (325 file backend, 428 unit, 128 E2E raggiungibili). Porta 6188
+> libera.
