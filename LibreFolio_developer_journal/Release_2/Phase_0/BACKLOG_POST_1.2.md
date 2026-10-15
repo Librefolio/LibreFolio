@@ -2393,6 +2393,22 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     esplicita del developer (coordinatore, 15/10).
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
+- **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
+  letta nel codice e non ancora provata; segnalata dal coordinatore.
+  - Una riga di `user_settings` con un `theme` diverso da `light`, `dark` e `auto` farebbe rispondere 500 a
+    `/auth/login` e a `/settings/user`.
+  - Prima della correzione serve un rosso. È piccola: va in un lotto dopo A5.
+- **A-12 · `e2e/settings.spec.ts`: selettori ancora fragili nei test non toccati da A5b** — minimo; A (15/10,
+  `test-author` della riparazione).
+  - I test dei numeri usano `.first()` su `.setting-row input[type="number"]`, i `title` tradotti «Save» e
+    «Undo» e un XPath su una classe CSS.
+  - Lo sblocco usa il `title` tradotto, mentre esiste `settings-lock-toggle`.
+  - I due `beforeEach` aspettano la classe `.setting-row` invece di `data-busy` della scheda.
+  - Il segnaposto «Coming soon» (disabilitato sempre) non ha più un test: lo copriva per caso il vecchio
+    `.first()`. Basta un test di componente (`SettingToggle`, `disabled` e `badge`).
+  - I test «non admin» non provano la sola lettura: manca l'asserzione che `settings-lock-toggle` non c'è.
+  - Si fa con la scheda Utenti (A6), che tocca la stessa pagina.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.9».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
