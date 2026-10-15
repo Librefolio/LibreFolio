@@ -1158,3 +1158,29 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >
 > **Finestra della galleria**: dalle 08:45 a fine r2 (verso le 10:15) `dev_release2` resta fermo; poi i lotti solo
 > backend possono rientrare con l'avviso, quelli frontend dopo la fine della finestra (verso le 12:30).
+
+### Finestra della galleria, prima parte (2026-10-15, 08:45–10:20)
+
+> **Note implementazione**: `dev_release2` fermo a `2338aaf79` dalle 08:38 alle 10:16 (gallerie r1 e r2 del programma
+> colori nel checkout principale; r1 rilanciata alle 09:15 con meno worker; tutte e due pulite). Nel frattempo, solo
+> commit sui rami dei figli:
+> - **H**: CP5b e CP6 (`87be1e2d8`…`0326a1d02`, base in `5b2b9061f`); scritti CP7a, C-96 e un filtro che maschera i
+>   token nel log d'accesso di uvicorn (i link di A5b portano ora il token nel frammento). CP6 entrerà dal commit
+>   `5b2b9061f`, validato con il worktree staccato lì; i tre lotti nuovi restano sul ramo finché non sono provati.
+> - **A**: A5a committato e base aggiornata (`8e049474e`, conflitto in `test_system_api.py` risolto da A); A5b in corso.
+> - **X**: FE5b-1, FE5b-2, X-R11a, X-R1 e X-R2 committati; il contratto del ripristino per B nel disegno del CP10
+>   (il `key_id` di ogni segreto fa da valore di controllo H-3: B non deve riscrivere niente).
+> - **W**: FE8a in tre pezzi committati (il Wizard prima delle prove); avviato N1: la cassa e le posizioni della pagina
+>   broker al giorno dell'utente (verificato da J: è la regola della Dashboard) e le metà spaiate dei trasferimenti
+>   (V-3). Decisioni del coordinatore: CASH_TRANSFER e FX_CONVERSION come la divisione di una coppia (deposito o
+>   prelievo); le metà già nei DB con una correzione dopo le migrazioni (non Alembic: il log di ogni riga si vede
+>   anche in Docker), che entra solo con l'ok del developer (punto 46); le gambe in uscita restano come oggi fino al
+>   punto 47 (proposta di J: rettifica in uscita al costo). D-J4 aggiornata: i rossi su lotti e Dashboard li scrive il
+>   test-author di W, J ne rivede i numeri.
+> - **E**: analisi consegnata, senza dipendenze nuove; scelte di prodotto nei punti 44 (la verifica dell'email) e 45
+>   (link solo con `LIBREFOLIO_PUBLIC_URL`), le altre del coordinatore nello stesso blocco. Trovata C-96, assegnata a
+>   H; A-9 di A ne fa parte.
+> - **J**: C-94 scritto (prove dopo la finestra, con una categoria della galleria e `LF_APP_VERSION` concordata col
+>   coordinatore colori); rivista la V-3 di W.
+>
+> Punti nuovi per il developer nel file delle decisioni: 44–47.
