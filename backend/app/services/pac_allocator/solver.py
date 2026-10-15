@@ -208,7 +208,7 @@ class SolverTolerances:
 class SolverStageReport:
     """Floating facts about one cascade stage, as SCIP reported them.
 
-    Mirrors ``schemas/pac_allocator/pac_allocator.SolverStageEvidence`` field for field so
+    Mirrors ``schemas/pac_allocator/evidence.SolverStageEvidence`` field for field so
     ``planner_report.py`` can project it without re-deriving anything, but
     stays a plain dataclass: this module must not import wire schemas.
     ``infeasible`` is reserved for SCIP's verdict on the first, still-global
