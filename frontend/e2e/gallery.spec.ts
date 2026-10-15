@@ -127,6 +127,7 @@ import {
     settlePacShot,
 } from './fixtures/galleryPac';
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
+import {expectGalleryEmailStatus, serveGalleryEmailStatus} from './fixtures/galleryEmail';
 import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
 import {boxStill, bringIntoViewFromTop, captureShot, COLUMN_FILTER_GAP, DROPDOWN_GAP, expectDropdownAt, frameTarget, logApiOnFailure, scrollStill, settledToOpen, settleShot, type ShotOptions, trackApiRequests} from './fixtures/galleryShot';
 import {brimFileId, chooseTheme, closePreview, FILES_SAMPLES, filesTableReady, fontsLoaded, gridPreviewReady, imagePreviewReady, imagesInViewLoaded, languageMenuClosed, markdownPreviewReady, openPreview, pdfPreviewReady, staticFileId, textPreviewReady} from './fixtures/galleryFiles';
@@ -2037,6 +2038,28 @@ test.describe('Gallery Screenshots', () => {
                 // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole page, on a screen as tall as it.
                 if (viewport === 'desktop') await extendScreenToBlock(page, page.locator(PAGE_BLOCK), `desktop/${lang}/${theme}/settings/global-settings`);
                 await screenshot(page, viewport, lang, theme, 'settings', 'global-settings');
+                await restoreTallScreen(page);
+            });
+        });
+
+        test('email (admin) - all languages and themes', async ({page}, testInfo) => {
+            // The administrators' Email tab where email works: the lane has no SMTP server, so the status read is answered,
+            // before any navigation, by galleryEmail.ts — ready, 47 of 50 emails left, no notice. The test email is never pressed.
+            const viewport = getViewport(testInfo);
+            await serveGalleryEmailStatus(page);
+            await login(page, TEST_ADMIN);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                // Straight to the tab, as the preferences shots open theirs: the page honours ?tab= (settings/+page.svelte).
+                await navigateTo(page, '/settings?tab=email');
+                await expect(page.getByTestId('settings-tab-email')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+                // The status arrives after the tab is drawn: the panel says when it is in (data-busy).
+                await waitForSettled(page.getByTestId('email-tab'), 15_000);
+                await expectGalleryEmailStatus(page);
+                await freezeAnimations(page);
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, as the profile shot frames it.
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/email`);
+                await screenshot(page, viewport, lang, theme, 'settings', 'email');
                 await restoreTallScreen(page);
             });
         });
