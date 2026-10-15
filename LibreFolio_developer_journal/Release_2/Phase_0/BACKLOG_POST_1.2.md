@@ -2382,24 +2382,30 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   14/10 senza codice: già fatta il 10/09 in `e50d66408` (conteggio e link nella cancellazione singola e in quella multipla,
   `FAAssetDeleteResult.transaction_count`, E2E in `e2e/assets/asset-list.spec.ts`); nella devWiki F-095 era già
   `documented`, e `domains/assets.md` non la elenca più fra le cose da fare. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «2.5».
-- **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1,
+- ✅ **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1,
   CP3). La docstring di `create_routes_bulk` (oggi `api/v1/fx/providers.py:183`) cita ancora «``services/fx.py``»; la
   funzione sta in `services/fx/storage.py` dal CP3. Il testo è nella descrizione dell'endpoint in `openapi.json`, e il PL4 è
   un riordino a `openapi.json` invariato: come X-R2, si corregge in un lotto che cambia comunque l'API (il CP6, F05, o
-  prima). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1 e CP3.
-- **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
+  prima). **Chiusa il 15/10**, con X-R2, in un commit sopra X-R11a che entra con FE5b; `openapi.json` cambia solo nelle tre
+  descrizioni. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1, CP3
+  e X-R1 + X-R2.
+- ✅ **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
   docstring di `BackwardFillInfo` (`schemas/common.py:369`) e di `IdentifierType` (`db/models.py:117` e `:123`) citano ancora
   `schemas/assets.py` (diventato `schemas/assets/assets.py` nel CP2b) e `asset_source.py` (tolto nel CP2a). Il testo finisce
   in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima). Nella stessa docstring di
   `db/models.py`, la riga `:127` cita `services/brim_provider.py`, spostato da W (W4 CP6) in `services/brim/`: per la stessa
-  ragione resta, e si corregge insieme alle altre (aggiunta il 15/10, validazione di `d1ef3ddeb`). Dettagli:
-  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a e CP2b.
-- **X-R3 · Tre commenti del frontend citano il modulo degli asset tolto** — minimo; X, 15/10 (CP2b, validazione di
+  ragione resta, e si corregge insieme alle altre (aggiunta il 15/10, validazione di `d1ef3ddeb`). **Chiusa il 15/10** con
+  X-R1; nella stessa docstring anche il passo 1, che mandava la colonna nuova in `001_initial.py` contro la regola delle
+  migrazioni incrementali. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione
+  «15», CP2a, CP2b e X-R1 + X-R2.
+- ✅ **X-R3 · Tre commenti del frontend citano il modulo degli asset tolto** — minimo; X, 15/10 (CP2b, validazione di
   `eb245b624`). `AssetModal.svelte:1507` e `:1636` attribuiscono ad `asset_source.py` le cancellazioni di prezzi ed eventi
   generati (oggi in `services/assets/provider_management.py`, `bulk_assign_providers`), e `assetPayload.test.ts:58` la fusione
   per campo della classificazione (oggi in `services/assets/crud.py`, `patch_assets_bulk`). Fuori dal perimetro dei lotti
-  del backend: si corregge nel FE5, con il taglio di `AssetModal`. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
-  sezione «15», CP2b.
+  del backend: si corregge nel FE5, con il taglio di `AssetModal`. **Chiusa nel FE5b-1 il 15/10**: i due commenti di
+  `AssetModal` puntano a `services/assets/provider_management.py`, quello di `assetPayload.test.ts:58` a
+  `services/assets/crud.py`. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», CP2b e FE5b.
 - **X-R4 · Il diagramma della guida dei plugin FX attribuisce al servizio la divisione per le valute multi-unità** —
   minimo, doc; segnalato da docs-writer il 15/10 (CP3). In `mkdocs_src/docs/developer/architecture/patterns/fx_plugin_guide.md`
   un riquadro Mermaid dice «Service normalizes … Multi-unit ÷100»; la stessa pagina dice che la divisione la fa il plugin, e
@@ -2468,6 +2474,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - la docstring di `create_routes_bulk` (`api/v1/fx/providers.py:180`) cita ancora `services/fx.py`, che dopo il CP3 è
     `services/fx/` (la normalizzazione sta in `storage.py`): segnalata dal coordinatore il 15/10, è la stessa riga di
     **X-R1**, aperta dal CP1; resta lì, perché il testo finisce nella descrizione dell'endpoint in `openapi.json`.
+    ✅ Chiusa il 15/10 con X-R1.
   Proposta: con il FE4 (frontend dei cambi). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
   sezione «15», X-R8.
 - ✅ **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
@@ -2494,6 +2501,22 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   lui a W, proprietario di `DataImportModal.svelte`. **15/10, i due test-id ci sono** (W E0, `d226bc69e`):
   `data-import-cancel` e `data-import-discard-confirm`. Restano a X le quattro righe della spec, con il FE4.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
+- **X-R11 · `AssetModal`: stranezze preesistenti viste dai test di FE5b-2** — minimo; X, 15/10 (FE5b-2, segnalate da
+  test-author). Copiate fedelmente nei moduli puri, nessuna cambiata:
+  - ✅ la riga della descrizione nel dialogo di confronto ha l'etichetta fissa `'Description'`
+    (`assetMetadataComparison.ts`), e `ProviderComparisonModal` la mostra com'è: in IT ed ES resta in inglese. Cura di
+    poche righe: `common.description` c'è già nei quattro cataloghi, basta un'etichetta in più in `ComparisonLabels`.
+    **Chiusa il 15/10** (X-R11a): in un commit a parte sopra FE5b-2, deciso dal coordinatore; entra con FE5b; test
+    rosso prima (3 su 61);
+  - `searchResultIdentifier` controlla che l'identificativo non sia vuoto prima di togliere gli spazi: uno di soli spazi
+    diventa una riga vuota, o un conflitto con un codice vuoto;
+  - `withElectedPrimary` chiama `.trim()` sui valori OTHER senza convertirli in stringa (`mergeOtherIdentifierValues` li
+    converte);
+  - `mergeOtherIdentifierValues` scarta solo `null` e `undefined`: `false` o un oggetto diventano righe `'false'` o
+    `'[object Object]'`;
+  - un `{currency: null}` nei parametri del fornitore blocca la valuta del risultato di ricerca (conta solo la chiave).
+  Proposta: le quattro rimaste con il FE5a. Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», FE5b-2 e X-R11a.
 
 - ✅ **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — basso, robustezza; trovata da J il
   15/10 (C-93), assegnata a X dal coordinatore. `services/assets/core.py:114-119` (`_sync_runner`, dentro
