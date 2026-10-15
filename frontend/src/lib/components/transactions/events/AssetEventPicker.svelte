@@ -17,6 +17,7 @@
     import {Plus} from 'lucide-svelte';
     import {formatExactDecimal, formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {registerPortfolioMutationListener} from '$lib/stores/portfolio/portfolioMutation';
 
     interface Props {
         assetId: number;
@@ -150,8 +151,17 @@
         fetchTimer = setTimeout(() => fetchEvents(aid, date, days), 200);
     });
 
+    // A write on the asset events (a new event, «Edit this» in the mini modal, the data editor) re-reads the
+    // list: fetchEvents keeps it for the same asset, date and range, so an edited event would show its old values.
+    const stopListening = registerPortfolioMutationListener(`asset-event-picker:${_uid}`, (signal) => {
+        if (signal.kind !== 'mutation' || !signal.path.startsWith('/api/v1/assets/events')) return;
+        fetchKey = '';
+        if (assetId && txDate) void fetchEvents(assetId, txDate, daysRange);
+    });
+
     onDestroy(() => {
         if (fetchTimer) clearTimeout(fetchTimer);
+        stopListening();
     });
 
     // =========================================================================

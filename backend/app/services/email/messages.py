@@ -68,10 +68,16 @@ _BUTTON = '<p style="margin:24px 0;"><a href="{href}" style="display:inline-bloc
 _FALLBACK = '<p style="margin:0 0 16px;font-size:13px;color:#4b5563;">{hint}<br><a href="{href}" style="color:#1b4334;word-break:break-all;">{text}</a></p>'
 
 
+def supported_email_language(language: str | None) -> str | None:
+    """The email language ``language`` names (``it``, ``it-IT``, ``it_IT`` and ``IT`` are ``it``), or ``None`` when it
+    names none of the four."""
+    code = (language or "").strip().lower().replace("_", "-").split("-", 1)[0]
+    return code if code in EMAIL_LANGUAGES else None
+
+
 def email_language(language: str | None) -> str:
     """The language of an email: ``it``, ``it-IT``, ``it_IT`` and ``IT`` are ``it``; an unknown one, or none, is ``en``."""
-    code = (language or "").strip().lower().replace("_", "-").split("-", 1)[0]
-    return code if code in EMAIL_LANGUAGES else "en"
+    return supported_email_language(language) or "en"
 
 
 def _checked_link(link: str) -> str:
@@ -167,13 +173,17 @@ def build_test_message(*, language: str | None, username: str, instance: str) ->
     return _render(EmailKind.TEST, lang, greeting="greeting", before=["intro"], after=["outro"], values=values)
 
 
+class EmailRecipientError(ValueError):
+    """The recipient is not exactly one bare address: nothing is composed, nothing is spent."""
+
+
 def _single_address(to: str) -> str:
-    """``to`` when it is exactly one bare address; ``ValueError`` otherwise: two addresses, a line break or any other
-    whitespace, even at an end — nothing is trimmed, so nothing can smuggle a second header or recipient."""
+    """``to`` when it is exactly one bare address; ``EmailRecipientError`` otherwise: two addresses, a line break or any
+    other whitespace, even at an end — nothing is trimmed, so nothing can smuggle a second header or recipient."""
     value = to if isinstance(to, str) else ""
     local, at, domain = value.rpartition("@")
     if not at or not local or not domain or "@" in local or any(char.isspace() or char in ',<>"' for char in value):
-        raise ValueError("an email goes to exactly one address")
+        raise EmailRecipientError("an email goes to exactly one address")
     return value
 
 

@@ -47,7 +47,7 @@ quando decido il 31)».
 | # | Decisione |
 |---|---|
 | D-Y1 | Prima `GrowthChart` (Y1), poi `DataTable` (Y2) |
-| D-Y2 | `DataTable` tagliata come FE8a: figli di template con props esplicite; stato, effetti, gestori e API pubblica restano nel padre; il CSS segue il markup; ogni figlio importa `table.css` |
+| D-Y2 | `DataTable` tagliata come FE8a: figli di template con props esplicite; stato, effetti, gestori e API pubblica restano nel padre; il CSS segue il markup; ogni figlio importa `table.css`. **Proposta del 15/10, approvata dal coordinatore (15/10, ~15:25)**: due figli invece di quattro (`DataTableColumnHeader`, `DataTableCellContent`), con struttura, CSS strutturale e gestori nel padre; motivi e forma in §4, Y2 |
 | D-Y3 | `GrowthChart` tagliato sul posto in tre moduli puri (`growthChartData.ts`, `growthChartSeries.ts`, `growthChartTooltip.ts`); nel componente restano stato, effetti, ciclo di vita di ECharts e template; poi lo spostamento (FE6b). **B10 entra in Y1** |
 | D-Y4 | FE6b subito dopo i tagli; FE7 e FE3 dopo l'ingresso di FE8a di W; FE2 dopo FE4 e FE5a di X e prima di FE5c (lo concorda il coordinatore con X) |
 | D-Y5 | Niente barili nuovi; le cose che restano al loro posto si elencano qui (§3) |
@@ -113,9 +113,11 @@ E2E del Lab legge il token della sua intestazione.
 | K-15, C-34, C-15 (parte di Y) | ✗ | formatter dei grafici; `CorrelationHeatmap.svelte:330`; `translateOr`, `LABEL_BUNDLE` | Y9 |
 | K-13 | ✗ | 15 componenti con `echarts.init` (+2 del PAC) | Y9 |
 | 54-1 | ⚠ | `AllocationHistoryChart` 627/630/779, 707, 806; `AllocationPanel:64` | Y10, dopo il developer |
+| Y-6 (dal coordinatore, DV, 15/10) | ✗ | `dashboard/AllocationPanel.svelte:65` (`toAllocEntries`) e il tipo `AllocEntry` (`:23`): `emoji` passato alla torta, che dopo DV non lo legge più. È un dato morto | Y10, dopo DV |
 | C-85 | ✗ | nessun componente comune | Y11, se c'è spazio, dopo il developer |
 | U8 | ✗ | inventario del 43 (R17, W7, W8, P4, P5, V11; `LotCustodyModal:236`; dichiarazioni) | Y12 a/b; b dopo CP-13 di J |
 | FE9, FE10, FE11 | ✗ | — | Y13, per ultimi |
+| Y-4 (G-12, dal coordinatore, 15/10) | ✗ | `charts/SignalTreeSelect.test.ts:16-17` e `:306-310`: i commenti descrivono `selectIndicatorFromTree` della galleria che espande la famiglia con un clic e clicca l'opzione; da G-9 (`1470bd693`) la galleria sceglie l'indicatore da tastiera. Solo testo | Y4 (FE2), passando dal file |
 
 ## 3. Confini (D-Y5)
 
@@ -180,12 +182,172 @@ Passi:
 Fatto quando: oracoli invariati e verdi; `--check` pulito con la riga `~split`; galleria identica salvo il rumore noto;
 handoff `FROZEN` con il messaggio di commit proposto.
 
-### Y2 — `DataTable` tagliata [autorizzato; annuncio al coordinatore prima di iniziare]
+### Y2 — `DataTable` tagliata sul posto [autorizzato; forma approvata e taglio annunciato il 15/10; fatto, checkpoint FROZEN alle 16:45, galleria d'ingresso dopo il commit]
 
-Forma (D-Y2): `DataTableHead`, `DataTableBodyRow`, `DataTableCellContent`, `DataTableFoot`; stato, effetti, gestori
-e API pubblica nel padre; `<th>` e `<td>` nei figli di riga, il contenuto nel figlio di cella; il CSS segue il markup;
-ogni figlio importa `table.css`. Prima un test d'oro del DOM (`test-author`), poi il taglio, `--split`, i gate per
-percorso, il confronto del CSS compilato con gli hash normalizzati, la galleria delle tabelle. C-38 e C-62 dopo (Y7).
+**Stato verificato a `cf8101f29`** (il file non è cambiato dalla base `1e9e567f7`):
+- `components/table/DataTable.svelte`, 2 431 righe: script 13–960, template 961–1559, `<style>` 1560–2431. Lo stile
+  ha 154 regole e 155 letture `var(--lf-cmp-*)`, e nessun letterale: R (lotto C) li ha portati in `table.css`.
+- Cricchetto: m1 4, le classi dell'interruttore `editable-checkbox` (righe 1387 e 1393: `bg-emerald-500`,
+  `bg-gray-300`, `dark:bg-slate-600`, `bg-white`). I letterali del record sono già caduti (R5).
+- 56 importatori. L'API pubblica (props, metodi esportati, `data-testid`) non cambia.
+
+**Forma: deviazione proposta da D-Y2.** D-Y2 prevede quattro figli (Head, BodyRow, CellContent, Foot), con `<th>` e
+`<td>` nei figli di riga. Propongo due figli, con `table`, `thead`, `tbody`, `tfoot`, `tr`, `th` e `td` che restano nel
+padre. I motivi:
+1. **Una E2E del programma colori.** `designer-lab-picker.spec.ts:216` pretende che la regola `th` che colora
+   l'intestazione stia in `lib/components/table/DataTable.svelte`. Con `th` in `DataTableHead` diventerebbe rossa.
+2. **CSS strutturale fermo.** Restano dove sono il sticky (`th-fixed`, `td-fixed`), lo z-index, gli stati di riga
+   (`selected`, `highlighted`, `row-*`), `:hover`, `:focus-within` e il mobile `.td-actions`.
+   - Con D-Y2 andrebbero in due copie `td`, `.td-fixed`, `.td-select`, `.td-actions`, `.checkbox-btn` e `.check-box`.
+   - L'ordine delle regole andrebbe ricostruito fra chunk CSS di componenti diversi.
+   - `OtherPeriodEffectsTable.svelte:262-321` stila da fuori proprio `.datatable th`, `td` e `tbody tr`: con questa
+     forma il suo rapporto con il chunk di DataTable non cambia.
+3. **Gestori di riga fermi.** Click, doppio click, auxclick, menu contestuale e tocco lungo non diventano 25 callback
+   di un figlio di riga: il comportamento più delicato dei 56 consumatori resta com'è.
+4. **Il guadagno resta.**
+   - Il template scende da ~600 a ~260 righe, lo stile da 154 a 100 regole.
+   - I due blocchi più grossi e autonomi diventano componenti: lo switch delle 13 celle (39 regole) e l'intestazione
+     di colonna con filtro e popover (20 regole).
+   - Il piede riusa lo switch, quindi spariscono 4 sink `{@html}` duplicati.
+
+**I pezzi**:
+- **`DataTableColumnHeader.svelte`** (nuovo, `generics="T"`): il contenuto di `th.th-data`, cioè `div.header-content`
+  (righe 1020–1136). Comprende:
+  - il bottone d'ordinamento, con e senza Tooltip;
+  - l'HTML d'intestazione;
+  - l'icona del tooltip, come link o come gesto;
+  - il bottone del filtro e la maniglia di ridimensionamento;
+  - il popover `DataTableColumnFilter` con i suoi `{@const}`, parola per parola (le opzioni del filtro dipendono da
+    `data` e da `boundaryData`: devWiki `datatable-filter-options-disappear`).
+
+  Script:
+  - i quattro risolutori puri `getColumnLabel`, `getColumnHeaderHtml`, `getColumnTooltip` e `getColumnTooltipUrl`
+    (435–452) e `EMPTY_CURRENCY_MIN_MAX` (433), usati solo qui;
+  - un ref locale del bottone del filtro, al posto di `filterBtnRefs` (308), che serviva solo a `bind:this` e ad
+    `anchorElement`.
+
+  Props esplicite, con i nomi del padre, così il template si sposta parola per parola:
+  - valori: `column`, `sortDir`, `hasFilter`, `enableSorting`, `enableColumnFilters`, `enableColumnResize`,
+    `resizing`, `columnFilters`, `data`, `boundaryData`;
+  - stato condiviso: `openFilterColumnId` come `$bindable`, perché lo stato resta del padre;
+  - gestori: `toggleSort`, `applyColumnFilter`, `startResize` e i cinque gestori del tooltip
+    (`handleHeaderTooltip*`, `cancelHeaderTooltipLongPress`). Il timer della pressione lunga resta un `let` del padre,
+    chiuso da `onDestroy` (789); la regola della devWiki `svelte5-teardown-reads-stale-state-timers` è rispettata.
+
+  CSS: le 20 regole delle righe 1681–1808.
+  - `th:hover .resize-handle` diventa `:global(th:hover) .resize-handle`, e lo stesso per la variante `.dark`.
+  - Le 5 regole `.filter-btn` sono copiate: il padre le tiene per il «mostra solo selezionati» di `th-select`.
+  - Importa `table.css`, come chiede la regola (b) del gate dei token.
+- **`DataTableCellContent.svelte`** (nuovo): lo switch di `td.td-data` (righe 1257–1433) con i suoi 13 tipi di cella.
+  - Script: `handleImageError` (496–500) e gli import usati solo qui (`formatCellDate`, `formatBytes`,
+    `normalizeDecimalInput`, `decimalArrowStep`, `SimpleSelect`, `ExternalLink`, `ImageIcon`).
+  - Una sola prop, `cellContent: CellContent`. Il nome non cambia, quindi il sink resta `cellContent.html`.
+  - CSS: le 39 regole `.cell-*` (2003–2056, 2140–2259, 2310–2379, con i loro commenti), nell'ordine originale.
+    Importa `table.css`.
+  - **Riuso nel piede** (switch 1479–1513): `FooterCellContent = SimpleCellContent | HtmlCell` è un sottoinsieme di
+    `CellContent`. Il ramo HTML è identico a quello della cella, salvo `data-testid={cellContent.testId}`, che nessun
+    piede imposta oggi. I piedi in produzione sono tre: `AssetTable` del PAC, `DistributionDialog` e
+    `UnifiedLotsTable`; due passano la prop in forma breve, `{footerCells}`.
+- **`DataTable.svelte`** tiene:
+  - lo script: stato, effetti, gestori, API pubblica;
+  - `table`, `thead`, `tbody` e `tfoot`;
+  - `tr`, `th` e `td`, con attributi, classi, stili e `data-testid`;
+  - le colonne di selezione e di azione, il caricamento, il vuoto, la paginazione, il menu contestuale e le modali;
+  - 100 regole CSS, cioè le 5 `.filter-btn` del «seleziona tutto» più le 95 strutturali. Le due
+    `:has(.cell-editable-select-wrapper)` (1960, 1965) diventano
+    `:has(:global(.cell-editable-select-wrapper))`.
+- **Niente barili**: `table/index.ts` non esporta i due figli, che sono interni (D-Y5).
+- **Cricchetto**: `--split lib/components/table/DataTable.svelte:lib/components/table/DataTable.svelte,lib/components/table/DataTableColumnHeader.svelte,lib/components/table/DataTableCellContent.svelte`,
+  poi `--check`.
+  - Le 4 classi dell'interruttore passano a `DataTableCellContent` con il record ereditato dal taglio dichiarato
+    (R3, `declareSplit`): il totale resta 4, non nasce nessuna classe nuova e nessun letterale.
+  - La loro conversione resta a T (W6). Lo dico al coordinatore colori, perché la regola del 14/10 vuole solo ruoli
+    nei file nuovi.
+- **`table.css` non si tocca.** Il commento di sezione `/* DataTable.svelte */` nomina la famiglia, e il gate dei
+  token toglie i commenti prima di leggere.
+
+**Specificità.** In Svelte 5 ogni selettore ha una sola classe di hash a peso pieno; i composti scoped successivi
+pesano zero (`:where`).
+- Spostare una regola in un figlio sposta l'hash su un altro composto, e la specificità resta uguale.
+- `:global()` sul composto che resta fuori dal figlio la conserva: `th:hover .resize-handle` pesa (0,3,1) prima e dopo.
+- Dentro `:has()` l'argomento pesa (0,1,0) con o senza `:global`.
+
+Tutto questo va provato sul CSS compilato, non dedotto. Nessun elemento riceve regole da due componenti:
+- gli `.header-*` e i `.cell-*` colpiscono solo elementi dei figli;
+- il padre colpisce solo la struttura e le colonne di selezione e di azione.
+
+Passi:
+0. **Via**: annuncio al coordinatore colori, fatto dal coordinatore.
+   - Righe del runner degli altri (D-Y6): nessuna. I test toccati restano registrati dove sono, in
+     `_frontend_utility.py:233-235` e `:297`, e l'impalcatura d'oro non si registra.
+1. **Oracoli prima del taglio.**
+   - **Impalcatura d'oro del DOM** (`test-author`), temporanea: il frontend non usa snapshot, quindi non va nel commit.
+     È `components/table/DataTable.golden.test.ts`: monta `DataTable` con una fixture che copre:
+     - i 13 tipi di cella;
+     - il piede: stringa, numero, HTML con e senza tooltip e click;
+     - le intestazioni: HTML, tooltip di testo, link e gesto, ordinabili e no, filtrabili, ridimensionabili, fissate a
+       sinistra e a destra, allineate;
+     - la selezione multipla, le azioni, il caricamento, il vuoto e il popover del filtro aperto.
+
+     Serializza il DOM normalizzato, senza le classi `svelte-*` e senza i commenti. Con `LF_GOLDEN=record` lo scrive in
+     `/tmp/librefolio-r13-y/`, altrimenti lo confronta. Si registra sul codice di oggi.
+   - **Confronto del CSS compilato**: uno script nella cartella di sessione che usa `svelte/compiler` del
+     `node_modules` locale. Normalizza gli hash e confronta regola per regola: selettore, dichiarazioni e specificità.
+2. **Taglio.** I due figli si creano spostando i blocchi parola per parola, e il padre li usa. Poi `:global` sulle
+   quattro regole di confine e Prettier.
+3. **`--split`**, poi `--check`.
+4. **Prove leggere**, un file alla volta.
+   - Impalcatura d'oro in confronto: deve essere identica.
+   - CSS: stesse regole e stessa specificità. Le sole differenze attese sono le 5 `.filter-btn` in due copie e i
+     quattro selettori di confine.
+   - Vitest: `DataTable`, `DataTable.rowOrder`, `DataTableHeaderTooltip`, `DataTableColumnFilter`,
+     `DataTablePagination`, `dataTableLogic` e `ReportSetCard`.
+   - Gate: `htmlInterpolation`, `themeComponentTokens`, `themeRoles.gate` e `moneyRenderSites`.
+5. **Test** (`test-author`).
+   - `htmlSink.gate.test.ts:63-65`: i sink passano ai figli (`cellContent.html` in `DataTableCellContent`,
+     `getColumnHeaderHtml(column)` in `DataTableColumnHeader`). La voce `footerContent.html` esce, perché il codice
+     non c'è più.
+   - Il controllo positivo `:214` («≥ 10 in DataTable») si riscrive sui due figli.
+   - Il commento di `DataTable.test.ts:355` cita la riga 713, che si sposta.
+   - L'impalcatura d'oro si toglie.
+6. **Validazione.**
+   - Con il via: svelte-check 0/0 e knip invariato.
+   - Sempre: Prettier e `git diff --check`.
+   - E2E con lo slot (vedi sotto).
+   - Galleria filtrata con lo slot del programma colori.
+7. **Doc.**
+   - `developer/frontend/components/core-ui/data-table.md`: «Where DataTable's code lives», a cura di `docs-writer`.
+   - devWiki: le tabelle «Source files» di `datatable-filter-options-disappear`, `datatable-column-resize-noop` e
+     `datatable-tooltip-custom-cell`.
+   - `check_source_paths.py`.
+
+E2E (`--workers 2`, una alla volta, con lo slot):
+
+| Categoria | Azioni | Cosa esercita |
+|---|---|---|
+| `front-designer-lab` | `picker`, `live` | la regola `th` in `DataTable.svelte`, il token d'intestazione |
+| `front-transaction` | `transactions-table`, `tx-bulk-diagnostics`, `transactions-modals`, `tx-import-upload` | filtro, ordinamento, «mostra solo selezionati», tooltip d'intestazione, badge |
+| `front-portfolio` | `risk-lab`, `privacy-masking` | tooltip a gesto, seleziona tutto, piede |
+| `front-utility` | `files-uploader`, `pac-allocator-real` | filtro, piede |
+| `front-asset` | `asset-browse`, `asset-list` | ordinamento, seleziona tutto |
+| `front-fx` | `fx-bulk` | seleziona tutto |
+
+Galleria, con lo slot del programma colori: `-f "Dashboard|Tools|Files|Transactions|Brokers|Import report sets|FX|Assets|Risk Analysis"`.
+Sono i 10 gruppi su 16 che contengono tabelle. Il confronto si fa con l'ultimo riferimento completo, con le opzioni
+del Y1. Note del programma colori (15/10): `--workers 6` finché non entra C-94; contro `g-final3-r1`, più vecchio di
+G-10 (`b4533a949`), cambiano per conto loro `media/asset-picker-modal`, `files/static-tab` e `files/static-grid`
+(ordine degli avatar), da segnalare come «G-10». Quando entra T, G rifà il riferimento per tutti.
+
+Fatto quando:
+- l'impalcatura d'oro è identica;
+- il CSS compilato è equivalente regola per regola;
+- `--check` è pulito, con la riga `~split`;
+- Vitest, gate ed E2E sono verdi;
+- la galleria è identica salvo il rumore noto;
+- documentazione e devWiki sono allineate;
+- l'handoff FROZEN è consegnato.
+
+C-38 e C-62 dopo, in Y7, su `th-actions` e `resize-handle`, che restano facili da trovare.
 
 ### Y3–Y13 — non autorizzati
 
@@ -205,8 +367,16 @@ sessione) e nel §2; si scrivono qui quando partono.
 
 - Y1: i legami al sorgente (24 letture di GrowthChart), l'invariante della cache (`aggregationInputs` letto solo
   dalla memo), la maschera della privacy nel tooltip e la sua reattività; nessun file di altri figli.
-- Y2: l'ambito del CSS di Svelte fra figli (`:global`, specificità), colonne sticky, sink `{@html}` spostati, 56
-  consumatori, il Designer Lab che legge il token dell'intestazione.
+- Y2 (forma proposta):
+  - **Ambito del CSS.** Quattro selettori attraversano il confine: le due `:has(.cell-editable-select-wrapper)` del
+    padre e le due `th:hover .resize-handle` del figlio. Le 5 `.filter-btn` sono in due copie. La specificità si prova
+    sul CSS compilato.
+  - **Sink `{@html}` spostati**: il gate `htmlSink` si riscrive con `test-author`.
+  - **Il piede che riusa lo switch**: differisce solo per `data-testid`, se un piede imposta `testId`. Oggi nessuno lo
+    fa.
+  - **Le 4 classi dell'interruttore in un file nuovo** (R3, record ereditato): lo dico al coordinatore colori.
+  - **Il Designer Lab**: la regola `th` e il token d'intestazione restano in `DataTable.svelte`.
+  - **I 56 consumatori**: la loro API e il loro DOM non cambiano.
 - Baseline del cricchetto: righe `~split`; su un conflitto, `--resolve` e poi `--check`.
 
 ## 7. Avanzamento
@@ -360,3 +530,312 @@ sessione) e nel §2; si scrivono qui quando partono.
 >
 > **Fuori pista**: uno scarto ripetibile non è per forza del commit sotto esame. Prima di attribuirlo, cerco lo stesso
 > scarto nei confronti già fatti su commit antenati (`$W/diffs/g-final3__r1__vs__cand*`).
+
+### Y1 — ingresso in `dev_release2` ✅ (2026-10-15)
+
+> **Note implementazione**: il coordinatore ha committato il journal (`cf8101f29`) e ha fuso Y1 in `dev_release2`:
+> `badec1465`, merge di `cf8101f29` sopra `8fc44558c`. Sull'albero unito il controllo dei colori è pulito.
+
+### Y2 — preparazione e piano del taglio ✅ (2026-10-15, 15:12–15:21, sola lettura)
+
+> **Note implementazione**: piano scritto in §4, Y2, senza toccare `DataTable.svelte`. Cosa ho verificato a
+> `cf8101f29`:
+> - **Il file**: invariato dalla base; stile senza letterali (155 letture `--lf-cmp-*`); m1 4 alle righe 1387 e 1393.
+> - **Il gate dei token** (regole a–e): ignora la sezione commentata di `table.css`. Il taglio chiede solo che i figli
+>   importino `table.css` (b) e che ogni definizione resti letta (c).
+> - **`htmlInterpolation.gate.test.ts:905`**: controlla solo che il file sia letto, quindi non si tocca.
+> - **I legami per percorso** del Designer Lab: i test unitari usano il percorso in alberi sintetici. Le due E2E
+>   (`picker:216`, `live`) leggono la regola `th` in `DataTable.svelte`.
+> - **Il cricchetto**: `declareSplit` (R3) dà ai pezzi il record ereditato.
+> - **Il piede**: `FooterCellContent` ⊂ `CellContent`; nessun piede imposta `testId` (tre siti in produzione, vedi §4
+>   Y2).
+> - **Lo stile da fuori**: solo `OtherPeriodEffectsTable` stila gli interni di DataTable, e solo la struttura.
+> - **I blocchi che si spostano**: nessuna regola `@media`, `@keyframes` o `animation`, e nessun gruppo di selettori
+>   a cavallo fra padre e figlio.
+> - **Le E2E**: 26 spec esercitano intestazioni, filtri, piedi e celle. Le 13 scelte coprono ogni funzione e sono
+>   mappate alle azioni del runner.
+>
+> **Fuori pista**: la forma approvata D-Y2 (quattro figli) farebbe diventare rossa una E2E del programma colori
+> (`designer-lab-picker.spec.ts:216`). Propongo al coordinatore due figli, con la struttura nel padre.
+
+### Y2 — via al taglio ✅ (2026-10-15, ~15:35)
+
+> **Note implementazione**: il coordinatore ha approvato la forma nuova di D-Y2: due figli, con struttura, CSS
+> strutturale e gestori nel padre. Ha poi annunciato il taglio al coordinatore colori, che non ha annunci aperti; T
+> arriva a W6 fra settimane. Le condizioni:
+> - Il `--split` eredita le 4 classi di `editable-checkbox` senza `--accept`.
+> - Senza chiedere: prove di file singoli, più svelte-check e knip con `nice -n 15`.
+> - Con lo slot del coordinatore: le 13 spec E2E.
+> - Galleria nello slot del programma colori, dopo L-10 e la ripresa di G-9.
+> - Il programma colori lavora su file del perimetro di Y:
+>   - il figlio V analizza in sola lettura i colori dei grafici (GR1–GR5: `components/charts/*Allocation*`,
+>     `GeographyMap`, `SemiDonutChart`, `dashboard/AllocationHistoryChart`, `AllocationPanel`, `growthChartSeries.ts`,
+>     `risk/CorrelationHeatmap`). Prima del suo codice ci si coordina, file per file;
+>   - T-8 cambia valori di ruoli e ne aggiunge: chi usa già i ruoli non tocca niente.
+>
+> Ordine: prima l'impalcatura d'oro registrata sul codice di oggi (`test-author`), poi il taglio.
+
+### Y2 — passo 1, oracoli ✅ (2026-10-15, 15:40–16:15)
+
+> **Note implementazione**:
+> - **Impalcatura d'oro**: `test-author` ha scritto `components/table/DataTable.golden.test.ts`, 878 righe, non
+>   tracciato, da non committare; una copia sta nella cartella di sessione. 28 stati (tutti i rami dei tre blocchi che
+>   si spostano, con l'elenco di quelli non raggiunti e del perché) registrati in `/tmp/librefolio-r13-y/datatable-golden`
+>   sul codice di `cf8101f29`.
+>   - Registrazione: `LF_GOLDEN=record nice -n 10 node_modules/.bin/vitest run src/lib/components/table/DataTable.golden.test.ts`,
+>     28 verdi.
+>   - Confronto sullo stesso codice: 28 verdi, quindi il confronto è deterministico.
+>   - Controprova: con un file d'oro alterato, 1 rosso con stato, posizione e contesto; poi file ripristinato (somma
+>     identica).
+>   - Normalizzazioni oltre l'elenco: l'id della listbox di `SimpleSelect`, numerato da un contatore di Svelte, viene
+>     rinumerato per ordine di comparsa; il valore vivo di `<input>` e `<select>` e il registro delle callback vengono
+>     accodati a ogni stato.
+> - **Trappola voluta**: due celle HTML del piede dell'impalcatura hanno un `testId`. Oggi il piede non lo scrive, la
+>   cella sì. Dopo il taglio mi aspetto quelle due sole differenze, da provare con una registrazione separata.
+> - **Confronto del CSS compilato**: `y2_css_compare.mjs`, nella cartella di sessione. Usa `svelte/compiler` e
+>   `css-tree` del `node_modules` locale. Prova a vuoto sul file invariato: 159 voci identiche su 159, nessun avviso,
+>   ordine tenuto.
+> - **Script del taglio**: `y2_cut_datatable.py`, nella cartella di sessione. Controlla ogni marcatore e ogni riga
+>   attesa prima di scrivere, e non scrive nulla se il file non è quello di `cf8101f29`. A vuoto: padre 1 751 righe,
+>   intestazione 336, cella 454.
+>
+> **Fuori pista**:
+> - Nel piano avevo contato un solo piede in produzione, ma sono tre: due passano la prop in forma breve. Nessuno
+>   imposta `testId`, quindi la conclusione non cambia.
+> - Le regole CSS della cella sono 39, non 41, e nel padre ne restano 100. I conteggi in §4 sono corretti.
+
+### Y2 — passi 2–4, taglio, dichiarazione e prove leggere ✅ (2026-10-15, 15:55–16:10)
+
+> **Note implementazione**:
+> - **Taglio**: `python3 y2_cut_datatable.py`, dalla cartella di sessione. Il padre passa da 2 431 a 1 751 righe e
+>   nascono `DataTableColumnHeader.svelte` (336) e `DataTableCellContent.svelte` (454), con blocchi spostati alla
+>   lettera, de-indentati.
+>   - Nell'intestazione: un ref locale al posto di `filterBtnRefs`, e `bind:openFilterColumnId`.
+>   - Nel padre:
+>     - i due `:has(:global(.cell-editable-select-wrapper))`;
+>     - le 5 `.filter-btn` del «seleziona tutto», con il loro commento;
+>     - via gli import usati solo dai figli.
+>   - Prettier (`node_modules/.bin/prettier --write` sui tre file) ha unito in una riga un solo `{@const}` del popover
+>     dell'intestazione; le parentesi esplicite non cambiano l'ordine dei ternari.
+> - **DOM**: confronto con l'impalcatura d'oro → 26 rossi su 28. I 2 verdi (`loading` ed `empty`) non hanno piede, e la
+>   prima differenza di `initial` è il `data-testid="golden-foot-when"` della trappola.
+>   - Prova stretta: ho registrato il codice tagliato in `datatable-golden-after`, poi
+>     `/tmp/libreFolio_y2_golden_diff.py`.
+>   - Risultato: **28 stati su 28 identici byte per byte**, tolti i due attributi della trappola, che compaiono una
+>     volta ciascuno in ogni stato con piede (+62 caratteri). Il confronto copre anche i valori vivi degli input e il
+>     registro delle callback.
+>   - Nessun piede in produzione imposta `testId`, quindi nell'app il DOM non cambia.
+> - **CSS compilato**: `y2_css_compare.mjs`, Svelte 5.48.0, nessun avviso del compilatore in nessuno dei tre file.
+>   - 155 voci su 159 identiche.
+>   - 4 riscritture di selettore con dichiarazioni e specificità identiche:
+>
+>     | Selettore | Specificità |
+>     |---|---|
+>     | `th:hover .resize-handle` | (0,3,1) |
+>     | la sua variante `.dark` | (0,4,1) |
+>     | `td:has(…)` | (0,2,1) |
+>     | `tbody tr:has(…)` | (0,2,2) |
+>
+>   - 5 `.filter-btn` in due copie; 0 mancanti, 0 nuove.
+>   - Ordine relativo tenuto in tutti e tre i file: padre 102 voci, intestazione 23, cella 39.
+> - **Cricchetto**: `theme-roles.mjs --split lib/components/table/DataTable.svelte:…DataTable.svelte,…DataTableColumnHeader.svelte,…DataTableCellContent.svelte`,
+>   poi `--check` pulito.
+>   - Baseline: la riga di `DataTable.svelte` sparisce, perché non misura più nulla; `DataTableCellContent.svelte`
+>     eredita le sue 4 classi; c'è la riga `~split`.
+>   - La nota «79 file sotto il loro record» c'era già prima.
+> - **Vitest**, un file alla volta (`/tmp/libreFolio_y2_vitest.sh`):
+>   - tabella, tutti verdi: `DataTable` 55, `DataTable.rowOrder` 12, `DataTableHeaderTooltip` 12,
+>     `DataTableColumnFilter` 59, `DataTablePagination` 20, `dataTableLogic` 83, `ReportSetCard` 45;
+>   - gate verdi: `htmlInterpolation` 26, `themeComponentTokens` 18, `themeRoles.gate` 36, `themeModeReads` 24,
+>     `flagFont` 13, `themeTokens` 14, `themeColorMeta` 10, `clipboardSink` 11, `moneyRenderSites` 6;
+>   - **`htmlSink` 3 rossi, attesi**: i 6 sink passati ai figli, le 3 voci di DataTable non più valide e il controllo
+>     positivo «≥ 10 in DataTable». Il totale dei sink dell'app resta oltre 35. Riscrittura affidata a `test-author`.
+> - **devWiki**: tabelle delle fonti aggiornate in `datatable-filter-options-disappear`, `datatable-column-resize-noop`
+>   e `datatable-tooltip-custom-cell`. Le altre 9 pagine che citano `DataTable.svelte` parlano di cose rimaste nel
+>   padre (td, colonna azioni, timer del tocco, visibilità) o del componente intero.
+>
+> **Fuori pista**: il commento di `DataTable.test.ts:355` puntava già prima del taglio alla riga sbagliata (la 713 era in
+> `applyColumnFilter`). Lo riscrive `test-author` col nome della funzione, `toggleAllPageRows`.
+
+### Y2 — passi 5–6, test e validazione statica ✅ (2026-10-15, 16:10–16:25)
+
+> **Note implementazione**:
+> - **`test-author`** ha cambiato solo le righe indicate.
+>   - `htmlSink.gate.test.ts`: due voci rivedute al posto delle tre di DataTable, con la stessa ragione `COLUMN_DEFS`:
+>     `DataTableCellContent.svelte` `cellContent.html` (celle e piede) e `DataTableColumnHeader.svelte`
+>     `getColumnHeaderHtml(column)`.
+>   - Il controllo positivo misura ≥ 4 sink nella cella e ≥ 2 nell'intestazione; la storia è nel commento.
+>     `sinks.length > 35` resta: oggi sono 39 sink in 21 componenti.
+>   - Controprova: con un'`expr` alterata il gate va rosso e nomina i due sink e la voce scaduta; ripristinata, torna
+>     verde.
+>   - `DataTable.test.ts:355`: il commento cita `toggleAllPageRows` invece della riga.
+>   - Prettier pulito.
+> - **Verifica mia**: `htmlSink.gate` 7/7.
+> - **`npm run check`** (`nice -n 15`, sull'albero tagliato, impalcatura compresa): **0 errori, 0 avvisi**.
+> - **knip** (`npm run lint:dead`, `nice -n 15`): stesse 63 voci del Y1, nessuna nei file della tabella oltre ai tre
+>   tipi già noti di `types.ts`. L'unica differenza è di formato: knip nudo nomina i sottopercorsi di `@embedpdf` e il
+>   binario `pipenv`, mentre il Y1 usava il wrapper.
+> - **devWiki**: `check_source_paths.py` → le pagine toccate da Y2 sono pulite. I 5 percorsi mancanti (`htmlcov-*`,
+>   `frontend/coverage-js/` e una cartella di sonde di AI Export) c'erano già, in pagine che Y2 non tocca.
+> - **Documentazione**: `data-table.md` affidata a `docs-writer`. `mkdocs build` e `check-links` aspettano il via del
+>   coordinatore.
+>
+> **`docs-writer`**, solo `core-ui/data-table.md`, nessun comando:
+> - «Where DataTable's code lives», in testa in grassetto dentro «📦 State Management (Internal)», come per
+>   GrowthChart: tabella dei quattro file e cosa tiene ciascuno, l'import di `table.css`, i due selettori `:global` di
+>   confine («Svelte non li controlla contro il markup dell'altro lato: un rinomina li rompe in silenzio») e le
+>   `.filter-btn` in due copie.
+> - L'avviso «`html` is rendered as-is» dice dove stanno i sink e che sono voci del gate `htmlSink`.
+> - Seconda passata: corretta la riga `headerTooltip`/`headerTooltipUrl` di «🔧 Column Definition». Diceva un'icona,
+>   ma `headerTooltip` da solo mette un tooltip sull'etichetta e l'icona compare solo con l'URL. Nuova riga
+>   `headerTooltipLinkMode` (`'direct' | 'gesture'`).
+> - La pagina non ha traduzioni né un indicatore di aggiornamento.
+>
+> **Fuori pista**: `docs-writer` ha trovato due commenti fuorvianti nei file nuovi, e li ho corretti.
+> - Le `.filter-btn` del padre e dell'intestazione nominavano il «seleziona tutto», ma il bottone è il «mostra solo
+>   selezionati» dell'intestazione di selezione.
+> - Il commento dell'icona d'informazione, spostato alla lettera, diceva il contrario della sua condizione.
+> - Prova che erano solo commenti: CSS compilato con lo stesso referto del primo confronto; golden 28/28 contro la
+>   registrazione dopo il taglio; Prettier pulito sui 5 file.
+> - Il commento di `types.ts:291` («(info icon)») è sbagliato allo stesso modo, ma `types.ts` è fuori dal taglio:
+>   backlog Y-5.
+
+### Y2 — passo 6, E2E e documentazione ✅ (2026-10-15, 16:20–16:40)
+
+> **Note implementazione**:
+> - **E2E**: slot pesante 1 del coordinatore. 13 spec in fila con `/tmp/libreFolio_y2_e2e.sh`, ciascuna
+>   `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc nice -n 10 pipenv run python dev.py test --test-port 6189 --data-dir /tmp/librefolio-r13-y --workers 2 <categoria> <azione>`.
+>   La prima ha rifatto la build del frontend.
+>
+>   | Categoria | Azione | Esito |
+>   |---|---|---|
+>   | `front-designer-lab` | `picker` | 3 verdi |
+>   | `front-designer-lab` | `live` | 7 verdi |
+>   | `front-transaction` | `transactions-table` | 25 verdi |
+>   | `front-transaction` | `tx-bulk-diagnostics` | 2 verdi |
+>   | `front-transaction` | `transactions-modals` | 25 verdi |
+>   | `front-transaction` | `tx-import-upload` | 10 verdi |
+>   | `front-portfolio` | `risk-lab` | 44 verdi |
+>   | `front-portfolio` | `privacy-masking` | 18 verdi |
+>   | `front-utility` | `files-uploader` | **8 rossi**, non di Y2 (sotto) |
+>   | `front-utility` | `pac-allocator-real` | 1 verde |
+>   | `front-asset` | `asset-browse` | 8 verdi |
+>   | `front-asset` | `asset-list` | 28 verdi |
+>   | `front-fx` | `fx-bulk` | 7 verdi |
+>
+>   Porta 6189 libera alla fine.
+> - **`mkdocs build`** (strict, `nice -n 15`): exit 0, 3 036 URL relativi di asset risolti. L'unico «Warning» del log
+>   è l'annuncio del team di Material for MkDocs. **`check-links`**: 95 link validi.
+> - **Impalcatura d'oro tolta** dal worktree, dopo aver verificato che la copia nella cartella di sessione è identica.
+>   I file d'oro restano in `/tmp/librefolio-r13-y/datatable-golden{,-after}`.
+>
+> **Fuori pista**: `files-uploader` ha 8 test rossi su 8, desktop e mobile, ma non dipendono da Y2.
+> - **Dove cade.** L'unico errore di ogni test è il controllo di chiusura della spec (`files-uploader.spec.ts:233`,
+>   «Only the declared synthetic GET contracts may be requested»), su due `GET /api/v1/system/instance`. I corpi dei
+>   test, tabella dei file compresa, sono passati.
+> - **Da dove viene la richiesta.** Dallo store `features/instance/instanceConfig.svelte.ts` di H (`2069c75cd`, entrato
+>   con CP6), che la fa a ogni caricamento di pagina, mentre la spec dichiara un insieme chiuso di contratti GET.
+> - **Anche `dev_release2` è rosso.** Lì la spec e la richiesta sono identiche.
+> - **Decisione del coordinatore**: lo corregge con H. Y non tocca la spec, e per Y2 non è un cancello.
+
+### Y2 — checkpoint 🧊 FROZEN (2026-10-15, 16:45)
+
+> **Note implementazione**: base `cf8101f29`; `dev_release2` è a `dae4de4fa`. Albero: 10 file modificati e 2 nuovi.
+> - Codice: `DataTable.svelte` (2 431 → 1 751 righe); `DataTableColumnHeader.svelte` (329, dopo Prettier) e
+>   `DataTableCellContent.svelte` (454), nuovi.
+> - Test: `htmlSink.gate.test.ts` e `DataTable.test.ts`.
+> - Baseline: `themeRoles.baseline.tsv`.
+> - Documentazione: `core-ui/data-table.md`.
+> - devWiki: 3 pagine.
+> - Journal: piano e backlog (Y-4, Y-5).
+>
+> Fuori dal commit: l'impalcatura d'oro e i file d'oro, `.testLog/`, `frontend/build/`, `frontend/test-results/` e il
+> catalogo i18n generato. `git diff --check` è pulito, e i due file nuovi non hanno spazi in coda.
+>
+> **Ancora da fare**: la galleria filtrata, cancello d'ingresso dopo il commit (slot del programma colori, chiesto dal
+> coordinatore).
+
+### Y2 — commit e aggiornamento di base ✅ (2026-10-15, 16:42–16:48)
+
+> **Note implementazione**:
+> - **Commit del coordinatore**: `fbee8506d` (`refactor(table): split DataTable header and cells`) e `491cf3a4c`
+>   (journal).
+> - **Aggiornamento di base**: con `dev_release2` a `dae4de4fa`, che porta FE8a di W. L'unico conflitto è stato
+>   `frontend/src/themeRoles.baseline.tsv`.
+>   - `--resolve` ha fatto vincere il lato più stretto, e `--check` è pulito, senza il caso R-8.
+>   - Restano tutte e 6 le righe `~split`, le 3 di Y e le 3 di FE8a, più l'`~accept` D3 di `themeStore.ts`.
+>   - `git add` del solo baseline. Merge committato dal coordinatore: `2ffedf004`.
+> - **File uniti da Git, controllati**:
+>   - `htmlSink.gate.test.ts`: le due voci di Y più quella di W (`TxBulkBanners`), nessuna persa;
+>   - backlog: la sezione Y è identica;
+>   - nessun marcatore di conflitto;
+>   - nessun file nuovo di FE8a stila da fuori le classi passate ai figli, né li importa.
+> - **Sulla revisione unita**, una prova alla volta con `nice -n 10`:
+>   - `api sync`, nessun file tracciato cambiato;
+>   - `npm run check`, **0/0**;
+>   - Vitest: `htmlSink` 7, `DataTable` 55, `rowOrder` 12, `HeaderTooltip` 12, `ColumnFilter` 59, `Pagination` 20,
+>     `dataTableLogic` 83, `ReportSetCard` 45. Tutti verdi.
+
+### Y2 — galleria filtrata, cancello d'ingresso ✅ (2026-10-15, 16:54–18:10)
+
+> **Note implementazione**:
+> - **Scatto**: slot del programma colori, concesso mentre T-8 era in scrittura.
+>   `gallery_snapshot.sh y2-dt-2ffedf004 … -- -f "Transactions|Assets|FX|Files|Risk Analysis" --desktop-only --workers 6`,
+>   cioè i 57 test dei cinque gruppi più un test di Onboarding e uno di Import report sets, i cui titoli contengono
+>   quelle parole.
+>   - Esito: 59 verdi e 10 rossi, 600 PNG, in 16 minuti.
+>   - Carico medio da 21 (16:48) a 85 (17:11). Porta libera alla fine.
+> - **Confronto** con `g-final3-r1` (`--common-only`, maschere e stabilità di `g-final3__r1__vs__r2`): 454 identiche,
+>   146 cambiate in 46 scatti.
+>   - 43 scatti su 46 cambiano anche nel rumore `r1` contro `r2` (stesso codice), con ampiezze simili o maggiori; lo
+>     script è `/tmp/libreFolio_y2_noise_cmp.py`.
+>   - I 3 restanti hanno Δ1: la linea del grafico FX dietro il modale dei provider, un bordo di 1 px di
+>     `add-pair-routes` e un'icona 7×7 di RSI.
+>   - `transactions/list`: 8 su 8 identiche.
+>   - `assets/list-table`: punti cambiati solo nella barra sopra la tabella. `fx/list-table`: bordi della barra e
+>     pillola della paginazione, un file che Y2 non tocca. Entrambe cambiano allo stesso modo anche nel rumore.
+>   - **Nessuna differenza viene da Y2.**
+> - **Triage dei 10 rossi** (skill `test-triage`). Verdetto: **ambiente**, da confermare con la ripresa.
+>   - §1 forma della risposta: nessuna asserzione sul contenuto, solo timeout.
+>   - §2 clock: le attese sono sulle condizioni giuste.
+>   - §3 stato condiviso: corsia esclusiva e nessun errore del backend.
+>   - §4 cascata: nessuna causa unica. I 2 rossi di Files cadono nella prima ondata di login, gli 8 di Assets negli
+>     ultimi 15 test, al picco di carico.
+>   - Tutti e 10 erano verdi in `r1`, `r2`, `candR`, `candL` e `candT6`.
+>   - Nessuno cade su una `DataTable`. Il #10 passa `tx-table` e cade sull'`AssetSelect` del wizard, che non è mai in una
+>     cella.
+> - **Ripresa chiesta** al coordinatore: `-- --no-populate --desktop-only --workers 2 -f "<i 10 titoli>"`; il filtro
+>   prende esattamente quei 10. Chiude anche il buco di copertura, che comprende la lista dei report dei broker in
+>   Files (`FilesTable`, una `DataTable`).
+
+### Y2 — E2E sulla revisione unita ✅ (2026-10-15, 17:39–17:45)
+
+> **Note implementazione**: slot pesante 2, dopo E1b di W. Sulla revisione `2ffedf004`, che porta FE8a, con
+> `/tmp/libreFolio_y2_e2e_merged.sh`: `--workers 2`, `nice -n 10`, una spec alla volta.
+> - `front-transaction transactions-table`: 25 verdi.
+> - `front-transaction transactions-modals`: 25 verdi.
+> - `front-transaction tx-import-upload`: 10 verdi.
+>
+> Porta 6189 libera alla fine.
+
+### Y2 — ripresa della galleria e ingresso ✅ (2026-10-15, 18:00–18:10)
+
+> **Note implementazione**:
+> - **Ripresa**: slot del programma colori, a carico basso, dopo la validazione di T-8.
+>   `gallery_snapshot.sh y2-dt-2ffedf004-retry … -- --desktop-only --workers 2 -f "<i 10 titoli>"`: **10 verdi su 10**,
+>   96 PNG, in 4,7 minuti, con il carico medio fra 31 e 38. Il verdetto «ambiente» del triage è confermato.
+> - **Confronto** con `g-final3-r1`, stesse opzioni: 75 identiche, 21 cambiate in 7 scatti, e tutti e 7 cambiano anche
+>   nel rumore `r1` contro `r2`.
+>   - `files/static-grid` supera il rumore (fino a 28 113 px), ma è G-10: l'ultima scheda mostra un altro avatar
+>     (`men_04` → `men_01`), e cambiano gli orari di caricamento (09:15 → 18:00). È la griglia, senza tabelle.
+>   - Pagine con `DataTable`: `files/brim-tab` (la lista dei report dei broker, `FilesTable`) è identica 8 su 8, e lo
+>     sono anche `assets/distribution-editor-*`, `detail-classification` e `chart-settings`.
+>   - **Nessuna differenza viene da Y2.**
+>
+> **Fuori pista**: per la ripresa ho fatto ripopolare il DB alla galleria invece di usare `--no-populate`. Le 3 E2E
+> fatte nel frattempo l'avevano ripopolato senza risorse statiche (il runner E2E non usa `--with-static`), e i test di
+> Files avrebbero falsato il confronto. Regola: `--no-populate` vale solo se fra la galleria e la ripresa non gira nulla
+> nella corsia.
+>
+> Il coordinatore ha aggiunto Y-6 per Y10 (`AllocationPanel.svelte:65` passa `emoji` alla torta, che dopo DV non lo
+> legge più): è nel backlog e in §2.

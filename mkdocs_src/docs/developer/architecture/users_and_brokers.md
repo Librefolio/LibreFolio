@@ -41,10 +41,10 @@ There are two system-level user roles in LibreFolio:
 2. 👑 **Superuser (Admin)**:
     - ✅ Has all permissions of a normal user.
     - ⚙️ Can manage system-wide **Global Settings**, the registration mode included, unless `LIBREFOLIO_REGISTRATION` pins it.
-    - 🔧 Can manage the other accounts through the administrator API under `/api/v1/users`: list them, activate or deactivate, promote or demote, create a password-reset link, sign an account out everywhere, restart its onboarding, and create, list or revoke invitations. The API never sets a password: the user chooses it through the reset link. See [Registration, Invitations and the Admin API](access_control.md#registration).
+    - 🔧 Can manage the other accounts through the administrator API under `/api/v1/users`: list them, activate or deactivate, promote or demote, delete a regular account ([Deleting an Account](#account-deletion)), create a password-reset link, sign an account out everywhere, restart its onboarding, and create, list or revoke invitations. The API never sets a password: the user chooses it through the reset link. See [Registration, Invitations and the Admin API](access_control.md#registration).
     - 🔍 Can access *any* broker and transaction in the system for support purposes.
 
-Whoever has a shell on the server manages accounts with the user CLI (`./dev.py user …`), no account needed: it lists, creates, activates or deactivates, promotes or demotes accounts, sets a password directly (`user reset`), creates invitations and password-reset links, and restarts a user's onboarding. It has no command to list or revoke invitations, or to sign an account out without another change. See [Command-Line Tools](../../admin/cli_tools.md).
+Whoever has a shell on the server manages accounts with the user CLI (`./dev.py user …`), no account needed: it lists, creates, activates or deactivates, promotes or demotes accounts, sets a password directly (`user reset`), creates invitations and password-reset links, and restarts a user's onboarding. It has no command to list or revoke invitations, to sign an account out without another change, or to delete an account. See [Command-Line Tools](../../admin/cli_tools.md).
 
 ## 🏗️ User-Broker Mapping and Data Segregation
 
@@ -83,6 +83,63 @@ graph TD
 Access to brokers is granularly controlled via the `BrokerUserAccess` table.
 
 > 🔗 **Deep Dive**: For a detailed explanation of roles (OWNER, EDITOR, VIEWER) and permissions, see the **[Access Control (RBAC)](access_control.md)** documentation.
+
+### 🗑️ Deleting an Account {: #account-deletion }
+
+An account is deleted by its holder, from the profile (`DELETE /api/v1/auth/users/me`, refused with `400` to
+the last active administrator: see [Superusers](access_control.md#superusers)), or by an administrator
+(`DELETE /api/v1/users/{user_id}`, with its refusals in
+[Deleting an Account](access_control.md#admin-account-deletion)). Both apply one rule, broker by broker: the
+last-owner rule of `BrokerService.leave_broker()` (`backend/app/services/brokers/access.py`).
+
+| The account's role on the broker | The deletion |
+|----------------------------------|--------------|
+| `OWNER`, the only one | Deletes the broker, with its transactions and its BRIM report files |
+| `OWNER`, with another `OWNER` | Removes the account's access; the broker stays |
+| `EDITOR` or `VIEWER` | Removes the account's access; the broker stays |
+
+Another `OWNER` row counts whether or not its account is active: an inactive co-owner keeps the broker.
+
+- **One helper for both routes.** `user_service.delete_account(session, user)` returns
+  `AccountDeletionResult(deleted_broker_ids, files_removed)`. It calls `delete_user()`, which applies the rule
+  to each broker of the account in order of id, deletes the account and commits once; on any failure it rolls
+  back and re-raises, so nothing is deleted and the route answers `500` *Account deletion failed: nothing was
+  deleted*. The report files live on disk, outside the transaction: `brim_provider.delete_files_for_brokers()`
+  removes those of the deleted brokers after the commit, in a worker thread (`asyncio.to_thread`). A failure
+  there is logged and leaves the deletion done: the request still succeeds.
+- **The preview.** `user_service.preview_user_deletion(session, user_id)` computes, by the same rule and
+  without writing anything, what `delete_user()` would take (`None` for an unknown user). The API returns it as
+  `AccountDeletionPreviewRead`: to any signed-in user for their own account
+  (`GET /api/v1/auth/users/me/deletion-preview`), and to an administrator for any account
+  (`GET /api/v1/users/{user_id}/deletion-preview`).
+
+    ```json
+    {
+      "user_id": 7,
+      "username": "alice",
+      "brokers_deleted": [{"id": 3, "name": "Degiro", "transactions": 42}],
+      "brokers_left": [{"id": 5, "name": "IBKR", "role": "OWNER"}],
+      "transfers_unpaired": 1
+    }
+    ```
+
+    `brokers_deleted` and `brokers_left` are in order of broker id; `role` is the account's role on a broker
+    that stays: `OWNER`, `EDITOR` or `VIEWER`.
+- **`transfers_unpaired`** counts the transactions that stay but are linked by `related_transaction_id`, in
+  either direction, to a transaction that goes: the halves of transfers left without their pair (backlog
+  V-3). Each staying half counts once, whatever broker it is on. What becomes of a staying half is the rule
+  of deleting a broker, `TransactionService.delete_by_broker()`: it loses its link, and becomes the
+  standalone row a split of the pair leaves — a received `TRANSFER` an `ADJUSTMENT`, a `CASH_TRANSFER` or
+  `FX_CONVERSION` a `DEPOSIT` or a `WITHDRAWAL` (backlog V-3, D-J4) — except the giving leg of a `TRANSFER`,
+  which only loses its link. See [Broker Deletion](../backend/transactions/service.md#broker-deletion).
+- **Sessions.** `get_current_user()` no longer finds a deleted account: its sessions get `401` at their next
+  request.
+
+Tests: `./dev.py test services account-deletion-preview`
+(`backend/test_scripts/test_services/test_account_deletion_preview.py`: in seven scenarios, the preview names
+exactly the brokers `delete_user()` then deletes; the counts; nothing written; the report files removed once,
+after the commit, and never when nothing is deleted or the deletion fails), `./dev.py test api account-deletion`
+(the own deletion and its preview, over HTTP) and `./dev.py test api users-admin` (the administrator's routes).
 
 ### 🌐 Global vs. User-Specific Data
 

@@ -617,6 +617,17 @@ def api_session_revocation(verbose: bool = False, test_names: list[str] | None =
     return run_command(cmd, "Session revocation API tests", verbose=verbose)
 
 
+def api_address_probe(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the address probe API tests: the administrator's nonce and the public, cross-origin check (A6a, D-A3)."""
+    print_section("Address Probe API Tests")
+    print_info("Testing POST /users/address-probe (admin) and GET /auth/address-probe (public): {nonce, expires_at}, exactly {match}")
+    print_info("Tests: Access-Control-Allow-Origin * through the CORSMiddleware, Cache-Control no-store, forged/expired/foreign nonces false, cookies ignored, another instance in process")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_address_probe_api.py", test_names)
+    return run_command(cmd, "Address probe API tests", verbose=verbose)
+
+
 def api_broker_multiuser(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run broker multi-user role tests."""
     print_section("Broker Multi-User Role Tests")
@@ -658,6 +669,16 @@ def api_portfolio_wac(verbose: bool = False, test_names: list[str] | None = None
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_portfolio_wac.py", test_names)
     return run_command(cmd, "Portfolio WAC API tests", verbose=verbose)
+
+
+def api_email(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the email administration API tests: GET /email/status, POST /email/test and the email part of GET /system/instance, in-process."""
+    print_section("Email Administration API Tests")
+    print_info("Testing GET /email/status and POST /email/test: admin only, state/checks/budget without the SMTP configuration, the test email in the admin's language, 409/429/502/422; GET /system/instance email.available")
+    print_info("In-process: the real auth and email routers and the instance route on a private SQLite, SMTP variables by monkeypatch, a fake SMTP server on 127.0.0.1; the lane's backend is never called")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_email_api.py", test_names)
+    return run_command(cmd, "Email administration API tests", verbose=verbose)
 
 
 def _api_setup() -> bool:
@@ -825,10 +846,25 @@ Tests for REST API endpoints (server auto-started):
     # The category's write-scoped holds: each test registers its own two users, reads only their rows and deletes them;
     # a password change ends the sessions of that account alone.
     add_test(api, "session-revocation", api_session_revocation, name="Session Revocation API", desc="Password change: version +1, the device's cookie re-issued, other sessions 401, refusals end nothing")
+    # Write-scoped (the category default), no exclusive_because: a nonce is stateless, nothing is stored and no setting or
+    # global row is written; the one write is the login counters of e2e_test_admin / e2e_test_user, which no unit asserts.
+    # The instance key is switched in this process only (monkeypatch), never while the lane's server is asked.
+    add_test(api, "address-probe", api_address_probe, name="Address Probe API", desc="Admin nonce 401/403/200, public {match} with ACAO * and no-store, Origin from elsewhere through the CORSMiddleware, forged/expired/foreign nonces false, cookies ignored, another instance in process")
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
     add_test(api, "portfolio", api_portfolio, name="Portfolio API", desc="Summary, history, asset-history, FIFO lots endpoints")
     add_test(api, "portfolio-wac", api_portfolio_wac, name="Portfolio WAC API", desc="POST /portfolio/wac endpoint (A1-A8)")
+    add_test(
+        api,
+        "email",
+        api_email,
+        name="Email Administration API",
+        desc="GET /email/status (admin: off/ready/invalid, checks, hourly budget, never the SMTP configuration) and POST /email/test (to the admin's own address in their language; 409 off or unusable, 429 with Retry-After, 502 with the SMTP code, 422 not one address; no secret in an answer); GET /system/instance email.available (public, never the configuration, read off the event loop, optional in the OpenAPI)",
+        # PURE: the real auth and email routers and the instance route run in-process on a private SQLite file under tmp_path, the
+        # SMTP variables are set with monkeypatch in this process and the fake SMTP server listens on 127.0.0.1: the lane's backend
+        # is never called.
+        isolation="pure",
+    )
     add_test(
         api,
         "http-compression",
