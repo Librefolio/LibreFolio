@@ -1316,3 +1316,22 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
    - `git diff --check` pulito; porta 6184 libera.
 
    ✅ **E0 completato** (07:33) — 🧊 FROZEN; entra dopo la chiusura della finestra della galleria.
+
+   > **Note implementazione (coordinatore, 15/10 ~07:34)**: E0 committato come `692fbae39` (`fix(data-editor): events
+   > keyed by date and type`, 12 file) e `f901eb6fb` (journal). Aggiornamento di base: merge `2bf015afa` di
+   > `dev_release2` a `c3047aa17` (J C-93, H CP4, J G-8, X CP4, A4b, X J-5, H CP5a, la versione fissata nelle gallerie),
+   > pulito; `.translate-hashes.json` fuso come testo. E0 entra dopo la finestra della galleria; le chiusure di I-11a,
+   > I-11d, X-R9 e W-B15 e la riga del CHANGELOG le scrive il coordinatore.
+
+### Revisione combinata `2bf015afa` (E0 + A4b, X J-5, H CP5a…) ✅ (2026-10-15) — 🧊 FROZEN
+
+1. ✅ **Base** (07:35): HEAD `2bf015afa` (genitori `f901eb6fb`, `c3047aa17`), pulito, porta libera;
+   `.translate-hashes.json` si legge (251 voci) e tiene l'md5 di `data-editor.en.md` timbrato in E0. Dei file di E0 il
+   merge tocca solo il backlog e `.translate-hashes.json`, con righe aggiunte.
+2. ✅ **`front build --debug`** (07:35–07:36, client rifatto per l'API di H CP5a): svelte-check 0 errori, 0 avvisi.
+3. ✅ **Vitest**: `front-utility core-unit` 134 file, 4 290 passed (con `themeRoles.gate.test.ts`, la guardia dei
+   colori di T: E0 non aggiunge classi); `component-unit` 120 file, 3 225 passed (07:36–07:39).
+4. ✅ **E2E** (07:39–07:44): `front-asset asset-data-editor` 26, `front-fx fx-csv-import` 21, `front-fx fx-editor` 4,
+   `front-transaction tx-bulk-operations` 10.
+5. ✅ **Doc**: `mkdocs build` stretto con 0 avvisi; `check-links` 95 validi. `git diff --check` pulito; porta 6184 libera
+   (07:44).
