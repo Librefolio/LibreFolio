@@ -100,7 +100,8 @@ connection:
 5. Each pending fix runs `prepare()` outside the transaction (filesystem work to undo on failure),
    then, with `foreign_keys = OFF` (SQLite switches it only outside a transaction),
    `BEGIN IMMEDIATE`, `apply()`, `verify()` and the common checks — no `PRAGMA foreign_key_check`
-   row that was not there just before the fix, the row count of every table unchanged — before
+   row that was not there just before the fix, the row count of every table unchanged but for the
+   changes the fix declares (`row_count_changes()`, `{table: delta}`, checked exactly) — before
    `COMMIT`. Any problem rolls back. `finish()` runs after either outcome, and a failed fix stops
    the ones after it. A broken reference the database already held is not the fix's to judge: it
    stays, and the run logs those it found once, as the WARNING *Foreign key violations already in
@@ -178,6 +179,33 @@ fix converts, once, the halves already in a database.
 
 `./dev.py test db post-migration-orphan-pairs`
 (`backend/test_scripts/test_db/test_post_migration_orphan_pairs.py`) pins this contract.
+
+The fix `event_types` (`event_types.py`) repairs the asset events stored with a type the app does
+not know. Until 1.3 an event type was saved as it came — a CSV written by hand could store `dividend`
+or `dividendo` — while the column is the `AssetEventType` enum: every later read of that asset's
+events failed (`LookupError`, a 500) and none of them was shown. Since 1.3 `FAAssetEventPoint`
+trims and upper-cases the type on the way in and refuses one that is still unknown (422); this fix
+repairs the rows already stored, once (decision 23 of release 1.3).
+
+- `detect()` writes nothing. It selects the events whose `type` is not exactly one of the enum's
+  values.
+- A type that becomes valid once trimmed and upper-cased (Python's `str.strip().upper()`, the
+  schema's own rule) is corrected in place: the event keeps its id, and its transactions stay
+  linked.
+- Any other event is deleted, a provider's included (they are not shown already). Its transactions
+  are unlinked first — `asset_event_id` NULL, `updated_at` now — and stay, without their event.
+- It declares its deletions (`row_count_changes()` → `{"asset_events": -n}`), so the framework checks
+  that exactly those rows went; its own `verify()` wants no unknown type left, each correction in
+  place, each deleted event gone and named by no transaction.
+- Logs: the detection WARNING (dry runs included) with `count`, `corrections` (ids per
+  `stored->CORRECTED`), `deletions` (ids per stored type) and `unlinked_transactions`; after the
+  commit, one INFO line per corrected event (*Asset event type corrected*), per unlinked transaction
+  (*Transaction unlinked from an asset event of unknown type*) and per deleted event (*Asset event of
+  unknown type deleted*, with its date, value, currency, `is_auto` and the transactions unlinked).
+
+`./dev.py test db post-migration-event-types`
+(`backend/test_scripts/test_db/test_post_migration_event_types.py`) pins this contract and the
+declared row counts.
 
 The admin side (log lines, the offline run) is in [Command-Line Tools](../../../admin/cli_tools.md).
 
