@@ -4,14 +4,24 @@ Test: StaticUploads Service — save, list, get, delete, security validation.
 Tests the static uploads service layer including file persistence,
 metadata sidecar, security checks, cache invalidation, user filtering
 and listing order.
+
+Decision 36 (scope of uploaded files, red until it lands): the pure rule ``effective_scope(metadata)``, the scope
+``save_upload`` writes into the sidecar, legacy sidecars without ``scope``, sidecars read fresh after another worker
+rewrote or deleted them, and ``set_upload_scope`` replacing the sidecar atomically.
+
+Every test runs on a data directory of its own under ``tmp_path`` (``_private_data_dir``): the lane's
+``custom-uploads/`` is shared with every other unit of the lane and is never touched here.
 """
 
+import copy
 import json
-import shutil
+import os
 import sys
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -30,7 +40,6 @@ from backend.app.schemas.uploads import UploadFileInfo
 from backend.app.services.files.static_uploads import (
     UploadSecurityError,
     _detect_actual_mime_type,
-    _load_metadata,
     delete_upload,
     get_upload_by_user,
     get_upload_info,
@@ -50,17 +59,19 @@ from backend.test_scripts.test_utils import print_section, print_success
 
 
 @pytest.fixture(autouse=True)
-def _clean_uploads_dir():
-    """Create a clean uploads directory before each test, clean up after."""
+def _private_data_dir(tmp_path, monkeypatch):
+    """Point the data directory at this test's own ``tmp_path``: an empty ``custom-uploads/`` that no neighbour shares.
+
+    The lane's ``custom-uploads/`` belongs to every unit of the lane (the API tests' uploads, the seeded avatars and
+    their marker), and this module used to empty it before and after each test. Every path of the service derives from
+    ``get_data_dir()``, which reads ``LIBREFOLIO_TEST_DATA_DIR`` at each call, so the redirection reaches all of them;
+    pytest removes ``tmp_path``, nothing is left to clean.
+    """
+    monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
     uploads_dir = get_uploads_dir()
-    # Clear any existing files
-    if uploads_dir.exists():
-        shutil.rmtree(uploads_dir)
+    assert uploads_dir.is_relative_to(tmp_path.resolve()), f"the uploads directory must be this test's own, under {tmp_path}, not {uploads_dir}"
     uploads_dir.mkdir(parents=True, exist_ok=True)
     yield
-    # Clean up after test
-    if uploads_dir.exists():
-        shutil.rmtree(uploads_dir)
 
 
 # ============================================================================
@@ -158,26 +169,16 @@ class TestGetUploadInfo:
 
 
 # ============================================================================
-# _load_metadata / get_upload_mime_type
+# get_upload_mime_type
 # ============================================================================
 
 
 class TestUploadMetadataHelpers:
-    """Tests for metadata helper functions."""
+    """Tests for metadata helper functions.
 
-    def test_load_metadata_uses_cache_after_first_read(self):
-        """Cached metadata remains available after sidecar removal."""
-        print_section("_load_metadata: cache hit after first read")
-        saved = save_upload(SAMPLE_CONTENT, "cached.txt", user_id=1)
-        first = _load_metadata(saved.id)
-        assert first is not None
-
-        meta_path = get_uploads_dir() / f"{saved.id}.json"
-        meta_path.unlink()
-
-        second = _load_metadata(saved.id)
-        assert second == first
-        print_success("Metadata served from cache")
+    test_load_metadata_uses_cache_after_first_read lived here: it pinned that a sidecar deleted on disk is still served
+    from the one-hour cache. Decision 36 asks the opposite, see TestCrossProcessFreshness.
+    """
 
     def test_get_upload_mime_type_defaults_when_key_missing(self):
         """Missing mime_type key falls back to octet-stream."""
@@ -628,3 +629,348 @@ class TestValidateUploadSecurityDetectedMime:
 
         assert mime == "application/pdf"
         print_success("Detected MIME used for octet-stream declaration")
+
+
+# ============================================================================
+# Scope of uploaded files (decision 36) — helpers
+# ============================================================================
+#
+# effective_scope() and set_upload_scope() do not exist before decision 36: each test imports what it needs in its own
+# body, so that until they land only the tests needing them fail, on an ImportError that names them, and the collection
+# of the module (every other test included) never breaks.
+
+
+def _effective_scope() -> Callable[[dict], str]:
+    """The scope rule under test, imported when the test runs."""
+    from backend.app.services.files.static_uploads import effective_scope  # noqa: PLC0415 — red until decision 36: imported at module level it would stop the collection of every test
+
+    return effective_scope
+
+
+def _set_upload_scope() -> Callable[[str, str], UploadFileInfo | None]:
+    """The scope change under test, imported when the test runs."""
+    from backend.app.services.files.static_uploads import set_upload_scope  # noqa: PLC0415 — red until decision 36: imported at module level it would stop the collection of every test
+
+    return set_upload_scope
+
+
+def _png_bytes(width: int = 32, height: int = 24) -> bytes:
+    """A real PNG (Pillow), so that the detected MIME type is image/png with or without libmagic."""
+    from PIL import Image  # noqa: PLC0415 — test-only local import
+
+    out = BytesIO()
+    Image.new("RGB", (width, height), color=(0, 128, 255)).save(out, format="PNG")
+    return out.getvalue()
+
+
+def _sidecar(file_id: str) -> dict:
+    """The metadata sidecar of an upload, as it is on disk."""
+    return json.loads((get_uploads_dir() / f"{file_id}.json").read_text())
+
+
+def _write_legacy_upload(name: str, content: bytes, mime_type: str, user_id: int) -> str:
+    """Store a file the way uploads were stored before decision 36 — a sidecar without ``scope`` —; its id."""
+    file_id = str(uuid.uuid4())
+    ext = Path(name).suffix.lower()
+    uploads_dir = get_uploads_dir()
+    (uploads_dir / f"{file_id}{ext}").write_bytes(content)
+    metadata = {
+        "id": file_id,
+        "original_name": name,
+        "extension": ext,
+        "mime_type": mime_type,
+        "size_bytes": len(content),
+        "uploaded_at": datetime.now(UTC).isoformat(),
+        "uploaded_by_user_id": user_id,
+        "description": None,
+    }
+    (uploads_dir / f"{file_id}.json").write_text(json.dumps(metadata, indent=2))
+    return file_id
+
+
+def _rewrite_like_another_worker(file_id: str, **changes) -> None:
+    """Rewrite a sidecar the way another worker's write lands: a whole new file, then ``os.replace`` over the old one."""
+    sidecar_path = get_uploads_dir() / f"{file_id}.json"
+    metadata = {**json.loads(sidecar_path.read_text()), **changes}
+    written_elsewhere = sidecar_path.with_name(f"{sidecar_path.name}.another-worker.tmp")
+    written_elsewhere.write_text(json.dumps(metadata, indent=2))
+    os.replace(written_elsewhere, sidecar_path)
+
+
+# ============================================================================
+# effective_scope — the rule (decision 36)
+# ============================================================================
+
+#: A stored "common" or "personal" wins, each case against the opposite outcome of the inheritance rule.
+STORED_SCOPE_WINS = [
+    pytest.param({"scope": "common", "mime_type": "text/plain", "uploaded_by_user_id": 5}, "common", id="stored-common-over-text"),
+    pytest.param({"scope": "personal", "mime_type": "image/png", "uploaded_by_user_id": 5}, "personal", id="stored-personal-over-image"),
+    pytest.param({"scope": "personal", "mime_type": "application/pdf", "uploaded_by_user_id": 0}, "personal", id="stored-personal-over-system"),
+]
+
+#: No scope, None or any other value: the system's files (user 0) and image/* are common, anything else personal.
+INHERITED_SCOPE = [
+    pytest.param({"mime_type": "text/plain", "uploaded_by_user_id": 0}, "common", id="missing-system-text"),
+    pytest.param({"mime_type": "application/pdf", "uploaded_by_user_id": 0}, "common", id="missing-system-pdf"),
+    pytest.param({"mime_type": "image/png", "uploaded_by_user_id": 5}, "common", id="missing-image-png"),
+    pytest.param({"mime_type": "image/jpeg", "uploaded_by_user_id": 5}, "common", id="missing-image-jpeg"),
+    pytest.param({"mime_type": "text/plain", "uploaded_by_user_id": 5}, "personal", id="missing-text"),
+    pytest.param({"mime_type": "text/csv", "uploaded_by_user_id": 5}, "personal", id="missing-csv"),
+    pytest.param({"mime_type": "application/pdf", "uploaded_by_user_id": 5}, "personal", id="missing-pdf"),
+    pytest.param({"uploaded_by_user_id": 5}, "personal", id="missing-mime-type"),
+    pytest.param({"scope": None, "mime_type": "image/png", "uploaded_by_user_id": 5}, "common", id="none-image"),
+    pytest.param({"scope": None, "mime_type": "text/plain", "uploaded_by_user_id": 5}, "personal", id="none-text"),
+    pytest.param({"scope": None, "mime_type": "text/plain", "uploaded_by_user_id": 0}, "common", id="none-system"),
+    pytest.param({"scope": "public", "mime_type": "text/plain", "uploaded_by_user_id": 5}, "personal", id="other-value-text"),
+    pytest.param({"scope": "public", "mime_type": "image/png", "uploaded_by_user_id": 5}, "common", id="other-value-image"),
+    pytest.param({"scope": "", "mime_type": "text/plain", "uploaded_by_user_id": 0}, "common", id="empty-system"),
+    pytest.param({"scope": "Common", "mime_type": "text/plain", "uploaded_by_user_id": 5}, "personal", id="other-case-text"),
+]
+
+
+class TestEffectiveScope:
+    """effective_scope(metadata) -> "common" | "personal", a pure function of a sidecar's metadata (decision 36)."""
+
+    @pytest.mark.parametrize(("metadata", "expected"), STORED_SCOPE_WINS)
+    def test_a_stored_scope_wins(self, metadata: dict, expected: str):
+        """A stored "common" or "personal" is the scope, whatever the inheritance rule would say."""
+        print_section(f"effective_scope: stored {metadata['scope']!r} wins")
+        effective_scope = _effective_scope()
+        untouched = copy.deepcopy(metadata)
+
+        assert effective_scope(metadata) == expected
+        assert metadata == untouched, "effective_scope() reads the metadata and never writes them"
+        print_success(f"{metadata} → {expected}")
+
+    @pytest.mark.parametrize(("metadata", "expected"), INHERITED_SCOPE)
+    def test_otherwise_the_inheritance_rule_applies(self, metadata: dict, expected: str):
+        """No scope, None or any other value (a case variant included): user 0 → common, image/* → common, else personal."""
+        print_section("effective_scope: inheritance rule")
+        effective_scope = _effective_scope()
+        untouched = copy.deepcopy(metadata)
+
+        assert effective_scope(metadata) == expected
+        assert metadata == untouched, "effective_scope() reads the metadata and never writes them"
+        print_success(f"{metadata} → {expected}")
+
+
+# ============================================================================
+# save_upload — the scope stored in the sidecar (decision 36)
+# ============================================================================
+
+
+class TestSaveUploadStoresTheScope:
+    """save_upload() writes the scope into the sidecar: the one asked for, as given; without one, the rule's result, so
+    the stored value stays explicit. POST /uploads passes its optional ``scope`` field through (keyword ``scope``)."""
+
+    @pytest.mark.parametrize(
+        ("name", "scope", "expected"),
+        [
+            pytest.param("photo.png", None, "common", id="image-without-scope"),
+            pytest.param("notes.txt", None, "personal", id="text-without-scope"),
+            pytest.param("photo.png", "personal", "personal", id="image-asked-personal"),
+            pytest.param("notes.txt", "common", "common", id="text-asked-common"),
+        ],
+    )
+    def test_scope_written_to_the_sidecar(self, name: str, scope: str | None, expected: str):
+        print_section(f"save_upload: {name}, scope={scope} → sidecar scope {expected}")
+        is_image = name.endswith(".png")
+        asked = {} if scope is None else {"scope": scope}
+
+        info = save_upload(_png_bytes() if is_image else SAMPLE_CONTENT, name, user_id=5, **asked)
+
+        sidecar = _sidecar(info.id)
+        assert sidecar["mime_type"].startswith("image/") == is_image, f"precondition: {name} was detected as {sidecar['mime_type']}"
+        assert sidecar.get("scope") == expected, f"the sidecar of {name} (scope={scope}) stores scope {sidecar.get('scope')!r}, expected {expected!r}: {sidecar}"
+        assert info.scope == expected
+        print_success(f"{name}: sidecar and info say {expected}")
+
+
+# ============================================================================
+# Legacy sidecars — written before decision 36, without scope
+# ============================================================================
+
+
+class TestLegacySidecars:
+    """Sidecars written before decision 36 carry no ``scope``: the inheritance rule classifies them when they are read,
+    writing nothing (D36-2: read on the fly, no migration). A scope change stores the field."""
+
+    @pytest.mark.parametrize(
+        ("name", "mime_type", "user_id", "expected"),
+        [
+            pytest.param("logo.png", "image/png", 5, "common", id="png"),
+            pytest.param("statement.pdf", "application/pdf", 5, "personal", id="pdf"),
+            pytest.param("export.csv", "text/csv", 5, "personal", id="csv"),
+            pytest.param("notes.txt", "text/plain", 5, "personal", id="text"),
+            pytest.param("readme.txt", "text/plain", 0, "common", id="system-text"),
+        ],
+    )
+    def test_legacy_sidecar_inherits_its_scope(self, name: str, mime_type: str, user_id: int, expected: str):
+        print_section(f"legacy sidecar: {name} of user {user_id} → {expected}")
+        file_id = _write_legacy_upload(name, _png_bytes() if mime_type.startswith("image/") else SAMPLE_CONTENT, mime_type, user_id)
+        sidecar_path = get_uploads_dir() / f"{file_id}.json"
+        as_written = sidecar_path.read_bytes()
+
+        info = get_upload_info(file_id)
+        assert info is not None, "a legacy sidecar is still an upload"
+        assert info.scope == expected
+        listed = {f.id: f for f in list_uploads()[0]}
+        assert listed[file_id].scope == expected, "list_uploads() classifies a legacy sidecar the same way"
+        assert sidecar_path.read_bytes() == as_written, "reading a legacy sidecar wrote it: the inheritance rule is applied on the fly, without writing (D36-2)"
+        print_success(f"{name} → {expected}, sidecar untouched")
+
+    def test_scope_change_stores_the_field_in_a_legacy_sidecar(self):
+        """set_upload_scope() writes ``scope`` into a legacy sidecar, the inherited value included, and nothing else."""
+        print_section("legacy sidecar: a scope change stores the field")
+        set_upload_scope = _set_upload_scope()
+        image_id = _write_legacy_upload("logo.png", _png_bytes(), "image/png", 5)  # inherited: common
+        text_id = _write_legacy_upload("notes.txt", SAMPLE_CONTENT, "text/plain", 5)  # inherited: personal
+        before = {file_id: _sidecar(file_id) for file_id in (image_id, text_id)}
+
+        changed = set_upload_scope(image_id, "personal")
+        same = set_upload_scope(text_id, "personal")  # the value the rule gives anyway: stored all the same, explicit from now on
+
+        for file_id, info in ((image_id, changed), (text_id, same)):
+            assert info is not None, f"set_upload_scope({file_id!r}) found nothing"
+            assert (info.id, info.scope) == (file_id, "personal")
+            after = _sidecar(file_id)
+            assert after.get("scope") == "personal", f"the legacy sidecar was not given the scope: {after}"
+            assert {key: after.get(key) for key in before[file_id]} == before[file_id], "a scope change rewrites the scope, nothing else"
+        print_success("scope stored in both legacy sidecars")
+
+
+# ============================================================================
+# Cross-process freshness and atomic writes (decision 36)
+# ============================================================================
+
+
+class TestCrossProcessFreshness:
+    """Each worker of ``dev.py server --workers N`` keeps its own one-hour cache of the sidecars, and the scope decides
+    who may read a file: a sidecar another worker rewrote or deleted is read as it is on disk now, without anybody
+    clearing a cache. A scope change replaces the sidecar atomically: written whole, then renamed over the old one."""
+
+    def test_sidecar_rewritten_by_another_worker_is_read_fresh(self):
+        print_section("freshness: a sidecar another worker rewrote")
+        saved = save_upload(SAMPLE_CONTENT, "shared.txt", user_id=5, description="before")
+        first = get_upload_info(saved.id)
+        assert first is not None and first.description == "before"  # read once: now in this process's cache
+
+        _rewrite_like_another_worker(saved.id, scope="common", description="after, from another worker")
+
+        fresh = get_upload_info(saved.id)
+        assert fresh is not None
+        assert fresh.description == "after, from another worker", "get_upload_info() served the sidecar this process had cached, not the one another worker wrote since"
+        assert fresh.scope == "common"
+        listed = {f.id: f for f in list_uploads()[0]}[saved.id]
+        assert (listed.description, listed.scope) == ("after, from another worker", "common"), "list_uploads() served a stale sidecar"
+        print_success("the rewritten sidecar is read, no cache cleared")
+
+    def test_sidecar_deleted_on_disk_is_no_longer_found(self):
+        """Replaces test_load_metadata_uses_cache_after_first_read, which pinned the opposite (the cache served it)."""
+        print_section("freshness: a sidecar deleted on disk")
+        saved = save_upload(SAMPLE_CONTENT, "gone.txt", user_id=5)
+        assert get_upload_info(saved.id) is not None  # read once: now in this process's cache
+
+        (get_uploads_dir() / f"{saved.id}.json").unlink()
+
+        assert get_upload_info(saved.id) is None, "get_upload_info() still finds a file whose sidecar is gone from disk: served from the cache"
+        assert get_upload_path(saved.id) is None, "get_upload_path() still finds a file whose sidecar is gone from disk: served from the cache"
+        print_success("a deleted sidecar is not found, no cache cleared")
+
+    def test_scope_change_replaces_the_sidecar_atomically(self):
+        print_section("set_upload_scope: atomic sidecar write")
+        set_upload_scope = _set_upload_scope()
+        saved = save_upload(SAMPLE_CONTENT, "switch.txt", user_id=5, description="kept as it was")
+        uploads_dir = get_uploads_dir()
+        sidecar_path = uploads_dir / f"{saved.id}.json"
+        before = json.loads(sidecar_path.read_text())
+        inode_before = sidecar_path.stat().st_ino
+
+        updated = set_upload_scope(saved.id, "common")
+
+        assert updated is not None and (updated.id, updated.scope) == (saved.id, "common")
+        # The folder is this test's own (tmp_path): exactly the file and its sidecar, no temporary or partial file left.
+        assert sorted(p.name for p in uploads_dir.iterdir()) == sorted([f"{saved.id}.txt", f"{saved.id}.json"])
+        after = json.loads(sidecar_path.read_text())  # whole, and parses
+        assert after.get("scope") == "common"
+        assert {key: after.get(key) for key in before if key != "scope"} == {key: value for key, value in before.items() if key != "scope"}, "a scope change rewrites the scope, nothing else"
+        # Rewritten in place (open with truncation), the same inode is emptied, then refilled under a concurrent reader's
+        # eyes; written whole and renamed over the old one (os.replace), the sidecar is a new inode.
+        assert sidecar_path.stat().st_ino != inode_before, "the sidecar was rewritten in place: a reader in another worker can read it half written"
+        assert get_upload_info(saved.id).scope == "common"
+        print_success("sidecar replaced whole, nothing left behind")
+
+    def test_scope_change_of_a_missing_file_returns_none(self):
+        print_section("set_upload_scope: missing id")
+        set_upload_scope = _set_upload_scope()
+        missing = str(uuid.uuid4())
+
+        assert set_upload_scope(missing, "common") is None
+        assert [p.name for p in get_uploads_dir().iterdir() if missing in p.name] == [], "a scope change of a missing file wrote something"
+        print_success("None, nothing written")
+
+    @pytest.mark.parametrize("delete_lands", ["before-the-write", "after-the-write"], ids=["delete-done-before-the-write", "file-removed-after-the-write"])
+    def test_scope_change_racing_a_delete_leaves_nothing_behind(self, monkeypatch, delete_lands: str):
+        """A delete runs while set_upload_scope() writes: the file is gone when it checks again after writing.
+
+        Either the delete finished just before the write, which then puts a sidecar back for a file that no longer
+        exists, or it has removed the file just after the write and not yet its sidecar. set_upload_scope() answers None
+        and removes the sidecar it wrote: nothing of the deleted file is left in the folder."""
+        print_section(f"set_upload_scope: a delete lands {delete_lands.replace('-', ' ')}")
+        set_upload_scope = _set_upload_scope()
+        saved = save_upload(SAMPLE_CONTENT, "raced.txt", user_id=5)
+        uploads_dir = get_uploads_dir()
+        real_save_metadata = static_uploads._save_metadata
+        writes: list[str] = []
+
+        def write_while_a_delete_lands(file_id: str, metadata: dict) -> None:
+            if delete_lands == "before-the-write":
+                assert delete_upload(file_id), "precondition: the delete removed the file"
+                real_save_metadata(file_id, metadata)
+            else:
+                real_save_metadata(file_id, metadata)
+                (uploads_dir / f"{file_id}.txt").unlink()  # the delete's first step; its sidecar step has not run yet
+            writes.append(metadata["scope"])
+
+        monkeypatch.setattr(static_uploads, "_save_metadata", write_while_a_delete_lands)
+
+        result = set_upload_scope(saved.id, "common")
+
+        assert writes == ["common"], "precondition: set_upload_scope() reached the sidecar write, where the delete lands"
+        assert result is None, f"set_upload_scope() answered {result!r} for a file deleted while it wrote"
+        assert not (uploads_dir / f"{saved.id}.json").exists(), "the sidecar written for a file deleted meanwhile is left behind"
+        assert get_upload_info(saved.id) is None
+        # The folder is this test's own (tmp_path): no content, no sidecar, no temporary file of the write.
+        assert sorted(p.name for p in uploads_dir.iterdir()) == []
+        print_success("None, nothing of the deleted file left")
+
+
+# ============================================================================
+# Ids the filesystem cannot name
+# ============================================================================
+
+
+class TestIdsTheFilesystemCannotName:
+    """An id with an embedded NUL byte names no file: ``os.stat()`` raises ValueError on its path instead of OSError.
+    It must read as a missing file, never as an exception, which the API would turn into a 500."""
+
+    def test_nul_byte_id_is_a_missing_file(self):
+        print_section("NUL byte in the id → missing file")
+        set_upload_scope = _set_upload_scope()
+        saved = save_upload(SAMPLE_CONTENT, "real.txt", user_id=5)
+        nul_id = f"{saved.id}\x00"  # an existing file's id, then NUL: must not reach that file
+        uploads_dir = get_uploads_dir()
+        with pytest.raises(ValueError):  # the premise: the filesystem cannot name it, stat() raises
+            (uploads_dir / f"{nul_id}.json").stat()
+
+        assert get_upload_info(nul_id) is None
+        assert get_upload_path(nul_id) is None
+        assert get_upload_mime_type(nul_id) is None
+        assert set_upload_scope(nul_id, "common") is None
+        assert delete_upload(nul_id) is False
+
+        # The real file next to it is untouched: no write, no delete reached it.
+        assert sorted(p.name for p in uploads_dir.iterdir()) == sorted([f"{saved.id}.txt", f"{saved.id}.json"])
+        info = get_upload_info(saved.id)
+        assert info is not None and info.scope == "personal"
+        print_success("None / False, no exception, the real file untouched")

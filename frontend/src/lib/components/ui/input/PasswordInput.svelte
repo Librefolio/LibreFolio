@@ -37,6 +37,7 @@
         class:pl-12={!!icon}
         class:border-lf-input={!hasError}
         class:border-lf-danger={hasError}
+        class:hover:border-lf-input-hover={!hasError}
         class:focus:border-lf-focus={!hasError}
         class:focus:border-lf-danger={hasError}
         class:focus:ring-lf-focus={!hasError}

@@ -143,7 +143,7 @@ async def send_test_email(session: AsyncSession, user: User, *, instance: str) -
     return language
 
 
-async def _require_email() -> delivery.EmailConfigState:
+async def require_email() -> delivery.EmailConfigState:
     """The configuration when email can be used now, else ``EmailUnavailableError`` (``INSTANCE_BLOCKED`` while the
     hosting provider blocks the instance); read off the event loop."""
     if delivery.sending_blocked():
@@ -154,7 +154,8 @@ async def _require_email() -> delivery.EmailConfigState:
     return state
 
 
-def _remaining(record: AccountToken, now: datetime) -> timedelta:
+def link_ttl(record: AccountToken, now: datetime) -> timedelta:
+    """How long the link of ``record`` still works at ``now``: never negative."""
     return max(ensure_utc(record.expires_at) - ensure_utc(now), timedelta(0))
 
 
@@ -176,7 +177,7 @@ async def send_link_email(
     that purpose), ``EmailRecipientRequiredError``, ``EmailRecipientNotAllowedError``, ``EmailAccountInactiveError`` (a
     reset link of an inactive account), and what ``send_email`` raises.
     """
-    await _require_email()
+    await require_email()
     links = require_links()
     moment = now or utcnow()
     inspection = await token_service.inspect_token(session, token, _PURPOSES[purpose], now=moment)
@@ -189,7 +190,7 @@ async def send_link_email(
         if not recipient:
             raise EmailRecipientRequiredError()
         lang = supported_email_language(language) or await instance_language(session)
-        content = build_invite(language=lang, link=link, ttl=_remaining(record, moment), instance=links.instance, inviter=admin.username, grants_admin=record.grants_admin)
+        content = build_invite(language=lang, link=link, ttl=link_ttl(record, moment), instance=links.instance, inviter=admin.username, grants_admin=record.grants_admin)
         user_id = None
     else:
         if to is not None:
@@ -201,7 +202,7 @@ async def send_link_email(
             raise EmailAccountInactiveError()
         recipient = user.email
         lang = await account_language(session, user.id)
-        content = build_password_reset(language=lang, username=user.username, link=link, ttl=_remaining(record, moment), instance=links.instance)
+        content = build_password_reset(language=lang, username=user.username, link=link, ttl=link_ttl(record, moment), instance=links.instance)
         user_id = user.id
     await send_email(content, to=recipient, user_id=user_id)
     logger.info("Link emailed by an administrator", admin_id=admin.id, purpose=purpose, token_id=record.id, user_id=user_id, language=lang)
@@ -218,7 +219,7 @@ async def admit_forgotten_password(address: str | None, identifier: str) -> None
     """
     if FORGOT_PASSWORD_HELD:
         raise ForgottenPasswordHeldError()
-    state = await _require_email()
+    state = await require_email()
     require_links()
     # Without an address (a unix socket), one shared count would let a single client block the feature for everyone:
     # the limits per identifier and per account, and the hourly budget, still apply.
@@ -288,7 +289,7 @@ async def forgotten_password_work(identifier: str, *, engine: AsyncEngine | None
                 logger.info("Forgotten password: an administrator's reset link is still live, nothing sent", user_id=user_id)
                 return
             # Checked again now, since the answer went out: nothing is created when the email cannot go.
-            state = await _require_email()
+            state = await require_email()
             links = require_links()
             if not delivery.budget_status(state.max_per_hour).allowed:
                 logger.warning("Forgotten password: the hourly limit of the instance is reached, nothing sent", user_id=user_id)
@@ -313,7 +314,7 @@ async def forgotten_password_work(identifier: str, *, engine: AsyncEngine | None
                     language=language,
                     username=user.username,
                     link=email_link(AccountTokenPurpose.PASSWORD_RESET, issued.token),
-                    ttl=_remaining(issued.record, moment),
+                    ttl=link_ttl(issued.record, moment),
                     instance=links.instance,
                 )
                 await send_email(content, to=user.email, user_id=user_id)
