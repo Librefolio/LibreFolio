@@ -1386,3 +1386,43 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
    `txFormTypes.ts`); devWiki `problems/browser-autofill-numeric-fields.md` (la riga del Form punta anche ai pezzi; le
    altre righe che citano la modale restano vere, la logica è nel padre); `check_source_paths.py` invariato (5 path di
    prima); `mkdocs build` stretto con 0 avvisi; `check-links` verde.
+
+   > **Note implementazione (coordinatore, 15/10 ~08:18)**: FE8a-1 committato come `8a62cea7f` (`refactor(tx-form): cut
+   > form modal by section`, 9 file; baseline 218 = 35 + 6 + 96 + 56 + 25, `--check` pulito anche dal coordinatore) e
+   > `04a3b2691` (journal). Orari dal coordinatore colori: dalle 08:45 alle ~10:15 `dev_release2` è fermo (gallerie r1 e
+   > r2); dalle 08:45 alla fine della finestra (~12:30) niente run pesanti nella corsia (E2E delle transazioni, build).
+   > FE8a-1 entra dopo la finestra, dopo R e L, con il controllo leggero sul fuso.
+
+#### FE8a-2 — il Bulk ✅ (2026-10-15) — 🧊 FROZEN
+
+1. ✅ **Taglio** (08:18, `/tmp/libreFolio_w_fe8/gen_cut.py`, la versione generica di `gen_form.py`, con
+   `bulk_cfg.py`): `TransactionBulkModal.svelte` 3 760 → 3 332 righe; in `components/transactions/bulk/`:
+   `TxBulkBanners.svelte` (righe 3194-3454 del padre: errori, problemi di validazione, cose da sistemare, proposte di
+   unione; 36 props, legati `commitFailed`, `formError`, `issuesDismissed`, `promoteAllOpen`, `promoteBannerSeen`,
+   `todoBlockersExpanded`, `todoWarningsExpanded`), `TxBulkToolbar.svelte` (3462-3566: cerca e aggiungi, filtro dei
+   giorni, selezione e azioni; 17 props, legati `bulkTableSelectedRows`, `importWizardOpen`, `maxDeltaDays`);
+   `txBulkTypes.ts` con `DraftFields`, `PendingOp`, `WacResultEntry`, `SuggestEntry`, spostati alla lettera dal padre.
+   **W-B11 chiusa**: `brokerName()` (`:1597`) non aveva chiamanti ed è tolta. Header, tabella, footer e modali
+   impilate restano nel padre; restano anche le funzioni pure (i renderer delle celle), fuori dal disegno approvato.
+
+   > **⚠️ Fuori pista**: la prima prova ha dato 2 rossi in `core-unit` e 3 in `component-unit`.
+   > (1) `htmlSink.gate.test.ts`: la voce rivista di `formatCurrencyCodeHtml(…)` (`REVIEWED_SINKS`, `:69`) puntava a
+   > `TransactionBulkModal.svelte`; ora il `{@html}` sta in `TxBulkBanners.svelte`, e la voce segue il codice (stesso
+   > motivo, `CURRENCY_HTML`). (2) `ImportWizardModal.test.ts`, «Import success-only handoff»: `tx-bulk-import` non
+   > c'era. La sezione della barra cominciava **dentro** il commento HTML di più righe che la precede: nel padre il
+   > `<!--` restava aperto e inghiottiva la chiamata `<TxBulkToolbar/>` fino al `-->` successivo, e il figlio cominciava
+   > con il resto del commento. svelte-check non lo vede (è markup valido). Cura: il commento torna intero nel padre, la
+   > riga spuria esce dal figlio; il generatore ora rifiuta una sezione che comincia dentro un commento o che apre o chiude
+   > un commento che non contiene. Le sezioni del Form (FE8a-1) erano giuste: il loro commento era tutto dentro, e
+   > `front-transaction all` lo aveva provato.
+2. ✅ **Cricchetto**: `--split` del Bulk nei due pezzi; m1 190 = 88 (padre) + 54 + 48; riga `~split`; `--check`
+   pulito.
+3. ✅ **Prove** (08:19–08:43, corsia 6184): svelte-check 0 errori, 0 avvisi su 5 670 file; Vitest `tx-unit` 903,
+   `core-unit` 4 290, `component-unit` 3 225; `ImportWizardModal.test.ts` 26/26; E2E `front-transaction all --workers 4`
+   (08:29–08:39, avviso al coordinatore): 46/46 azioni verdi, 337 + 34 (mobile) passed, 32 skipped del progetto mobile;
+   fuori dalle transazioni `front-utility onboarding-tour` 10 (l'àncora `transaction.bulk.add_import` è ora nella
+   barra) e `front-broker detail` 37. Doc: `developer/frontend/state/transaction-draft.md` (dove sono dichiarati
+   `PendingOp` e `DraftFields`; i due componenti). devWiki: `concepts/import-todo-signals.md` e
+   `decisions/transfer-pair-same-asset-opposite-quantity.md` (le righe che descrivono i banner e la barra puntano anche
+   ai pezzi); `check_source_paths.py` invariato. `mkdocs build` stretto con 0 avvisi; `check-links` verde (08:43,
+   prima della finestra).
