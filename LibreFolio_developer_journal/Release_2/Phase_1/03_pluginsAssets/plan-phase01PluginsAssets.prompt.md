@@ -1177,3 +1177,92 @@ Decisioni del coordinatore sul CP3b (15/10, ~05:20):
 - **X-R7**: sì.
 - **X-R8, proposta del coordinatore** (il developer può cambiarla): una cache dell'elenco delle valute dei fornitori,
   valida 24 ore; se la BCE non risponde si usa l'ultimo elenco noto, con un timeout breve. In un mio lotto dopo il CP3b.
+
+### CP3 in `dev_release2` ✅ (2026-10-15)
+
+Avanzamento veloce di `dev_release2` a `8000aba5a` (il journal del sesto aggiornamento sopra `9a3ba752a`), record del
+coordinatore `5d21f2d85`; il mio ramo è avanzato lì, worktree pulito. Le 3 fixture della galleria le ha girate il
+coordinatore al coordinatore colori.
+
+### CP3b — test dei cambi senza rete e residui di testo ✅ (2026-10-15)
+
+Via del coordinatore alle ~05:25, nel perimetro deciso: W-B9, W-B13, X-R5 (tranne `AssetModal` e le fixture di G), X-R7.
+Base: HEAD `5d21f2d85`. Nessun file del backend dell'app cambia comportamento; `openapi.json` deve restare identico.
+
+Passi:
+1. ✅ Prova a vuoto della rete: `api fx` con `HTTP(S)_PROXY` su una porta chiusa (localhost escluso), prima delle modifiche,
+   per vedere quali test dipendono dalla rete.
+   > **Note implementazione**: `env HTTP_PROXY=… HTTPS_PROXY=… ALL_PROXY=…` (anche in minuscolo) `=http://127.0.0.1:9`,
+   > `NO_PROXY=localhost,127.0.0.1,::1`, poi `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test
+   > --test-port 6183 --data-dir /tmp/librefolio-r13-x api fx` (05:27–05:28): **2 falliti, 19 passati**. Rossi
+   > `test_providers_include_target_currencies` («Provider ECB should have at least one target currency», `:126`) e
+   > `test_get_providers` («Provider should have target_currencies», `:175`); gli altri 19 non dipendono dalla rete (la
+   > creazione delle rotte con ECB non chiama il fornitore, e i sync usano MOCKFX). httpx sul server rispetta le variabili del
+   > proxy: è la prova che il server è rimasto senza rete. Log `/tmp/libreFolio_x_cp3b_offline_before.log`.
+2. ✅ X-R5: i commenti e le docstring nel perimetro deciso (io).
+   > **Note implementazione**: 13 righe in 9 file, sostituzioni sul posto (Prettier ha `printWidth` 300, nessun ritorno a
+   > capo): docstring di `scheduled_investment/plugin.py:33-34` (→ `schemas.assets.assets`), `services/assets/core.py:15`
+   > (→ `services/fx/`), `test_fx_compress_errors.py:1` (→ `api/v1/fx/currencies.py`), `test_fx_core.py:5` (→
+   > `services/fx/` `storage.py`, `sync.py`); commenti di `e2e/assets/asset-modal.spec.ts:526` (→
+   > `services/assets/provider_management.py`, dove c'è «provider changed», `:134`), `ScheduledInvestmentEditor.svelte:75`,
+   > `:81`, `:89` (→ `schemas/assets/assets.py`), `auth.test.ts:574` di A (→ `api/v1/assets/crud.py`, il 409 con `error_code`
+   > in `detail`, `:139-146`), `fxRoutesStore.test.ts:8` (→ `services/fx/sync.py`, che salva il tasso composto su
+   > `route.base/route.quote`, `:728`); `TODO_FUTURI.md:1121` e `:2067`. Restano, come deciso: X-R1, X-R2, `AssetModal`
+   > (X-R3) e le 3 fixture di G; `schemas/fx.py` esiste ancora, e `TODO_Completati.md:202` è storia.
+3. ✅ X-R7: la riga di `provider_borsa_italiana.md` (docs-writer).
+   > **Note implementazione**: `provider_borsa_italiana.md:123` non ripete più le variabili: rimanda a
+   > [Asset Search & Link-Finder](search_link_finder.md#configuration-env-vars-all-optional), che le elenca tutte, compresa
+   > `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`, e dice che si leggono in `backend/app/config/plugins.py`. docs-writer ha
+   > controllato l'ancora nell'HTML costruito (en, it, fr, es): MkDocs segnala le ancore sbagliate solo come INFO.
+   > `mkdocs build` stretto verde (3 012 URL), `check-links` 95 validi, 0 rotti. Pagina senza traduzioni: nessun timbro.
+4. ✅ Una sola build del frontend (le modifiche in `frontend/src` la rendono vecchia) e di MkDocs, prima dei test.
+   > **Note implementazione**: `dev.py front build --debug` 05:30:55–05:32:27, rc 0, dopo le modifiche di X-R5 in
+   > `frontend/src` (`scripts/cli_base.py`, `check_frontend_needs_build`: conta ogni file di `frontend/src` più nuovo della
+   > build; `frontend/e2e` no, quindi W-B13 non la invecchia). MkDocs ricostruito da docs-writer dopo X-R7 (il sito va in
+   > `mkdocs_src/site`, separato da `frontend/build`: le due build potevano sovrapporsi).
+5. ✅ W-B9 e W-B13 (test-author).
+   > **Note implementazione**: `test_fx_api.py`: due costanti (`_STATIC_FX_PROVIDERS = ("FED", "BOE")`,
+   > `_PUBLIC_FX_PROVIDERS`) con il perché in commento; `test_providers_include_target_currencies` chiede l'elenco filtrato
+   > sui fornitori statici, vuole esattamente quei codici e tiene i controlli per fornitore di prima; `test_get_providers`
+   > sposta il contratto completo su una chiamata filtrata (2a), prova i filtri con FED e con FED + BOE (2b, 2c), e le chiamate
+   > senza filtro (la prima e 2d) controllano solo che ci siano i codici pubblici ECB, FED, BOE, SNB (sottoinsieme, mai un
+   > conteggio). `test_manual_provider_hidden_from_list` è rimasto com'era; `TIMEOUT` invariato. `fx-csv-import.spec.ts:247` e
+   > `:276`: `modal.getByTestId('data-import-modal-close')`. Prove di test-author: `api fx` senza rete 21/21, `api fx` normale
+   > 21/21, `front-fx fx-csv-import` 21/21 (log `/tmp/libreFolio_x_cp3b_ta_*.log`).
+
+> **Fuori pista**:
+> - **La SNB non ha un elenco statico: l'errore era mio.** Nell'handoff della validazione di `d1ef3ddeb` ho scritto che FED,
+>   BOE e SNB hanno elenchi statici, e il coordinatore ha deciso su quella base. Il mio controllo guardava solo il corpo di
+>   `get_supported_currencies` (nessuna chiamata HTTP); la SNB però passa da `_ensure_currency_map()`
+>   (`fx_providers/snb/plugin.py:139-149`), che scarica la mappa delle valute da data.snb.ch con 15 s di timeout e la tiene
+>   in memoria solo se riesce. test-author l'ha trovato: con FED, BOE e SNB come deciso, `api fx` senza rete dà ancora 2
+>   rossi, tutti e due sulla SNB (`/tmp/libreFolio_x_cp3b_ta_offline_literal_snb.log`; nel log del server, `Failed to fetch
+>   target currencies for SNB … All connection attempts failed`, già presente nella mia prova a vuoto, dove però l'ECB
+>   veniva prima in ordine alfabetico). Ha tenuto il principio della decisione (solo fornitori statici, nessuna rete) e
+>   ristretto a FED e BOE; la SNB dal vivo è già in `test_external/test_fx_providers.py::test_supported_currencies`.
+>   **Scostamento dalla decisione: chiesta la conferma del coordinatore nell'handoff.**
+> - La SNB cade anche nel residuo X-R8: senza filtro il server la interroga finché non riesce una volta nel processo.
+> - Nella stessa spec restano quattro selettori in inglese (`:233`, `:234`, `:250`, `:261`), fuori dal perimetro di W-B13:
+>   registrati come X-R9.
+6. ✅ Verifica: `api fx` di nuovo senza rete, `api schema` identico, lint, test mirati, journal e handoff.
+   > **Note implementazione** (`/tmp/libreFolio_x_cp3b_verify.sh`, 05:44–05:45, log `/tmp/libreFolio_x_cp3b_verify.log`):
+   > `api schema` identico a quello di `be2ad6573` salvo `info.version` (113 percorsi), `tool-contracts` identico; scoperta
+   > dei registri identica (6 / 7 / 33 / 23 / 15); **`api fx` senza rete 21/21** (prima delle modifiche 19/21); `api
+   > fx-compress-errors` 6; `services fx-core` 23; vitest `front-user user-unit` 78 (con `auth.test.ts`) e `front-utility
+   > core-unit` 4 266 (con `fxRoutesStore.test.ts`); `ruff` e `black --check` puliti sui 5 file Python; Prettier pulito sui 5
+   > file del frontend; `git diff --check` pulito; porta 6183 libera.
+
+### Checkpoint CP3b 🧊 (2026-10-15) — FROZEN, handoff al coordinatore
+
+- **Base**: HEAD `5d21f2d85`.
+- **Elenchi**: nessuna rinomina, nessun taglio. 14 file modificati, nessuno nuovo:
+  - test: `backend/test_scripts/test_api/test_fx_api.py` (W-B9), `frontend/e2e/fx/fx-csv-import.spec.ts` (W-B13);
+  - commenti e docstring (X-R5): `backend/app/services/asset_source_providers/scheduled_investment/plugin.py`,
+    `backend/app/services/assets/core.py`, `backend/test_scripts/test_api/test_fx_compress_errors.py`,
+    `backend/test_scripts/test_services/test_fx_core.py`, `frontend/e2e/assets/asset-modal.spec.ts`,
+    `frontend/src/lib/components/assets/ScheduledInvestmentEditor.svelte`, `frontend/src/lib/stores/app/auth.test.ts` (di A),
+    `frontend/src/lib/stores/reference/fxRoutesStore.test.ts`, `TODO_FUTURI.md` (del developer, 2 righe);
+  - doc (X-R7): `mkdocs_src/docs/developer/backend/assets/provider_borsa_italiana.md`;
+  - journal: il piano e il backlog.
+- **Commit proposti**: `test(fx): keep FX provider tests offline, fix stale module paths` (12 file: tutto tranne il journal)
+  e `docs(journal): X CP3b log, backlog W-B9, W-B13, X-R5, X-R7 closed, X-R9` (piano e backlog).

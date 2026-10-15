@@ -2141,7 +2141,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   un riquadro Mermaid dice «Service normalizes … Multi-unit ÷100»; la stessa pagina dice che la divisione la fa il plugin, e
   nessun codice di `services/fx/` la fa (`base.py` dichiara solo la proprietà `multi_unit_currencies`). Preesistente al
   riordino. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3.
-- **X-R5 · Commenti e docstring con i percorsi tolti da CP2a, CP2b e CP3** — minimo; X, 15/10 (validazione di
+- ✅ **X-R5 · Commenti e docstring con i percorsi tolti da CP2a, CP2b e CP3** — minimo; X, 15/10 (validazione di
   `d1ef3ddeb`). Un grep più largo di quelli dei lotti (nomi di file nudi, nomi puntati dentro le docstring, il frontend e
   `TODO_FUTURI.md`) trova 16 righe che citano un percorso che non c'è più; erano tutte già nel mio ramo prima del merge
   (nessuna arriva dalle altre sessioni). Solo testo: nessuna è in `openapi.json` né cambia comportamento.
@@ -2157,8 +2157,9 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - `TODO_FUTURI.md:1121` (→ `schemas/assets/assets.py`) e `:2067` (→ `services/assets/price_query.py:149`).
   Decisione del coordinatore (15/10): nel lotto CP3b, compresi `auth.test.ts:574` (lo avvisa lui ad A) e le 2 righe di
   `TODO_FUTURI.md`; restano fuori i due commenti di `AssetModal` (X-R3, FE5) e le 3 fixture della galleria, che sono di G e
-  il coordinatore gira al coordinatore colori. Dettagli:
-  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», quinto aggiornamento di base.
+  il coordinatore gira al coordinatore colori. **Chiusa nel CP3b il 15/10** per le 13 righe del perimetro deciso; i due
+  commenti di `AssetModal` restano in X-R3, le 3 fixture sono passate a G. Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», quinto aggiornamento di base e CP3b.
 - **X-R6 · `web_link_finder`: timeout e numero massimo di URL non validati** — piccolo; segnalato da H il 15/10 (lotto
   `web_link_finder`), girato a X dal coordinatore. Preesistente e invariato dagli spostamenti. `config/plugins.py:46-52`
   accetta `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` a `nan` o `inf` (`float()`), e `services/assets/web_link_finder.py:108`
@@ -2168,32 +2169,44 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   `config/plugins.py` (file di H: d'accordo con H) e un timeout non intero rispettato; con il CP6 (F05) o il CP10, che
   toccano la configurazione dei plugin. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
   sezione «15», quinto aggiornamento di base.
-- **X-R7 · La pagina di Borsa Italiana elenca le variabili del `web_link_finder` senza `_FILE`** — minimo, doc; segnalato
+- ✅ **X-R7 · La pagina di Borsa Italiana elenca le variabili del `web_link_finder` senza `_FILE`** — minimo, doc; segnalato
   da H il 15/10. `mkdocs_src/docs/developer/backend/assets/provider_borsa_italiana.md:123` cita `_API_KEY` ma non
   `_API_KEY_FILE` (segreti Docker, `env_secret()`); la fonte di verità è `search_link_finder.md`: la riga va ridotta a un
-  rimando. Nel lotto CP3b (docs-writer). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
-  sezione «15», quinto aggiornamento di base.
+  rimando. **Chiusa nel CP3b il 15/10** (docs-writer): la riga rimanda a `search_link_finder.md#configuration-env-vars-all-optional`.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
 - **X-R8 · `GET /fx/providers` chiede alla BCE l'elenco delle valute a ogni richiesta** — piccolo, prodotto; X, 15/10
   (preparazione del CP3b). `list_providers` (`api/v1/fx/providers.py:97-101`) chiama `get_supported_currencies` di ogni
   fornitore pubblico; quello della BCE (`fx_providers/ecb/plugin.py:95`) fa una richiesta HTTP senza cache, con 30 s di
   timeout: ogni apertura dell'elenco aspetta la BCE, e senza rete la BCE compare con zero valute (l'errore resta nel log).
+  Lo stesso vale per la SNB finché non riesce una volta nel processo (`fx_providers/snb/plugin.py:139-149`,
+  `_ensure_currency_map`, data.snb.ch, 15 s): trovato nel CP3b.
   Il CP3b toglie la rete dai test che controllano le valute; le chiamate senza filtro (elenco completo, `MANUAL` nascosto)
   restano, e sul server vanno comunque alla BCE. Proposta del coordinatore (15/10; il developer può cambiarla): una cache
   dell'elenco delle valute dei fornitori, valida 24 ore; se la BCE non risponde si usa l'ultimo elenco noto, con un timeout
   breve. In un lotto di X dopo il CP3b. Dettagli:
   [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», quinto aggiornamento di base.
-- **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
+- ✅ **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
   `test_api/test_fx_api.py::test_providers_include_target_currencies` passa da `GET /fx/providers`, che chiama dal vivo
   `get_supported_currencies` di `fx_providers/ecb/plugin.py`; su un errore di rete il gestore in `api/v1/fx/providers.py`
   (`list_providers`, righe ~97-101 dal CP3) rende una lista vuota. Va contro la regola dei test senza rete. Non nel CP3,
   che è un riordino puro (`openapi.json` e test invariati): lotto di solo test CP3b, approvato dal coordinatore il 15/10,
-  dopo l'ingresso del CP3 e prima del CP4. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
-  sezione «15», CP2a e CP3.
-- **W-B13 · `fx-csv-import.spec.ts` prende la ✕ della modale d'importazione per testo** — minimo, test; trovato da W
+  dopo l'ingresso del CP3 e prima del CP4. **Chiusa nel CP3b il 15/10**: contratto e filtri su FED e BOE, le chiamate senza
+  filtro controllano solo i codici; `api fx` senza rete 21/21 (prima 19/21). La SNB è rimasta fuori perché scarica anche
+  lei il suo elenco (scostamento dalla decisione, da confermare dal coordinatore). Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a, CP3 e CP3b.
+- ✅ **W-B13 · `fx-csv-import.spec.ts` prende la ✕ della modale d'importazione per testo** — minimo, test; trovato da W
   il 15/10 (K1), assegnato a X dal coordinatore. `frontend/e2e/fx/fx-csv-import.spec.ts:247` e `:276` usano
   `button[aria-label="Close"]`; con P-15 l'etichetta viene da `common.close`, quindi il selettore regge solo in
-  inglese. Cura: il `data-testid` `data-import-modal-close`, aggiunto in K1; nel lotto CP3b, con W-B9. Dettagli: piano 04,
-  §12, K1 passo 4.
+  inglese. Cura: il `data-testid` `data-import-modal-close`, aggiunto in K1; nel lotto CP3b, con W-B9. **Chiusa nel CP3b il
+  15/10** (`front-fx fx-csv-import` 21/21). Dettagli: piano 04, §12, K1 passo 4; piano 03, sezione «15», CP3b.
+- **X-R9 · `fx-csv-import.spec.ts`: altri quattro selettori validi solo in inglese** — minimo, test; X, 15/10 (CP3b,
+  segnalato da test-author). Oltre alla ✕ di W-B13: `:233` controlla il testo tradotto dell'errore
+  (`toHaveText("Header currencies don't match")` su `fx-import-header-mismatch-error`: basta la visibilità), `:234` prende il
+  pulsante con `hasText: 'Import (1)'` (c'è già `data-import-confirm`), `:250` cerca `text=Discard import` e `:261` il
+  pulsante `hasText: 'Cancel'`. Per questi ultimi due `DataImportModal.svelte` non ha test-id: il `ConfirmModal` di `:305`
+  accetta `testId` ma non lo riceve, e il pulsante Annulla di `:287` non ne ha. Cura: due test-id nel componente (condiviso,
+  toccato da W in K1) e le quattro righe della spec; con il FE4 (frontend dei cambi) o prima, d'accordo col coordinatore.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
 
 ## W · Import e transazioni (fase 01)
 
