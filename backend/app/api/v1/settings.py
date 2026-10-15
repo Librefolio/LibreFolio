@@ -41,6 +41,7 @@ from backend.app.services.accounts.onboarding_service import (
     transition_onboarding_step_progress,
 )
 from backend.app.services.accounts.settings_service import (
+    GlobalSettingLockedError,
     GlobalSettingNotFoundError,
     GlobalSettingValueError,
     get_all_global_settings,
@@ -333,6 +334,8 @@ async def bulk_update_global_settings(
         return await update_global_settings([(item.key, item.value) for item in update.items], admin.id, session)
     except GlobalSettingNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Setting '{exc.key}' not found") from None
+    except GlobalSettingLockedError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "SETTING_LOCKED_BY_ENV", "message": str(exc), "key": exc.key, "variable": exc.variable}) from None
     except GlobalSettingValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from None
 

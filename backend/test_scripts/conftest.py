@@ -21,16 +21,20 @@ _exit_status = None
 
 @pytest.fixture(scope="session", autouse=True)
 def restore_registration_setting():
-    """Make sure the global settings exist, and that registration is on.
+    """Make sure the global settings exist, and that registration is open.
 
     Almost every API test creates its own user through POST /auth/register, so
-    the whole suite depends on `enable_registration` being true. The auth tests
-    legitimately flip it to false and restore it in a `finally`, but that
+    the whole suite depends on `registration_mode` being `open`. The auth tests
+    legitimately set it to `disabled` and restore it in a `finally`, but that
     restore is skipped when a run is killed mid-test (Ctrl-C, a crashed test
-    server, a parallel Playwright run recreating the DB). The stale `false`
+    server, a parallel Playwright run recreating the DB). The stale `disabled`
     then survives into the *next* run and makes ~50 unrelated tests fail with
-    "New user registration is disabled" — an error that points nowhere near the
-    real cause.
+    REGISTRATION_DISABLED — an error that points nowhere near the real cause.
+    Any value other than `open` (`invite` included) closes registration to those
+    tests just the same, so any other value is put back to `open`.
+
+    Only the row is restored here: `LIBREFOLIO_REGISTRATION`, when set, wins over
+    it and locks it, and no fixture can unset the environment of the lane's server.
 
     Seeding the rows, and not merely updating them, matters just as much. The
     settings are created by the app's startup hook, and every API module used to
@@ -68,14 +72,14 @@ def restore_registration_setting():
     try:
         with contextlib.closing(sqlite3.connect(db_path, timeout=_SEED_LOCK_TIMEOUT_S)) as conn:
             # Read before writing. In the overwhelmingly common case every default
-            # is already seeded and registration is already on, so the eight
+            # is already seeded and registration is already open, so the eight
             # workers that start within a second of each other take no write lock
             # at all — a WAL reader blocks nobody. The write path is then reserved
             # for the case it was written for: a previous run killed mid-test.
             present = {row[0] for row in conn.execute("SELECT key FROM global_settings")}
             missing = {k: v for k, v in GLOBAL_SETTINGS_DEFAULTS.items() if k not in present}
-            registration_off = conn.execute("SELECT 1 FROM global_settings WHERE key = 'enable_registration' AND value != 'true'").fetchone() is not None
-            if not missing and not registration_off:
+            registration_closed = conn.execute("SELECT 1 FROM global_settings WHERE key = 'registration_mode' AND value != 'open'").fetchone() is not None
+            if not missing and not registration_closed:
                 return
 
             with conn:
@@ -84,18 +88,18 @@ def restore_registration_setting():
                         "INSERT OR IGNORE INTO global_settings (key, value, value_type, description, updated_at) " "VALUES (?, ?, ?, ?, datetime('now'))",
                         (key, config["value"], config["type"], config.get("description")),
                     )
-                if registration_off:
-                    conn.execute("UPDATE global_settings SET value = 'true' WHERE key = 'enable_registration'")
+                if registration_closed:
+                    conn.execute("UPDATE global_settings SET value = 'open' WHERE key = 'registration_mode'")
     except sqlite3.OperationalError as exc:
         # "no such table" is the documented benign case: the DB is not migrated
         # yet and the suite's own setup will build it. Anything else — a lock
-        # timeout above all — means registration may have stayed disabled, and
+        # timeout above all — means registration may have stayed closed, and
         # the docstring explains what that costs: dozens of unrelated tests
         # failing with a message that points nowhere near here. Silence is what
         # makes that expensive, so this one says its name.
         if "no such table" not in str(exc):
             warnings.warn(
-                f"could not restore enable_registration ({exc}); expect unrelated " "'registration is disabled' failures across this run",
+                f"could not restore registration_mode ({exc}); expect unrelated " "REGISTRATION_DISABLED / INVITE_REQUIRED failures across this run",
                 stacklevel=2,
             )
     except sqlite3.Error:
