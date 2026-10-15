@@ -93,13 +93,14 @@ users start from the **Default Currency** in [Global Settings](settings.md).
 
 ## 🔐 Secrets {: #secrets }
 
-Two options are secrets: keep them as private as the database. Each one can be written in `.env` or
+Three options are secrets: keep them as private as the database. Each one can be written in `.env` or
 read from a file.
 
 | Secret | From a file | What it is |
 | --- | --- | --- |
 | `JWT_SECRET` | `JWT_SECRET_FILE` | The key that signs login sessions, in the main options above. |
 | `LIBREFOLIO_INSTANCE_KEY` | `LIBREFOLIO_INSTANCE_KEY_FILE` | The [instance key](#instance-key). Not set: LibreFolio creates one in the data directory. |
+| `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` | The key of a paid search service, for the `apikey` engine of the web search below. Unlike the other two, a file that cannot give it does not stop the server: it only turns the web search off. |
 
 ### 📄 Secrets in Files {: #secret-files }
 
@@ -115,9 +116,13 @@ and out of the container's environment.
   space is never used as a key.
 - Set one of the two. When both are set, the variable itself wins, the file is ignored and the start
   log has a [warning](#startup-checks).
-- A file that is missing, cannot be read, is empty or blank (only spaces and line breaks), is not
-  UTF-8 text or is larger than 64 KiB stops the server at startup. The error names the variable and
-  the path, never the secret.
+- For `JWT_SECRET_FILE` and `LIBREFOLIO_INSTANCE_KEY_FILE`, a file that is missing, cannot be read, is
+  empty or blank (only spaces and line breaks), is not UTF-8 text or is larger than 64 KiB stops the
+  server at startup. The error names the variable and the path, never the secret.
+- `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` is read only when a search uses the `apikey` engine. A
+  file that cannot give the key does not stop the server: the search goes on without the web search,
+  with a warning in the log (`web_link_finder: …; disabling`), and the providers' own search keeps
+  working.
 - LibreFolio reads these variables from its environment: `./dev.py` and Docker Compose
   (`env_file: .env`) put the values of `.env` there, so `.env` works with both.
 
@@ -155,7 +160,7 @@ and out of the container's environment.
     `sudo chmod 600 jwt_secret.txt`. Otherwise the server stops at startup and the error says that the
     file `cannot be read`.
 
-    `LIBREFOLIO_INSTANCE_KEY_FILE` works the same way.
+    `LIBREFOLIO_INSTANCE_KEY_FILE` and `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` work the same way.
 
 ### 🗝️ The Instance Key {: #instance-key }
 
@@ -210,10 +215,11 @@ each finding is one line of the log, at its level, with the name of the check in
 | ⚠️ `warning` | `SESSION_COOKIE_SECURE=never: the session cookie is sent over plain HTTP too; prefer auto` | Go back to `auto` unless you really need `never`: see [HTTPS and reverse proxies](#session-cookie-secure). |
 | ℹ️ `info` | `The log level is DEBUG: the log records operational detail; …` (or `TRACE`) | Go back to `INFO` once you are done troubleshooting. |
 
-A secret you configured that cannot be used stops the start instead: a `*_FILE` that cannot give its
-secret (see [Secrets in Files](#secret-files)), or an instance key of your own shorter than 32
-characters. The error is in the server's console output (`docker compose logs librefolio` with
-Docker): it names the variable, and the file when there is one, never the secret. Fix it, then start
+A secret you configured that cannot be used stops the start instead: a `JWT_SECRET_FILE` or a
+`LIBREFOLIO_INSTANCE_KEY_FILE` that cannot give its secret (see [Secrets in Files](#secret-files)),
+or an instance key of your own shorter than 32 characters. The error is in the server's console
+output (`docker compose logs librefolio` with Docker): it names the variable, and the file when there
+is one, never the secret. Fix it, then start
 again.
 
 ---
@@ -247,7 +253,7 @@ updates. All these variables are optional: uncomment a line of `.env.example` to
 | `LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND` | `auto` | Engines that `ddgs` queries: `auto` rotates them for the widest coverage; a list such as `google,bing,duckduckgo` gives steadier results. |
 | `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` | `6` | Time limit of one search, in seconds. |
 | `LIBREFOLIO_WEB_LINK_FINDER_MAX` | `5` | Most links returned by one search. |
-| `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | _empty_ | Key for the `apikey` engine. |
+| `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | _empty_ | Key for the `apikey` engine. `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` reads it from a file instead: see [Secrets](#secrets). |
 
 ??? tip "🔁 Results change between attempts — when a known asset is sometimes not found"
 
