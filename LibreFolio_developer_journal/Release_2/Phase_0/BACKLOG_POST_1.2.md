@@ -375,8 +375,8 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   «Da» e «A» (`TransactionFormModal.svelte:1645`, `:1693`), un suggerimento: di solito coincidono, e si separano quando
   il broker accredita la nuova valuta in un altro giorno. La stessa frase nella guida (`user/transactions/form.*.md`).
   Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voce 31.
-  - ✅ **Chiusa il 15/10** da W (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`): il suggerimento nel form
-    (`tx-form-fx-dates-hint`) e la stessa frase nella guida, nelle 4 lingue.
+  - ✅ **Chiusa il 15/10** da W (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`):
+    il suggerimento nel form (`tx-form-fx-dates-hint`) e la stessa frase nella guida, nelle 4 lingue.
 - **C-90 · «Testa configurazione» dice che è solo una prova** — minimo; utente C, chat del 04/09. Accanto al risultato
   dello storico, una riga: la prova legge gli ultimi giorni, e alla creazione dell'asset LibreFolio scarica tutto lo
   storico disponibile. Oggi lo dice solo la guida (`user/assets/create-edit.en.md:67`). Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voce 11.
@@ -569,8 +569,8 @@ sezione T, e P-7 (chiudere le issue #32 e #35) è un compito del rilascio, non d
 - **P-15 · Altre etichette inglesi scritte nel codice** — basso; test-author di P (11/10). `DataEditor`: «Date», i
   contatori «modified/deleted/new», un `aria-label`, «Reset layout»; `BrokerSharingPanel:832`: «max». Dettagli: idem,
   8.1 e 8.
-  - ✅ **Parte di W chiusa il 15/10** (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`): i contatori e l'`aria-label` della levetta delle righe
-    vecchie in `DataEditor`, «Help» e «Close» di `DataImportModal` (W-B8). «Date» era già `common.date`. Restano
+  - ✅ **Parte di W chiusa il 15/10** (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`):
+    i contatori e l'`aria-label` della levetta delle righe vecchie in `DataEditor`, «Help» e «Close» di `DataImportModal` (W-B8). «Date» era già `common.date`. Restano
     «Reset layout» (`components/table/ColumnVisibilityToggle.svelte:177`) e «max» (`BrokerSharingPanel:832`), a Y
     (decisione Q6 del piano 04).
 
@@ -1713,8 +1713,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
   - Il bulk editor divide invece per codice (`isBulkBalanceIssue`, `utils/transactions/bulkDisplay.ts:145`), e mette lo
     stesso problema sotto il titolo del saldo.
   - Da verificare a schermo prima di decidere. Dettagli: piano della 46, §12.14.
-  - ✅ **Chiusa il 15/10** da W (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`): visto a schermo, poi il form divide i problemi per codice
-    come il bulk editor (`isBulkBalanceIssue`).
+  - ✅ **Chiusa il 15/10** da W (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`):
+    visto a schermo, poi il form divide i problemi per codice come il bulk editor (`isBulkBalanceIssue`).
 
 ## 09 · Feedback e backlog strutturale
 
