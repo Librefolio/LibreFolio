@@ -1148,7 +1148,7 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   scheda «📦» (vive solo per sorgenti non raggiungibili da una rotta). Nessun cancello fallisce: `gate-i18n-usage`
 >   prova il classificatore, non il catalogo vero. knip vede i file nuovi raggiungibili dai test.
 
-### Checkpoint B1-fix + B6a + B5a 🧊 (2026-10-15, 16:15) — FROZEN, in attesa del coordinatore
+### Checkpoint B1-fix + B6a + B5a 🧊 (2026-10-15, 16:15) — committato
 
 > Handoff inviato. Quattro commit proposti, su percorsi disgiunti:
 >
@@ -1168,6 +1168,117 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > 4. **`docs(journal): B1 fixes, B6a, B5a`**: questo piano e la sezione B del backlog (B-4…B-8).
 >
 > Fuori: i file generati e ignorati (client API, catalogo i18n, `mkdocs_src/site/`), `.testLog/` e i log in `/tmp`.
+
+> **Committato dal coordinatore** (16:13): `2d3480b4b` (fix), `68d382586` (doc), `3bd729c38` (scheda), `89a486ec5`
+> (journal).
+
+### Aggiornamento di base — merge di `dev_release2` (2026-10-15, 16:13-16:26) ✅
+
+> **Merge aperto dal coordinatore**: HEAD `89a486ec5`, `MERGE_HEAD` `9c82a731e`. La base porta H CP6, X FE5b, E1, Y1,
+> A5, i lotti di H (CP7a, C-96, filtro del log, G-10), Z1 e i commit del programma colori.
+>
+> **6 conflitti, risolti tenendo i due lati** (script con un'asserzione per blocco):
+>
+> - `_backend_api.py`: `instance-block` di H, poi la mia voce `backup` (la base aveva ancora «Placeholder endpoints»),
+>   poi `backup-instance-errors`.
+> - `_backend_services.py`: le funzioni e le voci `backup-archive` e `backup-jobs` più `logging-access-filter` di H.
+> - `_frontend_utility.py` (file del programma colori): le 7 righe unitarie e le 2 di componente della base, poi le
+>   mie 2 e 1.
+> - `BACKLOG_POST_1.2.md`: la frase d'apertura del coordinatore, poi le mie righe B-1…B-8.
+> - `cli_tools.en.md`: il suggerimento Docker di H (`./dev.py docker exec` come utente del server, con gosu) più la mia
+>   frase sul backup. La mia sezione «Back Up with Docker» resta giusta: un `docker compose exec` semplice gira ancora
+>   come root.
+> - `test_dev_cli_image.py`: i miei IMG-013/013b/014/014b diventano **IMG-025/025b/026/026b**.
+>   - La serie è unica fra `test_dev_cli_image.py` e `test_dev_cli_docker.py`: quello di H (CP7a) dice «the series
+>     continues» e usa IMG-013…024.
+>   - Gli IMG-013…016 di A si scontrano con quelli di H; il coordinatore li risolve con A.
+>
+> **Verifiche prima dello stage**: nessun marcatore; i file Python compilano; il registro del runner si carica senza
+> nomi doppi; `diff --cached --check` pulito; stage dei soli 6 file.
+>
+> **Merge committato dal coordinatore**: `dfd1c1ea2`, genitori `89a486ec5` e `9c82a731e`.
+>
+> **Cancelli sulla revisione combinata** (16:18-16:26, corsia 6187, `nice -n 10`, uno alla volta), tutti verdi:
+>
+> - `api sync` 0; `front check` 0 errori e 0 avvisi;
+> - `api backup` 23 (il backend della corsia ci ha messo circa 180 s a partire); `api backup-instance-errors` 6;
+> - `utils backup-cli` 70; `utils dev-cli-image` 75, con i casi di A e i miei IMG-025/026;
+> - `services backup-archive` 141 più 1 saltato; `services backup-jobs` 63; `services config-package` 649;
+> - `mkdocs build` senza avvisi; `check-links` 95 link validi;
+> - porta 6187 libera.
+
+### Due cambi dichiarati dopo il merge (2026-10-15, 16:27-17:03) ✅ — 🧊 FROZEN, in attesa del coordinatore
+
+> **1. La riga della scheda Backup nel registro di A** (via del coordinatore, «una riga in aggiunta, dichiarata»):
+>
+> - `settingsTabs.ts`: l'import di `DatabaseBackup` e di `BackupTab`, e la riga `{id: 'backup', labelKey:
+>   'backup.tab', icon: DatabaseBackup, order: 120, component: BackupTab, visible: (ctx) => ctx.isSuperuser}`, col
+>   commento.
+> - `settingsTabs.test.ts`: A5 non ha portato una colonna di visibilità, quindi la aggiungo io, in modo meccanico:
+>   - `bodies.backup` e il suo `vi.mock`;
+>   - la riga di `TODAY` con `adminOnly: true`;
+>   - il caso per contesto si aspetta `TODAY.filter((tab) => !tab.adminOnly || ctx.isSuperuser)`;
+>   - titoli e docstring aggiornati.
+>
+>   Verde: 17 test.
+>
+> **2. CP6: il backup completo su un'istanza bloccata** (decisione 12):
+>
+> - `instance_block.py`: le 4 rotte del backup dell'admin (avvio, stato, file, cancellazione) in
+>   `ALLOWED_WHEN_BLOCKED`, con un commento; la docstring del modulo dice che ci sono. Sono 4 righe e non una: black
+>   apre comunque un elemento per riga.
+> - `InstanceBlockResponse.backup_available: bool`, obbligatorio, riempito in `system/block.py` con
+>   `current_user.is_superuser`.
+> - `test_instance_block.py`, in modo meccanico: `ALLOWED_ROUTES` +4; il JSON esatto della pagina di blocco per un
+>   utente normale (+`backup_available: false`, anche nel test dal vivo sulla corsia); il perno OpenAPI (proprietà e
+>   `required`). Verde: `api instance-block` 44.
+> - L'app si importa senza cicli; l'elenco consentito ha 14 voci.
+> - Il frontend di H (`InstanceBlockedPage`) usa un suo tipo strutturale `{blocked, deletion_date?}`, quindi il campo
+>   nuovo non lo rompe. Mostrare la mia `BackupDownloadCard` sulla pagina di blocco quando `backup_available` è vero
+>   resta un lavoro di H, da proporre.
+>
+> **Test nuovi** ✅ (test-author, 16:35-16:55), solo in aggiunta e nello stile dei due file:
+>
+> - `settingsTabs.test.ts`: «backup is for administrators only», cioè non visibile all'utente, visibile all'admin,
+>   senza `props` né `alignEnd`, subito dopo «admin».
+> - `test_instance_block.py`, sottosezione nuova «(a) Blocked: the full backup, for administrators only»:
+>   - la fixture `administrator`, creata dal livello dei servizi e cancellata alla fine;
+>   - un servizio di backup finto nel processo, con una precondizione che impedisce un backup vero sulla corsia;
+>   - un admin su un'istanza bloccata: avvio 202, stato 200 done, file 200 con gli stessi byte, cancellazione 204, e
+>     `/system/block` con `backup_available: true`;
+>   - un utente normale: 403 «Admin access required» sulle 4 rotte, mai 423, e nessuna chiamata al servizio;
+>   - tutti e due i test controllano prima che `GET /brokers` risponda 423 con la stessa sessione.
+> - **Mutazioni rosse**, file ripristinati con lo stesso sha256: `visible` tolto; `visible: () => true`; `order: 25`;
+>   una rotta tolta da `ALLOWED_WHEN_BLOCKED` (3 rossi); `backup_available=True` per tutti (12 rossi);
+>   `require_admin` tolto dallo scaricamento (1 rosso). Prima, nessun test avrebbe visto un utente normale scaricare
+>   l'archivio dell'istanza su un'istanza bloccata.
+> - In `/tmp/librefolio-r13-b/backups/.jobs` c'è sempre solo `.lock`, con la stessa data di modifica: nessun backup
+>   vero.
+>
+> **Verifica dei due cambi** (16:55-17:02, corsia 6187, `nice -n 10`, uno alla volta), tutto verde:
+>
+> - `api sync` 0: il client generato ha `backup_available: z.boolean()`;
+> - `front check` 0 errori e 0 avvisi;
+> - Vitest: `settingsTabs.test.ts` 18; `InstanceBlockedPage.test.ts` 14 e `instanceBlock.test.ts` 21, di H;
+> - `api instance-block` 46; `api system` 117;
+> - ruff, black e Prettier puliti; `git diff --check` pulito; porta libera.
+>
+> **devWiki**: F-073 aggiornato con la scheda (B5a), le rotte consentite sull'istanza bloccata e le righe dei file.
+> `check_source_paths` non ha percorsi nuovi mancanti.
+>
+> **Commit proposti**, su percorsi disgiunti:
+>
+> 1. `feat(settings): show the Backup tab to administrators`: `settingsTabs.ts`, `settingsTabs.test.ts`.
+> 2. `feat(platform): keep the full backup on a blocked instance`: `api/v1/instance_block.py`, `api/v1/system/block.py`,
+>    `schemas/system.py`, `test_api/test_instance_block.py`.
+> 3. `docs(journal): merge validation, Backup tab, blocked-instance backup`: questo piano e `features/F-073.md`.
+>
+> **Prossimi, col via del coordinatore**:
+>
+> - l'E2E della scheda e knip (slot);
+> - la galleria (G);
+> - la scheda di backup sulla pagina di blocco, quando `backup_available` è vero (frontend di H);
+> - B2, B4, B7 come da decisioni.
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 
