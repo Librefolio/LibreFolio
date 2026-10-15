@@ -92,6 +92,23 @@
  * its decimal separator marking the fraction: in English as before, in Italian and French red until
  * the text is theirs. Every expectation is Intl's output for the interface locale, handed the digits
  * as a string (exact, no double between); no localized literal is typed.
+ *
+ * The percentages (C-73, TP-2, last blocks). The planner's display rule is half away from zero,
+ * exactly (`roundDecimal`, R14), and its two percentage formatters did not keep it: a share, a
+ * fraction (`formatPlannerPercent`, and `formatExactPercent` through it), and a value already in
+ * percent units (`formatPlannerPercentUnits`) went through `formatPercent(Number(…))` — the value
+ * times the scale, then `toFixed`, in binary floating point. A tie the double holds just below
+ * rounds down: an exact share of 0.30595 read 30.59%. Each expectation is computed in the test, in
+ * integers (BigInt, never a double): the value rounded half away from zero, then written the way the
+ * planner writes a percentage today (`formatPercent`'s `%` branch) — `≈` in front when approximate,
+ * `+` before a positive value when signed, Intl's percent of the interface locale with exactly the
+ * digits asked, handed the rounded fraction as a string, so Intl has nothing left to round. A few
+ * en-US literals check that oracle, and each red case first proves that the double path errs on its
+ * value. A percentage is public: privacy leaves it in the clear. Every tie at the fifth decimal of a
+ * share between 0.1 and 0.9 is swept, 8 000 of them, each also checked against the arithmetic (a
+ * share of 0.ABCD5 owes ABCD + 1 hundredths of a percent). A tie in percent units at no decimal place
+ * (30.5) is a binary fraction, which `toFixed` already takes away from zero: that case is a guard,
+ * like the values that are not ties and the missing or unreadable ones.
  */
 import {afterAll, afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 
@@ -137,12 +154,15 @@ import {
     formatExactFxRate,
     formatExactMoneyHtml,
     formatExactMoneyPlain,
+    formatExactPercent,
     formatExactQuantity,
     formatObjectiveValue,
     formatPlannerDate,
     formatPlannerFxRate,
     formatPlannerL2,
     formatPlannerMoneyPlain,
+    formatPlannerPercent,
+    formatPlannerPercentUnits,
     formatPlannerPlainDecimal,
     formatPlannerQuantity,
     formatPlannerTimestamp,
@@ -1048,5 +1068,245 @@ describe('formatPlannerQuantity, formatPlannerPlainDecimal, formatPlannerFxRate 
         await interfaceUi(lang);
 
         expectTwinProperty(on);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// C-73 (TP-2) — a percentage rounds a tie half away from zero, exactly
+// ---------------------------------------------------------------------------
+
+/** A plain decimal text as an integer count of 10^-scale: `-0.30595` is -30595 at scale 5. Integers only, no double. */
+function scaledDecimal(text: string): {units: bigint; scale: number} {
+    const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(text);
+    if (match === null) throw new Error(`not a plain decimal: ${text}`);
+    const [, sign, integer, fraction = ''] = match;
+    const magnitude = BigInt(integer + fraction);
+    return {units: sign === '-' ? -magnitude : magnitude, scale: fraction.length};
+}
+
+/** `units` × 10^-scale as a plain decimal text with exactly `scale` fraction digits: -3060 at scale 4 is `-0.3060`. */
+function scaledText(units: bigint, scale: number): string {
+    const digits = (units < 0n ? -units : units).toString().padStart(scale + 1, '0');
+    const text = scale === 0 ? digits : `${digits.slice(0, -scale)}.${digits.slice(-scale)}`;
+    return units < 0n ? '-' + text : text;
+}
+
+/** One Intl percent format per locale and digit count: the sweep asks for the same one 8 000 times. */
+const PERCENT_FORMATS = new Map<string, Intl.NumberFormat>();
+
+function percentFormat(locale: string, digits: number): Intl.NumberFormat {
+    const id = `${locale}|${digits}`;
+    let format = PERCENT_FORMATS.get(id);
+    if (format === undefined) {
+        format = new Intl.NumberFormat(locale, {style: 'percent', minimumFractionDigits: digits, maximumFractionDigits: digits});
+        PERCENT_FORMATS.set(id, format);
+    }
+    return format;
+}
+
+interface OwedPercentOptions {
+    signed?: boolean;
+    approx?: boolean;
+    /** The interface locale of the case: en-US unless the UI language was switched. */
+    locale?: string;
+}
+
+/**
+ * The text owed for a percentage of `units` × 10^-scale percent: rounded to `digits` places half away from zero, in
+ * integers, then written as the planner writes a percentage today (`formatPercent`'s `%` branch) — `≈` in front when
+ * approximate, `+` before a positive value when signed, Intl's percent of the locale with exactly `digits` fraction
+ * digits. Intl is handed the rounded fraction as a string, an exact decimal (Intl.NumberFormat v3): it has nothing
+ * left to round, so its own rounding mode never decides a digit.
+ */
+function owedPercent(units: bigint, scale: number, digits: number, {signed = false, approx = false, locale = INTERFACE_LOCALE}: OwedPercentOptions = {}): string {
+    let rounded: bigint; // the percentage × 10^digits
+    if (scale <= digits) {
+        rounded = units * 10n ** BigInt(digits - scale);
+    } else {
+        const divisor = 10n ** BigInt(scale - digits);
+        const magnitude = units < 0n ? -units : units;
+        // Half away from zero: the magnitude rounded half up, then the sign put back.
+        const quotient = (2n * magnitude + divisor) / (2n * divisor);
+        rounded = units < 0n ? -quotient : quotient;
+    }
+    // A percentage × 10^digits is its fraction × 10^(digits + 2).
+    const text = percentFormat(locale, digits).format(scaledText(rounded, digits + 2) as Intl.StringNumericLiteral);
+    return (approx ? '≈' : '') + (signed && rounded > 0n ? '+' : '') + text;
+}
+
+/** What `formatPlannerPercent(fraction, {digits, …})` owes: a fraction is its percentage two places along. */
+function owedShare(fraction: string, digits = 2, options: OwedPercentOptions = {}): string {
+    const {units, scale} = scaledDecimal(fraction);
+    return owedPercent(units, scale - 2, digits, options);
+}
+
+/** What `formatPlannerPercentUnits(percent, digits)` owes. */
+function owedUnits(percent: string, digits = 2, options: OwedPercentOptions = {}): string {
+    const {units, scale} = scaledDecimal(percent);
+    return owedPercent(units, scale, digits, options);
+}
+
+describe('formatPlannerPercent — a share rounds a tie half away from zero, exactly (C-73, TP-2)', () => {
+    it('shows an exact share of 0.30595 as 30.60%, not 30.59%; so does an exact weight, decimal or ratio', () => {
+        expect((Number('0.30595') * 100).toFixed(2), 'control: the double path rounds this tie down').toBe('30.59');
+        const owed = owedShare('0.30595');
+        expect(owed, 'control: the en-US text owed').toBe('30.60%');
+
+        expect({
+            share: formatPlannerPercent('0.30595'),
+            weight: formatExactPercent(finite('0.30595')),
+            ratioWeight: formatExactPercent(ratio('6119', '20000', '0.30595', 5)),
+        }).toEqual({share: owed, weight: owed, ratioWeight: owed});
+    });
+
+    it('rounds a negative tie away from zero; signed puts + before a positive one, approx keeps ≈ in front; privacy leaves a share in the clear', () => {
+        expect((Number('-0.30595') * 100).toFixed(2), 'control: the double path rounds this tie toward zero').toBe('-30.59');
+        const owed = {
+            negative: owedShare('-0.30595'),
+            signed: owedShare('0.30595', 2, {signed: true}),
+            negativeSigned: owedShare('-0.30595', 2, {signed: true}),
+            approx: owedShare('0.30595', 2, {approx: true}),
+            signedApprox: owedShare('0.30595', 2, {signed: true, approx: true}),
+        };
+        expect(owed, 'control: the en-US text owed').toEqual({negative: '-30.60%', signed: '+30.60%', negativeSigned: '-30.60%', approx: '≈30.60%', signedApprox: '≈+30.60%'});
+        const shown = () => ({
+            negative: formatPlannerPercent('-0.30595'),
+            signed: formatPlannerPercent('0.30595', {signed: true}),
+            negativeSigned: formatPlannerPercent('-0.30595', {signed: true}),
+            approx: formatPlannerPercent('0.30595', {approx: true}),
+            signedApprox: formatPlannerPercent('0.30595', {signed: true, approx: true}),
+        });
+
+        expect(shown(), 'privacy off').toEqual(owed);
+        privacy(true);
+        expect(shown(), 'privacy on: a percentage is public, so it stays in the clear').toEqual(owed);
+    });
+
+    it('rounds a tie at the places asked: 0.145 is 15% at none, 0.3065 is 30.7% at one', () => {
+        expect({none: (Number('0.145') * 100).toFixed(0), one: (Number('0.3065') * 100).toFixed(1)}, 'control: the double path rounds both ties down').toEqual({none: '14', one: '30.6'});
+        const owed = {none: owedShare('0.145', 0), one: owedShare('0.3065', 1)};
+        expect(owed, 'control: the en-US text owed').toEqual({none: '15%', one: '30.7%'});
+
+        expect({none: formatPlannerPercent('0.145', {digits: 0}), one: formatPlannerPercent('0.3065', {digits: 1})}).toEqual(owed);
+    });
+
+    it('sweep: every tie at the fifth decimal from 0.10005 to 0.89995, 8 000 shares, reads its exact rounding', () => {
+        const mismatches: string[] = [];
+        let read = 0;
+        let oracleSlips = 0;
+        for (let head = 1000; head <= 8999; head += 1) {
+            // 0.10005 … 0.89995: five decimals, the last a 5, so a tie at two places of a percent.
+            const fraction = `0.${head}5`;
+            const owed = owedShare(fraction);
+            // The oracle against the arithmetic, on every value: half away from zero takes 0.ABCD5 up to ABCD + 1 hundredths of a percent.
+            if (digitsOf(owed) !== String(head + 1)) oracleSlips += 1;
+            const shown = formatPlannerPercent(fraction);
+            read += 1;
+            if (shown !== owed) mismatches.push(`${fraction}: shown ${shown}, owed ${owed}`);
+        }
+
+        expect({read, oracleSlips}, 'control: 8 000 ties read, each owed the next hundredth of a percent').toEqual({read: 8000, oracleSlips: 0});
+        expect({mismatches: mismatches.length, first: mismatches.slice(0, 5)}).toEqual({mismatches: 0, first: []});
+    });
+
+    it('guards: a share that is not a tie reads as before, one just below a tie is rounded once, and a missing or unreadable one is the empty cell', () => {
+        const owed = {
+            sixty: owedShare('0.6'),
+            third: owedShare('0.333333333333'),
+            belowTie: owedShare('0.305949999'),
+            zero: owedShare('0'),
+            negativeZero: owedShare('-0'),
+            whole: owedShare('1'),
+        };
+        expect(owed, 'control: the en-US text owed').toEqual({sixty: '60.00%', third: '33.33%', belowTie: '30.59%', zero: '0.00%', negativeZero: '0.00%', whole: '100.00%'});
+
+        expect({
+            sixty: formatPlannerPercent('0.6'),
+            third: formatPlannerPercent('0.333333333333'),
+            belowTie: formatPlannerPercent('0.305949999'),
+            zero: formatPlannerPercent('0'),
+            negativeZero: formatPlannerPercent('-0'),
+            whole: formatPlannerPercent('1'),
+        }).toEqual(owed);
+        for (const input of [null, undefined, '', ' ', 'abc', '1e3', '1,5']) expect(formatPlannerPercent(input), `${JSON.stringify(input) ?? 'undefined'} is not a share`).toBe(EMPTY);
+        expect(formatPlannerPercent(null, {approx: true}), 'no ≈ on an empty cell').toBe(EMPTY);
+    });
+});
+
+describe('formatPlannerPercentUnits — a value already in percent rounds a tie the same way (C-73, TP-2)', () => {
+    it('shows 30.595 as 30.60%, and -30.595 as -30.60%', () => {
+        expect({positive: Number('30.595').toFixed(2), negative: Number('-30.595').toFixed(2)}, 'control: the double path rounds both ties toward zero').toEqual({positive: '30.59', negative: '-30.59'});
+        const owed = {positive: owedUnits('30.595'), negative: owedUnits('-30.595')};
+        expect(owed, 'control: the en-US text owed').toEqual({positive: '30.60%', negative: '-30.60%'});
+
+        expect({positive: formatPlannerPercentUnits('30.595'), negative: formatPlannerPercentUnits('-30.595')}).toEqual(owed);
+    });
+
+    it('at one place, 30.65 is 30.7% and 0.15 is 0.2%', () => {
+        expect({thirty: Number('30.65').toFixed(1), small: Number('0.15').toFixed(1)}, 'control: the double path rounds both ties down').toEqual({thirty: '30.6', small: '0.1'});
+        const owed = {thirty: owedUnits('30.65', 1), small: owedUnits('0.15', 1)};
+        expect(owed, 'control: the en-US text owed').toEqual({thirty: '30.7%', small: '0.2%'});
+
+        expect({thirty: formatPlannerPercentUnits('30.65', 1), small: formatPlannerPercentUnits('0.15', 1)}).toEqual(owed);
+    });
+
+    it('guard: at no place, 30.5 is 31% and -30.5 is -31% — right already: a tie at a whole percent is a binary fraction, which toFixed takes away from zero', () => {
+        expect({half: Number('30.5').toFixed(0), negativeHalf: Number('-30.5').toFixed(0)}, 'control: the double path is exact here').toEqual({half: '31', negativeHalf: '-31'});
+        const owed = {half: owedUnits('30.5', 0), negativeHalf: owedUnits('-30.5', 0)};
+        expect(owed, 'control: the en-US text owed').toEqual({half: '31%', negativeHalf: '-31%'});
+
+        expect({half: formatPlannerPercentUnits('30.5', 0), negativeHalf: formatPlannerPercentUnits('-30.5', 0)}).toEqual(owed);
+    });
+
+    it('guards: a value that is not a tie reads as before, and a missing or unreadable one is the empty cell', () => {
+        const owed = {sixty: owedUnits('60'), third: owedUnits('33.333333'), belowTie: owedUnits('30.594999'), noPlace: owedUnits('12.34', 0)};
+        expect(owed, 'control: the en-US text owed').toEqual({sixty: '60.00%', third: '33.33%', belowTie: '30.59%', noPlace: '12%'});
+
+        expect({
+            sixty: formatPlannerPercentUnits('60'),
+            third: formatPlannerPercentUnits('33.333333'),
+            belowTie: formatPlannerPercentUnits('30.594999'),
+            noPlace: formatPlannerPercentUnits('12.34', 0),
+        }).toEqual(owed);
+        for (const input of [null, undefined, '', 'abc', '1e3']) expect(formatPlannerPercentUnits(input), `${JSON.stringify(input) ?? 'undefined'} is not a percentage`).toBe(EMPTY);
+    });
+});
+
+describe('the percentages in the interface language: a tie rounds the same, written in the language’s notation (C-73, TP-2)', () => {
+    /** The UI in `lang` on the pinned en-US browser; returns the interface locale that gives, checked. */
+    async function percentUi(lang: 'it' | 'fr'): Promise<string> {
+        await uiLanguage(lang);
+        expect(uiLocale(), `control: a ${lang} UI on an en-US browser is written ${LOCALE_OF[lang]}`).toBe(LOCALE_OF[lang]);
+        return LOCALE_OF[lang];
+    }
+
+    afterEach(async () => {
+        // The language is module-level state shared by every test of the file.
+        await uiLanguage('en');
+    });
+
+    it.each(['it', 'fr'] as const)('%s UI, guard: a share and a percentage that are not ties read as before, so the oracle writes the language as the planner does', async (lang) => {
+        const locale = await percentUi(lang);
+
+        expect({
+            share: formatPlannerPercent('0.6'),
+            signedNegative: formatPlannerPercent('-0.333333333333', {signed: true}),
+            signedPositive: formatPlannerPercent('0.6', {signed: true}),
+            units: formatPlannerPercentUnits('12.5', 1),
+        }).toEqual({
+            share: owedShare('0.6', 2, {locale}),
+            signedNegative: owedShare('-0.333333333333', 2, {signed: true, locale}),
+            signedPositive: owedShare('0.6', 2, {signed: true, locale}),
+            units: owedUnits('12.5', 1, {locale}),
+        });
+    });
+
+    it.each(['it', 'fr'] as const)('%s UI: a share of 0.30595 and a percentage of 30.595 both read 30.60, in the language', async (lang) => {
+        const locale = await percentUi(lang);
+        const owed = {share: owedShare('0.30595', 2, {locale}), units: owedUnits('30.595', 2, {locale})};
+        expect(owed.share, 'control: the language writes a percentage otherwise than English').not.toBe(owedShare('0.30595'));
+        expect(digitsOf(owed.share), 'control: with the digits of 30.60').toBe('3060');
+
+        expect({share: formatPlannerPercent('0.30595'), units: formatPlannerPercentUnits('30.595')}).toEqual(owed);
     });
 });

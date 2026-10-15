@@ -200,8 +200,9 @@ test.describe('Asset Event Delete', () => {
             await expect(toast, 'no ICU placeholder is left unresolved').not.toContainText('{');
             await expect(toast, 'the toast says how many events were deleted: the one this test marked').toContainText(standaloneNumber(1));
         } finally {
-            // If anything above failed before the UI deleted it, do not leave it behind.
-            await page.request.delete(`${API}/assets/events?ids=${eventId}`).catch(() => {});
+            // If anything above failed before the UI deleted it, do not leave it behind. The
+            // delete is scoped by asset (decision 21): without asset_id it is a 422, and the event stays.
+            await page.request.delete(`${API}/assets/events?asset_id=${assetId}&ids=${eventId}`).catch(() => {});
         }
     });
 

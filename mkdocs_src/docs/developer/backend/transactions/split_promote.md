@@ -52,6 +52,14 @@ The rows keep their IDs. No create or delete is involved.
 | `TRANSFER` | `ADJUSTMENT` | `ADJUSTMENT` |
 | `FX_CONVERSION` | `WITHDRAWAL` | `DEPOSIT` |
 
+Deleting a broker with its transactions converts the surviving half of each pair
+with another broker by the same rules, through the same helpers of
+`batch_edits.py`: `pair_sides()` (step 3) and `make_standalone()` (steps 4–6). Two
+differences: a received `TRANSFER` without a cost basis first gets its sender's
+Auto cost, and the giving leg of a `TRANSFER` only loses its link until point 47
+of release 1.3 is answered. See
+[Transaction Service — Broker Deletion](service.md#broker-deletion).
+
 ### 📦 Request shape
 
 Split is a first-class item in the unified batch:
