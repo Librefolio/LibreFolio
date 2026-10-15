@@ -100,8 +100,17 @@
   - Barra laterale verde `#1B4334` nei due temi: **supera D-T15** (barra neutra).
   - Stati con fondi, bordi e testi tenui espliciti al posto della ricetta; avviso chiaro `#B45309`.
   - N1–N6, Q2–Q13 e i colori dei grafici GR1–GR5, con un colore fisso per ognuno degli 11 tipi e dei 14 settori.
-- **D-T18, aperta:** il bordo dei campi (N5). La designer lo vuole più leggero, sotto il 3:1 di D-T6; tre versioni a
-  confronto nell'analisi, §2.
+- **D-T18:** il bordo dei campi (N5) resta al 3:1 di D-T6, con un hover nuovo uguale al testo attenuato. Developer,
+  15/10 alle 15:50, dopo il confronto delle tre versioni (analisi, §2): «meglio mantenere la regola WCAG».
+- **D-T19:** l'header è verde `#1B4334` anche su desktop, con la famiglia di colori della barra laterale. Developer,
+  15/10 alle 15:50: «credo che la designer si aspetti che anche in desktop sia verde, non solo in mobile».
+- **D-T20, integrazione progressiva.** T entra in `dev_release2` dopo la revisione del developer di T-8 sull'anteprima
+  6160; da lì ogni gruppo di lotti delle ondate entra appena validato. Il target ha per un po' un aspetto misto; resta
+  la regola del 14/10, nessun rilascio della 1.3 con W1–W4 a metà; a ogni ingresso la 1.3 rifà la galleria di
+  riferimento. Developer, 15/10 alle 15:55.
+- **D-T21, chi approva l'aspetto delle ondate:** il developer, dal contact sheet e dal diff della galleria; la designer
+  rivede tutto insieme nel giro 3. Testuale: «si principalmente io, se lei è disponibile te lo faccio sapere».
+  Sostituisce la «revisione della designer» a ogni ondata.
 - **Codici delle sessioni** a una o due lettere, liberi ovunque (developer, 15/10: «per le lettere se 1 non basta
   usiamone 2»). Regola scritta in `.github/agents/release-coordinator.agent.md` e `coordinated-workstream.agent.md`.
 - **Instradamento:**
