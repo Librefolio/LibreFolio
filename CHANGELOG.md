@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Live prices pause while you are away.** On the Assets page (every minute) and on an asset's page (every 30 seconds), live prices stop refreshing while the tab is in the background or after two minutes without using the page, with a small «Updates paused» label, and start again by themselves as soon as you come back. An asset's page now sends one request per refresh instead of two, and none at all on a date range that ends in the past.
 - **Saving the asset events editor is all or nothing.** The Events tab saves deletions, edits and new rows in one step: if anything is refused, none of them is kept, and the message, in your language, names the event at fault. An event linked to transactions can no longer be deleted together with other changes: the save stops and says which event and how many transactions use it, so remove the link first. Until now the other changes were saved and that deletion was skipped with a warning. Deleting an event and giving its date and type to another in the same save now works.
 - **«+ New event» never overwrites an event.** On a date and type the asset already has, entered by hand or from a data provider, nothing is saved: the form shows the event already there, to use it or, if entered by hand, to edit it. Until now the new event replaced the manual one of that day and type, or added a manual copy next to a provider's.
+- Logs: the startup and shutdown lines are written by the logger `backend.app.services.platform.app_lifespan` (before: `backend.app.main`).
 
 ### 🧹 Repository cleanup
 
@@ -97,6 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The transaction form's event picker shows an event's new values** right after it is edited from the form.
 - Data quality: the "valued at cost" warning counts its two weeks from the asset's last market quote, as its text says. An asset quoted the day before and bought again is no longer flagged, and a price feed that stopped long ago is flagged at once; an asset never quoted still counts from its first purchase.
 - Editing only the notes, tags or date of a received transfer, or of an incoming adjustment, saved without a cost basis is no longer refused by the API; changing its type, quantity, cost or linked event still needs one.
+- Stopping the server: a component that fails to stop no longer keeps the others from stopping (scheduler, data providers, broker-import and risk workers, caches); the failure is logged.
 
 ### ⚠️ Breaking changes
 
