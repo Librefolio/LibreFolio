@@ -11,11 +11,15 @@
  *
  * Which code writes a colour is not the specs' business: workstreams move colours between rules, tokens and utilities.
  * The specs read it at run time — from the page, from the facts the picker reports, from the catalogue the Lab lists —
- * and hold the export to the verifier the Lab ships (`verify-export.mjs`), never to a file name written down here.
+ * and hold the export to the verifier the Lab ships (`verify-export.mjs`), never to a file name written down here. A
+ * colour class is followed the same way (`colourSourceOf`): a Tailwind palette class reads its palette variable, a
+ * colour-role utility of workstream T reads the role its rule names in the page's CSSOM, and the values of both are
+ * read from the page, never written down — T changes them.
  */
 
 import {execFileSync} from 'node:child_process';
 import {readFile, writeFile} from 'node:fs/promises';
+import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {expect, type BrowserContext, type Locator, type Page} from '../fixtures/playwright';
 import {navigateTo} from '../fixtures/auth-helpers';
@@ -66,7 +70,10 @@ interface LabExportChange {
     from: string;
     to: string;
     property?: string;
-    impact?: {uses: number; files: number};
+    /** `css-var`: the editor's figures, and the Tailwind classes that read the variable — a role's utilities included. */
+    impact?: {uses: number; files: number; classes?: Record<string, number>};
+    /** `css-var`: where the sources define the variable. */
+    definitions?: {file: string; line: number; selector: string | null; theme: string | null; value: string}[];
     occurrences: {file: string; line: number; raw?: string; selector?: string | null; why?: string}[];
     anchor?: {
         route: string;
@@ -108,7 +115,8 @@ export interface PickedElementFacts {
     route: string;
     theme: 'light' | 'dark';
     testids: string[];
-    properties: {property: string; computed: string; declarations: PickedDeclarationFacts[]}[];
+    /** `depth` 0: the colour is set on the element itself; n: on its n-th ancestor (inherited, or a background seen through). */
+    properties: {property: string; computed: string; depth: number; declarations: PickedDeclarationFacts[]}[];
 }
 
 /**
@@ -117,11 +125,14 @@ export interface PickedElementFacts {
  */
 export interface VerifyReport {
     totals: {changes: number; ok: number; missing: number};
-    changes: {id: string; missing: {file: string; line: number; raw?: string}[]}[];
+    changes: {id: string; missing: {file: string; line: number; raw?: string}[]; definitions: {file: string; line: number; status: string; value_now?: string}[]}[];
 }
 
 /** The verifier the Lab ships next to its scanner, resolved from this file: Playwright's working directory does not matter. */
 const VERIFY_EXPORT_SCRIPT = fileURLToPath(new URL('../../scripts/designer-lab/verify-export.mjs', import.meta.url));
+
+/** `frontend/`, resolved from this file: the paths of an export are relative to it (`src/lib/…`). Ends with a separator. */
+const FRONTEND_DIR = fileURLToPath(new URL('../../', import.meta.url));
 
 /** The theme toggle's end state, read back from `<html>`: act only when the app is not already there. */
 export async function chooseTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
@@ -146,6 +157,20 @@ export function transactionsSubtitle(page: Page): Locator {
 /** The header cell of the date column of the transactions table: DataTable styles it, through whichever rule, token or utility its code uses today. */
 export function dateColumnHeader(page: Page): Locator {
     return page.getByTestId('tx-table').getByTestId('dt-header-date');
+}
+
+/** The test id of the login card, the root of `LoginCard.svelte`, which a visitor who is not logged in gets at `/`. */
+export const LOGIN_CARD = 'login-modal';
+
+/**
+ * `/` for a visitor who is not logged in (a fresh context has no session), loaded: the page asks GET /auth/me before
+ * it shows the login card, so the first paint gets the budget auth.spec.ts gives it. Returns the card.
+ */
+export async function openSignIn(page: Page): Promise<Locator> {
+    await page.goto('/');
+    const card = page.getByTestId(LOGIN_CARD);
+    await expect(card, 'a visitor who is not logged in gets the login card at /').toBeVisible({timeout: 20_000});
+    return card;
 }
 
 /** The dashboard, loaded, with the growth chart drawn: `data-chart-ready` flips once ECharts has really drawn. */
@@ -271,6 +296,48 @@ export async function computedStyle(locator: Locator, property = 'color'): Promi
     return locator.evaluate((el, name) => getComputedStyle(el).getPropertyValue(name).trim(), property);
 }
 
+/**
+ * What `variable` resolves to as a colour in each theme, as the app page computes it: on a probe inside a `.light` and
+ * a `.dark` subtree — the subtrees `tokens.css` defines the colour roles on too — appended, read and removed within one
+ * task, so the page never paints it. A variable no theme block redefines reads the same in both.
+ */
+export async function themeValuesOf(page: Page, variable: string): Promise<{light: string; dark: string}> {
+    return page.evaluate((name) => {
+        const read = (theme: 'light' | 'dark'): string => {
+            const host = document.createElement('div');
+            host.className = theme;
+            const probe = host.appendChild(document.createElement('div'));
+            probe.style.setProperty('color', `var(${name})`);
+            document.body.appendChild(host);
+            try {
+                return getComputedStyle(probe).color;
+            } finally {
+                host.remove();
+            }
+        };
+        return {light: read('light'), dark: read('dark')};
+    }, variable);
+}
+
+/** A colour a test applies: as the editor takes it, and as `getComputedStyle` gives it back. */
+export interface NewColour {
+    hex: string;
+    rgb: string;
+}
+
+/**
+ * The first of `colours` that `variable` has in neither theme (`themeValuesOf`) and that none of `alsoAvoid` is: a
+ * change to it then shows whichever theme is on screen. The values are read, never written down: workstream T changes
+ * them. Fails, naming the values, when every candidate is taken.
+ */
+export async function newColourFor(page: Page, variable: string, colours: NewColour[], alsoAvoid: string[] = []): Promise<NewColour> {
+    const themes = await themeValuesOf(page, variable);
+    const taken = new Set([themes.light, themes.dark, ...alsoAvoid]);
+    const colour = colours.find((c) => !taken.has(c.rgb));
+    if (!colour) throw new Error(`no new colour left for ${variable}: it is ${themes.light} in light and ${themes.dark} in dark, also avoided ${alsoAvoid.join(', ') || 'nothing'}; candidates ${colours.map((c) => c.rgb).join(', ')}`);
+    return colour;
+}
+
 /** `rgb(100, 116, 139)` → `#64748b`: the catalogue key of an opaque sRGB colour, or null for any other form. */
 export function opaqueHexOf(color: string): string | null {
     const m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/.exec(color.trim());
@@ -311,15 +378,108 @@ export async function opaqueKeysOf(page: Page, colours: string[]): Promise<(stri
     return serialised.map((value) => (value === null ? null : (hexKeyOf(value) ?? rgbKeyOf(value))));
 }
 
+/** The colour property a utility prefix sets: the one its rule declares. */
+const PREFIX_PROPERTY = {text: 'color', bg: 'background-color', border: 'border-color'} as const;
+
+/** A Tailwind utility prefix that sets a colour: `text-…`, `bg-…`, `border-…`. */
+export type ColourPrefix = keyof typeof PREFIX_PROPERTY;
+
 /**
- * The Tailwind palette variable the text-colour class of an element reads (`text-gray-500` → `--color-gray-500`), with
- * that class. Colour classes are the Lab's subject, so here an element is described by them on purpose.
+ * What sets one colour of an element, as the Lab's palette edits it: a Tailwind palette class, or a colour-role utility
+ * of workstream T (`--color-lf-card: var(--lf-surface-card)` in `@theme inline` gives `bg-lf-card`).
  */
-export async function textPaletteClassOf(locator: Locator): Promise<{className: string; variable: string}> {
-    const classes = ((await locator.getAttribute('class')) ?? '').split(/\s+/);
-    const className = classes.find((c) => /^text-[a-z]+-\d{2,3}$/.test(c));
-    if (!className) throw new Error(`the element carries no Tailwind text colour class (classes: ${classes.join(' ')})`);
-    return {className, variable: `--color-${className.slice('text-'.length)}`};
+export interface ColourSource {
+    /** The class on the element: `text-gray-500`, `bg-lf-card`. */
+    className: string;
+    /**
+     * The variable the palette tab lists the class under, so its chip is `lab-item-var-<chipVar>`: the palette variable
+     * (`--color-gray-500`), or the role's `@theme inline` alias (`--color-lf-card`), which no stylesheet defines at runtime.
+     */
+    chipVar: string;
+    /** The variable the chip edits, the one the class reads at runtime: the palette variable itself, or the role (`--lf-surface-card`). */
+    target: string;
+    /** A colour role: the chip keeps its alias's test id and edits `target`. */
+    role: boolean;
+    /** A role utility's rule, as the app page's CSSOM serialises its selector (`.bg-lf-card`); null for a palette class, whose CSSOM is not read. */
+    selector: string | null;
+}
+
+/**
+ * The colour source of an element for one utility prefix (`text`, `bg`, `border`), read from its classes — colour classes
+ * are the Lab's subject, so here an element is described by them on purpose:
+ *
+ * - a palette class (`text-gray-500`) reads its palette variable: chip and target are `--color-gray-500`;
+ * - a role utility (`text-lf-muted`) is listed under its alias (`--color-lf-muted`) and reads the role its rule names:
+ *   read at run time in the app page's CSSOM — the rule whose selector is the utility, in whatever layer, `@media` or
+ *   `@supports` holds it, declaring `var(--lf-…)` — never written down, since workstream T moves the roles.
+ *
+ * Fails with a message naming the missing assumption: no colour class for the prefix, a palette class and a role
+ * utility together (an element migrates whole), two role utilities, no rule for the utility, or a rule that reads no role.
+ */
+export async function colourSourceOf(locator: Locator, prefix: ColourPrefix): Promise<ColourSource> {
+    const classes = ((await locator.getAttribute('class')) ?? '').split(/\s+/).filter(Boolean);
+    const property = PREFIX_PROPERTY[prefix];
+    const palette = classes.find((c) => new RegExp(`^${prefix}-(?!lf-)[a-z]+-\\d{2,3}$`).test(c));
+    const roles = classes.filter((c) => new RegExp(`^${prefix}-lf-[a-z0-9]+(?:-[a-z0-9]+)*$`).test(c));
+    const listed = classes.join(' ');
+    if (palette && roles.length) throw new Error(`the element mixes a palette class (${palette}) and a role utility (${roles.join(', ')}) for its ${property}: its classes do not say which one sets it (classes: ${listed})`);
+    if (palette) {
+        const variable = `--color-${palette.slice(prefix.length + 1)}`;
+        return {className: palette, chipVar: variable, target: variable, role: false, selector: null};
+    }
+    if (roles.length > 1) throw new Error(`the element carries several role utilities for its ${property} (${roles.join(', ')}): its classes do not say which one sets it`);
+    const [className] = roles;
+    if (!className) throw new Error(`the element carries no ${prefix} colour class: neither a Tailwind palette class (${prefix}-<family>-<shade>) nor a colour-role utility (${prefix}-lf-<name>) (classes: ${listed})`);
+
+    const found = await locator.evaluate(
+        (el, {cls, prop}) => {
+            // The selector as Tailwind writes the class (`:` and `/` escaped) and the CSSOM serialises it.
+            const wanted = `.${CSS.escape(cls)}`;
+            const hits: {selector: string; value: string; layer: string | null}[] = [];
+            let rules = 0;
+            let unreadable = 0;
+            const walk = (list: CSSRuleList, layer: string | null, nested: boolean): void => {
+                for (const rule of Array.from(list)) {
+                    rules++;
+                    if (rule instanceof CSSStyleRule) {
+                        // A rule nested in a style rule stands for a longer selector than its own text.
+                        if (!nested && rule.selectorText === wanted) hits.push({selector: rule.selectorText, value: rule.style.getPropertyValue(prop).trim(), layer});
+                        if (rule.cssRules?.length) walk(rule.cssRules, layer, true);
+                    } else if (rule instanceof CSSMediaRule) {
+                        if (window.matchMedia(rule.media.mediaText).matches) walk(rule.cssRules, layer, nested);
+                    } else if (rule instanceof CSSSupportsRule) {
+                        if (CSS.supports(rule.conditionText)) walk(rule.cssRules, layer, nested);
+                    } else if (rule instanceof CSSLayerBlockRule) {
+                        walk(rule.cssRules, layer ? `${layer}.${rule.name}` : rule.name, nested);
+                    } else if (rule instanceof CSSGroupingRule && rule.constructor.name !== 'CSSStartingStyleRule') {
+                        walk(rule.cssRules, layer, nested);
+                    }
+                }
+            };
+            for (const sheet of Array.from(el.ownerDocument.styleSheets)) {
+                let list: CSSRuleList;
+                try {
+                    list = sheet.cssRules;
+                } catch {
+                    unreadable++;
+                    continue;
+                }
+                walk(list, null, false);
+            }
+            return {wanted, hits, rules, unreadable};
+        },
+        {cls: className, prop: property},
+    );
+    const declaring = found.hits.filter((h) => h.value !== '');
+    const described = declaring.map((h) => `${property}: ${h.value}${h.layer === null ? '' : ` in @layer ${h.layer}`}`).join('; ');
+    if (!declaring.length)
+        throw new Error(
+            `${className} is a colour-role utility, but no rule ${found.wanted} of the app page declares ${property} (${found.hits.length} rules with that selector among ${found.rules} walked, ${found.unreadable} stylesheets unreadable): Tailwind did not generate it, or wrote it under another selector`,
+        );
+    const named = [...new Set(declaring.map((h) => /^var\(\s*(--lf-[\w-]+)\s*\)$/.exec(h.value)?.[1] ?? null))];
+    const [target] = named;
+    if (named.length !== 1 || !target) throw new Error(`the rule ${found.wanted} must read one colour role, var(--lf-…), for ${property}; it declares ${described}: the @theme inline alias of ${className} no longer stands for a role`);
+    return {className, chipVar: `--color-${className.slice(prefix.length + 1)}`, target, role: true, selector: found.wanted};
 }
 
 /**
@@ -401,4 +561,38 @@ export async function verifyExport(text: string, file: string): Promise<{status:
         report = null;
     }
     return {status, report, stderr};
+}
+
+/**
+ * The lines of a source file an export names (`src/lib/…`, relative to `frontend/`), read from disk as the code is now;
+ * null when the file is not there, or when the path leaves `frontend/` — an export is input.
+ */
+export async function sourceLines(file: string): Promise<string[] | null> {
+    const full = resolve(FRONTEND_DIR, file);
+    if (!full.startsWith(FRONTEND_DIR)) return null;
+    try {
+        return (await readFile(full, 'utf8')).split('\n');
+    } catch {
+        return null;
+    }
+}
+
+/** Whether source lines write the test id `testid` as a string: `data-testid="…"`, a `testid` prop, a script constant. */
+export function writesTestid(lines: string[], testid: string): boolean {
+    const literal = testid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const quoted = new RegExp(`["'\`]${literal}["'\`]`);
+    return lines.some((line) => quoted.test(line));
+}
+
+/**
+ * The places, among `places` (occurrences or candidates of an export), that are in the component of an element, read
+ * from disk as the code is now: the line holds `needle`, and the file writes the element's test id. As `file:line`.
+ */
+export async function placesInComponent(places: {file: string; line: number}[], needle: string, testid: string): Promise<string[]> {
+    const found: string[] = [];
+    for (const place of places) {
+        const lines = await sourceLines(place.file);
+        if (lines && (lines[place.line - 1] ?? '').includes(needle) && writesTestid(lines, testid)) found.push(`${place.file}:${place.line}`);
+    }
+    return found;
 }

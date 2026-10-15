@@ -12,13 +12,18 @@ export interface PaletteFamily {
     entries: (CatalogPaletteEntry & {shade: string})[];
 }
 
-/** Tailwind palette variables in use, grouped by family (`--color-emerald-*`), shades in order; the rest last. */
+/**
+ * Tailwind palette variables in use, grouped by family (`--color-emerald-*`), shades in order; the colour roles of
+ * workstream T (`--color-lf-*`, utilities `bg-lf-card`…) as the family `lf`; the rest last.
+ */
 export function paletteFamilies(catalog: ColorCatalog): PaletteFamily[] {
     const families = new Map<string, PaletteFamily>();
     for (const entry of catalog.palette) {
+        const role = /^--color-lf-(.+)$/.exec(entry.var);
         const m = /^--color-([a-z]+)-(\d{2,3})$/.exec(entry.var);
-        const family = m && SHADES.includes(m[2]) ? m[1] : 'other';
-        const shade = m && SHADES.includes(m[2]) ? m[2] : entry.var.replace(/^--color-/, '');
+        const shaded = !!m && SHADES.includes(m[2]);
+        const family = role ? 'lf' : shaded && m ? m[1] : 'other';
+        const shade = role ? role[1] : shaded && m ? m[2] : entry.var.replace(/^--color-/, '');
         let f = families.get(family);
         if (!f) {
             f = {family, entries: []};
@@ -31,9 +36,47 @@ export function paletteFamilies(catalog: ColorCatalog): PaletteFamily[] {
     return [...families.values()].sort((a, b) => (a.family === 'other' ? 1 : b.family === 'other' ? -1 : b.entries.reduce((n, e) => n + e.uses, 0) - a.entries.reduce((n, e) => n + e.uses, 0)));
 }
 
-/** CSS variables the app defines with a colour value (brand, `--theme-*`, component variables), in name order. */
+/**
+ * CSS variables the app defines with a colour value (brand, `--theme-*`, the `--lf-*` roles, component variables), in
+ * name order. Not the inline aliases of `@theme inline`: no stylesheet defines them at runtime, so editing one would
+ * change nothing (the palette shows them, with the role they stand for).
+ */
 export function appVars(catalog: ColorCatalog): CatalogVar[] {
-    return catalog.css_vars.filter((v) => v.defs.some((d) => parseColor(d.value) || /color-mix\(|var\(|rgba?\(|hsla?\(|oklch\(/.test(d.value)));
+    return catalog.css_vars.filter((v) => !isInlineAlias(v) && v.defs.some((d) => parseColor(d.value) || /color-mix\(|var\(|rgba?\(|hsla?\(|oklch\(/.test(d.value)));
+}
+
+/** Whether every definition of a variable is an alias of `@theme inline`. */
+export function isInlineAlias(v: CatalogVar): boolean {
+    return v.defs.length > 0 && v.defs.every((d) => d.inline);
+}
+
+/** The variable the Lab edits for a palette entry: the role an inline alias stands for, else the entry's own. */
+export function editTarget(entry: CatalogPaletteEntry): string {
+    return entry.role ?? entry.var;
+}
+
+export interface VarImpact {
+    /** The palette entries whose classes change with the variable: its own, and the inline aliases standing for it. */
+    entries: CatalogPaletteEntry[];
+    variable: CatalogVar | undefined;
+    uses: number;
+    files: number;
+    /** Every class of those entries, with its number of uses. */
+    classes: Record<string, number>;
+}
+
+/**
+ * What editing a variable reaches in the code: the palette classes that read it — directly (`text-gray-500` for
+ * `--color-gray-500`) or through an inline alias (`bg-lf-card` for `--lf-surface-card`) — and the stylesheets that
+ * read it with `var()`.
+ */
+export function varImpact(catalog: ColorCatalog, name: string): VarImpact {
+    const entries = catalog.palette.filter((p) => p.var === name || p.role === name);
+    const variable = catalog.css_vars.find((v) => v.name === name);
+    const classes: Record<string, number> = {};
+    for (const e of entries) for (const [cls, n] of Object.entries(e.classes)) classes[cls] = (classes[cls] ?? 0) + n;
+    const files = new Set([...entries.flatMap((e) => Object.keys(e.files)), ...Object.keys(variable?.files ?? {})]);
+    return {entries, variable, uses: entries.reduce((n, e) => n + e.uses, 0) + (variable?.uses ?? 0), files: files.size, classes};
 }
 
 export interface ValueGroup {

@@ -215,13 +215,15 @@ The picker's messages travel under two other keys, outside this document: see
 ### 🎛️ L1 — CSS Variables
 
 `engine/vars.ts` writes one `<style id="lf-designer-lab-vars">` in `<head>`, with one rule per `css-var`
-change; the selector carries the scope:
+change. The selector carries the scope (`VAR_SELECTOR`) and names, besides `<html>`, the `.light` or
+`.dark` subtrees of the scope's themes: the elements on which the token blocks of `tokens.css` define the
+colour roles ([Colour Roles](#colour-roles)):
 
 ```css
 /* example values — scope both, light, dark */
-html { --color-emerald-600: oklch(62% 0.13 160) !important; }
-html:not(.dark) { --theme-text-muted: #5b6370 !important; }
-html.dark { --theme-text-muted: #a3adbd !important; }
+html, .light, .dark { --color-emerald-600: oklch(62% 0.13 160) !important; }
+html:not(.dark), .light { --theme-text-muted: #5b6370 !important; }
+html.dark, .dark { --theme-text-muted: #a3adbd !important; }
 ```
 
 An `!important` declaration beats every normal one, inside `@layer theme` or not, so everything that
@@ -229,15 +231,26 @@ reads the variable follows at once:
 
 - Tailwind classes, which read the palette at runtime (`.text-red-500{color:var(--color-red-500)}`);
 - their opacity modifiers (`color-mix(in oklab, var(--color-red-500) 20%, transparent)`);
+- the role utilities, which read the role itself (`.bg-lf-card{background-color:var(--lf-surface-card)}`),
+  and the derived roles built on it;
 - the brand (`--color-libre-*`) and the `--theme-*` variables of `app.css`.
 
+A `.light` or `.dark` subtree — an element forced into one theme, which redefines the roles for itself —
+gets the overrides of its theme too. The derived roles, which `tokens.css` defines on
+`:root, .light, .dark`, recompute from the overridden values, on `<html>` and in the subtree alike.
+`applyVars()` writes every `both` rule before the `light` and `dark` ones, keeping the changes' order
+otherwise: when a variable has both kinds of change, the theme's rule wins on `<html>` anyway
+(`html.dark` beats the `both` rule's `.dark`), and on an island, where the two rules tie on `.dark` or
+`.light`, it wins by coming later.
+
 The reach is the variable: changing `--color-emerald-600` changes **every** class that uses it. The
-editor shows the impact — uses, files, the most used classes, where the sources define the variable.
+editor shows the impact — uses, files, the most used classes, where the sources define the variable. A
+role's impact counts the utilities that read it through their alias.
 
 This path serves the variables the whole page inherits, `scope: root` in the catalogue (`:root`,
-`html`, `@theme`, `html.dark`…). Variables that a component defines on its own elements
-(`--highlight-*`, `--cropper-*`, `--lf-price-flash-*`…) are `scope: scoped`: L2 rewrites their defining
-rule instead.
+`html`, `@theme`, `html.dark`, `.light`, `.dark`…), the colour roles included. Variables that a component
+defines on its own elements (`--highlight-*`, `--cropper-*`, `--lf-price-flash-*`…) are `scope: scoped`:
+L2 rewrites their defining rule instead.
 
 ### 🖌️ L2 — Stylesheet Colours
 
@@ -398,16 +411,16 @@ about 870 KB of JSON (measured on 14/10/2026).
 |:--|:--|
 | `meta` | `schema`, `app_version`, `generated_at`, `hash`, `scan_ms`, `parity` (the totals shared with the Python inventory), `layers` (literals per layer), `excluded` (the Lab's folders) |
 | `files` | Paths relative to `frontend/`; the other sections point into this list by index |
-| `css_vars` | Every custom property defined or read with `var()`: `name`, `defs` (file, line, value, zone, selector, theme and `scope`, `root` or `scoped`), `uses`, uses per file, and `use_sites`, the `[file, line, selector]` of every `var()` read (the selector `null` outside a stylesheet rule) |
-| `palette` | Every colour variable a Tailwind class reaches (`text-emerald-600` → `--color-emerald-600`, `bg-libre-green` → `--color-libre-green`): uses, uses under `dark:`, classes, files, and `occ`, the `[file, line, classIndex]` of every use — `classIndex` points into `Object.keys(classes)` |
+| `css_vars` | Every custom property defined or read with `var()`: `name`, `defs` (file, line, value, zone, selector, theme and `scope`, `root` or `scoped`; `inline` and `alias_of` for a definition inside `@theme inline`), `uses`, uses per file, and `use_sites`, the `[file, line, selector]` of every `var()` read (the selector `null` outside a stylesheet rule) |
+| `palette` | Every colour variable a Tailwind class reaches (`text-emerald-600` → `--color-emerald-600`, `bg-libre-green` → `--color-libre-green`, `bg-lf-card` → `--color-lf-card`): uses, uses under `dark:`, classes, files, `occ`, the `[file, line, classIndex]` of every use — `classIndex` points into `Object.keys(classes)` — and `role` for the alias of a colour role |
 | `literals` | Every hand-written colour: `id`, `file`, `line`, `col`, `raw`, `kind` (`hex`, `fn`, `mix`), `key`, `alpha`, `zone`, `theme`, `layer`, `preview`, `snippet`. Stylesheet colours add `selector`, `at` (the enclosing at-rules) and `property`; script colours add `chart`; markup colours add `via` |
 | `by_value` | Colour key → literal ids |
 | `testids` | Every static test id → the `[file, line, via]` of each place that writes it: `via` is `attr` for `data-testid=`, `prop` for a prop that a component renders as its `data-testid` (`testid=`, `optionTestId=`…), `script` for a property or variable of a script (`testId: 'x'`) |
 | `testid_prefixes` | The templated test ids (`row-{id}`): `[prefix, file, line, via]`, longest prefix first |
 
 `testids`, `testid_prefixes`, the class index of `palette[].occ` and `css_vars[].use_sites` serve the
-element picker. They are additions: the schema keeps its name, `lf-color-catalog/1`, and none of them
-enters `meta.parity`.
+element picker; `inline`, `alias_of` and `role` serve the [colour roles](#colour-roles). They are
+additions: the schema keeps its name, `lf-color-catalog/1`, and none of them enters `meta.parity`.
 
 `meta.hash` is a `sha256:` of the body only, without volatile fields such as `generated_at` and
 `scan_ms`: it stays the same on an unchanged tree, and the export records it as `catalog_hash`.
@@ -443,6 +456,39 @@ line, `? '#…'` and `: '#…'` on the next ones); a negated condition (`!isDark
 `dark` when the class holding the colour carries a `dark:` variant (`dark:bg-[#1e293b]`), never from a
 neighbouring class. `null` otherwise.
 
+### 🎭 Colour Roles {: #colour-roles }
+
+Workstream T moves the interface colours to **colour roles**, in `frontend/src/lib/theme/tokens.css`:
+
+- a role is a variable `--lf-<group>-<name>`, such as `--lf-surface-card`. The token blocks define the
+  roles on `:root, html.light, .light` (light) and `html.dark, .dark` (dark), and the derived ones —
+  `color-mix()`, references to other roles — on `:root, .light, .dark`;
+- an `@theme inline` block turns each role into Tailwind utilities:
+  `--color-lf-card: var(--lf-surface-card)` gives `bg-lf-card`, `border-lf-card`, `ring-lf-card`…
+
+With `inline`, Tailwind writes the role into the utility —
+`.bg-lf-card{background-color:var(--lf-surface-card)}` — and emits no `--color-lf-card` at runtime. The
+alias exists only in the sources: editing it would change nothing, so the Lab edits the role. The
+catalogue records the link:
+
+- **Classes.** The custom-token class expression covers the role utilities: `lf-[a-z0-9-]+`, next to
+  `libre-*`, `theme-*`, `primary*` and `accent*` — `TW_CUSTOM_RE` in `scan-colors.mjs` and `tw_custom_re`
+  in `color_inventory.py`, changed together. A role name may hold digits, as T's own `ROLE_CLASS_RE`
+  (`frontend/scripts/theme/theme-roles.mjs`) allows. A role utility, variants and opacity included
+  (`hover:border-lf-card/50`), counts among the custom-token classes and enters `palette` under its
+  alias, `--color-lf-<name>`.
+- **Definitions.** A definition inside an `@theme inline` block gets `inline: true` and `alias_of`: the
+  variable it names when its value is exactly `var(--x)`, else `null`. The two fields are written only
+  for such definitions.
+- **Palette.** A palette entry gets `role` when every definition of its variable is an inline alias of
+  one same variable: `--color-lf-card` → `--lf-surface-card`. The rule is generic, not tied to the `lf`
+  prefix.
+
+Wherever the Lab meets an alias it edits the role — the palette chips and the editor's impact, the
+export's occurrences, the picker's candidates: each section below says how — and L1, above, writes its
+overrides where the token blocks define the roles. An alias that is not exactly `var(--x)` gets no role:
+see [Known Limits](#known-limits).
+
 ### ⚖️ Parity with the Python Inventory
 
 `scripts/visual_review/color_inventory.py`, the inventory of the visual-review toolkit, counts the same
@@ -451,7 +497,12 @@ totals the two share: files, Tailwind palette classes, custom-token classes, arb
 literals, colour functions, `var()` uses and custom property definitions. On 14/10/2026 both reported
 1,047 files, 1,610 hex literals and 211 colour functions, with the same occurrences line by line. The
 picker's additions — test ids, `use_sites`, the class index of `occ` — are annotation, not counting: the
-Python inventory has no counterpart for them, and the parity totals did not move when they arrived.
+Python inventory has no counterpart for them, and the parity totals did not move when they arrived. The
+same holds for the roles' `inline`, `alias_of` and `role`; what the roles did change is the class
+expression. On 15/10/2026, on the base `9d57aa4c0`, which carries the first wave of workstream T, the two
+class expressions took in the role utilities in the same change ([Colour Roles](#colour-roles)), and the
+inventories stayed identical line by line: the custom-token classes went from 764 to 912, while the 1,080
+files, 1,291 hex literals and 238 colour functions did not move.
 
 !!! warning "Change one, change the other"
 
@@ -544,8 +595,8 @@ to that element ([what it keeps](#element-tab)).
 |:--|:--|
 | Overview | Hand-written colours per layer and how many are live-editable, palette and app variables in use, catalogue schema, file count and scan time |
 | Element | The picked element: where it is, each of its colours with its source, **Edit the source** and **Specialise here** — see [The Element Tab](#element-tab) |
-| Tailwind palette | The `--color-*` variables the classes reach, by family and shade, with their uses |
-| App variables | Variables the app defines with a colour value: brand, `--theme-*`, component variables |
+| Tailwind palette | The `--color-*` variables the classes reach, by family and shade, with their uses; the role utilities form the family `lf` |
+| App variables | Variables the app defines with a colour value: brand, `--theme-*`, the colour roles, component variables — never an inline alias |
 | Stylesheets | `css-literal` colours grouped by value, alpha variants together, with occurrences, files, alphas and theme hints |
 | Charts | `chart-color` colours, grouped the same way |
 | No preview | `script`, `markup` and `static` colours: proposals only |
@@ -553,18 +604,28 @@ to that element ([what it keeps](#element-tab)).
 | Contrast | WCAG ratios before and after the changes, in both themes, plus a free pair |
 | Notes | Author and general note, both exported |
 
+**Roles in the palette.** The family `lf` holds the role utilities, one chip per alias, whose shade is the
+rest of the alias's name (`--color-lf-card` → `card`, `--color-lf-action-hover` → `action-hover`). A
+chip keeps its alias's test id, `lab-item-var-<alias>` (`lab-item-var---color-lf-card`), but edits the
+role ([Colour Roles](#colour-roles)): `data-target="--lf-surface-card"`, title
+`--color-lf-card → --lf-surface-card`, and its swatch and changed state follow the role. The search finds
+a chip by its role too. **App variables** lists the roles, as root variables, and omits the inline
+aliases (`appVars()`), which no stylesheet defines at runtime.
+
 **Editor** (`ColorEditor.svelte`), opened from any entry:
 
 - a text field that accepts any CSS colour, OKLCH sliders (L, C, H), and a warning when the value leaves
   sRGB;
 - `<input type="color">` as an sRGB shortcut, and **Snap to a variable**, which writes `var(--x)`: a
-  proposal to unify two colours;
+  proposal to unify two colours. Its list offers the roles, never their inline aliases;
 - for values, **Translucent variants too** and, in stylesheets, **Reach in the code**: every occurrence,
   or one occurrence with its selector — preselected on the picked element's rule when the editor is opened
   from the **Element** tab and exactly one catalogue occurrence matches it;
 - a note and gallery screen codes such as `dashboard/kpi-top` — the codes of the designer package;
 - the impact of a variable (uses, files, most used classes, definitions), or the occurrences of a value
-  (file, line, selector, property, theme, snippet);
+  (file, line, selector, property, theme, snippet). `varImpact()` (`catalogView.ts`) adds up the palette
+  entries that read the variable, directly or through an inline alias, and the variable's own `var()`
+  uses: a role's impact counts its utilities, and its definitions are those of `tokens.css`;
 - in **`element` mode**, opened by **Specialise here**: the selector, the property (and the colour key for
   a chart), the reminder that only this component changes, how many elements the selector matched when
   the element was picked, and where an agent would bind the new variable. The current value is the one the
@@ -780,6 +841,10 @@ inside a header cell of the transactions table, body cells included. The shipped
 | `chart` | A colour of the chart under the pointer | The chart colour (`chart-color`) |
 | `unknown` | No candidate was proved | — |
 
+A role utility is a `tailwind-class` source like any other: the winner `.bg-lf-card`, in the layer
+`utilities`, holds `var(--lf-surface-card)`, so the chain starts at the role and **Edit the source** opens
+`--lf-surface-card` ([Colour Roles](#colour-roles)).
+
 Around the source:
 
 - **The variable chain**: the variable the winner reads, then the variable its root definition reads in
@@ -798,7 +863,7 @@ go, and at most 12 stay.
 | `why` | The place | How the Lab finds it |
 |:--|:--|:--|
 | `matched-rule` | The stylesheet rule that sets the colour | Catalogue literals with the winner's colour key and a declaration of the property, shorthands included, whose selector equals the winner's after `normalizeSelector()`: those in the component's files, else the first six anywhere. A nested or wrapped rule does not compare: the colour's literals in the component's files stand in |
-| `class-use` | The colour class on that line | The uses of that exact class (`palette[].occ` with its class index): in the component's files, else all of them when there are at most six |
+| `class-use` | The colour class on that line | The uses of that exact class (`palette[].occ` with its class index): in the component's files, else all of them when there are at most six. A role utility's uses are found through the role: the alias entry that lists the class (`--color-lf-card` for `bg-lf-card`) |
 | `var-use` | The rule that reads the variable | For `var`, or a class whose uses were not found: `css_vars[].use_sites` by the winner's selector, else in the component's files, else all when at most six |
 | `literal` | An inline style or an SVG attribute; for a chart, a chart colour | The markup literals of the colour, by the same rule; for a chart colour, its `chart-color` literals in the component's files |
 | `testid` | Where a test id of the chain is written | The nearest id of the chain that the catalogue knows: a static id's places; for `prefix*`, or an id the scanner saw only as a template, the places of the longest catalogue prefix it extends; at most four |
@@ -823,7 +888,9 @@ chart's component.
 **The filter.** **Only the picked element's colours** narrows the palette, variable and value lists to:
 the variables of every chain, the colour keys of the computed values and of the matched literals, the
 chart's colours, and — so that the class an `app.css` override hides, or a hover colour, still shows —
-the variables and colours of every declaration found, winners or not.
+the variables and colours of every declaration found, winners or not. A role in those chains brings its
+alias names too (`--color-lf-card` for `--lf-surface-card`): the palette lists a role's utilities under
+their alias, so their chips show.
 
 ---
 
@@ -833,7 +900,7 @@ the variables and colours of every declaration found, winners or not.
 
 | Change layer | What it changes | Engine | Reach |
 |:--|:--|:--|:--|
-| `css-var` | A custom property: Tailwind's `--color-*`, the brand `--color-libre-*`, `--theme-*`, a component variable | L1 on `<html>`; L2 for a component variable | Every use of the variable |
+| `css-var` | A custom property: Tailwind's `--color-*`, the brand `--color-libre-*`, `--theme-*`, a colour role, a component variable | L1 on `<html>` and the `.light`/`.dark` subtrees; L2 for a component variable | Every use of the variable |
 | `css-literal` | A colour written in a stylesheet: a component `<style>`, `app.css`, a Tailwind arbitrary class | L2 | The value with its translucent variants, or one occurrence |
 | `chart-color` | A colour written in a chart script, as it reaches an ECharts option | L3 | The value with its translucent variants |
 | `proposal` | Colours with no live path: inline styles, other markup and scripts, generated colours, `app.html`, `offline.html`, `manifest.json` | — | Exported only, with `preview: false` |
@@ -854,11 +921,26 @@ the variables and colours of every declaration found, winners or not.
   option as a value no change targets. The preview changes a base colour only where the option carries it
   unchanged; the export still points at the literal in the source.
 - **No preview** for the `proposal` layer.
-- **Variables redefined in a subtree.** L1 writes its overrides on `<html>` (`html`, `html:not(.dark)`,
-  `html.dark`: `SELECTOR` in `engine/vars.ts`). An element that defines the same variable again — a
-  `.dark` island with its own definitions, say — keeps its own value for its subtree: the nearer definition
-  wins over the inherited one. Nothing in the app does that today; the tokens of workstream T, written for
-  `html.dark, .dark`, may, and the backlog item L-10 covers it.
+- **Variables redefined in a subtree.** L1 writes its overrides on `<html>` and on the `.light` and
+  `.dark` subtrees (`VAR_SELECTOR` in `engine/vars.ts`), where the token blocks of `tokens.css` define the
+  roles: a theme island that redefines the roles takes the override too. A definition under any other
+  selector — a component's own — is rewritten by L2 instead; only one in a `style` attribute, which no
+  engine rewrites, keeps its value for its subtree, as the nearer definition. Conversely, L1 runs in the
+  app tabs without the catalogue (`designerLabImports.gate.test.ts` lets only the Lab page import it), so
+  its selectors are the same for every variable: it cannot know where each one is defined. A variable
+  the app defines on `<html>` only — a `--theme-*` of `app.css`, a palette shade — thus also gets a
+  one-theme override inside a `.light` or `.dark` island of that theme placed in the other theme, where
+  the code does not redefine it: the preview there shows a value the edited definition would not reach.
+  Today no element but `<html>` carries `light` or `dark` (`themeStore.ts` and the inline script of
+  `app.html` set them on `document.documentElement`), so no such island exists yet.
+- **Inline aliases that are not `var(--x)`.** An `@theme inline` alias with any other value — a
+  `color-mix()`, say — gets no `role` ([Colour Roles](#colour-roles)): its chip edits the alias itself, a
+  variable that does not exist at runtime, so nothing changes. Edit the roles it mixes. `tokens.css` has
+  none today.
+- **Class names in comments** count as uses, in the scanner and in the Python inventory alike: the header
+  comments of `app.css` and `tokens.css` name role utilities (`bg-lf-card`, `text-lf-muted`…). They show
+  among the uses, in the editor's impact, and among the export's occurrences, where an agent finds a
+  comment line.
 - **Wide gamut.** Stylesheets keep the value as typed, so an `oklch()` outside sRGB stays wide; charts
   receive it clamped to sRGB. The editor warns when a value leaves sRGB. `<input type="color">` and the
   gallery screenshots are sRGB only, so a wide-gamut display shows such colours more saturated than the
@@ -991,13 +1073,20 @@ An abridged export (occurrence lists and classes cut):
 | `changes[].preview` | `false` only for `proposal` |
 | `changes[].from`, `to` | The value the Lab saw, and the new value (any CSS colour, `var(--x)` included) |
 | `changes[].granularity`, `alpha_variants` | `css-literal`, `chart-color` and `proposal`: `value` or `occurrence`, and whether translucent writings change too |
-| `changes[].impact`, `definitions` | `css-var`: uses, files and Tailwind classes; where the sources define the variable (file, line, selector, theme, value) |
+| `changes[].impact`, `definitions` | `css-var`: uses, files and Tailwind classes, the editor's figures (`varImpact()`); where the sources define the variable (file, line, selector, theme, value) |
 | `changes[].property`, `color_key` | `element`: the property specialised, or `chart` with the colour key it replaces in the charts the selector reaches |
 | `changes[].anchor` | The picked element the change was decided on: on every `element` change the Lab makes, and on a change of another layer opened from the **Element** tab — see [The Anchor](#anchor) |
-| `changes[].occurrences` | `css-var`: the file and line of every class use. `element`: the anchor's candidates, as `file`, `line`, `raw` (the text expected there) and `why`. Other layers: `file`, `line`, `col`, `raw`, `layer`, `theme_context`, `selector`, `property`, `snippet` |
+| `changes[].occurrences` | `css-var`: the file and line of every class use, and `raw`, the class, for a utility that reads a colour role. `element`: the anchor's candidates, as `file`, `line`, `raw` (the text expected there) and `why`. Other layers: `file`, `line`, `col`, `raw`, `layer`, `theme_context`, `selector`, `property`, `snippet` |
 | `changes[].note`, `shots` | The designer's note and gallery screen codes, when given |
 | `contrast` | The declared pairs whose ratio changed: `fg`, `bg`, `scope`, `before`, `after` |
 | `variants` | The named variants, as the Lab stores them |
+
+A `css-var` change on a colour role (`--lf-surface-card`, see [Colour Roles](#colour-roles)) takes its
+`impact` from `varImpact()`: `uses` and `files` count the role's utilities and its own `var()` uses, and
+`classes` lists the utilities (`bg-lf-card`…). Its `occurrences[]` are the lines of those utilities, each
+with `raw`, the class: the line names neither the role nor a palette shade, so the class is the text
+[`verify-export`](#verify-export) looks for there. `definitions[]` lists the role's definitions in
+`tokens.css`. The schema is unchanged: occurrences already had `raw`.
 
 The occurrences of a value change are the catalogue literals with the same colour key, in the change's
 layers (`proposal` covers `script`, `markup` and `static`); translucent ones are listed only with
@@ -1127,8 +1216,9 @@ node frontend/scripts/designer-lab/verify-export.mjs designer-lab-changes.json -
 ```
 
 It rebuilds the catalogue to compare its hash with `catalog_hash`, then looks for every occurrence on its
-`file:line`, case-insensitively — the raw value, or `family-shade` (`emerald-600`) for a Tailwind class
-use:
+`file:line`, case-insensitively. The text it looks for is the occurrence's `raw` when it has one — a
+literal, or the class of a role utility — else, for a `css-var` change, the `family-shade` of its
+`--color-*` target (`emerald-600`), for a Tailwind class use. Each occurrence is:
 
 - **ok**: still there;
 - **moved**: elsewhere in the same file, reported with the nearest line;
@@ -1214,8 +1304,9 @@ workstream allowed to change the appearance.
 The Lab's own colours reach the page only as `--lab-*` custom properties in the inline `style` of its
 root element (`labTheme.ts`, one set for light and one for dark, following the class of `<html>`). Its
 stylesheets hold no colour, only `var(--lab-*)`, and its markup uses no Tailwind colour class. The
-engines rewrite stylesheet rules and `<html>` variables, never an inline style, so editing the app's
-colours never repaints the Lab. Specialisation rules aim at the app's elements: a component selector
+engines rewrite stylesheet rules and the variables of `<html>` and of the `.light`/`.dark` subtrees —
+classes the Lab's markup never carries — never an inline style, so editing the app's colours never
+repaints the Lab. Specialisation rules aim at the app's elements: a component selector
 starts from an app test id, which the Lab's markup never carries. The colour-vision filter sits on
 `<html>` and applies to the Lab as well.
 
@@ -1250,18 +1341,20 @@ four-language rule of the UI. Do not add Lab keys to the [app catalogue](i18n.md
   reaching `engine/` and `picker/` only through `import()`; the route files reaching the Lab only through a
   guarded `import()`. It is the static side of the release guard
   ([Import the Lab only inside a branch](#release-builds)).
-- Seams for tests: the pure modules (`color.js`, `store.ts`, `pick.ts`, `cssProps.ts`, `catalogView.ts`,
-  `contrast.ts`, `export.ts` with `sanitizeAnchor()`, `pickView.ts`); the DOM helpers of
-  `picker/anchor.ts`, which take the test-id index as a parameter and run under jsdom; `elementRule()` and
-  `applyElementRules()` in `engine/anchors.ts`; `collectRules()` in `picker/describe.ts`; the exported
-  functions of the scripts (`scanColors()`, `scanSource()`, `listSourceFiles()`, `testidValues()`,
+- Seams for tests: the pure modules (`color.js`, `store.ts`, `pick.ts`, `cssProps.ts`, `catalogView.ts`
+  with `varImpact()`, `editTarget()` and `isInlineAlias()`, `contrast.ts`, `export.ts` with
+  `sanitizeAnchor()`, `pickView.ts`); the DOM helpers of `picker/anchor.ts`, which take the test-id index
+  as a parameter and run under jsdom; `elementRule()` and `applyElementRules()` in `engine/anchors.ts`;
+  `applyVars()` and `VAR_SELECTOR` in `engine/vars.ts`; `collectRules()` in `picker/describe.ts`; the
+  exported functions of the scripts (`scanColors()`, `scanSource()`, `listSourceFiles()`, `testidValues()`,
   `designerLabEnabled()`, `filesWithMarker()`, `testidIndex()`, `verifyExport()`, `locate()`,
   `testidKnown()`); `mapChartOption()` and `chartPatch()` in `engine/charts.ts`, kept for tests.
 - In the browser: `window.__lfDesignerLab` (`picking()`, `stats().elementRules` included) and the test
   ids. The page root is `data-testid="designer-lab"`, with `data-catalog-hash` and `data-changes`; every
-  control has a `lab-…` test id — the picker's among them: `lab-pick`, `lab-pick-cancel`,
-  `lab-tab-element`, `lab-picked-…` (with `data-property`, `data-kind`, `data-matches`),
-  `lab-filter-picked`. In the app tab, the veil is `lf-lab-pick-veil`.
+  control has a `lab-…` test id. A palette chip is `lab-item-var-<variable>`, with `data-target`, the
+  variable it edits; the picker's are `lab-pick`, `lab-pick-cancel`, `lab-tab-element`, `lab-picked-…`
+  (with `data-property`, `data-kind`, `data-matches`) and `lab-filter-picked`. In the app tab, the veil is
+  `lf-lab-pick-veil`.
 
 ### 🔁 Rebuilds
 
