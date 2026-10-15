@@ -9,6 +9,7 @@ Reference: backend/app/schemas/transactions/transactions.py
 
 from datetime import date
 from decimal import Decimal
+from itertools import product
 from typing import Optional
 
 import pytest
@@ -733,16 +734,28 @@ class TestAssetEventLink:
         assert upd_relink.asset_event_id == 99
 
     def test_tx_type_metadata_event_compatible_flags(self):
-        """Only DIVIDEND, INTEREST, ADJUSTMENT expose event_compatible=True."""
-        from backend.app.schemas.transactions.transactions import EVENT_COMPATIBLE_TYPES  # noqa: PLC0415
-        from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA  # noqa: PLC0415
+        """Only DIVIDEND, INTEREST, ADJUSTMENT are event_compatible in TX_TYPE_METADATA, and rule 9's ``allowed`` names exactly them.
 
+        Reads only names that outlived W-B36, which removed ``EVENT_COMPATIBLE_TYPES`` (rule 9 and ``event_suggestions.py``
+        read the table instead): the table's flags, and the ``allowed`` param of eventTypeIncompatible on a DEPOSIT linked
+        to an asset event, the list the user is shown.
+        """
         expected_true = {TransactionType.DIVIDEND, TransactionType.INTEREST, TransactionType.ADJUSTMENT}
-        assert EVENT_COMPATIBLE_TYPES == expected_true
+        assert set(TX_TYPE_METADATA) == set(TransactionType), "TX_TYPE_METADATA must have exactly one entry per TransactionType"
 
         true_in_meta = {t for t, m in TX_TYPE_METADATA.items() if m.event_compatible}
         assert true_in_meta == expected_true
-        assert len(TX_TYPE_METADATA) == 12
+
+        errors = validate_transaction_business_rules(
+            tx_type=TransactionType.DEPOSIT,
+            asset_id=None,
+            quantity=Decimal("0"),
+            cash=Currency(code="EUR", amount=Decimal("100")),
+            asset_event_id=1,
+            cost_basis_mode=None,
+        )
+        refusals = [(error.type, error.context) for error in errors if error.type == "eventTypeIncompatible"]
+        assert refusals == [("eventTypeIncompatible", {"type": "DEPOSIT", "allowed": "ADJUSTMENT, DIVIDEND, INTEREST"})], f"Rule 9 must refuse a DEPOSIT linked to an asset event once, its allowed naming exactly the event-compatible types; got {refusals}"
 
 
 # ============================================================================
@@ -969,8 +982,8 @@ def _replace_metadata_entry(monkeypatch: pytest.MonkeyPatch, tx_type: Transactio
     """Replace ``TX_TYPE_METADATA[tx_type]`` with a copy carrying ``update``, for this test only.
 
     ``monkeypatch.setitem`` swaps the dict's value and puts the original entry back at teardown; the original object is
-    never touched. A rule that reads ``TX_TYPE_METADATA`` when it runs sees the copy; one that never reads it, like
-    today's rule 12, or that copied the table at import time, does not.
+    never touched. A rule that reads ``TX_TYPE_METADATA`` when it runs sees the copy; one that never reads it (rule 12
+    before W-B31, rules 5-11 before W-B36), or that copied the table at import time, does not.
     """
     monkeypatch.setitem(TX_TYPE_METADATA, tx_type, TX_TYPE_METADATA[tx_type].model_copy(update=update))
     replaced = TX_TYPE_METADATA[tx_type]
@@ -982,12 +995,12 @@ class TestCostBasisModeRule12:
 
     A ``cost_basis_mode`` belongs only where the metadata admits a cost basis: the rule of the side (``cost_basis_pair``
     for a paired type, ``cost_basis_mode`` otherwise) neither ``forbidden`` nor ``required_qty_pos`` with quantity <= 0,
-    the frontend's ``cbAllowed``. Today rule 12 is a second copy written by hand (TRANSFER and ADJUSTMENT with
-    quantity > 0); W-B31 makes it read the table.
+    the frontend's ``cbAllowed``. Before W-B31 rule 12 was a second copy written by hand (TRANSFER and ADJUSTMENT with
+    quantity > 0); since W-B31 it reads the table (``cost_basis_allowed``).
 
-    - TX-S-090, TX-S-091, TX-S-094: guards, green today (the copy matches today's table) and after W-B31.
-    - TX-S-092, TX-S-093: RED until W-B31. An entry of ``TX_TYPE_METADATA`` is replaced for one test and rule 12 must
-      follow it; the hand-written copy never reads the table, so it answers as before.
+    - TX-S-090, TX-S-091, TX-S-094: guards, green before W-B31 (the copy matched the table) and since.
+    - TX-S-092, TX-S-093: red before W-B31, now its guards. An entry of ``TX_TYPE_METADATA`` is replaced for one test and
+      rule 12 must follow it; a hand-written copy never reads the table, so it would answer as before.
 
     Pure: no database, no server. The only module state touched is one ``TX_TYPE_METADATA`` entry, through
     ``monkeypatch``, which puts the original back.
@@ -996,8 +1009,8 @@ class TestCostBasisModeRule12:
     def test_rule12_follows_metadata_for_every_type_and_side(self):
         """TX-S-090: cost_basis_mode is refused exactly where TX_TYPE_METADATA admits no cost basis, every type × sign.
 
-        Guard: green today because the hand-written rule happens to match today's table, and after W-B31 because the rule
-        reads it. A cure reading the wrong side of a pair, the mode of a paired type, or ``required_qty_pos`` without its
+        Guard: green before W-B31 because the hand-written rule happened to match the table, and since because the rule
+        reads it. A rule reading the wrong side of a pair, the mode of a paired type, or ``required_qty_pos`` without its
         quantity sign, turns a cell red. One table, one assertion: a failure shows every wrong cell at once.
         """
         refused: dict[tuple[str, str], bool] = {}
@@ -1016,7 +1029,7 @@ class TestCostBasisModeRule12:
     def test_rule12_silent_without_cost_basis_mode(self):
         """TX-S-091: with cost_basis_mode=None no type and no sign gets costBasisModeIncompatible.
 
-        Guard, green today and after W-B31: the metadata says WHERE a cost_basis_mode may go, never that leaving it out is
+        Guard, green before and since W-B31: the metadata says WHERE a cost_basis_mode may go, never that leaving it out is
         a fault (a missing cost is ``costBasisRequired``, a batch rule, not rule 12).
         """
         refused = [(tx_type.value, str(quantity)) for tx_type in TransactionType for quantity in RULE12_QUANTITIES if _rule12_refusals(tx_type, quantity, None)]
@@ -1024,10 +1037,10 @@ class TestCostBasisModeRule12:
         assert refused == [], f"With cost_basis_mode=None rule 12 has nothing to judge, yet it refused (type, quantity): {refused}"
 
     def test_rule12_admits_cost_basis_mode_where_metadata_opens_it(self, monkeypatch):
-        """TX-S-092: RED until W-B31. A BUY made ``optional`` in TX_TYPE_METADATA is admitted with a cost_basis_mode.
+        """TX-S-092: red before W-B31, now its guard. A BUY made ``optional`` in TX_TYPE_METADATA is admitted with a cost_basis_mode.
 
-        Red today: rule 12 never reads the table, and its hand-written list (TRANSFER and ADJUSTMENT with quantity > 0)
-        refuses the BUY with costBasisModeIncompatible whatever the metadata says.
+        Before W-B31 rule 12 never read the table: its hand-written list (TRANSFER and ADJUSTMENT with quantity > 0)
+        refused the BUY with costBasisModeIncompatible whatever the metadata said. Red again means rule 12 stopped reading it.
         """
         quantity = Decimal("1")
         _replace_metadata_entry(monkeypatch, TransactionType.BUY, cost_basis_mode="optional")
@@ -1035,13 +1048,13 @@ class TestCostBasisModeRule12:
 
         refusals = _rule12_refusals(TransactionType.BUY, quantity, "auto")
 
-        assert refusals == [], f"W-B31: with TX_TYPE_METADATA[BUY].cost_basis_mode = 'optional', rule 12 must admit cost_basis_mode='auto' on a BUY with quantity {quantity}; it refused it {[error.context for error in refusals]}: still the hand-written copy"
+        assert refusals == [], f"W-B31: with TX_TYPE_METADATA[BUY].cost_basis_mode = 'optional', rule 12 must admit cost_basis_mode='auto' on a BUY with quantity {quantity}; it refused it {[error.context for error in refusals]}: rule 12 no longer reads the table"
 
     def test_rule12_refuses_cost_basis_mode_where_metadata_closes_it(self, monkeypatch):
-        """TX-S-093: RED until W-B31. An ADJUSTMENT made ``forbidden`` in TX_TYPE_METADATA is refused a cost_basis_mode.
+        """TX-S-093: red before W-B31, now its guard. An ADJUSTMENT made ``forbidden`` in TX_TYPE_METADATA is refused a cost_basis_mode.
 
-        Red today: the hand-written list admits every ADJUSTMENT with quantity > 0 whatever the metadata says, so no
-        costBasisModeIncompatible comes back.
+        Before W-B31 the hand-written list admitted every ADJUSTMENT with quantity > 0 whatever the metadata said, so no
+        costBasisModeIncompatible came back. Red again means rule 12 stopped reading the table.
         """
         quantity = Decimal("1")
         _replace_metadata_entry(monkeypatch, TransactionType.ADJUSTMENT, cost_basis_mode="forbidden")
@@ -1050,13 +1063,13 @@ class TestCostBasisModeRule12:
 
         refusals = _rule12_refusals(TransactionType.ADJUSTMENT, quantity, "auto")
 
-        assert refusals, f"W-B31: with TX_TYPE_METADATA[ADJUSTMENT].cost_basis_mode = 'forbidden', rule 12 must refuse cost_basis_mode='auto' on an ADJUSTMENT with quantity {quantity} (costBasisModeIncompatible); it admitted it: still the hand-written copy"
+        assert refusals, f"W-B31: with TX_TYPE_METADATA[ADJUSTMENT].cost_basis_mode = 'forbidden', rule 12 must refuse cost_basis_mode='auto' on an ADJUSTMENT with quantity {quantity} (costBasisModeIncompatible); it admitted it: rule 12 no longer reads the table"
 
     def test_rule12_create_path_refuses_cost_basis_mode_on_buy(self):
         """TX-S-094: TXCreateItem refuses a BUY that is valid in every other respect, for its cost_basis_mode alone.
 
-        Guard, green today and after W-B31: the create path still hands cost_basis_mode to rule 12, and the refusal keeps
-        its code and params (``type``, ``qty``); W-B31 changes only the English message.
+        Guard, green before and since W-B31: the create path hands cost_basis_mode to rule 12, and the refusal kept its
+        code and params (``type``, ``qty``); W-B31 changed only the English message.
         """
         with pytest.raises(ValidationError) as exc_info:
             TXCreateItem(
@@ -1071,3 +1084,477 @@ class TestCostBasisModeRule12:
 
         errors = [(error["type"], error.get("ctx")) for error in exc_info.value.errors()]
         assert errors == [(COST_BASIS_MODE_INCOMPATIBLE, {"type": "BUY", "qty": "10"})], f"A BUY with cost_basis_mode='auto' must be refused by rule 12 alone, with code and params unchanged; got {errors}"
+
+
+# ============================================================================
+# 1.11 RULES 5-11 READ TX_TYPE_METADATA (W-B36)
+# ============================================================================
+
+
+CASH_EUR_ZERO = Currency(code="EUR", amount=Decimal("0"))
+CASH_EUR_PLUS_100 = Currency(code="EUR", amount=Decimal("100"))
+CASH_EUR_MINUS_100 = Currency(code="EUR", amount=Decimal("-100"))
+
+# The cells of TX-S-095: every TransactionType × these asset ids × cashes × quantities × asset_event ids.
+PARITY_ASSET_IDS = (None, 1)
+PARITY_CASHES = {"none": None, "EUR 0": CASH_EUR_ZERO, "EUR +100": CASH_EUR_PLUS_100, "EUR -100": CASH_EUR_MINUS_100}
+PARITY_QUANTITIES = (Decimal("-1"), Decimal("0"), Decimal("1"))
+PARITY_EVENT_IDS = (None, 1)
+
+# The codes of each of rules 5-11: a red keeps only those of the rule it is about.
+RULE_CODES: dict[int, frozenset[str]] = {
+    5: frozenset({"assetRequired"}),
+    7: frozenset({"cashRequired"}),
+    8: frozenset({"cashForbidden"}),
+    9: frozenset({"eventTypeIncompatible", "eventRequiresAsset"}),
+    10: frozenset({"qtyPositive", "qtyNegative", "qtyZero", "qtyNonzero"}),
+    11: frozenset({"cashSignNegative", "cashSignPositive"}),
+}
+
+# Rule 10: the quantity each quantity_sign of TX_TYPE_METADATA refuses, and the code it refuses it with ("free": none).
+QUANTITY_SIGN_REFUSALS = {
+    "positive": ("qtyPositive", lambda quantity: quantity <= 0),
+    "negative": ("qtyNegative", lambda quantity: quantity >= 0),
+    "zero": ("qtyZero", lambda quantity: quantity != 0),
+    "nonzero": ("qtyNonzero", lambda quantity: quantity == 0),
+}
+
+# Rule 11: the amount each cash_sign refuses, and the code, judged on a non-zero cash only: a zero amount is never refused
+# by its sign (TX-S-056 keeps a DIVIDEND or INTEREST netting to zero valid). "zero" is rule 8's business (cash_mode
+# "forbidden"); "nonzero" and "free" refuse no non-zero amount.
+CASH_SIGN_REFUSALS = {
+    "negative": ("cashSignNegative", lambda amount: amount > 0),
+    "positive": ("cashSignPositive", lambda amount: amount < 0),
+}
+
+# P6 — a decision pending with the developer (2026-10-16): should rules 5-11, which with rule 12 are all the UPDATE path
+# runs (``batch_edits._validate_updated_final_state``), enforce the stricter modes TX_TYPE_METADATA gives TRANSFER,
+# FX_CONVERSION and CASH_TRANSFER, as CREATE already does with its create-only rules 2, 3 and 3b? Until it is taken they
+# keep the behaviour of before W-B36: W-B36 reads the table with these four cases as explicit exceptions.
+# Key: the (type, field) of TX_TYPE_METADATA that rules 5-11 do not enforce; value: the case, and what they do instead.
+# Case 4 moves no cell of TX-S-095 (rule 11 judges a non-zero cash only, where "nonzero" has nothing to refuse): only its
+# guard sees it. An entry leaves only with P6, and its guard (TX-S-104 … TX-S-107) flips with it.
+_P6_PENDING: dict[tuple[TransactionType, str], str] = {
+    (TransactionType.TRANSFER, "cash_mode"): "case 1: 'forbidden', yet rule 8 refuses cash on ADJUSTMENT only, no cashForbidden",
+    (TransactionType.FX_CONVERSION, "quantity_sign"): "case 2: 'zero', yet rule 10 leaves FX_CONVERSION out of qtyZero",
+    (TransactionType.TRANSFER, "quantity_sign"): "case 3: 'nonzero', yet rule 10 checks ADJUSTMENT only, no qtyNonzero",
+    (TransactionType.FX_CONVERSION, "cash_sign"): "case 4: 'nonzero', yet a zero cash gets no code from rules 5-11",
+    (TransactionType.CASH_TRANSFER, "cash_sign"): "case 4: 'nonzero', yet a zero cash gets no code from rules 5-11",
+}
+
+# TX-S-108: one violation of each code of rules 5-11 on today's table. The cell, otherwise valid, then the code, the
+# message template (the text ``multipleBusinessRuleErrors`` packs), the rendered message and the params it gets today.
+VISIBLE_RULE_MESSAGES = [
+    pytest.param({"tx_type": TransactionType.BUY, "quantity": Decimal("1"), "cash": CASH_EUR_MINUS_100}, ("assetRequired", "{type} requires asset_id", "BUY requires asset_id", {"type": "BUY"}), id="assetRequired"),
+    pytest.param({"tx_type": TransactionType.DEPOSIT}, ("cashRequired", "{type} requires cash (amount + currency)", "DEPOSIT requires cash (amount + currency)", {"type": "DEPOSIT"}), id="cashRequired"),
+    pytest.param(
+        {"tx_type": TransactionType.ADJUSTMENT, "asset_id": 1, "quantity": Decimal("1"), "cash": CASH_EUR_PLUS_100},
+        ("cashForbidden", "ADJUSTMENT should not have cash movement", "ADJUSTMENT should not have cash movement", {"type": "ADJUSTMENT"}),
+        id="cashForbidden",
+    ),
+    pytest.param(
+        {"tx_type": TransactionType.BUY, "asset_id": 1, "quantity": Decimal("1"), "cash": CASH_EUR_MINUS_100, "asset_event_id": 1},
+        ("eventTypeIncompatible", "{type} cannot be linked to an asset_event (only {allowed} can)", "BUY cannot be linked to an asset_event (only ADJUSTMENT, DIVIDEND, INTEREST can)", {"type": "BUY", "allowed": "ADJUSTMENT, DIVIDEND, INTEREST"}),
+        id="eventTypeIncompatible",
+    ),
+    pytest.param(
+        {"tx_type": TransactionType.INTEREST, "cash": CASH_EUR_PLUS_100, "asset_event_id": 1},
+        ("eventRequiresAsset", "asset_event_id requires asset_id", "asset_event_id requires asset_id", {"type": "INTEREST"}),
+        id="eventRequiresAsset",
+    ),
+    pytest.param({"tx_type": TransactionType.BUY, "asset_id": 1, "quantity": Decimal("0"), "cash": CASH_EUR_MINUS_100}, ("qtyPositive", "BUY requires quantity > 0", "BUY requires quantity > 0", {"type": "BUY"}), id="qtyPositive"),
+    pytest.param({"tx_type": TransactionType.SELL, "asset_id": 1, "quantity": Decimal("1"), "cash": CASH_EUR_PLUS_100}, ("qtyNegative", "SELL requires quantity < 0", "SELL requires quantity < 0", {"type": "SELL"}), id="qtyNegative"),
+    pytest.param({"tx_type": TransactionType.DIVIDEND, "asset_id": 1, "quantity": Decimal("1"), "cash": CASH_EUR_PLUS_100}, ("qtyZero", "{type} requires quantity = 0", "DIVIDEND requires quantity = 0", {"type": "DIVIDEND"}), id="qtyZero"),
+    pytest.param({"tx_type": TransactionType.ADJUSTMENT, "asset_id": 1, "quantity": Decimal("0")}, ("qtyNonzero", "ADJUSTMENT requires quantity != 0", "ADJUSTMENT requires quantity != 0", {"type": "ADJUSTMENT"}), id="qtyNonzero"),
+    pytest.param({"tx_type": TransactionType.WITHDRAWAL, "cash": CASH_EUR_PLUS_100}, ("cashSignNegative", "{type} requires cash.amount < 0", "WITHDRAWAL requires cash.amount < 0", {"type": "WITHDRAWAL"}), id="cashSignNegative"),
+    pytest.param({"tx_type": TransactionType.DEPOSIT, "cash": CASH_EUR_MINUS_100}, ("cashSignPositive", "{type} requires cash.amount > 0", "DEPOSIT requires cash.amount > 0", {"type": "DEPOSIT"}), id="cashSignPositive"),
+]
+
+
+def _run_rules(*, tx_type: TransactionType, asset_id: Optional[int] = None, quantity: Decimal = Decimal("0"), cash: Optional[Currency] = None, asset_event_id: Optional[int] = None) -> list[PydanticCustomError]:
+    """``validate_transaction_business_rules`` on this final state, with cost_basis_mode=None: rule 12 (W-B31's) is silent."""
+    return validate_transaction_business_rules(tx_type=tx_type, asset_id=asset_id, quantity=quantity, cash=cash, asset_event_id=asset_event_id, cost_basis_mode=None)
+
+
+def _returned_violations(codes: Optional[frozenset[str]], **cell) -> list[tuple[str, dict]]:
+    """The (code, params) ``validate_transaction_business_rules`` returns for ``cell``, in its order, kept to ``codes``.
+
+    ``codes=None`` keeps every code but rule 12's ``costBasisModeIncompatible`` (W-B31's): a code a rule would add shows.
+    """
+    errors = _run_rules(**cell)
+    if codes is None:
+        return [(error.type, dict(error.context or {})) for error in errors if error.type != COST_BASIS_MODE_INCOMPATIBLE]
+    return [(error.type, dict(error.context or {})) for error in errors if error.type in codes]
+
+
+def _metadata_mode(tx_type: TransactionType, field: str) -> Optional[str]:
+    """What ``TX_TYPE_METADATA``, read when called, says of ``field`` for ``tx_type``; ``None`` where P6 keeps it out of rules 5-11."""
+    return None if (tx_type, field) in _P6_PENDING else getattr(TX_TYPE_METADATA[tx_type], field)
+
+
+def _metadata_event_allowed() -> str:
+    """The ``allowed`` param of eventTypeIncompatible as ``TX_TYPE_METADATA`` has it: its event-compatible types, sorted, joined."""
+    return ", ".join(sorted(tx_type.value for tx_type, entry in TX_TYPE_METADATA.items() if entry.event_compatible))
+
+
+def _metadata_violations(codes: Optional[frozenset[str]], *, tx_type: TransactionType, asset_id: Optional[int] = None, quantity: Decimal = Decimal("0"), cash: Optional[Currency] = None, asset_event_id: Optional[int] = None) -> list[tuple[str, dict]]:
+    """The (code, params) of rules 5-11 that ``TX_TYPE_METADATA``, read when called, implies for this final state.
+
+    Computed here from the table with the formulas of W-B36, not imported: the expectation must not take the word of the
+    code under test.
+
+    - rule 5, assetRequired: asset_mode ``required`` and no asset (``forbidden`` is the create-only rules 3, 3b, 4's);
+    - rule 7, cashRequired: cash_mode ``required`` and no cash (a zero cash is a cash);
+    - rule 8, cashForbidden: cash_mode ``forbidden`` and a non-zero cash;
+    - rule 9, on an asset event: eventTypeIncompatible for a type not ``event_compatible``, ``allowed`` listing those that
+      are; eventRequiresAsset without an asset, whatever the type;
+    - rules 10 and 11: ``QUANTITY_SIGN_REFUSALS`` by quantity_sign, ``CASH_SIGN_REFUSALS`` by cash_sign on a non-zero cash;
+
+    less the P6 cases (``_P6_PENDING``). Params are ``{"type": <type>}``, plus ``allowed`` for eventTypeIncompatible. Kept
+    to ``codes``; ``None`` keeps them all.
+    """
+    params = {"type": tx_type.value}
+    cash_mode = _metadata_mode(tx_type, "cash_mode")
+    nonzero_cash = cash is not None and cash.amount != 0
+    violations: list[tuple[str, dict]] = []
+    if _metadata_mode(tx_type, "asset_mode") == "required" and asset_id is None:
+        violations.append(("assetRequired", dict(params)))
+    if cash_mode == "required" and cash is None:
+        violations.append(("cashRequired", dict(params)))
+    if cash_mode == "forbidden" and nonzero_cash:
+        violations.append(("cashForbidden", dict(params)))
+    if asset_event_id is not None and not TX_TYPE_METADATA[tx_type].event_compatible:
+        violations.append(("eventTypeIncompatible", {**params, "allowed": _metadata_event_allowed()}))
+    if asset_event_id is not None and asset_id is None:
+        violations.append(("eventRequiresAsset", dict(params)))
+    quantity_refusal = QUANTITY_SIGN_REFUSALS.get(_metadata_mode(tx_type, "quantity_sign"))
+    if quantity_refusal and quantity_refusal[1](quantity):
+        violations.append((quantity_refusal[0], dict(params)))
+    cash_refusal = CASH_SIGN_REFUSALS.get(_metadata_mode(tx_type, "cash_sign"))
+    if nonzero_cash and cash_refusal and cash_refusal[1](cash.amount):
+        violations.append((cash_refusal[0], dict(params)))
+    return [violation for violation in violations if codes is None or violation[0] in codes]
+
+
+def _sorted_violations(violations: list[tuple[str, dict]]) -> list[tuple[str, dict]]:
+    """``violations`` in a fixed order, so two lists compare as multisets: the order is not the subject, a duplicate is."""
+    return sorted(violations, key=lambda violation: (violation[0], sorted(violation[1].items())))
+
+
+def _metadata_expects(codes: Optional[frozenset[str]], cells: dict[str, dict]) -> dict[str, list[tuple[str, dict]]]:
+    """``_metadata_violations`` of every labelled cell: what the table, as it is when called, implies."""
+    return {label: _metadata_violations(codes, **cell) for label, cell in cells.items()}
+
+
+def _rules_return(codes: Optional[frozenset[str]], cells: dict[str, dict]) -> dict[str, list[tuple[str, dict]]]:
+    """``_returned_violations`` of every labelled cell: what the function under test answers."""
+    return {label: _returned_violations(codes, **cell) for label, cell in cells.items()}
+
+
+class TestRules5To11FollowMetadata:
+    """Rules 5-11 of ``validate_transaction_business_rules`` against ``TX_TYPE_METADATA`` (W-B36).
+
+    Before W-B36 they were hand-written copies of the table: the types that want an asset (rule 5, ``asset_mode``) and a
+    cash (7, ``cash_mode``), the cash refused to ADJUSTMENT (8, ``cash_mode`` ``forbidden``), the types an asset event may
+    link (9, ``event_compatible``, copied once more as ``EVENT_COMPATIBLE_TYPES``), the quantity and cash signs (10 and 11,
+    ``quantity_sign`` and ``cash_sign``). Since W-B36 they read the table when they run, keeping the four cases where the
+    table is stricter than the rules as explicit exceptions until P6 (``_P6_PENDING``, ``TestRules5To11P6Pending``).
+
+    - TX-S-095: parity guard, green before W-B36 (the copies matched the table, less the P6 cases) and since.
+    - TX-S-096 … TX-S-103: red before W-B36, now its guards. One entry of ``TX_TYPE_METADATA`` is replaced for one test
+      and the rule must follow it; a hand-written copy never reads the table, nor would a copy taken from it at import
+      time. Each checks first that the real table and the replaced one disagree on its cells (``today`` / ``expected``),
+      and keeps only the codes of its rule: a rule that stopped reading the table would answer ``today`` again.
+
+    Pure: no database, no server. The only module state touched is one ``TX_TYPE_METADATA`` entry per red, through
+    ``monkeypatch`` (``_replace_metadata_entry``), which puts the original back.
+    """
+
+    def test_rules_5_11_match_metadata_on_every_cell(self):
+        """TX-S-095: rules 5-11 return exactly what TX_TYPE_METADATA implies, less the P6 cases, on every cell.
+
+        Every type × asset (none, 1) × cash (none, EUR 0, +100, -100) × quantity (-1, 0, 1) × asset event (none, 1), with
+        cost_basis_mode=None: the (code, params) the function returns against those ``_metadata_violations`` derives from
+        the table. Guard: green before W-B36 because the hand-written rules matched the table once the four P6 cases were
+        set aside, and since because the rules read it. Every code but rule 12's is compared, so a code a rule would add,
+        or return twice, shows; the order of the list is not compared. One table, one assertion: a failure shows every
+        wrong cell at once.
+        """
+        returned: dict[str, list[tuple[str, dict]]] = {}
+        expected: dict[str, list[tuple[str, dict]]] = {}
+        for tx_type, asset_id, (cash_label, cash), quantity, asset_event_id in product(TransactionType, PARITY_ASSET_IDS, PARITY_CASHES.items(), PARITY_QUANTITIES, PARITY_EVENT_IDS):
+            cell = {"tx_type": tx_type, "asset_id": asset_id, "quantity": quantity, "cash": cash, "asset_event_id": asset_event_id}
+            label = f"{tx_type.value} asset={asset_id} cash={cash_label} qty={quantity} event={asset_event_id}"
+            returned[label] = _sorted_violations(_returned_violations(None, **cell))
+            expected[label] = _sorted_violations(_metadata_violations(None, **cell))
+
+        wrong = {label: f"returned {returned[label]}, TX_TYPE_METADATA says {expected[label]}" for label in expected if returned[label] != expected[label]}
+        assert returned == expected, f"Rules 5-11 must return what TX_TYPE_METADATA implies, less the P6 cases (_P6_PENDING): {len(wrong)} of {len(expected)} cells differ: {wrong}"
+
+    def test_rule5_asset_required_follows_metadata(self, monkeypatch):
+        """TX-S-096: red before W-B36, now its guard. A BUY made ``asset_mode="optional"`` in TX_TYPE_METADATA gets no assetRequired without asset.
+
+        Before W-B36 rule 5 listed the asset-required types by hand, BUY among them, and refused the BUY whatever the
+        table said. Red again means rule 5 stopped reading the table. The BUY is otherwise valid (quantity 1, cash
+        -100 EUR) and only rule 5's code is kept.
+        """
+        cells = {"BUY without asset": {"tx_type": TransactionType.BUY, "quantity": Decimal("1"), "cash": CASH_EUR_MINUS_100}}
+        today = {"BUY without asset": [("assetRequired", {"type": "BUY"})]}
+        expected = {"BUY without asset": []}
+        assert _metadata_expects(RULE_CODES[5], cells) == today, "scaffold: today's table already lets this BUY through rule 5, so the replacement below proves nothing"
+        _replace_metadata_entry(monkeypatch, TransactionType.BUY, asset_mode="optional")
+        assert _metadata_expects(RULE_CODES[5], cells) == expected, "scaffold: the replaced BUY entry still wants an asset"
+
+        returned = _rules_return(RULE_CODES[5], cells)
+
+        assert returned == expected, f"W-B36: with TX_TYPE_METADATA[BUY].asset_mode = 'optional', rule 5 must not refuse a BUY without asset_id; it returned {returned}: rule 5 no longer reads the table"
+
+    def test_rule7_cash_required_follows_metadata(self, monkeypatch):
+        """TX-S-097: red before W-B36, now its guard. A DEPOSIT made ``cash_mode="optional"`` in TX_TYPE_METADATA gets no cashRequired without cash.
+
+        Before W-B36 rule 7 listed the cash-required types by hand, DEPOSIT among them, and refused the DEPOSIT whatever
+        the table said. Red again means rule 7 stopped reading the table. The DEPOSIT is otherwise valid (no asset,
+        quantity 0) and only rule 7's code is kept.
+        """
+        cells = {"DEPOSIT without cash": {"tx_type": TransactionType.DEPOSIT}}
+        today = {"DEPOSIT without cash": [("cashRequired", {"type": "DEPOSIT"})]}
+        expected = {"DEPOSIT without cash": []}
+        assert _metadata_expects(RULE_CODES[7], cells) == today, "scaffold: today's table already lets this DEPOSIT through rule 7, so the replacement below proves nothing"
+        _replace_metadata_entry(monkeypatch, TransactionType.DEPOSIT, cash_mode="optional")
+        assert _metadata_expects(RULE_CODES[7], cells) == expected, "scaffold: the replaced DEPOSIT entry still wants a cash"
+
+        returned = _rules_return(RULE_CODES[7], cells)
+
+        assert returned == expected, f"W-B36: with TX_TYPE_METADATA[DEPOSIT].cash_mode = 'optional', rule 7 must not refuse a DEPOSIT without cash; it returned {returned}: rule 7 no longer reads the table"
+
+    def test_rule8_cash_forbidden_follows_metadata(self, monkeypatch):
+        """TX-S-098: red before W-B36, now its guard. An ADJUSTMENT made ``cash_mode="optional"`` in TX_TYPE_METADATA gets no cashForbidden for its cash.
+
+        Before W-B36 rule 8 refused cash on ADJUSTMENT by name, whatever the table said. Red again means rule 8 stopped
+        reading the table. The ADJUSTMENT is otherwise valid (asset, quantity 1) with 100 EUR of cash, and only rule 8's
+        code is kept.
+        """
+        cells = {"ADJUSTMENT with EUR +100": {"tx_type": TransactionType.ADJUSTMENT, "asset_id": 1, "quantity": Decimal("1"), "cash": CASH_EUR_PLUS_100}}
+        today = {"ADJUSTMENT with EUR +100": [("cashForbidden", {"type": "ADJUSTMENT"})]}
+        expected = {"ADJUSTMENT with EUR +100": []}
+        assert _metadata_expects(RULE_CODES[8], cells) == today, "scaffold: today's table already lets this ADJUSTMENT keep its cash, so the replacement below proves nothing"
+        _replace_metadata_entry(monkeypatch, TransactionType.ADJUSTMENT, cash_mode="optional")
+        assert _metadata_expects(RULE_CODES[8], cells) == expected, "scaffold: the replaced ADJUSTMENT entry still forbids its cash"
+
+        returned = _rules_return(RULE_CODES[8], cells)
+
+        assert returned == expected, f"W-B36: with TX_TYPE_METADATA[ADJUSTMENT].cash_mode = 'optional', rule 8 must not refuse an ADJUSTMENT its cash; it returned {returned}: rule 8 no longer reads the table"
+
+    def test_rule9_event_admitted_where_metadata_makes_type_compatible(self, monkeypatch):
+        """TX-S-099: red before W-B36, now its guard. A DEPOSIT made ``event_compatible=True`` in TX_TYPE_METADATA may be linked to an asset event.
+
+        Before W-B36 rule 9 asked ``EVENT_COMPATIBLE_TYPES``, a hand-written copy of the table since removed, and refused
+        the DEPOSIT with eventTypeIncompatible whatever the table said. Red again means rule 9 stopped reading the table.
+        The DEPOSIT has an asset, so eventRequiresAsset has nothing to say (the asset itself is the create-only rule 4's
+        business), and only rule 9's codes are kept.
+        """
+        cells = {"DEPOSIT linked to an event": {"tx_type": TransactionType.DEPOSIT, "asset_id": 1, "cash": CASH_EUR_PLUS_100, "asset_event_id": 1}}
+        today = {"DEPOSIT linked to an event": [("eventTypeIncompatible", {"type": "DEPOSIT", "allowed": "ADJUSTMENT, DIVIDEND, INTEREST"})]}
+        expected = {"DEPOSIT linked to an event": []}
+        assert _metadata_expects(RULE_CODES[9], cells) == today, "scaffold: today's table already lets this DEPOSIT link an asset event, so the replacement below proves nothing"
+        _replace_metadata_entry(monkeypatch, TransactionType.DEPOSIT, event_compatible=True)
+        assert _metadata_expects(RULE_CODES[9], cells) == expected, "scaffold: the replaced DEPOSIT entry is still not event-compatible"
+
+        returned = _rules_return(RULE_CODES[9], cells)
+
+        assert returned == expected, f"W-B36: with TX_TYPE_METADATA[DEPOSIT].event_compatible = True, rule 9 must let a DEPOSIT with an asset link an asset event; it returned {returned}: rule 9 no longer reads the table"
+
+    def test_rule9_event_refused_where_metadata_makes_type_incompatible(self, monkeypatch):
+        """TX-S-100: red before W-B36, now its guard. An ADJUSTMENT made ``event_compatible=False`` is refused an asset event, and ``allowed`` drops it.
+
+        Before W-B36 ``EVENT_COMPATIBLE_TYPES`` held ADJUSTMENT whatever the table said, so rule 9 returned nothing (and its
+        ``allowed`` listed ADJUSTMENT). Red again means rule 9 stopped reading the table. The ADJUSTMENT is otherwise valid
+        (asset, quantity 1, no cash) and only rule 9's codes are kept.
+        """
+        cells = {"ADJUSTMENT linked to an event": {"tx_type": TransactionType.ADJUSTMENT, "asset_id": 1, "quantity": Decimal("1"), "asset_event_id": 1}}
+        today = {"ADJUSTMENT linked to an event": []}
+        expected = {"ADJUSTMENT linked to an event": [("eventTypeIncompatible", {"type": "ADJUSTMENT", "allowed": "DIVIDEND, INTEREST"})]}
+        assert _metadata_expects(RULE_CODES[9], cells) == today, "scaffold: today's table already refuses this ADJUSTMENT its asset event, so the replacement below proves nothing"
+        _replace_metadata_entry(monkeypatch, TransactionType.ADJUSTMENT, event_compatible=False)
+        assert _metadata_expects(RULE_CODES[9], cells) == expected, "scaffold: the replaced ADJUSTMENT entry is still event-compatible, or the table's allowed list still names it"
+
+        returned = _rules_return(RULE_CODES[9], cells)
+
+        assert returned == expected, f"W-B36: with TX_TYPE_METADATA[ADJUSTMENT].event_compatible = False, rule 9 must refuse an ADJUSTMENT linked to an asset event, allowed 'DIVIDEND, INTEREST'; it returned {returned}: rule 9 no longer reads the table"
+
+    def test_rule10_positive_negative_follow_metadata(self, monkeypatch):
+        """TX-S-101: red before W-B36, now its guard. A BUY made ``quantity_sign="negative"`` in TX_TYPE_METADATA wants a quantity < 0.
+
+        Before W-B36 rule 10 wanted quantity > 0 from BUY by name, whatever the table said: -1 got qtyPositive, 1 nothing.
+        Red again means rule 10 stopped reading the table. The BUY is otherwise valid (asset, cash -100 EUR) and only
+        rule 10's codes are kept.
+        """
+        cells = {
+            "BUY quantity -1": {"tx_type": TransactionType.BUY, "asset_id": 1, "quantity": Decimal("-1"), "cash": CASH_EUR_MINUS_100},
+            "BUY quantity 1": {"tx_type": TransactionType.BUY, "asset_id": 1, "quantity": Decimal("1"), "cash": CASH_EUR_MINUS_100},
+        }
+        today = {"BUY quantity -1": [("qtyPositive", {"type": "BUY"})], "BUY quantity 1": []}
+        expected = {"BUY quantity -1": [], "BUY quantity 1": [("qtyNegative", {"type": "BUY"})]}
+        assert _metadata_expects(RULE_CODES[10], cells) == today, "scaffold: today's table does not want quantity > 0 from BUY, so the replacement below proves nothing"
+        _replace_metadata_entry(monkeypatch, TransactionType.BUY, quantity_sign="negative")
+        assert _metadata_expects(RULE_CODES[10], cells) == expected, "scaffold: the replaced BUY entry does not want quantity < 0"
+
+        returned = _rules_return(RULE_CODES[10], cells)
+
+        assert returned == expected, f"W-B36: with TX_TYPE_METADATA[BUY].quantity_sign = 'negative', rule 10 must admit BUY quantity -1 and refuse 1 (qtyNegative); it returned {returned}: rule 10 no longer reads the table"
+
+    def test_rule10_zero_nonzero_follow_metadata(self, monkeypatch):
+        """TX-S-102: red before W-B36, now its guard. An ADJUSTMENT made ``quantity_sign="zero"`` in TX_TYPE_METADATA wants a quantity = 0.
+
+        The other half of rule 10, where the P6 cases 2 and 3 live: ``zero`` and ``nonzero`` must come from the table too,
+        not only ``positive`` and ``negative`` (TX-S-101). Before W-B36 rule 10 wanted quantity != 0 from ADJUSTMENT by
+        name, whatever the table said: 0 got qtyNonzero, 1 nothing. Red again means rule 10 stopped reading the table.
+        Only rule 10's codes are kept.
+        """
+        cells = {
+            "ADJUSTMENT quantity 0": {"tx_type": TransactionType.ADJUSTMENT, "asset_id": 1, "quantity": Decimal("0")},
+            "ADJUSTMENT quantity 1": {"tx_type": TransactionType.ADJUSTMENT, "asset_id": 1, "quantity": Decimal("1")},
+        }
+        today = {"ADJUSTMENT quantity 0": [("qtyNonzero", {"type": "ADJUSTMENT"})], "ADJUSTMENT quantity 1": []}
+        expected = {"ADJUSTMENT quantity 0": [], "ADJUSTMENT quantity 1": [("qtyZero", {"type": "ADJUSTMENT"})]}
+        assert _metadata_expects(RULE_CODES[10], cells) == today, "scaffold: today's table does not want quantity != 0 from ADJUSTMENT, so the replacement below proves nothing"
+        _replace_metadata_entry(monkeypatch, TransactionType.ADJUSTMENT, quantity_sign="zero")
+        assert _metadata_expects(RULE_CODES[10], cells) == expected, "scaffold: the replaced ADJUSTMENT entry does not want quantity = 0"
+
+        returned = _rules_return(RULE_CODES[10], cells)
+
+        assert returned == expected, f"W-B36: with TX_TYPE_METADATA[ADJUSTMENT].quantity_sign = 'zero', rule 10 must admit ADJUSTMENT quantity 0 and refuse 1 (qtyZero); it returned {returned}: rule 10 no longer reads the table"
+
+    def test_rule11_cash_sign_follows_metadata(self, monkeypatch):
+        """TX-S-103: red before W-B36, now its guard. A DEPOSIT made ``cash_sign="negative"`` in TX_TYPE_METADATA wants a cash amount < 0.
+
+        Before W-B36 rule 11 wanted a positive amount from DEPOSIT by name, whatever the table said: +100 EUR passed,
+        -100 EUR got cashSignPositive. Red again means rule 11 stopped reading the table. The DEPOSIT is otherwise valid
+        (no asset, quantity 0) and only rule 11's codes are kept.
+        """
+        cells = {
+            "DEPOSIT EUR +100": {"tx_type": TransactionType.DEPOSIT, "cash": CASH_EUR_PLUS_100},
+            "DEPOSIT EUR -100": {"tx_type": TransactionType.DEPOSIT, "cash": CASH_EUR_MINUS_100},
+        }
+        today = {"DEPOSIT EUR +100": [], "DEPOSIT EUR -100": [("cashSignPositive", {"type": "DEPOSIT"})]}
+        expected = {"DEPOSIT EUR +100": [("cashSignNegative", {"type": "DEPOSIT"})], "DEPOSIT EUR -100": []}
+        assert _metadata_expects(RULE_CODES[11], cells) == today, "scaffold: today's table does not want a positive cash from DEPOSIT, so the replacement below proves nothing"
+        _replace_metadata_entry(monkeypatch, TransactionType.DEPOSIT, cash_sign="negative")
+        assert _metadata_expects(RULE_CODES[11], cells) == expected, "scaffold: the replaced DEPOSIT entry does not want a negative cash"
+
+        returned = _rules_return(RULE_CODES[11], cells)
+
+        assert returned == expected, f"W-B36: with TX_TYPE_METADATA[DEPOSIT].cash_sign = 'negative', rule 11 must refuse DEPOSIT +100 EUR (cashSignNegative) and admit -100 EUR; it returned {returned}: rule 11 no longer reads the table"
+
+
+class TestRules5To11P6Pending:
+    """The four cases where ``TX_TYPE_METADATA`` is stricter than rules 5-11 today: P6, a decision pending with the developer.
+
+    These guards pin a pending developer decision (P6, 2026-10-16): should the UPDATE path, which runs rules 5-12 alone,
+    enforce the table's stricter modes as CREATE does with its create-only rules 2, 3 and 3b? Until it is taken the
+    behaviour of before W-B36 stays: W-B36 keeps these cases as explicit exceptions. Green before and since W-B36; each
+    flips only with P6, together with its entry in ``_P6_PENDING``. Each checks first that the table still says the
+    stricter thing and that the case is still pending. Every cell is otherwise valid for rules 5-11, so nothing at all
+    comes back.
+    """
+
+    def test_p6_case1_transfer_cash_not_refused(self):
+        """TX-S-104: P6 case 1. A TRANSFER with 100 EUR of cash gets no cashForbidden, though TX_TYPE_METADATA forbids its cash.
+
+        Pins a pending developer decision (P6, 2026-10-16); it must flip only with it. Rule 8 refuses cash on ADJUSTMENT
+        only. CREATE refuses this TRANSFER anyway (create-only rule 2); an UPDATE lets it through.
+        """
+        assert TX_TYPE_METADATA[TransactionType.TRANSFER].cash_mode == "forbidden", "scaffold: TX_TYPE_METADATA no longer forbids cash on TRANSFER: P6 case 1 is gone, retire this guard"
+        assert (TransactionType.TRANSFER, "cash_mode") in _P6_PENDING, "scaffold: P6 case 1 has left _P6_PENDING, so the decision is taken: flip this guard with it"
+
+        returned = _returned_violations(None, tx_type=TransactionType.TRANSFER, asset_id=1, quantity=Decimal("1"), cash=CASH_EUR_PLUS_100)
+
+        assert returned == [], f"P6 case 1 is pending: until the developer decides, rules 5-11 must keep admitting a TRANSFER with cash (no cashForbidden); got {returned}"
+
+    def test_p6_case2_fx_conversion_quantity_not_refused(self):
+        """TX-S-105: P6 case 2. An FX_CONVERSION with quantity 1 gets no qtyZero, though TX_TYPE_METADATA gives it quantity_sign ``zero``.
+
+        Pins a pending developer decision (P6, 2026-10-16); it must flip only with it. Rule 10 leaves FX_CONVERSION out of
+        qtyZero. CREATE refuses it anyway (create-only rule 3, fxConversionQtyZero); an UPDATE lets it through.
+        """
+        assert TX_TYPE_METADATA[TransactionType.FX_CONVERSION].quantity_sign == "zero", "scaffold: TX_TYPE_METADATA no longer wants quantity = 0 from FX_CONVERSION: P6 case 2 is gone, retire this guard"
+        assert (TransactionType.FX_CONVERSION, "quantity_sign") in _P6_PENDING, "scaffold: P6 case 2 has left _P6_PENDING, so the decision is taken: flip this guard with it"
+
+        returned = _returned_violations(None, tx_type=TransactionType.FX_CONVERSION, quantity=Decimal("1"), cash=CASH_EUR_PLUS_100)
+
+        assert returned == [], f"P6 case 2 is pending: until the developer decides, rules 5-11 must keep admitting an FX_CONVERSION with a quantity (no qtyZero); got {returned}"
+
+    def test_p6_case3_transfer_zero_quantity_not_refused(self):
+        """TX-S-106: P6 case 3. A TRANSFER with quantity 0 gets no qtyNonzero, though TX_TYPE_METADATA gives it quantity_sign ``nonzero``.
+
+        Pins a pending developer decision (P6, 2026-10-16); it must flip only with it. Rule 10 wants quantity != 0 from
+        ADJUSTMENT only. CREATE refuses this TRANSFER anyway (create-only rule 2); an UPDATE lets it through.
+        """
+        assert TX_TYPE_METADATA[TransactionType.TRANSFER].quantity_sign == "nonzero", "scaffold: TX_TYPE_METADATA no longer wants quantity != 0 from TRANSFER: P6 case 3 is gone, retire this guard"
+        assert (TransactionType.TRANSFER, "quantity_sign") in _P6_PENDING, "scaffold: P6 case 3 has left _P6_PENDING, so the decision is taken: flip this guard with it"
+
+        returned = _returned_violations(None, tx_type=TransactionType.TRANSFER, asset_id=1, quantity=Decimal("0"))
+
+        assert returned == [], f"P6 case 3 is pending: until the developer decides, rules 5-11 must keep admitting a TRANSFER with quantity 0 (no qtyNonzero); got {returned}"
+
+    def test_p6_case4_zero_cash_not_refused_on_fx_conversion_and_cash_transfer(self):
+        """TX-S-107: P6 case 4. FX_CONVERSION and CASH_TRANSFER with a zero cash get no code, though their cash_sign is ``nonzero``.
+
+        Pins a pending developer decision (P6, 2026-10-16); it must flip only with it. Rule 11 judges a non-zero cash only
+        and rule 7 wants a cash, which a zero cash is: none of rules 5-11 refuses it. CREATE refuses both anyway (create-only
+        rules 3 and 3b: fxConversionCashRequired, cashRequired); an UPDATE lets them through. The parity table (TX-S-095)
+        cannot see this case: only this guard does.
+        """
+        types = (TransactionType.FX_CONVERSION, TransactionType.CASH_TRANSFER)
+        not_nonzero = [tx_type.value for tx_type in types if TX_TYPE_METADATA[tx_type].cash_sign != "nonzero"]
+        assert not not_nonzero, f"scaffold: TX_TYPE_METADATA no longer gives {not_nonzero} cash_sign 'nonzero': that part of P6 case 4 is gone, retire it here"
+        not_pending = [tx_type.value for tx_type in types if (tx_type, "cash_sign") not in _P6_PENDING]
+        assert not not_pending, f"scaffold: P6 case 4 has left _P6_PENDING for {not_pending}, so the decision is taken: flip this guard with it"
+
+        returned = {tx_type.value: _returned_violations(None, tx_type=tx_type, cash=CASH_EUR_ZERO) for tx_type in types}
+
+        assert returned == {"FX_CONVERSION": [], "CASH_TRANSFER": []}, f"P6 case 4 is pending: until the developer decides, rules 5-11 must keep admitting a zero cash on FX_CONVERSION and CASH_TRANSFER (no code at all); got {returned}"
+
+
+class TestRules5To11VisibleMessages:
+    """What the user reads of rules 5-11: code, message and params, one violation of each code (W-B36).
+
+    Guard, green before and since W-B36: W-B36 changed where the rules find their types, not what they tell the user
+    (the developer's decision, 2026-10-16: the texts stay identical). The user gets one of two texts. A single violation
+    is raised as it is and rendered, ``message()``; two or more are packed by ``TXCreateItem`` into
+    ``multipleBusinessRuleErrors`` with each one's ``message_template``, unrendered, which batch validation
+    (``TXValidationIssue.error``) and broker import (``BRIMValidationIssue.message``) pass on. TX-S-108 pins both texts
+    of every code, TX-S-109 the packing itself. The four messages written before W-B36 with their type in the text
+    (qtyPositive "BUY requires quantity > 0", qtyNegative "SELL ...", qtyNonzero and cashForbidden "ADJUSTMENT ...")
+    keep it in the template too, a text per type rather than ``{type}``; the other codes keep their ``{type}``
+    templates. A packed ``{type}`` is a known leak, sent to the backlog the same day: its cure, and nothing else, flips
+    these pins.
+    """
+
+    @pytest.mark.parametrize(("cell", "violation"), VISIBLE_RULE_MESSAGES)
+    def test_rule_message_unchanged(self, cell, violation):
+        """TX-S-108: a cell otherwise valid on today's table gets exactly one violation, with this code, template, message and params."""
+        returned = [(error.type, error.message_template, error.message(), error.context) for error in _run_rules(**cell)]
+
+        assert returned == [violation], f"Rules 5-11 must keep the code, the message template, the rendered message and the params the user gets: expected {[violation]}, got {returned}"
+
+    def test_packed_templates_unchanged(self):
+        """TX-S-109: two violations on one create reach the user packed, each with its template unrendered, as today.
+
+        A BUY with no asset and quantity 0, otherwise valid: ``TXCreateItem`` raises one ``multipleBusinessRuleErrors``
+        whose ``ctx.errors`` holds the code, the ``message_template`` and the params of each violation, the text batch
+        validation and broker import show. One ``{type}`` template (assetRequired, the known leak) and one text written
+        per type (qtyPositive) must come out as they do today. Guard, green before and since W-B36; the order of the list
+        is not the subject.
+        """
+        with pytest.raises(ValidationError) as exc_info:
+            TXCreateItem(broker_id=1, type=TransactionType.BUY, date=date.today(), quantity=Decimal("0"), cash=CASH_EUR_MINUS_100)
+
+        errors = exc_info.value.errors()
+        assert [error["type"] for error in errors] == ["multipleBusinessRuleErrors"], f"A BUY with no asset and quantity 0 must fail on two business rules at once, packed in one multipleBusinessRuleErrors; got {errors}"
+        packed = sorted(errors[0]["ctx"]["errors"], key=lambda entry: entry["code"])
+        expected = [
+            {"code": "assetRequired", "msg": "{type} requires asset_id", "ctx": {"type": "BUY"}},
+            {"code": "qtyPositive", "msg": "BUY requires quantity > 0", "ctx": {"type": "BUY"}},
+        ]
+        assert packed == expected, f"The packed texts must stay as they are today (the developer's decision, 2026-10-16): expected {expected}, got {packed}"

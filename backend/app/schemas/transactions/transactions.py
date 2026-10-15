@@ -31,7 +31,7 @@ from backend.app.schemas.common import (
     SafeDecimal,
     StrictModel,
 )
-from backend.app.schemas.transactions.type_metadata import cost_basis_allowed
+from backend.app.schemas.transactions.type_metadata import cost_basis_allowed, event_compatible, event_compatible_types, get_tx_type_metadata
 from backend.app.utils.datetime_utils import UTCDateTime
 
 # =============================================================================
@@ -39,17 +39,12 @@ from backend.app.utils.datetime_utils import UTCDateTime
 # =============================================================================
 
 
-# Transaction types that can be linked to an AssetEvent.
-# Rationale:
-# - DIVIDEND / INTEREST: direct cash realization of a global payout event
-# - ADJUSTMENT: captures SPLIT / PRICE_ADJUSTMENT asset-level effects
-EVENT_COMPATIBLE_TYPES: frozenset[TransactionType] = frozenset(
-    {
-        TransactionType.DIVIDEND,
-        TransactionType.INTEREST,
-        TransactionType.ADJUSTMENT,
-    }
-)
+# Decision P6 (developer's list, 2026-10-16): TX_TYPE_METADATA is stricter than rules 5-11 on four points. The CREATE
+# path enforces them with its own rules 2, 3 and 3b; an UPDATE runs only rules 5-12, so until the decision they stay
+# unchecked here, as before W-B36: a TRANSFER's cash (case 1), FX_CONVERSION's zero quantity (case 2), TRANSFER's
+# non-zero quantity (case 3), and the "nonzero" cash sign of FX_CONVERSION and CASH_TRANSFER (case 4, not read at all).
+_P6_CASH_FORBIDDEN_UNCHECKED: frozenset[TransactionType] = frozenset({TransactionType.TRANSFER})
+_P6_QUANTITY_SIGN_UNCHECKED: frozenset[TransactionType] = frozenset({TransactionType.FX_CONVERSION, TransactionType.TRANSFER})
 
 
 def validate_tags_list(v) -> Optional[List[str]]:
@@ -104,88 +99,62 @@ def validate_transaction_business_rules(  # noqa: C901 — flat per-rule error c
     Create-only concerns are NOT part of this shared function and remain in
     ``TXCreateItem``: field-level positivity (broker_id / id) and the pairing
     rules 1-4 (link_uuid, TRANSFER/FX_CONVERSION/CASH_TRANSFER shape).
+
+    Rules 5-12 read the type's row of ``TX_TYPE_METADATA`` when they run (W-B31, W-B36): the table the frontend reads
+    too (``GET /transactions/types``). The four points where the table is stricter stay unchecked until decision P6
+    (``_P6_CASH_FORBIDDEN_UNCHECKED``, ``_P6_QUANTITY_SIGN_UNCHECKED``, rule 11).
     """
     t = tx_type.value  # shorthand for error params
     errors: List[PydanticCustomError] = []
     zero = Decimal("0")
+    meta = get_tx_type_metadata(tx_type)  # read now: rules 5-11 follow the table (W-B36), but for the P6 points
 
-    # Rule 5: Asset REQUIRED for BUY, SELL, DIVIDEND, TRANSFER, ADJUSTMENT
-    asset_required_types = {
-        TransactionType.BUY,
-        TransactionType.SELL,
-        TransactionType.DIVIDEND,
-        TransactionType.TRANSFER,
-        TransactionType.ADJUSTMENT,
-    }
-    if tx_type in asset_required_types and not asset_id:
+    # Rule 5: asset required where asset_mode is "required". Rule 6, "optional": nothing to check. "forbidden" is
+    # enforced at create by rules 3, 3b and 4, and an update cannot add an asset (TXUpdateItem has no asset_id).
+    if meta is not None and meta.asset_mode == "required" and not asset_id:
         errors.append(PydanticCustomError("assetRequired", "{type} requires asset_id", {"type": t}))
 
-    # Rule 6: Asset OPTIONAL for INTEREST, FEE, TAX (no validation needed)
+    # Rule 7: cash required where cash_mode is "required".
+    if meta is not None and meta.cash_mode == "required" and cash is None:
+        errors.append(PydanticCustomError("cashRequired", "{type} requires cash (amount + currency)", {"type": t}))
 
-    # Rule 7: Cash REQUIRED for all types except TRANSFER, ADJUSTMENT
-    cash_required_types = {
-        TransactionType.BUY,
-        TransactionType.SELL,
-        TransactionType.DIVIDEND,
-        TransactionType.INTEREST,
-        TransactionType.DEPOSIT,
-        TransactionType.WITHDRAWAL,
-        TransactionType.FEE,
-        TransactionType.TAX,
-        TransactionType.FX_CONVERSION,
-        TransactionType.CASH_TRANSFER,
-    }
-    if tx_type in cash_required_types:
-        if cash is None:
-            errors.append(PydanticCustomError("cashRequired", "{type} requires cash (amount + currency)", {"type": t}))
+    # Rule 8: no cash movement where cash_mode is "forbidden", but on a TRANSFER (P6, case 1).
+    cash_forbidden = meta is not None and meta.cash_mode == "forbidden" and tx_type not in _P6_CASH_FORBIDDEN_UNCHECKED
+    if cash_forbidden and cash is not None and not cash.is_zero():
+        errors.append(PydanticCustomError("cashForbidden", f"{t} should not have cash movement", {"type": t}))
 
-    # Rule 8: ADJUSTMENT should not have cash
-    if tx_type == TransactionType.ADJUSTMENT:
-        if cash is not None and not cash.is_zero():
-            errors.append(PydanticCustomError("cashForbidden", "ADJUSTMENT should not have cash movement", {"type": t}))
-
-    # Rule 9: asset_event_id requires event-compatible type + asset_id present.
+    # Rule 9: asset_event_id requires an event-compatible type (event_compatible) and an asset.
     if asset_event_id is not None:
-        if tx_type not in EVENT_COMPATIBLE_TYPES:
-            allowed = sorted(tt.value for tt in EVENT_COMPATIBLE_TYPES)
+        if not event_compatible(tx_type):
             errors.append(
                 PydanticCustomError(
                     "eventTypeIncompatible",
                     "{type} cannot be linked to an asset_event (only {allowed} can)",
-                    {"type": t, "allowed": ", ".join(allowed)},
+                    {"type": t, "allowed": ", ".join(event_compatible_types())},
                 )
             )
         if asset_id is None:
             errors.append(PydanticCustomError("eventRequiresAsset", "asset_event_id requires asset_id", {"type": t}))
 
-    # Rule 10: Per-type quantity sign enforcement
-    if tx_type == TransactionType.BUY and quantity <= zero:
-        errors.append(PydanticCustomError("qtyPositive", "BUY requires quantity > 0", {"type": t}))
-    if tx_type == TransactionType.SELL and quantity >= zero:
-        errors.append(PydanticCustomError("qtyNegative", "SELL requires quantity < 0", {"type": t}))
-    if (
-        tx_type
-        in (
-            TransactionType.DIVIDEND,
-            TransactionType.INTEREST,
-            TransactionType.DEPOSIT,
-            TransactionType.WITHDRAWAL,
-            TransactionType.FEE,
-            TransactionType.TAX,
-            TransactionType.CASH_TRANSFER,
-        )
-        and quantity != zero
-    ):
+    # Rule 10: the quantity sign quantity_sign asks for, but FX_CONVERSION's "zero" and TRANSFER's "nonzero" (P6, cases 2
+    # and 3).
+    # Messages: the texts of before W-B36, literal per type where they were (multipleBusinessRuleErrors packs the template).
+    quantity_sign = meta.quantity_sign if meta is not None and tx_type not in _P6_QUANTITY_SIGN_UNCHECKED else "free"
+    if quantity_sign == "positive" and quantity <= zero:
+        errors.append(PydanticCustomError("qtyPositive", f"{t} requires quantity > 0", {"type": t}))
+    elif quantity_sign == "negative" and quantity >= zero:
+        errors.append(PydanticCustomError("qtyNegative", f"{t} requires quantity < 0", {"type": t}))
+    elif quantity_sign == "zero" and quantity != zero:
         errors.append(PydanticCustomError("qtyZero", "{type} requires quantity = 0", {"type": t}))
-    if tx_type == TransactionType.ADJUSTMENT and quantity == zero:
-        errors.append(PydanticCustomError("qtyNonzero", "ADJUSTMENT requires quantity != 0", {"type": t}))
+    elif quantity_sign == "nonzero" and quantity == zero:
+        errors.append(PydanticCustomError("qtyNonzero", f"{t} requires quantity != 0", {"type": t}))
 
-    # Rule 11: Per-type cash sign enforcement
-    if cash is not None and not cash.is_zero():
-        amt = cash.amount
-        if tx_type in (TransactionType.BUY, TransactionType.WITHDRAWAL, TransactionType.FEE, TransactionType.TAX) and amt >= zero:
+    # Rule 11: the sign of a non-zero cash amount, from cash_sign. "zero" is rule 8's business; "nonzero"
+    # (FX_CONVERSION, CASH_TRANSFER) is not read, so a zero amount passes here (P6, case 4).
+    if meta is not None and cash is not None and not cash.is_zero():
+        if meta.cash_sign == "negative" and cash.amount >= zero:
             errors.append(PydanticCustomError("cashSignNegative", "{type} requires cash.amount < 0", {"type": t}))
-        if tx_type in (TransactionType.SELL, TransactionType.DIVIDEND, TransactionType.INTEREST, TransactionType.DEPOSIT) and amt <= zero:
+        if meta.cash_sign == "positive" and cash.amount <= zero:
             errors.append(PydanticCustomError("cashSignPositive", "{type} requires cash.amount > 0", {"type": t}))
 
     # Rule 12: cost_basis_mode only where TX_TYPE_METADATA lets a cost basis in (cost_basis_allowed, W-B31).
@@ -270,7 +239,7 @@ class TXCreateItem(StrictModel):
     )
 
     # Link to AssetEvent (realization of a global asset event in this portfolio).
-    # Only valid for event-compatible types (see EVENT_COMPATIBLE_TYPES).
+    # Only valid for event-compatible types (``event_compatible`` in TX_TYPE_METADATA, rule 9).
     # Cross-record check (asset_id must match event.asset_id) is done in service layer.
     # Omit or set to None to leave the transaction unlinked.
     asset_event_id: Optional[int] = Field(default=None, description="Link to AssetEvent (DIVIDEND/INTEREST/ADJUSTMENT only). Omit to leave unlinked.")

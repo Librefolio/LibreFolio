@@ -1,7 +1,8 @@
 """
 Transaction type metadata: the field modes and pair-form rules of each transaction type (``TX_TYPE_METADATA``),
-the type swap groups, the cost-basis rules read from the table (``cost_basis_required``, ``cost_basis_allowed``),
-the event type metadata, and the ``GET /transactions/types`` response.
+the type swap groups, the rules read from the table (``cost_basis_required``, ``cost_basis_allowed``, and for rules
+5-11 ``get_tx_type_metadata``, ``event_compatible``, ``event_compatible_types``), the event type metadata, and the ``GET /transactions/types``
+response.
 """
 
 from __future__ import annotations
@@ -94,7 +95,7 @@ class TXTypeMetadata(StrictModel):
     quantity_sign: SignType = Field(..., description="Allowed quantity sign constraint")
     cash_sign: SignType = Field(..., description="Allowed cash amount sign constraint")
 
-    # Whether this type can be linked to an AssetEvent (see EVENT_COMPATIBLE_TYPES)
+    # Whether this type can be linked to an AssetEvent (rule 9 of validate_transaction_business_rules)
     event_compatible: bool = Field(..., description="Can be linked to an AssetEvent")
 
     # Pair form layout — tells frontend which dual-transaction form to use.
@@ -433,6 +434,25 @@ def cost_basis_allowed(tx_type: TransactionType, quantity: Decimal) -> bool:
     """
     rule = _cost_basis_rule(tx_type, quantity)
     return rule is not None and rule != "forbidden" and not (rule == "required_qty_pos" and quantity <= 0)
+
+
+def get_tx_type_metadata(tx_type: TransactionType) -> TXTypeMetadata | None:
+    """The ``TX_TYPE_METADATA`` row of ``tx_type``, read at call time; ``None`` for a type the table lacks.
+
+    Rules 5-11 of ``validate_transaction_business_rules`` read it (W-B36).
+    """
+    return TX_TYPE_METADATA.get(tx_type)
+
+
+def event_compatible(tx_type: TransactionType) -> bool:
+    """Whether ``TX_TYPE_METADATA`` lets a transaction of ``tx_type`` link an asset event (rule 9, event suggestions)."""
+    meta = TX_TYPE_METADATA.get(tx_type)
+    return meta is not None and meta.event_compatible
+
+
+def event_compatible_types() -> list[str]:
+    """The codes of the types ``TX_TYPE_METADATA`` lets link an asset event, sorted: rule 9's ``allowed``."""
+    return sorted(tx_type.value for tx_type, meta in TX_TYPE_METADATA.items() if meta.event_compatible)
 
 
 class EventTypeMetadata(StrictModel):
