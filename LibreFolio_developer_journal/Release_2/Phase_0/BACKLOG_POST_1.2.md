@@ -2139,7 +2139,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     checkpoint di J. La voce nella sezione di J la scrive J.
 
   Dettagli: piano della 56, passo 6.
-- **G-9 · La gallery può fotografare un indicatore non applicato** — basso-medio; coordinatore, 15/10 (candidata di L,
+- ✅ **G-9 · La gallery può fotografare un indicatore non applicato** — basso-medio; coordinatore, 15/10 (candidata di L,
   `assets/detail-signals-macd`, mobile it chiaro: menu degli indicatori ancora aperto, MACD non applicato, 1 variante su
   16).
   - Causa (G, verificata nel codice): `selectIndicatorFromTree` (`frontend/e2e/gallery.spec.ts:165`) clicca l'opzione e
@@ -2166,8 +2166,10 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     86–150) l'helper è riuscito in tutti i 63 scatti presi: `focus` "-" in tutti, frame identici a `g-final3-r1`, MACD
     verde sui due progetti. 5 rossi fuori dall'helper (lista asset, clic sul tema, `textStill`, cattura), tutti di
     carico.
-  - Codice committato dal coordinatore in `5da3c9eba` (15/10), che entra nel target a DoD raggiunta. Resta da rifare da
-    soli, quando il coordinatore dà il posto, EMA, RSI, Bollinger e drawdown: poi ✅.
+  - ✅ **15/10, chiusa (DoD 10/10):** codice in `5da3c9eba`, che entra in `dev_release2` con l'ingresso di G-9. Sulla
+    revisione fusa `6f0198a08`, i 5 test con rossi di carico rifatti da soli a 1 worker sono verdi: EMA, RSI e Bollinger
+    desktop, drawdown desktop e mobile. Su 40 scatti: nessuna opzione con il focus, frame identici a `g-final3-r1`,
+    `live_price_check` 0.
 
   Dettagli: piano della 56, passo 8.
 - **G-10 · Ordine casuale delle immagini del seed nelle liste di file** — medio-basso; G, 15/10, su segnalazione del

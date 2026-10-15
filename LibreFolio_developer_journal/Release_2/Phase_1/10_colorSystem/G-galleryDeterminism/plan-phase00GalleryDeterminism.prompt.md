@@ -621,7 +621,7 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 > volte su 4 run contando `g-final3`. La causa sta fra i `syncScrollContext()` di `Header.svelte`; serve una run
 > strumentata. Registrato G-11, non corretto ora.
 
-### Passo 8 — G-9, scelta dell'indicatore verificata 🟡 (15/10: codice ✅ e helper riuscito 63/63 sotto carico; 5 rossi di carico fuori dall'helper, da rifare da soli quando il coordinatore dà il posto)
+### Passo 8 — G-9, scelta dell'indicatore verificata ✅ (15/10: codice `5da3c9eba`; DoD 10/10 alle 15:56, i rossi di carico rifatti da soli a 1 worker sulla revisione fusa `6f0198a08`)
 - **Difetto.** Nella candidata di L lo scatto `mobile/it/light/assets/detail-signals-macd` ha il menu degli indicatori
   aperto e il MACD non applicato, in 1 variante su 16, con il test verde.
 - **Prova (impronta 🔎).** Lo scatto sbagliato ha `{"y":798,"dh":1538,…,"focus":"signal-tree-option-macd"}`; le altre 15
@@ -691,6 +691,43 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 >   drawdown). Dalle 13:50 vale il budget comune con la 1.3 (al massimo 3 suite pesanti, 1 nostra), quindi lo chiedo
 >   nell'handoff. Snapshot `g-g9-w5`; log, confronto con `g-final3-r1` e log delle build in
 >   `g-workstream/2026-10-15/logs/`.
+>
+> **DoD chiusa (15/10, 15:48–15:56): 10/10.** Codice committato dal coordinatore in `5da3c9eba`; journal in `e3153b75d`.
+> Il coordinatore ha poi fatto il merge di base con `dev_release2` (`8f1abf89e`: Y1, A5 e l'archivio del giro 2 della
+> designer): HEAD `6f0198a08`. Del nostro perimetro il target non tocca nulla; `frontend/e2e/fixtures/instance-config.ts`
+> è nuovo e la gallery non lo importa.
+> - *Prima della run, sulla revisione fusa* (`files/prebuild_alone.sh` della sessione):
+>   - build debug con la versione fissata `v0.0.0-review`: 15:39–15:46, 6 min 30 s, carico da 40 a 58, rc 0;
+>   - sito MkDocs: 15:46–15:48, 2 min 9 s, rc 0, 3036 URL relativi risolti.
+> - *Migrazione.* Il merge porta `006_registration_mode`. Con `--no-populate` il server ha portato il DB della corsia a
+>   head all'avvio: dopo la run il DB è a `006_registration_mode`, con `registration_mode` = `open`. I test dei segnali
+>   entrano con l'account della gallery e non ne registrano uno nuovo.
+> - *Dipendenze.* `package.json` e il lock cambiano solo la versione del progetto (`1.1.0` → `0.0.0`); il `Pipfile`
+>   aggiunge `cryptography`, già installato dal developer (`dc9a5d232`). Nessun `npm ci`.
+> - *Run* (`files/verify_g9_alone.sh` della sessione): corsia 6153, `--no-populate`, `-w 1`, un test per invocazione,
+>   carico da 42 a 91 (altre corsie attive).
+>
+>   | Test | Progetto | Durata | Esito | Snapshot |
+>   |---|---|---|---|---|
+>   | EMA | desktop | 57,8 s | ✅ | `g-g9-alone-ema` |
+>   | RSI | desktop | 39,0 s | ✅ | `g-g9-alone-rsi` |
+>   | Bollinger | desktop | 47,5 s | ✅ | `g-g9-alone-bollinger` |
+>   | drawdown | desktop | 54,3 s | ✅ | `g-g9-alone-drawdown` |
+>   | drawdown | mobile | 57,5 s | ✅ | `g-g9-alone-drawdown` |
+>
+>   Il drawdown su mobile non era nell'elenco del coordinatore, ma era rosso anch'esso in `g-g9-w5`: senza, la DoD si
+>   fermava a 9/10. Insieme ai 5 verdi della run a 5 worker fa **10/10**.
+> - *Controlli:*
+>   - 40 PNG e 40 impronte 🔎 su 40 scatti;
+>   - in nessuno scatto un'opzione del menu tiene il focus;
+>   - frame (`y`, `dh`, `vh`, `hdr`, `focus`) identici a `g-final3-r1` in tutti e 40: 0 differenze;
+>   - nessun messaggio d'errore dell'helper;
+>   - `live_price_check` rc 0 sui 4 snapshot, nessun prezzo dal vivo nelle loro finestre di log.
+> - *Statica sulla revisione fusa:* `tsc` e2e con i soli 2 errori di base (`onboarding-tour.spec.ts:863`,
+>   `src/lib/types/files.ts:9`).
+> - Porta 6153 libera alle 15:56:02. Log delle run e confronti dei frame in `g-workstream/2026-10-15/logs/`
+>   (`libreFolio_g_g-g9-alone-*.log`, `g-g9-alone-*_frames_vs_final3.txt`, `libreFolio_g_build_debug_6f0198a08.log`,
+>   `libreFolio_g_mkdocs_6f0198a08.log`).
 
 ## ⏸️ Pausa del 14/10
 
@@ -825,3 +862,10 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
   - G è in coda per il posto dopo L, che chiude L-10 in circa 25 minuti; il via lo dà il coordinatore.
   - Le due note fuori perimetro diventano **G-12** nel backlog, con il proprietario da instradare.
   - FROZEN; delta non committato: questa riga, il passo 8 e il backlog (G-9, G-12).
+- **15/10, 15:36 — Slot pesante a G** (coordinatore), in tre passi.
+  - Journal committato in `e3153b75d`. Merge di base con `dev_release2` (`8f1abf89e`): HEAD `6f0198a08`, padri
+    `e3153b75d` e `8f1abf89e`, worktree pulito.
+  - 15:39–15:48 build debug e MkDocs sulla revisione fusa.
+  - 15:48–15:56 i test con rossi di carico, da soli a 1 worker: 5 verdi su 5 → **G-9 ✅, DoD 10/10** (passo 8).
+  - 15:56 porta 6153 libera, comunicata al coordinatore: lo slot passa alla gallery Y2 della 1.3.
+  - Handoff per l'ingresso; delta non committato: il passo 8, queste righe e il backlog (G-9 ✅). FROZEN.
