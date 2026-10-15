@@ -1986,6 +1986,29 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - È vicina a I-06 del backlog 38.
 
   Dettagli: piano H, §14 «CP1 passo 0» e «Fuori pista 3».
+- **H-3 · Una chiave d'istanza persa dopo il primo uso sembra un primo uso** — medio-basso; H, revisione di sicurezza di
+  CP3 (15/10).
+  - Se `secrets/instance.key` sparisce, per esempio con un ripristino senza `secrets/`, `derive_key` ne genera una
+    nuova senza avvisi.
+  - Ciò che la vecchia chiave cifrava resta illeggibile, e i dati nuovi si cifrano con una chiave che non sta in nessun
+    backup.
+  - Cura proposta: al primo uso, un valore di controllo della chiave nel DB (per esempio un HMAC con la chiave derivata
+    `instance.key-check.v1`). Se il valore c'è, `derive_key` non genera mai una chiave e rifiuta una chiave diversa.
+  - Serve il DB: si fa con X e B al loro primo uso di `derive_key`. Oggi la doc admin chiede di ripristinare
+    `secrets/` insieme ai dati.
+  - Note di progetto per X e B:
+    - una chiave per istanza, mai la stessa su più istanze;
+    - un backup cifrato con una chiave derivata non deve contenere anche `secrets/`;
+    - una chiave configurata è casuale, non una passphrase.
+
+  Dettagli: piano H, §14 «CP3 passo 2».
+- **H-4 · `validate_test_data_dir` solleva un `PermissionError` grezzo per una cartella gestita non attraversabile** —
+  minimo; H, 15/10.
+  - In modalità test, `_same_filesystem_location` chiama `Path.exists()`, che su Python 3.13 solleva con `EACCES`.
+  - Vale per `sqlite/`, e da CP3 anche per `secrets/`.
+  - È fail-closed, ma senza un messaggio chiaro: andrebbe trasformato in `ValueError` col percorso.
+
+  Dettagli: piano H, §14 «CP3 passo 2», «Fuori pista».
 
 ## A · Account e accessi (fase 01)
 
