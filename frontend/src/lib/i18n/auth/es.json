@@ -57,6 +57,28 @@
     "loginServerError": "El servidor ha tenido un error: vuelve a intentarlo en un momento y, si vuelve a ocurrir, avisa a un administrador.",
     "tooManyAttempts": "Demasiados intentos de inicio de sesión: espera unos minutos y vuelve a intentarlo.",
     "showPassword": "Mostrar contraseña",
-    "hidePassword": "Ocultar contraseña"
+    "hidePassword": "Ocultar contraseña",
+    "registrationInviteOnly": "Este servidor solo acepta cuentas nuevas mediante un enlace de invitación. Pide uno a un administrador.",
+    "userLimitReached": "Este servidor ha alcanzado su número máximo de cuentas. Contacta con el administrador.",
+    "invite": {
+      "notice": "Has recibido una invitación para este servidor de LibreFolio: crea tu cuenta.",
+      "adminNotice": "Esta invitación crea una cuenta de administrador."
+    },
+    "link": {
+      "expired": "Este enlace ha caducado.",
+      "consumed": "Este enlace ya se ha usado.",
+      "revoked": "Este enlace ha sido revocado.",
+      "unknown": "Este enlace no es válido.",
+      "missing": "Este enlace está incompleto: ábrelo de nuevo desde el mensaje que recibiste.",
+      "checkFailed": "No se ha podido comprobar el enlace. Inténtalo de nuevo en un momento.",
+      "askAdmin": "Pide un enlace nuevo a un administrador."
+    },
+    "resetPassword": {
+      "title": "Elige una contraseña nueva",
+      "account": "Cuenta:",
+      "submit": "Establecer la contraseña nueva",
+      "done": "Tu contraseña se ha cambiado: inicia sesión con la nueva.",
+      "failed": "No se ha podido cambiar la contraseña. Inténtalo de nuevo."
+    }
   }
 }

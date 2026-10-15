@@ -6,13 +6,15 @@ Business logic for user management, used by both API and CLI.
 
 import asyncio
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Optional
 
 import structlog
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import BrokerUserAccess, User, UserSettings
+from backend.app.db.models import AccountTokenPurpose, BrokerUserAccess, User, UserSettings
+from backend.app.services.accounts import token_service
 from backend.app.services.accounts.auth_service import hash_password
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.utils.datetime_utils import utcnow
@@ -145,9 +147,13 @@ async def create_user(
     password: str,
     is_superuser: bool = False,
     is_active: bool = True,
+    commit: bool = True,
 ) -> tuple[Optional[User], Optional[str]]:
     """
     Create a new user.
+
+    With ``commit=False`` the user is only flushed (it has its id), and the caller commits it together with what
+    else the creation belongs to — an invitation spent, a limit checked.
 
     Args:
         session: Database session
@@ -180,8 +186,11 @@ async def create_user(
     )
 
     session.add(user)
-    await session.commit()
-    await session.refresh(user)
+    if commit:
+        await session.commit()
+        await session.refresh(user)
+    else:
+        await session.flush()
 
     logger.info("User created", user_id=user.id, username=user.username, is_superuser=is_superuser)
     return user, None
@@ -219,6 +228,77 @@ async def reset_password(
 
     logger.info("Password reset, sessions ended", user_id=user_id, username=username)
     return True, None
+
+
+async def create_password_reset(
+    session: AsyncSession,
+    user: User,
+    *,
+    created_by_user_id: Optional[int] = None,
+    now: Optional[datetime] = None,
+) -> token_service.IssuedToken:
+    """Issue a password-reset link for ``user``, revoking the live ones issued before; flushed, not committed."""
+    await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.PASSWORD_RESET, now=now)
+    issued = await token_service.issue_token(session, AccountTokenPurpose.PASSWORD_RESET, user_id=user.id, created_by_user_id=created_by_user_id, now=now)
+    logger.info("Password reset link created", user_id=user.id, token_id=issued.record.id, created_by_user_id=created_by_user_id)
+    return issued
+
+
+async def complete_password_reset(session: AsyncSession, token: str, new_password: str, *, now: Optional[datetime] = None) -> Optional[User]:
+    """Spend a password-reset link: set the new password, end every session, revoke the other live links; commits.
+
+    None, and nothing changed, when the link is not valid.
+    """
+    record = await token_service.consume_token(session, token, AccountTokenPurpose.PASSWORD_RESET, now=now)
+    user = await get_user_by_id(session, record.user_id) if record is not None and record.user_id is not None else None
+    if user is None:
+        await session.rollback()
+        return None
+    # bcrypt is slow on purpose: it runs off the event loop.
+    user.hashed_password = await asyncio.to_thread(hash_password, new_password)
+    end_sessions(user)
+    user.updated_at = utcnow()
+    session.add(user)
+    await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.PASSWORD_RESET, now=now)
+    await session.commit()
+    await session.refresh(user)
+    logger.info("Password reset through a link, sessions ended", user_id=user.id, username=user.username)
+    return user
+
+
+async def update_user_status(
+    session: AsyncSession,
+    user: User,
+    *,
+    is_active: Optional[bool] = None,
+    is_superuser: Optional[bool] = None,
+) -> Optional[str]:
+    """Change whether ``user`` is active and an administrator, all or nothing; commits.
+
+    Returns ``"LAST_ADMIN"``, changing nothing, when the change would deactivate or demote the last active
+    administrator; None otherwise. Deactivating or demoting ends every session of the account. A value equal to the
+    current one changes nothing.
+    """
+    deactivate = is_active is False and user.is_active
+    demote = is_superuser is False and user.is_superuser
+    if (deactivate or demote) and await _is_last_active_admin(session, user):
+        return "LAST_ADMIN"
+    changed = False
+    if is_active is not None and is_active != user.is_active:
+        user.is_active = is_active
+        changed = True
+    if is_superuser is not None and is_superuser != user.is_superuser:
+        user.is_superuser = is_superuser
+        changed = True
+    if deactivate or demote:
+        end_sessions(user)
+    if changed:
+        user.updated_at = utcnow()
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+        logger.info("User status changed", user_id=user.id, username=user.username, is_active=user.is_active, is_superuser=user.is_superuser)
+    return None
 
 
 async def set_user_active(

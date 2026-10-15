@@ -15,6 +15,7 @@ backend/
 │   ├── services/              # Business logic
 │   │   ├── platform/                 # scheduler, container registry, date sentinels, data-quality thresholds, per-series exports, instance backup, instance key, config checks, readiness
 │   │   ├── files/                    # uploaded static files and their previews
+│   │   ├── email/                    # optional SMTP email: config checks, transport, budget, templates
 │   │   ├── asset_source_providers/   # yfinance, JustETF, CSS Scraper, Scheduled Investment
 │   │   ├── fx_providers/             # ECB, FED, BOE, SNB, MANUAL
 │   │   └── brim_providers/           # 11 broker import plugins
@@ -87,7 +88,8 @@ decision 1).
 `utils/` holds leaf functions only: they never import services; anything that needs FX, assets or other services
 belongs to a service layer, such as `financial_math/` (developer decision D-P7, 2026-10-12). Its folders group them by
 type: `utils/asset/` (sectors, geographic areas, identifiers, display-name locale), `utils/fx/` (currencies),
-`utils/runtime/` (version, client network address, TTL caches); `datetime_utils`, `json_utils` and `decimal_utils` stay
+`utils/runtime/` (version, client network address, TTL caches, sliding-window rate limits in `rate_window.py`);
+`datetime_utils`, `json_utils` and `decimal_utils` stay
 at the root. The truncation to the database precision reads the models, so it lives in `db/precision.py`.
 
 ## Where to Find Things
@@ -99,6 +101,7 @@ at the root. The truncation to the database precision reads the models, so it li
 | Business Logic | `backend/app/services/*.py` |
 | Platform services (scheduler, data-quality thresholds, per-series exports `series_export.py`, instance backup `instance_backup/`, instance key `derive_key()`, startup config checks, readiness `/system/ready`) | `backend/app/services/platform/` |
 | Uploads and file previews | `backend/app/services/files/` |
+| Email (optional SMTP: transport, hourly budget, templates in 4 languages, config checks) | `backend/app/services/email/` (config in `backend/app/config/email.py`; sliding-window limiter in `backend/app/utils/runtime/rate_window.py`) |
 | API Endpoints | `backend/app/api/v1/*.py` |
 | Config & Data Paths | `backend/app/config/` (base in `__init__.py`, one module per owner section; env vars are read only here; secrets through `env_secret()`, which also reads `NAME_FILE`; every variable documented in `.env.example`, new lines commented) |
 | FX Providers | `backend/app/services/fx_providers/` |

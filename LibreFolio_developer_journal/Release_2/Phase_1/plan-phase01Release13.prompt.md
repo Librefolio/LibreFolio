@@ -556,10 +556,10 @@ fermati all'handoff, porta verificata libera.
 
   | Taglio | Sessione | File | Fuori dai lotti di R | Annuncio aperto |
   |---|---|---|---|---|
-  | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | **X, FE5b (`AssetModal`), dal 15/10 alle 08:20** (via libera del coordinatore colori; m1 214, nessun letterale). La pagina (FE5c) dopo il lotto di Z sul polling |
+  | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | ~~X, FE5b (`AssetModal`), dal 15/10 alle 08:20~~ **chiuso: entrato in `dev_release2` il 15/10 alle 14:22 (`ec0dc7ebd`)**. La pagina (FE5c) dopo il lotto di Z sul polling |
   | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | **W, dal 15/10 alle 07:55** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
-  | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | nessuno |
-  | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | nessuno |
+  | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | ~~Y, FE6a, dal 15/10 alle 12:47~~ **chiuso: entrato il 15/10 alle 15:12 (`badec1465`)** (via libera del coordinatore colori: nessun annuncio loro; T lo converte in W5; restano `data-testid="growth-chart"` e la forma dell'opzione ECharts, letta dalla E2E del Lab) |
+  | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | **Y, Y2 (due figli: `DataTableColumnHeader`, `DataTableCellContent`), dal 15/10 alle 15:24** (via libera del coordinatore colori; le 4 classi di `editable-checkbox` passano al figlio con il record ereditato) |
 
 ## 8. Traguardi, in ordine di dipendenza
 
@@ -1184,3 +1184,80 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >   coordinatore colori); rivista la V-3 di W.
 >
 > Punti nuovi per il developer nel file delle decisioni: 44–47.
+
+### R in `dev_release2`, avvio di B, E e Y (2026-10-15, 11:10–11:30)
+
+> **Note implementazione**: il coordinatore colori ha fuso i lotti A–D di R (`8fd8e494b`, più `23f6578f3`: timbro di
+> `sw.js`); `dev_release2` fermo per loro dalle 11:17 alle 11:22. Sbloccati gli spostamenti di cartella legati ai lotti di
+> R (FE4 e FE5a di X, FE8 di W; FE2, FE3, FE6, FE7 e `DataTable` di Y). Coda dei lotti frontend: L, poi i nostri, poi T.
+> - **B ed E avviati** su delega del developer («riguardo b ed e sei tu il coordinatore, a meno che non devo qualcosa
+>   in particolare, e allora aggiornami, avviali tu»), base `23f6578f3`. B: B0 (divisione di `api/v1/backup.py`, prima
+>   dell'E1 di W, che partirà dal pacchetto nuovo; D-B8, la rinomina `backup_service.py` → `series_export.py`) e B1;
+>   D-B7 e D-B9 come proposte, D-B10 dopo B7. E: E0 ed E1, con `links.py` spostato in E3 (aspetta il punto 45) e la
+>   registrazione in `config_audit.py` in E2 (il file ha modifiche in attesa sul ramo di H); l'aggancio a `cli_base.py`
+>   non serve più, lo copre C-96 di H; D-E1, D-E2, D-E4…D-E6, D-E8…D-E14 come proposte.
+> - **Y avviato** in sola analisi (sessione `17050e81`, corsia 6189), base `23f6578f3`: i tagli di `DataTable` e
+>   `GrowthChart` devono arrivare prima delle ondate W5 e W6 di T.
+> - **W**: committati la doc di N1b-2 (`3f42dda9d`) e il journal (`eb3bb0529`). W-B20 riscritta con i reperti di X:
+>   `delete_assets_bulk` è già atomico (un `UPDATE` vuoto prima del primo savepoint); il listener `begin` generale è
+>   scartato (`SQLITE_BUSY_SNAPSHOT`). Cura decisa: un aiuto mirato in `db/session.py`, lotto piccolo di W dopo N1.
+>   W-B22 e W-B23 (quadro delle correzioni post-migrazione) assegnate a W come N1b-3: W-B22 è legata a N1b-2, perché
+>   una violazione di FK già nel DB ferma il giro prima di `orphan_pair_halves`.
+
+### La 1.2.1 pubblicata e riportata in `dev_release2` (2026-10-15, 12:00–12:50)
+
+> **Note implementazione**: il developer ha deciso di pubblicare la 1.2.1 subito, separata dal restyle dei colori, con
+> una terza correzione: un `JWT_SECRET` di soli spazi non è più la chiave che firma le sessioni (`c73d5d56a`, test
+> `utils jwt-secret-blank` rosso 9/15 prima, verde 15/15 dopo). Ramo `hotfix-1.2.1` = `064fb4fc2` (9 commit su v1.2.0);
+> `main` avanzato e release v1.2.1 pubblicata dal developer alle 12:27 (pipeline `38720357465`). Nessuna advisory né CVE
+> (decisione del developer). Riportata in `dev_release2` con il merge `6c349f907`, preparato in un worktree a parte:
+> conflitti solo in `CHANGELOG.md` e `services/accounts/auth_service.py` (tenuta la versione 1.3: `env_secret()` di H
+> scarta già il segreto vuoto); il test del segreto adattato alla 1.3 dal test-author; prove sull'albero fuso: i 4 test
+> della 1.2.1 (23, 26, 36, 15), `config-package` 594, ruff pulito. Sbloccati il CP2b di H e i lotti CP7, W3 e W5–W6 di W.
+> `dev_release2` si può pushare.
+>
+> **⚠️ Fuori pista**: avevo detto al developer che la pipeline di rilascio rifà i test; non è così: fa build, controlli
+> della documentazione, galleria e immagini. Il giro completo sull'hotfix (`utils all`, `api auth`) lo faccio dopo la
+> finestra della galleria.
+
+### Y e Z avviati, decisioni 19–25 girate (2026-10-15, 12:40–12:50)
+
+> **Note implementazione**: su delega del developer («Sì: avvia tu Y (i due tagli) e Z (Z6a subito, Z1 quando decido il
+> 31)») approvati i piani di Y e Z, base `1e9e567f7`. Y: Y1 (taglio di `GrowthChart`, FE6a, annunciato e accettato dal
+> coordinatore colori) e Y2 (`DataTable`, da annunciare); D-Y1…D-Y9 decise dal coordinatore; D-Y10…D-Y12 (C-85, 54-1,
+> difetto 5 del PAC) vanno nel file delle decisioni. Z: Z6a (prove su C-49); Z1 aspetta il punto 31. Decisioni del
+> developer girate alla lettera: 19 a X (scraper fuori dalla ricerca nel profilo gestito, assegnabili a mano con un
+> avviso), 20–25 a W (20 subito in E1: errore e «Modifica questo»/«Usa questo»/«Annulla», niente «Crea comunque»; 23:
+> i tipi sconosciuti già salvati si cancellano); E1 di W autorizzato, la parte sull'export degli eventi dopo B0.
+
+### Finestra delle dipendenze e treni 32–35 (2026-10-15, 13:05–14:45)
+
+> **Note implementazione**: chiusa la finestra della galleria (13:01). Il carico della macchina è salito a 84, poi a
+> 110–139, per troppe prove «leggere» in parallelo (categorie Vitest con un worker per core, build, svelte-check) più le
+> gallerie del programma colori. Regole nuove: al massimo 3 suite pesanti sulla macchina, 2 della 1.3 e 1 del programma
+> colori, assegnate dai coordinatori; le categorie Vitest contano come pesanti; le corsie non in integrazione lanciano
+> solo test di file singoli. Finestra delle dipendenze (13:08–13:36): tutte le corsie ferme, il developer ha installato
+> `cryptography` (lock: + `cryptography 50.0.2`, `pycparser` 3.0 → 3.11), commit `dc9a5d232`.
+> Treni: 32 `dc9a5d232` (dipendenze); 33 H CP5b+CP6 (`83eaa5a28`, validato da H sulla revisione combinata:
+> `all-backend` 12 725, core-unit 4 407, component-unit 3 240, E2E auth/app-start-auth/settings); 34 X FE5b, X-R11a,
+> X-R1/R2, D-X4 (`ec0dc7ebd`, validato da X su `2fb577588`, che differisce solo per `Pipfile`; due rossi di
+> `asset-browse` da saturazione, la spec da sola 8/8; sull'albero H+X `npm run check` 0/0 dopo `api sync`); 35 E1
+> (`f46a93ffd`, validato nella corsia del coordinatore: email-* 516, config-package 639). Basi aggiornate e committate:
+> A (`246863005`), X (`2fb577588`), E (`fc99e9bfe`), W (`06459c1b3`), H riattaccato (`aa0e3a49a`); Y in corso.
+> Checkpoint committati: B0 (`be6206c0d`), B1 (`d37736d05`), E1 (`918e8d4f0`), W E1c (`87a034a89`), Y1 (`374dcca8a`).
+>
+> **⚠️ Fuori pista**: `--resolve` del cricchetto dei colori perde un `~accept` presente da un solo lato (R-8); ripetuto
+> l'`--accept` D3 di `themeStore.ts` nei merge di X e W, con l'ok del coordinatore colori (TC-7 di T per la cura).
+
+### Treni 36–38 e decisioni 18–37 (2026-10-15, 15:00–15:55)
+
+> **Note implementazione**: entrati Y1 (`badec1465`, galleria filtrata contro `g-final3-r1` senza differenze dal
+> taglio, 96/96 scatti del grafico di crescita), A5 (`8bcb23502`, validato da A sulla revisione combinata con CP6 e E1)
+> e i quattro lotti di H (`744f5a0ee`: CP7a, C-96, filtro del log d'accesso, G-10, più la riparazione di
+> `test_instance_block.py`, rosso in `dev_release2` per un conflitto semantico CP6 × A5a). Prova Docker parziale: il
+> build si ferma a `pip install` per il proxy TLS della rete (H-11); `tzdata-legacy` e i compose verificati a parte; la
+> prova a runtime dell'immagine resta al developer, fuori dalla VPN, con gli script di H. Decisioni 18–35 scritte nel
+> file (`8fc44558c`); 37 girata ad A (lotto A6c); 36 in discussione (file comuni e personali, registrazione «su invito»
+> di default). Avviati A6 (scheda Utenti; verifica dell'indirizzo con un nonce firmato al posto del CORS su
+> `/system/instance`) e Y2 (`DataTable`). Checkpoint committati: E2a (`c1d1c3c2d`), Z1 (`a6199d0e7`, base aggiornata
+> `4618a2116`).

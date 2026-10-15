@@ -285,10 +285,11 @@ GLOBAL_SETTINGS_DEFAULTS = {
         "type": "int",
         "description": "Session cookie TTL in hours (default: 24)",
     },
-    "enable_registration": {
-        "value": "true",
-        "type": "bool",
-        "description": "Allow new user registration",
+    # Who may create an account; LIBREFOLIO_REGISTRATION, when set, pins it and the row is read-only.
+    "registration_mode": {
+        "value": "open",
+        "type": "str",
+        "description": "Who may create an account: open, invite or disabled",
     },
     # placeholder — email verification not implemented (see TODO_FUTURI email server)
     "require_email_verification": {
@@ -380,6 +381,7 @@ GLOBAL_SETTINGS_CONSTRAINTS: dict[str, SettingConstraint] = {
     "default_currency": SettingConstraint(format="currency"),
     "default_language": SettingConstraint(choices=("en", "it", "fr", "es")),
     "default_theme": SettingConstraint(choices=("light", "dark", "auto")),
+    "registration_mode": SettingConstraint(choices=("open", "invite", "disabled")),
 }
 
 _BOOL_WORDS = {"true": "true", "1": "true", "yes": "true", "on": "true", "false": "false", "0": "false", "no": "false", "off": "false"}
@@ -546,7 +548,7 @@ class SETTINGS_REGISTRY:
 
         # Authentication & Security
         SESSION_TTL_HOURS = _global_spec("session_ttl_hours")
-        ENABLE_REGISTRATION = _global_spec("enable_registration")
+        REGISTRATION_MODE = _global_spec("registration_mode")
         REQUIRE_EMAIL_VERIFICATION = _global_spec("require_email_verification")
         # File Upload
         MAX_FILE_UPLOAD_MB = _global_spec("max_file_upload_mb")

@@ -1,8 +1,9 @@
 # 📝 Configuration
 
-Startup options live in a `.env` file: ports, the data folder, logging, login sessions, secrets and a
-few optional features. It sits at the root of the project, or next to `docker-compose.yml` with
-Docker. The options you change from inside the app are [Global Settings](settings.md) instead.
+Startup options live in a `.env` file: ports, the data folder, logging, login sessions, sign-ups,
+secrets and a few optional features. It sits at the root of the project, or next to
+`docker-compose.yml` with Docker. The options you change from inside the app are
+[Global Settings](settings.md) instead.
 
 ---
 
@@ -37,7 +38,9 @@ the same sample as `.env`.
 | `JWT_SECRET` | _not set_ | Key that signs login sessions. Not set, empty or only spaces: a new key at every start, so everyone logs in again after a restart. `JWT_SECRET_FILE` reads it from a file instead: see [Secrets](#secrets). See [Keep users signed in](index.md#session-persistence). |
 | `SESSION_COOKIE_SECURE` | `auto` | When the login session cookie is sent over HTTPS only: `auto` (if the browser uses HTTPS), `always` or `never`. See [HTTPS and reverse proxies](#session-cookie-secure). |
 | `PREVIEW_CACHE_MAX_MB` | `50` | Memory, in MB, of the image-preview cache in each server process. |
-| `LIBREFOLIO_PROFILE` | `selfhosted` | Leave it unset. `managed` is reserved for hosting providers that run LibreFolio for their customers. Case and spaces around the value do not matter; any other value stops the server at startup. The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`. |
+| `LIBREFOLIO_PROFILE` | `selfhosted` | Leave it unset. `managed` is reserved for hosting providers that run LibreFolio for their customers: there, a `JWT_SECRET` shorter than 32 characters stops the server at startup. Case and spaces around the value do not matter; any other value stops the server at startup. The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`. See [Hosting for Others](hosting_providers.md#managed-profile). |
+| `LIBREFOLIO_BLOCKED` | _not set_ | Leave it unset. A hosting provider sets it to block the instance: users can still sign in and out, and see a block page instead of the app. `1`, `true`, `yes` or `on` block; `0`, `false`, `no` or `off` do not, in any case; any other value stops the server at startup. Read from the environment only, in every profile. See [Hosting for Others](hosting_providers.md#instance-block). |
+| `LIBREFOLIO_DELETION_DATE` | _not set_ | Leave it unset. The day the hosting provider will delete a blocked instance and its data, as an ISO date such as `2026-11-14`, shown on the block page. Any other value stops the server at startup. Read from the environment only. See [Hosting for Others](hosting_providers.md#deletion-date). |
 
 Older `.env` files may still contain `PORTFOLIO_BASE_CURRENCY`: LibreFolio ignores it, and new
 users start from the **Default Currency** in [Global Settings](settings.md).
@@ -208,7 +211,7 @@ each finding is one line of the log, at its level, with the name of the check in
 | Level | The log says | What to do |
 | --- | --- | --- |
 | ℹ️ `info` | `JWT_SECRET is not set: every start makes a new session signing key, …` | Nothing, if signing everyone out at every restart is fine. Otherwise see [Keep users signed in](index.md#session-persistence). |
-| ⚠️ `warning` | `The session signing key from JWT_SECRET is … characters long: use at least 32 random characters` (or `from JWT_SECRET_FILE (<path>)`) | Generate a longer key, as in [Keep users signed in](index.md#session-persistence), and put it where the line says. |
+| ⚠️ `warning` | `The session signing key from JWT_SECRET is … characters long: use at least 32 random characters` (or `from JWT_SECRET_FILE (<path>)`) | Generate a longer key, as in [Keep users signed in](index.md#session-persistence), and put it where the line says. In the `managed` profile the server does not start instead: see below. |
 | ⚠️ `warning` | `Set both directly and through a *_FILE variable: …` | For each secret listed, keep only one of the two: the variable itself wins, the file is ignored. |
 | ❌ `error` | `The instance key cannot be used: …`, ending with `cannot be reached (Permission denied)` or `cannot be read (…)` | The `secrets/` folder or `instance.key` belongs to another user, or its permissions keep LibreFolio out. Give both back to the user that runs LibreFolio (`chown`), then `chmod 700` on the folder and `chmod 600` on the file. Never replace the key with a new one. The server starts anyway. |
 | ❌ `error` | `The instance key cannot be used: …`, ending with another reason, such as `is empty or blank` | `instance.key` is damaged: restore it from a backup, never replace it with a new key. The server starts anyway. |
@@ -218,10 +221,16 @@ each finding is one line of the log, at its level, with the name of the check in
 
 A secret you configured that cannot be used stops the start instead: a `JWT_SECRET_FILE` or a
 `LIBREFOLIO_INSTANCE_KEY_FILE` that cannot give its secret (see [Secrets in Files](#secret-files)),
-or an instance key of your own shorter than 32 characters. The error is in the server's console
+or an instance key of your own shorter than 32 characters. In the `managed` profile, a `JWT_SECRET`
+shorter than 32 characters stops it too. The error is in the server's console
 output (`docker compose logs librefolio` with Docker): it names the variable, and the file when there
 is one, never the secret. Fix it, then start
 again.
+
+A `LIBREFOLIO_BLOCKED` or `LIBREFOLIO_DELETION_DATE` value that LibreFolio cannot read also stops the
+start, and a blocked instance logs a warning at every start,
+`Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): …`: see
+[Hosting for Others](hosting_providers.md#block-variables).
 
 ---
 
@@ -236,6 +245,48 @@ again.
 | `LIBREFOLIO_NO_SCHEDULER` | — | Any non-empty value, `0` included, turns the scheduled price and FX syncs off. Set by `./dev.py server --no-scheduler`. |
 | `LIBREFOLIO_TEST_MODE` | — | `1`, `true` or `yes` switches to the test data folder. Set by `./dev.py server --test` and the test runners. |
 | `LIBREFOLIO_TEST_DATA_DIR` | `./backend/data/test` | Folder of the test data; it may not overlap the production one. |
+
+---
+
+## 👥 Accounts and Sign-ups {: #accounts }
+
+Who may create an account, and how many accounts the instance may hold. Without these variables,
+nothing changes: the **Registration** setting of the [Global Settings](settings.md#registration)
+decides who may sign up, and there is no limit. All four are optional: uncomment a line of the
+**Accounts** section of `.env.example` to set one.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `LIBREFOLIO_REGISTRATION` | _not set_ | Who may create an account: `open` (anyone), `invite` (only with an invitation link) or `disabled` (nobody). Not set: the **Registration** global setting decides, **Open** unless an administrator changed it. Set: this value wins, and the global setting cannot be changed from the app. Case and spaces around the value do not matter. On a new instance, `invite` and `disabled` leave the login page without **Register here**: see [Who Can Sign Up](settings.md#registration) to create the first administrator. |
+| `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
+| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. The [command line](cli_tools.md#invite) puts it in front of the invitation and password-reset links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. |
+| `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. LibreFolio gives it to administrators only, with the numbers of the user limit; the app does not show it yet. |
+
+An empty value counts as not set. A wrong value does not stop the server, unlike the main options:
+LibreFolio stays on the safe side, and writes an error to its log the first time each server
+process needs the value: `Invalid account configuration`, with the variable and its value in
+`problem`, and in `consequence` what it costs until you fix it. Fix the value, then restart:
+
+| Wrong value | What LibreFolio does | `consequence` in the log |
+| --- | --- | --- |
+| `LIBREFOLIO_REGISTRATION` other than the three modes | Registration is closed, and the global setting stays locked | `registration stays closed until it is fixed` |
+| `LIBREFOLIO_MAX_USERS` that is not a whole number of at least 1, `0` included | A limit of 0: nobody can sign up without an invitation | `registration stays closed until it is fixed` |
+| `LIBREFOLIO_PUBLIC_URL` without `http://` or `https://` | Ignored: links show the path only, and the [command line](cli_tools.md#invite) says why under each link | `links show the bare path until it is fixed` |
+| `LIBREFOLIO_BILLING_URL` without `http://` or `https://` | Ignored, as if it were not set | `the billing link stays hidden until it is fixed` |
+
+### 📏 When the Instance Is Full {: #user-limit }
+
+When the active accounts and the pending invitations reach `LIBREFOLIO_MAX_USERS`:
+
+- nobody can sign up without an invitation, whatever the [Registration](settings.md#registration)
+  mode;
+- an invitation link already sent still works: its place was counted when it was created;
+- administrators cannot create invitations or reactivate accounts, except from the
+  [command line](cli_tools.md): `user create`, `user invite` and `user activate` print a warning,
+  then go ahead.
+
+A place frees up when an account is deactivated or deleted, or when an invitation is revoked or
+expires. The first account of a new instance can always be created.
 
 ---
 
@@ -274,7 +325,8 @@ From the highest priority to the lowest:
 4. The defaults listed on this page.
 
 With Docker Compose, the `environment:` block of `docker-compose.yml` wins over `.env`: it fixes
-`HOST` and `LIBREFOLIO_DATA_DIR`. See [Advanced Docker](docker_advanced.md#resolution-priority).
+`HOST`, `LIBREFOLIO_DATA_DIR` and, inside the container, `PORT=6040` (your `PORT` still sets the host
+port). See [Advanced Docker](docker_advanced.md#resolution-priority).
 
 ---
 

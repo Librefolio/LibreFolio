@@ -5,6 +5,10 @@
 > **Scopo:** la gallery della documentazione è la rete di sicurezza dei lavori sui colori: il workstream R deve
 > dimostrare «stesso aspetto» con un diff dello stesso giorno. Oggi la gallery cambia anche da sola: questo lavoro la
 > rende ripetibile.
+>
+> **✅ Chiusa il 15/10/2026:** DoD raggiunta con la misura `g-final3`
+> ([piano](plan-phase00GalleryDeterminism.prompt.md), passo 6 e §1). Resta nel backlog G-11. Il prossimo compito di G è
+> G-13, la nuova coppia di riferimento dopo l'ingresso di T.
 
 ## Il problema, misurato
 
@@ -30,6 +34,26 @@ confrontate pixel per pixel con `scripts/visual_review/gallery_tool.py`.
   - Tutti passati in un secondo tentativo isolato (`--no-populate --desktop-only -w 5`). **Non sono classificati:**
     vanno analizzati con la skill `test-triage` prima di chiamarli instabili.
 
+**Misura finale del 15/10/2026** (`2338aaf79`, `dev_release2` con il checkpoint 1 di G): due esecuzioni complete a 6
+worker (`g-final3-r1`, `g-final3-r2`), entrambe pulite per `live_price_check`. Analisi per schermata:
+[`evidence/analysis-final-2026-10-15.md`](evidence/analysis-final-2026-10-15.md); numeri grezzi:
+[`evidence/stability-2026-10-15.md`](evidence/stability-2026-10-15.md).
+
+- **Immagini:** 2.107 identiche, 717 cambiate, nessuna di altezza diversa.
+- **Schermate:** **40 stabili, 112 con rumore minimo, 19 medio, 6 instabili** (erano 27). Delle 27 del 14/10, 8 sono
+  ora stabili e 16 con rumore minimo.
+- **Le 6 instabili:**
+  - 2 di solo contenuto, accettate: l'ordine delle immagini del seed (`media/asset-picker-modal`) e quello dei due file
+    del set (`brokers/import-nway-compare`);
+  - 4 di inquadratura, corrette nel checkpoint 2 di G: `assets/detail-measures` e `-active` e
+    `settings/about-plugin-diagnostics` su mobile, la pagina dietro il modale di `settings/scheduler-config`. Verificate
+    da sole due volte: tutte stabili o con rumore minimo, salvo l'header di 1 variante di `detail-measures` (mobile es
+    chiaro, backlog G-11).
+- **Le 19 medie:** contenuto (orari, account usa e getta, codici casuali, durate, ordine dei file) e due residui di
+  resa (le celle fissate della tabella dei lotti, l'antialiasing dei canvas RSI e MACD).
+- **Nessun test rosso a 6 worker.** A 10 worker la macchina satura (carico 65, 8 rossi in 10 minuti, che da soli
+  passano): il toolkit usa `-- --workers 6`.
+
 ## Corsia e confini
 
 - **Corsia:** 6153 + `/tmp/librefolio-r2-g`. Una sola esecuzione per volta; mai `--force`.
@@ -39,4 +63,4 @@ confrontate pixel per pixel con `scripts/visual_review/gallery_tool.py`.
   screenshot senza l'accordo del coordinatore.
 - I test li scrive `test-author`.
 - **Definition of done:** una nuova misura di rumore (due esecuzioni dello stesso giorno) con le instabili ridotte al
-  minimo spiegabile, e i fallimenti sotto carico analizzati, corretti o documentati.
+  minimo spiegabile, e i fallimenti sotto carico analizzati, corretti o documentati. ✅ 15/10, con `g-final3`.

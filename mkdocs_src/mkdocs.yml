@@ -959,6 +959,7 @@ nav:
           - Advanced Docker: admin/docker_advanced.md
           - Expose Securely: admin/service_exposure.md
           - Check Connection Security: admin/connection_checks.md
+          - Hosting for Others: admin/hosting_providers.md
       - ⚙️ System Configuration:
           - Environment Variables: admin/configuration.md
           - Global Settings: admin/settings.md
@@ -1163,6 +1164,7 @@ nav:
                   - BOE Tech: developer/backend/fx/providers/boe.md
                   - SNB Tech: developer/backend/fx/providers/snb.md
           - "🕐 Scheduler (Daemon)": developer/backend/scheduler.md
+          - "📧 Email (SMTP)": developer/backend/email.md
           - "🧮 Financial Math Layer": developer/backend/financial_math.md
           - "📉 Risk Engine": developer/backend/risk/architecture.md
       - 🎨 Frontend Development:
@@ -1181,6 +1183,7 @@ nav:
               - Pages: developer/frontend/pages/index.md
           - "🎨 Design System & UI":
               - Styling: developer/frontend/styling.md
+              - Designer Lab: developer/frontend/designer-lab.md
               - 🧩 Components:
                   - Overview: developer/frontend/components/index.md
                   - 🏗️ Core UI:
