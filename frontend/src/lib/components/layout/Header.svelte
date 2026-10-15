@@ -123,8 +123,22 @@
         scheduleScrollFrame();
     }
 
+    /**
+     * Keyboard focus inside the header pins it. The focus a mouse click leaves on a button does not (Chrome keeps it
+     * there): after a click on the theme toggle the header must still hide on scroll. An engine that cannot read
+     * `:focus-visible` keeps the old rule, any focus.
+     */
+    function focusPinsHeader(element: unknown): boolean {
+        if (!(element instanceof Element) || headerRef?.contains(element) !== true) return false;
+        try {
+            return element.matches(':focus-visible');
+        } catch {
+            return true;
+        }
+    }
+
     function handleFocusIn(event: FocusEvent) {
-        if (event.target instanceof Element && headerRef?.contains(event.target)) {
+        if (focusPinsHeader(event.target)) {
             focusPinned = true;
             syncScrollContext();
         }
@@ -134,8 +148,7 @@
         cancelFocusRecheckFrame();
         focusRecheckFrame = requestAnimationFrame(() => {
             focusRecheckFrame = null;
-            const activeElement = document.activeElement;
-            const nextFocusPinned = activeElement instanceof Element && headerRef?.contains(activeElement) === true;
+            const nextFocusPinned = focusPinsHeader(document.activeElement);
             if (nextFocusPinned !== focusPinned) {
                 focusPinned = nextFocusPinned;
                 syncScrollContext();

@@ -104,8 +104,8 @@
 		{collapsed ? 'w-16' : 'w-64'}
 		{isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0"
 >
-    <!-- Logo Header -->
-    <div class="p-4 flex items-center border-b border-lf-subtle {collapsed ? 'justify-center' : 'justify-between'}">
+    <!-- Logo Header: the green of the login card header (developer, 15/10); the rest of the sidebar stays neutral (D-T15) -->
+    <div class="p-4 flex items-center bg-lf-brand text-lf-on-brand {collapsed ? 'justify-center' : 'justify-between'}" data-testid="sidebar-brand">
         <button class="flex items-center space-x-3 cursor-pointer" on:click={toggleCollapsed} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} data-testid="sidebar-collapse-toggle" use:guideAnchor={'nav.toggle.desktop'}>
             <div class="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center p-1 bg-lf-logo">
                 <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png" />
@@ -116,7 +116,7 @@
         </button>
         <!-- Mobile close button -->
         {#if !collapsed}
-            <button class="lg:hidden p-2 hover:bg-lf-hover rounded-lg" on:click={closeSidebar}>
+            <button class="lg:hidden p-2 hover:bg-lf-on-brand/10 rounded-lg" on:click={closeSidebar}>
                 <X size={20} />
             </button>
         {/if}
