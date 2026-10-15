@@ -54,6 +54,10 @@ DEFAULT_TEST_DATA_DIR = PROJECT_ROOT / "backend" / "data" / "test"
 PRODUCTION_DATA_MARKER = ".librefolio-production-data"
 TEST_LANE_HEADER = "X-LibreFolio-Test-Lane"
 
+#: The secrets that make an instance trust a session. A test runtime never inherits them (``configure_test_runtime`` in
+#: ``scripts/cli_base.py``): a test lane signs with secrets of its own.
+INSTANCE_TRUST_SECRETS = ("JWT_SECRET",)
+
 
 # =============================================================================
 # Test mode management
