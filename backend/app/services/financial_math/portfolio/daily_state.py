@@ -11,7 +11,6 @@ from decimal import Decimal
 import structlog
 
 from backend.app.db.models import Transaction, TransactionType
-from backend.app.services.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.financial_math.average_cost import (
     AverageCost,
     CostEffect,
@@ -38,6 +37,7 @@ from backend.app.services.financial_math.portfolio.models import (
 )
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.valuation import compute_holding_value
+from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 
 logger = structlog.get_logger(__name__)
 

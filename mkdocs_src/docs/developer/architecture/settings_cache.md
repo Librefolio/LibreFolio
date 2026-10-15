@@ -100,7 +100,7 @@ A restart empties every worker's caches.
 
 ## 🖥️ Frontend: `CachePanel.svelte`
 
-`frontend/src/lib/components/settings/CachePanel.svelte` renders the registry as a table
+`frontend/src/lib/features/settings/CachePanel.svelte` renders the registry as a table
 (name, `current_size / maxsize`, human-formatted TTL) inside the **Settings → Global** tab
 (`GlobalSettingsTab.svelte`). Status loads for everyone; the per-row **Clear** buttons and
 **Clear all** are gated by the `canEdit` prop, which mirrors the Global-settings lock — the

@@ -20,7 +20,7 @@ from backend.app.schemas.risk import (
     RiskScopeKind,
     RiskWarning,
 )
-from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
+from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
 from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
 from backend.app.services.risk.analytic_helpers import (
     prepared_asset_return_points,

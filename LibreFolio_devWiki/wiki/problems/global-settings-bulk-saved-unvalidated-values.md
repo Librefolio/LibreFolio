@@ -63,8 +63,8 @@ and `tzdata` is not in the `Pipfile`). Source: [[sources/phase00-wac-unification
 | Role | Path |
 |------|------|
 | `validate_global_setting_value`, `GLOBAL_SETTINGS_CONSTRAINTS` | `backend/app/schemas/settings.py` |
-| `update_global_settings` (all or nothing) | `backend/app/services/settings_service.py` |
+| `update_global_settings` (all or nothing) | `backend/app/services/accounts/settings_service.py` |
 | `PATCH /settings/global/bulk` (404 / 422) | `backend/app/api/v1/settings.py` |
-| Read-side coercion `_convert_value` | `backend/app/services/global_settings_service.py` |
+| Read-side coercion `_convert_value` | `backend/app/services/accounts/global_settings_service.py` |
 | API tests | `backend/test_scripts/test_api/test_settings_api.py` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/30_wacUnification/plan-phase00SettingsBulkValidation.prompt.md` |

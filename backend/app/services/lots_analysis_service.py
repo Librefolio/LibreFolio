@@ -26,6 +26,7 @@ from backend.app.schemas.portfolio import (
     LotTimelineEventSchema,
 )
 from backend.app.schemas.wac import WACMissingPairInfo
+from backend.app.services.accounts.settings_service import get_effective_base_currency
 from backend.app.services.financial_math.average_cost import AverageCost, CostPosition, compute_average_costs, cost_movement_from_transaction
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
 from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, ReferencePriceResolution
@@ -38,7 +39,6 @@ from backend.app.services.financial_math.portfolio.data_quality import build_dat
 from backend.app.services.financial_math.price_marks import build_asset_price_series
 from backend.app.services.financial_math.returns import cumulative_to_annualized
 from backend.app.services.financial_math.valuation import compute_holding_value, normalize_quote_base_quantity
-from backend.app.services.settings_service import get_effective_base_currency
 
 _WARNING_ISSUE_CODES = {
     IssueCode.REFERENCE_PRICE_FALLBACK,
