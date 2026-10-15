@@ -463,7 +463,7 @@
         const desc = getProviderDescription(prov);
         const warning = getProviderWarning(prov.code);
         let h = `<strong>${escapeHtml(prov.name)}</strong><br/>${escapeHtml(desc)}`;
-        if (warning) h += `<br/><br/><span style="color:#fbbf24">⚠️ ${escapeHtml(warning)}</span>`;
+        if (warning) h += `<br/><br/><span class="text-lf-warning-on-inverse">⚠️ ${escapeHtml(warning)}</span>`;
         return h;
     }
 </script>

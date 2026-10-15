@@ -580,7 +580,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 11 | W3-a (TD-2): il segno della dashboard sui ruoli `gain` / `loss` | ✅ checkpoint `96a7c5bbb`, nel target |
 | 12 | TD-3 (card «Allocazione Patrimoniale») e W3-b (segno su mercato e broker) | 🔄 checkpoint di scrittura `7df164689` (prove leggere); prove pesanti nello slot insieme a W3-c/d, poi un ingresso unico |
 | 13 | W3-c e W3-d (stati e polarità sui ruoli) | 🔄 checkpoint di scrittura `078d4dcf8` (prove leggere); prove pesanti nello slot insieme a TD-3, W3-b e I1 |
-| 14 | I1 = W1-a + W1-b (selettori di `ui/select`) e le funzioni di segno di `LotCustodyModal` | 🔄 checkpoint di scrittura pronto (prove leggere), due commit; poi la base con DV e CP-16 e lo slot unico (~02:10) |
+| 14 | I1 = W1-a + W1-b (selettori di `ui/select`) e le funzioni di segno di `LotCustodyModal` | ✅ commit `6345f6950` e `1c16151a1`; base `7d78607df`; prove pesanti nello slot unico |
+| 15 | W1-d (`DistributionEditor`, `TagInput`) e Q10 (tooltip invertito, 3 ruoli `-on-inverse`) | 🔄 checkpoint di scrittura pronto (prove leggere), due commit; prove pesanti nello slot unico |
 
 ## Avanzamento
 
@@ -1704,3 +1705,69 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > broker), l'aggiunta di una coppia di cambi (la scelta della rotta dei provider), il laboratorio del rischio (asset,
 > filtro dei broker), la condivisione di un broker (utenti), i segnali del grafico; la modale di custodia di un lotto
 > (le cifre col segno).
+
+> **Commit:** `6345f6950` (`LotCustodyModal`) e `1c16151a1` (I1); base del coordinatore `7d78607df` (target `03ec20ac8`,
+> con J CP-16 e X CP11a): `LotCustodyModal` fuso da solo, il mio import, la riga di J con `closureValueLabelKey`, le mie
+> due funzioni, la sua etichetta alla 182; `--check` pulito.
+
+### W1-d e Q10 — 🔄 16/10/2026 (i campi di `ui/input`; il tooltip sul fondo invertito; D-T27)
+
+> **Avvio** (coordinatore, 00:5x–01:1x). Lo slot unico si sposta verso le 02:30–02:40 (dopo r2 di G, la galleria mobile
+> di Y7 e DV); fino alle 02:20 si scrive, e quello che è committato a quell'ora entra nello slot, che resta sotto i 75
+> minuti. **W1-d** sbloccato da G alle sue condizioni: in `gallery.spec.ts` solo le righe 6064 e 6067–6068, sullo span
+> `distribution-total-{kind}` un attributo di stato e non di colore, e nello slot una galleria filtrata a 1 worker,
+> desktop e mobile, le cui impronte 🔎 delle due scene siano uguali a `g-ref13-r1`/`r2` (`/tmp/librefolio-g13-ref/
+> compare_fingerprints.py`). OK di W per `TransactionFormModal.test.ts` 791–792 e 834–838. **Q10** approvato dalla
+> designer (`risposta-1-originale.txt`): tooltip sul fondo invertito, avviso su `--lf-warning-on-inverse`; la regola si
+> estende (coordinatore) a successo, pericolo, info e attenuato, «da rivedere». OK della 1.3, per W e X, a
+> `fxConversionHelper.ts:118–131`, `WacPreviewSection.svelte:321–322` e `providerProbe.ts:111`, solo colori.
+
+> ✅ **1 · W1-d, ridotto a 2 file** (sotto-agente, 01:1x). `DistributionEditor`: barra e totale sui ruoli di stato, gli
+> stessi valori di `pacTargetBar` / `pacTargetTotal`, traccia `bg-lf-neutral`, ✅/⚠ sui ruoli, testi attenuati; sullo span
+> del totale `data-state={isValid ? 'valid' : isExcess ? 'excess' : 'missing'}`, coi rami della classe. `TagInput`: campo
+> `bg-lf-field border-lf-input`, menu `bg-lf-card border-lf-raised shadow-lg shadow-lf-shadow`, suggerimento evidenziato
+> `bg-lf-selected` (prima blu), anello del chip a fuoco `ring-lf-focus ring-offset-lf-field`, i ripieghi del `<style>` sui
+> ruoli; i colori dei chip da `getStringBadgeStyle` restano (categoriali). Nessuno dei due riceve classi dai chiamanti.
+> - **⚠️ Fuori pista — `ExactDecimalInput` ed `ExactQuantityInput` rimandati:** i chiamanti passano classi di palette
+>   dentro `className`. Il pianificatore PAC passa `INPUT` (`ui.ts:39`: `bg-white`, `border-gray-300`, `dark:…`) a
+>   `TargetInputCell`, `AssetsStep`, `RoutingStep`: col campo sui ruoli il suo `dark:border-gray-600` (variante) batterebbe
+>   il bordo d'errore `border-lf-danger` (base), e in scuro l'errore sparirebbe. `TxFormSingleSection:185,233` e
+>   `TxFormPairSection:200` forzano `!bg-white`: col campo sui ruoli il remap scuro non vale più, e in scuro il campo
+>   sarebbe bianco col testo chiaro. In più `ExactQuantityInput.test.ts:284`, `TransactionFormModal.test.ts:803–813, 826`
+>   e `transactions-modals.spec.ts:1171–1203` leggono i colori dello stile in linea. I due file tornano come in HEAD; le
+>   bozze del sotto-agente stanno in `files/W1d-deferred/` della sessione. Vanno con i loro chiamanti (pianificatore, form
+>   delle transazioni), in un lotto con l'OK dei proprietari. Il test di `TransactionFormModal` non serve più stanotte.
+> - `gallery.spec.ts` (test-author): il commento della 6064 e le asserzioni 6067–6068 su
+>   `toHaveAttribute('data-state', 'valid', {timeout: 5_000})`; nient'altro (la 6027 dice ancora «green 100% total badge»:
+>   è di G).
+
+> ✅ **2 · Q10** (01:1x). Ruoli nuovi in `tokens.css`, coi valori del tema opposto, e le utility:
+> `--lf-danger-on-inverse` `#FF7A86` / `#C82838` (6,34 / 4,86:1 sul tooltip `#1C2420` / `#EDF2F0`),
+> `--lf-info-on-inverse` `#3F86FA` / `#155EEF` (4,54 / 4,78:1), `--lf-text-muted-on-inverse` `#7F8C87` / `#616D67`
+> (4,54 / 4,77:1); il verde non serve (nessun tooltip ne ha). `Tooltip.svelte`: fondo `var(--lf-surface-inverse)`, testo
+> `var(--lf-text-on-inverse)`, ombra `var(--lf-shadow-raised)` come i menu (Q8), KaTeX `var(--lf-info-on-inverse)`; via la
+> regola `html.dark`. I contenuti col colore per il fondo scuro (mappa di un `explore`, gli altri costruttori non hanno
+> colori): `fxConversionHelper` (etichette → `text-lf-muted-on-inverse`, «⚠️ non aggiornato» →
+> `text-lf-warning-on-inverse`), `WacPreviewSection:321–322` (data → avviso, tasso vecchio → `text-lf-danger-on-inverse`),
+> `FxProviderSelect:466` (`#fbbf24` → `class="text-lf-warning-on-inverse"`), `providerProbe.ts:111` (il bordo delle
+> intestazioni → `color-mix(in oklab, var(--lf-text-on-inverse) 20%, transparent)`).
+> - `test-author`: in `themeTokens.gate.test.ts` le 3 coppie nuove su `surface-inverse` e un controllo di parità (ogni
+>   `X-on-inverse` di un tema è la `X` dell'altro, trovati per nome, non vuoto, con un foglio difettoso permanente che
+>   deve dare 6 rilievi); in `sanitizeHtml.test.ts` un caso col markup vero della sonda: DOMPurify 3.4.8 tiene lo stile
+>   con `color-mix(… var(…) …)` com'è scritto e la classe. 28/28, provati rossi coi valori sbagliati.
+> - **Da rivedere:** in scuro tutti i tooltip dell'app diventano chiari col testo scuro; l'ombra dei tooltip è quella dei
+>   menu, più marcata; info e attenuato in chiaro stanno a 4,54:1, al filo della soglia (la parità li lega ai valori
+>   dello scuro).
+
+> ✅ **3 · Prove leggere** (01:2x–01:37): Prettier verde sugli 11 file; `--update` m1 10.223 → 10.166 e m2 83 → 71 (escono
+> dalla baseline `Tooltip`, `providerProbe`, `fxConversionHelper`, `FxProviderSelect`, `DistributionEditor`, `TagInput`;
+> `WacPreviewSection` 96 → 94); `--check` pulito; `diff --check` pulito; Vitest mirati sotto `nice -n 10` (dopo r2 di G,
+> come chiesto): `Tooltip`, `TagInput`, `providerProbe`, `providerProbeState`, `fxConversionHelper`, gate dei token,
+> `sanitizeHtml`, `FxProviderSelect` 336/336, `WacPreviewSection` 4/4. `front check`, suite intere, E2E e la galleria
+> filtrata di G nello slot unico.
+
+> **Dove guardarlo** (per il developer): i tooltip, in chiaro e soprattutto in scuro (ora chiari col testo scuro) — i KPI
+> della dashboard, l'informazione sul cambio nella modale delle transazioni e nel bulk, l'anteprima WAC, la sonda del
+> provider nella modale dell'asset (la tabella col bordo delle intestazioni), la legenda della rotta dei provider dei
+> cambi (l'avviso), le formule KaTeX del pianificatore PAC; l'editor delle distribuzioni (settori, paesi) nella modale
+> dell'asset; il campo dei tag.
