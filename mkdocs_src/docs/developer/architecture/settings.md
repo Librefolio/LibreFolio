@@ -2,7 +2,8 @@
 
 LibreFolio has a two-tiered settings system — **User Settings** (per-user preferences) and
 **Global Settings** (instance-wide, admin-managed) — held together by a single declarative
-catalogue, `SETTINGS_REGISTRY`.
+catalogue, `SETTINGS_REGISTRY`. The settings that plugins declare for themselves are a separate
+system: see [Plugin Settings](patterns/plugin_settings.md).
 
 !!! info "A third layer, outside these two tiers: process configuration (`.env`)"
 
@@ -24,8 +25,9 @@ catalogue, `SETTINGS_REGISTRY`.
       `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`,
       `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release
       job or `./dev.py docker build` freezes), `LIBREFOLIO_BLOCKED`, `LIBREFOLIO_DELETION_DATE`,
-      `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key also as `_FILE`) — are read in
-      `backend/app/config/` (base or section module), from
+      `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key also as `_FILE`), the variables of the plugin
+      settings (`LIBREFOLIO_PLUGIN_*` and the aliases of secret fields, all also as `_FILE`) — are
+      read in `backend/app/config/` (base or section module), from
       `os.environ` only. pydantic-settings does not export `.env` there, so they arrive through the
       launcher: `./dev.py server` copies `.env` into the environment (shell values win), Compose uses
       `env_file:`.
@@ -51,7 +53,8 @@ catalogue, `SETTINGS_REGISTRY`.
       `registration_mode_pinned()`, `max_users()`, `public_url()`, `billing_url()`), `plugins.py`
       (X: `web_link_finder_enabled()`, `web_link_finder_engine()`, `web_link_finder_api_key()`,
       `web_link_finder_ddgs_region()`, `web_link_finder_ddgs_backend()`, `web_link_finder_timeout()`,
-      `web_link_finder_max_results()`) and `email.py` (E: `smtp_host()`, `smtp_tls_mode()`,
+      `web_link_finder_max_results()`, and `plugin_setting_env()` and `plugin_setting_env_origin()`
+      for the [plugin settings](patterns/plugin_settings.md#environment)) and `email.py` (E: `smtp_host()`, `smtp_tls_mode()`,
       `smtp_port()`, `smtp_user()`, `smtp_password()`, `smtp_sender()`, `smtp_reply_to()`,
       `smtp_max_per_hour()`; see [Email Service](../backend/email.md#configuration)). `sleep_wake.py`
       and `backup.py` will follow when their areas add variables. Unlike a `Settings` field, an
@@ -217,7 +220,7 @@ Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and 
 |-------|--------|--------|
 | `profile` | `selfhosted`, an install run by its owner, or `managed`, an instance a hosting provider runs for its customers | `LIBREFOLIO_PROFILE`, a field of `Settings`, so it comes from `.env` or the environment like `PORT`. Default `selfhosted`; case and spaces around the value are ignored, and any other value stops the startup. Admin side: [Configuration](../../admin/configuration.md). |
 | `accounts` | `{registration_mode, registration_locked}` (`AccountsInstanceConfig`, `backend/app/schemas/auth.py`): the registration mode in force, `open`, `invite` or `disabled`, and whether `LIBREFOLIO_REGISTRATION` pins it | `effective_registration_mode()` (workstream A, `registration_service.py`): the variable, otherwise the `registration_mode` row, so the endpoint is `async`, with a database session. No count and no limit. Details: [Registration Modes](access_control.md#registration-modes). |
-| `email` | `{available}` (`EmailInstanceConfig`, `backend/app/schemas/email.py`): whether the instance can send emails now, an SMTP server set and every `LIBREFOLIO_SMTP_*` variable usable; never the configuration itself | `email_available()` (workstream E, `services/email/delivery.py`), run in a worker thread since it may read the password file. The field has a default, `available: false`, so it is optional in the schema. Details: [Email Service](../backend/email.md#instance-email). |
+| `email` | `{available, links}` (`EmailInstanceConfig`, `backend/app/schemas/email.py`): `available`, whether the instance can send emails now, an SMTP server set and every `LIBREFOLIO_SMTP_*` variable usable; `links`, whether emails with a link can go out too, `LIBREFOLIO_PUBLIC_URL` set to an http(s) address; never the configuration itself | `email_instance_config()` (workstream E, `services/email/links.py`), run in a worker thread since it may read the password file. Both booleans default to `false`, so the field is optional in the schema. Details: [Email Service](../backend/email.md#instance-email). |
 
 The rule for a workstream that owns part of the public configuration:
 

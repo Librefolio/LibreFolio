@@ -141,7 +141,7 @@ class CurrencyChangeOperations:
         await session.commit()
 
         # 4. Cache invalidation — history + current. The cache key is
-        # ``(provider_code, identifier, identifier_type, params_hash)`` so we
+        # ``(provider_code, identifier, identifier_type, params_hash, settings part)`` so we
         # rebuild it from the asset's current provider config. If the asset
         # has no provider assigned the keys simply won't be in the cache;
         # ``.delete`` is a no-op in that case.
@@ -158,6 +158,7 @@ class CurrencyChangeOperations:
                     asset.identifier or "",
                     str(asset.identifier_type),
                     core._provider_params_hash(params_dict),
+                    await core.settings_cache_part_for(asset.provider_code),
                 )
                 core._asset_history_cache.delete(cache_key)
                 core._asset_current_cache.delete(cache_key)

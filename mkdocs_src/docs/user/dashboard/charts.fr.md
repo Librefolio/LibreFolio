@@ -8,7 +8,7 @@ Sous les cartes KPI, le graphique **Croissance du portefeuille** et le panneau *
 
 Le graphique de croissance montre l'évolution de votre portefeuille sur la période sélectionnée : le bouton **Abs / % / P&L** dans son coin supérieur droit bascule entre les valeurs absolues, les taux de rendement et l'argent réellement gagné.
 
-Le graphique mémorise votre dernière vue, sous-vue P&L incluse, dans ce navigateur et pour chaque utilisateur, et la partage avec les pages des courtiers. Il démarre sur **Abs**. Sans données de taux de rendement, **%** est grisé et le graphique affiche **Abs** ; votre choix revient la prochaine fois que vous ouvrez le graphique avec des données à tracer.
+Le graphique mémorise votre dernière vue, sous-vue P&L incluse, dans ce navigateur et pour chaque utilisateur, et la partage avec les pages des courtiers. Il démarre sur **Abs**. Sans données de taux de rendement, **%** est grisé et le graphique affiche **Abs**, mais garde votre choix : **%** revient dès qu'il y a des données à tracer — quand vous changez de période ou de courtier, ou la prochaine fois que vous ouvrez le graphique — sauf si vous choisissez une autre vue entre-temps.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-growth" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active chart-crop-container" data-title="📈 Mode absolu" alt="Graphique de croissance — Mode absolu">
