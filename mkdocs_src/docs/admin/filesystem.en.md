@@ -1,6 +1,6 @@
 # 📂 Filesystem Structure
 
-LibreFolio keeps everything it stores in one **data directory**: the database, uploaded files, broker reports and logs. Its layout is all you need to know for backups and maintenance.
+LibreFolio keeps everything it stores in one **data directory**: the database, uploaded files, broker reports, logs and the instance key. Its layout is all you need to know for backups and maintenance.
 
 | Installation | Data directory |
 | --- | --- |
@@ -23,6 +23,8 @@ backend/data/
 │   │   └── ❌ failed/                # Reports that could not be read
 │   ├── 📝 logs/                      # Application log files
 │   ├── 🎭 scenario_catalog/          # Optional: your own stress scenarios
+│   ├── 🔐 secrets/                   # Created when LibreFolio first needs the key
+│   │   └── 🔑 instance.key           # The instance key: back it up, never change it
 │   └── 📋 scheduler_state.json       # Last run of the scheduled syncs
 │
 └── 🧪 test/                          # Test data (completely isolated)
@@ -79,6 +81,14 @@ A report moves from `uploaded/` to `parsed/` or `failed/`, so its original file 
     - **Troubleshooting**: `LOG_LEVEL=DEBUG` — see what the system is deciding
     - **Deep FX/price debugging**: `LOG_LEVEL=TRACE` — see every individual data point
 
+### 🔐 `secrets/`
+
+- 🔑 `instance.key` holds the [instance key](configuration.md#instance-key), the secret from which LibreFolio derives its encryption keys. LibreFolio creates it the first time it needs the key. After that, a missing `instance.key` looks the same as a first use: LibreFolio creates a new key, and what the old one encrypted can no longer be read.
+- 🔒 Only the user that runs LibreFolio can open the folder and the file: the folder is `0700`, the file `0600`. Keep them that way, and owned by that user: otherwise the [start log](configuration.md#startup-checks) has a warning, or an error when LibreFolio itself cannot open them.
+- ⛔ Never edit, replace or delete `instance.key`: what was encrypted with it could no longer be read. If it is damaged, restore it from a backup.
+- ♻️ When you restore the data directory, put `secrets/` back with it before you start LibreFolio again. Never start LibreFolio on restored data without its `secrets/`.
+- ⚙️ When the key comes from `LIBREFOLIO_INSTANCE_KEY` or `LIBREFOLIO_INSTANCE_KEY_FILE`, LibreFolio does not use this folder.
+
 🔗 For developers: [Data directory on disk](../developer/architecture/database/index.md#data-directory) — every file, its format and the code that writes it, `scenario_catalog/` included.
 
 ---
@@ -131,5 +141,12 @@ At minimum, back up:
 2. **`custom-uploads/`** — User-uploaded files (avatars, documents)
 3. **`broker_reports/`** — The original broker reports, in case you need to import them again
 4. **`scenario_catalog/`** — Your own stress scenarios, if you added any
+5. **`secrets/`** — The instance key, if LibreFolio has created it
 
-If storage is limited, `sqlite/app.db` alone keeps all the structured data: files and reports can be uploaded again if you still have them.
+!!! warning "🔑 Keep `secrets/` with the data, and keep it private"
+
+    Back up `secrets/` together with the database, and keep the copies as private as the database itself. Never change or delete the instance key once in use: what was encrypted with it could no longer be read. When you restore, put `secrets/` back with the data before you start LibreFolio.
+
+    Only the user that runs LibreFolio can open `secrets/`. If `cp` reports `Permission denied` there, for example with Docker when your host user is not the container's, copy as root and keep the permissions: `sudo cp -a`.
+
+If storage is limited, keep at least `sqlite/app.db`, which holds all the structured data, and the small `secrets/` folder: files and reports can be uploaded again if you still have them.
