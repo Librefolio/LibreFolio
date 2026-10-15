@@ -60,6 +60,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Logs: the startup and shutdown lines are written by the logger `backend.app.services.platform.app_lifespan` (before: `backend.app.main`).
 - `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` and `_MAX` below 1, or not a finite number, take their default. A timeout under a second used to mean no timeout, and `0` still returned one link. A fractional timeout is now honoured, rounded up to whole seconds.
 - **The server stops within 8 seconds.** After a `docker stop`, a restart or Ctrl+C, requests still running after 3 seconds are cancelled and what they had not saved is rolled back; the server's own work (scheduled syncs, workers, caches) gets the rest of the time, and worker processes still alive are ended, so none is left behind. If something still holds the server when the time is up, it ends anyway and its log says what was still running. `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` changes the budget (`0`: no limit, as before). Docker waits 10 seconds by default: if you raise the budget, give the container more time too (`stop_grace_period`).
+- **Uploaded files have a scope.** Common files (images: icons, logos, asset photos, avatars) are visible to every signed-in user; personal files (every other type) only to their uploader and the administrators. Files uploaded before this version follow the same rule.
+- API: `POST /api/v1/uploads` accepts `scope`; `PATCH /api/v1/uploads/{id}` changes it; file info carries `scope` and `can_delete`. Another user's personal file answers 404, as a missing one.
 
 #### 🎨 A new colour palette
 
@@ -128,6 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Broker reports uploaded by older versions are no longer open to every user.** A report stored without a broker could be listed, read, parsed and deleted by any signed-in user. Now only the user who uploaded it and an administrator can reach it, and only an administrator when no uploader was recorded.
 - **Parsing a report checks the broker it imports into.** The parse compared the report with the transactions of the broker named in the request without checking that the caller could edit it. It now needs EDITOR or OWNER there too, as the duplicates check already did.
 - **Report file ids are checked first.** An id that is not a file's own UUID answers 404; a very long one used to cause a server error.
+- **Thumbnails of uploaded images are no longer kept by shared caches**: they are sent `Cache-Control: private`, so a proxy in front of the instance does not store them.
 
 ### ⚠️ Breaking changes
 
