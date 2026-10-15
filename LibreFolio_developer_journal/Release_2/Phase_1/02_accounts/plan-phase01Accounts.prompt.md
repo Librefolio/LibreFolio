@@ -2906,7 +2906,7 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   ES (debito di A, confermato dal coordinatore). A-14 è passato a W, A-15 ad H.
 > - `all-backend`: nella validazione di A6b, prima del suo ingresso (coordinatore).
 
-### A6b — frontend di A6: scheda Utenti, eliminazione, verifica dell'indirizzo — in corso
+### A6b — frontend di A6: scheda Utenti, eliminazione, verifica dell'indirizzo — consegnato (handoff d'ingresso, 15/10 sera)
 
 #### A6b.0 — Via, base e vincoli ✅ (2026-10-15)
 > - **A6a è entrato**: `dev_release2` = `1840ebd62` (merge di `5e21149e5`); CHANGELOG `ca4ec658e`.
@@ -3110,7 +3110,7 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > 5. **Aggancio `linkShareActions.ts`**: girato a E così com'è.
 > 6. **Runner**: solo righe in aggiunta, dichiarate.
 
-#### A6b.2 — Test rossi (sei `test-author` in parallelo, solo scrittura) e bozza dell'implementazione ⏳ (2026-10-15)
+#### A6b.2 — Test rossi (sei `test-author` in parallelo, solo scrittura) e bozza dell'implementazione ✅ (2026-10-15)
 > - Il contratto, in inglese per i `test-author`, è nel file di sessione `a6b_contract_en.md`: è la stessa cosa di
 >   A6b.1.
 > - **Gli autori**:
@@ -3173,7 +3173,7 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - `mkdocs.yml`: «Users & Invitations: admin/users.md» sotto «⚙️ System Configuration», più le tre righe di
 >   `nav_translations`. Da dichiarare all'handoff.
 
-#### A6b.4 — Prove leggere ⏳ (2026-10-15)
+#### A6b.4 — Prove leggere ✅ (2026-10-15)
 > - Vitest sui 10 file: **394 passati**, al primo colpo.
 > - Gate Vitest: `clipboardSink`, `htmlInterpolation`, `htmlSink`, `themeRoles`, `themeTokens`,
 >   `themeComponentTokens`, `themeModeReads` e `flagFont` verdi; `page.tabs` verde dopo il mock.
@@ -3217,7 +3217,7 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   - `LIBREFOLIO_PUBLIC_URL` il browser non lo legge: viene da `url` nelle risposte dei link. Per la scheda Email la
 >     fonte è il suo `/email/status`, oppure un campo in `/system/instance` (H), se lo decide il coordinatore.
 
-#### A6b.5 — Doc (`docs-writer`, EN) e scatto della galleria ⏳ (2026-10-15)
+#### A6b.5 — Doc (`docs-writer`, EN) e scatto della galleria ✅ (2026-10-15; il doppio lancio dello scatto è di G-13)
 > - **Galleria** (`test-author`): `gallery.spec.ts` +63/−0. L'import di `schemas` (L138) e il test
 >   `'users - all languages and themes'` (L2121–2181) dopo `profile tab`: 16 scatti `{desktop,mobile}/{en,it,fr,es}/
 >   {light,dark}/settings/users`.
@@ -3322,6 +3322,23 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - **Validazione della revisione combinata** (in corso, `/tmp/libreFolio_a6b/merge_validation.sh`): `api sync`,
 >   `front check`, Vitest (`settingsTabs`, `page.tabs`, `ProfileTab`, `UsersTab`), `db populate`, E2E `admin-users` e
 >   `settings`, `mkdocs build`, `check-orphans`. `core-unit` va nello slot 1, dopo J.
+
+#### A6b.8 — Slot pesante 1: `core-unit` della revisione combinata e handoff d'ingresso ✅ (2026-10-15, 20:25–20:35)
+> - HEAD `e66334205` (A6b `3706a7e19`…`0b8bb863e`, merge `f242cd6f4`, journal `97fb199f1`, commento della galleria
+>   `0cf135997`, journal `e66334205`), worktree pulito. Lo slot 1 me l'ha dato il coordinatore alle 20:25.
+> - `nice -n 10 … dev.py test --test-port 6182 --data-dir /tmp/librefolio-r13-a front-utility core-unit`:
+>   ✅ **5139 su 157 file**, 1 min 32 s (log `/tmp/libreFolio_a6b/logs/entry/core_unit.log`). Il rosso noto di
+>   `htmlInterpolation.gate.test.ts` non compare: nella mia base la chiave `email.problems.SMTP_FROM_INVALID` è già
+>   quella corretta da E2 («angle brackets», senza `<`), e il gate è nel giro e passa.
+> - Previsione d'ingresso, in sola lettura: `git merge-tree --write-tree dev_release2 (b4597efad) HEAD` → **nessun
+>   conflitto** (albero `d59a9d0c8`). Due file toccati dai due lati, uniti da soli e riletti:
+>   - `security.md`: H (CP2b) a L320 e L697 (i riferimenti a `main.py` → `services/platform/`), io a L627 (il
+>     paragrafo «In the app»); l'ancora `#address-probe-cors` del mio rimando resta;
+>   - `BACKLOG_POST_1.2.md`: sezioni diverse.
+>   - Dopo `00aa2ab3c` il mio ramo non tocca file del backend: le patch di H su `test_post_migration.py` non lo toccano.
+> - Porta 6182 libera (`lsof` vuoto). Artefatti ignorati: `.testLog/` (con `00_archive/test-db_20261015_202730.tar.xz`
+>   dello snapshot del runner).
+> - Handoff d'ingresso mandato; stato **FROZEN** fino all'ingresso e al via di A6d.
 
 ### A6d — Decisione 36: registrazione su invito per le istanze nuove, impostazioni globali solo con il login — in attesa del via (dopo l'ingresso di A6b)
 
