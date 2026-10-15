@@ -20,6 +20,10 @@
  * that finds nothing breaks no rule, so it must reach tables known to exist, and each rule is shown to fail on a
  * synthetic table that breaks it.
  *
+ * `chartCategories.ts` is not walked: its exports are lists of keys, not colours, and its colour tables are private on
+ * purpose (one read point, `categoryColor`, contract C1 with the Designer Lab). Its values, their shape and how far
+ * apart they are, are `chartCategories.test.ts`'s.
+ *
  * The values are not pinned: a value is the designer's call, its shape is not.
  *
  * No runes, no DOM: this stays in the default `node` environment.
@@ -153,8 +157,10 @@ const SCAN = scanTables(MODULES);
 
 describe('the chart colour tables — every export of chartTheme.ts and chartPalettes.ts, at any depth', () => {
     it('positive control: the walk reaches tables known to exist, at every depth', () => {
-        expect(SCAN.pairs.map(({path}) => path)).toEqual(expect.arrayContaining(['chartPalettes.ALLOCATION_PIE_PALETTE', 'chartTheme.CHART_TOOLTIP_COLORS.box.background']));
-        expect(SCAN.colours).toEqual(expect.arrayContaining(['chartPalettes.ALLOCATION_PIE_PALETTE.dark[13]', 'chartPalettes.SEMI_DONUT_PALETTE[0]', 'chartTheme.CHART_TOOLTIP_COLORS.box.background.light', 'chartTheme.CHART_TOOLTIP_COLORS.aside']));
+        // A pair of lists, a pair inside a list, a pair inside a table.
+        expect(SCAN.pairs.map(({path}) => path)).toEqual(expect.arrayContaining(['chartPalettes.GEO_CHOROPLETH_SCALE', 'chartPalettes.GROWTH_BROKER_PALETTE[0]', 'chartTheme.CHART_TOOLTIP_COLORS.box.background']));
+        // The last entry of a theme's list, an entry of a plain list, a theme of a pair inside a list, a theme of a pair inside a table, a plain string.
+        expect(SCAN.colours).toEqual(expect.arrayContaining(['chartPalettes.GEO_CHOROPLETH_SCALE.dark[5]', 'chartPalettes.SIGNAL_DEFAULT_PALETTE[0]', 'chartPalettes.GROWTH_BROKER_PALETTE[7].dark', 'chartTheme.CHART_TOOLTIP_COLORS.box.background.light', 'chartTheme.CHART_TOOLTIP_COLORS.aside']));
     });
 
     it('breaks no rule: every pair whole and of one kind, every string a colour, no list repeating an entry, the two lists of a pair of one length', () => {

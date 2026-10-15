@@ -14,11 +14,16 @@
  *   `NaN` into the colour — `#abc` became `rgba(171,12,NaN,a)` — and `'#abc' + '88'` made an invalid `#abc88`: strings
  *   the canvas ignores, so a series silently lost its fill. Now a colour gets its alpha in a notation that can carry
  *   it, or comes back unchanged — never with a `NaN` in it.
+ * - **`parseRgba` reads the alpha a colour already carries** (DV, T's review of the bridge): the opacity of a
+ *   `#rrggbbaa` or `#rgba`, the fourth number of `rgba()`/`hsla()` or the one after `/`, a percentage read as such,
+ *   clamped to 0–1; 1 for an opaque notation. The channels are `parseRgb`'s, and so are the notations it refuses: it
+ *   reads, it never guesses — an alpha it cannot read makes the colour unreadable, never opaque. `./contrast`
+ *   composites a translucent colour with it before measuring.
  *
  * Registered in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action `core-unit`).
  */
 import {describe, expect, it} from 'vitest';
-import {toRgba, withAlpha, withHexAlpha} from '$lib/theme/colorAlpha';
+import {parseRgb, parseRgba, toRgba, withAlpha, withHexAlpha} from '$lib/theme/colorAlpha';
 
 /**
  * `hexToRgba` exactly as `lineChartHelpers.ts` defined it before R-4: the oracle of the golden tests. It is copied
@@ -236,5 +241,48 @@ describe('withHexAlpha', () => {
                 expect(out, `${color} + ${alphaHex}`).not.toContain('NaN');
             }
         }
+    });
+});
+
+describe('parseRgba — the channels of a colour and the opacity it carries', () => {
+    it('reads an opaque notation with alpha 1, its channels those of parseRgb', () => {
+        for (const color of ['#1a4031', '#1A4031', '#abc', 'rgb(22, 163, 74)', 'rgb(22 163 74)', 'rgba(22, 163, 74)', 'hsl(120, 50%, 50%)', ' #1a4031 ']) {
+            expect(parseRgba(color), color).toEqual({...parseRgb(color), alpha: 1});
+            expect(parseRgb(color), `barrier: ${color} is a colour parseRgb reads`).not.toBeNull();
+        }
+    });
+
+    it('reads the alpha of an eight-digit and a four-digit hex, byte by byte', () => {
+        expect(parseRgba('#16a34a80')).toEqual({r: 22, g: 163, b: 74, alpha: 0x80 / 255});
+        expect(parseRgba('#1A4031FF')).toEqual({r: 26, g: 64, b: 49, alpha: 1});
+        expect(parseRgba('#ef444400')).toEqual({r: 239, g: 68, b: 68, alpha: 0});
+        // The fourth digit is doubled, like the three before it: #abcd is #aabbccdd.
+        expect(parseRgba('#abcd')).toEqual({r: 170, g: 187, b: 204, alpha: 0xdd / 255});
+    });
+
+    it('reads the fourth number of rgba() and hsla(), comma or space syntax, after a slash, as a number or a percentage', () => {
+        expect(parseRgba('rgba(22, 163, 74, 0.3)')).toEqual({r: 22, g: 163, b: 74, alpha: 0.3});
+        expect(parseRgba('RGBA(22,163,74,.3)')).toEqual({r: 22, g: 163, b: 74, alpha: 0.3});
+        expect(parseRgba('rgb(22 163 74 / 0.3)')).toEqual({r: 22, g: 163, b: 74, alpha: 0.3});
+        expect(parseRgba('rgb(22 163 74 / 30%)')).toEqual({r: 22, g: 163, b: 74, alpha: 0.3});
+        expect(parseRgba('hsla(120, 50%, 50%, 0.25)')).toEqual({r: 64, g: 191, b: 64, alpha: 0.25});
+        expect(parseRgba('hsl(120deg 50% 50% / 25%)')).toEqual({r: 64, g: 191, b: 64, alpha: 0.25});
+    });
+
+    it('clamps an alpha outside 0–1 to its end', () => {
+        expect(parseRgba('rgba(1, 2, 3, 1.5)')?.alpha).toBe(1);
+        expect(parseRgba('rgba(1, 2, 3, -0.5)')?.alpha).toBe(0);
+        expect(parseRgba('rgb(1 2 3 / 150%)')?.alpha).toBe(1);
+        expect(parseRgba('rgb(1 2 3 / -20%)')?.alpha).toBe(0);
+    });
+
+    it('refuses what parseRgb refuses — a name, var(), color-mix(), oklch(), a broken hex — and an alpha it cannot read', () => {
+        for (const color of ['red', 'transparent', 'var(--lf-surface-card)', 'color-mix(in oklab, #fff 50%, #000)', 'oklch(0.62 0.19 145 / 0.5)', '#12345', '#gggggg', '', 'rgb(1, 2)']) {
+            expect(parseRgb(color), `barrier: parseRgb refuses ${JSON.stringify(color)}`).toBeNull();
+            expect(parseRgba(color), JSON.stringify(color)).toBeNull();
+        }
+        // The channels read, the alpha does not: unreadable, never taken for opaque.
+        expect(parseRgb('rgba(1, 2, 3, abc)'), 'barrier: the channels alone are readable').not.toBeNull();
+        expect(parseRgba('rgba(1, 2, 3, abc)')).toBeNull();
     });
 });
