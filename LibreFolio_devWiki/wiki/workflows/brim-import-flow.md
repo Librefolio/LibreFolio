@@ -94,7 +94,7 @@ through the standard transaction bulk API. BRIM has no commit endpoint.
 | Role | Path |
 |------|------|
 | BRIM routes and access checks | `backend/app/api/v1/brokers.py` |
-| File storage and parse cache | `backend/app/services/brim_provider.py` |
+| File storage and parse cache | `backend/app/services/brim/brim_provider.py` |
 | BRIM schemas | `backend/app/schemas/brim.py` |
 | Import wizard | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
 | Bulk editor | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |

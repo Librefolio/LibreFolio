@@ -57,7 +57,7 @@ PRIORITY_MAP = {
     "backend/app/services/brokers/": "HIGH",
     "backend/app/services/accounts/user_service.py": "HIGH",
     "backend/app/services/transactions/": "HIGH",
-    "backend/app/services/brim_provider.py": "HIGH",
+    "backend/app/services/brim/": "HIGH",
     # MEDIUM — API endpoints
     "backend/app/api/": "MEDIUM",
     # MEDIUM — providers
@@ -177,7 +177,7 @@ def classify_category(filepath: str, func_name: str, stmts: int) -> str:  # noqa
     if any(svc in filepath for svc in [
         "services/assets/", "services/fx/fx.py", "services/brokers/",
         "services/transactions/", "user_service.py",
-        "brim_provider.py", "settings_service.py",
+        "services/brim/", "settings_service.py",
     ]):
         return "CORE_SVC"
 
