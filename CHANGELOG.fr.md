@@ -7,6 +7,20 @@ et ce projet adhère au [Versionnage sémantique](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.1] - 2026-10-15
+
+Une version de sécurité : mettez à jour dès que possible chaque installation 1.2.0, ainsi que toute version antérieure.
+
+### 🐛 Corrections
+
+#### 🔒 Sécurité
+
+- Le serveur garde chaque fichier qu'il sert dans le dossier auquel il appartient. Une adresse forgée pouvait faire renvoyer par les pages de l'application et de la documentation des fichiers pris ailleurs sur le serveur, sans connexion ; c'était possible depuis la v0.4.24. Les icônes des plugins, qui avaient déjà une vérification, utilisent désormais la même vérification, plus stricte.
+- Les fichiers téléversés et les rapports des courtiers ne s'ouvrent dans le navigateur que comme un contenu qui ne peut pas s'exécuter. L'aperçu texte d'un fichier téléversé est toujours du texte brut, et un rapport de courtier ne s'ouvre directement que s'il s'agit d'un PDF, d'une image PNG, JPEG, GIF, WebP ou BMP, de texte brut, d'un CSV ou d'un JSON ; tout autre type est téléchargé. Auparavant, un utilisateur connecté pouvait téléverser une page web qui s'exécutait pour un autre utilisateur qui en ouvrait l'aperçu.
+- Un `JWT_SECRET` composé uniquement d'espaces ne signe plus les sessions. Avec `docker run --env-file`, une ligne `JWT_SECRET=   ` devenait la clé de signature, et n'importe qui pouvait forger une session ; une telle valeur compte désormais comme non définie, comme une valeur vide. Un vrai `JWT_SECRET` est utilisé comme avant : personne n'est déconnecté.
+
+---
+
 ## [1.2.0] - 2026-10-14
 
 Ce que la 1.2 ajoute à la 1.1 :
