@@ -39,8 +39,10 @@
     import {withHexAlpha} from '$lib/theme/colorAlpha';
     import {themed} from '$lib/theme/themePair';
     import {ALLOCATION_CHART_COLORS, CHART_NEUTRALS, CHART_TOOLTIP_COLORS} from '$lib/theme/chartTheme';
-    import {ALLOCATION_HISTORY_PALETTE} from '$lib/theme/chartPalettes';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {categoryColor, isUnclassifiedCountry, KEYLESS_SEQUENCE, sequenceColor} from '$lib/theme/chartCategories';
+    import {shadePoles} from '$lib/theme/chartShades';
+    import {chartRoles} from '$lib/theme/roleColors';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     interface AllocationComponent {
         name: string;
@@ -130,53 +132,11 @@
     /** The series ids, in order, last applied to the current instance; null before its first option. */
     let lastSeriesOrder: string | null = null;
 
-    // Distinct colors for allocation categories — 14 slots, which is enough for
-    // the `type` dimension and NOT enough for `sector`. Read the next paragraph
-    // before assuming the count closes.
-    //
-    // The two palettes are paired slot by slot — slot 0 is green in both themes,
-    // slot 1 blue, slot 2 amber … — so a category keeps its identity when the
-    // theme is toggled. Any addition must preserve that pairing.
-    //
-    // Grown from 12 to 14. That closes ONE of the two dimensions this palette
-    // serves:
-    //
-    //   type   — 12 base colours: the 11 families of assetTypeFamily (I's D15:
-    //            the chart groups by vehicle, like the pie), plus the synthetic
-    //            "Liquidity" bucket that `DailyStateBuilder.build` injects at its
-    //            step 4h, outside the enum. Each family is drawn as ONE area in its
-    //            base colour, and its subtypes appear only in the tooltip (D375).
-    //            12 <= 14, so no family is ever handed another's colour. (At
-    //            12 slots, grouping by content, it was: 13 keys, and the 13th took
-    //            the colour of the 1st — the largest slice on screen.)
-    //
-    //   sector — 15 keys: the 14 of SECTOR_KEYS_FALLBACK, plus the same
-    //            "Liquidity", which that same backend step injects into
-    //            `by_sector` as well. 15 > 14, so ONE collision SURVIVES here:
-    //            `palette[i % 14]` hands the 15th category the colour of the 1st.
-    //            The names are sorted by weight, so that is the smallest slice
-    //            wearing the largest slice's colour.
-    //
-    // That surviving case is hard to notice by design: the i18n label still
-    // resolves (the `.toUpperCase()` normalisation further down is independent of
-    // the palette), so the slice reads with the right name and the wrong colour —
-    // which looks like a design choice, not a bug. It needs a portfolio holding
-    // >=15 distinct sector buckets at once, so no fixture has ever produced it.
-    //
-    // Growing the palette again would NOT close it. getSectorKeysList() returns
-    // getSectorKeys() from the API store and falls back to the 14 above only when
-    // that store is empty: the real cardinality is backend data, not a constant,
-    // so no number is provably sufficient. The mechanism is the defect — the
-    // index WRAPS instead of SIGNALLING. Until that is cured (by deriving a shade
-    // for the wrapped slot, so a collision becomes visible instead of silent),
-    // the wrap is at least announced: see the debug.warn where `styling` is built.
-    //
-    // The two new slots were measured, not chosen: fuchsia (~295°) is the widest
-    // hue gap left in BOTH palettes, and purple-700/400 follows it while keeping
-    // the cross-theme pairing. The first 12 entries are untouched, so every chart
-    // with 12 categories or fewer renders exactly as before.
-    const PALETTE_LIGHT = ALLOCATION_HISTORY_PALETTE.light;
-    const PALETTE_DARK = ALLOCATION_HISTORY_PALETTE.dark;
+    // Every category wears its own colour (GR1 of the designer's round 2, D-T17), read through
+    // `categoryColor` (lib/theme/chartCategories): a family or a sector is the same colour as in
+    // the pie, whatever its rank, in every portfolio, broker and period. The countries have no
+    // colour of their own: they take the sector sequence by rank, a GR4 shade of it past the
+    // fourteenth, never a silent repeat; the unclassified one (`Unknown`) keeps its own grey.
 
     /** Get an emoji/icon label for a category. */
     function getCategoryEmoji(rawName: string): string {
@@ -191,6 +151,8 @@
 
     onMount(() => {
         darkModeObserver = onThemeClassChange(() => renderChart());
+        // A colour changed without a theme switch (a Designer Lab edit, contract C4): every render builds the whole option.
+        const chartColors = onChartColorsChange(() => renderChart());
 
         const loadRefs = async () => {
             await Promise.allSettled([ensureCountriesLoaded($currentLanguage), ensureSectorsLoaded()]);
@@ -203,6 +165,7 @@
             tooltipCleanup?.();
             disconnectVisibilityObservers();
             darkModeObserver?.disconnect();
+            chartColors.disconnect();
             resizeObserver?.disconnect();
             dataZoomTouchPanHandle?.dispose();
             dataZoomTouchPanHandle = null;
@@ -597,20 +560,37 @@
         return emoji ? `${emoji} ${localized}` : localized;
     }
 
-    /** One entry per asset family, in the hierarchy's group order, with its base colour verbatim and its raw members. */
-    function familyStyling(dataset: AggregatedAllocationDataset, palette: readonly string[]): SeriesStyle[] {
+    /** One entry per asset family, in the hierarchy's group order, with the family's own colour and its raw members. */
+    function familyStyling(dataset: AggregatedAllocationDataset, isDark: boolean): SeriesStyle[] {
         const hierarchy = buildAllocationHierarchy(
             dataset.sortedNames.map((name) => ({key: name, weight: dataset.avgWeights[name] ?? 0, item: name})),
-            {resolvePrimary: assetTypeFamily, palette},
+            // One area per family and no shades (D375): a member never needs a colour of its own here.
+            {resolvePrimary: assetTypeFamily, colorOf: (primary) => categoryColor('type', primary, isDark), shade: (base) => base},
         );
         const families: SeriesStyle[] = [];
         for (const entry of hierarchy) {
             const current = families[families.length - 1];
-            // A group's first member has depth 0, so its colour is the palette entry itself.
+            // A group's first member has depth 0, so its colour is the family's own.
             if (current && current.id === entry.primary) current.members.push(entry.item);
             else families.push({id: entry.primary, color: entry.color, members: [entry.item]});
         }
         return families;
+    }
+
+    /**
+     * One entry per sector, or per country, each with its colour. A sector wears its own; a country has none: it takes
+     * the sector sequence by rank among the classified countries, a GR4 shade of it past the fourteenth (GR5), while
+     * the unclassified one keeps its own grey.
+     */
+    function keyedStyling(dataset: AggregatedAllocationDataset, isDark: boolean): SeriesStyle[] {
+        if (dimension === 'sector') return dataset.sortedNames.map((name) => ({id: name, color: categoryColor('sector', name, isDark), members: [name]}));
+        const poles = shadePoles(isDark, chartRoles(isDark, chartContainer).color('--lf-surface-card'));
+        const rounds = KEYLESS_SEQUENCE.length * 7;
+        let rank = 0;
+        const styling = dataset.sortedNames.map((name) => ({id: name, color: isUnclassifiedCountry(name) ? categoryColor('sector', 'Unknown', isDark) : sequenceColor('sector', KEYLESS_SEQUENCE, rank++, isDark, poles), members: [name]}));
+        // The sequence and its six shades give 98 colours: past them a colour comes back. Announce it rather than let it pass.
+        if (rank > rounds) debug.warn('AllocationHistoryChart', `${rank} countries for ${rounds} distinct colours: ${rank - rounds} repeat an earlier colour`);
+        return styling;
     }
 
     /**
@@ -652,7 +632,6 @@
     }
 
     function buildChartOption(dataset: AggregatedAllocationDataset, isDark: boolean, skipAnimation: boolean): echarts.EChartsOption {
-        const palette = isDark ? PALETTE_DARK : PALETTE_LIGHT;
         const textColor = themed(CHART_NEUTRALS.dashboard.text, isDark);
         const gridColor = themed(CHART_NEUTRALS.dashboard.gridLine, isDark);
         const tooltipBg = themed(CHART_TOOLTIP_COLORS.box.background, isDark);
@@ -679,21 +658,13 @@
         //
         // By type, one area per family (D375, developer, 05/10/2026: «Una sola area per
         // famiglia (ETF = somma di tutti), con i sottotipi solo nel tooltip»). The family
-        // order and base colour are the pie's, from buildAllocationHierarchy by vehicle;
-        // the shades it gives the members are not drawn here, so the stack never shows two
+        // order is the pie's, from buildAllocationHierarchy by vehicle, and so is its colour,
+        // its own (GR1); no member is shaded here, so the stack never shows two
         // near-identical bands that read as an overlap.
         //
         // Deliberately not cached on the dataset: the dataset survives theme
-        // changes, the palette does not.
-        // The index wraps silently when there are more categories than slots: the
-        // wrapped one wears an earlier category's colour, with its own name still
-        // correct. Live today for `sector` — announce it rather than let it pass.
-        // (The `type` branch reports its own wrap from inside the helper.)
-        if (dimension !== 'type' && dataset.sortedNames.length > palette.length) {
-            debug.warn('AllocationHistoryChart', `palette exhausted: ${dataset.sortedNames.length} "${dimension}" categories for ${palette.length} colours — ` + `${dataset.sortedNames.length - palette.length} will repeat an earlier colour`);
-        }
-
-        const styling: SeriesStyle[] = dimension === 'type' ? familyStyling(dataset, palette) : dataset.sortedNames.map((name, index) => ({id: name, color: palette[index % palette.length], members: [name]}));
+        // changes, the colours do not.
+        const styling: SeriesStyle[] = dimension === 'type' ? familyStyling(dataset, isDark) : keyedStyling(dataset, isDark);
 
         const series: echarts.SeriesOption[] = styling.map(({id, color, members}) => {
             const emoji = getCategoryEmoji(id);

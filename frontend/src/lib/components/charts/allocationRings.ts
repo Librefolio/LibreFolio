@@ -26,12 +26,13 @@
  * rendering detail.
  *
  * Families are not assumed to have two members. A family can gain several subtypes,
- * so each subtype gets its own shade step.
+ * so each subtype gets its own shade: the GR4 shade of its rank under the family's
+ * colour (designer's round 2, D-T17), passed in by the caller as `shade`.
  *
  * Pure, no runes, and `resolvePrimary` stays upstream in the hierarchy it consumes:
  * nothing here imports the generated client.
  */
-import {shadeForDepth, type AllocationHierarchyResult} from './allocationHierarchy';
+import type {AllocationHierarchyResult} from './allocationHierarchy';
 
 export type AllocationRingRole = 'base' | 'member' | 'filler';
 
@@ -69,8 +70,8 @@ export interface AllocationRingsLayout<T> {
 export interface AllocationRingsOptions<T> {
     /** Magnitude of a member. Only relative sizes matter. */
     weightOf: (item: T) => number;
-    /** Lightness points between consecutive subtypes; defaults to the hierarchy's step. */
-    shadeStep?: number;
+    /** The colour of the subtype of rank `rank` (1…) under its family's colour `base` (GR4): `familyShade`. */
+    shade: (base: string, rank: number) => string;
 }
 
 /** Case-insensitive, because `by_type` mixes enum casing with the synthetic `"Liquidity"` bucket. */
@@ -79,7 +80,7 @@ function sameKey(a: string, b: string): boolean {
 }
 
 export function buildAllocationRings<T>(hierarchy: readonly AllocationHierarchyResult<T>[], opts: AllocationRingsOptions<T>): AllocationRingsLayout<T> {
-    const {weightOf, shadeStep} = opts;
+    const {weightOf, shade} = opts;
 
     // The hierarchy already emits each family contiguously, pure member first and
     // subtypes by weight; keep that order rather than re-deriving it.
@@ -94,7 +95,7 @@ export function buildAllocationRings<T>(hierarchy: readonly AllocationHierarchyR
     const outer: AllocationRingItem<T>[] = [];
 
     for (const {primary, members} of families) {
-        // Depth 0 is always the verbatim palette entry, whichever member holds it.
+        // Depth 0 is always the family's own colour, whichever member holds it.
         const baseColor = members[0].color;
         const weights = members.map((member) => weightOf(member.item));
         const total = weights.reduce((sum, weight) => sum + weight, 0);
@@ -113,12 +114,10 @@ export function buildAllocationRings<T>(hierarchy: readonly AllocationHierarchyR
         // Shade by rank among the subtypes, not by position in the family: when the
         // pure member is absent the first subtype would otherwise inherit the base
         // colour and vanish into the base arc — the very defect this layout exists for.
-        // The base arc holds depth 0 either way, so the family counts it as a member.
-        const shadeGroupSize = 1 + members.filter((member) => !sameKey(member.key, primary)).length;
         let subtypeRank = 0;
         members.forEach((member, index) => {
             const pure = sameKey(member.key, primary);
-            const color = pure ? baseColor : shadeForDepth(baseColor, ++subtypeRank, shadeStep, shadeGroupSize);
+            const color = pure ? baseColor : shade(baseColor, ++subtypeRank);
             outer.push({...shared, key: member.key, role: 'member', weight: weights[index], color, pure, items: [member.item]});
         });
     }
