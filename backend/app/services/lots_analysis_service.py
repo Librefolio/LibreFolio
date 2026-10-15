@@ -221,6 +221,7 @@ class LotsAnalysisService:
                     broker_shorting=performance_broker_shorting,
                     split_ratios_by_tx_id=performance_split_ratios,
                     reference_price_lookup=reference_price_lookup,
+                    target_currency=target_currency,
                 )
                 performance_lots_by_id = {lot.lot_id: lot for lot in performance_engine_result.lots}
                 performance_context = PerformanceSourceContext(
@@ -351,7 +352,6 @@ class LotsAnalysisService:
             lot_events = self._build_lot_event_rows(
                 engine_result=engine_result,
                 selected_ids=selected_ids,
-                tx_by_id=tx_by_id,
                 fx_resolver=fx_resolver,
                 lots_by_id=lots_by_id,
             )
@@ -870,13 +870,12 @@ class LotsAnalysisService:
         *,
         engine_result: FifoEngineResult,
         selected_ids: Sequence[int],
-        tx_by_id: dict[int, Transaction],
         fx_resolver: FxRateResolver,
         lots_by_id: dict[int, FifoLot],
     ) -> list[LotTimelineEventSchema]:
         selected = set(selected_ids)
         rows: list[LotTimelineEventSchema] = []
-        rows.extend(self._build_opening_and_split_rows(engine_result, selected, tx_by_id, fx_resolver, lots_by_id))
+        rows.extend(self._build_opening_and_split_rows(engine_result, selected, fx_resolver, lots_by_id))
         rows.extend(self._build_transfer_rows(engine_result.fragment_intervals, selected, lots_by_id, fx_resolver))
         rows.extend(self._build_closure_rows(engine_result.closures, selected, lots_by_id, fx_resolver))
         return sorted(rows, key=lambda row: (row.date, row.lot_id, row.transaction_id, row.kind))
@@ -885,7 +884,6 @@ class LotsAnalysisService:
         self,
         engine_result: FifoEngineResult,
         selected: set[int],
-        tx_by_id: dict[int, Transaction],
         fx_resolver: FxRateResolver,
         lots_by_id: dict[int, FifoLot],
     ) -> list[LotTimelineEventSchema]:
@@ -895,9 +893,8 @@ class LotsAnalysisService:
                 lot_id = event.transaction_id
                 if lot_id not in selected:
                     continue
-                tx = tx_by_id.get(event.transaction_id)
-                event_currency = tx.currency if tx is not None else lots_by_id[lot_id].currency
-                converted_unit_price = fx_resolver.convert(event.unit_price, event_currency, event.date)
+                # The opening price is in the lot's currency: a BUY's own, the cost basis's for a priced ADJUSTMENT.
+                converted_unit_price = fx_resolver.convert(event.unit_price, lots_by_id[lot_id].currency, event.date)
                 rows.append(
                     LotTimelineEventSchema(
                         lot_id=lot_id,

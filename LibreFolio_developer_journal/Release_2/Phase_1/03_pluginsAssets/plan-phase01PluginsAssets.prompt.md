@@ -2531,3 +2531,250 @@ parte 1, Y2. Merge aperto dal coordinatore e committato da lui (`f2a766f45`, gen
    >   nessun percorso.
    > - Previsione dei conflitti contro `45499dec4`: due file in comune (`api/overview.md`, `_backend_services.py`),
    >   entrambi puliti.
+
+### Checkpoint X-RL ✅ (2026-10-15) — committato dal coordinatore: `693b9ac3c` (codice, 58 percorsi) e `65b3fc0c4` (journal)
+
+### Undicesimo aggiornamento di base: `dev_release2` (`84a18fb4c`) nel ramo X ✅ (2026-10-15) — merge `276982a65`, pulito
+
+Dentro anche T+DV (la palette nuova, cambia `SectorListResponse`) e H CP-U1. `api/overview.md` e `_backend_services.py`
+si sono fusi da soli, come previsto. Le prove d'ingresso sulla revisione combinata, una alla volta con `nice -n 10` e
+un carico ≤ 70 (`/tmp/libreFolio_x_rl_entry_checks.sh`, log in `/tmp/libreFolio_x_rl_entry/`), tutte verdi:
+- `api sync`, senza file tracciati cambiati; `front check` 0/0; `front-utility core-unit` 5491, la regola per chi
+  tocca i cataloghi i18n;
+- services `rate-limit-errors` 55, `-boundaries` 33, `-http-providers` 18, `-results` 22, `provider-errors` 177;
+- Vitest `resolveProviderError` e `providerProbe` 65;
+- `mkdocs build` (strict) e `check-links` (96), perché `overview.md` si è fuso da solo; `check-orphans` pulito.
+
+Niente secondo `all-backend`, d'accordo col coordinatore: vale quello delle 23:16. Porta 6183 libera.
+
+### X-RL in `dev_release2` ✅ (2026-10-15) — treno 67, merge `da21c48c4`, registri `4ef2fc199`
+
+### CP11 — impostazioni dei plugin nell'interfaccia: analisi ⏳ (2026-10-15, 23:35)
+
+Base: HEAD `276982a65`; worktree pulito salvo questo piano. Disegno di riferimento: §4.4, D-X13, D-X14, D-X15.
+
+**Stato reale verificato**
+- Il backend del CP10 è completo.
+  - `GET /api/v1/settings/plugins`: filtri `family` e `plugin_code`; un plugin `test_only` compare solo se nominato.
+  - `PATCH …/bulk`: tutto o niente; un 422 porta `detail.results`.
+  - Ogni campo ha `label_key`, `description_key`, `options[].label_key`, `is_set`, `source`, `locked`, `env_variable`
+    (solo per l'admin), `editable`, `problem` e `updated_at`.
+  - Client generato: `get_plugin_settings_api_v1_settings_plugins_get`,
+    `update_plugin_settings_api_v1_settings_plugins_bulk_patch`.
+- Solo i doppi di prova dichiarano campi, ed entrambi sono `test_only`: `mockprov` ne ha 7, di ogni tipo, di sistema e
+  personali, con due segreti; `mockfx` ne ha 2. Oggi quindi la scheda, in produzione, sarebbe vuota; con D-X14
+  compaiono justETF e Borsa Italiana.
+- Il catalogo **non dice se un plugin è configurato**: il calcolo di `missing` vive solo nel resolver
+  (`resolver.py:254`).
+- La ricerca non dice perché un fornitore non ha risposto.
+  - Ricerca semplice: `NOT_CONFIGURED` finisce in `providers_with_errors`, che ha solo i codici.
+  - Stream: `provider_error` senza `error_code` (lo porta solo `RATE_LIMITED`).
+  - `AssetSearchAutocomplete` ignora ogni `provider_error`.
+- Le chiavi `providerErrors.NOT_CONFIGURED` e `providerErrors.PROVIDER_ERROR` mancano (sottosistema `assets`): la sonda
+  mostra il messaggio grezzo.
+- Gate di proprietà (`test_plugin_i18n_ownership_gate.py`):
+  - un plugin asset ha lo spazio `assets.providerParams.<codice>`, senza chiavi dichiarate raccolte;
+  - un plugin FX non ha spazio;
+  - le chiavi dei campi delle impostazioni non le legge nessuno.
+- justETF dà sempre 4 righe per fondo (EUR/USD/CHF/GBP), con 👑 sulla valuta del fondo, e non ha frammento i18n.
+- Borsa Italiana dà 2 righe per strumento (IT/EN), in tre punti (`_fund_search_items_all_langs`,
+  `_scheda_search_items_all_langs`, `search`), nell'ordine fisso `("it", "en")`. Il suo frammento ha
+  `assets.providerParams.borsa_italiana.*`.
+- UI riusabile senza colori legacy: `ModalBase` (m1 = 0) e `PasswordInput` (pulito).
+- Debito del programma colori: `SimpleSelect` (40), `Setting*.svelte` (palette), `ProviderAssignmentSection` (95) e
+  `AssetSearchAutocomplete` (57). Li riuso o li tocco solo con ruoli, senza classi legacy nuove.
+- Modello di scheda recente, `features/email/`:
+  - la scheda, `emailApi.ts` sottile, `emailText.ts` puro, i Vitest accanto;
+  - la galleria con la risposta servita da una fixture prima della navigazione (`galleryEmail.ts`);
+  - il `?tab=` onorato dalla pagina.
+
+**Disegno (dentro §4.4 approvato)**
+- Backend:
+  1. `PluginSettingsPluginRead.configured: bool`: la verità del resolver, campi nascosti compresi, con un solo helper
+     per `missing`, condiviso fra resolver e catalogo.
+  2. Ricerca:
+     - nello stream `NOT_CONFIGURED` porta `error_code`, come `RATE_LIMITED`;
+     - nella ricerca semplice, `providers_not_configured: list[str]` (additivo).
+  3. D-X14:
+     - justETF `preferred_currency`: select personale, con `all` e le 4 valute con la bandiera, default `all`;
+     - Borsa `preferred_language`: `all`/`it`/`en`, default `all`;
+     - il filtro agisce dopo ogni cache interna del plugin, con ricaduta per strumento;
+     - chiavi i18n nei frammenti `pluginSettings.asset.<codice>.label.<campo>`, `.description.<campo>`,
+       `.option.<campo>.<valore>`, come `providerParams`;
+     - frammento nuovo per justETF.
+  4. Gate esteso:
+     - ogni plugin asset e FX ha l'area `pluginSettings.<famiglia>.<codice>`;
+     - chiavi dichiarate: i `label_key` e `description_key` dei campi e delle opzioni;
+     - FX entra fra le famiglie con spazio.
+- Frontend, in `lib/features/plugin-settings/`:
+  - `pluginSettingsApi.ts`, sottile.
+  - `pluginSettingsForm.ts`, puro: gruppi per famiglia, testo con ripiego inglese, bozza → voci di scrittura, errori
+    per campo dal 422, stato del segreto.
+  - `PluginSettingsForm.svelte`, per tipo di campo:
+    - segreto a sola scrittura, con «impostato il …», «Sostituisci» e «Cancella»;
+    - campo bloccato con «impostato dal server», più la variabile per l'admin;
+    - campo di sistema in sola lettura per chi non è admin (D-X15);
+    - salva e annulla per plugin; ripristino del default = `clear`.
+  - `PluginSettingsTab.svelte`: gruppi Prezzi e Cambi, stato vuoto.
+  - `PluginSettingsModal.svelte`, su `ModalBase`, filtrata su un plugin.
+  - Una riga in `settingsTabs.ts`: `plugins`, icona `Puzzle`, ordine 25, visibile a tutti.
+  - «Configura» nella riga 1 di `ProviderAssignmentSection`, accanto alla guida, quando il plugin ha campi; badge «da
+    configurare» quando `configured` è falso.
+  - `AssetSearchAutocomplete`:
+    - una riga «<fornitore> da configurare · Configura» per ogni `provider_error` con `NOT_CONFIGURED`;
+    - la legenda della 👑 quando un risultato la mostra.
+  - i18n: il sottosistema nuovo `pluginSettings` (`prefixes.txt`: `pluginSettings`), più `providerErrors.NOT_CONFIGURED`
+    e `PROVIDER_ERROR` in `assets`.
+  - Nel codice nuovo solo ruoli colore.
+
+**Decisioni notturne, da rivedere**
+- **N1.** La scheda è visibile a tutti, con ordine 25 (dopo Preferenze, nel gruppo di sinistra): ha campi personali, e
+  per chi non è admin quelli di sistema sono in sola lettura (D-X15).
+- **N2.** `configured: bool` al posto delle chiavi mancanti: non rivela campi che il profilo gestito nasconde.
+- **N3.** Il filtro D-X14 ricade per strumento: uno strumento senza la variante preferita le mostra tutte. È un
+  superinsieme di «se svuota la lista, tutto».
+- **N4.** Le chiavi i18n delle impostazioni seguono il modello di `providerParams` (`label.<campo>`).
+- **N5.** Nel gate, lo spazio `pluginSettings.<famiglia>.<codice>` vale anche per gli FX.
+
+**Lotti**, ognuno con handoff FROZEN:
+- **CP11a**, backend e contratto i18n: i punti 1–4, le chiavi `providerErrors`, le unità, `api sync`.
+- **CP11b**, frontend: scheda, modulo, modale, Configura, ricerca; Vitest.
+- **CP11c**:
+  - E2E, fuori dalla finestra 00:00–01:15;
+  - galleria, su uno slot pesante;
+  - documentazione (docs-writer): pagina utente nuova, `admin/configuration`, `patterns/plugin_settings`, ricerca;
+  - revisione di sicurezza CP10–CP11.
+
+**Superfici condivise da dichiarare**
+- `settingsTabs.ts` (A): una riga e un import.
+- `_backend_services.py`, `_backend_utils.py` (la descrizione del gate) e la registrazione dei Vitest e degli E2E.
+- i18n `assets/`: due chiavi.
+- `openapi.json`.
+- `mkdocs.yml`: la navigazione della pagina utente nuova; la propongo, la scrive il coordinatore.
+- CHANGELOG: testi proposti.
+
+**Conflitti previsti**
+- `ProviderAssignmentSection.svelte` e `AssetSearchAutocomplete.svelte`, con il programma colori (se un suo lotto li
+  migra) e con il mio FE5a.
+- `settingsTabs.ts`, con chi aggiunge schede: la riga è additiva.
+
+**Rischi**
+- Un segreto nel browser: mai precompilato, `autocomplete="new-password"`, svuotato dopo il salvataggio. Da verificare
+  che nessun intercettore registri i corpi delle richieste.
+- Le preferenze personali nel DB condiviso degli E2E: scritture solo con un utente proprio o con ripristino garantito.
+- La cache della ricerca: l'impronta c'è già; il filtro va dopo le cache interne del plugin.
+
+**Prove (corsia 6183)**
+- CP11a:
+  - services `plugin-settings-*` e le unità nuove di justETF e Borsa (pure);
+  - utils `gate-plugin-i18n-ownership` e `gate-i18n-catalog`;
+  - api `plugin-settings` e `assets-provider`;
+  - `front-utility core-unit`.
+- CP11b: i Vitest dei file nuovi e toccati, `front check`.
+- CP11c: E2E `settings/plugin-settings`, galleria, `mkdocs build` e `check-links`.
+
+### CP11a — backend e contratto i18n ⏳ (via del coordinatore 2026-10-15, 23:35)
+
+N1–N5 restano «da rivedere»: il coordinatore le mette nella lista di domattina. Le due chiavi in `assets/` vogliono
+`front-utility core-unit` prima dell'handoff. La riga di `mkdocs.yml` la scrivo io con CP11c, dichiarata.
+
+1. ✅ (2026-10-15) `configured` nel catalogo.
+   > **Note implementazione**:
+   > - `missing_field_keys(states)` in `resolver.py` è la regola unica: un campo obbligatorio senza un valore usabile,
+   >   o con `invalid_env`.
+   > - Un segreto risolto senza decifrarlo (il catalogo) è usabile se impostato e leggibile.
+   > - La usano `build_bound_settings` (il `NOT_CONFIGURED` di una chiamata) e `read_catalogue`, dove si calcola su
+   >   tutti i campi, anche quelli che il profilo gestito nasconde (N2).
+   > - Schema: `PluginSettingsPluginRead.configured: bool`, obbligatorio.
+2. ✅ (2026-10-15) La ricerca dice chi è da configurare.
+   > **Note implementazione**:
+   > - Ricerca semplice: `FAProviderSearchResponse.providers_not_configured` (facoltativo, lista vuota per default),
+   >   un sottoinsieme di `providers_with_errors`. Ogni fornitore passa nel compito anche il codice d'errore.
+   > - Stream: `provider_error` porta `error_code` per ogni `AssetSourceError`, compreso `NOT_CONFIGURED`, che va nel
+   >   log come info e non come warning. La docstring ora elenca l'evento.
+3. ✅ (2026-10-15) D-X14.
+   > **Note implementazione**:
+   > - justETF `preferred_currency`: select personale, `all` più le 4 valute con la bandiera (opzioni costruite dalle
+   >   costanti del modulo), default `all`.
+   > - Borsa Italiana `preferred_language`: `all`/`it`/`en`, default `all`. `_languages_in_order` e
+   >   `_emitted_languages` sostituiscono i tre calcoli copiati di `emit_language_order`; la lingua del fetch resta la
+   >   prima di sempre (`it`).
+   > - Frammenti, con `dev.py i18n add --into`: il nuovo `justetf/i18n/` (3 chiavi) e `borsa_italiana/i18n/` (5 chiavi
+   >   nuove), sotto `pluginSettings.asset.<codice>.{label,description,option}`. `i18n check` severo verde (4645 chiavi).
+   > - Prova in processo (`/tmp/libreFolio_cp11a_smoke.py`, rete simulata): justETF dà 1 riga per fondo con la valuta
+   >   preferita, e la 👑 resta sulla valuta del fondo; Borsa dà solo la lingua preferita e fa il fetch sempre in `it`.
+4. ✅ (2026-10-15) `providerErrors.NOT_CONFIGURED` e `providerErrors.PROVIDER_ERROR` nel sottosistema `assets`.
+   > **Note implementazione**: il testo di `NOT_CONFIGURED` sta nei 60 caratteri del riassunto della sonda.
+   > `PROVIDER_ERROR` porta `{detail}` (N6).
+5. ✅ (2026-10-15) `api sync`: nessun file tracciato cambiato; `configured` e `providers_not_configured` sono nel client
+   generato. ruff e black puliti sugli 8 file Python.
+
+**Decisioni notturne, da rivedere** (seguono N1–N5)
+- **N6.** `PROVIDER_ERROR` porta la descrizione mascherata in `details["detail"]`, e il testo tradotto la mostra
+  («Il provider ha restituito un errore: {detail}»). La sonda mostra il testo tradotto al posto dell'errore grezzo:
+  con un testo fisso, la causa (per esempio un 401 su una chiave sbagliata) sparirebbe. La descrizione è già
+  mascherata dal confine del CP10.
+- **N7.** Nello stream, `error_code` per ogni `AssetSourceError` e non solo per `NOT_CONFIGURED`: un campo in più, che il
+  frontend ignora quando non lo conosce.
+- **N8.** Il filtro D-X14 restringe le varianti emesse invece di filtrarle dopo. Ogni strumento ha sempre ogni variante
+  (justETF 4 valute, Borsa 2 lingue), quindi è già per strumento e non svuota mai la lista. Per Borsa la lingua del
+  fetch non cambia.
+
+**Documentazione lasciata indietro dal CP11a**, per docs-writer nel CP11c (nessun controllo automatico la confronta col
+runner, verificato):
+- `developer/test-walkthrough/utils.md:25`: la riga del gate, con i nuovi spazi;
+- `patterns/asset_plugin_guide.md` (~392, «Translations») e `patterns/fx_plugin_guide.md`:
+  `pluginSettings.<famiglia>.<codice>`;
+- `developer/frontend/i18n.md`: che cosa tengono i frammenti dei plugin;
+- `patterns/plugin_settings.md`: `configured`, `missing_field_keys`, `PROVIDER_ERROR` con `detail`;
+- la ricerca: `providers_not_configured` e l'`error_code` dello stream;
+- lo skill `devpy-i18n` («Sources»).
+
+`front check` 0/0 dopo il CP11a. Audit i18n: le 10 chiavi nuove risultano usate; i 2 «likely unused»
+(`events.deleteBlocked`, `events.deleteNotFound`) c'erano già a HEAD (`f2a394a0f`), e non sono miei.
+6. ✅ (2026-10-16) Test (test-author), in 7 file esistenti, nessun file nuovo, quindi nessuna registrazione.
+   > **Note implementazione**:
+   > - **Gate di proprietà** (64 passati, prima delle modifiche 1 rosso atteso: R1 sulle 8 chiavi nuove):
+   >   - lo spazio di un plugin asset è `assets.providerParams.<codice>` più `pluginSettings.asset.<codice>`;
+   >   - quello di un FX è `pluginSettings.fx.<codice>`, col codice com'è nel registro (N5); FX è fra le famiglie con
+   >     spazio;
+   >   - le chiavi dichiarate dalle impostazioni si leggono col walker esistente, sulla dichiarazione ridotta a dati
+   >     semplici; `default` è un valore, mai una chiave;
+   >   - la sentinella copre anche gli attributi di `PluginSettingField` e `SettingOption`, prima che un plugin li usi;
+   >   - la descrizione `desc=` è aggiornata in `_backend_utils.py`.
+   > - `plugin-settings-service` 61:
+   >   - `configured` vero e falso: niente di obbligatorio, obbligatorio fino al salvataggio, segreto illeggibile con
+   >     la chiave B, variabile non valida su un campo facoltativo;
+   >   - profilo gestito: il campo nascosto non compare in nessuna parte della voce.
+   > - `plugin-settings-runtime` 96:
+   >   - `PROVIDER_ERROR` porta `details["detail"]`, mascherato;
+   >   - una matrice di 12 casi su `missing_field_keys`, uguale fra la chiamata e il catalogo;
+   >   - la ricerca: `providers_not_configured`, e l'evento SSE con esattamente 4 chiavi, loggato come info.
+   > - `rate-limit-results` 23: XRL-R21, `SEARCH_ERROR` porta il suo codice e nessun `retry_after`; la voce 5 della
+   >   docstring è riscritta.
+   > - `provider-errors` 182: le dichiarazioni e il filtro di justETF, su 3 fondi.
+   > - `borsa-italiana-search` 18: le preferenze su un fondo e un'azione; ricerca e scheda sempre in `it`, una volta.
+   > - `gate-i18n-catalog` 176 e `gate-i18n-usage` 195: le chiavi nuove risultano usate.
+   > - `api plugin-settings` 13, dopo `test db --force populate`: justETF e Borsa nel catalogo completo, e un giro
+   >   di salvataggio e cancellazione che non lascia righe.
+   > - **Limite noto, fissato da un test.** Un blob cifrato con l'impronta della chiave giusta ma non decifrabile:
+   >   il catalogo lo vede configurato, perché non decifra mai per scelta, mentre una chiamata risponde
+   >   `NOT_CONFIGURED`. L'API non può produrre una riga così.
+   >
+   > **⚠️ Fuori pista**:
+   > - test-author ha lanciato `plugin-settings-service` con un carico a 5 minuti di 70,73, appena sopra 70: aveva
+   >   letto il carico e lanciato nello stesso comando. Da lì in poi ha sempre letto il carico in un passo separato.
+   > - Su sua segnalazione: nella ricerca semplice il controllo testuale «not supported» veniva prima di
+   >   `NOT_CONFIGURED`. Un nome dichiarato da un plugin che contenesse quel testo avrebbe saltato il fornitore senza
+   >   segnalarlo nella lista nuova. Ora i due rifiuti tipizzati (`NOT_CONFIGURED`, `RATE_LIMITED`) vengono prima.
+7. ✅ (2026-10-16) Prove di chiusura, una alla volta con `nice` e il carico ≤ 70 (`/tmp/libreFolio_cp11a_checks.sh`,
+   log in `/tmp/libreFolio_cp11a_checks/`), dopo il riordino:
+   > - services `plugin-settings-runtime` 96 e `rate-limit-results` 23;
+   > - `front-utility core-unit` 5491, la regola per chi tocca le chiavi in `assets/`;
+   > - Vitest `resolveProviderError` e `providerProbe` 65; `check-orphans` pulito; porta 6183 libera.
+   > - `front check` 0/0; `i18n check` severo; ruff pulito sui 16 file Python cambiati; `git diff --check` pulito.
+   > - black segnala solo una riga che a HEAD era già fuori formato, in `_backend_utils.py` (il `print_info` del Designer Lab), e
+   >   che non tocco.
+   > - Previsione dei conflitti contro `dev_release2` (`59ce8ba20`): nessun percorso in comune.
+
+### Checkpoint CP11a — pronto, FROZEN (2026-10-16, 00:45)

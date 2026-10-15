@@ -214,6 +214,20 @@ def resolve_plugin_fields(  # noqa: PLR0913 — one plugin's fields, its rows an
     return states
 
 
+def missing_field_keys(states: list[FieldState]) -> tuple[str, ...]:
+    """The fields that leave a plugin not configured: required without a usable value, or set by an invalid variable.
+
+    One rule for a call (``build_bound_settings``, ``NOT_CONFIGURED``) and for the catalogue (``configured``). A secret
+    resolved without decrypting it (the catalogue) has no value: it is usable when it is set and readable.
+    """
+    missing = []
+    for state in states:
+        usable = state.problem not in ("unreadable", "invalid_env") and (state.value is not None or (state.field.secret and state.is_set))
+        if (state.field.required and not usable) or state.problem == "invalid_env":
+            missing.append(state.field.key)
+    return tuple(missing)
+
+
 def settings_fingerprint(plain: Mapping[str, Any], secrets: Mapping[str, str]) -> str:
     """A short fingerprint of the values a call received, for the keys of the caches that depend on them.
 
@@ -251,5 +265,4 @@ def build_bound_settings(  # noqa: PLR0913 — the arguments of resolve_plugin_f
     states = resolve_plugin_fields(family, plugin_code, fields, system_rows, user_rows, user_id=user_id, decrypt=True)
     plain = {state.field.key: state.value for state in states if not state.field.secret and state.value is not None}
     secrets = {state.field.key: state.value for state in states if state.field.secret and state.value is not None}
-    missing = tuple(state.field.key for state in states if (state.field.required and state.value is None) or state.problem == "invalid_env")
-    return BoundSettings(fields, plain, secrets, missing, fingerprint=settings_fingerprint(plain, secrets))
+    return BoundSettings(fields, plain, secrets, missing_field_keys(states), fingerprint=settings_fingerprint(plain, secrets))
