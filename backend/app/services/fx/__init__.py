@@ -5,4 +5,5 @@
 - ``sync.py``: the rate sync from the providers along the user's conversion routes (``sync_pairs_bulk``).
 - ``conversion.py``: chained route rates and the bulk conversion of amounts (``convert_bulk``).
 - ``storage.py``: the alphabetical normalization of a pair and the bulk upsert and delete of stored rates.
+- ``catalog.py``: the supported-currency list of each provider, cached for ``GET /fx/providers``.
 """

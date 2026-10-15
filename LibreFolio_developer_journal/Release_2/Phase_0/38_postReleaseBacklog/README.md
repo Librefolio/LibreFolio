@@ -205,11 +205,13 @@ Origine: [25_taxonomySelect](../../phases/25_taxonomySelect/README.md), archivia
 dallo [step 23](../../phases/25_taxonomySelect/plan-phase00TaxonomySelectStep23BulkCloneAndDiscardGuard.prompt.md),
 K-5…K-26 dalla verifica d'archivio di K su `586a4f0ea`; i percorsi senza prefisso sono sotto `frontend/src`.
 
-- **K-1 · Riparazione delle coppie di tipi non di coppia** — basso, solo se servisse. Il Bulk mostrava due cloni
+- ✅ **K-1 · Riparazione delle coppie di tipi non di coppia** — basso, solo se servisse. Il Bulk mostrava due cloni
   dello stesso tipo come una coppia, ma il payload scarta il `link_uuid` dei tipi non di coppia
   (`txPayloadHelpers.ts:256`), e la copia del DB del developer ha 0 coppie sbagliate. Un'altra installazione potrebbe
   averne, e lo Split non le ripara (`TYPE_CANNOT_SPLIT`): servirebbe una riparazione dedicata, con la query di
   rilevamento scritta nel piano.
+  - ✅ **Chiusa il 15/10 senza codice** (decisione 24 del developer: «si sono daccordo, niente codice, parliamo
+    comunque di un caso limite»). La query di rilevamento resta nel piano di W (04, §12).
 - **K-2 · Nel percorso lento, form o wizard aperti da soli si riaprono** — basso. Se l'utente chiude il form o il
   wizard prima che il caricamento finisca, il Bulk lo riapre a caricamento finito; i test B6 aspettano la fine.
 - **K-3 · Il crash di *Reset all* su una coppia con un capo inaccessibile** — basso, oggi non raggiungibile dalla UI.
@@ -414,6 +416,9 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
   ripetuta; l'import ignora `source` (le righe dei provider tornano manuali e poi raddoppiano) e `currency` (un
   backup preso prima di un cambio di valuta torna rietichettato); il selettore della data disabilita le date già
   usate (`DataEditor.svelte:151-161`). Origine: AssetEvents.
+  - 15/10, nella 1.3 (W, E0, `d226bc69e`): ✅ **a** (due righe sono doppioni solo con la stessa data e lo stesso tipo) e
+    ✅ **d** (il selettore blocca solo i giorni con un evento dello stesso tipo). La **b** (`source`) è la W-B16 del
+    backlog post-1.2, la **c** (`currency`) va nel lotto E1b, dopo le decisioni 20–23.
 - **I-12 · guardie server degli eventi** — basso-medio. `DELETE /assets/events?ids=…` non è limitato all'asset
   (`backend/app/api/v1/assets.py:1070-1072`, `price_store.py:954`); `bulk_upsert_events` salva un elemento alla volta
   (`price_store.py:629`). Origine: AssetEvents.

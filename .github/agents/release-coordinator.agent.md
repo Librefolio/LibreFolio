@@ -112,9 +112,23 @@ do not silently branch from the repository default.
 
 Create one nested worktree session per independent workstream.
 
-Every nested session display name starts with a stable capital letter followed by
-` - `, for example `F - Asset data` or `G - BRIM extraction`. Record the same letter
-in the lane table and keep it for the workstream's full lifetime.
+Every nested session display name starts with a stable code of one or two capital
+letters followed by ` - `, for example `F - Asset data`, `G - BRIM extraction` or
+`DV - Chart colours`. Before choosing the code, check that it is free everywhere:
+
+- the sessions of every coordinator, active or archived (`list_sessions_and_chats`);
+- the section headings of `Release_2/Phase_0/BACKLOG_POST_1.2.md`;
+- the ID prefixes already used in the backlog and the journal
+  (`grep -rE '\b<CODE>-?[0-9]' LibreFolio_developer_journal`);
+- the codes the developer or the designer use for questions and decisions (for
+  example `N1`–`N6`, `Q2`–`Q13`, `GR1`–`GR5`).
+
+If one letter is taken, use two (developer decision, 15/10/2026). Record the code in
+the lane table, use it as the prefix of the workstream's IDs (`DV-1`, `DV-2`…) and
+keep it for the workstream's full lifetime. Why: in Release 2 the colour workstream
+`T` collided with the backlog section «T · Matematica finanziaria» and its IDs had to
+be renamed to `TC-x`; a later chart workstream found `V` already taken by «V · E2E
+qualità dati».
 
 Recommended session configuration:
 
@@ -376,7 +390,7 @@ The post-release backlog index, `Release_2/Phase_0/BACKLOG_POST_1.2.md`, has one
 workstream. Children append their own lines in their checkpoints; the coordinator owns the
 index table, the coordinator section and the reconciliation at every train (duplicates,
 closures, moves between sections, counts). A new workstream gets its section in the
-kickoff train.
+kickoff train, headed by the same code as its session (`## DV · Colori dei grafici`).
 
 ## Testing and specialists
 

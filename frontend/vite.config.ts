@@ -2,6 +2,7 @@ import {sveltekit} from '@sveltejs/kit/vite';
 import {defineConfig, createLogger} from 'vite';
 import {execSync} from 'child_process';
 import istanbul from 'vite-plugin-istanbul';
+import {designerLabEnabled, designerLabPlugin} from './scripts/designer-lab/vite-plugin.mjs';
 
 /**
  * The version the app shows (sidebar, changelog): LF_APP_VERSION when it is set, otherwise git describe.
@@ -72,6 +73,8 @@ const coverageInstrumentation =
         ? [
               istanbul({
                   include: 'src/**/*',
+                  // The Designer Lab is debug tooling: it would only add never-run files to the coverage.
+                  exclude: ['src/lib/dev/designer-lab/**', 'src/routes/designer-lab/**'],
                   extension: ['.js', '.ts', '.svelte'],
                   requireEnv: false,
                   forceBuildInstrument: true,
@@ -80,12 +83,14 @@ const coverageInstrumentation =
           ]
         : [];
 
-export default defineConfig(({mode}) => ({
-    plugins: [sveltekit(), ...coverageInstrumentation],
+export default defineConfig(({mode, command}) => ({
+    plugins: [sveltekit(), designerLabPlugin({enabled: designerLabEnabled({mode, command}), appVersion: getAppVersion}), ...coverageInstrumentation],
     customLogger: logger,
     // Inject version at build time
     define: {
         __APP_VERSION__: JSON.stringify(getAppVersion()),
+        // Designer Lab switch: true in debug builds and `vite dev`, false in release (scripts/designer-lab/vite-plugin.mjs).
+        __LF_DESIGNER_LAB__: JSON.stringify(designerLabEnabled({mode, command})),
     },
     build: {
         // Debug mode: sourcemaps + no minify for easy debugging

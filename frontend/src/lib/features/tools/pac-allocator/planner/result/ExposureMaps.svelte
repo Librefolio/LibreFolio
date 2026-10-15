@@ -43,6 +43,10 @@
     import {HINT} from '../ui';
     import {exposureTooltipHtml, exposureTooltipText} from './exposureTooltip';
     import {chartPercent, type MapWeightRow} from './model';
+    import {themed} from '$lib/theme/themePair';
+    import {GEO_MAP_COLORS} from '$lib/theme/chartTheme';
+    import {GEO_CHOROPLETH_SCALE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
     const KEY = 'tools.pacAllocator.planner.result';
 
     interface Props {
@@ -56,10 +60,7 @@
     const SIDES: readonly Side[] = ['target', 'final'];
     const SERIES_ID = 'pac-planner-exposure-map';
     /** The colours of the portfolio map (`GeographyMap`), so one weight reads the same on both pages. */
-    const SCALE = {
-        light: ['#f0fdf4', '#bbf7d0', '#86efac', '#4ade80', '#22c55e', '#16a34a'],
-        dark: ['#1e3a2f', '#22543d', '#276749', '#2f855a', '#38a169', '#48bb78'],
-    };
+    const SCALE = GEO_CHOROPLETH_SCALE;
 
     let geoNames = $state<Record<string, string> | null>(null);
     let failed = $state(false);
@@ -94,11 +95,10 @@
 
     onMount(() => {
         const readTheme = () => {
-            dark = document.documentElement.classList.contains('dark');
+            dark = isDarkTheme();
         };
         readTheme();
-        const observer = new MutationObserver(readTheme);
-        observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        const observer = onThemeClassChange(readTheme);
         loadWorldMap()
             .then((names) => {
                 geoNames = names;
@@ -155,8 +155,8 @@
                     selectedMode: false,
                     // A country outside the plan has no box: only the plan's countries switch it back on.
                     tooltip: {show: false},
-                    emphasis: {label: {show: false}, itemStyle: {areaColor: dark ? '#fbbf24' : '#f59e0b'}},
-                    itemStyle: {areaColor: dark ? '#334155' : '#e2e8f0', borderColor: dark ? '#1e293b' : '#cbd5e1', borderWidth: 0.5},
+                    emphasis: {label: {show: false}, itemStyle: {areaColor: themed(GEO_MAP_COLORS.highlight, dark)}},
+                    itemStyle: {areaColor: themed(GEO_MAP_COLORS.land, dark), borderColor: themed(GEO_MAP_COLORS.border, dark), borderWidth: 0.5},
                     label: {show: false},
                     data: placed.map((row) => ({name: geoName(row) as string, value: chartPercent(side === 'target' ? row.target : row.final) ?? '-', tooltip: {show: true}})),
                 },

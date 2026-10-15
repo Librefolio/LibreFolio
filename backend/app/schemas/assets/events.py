@@ -18,6 +18,7 @@ from pydantic import (
     model_validator,
 )
 
+from backend.app.db.models import AssetEventType
 from backend.app.schemas.common import (
     BaseBulkResponse,
     BaseListResponse,
@@ -30,6 +31,9 @@ from backend.app.schemas.common import (
 # ============================================================================
 # FA EVENT POINTS
 # ============================================================================
+
+# The stored types: the values of AssetEventType, in its order.
+_EVENT_TYPES: tuple[str, ...] = tuple(kind.value for kind in AssetEventType)
 
 
 class FAAssetEventPoint(StrictModel):
@@ -45,9 +49,20 @@ class FAAssetEventPoint(StrictModel):
     """
 
     date: date_type = Field(..., description="Event date")
-    type: str = Field(..., description="Event type (DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT)")
+    type: str = Field(..., description="Event type: DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT or MATURITY_SETTLEMENT (spaces trimmed, case ignored; anything else is refused)")
     value: Currency = Field(..., description="Event value with currency (amount + code)")
     notes: Optional[str] = Field(None, description="Optional notes")
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def normalize_type(cls, value: object) -> str:
+        """Trim and upper-case the type; refuse anything that is not an ``AssetEventType`` (decision 23, I-09).
+
+        A stored type the enum does not know breaks every later read of the asset's events (``LookupError``).
+        """
+        if isinstance(value, str) and value.strip().upper() in _EVENT_TYPES:
+            return value.strip().upper()
+        raise ValueError(f"unknown event type {value!r}: expected one of {', '.join(_EVENT_TYPES)}")
 
 
 class FAAssetEventPointOut(FAAssetEventPoint):
@@ -99,9 +114,10 @@ class FAEventUpsertPoint(FAAssetEventPoint):
     - ``id`` set: the stored manual event with that id is edited in place. Every field
       may change, date and type included, and the id is kept, so a transaction linked
       to the event stays linked.
-    - ``id`` unset: the event replaces the stored manual events with the same
-      ``(date, type)``. Those rows are updated in place and keep their ids; only
-      events beyond the stored ones are inserted.
+    - ``id`` unset, in an ``upsert`` item: the event replaces the stored manual events
+      with the same ``(date, type)``. Those rows are updated in place and keep their
+      ids; only events beyond the stored ones are inserted. In a ``create`` item, a
+      ``(date, type)`` already stored is refused instead (``FAEventUpsert.mode``).
 
     ``from_attributes`` lets a plain ``FAAssetEventPoint`` instance stand for an
     upsert point without an id. Unknown fields are still rejected.
@@ -109,7 +125,7 @@ class FAEventUpsertPoint(FAAssetEventPoint):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: Optional[int] = Field(None, description="Id of the stored manual event to edit in place; omit to match on (date, type)")
+    id: Optional[int] = Field(None, description="Id of the stored manual event to edit in place; omit to match on (date, type) in an upsert item, or to add a new event in a create item")
 
 
 class FAEventUpsert(StrictModel):
@@ -117,10 +133,28 @@ class FAEventUpsert(StrictModel):
 
     Groups multiple event points for one asset.
     Only for manual events (provider_assignment_id = NULL).
+
+    ``mode`` (decision 20 of release 1.3):
+
+    - ``"upsert"`` (default): an event without id updates the manual event with the same
+      date and type in place — the event editor and its CSV import;
+    - ``"create"``: «+ New event». An event on a date and type the asset already has,
+      manual or from a provider, is refused (409 ``EVENT_EXISTS``, with the existing
+      events), never overwritten. A create item names no event id.
     """
 
     asset_id: int = Field(..., description="Asset ID")
+    mode: Literal["upsert", "create"] = Field(
+        "upsert",
+        description="upsert: an event without id updates the manual event with the same date and type. create: an event on a date and type the asset already has (manual or provider) is refused with 409 EVENT_EXISTS.",
+    )
     events: List[FAEventUpsertPoint] = Field(..., min_length=1, description="List of event points")
+
+    @model_validator(mode="after")
+    def validate_create_names_no_id(self) -> FAEventUpsert:
+        if self.mode == "create" and any(event.id is not None for event in self.events):
+            raise ValueError("A create item cannot name an event id: edit an event with mode 'upsert'")
+        return self
 
     @model_validator(mode="after")
     def validate_unique_event_ids(self) -> FAEventUpsert:
@@ -137,6 +171,7 @@ class FAEventUpsertResult(StrictModel):
     asset_id: int
     count: int
     message: str
+    event_ids: List[int] = Field(default_factory=list, description="The id of the event each point of the item wrote, in request order")
 
 
 class FABulkEventUpsertResponse(BaseBulkResponse[FAEventUpsertResult]):
@@ -149,7 +184,8 @@ class FAEventDeleteItemResult(StrictModel):
 
     status:
       - "deleted": event removed
-      - "not_found": id did not match any event
+      - "not_found": id did not match any event of the asset (an event of another
+                     asset is left alone)
       - "in_use": event is referenced by one or more transactions (RESTRICT);
                   accessible_transactions[] lists tx IDs the caller can see,
                   hidden_transactions_count counts refs from other users.
@@ -177,7 +213,7 @@ class FAEventBulkDeleteResponse(StrictModel):
 
     results: List[FAEventDeleteItemResult] = Field(default_factory=list)
     deleted_count: int = Field(..., description="Count of events successfully deleted")
-    not_found_count: int = Field(..., description="Count of ids that did not exist")
+    not_found_count: int = Field(..., description="Count of ids that matched no event of the asset")
     in_use_count: int = Field(..., description="Count of events blocked by RESTRICT")
 
 
