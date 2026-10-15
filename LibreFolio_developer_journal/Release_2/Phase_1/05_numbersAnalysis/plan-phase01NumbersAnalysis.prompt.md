@@ -2001,6 +2001,14 @@ CP-4, poi CP-15, poi la sostituzione della G/L % di W; per le prove pesanti chie
         - Causa: il server ha risposto oltre i 30 s del client per il sovraccarico della macchina, non per una
           regressione. La decisione (accettare con questa prova o rifare `all-backend` a carico normale) è del
           coordinatore.
+      - **⚠️ Fuori pista** (decisione del coordinatore, 20:25): i 2 rossi sono **accettati**, classe «carico» della skill
+        `test-triage`: `httpx.ReadTimeout` in BRIM sotto carico 77, e il file da solo dà 87/87.
+    - **Committato**: `70bc2d290` refactor(portfolio), `a1264fcb8` docs(journal).
+    - **Aggiornamento di base 8**: merge di `dev_release2` `6102d5097` senza conflitti (CP2b di H, B e B8, W N2, E2), HEAD
+      `fe20d34eb`, worktree pulito. Cancelli sulla revisione fusa, uno alla volta con `nice -n 10`, log in
+      `/tmp/libreFolio_j/cp4cm/`: `test_portfolio_service` 98, `test_period_and_unit_costs` 25, golden 1, guardia del
+      layer 38, `api transactions-wac` 20, `api portfolio` 51, `check-orphans` (316 file del backend raggiungibili). Porta
+      libera. Handoff d'ingresso mandato; via a CP-4d.
   - **CP-4d**: R2. La riprova a freddo esce solo con la parità provata sul corpus del motore; altrimenti resta, col
     perché scritto.
     - **Piano d'indagine** (15/10 sera, mandato al coordinatore, in attesa del suo via):
@@ -2060,6 +2068,19 @@ CP-4, poi CP-15, poi la sostituzione della G/L % di W; per le prove pesanti chie
       - **R2**: rifatta la classificazione delle 20 000 prove con il risolutore nuovo, se le divergenze sono 0 esce il
         blocco di `get_report` (`portfolio_service.py:2003+`) col parametro `_mwrr_use_warm_start` di `get_history`,
         che serve solo a R2.
+        - **Tutta l'impronta di R2** (letta il 15/10 sera, durante la pausa delle prove):
+          - il blocco «3b» e l'aggiunta del problema (`portfolio_service.py:2003-2050`, `:2170-2178`);
+          - `_mwrr_use_warm_start` di `get_history` (`:1091`, `:1096`, `:1141`);
+          - `IssueCode.MWRR_SERIES_UNRELIABLE` (`schemas/portfolio.py:174`), senza altri produttori. Esce, e
+            `dev.py api sync` aggiorna `openapi.json`;
+          - la chiave `dataQuality.mwrrSeriesUnreliable` nei 4 cataloghi di `dataQuality`: il blocco tolto era il suo
+            unico riferimento (un letterale), e il cancello d'uso la vedrebbe morta. Esce con `dev.py i18n remove`;
+          - la riga della tabella in `mkdocs_src/docs/developer/frontend/data-quality-banner.md:106`.
+        - Il codice non è salvato nel DB né letto dall'AI Export, e nessun test scorre `IssueCode`; nel frontend nessun
+          TypeScript lo nomina. `use_warm_start` delle funzioni della casa resta: i test di `test_roi_utils` (utilità e
+          servizi) lo usano per provare che calda e fredda coincidono.
+        - Superfici condivise da dichiarare nel checkpoint: `openapi.json` (generazione dell'API) e il catalogo
+          `dataQuality`.
       - **Valori che cambiano**: l'MWRR (sintesi, storia, fatti di portafoglio dell'AI Export) solo dove il risolutore
         sbagliava. Prima un tasso falso, spesso +10,011 % annuo, o una serie sbagliata; dopo la radice vera, o «—».
       - **CHANGELOG** (🐛 Fixed, proposta): «Portfolio: the money-weighted return (MWRR) comes from a checked solver,
@@ -2073,6 +2094,96 @@ CP-4, poi CP-15, poi la sostituzione della G/L % di W; per le prove pesanti chie
       - **Costo**, su serie giornaliere lunghe, vecchio contro nuovo: 0,04 contro 0,05 s su 365 giorni, 0,25 contro
         0,22 s e 0,21 contro 0,20 s su 1 095 giorni. Il ripiego sulla griglia è raro (1/365, 0/1 103, 2/1 095 punti) e i
         valori su queste serie sono identici.
+    - **Esecuzione** (15/10 sera, dopo l'ingresso di CP-4c):
+      - **Rossi** (`test-author`): `test_financial_math/test_mwrr_verified_root.py`, nuovo, 26 test, seme 20261015,
+        N = 100. Contiene i casi n. 1, 16, 17 come dati letterali e controlla che il generatore copiato li riproduca. Oggi
+        10 rossi e 16 verdi, esattamente come previsto:
+        - la soluzione singola e la serie fredda sui tre casi danno 0,100110;
+        - le proprietà: singola 7/99, calda 491/3 993 e fredda 541/3 993 punti che non sono radici;
+        - la parità calda 9/99.
+        - Il «nessuna radice → None» è già verde oggi. Il criterio di radice: |VAN| ≤ 1e-6·Σ|a|, oppure un cambio di
+          segno entro ±1e-6, che copre la quantizzazione a 6 decimali.
+      - **Cura** (`returns.py`):
+        - `_xirr_npv` e `_xirr_npv_slope` lavorano in float di Python e sollevano `OverflowError` dove il VAN non si
+          valuta;
+        - `_solve_xirr(flows, x0)`: Newton con la pendenza, accettato solo se |VAN| ≤ 1e-7·Σ|a|; altrimenti griglia
+          geometrica di 1 + r da 1e-12 a 1e4, 50 punti per decade, con Brent su ogni cambio di segno e la radice più
+          vicina a `x0`; `None` se non ce n'è;
+        - `calculate_mwrr` (x0 = 0,1) e `calculate_mwrr_series` (calda o fredda, il tetto e il riprovo «estremo» di
+          oggi) lo usano entrambe.
+        - La griglia parte da 1e-12 e non da 1e-4 come il prototipo: osservazione del test-author, perché una perdita
+          grande in pochi giorni annualizza vicinissimo a −100 %.
+      - **Verdi**: il file dei rossi 26/26, `test_returns_rebase_and_ratios` 53, `test_roi_utils` dei servizi 60; lint e
+        black puliti.
+      - **⚠️ Fuori pista**: `utils roi-utils` (`test_utilities/test_roi_utils.py`) ha 5 rossi. Sono test a scatola
+        bianca del risolutore vecchio: sostituiscono `scipy_newton` con un finto `(npv, x0, tol, maxiter)`, si
+        aspettano `npv(-1.1) == inf` e restituiscono tassi inventati, che il risolutore verificato giustamente
+        rifiuta. Il loro scopo resta valido: la guardia sui tassi non validi, i flussi intermedi, il riprovo «estremo»,
+        il ripristino di `prev_guess`. Il test-author li riscrive sulla cucitura nuova (`_solve_xirr`, `_xirr_npv`).
+        Esito: `utils roi-utils` 9/9 (+43/−34 righe nel solo file di test).
+      - **Le 20 000 prove sull'implementazione vera** (`classify.py`, che importa le funzioni della casa; 21:20–21:24): 0
+        non-radici per la singola, la serie calda e la fredda; 0 «None»; **0 divergenze**; mai 0,100110. La condizione
+        del coordinatore regge, quindi **R2 esce** con tutta la sua impronta:
+        - in `portfolio_service.py`: il blocco «3b» (48 righe), l'aggiunta del problema (11 righe), il parametro
+          `_mwrr_use_warm_start` di `get_history`, e gli import rimasti senza uso (`DataQualityIssue`, `IssueCode`,
+          `IssueDomain`, `IssueSeverity`);
+        - `IssueCode.MWRR_SERIES_UNRELIABLE` in `schemas/portfolio.py`. Dopo `dev.py api sync`, `openapi.json` non lo
+          contiene più; il file è generato e ignorato da git (`frontend/.gitignore:12`), quindi nessun file tracciato
+          dell'API cambia;
+        - la chiave `dataQuality.mwrrSeriesUnreliable`, tolta dai 4 file di `dataQuality` con `dev.py i18n remove`;
+        - `data-quality-banner.md` (docs-writer, +3/−7): la riga della tabella, la regola, la riga della copertura e la
+          nota; la riga di `MWRR_NOT_CALCULABLE` dice ora «no rate that solves the flows' equation (the solver,
+          `_solve_xirr`, returns only a verified root)»; il conteggio diventa «7 of the 8» codici.
+        - La pagina di teoria `mwrr` parla del risolutore in modo generale, che resta vero: non cambia.
+      - **Verdi**, uno alla volta, con il carico sotto 70 a ogni avvio, log in `/tmp/libreFolio_j/cp4d/j_z*`:
+        - `services financial-math` intero 317, cioè i 26 rossi, il layer, CP-4a e CP-4c;
+        - `test_portfolio_service` 98, `test_data_quality_report` 38, `test_roi_utils` 60, `utils roi-utils` 9;
+        - AI Export `portfolio_broker_financial` 126 e `portfolio_broker_integration` 58; `api portfolio` 51;
+        - `utils gate-i18n-usage` 195, `gate-i18n-catalog` 176, `dev.py i18n check` (4 516 chiavi, stretto);
+        - `front check` (svelte-check 0 errori e 0 avvisi), lint e black puliti.
+      - Resta: `all-backend` sullo slot pesante, poi il checkpoint FROZEN.
+      - **`all-backend --workers 2`** (slot 1, 21:50–22:13, 22 min 37 s, carico 55 all'avvio): 6/7. Unico rosso
+        `test_native_cash_guard.py::test_eur_only_dump_is_byte_identical`; tutto il resto verde.
+        - **⚠️ Fuori pista**: una mia svista, perché non avevo messo il golden fra i cancelli di CP-4d, che pure scarica
+          l'MWRR. Il diff (22 righe, 6 hunk) è tutto sui campi `mwrr_*`, il caso che il test prevede («confined to
+          mwrr_* fields, to review before regenerating»):
+          - **due cambi dichiarati**, in tutte e due le finestre: annualizzato 0,000100 → −0,736334 e 0,000200 →
+            −0,656175, cumulato 0,000001 → −0,014503 e 0,000003 → −0,014519. I vecchi valori erano i punti di partenza
+            della secante che avanzavano (0 → 1e-4 → 2e-4), non radici. I nuovi sono le radici vere: il NAV passa da
+            13 715,82 a 13 515,82 in pochi giorni;
+          - **un difetto mio**: `0.000000` → `-0.000000` in 3 punti. Una radice di circa −1e-9 quantizzata a «meno
+            zero», che si vedrebbe come «−0,00 %».
+        - **Piano** (mandato al coordinatore, slot liberato):
+          1. rosso «un tasso zero si scrive senza segno» (test-author);
+          2. cura in `returns.py`;
+          3. il golden ancora rosso, ma solo con i due cambi veri e nessun «−0»: è la prova;
+          4. rigenerazione con `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1` e controllo che il golden nuovo, tolte quelle
+             righe, sia identico al vecchio;
+          5. di nuovo golden, test di CP-4d, `test_portfolio_service`, AI Export, `api portfolio`.
+        - **Coordinatore (22:15)**: piano approvato; **niente secondo `all-backend`**. Dopo il passo 5 bastano
+          `services financial-math` intero, il golden, i test di CP-4d, `test_portfolio_service`, AI Export portfolio e
+          `api portfolio`. Nell'handoff, i due MWRR cambiati come «valori che cambiano, dichiarati», con la spiegazione
+          delle radici; il «−0» come «Fuori pista». DV cambierà ancora il golden (💵 → 💰) all'ingresso di T+DV: entrando
+          prima J, rigenerano loro (glielo dice il coordinatore).
+        - ✅ **Passi 1–5** (15/10, 22:15–22:45):
+          1. **Rosso** (test-author): la classe `TestAZeroRateHasNoSign` in `test_mwrr_verified_root.py`, con tre casi di
+             VAN nullo in r = 0 (1 000 → 1 000 in un anno, lo stesso con uno snapshot al mese, flussi bilanciati). Oggi 9
+             rossi: anche il caso più piatto finisce su −1,6e-16 e si scrive `-0.000000`.
+          2. **Cura**: `_rate_decimal(rate)` in `returns.py`, usata dai due punti che quantizzano. Uno zero si scrive con
+             `copy_abs()`, senza segno. Il file passa a 38/38.
+          3. **Il golden ancora rosso, ma senza «−0» dalla parte di questa run**. Il golden vecchio conteneva già
+             `"-0.000000"` in 2 punti: anche la secante vecchia scriveva a volte «meno zero». La cura normalizza anche
+             quelli.
+          4. **Rigenerato** con `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1`. Confronto JSON vecchio/nuovo: **10
+             differenze, tutte su campi `mwrr_*`**, tutte nella finestra W2:
+             - `-0.000000` → `0.000000` ×2;
+             - annualizzato 0,000100 → −0,736334 ×2, cumulato 0,000001 → −0,014503 ×2;
+             - annualizzato 0,000200 → −0,656175 ×2, cumulato 0,000003 → −0,014519 ×2.
+             Git: +10/−10 righe.
+          5. **Verdi**, uno alla volta: `services financial-math` 329, golden 1 (un passaggio vero), `test_portfolio_service`
+             98, AI Export 126 + 58, `api portfolio` 51; lint e black puliti; porta libera.
+        - **⚠️ Fuori pista**: (a) il golden mancava fra i cancelli di CP-4d; l'ha trovato `all-backend`. (b) Il risolutore
+          verificato scriveva «−0» per i tassi nulli, e la secante vecchia a volte pure: ora uno zero non ha mai segno.
 - **`derived_views.py` e DV dei colori** (coordinatore, 15/10 16:25; ok di J alle 16:26): DV cambia 3 righe, l'import di
   `SECTOR_EMOJIS`, che diventa unica in `utils/asset/sector.py`; la guardia del layer ammette `utils`, e chiude la nota
   «Presentazione» del piano 43, §4. Nessun lotto di J sposta o riscrive il file: CP-4 non lo tocca (P1 in un modulo

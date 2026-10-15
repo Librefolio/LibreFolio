@@ -24,9 +24,11 @@ The full table, with the light and dark values, is in `tokens.css`.
 
 | Meaning | Utility |
 |---|---|
-| Background behind the app shell (sidebar, header, pages) | `bg-lf-app` |
+| Background behind the app shell (pages) | `bg-lf-app` (today the same colour as `page`) |
+| The app header (D-T23): a step darker than the page in light, lighter in dark | `bg-lf-header text-lf-primary border-b border-lf-subtle`; its controls in their page look (`text-lf-secondary hover:bg-lf-hover`, focus `focus-visible:outline-lf-focus`) |
 | Background of a standalone page (login, error) | `bg-lf-page` |
-| Card, modal, menu, dropdown | `bg-lf-card` |
+| The green sidebar (D-T17): one family in both themes | `bg-lf-bar text-lf-bar-text`, no edge (D-T23), dividers `border-lf-bar-line`, quiet text `text-lf-bar-muted`, `hover:bg-lf-bar-hover`; active item `bg-lf-bar-active text-lf-on-bar-active border-l-4 border-lf-bar-indicator`; logout `bg-lf-bar-logout hover:bg-lf-bar-logout-hover`; focus `focus-visible:outline-lf-bar-focus`; states on the bar `text-lf-bar-success`, `-warning`, `-danger` |
+| Card, modal, menu, dropdown | `bg-lf-card`; one that floats (modal, menu, dropdown, the login card) adds `border-lf-raised` and `shadow-lf-shadow` (N3, Q8); a card of a page `shadow-lf-shadow-card` |
 | Secondary surface: panels, table heads, boxes inside a card | `bg-lf-panel` |
 | Inside of an input | `bg-lf-field` |
 | Hovered row or item | `hover:bg-lf-hover` |
@@ -40,16 +42,28 @@ The full table, with the light and dark values, is in `tokens.css`.
 | Placeholder | `placeholder:text-lf-placeholder` |
 | Link, active item | `text-lf-link` |
 | Border, divider | `border-lf-subtle`, `divide-lf-subtle` |
-| Border of an input | `border-lf-input` |
-| Focus | `focus:ring-lf-focus`, `focus:border-lf-focus`, `focus-visible:outline-lf-focus` |
-| Brand surface: card headers, sidebar | `bg-lf-brand` with `text-lf-on-brand` (`/70` for secondary text, `border-lf-on-brand/20`, `bg-lf-on-brand/10` for hovers) |
+| Border of an input | `border-lf-input`, under the mouse `hover:border-lf-input-hover` (D-T18; focus wins over it) |
+| Focus | `focus:ring-lf-focus`, `focus:border-lf-focus`, `focus-visible:outline-lf-focus`; on the green sidebar `focus-visible:outline-lf-bar-focus` |
+| Brand surface: the login card header | `bg-lf-brand` with `text-lf-on-brand` (`/70` for secondary text, `border-lf-on-brand/20`, `bg-lf-on-brand/10` for hovers) |
 | Primary button | `bg-lf-action hover:bg-lf-action-hover text-lf-on-action` |
 | Selected item | `bg-lf-selected` |
+| Selected control: checkbox, radio, switch on, selected day or preset, active segment (D-T16) | `bg-lf-checked` with `text-lf-on-checked` for its mark |
+| Switch (Q2) | track `bg-lf-switch-off`, on `bg-lf-checked`; knob `bg-lf-switch-knob-off border border-lf-input`, on `bg-lf-switch-knob-on` |
 | State, with X = `success`, `warning`, `danger`, `info` | `text-lf-X` (text, icon); `bg-lf-X-soft` + `border-lf-X-line` + `text-lf-X-on-soft` (alert, badge); `bg-lf-X text-lf-on-status` (solid) |
+| Solid red button, e.g. «Delete account» (Q3) | `bg-lf-danger-solid hover:bg-lf-danger-hover text-lf-on-danger-solid`; a solid warning hovers with `hover:bg-lf-warning-hover` |
+| Warning inside a tooltip (Q10) | `text-lf-warning-on-inverse`: the other theme's warning, on the inverted tooltip |
+| AI functions (Q11) | `text-lf-ai`, `bg-lf-ai-soft`, `border-lf-ai-line`; solid `bg-lf-ai text-lf-on-ai` |
+| Terminal block, dark in both themes (Q6) | `bg-lf-terminal border-lf-terminal-line text-lf-on-terminal`; prompt and commands `text-lf-terminal-prompt`; comments `text-lf-terminal-comment`. Inline code: `bg-lf-panel border-lf-subtle text-lf-primary` |
+| Highlighted result, `<mark>` (Q7) | `bg-lf-mark text-lf-on-mark border-lf-mark-line` |
+| Guided tour glow (Q9) | `var(--lf-tour-glow)`, backdrop `bg-lf-overlay` |
 | Signed figures | `text-lf-gain`, `text-lf-loss` |
-| Donation link («Offrimi un caffè») | `text-lf-donate` |
+| Donation link («Offrimi un caffè») | `text-lf-donate hover:text-lf-donate-hover` |
 
 Opacity works on every role: `bg-lf-card/90`, `border-lf-on-brand/20`.
+
+**Roles without a utility.** The login illustration (`ui/AnimatedBackground.svelte`) reads `--lf-art-hill-1…3` and
+`--lf-art-line` with `var()` in its `<style>`: the alpha of each colour is the strength of its layer. A `<style>` block
+reads any role that way, `var(--lf-…)`, never a literal.
 
 ## Converting a component
 
@@ -70,12 +84,12 @@ Convert by **meaning and step**, not by colour family: `gray` and `slate` go to 
 | `border-gray-100/200` + `dark:border-slate-600/700` | `border-lf-subtle` |
 | `border-gray-300/400` on inputs + `dark:border-slate-600` | `border-lf-input` |
 | `bg-libre-green text-white hover:bg-libre-green/90` (button) | `bg-lf-action text-lf-on-action hover:bg-lf-action-hover` |
-| `bg-libre-green` on headers, banners, the sidebar | `bg-lf-brand text-lf-on-brand` |
+| `bg-libre-green` on headers and banners | `bg-lf-brand text-lf-on-brand` |
 | `text-libre-green` + `dark:text-green-400` (links, accents) | `text-lf-link` |
 | `bg-libre-green/10` + `dark:bg-libre-green/20` | `bg-lf-selected` |
 | `focus:ring-libre-green`, `focus:border-libre-green` | `focus:ring-lf-focus`, `focus:border-lf-focus` |
 | `red`/`rose`, `amber`/`yellow`/`orange`, `emerald`/`green`, `blue`/`sky` used for a state | the state roles: text 500–700 → `text-lf-X`; bg 50–100 → `-soft`; border 200–400 → `-line`; text 800–900 on a tint → `-on-soft`; `bg-*-500/600 text-white` → `bg-lf-X text-lf-on-status` |
-| `violet`, `purple`, `indigo`, `pink`, `teal`, `cyan`, `fuchsia`, `lime` (categories: asset types, broker roles) | **leave them**: categorical roles come later |
+| `violet`, `purple`, `indigo`, `pink`, `teal`, `cyan`, `fuchsia`, `lime` (categories: asset types, broker roles) | **leave them**: categorical roles come later. The AI violet is not a category: the `ai` roles (Q11) |
 
 ## Rules
 
@@ -105,6 +119,10 @@ Convert by **meaning and step**, not by colour family: `gray` and `slate` go to 
   - **the grammar:** G1 no `dark:` on a role, G2 no unknown role, G3 no mixed element, G4 no arbitrary colour.
 - `src/themeTokens.gate.test.ts`: both themes declared, the utility table, the contrast pairs, no dead rule in the
   legacy remap.
+- `src/themeColorMeta.gate.test.ts`: the PWA title bar, `#1b4334` in both themes (N2, D-T17), the same in its three
+  copies (`app.html`, `themeStore.ts`, `offline.html`) and equal to `--lf-surface-bar`; and the static copies of the
+  roles in the splash of `app.html` and in `static/offline.html`, which paint without the app's stylesheet. **Change a
+  role they copy, and change the copy in the same commit.**
 - **Run them:** with the runner (`front-utility core-unit`), or alone with
   `node frontend/scripts/theme/theme-roles.mjs --check`. `--report` shows what is left, area by area.
 
@@ -129,9 +147,11 @@ node frontend/scripts/theme/theme-roles.mjs --split lib/components/assets/AssetM
 - A `~split` line records the declaration in the diff.
 - A pure move or rename needs nothing: the gate pairs a file that left the tree with a new one of the same name.
 
-**A merge conflict on the baseline:**
-1. Keep the tighter side for each line: the lower m1, the m2 values both sides have.
-2. A line one side removed stays removed; a line one side added (a split) stays.
+**A merge conflict on the baseline** is a three-way merge, line by line (TC-7):
+1. A line one side left as the base had it takes the other side's line: its change, its removal, its addition.
+2. A line both sides changed: the side that accepted the file (a new `~accept` line) keeps it; if both sides accepted
+   it, the merge stops — merge the sources, then `--accept` the file again on the merged tree. Otherwise the tighter
+   side wins: the lower m1, the m2 values both sides have; a line removed on one side stays removed.
 3. `node frontend/scripts/theme/theme-roles.mjs --resolve` does it from the three index stages. Then `git add` the
    file.
 4. The gate must pass on the merged tree. If it does not, there is a real regression or a missing split declaration:
