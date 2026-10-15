@@ -32,18 +32,20 @@ except ImportError:
 from datetime import UTC
 from datetime import datetime as _dt
 
-from backend.app.schemas.assets import (
-    FAAssetEventPoint,
+from backend.app.schemas.assets.assets import (
     FAAssetPatchItem,
     FAClassificationParams,
+    FASectorArea,
+)
+from backend.app.schemas.assets.events import FAAssetEventPoint
+from backend.app.schemas.common import Currency as CurrencyAmount
+from backend.app.schemas.prices import (
     FACurrentValue,
     FAHistoricalData,
     FAPricePoint,
-    FASectorArea,
 )
-from backend.app.schemas.common import Currency as CurrencyAmount
 from backend.app.schemas.provider import FAVolumeKind
-from backend.app.services.assets.core import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector

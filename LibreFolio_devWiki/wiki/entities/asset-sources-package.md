@@ -25,12 +25,15 @@ responsibility with **no contract change**.
 | Module | Responsibility |
 |---|---|
 | `registry.py` | `AssetProviderRegistry`, which discovers the plugins in `services/asset_source_providers/` (1.3, CP1) |
-| `core.py` | `AssetSourceProvider` (abstract provider base), shared errors and types, provider thread/cache plumbing |
+| `base.py` | the plugin contract: `AssetSourceProvider` (abstract provider base, OHLC guard), `AssetSourceError`, the history start-date types (1.3, CP2b) |
+| `core.py` | provider thread/cache plumbing: the five caches, `_run_provider_in_thread`, parameter helpers, `_json_safe_details` |
 | `crud.py` | `AssetCRUDService` — create, bulk patch (absent vs `null` semantics), bulk delete with per-item savepoints |
-| `manager.py` | `AssetSourceManager` — a compatibility manager composed from the responsibility modules |
+| `manager.py` | `AssetSourceManager` — the asset service, composed from the responsibility modules |
 | `metadata.py` | provider metadata refresh |
 | `price_query.py` | price queries (`get_prices_bulk`) and current quotes |
-| `price_store.py` | persistence of prices and events (`_upsert_asset_events`: in-place edit by id) |
+| `price_store.py` | persistence of prices (bulk upsert with the OHLC merge, bulk delete) |
+| `currency_change.py` | the market-data wipe after a currency change ([[decisions/policy-d-currency-wipe]]) (1.3, CP2b) |
+| `event_store.py` | persistence of events (`_upsert_asset_events`: in-place edit by id), event query and delete (1.3, CP2b; owned by workstream W since) |
 | `provider_management.py` | provider assignment and probe |
 | `refresh.py` | `bulk_refresh_prices` as **PREPARE → FETCH → PERSIST** with typed hand-offs (`_PreparedRefreshItem`, `_FetchedRefreshData`) |
 | `search.py` | `AssetSearchService` — cross-provider search orchestration |
@@ -58,17 +61,27 @@ responsibility with **no contract change**.
   then the modules moved from `asset_sources/` to `services/assets/` with the same names, together with
   `market_calendar.py` and `web_link_finder.py`. The facade and the barrel were removed; no behaviour change.
   Plan: `LibreFolio_developer_journal/Release_2/Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md`.
+- 2026-10-15 (1.3, workstream X, CP2b): cut by theme, no behaviour change. The plugin contract left `core.py` for
+  `base.py`; `price_store.py` became `price_store.py`, `currency_change.py` and `event_store.py`, three mixins composed
+  in `AssetSourceManager`. The router `api/v1/assets.py` became the package `api/v1/assets/` (`crud`, `market_data`,
+  `prices`, `providers`, `events`; same URLs, `operationId`s and route order), and the event schemas moved from
+  `schemas/prices.py` to `schemas/assets/events.py`. The event modules then passed to workstream W.
 
 ## Source files
 
 | Role | Path |
 |------|------|
+| Plugin contract | `backend/app/services/assets/base.py` |
 | Core | `backend/app/services/assets/core.py` |
 | Registry | `backend/app/services/assets/registry.py` |
 | CRUD | `backend/app/services/assets/crud.py` |
 | Manager | `backend/app/services/assets/manager.py` |
 | Price queries | `backend/app/services/assets/price_query.py` |
-| Price/event store | `backend/app/services/assets/price_store.py` |
+| Price store | `backend/app/services/assets/price_store.py` |
+| Currency-change wipe | `backend/app/services/assets/currency_change.py` |
+| Event store | `backend/app/services/assets/event_store.py` |
+| Asset API, one module per resource | `backend/app/api/v1/assets/` |
+| Event schemas | `backend/app/schemas/assets/events.py` |
 | Refresh pipeline | `backend/app/services/assets/refresh.py` |
 | Search | `backend/app/services/assets/search.py` |
 | Web link finder | `backend/app/services/assets/web_link_finder.py` |

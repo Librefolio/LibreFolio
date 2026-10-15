@@ -46,6 +46,7 @@ from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
 from backend.app.services.files.static_uploads import seed_default_avatars
 from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.platform.config_audit import log_configuration_audit
 from backend.app.services.platform.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
@@ -251,6 +252,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         database_url=settings.DATABASE_URL.split("///")[-1],  # Hide full path in logs
         test_mode=is_test_mode(),
     )
+    # A configured secret that cannot be read stops the start; settings that weaken the instance are logged
+    await asyncio.to_thread(log_configuration_audit)
 
     signal_runtime = validate_signal_runtime()
     SignalPluginRegistry.auto_discover()

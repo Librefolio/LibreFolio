@@ -31,16 +31,18 @@ setup_test_database()
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
-from backend.app.schemas.assets import FAAssetPatchItem, FACurrentValue, FAHistoricalData, FAPricePoint
+from backend.app.schemas.assets.assets import FAAssetPatchItem
+from backend.app.schemas.prices import FACurrentValue, FAHistoricalData, FAPricePoint
 from backend.app.schemas.provider import FAProviderConfigBase, ProbeOperation
 from backend.app.services.assets import core as asset_source_core
+from backend.app.services.assets import currency_change as currency_change_operations
 from backend.app.services.assets import metadata as metadata_operations
 from backend.app.services.assets import price_query as price_query_operations
-from backend.app.services.assets import price_store as price_store_operations
 from backend.app.services.assets import provider_management as provider_management_operations
 from backend.app.services.assets import refresh as refresh_operations
 from backend.app.services.assets import search as search_operations
-from backend.app.services.assets.core import AssetSourceError, AssetSourceProvider, _asset_current_cache, _asset_history_cache, _asset_metadata_cache, _run_provider_in_thread, _search_query_cache, _search_result_cache
+from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.core import _asset_current_cache, _asset_history_cache, _asset_metadata_cache, _run_provider_in_thread, _search_query_cache, _search_result_cache
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import print_section, print_success
@@ -101,7 +103,7 @@ def _clear_caches():
             ),
         ),
         (price_query_operations, ("_asset_current_cache", "_run_provider_in_thread")),
-        (price_store_operations, ("_asset_history_cache", "_asset_current_cache")),
+        (currency_change_operations, ("_asset_history_cache", "_asset_current_cache")),
     ],
     ids=[
         "metadata",
@@ -109,7 +111,7 @@ def _clear_caches():
         "search",
         "provider-management",
         "price-query",
-        "price-store",
+        "currency-change",
     ],
 )
 def test_operation_modules_share_canonical_core_objects(operation_module, core_object_names):
@@ -138,7 +140,7 @@ def test_normal_and_cold_discovery_keep_provider_base_identity():
 
         AssetProviderRegistry.auto_discover()
 
-        from backend.app.services.assets.core import AssetSourceProvider
+        from backend.app.services.assets.base import AssetSourceProvider
 
         providers = [
             AssetProviderRegistry.get_provider_instance(item["code"])
