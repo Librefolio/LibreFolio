@@ -801,6 +801,48 @@ describe('DataEditor — a value rendered into an html cell stays text (K step 1
     });
 });
 
+// ---------------------------------------------------------------------------
+// The marker locale — shared by the describes below that ask whether a label comes from the catalogue
+// ---------------------------------------------------------------------------
+// A private-use language where every key of the English catalogue, and each key a cure adds, reads as a
+// marker of itself (`⟦common.status⟧`, or `⟦key n=3⟧` for a message given values): a label the component
+// takes from the catalogue reads its marker, a literal written in the component reads as itself. That asks
+// whether the code uses the key, never what a language says; whether the four catalogues have the key is
+// asked of the JSON files (`catalogueGaps`). Each describe that switches to it puts English back after
+// every test.
+
+/** A private-use language (BCP 47 reserves qaa–qtz): Intl accepts it, and it is none of the app's catalogues. */
+const MARKER_LOCALE = 'qaa';
+/** The four shipped catalogues, by language. */
+const SHIPPED_CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+
+/** How a label reads in the marker locale: `⟦key⟧`, or `⟦key n=3⟧` for a message given values. */
+const marked = (key: string, values: Record<string, string | number> = {}): string => `⟦${[key, ...Object.entries(values).map(([name, value]) => `${name}=${value}`)].join(' ')}⟧`;
+
+/** The value behind a dotted key of a catalogue, if any. */
+const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+
+/** Every dotted key of a catalogue that holds a string. */
+function stringKeysOf(node: unknown, prefix = ''): string[] {
+    if (typeof node === 'string') return [prefix];
+    if (node === null || typeof node !== 'object') return [];
+    return Object.entries(node).flatMap(([part, child]) => stringKeysOf(child, prefix ? `${prefix}.${part}` : part));
+}
+
+/** Each of `keys` that some catalogue has no string for, with those catalogues: `{}` when all four have all of them. */
+function catalogueGaps(keys: readonly string[]): Record<string, string[]> {
+    const gaps = keys.map((key) => [key, Object.entries(SHIPPED_CATALOGUES).flatMap(([lang, catalogue]) => (typeof leafOf(catalogue, key) === 'string' ? [] : [lang]))] as const);
+    return Object.fromEntries(gaps.filter(([, langs]) => langs.length > 0));
+}
+
+/** Switch svelte-i18n to the marker locale: every key of the English catalogue reads as its marker, and so does every key of `added` — a key the cure adds, with the names of its values. */
+async function useMarkerLocale(added: Record<string, readonly string[]>): Promise<void> {
+    const messages: Record<string, string> = Object.fromEntries(stringKeysOf(en).map((key) => [key, marked(key)]));
+    for (const [key, names] of Object.entries(added)) messages[key] = marked(key, Object.fromEntries(names.map((name) => [name, `{${name}}`])));
+    addMessages(MARKER_LOCALE, messages);
+    await setupI18n(MARKER_LOCALE);
+}
+
 describe('DataEditor — the status column is labelled from the catalogues (P, item 8)', () => {
     // The status column (hidden until the column menu shows it) is English written in the code: the
     // header 'Status', the filter options 'Original', 'Edited', 'Deleted' and 'New', and a badge that
@@ -819,37 +861,6 @@ describe('DataEditor — the status column is labelled from the catalogues (P, i
     //
     // Red today: header and menu read 'Status'; badges and options 'Original', 'Edited', 'Deleted' and
     // 'New'; no catalogue has `dataEditor.status`.
-
-    /** A private-use language (BCP 47 reserves qaa–qtz): Intl accepts it, and it is none of the app's catalogues. */
-    const MARKER_LOCALE = 'qaa';
-    const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
-
-    /** How a label reads in the marker locale: `⟦key⟧`, or `⟦key n=3⟧` for a message given values. */
-    const marked = (key: string, values: Record<string, string | number> = {}): string => `⟦${[key, ...Object.entries(values).map(([name, value]) => `${name}=${value}`)].join(' ')}⟧`;
-
-    /** The value behind a dotted key of a catalogue, if any. */
-    const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
-
-    /** Every dotted key of a catalogue that holds a string. */
-    function stringKeysOf(node: unknown, prefix = ''): string[] {
-        if (typeof node === 'string') return [prefix];
-        if (node === null || typeof node !== 'object') return [];
-        return Object.entries(node).flatMap(([part, child]) => stringKeysOf(child, prefix ? `${prefix}.${part}` : part));
-    }
-
-    /** Each of `keys` that some catalogue has no string for, with those catalogues: `{}` when all four have all of them. */
-    function catalogueGaps(keys: readonly string[]): Record<string, string[]> {
-        const gaps = keys.map((key) => [key, Object.entries(CATALOGUES).flatMap(([lang, catalogue]) => (typeof leafOf(catalogue, key) === 'string' ? [] : [lang]))] as const);
-        return Object.fromEntries(gaps.filter(([, langs]) => langs.length > 0));
-    }
-
-    /** Switch svelte-i18n to the marker locale: every key of the English catalogue reads as its marker, and so does every key of `added` — a key the cure adds, with the names of its values. */
-    async function useMarkerLocale(added: Record<string, readonly string[]>): Promise<void> {
-        const messages: Record<string, string> = Object.fromEntries(stringKeysOf(en).map((key) => [key, marked(key)]));
-        for (const [key, names] of Object.entries(added)) messages[key] = marked(key, Object.fromEntries(names.map((name) => [name, `{${name}}`])));
-        addMessages(MARKER_LOCALE, messages);
-        await setupI18n(MARKER_LOCALE);
-    }
 
     const STATUSES = ['original', 'edited', 'deleted', 'appended'] as const;
     type Status = (typeof STATUSES)[number];
@@ -921,6 +932,131 @@ describe('DataEditor — the status column is labelled from the catalogues (P, i
 
         const said = Object.fromEntries(STATUSES.map((status) => [status, {badge: badges[status], option: options[status]}]));
         expect(said).toEqual(Object.fromEntries(STATUSES.map((status) => [status, {badge: marked(statusKey(status)), option: expect.stringContaining(marked(statusKey(status)))}])));
+    });
+});
+
+describe('DataEditor — the toolbar counters and the stale-rows switch are labelled from the catalogues (P-15, W part)', () => {
+    // The toolbar counts the rows the user has changed in English written in the code — «2 modified»,
+    // «1 deleted», «3 new» — and names the switch that hides the stale rows «Hide 2 stale rows», then
+    // «Show 2 stale rows»: the same English in Italian, French and Spanish, and read aloud by a screen
+    // reader. The contract: each counter reads `dataEditor.counter.<status>` (edited, deleted, appended)
+    // with `n` its number of rows; the switch is named `dataEditor.staleHide` while the stale rows show and
+    // `dataEditor.staleShow` once they are hidden — today's ternary — with `n` the number of stale rows.
+    //
+    // Read in the marker locale (above); control: the add-row button, already `common.addRow`, reads its
+    // marker. The counters have no handle of their own, so they are looked for among the texts the editor
+    // writes outside its grid, element by element: a red lists what the toolbar says instead.
+    //
+    // Red today: the counters read «2 modified», «1 deleted», «3 new»; the switch «Hide 2 stale rows», then
+    // «Show 2 stale rows»; no catalogue has the five keys.
+
+    const COUNTERS = [
+        {status: 'edited', key: 'dataEditor.counter.edited', n: 2},
+        {status: 'deleted', key: 'dataEditor.counter.deleted', n: 1},
+        {status: 'appended', key: 'dataEditor.counter.appended', n: 3},
+    ] as const;
+    const STALE_SHOW = 'dataEditor.staleShow';
+    const STALE_HIDE = 'dataEditor.staleHide';
+    /** The keys the cure adds, each given `n`. */
+    const ADDED_KEYS = [...COUNTERS.map(({key}) => key), STALE_SHOW, STALE_HIDE];
+
+    const squash = (text: string): string => text.replace(/\s+/g, ' ').trim();
+
+    beforeEach(async () => {
+        await useMarkerLocale(Object.fromEntries(ADDED_KEYS.map((key) => [key, ['n']])));
+    });
+
+    afterEach(async () => {
+        await setupI18n('en');
+    });
+
+    /** Mount `rows`, and check that the marker locale is live. */
+    function mountMarked(rows: DataRow[]): HTMLElement {
+        const {container} = mount(rows);
+        expect(screen.getByTestId('fx-data-add-row-btn'), 'control: a label the editor already takes from the catalogue reads its marker').toHaveTextContent(marked('common.addRow'));
+        return container;
+    }
+
+    /**
+     * One original row, then as many rows in each status as its counter will say: 2 edited, 1 deleted,
+     * 3 appended — three different numbers, so a counter handed another one's count is caught. Each row on
+     * its own day, its rowId, as for prices.
+     */
+    function countedRows(): DataRow[] {
+        let day = 0;
+        const nextDay = (): string => `2024-06-${String(++day).padStart(2, '0')}`;
+        return [row(nextDay()), ...COUNTERS.flatMap(({status, n}) => Array.from({length: n}, () => row(nextDay(), 1, {status, originalStatus: status === 'appended' ? 'appended' : 'original'})))];
+    }
+
+    /** What the editor writes outside its grid — its toolbar —, element by element: each element's own text. */
+    function textsOutsideGrid(): string[] {
+        return [...screen.getByTestId('data-editor-root').querySelectorAll('*')]
+            .filter((element) => element.closest('table') === null)
+            .map((element) => squash([...element.childNodes].map((node) => (node.nodeType === Node.TEXT_NODE ? (node.textContent ?? '') : '')).join('')))
+            .filter((text) => text !== '');
+    }
+
+    it('the four catalogues have the five new labels', () => {
+        expect(catalogueGaps(ADDED_KEYS), 'key → the catalogues with no string for it').toEqual({});
+    });
+
+    it('each counter reads dataEditor.counter.<status>, its n the number of rows in that status', () => {
+        mountMarked(countedRows());
+
+        expect(textsOutsideGrid(), 'what the editor writes outside its grid').toEqual(expect.arrayContaining(COUNTERS.map(({key, n}) => marked(key, {n}))));
+    });
+
+    it('the stale-rows switch is named dataEditor.staleHide while they show, dataEditor.staleShow once they are hidden, its n the number of stale rows', async () => {
+        const container = mountMarked([row('2024-06-10'), row('2024-06-01', 1, {staleDays: 5}), row('2024-06-02', 1, {staleDays: 3})]);
+        const toggle = within(screen.getByTestId('data-editor-stale-toggle')).getByRole('switch');
+        expect(toggle, 'premise: the stale rows show').toHaveAttribute('aria-checked', 'false');
+        const whileShown = toggle.getAttribute('aria-label');
+
+        await fireEvent.click(toggle);
+        await waitFor(() => expect(container.querySelector('tr[data-row-id="2024-06-01"]'), 'premise: the click hid the stale rows').toBeNull());
+        expect(toggle).toHaveAttribute('aria-checked', 'true');
+        const whileHidden = toggle.getAttribute('aria-label');
+
+        expect({whileShown, whileHidden}).toEqual({whileShown: marked(STALE_HIDE, {n: 2}), whileHidden: marked(STALE_SHOW, {n: 2})});
+    });
+});
+
+describe('DataImportModal — the help and close buttons are named from the catalogues (W-B8)', () => {
+    // The import modal's header names its two icon buttons in English written in the code: aria-label
+    // «Help» on the help toggle — whose title is already `csvImport.helpTitle` — and «Close» on ✕, the same
+    // English to a screen reader in Italian, French and Spanish. The contract: the help button is named
+    // `csvImport.helpTitle`, like its title, and the close button `common.close`; both keys exist.
+    //
+    // Read in the marker locale (above), on the events import modal: it gives help content and no header
+    // action, so its header holds exactly these two buttons. The help button is the one titled with the
+    // marker of `csvImport.helpTitle` — which is also the control that the locale is live —, and the close
+    // button is the other one, proved by what a click on it does.
+    //
+    // Red today: «Help» and «Close».
+
+    beforeEach(async () => {
+        await useMarkerLocale({});
+    });
+
+    afterEach(async () => {
+        await setupI18n('en');
+    });
+
+    it('the help button is named csvImport.helpTitle, the close button common.close', async () => {
+        const onclose = vi.fn();
+        render(EventDataImportModal, {open: true, onclose});
+        const buttons = within(await screen.findByTestId('data-import-modal-header')).getAllByRole('button');
+        expect(buttons, 'premise: the header holds the help button and the close button').toHaveLength(2);
+        const help = buttons.find((button) => button.getAttribute('title') === marked('csvImport.helpTitle'));
+        if (!help) throw new Error(`control: no header button is titled ${marked('csvImport.helpTitle')}: the help button lost its title, or the marker locale is not live (titles: ${JSON.stringify(buttons.map((button) => button.getAttribute('title')))})`);
+        const close = buttons.find((button) => button !== help);
+        if (!close) throw new Error('premise: the header holds a second button besides the help button');
+        const said = {help: help.getAttribute('aria-label'), close: close.getAttribute('aria-label')};
+
+        await fireEvent.click(close);
+        expect(onclose, 'premise: the other header button closes the modal').toHaveBeenCalledTimes(1);
+
+        expect(said).toEqual({help: marked('csvImport.helpTitle'), close: marked('common.close')});
     });
 });
 
