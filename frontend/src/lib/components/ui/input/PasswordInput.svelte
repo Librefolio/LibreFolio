@@ -1,6 +1,7 @@
 <script lang="ts">
     import type {ComponentType} from 'svelte';
     import {Eye, EyeOff} from 'lucide-svelte';
+    import {_} from '$lib/i18n';
 
     type AutoFill = 'current-password' | 'new-password' | 'off' | 'on';
 
@@ -51,7 +52,14 @@
         spellcheck="false"
         type={showPassword ? 'text' : 'password'}
     />
-    <button class="absolute right-3 top-1/2 -translate-y-1/2 text-lf-muted hover:text-lf-primary transition-colors p-1" {disabled} on:click={toggleVisibility} tabindex="-1" title={showPassword ? 'Hide password' : 'Show password'} type="button">
+    <button
+        aria-label={$_(showPassword ? 'auth.hidePassword' : 'auth.showPassword')}
+        class="absolute right-3 top-1/2 -translate-y-1/2 text-lf-muted hover:text-lf-primary transition-colors p-1"
+        {disabled}
+        on:click={toggleVisibility}
+        title={$_(showPassword ? 'auth.hidePassword' : 'auth.showPassword')}
+        type="button"
+    >
         {#if showPassword}
             <EyeOff size={20} />
         {:else}

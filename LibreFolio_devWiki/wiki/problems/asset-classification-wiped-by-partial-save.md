@@ -50,6 +50,6 @@ charts.
 | Role | Path |
 |------|------|
 | Bulk asset PATCH (`model_fields_set`, `exclude_unset`) | `backend/app/services/assets/crud.py` |
-| Asset patch schema | `backend/app/schemas/assets.py` |
+| Asset patch schema | `backend/app/schemas/assets/assets.py` |
 | Asset edit modal used by the wizard | `frontend/src/lib/components/assets/AssetModal.svelte` |
 | Plan (E1/E2) | `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgent.prompt.md` |
