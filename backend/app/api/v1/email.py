@@ -1,4 +1,5 @@
-"""Email: its state and a test email for administrators, links emailed by an administrator, and «forgot password».
+"""Email: its state and a test email for administrators, links emailed by an administrator, «forgot password», and the
+verification of an address at sign-up.
 
 The SMTP configuration itself is never returned (F04): only the state, the problem and the variable at fault, the
 configuration checks of the email section (their i18n keys and parameters, never their log summary, which may name the
@@ -24,10 +25,14 @@ from backend.app.schemas.email import (
     EmailLinksRead,
     EmailStatusResponse,
     EmailTestResponse,
+    EmailVerificationConfirmRequest,
+    EmailVerificationConfirmResponse,
+    EmailVerificationResendRequest,
+    EmailVerificationResendResponse,
     PasswordResetEmailAccepted,
     PasswordResetEmailRequest,
 )
-from backend.app.services.email import flows
+from backend.app.services.email import flows, verification
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
 from backend.app.services.email.delivery import EmailDeliveryError, EmailRateLimitedError, EmailUnavailableError, budget_status, email_config_state
 from backend.app.services.email.links import EmailLinksUnavailableError, links_state
@@ -163,3 +168,59 @@ async def request_password_reset_email(
     # The session of this request ends with it: the work opens its own, on the same database.
     background.add_task(flows.forgotten_password_work, body.identifier, engine=session.bind)
     return PasswordResetEmailAccepted()
+
+
+@router.post("/verification/confirm", response_model=EmailVerificationConfirmResponse, summary="Verify an email address: spend the link of the verification email")
+async def confirm_email_verification(body: EmailVerificationConfirmRequest, session: AsyncSession = Depends(get_session_generator)) -> EmailVerificationConfirmResponse:
+    """No session needed: the link proves that its reader received the email. The account becomes active, its address
+    verified, and its other verification links stop working.
+
+    400 ``TOKEN_INVALID`` with the token's ``status`` (``expired``, ``consumed``, ``revoked``, ``unknown``): ``revoked``
+    also for a link emailed to an address the account no longer has (revoked then), and for one whose email did not go
+    as far as LibreFolio knows (left as it is: the account keeps waiting). A dead link is not the end: signing in
+    offers to send a new one.
+    """
+    try:
+        user = await verification.confirm_email(session, body.token)
+    except verification.EmailVerificationLinkInvalidError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error_code": "TOKEN_INVALID", "status": exc.code, "message": "This verification link is not valid"}) from None
+    return EmailVerificationConfirmResponse(username=user.username)
+
+
+@router.post("/verification/resend", response_model=EmailVerificationResendResponse, summary="Send the verification email again, with the credentials of the sign-in")
+async def resend_email_verification(body: EmailVerificationResendRequest, request: Request, session: AsyncSession = Depends(get_session_generator)) -> EmailVerificationResendResponse:
+    """For an account waiting for its verification link: the sign-in's credentials, then a new link by email.
+
+    The credentials are checked as the sign-in checks them: 401 ``Invalid credentials`` for a wrong password or an
+    unknown account, the same answer and the same cost; 403 ``ACCOUNT_DISABLED`` for an account an administrator
+    deactivated. 409 ``EMAIL_VERIFICATION_NOT_NEEDED`` for an active account; 409 ``EMAIL_UNAVAILABLE``,
+    ``EMAIL_LINKS_UNAVAILABLE`` (without the ``problem``: not an administrator); 409 ``USER_LIMIT_REACHED`` when the old link expired and the instance is full now; 429
+    ``EMAIL_RATE_LIMITED`` with ``Retry-After`` (10 requests per 15 minutes per address, before the password; per
+    account, one email every 5 minutes and 3 an hour; the hourly budget); 502 ``EMAIL_DELIVERY_FAILED`` (without the
+    ``smtp_code``); 422
+    ``EMAIL_RECIPIENT_INVALID`` when the account's address is not one address.
+    """
+    address = request.client.host if request.client else None
+    try:
+        language = await verification.resend_verification(session, identifier=body.username, password=body.password, address=address)
+    except verification.VerificationCredentialsError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials") from None
+    except verification.VerificationAccountDisabledError:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail={"error_code": "ACCOUNT_DISABLED", "message": "Account is disabled"}) from None
+    except verification.EmailVerificationNotNeededError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "EMAIL_VERIFICATION_NOT_NEEDED", "message": "This account is active: sign in"}) from None
+    except verification.VerificationUserLimitError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "USER_LIMIT_REACHED", "message": "The instance has reached its maximum number of users"}) from None
+    except EmailUnavailableError:
+        # Without the problem: whoever asks is not an administrator.
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "EMAIL_UNAVAILABLE", "message": "This instance cannot send emails"}) from None
+    except EmailLinksUnavailableError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "EMAIL_LINKS_UNAVAILABLE", "message": "This instance cannot send emails with a link"}) from None
+    except EmailRateLimitedError as exc:
+        _rate_limited(exc, "Too many requests: try again later")
+    except EmailDeliveryError:
+        # Without the SMTP code: whoever asks is not an administrator.
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail={"error_code": "EMAIL_DELIVERY_FAILED", "message": "The email could not be sent"}) from None
+    except EmailRecipientError:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail={"error_code": "EMAIL_RECIPIENT_INVALID", "message": "The address of this account is not a single email address"}) from None
+    return EmailVerificationResendResponse(language=language)
