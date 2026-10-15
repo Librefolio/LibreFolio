@@ -292,7 +292,7 @@ lib/features/tools/pac-allocator/planner/steps/ScenarioStep.svelte	2
 lib/features/tools/pac-allocator/planner/steps/StrategyStep.svelte	19
 lib/features/tools/pac-allocator/planner/steps/TargetsStep.svelte	20
 lib/features/tools/pac-allocator/planner/ui.ts	162
-lib/stores/app/themeStore.ts	0	#166534	#1a4031
+lib/stores/app/themeStore.ts	0	#1b4334×2
 lib/utils/assetTypes.ts	80
 lib/utils/broker/brokerRoleHelpers.ts	4
 lib/utils/currency/fxConversionHelper.ts	6
@@ -311,6 +311,7 @@ routes/(app)/settings/+page.svelte	3
 routes/(app)/transactions/+page.svelte	37
 routes/(app)/welcome/+page.svelte	4
 routes/+page.svelte	1
+~accept	lib/stores/app/themeStore.ts	D-T17 (developer, 15/10): theme-color #1b4334 in both themes, the green bars' --lf-surface-bar (N2); pair checked by themeColorMeta
 ~accept	lib/stores/app/themeStore.ts	D3 (developer, 14/10): theme-color meta dark #156534 -> #166534, the sidebar green; pair checked by themeColorMeta
 ~split	lib/components/assets/AssetModal.svelte	lib/components/assets/AssetModal.svelte,lib/components/assets/AssetModalImportNotices.svelte,lib/components/assets/AssetModalDetails.svelte,lib/components/assets/AssetModalIdentifiers.svelte,lib/components/assets/AssetModalProvider.svelte,lib/components/assets/AssetModalFooter.svelte,lib/components/assets/AssetModalSelectionPrompts.svelte	214
 ~split	lib/components/dashboard/GrowthChart.svelte	lib/components/dashboard/GrowthChart.svelte,lib/components/dashboard/growthChartData.ts,lib/components/dashboard/growthChartSeries.ts,lib/components/dashboard/growthChartTooltip.ts	86	#0891b2	#0d9488	#10b981	#16a34a×3	#1a4031×2	#1e293b×2	#22d3ee	#2563eb×2	#2dd4bf	#34d399	#3b82f6	#4ade80×5	#60a5fa×3	#64748b×2	#65a30d	#6b7280	#6b8e6b	#7c3aed×2	#94a3b8	#9ca3af×2	#9caf9c×2	#a3e635	#a78bfa×2	#b08d00	#cbd5e1	#d97706	#db2777	#dc2626×3	#e2e8f0	#ea580c	#f1f5f9	#f472b6	#f87171×3	#facc15	#fb923c	#fbbf24

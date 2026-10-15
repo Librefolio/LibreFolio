@@ -30,16 +30,21 @@ e le tue integrazioni».
 | D-T6 | Correzioni minime di contrasto applicate subito in `tokens.css`, ciascuna commentata col valore originale. La designer le conferma nel giro 2 |
 | D-T7 | Splash, `offline.html` e `background_color` del manifest: sfondo `page` |
 | D-T8 | Cricchetto R1–R5, grammatica G1–G4, contratto C1–C4. **M2 (colori letterali) attivo in T-1**: R è d'accordo e lo cede a T al posto della parte equivalente del suo W10/D7 (coordinatore, 14/10 sera). Requisiti di R: nomi di colore CSS nei valori (non nei selettori né in `white-space`) e come stringhe negli script; `rgba()`, `hsla()`, `oklab()`, `lab()`, `lch()`, `hwb()`; test e commenti esclusi; per file si confronta il **multinsieme dei valori normalizzati**, così uno scambio a conteggio pari è rosso; percorsi di L esenti; elenco motivato delle eccezioni di R; un `rgb()` fatto solo di `var()` non è un letterale |
-| D-T8b | Baseline adatta ai merge (1.3, 14/10 sera): una riga per file, ordinata, nessun totale (lo calcola il gate). Su un conflitto vince il valore più stretto (m1 minore, intersezione dei valori m2), poi il gate deve passare sull'albero fuso: mai allargare. `--resolve` applica la regola. Tagli di file **dichiarati** con `--split VECCHIO:NUOVO1,NUOVO2`, nel commit del taglio |
+| D-T8b | Baseline adatta ai merge (1.3, 14/10 sera): una riga per file, ordinata, nessun totale (lo calcola il gate). Su un conflitto vince il valore più stretto (m1 minore, intersezione dei valori m2), poi il gate deve passare sull'albero fuso: mai allargare. `--resolve` applica la regola. Tagli di file **dichiarati** con `--split VECCHIO:NUOVO1,NUOVO2`, nel commit del taglio. **TC-7 (15/10):** `--resolve` è un merge a tre vie: una riga che un lato ha lasciato com'era nella base prende quella dell'altro lato; cambiata dai due lati, vince il lato con un `~accept` nuovo per quel file (due `~accept` nuovi: errore, si riaccetta sull'albero fuso), altrimenti il più stretto |
 | D-T9 | Piloti estesi a `ThemeToggle`, `PrivacyToggle`, `LanguageSelector`, `ConnectionSecurityIndicator`. Con l'OK di A: `auth/ForgotPasswordCard`, la barra in alto di `routes/+page.svelte` e `layout/HelpMenu`, solo classi colore e markup non riordinato; A arriva dopo il merge di T, altrimenti T segue sui percorsi nuovi. `routes/+error.svelte` è di T |
 | D-T10 | La migrazione la fa T con sotto-agenti; altri workstream paralleli li decide il coordinatore |
 | D-T11 | Nessun rilascio della 1.3 con la conversione dei neutri e degli stati a metà |
 | D-T12 | Istruzioni per gli agenti, solo in tre punti: la sezione «Design System» di `.github/instructions/frontend.instructions.md`, la riga «Dark mode» di `.github/copilot-instructions.md` e la skill nuova `.github/skills/design-tools/theme-roles/`. Il coordinatore le rivede al checkpoint |
 | D-T13 | Barra di robustezza della password: 3 ruoli (0–1 errore, 2 avviso, 3–4 successo) |
-| D-T14 | Card di accesso con `border-lf-subtle` nei due temi; poi decide la designer |
+| D-T14 | Card di accesso con `border-lf-subtle` nei due temi; poi decide la designer. **Superata da N3 (D-T17):** `border-lf-raised`, `#D8E0DC` in chiaro e `#2E3B36` in scuro, anche per modali e menu a tendina |
 | D-T15 | (15/10, supera D-T2) «Barra laterale neutra, come scrive la designer: #EDF0EE / #111615; il verde #1B4334 resta per l'header del login e i pulsanti». Palette del giro 2: «Pietra e Salvia» / «Ardesia e Salvia»; lo sfondo pagina vale anche per l'app |
 | D-T16 | (15/10, chiude Q1) «Verde focus: riempimento #236B4D / #429E79, segno nel colore della card (6,1:1 in chiaro, 5,3:1 in scuro)»: ruoli `--lf-checked` e `--lf-on-checked` |
 | D-T3 confermata | (15/10) «Solo le ondate W1–W6, come da D-T3: chi non è migrato resta visibilmente vecchio»: niente ponte, né sulle regole globali dello scuro di `app.css` né sulle tabelle di R |
+| D-T17 | (15/10, 15:03, supera D-T15) «archiviali opportunamente e poi dai mandato ai vari sotto agenti di realizzare quanto pianificato»: giro 2 della designer approvato per intero. Barra laterale verde nei due temi, stati con tinte esplicite, N1–N6, Q2–Q13, GR1–GR5. Fonti: `designer-feedback/2026-10-15-round2-palette/` |
+| D-T18 | (15/10, 15:50) «meglio mantenere la regola WCAG, usa Attuale 3:1 ovunque + hover proposto sia per chiaro che per scuro»: il bordo dei campi resta `#7E8984`/`#606F6A`; `--lf-border-input-hover` = testo attenuato (`#616D67`/`#7F8C87`), definitivo, sui campi di T; gli altri con W1-d e le ondate |
+| D-T19 | (15/10, 15:50, supera l'interpretazione di N2 in `analisi.md` §5) «credo che la designer si aspetti che anche in desktop sia verde, non solo in mobile»: header e barra laterale `#1B4334` nei due temi, una sola famiglia di ruoli, `--lf-bar-*` (i nomi della designer, `--lf-surface-sidebar` e `--lf-sidebar-*`, restano nei commenti). Anello di focus dedicato `#52C493` (5,10:1); icone sul testo della barra `#CFE0D8`; «Offrimi un caffè» `#F59E0B` nei due temi; anello del pallino di sicurezza nel verde della barra; bordo inferiore solo in scuro, `#265946`. Restano il comportamento di T-7 e i menu sulla card |
+| D-T20 | (15/10, 15:55) Integrazione progressiva: T entra in `dev_release2` dopo la revisione del developer di T-8 sull'anteprima 6160; da lì ogni gruppo di lotti delle ondate entra appena validato, senza accumulo sul ramo. Il merge lo fa il coordinatore; a ogni ingresso la 1.3 rifà la sua galleria di riferimento |
+| D-T21 | (15/10, 15:55) «si principalmente io, se lei è disponibile te lo faccio sapere»: l'aspetto lo approva il developer, dal contact sheet e dal diff della galleria. La designer rivede tutto insieme nel giro 3; sostituisce la sua revisione a ogni ondata |
 
 **Vincoli:**
 - **Fino alle 22:45 del 14/10:** solo scrittura. Niente `npm ci`, build, test né server: G misura la gallery. Dopo,
@@ -129,18 +134,20 @@ flowchart LR
   - sfondo `bg-lf-app`; header `bg-lf-app border-lf-subtle`.
 - **Test:** E2E, punti (b) e (c). Gallery completa quando il coordinatore la mette in calendario.
 
-### T-4 · PWA e superfici statiche, dopo l'ingresso del lotto A di R
+### T-4 · PWA e superfici statiche, dopo l'ingresso del lotto A di R — fatto dentro T-8 (sbloccato da N2)
 
 - Meta `theme-color` `#1B4334`/`#1B4334` in `app.html`, `themeStore.ts` e `offline.html`.
 - `manifest.json`: `theme_color` e `background_color`, quest'ultimo = page (D-T7).
 - Splash e palette di `offline.html` sui valori dei ruoli.
-- Il gate della meta di R: `PAIR` e (d) su `--lf-brand`.
-- Nuovo `staticThemeMirrors.gate.test.ts`.
+- Il gate della meta di R: `PAIR` e (d) su `--lf-surface-bar`, il ruolo delle barre verdi (D-T19), che la barra del
+  titolo continua.
+- Le copie statiche dei ruoli (splash e `offline.html`) controllate in un blocco nuovo dello stesso
+  `themeColorMeta.gate.test.ts`, già registrato: nessun file nuovo nel runner, che è una superficie condivisa.
 - **Il cricchetto e `themeStore.ts`** (coordinatore, 14/10 sera):
   - nel merge di base di R, la sua correzione D3 (`#156534` → `#166534`) è entrata con
     `--accept lib/stores/app/themeStore.ts --reason …D3…`, perché per il multinsieme m2 era uno scambio;
   - in T-4 la coppia della meta cambia di nuovo (`#1b4334` nei due temi): stesso percorso, con un `--accept`
-    motivato D-T2 nel commit di T-4;
+    motivato D-T17 nel commit di T-8;
   - da lì il gate `themeColorMeta` di R passa a T.
 
 ### T-5 · Sfondo del login, dopo l'ingresso di G
@@ -155,6 +162,25 @@ flowchart LR
   secondaria, colline del login ritarate.
 - Niente ponte (D-T3 confermata): i componenti non migrati restano come sono.
 
+### T-8 · Giro 2 della designer approvato (D-T17)
+
+- `tokens.css`, solo ruoli e valori:
+  - la famiglia della barra verde (README §A) e i colori di stato sulla barra;
+  - gli stati con fondi tenui, bordi e testi espliciti al posto della ricetta (§B), con l'avviso chiaro `#B45309`;
+  - N3 (card in rilievo), N6 (colline scure), Q2 (interruttore), Q3 (rosso pieno e hover), Q6 (terminale), Q7 (`mark`),
+    Q8 (ombre), Q9 (alone del tour), Q10 (avviso nel tooltip), Q11 (viola AI), Q13 (fondale, da verificare);
+  - `--lf-border-input-hover`, il testo attenuato (D-T18, decisa alle 15:50);
+  - correzioni minime D-T6 su ogni coppia misurata dal gate, col valore della designer in commento.
+- Componenti di T: barra laterale tutta verde; stato della connessione sulla barra verde; header verde anche su
+  desktop, con la stessa famiglia `--lf-bar-*` della barra (D-T19, supera l'interpretazione di N2); card di accesso e
+  menu sul bordo e sull'ombra in rilievo (N3, Q8); hover dei campi di T, `PasswordInput` compreso (OK del coordinatore,
+  A verificato); terminale di `ForgotPasswordCard` (Q6), solo classi colore, via libera di A e del 1.3.
+- T-4, sbloccato da N2: `theme-color` `#1B4334` nei due temi, manifest, `offline.html`, gate di R ripreso da T,
+  `--accept` di `themeStore.ts` motivato D-T17.
+- TC-7: `--resolve` a tre vie, prima di W1.
+- Fuori perimetro: l'applicazione nei componenti degli altri (Q4, Q5, Q6 codice nel testo, Q7, Q9, Q10, Q11, Q12, card
+  scure di Profilo e Allocazione) va nelle ondate; i grafici (GR1–GR5) a DV.
+
 ### W1–W6 · Ondate di migrazione (sotto-agenti)
 
 Ordine e prerequisiti: analisi §4.5.
@@ -168,7 +194,10 @@ Ordine e prerequisiti: analisi §4.5.
 | W5 | charts, dashboard, risk, brokers (B4) | lotto B; FE2, FE6, FE7 |
 | W6 | table, files, media, dialoghi (B5) | lotti C e D; FE3 |
 
-Per ogni ondata: lotti di ≤ 15 file; gate eseguiti in serie da T; gallery e revisione della designer.
+Per ogni ondata: lotti di ≤ 15 file, scritti dai sotto-agenti; gate eseguiti in serie da T, una prova pesante alla
+volta. **Ingresso a gruppi (D-T20):** ogni gruppo di lotti entra in `dev_release2` appena validato, senza accumulo sul
+ramo; il merge lo fa il coordinatore e la 1.3 rifà la sua galleria di riferimento. **Approvazione dell'aspetto
+(D-T21):** il developer, dal contact sheet e dal diff della galleria; la designer rivede tutto insieme nel giro 3.
 
 **File che la 1.3 taglia** (coordinatore, 14/10 sera): FE5 di X (`AssetModal` e la pagina dell'asset), FE8a di W
 (wizard e modali delle transazioni), FE6 di Y (`GrowthChart`) e il taglio di `DataTable` di Y (ondata W6).
@@ -429,24 +458,26 @@ Report: per file, the m1/m2 before and after (from --report), the elements left 
 classes, any doubt about a role. Do not stop at the first doubt: leave the element legacy and go on.
 ```
 
-Blocchi per lotto:
+Blocchi per lotto (aggiornati al giro 2, D-T17: Q2–Q13 hanno risposta, e sono valide per tutti i lotti le regole
+seguenti: menu a tendina e modali su `border-lf-raised` e `shadow-lf-shadow` (N3, Q8); campi con
+`hover:border-lf-input-hover` (D-T18)):
 
 | Lotto | Casi particolari da scrivere nel prompt |
 |---|---|
-| W1-a | Opzione evidenziata nella lista: `bg-lf-selected`. Bordo del campo `border-lf-input`, aperto `ring-lf-focus border-lf-focus`. Spunte e caselle selezionate (`CheckMenu`): `bg-lf-checked text-lf-on-checked` (D-T16) |
-| W1-b | `FxProviderSelect`: il `#fbbf24` dentro l'HTML del tooltip resta (Q10). Gli stati delle righe dei provider (`emerald`, `blue`, `amber`) vanno sui ruoli di stato. Le caselle di `AssetPickerPanel` come in W1-a (D-T16) |
+| W1-a | Opzione evidenziata nella lista: `bg-lf-selected`. Bordo del campo `border-lf-input hover:border-lf-input-hover`, aperto `ring-lf-focus border-lf-focus`. Spunte e caselle selezionate (`CheckMenu`): `bg-lf-checked text-lf-on-checked` (D-T16). Il pannello del popover: `bg-lf-card border-lf-raised shadow-lf-shadow` |
+| W1-b | `FxProviderSelect`: il `#fbbf24` dentro l'HTML del tooltip diventa `var(--lf-warning-on-inverse)` (Q10: l'avviso del tema opposto sul tooltip invertito). Gli stati delle righe dei provider (`emerald`, `blue`, `amber`) vanno sui ruoli di stato. Le caselle di `AssetPickerPanel` come in W1-a (D-T16) |
 | W1-c | Il giorno di `CalendarMonth` è un elemento solo, assemblato da `getDayClasses`: selezionato e capi dell'intervallo `bg-lf-checked !text-lf-on-checked` (D-T16), intervallo `bg-lf-selected`, in sospeso `bg-lf-checked/50`, oggi `ring-lf-focus`, giorni fuori mese e futuri `text-lf-muted`. Lo stesso per il preset attivo di `DateRangePicker` e il segmento attivo di `ViewModeToggle` |
-| W1-d | `ExactQuantityInput`: i due `oklch(… / 0.7)` diventano `color-mix(in oklab, var(--lf-danger) 70%, transparent)` e lo stesso con `--lf-success`. `TagInput`: le variabili `--badge-*` ricadono sui ruoli |
-| W1-e | Pannello `var(--lf-surface-card)`, fondale `var(--lf-surface-overlay)`; via la regola scura. L'ombra resta letterale fino a Q8 |
+| W1-d | `ExactQuantityInput`: i due `oklch(… / 0.7)` diventano `color-mix(in oklab, var(--lf-danger) 70%, transparent)` e lo stesso con `--lf-success`. `TagInput`: le variabili `--badge-*` ricadono sui ruoli. Ogni campo: `hover:border-lf-input-hover` (D-T18) |
+| W1-e | Pannello `var(--lf-surface-card)` col bordo `var(--lf-border-raised)` (N3), ombra `var(--lf-shadow-raised)` (Q8), fondale `var(--lf-surface-overlay)` (Q13); via la regola scura |
 | W1-f1 | Gli stati della sync vanno sui ruoli di stato; le classi che arrivano da `syncHelpers` e dalle tabelle di R non si toccano |
 | W1-f2 | La ✗ e la ✓ di convalida: `text-lf-danger` e `text-lf-success`; le celle d'errore `bg-lf-danger-soft` |
-| W2-a | Il banner va sui ruoli `warning` (soft, line, on-soft): è il modello per `InstanceNotices` di H. Il coachmark resta legacy finché Q9 non è decisa; dopo, si toglie la sua eccezione dallo scanner (file di T) |
-| W2-b | Gli stili del changelog: i link su `var(--lf-link)`, il testo attenuato su `var(--lf-text-muted)`, il bordo su `var(--lf-border-subtle)`; `mark` (Q7) e codice (Q6) restano |
-| W2-d | Il viola resta (Q11); neutri e stati sì |
+| W2-a | Il banner va sui ruoli `warning` (soft, line, on-soft): è il modello per `InstanceNotices` di H. Il coachmark: alone `var(--lf-tour-glow)` e fondale `var(--lf-surface-overlay)` (Q9); poi si toglie la sua eccezione dallo scanner (file di T) |
+| W2-b | Gli stili del changelog: i link su `var(--lf-link)`, il testo attenuato su `var(--lf-text-muted)`, il bordo su `var(--lf-border-subtle)`; `mark` su `--lf-mark-bg`, `--lf-mark-text`, `--lf-mark-line` (Q7); il codice nel testo su `--lf-surface-panel`, `--lf-border-subtle`, `--lf-text-primary` (Q6) |
+| W2-d | Il viola va sui ruoli dell'AI: `text-lf-ai`, `bg-lf-ai-soft`, `border-lf-ai-line`, `text-lf-on-ai` sul pieno (Q11); neutri e stati come gli altri |
 | W2-c | `supportLinks.ts`: restano solo i colori dei marchi (eccezione); i neutri si convertono. Il `#ffffff` della donazione diventa `bg-lf-logo` |
-| W2-e2 | I pallini di stato vanno sui ruoli di stato, il grigio resta (Q5) |
-| W2-e1 | L'interruttore: traccia accesa `bg-lf-checked` (D-T16), spenta `bg-lf-input`, pomello `bg-lf-on-action` (Q2: senza risposta, l'interruttore resta legacy per intero). Il badge `setting-badge` (ambra, per esempio «Coming soon») va su `warning-soft` e `warning-on-soft`, come oggi; l'arancio di «modificato» resta (Q4) |
-| W2-f1 | Le icone decorative restano (Q12). Il pulsante distruttivo: `bg-lf-danger text-lf-on-status`, e l'hover provvisorio `hover:bg-lf-danger/90` (Q3), sennò resta legacy per intero. Il logo: `bg-lf-logo` al posto dello `style` |
+| W2-e2 | I pallini di stato vanno sui ruoli di stato, quello «inattivo» sul testo attenuato, `bg-lf-muted` (Q5) |
+| W2-e1 | L'interruttore (Q2): traccia accesa `bg-lf-checked` (D-T16), spenta `bg-lf-switch-off`; pomello `bg-lf-switch-knob-on` da acceso, `bg-lf-switch-knob-off` con `border border-lf-input` da spento (correzione D-T6 sul pallino chiaro). Il badge `setting-badge` (ambra, per esempio «Coming soon») va su `warning-soft` e `warning-on-soft`, come oggi; «modificato» sui ruoli dell'avviso, `warning`, `-soft`, `-line` (Q4) |
+| W2-f1 | Le icone della scheda «Informazioni», senza arcobaleno: badge `bg-lf-panel`, icona `text-lf-focus` (Q12). Il pulsante distruttivo pieno: `bg-lf-danger-solid text-lf-on-danger-solid hover:bg-lf-danger-hover` (Q3). Il logo: `bg-lf-logo` al posto dello `style`. A6 taglia prima `ProfileTab` (`AccountDeletionDialog`): il lotto segue i file del taglio |
 | W2-f2 | I pallini di stato vanno su `bg-lf-success`, `bg-lf-warning`, `bg-lf-danger` |
 | W2-f3 | Nessun caso particolare |
 
@@ -454,7 +485,28 @@ Blocchi per lotto:
 
 - 16 lotti di sotto-agenti e 2 gallery.
 - Ogni lotto passa per T con 3 o 4 esecuzioni in serie nella corsia: gate, `component-unit` mirato, 1–5 azioni E2E.
-- Da coordinare: 10 lotti su 16 chiedono il via a una sessione (X, W, H, Z, J, A). Q1 è chiusa da D-T16 (15/10).
+- Da coordinare: 10 lotti su 16 chiedono il via a una sessione (X, W, H, Z, J, A). Q1 è chiusa da D-T16 (15/10),
+  Q2–Q13 dal giro 2 (D-T17).
+
+**Gruppi d'ingresso di W1 e W2 (proposta del 15/10 per D-T20 e D-T21)**
+
+Un gruppo entra in `dev_release2` appena validato. Dentro un gruppo i lotti li scrivono sotto-agenti in parallelo, su
+file disgiunti; poi una sola validazione pesante del gruppo, in serie nella corsia. Mentre gira, i sotto-agenti possono
+già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da contact sheet e diff della galleria.
+
+| Gruppo | Lotti | Prima, `test-author` | Prove pesanti del gruppo, in serie | Scatti e scene |
+|---|---|---|---|---|
+| I1 · selettori | W1-a, W1-b (14 file, tutto `ui/select`) | `SimpleSelect.test.ts:74-76` | gate, `front check`; Vitest dei selettori in `component-unit`; E2E `select`, `asset-modal`, `asset-classification`, `transactions-modals`, `broker-sharing`, `tx-import-upload`, `risk-lab`, `fx-add-pair`, `fx-detail` | Assets (creazione, tipo, albero, distribuzioni), Settings (preferenze), Transactions (modale), Brokers (condivisione), Risk lab, FX (provider, nuova coppia) |
+| I2 · date, schede, campi | W1-c, W1-d (14 file) | `DateRangePicker.test.ts:949-954`, `fx-list.spec.ts:155`, `asset-data-editor.spec.ts:115,126` | gate, `front check`; Vitest di date, `TabBar` e input; E2E `fx-list`, `asset-data-editor`, `dashboard`, `toolbar-width-sweep`, `asset-list`, `asset-modal`, `transactions-modals`, `files` | galleria completa: barre degli strumenti, schede e intervallo di date sono su quasi ogni pagina |
+| I3 · modali | W1-e (`ModalBase` da solo) | — | gate, `front check`; Vitest `ModalBase`, `ModalBase.escapeLayers`; E2E `transactions-modals`, `settings`, `asset-modal`, `files`, `support-copy-and-go` | tutte le scene con una modale |
+| I4 · onboarding | W2-a (8 file) | — | gate, `front check`; `onboarding-component-unit`; E2E `onboarding-tour`, `onboarding-guides`, `settings` | Onboarding (welcome, tour, guida), Settings (ripasso) |
+| I5 · da chiedere, ciascuno quando ha il via | W1-f1 (X), W1-f2 (W), W2-b (H, Z), W2-c (A), W2-d (J) | come da tabella dei lotti | come da tabella dei lotti | come da tabella; W2-b e W2-d con scatti miei, fuori dalla galleria |
+| I6 · impostazioni | W2-e1, W2-e2, poi W2-f1, W2-f2, W2-f3 (16 file, cartelle di A) | `GlobalSettingsTab.test.ts:885` | gate, `front check`; Vitest delle impostazioni; E2E `settings`, `scheduler`, `account-deletion`, `document-title` | Settings, tutte le schede e le modali dello scheduler |
+
+- **Ordine:** I1 → I2 → I3 → I4; I5 e I6 appena le sessioni danno il via. I6 dopo A6, A8 e A9.
+- **Se la galleria della 1.3 a ogni ingresso pesa più dei conflitti,** I2 e I3 possono entrare insieme: tutti e due
+  chiedono la galleria completa.
+- **Un lotto che resta indietro nel gruppo** non blocca gli altri: esce dal gruppo e passa al successivo.
 
 ### B6 · Pulizia
 
@@ -470,7 +522,8 @@ Blocchi per lotto:
 | 3 | T-3 con la gallery completa | ✅ checkpoint `bd51acbc2`, base aggiornata con G nel merge `dad0f6292`; la gallery la lancia il coordinatore il 15/10 |
 | 4 | T-5 sfondo del login, prima della gallery candidata del 15/10 | ✅ checkpoint `f43aa7200`; spacchettamento W1/W2 `48cc52e5b`; base con X nel merge `2c7553e0b` |
 | 5 | T-6 palette del giro 2 e barra neutra (D-T15, D-T16) | ✅ checkpoint `078dec1ae`; base con `dc9a5d232` nel merge `e1443e952`, validato il 15/10; candidata T6 fatta, l'ingresso aspetta il via del developer |
-| 6 | T-7 header che si nasconde di nuovo, fascia verde del logo nella barra laterale | ✅ pronto il 15/10, FROZEN in attesa del commit |
+| 6 | T-7 header che si nasconde di nuovo, fascia verde del logo nella barra laterale | ✅ checkpoint `0580c92ab`; base `8f1abf89e` nel merge `fe618a0e3` |
+| 7 | T-8 giro 2 della designer (D-T17, D-T18, D-T19), T-4, TC-7 | ⏳ checkpoint scritto il 15/10; prove pesanti e contact sheet sulla revisione fusa (sequenza del coordinatore) |
 
 ## Avanzamento
 
@@ -995,3 +1048,123 @@ Blocchi per lotto:
 > - E2E `theme-roles` 18/18, compresa la fascia;
 > - `component-unit` 3.227 e `onboarding-component-unit` 443 (+2 ciascuna, i casi nuovi di `Header.test.ts`);
 > - **4 scatti** in `files/T7-shots/`: dashboard in desktop e barra mobile aperta, chiaro e scuro.
+
+### T-8 — 🔄 15/10/2026 (giro 2 della designer, D-T17)
+
+> **Avvio** (coordinatore, 15:37): mandato T-8 dal developer, testuale: «archiviali opportunamente e poi dai mandato ai
+> vari sotto agenti di realizzare quanto pianificato» (D-T17). Prima il merge di base `8f1abf89e`:
+> - conflitti su `LanguageSelector` (`data-language` di A5 più la classe del ruolo di T-3) e sul commento di
+>   `theme-roles.spec.ts` (il `registration_mode` di A5 più i casi con accesso di T);
+> - resto fuso in automatico e rivisto; il coordinatore ha committato `fe618a0e3`.
+>
+> Le prove pesanti della revisione fusa vanno insieme a quelle di T-8, quando arriva lo slot.
+
+> **Decisioni arrivate durante il passo** (coordinatore): D-T18 e D-T19 alle 15:50, D-T20 e D-T21 alle 15:55, nella
+> tabella in alto. Via libera su `ForgotPasswordCard` (solo classi colore, A e il 1.3 verificati) e su `PasswordInput`
+> (solo la direttiva dell'hover, A verificato).
+
+> ✅ **1 · `tokens.css` sul giro 2.** Valori del README §A e §B; ruoli nuovi per N3, N6, Q2, Q3, Q6, Q7, Q8, Q9, Q10,
+> Q11, Q13; `--lf-border-input-hover` (D-T18). Blocchi: chiaro 53 ruoli, derivati 40, scuro 53, utility 89; ogni ruolo
+> si risolve nei due temi, C1 regge.
+> - **Note implementazione — correzioni D-T6**, ciascuna in commento accanto al valore della designer:
+>   - avviso chiaro `#B45309` → `#AE4E00` (4,21:1 sulla superficie secondaria);
+>   - fondo tenue dell'errore chiaro `#FEE2E2` → `#FFE5E5` (testo attenuato 4,42);
+>   - fondo tenue dell'informazione chiaro `#DBEAFE` → `#DEEDFF` (info 4,44, attenuato 4,42);
+>   - testo attenuato della barra `#8CA89B` → `#A0BCAF` (4,31 sulla barra, 3,59 sull'hover; ora 5,43 e 4,52);
+>   - avviso sul tooltip invertito, scuro, `#B45309` → `#AE4E00` (4,44; è l'avviso del tema chiaro);
+>   - rosso pieno scuro `#F84361` → `#E1284F` (bianco 3,52); hover `#E12D4B` → `#D51C42` (4,49);
+>   - pallino dell'interruttore acceso in scuro `#FFFFFF`, l'opzione della designer che passa (3,29; `#EDF2F0` dà 2,90).
+> - **Q13:** il fondale è `#0D1110` al 60 % nei due temi, verificato.
+> - **Prova:** script dei contrasti della sessione, 0 coppie sotto soglia su 246, nei due temi.
+
+> ✅ **2 · Una famiglia per le due barre (D-T19).** `--lf-surface-bar` e `--lf-bar-*` al posto di `--lf-sidebar-*`;
+> i nomi della designer restano nei commenti. Nuovi `--lf-bar-focus` `#52C493` (5,10:1) e `--lf-bar-donate` `#F59E0B`
+> (5,15:1); `--lf-bar-edge` trasparente in chiaro, `#265946` in scuro.
+> - **⚠️ Fuori pista:** il primo script di rinomina controllava che non restasse `--lf-sidebar` nel file e ha fallito
+>   sui commenti con i nomi della designer, senza scrivere nulla. Rieseguito col controllo sulle sole dichiarazioni.
+
+> ✅ **3 · Barra laterale tutta verde.** `bg-lf-bar text-lf-bar-text`, bordo destro `border-lf-bar-edge`; la fascia del
+> logo non ha più un fondo suo e si fonde nella barra, la piastrella del logo resta bianca (N1). Voce attiva
+> `bg-lf-bar-active text-lf-on-bar-active` con l'indicatore a sinistra, `border-l-4 border-lf-bar-indicator`, come nel
+> README; divisori `border-lf-bar-line`; esci `bg-lf-bar-logout`. Anello di focus da tastiera
+> `focus-visible:outline-lf-bar-focus` su ogni elemento interattivo (8).
+
+> ✅ **4 · Header verde anche su desktop (D-T19).** `bg-lf-bar text-lf-bar-text border-b border-lf-bar-edge`; icona
+> del menu sul testo della barra; «Offrimi un caffè» `text-lf-bar-donate`, con `data-testid="header-donate-link"`.
+> `ThemeToggle`, `PrivacyToggle`, `LanguageSelector` e `HelpMenu` hanno la prop `onBar` (predefinita `false`: la pagina
+> di accesso di A resta com'è); i loro menu restano sulla card, con `border-lf-raised` e `shadow-lf-shadow`. Lo script
+> di T-7 non è toccato; solo classi e attributi.
+> - **Pallino di sicurezza:** `bg-lf-bar-danger ring-lf-bar`, `#F87171` (4,00:1) nei due temi, come l'icona «non
+>   sicura» della barra. `bg-lf-danger` darebbe 3,14 in scuro (`#F84361`) ma 2,01 in chiaro (`#C82838`).
+> - **⚠️ Fuori pista — «Offrimi un caffè» al passaggio del mouse:** `#F59E0B` (D-T19) sull'hover della barra `#21503E`
+>   dà 4,29:1. L'ha trovato `test-author` leggendo le coppie che il prodotto disegna. Correzione minima D-T6 (solo la
+>   luminosità OKLCH, +0,015): `--lf-bar-donate` `#FAA319`, 5,43 sulla barra e 4,52 sull'hover, col valore chiesto in
+>   commento.
+
+> ✅ **5 · Stato della connessione sulla barra verde (TC-2).** Livelli `text-lf-bar-success`, `-warning`, `-danger`
+> (5,76, 6,62 e 4,00:1); etichetta e dettagli `text-lf-bar-text`; avviso agli amministratori con bordo e testo
+> `lf-bar-warning`.
+
+> ✅ **6 · Accesso: card in rilievo e hover dei campi.** `LoginCard`, `RegisterCard`, `ForgotPasswordCard` e
+> `+error`: `border-lf-raised shadow-lf-shadow` (N3, Q8). Campi: `hover:border-lf-input-hover` nelle due card e in
+> `PasswordInput` (`class:hover:…={!hasError}`).
+> - **Verifiche chieste dal coordinatore:**
+>   - compilando con il Tailwind del progetto le sole classi del campo, `focus:border-lf-focus` e
+>     `focus:border-lf-danger` vengono dopo `hover:border-lf-input-hover`, a pari specificità: il focus vince;
+>   - lo scanner legge la variante dentro `class:`: una sonda con `class:hover:border-lf-nope` dà G2, quella vera no.
+
+> ✅ **7 · Terminale di `ForgotPasswordCard` (Q6).** `bg-lf-terminal border border-lf-terminal-line
+> text-lf-terminal-prompt`; i commenti `# …` su `text-lf-terminal-comment`, derivato provvisorio (testo al 60 % verso
+> il fondo, 5,74:1). Testo dei comandi e markup invariati. Il file scende da 4 a 0 sotto il record (R4 lo segue dal
+> vecchio percorso).
+
+> ✅ **8 · N6, colline del login.** Nessuna modifica al markup: la designer conferma «niente pallini (mantieni il
+> grafico pulito come nel codice attuale)». I valori scuri erano già nei ruoli `--lf-art-*`. In chiaro scrive «perfetti
+> quelli attuali», citandoli come `#9BAF9B` e linea `#1A4235`: una cifra di distanza da quelli in uso (`#9CAF9C`, e
+> `--lf-brand` `#1B4334` al 30 %), letta come arrotondamento della sua misura. Valori lasciati.
+
+> ✅ **9 · T-4: barra del titolo e superfici statiche.**
+> - `theme-color` `#1B4334` nei due temi in `app.html`, `themeStore.ts` e `offline.html`. Resta una coppia
+>   chiaro/scuro con i due rami uguali: un tema suo resta a una modifica di distanza, e il gate legge le tre copie.
+> - `manifest.json`: `theme_color` `#1B4334`, `background_color` `#F3F5F3` (D-T7).
+> - Splash di `app.html`: copie `--lf-*` limitate a `#app-splash`, così non arrivano all'app; spinner sul verde focus.
+> - `offline.html`: un blocco `--lf-*` per tema, copiato da `tokens.css`; le variabili della pagina puntano ai ruoli;
+>   colline e linee come in `AnimatedBackground`; nessun colore letterale fuori dalle copie.
+> - Cricchetto: `--accept lib/stores/app/themeStore.ts --reason "D-T17 …"`. La riga `~accept` D3 resta, una sola.
+> - **⚠️ Fuori pista:** al posto di un `staticThemeMirrors.gate.test.ts` nuovo, il controllo delle copie è un blocco
+>   di `themeColorMeta.gate.test.ts`, già registrato: niente modifica al runner, che è condiviso.
+
+> ✅ **10 · TC-7: `--resolve` a tre vie.** `mergeBaselines`: una riga che un lato ha lasciato com'era nella base
+> prende quella dell'altro lato; cambiata dai due lati, vince il lato con un `~accept` nuovo (due: errore), altrimenti
+> il più stretto. Aggiornati la regola nell'intestazione della baseline (il file la prende alla prossima scrittura dello strumento, `--update` o `--resolve`) e il messaggio di `--resolve`.
+> - **Prova:** basi sintetiche, simmetria compresa: accetta contro stringe, accetta contro rimuove, invariato contro
+>   stringe, entrambi cambiati, due accettazioni (errore). I test li scrive test-author.
+
+> ✅ **11 · Piano delle ondate.** W1–W6 su D-T20 e D-T21; blocchi dei lotti aggiornati alle risposte del giro 2;
+> gruppi d'ingresso I1–I6.
+
+> ✅ **12 · Test (`test-author`, solo scrittura; nessuna suite eseguita: lo slot pesante era di altre corsie).**
+> - `themeTokens.gate.test.ts` (C3): via `surface-sidebar`; 126 coppie per tema (prima 119). Le barre verdi hanno 25
+>   coppie: testo, attenuato, attivo, indicatore, anello di focus, stati, caffè, su barra, hover, attivo ed esci. Si
+>   aggiungono il rosso pieno, l'avviso sul tooltip, l'hover dei campi, l'interruttore, `mark`, il terminale, l'AI e
+>   ogni stato sul suo fondo tenue a 4,5. Via la ricetta `--lf-tint-*`; nuovo test che vieta le coppie doppie. Nel
+>   commento, ciò che C3 non può dire: il pallino dell'interruttore spento e la tinta «non sicura», traslucida (icona
+>   3,19, anello 4,06, misurati a mano).
+> - `themeColorMeta.gate.test.ts`, ripreso da R: coppia `#1b4334` nei due temi (D-T17); (d) su `--lf-surface-bar`;
+>   blocco nuovo sulle copie statiche: (f) ogni copia uguale a `tokens.css` nei due temi, (g) controllo positivo,
+>   (h) nessun colore letterale fuori dalle copie, (i) `background_color` del manifest = `--lf-surface-page` chiaro.
+> - `themeRoles.gate.test.ts`: TC-7, casi da 1 a 10, simmetria compresa; i casi 1–3 falliscono con l'algoritmo di
+>   prima.
+> - `e2e/layout/theme-roles.spec.ts`: (a) card in rilievo; campi sotto il puntatore e a fuoco lì (solo desktop: Tailwind
+>   scrive l'hover dentro `@media (hover: hover)`); card «password dimenticata» col terminale. (b) le due barre verdi da
+>   una famiglia, il bordo trasparente in chiaro letto con un aiuto nuovo, `declaredRole`; l'anello di focus da tastiera
+>   su `theme-toggle`, raggiunto col Tab. (c) il menu della lingua con `--lf-border-raised`.
+> - **Prove leggere:** Prettier e `tsc` mirato puliti sui quattro file, la spec compresa.
+
+> ✅ **13 · Descrizione nel runner.** La voce `theme-roles` di `scripts/test_runner/_frontend_utility.py`, scritta da T
+> in T-2 e T-6, descrive i casi di oggi: solo il testo di `desc`, superficie condivisa.
+
+> **Prove leggere** (nessuna prova pesante: lo slot è di altre corsie):
+> - `theme-roles --check` pulito, 82 file sotto il record;
+> - grammatica 0 sui 12 file toccati;
+> - Prettier sui file toccati: `manifest.json` non era formattato già in `HEAD`, lasciato com'era.

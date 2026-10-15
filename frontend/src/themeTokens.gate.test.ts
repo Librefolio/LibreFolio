@@ -22,13 +22,15 @@
  *       of its own; and no role is both base and derived;
  *   C2  every utility of the table is `--color-lf-<name>: var(--lf-…)` of a role declared in the light or the
  *       derived block; every name is distinct; every utility resolves to a colour in both themes — and so does every
- *       role of the light, derived and dark blocks, utility or not, the tint recipe excepted (`--lf-tint-*`, the
- *       shares of a mix: `8%`). The login illustration (`--lf-art-*`) has no utility: its one component reads it
- *       with var(), where nothing but this check would see a role that does not resolve;
- *   C3  the pairs of `CONTRAST_PAIRS` reach their minimum in both themes: 4.5:1 for text (WCAG 1.4.3) and for the
- *       mark of a selected control (D-T16), 3:1 for the border of a field, the focus ring, a status mark on its own
- *       tint and the fill of a selected control (WCAG 1.4.11). A pair under its minimum is red unless
- *       `KNOWN_EXCEPTIONS` holds it, and an entry there is the designer's decision, not ours;
+ *       role of the light, derived and dark blocks, utility or not, with no exception: a role is a colour. The login
+ *       illustration (`--lf-art-*`) has no utility: its one component reads it with var(), where nothing but this
+ *       check would see a role that does not resolve;
+ *   C3  the pairs of `CONTRAST_PAIRS` reach their minimum in both themes: 4.5:1 for text (WCAG 1.4.3) — a status on
+ *       its own tint included — and for the mark of a selected control (D-T16); 3:1 for the border of a field at rest
+ *       and under the pointer (D-T18), a focus ring, the fill of a selected control, the knob of a switch turned on
+ *       and the marks the green bars draw (WCAG 1.4.11). The green bars, sidebar and header (D-T17, D-T19), are no
+ *       neutral surface: they have pairs of their own. A pair under its minimum is red unless `KNOWN_EXCEPTIONS` holds
+ *       it, and an entry there is the designer's decision, not ours;
  *   C4  every class the legacy remap rewrites (`html.dark .bg-white` …) is still written by a production source: a
  *       rule whose class lost its last use is dead, and leaves app.css in the change that removed that use.
  * And app.css imports tokens.css, and every rule of the remap that targets a field (`input`, `select`, `textarea`),
@@ -42,9 +44,10 @@
  * loudly before it could fail C3 in silence. Contrast is computed on the declared values, not on the page: an
  * opacity utility (`text-lf-muted/70`), a translucent layer, a gradient or an image behind the text are invisible
  * here, and a pair missing from `CONTRAST_PAIRS` is not checked at all — a new role that carries text or draws a
- * control adds its pairs in the same change. The pairs are the floor; the gallery and the designer's review do the
- * rest. C4 counts the class written whole in a production source (`classUses`): a class assembled at run time
- * (`` `bg-gray-${n}` ``) is no use, and a string that merely spells the class is one.
+ * control adds its pairs in the same change. Nor is a control told apart by two colours at once, a fill and an edge:
+ * that is no pair (the knob of a switch turned off, see `CONTRAST_PAIRS`). The pairs are the floor; the gallery and
+ * the designer's review do the rest. C4 counts the class written whole in a production source (`classUses`): a class
+ * assembled at run time (`` `bg-gray-${n}` ``) is no use, and a string that merely spells the class is one.
  *
  * Registered in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action `core-unit`).
  */
@@ -83,14 +86,13 @@ const ratioText = (ratio: number): string => (Math.floor(ratio * 100) / 100).toF
 // C1 and C2: the table
 // ---------------------------------------------------------------------------
 
-/** Four blocks with one fault of every kind C1 and C2 look for — and a tint share, which is no colour and no fault. */
+/** Four blocks with one fault of every kind C1 and C2 look for. */
 const FAULTY_TOKENS = `
 :root,
 html.light,
 .light {
     --lf-a: #ffffff;
     --lf-b: #000000;
-    --lf-tint-a: 8%;
     --lf-art-a: color-mix(in oklab, var(--lf-brnad) 15%, transparent);
 }
 
@@ -106,7 +108,6 @@ html.dark,
     --lf-a: #111111;
     --lf-c: #222222;
     --lf-z: #333333;
-    --lf-tint-a: 6%;
     --lf-art-a: #444444;
 }
 
@@ -143,18 +144,14 @@ function utilityFindings(tokens: Tokens): string[] {
     return out;
 }
 
-/** The tint recipe: `--lf-tint-*` are the shares the status tints are mixed with (`8%`), the one family of roles that is no colour. */
-const TINT_RECIPE = '--lf-tint-';
-
 /** Every role tokens.css declares, in the light, the derived or the dark block: once each, in the order of the file. */
 const declaredRoles = (tokens: Tokens): string[] => [...new Set([...tokens.light.keys(), ...tokens.derived.keys(), ...tokens.dark.keys()])];
 
-/** C2: what keeps a role — named by a utility or read by var() alone, the tint recipe excepted — from being a colour in a theme. */
+/** C2: what keeps a role — named by a utility or read by var() alone — from being a colour in a theme. */
 function roleFindings(tokens: Tokens): string[] {
     const out: string[] = [];
     for (const theme of THEMES) {
         for (const name of declaredRoles(tokens)) {
-            if (name.startsWith(TINT_RECIPE)) continue;
             const colour = colourOf(tokens, `var(${name})`, theme);
             if (typeof colour === 'string') out.push(`${theme}  ${name}: ${colour}`);
         }
@@ -176,11 +173,7 @@ describe('tokens.css: the table of the roles (C1, C2)', () => {
         const faulty = parseTokens(FAULTY_TOKENS);
         expect(themeFindings(faulty)).toEqual(['--lf-b  missing from the dark block', '--lf-z  in the dark block only, and no derived role it could override', '--lf-b  in both the light and the derived block']);
         expect(utilityFindings(faulty)).toEqual(['--color-lf-ghost  --lf-ghost is declared neither in the light block nor in the derived block', '--color-lf-raw  #ffffff is not var(--lf-…): a utility names a role, nothing else', '--color-brand  not a --color-lf-<name> utility']);
-        expect(roleFindings(faulty), 'a role no utility names is read all the same (the typo of --lf-art-a), and the tint share is left out').toEqual([
-            'light  --lf-art-a: tokens.css: --lf-brnad is not declared for the light theme',
-            'light  --lf-z: tokens.css: --lf-z is not declared for the light theme',
-        ]);
-        expect(typeof colourOf(faulty, 'var(--lf-tint-a)', 'light'), 'a tint share is not a colour: TINT_RECIPE alone keeps it out of the findings').toBe('string');
+        expect(roleFindings(faulty), 'a role no utility names is read all the same: the typo of --lf-art-a').toEqual(['light  --lf-art-a: tokens.css: --lf-brnad is not declared for the light theme', 'light  --lf-z: tokens.css: --lf-z is not declared for the light theme']);
         expect(typeof colourOf(faulty, 'var(--lf-ghost)', 'dark'), 'an undeclared role cannot be read').toBe('string');
         expect(typeof colourOf(readTokens(), 'rgb(0 0 0)', 'light'), 'nor can a form the resolver does not know').toBe('string');
     });
@@ -209,10 +202,10 @@ describe('tokens.css: the table of the roles (C1, C2)', () => {
         expect(unreadable, ['', 'A utility the resolver cannot read is a utility C3 cannot check: use the forms tokens.css already uses, or teach resolveColour the new one.', '', ...unreadable, ''].join('\n  ')).toEqual([]);
     });
 
-    it('C2: every role resolves to a colour in both themes, utility or not — the tint recipe excepted', () => {
+    it('C2: every role resolves to a colour in both themes, utility or not', () => {
         const tokens = readTokens();
         const named = new Set(tokens.utilities.values());
-        const readByVarAlone = declaredRoles(tokens).filter((name) => !named.has(`var(${name})`) && !name.startsWith(TINT_RECIPE));
+        const readByVarAlone = declaredRoles(tokens).filter((name) => !named.has(`var(${name})`));
         expect(readByVarAlone, 'positive control: the check reaches the roles no utility names — the login illustration among them').toEqual(expect.arrayContaining(['--lf-art-hill-1', '--lf-art-hill-2', '--lf-art-hill-3', '--lf-art-line']));
         const findings = roleFindings(tokens);
         const rule = 'Every role is a colour in both themes, whether a utility names it or var() reads it alone: one the resolver cannot read draws nothing, in silence. Fix the role, or teach resolveColour its form.';
@@ -227,7 +220,8 @@ describe('tokens.css: the table of the roles (C1, C2)', () => {
 const TEXT = 4.5;
 const NON_TEXT = 3;
 const STATUSES = ['success', 'warning', 'danger', 'info'];
-const SURFACES = ['surface-app', 'surface-page', 'surface-sidebar', 'surface-card', 'surface-panel', 'surface-field'];
+/** The neutral surfaces text and controls are set on. The green bars are not one of them: their pairs are their own. */
+const SURFACES = ['surface-app', 'surface-page', 'surface-card', 'surface-panel', 'surface-field'];
 
 interface ContrastPair {
     foreground: string;
@@ -239,27 +233,70 @@ interface ContrastPair {
 const pairs = (foregrounds: string[], backgrounds: string[], min: number): ContrastPair[] => foregrounds.flatMap((foreground) => backgrounds.map((background) => ({foreground: `--lf-${foreground}`, background: `--lf-${background}`, min})));
 
 /**
- * What the roles promise, in both themes. Text reaches 4.5:1 (WCAG 1.4.3) on every surface it is set on; the border
- * of a field, the focus ring and a status mark on its own tint reach 3:1 (WCAG 1.4.11). The neutral sidebar (D-T15) is
- * one of those surfaces, and the link and the focus border of its active item are checked on it too. A selected
- * control (D-T16: checkbox, radio, switch on, selected day or preset): its fill, --lf-checked, reaches 3:1 on every
- * surface it sits on, and its mark, --lf-on-checked, is held to the text minimum on the fill, as the decision quotes it.
+ * What the roles promise, in both themes: the designer's round 2, approved whole by the developer (D-T17, 15/10).
+ *
+ * On the neutral surfaces, `SURFACES`, text reaches 4.5:1 (WCAG 1.4.3) wherever it is set; the border of a field
+ * reaches 3:1 at rest and under the pointer — the hover border is the muted text colour (D-T18) — and so does the
+ * focus ring (WCAG 1.4.11). A status is legible as text on the surfaces and on its own tint, where its on-soft text,
+ * the muted and the primary text are held to the same minimum; text on a solid status is --lf-on-status, on the hover
+ * of a solid warning or donation button too, and on a solid destructive button --lf-on-danger-solid, at rest and
+ * hovered. A selected control (D-T16: checkbox, radio, switch on, selected day or preset): its fill, --lf-checked,
+ * reaches 3:1 on every surface it sits on; its mark, --lf-on-checked, is held to the text minimum on the fill, as the
+ * decision quotes it; and the knob of a switch turned on, --lf-switch-knob-on, reaches 3:1 on it.
+ *
+ * The green bars are no neutral surface. The sidebar is green in both themes (D-T17, which supersedes the neutral
+ * sidebar of D-T15), and so is the header, both drawn from one family of roles, --lf-bar-* (D-T19). On them, text: the
+ * bar text on the bar, under the pointer, on the active fill (the icon of the default avatar) and on the logout button
+ * at rest and hovered; the muted bar text (the version, the e-mail) on the bar and under the pointer; the active text
+ * on its fill (the active item, its icon included), on the bar (the username) and under the pointer (the username
+ * hovered, the docs link of the connection line); the logo block's --lf-on-brand on the bar, the block having no
+ * surface of its own; the bright warning and «Offrimi un caffè» on the bar and under the pointer — the warning of the
+ * connection line to the administrators sits on its details panel, drawn in the hover colour. And marks, at 3:1: the
+ * indicator of the active item, on the bar beside it and on its fill; the keyboard focus ring of the bars on every bar
+ * surface it surrounds — there the page's --lf-focus would give 1.73:1 in light; the connection-security icons, on the
+ * bar and on their toggle hovered; and the danger dot of the mobile menu.
+ *
+ * And the rest of round 2: a warning inside the tooltip, --lf-warning-on-inverse on --lf-surface-inverse; a highlighted
+ * search result; the terminal box, its text, its prompt and its comments; the AI accent as text on its tint, on the
+ * card and on the panel, and --lf-on-ai on its solid fill.
+ *
+ * What C3 cannot express: a control told apart by two colours at once. The knob of a switch turned off,
+ * --lf-switch-knob-off, is white on the light track of --lf-switch-off in light, and the control is recognised by the
+ * --lf-border-input edge the knob is drawn with — an edge between two fills, which no pair holds. An item for the
+ * designer's round 3. Nor a colour that is no role: the «insecure» tint behind the connection-security toggle is
+ * `bg-lf-bar-danger/20`, composited over the bar — translucent, so no role, and no background a ratio could be taken
+ * on: the icon on it measures 3.19:1 and the focus ring 4.06:1, checked by hand (15/10).
  */
 const CONTRAST_PAIRS: readonly ContrastPair[] = [
     ...pairs(['text-primary', 'text-secondary', 'text-muted', 'text-placeholder'], SURFACES, TEXT),
-    ...pairs(['link'], ['surface-app', 'surface-page', 'surface-sidebar', 'surface-card', 'surface-panel'], TEXT),
+    ...pairs(['link'], ['surface-app', 'surface-page', 'surface-card', 'surface-panel'], TEXT),
     ...pairs(STATUSES, SURFACES, TEXT),
     ...pairs(['donate'], ['surface-app', 'surface-page'], TEXT),
-    ...STATUSES.flatMap((status) => pairs([`${status}-on-soft`, 'text-muted', 'text-primary'], [`${status}-soft`], TEXT)),
+    ...STATUSES.flatMap((status) => pairs([status, `${status}-on-soft`, 'text-muted', 'text-primary'], [`${status}-soft`], TEXT)),
     ...pairs(['on-brand'], ['brand'], TEXT),
     ...pairs(['on-action'], ['action', 'action-hover'], TEXT),
-    ...pairs(['on-status'], STATUSES, TEXT),
+    ...pairs(['on-status'], [...STATUSES, 'warning-hover'], TEXT),
+    ...pairs(['on-danger-solid'], ['danger-solid', 'danger-hover'], TEXT),
     ...pairs(['on-checked'], ['checked'], TEXT),
-    ...pairs(['text-on-inverse'], ['surface-inverse'], TEXT),
-    ...pairs(['border-input'], SURFACES, NON_TEXT),
-    ...pairs(['focus'], ['surface-app', 'surface-sidebar', 'surface-card', 'surface-panel', 'surface-field'], NON_TEXT),
-    ...STATUSES.flatMap((status) => pairs([status], [`${status}-soft`], NON_TEXT)),
-    ...pairs(['checked'], ['surface-card', 'surface-panel', 'surface-field', 'surface-sidebar'], NON_TEXT),
+    ...pairs(['text-on-inverse', 'warning-on-inverse'], ['surface-inverse'], TEXT),
+    ...pairs(['mark-text'], ['mark-bg'], TEXT),
+    ...pairs(['terminal-text', 'terminal-prompt', 'terminal-comment'], ['terminal-bg'], TEXT),
+    ...pairs(['ai'], ['ai-soft', 'surface-card', 'surface-panel'], TEXT),
+    ...pairs(['on-ai'], ['ai'], TEXT),
+    ...pairs(['border-input', 'border-input-hover'], SURFACES, NON_TEXT),
+    ...pairs(['focus'], ['surface-app', 'surface-card', 'surface-panel', 'surface-field'], NON_TEXT),
+    ...pairs(['checked'], ['surface-card', 'surface-panel', 'surface-field'], NON_TEXT),
+    ...pairs(['switch-knob-on'], ['checked'], NON_TEXT),
+
+    // The green bars, sidebar and header (D-T17, D-T19)
+    ...pairs(['bar-text'], ['surface-bar', 'bar-hover', 'bar-active-bg', 'bar-logout-bg', 'bar-logout-hover'], TEXT),
+    ...pairs(['bar-text-muted'], ['surface-bar', 'bar-hover'], TEXT),
+    ...pairs(['bar-active-text'], ['bar-active-bg', 'surface-bar', 'bar-hover'], TEXT),
+    ...pairs(['on-brand'], ['surface-bar'], TEXT),
+    ...pairs(['bar-warning', 'bar-donate'], ['surface-bar', 'bar-hover'], TEXT),
+    ...pairs(['bar-indicator'], ['surface-bar', 'bar-active-bg'], NON_TEXT),
+    ...pairs(['bar-focus'], ['surface-bar', 'bar-hover', 'bar-active-bg', 'bar-logout-bg'], NON_TEXT),
+    ...pairs(['bar-success', 'bar-danger'], ['surface-bar', 'bar-hover'], NON_TEXT),
 ];
 
 interface KnownException {
@@ -320,6 +357,12 @@ describe('tokens.css: contrast in both themes (C3)', () => {
         }
         const rule = 'Each pair is a promise of the roles: change the value of a role (the designer confirms it), never the pair list. A pair kept under its minimum is her decision, in KNOWN_EXCEPTIONS.';
         expect(failures, ['', rule, '', ...failures, ''].join('\n  ')).toEqual([]);
+    });
+
+    it('C3: CONTRAST_PAIRS lists each pair once', () => {
+        const names = CONTRAST_PAIRS.map((pair) => `${pair.foreground} on ${pair.background}`);
+        const twice = names.filter((name, index) => names.indexOf(name) !== index);
+        expect(twice, 'a pair listed twice makes two promises, possibly at two minimums, and KNOWN_EXCEPTIONS can only answer the first: keep the stricter one').toEqual([]);
     });
 
     it('C3: KNOWN_EXCEPTIONS holds only pairs still under their minimum, each with a reason', () => {

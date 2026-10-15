@@ -2,9 +2,10 @@
  * Colour roles in the browser: every migrated element draws the colour of its role, as the browser itself resolves it,
  * in the light and in the dark theme — and the page content not migrated yet keeps today's look (colour programme,
  * workstream T: step T-2, the login/registration pilot; step T-3, the app shell; step T-5, the login background; then
- * the designer's round 2 of the palette, «Pietra e Salvia» in light and «Ardesia e Salvia» in dark, with decision
- * D-T15: the sidebar turns neutral, and the brand green stays on the login header and the primary buttons only — and,
- * at the developer's request of 15/10, on the logo block at the top of the sidebar, as on the login card header).
+ * the designer's round 2 of the palette, «Pietra e Salvia» in light and «Ardesia e Salvia» in dark, approved whole by
+ * the developer on 15/10 — decision D-T17, step T-8 — with decision D-T19: the sidebar and the header are both green,
+ * in both themes, and drawn from one family of roles, --lf-bar-*. The two supersede D-T15, which had turned the sidebar
+ * neutral and kept the brand green for its logo block alone).
  *
  * ## What this protects
  *
@@ -17,12 +18,15 @@
  * element only through `:where(:not([class*='-lf-']))`. Without that exemption a migrated field would keep the legacy
  * border, text and placeholder, and the card the legacy border, and nothing but a computed style would say so.
  *
- * Round 2 changed values, which this spec never writes, and four things it reads: the app and the standalone pages
- * share one background (--lf-surface-app is derived from --lf-surface-page); the sidebar left the brand green for a
- * neutral surface of its own, --lf-surface-sidebar, and the text roles (D-T15), its active item marked on the panel
- * surface, in the link colour, with a focus border — all but its logo block, which the developer brought back to the
- * brand green (15/10); the connection-security line on it draws its level in a status role; and the password
- * requirements left success-soft for the panel surface.
+ * Round 2, as approved, changed values, which this spec never writes, and these things it reads: the app and the
+ * standalone pages share one background (--lf-surface-app is derived from --lf-surface-page); the sidebar and the
+ * header are the green bars (D-T17, D-T19) — one surface, --lf-surface-bar; one text, --lf-bar-text; an edge light
+ * does not draw and dark does, --lf-bar-edge; an active item on a fill of its own, marked by an indicator on its left;
+ * a keyboard focus ring of their own, --lf-bar-focus, since the page's --lf-focus would hardly show on the green; the
+ * connection-security levels in the bright statuses of the bar; and a logo block with no surface of its own, through
+ * which the bar shows. The cards of the sign-in page and the menus are in relief, --lf-border-raised (N3); a field
+ * under the pointer draws --lf-border-input-hover (D-T18); the forgot-password card shows its commands in a terminal
+ * box (Q6); and the password requirements sit on the panel surface.
  *
  * The login background (ui/AnimatedBackground.svelte, fixed behind `/` and the error page) left its literals for roles
  * as well, and its dark rules (`:global(html.dark)`) with them: its surface is --lf-surface-page, its illustration the
@@ -31,40 +35,60 @@
  * both themes (C2); only a browser can prove that each layer draws its own.
  *
  * (a) Signed out, on `/`, in each theme:
- *   - `login-modal`: background --lf-surface-card, border --lf-border-subtle — in dark, the proof that
- *     `html.dark .rounded-2xl` leaves it alone;
+ *   - `login-modal`: background --lf-surface-card, border --lf-border-raised (N3) — in light the colour of
+ *     --lf-border-subtle; in dark a colour of its own, checked to differ first, and there the proof that
+ *     `html.dark .rounded-2xl` leaves the card alone;
  *   - `login-username`: border --lf-border-input at rest and --lf-focus in focus, text --lf-text-primary, placeholder
  *     --lf-text-placeholder — in dark, the proof that `html.dark input` and its `::placeholder` leave it alone;
+ *   - on the desktop project, both fields of the card, `login-username` and `login-password` (PasswordInput): border
+ *     --lf-border-input at rest, --lf-border-input-hover under the pointer (D-T18), then --lf-focus once focused there
+ *     — focus beats hover — the three roles resolved to three different colours first. Tailwind writes `hover:`
+ *     inside `@media (hover: hover)`, which the mobile project, a touch device, does not match: the case skips there;
  *   - `login-submit`: background --lf-action;
  *   - the register card, once the password meets every rule: every `password-rule-*` passed; the
  *     `password-requirements` box on --lf-surface-panel with a --lf-border-subtle border; and in each passed rule its
- *     ✓ — the rule's one `<svg>` — in --lf-success, its text in --lf-text-secondary.
+ *     ✓ — the rule's one `<svg>` — in --lf-success, its text in --lf-text-secondary;
+ *   - the forgot-password card, `forgot-modal`, opened by `goto-forgot`: border --lf-border-raised; its terminal box,
+ *     `forgot-reset-commands` (Q6), background --lf-terminal-bg and border --lf-terminal-border; and its four lines,
+ *     the `<code>` children of the box, by position in the component's fixed markup — a `#` comment, then its command,
+ *     twice — each comment checked to start with `#`, the shell's comment mark, before it is read: the commands in
+ *     --lf-terminal-prompt, the comments in --lf-terminal-comment, the two roles resolved to two different colours
+ *     first.
  *
  * (b) Signed in as TEST_USER, on `/dashboard`, in each theme:
  *   - --lf-surface-app resolves to the colour of --lf-surface-page (round 2: one background);
  *   - `app-shell`: background --lf-surface-app;
  *   - the sidebar — the `<nav>` that holds `sidebar-collapse-toggle`, since it has no test id of its own: background
- *     --lf-surface-sidebar, text --lf-text-primary, right border --lf-border-subtle;
- *   - its logo block, `sidebar-brand`, the one green part of it: background --lf-brand, text --lf-on-brand, the pair of
- *     the login card header, with --lf-brand and --lf-surface-sidebar resolved to two different colours first. Text
- *     colour is inherited, so its reading proves the block's own role only where --lf-on-brand differs from the
- *     sidebar's --lf-text-primary: in light, where that is checked first; in dark --lf-on-brand is --lf-text-primary;
+ *     --lf-surface-bar, text --lf-bar-text, right edge --lf-bar-edge — transparent in light, a line in dark. An edge
+ *     whose class went missing would not read transparent: Tailwind's preflight draws a border in currentColor, here
+ *     the bar text;
+ *   - its logo block, `sidebar-brand`, one with the bar (D-T17): no background of its own — transparent, the bar shows
+ *     through — and text --lf-on-brand. Text colour is inherited, so the reading proves the block's own role only
+ *     because --lf-on-brand and the sidebar's --lf-bar-text are two different colours, checked first in both themes;
  *   - its active item, `nav-dashboard` — the item whose href is the page on view, both read back first: background
- *     --lf-surface-panel, text --lf-link, right border --lf-focus; an inactive item, `nav-settings`, read at rest (no
- *     pointer over it, checked): text --lf-text-secondary;
+ *     --lf-bar-active-bg, text --lf-bar-active-text, left border --lf-bar-indicator, the mark on its left; an inactive
+ *     item, `nav-settings`, read at rest (no pointer over it, checked): text --lf-bar-text;
  *   - its connection-security line, `connection-security`, once the server has answered (`data-server-checked`, so the
- *     level is final): the icon — the `<svg>` of `connection-security-toggle` — in the status role of the level the
- *     line reports in `data-level` (secure → --lf-success, local → --lf-warning, insecure → --lf-danger; secure on the
- *     lane's localhost), the three resolved to three different colours first; `connection-security-label` in
- *     --lf-text-secondary;
- *   - `app-header`: background --lf-surface-app, bottom border --lf-border-subtle.
+ *     level is final): the icon — the `<svg>` of `connection-security-toggle` — in the bar's status role of the level
+ *     the line reports in `data-level` (secure → --lf-bar-success, local → --lf-bar-warning, insecure →
+ *     --lf-bar-danger; secure on the lane's localhost), the three resolved to three different colours first;
+ *     `connection-security-label` in --lf-bar-text;
+ *   - `app-header`, the other green bar (D-T19): background --lf-surface-bar, bottom edge --lf-bar-edge, as the
+ *     sidebar's right one; `theme-toggle` in --lf-bar-text, the look its `onBar` gives it in the header;
+ *     `header-donate-link`, «Offrimi un caffè», in --lf-bar-donate; on the mobile project, the icon of
+ *     `mobile-menu-toggle` in --lf-bar-text;
+ *   - keyboard focus in the header: a Tab from `privacy-toggle` lands on `theme-toggle`, read back as focused and as
+ *     `:focus-visible`, and draws a solid outline in --lf-bar-focus where the toggle at rest drew none — --lf-bar-focus
+ *     and the page's --lf-focus resolved to two different colours first. The focus pins the header (T-7), which is read
+ *     where it stands.
  *
  * (c) The other side of the line, in dark, where the remap acts. The page content stays legacy on purpose (decision
  * D-T3), so a card of it must still be painted by the remap, not by a role: `dashboard-cash-balances` (`bg-white`, drawn
  * on both projects whatever the data — an empty account gets its «no cash» line in the same card) has the background of
  * `var(--theme-bg-card)`, the legacy variable, and not the one of --lf-surface-card. Meanwhile the language menu opened
- * over that page, migrated, draws its own role: `language-selector-panel` on --lf-surface-card. A migration that leaked
- * into the page, or a remap that stopped repainting it, shows here.
+ * over that page, migrated, draws its own roles: `language-selector-panel` on --lf-surface-card, with a
+ * --lf-border-raised border (N3), checked to differ from --lf-border-subtle first. A migration that leaked into the
+ * page, or a remap that stopped repainting it, shows here.
  *
  * (d) Signed out, on `/`, in each theme, the login background, `animated-background`:
  *   - its root: background --lf-surface-page;
@@ -103,41 +127,49 @@
  * account's own preference included — and a probe that read one value everywhere fails there instead of passing below.
  * In (d) the three hill roles must also resolve to three different colours, or no wave could be told from another; in
  * (b), likewise, the three status roles of the connection-security levels, or the icon could not tell one from another.
+ * Wherever a reading could also come from a neighbouring role — an inherited text colour, a border at rest, the page's
+ * focus ring — the two roles are checked to differ before it is taken.
+ *
+ * One role is transparent on purpose: --lf-bar-edge in light, the edge the green bars do not draw there (D-T19). role()
+ * would refuse it, so declaredRole() reads it instead: the probe reads the role under two different fallbacks, two
+ * sentinels no role is expected to have, and only a role some stylesheet declares gives one value under both.
  *
  * ## What it cannot see
  *
  *   - pixels: a computed colour is what the cascade decided, not what reached the screen — an opacity (a wave's aside,
- *     held at 1 by (d)), a layer on top, an image behind, a clip; hover and pressed states; the colours of the icons
- *     but two, the ✓ of a passed rule and the connection-security icon. The gallery and the designer's review do;
+ *     held at 1 by (d)), a layer on top, an image behind, a clip; the states but three — the fields under the pointer
+ *     (desktop only), a focused field and the keyboard focus on the theme toggle — and no pressed state; the colours of
+ *     the icons but three, the ✓ of a passed rule, the connection-security icon and the mobile menu's. The gallery and
+ *     the designer's review do;
  *   - legibility: the contrast of the pairs is themeTokens.gate.test.ts's (C3), on the declared values;
  *   - the placeholder through anything but getComputedStyle(el, '::placeholder'). A browser that ignored the
  *     pseudo-element would hand back the field's own colour, --lf-text-primary: a red, not a silent pass, and its
  *     message names the field's own colour so that it reads as what it is;
  *   - the sidebar as it slides: on mobile it waits off-canvas and is read there — a computed colour does not depend on
  *     where the drawer is, so it is not opened;
- *   - what is fleeting: the sidebar's hover states (an inactive item's `hover:bg-lf-hover hover:text-lf-primary`, which
- *     is why that item is read at rest, and the tint of the logo block's close button, `hover:bg-lf-on-brand/10`, a
- *     button drawn on mobile only), the collapsed sidebar's tooltips (shown on hover only), and the shell's waiting
- *     screens (`app-auth-checking`, `app-bootstrap-loading`, `onboarding-redirecting`) and `welcome-shell`, which a
- *     signed-in landing passes through, or never reaches, before anything could be read;
+ *   - what is fleeting: the bars' hover states (an inactive item's `hover:bg-lf-bar-hover`, which is why that item is
+ *     read at rest; the header's controls; the logo block's close button, a button drawn on mobile only), the focus
+ *     ring of every control but the theme toggle, the collapsed sidebar's tooltips (shown on hover only), and the
+ *     shell's waiting screens (`app-auth-checking`, `app-bootstrap-loading`, `onboarding-redirecting`) and
+ *     `welcome-shell`, which a signed-in landing passes through, or never reaches, before anything could be read;
  *   - the connection-security levels the lane does not report: on its localhost the line is secure, so the other two
- *     tones — and the insecure tint behind the toggle, --lf-danger-soft — are resolved but never seen drawn here
- *     (connection-security.spec.ts reaches those levels under other host names, and reads no colour); nor the line's
- *     details and their admin warning, which stay closed;
+ *     tones — the insecure tint behind the toggle, --lf-bar-danger at 20 %, and the danger dot of the mobile menu with
+ *     them — are resolved but never seen drawn here (connection-security.spec.ts reaches those levels under other host
+ *     names, and reads no colour); nor the line's details and their admin warning, which stay closed;
  *   - the login background as it moves: the waves' transform and the lines' dash and fade are animated, their colours
  *     are not, so a computed colour holds at any frame — but the opacity of a line, animated from 0 to 1 and back, is
  *     not read, so its strength is checked only as the alpha of --lf-art-line; and a retired colour that came back in
  *     another form (a mix of it) would not be recognised as one;
- *   - any page but `/` and `/dashboard` — the error page included, which draws the same login background: the rest of
- *     the content is legacy by decision (D-T3), and the migration waves bring their own cases.
+ *   - any page but `/` and `/dashboard` — the error page included, which draws the same login background and a card in
+ *     relief: the rest of the content is legacy by decision (D-T3), and the migration waves bring their own cases.
  *
  * The test writes nothing server-side. The signed-out cases never sign in or register; the registration link needs
  * `registration_mode` 'open': open by default, read by the login card from GET /api/v1/system/instance, and changed by no
  * E2E spec (auth.spec.ts stubs that read on its own pages only). The signed-in cases sign in as TEST_USER — the server
  * counts the sign-in, as it does for every E2E login — and only read; TEST_USER is grandfathered completed on every
  * onboarding flow (populate_mock_data), which is read back before the dashboard is loaded, so no Welcome, tour or guide
- * stands in the way. The runner's desktop AND mobile projects run every case. Registered in
- * scripts/test_runner/_frontend_utility.py, action `theme-roles` of front-utility.
+ * stands in the way. The runner's desktop AND mobile projects run every case but the fields under the pointer, a desktop
+ * case. Registered in scripts/test_runner/_frontend_utility.py, action `theme-roles` of front-utility.
  */
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
@@ -148,7 +180,7 @@ const THEMES = ['light', 'dark'] as const;
 type Theme = (typeof THEMES)[number];
 
 /** The colour properties this spec compares: a probe reads its role through the same one as the element. */
-type ColourProperty = 'background-color' | 'border-top-color' | 'border-right-color' | 'border-bottom-color' | 'color' | 'stroke';
+type ColourProperty = 'background-color' | 'border-top-color' | 'border-right-color' | 'border-bottom-color' | 'border-left-color' | 'outline-color' | 'color' | 'stroke';
 
 /** The first paint of `/`: it asks GET /auth/me before it shows the login (the budget auth.spec.ts gives the same step). */
 const FIRST_PAINT_MS = 20_000;
@@ -171,11 +203,13 @@ const RETIRED_DARK = ['#11151c', '#00ff9a', '#4ade80'] as const;
 
 /** The page on view in (b), and with it the sidebar's active item: the one whose href it is (Sidebar.svelte's `activeHref`). */
 const DASHBOARD_URL = /^https?:\/\/[^/]+\/dashboard(?:[/?#]|$)/;
-/** The status role each level of the connection-security line draws its icon in (ConnectionSecurityIndicator.svelte). */
-const LEVEL_ROLES = {secure: '--lf-success', local: '--lf-warning', insecure: '--lf-danger'} as const;
+/** The bar's status role each level of the connection-security line draws its icon in (ConnectionSecurityIndicator.svelte, D-T17). */
+const LEVEL_ROLES = {secure: '--lf-bar-success', local: '--lf-bar-warning', insecure: '--lf-bar-danger'} as const;
 type ConnectionLevel = keyof typeof LEVEL_ROLES;
 /** The line asks the server once it has mounted: one GET on a loaded lane (connection-security.spec.ts's budget). */
 const VERDICT_MS = 15_000;
+/** The four lines of the forgot-password card's terminal box, in the order of its fixed markup (ForgotPasswordCard.svelte). */
+const TERMINAL_LINES = ['comment', 'command', 'comment', 'command'] as const;
 
 // The first paint may take FIRST_PAINT_MS on a loaded lane; the comparisons after it take a few seconds. The signed-in
 // cases sign in first and set a budget of their own.
@@ -205,13 +239,27 @@ function probe(page: Page, expression: string, property: ColourProperty, theme: 
 
 /**
  * A role's colour as the page resolves it. The probe falls back to transparent when nothing declares the role, and that
- * is refused: every role this spec reads is a colour that shows — opaque, or translucent as the light hills of the login
- * background are, never fully transparent — so transparent can only mean a broken probe or a missing role.
+ * is refused: every role this spec reads through it is a colour that shows — opaque, or translucent as the light hills of
+ * the login background are, never fully transparent — so transparent can only mean a broken probe or a missing role.
+ * The one role transparent on purpose, --lf-bar-edge in light, is read by declaredRole() instead.
  */
 async function role(page: Page, name: string, property: ColourProperty, theme: Theme | null = null): Promise<string> {
     const value = await probe(page, `var(${name}, transparent)`, property, theme);
     const unresolved = await probe(page, 'transparent', property, theme);
     expect(value, `${name} must resolve to a colour${theme ? ` in a .${theme} subtree` : ''}: the probe fell back to transparent, so no stylesheet declares it there`).not.toBe(unresolved);
+    return value;
+}
+
+/**
+ * A role's colour as the page resolves it, transparent allowed: for --lf-bar-edge, the edge of the green bars, which
+ * light leaves transparent on purpose (D-T19) and role() would refuse. That the role is declared is proven another way:
+ * the probe reads it under two different fallbacks — sentinels, never expected on screen — and only a role some
+ * stylesheet declares gives one value under both.
+ */
+async function declaredRole(page: Page, name: string, property: ColourProperty): Promise<string> {
+    const value = await probe(page, `var(${name}, rgb(1, 2, 3))`, property);
+    const other = await probe(page, `var(${name}, rgb(4, 5, 6))`, property);
+    expect(value, `${name} must be declared: the probe read back each of its two fallbacks, so no stylesheet declares it`).toBe(other);
     return value;
 }
 
@@ -270,6 +318,12 @@ async function expectRole(page: Page, target: Locator, property: ColourProperty,
     await expect.poll(() => computed(target, property, pseudo), {message: `${what}: ${pseudo ? `${pseudo} ` : ''}${property} must be ${name}, ${expected}`, timeout: SETTLE_MS}).toBe(expected);
 }
 
+/** `target` draws `property` in the colour of the role `name`, transparent allowed (declaredRole), once any transition has settled. */
+async function expectDeclaredRole(page: Page, target: Locator, property: ColourProperty, name: string, what: string): Promise<void> {
+    const expected = await declaredRole(page, name, property);
+    await expect.poll(() => computed(target, property), {message: `${what}: ${property} must be ${name}, ${expected}`, timeout: SETTLE_MS}).toBe(expected);
+}
+
 /**
  * The positive control: the page is drawn in `theme`, measured on a colour and not only on <html>'s class. The probe
  * resolves --lf-surface-card, the `.light` and `.dark` subtrees resolve it to two different values, and the page's own
@@ -320,10 +374,16 @@ test.describe('Colour roles on the sign-in page — every element draws its role
                 await openSignIn(page, theme);
             });
 
-            test('the login card: card, field at rest and in focus, its placeholder, the primary action', async ({page}) => {
+            test('the login card: card in relief, field at rest and in focus, its placeholder, the primary action', async ({page}) => {
                 const card = page.getByTestId('login-modal');
                 await expectRole(page, card, 'background-color', '--lf-surface-card', 'login-modal');
-                await expectRole(page, card, 'border-top-color', '--lf-border-subtle', 'login-modal (in dark, html.dark .rounded-2xl must exempt it)');
+                // N3: the card in relief. In light --lf-border-raised is the colour of --lf-border-subtle; in dark it is one
+                // of its own, checked first, so that there the reading proves the card's own role.
+                if (theme === 'dark') {
+                    const subtle = await role(page, '--lf-border-subtle', 'border-top-color');
+                    expect(await role(page, '--lf-border-raised', 'border-top-color'), `positive control: in dark --lf-border-raised is not --lf-border-subtle (${subtle}), so the card's border reads its own role`).not.toBe(subtle);
+                }
+                await expectRole(page, card, 'border-top-color', '--lf-border-raised', 'login-modal (in dark, html.dark .rounded-2xl must exempt it)');
 
                 const username = page.getByTestId('login-username');
                 // At rest: nothing focuses the field on load, and blur() makes sure of it.
@@ -339,6 +399,34 @@ test.describe('Colour roles on the sign-in page — every element draws its role
                 await expectRole(page, username, 'border-top-color', '--lf-focus', 'login-username in focus');
 
                 await expectRole(page, page.getByTestId('login-submit'), 'background-color', '--lf-action', 'login-submit');
+            });
+
+            test('the fields under the pointer: the hover border (D-T18), and the focus border over it once focused there', async ({page}, testInfo) => {
+                test.skip(testInfo.project.name !== 'desktop', 'Desktop only: Tailwind writes hover: inside @media (hover: hover), which the mobile project, a touch device, does not match');
+                // Positive control: the three borders of a field are three colours, or no reading below could tell a state
+                // from another.
+                const borders = [await role(page, '--lf-border-input', 'border-top-color'), await role(page, '--lf-border-input-hover', 'border-top-color'), await role(page, '--lf-focus', 'border-top-color')];
+                expect(new Set(borders).size, `positive control: --lf-border-input, --lf-border-input-hover and --lf-focus resolve to three different colours (${borders.join(' | ')})`).toBe(3);
+
+                // The username field, then the password field (PasswordInput, its hover a class: directive). The pointer and
+                // the focus move from the first to the second, so the second starts at rest too — read back, not assumed.
+                for (const testId of ['login-username', 'login-password']) {
+                    const field = page.getByTestId(testId);
+                    await expect(field).toBeVisible();
+                    await field.blur();
+                    await expect(field, `${testId} starts without the focus`).not.toBeFocused();
+                    expect(await field.evaluate((element) => element.matches(':hover')), `${testId} starts at rest: no pointer is over it`).toBe(false);
+                    await expectRole(page, field, 'border-top-color', '--lf-border-input', `${testId} at rest`);
+
+                    await field.hover();
+                    await expect.poll(() => field.evaluate((element) => element.matches(':hover')), {message: `the pointer is over ${testId}`, timeout: SETTLE_MS}).toBe(true);
+                    await expectRole(page, field, 'border-top-color', '--lf-border-input-hover', `${testId} under the pointer (D-T18)`);
+
+                    await field.focus();
+                    await expect(field).toBeFocused();
+                    expect(await field.evaluate((element) => element.matches(':hover')), `${testId} is still under the pointer: hovered and focused at once`).toBe(true);
+                    await expectRole(page, field, 'border-top-color', '--lf-focus', `${testId} focused under the pointer: the focus border beats the hover one`);
+                }
             });
 
             test('the register card: a password meeting every rule, the requirements box on the panel surface, each rule ticked in success', async ({page}) => {
@@ -368,6 +456,41 @@ test.describe('Colour roles on the sign-in page — every element draws its role
                     await expectRole(page, passed.locator('span').first(), 'color', '--lf-text-secondary', `the text of the passed rule ${key}`);
                 }
             });
+
+            test('the forgot-password card: in relief, and its commands in a terminal box, the commands and the comments apart (Q6)', async ({page}) => {
+                const gotoForgot = page.getByTestId('goto-forgot');
+                await expect(gotoForgot, 'the login card offers the password recovery').toBeVisible();
+                await gotoForgot.click();
+                const card = page.getByTestId('forgot-modal');
+                await expect(card).toBeVisible();
+                await expectRole(page, card, 'border-top-color', '--lf-border-raised', 'forgot-modal (N3)');
+
+                const terminal = card.getByTestId('forgot-reset-commands');
+                await expect(terminal).toBeVisible();
+                await expectRole(page, terminal, 'background-color', '--lf-terminal-bg', 'forgot-reset-commands');
+                await expectRole(page, terminal, 'border-top-color', '--lf-terminal-border', 'forgot-reset-commands border');
+
+                // `color` is inherited: a comment line that lost its own role would draw the box's, the prompt colour. The
+                // two differ, checked first, so that the readings below tell a comment from a command.
+                const prompt = await role(page, '--lf-terminal-prompt', 'color');
+                expect(await role(page, '--lf-terminal-comment', 'color'), `positive control: --lf-terminal-comment is not --lf-terminal-prompt (${prompt})`).not.toBe(prompt);
+                // The lines carry no test id: they are the `<code>` children of the box, in the order of the component's fixed
+                // markup (TERMINAL_LINES). An index names a line of that markup here, it does not guess at a row — and each
+                // comment line is checked to be one before it is read: it starts with `#`, the shell's comment mark, which no
+                // translation touches.
+                const lines = terminal.locator(':scope > code');
+                await expect(lines, 'the terminal box holds its four lines').toHaveCount(TERMINAL_LINES.length);
+                for (const [index, kind] of TERMINAL_LINES.entries()) {
+                    const line = lines.nth(index);
+                    if (kind === 'comment') {
+                        await expect(line, `line ${index + 1} of forgot-reset-commands is a shell comment`).toHaveText(/^\s*#/);
+                        await expectRole(page, line, 'color', '--lf-terminal-comment', `line ${index + 1} of forgot-reset-commands, a comment`);
+                    } else {
+                        await expect(line, `line ${index + 1} of forgot-reset-commands is a command`).not.toHaveText(/^\s*#/);
+                        await expectRole(page, line, 'color', '--lf-terminal-prompt', `line ${index + 1} of forgot-reset-commands, a command`);
+                    }
+                }
+            });
         });
     }
 });
@@ -377,7 +500,7 @@ test.describe('Colour roles in the app shell — signed in as TEST_USER, on /das
     test.describe.configure({timeout: 120_000});
 
     for (const theme of THEMES) {
-        test(`(b) ${theme} theme: the shell draws the app background, the neutral sidebar with its green logo block, and the header from the roles`, async ({page}) => {
+        test(`(b) ${theme} theme: the green bars, sidebar and header, from one family of roles`, async ({page}, testInfo) => {
             await openDashboard(page, theme);
 
             // Round 2: the app and the standalone pages share one background, --lf-surface-app derived from --lf-surface-page.
@@ -389,41 +512,39 @@ test.describe('Colour roles in the app shell — signed in as TEST_USER, on /das
             // and is read there, since a computed colour does not depend on where the drawer is.
             const sidebar = page.locator('nav').filter({has: page.getByTestId('sidebar-collapse-toggle')});
             await expect(sidebar, 'one <nav> holds sidebar-collapse-toggle: the sidebar').toHaveCount(1);
-            // D-T15: neutral, on a surface of its own and the text roles, no longer the brand green — but for its logo block.
-            await expectRole(page, sidebar, 'background-color', '--lf-surface-sidebar', 'the sidebar');
-            await expectRole(page, sidebar, 'color', '--lf-text-primary', 'the sidebar text');
-            await expectRole(page, sidebar, 'border-right-color', '--lf-border-subtle', 'the sidebar right border');
+            // D-T17: green in both themes; D-T19: drawn from the family of roles it shares with the header, --lf-bar-*.
+            await expectRole(page, sidebar, 'background-color', '--lf-surface-bar', 'the sidebar');
+            await expectRole(page, sidebar, 'color', '--lf-bar-text', 'the sidebar text');
+            // The edge is transparent in light, on purpose (declaredRole reads it). An edge whose class went missing would not
+            // read transparent: Tailwind's preflight draws a border in currentColor, here the bar text.
+            await expectDeclaredRole(page, sidebar, 'border-right-color', '--lf-bar-edge', 'the sidebar right edge (none in light, a line in dark)');
 
-            // The logo block keeps the green of the login card header (developer, 15/10): a surface and a text role of its
-            // own, inside the sidebar that stays neutral around it.
+            // The logo block is one with the bar (D-T17): no surface of its own, so the bar shows through — the transparent
+            // keyword, read back through the same probe. Its text keeps the role of the login card header; `color` is
+            // inherited, so the reading tells the block's role from the sidebar's only because the two differ, checked first.
             const brand = sidebar.getByTestId('sidebar-brand');
             await expect(brand, 'the sidebar holds its logo block, sidebar-brand').toHaveCount(1);
-            const sidebarSurface = await role(page, '--lf-surface-sidebar', 'background-color');
-            expect(await role(page, '--lf-brand', 'background-color'), `positive control: --lf-brand is not --lf-surface-sidebar (${sidebarSurface}), or the logo block could not be told from the sidebar it sits on`).not.toBe(sidebarSurface);
-            await expectRole(page, brand, 'background-color', '--lf-brand', 'the logo block, sidebar-brand');
-            if (theme === 'light') {
-                // `color` is inherited: a block with no text role of its own would draw the sidebar's. In light the two roles
-                // differ, so the reading below tells them apart; in dark --lf-on-brand is --lf-text-primary itself.
-                const sidebarText = await role(page, '--lf-text-primary', 'color');
-                expect(await role(page, '--lf-on-brand', 'color'), `positive control: in light --lf-on-brand is not the sidebar text, --lf-text-primary (${sidebarText}), so the logo block's text reads its own role, not an inherited one`).not.toBe(sidebarText);
-            }
+            const transparent = await probe(page, 'transparent', 'background-color');
+            await expect.poll(() => computed(brand, 'background-color'), {message: `the logo block, sidebar-brand: no background of its own, ${transparent}, so that the bar shows through`, timeout: SETTLE_MS}).toBe(transparent);
+            const barText = await role(page, '--lf-bar-text', 'color');
+            expect(await role(page, '--lf-on-brand', 'color'), `positive control: --lf-on-brand is not the bar text, --lf-bar-text (${barText}), so the logo block's text reads its own role, not the one it would inherit from the sidebar`).not.toBe(barText);
             await expectRole(page, brand, 'color', '--lf-on-brand', 'the logo block text');
 
             // The active item is the one whose href is the page on view: both read back, never inferred from a class.
             await expect(page, 'the page on view is /dashboard').toHaveURL(DASHBOARD_URL);
             const active = sidebar.getByTestId('nav-dashboard');
             await expect(active, 'nav-dashboard links the page on view').toHaveAttribute('href', '/dashboard');
-            await expectRole(page, active, 'background-color', '--lf-surface-panel', 'the active item, nav-dashboard on /dashboard');
-            await expectRole(page, active, 'color', '--lf-link', 'the active item text');
-            await expectRole(page, active, 'border-right-color', '--lf-focus', 'the active item right border');
+            await expectRole(page, active, 'background-color', '--lf-bar-active-bg', 'the active item, nav-dashboard on /dashboard');
+            await expectRole(page, active, 'color', '--lf-bar-active-text', 'the active item text');
+            await expectRole(page, active, 'border-left-color', '--lf-bar-indicator', 'the active item left border, its indicator');
 
-            // An inactive item, read at rest: under the pointer it would draw hover:text-lf-primary instead.
+            // An inactive item, read at rest: under the pointer it would draw hover:bg-lf-bar-hover.
             const inactive = sidebar.getByTestId('nav-settings');
             await expect(inactive, 'nav-settings links another page than the one on view').toHaveAttribute('href', '/settings');
             expect(await inactive.evaluate((element) => element.matches(':hover')), 'nav-settings is read at rest: no pointer is over it').toBe(false);
-            await expectRole(page, inactive, 'color', '--lf-text-secondary', 'an inactive item, nav-settings');
+            await expectRole(page, inactive, 'color', '--lf-bar-text', 'an inactive item, nav-settings');
 
-            // The connection-security line on the neutral sidebar: its icon in the status role of the level it reports.
+            // The connection-security line on the green bar: its icon in the bar's status role of the level it reports.
             const tones: string[] = [];
             for (const name of Object.values(LEVEL_ROLES)) tones.push(await role(page, name, 'color'));
             expect(new Set(tones).size, `positive control: the three level roles resolve to three different colours, or the icon could not tell a level from another (${tones.join(' | ')})`).toBe(tones.length);
@@ -437,15 +558,45 @@ test.describe('Colour roles in the app shell — signed in as TEST_USER, on /das
             // The label shows on an expanded sidebar, and a fresh browser context stores no collapsed one.
             const label = line.getByTestId('connection-security-label');
             await expect(label, 'the sidebar is expanded, so the line shows its label').toBeAttached();
-            await expectRole(page, label, 'color', '--lf-text-secondary', 'connection-security-label');
+            await expectRole(page, label, 'color', '--lf-bar-text', 'connection-security-label');
 
+            // The header, the other green bar (D-T19): the sidebar's surface, and its edge at the bottom.
             const header = page.getByTestId('app-header');
-            await expectRole(page, header, 'background-color', '--lf-surface-app', 'app-header');
-            await expectRole(page, header, 'border-bottom-color', '--lf-border-subtle', 'app-header bottom border');
+            await expectRole(page, header, 'background-color', '--lf-surface-bar', 'app-header');
+            await expectDeclaredRole(page, header, 'border-bottom-color', '--lf-bar-edge', 'app-header bottom edge (none in light, a line in dark)');
+            const themeToggle = header.getByTestId('theme-toggle');
+            await expect(themeToggle).toBeVisible();
+            await expectRole(page, themeToggle, 'color', '--lf-bar-text', 'theme-toggle, in its onBar look');
+            const donate = header.getByTestId('header-donate-link');
+            await expect(donate).toBeVisible();
+            await expectRole(page, donate, 'color', '--lf-bar-donate', 'header-donate-link');
+            if (testInfo.project.name === 'mobile') {
+                // On a phone the header holds the burger that opens the sidebar, its icon in the bar text.
+                const menuToggle = header.getByTestId('mobile-menu-toggle');
+                await expect(menuToggle, 'the mobile header shows the burger').toBeVisible();
+                await expectRole(page, menuToggle.locator('svg').first(), 'color', '--lf-bar-text', 'the icon of mobile-menu-toggle');
+            }
+
+            // Keyboard focus on a bar draws the bar's own ring (D-T19): the page's --lf-focus would hardly show on the
+            // green. The last hop is a Tab, which Chrome always marks :focus-visible — a bare focus() would inherit the
+            // kind of the page's last interaction — from privacy-toggle, the control just before theme-toggle in the
+            // header on both projects (header-scroll.spec.ts takes the same hop). The focus pins the header (T-7): it is
+            // read where it stands.
+            const ring = await role(page, '--lf-bar-focus', 'outline-color');
+            expect(await role(page, '--lf-focus', 'outline-color'), `positive control: the page's --lf-focus is not the bar's ring, --lf-bar-focus (${ring}), so the reading below tells them apart`).not.toBe(ring);
+            await expect(themeToggle, 'theme-toggle at rest draws no outline: the one read below is its focus ring').toHaveCSS('outline-style', 'none');
+            const privacy = header.getByTestId('privacy-toggle');
+            await expect(privacy).toBeVisible();
+            await privacy.focus();
+            await page.keyboard.press('Tab');
+            await expect(themeToggle, 'Tab from privacy-toggle lands on theme-toggle, the next control of the header').toBeFocused();
+            expect(await themeToggle.evaluate((element) => element.matches(':focus-visible')), 'a focus that arrives by Tab is keyboard focus').toBe(true);
+            await expect(themeToggle, 'the focus ring is drawn: focus-visible:outline-2, a solid outline').toHaveCSS('outline-style', 'solid');
+            await expectRole(page, themeToggle, 'outline-color', '--lf-bar-focus', 'the keyboard focus ring of theme-toggle on the header');
         });
     }
 
-    test('(c) dark theme: the page content keeps the legacy remap, and a migrated menu over it draws its role', async ({page}) => {
+    test('(c) dark theme: the page content keeps the legacy remap, and a migrated menu over it draws its roles', async ({page}) => {
         await openDashboard(page, 'dark');
 
         // A card of the page content, legacy by decision (D-T3): `bg-white`, which the remap of app.css repaints in dark.
@@ -455,7 +606,7 @@ test.describe('Colour roles in the app shell — signed in as TEST_USER, on /das
         const cardRole = await role(page, '--lf-surface-card', 'background-color');
         expect(await computed(legacyCard, 'background-color'), 'the legacy card does not take the card role: the page content is not migrated yet (D-T3)').not.toBe(cardRole);
 
-        // A migrated menu, opened over that legacy page.
+        // A migrated menu, opened over that legacy page: on the card, in relief (N3).
         const languageButton = page.getByTestId('language-selector-button');
         await expect(languageButton, 'the language menu starts closed').toHaveAttribute('aria-expanded', 'false');
         await languageButton.click();
@@ -463,6 +614,9 @@ test.describe('Colour roles in the app shell — signed in as TEST_USER, on /das
         const panel = page.getByTestId('language-selector-panel');
         await expect(panel).toBeVisible();
         await expectRole(page, panel, 'background-color', '--lf-surface-card', 'language-selector-panel');
+        const subtle = await role(page, '--lf-border-subtle', 'border-top-color');
+        expect(await role(page, '--lf-border-raised', 'border-top-color'), `positive control: in dark --lf-border-raised is not --lf-border-subtle (${subtle}), so the menu's border reads its own role`).not.toBe(subtle);
+        await expectRole(page, panel, 'border-top-color', '--lf-border-raised', 'language-selector-panel border');
     });
 });
 
