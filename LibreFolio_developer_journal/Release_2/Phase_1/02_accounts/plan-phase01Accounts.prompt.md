@@ -1641,3 +1641,68 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - **Commit proposti**:
 >   1. `feat(accounts): end sessions on password change`;
 >   2. `docs(journal): A4b progress, A backlog, TODO`.
+>
+> **Esito**: il coordinatore ha committato `3ac4114d5` (`feat(accounts): end sessions on password change`, 28 file) e
+> `6160a71ce` (journal, backlog, `TODO_FUTURI.md`, `TODO_Completati.md`), dopo aver riletto la logica di
+> `get_current_user`, `decode_jwt_token` e `change-password`. Le due righe del CHANGELOG vanno sotto «🔄 Changed».
+>
+> Poi ha aggiornato la base con il merge `9c3047ce9` di `dev_release2` a `6d67fdaac`. Porta X CP3, W7, X CP3b, J C-93 e
+> H CP4: router di sistema per risorsa, `/system/instance` pubblico, area degli avvisi nel layout.
+> - Unione automatica di `security.md`, `app-state.md`, `_backend_api.py`, `_backend_services.py`, `TODO_FUTURI.md` e
+>   del backlog.
+> - `decode_jwt_token` ha un solo chiamante, `auth.py`.
+>
+> **Nota per A5 e i lotti dopo**, alla lettera: «`GET /api/v1/system/instance` è **pubblico**. Ogni campo che aggiungi in
+> `InstanceConfigResponse` deve essere innocuo per un anonimo. `registration_mode` va bene; dati di utenti, email o
+> versioni no (decisione 15).»
+
+#### A4b.7 — Validazione completa della revisione combinata `9c3047ce9` ✅ (2026-10-15)
+> Richiesta del coordinatore:
+> - `services session-version`, `api session-revocation`, `api auth`, `api system`;
+> - `all-backend`, con `front build --debug` e `mkdocs build` prima;
+> - E2E `front-utility auth` e `front-utility settings`;
+> - `api schema` contro `6d67fdaac`;
+> - handoff entro le 08:20.
+>
+> **Note implementazione**:
+> - **`api schema`**: l'ho esportato da HEAD e dalla base `6d67fdaac`. La base l'ho estratta con `git archive` in
+>   `/tmp` ed esportata con il Python del venv condiviso, senza un altro checkout. Risultato: 114 percorsi e 587 schemi
+>   da tutte e due le parti. Cambia solo la `description` di `POST /api/v1/auth/change-password`, e il resto è uguale.
+> - **⚠️ Fuori pista**: nessuna E2E invia la modale del cambio password. `settings.spec.ts` la apre, ne controlla i
+>   campi e la annulla, quindi le E2E `auth` e `settings` non provano il cookie riemesso nel browser. Ho chiesto a
+>   `test-author` un test in `settings.spec.ts`: un utente suo cambia la password dalla modale, il dispositivo resta
+>   collegato, un secondo contesto del browser riceve 401. Non è un rosso visto prima: è la prova nel browser,
+>   scritta dopo il codice.
+> - **Prima parte** (`bash /tmp/libreFolio_a4bc_validate.sh`, corsia 6182, dalle 06:18 alle 06:42, tutto exit 0):
+>   - `dev.py front build --debug`: svelte-check 0/0. `dev.py mkdocs build`: exit 0.
+>   - Le voci `api` girano prima, sul DB popolato della corsia, perché la voce `services` lo svuota:
+>     - `api session-revocation`: **3**;
+>     - `api auth`: **60**;
+>     - `api system`: **94**;
+>     - `services session-version`: **47**.
+>   - **`all-backend`**: uscita 0, **7/7 categorie**, 20 min. 24 riepiloghi: **14 046 passati, 28 saltati, 0 falliti**.
+>     Rispetto ai 14 010 di A4b.6, i 36 in più vengono dai lotti entrati col merge.
+>   - `git diff --check` pulito, porta libera.
+> - **E2E del cambio password**: scritta da `test-author` in `frontend/e2e/settings.spec.ts`, nella describe
+>   «Password change and sessions».
+>   - Usa un utente usa e getta, `registerDisposableUser`, e lo cancella alla fine.
+>   - Il dispositivo A cambia la password dalla modale. Il test controlla che il barattolo dei cookie abbia un solo
+>     `session`, con un valore nuovo, e che `/dashboard` e `/auth/me` funzionino ancora.
+>   - Il dispositivo B riceve 401 e torna al login. La password vecchia viene rifiutata, la nuova entra.
+> - **E2E**, lanciate da `test-author` nella corsia dopo `all-backend`, una alla volta:
+>
+>   | Run | Esito |
+>   |---|---|
+>   | `front-utility settings "Password change and sessions"` | **1/1**, 6,6 s |
+>   | `front-utility settings` | **46/46** (43 più i 3 di `fx/fx-chart-settings.spec.ts`, che il runner prende per sottostringa) |
+>   | `front-utility settings` con `--workers 4` | **46/46**; il test nuovo in 14,2 s, su un budget di 90 s |
+>   | `front-utility auth` | **29/29** (26 più i 3 di `layout/app-start-auth.spec.ts`) |
+>   | `check-orphans` | pulito: 118 spec E2E, 370 file di test unitari |
+>   | `dev.py front check` | 0 errori, 0 avvisi |
+>
+>   - `front check` esclude `e2e/`, quindi `test-author` ha controllato i tipi della spec con il `tsc` del
+>     repository, `--noEmit` in modalità strict: 0 errori.
+>   - Il log del backend mostra, per ognuno dei tre utenti `guides_pwchange_*`: registrazione, due accessi, «Password
+>     changed, other sessions ended», password vecchia rifiutata, cancellazione.
+> - Porta 6182 libera. Delta: `frontend/e2e/settings.spec.ts` (il test nuovo, più `type BrowserContext`
+>   nell'import) e questo piano.
