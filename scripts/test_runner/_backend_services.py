@@ -610,6 +610,16 @@ def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "ROI/FIFO/Portfolio service tests", verbose=verbose)
 
 
+def services_orphan_transfer_numbers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the lots and the Dashboard of a broker whose TRANSFER partner was deleted with its broker (V-3, D-J4)."""
+    print_section("Services: Orphan Transfer After Broker Delete (V-3 numbers)")
+    print_info("Testing: LotsAnalysisService and PortfolioService after BrokerService.delete_bulk leaves the other half of a TRANSFER")
+    print_info("Tests: TRANSFER_PAIR_MISSING vs the ADJUSTMENT-in lot, in-kind capital at market value vs at cost basis, against a control book")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_orphan_transfer_after_broker_delete.py", test_names)
+    return run_command(cmd, "Orphan transfer numbers tests", verbose=verbose)
+
+
 def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test the read-only PAC/Rebalancer portfolio source snapshot."""
     print_section("Services: Portfolio Allocation Source")
@@ -1163,6 +1173,16 @@ Note: No backend server required.
         isolation="pure",
     )
     add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price marks")
+    add_test(
+        cat,
+        "orphan-transfer-numbers",
+        services_orphan_transfer_numbers,
+        name="Orphan Transfer Numbers",
+        desc="Lots and Dashboard once a broker deletion leaves the other half of a TRANSFER: the orphan against an ADJUSTMENT-in control",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+    )
     add_test(
         cat,
         "portfolio-allocation-source",
