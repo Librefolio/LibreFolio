@@ -1288,9 +1288,9 @@ def test_a_dry_run_names_a_restore_folder_that_is_a_link_and_writes_nothing_thro
     print_success(".restore a link → 1, named, nothing written through it")
 
 
-def test_the_report_of_an_upgrade_lists_its_migrations_changes_and_warnings(capsys):
-    """(k) ``_print_stage_report`` of an older backup: the revision upgraded, each migration, the tables the upgrade
-    changed (a table it created from nothing), the fixes, and the warnings."""
+def upgrade_report(**changes) -> StagingReport:
+    """The report of an older backup's check, as staging writes it: two migrations, a table whose rows the upgrade
+    changed, one it left alone and one it created empty, a fix, both warnings of a broken reference added."""
     staged_at = datetime(2026, 10, 15, 12, 0, tzinfo=UTC)
     report = StagingReport(
         stage_id=VALID_ID,
@@ -1313,6 +1313,13 @@ def test_the_report_of_an_upgrade_lists_its_migrations_changes_and_warnings(caps
         warnings=["rows_changed", "foreign_key_violations_added"],
         blockers=[],
     )
+    return report.model_copy(update=changes)
+
+
+def test_the_report_of_an_upgrade_lists_its_migrations_changes_and_warnings(capsys):
+    """(k) ``_print_stage_report`` of an older backup: the revision upgraded, each migration, the tables whose rows the
+    upgrade changed (not the one it created empty: no row changed there), the fixes, and the warnings."""
+    report = upgrade_report()
     backup_cli._print_stage_report(report)
     out = capsys.readouterr().out
     lines = [
@@ -1322,7 +1329,7 @@ def test_the_report_of_an_upgrade_lists_its_migrations_changes_and_warnings(caps
         "     - 006_head: Accounts: registration mode",
         "   Post-migration fixes applied to the copy: event_types",
         "   Rows: 6 in 3 tables, 1.0 MB",
-        "   Changed by the upgrade: users (3 → 4), account_tokens (— → 0)",
+        "   Changed by the upgrade: users (3 → 4)",
         "   Files: 3, 2.0 KB",
         "   Administrators: ada_admin",
         "⚠️  The upgrade changed the rows of some tables (listed above)",
@@ -1332,6 +1339,26 @@ def test_the_report_of_an_upgrade_lists_its_migrations_changes_and_warnings(caps
     backup_cli._print_stage_report(report.model_copy(update={"migrations": report.migrations[1:]}))
     assert "(1 migration):" in capsys.readouterr().out, "one migration, singular"
     print_success("upgrade report: migrations, changes, fixes, warnings")
+
+
+#: Tables of a report, and what «Changed by the upgrade» lists for them (``None``: no such line). A table absent on one
+#: side counts as empty: created or dropped empty, it changed no row.
+CHANGED_TABLES = [
+    pytest.param({"users": (3, 3), "plugin_settings": (None, 0), "old_cache": (0, None)}, None, id="only-tables-created-or-dropped-empty"),
+    pytest.param({"users": (3, 3), "plugin_settings": (None, 2)}, "plugin_settings (— → 2)", id="a-table-created-with-rows"),
+    pytest.param({"users": (3, 3), "old_cache": (5, None)}, "old_cache (5 → —)", id="a-table-dropped-with-rows"),
+]
+
+
+@pytest.mark.parametrize(("tables", "listed"), CHANGED_TABLES)
+def test_the_tables_an_upgrade_changed_are_those_whose_rows_differ(capsys, tables, listed):
+    """(k) «Changed by the upgrade» follows staging's ``rows_changed``: only the tables whose count differs, an absent
+    table counting as empty; with none, no such line at all."""
+    rows = {name: TableRows(before=before, after=after) for name, (before, after) in tables.items()}
+    backup_cli._print_stage_report(upgrade_report(tables=rows, warnings=["rows_changed"] if listed else []))
+    changed = [line for line in capsys.readouterr().out.splitlines() if "Changed by the upgrade" in line]
+    assert changed == ([f"   Changed by the upgrade: {listed}"] if listed else []), f"{tables}: {changed}"
+    print_success(f"{list(tables)}: {changed or 'no line'}")
 
 
 def test_the_script_checks_an_archive_for_a_restore(tmp_path, head_database):

@@ -81,7 +81,7 @@ from backend.app.db.post_migration.base import PostMigrationReport
 from backend.app.services.platform.instance_backup import staging
 from backend.app.services.platform.instance_backup.archive import BuiltArchive, build_archive
 from backend.app.services.platform.instance_backup.jobs import _RunLock
-from backend.app.services.platform.instance_backup.manifest import MANIFEST_MAX_BYTES, ManifestFile
+from backend.app.services.platform.instance_backup.manifest import MANIFEST_MAX_BYTES, BackupManifest, ManifestDatabase, ManifestFile
 from backend.app.services.platform.instance_backup.paths import (
     DATABASE_ENTRY,
     MANIFEST_ENTRY,
@@ -96,7 +96,7 @@ from backend.app.services.platform.instance_backup.paths import (
     stage_dir,
     stages_dir,
 )
-from backend.app.services.platform.instance_backup.snapshot import file_digest
+from backend.app.services.platform.instance_backup.snapshot import DatabaseDescription, file_digest
 from backend.app.services.platform.instance_backup.staging import (
     ALEMBIC_INI,
     MAX_ENTRIES,
@@ -107,6 +107,7 @@ from backend.app.services.platform.instance_backup.staging import (
     StagingError,
     StagingReport,
     TableRows,
+    _report,
     _revision_plan,
     new_stage_id,
     read_report,
@@ -850,6 +851,44 @@ def test_read_report_reads_only_a_report_of_its_own(instance, tmp_path, case):
 # =============================================================================
 
 
+def description(tables: dict[str, int]) -> DatabaseDescription:
+    """A database as ``describe_database`` would describe it: intact, no broken reference, these rows per table."""
+    return DatabaseDescription(size=8192, sha256="a" * 64, integrity_check="ok", foreign_key_violations=0, tables=dict(tables), alembic_revision=OLDER)
+
+
+def synthetic_manifest(tables: dict[str, int]) -> BackupManifest:
+    return BackupManifest(
+        created_at=datetime(2026, 10, 15, 10, 15, tzinfo=UTC),
+        origin="cli",
+        app_version=APP_VERSION,
+        alembic_revision=OLDER,
+        database=ManifestDatabase(integrity_check="ok", foreign_key_violations=0, tables=dict(tables)),
+        files=[ManifestFile(path=DATABASE_ENTRY, size=8192, sha256="a" * 64)],
+    )
+
+
+#: (rows before the upgrade, rows after it, the warnings): a table absent on one side counts as empty.
+ROW_CHANGES = [
+    pytest.param({"users": 3}, {"users": 3}, [], id="unchanged"),
+    pytest.param({"users": 3}, {"users": 3, "plugin_settings": 0}, [], id="created-empty"),
+    pytest.param({"users": 3}, {"users": 3, "plugin_settings": 2}, ["rows_changed"], id="created-with-rows"),
+    pytest.param({"users": 3, "old_cache": 0}, {"users": 3}, [], id="dropped-empty"),
+    pytest.param({"users": 3, "old_cache": 5}, {"users": 3}, ["rows_changed"], id="dropped-with-rows"),
+    pytest.param({"users": 3}, {"users": 4}, ["rows_changed"], id="rows-changed"),
+]
+
+
+@pytest.mark.parametrize(("before", "after", "warnings"), ROW_CHANGES)
+def test_rows_changed_is_warned_only_when_a_count_differs_an_absent_table_counting_as_empty(before, after, warnings):
+    """(j) The rule of ``rows_changed``, on the report alone: a table the upgrade creates empty (``None`` → 0) or drops
+    empty (0 → ``None``) changes no row; created or dropped with rows, or a count that moved, does. The table still
+    appears in ``tables``, absent on one side as ``None``."""
+    report = _report(VALID_ID, synthetic_manifest(before), description(before), description(after), "upgrade", AFTER_OLDER, HEAD, [], ADMINISTRATORS)
+    assert report.warnings == warnings, f"{before} → {after}: warnings {report.warnings}, expected {warnings}"
+    assert report.tables == {name: TableRows(before=before.get(name), after=after.get(name)) for name in before.keys() | after.keys()}, f"every table, absent as None: {report.tables}"
+    print_success(f"{before} → {after}: {report.warnings}")
+
+
 def test_the_plan_of_every_revision_is_the_migrations_after_it_oldest_first():
     """(c) What ``alembic upgrade head`` will apply to a backup at each revision, as the migration files describe it."""
     print_section("The migrations a restore applies")
@@ -872,7 +911,7 @@ def test_an_older_backup_is_upgraded_on_the_copy(upgraded):
     copy_tables = {name: rows_of(copy, f'SELECT count(*) FROM "{name}"')[0][0] for name in names}
     expected = {name: TableRows(before=manifest_tables.get(name), after=copy_tables.get(name)) for name in manifest_tables.keys() | copy_tables.keys()}
     assert report.tables == expected, f"every table: before, the rows the manifest counts (none for a table the upgrade created); after, the copy's: {report.tables}"
-    assert report.warnings == (["rows_changed"] if any(rows.before != rows.after for rows in expected.values()) else []), f"rows_changed exactly when a table's rows differ, a table created included: {report.warnings}"
+    assert report.warnings == (["rows_changed"] if any((rows.before or 0) != (rows.after or 0) for rows in expected.values()) else []), f"rows_changed exactly when a table's count differs, an absent table counting as empty (a table the upgrade creates empty changes no row): {report.warnings}"
     assert (report.post_migration_fixes, report.administrators, report.restorable) == ([], ADMINISTRATORS, True), f"nothing to fix, restorable: {report.post_migration_fixes}"
     print_success(f"{OLDER} → {HEAD}: {[m.revision for m in report.migrations]}")
 
