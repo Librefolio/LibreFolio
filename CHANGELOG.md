@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🔄 Changed
 
 - An empty or blank secret counts as not set, as if the variable were absent.
+- Changing your password signs out every other device; the one you changed it from stays signed in.
+- A password reset from the command line, a deactivation or a demotion signs the account out of every device; reactivating an account does not bring its old sessions back.
 - Import wizard: when a broker's default plugin, DEGIRO or the Generic CSV, cannot read an uploaded file, the wrong-broker prompt gives the reason in your language.
 
 ### 🧹 Repository cleanup
