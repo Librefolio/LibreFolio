@@ -2331,20 +2331,68 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > [`plan-phase00ChartColors.prompt.md`](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md).
 > Gli ID di questa sezione sono `DV-n`.
 
-- **DV-1 · La rigenerazione documentata del golden di `native_cash_guard` non arriva al test** — minimo; DV, 15/10 (S1).
+- ✅ **DV-1 · La rigenerazione documentata del golden di `native_cash_guard` non arriva al test** — minimo; DV, 15/10
+  (S1). **Chiusa il 15/10 da J con CP-4**, entrato in `dev_release2` col merge `322d55042`: la variabile ora è
+  `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD`, e il docstring spiega perché porta il prefisso `LIBREFOLIO_TEST_`.
   - Il comando del docstring, `LIBREFOLIO_REGEN_NATIVE_CASH_GUARD=1 ./dev.py test services roi-fifo-utils
     native_cash_guard`, non funziona: la corsia di test scarta ogni `LIBREFOLIO_*` che non sia `LIBREFOLIO_TEST_*`
     (`scripts/cli_base.py`, `_test_lane_drops`). Il test confronta, invece di riscrivere.
   - In S1 il golden è stato aggiornato sulle 4 righe del diff del test (💵 → 💰), poi verificato verde byte per byte.
   - Rimedio: rinominare la variabile in `LIBREFOLIO_TEST_…`, oppure aggiungerla a `TEST_LANE_KEEPS`. Fuori dal perimetro
-    di DV.
+    di DV: il coordinatore la gira alla 1.3 (15/10).
+  - **La chiude J nel lotto CP-4** (coordinatore, 15/10): la variabile diventa
+    `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1`, che passa il filtro della corsia. Si chiude qui, citando CP-4, quando
+    entra.
+  - **Conflitto atteso sul golden:**
+    - J lo rigenera con un campo nuovo (+116 righe), DV ha cambiato 4 righe a mano;
+    - chi entra per secondo lo rigenera con la variabile nuova sulla revisione fusa, senza unire a mano.
+    - J è entrato per primo, quindi rigenera DV, al merge di base fatto dal coordinatore prima della sua validazione.
   - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S1».
-- **DV-2 · Un settore senza emoji: l'endpoint ripiega su 📊, la vista dell'allocazione su `None`** — minimo; DV, 15/10
-  (`test-author`, S1).
-  - `/utilities/sectors` elenca solo valori di `FinancialSector`, quindi oggi il ripiego non scatta. Il motore invece
-    riceve qualunque nome dalla distribuzione di un asset.
-  - Il contratto (un'emoji neutra o nessuna) si decide con il passo delle emoji nel frontend (decisione 8 del piano).
-    Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S1».
+- ✅ **DV-2 · Un settore senza emoji: l'endpoint ripiega su 📊, la vista dell'allocazione su `None`** — minimo; DV, 15/10
+  (`test-author`, S1). **Chiusa il 15/10** (in attesa del commit del coordinatore).
+  - Un solo ripiego, accanto alla mappa in `sector.py`: `SECTOR_EMOJI_FALLBACK`, cioè ❓, l'emoji di «Non
+    classificato». Lo usano l'endpoint e il motore (`sector_emoji`), ed è fissato nei test.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «DV-2 e
+    decisione 8».
+- **DV-3 · La torta non legge più l'`emoji` che le passano dashboard e pagina dell'asset** — minimo; DV, 15/10 (S3).
+  - Con la decisione 8 la torta per settore prende le emoji dallo store dei settori. Il campo `emoji` di
+    `AllocationEntry` è rimosso, ma è ancora calcolato e passato:
+    - `components/dashboard/AllocationPanel.svelte:65` (zona di Y10);
+    - `routes/(app)/assets/[id]/+page.svelte:3496` (`getSectorEmoji(name)`, zona di X).
+  - Per `front check` non è un errore: l'oggetto nasce dentro un `.map`, e TypeScript fa il controllo delle proprietà
+    in eccesso solo su un letterale assegnato direttamente (verificato con `tsc` 5.9 su una prova isolata, 15/10).
+  - È un dato morto e innocuo. Si toglie quando quei file si toccano.
+  - **Girata dalla 1.3** a Y-6/Y10 e a X (FE5c) (coordinatore, 15/10).
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S3».
+- **DV-4 · `hexToHsl` resta usato solo dai test** — minimo; DV, 15/10 (S3).
+  - Il suo unico consumatore di produzione era `shadeForDepth`, tolto con GR4 (miscela in OKLab).
+  - Da decidere se rimuoverlo con i suoi test o tenerlo come inverso documentato di `hslToHex` (`utils/colors.ts`).
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S3».
+- **DV-5 · Due pagine developer descrivono ancora le sfumature HSL** — minimo; DV, 15/10 (S3).
+  - Pagine:
+    - `mkdocs_src/docs/developer/frontend/components/charts.md`, «Pie Charts»: parla di `shadeForDepth`, della
+      passeggiata in luminosità e della diffusione sui due lati;
+    - `mkdocs_src/docs/developer/frontend/designer-lab.md:920` lo cita come esempio di colore derivato (pagina di L).
+  - Il sito si aggiorna solo alla chiusura del programma colori (developer, 14/10).
+  - Da scrivere allora:
+    - `categoryColor` come unico punto di lettura;
+    - GR4 a miscela in OKLab;
+    - il ponte `roleColors`;
+    - il segnale C4.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S2».
+- **DV-6 · Un'etichetta di settore comincia con uno spazio finché l'elenco dei settori non arriva** — minimo; DV, 15/10
+  (`test-author`, S10).
+  - Causa: la decisione 8. Senza il ripiego scritto a mano, `getSectorEmoji` restituisce `''` fino al caricamento, e
+    due composizioni scrivono `` `${emoji} ${nome}` `` senza controllarlo:
+    - `components/risk/stressBucketLabel.ts:37`, usato da `L4Shock` e `RiskAnalysisPanel` (zona di Y):
+      `title=" Finanziari"` e `aria-label=" Finanziari"`;
+    - `features/tools/pac-allocator/planner/categoryLabels.svelte.ts:22` (PAC).
+  - Dura una richiesta: entrambi caricano l'elenco e si ridisegnano quando arriva.
+  - Rimedio di una riga, come fanno già torta e `SectorSearchSelect`: ``emoji ? `${emoji} ${nome}` : nome``.
+  - **OK della 1.3** (coordinatore, 15/10): le due righe le fa DV, dopo il merge di base e la prova 0 e prima dello
+    slot pesante; il test lo scrive `test-author`. I file sono di Y (`stressBucketLabel.ts`, che Y4b sposterà dopo
+    l'ingresso di DV) e del PAC, di J.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S10».
 
 ---
 
