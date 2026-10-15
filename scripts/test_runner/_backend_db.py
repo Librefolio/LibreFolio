@@ -228,6 +228,16 @@ def db_post_migration(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Post-migration fix tests", verbose=verbose)
 
 
+def db_post_migration_orphan_pairs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the post-migration fix orphan_pair_halves on temporary databases at head (N1b-2)."""
+    print_section("DB Test: Post-Migration Fix — Orphan Pair Halves")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: lone halves converted as a split leaves them, giving TRANSFER legs and unreadable rows left, outcome and checks, dry run and its warning, one log line per row, rollback")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_post_migration_orphan_pairs.py", test_names)
+    return run_command(cmd, "Post-migration orphan pair halves tests", verbose=verbose)
+
+
 def db_migration_005(verbose: bool = False, test_names: list = None) -> bool:
     """Test migration 005_accounts_invites on temporary databases: a new one, and a populated 1.2 install."""
     print_section("DB Test: Migration 005 (accounts)")
@@ -281,6 +291,7 @@ def db_all(verbose: bool = False) -> bool:
 
     db_order = [
         "create", "validate", "numeric-truncation", "populate", "populate-reset", "autoincrement-schema", "post-migration",
+        "post-migration-orphan-pairs",
         "migration-005", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
         ]
 
@@ -349,6 +360,9 @@ Note: No backend server required. Tests operate directly on test DB.
              prereq="None (temporary databases)")
     add_test(cat, "post-migration", db_post_migration, name="Post-Migration Fixes",
              desc="Ordered fixes after alembic upgrade head: AUTOINCREMENT conversion, orphan broker folders, rollback",
+             prereq="None (temporary databases)")
+    add_test(cat, "post-migration-orphan-pairs", db_post_migration_orphan_pairs, name="Post-Migration Orphan Pair Halves",
+             desc="orphan_pair_halves: the lone halves older broker deletions left become standalone rows; giving TRANSFER legs and unreadable rows left; dry run, log lines, rollback",
              prereq="None (temporary databases)")
     # PURE: every database is a private file under tmp_path. Alembic runs in-process with -x sqlalchemy.url= pointing at
     # it, and a connect listener refuses any other file while it runs: no lane database, no server, nothing shared.
