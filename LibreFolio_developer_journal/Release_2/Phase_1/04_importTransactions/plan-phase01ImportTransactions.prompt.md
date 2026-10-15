@@ -1460,9 +1460,13 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
    devWiki: `decisions/brim-broker-scoped.md`, `problems/playwright-probes-ignore-timeout.md`,
    `entities/import-wizard-modal.md` (le righe su ciò che ora sta nei passi); `check_source_paths.py` invariato. Nessun
    pezzo muta in loco una prop ricevuta senza `bind:` (controllo statico).
-5. ⏳ **Prove dopo l'avviso di fine finestra**: svelte-check, Vitest `tx-unit`, `core-unit`, `component-unit`
+5. ✅ **Prove dopo l'avviso di fine finestra** (slot pesante 2, 15:28–15:58, revisione combinata `06459c1b3` + E1a):
+   svelte-check, Vitest `tx-unit`, `core-unit`, `component-unit`
    (`ImportWizardModal.test.ts`), E2E `front-transaction all --workers 4`, `front-utility onboarding-tour` (la guida
    dell'import ancora le sue àncore ai passi), `mkdocs build` e `check-links`; poi l'handoff FROZEN.
+   > **Note implementazione** (15:58): svelte-check 0/0 (nella `front build --debug`); `tx-unit` 903, `core-unit` 4 537,
+   > `component-unit` 3 240; `front-transaction all --workers 4` 337/337 desktop, 34 mobile; `onboarding-tour` 10. I
+   > dettagli e la doc nella sezione E1, passo 2. `mkdocs build` stretto (0 avvisi) e `check-links` (95) ✅ alle 16:05.
 
    > **Note implementazione (coordinatore, 15/10 ~09:05)**: FE8a-3 committato come checkpoint prima delle prove,
    > `b92e655d9` (`refactor(import-wizard): cut wizard steps and footer`, 13 file; 595 = 222 + 20 + 22 + 67 + 77 + 86 +
@@ -1604,6 +1608,10 @@ decisioni). Durante la finestra: codice e singoli file pytest senza server, uno 
    perde all'avvio, `main.py:202-209` con `capture_output=True`, anche in Docker). `post_migration/orphan_pair_halves.py`
    è mio; la voce in `FIXES` di `post_migration/__init__.py` concessa, solo in aggiunta. Commit a parte, entra solo con
    l'ok del developer sul punto 46.
+   > **Punto 46 deciso** (developer, 15/10 16:00, alla lettera): «Sì: la correzione entra, e una metà senza costo resta
+   > «costo mancante» con l'avviso». N1b-2 ed N1b-3 entrano con il resto del ramo, così come sono: la metà senza costo
+   > diventa una rettifica senza costo, con l'avviso `MISSING_COST_BASIS`. Il punto 47 (la gamba in uscita) resta aperto,
+   > e la gamba resta com'è oggi.
    > **Note implementazione** (10:00): `OrphanPairHalfFix` (`fix_id` `orphan_pair_halves`): `detect` trova le righe
    > TRANSFER/CASH_TRANSFER/FX_CONVERSION senza la metà (link NULL o verso una riga assente) e logga un **warning** con
    > le conversioni per tipo, le righe che resteranno senza costo, quelle lasciate come sono (gamba in uscita di un
@@ -1638,8 +1646,13 @@ decisioni). Durante la finestra: codice e singoli file pytest senza server, uno 
    > (test-author), poi `/tmp/libreFolio_w_n1b2_otherlinks.py`.
    > Fatto (10:58): 2 rossi visti (`failed` con la copia tenuta; `clean` con la violazione rimasta), poi l'estensione
    > → **45/45**; un link verso una riga che esiste non si tocca (guardia verde).
-4. Verdi senza server durante la finestra ✅ (11:00); `api`, `all-backend` ed E2E dopo l'avviso di fine ⏳; handoff
-   FROZEN per N1a+N1b-1, e N1b-2 separato.
+4. Verdi senza server durante la finestra ✅ (11:00); `api`, `all-backend` ed E2E dopo l'avviso di fine ✅ (slot pesante
+   2, 15:58); handoff FROZEN per N1a+N1b-1, e N1b-2 separato.
+   > **Prove dopo la finestra** (slot pesante 2, revisione combinata `06459c1b3` + E1a): `api sync` (il parametro
+   > `as_of` c'è nel client generato); `all-backend` 7/7 (comprende `api brokers`, `api account-deletion`, `api
+   > batch-split-promote`, `services broker`, `db post-migration-orphan-pairs` 47); `front check` dentro la `front build
+   > --debug` (0/0); E2E `front-broker detail` 37, `front-broker list` 9, `front-user account-deletion` 1. Dettagli
+   > nella sezione E1, passo 2.
    > **Note implementazione** (11:00, tutto con `nice -n 15`, senza server): `services broker` 65/65 (con BR-U-080 dopo
    > il riordino «prima i costi»: rosso visto alle 10:48), `services orphan-transfer-numbers` 19/19 (con il controllo
    > dell'opzione a: un ADJUSTMENT +4 senza costo → lotti DEGRADED, Dashboard investito 0 / P&L 120 / MISSING_COST_BASIS),
@@ -1725,7 +1738,8 @@ di N1b-2 (W-B22 è legata a N1b-2: un DB che chiede ancora `autoincrement` e ha 
    delle violazioni nuove e il warning; lo script logga sulla console; tolta la frase delle righe INFO perse) e
    `admin/cli_tools.en.md` (un punto per il warning delle violazioni già presenti; nel riquadro, lo script stampa il
    log e non scrive file). Solo EN (W-B21). `mkdocs build` e `check-links` dopo la finestra.
-4. ⏳ Handoff FROZEN.
+4. ✅ Handoff FROZEN (committati dal coordinatore: `0e4bd9790` fix(db), `05f2cb106` journal). `mkdocs build` stretto e
+   `check-links` sulla revisione combinata ✅ (16:05, sezione E1, passo 2).
 
 ### E1 — eventi: decisioni 20–23 del developer (V-22, I-09, I-10 S4 e resto, I-11c, I-12) ⏳ (2026-10-15)
 
@@ -1797,7 +1811,7 @@ del 15/10 12:30–12:44):
 
 **Passi**:
 
-1. ⏳ Rossi E1a (test-author, test di servizio senza server; API scritti ora, eseguiti dopo la finestra).
+1. ✅ Rossi E1a (test-author): servizio 13:38, API 14:44 (slot pesante 2).
    > **Rossi del servizio visti** (13:38, `nice -n 10`, dopo la pausa delle dipendenze; `cryptography 50.0.2` e
    > `pycparser 3.11` nell'ambiente condiviso, `dc9a5d232` su `dev_release2`): nuovo
    > `test_services/test_asset_event_store.py` con l'azione `services asset-event-store` (`write-global`): **40 test, 34
@@ -1840,8 +1854,86 @@ del 15/10 12:30–12:44):
    > valuta della riga importata, l'errore tradotto con la riga), e le chiavi i18n in `/tmp/libreFolio_w_e1b_i18n.sh`.
    > La riga registrata del toast della mini-modale (`moneyRenderSites.test.ts`) resta identica; il pannello mostra
    > importo e valuta in due espressioni di markup (asset events = pubblici).
-2. ⏳ Cura E1a; `api sync`.
+2. ✅ Cura E1a; `api sync` (slot pesante 2, 14:41–14:51).
+   > **Checkpoint e merge** (coordinatore, 14:38–14:40): `c658119af` (rossi E1a), `313dde70e` (E1c), `87a034a89`
+   > (journal); merge di `dev_release2` a `ec0dc7ebd` (H CP6, X FE5b, `cryptography`, la 1.2.1) committato come
+   > `06459c1b3`. Conflitti risolti da me e messi in stage: `themeRoles.baseline.tsv` (`--resolve`; poi `--check` rosso
+   > sul caso R-8, `themeStore.ts` `#166534`; `--accept` con la ragione D3 autorizzata dal coordinatore colori; poi
+   > pulito, `~accept` una sola volta; unione esatta dei due lati) e il backlog (la nota di chiusura di W-B15 più le mie
+   > W-B17…W-B24). Uniti da soli e controllati: `api/v1/brokers.py` (i tipi dei report in linea; le righe `as_of`
+   > lontane), `.translate-hashes.json` (il JSON si legge, nessuna chiave cambiata dai due lati, lo stamp di N1 c'è),
+   > `_backend_services.py` (compila; `orphan-transfer-numbers`, `asset-event-store` e la `fx-catalog` di X).
+   > **Slot pesante 2** (`nice -n 10`, una cosa alla volta; `LIBREFOLIO_TEST_STARTUP_TIMEOUT=1200` sui comandi con il
+   > server): `db populate --force --clean` verde; **`api assets-events` sui rossi: 18 rossi, 19 verdi** (14:44, la build
+   > dentro l'avvio), ognuno per la ragione voluta (dettaglio stringa, 200 al posto di 400/422, il 500 di I-09 alla
+   > rilettura, `mode` campo sconosciuto, niente `event_ids`, cancellazione non limitata all'asset). **Cura** (14:44,
+   > `/tmp/libreFolio_w_e1a_fix.py` e `/tmp/libreFolio_w_e1a_fe.py`, la riga della cancellazione nell'editor): `ruff`
+   > (un C416 corretto: `dict(...)`), `black` puliti; `services asset-event-store` **40/40**, `services
+   > asset-source-guards` **29/29**; `api sync`: l'OpenAPI cambia solo nelle descrizioni del tipo, `FAEventUpsert.mode`,
+   > `FAEventUpsertResult.event_ids` e `asset_id` **obbligatorio** sulla `DELETE` (la sola rottura); `front build
+   > --debug` verde, **svelte-check 0 errori e 0 avvisi** (verifica anche gli import di tipo di `WizardFooter` di
+   > FE8a-3); `api assets-events` **37/37**. In corso: `all-backend` (14:51); gli E2E che chiamano la `DELETE` degli
+   > eventi senza `asset_id` li aggiusta il test-author (solo modifiche).
+   > **E2E per la rottura del 21** (test-author, 14:55, solo modifiche; poi rivisti da me): `asset_id` aggiunto alle tre
+   > chiamate `DELETE` dei test — `tx-bulk-promote-cost-basis.spec.ts` (gli eventi posseduti ora con il loro asset,
+   > `events: [{id, assetId}]`; l'asserzione `deleted` uguale), le pulizie di `asset-event-delete.spec.ts:203–205` e di
+   > `asset-data-editor.spec.ts:472`; due commenti di `asset-data-editor.spec.ts` (S1, :584–587 e :608–610) riallineati.
+   > Invariati, perché la `DELETE` dell'editor la osservano soltanto: `asset-event-delete.spec.ts:176,253` (il predicato
+   > sull'URL combacia anche con `?asset_id=…&ids=…`; lo `status === 200` ora prende anche un editor che dimenticasse
+   > `asset_id`) e `asset-data-editor.spec.ts:614`. Nessun'altra `DELETE` degli eventi nei test del frontend; nessun test
+   > fissa il `detail` stringa dell'upsert (`portfolioMutation.test.ts:16` classifica solo il percorso). `prettier
+   > --check` pulito sui file toccati.
+   > **⚠️ Fuori pista — la mini-modale con il `detail` oggetto** (segnalato dal test-author): `EventCreateMiniModal.svelte`
+   > mostrava `err.response.data.detail` così com'era, e dopo E1a un rifiuto avrebbe scritto «[object Object]» nel
+   > banner. Correzione ponte, accoppiata alla mia rottura: il banner legge `detail.message` (o la stringa, se il
+   > `detail` è ancora una stringa), cioè lo stesso testo inglese di prima senza il codice davanti. E1b la sostituisce
+   > con l'errore tradotto: l'ancora di `/tmp/libreFolio_w_e1b_fix.py` riallineata, dry run ok. L'editor non cambia: legge
+   > solo `e.message` di Axios, come prima.
+   > **Prove dello slot 2, revisione combinata** (HEAD `06459c1b3` + E1a e i ritocchi sopra, `nice -n 10`, una alla volta):
+   > `all-backend` **7/7 gruppi verdi** (14:51–15:27; 14 609 passati, 28 saltati, 0 rossi: servizi 7 627, utilità 2 369,
+   > schemi 1 705 con 6 avvisi preesistenti di `test_pac_planner_schemas.py`, API 1 120, db 16/16 compresi
+   > `post-migration-event-types`, `post-migration` 41 e `post-migration-orphan-pairs` 47); Vitest `front-utility
+   > core-unit` **4 537/4 537** (144 file, con i cancelli dei colori e quello del denaro), `component-unit` **3 240/3 240**
+   > (con `ImportWizardModal.test.ts` di FE8a-3), `front-transaction tx-unit` **903/903**; `test db populate --force
+   > --clean`; `front build --debug` (dopo il ritocco della mini-modale) con **svelte-check 0 errori e 0 avvisi**;
+   > `front-transaction all --workers 4` **337/337** su desktop (43 spec, compresi FE8a, `tx-event-picker` e
+   > `tx-bulk-promote-cost-basis` con `asset_id`) e 34 su mobile (32 saltati per disegno), 15:36–15:51.
+   > E2E con `--workers 2` (15:51–15:58): `front-asset asset-data-editor` **26**, `front-asset asset-event-delete` **4**,
+   > `front-broker detail` **37**, `front-broker list` **9**, `front-user account-deletion` **1**, `front-utility
+   > onboarding-tour` **10**; nessun rosso né flaky. Porta 6184 libera; slot pesante restituito al coordinatore (15:58).
+   > **Doc di E1a** (docs-writer, solo EN, pagine sviluppatore senza traduzioni): `developer/backend/assets/events.md`
+   > (§ Manual Events: tutto o niente, `mode`, `event_ids`, i rifiuti con stato e `params`, il tipo, la `DELETE` con
+   > `asset_id`), `developer/backend/assets/architecture.md` (tabella degli endpoint), `developer/frontend/components/
+   > core-ui/data-editor.md` (la `DELETE`). Le pagine utente aspettano E1b.
+   > **Fatto** (16:00–16:05): la doc come sopra (rivista da me; il docs-writer non ha lanciato nulla). Dai suoi reperti:
+   > tre descrizioni dello schema che finiscono nell'OpenAPI erano rimaste al contratto vecchio — `FAEventUpsertPoint`
+   > (docstring e `id`: senza id si confronta su data e tipo solo in un elemento `upsert`; in un `create` si aggiunge),
+   > `FAEventDeleteItemResult` (`not_found`: anche un evento di un altro asset, che resta) e
+   > `FAEventBulkDeleteResponse.not_found_count` — corrette; `ruff`/`black` puliti; `api sync` di nuovo: nel client
+   > generato cambiano solo quelle tre descrizioni. `mkdocs build` stretto verde, nessun avviso (47 s; 3 028 URL
+   > relativi risolti), `mkdocs check-links` 95 validi. `git diff --check` pulito; porta 6184 libera.
+   > Restano fuori, annotati dal docs-writer: «+ Nuovo evento» non usa ancora `create` (E1b); il caso limite di un
+   > `create` rifiutato da un evento scritto da un elemento precedente della stessa richiesta (gli `existing` mostrano
+   > un id che il rollback toglie: solo detto nella pagina); `assets_pricing.md:119` incompleta (non nomina `create`) e
+   > la frase vecchia «sync replaces» di `architecture.md`, non mia: nella doc di E1b.
 3. ⏳ Rossi e cura E1b (dopo la risposta sui colori; Vitest ed E2E dopo la finestra).
+   > **Rossi scritti in staging, non eseguiti** (test-author, ~16:00; il worktree resta fermo per l'ingresso di E1a):
+   > `/tmp/libreFolio_w_e1b_tests/` con `frontend/e2e/transactions/tx-event-create-exists.spec.ts` (8 test, la
+   > mini-modale), `frontend/e2e/assets/asset-event-editor-save.spec.ts` (3: prima le cancellazioni, la valuta della
+   > riga, il rifiuto con il toast — quest'ultimo guardia verde oggi), `eventSaveError.test.ts` (42, Vitest node),
+   > `EventExistsPanel.test.ts` (7, jsdom), e le copie con le registrazioni (solo aggiunte) di `_frontend_transaction.py`
+   > (`tx-event-create-exists`), `_frontend_asset.py` (`asset-event-editor-save`), `_frontend_utility.py` (i due Vitest
+   > in `core-unit` e `component-unit`). Un evento del fornitore su un asset proprio, senza stato condiviso:
+   > `scheduled_investment` con un DIVIDEND pianificato e `POST /assets/prices/sync` (calcolato in locale).
+   > **Reperti da sistemare nella cura**: (1) bozza: «Modifica questo» porta `1.500000` a `1.5`, non `1.50` — usare la
+   > stessa funzione del pannello (`amountText`) anche nel form; (2) I-10 fissato con un cambio di tipo, perché l'editor
+   > non cambia la data di una riga salvata (`DataEditor.svelte:163-179`); (3) **prima le cancellazioni** = un salvataggio
+   > che cancella e ha un upsert rifiutato lascia le cancellazioni fatte (due richieste): da dichiarare al coordinatore
+   > (il 22 parla della richiesta bulk), lo stato resta coerente col DB; (4) codici sconosciuti: frase generica col
+   > messaggio inglese; (5) il picker tiene in cache la lista per asset/data/intervallo: dopo «Modifica questo» che
+   > cambia note o importo potrebbe mostrare i valori vecchi — da verificare in `AssetEventPicker.svelte`
+   > (`fetchEvents`, :115); (6) l'editor E2E semina due chiusure per asset (senza prezzi il pulsante non ha test id);
+   > (7) le chiavi i18n nuove (`/tmp/libreFolio_w_e1b_i18n.sh`).
 4. ✅ E1c (14:35): rossi visti → cura → verdi; commit a parte.
    > **Rossi scritti, non eseguiti** (test-author, 14:10, carico alto): nuovo
    > `test_db/test_post_migration_event_types.py` (20 funzioni, 35 casi: 33 rossi attesi, 2 guardie), nessun import dai
@@ -1865,3 +1957,6 @@ del 15/10 12:30–12:44):
    > **Via (b) per i rossi API di E1a** (14:29, carico 32,8 alla scadenza): nello slot pesante dopo il merge. La cura E1a
    > resta in `/tmp` fino ad allora; nel worktree ci sono i soli rossi di E1a.
 5. ⏳ Doc; handoff FROZEN (E1a+E1b; E1c a parte).
+   > **E1a entra da solo** (coordinatore, 16:00, dopo il punto 46): doc sviluppatore di E1a ✅ (passo 2), handoff
+   > FROZEN d'ingresso con il CHANGELOG di FE8a, N1, N1b-2/3, E1a ed E1c (16:10). Le pagine utente, la devWiki e il resto
+   > con E1b.
