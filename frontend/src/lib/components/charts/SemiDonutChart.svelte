@@ -27,6 +27,10 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {themed} from '$lib/theme/themePair';
+    import {CHART_TOOLTIP_COLORS, SEMI_DONUT_COLORS} from '$lib/theme/chartTheme';
+    import {SEMI_DONUT_PALETTE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Types
@@ -65,7 +69,7 @@
     let renderGeneration = 0;
 
     // Diversified color palette — high chromatic distance between adjacent slices
-    const PALETTE = ['#1a4031', '#2563eb', '#7c3aed', '#dc2626', '#d97706', '#0d9488', '#be185d', '#4f46e5'];
+    const PALETTE = SEMI_DONUT_PALETTE;
 
     // Cache for circular avatar data URLs
     const circularAvatarCache = new Map<string, string>();
@@ -185,9 +189,9 @@
         }
         const currentInstance = chartInstance;
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
         const avatarSize = 44;
-        const borderColor = isDark ? '#334155' : '#ffffff';
+        const borderColor = themed(SEMI_DONUT_COLORS.avatarBorder, isDark);
         const borderWidth = 2;
 
         // Pre-load circular avatars in parallel
@@ -220,11 +224,11 @@
                 pct: {
                     fontSize: 11,
                     fontWeight: 'bold',
-                    color: isDark ? '#e2e8f0' : '#1e293b',
+                    color: themed(SEMI_DONUT_COLORS.label, isDark),
                     lineHeight: 18,
                     padding: [2, 0, 0, 0],
                     align: 'center',
-                    textShadowColor: isDark ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.8)',
+                    textShadowColor: themed(SEMI_DONUT_COLORS.labelShadow, isDark),
                     textShadowBlur: 3,
                 },
             };
@@ -243,14 +247,14 @@
                 rich['avatar'] = {
                     fontSize: 18,
                     fontWeight: 'bold',
-                    color: '#fff',
+                    color: SEMI_DONUT_COLORS.avatarInitial,
                     backgroundColor: PALETTE[i % PALETTE.length],
                     borderRadius: avatarSize / 2,
                     width: avatarSize,
                     height: avatarSize,
                     align: 'center',
                     lineHeight: avatarSize,
-                    borderColor: isDark ? '#334155' : '#ffffff',
+                    borderColor: themed(SEMI_DONUT_COLORS.avatarBorder, isDark),
                     borderWidth: 2,
                 };
                 formatter = `{avatar|${initial}}\n{pct|${formatPercent(slice.percentage, {digits: 1, signed: false})}}`;
@@ -269,7 +273,7 @@
             chartData.push({
                 value: avail,
                 name: label,
-                itemStyle: {color: isDark ? 'rgba(100,116,139,0.3)' : 'rgba(203,213,225,0.5)'},
+                itemStyle: {color: themed(SEMI_DONUT_COLORS.available, isDark)},
                 label: {show: false},
             });
         }
@@ -279,7 +283,7 @@
             chartData.push({
                 value: 100,
                 name: `${label} (100%)`,
-                itemStyle: {color: isDark ? 'rgba(100,116,139,0.3)' : 'rgba(203,213,225,0.5)'},
+                itemStyle: {color: themed(SEMI_DONUT_COLORS.available, isDark)},
                 label: {show: false},
             });
         }
@@ -293,9 +297,9 @@
                     return `${escapeHtml(String(item.name ?? ''))}: ${formatPercent(Number(item.value), {digits: 1, signed: false})}`;
                 },
                 position: tooltipPositionAboveFinger,
-                backgroundColor: isDark ? '#1e293b' : '#fff',
-                borderColor: isDark ? '#334155' : '#e2e8f0',
-                textStyle: {color: isDark ? '#e2e8f0' : '#1e293b'},
+                backgroundColor: themed(CHART_TOOLTIP_COLORS.box.background, isDark),
+                borderColor: themed(CHART_TOOLTIP_COLORS.box.border, isDark),
+                textStyle: {color: themed(CHART_TOOLTIP_COLORS.box.text, isDark)},
             },
             series: [
                 {
@@ -307,7 +311,7 @@
                     padAngle: 2,
                     itemStyle: {
                         borderRadius: 6,
-                        borderColor: isDark ? '#1e293b' : '#ffffff',
+                        borderColor: themed(SEMI_DONUT_COLORS.sliceGap, isDark),
                         borderWidth: 2,
                     },
                     label: {
@@ -320,7 +324,7 @@
                         show: true,
                         length: 10,
                         length2: 8,
-                        lineStyle: {color: isDark ? '#475569' : '#94a3b8'},
+                        lineStyle: {color: themed(SEMI_DONUT_COLORS.labelLine, isDark)},
                     },
                     emphasis: {
                         label: {show: true},

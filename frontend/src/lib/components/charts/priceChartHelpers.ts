@@ -23,6 +23,7 @@ import {aggregateLineSeries, bucketEventMarkers, mapDateToBucket, type ChartReso
 import {formatFixed} from '$lib/utils/core/formatFixed';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {CHART_GAIN_LOSS, CHART_TOOLTIP_COLORS, PRICE_SERIES} from '$lib/theme/chartTheme';
 
 /** A resolved logical date span the chart is currently showing. */
 export interface LogicalVisibleRange {
@@ -527,7 +528,7 @@ export function buildEventScatterGroups(eventMarkers: EventMarker[], activeResol
     for (const marker of eventMarkers) {
         const isComparison = !!marker.assetLabel;
         const groupKey = isComparison ? `${marker.assetLabel}::${marker.type}` : marker.type;
-        const color = isComparison ? (marker.signalColor ?? '#6b7280') : baseColor;
+        const color = isComparison ? (marker.signalColor ?? PRICE_SERIES.comparisonMarkerFallback) : baseColor;
         const seriesLabel = isComparison ? `${marker.assetLabel} ${marker.type}` : marker.type;
         if (!grouped.has(groupKey)) {
             grouped.set(groupKey, {markers: [], color, label: seriesLabel});
@@ -585,13 +586,14 @@ export function buildEventScatterGroups(eventMarkers: EventMarker[], activeResol
 
 /**
  * The green/red "(Δ …)" delta suffix for the main-axis tooltip row. The colour
- * is *derived from the sign* (≥0 green `#10b981`, otherwise red `#ef4444`) — the
- * contract this asserts. In percentage view the value already is the delta; in
+ * is *derived from the sign* (≥0 green `#10b981`, otherwise red `#ef4444`, both
+ * `CHART_GAIN_LOSS.tooltipDelta` in `$lib/theme/chartTheme`) — the contract
+ * this asserts. In percentage view the value already is the delta; in
  * absolute view both the absolute and percentage delta from `firstValue` are
  * shown (a `firstValue` of 0 yields a 0% delta rather than dividing by 0).
  */
 export function buildDeltaHtml(value: number, firstValue: number, isPercentage: boolean): string {
-    const color = (n: number) => (n >= 0 ? '#10b981' : '#ef4444');
+    const color = (n: number) => (n >= 0 ? CHART_GAIN_LOSS.tooltipDelta.gain : CHART_GAIN_LOSS.tooltipDelta.loss);
 
     // In the interface locale (M-18); a zero carries no sign, as with `formatPercent` everywhere.
     if (isPercentage) {
@@ -612,7 +614,7 @@ export function buildDeltaHtml(value: number, firstValue: number, isPercentage: 
  */
 export function buildStaleTooltipHtml(priceStaleDays: number | undefined, fxStaleDays: number | undefined, staleLabel?: string, fxStaleLabel?: string): string {
     if (priceStaleDays === undefined) return '';
-    const warn = (text: string) => `<br/><span style="color:#f59e0b;font-size:11px">⚠ ${text}</span>`;
+    const warn = (text: string) => `<br/><span style="color:${CHART_TOOLTIP_COLORS.staleWarning};font-size:11px">⚠ ${text}</span>`;
     const priceText = staleLabel ? staleLabel.replace('{days}', String(priceStaleDays)) : `Stale: ${priceStaleDays}d`;
 
     if (fxStaleDays !== undefined && fxStaleDays > 0) {

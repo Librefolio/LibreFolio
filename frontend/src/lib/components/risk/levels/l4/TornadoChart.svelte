@@ -10,6 +10,7 @@
 
     import {formatReplayShare, type TornadoRow} from './scenarioHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {SIGN_BAR} from '$lib/theme/toneClasses';
 
     /**
      * What each row did over the scenario, in a table with the bar beside the numbers (D376).
@@ -88,7 +89,7 @@
         // gain from a small loss at a glance.
         return (
             `<span class="relative block h-3 w-full rounded bg-gray-100 dark:bg-slate-700">` +
-            `<span class="absolute top-0 h-3 rounded ${loss ? 'bg-red-500/80 right-1/2' : 'bg-emerald-500/80 left-1/2'}" style="width: ${(magnitude / 2).toFixed(2)}%" data-testid="${escapeHtml(`${testId}-bar`)}" data-sign="${loss ? 'loss' : 'gain'}"></span>` +
+            `<span class="absolute top-0 h-3 rounded ${loss ? `${SIGN_BAR.tornado.loss} right-1/2` : `${SIGN_BAR.tornado.gain} left-1/2`}" style="width: ${(magnitude / 2).toFixed(2)}%" data-testid="${escapeHtml(`${testId}-bar`)}" data-sign="${loss ? 'loss' : 'gain'}"></span>` +
             `<span class="absolute left-1/2 top-0 h-3 w-px bg-gray-300 dark:bg-slate-500"></span>` +
             `</span>`
         );

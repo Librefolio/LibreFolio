@@ -395,7 +395,7 @@ const PROVIDER_CATALOGUE = `${API}/fx/providers`;
 const PROVIDER_SEARCH = `${API}/assets/provider/search`;
 const PROVIDER_SEARCH_STREAM = `${API}/assets/provider/search/stream`;
 const PROVIDER_CALLS = new Set([`${API}/assets/prices/sync`, `${API}/assets/provider/refresh`, `${API}/assets/provider/probe`, `${API}/fx/currencies/sync`]);
-/** What each provider reports, as the search stream does for a provider that raised (asset_sources/search.py). */
+/** What each provider reports, as the search stream does for a provider that raised (services/assets/search.py). */
 const OFFLINE_SEARCH_ERROR = 'provider not reached: the gallery runs offline';
 
 /**
