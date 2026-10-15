@@ -285,6 +285,14 @@ def api_backup_instance_errors(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Backup API start error tests", verbose=verbose)
 
 
+def api_backup_panel(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hosting panel's backup routes (/backup/panel/jobs) and their token, in an app of the test (no server reached)."""
+    print_section("Backup API: the hosting panel's token")
+    print_info("Testing: LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN(_FILE) → 404 off, 503 unusable (short, not visible ASCII), 401 without it; with it, the panel's own jobs only (in-process app, jobs replaced)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_panel.py", test_names)
+    return run_command(cmd, "Backup API panel token tests", verbose=verbose)
+
+
 def api_transactions(verbose: bool = False, test_names: list = None) -> bool:
     """Run Transactions API endpoint tests."""
     print_section("Transactions API Endpoint Tests")
@@ -816,6 +824,17 @@ Tests for REST API endpoints (server auto-started):
         desc="POST /backup/instance when the run cannot start: a link or a file in place of backups/ or backups/.jobs (BackupPathError) → 500 backup_folder_unusable, any other OSError → 500 backup_failed, another run → 409 backup_busy, never the data directory's path or the system's words in the answer; a run that starts → 202 with its first state",
         # PURE: an app of the test holds instance_router, require_admin overridden and jobs.start_backup replaced: no
         # data directory, DB, server or network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-panel",
+        api_backup_panel,
+        name="Backup API Panel Token",
+        desc="The hosting panel's backup routes (/backup/panel/jobs) and LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN(_FILE): backup_download_token() (variable or file, BOM and trailing line breaks dropped, variable wins, blank is unset, anything but visible ASCII refused first, 31 characters refused, never the value, 32 taken, unreadable file); unset → 404 Not Found as a path that does not exist; unusable → 503 backup_panel_unavailable and one error line naming the variable; missing or wrong token → 401 backup_panel_unauthorized, WWW-Authenticate: Bearer; with it, the panel's own jobs only (another origin answers as no job, archive never read, never deleted), the archive's exact bytes with no-store, the shared start errors; an administrator still sees every job; the token never in an answer or the log",
+        # PURE: an app of the test holds backup_router under /api/v1 (require_admin overridden where called) and the four
+        # functions of jobs replaced by a fake under tmp_path; the token variables are set with monkeypatch: no data
+        # directory, DB, server or network is reached (the api category still starts the lane's backend around it).
         isolation="pure",
     )
     add_test(api, "transactions", api_transactions, name="Transactions API", desc="Bulk create, query, patch, delete")
