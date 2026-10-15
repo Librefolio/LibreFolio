@@ -116,7 +116,7 @@ Asset-level events that affect pricing or generate distributions. Events are dis
 | `SPLIT` | Changes quantity, not total value | Stock/unit split |
 | `MATURITY_SETTLEMENT` | Final capital return | Asset reaches maturity — no further calculations |
 
-**Deduplication strategy**: events are upserted **in place**, per source, on `(asset_id, date, type)`: a sync matches only the events of its own assignment, and a matched row keeps its id, so the transactions linked to it stay linked. Manual events (`provider_assignment_id = NULL`) are edited by id or matched on date and type, and a sync never deletes them. See [Asset Events](../../backend/assets/events.md#dedup-strategy).
+**Deduplication strategy**: events are upserted **in place**, per source, on `(asset_id, date, type)`: a sync matches only the events of its own assignment, and a matched row keeps its id, so the transactions linked to it stay linked. Manual events (`provider_assignment_id = NULL`) are edited by id or matched on date and type, except in a `create` item (the transaction form's **+ New event**), which is refused on a date and type the asset already has instead of overwriting it; a sync never deletes them. See [Asset Events](../../backend/assets/events.md#dedup-strategy).
 
 **Indexes**: `(asset_id, date)`, `(asset_id, type, date)`, `(provider_assignment_id)`.
 

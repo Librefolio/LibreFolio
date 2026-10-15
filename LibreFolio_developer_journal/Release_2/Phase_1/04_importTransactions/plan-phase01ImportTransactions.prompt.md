@@ -1923,7 +1923,7 @@ del 15/10 12:30–12:44):
    > `create` rifiutato da un evento scritto da un elemento precedente della stessa richiesta (gli `existing` mostrano
    > un id che il rollback toglie: solo detto nella pagina); `assets_pricing.md:119` incompleta (non nomina `create`) e
    > la frase vecchia «sync replaces» di `architecture.md`, non mia: nella doc di E1b.
-3. ⏳ Rossi e cura E1b (dopo la risposta sui colori; Vitest ed E2E dopo la finestra).
+3. ✅ Rossi e cura E1b (2026-10-15, 16:40–17:59; dettagli sotto).
    > **Rossi scritti in staging, non eseguiti** (test-author, ~16:00; il worktree resta fermo per l'ingresso di E1a):
    > `/tmp/libreFolio_w_e1b_tests/` con `frontend/e2e/transactions/tx-event-create-exists.spec.ts` (8 test, la
    > mini-modale), `frontend/e2e/assets/asset-event-editor-save.spec.ts` (3: prima le cancellazioni, la valuta della
@@ -1948,6 +1948,99 @@ del 15/10 12:30–12:44):
    > continua a funzionare, il salvataggio è atomico). La `DELETE` separata resta per l'eliminazione semplice. In E1b,
    > con i rossi prima: da decidere nel disegno come si dice un evento cancellato in uso (oggi `in_use` per riga, non un
    > errore) dentro un salvataggio tutto o niente.
+   > **Disegno di E1b aggiornato** (16:50):
+   > - **Backend, `delete_ids`** (`FAEventUpsert`, per elemento, cioè per asset): solo in `mode: "upsert"` (in un
+   >   `create` → 422); un id sia in `delete_ids` sia fra gli eventi dell'elemento → 422; un elemento con soli
+   >   `delete_ids` è valido (`events` può essere vuoto se ci sono cancellazioni; né l'uno né l'altro → 422). In
+   >   `_write_manual_item`, **prima** dei controlli sugli eventi: ogni id deve essere un evento **manuale di quell'asset**,
+   >   altrimenti 400 `EVENT_NOT_DELETABLE` (`params.ids`; come `EVENT_NOT_EDITABLE` per le modifiche: un id che non c'è più
+   >   non si ignora); un evento collegato a transazioni → 409 `EVENT_IN_USE` (`params.events`: `id`, `date`, `type`,
+   >   `linked_transactions` — solo il conteggio, nessun id di transazioni di altri utenti); poi la cancellazione e il
+   >   flush, così i controlli di chiave e il `create` vedono le chiavi liberate (I-10 dentro una richiesta). Il risultato
+   >   aggiunge `deleted_ids`. La `DELETE` separata resta com'è (eliminazione semplice, `in_use` per riga).
+   > - **Editor**: un'unica `POST` con `delete_ids` ed eventi; niente più `DELETE` nel salvataggio; alla riuscita toglie
+   >   le righe cancellate; al rifiuto nessuna modifica, e il messaggio tradotto nomina la riga (anche l'evento in uso).
+   >   Cambia per l'utente: prima un evento in uso veniva saltato con un avviso e il resto salvato; ora il salvataggio non
+   >   parte e dice quale evento è in uso (decisione 22).
+   > - **Mini-modale**: come la bozza, più il reperto (1): `existingAmountText()` in `eventSaveError.ts`, usata dal
+   >   pannello e da «Modifica questo».
+   > - **Picker** (reperto 5, verificato: `fetchEvents` esce se `fetchKey` non cambia, `AssetEventPicker.svelte:115-118`;
+   >   un evento nuovo arriva come `pinnedEvent`, ma dopo «Modifica questo» il picker trova la copia vecchia in `events`):
+   >   il picker si registra sul bus `registerPortfolioMutationListener` (`portfolioMutation.ts`, già notificato
+   >   dall'interceptor per ogni `POST`/`DELETE` su `/assets/events`) e rilegge la lista; chiave per istanza, tolta
+   >   all'uscita.
+   > - i18n (sorgente `assets`, condivisa: solo aggiunte): `events.saveError.inUse`, `events.saveError.notDeletable` oltre
+   >   alle chiavi della bozza.
+   > **Rossi, seconda tornata** (test-author, 16:40; i file della prima copiati dallo staging: i 4 nuovi tali e quali,
+   > `_frontend_transaction.py` intero perché solo aggiunte, le aggiunte di `_frontend_asset.py` e `_frontend_utility.py` a
+   > mano, perché le copie in staging erano di prima del merge e avrebbero tolto le registrazioni di Z1 e A5b):
+   > `test_asset_event_store.py` +19 casi, `test_assets_events.py` +8, `asset-event-editor-save.spec.ts` riscritto (4: una
+   > sola `POST` con `delete_ids`; la riga EUR; l'evento in uso con un'altra modifica → 409 e nulla salvato; il conflitto,
+   > guardia), ritarati `asset-event-delete.spec.ts` (scenario 1: la `POST` con `delete_ids`; scenario 2: l'evento in uso
+   > rifiuta il salvataggio) e `asset-data-editor.spec.ts` S1 (nessuna `DELETE` né `delete_ids`; guardia), il picker con le
+   > note nuove dopo «Modifica questo» in `tx-event-create-exists.spec.ts`, i Vitest (`EVENT_IN_USE`, `EVENT_NOT_DELETABLE`,
+   > `existingAmountText`). **Visti** (16:43, `nice -n 10`, senza server): `services asset-event-store` **17 rossi / 42
+   > verdi**, tutti per il campo `delete_ids` sconosciuto o per `events` vuoto rifiutato; i due Vitest rossi al caricamento
+   > (moduli assenti). API ed E2E sui rossi: slot chiesto al coordinatore (16:45). Cura pronta, non applicata:
+   > `/tmp/libreFolio_w_e1b_backend_fix.py`, `/tmp/libreFolio_w_e1b_fix.py` (editor con una sola `POST`),
+   > `/tmp/libreFolio_w_e1b_picker_fix.py`, `/tmp/libreFolio_w_e1b_i18n.sh`; tutti in dry run ok.
+   > Non fissati (test-author): id ripetuti in `delete_ids` (la cura: 422), quale codice vince fra non cancellabile e in
+   > uso (la cura: prima `EVENT_NOT_DELETABLE`), l'ordine di `params.ids` (la cura: ordinati). Rischio noto lasciato com'è:
+   > lo scenario 1 di `asset-event-delete` scrive su Apple condivisa a una data fissa (desktop e mobile insieme potrebbero
+   > sovrascriversi).
+   > **Rossi API ed E2E visti** (slot pesante 2, 16:47–17:06, `nice -n 10`, `--workers 2` per le E2E): `api
+   > assets-events` **8 rossi / 37 verdi** (422 per `delete_ids` sconosciuto o `events` mancante); `front-asset
+   > asset-event-editor-save` **3 rossi + 1 guardia verde** (nessun `delete_ids` nella richiesta; la riga EUR mandata in
+   > USD; l'evento in uso: 200); `asset-event-delete` **2 rossi** (i due scenari ritarati: nessuna `POST` entro 10 s) **+ 2
+   > verdi** (non toccati); `asset-data-editor` **26 verdi** (S1 guardia); `front-transaction tx-event-create-exists` **8
+   > rossi**. **⚠️ Fuori pista**: il test dell'evento del fornitore era rosso nella **precondizione** (la sync non scriveva
+   > il DIVIDEND pianificato: `events_fetched 0`). Causa (test-author): una sync non scrive mai un evento del fornitore con
+   > la data di oggi — la storia si ferma a ieri (`refresh.py:227`, `history_end`) e il punto di oggi viene da
+   > `get_current_value`, senza eventi. Il test ora data l'evento e il form a ieri (helper `setFormDate`); rilanciato da
+   > solo (17:04–17:06): **rosso al punto voluto** (il pannello non compare, `:476`). Il comportamento del prodotto (un
+   > evento pianificato con la data di oggi arriva solo il giorno dopo) è di `services/assets/` (X): segnalato al
+   > coordinatore, non mio.
+   > **Cura applicata** (17:06–17:10): `/tmp/libreFolio_w_e1b_backend_fix.py`, `/tmp/libreFolio_w_e1b_fix.py`,
+   > `/tmp/libreFolio_w_e1b_picker_fix.py` (`--apply`), le 18 chiavi i18n (`/tmp/libreFolio_w_e1b_i18n.sh`: 16 in
+   > `assets`, `transactions.form.eventEditTitle`; nelle 4 lingue, solo aggiunte), `api sync` (il client cambia in
+   > `delete_ids`, `deleted_ids`, `events` facoltativo e la docstring), `ruff`/`black` puliti, `prettier --write` sui due
+   > componenti (solo rientri del blocco `{#if existing}`). **Verdi** (17:10–17:29, `nice -n 10`): `theme-roles --check`
+   > pulito; `services asset-event-store` **59/59**, `asset-source-guards` **29/29**; Vitest `eventSaveError` **57/57**;
+   > `front build --debug` con svelte-check **0/0**; `api assets-events` **45/45**; E2E `asset-event-delete` **4/4**,
+   > `asset-data-editor` **26**, `tx-event-create-exists` **8/8** (il fornitore e il picker dopo «Modifica questo»
+   > compresi), `tx-event-picker` **5/5**; `front-utility core-unit` **4 680/4 680** (151 file, con `eventSaveError` e i
+   > cancelli di colori, denaro e ICU), `component-unit` **3 395/3 395**; `i18n check` stretto pulito (4 435 chiavi).
+   > **⚠️ Fuori pista** (2): (1) `EventExistsPanel.test.ts` 8/8 rosso dopo la cura per un errore del test (`events` è
+   > anche un'opzione di montaggio di Svelte: le props vanno sotto `props`): corretto dal test-author, poi **8/8**. (2)
+   > `asset-event-editor-save` **3/4**: il test 3 (evento in uso più un'altra modifica) fallisce **sempre** al cambio di
+   > tipo, prima e dopo la cura e anche da solo (17:29–17:31): l'opzione `SPLIT` della tendina è coperta dall'intestazione
+   > fissa della tabella (`thead.sticky-header … intercepts pointer events`). Quindi il suo rosso «prima» non era quello
+   > voluto (avevo letto male il riepilogo: il comportamento rosso dell'evento in uso è visto all'API, 409 contro 422, e
+   > nello scenario 2 di `asset-event-delete`). Causa, un difetto del prodotto fuori da E1b: la tendina di `SimpleSelect`
+   > è `fixed z-[9999]` ma non portata nel `body`, e dentro la tabella resta sotto la `th` fissa (`z-index: 15`,
+   > `DataTable.svelte:1621`) quando si apre verso l'alto vicino all'intestazione → **W-B26** nel backlog. Il test 3 cambia
+   > l'importo invece del tipo (test-author), poi lo rilancio.
+   > **Rilanciato** (17:34–17:35): `asset-event-editor-save` **4/4**. Il test 3 non ha avuto il suo rosso E2E per la
+   > ragione voluta; il comportamento resta visto rosso all'API e nello scenario 2. `prettier --check` pulito su specs,
+   > test e componenti; `ruff`/`black` puliti sui test; `git diff --check` pulito. **Slot pesante 2 restituito** (17:36),
+   > porta libera. Resta: doc di E1b (docs-writer), `mkdocs build` e `check-links` (chiesti), handoff.
+   > **⚠️ Fuori pista — una regressione mia, trovata dal docs-writer** (17:50): l'editor offre ancora «Elimina» sulle righe
+   > del fornitore (sola lettura) e ne mette l'id in `delete_ids`; la mia cura rifiutava gli id del fornitore
+   > (`EVENT_NOT_DELETABLE`), quindi l'intero salvataggio falliva con un messaggio fuorviante («…non esiste più… ricarica»).
+   > Nella 1.2 quella cancellazione riusciva (l'evento torna con la sync successiva, e la doc utente lo diceva); la `DELETE`
+   > la permette ancora. **Correzione nel mio perimetro, da dichiarare nell'handoff**: `delete_ids` accetta ogni evento
+   > dell'asset, manuale o del fornitore; `EVENT_NOT_DELETABLE` solo per id ignoti, spariti o di un altro asset;
+   > `EVENT_IN_USE` per ogni evento collegato. Rossi prima (test-author), poi `/tmp/libreFolio_w_e1b_provider_fix.py`
+   > (dry run ok); doc riallineata dal docs-writer. Annotati per l'handoff, non curati: il prefisso inglese «Save failed» e
+   > le date ISO dell'editor (righe di X), il tipo in minuscolo nel CSV (l'editor confronta con le maiuscole; il server poi
+   > normalizza), le chiavi `events.deleteBlocked`/`deleteNotFound` non più usate, tre pagine sviluppatore da aggiornare
+   > (`transaction-form.md`, `domain-state.md`, la frase dei range nel `data-editor.md`).
+   > **Correzione fatta** (17:52–17:55): rossi (test-author: un test del fornitore cancellato come un manuale, uno del
+   > fornitore in uso → `EVENT_IN_USE`; il test dei non cancellabili senza il fornitore) **visti: 2 rossi / 59 verdi**
+   > (17:54); poi `/tmp/libreFolio_w_e1b_provider_fix.py --apply` (`_delete_item_events`, il filtro sul fornitore tolto,
+   > messaggi e docstring) → `services asset-event-store` **61/61**, `asset-source-guards` **29/29**, `ruff`/`black`
+   > puliti, `api sync` (solo descrizioni), `api assets-events` **45/45** (17:59). Il frontend non cambia: l'editor mandava
+   > già quegli id.
 4. ✅ E1c (14:35): rossi visti → cura → verdi; commit a parte.
    > **Rossi scritti, non eseguiti** (test-author, 14:10, carico alto): nuovo
    > `test_db/test_post_migration_event_types.py` (20 funzioni, 35 casi: 33 rossi attesi, 2 guardie), nessun import dai
@@ -1970,7 +2063,18 @@ del 15/10 12:30–12:44):
    > punti per l'amministratore); debito di traduzione in W-B21. `ruff`/`black` puliti.
    > **Via (b) per i rossi API di E1a** (14:29, carico 32,8 alla scadenza): nello slot pesante dopo il merge. La cura E1a
    > resta in `/tmp` fino ad allora; nel worktree ci sono i soli rossi di E1a.
-5. ⏳ Doc; handoff FROZEN (E1a+E1b; E1c a parte).
+5. ✅ Doc; handoff FROZEN (E1a+E1b; E1c a parte) — E1a ed E1c entrati; E1b handoff alle 18:05.
+   > **Doc di E1b** (docs-writer, solo EN, senza stamp, rivista da me): utente `user/assets/detail/data-editor.en.md`,
+   > `events.en.md` (nuovo H3 `#new-event`), `user/transactions/form.en.md` («Missing event?»); sviluppatore
+   > `developer/backend/assets/events.md`, `architecture.md`, `developer/frontend/components/core-ui/data-editor.md`,
+   > `developer/frontend/state/domain-state.md` (il picker sul bus), `developer/frontend/components/features/
+   > transaction-form.md`, `developer/architecture/database/assets_pricing.md`. Debito di traduzione → W-B28. **devWiki**
+   > (historian): nuove `decisions/asset-event-saves-all-or-nothing.md`, `problems/provider-event-dated-today-not-synced.md`,
+   > `problems/select-list-under-the-sticky-table-header.md`, `problems/testing-library-events-prop-read-as-mount-option.md`;
+   > aggiornate F-031, F-090, `problems/asset-event-edit-delete-reinsert.md`, `problems/sqlite-savepoint-without-write-
+   > begins-as-transaction.md` (W-B20), `domains/assets.md`, `features/registry.md`, `index.md`, `log.md`;
+   > `check_source_paths.py` invariato (5). **Prove** (18:00, `nice -n 15`): `mkdocs build` stretto, 0 avvisi (42 s, 3 036
+   > URL), `check-links` 95 validi. Porta 6184 libera.
    > **E1a entra da solo** (coordinatore, 16:00, dopo il punto 46): doc sviluppatore di E1a ✅ (passo 2), handoff
    > FROZEN d'ingresso con il CHANGELOG di FE8a, N1, N1b-2/3, E1a ed E1c (16:10). Le pagine utente, la devWiki e il resto
    > con E1b.
@@ -1990,7 +2094,7 @@ del 15/10 12:30–12:44):
    > **34**, `api account-deletion` **6**, `api assets-events` **37**; `services broker` **65**, `services config-package`
    > **642**. Porta 6184 libera. Pronto all'ingresso.
 
-### N2 — il costo obbligatorio anche nell'API: TRANSFER ricevuto e ADJUSTMENT in entrata ⏳ (2026-10-15)
+### N2 — il costo obbligatorio anche nell'API: TRANSFER ricevuto e ADJUSTMENT in entrata ✅ (2026-10-15) — 🧊 FROZEN
 
 **Richiesta** (coordinatore, 15/10 ~16:30, dopo il punto 46). Il developer, in chat alle 16:12, alla lettera: «sarei
 daccordo a metterci una protezione in caso di chiamate dirette dalle api, ma non certo metterci a fare bonifiche o
@@ -2015,4 +2119,124 @@ vecchi, o una metà convertita da `orphan_pair_halves`): rifiutarla finché non 
 modifica delle sole note via API; il disegno proposto la applica alla creazione e alla modifica che **tocca** tipo,
 quantità o costo, e lo verifico contro quello che fanno il modulo e il Bulk.
 
-**Passi**: 1. ⏳ analisi e disegno al coordinatore; 2. rossi (test-author); 3. cura; 4. prove; 5. doc e CHANGELOG.
+**Passi**: 1. ✅ analisi e disegno al coordinatore (16:40); 2. ✅ rossi (test-author, 18:43–19:15); 3. ✅ cura (18:52, più il
+collegamento all'evento alle 19:16); 4. ✅ prove; 5. ✅ doc; CHANGELOG proposto nell'handoff (19:30).
+> **Via a N2** (coordinatore, 18:15, dopo l'ingresso di E1b: `dev_release2` = `fecf88c1a`, CHANGELOG `f0d2c77e2`; il mio
+> ramo in pari per avanzamento veloce, HEAD `f0d2c77e2`, pulito). Rossi chiesti a un test-author nuovo (18:16: (a) la
+> modifica delle sole note e dei soli tag di un TRANSFER ricevuto e di un'ADJUSTMENT +qty salvati senza costo, (b) i
+> metadati come fonte con `TX_TYPE_METADATA` modificato nel test; le guardie). **Cura pronta, non applicata**
+> (`/tmp/libreFolio_w_n2_fix.py`, dry run ok): `cost_basis_required(type, quantity)` in `type_metadata.py`, usata da
+> `_requires_cost_basis`; `stored_cost_fields` nel contesto del batch, fotografato al caricamento delle righe
+> (`_load_existing_transactions`) con `cost_fields(tx)` = tipo, quantità, costo e valuta; `_check_update_cost_basis`
+> controlla solo se la modifica cambia quei valori o nomina una `cost_basis_mode`.
+> **Rossi visti** (test-author, poi io, 18:43–18:51): nuovo `test_services/test_transaction_cost_basis_rule.py` (azione
+> `services transaction-cost-basis-rule`, registrata dopo `transaction`): **10 rossi / 51 verdi** — (a) le modifiche di
+> sole note (`description`), soli tag e sola data di un TRANSFER ricevuto e di un'ADJUSTMENT +qty salvati senza costo
+> (oggi `costBasisRequired`), (b) `_requires_cost_basis` con un campo dei metadati cambiato nel test (ADJUSTMENT e
+> TRANSFER ricevuto resi `optional`, BUY reso `required_qty_pos`) e la creazione senza costo quando i metadati la rendono
+> facoltativa; guardie: creazioni rifiutate sulla loro riga, quantità −5→+5 e unità in più senza costo, `manual` senza
+> costo, cambio di tipo (con `SWAP_GROUPS` modificato nel test: nessun gruppo reale porta a un tipo che chiede il costo),
+> note su una riga con costo, Auto con media (100 EUR), una promozione con modifica delle note nello stesso batch (resta
+> rifiutata), parametrico tipo × segno (−, 0, +) uguale ai metadati. API (`test_transactions_batch_split_promote.py`,
+> B4.1, dati vecchi scritti con `legacy_cost_rows.main()`): **rossa** (modifica delle sole note rifiutata con
+> `costBasisRequired`, update 1 e 2). **Cura applicata** (18:52, `/tmp/libreFolio_w_n2_fix.py --apply`, `ruff`/`black`
+> puliti). Reperti del test-author: (1) togliere il costo con una modifica non si può esprimere (`cost_basis_override:
+> null` vale «invariato»): il modulo che svuota un costo manuale manda `null` e il backend tiene il vecchio → W-B30; (2)
+> la regola 12 di `validate_transaction_business_rules` (`costBasisModeIncompatible`) è una seconda copia scritta a mano
+> (TRANSFER e ADJUSTMENT con quantità > 0); leggerla dai metadati porterebbe un import circolare
+> (`type_metadata` importa `transactions`) → W-B31.
+> **Verdi** (18:52–18:59, `nice -n 10`, una alla volta): `services transaction-cost-basis-rule` **61/61**, `services
+> transaction` **66**, `services broker` **65**, `services orphan-transfer-numbers` **19**; `db populate --force --clean`;
+> `api batch-split-promote` **36** (B4.1 compresa), `api transactions` **26**, `api transactions-validate` **11**, `api
+> transactions-wac` **20**; `test check-orphans` pulito; `git diff --check` pulito; porta libera. Nessuno schema cambiato:
+> niente `api sync`, nessun file del frontend toccato. Doc sviluppatore in corso (docs-writer).
+> **⚠️ Fuori pista — un buco della mia cura, trovato dal docs-writer** (19:15): `cost_fields()` non contava il
+> collegamento all'evento. Un'ADJUSTMENT +qty legata a uno SPLIT e salvata in Auto resta senza costo per disegno
+> (`auto_cost.py:70-90`): prima di N2 ogni sua modifica non Auto era rifiutata, dopo la cura una modifica che la
+> **scollega** soltanto (`asset_event_id: 0`, quello che manda `buildUpdateDiff`) passava e lasciava un acquisto di costo
+> ignoto. Cura: `asset_event_id` dentro `cost_fields()` (cambiare o togliere il collegamento conta come toccare il costo),
+> con il rosso prima (test-author); `/tmp/libreFolio_w_n2_link_fix.py` (dry run ok), che toglie anche dalla docstring di
+> `cost_basis_required` la frase «l'app e l'API applicano una sola regola» (il modulo sceglie dove mostrare il costo dal
+> nome del tipo, `TransactionFormModal.svelte:744`, `TxFormSingleSection.svelte:294,316`). Residui annotati per
+> l'handoff, non curati: il testo `warningAdjustment` («non si può salvare senza») e il controllo lato client restano più
+> severi dell'API per le righe vecchie; `fieldsFromTx()` del Bulk sceglie il lato dal collegamento e non dal segno.
+> **Fatto** (19:15–19:27): test-author, nuova classe `TestSplitLinkedAdjustment` (6 test: la riga legata a uno SPLIT
+> costruita come fa l'app, in Auto; scollegarla o legarla a un PRICE_ADJUSTMENT senza costo → rifiutato; note e tag →
+> committati; cambio di collegamento con un costo → committato); **rossi visti: 2 / 65 verdi** (scollega, ricollega);
+> `/tmp/libreFolio_w_n2_link_fix.py --apply` (`asset_event_id` in `cost_fields`, le docstring); **verdi**:
+> `services transaction-cost-basis-rule` **67/67**, `transaction` **66**, `broker` **65**; `api batch-split-promote`
+> **36**, `transactions` **26**, `transactions-validate` **11**, `transactions-wac` **20**; `ruff`/`black` puliti; porta
+> libera. **Doc** (docs-writer, solo sviluppatore EN, niente stamp): `developer/frontend/data-quality-banner.md:176`,
+> `developer/frontend/components/features/transaction-form.md:227-240` (anche due frasi già sbagliate prima di N2: «salta
+> solo le creazioni consumate da una promozione», da `d7c148564`; «costo zero», da `bdec709d2`),
+> `developer/backend/transactions/wac.md:528-550` e `:655-657`, `split_promote.md:211-212`. **Prove della doc** (19:28,
+> `nice -n 15`, carico 36): `mkdocs build` stretto, 0 avvisi (43 s, 3 036 URL), `check-links` 95 validi. `git diff
+> --check` pulito. Handoff FROZEN di N2 (19:30).
+Ordine dei lotti (coordinatore, 16:30): **E1b, poi N2, poi W-B20**; FE8b sul suo binario. Ogni prova pesante: slot dal
+coordinatore. Scopo delle modifiche (coordinatore, 16:30): la regola vale alla creazione e per le modifiche che toccano
+tipo, quantità, segno o costo; note, tag e descrizione di una riga vecchia senza costo restano modificabili.
+
+**Analisi** (16:40, letta sul codice di `4a303b50b`) — **la premessa va corretta**: il backend la regola **la controlla
+già**, per ogni percorso dell'API.
+- `TransactionService.execute_batch` (`transaction_service.py:113-161`) è l'unico percorso di creazione e modifica:
+  `POST /transactions/validate`, `/transactions/commit` e `promote-transfer` (`promotion.py:167`, che gli passa
+  `creates_raw`). Dopo il WAC gira sempre `validate_cost_basis` (`batch_costs.py:64-215`): creazioni (singole e in
+  coppia), modifiche e promozioni senza `cost_basis_override` → issue `costBasisRequired` con `index`, `ref_id`,
+  `field: cost_basis_override` e `params.type`; il batch non committa (HTTP 200, `committed: false`, come ogni altro
+  rifiuto del batch; la chiave `transactions.errors.costBasisRequired` è già nelle 4 lingue).
+- La regola però è **scritta a mano**: `TransactionService._requires_cost_basis` (`validation.py:33-41`, TRANSFER e
+  ADJUSTMENT con quantità > 0), oggi uguale ai metadati ma non letta da lì.
+- **Le modifiche oggi sono più strette di quanto deciso**: `_check_update_cost_basis` rifiuta **qualunque** modifica di
+  una riga che vuole un costo e non l'ha, anche delle sole note. Con N1b-2 queste righe esisteranno (metà convertite
+  senza costo): oggi non se ne potrebbero toccare nemmeno le note, né dall'app né dall'API.
+- Le righe senza costo nascono, oltre che dai dati vecchi e dalle due conversioni di N1: dalla modalità **Auto** quando
+  la media non esiste (pool vuoto, P-1: `_write_auto_cost` non scrive nulla e il controllo salta le righe Auto;
+  `auto_cost.py:143-148`) e dalle ADJUSTMENT legate a uno SPLIT (per disegno: il costo viene dal rapporto dello split,
+  `auto_cost.py:70-90`). Non dall'API «senza modalità».
+
+**Disegno proposto**:
+1. Un'unica funzione che legge i metadati: `cost_basis_required(type, quantity)` vicino a `TX_TYPE_METADATA`
+   (`type_metadata.py`): per un tipo in coppia `cost_basis_pair[1 if quantity > 0 else 0]`, altrimenti
+   `cost_basis_mode`; `required_qty_pos` con quantità > 0 → richiesto. `_requires_cost_basis` la chiama (stesse
+   risposte di oggi su ogni tipo: perno parametrico su tutti i `TransactionType` × segno).
+2. `_check_update_cost_basis` controlla solo le modifiche che **cambiano** tipo, quantità (segno compreso) o costo
+   (`cost_basis_override`, la sua valuta, `cost_basis_mode`) rispetto alla riga salvata: confronto dei valori, non dei
+   campi presenti, così vale sia per il diff dell'app (`buildUpdateDiff`) sia per un client che manda la riga intera.
+   Serve lo stato salvato prima della modifica (da prendere in `apply_updates` o nel contesto).
+3. Fuori da N2: l'Auto senza media (P-1) e lo split, come oggi.
+
+**Rossi previsti** (test-author, `services transaction`/`api` del batch): (a) la modifica delle sole note (e dei soli
+tag) di un TRANSFER ricevuto e di un'ADJUSTMENT +qty salvati senza costo → oggi `costBasisRequired`, dopo committata;
+(b) i metadati come fonte: con `TX_TYPE_METADATA` modificato nel test (ADJUSTMENT `optional`) la creazione senza costo
+passa → oggi rossa (regola a mano). Guardie verdi oggi: creazione senza costo rifiutata con `index`; modifica che porta
+la quantità di un'ADJUSTMENT da −5 a +5, o cambia il tipo, senza costo → rifiutata; modifica che toglie il costo →
+rifiutata; Auto con media → committata; parametrico tipo × segno = metadati.
+
+**CHANGELOG** (riga corretta, la tua presupponeva un'API che accetta): 🐛 Fixed — «Editing only the notes, tags or
+description of a transfer received or of an incoming adjustment saved without a cost basis is no longer refused; a
+change to its type, quantity or cost still needs one.»
+
+### Coda dei lotti dopo E1b (coordinatore, 15/10 16:30 e 18:02)
+
+- **E1b committato** (coordinatore, 18:05): `af4408608` feat(events), `0ffaa9127` docs(events), `a62d36062` docs(wiki),
+  `5749cef7d` docs(journal); base aggiornata con `dev_release2` `a718e5281` (J, A6a, H, Z7a, il banner del Lab) senza
+  conflitti → HEAD `949ab6bea`. **Prove sulla revisione combinata** (18:03–18:11, `nice -n 10`, una alla volta): `api sync`
+  (157 righe del client, tutte di A6a e H: anteprima di cancellazione dell'account, sonda dell'indirizzo; nessuna mia);
+  `front check` svelte-check **0/0**; `services asset-event-store` **61/61**; `db populate --force --clean`; `api
+  assets-events` **45/45**; Vitest `eventSaveError` **57/57**, `EventExistsPanel` **8/8**; E2E `asset-event-editor-save`
+  **4/4**, `tx-event-create-exists` **8/8**; `i18n check` stretto pulito (4 440 chiavi); `theme-roles --check` pulito;
+  `test check-orphans` pulito. Porta 6184 libera. Pronto all'ingresso.
+- Ordine: **N2** (dopo l'ingresso, non prima) → **W-B20** (l'aiuto in `db/session.py` per `delete_bulk`) → **A-14** (da A:
+  in `mkdocs_src/docs/developer/architecture/access_control.md` la frase «The last OWNER cannot remove themselves»
+  contraddice la sezione «Self-Management» e `leave_broker`: correggerla secondo il codice). FE8b sul suo binario.
+- Il rischio di Apple condivisa a data fissa in `asset-event-delete` → **W-B29** nel backlog W.
+- **Coda aggiornata** (coordinatore, 18:15): N2 → **i file dei broker visibili solo a chi ha la vista sul broker**
+  (decisione 36, `Phase_1/decisioni-analisi-20261014.md` § 36: «File dei broker (report, estratti): lista, anteprima e
+  scarico solo a chi ha almeno la vista su quel broker»; i file comuni e personali sono di Piattaforma, registrazione e
+  impostazioni di Account e accessi) → W-B20 → A-14. W-B26 lo assegna il coordinatore.
+  > **Prima lettura per la decisione 36** (18:59, solo lettura): le rotte BRIM dei file (`api/v1/brokers.py:653-870`:
+  > lista, info, anteprima, scarico, ultimo parse, controllo del plugin, parse, cancellazione) controllano già l'accesso
+  > al broker con `_get_brim_file_with_access` (`:120-140`) e la lista filtra per broker accessibili. **Ma** il controllo
+  > c'è solo `if file_info.target_broker_id and not current_user.is_superuser`: un file **senza** `target_broker_id` è
+  > aperto a ogni utente con il login, anche la cancellazione (il `min_role=EDITOR` salta) — W-B3 confermata. Da
+  > chiarire nell'analisi: quando nasce un file senza broker, chi l'ha caricato (se è registrato), e cosa fa la lista.

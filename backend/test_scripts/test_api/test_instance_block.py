@@ -18,10 +18,13 @@ and ``ALLOWED_WHEN_BLOCKED``) and the block page ``GET /api/v1/system/block`` (`
     issued before the block sets the new password, which signs in and reaches the block page. Registration stays out of
     the list: an invitation reads as valid, and spending it registers nobody. ``/system/block`` gives an administrator
     ``billing_url``, ``LIBREFOLIO_BILLING_URL`` through A5's ``billing_link()`` (one trailing slash removed; null when
-    unset or not an http(s) address), and anyone else null, whatever the variable says.
+    unset or not an http(s) address), and anyone else null, whatever the variable says. An administrator keeps the full
+    backup (decision 12): its four routes start, poll, download and delete a job as on any instance, and
+    ``/system/block`` answers ``backup_available`` true; a regular user meets the 403 of ``require_admin`` on each of
+    them, never the 423, and the backup service is never reached.
 (b) Not blocked (unset, blank, or a value that does not block): the routes answer as before, and ``/system/block`` is
-    ``{"blocked": false, "deletion_date": null, "billing_url": null}`` with the session of a regular user and 401
-    without, on the lane's backend too.
+    ``{"blocked": false, "deletion_date": null, "billing_url": null, "backup_available": false}`` with the session of a
+    regular user and 401 without, on the lane's backend too.
 (c) The guard. FastAPI gives router dependencies to an ``APIRoute`` (and its subclasses) only, never to a plain
     ``Route``, a ``WebSocketRoute`` or a ``Mount``. So every route or mount of the app under ``/api/v1`` must be an
     ``APIRoute`` resolving ``refuse_when_blocked`` first, before the route's own dependencies, so that a signed-in
@@ -44,12 +47,17 @@ API keeps the last administrator. The administrator of a billing case is a user 
 ``user_service``, as ``test_users_admin_api.py`` does on the lane, and deleted through the service layer too. The links
 are issued by A5's token service in the lane's database, as ``test_registration_api.py`` issues them: a reset link goes
 with its account, an invitation is deleted by id.
+The backup cases sign in the same administrator, and replace the backup service in this process (``monkeypatch`` on
+``services/platform/instance_backup/jobs.py``): no backup runs on the lane's data directory, whose run lock other
+suites of the lane take.
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
 
 import httpx
@@ -64,6 +72,7 @@ from starlette.requests import Request
 from starlette.routing import Mount, Route, WebSocketRoute
 
 from backend.app.api.v1.auth import SESSION_COOKIE_NAME
+from backend.app.api.v1.backup import instance as backup_instance
 from backend.app.api.v1.instance_block import ALLOWED_WHEN_BLOCKED, refuse_when_blocked
 from backend.app.config import API_V1_PREFIX, TEST_LANE_HEADER, get_settings, is_test_mode
 from backend.app.config.platform import instance_blocked
@@ -72,6 +81,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.system import InstanceBlockResponse, SystemInfoPublicResponse, SystemInfoResponse
 from backend.app.services.accounts import token_service, user_service
 from backend.app.services.accounts.registration_service import billing_link
+from backend.app.services.platform.instance_backup import jobs
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -124,6 +134,10 @@ ALLOWED_ROUTES = {
     "backend.app.api.v1.auth.reset_password_with_link": ("POST", "/api/v1/auth/password-reset"),
     "backend.app.api.v1.auth.delete_own_account": ("DELETE", "/api/v1/auth/users/me"),
     "backend.app.api.v1.auth.preview_own_account_deletion": ("GET", "/api/v1/auth/users/me/deletion-preview"),
+    "backend.app.api.v1.backup.instance.start_instance_backup": ("POST", "/api/v1/backup/instance"),
+    "backend.app.api.v1.backup.instance.get_instance_backup_job": ("GET", "/api/v1/backup/instance/jobs/{job_id}"),
+    "backend.app.api.v1.backup.instance.download_instance_backup": ("GET", "/api/v1/backup/instance/jobs/{job_id}/file"),
+    "backend.app.api.v1.backup.instance.delete_instance_backup_job": ("DELETE", "/api/v1/backup/instance/jobs/{job_id}"),
     "backend.app.api.v1.system.block.get_instance_block": ("GET", "/api/v1/system/block"),
     "backend.app.api.v1.system.instance.get_instance_config": ("GET", "/api/v1/system/instance"),
     "backend.app.api.v1.system.health.health_check": ("GET", "/api/v1/system/health"),
@@ -190,7 +204,7 @@ def _credentials(username: str) -> dict[str, str]:
 
 @dataclass(frozen=True)
 class Account:
-    """A regular user of one test, with the Cookie header of a session the app in process opened."""
+    """A regular user of one test (or the administrator of ``administrator``), with the Cookie header of a session the app in process opened."""
 
     username: str
     session: dict[str, str]
@@ -653,7 +667,7 @@ async def test_a_reset_link_sent_before_the_block_sets_a_password_that_signs_in(
 
         assert instance_blocked(), "Barrier: every request of this test ran on the blocked instance"
         assert me.status_code == 200 and me.json()["user"]["username"] == username, f"the new password's session must be this account's: {me.status_code} {me.text}"
-        assert (block.status_code, block.json()) == (200, {"blocked": True, "deletion_date": DELETION_DATE, "billing_url": None}), f"the new password's session must reach the block page: {block.status_code} {block.text}"
+        assert (block.status_code, block.json()) == (200, {"blocked": True, "deletion_date": DELETION_DATE, "billing_url": None, "backup_available": False}), f"the new password's session must reach the block page: {block.status_code} {block.text}"
     finally:
         try:
             await _delete_if_present(app, monkeypatch, username, password=NEW_PASSWORD)
@@ -713,7 +727,7 @@ async def test_the_block_page_answers_the_deletion_date_when_given(app, monkeypa
 
     response = await _request(app, "GET", "/system/block", session=account.session)
 
-    assert (response.status_code, response.json()) == (200, {"blocked": True, "deletion_date": answered, "billing_url": None}), f"GET /system/block with {DELETION_DATE_VARIABLE}={deletion_date!r}: {response.status_code} {response.text}"
+    assert (response.status_code, response.json()) == (200, {"blocked": True, "deletion_date": answered, "billing_url": None, "backup_available": False}), f"GET /system/block with {DELETION_DATE_VARIABLE}={deletion_date!r}: {response.status_code} {response.text}"
     InstanceBlockResponse.model_validate(response.json())
 
 
@@ -737,7 +751,7 @@ async def test_the_block_page_gives_an_administrator_the_billing_link(app, monke
 
     response = await _request(app, "GET", "/system/block", session=administrator.session)
 
-    assert (response.status_code, response.json()) == (200, {"blocked": True, "deletion_date": DELETION_DATE, "billing_url": answered}), f"GET /system/block to an administrator with {BILLING_VARIABLE}={address!r}: {response.status_code} {response.text}"
+    assert (response.status_code, response.json()) == (200, {"blocked": True, "deletion_date": DELETION_DATE, "billing_url": answered, "backup_available": True}), f"GET /system/block to an administrator with {BILLING_VARIABLE}={address!r}: {response.status_code} {response.text}"
     InstanceBlockResponse.model_validate(response.json())
     print_success(f"{BILLING_VARIABLE}={address!r}: an administrator gets billing_url={answered!r}")
 
@@ -751,8 +765,120 @@ async def test_the_block_page_gives_a_regular_user_no_billing_link(app, monkeypa
 
     response = await _request(app, "GET", "/system/block", session=account.session)
 
-    assert (response.status_code, response.json()) == (200, {"blocked": True, "deletion_date": DELETION_DATE, "billing_url": None}), f"GET /system/block to a regular user with {BILLING_VARIABLE} set: {response.status_code} {response.text}"
+    assert (response.status_code, response.json()) == (200, {"blocked": True, "deletion_date": DELETION_DATE, "billing_url": None, "backup_available": False}), f"GET /system/block to a regular user with {BILLING_VARIABLE} set: {response.status_code} {response.text}"
     print_success("a regular user: billing_url null, whatever the variable says")
+
+
+# =============================================================================
+# (a) Blocked: the full backup, for administrators only (decision 12)
+# =============================================================================
+
+#: The answer of a route for administrators only to a regular user, whole: the 403 of ``require_admin``
+#: (``api/v1/settings.py``).
+ADMIN_REQUIRED_ANSWER = {"detail": "Admin access required"}
+
+
+@dataclass(frozen=True)
+class FakeBackupService:
+    """The backup service of the full backup's routes, replaced in this process: one job, done at once, whose archive is
+    a small file of the test. Every call is recorded with its name and its argument: the origin, or the job id asked."""
+
+    job_id: str
+    archive: Path
+    calls: list[tuple[str, str]]
+
+
+def _replace_the_backup_service(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> FakeBackupService:
+    """Replace ``start_backup``, ``get_job``, ``job_archive`` and ``delete_job`` of ``jobs``, the module the routes of
+    ``api/v1/backup/instance.py`` call (``jobs.<name>(...)``), in this process only: no backup runs on the lane's data
+    directory, whose run lock other suites of the lane take. Any job id but the fake's is unknown, as to the service."""
+    assert backup_instance.jobs is jobs, "Precondition: the routes call the very module replaced here, so no real backup can run"
+    job_id = uuid4().hex
+    created_at = datetime(2026, 10, 15, 10, 15, tzinfo=UTC)
+    archive = tmp_path / jobs.archive_name(created_at)
+    archive.write_bytes(job_id.encode() + bytes(range(256)))
+    size = archive.stat().st_size
+    first = jobs.BackupJob(job_id=job_id, origin="ui", status="running", phase="preparing", done_bytes=0, total_bytes=0, created_at=created_at)
+    done = jobs.BackupJob(job_id=job_id, origin="ui", status="done", phase=None, done_bytes=size, total_bytes=size, created_at=created_at, finished_at=datetime(2026, 10, 15, 10, 16, tzinfo=UTC), file_name=archive.name, file_size=size)
+    fake = FakeBackupService(job_id, archive, [])
+
+    def record_job_call(name: str, asked: str) -> None:
+        fake.calls.append((name, asked))
+        if asked != job_id:
+            raise jobs.BackupJobNotFoundError("No such backup job")
+
+    def start_backup(*, origin: str = "ui", data_dir: Path | None = None) -> jobs.BackupJob:
+        fake.calls.append(("start_backup", origin))
+        return first
+
+    def get_job(asked: str, *, data_dir: Path | None = None) -> jobs.BackupJob:
+        record_job_call("get_job", asked)
+        return done
+
+    def job_archive(asked: str, *, data_dir: Path | None = None) -> tuple[Path, str]:
+        record_job_call("job_archive", asked)
+        return archive, archive.name
+
+    def delete_job(asked: str, *, data_dir: Path | None = None) -> None:
+        record_job_call("delete_job", asked)
+
+    for name, replacement in (("start_backup", start_backup), ("get_job", get_job), ("job_archive", job_archive), ("delete_job", delete_job)):
+        monkeypatch.setattr(jobs, name, replacement)
+    return fake
+
+
+def _backup_routes(job_id: str) -> list[tuple[str, str]]:
+    """The four routes of the full backup (``api/v1/backup/instance.py``) for one job: start, poll, download, delete."""
+    return [("POST", "/backup/instance"), ("GET", f"/backup/instance/jobs/{job_id}"), ("GET", f"/backup/instance/jobs/{job_id}/file"), ("DELETE", f"/backup/instance/jobs/{job_id}")]
+
+
+def _status_and_body(response: httpx.Response) -> tuple[int, object]:
+    """Status and body: the JSON of a JSON answer, the first bytes of any other (an archive), so a red always reads."""
+    if response.headers.get("content-type", "").startswith("application/json"):
+        return response.status_code, response.json()
+    return response.status_code, response.content[:64]
+
+
+@pytest.mark.asyncio
+async def test_an_administrator_keeps_the_full_backup_on_a_blocked_instance(app, monkeypatch, administrator, tmp_path):
+    """(a) Decision 12: on a blocked instance an administrator can still take the data away. The block refuses the
+    administrator elsewhere, and the four routes of the full backup answer as on any instance: start 202 with the job,
+    poll 200 done, download 200 with the archive's very bytes, delete 204, each reaching the backup service. The block
+    page tells the administrator that the backup is available."""
+    print_section("Instance block: the full backup of an administrator")
+    fake = _replace_the_backup_service(monkeypatch, tmp_path)
+    monkeypatch.delenv(BILLING_VARIABLE, raising=False)
+    _block(monkeypatch)
+
+    refused = await _request(app, "GET", "/brokers", session=administrator.session)
+    started, polled, downloaded, deleted = [await _request(app, method, path, session=administrator.session) for method, path in _backup_routes(fake.job_id)]
+    block = await _request(app, "GET", "/system/block", session=administrator.session)
+
+    assert (refused.status_code, refused.json()) == (423, BLOCKED_ANSWER), f"Barrier: the block refuses this administrator outside the list, GET /brokers answers 423: {refused.status_code} {refused.text}"
+    assert started.status_code == 202 and started.json()["job_id"] == fake.job_id, f"POST /backup/instance on a blocked instance: 202 with the job started: {_status_and_body(started)}"
+    assert polled.status_code == 200 and (polled.json()["job_id"], polled.json()["status"]) == (fake.job_id, "done"), f"GET /backup/instance/jobs/{{job_id}} on a blocked instance: 200, done: {_status_and_body(polled)}"
+    assert (downloaded.status_code, downloaded.content) == (200, fake.archive.read_bytes()), f"GET /backup/instance/jobs/{{job_id}}/file on a blocked instance: 200 with exactly the archive's bytes: {_status_and_body(downloaded)}"
+    assert deleted.status_code == 204, f"DELETE /backup/instance/jobs/{{job_id}} on a blocked instance: 204: {_status_and_body(deleted)}"
+    assert fake.calls == [("start_backup", "ui"), ("get_job", fake.job_id), ("job_archive", fake.job_id), ("delete_job", fake.job_id)], f"each route must reach the backup service, with the job's id: {fake.calls}"
+    assert (block.status_code, block.json()) == (200, {"blocked": True, "deletion_date": DELETION_DATE, "billing_url": None, "backup_available": True}), f"GET /system/block for an administrator: {block.status_code} {block.text}"
+    print_success("blocked: start 202, poll 200 done, download 200 with the archive's bytes, delete 204; the block page offers the backup")
+
+
+@pytest.mark.asyncio
+async def test_a_regular_user_meets_the_admin_check_of_the_backup_not_the_block(app, monkeypatch, account, tmp_path):
+    """(a) Allowed is not open to all: on a blocked instance the four routes of the full backup refuse a regular user as
+    on any instance, each with the 403 of require_admin, never the 423 of the block; the backup service is not
+    reached."""
+    fake = _replace_the_backup_service(monkeypatch, tmp_path)
+    _block(monkeypatch)
+
+    refused = await _request(app, "GET", "/brokers", session=account.session)
+    answers = {f"{method} {path}": _status_and_body(await _request(app, method, path, session=account.session)) for method, path in _backup_routes(fake.job_id)}
+
+    assert (refused.status_code, refused.json()) == (423, BLOCKED_ANSWER), f"Barrier: the block refuses this user outside the list, GET /brokers answers 423: {refused.status_code} {refused.text}"
+    assert answers == dict.fromkeys(answers, (403, ADMIN_REQUIRED_ANSWER)), f"each route of the full backup must refuse a regular user with the 403 of require_admin, never the 423 of the block: {answers}"
+    assert fake.calls == [], f"the backup service must never be reached for a regular user: {fake.calls}"
+    print_success("blocked: start, poll, download, delete each answer a regular user 403 Admin access required, never 423; the service untouched")
 
 
 # =============================================================================
@@ -781,7 +907,7 @@ async def test_routes_answer_as_before_when_not_blocked(app, monkeypatch, accoun
     assert connection.status_code == 200, f"GET /system/connection: {connection.status_code} {connection.text}"
     assert invalid.status_code == 422, f"POST /auth/change-password with an empty body: {invalid.status_code} {invalid.text}"
     assert (anonymous.status_code, anonymous.json()) == (401, {"detail": "Not authenticated"}), f"GET /brokers without a session: {anonymous.status_code} {anonymous.text}"
-    assert (block.status_code, block.json()) == (200, {"blocked": False, "deletion_date": None, "billing_url": None}), f"GET /system/block: {block.status_code} {block.text}"
+    assert (block.status_code, block.json()) == (200, {"blocked": False, "deletion_date": None, "billing_url": None, "backup_available": False}), f"GET /system/block: {block.status_code} {block.text}"
     print_success(f"{BLOCKED_VARIABLE}={value!r}: routes as before, not blocked")
 
 
@@ -851,7 +977,7 @@ async def test_the_lane_backend_is_not_blocked(live_session):
     async with httpx.AsyncClient() as client:
         anonymous = await client.get(f"{API_BASE}/system/block", timeout=TIMEOUT)
 
-    assert (signed_in.status_code, signed_in.json()) == (200, {"blocked": False, "deletion_date": None, "billing_url": None}), f"GET /system/block on the lane's backend: {signed_in.status_code} {signed_in.text}"
+    assert (signed_in.status_code, signed_in.json()) == (200, {"blocked": False, "deletion_date": None, "billing_url": None, "backup_available": False}), f"GET /system/block on the lane's backend: {signed_in.status_code} {signed_in.text}"
     assert (anonymous.status_code, anonymous.json()) == (401, {"detail": "Not authenticated"}), f"GET /system/block without a session on the lane's backend: {anonymous.status_code} {anonymous.text}"
     print_success("lane backend: not blocked, the block page behind the session")
 
@@ -1015,7 +1141,7 @@ def test_openapi_documents_the_block_page(app):
     assert operation["tags"] == ["System"], f"GET /system/block belongs to the System tag: {operation['tags']}"
     component = document["components"]["schemas"]["InstanceBlockResponse"]
     properties = component["properties"]
-    assert set(properties) == {"blocked", "deletion_date", "billing_url"} and component.get("required") == ["blocked"], f"InstanceBlockResponse: {component}"
+    assert set(properties) == {"blocked", "deletion_date", "billing_url", "backup_available"} and component.get("required") == ["blocked", "backup_available"], f"InstanceBlockResponse: {component}"
     assert properties["blocked"]["type"] == "boolean", f"blocked: {properties['blocked']}"
     variants = properties["deletion_date"].get("anyOf", [])
     assert {"type": "string", "format": "date"} in variants and {"type": "null"} in variants, f"deletion_date is an ISO date or null: {properties['deletion_date']}"
