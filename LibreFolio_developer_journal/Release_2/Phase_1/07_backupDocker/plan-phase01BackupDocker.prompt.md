@@ -285,11 +285,13 @@ plugin.
 | `GET /backup/restore/status`, `DELETE /backup/restore/pending` | admin | in attesa e ultimo esito; annulla prima del riavvio |
 | `POST /backup/panel/jobs`, `GET …/{id}`, `GET …/{id}/file` | token del pannello (`Authorization: Bearer`) | come i job dell'admin, senza chiave e senza password; 404 se il token non è impostato |
 
-- **Errori con un `code` stabile**, tradotto nella UI come i rifiuti di K2a di W: `BACKUP_BUSY` 409,
-  `BACKUP_TOO_LARGE` 413, `BACKUP_NO_SPACE` 507, `BACKUP_INVALID_ARCHIVE` 400, `BACKUP_WRONG_PASSWORD` 400,
-  `BACKUP_NEWER_THAN_APP` 409, `BACKUP_UNKNOWN_REVISION` 409, `BACKUP_CHECKSUM_MISMATCH` 400,
-  `BACKUP_INTEGRITY_FAILED` 400, `RESTORE_ALREADY_PENDING` 409, `RESTORE_STAGE_EXPIRED` 410. Mai percorsi o messaggi
-  interni nella risposta.
+- **Errori con un `code` stabile** in `detail` (`{"code": …, "message": …}`, minuscolo come il resto dell'API, per esempio
+  `portfolio_wac_broker_forbidden`), tradotto nella UI come i rifiuti di K2a di W. In B1: `backup_busy` 409,
+  `backup_job_not_found` 404, `backup_job_not_ready` 409, `backup_job_running` 409; nello stato del job,
+  `backup_no_space`, `backup_failed`, `backup_interrupted`. Previsti: `backup_too_large` 413, `backup_invalid_archive`
+  400, `backup_wrong_password` 400, `backup_newer_than_app` 409, `backup_unknown_revision` 409,
+  `backup_checksum_mismatch` 400, `backup_integrity_failed` 400, `restore_already_pending` 409, `restore_stage_expired`
+  410. Mai percorsi o messaggi interni nella risposta.
 - **Spariscono i 4 segnaposto** (`POST /backup/export`, `POST /backup/restore`, `GET /backup/formats`,
   `GET /backup/status`): nessun consumatore; `test_backup_api.py` lo riscrivo.
 - **Blocco dell'istanza** (H CP6, decisione 12): permessi i tre endpoint di backup dell'admin, il backup automatico e
@@ -749,6 +751,71 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 > Handoff inviato. Tre commit di codice dalle patch (R, C, S, da applicare in ordine con `git apply --cached`) e il
 > journal (questo piano, la sezione B del backlog). Il lavoro di B1 nel worktree (file nuovi non tracciati, tre voci nei
 > cataloghi `_backend_services.py` e `_backend_utils.py`) non fa parte di B0.
+>
+> **Committato dal coordinatore** (13:36) nei 4 commit proposti: `bc1a01141` (R), `73b138b9b` (C), `256a78b36` (S),
+> `be6206c0d` (journal). Il lavoro di B1 è rimasto fuori, nel worktree. `all-backend` non serve: lo fa il coordinatore
+> all'ingresso. Nella stessa ora la finestra delle dipendenze ha portato `cryptography` 50.0.2 in `dev_release2`
+> (`dc9a5d232`; nel lock cambia anche `pycparser`, 3.0 → 3.11): B4 non aspetta più la dipendenza, solo il punto 38.
+>
+> **Regole di carico nuove** (coordinatore, 13:36): per la mia corsia solo test di un singolo file (pytest o Vitest),
+> uno alla volta, con `nice -n 10`; build, svelte-check, `mkdocs build` ed E2E su richiesta; le prove pesanti le assegna
+> lui, al massimo 2 su tutta la macchina.
+
+### B1 passo 2 — i file condivisi e la seconda tornata di test (2026-10-15, dalle 13:38) — in corso
+
+> **Note implementazione**:
+>
+> - HEAD `be6206c0d` verificato; il lavoro di B1 intatto.
+> - Dalla copia in `/tmp`, dopo un confronto riga per riga (solo le differenze di B1): `backup/instance.py` (le 4 rotte
+>   nuove al posto dei segnaposto), la docstring di `backup/__init__.py`, la docstring dei prezzi in `backup/exports.py`
+>   (B-3), il gruppo `backup` in `dev.py` (un import, una chiamata, due righe dell'aiuto sotto «💾  Backup»), la stringa
+>   e la descrizione di `api backup` nel catalogo, le due righe della mappa in `backend.instructions.md`, e nella
+>   devWiki F-073 e `entities/backup-router.md`.
+> - devWiki, per chiudere B-1: in F-073 la nota sullo streaming (gli export per serie leggono la serie intera prima di
+>   mandarla) e la riga di Impostazioni (la scheda arriva con B5); in `domains/infrastructure.md` la riga di F-073.
+> - **Prove** (leggere, `nice -n 10`): ruff e black puliti sui 12 file Python; `dev.py backup --test-db create` sul DB
+>   della corsia (schema vero, revisione `005_accounts_invites`): 61 file, 24,7 MB in 0,9 s, poi `backup inspect`: ogni
+>   entrata uguale al manifest; la cartella del job tolta. OpenAPI del worktree identico a quello rivisto nella bozza
+>   (`b4e6226d58581b8b`; le rotte sono 141 perché ora c'è `frontend/build`, e `main.py` aggiunge il mount `/_app`).
+>   Nessun uso nel frontend delle rotte tolte.
+> - **Test** (test-author, in corso): riscrittura di `test_backup_api.py` per le rotte nuove (perno C2 aggiornato) e
+>   casi nuovi in `test_dev_cli_image.py` (il gruppo `backup` nell'albero dell'immagine).
+>
+> **Passo 3 ✅ — seconda tornata di test e verdi** (14:00-14:12):
+>
+> - **Test** (test-author, nessun difetto trovato):
+>   - `test_backup_api.py` riscritto, 23 test (BACKUP-001…010): perno C2 con le 4 rotte nuove e i 3 export; 401 senza
+>     sessione e 403 per un utente normale su ognuna; il giro dell'admin fino allo scaricamento (zip con `sqlite/app.db`
+>     primo e `manifest.json` ultimo, revisione uguale a quella del DB della corsia, dentro l'admin del test,
+>     `Cache-Control: no-store`); `backup_busy` col lock tenuto dal test per una richiesta; `DELETE` e poi 404; un job
+>     «in corso» scritto dal test (409 `backup_job_not_ready` e `backup_job_running`, poi `backup_interrupted`); id
+>     sconosciuti e malformati sempre 404, mai 500; i segnaposto tolti rispondono 404 o 405. Ogni job e ogni utente
+>     creati vengono tolti alla fine.
+>   - `test_dev_cli_image.py`: IMG-013/013b (`backup` in `--help`, `backup --help`) e IMG-014/014b (`backup create`
+>     sul DB dell'albero dell'immagine scrive un solo archivio in `backups/`, senza cartelle di job, con dentro quel DB;
+>     `inspect` 0, e 1 su un file che non c'è).
+>   - Prove di mutazione: senza `Cache-Control`, con gli `include_router` scambiati, senza la pulizia della cartella
+>     del job: tutte rosse, file ripristinati con lo stesso sha256.
+>   - Le descrizioni di `api backup` e di `utils dev-cli-image` nel catalogo dicono le prove nuove (la seconda è una
+>     voce di H: solo la descrizione).
+> - **Verdi**, sulla corsia, un file alla volta, `nice -n 10`: `api backup` 23; `utils dev-cli-image` 48 (44 + 4);
+>   `services backup-archive` 125 + 1 saltato; `services backup-jobs` 39; `utils backup-cli` 26;
+>   `services config-package` 602; `services config-env-example` 36; `api backup-export-extras` 8;
+>   `api asset-prices-export` 5.
+> - **Statici**: ruff e black puliti; codice morto: lo stesso insieme della base; `check-orphans`: 280 file di test
+>   raggiungibili da un `all`; `check_source_paths` senza percorsi nuovi mancanti; `git diff --check` pulito; porta
+>   6187 libera.
+> - **Non lanciati** (vanno chiesti al coordinatore): `api sync` con `front check`. Il client generato perde le 4 rotte
+>   tolte, che nel frontend nessuno usa (grep su `frontend/src` e `frontend/e2e`).
+> - **Da sapere per B5**: lo stato finale si scrive prima di liberare il lock, quindi chi riavvia un backup nell'istante
+>   in cui legge «done» può ricevere un 409 `backup_busy` per un attimo: la UI non offre il riavvio immediato, o ritenta.
+> - **Fuori pista**: una sonda in sola lettura di test-author, a server spento, ha lasciato `app.db-wal` e `app.db-shm`
+>   vuoti accanto al DB della corsia: innocui. Il runner mette una copia del DB di test in `.testLog/00_archive/`
+>   (ignorata).
+
+### Checkpoint B1 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+
+> Handoff inviato con l'elenco dei file, le prove e il testo proposto per il CHANGELOG.
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 

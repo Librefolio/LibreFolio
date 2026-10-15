@@ -25,13 +25,13 @@ Introduced 2026-04-24 (commit `c7cf528c4`) to support the
 [[decisions/policy-d-currency-wipe]] flow end-to-end. Replaces an earlier
 ad-hoc `GET /assets/{id}/prices/export` endpoint that lived directly on the
 assets router. This router is the per-series implementation of
-[[features/F-073]] (Backup & Restore); F-073 also covers the still-placeholder
-full-portfolio export/restore endpoints.
+[[features/F-073]] (Backup & Restore); F-073 also covers the backup of the whole
+instance, `/backup/instance` in `instance.py` (1.3, lot B1).
 
 ## Location
 
 `backend/app/api/v1/backup/` — a package since the 1.3 split (rule C2): `__init__.py` composes `backup_router` from
-`instance.py` (the full-instance export and restore) and `exports.py` (the per-series exports below). It is mounted
+`instance.py` (the backup of the whole instance) and `exports.py` (the per-series exports below). It is mounted
 under `/api/v1/backup` by the main v1 router (see [[entities/api-router]]).
 
 ## Key Endpoints
