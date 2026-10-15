@@ -333,6 +333,47 @@ start, and a blocked instance logs a warning at every start,
 
 ---
 
+## ⏹️ Stopping the Server {: #shutdown }
+
+When the server is asked to stop, it must be done within a time limit, the **shutdown budget**:
+8 seconds unless you change it, counted from the signal (SIGTERM from `docker stop`,
+`docker compose down` or a restart; SIGINT from Ctrl+C). Most of the time users notice nothing,
+except restarts that are quicker and cleaner.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` | `8` | The shutdown budget, in seconds: a whole number from `2` to `600`, or `0` for no limit, as before release 1.3. A value that cannot be used does not stop the server, unlike the main options: the log says `Shutdown budget setting cannot be used: the default applies`, and the budget stays at 8 seconds. |
+| `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN` | 3/8 of the budget | How many seconds uvicorn, the web server, waits for the requests in flight: `3` with the default budget. The Docker image and `./dev.py server` work it out from the budget. A value you set yourself wins: keep it below the budget, which still counts for the whole stop. |
+
+The budget is spent in this order:
+
+1. **Requests in flight**: the web server accepts no new ones and gives those already running 3/8 of
+   the budget, 3 seconds by default. Then it cancels those still running, such as a long broker
+   import: what they had not saved yet is rolled back, so they can simply be repeated once
+   LibreFolio is back.
+2. **The server's own work**: the scheduled syncs, the worker processes, the caches… stop one after
+   the other, each within the time left. The last step ends the child processes still running
+   (broker imports, risk simulations, Tools), so none outlives the server.
+3. **When the budget runs out**: if anything still holds the server, it ends anyway, with exit
+   status 1, and its log says what was still running: `Shutdown budget exhausted: ending the process`.
+
+!!! warning "🐳 Give the container more time than the budget"
+
+    Docker gives a container 10 seconds to stop by default, then kills it: the default budget of
+    8 seconds fits. If you raise `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`, give the container at least
+    2 seconds more: set `stop_grace_period` on the `librefolio` service of `docker-compose.yml`, keep
+    the rest of the service as it is, then run `docker compose up -d`.
+
+    ```yaml
+    services:
+      librefolio:
+        stop_grace_period: 32s  # for LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS=30
+    ```
+
+    Otherwise Docker kills the server after 10 seconds, whatever its budget.
+
+---
+
 ## 💻 Parameters Set by the Tools
 
 `./dev.py` and Docker Compose set these for you: change them only if you know why.

@@ -537,10 +537,20 @@ def services_shutdown_budget(verbose: bool = False, test_names: list = None) -> 
     """Test the shutdown time budget: the server exits within about 8 s of SIGTERM or SIGINT (decision 35)."""
     print_section("Services: Shutdown Budget")
     print_info("Testing: backend/app/services/platform/shutdown_budget.py, backend/app/config/sleep_wake.py, entrypoint.sh, the shutdown grace of the runner and of Playwright")
-    print_info("Tests: LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS and its 3/8 drain, UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN from entrypoint.sh, graces >= budget + 2 s, the watchdog (armed once, fired once, exit 1 on fakes), the SIGTERM/SIGINT wrappers, shutdown deadlines, children terminated then killed")
+    print_info("Tests: LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS, its 3/8 drain, entrypoint.sh, graces >= budget + 2 s, the watchdog (once, exit 1 on fakes) only under uvicorn's handle_exit, its wrappers, deadlines that never arm it, the child step idle without it, children terminated then killed")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_shutdown_budget.py", test_names)
     return run_command(cmd, "Shutdown budget tests", verbose=verbose)
+
+
+def services_shutdown_process(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the shutdown budget in real server processes under the uvicorn CLI, signalled with SIGTERM and SIGINT."""
+    print_section("Services: Shutdown Budget in a Server Process")
+    print_info("Testing: backend/app/services/platform/lifecycle.py and shutdown_budget.py under uvicorn, the wiring of backend/app/services/platform/app_lifespan.py")
+    print_info("Tests: budget 2 s, drain 1 s: a request in flight cancelled, a step that never ends cut, SIGINT with a blocked thread ended by the watchdog, a child ignoring SIGTERM killed, budget 0 runs a 4 s step to its end, nothing pending exits at once; first and last steps")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_shutdown_budget_process.py", test_names)
+    return run_command(cmd, "Shutdown budget process tests", verbose=verbose)
 
 
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
@@ -1416,11 +1426,22 @@ Note: No backend server required.
         "shutdown-budget",
         services_shutdown_budget,
         name="Shutdown Budget",
-        desc="config.sleep_wake: LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS (0 = no limit, ASCII digits 2–600, default 8) read at call time, the drain max(1, budget*3//8), uvicorn_drain_env (a value set by hand wins, never raises); entrypoint.sh exports UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN under sh and dash; the runner's and Playwright's plain grace >= budget + 2 s; shutdown_budget: shutdown_budget_seconds never raises and logs once per process, ShutdownWatchdog arms once (re-entrant, one daemon thread) and fires once (ERROR log of step, threads and children, terminate_children(0.5), coverage saved only if measuring, flush, exit 1 even after a failing step), SIGTERM/SIGINT wrappers arm then call uvicorn's handler, shutdown_deadline, terminate_child_processes (terminate, timeout, kill, recursive, keep)",
+        desc="config.sleep_wake: LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS (0 = no limit, ASCII digits 2–600, default 8) read at call time, the drain max(1, budget*3//8), uvicorn_drain_env (a value set by hand wins, never raises); entrypoint.sh exports UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN under sh and dash; the runner's and Playwright's plain grace >= budget + 2 s; shutdown_budget: shutdown_budget_seconds never raises and logs once per process, ShutdownWatchdog arms once (re-entrant, one daemon thread) and fires once (ERROR log of step, threads and children, terminate_children(0.5), coverage saved only if measuring, flush, exit 1 even after a failing step), install_shutdown_watchdog only under uvicorn's Server.handle_exit on SIGTERM (a subclass's too; SIGINT wrapped only when uvicorn's; budget 0, another thread or any other SIGTERM handler, pytest's main thread included: nothing), the wrappers arm then call uvicorn's handler with (signum, frame), shutdown_deadline (an armed watchdog's less 0.75 s; otherwise clock + budget - drain at each call, never arming), the child-processes step terminates nothing without a watchdog, terminate_child_processes (terminate, timeout, kill, recursive, keep)",
         # PURE: no DB, no server, no lane port; environment only through monkeypatch; SIGTERM/SIGINT handlers saved and
         # restored around each test, never delivered (the wrappers are called directly); os._exit and the default
         # terminate_children replaced by recorders. Its subprocesses are `sh entrypoint.sh` runs and short-lived python
         # children of its own (fresh interpreters in tmp_path included), all reaped.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "shutdown-process",
+        services_shutdown_process,
+        name="Shutdown Budget in a Server Process",
+        desc="A fixture app with the real lifecycle and shutdown_budget under the uvicorn CLI, LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS=2 and UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=1: SIGTERM cancels a request in flight after the drain, cuts a shutdown step that never ends, kills a child that ignores SIGTERM, each within 6 s; SIGINT with a blocked non-daemon thread ends by the watchdog (status 1, 'Shutdown budget exhausted'); budget 0 runs a 4 s step to its end (status -SIGTERM, no watchdog); nothing pending exits within 3 s; app_lifespan: shutdown-watchdog first, child-processes last, shutdown_deadline from shutdown_budget",
+        # PURE: its own server processes on a Unix socket of their own (in a short directory under /tmp: an AF_UNIX path
+        # holds 104 bytes on macOS), data and logs in tmp_path; no lane port, no DB. Every process it starts — each server,
+        # in a session of its own, with its process group — is killed if still running and reaped.
         isolation="pure",
     )
     add_test(
