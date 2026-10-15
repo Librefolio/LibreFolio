@@ -9,3 +9,7 @@ class FXProviderRegistry(AbstractProviderRegistry):
     @classmethod
     def _get_provider_folder(cls) -> str:
         return "fx_providers"
+
+    @classmethod
+    def settings_family(cls) -> str:
+        return "fx"

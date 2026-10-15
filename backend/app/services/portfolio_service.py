@@ -16,7 +16,6 @@ PortfolioService uses:
 from __future__ import annotations
 
 import asyncio
-import bisect
 from collections import defaultdict, deque
 from datetime import date as date_type
 from datetime import timedelta
@@ -82,8 +81,10 @@ from backend.app.services.financial_math.average_cost import (
     compute_average_costs,
     cost_movement_from_transaction,
     determine_target_currency,
+    movement_unit_costs,
 )
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST, NativeCash, cash_movement_from_transaction, compute_native_cash, effective_share
+from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.financial_math.returns import (
     annualized_to_cumulative,
     calculate_mwrr,
@@ -240,18 +241,8 @@ _WAC_PREVIEW_EFFECTS = {
 def _wac_qualifying_txs(steps: tuple[CostStep, ...], target_currency: str) -> list[WACQualifyingTX]:
     """One preview row per movement: unit cost, running WAC and conversion provenance."""
     rows: list[WACQualifyingTX] = []
-    previous_wac = Decimal("0")
-    for step in steps:
+    for step, unit_cost in zip(steps, movement_unit_costs(steps), strict=True):
         movement = step.movement
-        running_wac = step.unit_cost_report
-        if step.effect == CostEffect.ADD:
-            unit_cost = step.cost_report_change / movement.quantity
-        elif step.effect == CostEffect.REDUCE:
-            unit_cost = previous_wac
-        elif step.effect == CostEffect.SPLIT_RESCALE:
-            unit_cost = running_wac
-        else:
-            unit_cost = Decimal("0")
         conversion = step.conversion
         rows.append(
             WACQualifyingTX(
@@ -259,17 +250,16 @@ def _wac_qualifying_txs(steps: tuple[CostStep, ...], target_currency: str) -> li
                 type=movement.transaction_type,
                 date=movement.date,
                 quantity=movement.quantity,
-                unit_cost=unit_cost,
+                unit_cost=unit_cost.report,
                 currency=target_currency,
                 effect=_WAC_PREVIEW_EFFECTS[step.effect],
-                running_wac=running_wac,
+                running_wac=step.unit_cost_report,
                 fx_info=FxBackwardFillInfo(fx_rate_date=conversion.rate_date, fx_days_back=conversion.days_back) if conversion else None,
-                original_unit_cost=conversion.original_amount / movement.quantity if conversion else None,
+                original_unit_cost=unit_cost.original,
                 original_currency=conversion.original_currency if conversion else None,
                 fx_rate_used=conversion.rate if conversion else None,
             )
         )
-        previous_wac = running_wac
     return rows
 
 
@@ -325,21 +315,15 @@ def _engine_native_cash(engine_result: Any, report_currency: str) -> NativeCash:
 def _unrealized_breakdown_rows(engine_result: Any, date_from: date_type | None, as_of: date_type, currency: str) -> list[UnrealizedBreakdownRow]:
     """The period's unrealized change by asset currency: assets' own change, exchange-rate effect, unsplit.
 
-    Same boundary states as PortfolioService._compute_period_summary_metrics (the last state on
-    or before ``date_from``, zero when there is none or no ``date_from``; the state at ``as_of``),
-    so the rows add up to ``period_unrealized_gain_loss_delta`` exactly. Order: asset rows, then
-    exchange-rate rows, then unsplit rows; the report currency first, then alphabetical.
+    Same boundary states as the period P&L (``financial_math.portfolio.period.period_boundaries``: the
+    last state on or before ``date_from``, zero when there is none or no ``date_from``; the state at
+    ``as_of``), so the rows add up to ``period_unrealized_gain_loss_delta`` exactly. Order: asset rows,
+    then exchange-rate rows, then unsplit rows; the report currency first, then alphabetical.
     """
-    daily_states = getattr(engine_result, "daily_states", None) or []
-    if len(daily_states) < 2:
+    boundaries = period_math.period_boundaries(getattr(engine_result, "daily_states", None) or [], date_from, as_of)
+    if boundaries is None:
         return []
-    end_state = _daily_state_as_of(daily_states, as_of)
-    if end_state is None:
-        return []
-    start_state = None
-    if date_from:
-        pre_states = [state for state in daily_states if state.date <= date_from]
-        start_state = pre_states[-1] if pre_states else None
+    start_state, end_state = boundaries.start, boundaries.end
     end_parts = end_state.unrealized_by_currency
     start_parts = start_state.unrealized_by_currency if start_state is not None else {}
     currencies = sorted(set(end_parts) | set(start_parts), key=lambda code: (code != currency, code))
@@ -362,24 +346,6 @@ def _unrealized_breakdown_rows(engine_result: Any, date_from: date_type | None, 
         if start_value != zero or end_value != zero:
             rows.append(UnrealizedBreakdownRow(kind="unsplit", asset_currency=code, period_delta=Currency(code=currency, amount=change)))
     return rows
-
-
-def _daily_state_as_of(daily_states: list[Any], as_of: date_type) -> Any | None:
-    """Return the last daily state with date <= as_of using backward fill.
-
-    daily_states must be sorted ascending by date. Defensive helper: engine_result's
-    daily_states is expected to already be bound to the requested date_to, but this
-    guards downstream consumers against a stale/wider cached blob leaking states
-    beyond the requested range (rather than blindly indexing daily_states[-1]).
-    Returns None if no state exists at or before as_of.
-    """
-    if not daily_states:
-        return None
-    dates = [s.date for s in daily_states]
-    idx = bisect.bisect_right(dates, as_of) - 1
-    if idx < 0:
-        return None
-    return daily_states[idx]
 
 
 # =============================================================================
@@ -582,77 +548,6 @@ class PortfolioService:
 
         return await load_configured_fx_pair_sets(self.db)
 
-    @staticmethod
-    def _compute_period_summary_metrics(
-        engine_result: Any,
-        date_from: date_type | None,
-        as_of: date_type,
-    ) -> dict[str, Decimal | None]:
-        """Compute period NAV/P&L inputs from engine daily states.
-
-        as_of: the requested date_to (or today) — the "end" state is looked up
-        by date rather than assumed to be daily_states[-1], as a guard against
-        a stale/wider cached blob leaking states beyond the requested range.
-        """
-        metrics: dict[str, Decimal | None] = {
-            "period_nav_start_val": None,
-            "period_net_flows_val": None,
-            "period_pnl_val": None,
-            "period_ugl_start": None,
-            "period_ugl_end": None,
-            "period_ugl_delta": None,
-            "period_book_value_start_val": None,
-            "period_market_value_start_val": None,
-        }
-        daily_states = getattr(engine_result, "daily_states", None) or []
-        if len(daily_states) < 2:
-            return metrics
-
-        zero = Decimal("0")
-        end_state = _daily_state_as_of(daily_states, as_of)
-        if end_state is None:
-            return metrics
-        period_ugl_end = end_state.market_value - end_state.open_cost_basis
-
-        if date_from:
-            pre_states = [s for s in daily_states if s.date <= date_from]
-            if pre_states:
-                start_state = pre_states[-1]
-                period_nav_start_val = start_state.nav_value
-                period_book_value_start_val = start_state.book_value
-                period_market_value_start_val = start_state.market_value
-                period_ugl_start = start_state.market_value - start_state.open_cost_basis
-                period_net_flows_val = end_state.cumulative_external_cash_flow - start_state.cumulative_external_cash_flow
-            else:
-                period_nav_start_val = zero
-                period_book_value_start_val = zero
-                period_market_value_start_val = zero
-                period_ugl_start = zero
-                period_net_flows_val = end_state.cumulative_external_cash_flow
-        else:
-            period_nav_start_val = zero
-            period_book_value_start_val = zero
-            period_market_value_start_val = zero
-            period_ugl_start = zero
-            period_net_flows_val = end_state.cumulative_external_cash_flow
-
-        period_pnl_val = end_state.nav_value - period_nav_start_val - period_net_flows_val
-        period_ugl_delta = period_ugl_end - period_ugl_start
-
-        metrics.update(
-            {
-                "period_nav_start_val": period_nav_start_val,
-                "period_net_flows_val": period_net_flows_val,
-                "period_pnl_val": period_pnl_val,
-                "period_ugl_start": period_ugl_start,
-                "period_ugl_end": period_ugl_end,
-                "period_ugl_delta": period_ugl_delta,
-                "period_book_value_start_val": period_book_value_start_val,
-                "period_market_value_start_val": period_market_value_start_val,
-            }
-        )
-        return metrics
-
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -703,7 +598,7 @@ class PortfolioService:
         # ── 2. Extract aggregate values from last daily state ──
         # Looked up by date (not blindly daily_states[-1]) as a guard against a
         # stale/wider cached blob leaking states beyond the requested valuation_date.
-        last_state = _daily_state_as_of(engine_result.daily_states, valuation_date)
+        last_state = period_math.state_as_of(engine_result.daily_states, valuation_date)
         engine_nav = last_state.nav_value if last_state else Decimal("0")
         engine_cash = last_state.cash_value if last_state else Decimal("0")
         engine_market_value = last_state.market_value if last_state else Decimal("0")
@@ -1024,15 +919,15 @@ class PortfolioService:
         cash_balances_list = [Currency(code=ccy, amount=amt) for ccy, amt in all_cash_balances.items()]
 
         # ── Period P&L breakdown: NAV, unrealized delta, income, fees ──
-        period_metrics = self._compute_period_summary_metrics(engine_result, date_from, valuation_date)
-        period_nav_start_val = period_metrics["period_nav_start_val"]
-        period_net_flows_val = period_metrics["period_net_flows_val"]
-        period_pnl_val = period_metrics["period_pnl_val"]
-        period_ugl_start = period_metrics["period_ugl_start"]
-        period_ugl_end = period_metrics["period_ugl_end"]
-        period_ugl_delta = period_metrics["period_ugl_delta"]
-        period_book_value_start_val = period_metrics["period_book_value_start_val"]
-        period_market_value_start_val = period_metrics["period_market_value_start_val"]
+        period_figures = period_math.period_pnl(getattr(engine_result, "daily_states", None) or [], date_from, valuation_date)
+        period_nav_start_val = period_figures.nav_start if period_figures is not None else None
+        period_net_flows_val = period_figures.net_flows if period_figures is not None else None
+        period_pnl_val = period_figures.pnl if period_figures is not None else None
+        period_ugl_start = period_figures.ugl_start if period_figures is not None else None
+        period_ugl_end = period_figures.ugl_end if period_figures is not None else None
+        period_ugl_delta = period_figures.ugl_delta if period_figures is not None else None
+        period_book_value_start_val = period_figures.book_value_start if period_figures is not None else None
+        period_market_value_start_val = period_figures.market_value_start if period_figures is not None else None
         period_realized_val: Decimal | None = None
         period_income_val: Decimal | None = None
         period_fees_taxes_val: Decimal | None = None
@@ -1046,7 +941,7 @@ class PortfolioService:
 
             # Other result: residual that closes the identity
             # pnl = ugl_delta + realized + income - fees_taxes + other_result
-            period_other_result_val = period_pnl_val - period_ugl_delta - period_realized_val - period_income_val + period_fees_taxes_val
+            period_other_result_val = period_math.period_other_result(period_pnl_val, period_ugl_delta, period_realized_val, period_income_val, period_fees_taxes_val)
 
         # ── 6. Data quality report ──
         # "Valued at cost" is an *as-of* statement (dataQuality.transactionImplied:
@@ -1913,9 +1808,9 @@ class PortfolioService:
                         )
                     )
 
-        period_metrics = self._compute_period_summary_metrics(engine_result, date_from, effective_end)
-        period_pnl_total = period_metrics["period_pnl_val"]
-        period_ugl_delta = period_metrics["period_ugl_delta"]
+        period_figures = period_math.period_pnl(getattr(engine_result, "daily_states", None) or [], date_from, effective_end)
+        period_pnl_total = period_figures.pnl if period_figures is not None else None
+        period_ugl_delta = period_figures.ugl_delta if period_figures is not None else None
         period_other_result: Decimal | None = None
         if period_pnl_total is not None and period_ugl_delta is not None:
             total_realized = sum(per_realized.values(), Decimal("0"))
