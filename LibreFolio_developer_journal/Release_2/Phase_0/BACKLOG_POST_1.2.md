@@ -2868,6 +2868,24 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   apposta, è un rischio necessario che uno sbagli, è noto e accettato» — nella 1.3 resta così. Per il futuro (istanze
   cloud con più famiglie?): un modello fra solo gli admin, solo chi ha creato l'asset, solo chi ne ha posizioni, o un
   registro delle modifiche con l'autore. Dettagli: file delle decisioni, punto 25.
+- **W-B26 · Una tendina aperta verso l'alto in una tabella finisce sotto l'intestazione fissa** — basso, UI (componenti
+  condivisi); W, 15/10 (E1b, trovato dal test-author). La lista di `SimpleSelect` è `fixed z-[9999]` ma non è portata nel
+  `body` (`frontend/src/lib/components/ui/select/SimpleSelect.svelte:328`): dentro una tabella resta nel contesto di
+  sovrapposizione di un antenato, sotto la `th` fissa (`z-index: 15`, `components/table/DataTable.svelte:1621`). Quando
+  si apre verso l'alto vicino all'intestazione (poco spazio sotto) le opzioni sono coperte e non si cliccano: visto
+  nell'editor degli eventi, sul tipo di una riga. Cura possibile: portare la lista nel `body`, come gli altri menu
+  fissi. File condivisi (UI e tabella): da assegnare. Dettagli: piano 04, sezione E1, passo 3.
+- **W-B27 · L'editor dei dati dell'asset: il prefisso «Save failed:» in inglese e le date ISO nel messaggio** — minimo,
+  chiarezza; W, 15/10 (E1b, docs-writer). Dopo E1b il motivo di un rifiuto degli eventi è tradotto, ma il `catch` del
+  salvataggio in `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` lo antepone a «Failed to save: » /
+  «Save failed: » scritti a mano in inglese, e la frase porta le date in ISO. In più le chiavi `events.deleteBlocked` e
+  `events.deleteNotFound` (sorgente i18n `assets`) non le usa più nessuno: da togliere. Righe di X: da assegnare.
+  Dettagli: piano 04, sezione E1, passo 3.
+- **W-B28 · Debito di traduzione delle pagine utente di E1b** — minimo, doc; W, 15/10 (E1b). Cambiate solo in inglese,
+  senza stamp: `user/assets/detail/data-editor.en.md` (§ 📅 Events tab: il salvataggio tutto o niente e l'elenco dei
+  rifiuti; § 📥 Import from CSV: il `type` e la colonna `currency`), `user/assets/detail/events.en.md` («From you» e il
+  nuovo H3 `#new-event`, da tenere con quell'àncora in ogni lingua: `form` la cita), `user/transactions/form.en.md`
+  («Missing event?»). IT, FR ed ES con la pipeline, su richiesta del developer. Dettagli: piano 04, sezione E1, passo 5.
 
 ## J · Numeri e analisi (fase 01)
 
