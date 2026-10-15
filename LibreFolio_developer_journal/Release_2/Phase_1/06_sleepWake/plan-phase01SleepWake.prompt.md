@@ -1614,4 +1614,17 @@ entro qualche centinaio di ms, «your app server may serve a whole request befor
    > siti IT/FR/ES. Il testo nomina la sezione; il frammento si aggiunge con la traduzione.
    - Restano fuori: l'elenco delle variabili in `settings.md:23–30` (incompleto, non falso) e la frase «GZip
      outermost, CORS inside it» della docstring di `middleware.py`, di H.
-5. ✅ 15/10 ~23:58 — Checkpoint FROZEN inviato; `mkdocs build` e `check-links` dopo «galleria finita». ⏳ build
+5. ✅ 15/10 ~23:58 — Checkpoint FROZEN inviato; committato dal coordinatore (`a4da204b4` feat, `55ed663cf` journal),
+   base aggiornata con il merge di `dev_release2` (`25204e5ff`, pulito; `security.md` fuso da solo con le righe di H
+   CP-U1, riletto: coerente).
+6. Ingresso, sulla revisione combinata `25204e5ff`, una prova alla volta con `nice` e carico sotto 70:
+   - ✅ 16/10 ~00:00, durante G-13: `scheduler-catchup` 73/73, `scheduler-due` 25/25, `sleep-wake-activity` 94/94,
+     `app-lifecycle` 42/42; `mkdocs build` rigoroso, 0 warning; `check-links` 96 validi.
+   - ✅ 16/10 ~00:10, il mermaid a occhio, servendo `mkdocs_src/site` per pochi secondi sulla porta 6186 della mia
+     corsia (poi fermato, porta libera) e guardandolo nel canvas: si disegna senza errori, ma è largo il 44% più di
+     prima (3456 contro 2402 px allo stesso renderer, quindi nella colonna di 697 px il testo scende dal 29% al 20%).
+     **Decisione notturna, da rivedere**: diagramma semplificato (i due job in un nodo, l'attesa di 2 s
+     sull'arco, la domanda del rombo accorciata: i dettagli sono nelle sezioni sotto) e motore Dagre, il default
+     della regola di `mkdocs.instructions.md` per i grafi semplici: 82% di scala, 1005 px d'altezza, flusso
+     dall'alto in basso. Ricostruito: build 0 warning, `check-links` 96 validi.
+   - ⏳ Dopo le 01:15: `api system`, `db post-migration`, `test_market_calendar.py`.
