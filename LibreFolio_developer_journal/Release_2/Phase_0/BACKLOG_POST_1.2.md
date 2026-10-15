@@ -570,9 +570,10 @@ sezione T, e P-7 (chiudere le issue #32 e #35) è un compito del rilascio, non d
   contatori «modified/deleted/new», un `aria-label`, «Reset layout»; `BrokerSharingPanel:832`: «max». Dettagli: idem,
   8.1 e 8.
   - ✅ **Parte di W chiusa il 15/10** (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`):
-    i contatori e l'`aria-label` della levetta delle righe vecchie in `DataEditor`, «Help» e «Close» di `DataImportModal` (W-B8). «Date» era già `common.date`. Restano
-    «Reset layout» (`components/table/ColumnVisibilityToggle.svelte:177`) e «max» (`BrokerSharingPanel:832`), a Y
-    (decisione Q6 del piano 04).
+    i contatori e l'`aria-label` della levetta delle righe vecchie in `DataEditor`, «Help» e «Close» di
+    `DataImportModal` (W-B8). «Date» era già `common.date`. Restano «Reset layout»
+    (`components/table/ColumnVisibilityToggle.svelte:177`) e «max» (`BrokerSharingPanel:832`), a Y (decisione Q6 del
+    piano 04).
 
 ## T · Matematica finanziaria e riordino (43)
 
