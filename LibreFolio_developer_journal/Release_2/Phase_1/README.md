@@ -141,3 +141,5 @@ Sono tutti locali: la push la fa il developer.
 | 53 | 15/10 20:24 | B8: token del pannello per i backup (`LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, `/backup/panel/jobs`, anche a istanza bloccata) | `56d3d3182` |
 | 54 | 15/10 20:33 | A6b: scheda Users (110), eliminazione con anteprima, sonda dell'indirizzo dal browser, A-12; scatto `settings/users` | `09ca36b9d` |
 | 55 | 15/10 20:41 | J: CP-4c (`financial_math/portfolio/period.py`: P&L di periodo; costi unitari nella casa; valori identici) | `a180ea0b7` |
+| 55b | 15/10 20:56 | B: scatto `settings/backup-ready` (rivisto da G), da solo prima di B2a | `ab2ddf86e` |
+| 56 | 15/10 21:04 | X: CP10, impostazioni dei plugin (migrazione 007, segreti cifrati, `/settings/plugins`, confine unico per famiglia, mascheramento), X-R6 | `9fb7fe6c9` |
