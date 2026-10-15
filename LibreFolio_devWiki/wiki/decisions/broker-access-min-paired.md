@@ -60,7 +60,7 @@ New field in `TXReadItem` — batch lookup of partner broker IDs for tooltip and
 | Broker store | `frontend/src/lib/stores/reference/brokerStore.ts` |
 | BrokerBadge (showRole) | `frontend/src/lib/components/ui/display/BrokerBadge.svelte` |
 | Transaction service | `backend/app/services/transactions/transaction_service.py` |
-| Transaction schemas | `backend/app/schemas/transactions.py` |
+| Transaction schemas | `backend/app/schemas/transactions/transactions.py` |
 | Delete flow (TransactionDeleteModal removed 2026-09-03: single-row delete routes through the bulk workspace) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | Broker service | `backend/app/services/brokers/broker_service.py` |
 

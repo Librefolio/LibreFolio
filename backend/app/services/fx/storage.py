@@ -1,0 +1,298 @@
+"""
+FX rate storage: the alphabetical normalization of a pair (``normalize_rate_for_storage``) and the bulk upsert and
+delete of stored rates.
+"""
+
+from datetime import date
+from decimal import Decimal
+
+from sqlalchemy import and_, func, or_
+from sqlalchemy import delete as sql_delete
+from sqlalchemy import select as sql_select
+from sqlalchemy.dialects.sqlite import insert
+
+from backend.app.db.models import FxRate
+from backend.app.logging_config import get_logger
+from backend.app.utils.runtime.cache import clear_cache
+
+logger = get_logger(__name__)
+
+# ============================================================================
+# SERVICE LAYER HELPER FUNCTIONS
+# ============================================================================
+
+
+def normalize_rate_for_storage(base: str, quote: str, rate: Decimal) -> tuple[str, str, Decimal]:
+    """
+    Normalize FX rate for alphabetical storage in database.
+
+    Database stores rates with: base < quote (alphabetically)
+    This function handles the conversion if needed.
+
+    Args:
+        base: Base currency (e.g., 'EUR')
+        quote: Quote currency (e.g., 'USD')
+        rate: Rate value (1 base = rate * quote)
+
+    Returns:
+        Tuple of (normalized_base, normalized_quote, normalized_rate)
+
+    Example:
+        normalize_rate_for_storage('EUR', 'USD', 1.08)
+        → ('EUR', 'USD', 1.08) because EUR < USD
+
+        normalize_rate_for_storage('EUR', 'CHF', 0.95)
+        → ('CHF', 'EUR', 1.0526...) because CHF < EUR (inverted)
+    """
+    if base < quote:
+        # Already in correct order
+        return base, quote, rate
+    else:
+        # Invert: swap currencies and invert rate
+        return quote, base, Decimal("1") / rate
+
+
+# ============================================================================
+# RATE STORAGE (bulk upsert and delete)
+# ============================================================================
+
+
+async def upsert_rates_bulk(
+    session,  # AsyncSession
+    rates: list[tuple[date, str, str, Decimal, str]],  # [(date, base, quote, rate, source), ...]
+) -> list[tuple[bool, str]]:  # [(success, action), ...]
+    """
+    Insert or update multiple FX rates in a single batch operation.
+
+    Args:
+        session: Database session
+        rates: List of (date, base, quote, rate, source) tuples
+
+    Returns:
+        List of (success, action) tuples where action is 'inserted' or 'updated'
+        Results are in the same order as input rates
+
+    Raises:
+        ValueError: If validation fails for any rate
+    """
+
+    if not rates:
+        return []
+
+    # Validate and normalize all rates first
+    normalized_rates = []
+    for rate_date, base, quote, rate_value, source in rates:
+        base = base.upper()
+        quote = quote.upper()
+
+        if base == quote:
+            raise ValueError(f"Base and quote must be different (got {base} == {quote})")
+
+        if rate_value <= 0:
+            raise ValueError(f"Rate must be positive (got {rate_value})")
+
+        # Ensure alphabetical ordering
+        if base > quote:
+            base, quote = quote, base
+            rate_value = Decimal("1") / rate_value
+
+        normalized_rates.append((rate_date, base, quote, rate_value, source))
+
+    # OPTIMIZATION: Single batch query to check all existing rates
+    conditions = []
+    for rate_date, base, quote, _, _ in normalized_rates:
+        conditions.append(and_(FxRate.date == rate_date, FxRate.base == base, FxRate.quote == quote))
+
+    # Fetch all existing rates in one query
+    stmt = sql_select(FxRate).where(or_(*conditions))
+    result = await session.execute(stmt)
+    existing_rates = result.scalars().all()
+
+    # Build lookup set for existing rates
+    existing_keys = {(rate.date, rate.base, rate.quote) for rate in existing_rates}
+
+    # OPTIMIZATION: Prepare results tracking (before batch insert)
+    results = []
+    for rate_date, base, quote, _rate_value, _source in normalized_rates:
+        key = (rate_date, base, quote)
+        action = "updated" if key in existing_keys else "inserted"
+        results.append((True, action))
+
+    # OPTIMIZATION: Single batch INSERT with multiple VALUES
+    # Prepare all values for batch insert
+    values_list = [
+        {
+            "date": rate_date,
+            "base": base,
+            "quote": quote,
+            "rate": rate_value,
+            "source": source,
+            "fetched_at": func.current_timestamp(),
+        }
+        for rate_date, base, quote, rate_value, source in normalized_rates
+    ]
+
+    # Single batch INSERT statement (all rates at once)
+    batch_insert = insert(FxRate).values(values_list)
+
+    # On conflict: update all fields for each row
+    batch_insert = batch_insert.on_conflict_do_update(
+        index_elements=["date", "base", "quote"],
+        set_={
+            "rate": batch_insert.excluded.rate,
+            "source": batch_insert.excluded.source,
+            "fetched_at": func.current_timestamp(),
+        },
+    )
+
+    # Execute single batch statement (replaces N individual executes)
+    await session.execute(batch_insert)
+
+    # Single commit for all upserts
+    await session.commit()
+
+    # Manual rates change valuations exactly like a provider sync — drop the cached
+    # portfolio layers so the next report recomputes (same invalidation as sync_pairs_bulk).
+    clear_cache("portfolio_layer2")
+    clear_cache("portfolio_blob")
+    return results
+
+
+async def delete_rates_bulk(  # noqa: C901 — flat batch delete: normalize, count, chunked delete
+    session,  # AsyncSession
+    deletions: list[tuple[str, str, date, date | None]],  # [(from_currency, to_currency, start_date, end_date?), ...]
+) -> list[tuple[bool, int, int, str | None]]:  # [(success, existing_count, deleted_count, message), ...]
+    """
+    Delete multiple FX rates in a single batch operation.
+
+    This function efficiently handles bulk deletions by:
+    1. Normalizing all currency pairs (alphabetical ordering)
+    2. Fetching existing counts in a single batch query (optimization)
+    3. Executing deletions in a single batch (optimization)
+
+    Args:
+        session: Database session
+        deletions: List of (from_currency, to_currency, start_date, end_date?) tuples
+                  - from_currency, to_currency: Will be normalized to alphabetical order
+                  - start_date: Start date (inclusive)
+                  - end_date: End date (inclusive), optional. If None, only start_date is deleted
+
+    Returns:
+        List of (success, existing_count, deleted_count, message) tuples
+        - success: Always True (errors handled gracefully)
+        - existing_count: Number of rates present before deletion
+        - deleted_count: Number of rates actually deleted
+        - message: Warning/error message if any (e.g., "no rates found")
+
+    Example:
+        deletions = [
+            ("USD", "EUR", date(2025, 1, 1), None),  # Single day
+            ("GBP", "USD", date(2025, 1, 1), date(2025, 1, 5))  # Range
+        ]
+        results = await delete_rates_bulk(session, deletions)
+    """
+
+    if not deletions:
+        return []
+
+    # Normalize all deletions (alphabetical ordering)
+    normalized_deletions = []
+    for from_cur, to_cur, start_date, end_date in deletions:
+        from_cur = from_cur.upper()
+        to_cur = to_cur.upper()
+
+        # Normalize to alphabetical order (base < quote)
+        if from_cur > to_cur:
+            base, quote = to_cur, from_cur
+        else:
+            base, quote = from_cur, to_cur
+
+        normalized_deletions.append((base, quote, start_date, end_date))
+
+    # OPTIMIZATION: Single batch query to fetch ALL matching rates across all deletions
+    # Build OR conditions for all deletions
+    all_conditions = []
+    for base, quote, start_date, end_date in normalized_deletions:
+        if end_date:
+            # Date range
+            condition = and_(
+                FxRate.base == base,
+                FxRate.quote == quote,
+                FxRate.date >= start_date,
+                FxRate.date <= end_date,
+            )
+        else:
+            # Single date
+            condition = and_(FxRate.base == base, FxRate.quote == quote, FxRate.date == start_date)
+        all_conditions.append(condition)
+
+    # SINGLE QUERY: Fetch all matching rates (id, base, quote, date)
+    stmt = sql_select(FxRate.id, FxRate.base, FxRate.quote, FxRate.date).where(or_(*all_conditions))
+    result = await session.execute(stmt)
+    all_matching_rates = result.all()
+
+    # Build lookup: {(base, quote, date): id}
+    rate_lookup = {(r.base, r.quote, r.date): r.id for r in all_matching_rates}
+
+    # Count existing rates per deletion request
+    existing_counts = {}
+    ids_to_delete = set()
+
+    for idx, (base, quote, start_date, end_date) in enumerate(normalized_deletions):
+        count = 0
+        for (r_base, r_quote, r_date), r_id in rate_lookup.items():
+            if r_base == base and r_quote == quote:
+                if end_date:
+                    # Check if date is in range
+                    if start_date <= r_date <= end_date:
+                        count += 1
+                        ids_to_delete.add(r_id)
+                else:
+                    # Check if date matches exactly
+                    if r_date == start_date:
+                        count += 1
+                        ids_to_delete.add(r_id)
+
+        existing_counts[idx] = count
+
+    # CHUNKED DELETE: Remove all matched IDs in batches to avoid SQLite limits
+    # SQLite has SQLITE_MAX_VARIABLE_NUMBER = 999 by default
+    # We use chunks of 500 to be safe and improve performance with large datasets
+    deleted_count_total = 0
+    if ids_to_delete:
+        ids_list = list(ids_to_delete)
+        chunk_size = 500  # Safe for SQLite (max 999) and optimal for performance
+
+        # Process in chunks within same transaction
+        for i in range(0, len(ids_list), chunk_size):
+            chunk = ids_list[i : i + chunk_size]
+            delete_stmt = sql_delete(FxRate).where(FxRate.id.in_(chunk))
+            delete_result = await session.execute(delete_stmt)
+            deleted_count_total += delete_result.rowcount
+
+        logger.info(f"Deleted {deleted_count_total} rate(s) in {(len(ids_list) + chunk_size - 1) // chunk_size} batch(es)")
+
+    # Build results per deletion request
+    results = []
+    for idx, (base, quote, start_date, end_date) in enumerate(normalized_deletions):
+        existing_count = existing_counts[idx]
+        deleted_count = existing_count  # All existing were deleted
+
+        # Prepare result message
+        message = None
+        if deleted_count == 0:
+            if end_date:
+                message = f"No rates found for {base}/{quote} from {start_date} to {end_date}"
+            else:
+                message = f"No rates found for {base}/{quote} on {start_date}"
+
+        results.append((True, existing_count, deleted_count, message))
+
+    # Single commit for all deletions
+    await session.commit()
+
+    if deleted_count_total > 0:
+        clear_cache("portfolio_layer2")
+        clear_cache("portfolio_blob")
+
+    return results

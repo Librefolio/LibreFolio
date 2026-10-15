@@ -31,7 +31,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import Currency, DateRangeModel, SafeDecimal, StrictModel
-from backend.app.schemas.transactions import TXCreateItem
+from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.utils.datetime_utils import UTCDateTime
 
 # =============================================================================

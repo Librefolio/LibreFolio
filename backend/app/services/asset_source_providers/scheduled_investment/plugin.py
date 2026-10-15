@@ -30,8 +30,8 @@ Late interest (from FALateInterestConfig):
 - interest_type: configurable per-event (default: COMPOUND — penalties grow on accumulated value)
 
 For detailed parameter structure documentation, see:
-- backend.app.schemas.assets.FAScheduledInvestmentSchedule
-- backend.app.schemas.assets.FAInterestRatePeriod
+- backend.app.schemas.assets.assets.FAScheduledInvestmentSchedule
+- backend.app.schemas.assets.assets.FAInterestRatePeriod
 """
 
 import calendar

@@ -12,7 +12,7 @@ The plugin contract (AssetSourceProvider, AssetSourceError) lives in ``base.py``
 Nothing here backward-fills prices: history is stored exactly as providers return
 it, and gaps are filled only when prices are read (assets/price_query.py).
 
-Similar to fx.py but for price_history table (asset prices vs FX rates).
+Similar to the FX service (services/fx/) but for price_history table (asset prices vs FX rates).
 
 Key differences from FX:
 - Table: price_history (not fx_rates)

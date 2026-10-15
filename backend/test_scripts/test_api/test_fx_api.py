@@ -100,6 +100,14 @@ def test_server():
 # TEST FUNCTIONS
 # ============================================================================
 
+# Public providers whose get_supported_currencies() is a static list: GET /fx/providers
+# filtered on these answers without any outbound call. ECB fetches its list from the ECB
+# API and SNB its currency map from data.snb.ch (SNBProvider._ensure_currency_map), so
+# their live checks stay in test_external/test_fx_providers.py::test_supported_currencies.
+_STATIC_FX_PROVIDERS = ("FED", "BOE")
+# Every provider GET /fx/providers must list (MANUAL and the MOCKFX* test providers are hidden).
+_PUBLIC_FX_PROVIDERS = frozenset({"ECB", "FED", "BOE", "SNB"})
+
 
 @pytest.mark.asyncio
 async def test_providers_include_target_currencies(test_server):
@@ -107,17 +115,27 @@ async def test_providers_include_target_currencies(test_server):
 
     This test replaces the former test_get_currencies which tested the now-removed
     GET /fx/currencies endpoint. Target currencies are now part of the providers response.
+
+    The contract is checked on FED and BOE only: their get_supported_currencies()
+    returns a static list, so the endpoint answers without any network call. ECB and
+    SNB fetch their lists live (ECB API, data.snb.ch): those checks live in
+    test_external/test_fx_providers.py::test_supported_currencies.
     """
     print_section("Test 1: GET /fx/providers - target_currencies")
 
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
-        response = await client.get(f"{API_BASE}/fx/providers", timeout=TIMEOUT)
+        response = await client.get(
+            f"{API_BASE}/fx/providers",
+            params={"providers": list(_STATIC_FX_PROVIDERS)},
+            timeout=TIMEOUT,
+        )
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
         providers = [FXProviderInfo(**p) for p in response.json()]
-        assert len(providers) > 0, "Should have at least one provider"
+        codes = sorted(p.code for p in providers)
+        assert codes == sorted(_STATIC_FX_PROVIDERS), f"Expected exactly {sorted(_STATIC_FX_PROVIDERS)}, got {codes}"
 
         for provider in providers:
             # Validate target_currencies field exists and is populated
@@ -152,7 +170,14 @@ async def test_old_currencies_endpoint_removed(test_server):
 
 @pytest.mark.asyncio
 async def test_get_providers(test_server):
-    """Test 2: GET /fx/providers - List FX providers with full info."""
+    """Test 2: GET /fx/providers - List FX providers with full info.
+
+    The full-info contract and the providers filter are checked on FED and BOE, whose
+    currency lists are static (no network). The unfiltered calls check provider codes
+    only: answering them, the server still asks ECB and SNB for their currencies live,
+    so their target_currencies are not asserted. The live ECB and SNB lists are checked
+    in test_external/test_fx_providers.py::test_supported_currencies.
+    """
     print_section("Test 2: GET /fx/providers")
 
     async with httpx.AsyncClient() as client:
@@ -161,58 +186,76 @@ async def test_get_providers(test_server):
 
         assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
 
-        # Parse response as List[FXProviderInfo]
-        providers = [FXProviderInfo(**p) for p in response.json()]
+        # Unfiltered: provider codes only (see docstring)
+        listed = {FXProviderInfo(**p).code for p in response.json()}
+        missing = _PUBLIC_FX_PROVIDERS - listed
+        assert not missing, f"Public providers missing from the list: {sorted(missing)} (got {sorted(listed)})"
 
-        assert len(providers) > 0, "Should have at least one provider"
+        print_success(f"✓ Found {len(listed)} providers")
+        print_info(f"  Providers: {', '.join(sorted(listed))}")
+
+        # 2a. Full provider info, on the providers with a static currency list
+        print_info(f"2a. Full info ({', '.join(_STATIC_FX_PROVIDERS)})")
+        response_static = await client.get(
+            f"{API_BASE}/fx/providers",
+            params={"providers": list(_STATIC_FX_PROVIDERS)},
+            timeout=TIMEOUT,
+        )
+        assert response_static.status_code == 200, f"Expected 200, got {response_static.status_code}: {response_static.text}"
+
+        # Parse response as List[FXProviderInfo]
+        providers = [FXProviderInfo(**p) for p in response_static.json()]
+        static_codes = sorted(p.code for p in providers)
+        assert static_codes == sorted(_STATIC_FX_PROVIDERS), f"Expected exactly {sorted(_STATIC_FX_PROVIDERS)}, got {static_codes}"
 
         # Validate each provider
         for provider in providers:
             assert provider.code, "Provider should have code"
-            assert provider.name, "Provider should have name"
-            assert provider.base_currency, "Provider should have base_currency"
-            assert provider.base_currencies, "Provider should have base_currencies"
-            assert provider.target_currencies, "Provider should have target_currencies"
-            assert hasattr(provider, "icon_url"), "Provider should have icon_url field"
+            assert provider.name, f"Provider {provider.code} should have name"
+            assert provider.base_currency, f"Provider {provider.code} should have base_currency"
+            assert provider.base_currencies, f"Provider {provider.code} should have base_currencies"
+            assert provider.target_currencies, f"Provider {provider.code} should have target_currencies"
+            assert hasattr(provider, "icon_url"), f"Provider {provider.code} should have icon_url field"
             # base_currency should be in base_currencies
-            assert provider.base_currency in provider.base_currencies, f"base_currency {provider.base_currency} should be in base_currencies"
+            assert provider.base_currency in provider.base_currencies, f"base_currency {provider.base_currency} should be in base_currencies ({provider.code})"
 
-        print_success(f"✓ Found {len(providers)} providers")
-        print_info(f"  Providers: {', '.join([p.code for p in providers])}")
+        print_success(f"✓ Full info valid for {', '.join(static_codes)}")
 
         # 2b. Test providers filter (single provider)
-        print_info("2b. Filter by single provider (ECB)")
+        print_info("2b. Filter by single provider (FED)")
         response_filtered = await client.get(
             f"{API_BASE}/fx/providers",
-            params={"providers": ["ECB"]},
+            params={"providers": ["FED"]},
             timeout=TIMEOUT,
         )
         assert response_filtered.status_code == 200
         filtered = [FXProviderInfo(**p) for p in response_filtered.json()]
         assert len(filtered) == 1, f"Expected 1 provider, got {len(filtered)}"
-        assert filtered[0].code == "ECB"
+        assert filtered[0].code == "FED"
         print_success("✓ Single provider filter works")
 
         # 2c. Test providers filter (multiple providers)
-        print_info("2c. Filter by multiple providers (ECB, FED)")
+        print_info("2c. Filter by multiple providers (FED, BOE)")
         response_multi = await client.get(
             f"{API_BASE}/fx/providers",
-            params={"providers": ["ECB", "FED"]},
+            params={"providers": ["FED", "BOE"]},
             timeout=TIMEOUT,
         )
         assert response_multi.status_code == 200
         multi = [FXProviderInfo(**p) for p in response_multi.json()]
         assert len(multi) == 2, f"Expected 2 providers, got {len(multi)}"
         codes = {p.code for p in multi}
-        assert codes == {"ECB", "FED"}, f"Expected ECB & FED, got {codes}"
+        assert codes == {"FED", "BOE"}, f"Expected FED & BOE, got {codes}"
         print_success("✓ Multi-provider filter works")
 
-        # 2d. No filter returns all providers
+        # 2d. No filter returns all providers (codes only, see docstring)
         print_info("2d. No filter returns all")
         response_all = await client.get(f"{API_BASE}/fx/providers", timeout=TIMEOUT)
-        all_providers = [FXProviderInfo(**p) for p in response_all.json()]
-        assert len(all_providers) >= 4, f"Expected >= 4, got {len(all_providers)}"
-        print_success(f"✓ No filter returns {len(all_providers)} providers")
+        assert response_all.status_code == 200, f"Expected 200, got {response_all.status_code}: {response_all.text}"
+        all_codes = {FXProviderInfo(**p).code for p in response_all.json()}
+        missing_all = _PUBLIC_FX_PROVIDERS - all_codes
+        assert not missing_all, f"Public providers missing from the list: {sorted(missing_all)} (got {sorted(all_codes)})"
+        print_success(f"✓ No filter returns {len(all_codes)} providers, public ones included")
 
 
 @pytest.mark.asyncio
@@ -942,7 +985,7 @@ async def test_manual_cleanup_from_previous_tests(test_server):
 async def test_delete_rates_mixed_validity(test_server):
     """G7§5: DELETE /fx/currencies/rate with mixed valid+invalid items.
 
-    Contract under test (api/v1/fx.py L319-L327): the endpoint must collect
+    Contract under test (api/v1/fx/currencies.py, ``delete_rates_endpoint``): the endpoint must collect
     per-item errors (e.g. ``from == to``) into the ``errors`` array while
     still processing the valid items. Returns 200 with a partial result.
     """
