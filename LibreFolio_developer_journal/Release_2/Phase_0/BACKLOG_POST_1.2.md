@@ -2704,6 +2704,16 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `settings`/`admin-users` E2E e lo scatto della galleria da ricontrollare (il corpo arriva dopo un `await`).
   - Nello stesso giro, nota di G (15/10): i corpi e le rotte dello scatto `settings/users` in `fixtures/galleryUsers.ts`,
     come `galleryEmail.ts`.
+- **A-19 · Su un'istanza su invito «Register here» lampeggia al caricamento del login** — basso; deciso dal
+  coordinatore in A6d (15/10).
+  - Finché `GET /system/instance` non risponde, `LoginCard` usa `DEFAULT_INSTANCE_CONFIG` (`open`) e offre il link;
+    poi lo ritira. Il default resta `open` per non mettere in corsa gli scatti del login (G, theme-roles) e per lasciare
+    alle E2E negative di `auth.spec.ts` il loro controllo «prima».
+  - Possibile cura: nascondere il link finché l'istanza non risponde, con uno stato `data-*` sulla scheda che le prove
+    e la galleria possano aspettare. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
+    «A6d.1».
+- **A-20 · `black` fallisce su `scripts/test_runner/_backend_services.py`** — minimo; da E tramite il coordinatore
+  (15/10). Il `print_info` di `services_account_deletion_preview` (A6a, `5928176cf`) ha 305 caratteri: si spezza in A6d.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -2902,9 +2912,14 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   14/10. `_get_brim_file_with_access` (`backend/app/api/v1/brokers.py:119`) salta il controllo dei ruoli quando il file
   non ha un broker (i file vecchi, alla radice delle cartelle). Prima un rosso: se quei file possono ancora esistere, e
   chi li vede. Dettagli: piano 04.
+  ✅ 15/10 (F36, decisione 36): confermata (lista, lettura, parse e cancellazione aperti a chiunque con il login) e chiusa:
+  un file senza broker lo raggiungono solo chi l'ha caricato e l'admin (senza caricatore registrato, come i file di prima
+  del 24/01/2026, solo l'admin); 403 per gli altri, assente dalle loro liste. Dettagli: piano 04, sezione F36.
 - **W-B4 · Gli id dei file BRIM accettati senza controllo del formato** — basso, sicurezza; coordinatore, 14/10. Le rotte
   `/brokers/import/files/{file_id}` accettano una stringa qualsiasi: un controllo del formato UUID all'ingresso è una
   difesa in più sui percorsi. Dettagli: piano 04.
+  ✅ 15/10 (F36): un `file_id` che non è un UUID nella forma canonica minuscola risponde 404 prima di ogni ricerca (prima
+  un id di 300 caratteri dava 500, un file `<uuid>-1` veniva servito, e su macOS anche l'id in maiuscolo).
 - **W-B5 · La cassa del broker conta le transazioni future** — da verificare, numeri; coordinatore, 14/10 (D-J16
   dell'analisi di J, con B15 lato broker). `TransactionService.get_cash_balances`
   (`backend/app/services/transactions/transaction_service.py:476-480`) somma tutte le transazioni del broker, anche
@@ -3067,6 +3082,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   N2 legge dai metadati il costo obbligatorio (`cost_basis_required`). Leggerla da `TX_TYPE_METADATA` porterebbe un
   import circolare (`type_metadata.py` importa `transactions.py`): serve spostare la funzione o un import tardivo.
   Dettagli: piano 04, sezione N2.
+- **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
+  docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
+  (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
+  caricatore e l'admin, ma nella lista «Uploaded Reports» di **ogni** broker (tutti per l'admin, i propri per gli altri).
+  Da decidere: con un filtro di broker esplicito, escluderli (restano nella vista senza filtro della pagina File).
+  Dettagli: piano 04, sezione F36.
 
 ## J · Numeri e analisi (fase 01)
 
@@ -3263,6 +3284,12 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   proposta: `flush=True` su quella riga, col via del coordinatore colori.
 
   Dettagli: piano J, §10, C-94, passo 6 (3), «Fuori pista».
+- **J-16 · Il test del gemello compatto del PAC non dice quale risultato fallisce** — basso, test; segnalata da X tramite
+  il coordinatore, 15/10. `test_pac_compute_plans_the_compact_twin_like_the_explicit_request` (`api pac-planner-tool`)
+  è caduto una volta sotto un carico fra 75 e 121, con `(1, 1)` invece di `(2, 0)`; da solo passa. I Tools non scrivono
+  nel log l'elemento fallito, e il test controlla i conteggi prima di stampare i risultati, quindi la causa non si
+  vede. Proposta: mettere `results` nel messaggio d'errore dell'asserzione, poi, alla prossima caduta, il triage con la
+  skill `test-triage`. Lotto piccolo, quando capita, con `test-author`.
 
 ## Z · Sospensione e risveglio (fase 01)
 

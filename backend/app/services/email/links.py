@@ -24,7 +24,7 @@ from backend.app.services.email.delivery import EmailError, email_config_state, 
 
 
 class EmailLinksUnavailableError(EmailError):
-    """No email with a link can go out: ``LIBREFOLIO_PUBLIC_URL`` is not set, or is not an http(s) address."""
+    """No email with a link can go out: ``LIBREFOLIO_PUBLIC_URL`` is not set, or cannot start a link (``_usable_base``)."""
 
 
 @dataclass(frozen=True)
