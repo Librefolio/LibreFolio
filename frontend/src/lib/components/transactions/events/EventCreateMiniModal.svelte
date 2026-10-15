@@ -164,7 +164,9 @@
             }
             onclose?.();
         } catch (err: any) {
-            const msg = err?.response?.data?.detail || err?.message || 'Error creating event';
+            // A refusal's detail is {error_code, message, params}: show its message.
+            const detail = err?.response?.data?.detail;
+            const msg = (typeof detail === 'string' ? detail : detail?.message) || err?.message || 'Error creating event';
             error = msg;
         } finally {
             saving = false;

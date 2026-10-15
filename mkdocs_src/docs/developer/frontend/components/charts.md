@@ -44,11 +44,14 @@ Dashboard and Broker detail):
 // GrowthChart.svelte — renderChart(forceFullXAxisRebuild = false)
 const renderedModeKey = viewMode === 'pnl' ? `pnl:${pnlSubmode}` : viewMode;
 const masked = shouldMaskAmount();
+const seriesData = buildChartUpdateSeries(isDark, activeData, logicalRange.startDate);
+const seriesKey = seriesData.map((series) => series.name).join('\u0000');
 const needsFullInit =
     forceFullXAxisRebuild ||
     lastRenderedMode !== renderedModeKey ||
     lastRenderedDark !== isDark ||
-    lastRenderedMasked !== masked;
+    lastRenderedMasked !== masked ||
+    lastRenderedSeriesKey !== seriesKey;
 
 if (needsFullInit) {
     // Axes, tooltip, legend, series: setOption(option, CHART_FULL_UPDATE_OPTS)
@@ -64,6 +67,7 @@ if (needsFullInit) {
 | `renderedModeKey` | The mode (`eur`, `pct`, `pnl`) and, in `pnl`, the submode: the series *type* changes (line, candlestick, bar), which `{name, data}` cannot express. |
 | `isDark` | Colours are set once, in the full option. |
 | `masked` | The privacy toggle: ECharts caches the axis labels, so the tick formatter has to run again. The tooltip formatter reads the flag on every hover. |
+| `seriesKey` | The names of the series last drawn, in order: a broker that joins, leaves or is swapped under the P&L line changes the list, and from `{name, data}` alone ECharts would keep the old series and their legend entries. |
 | `forceFullXAxisRebuild` | The x-axis leaves its compact layout (a narrow container widening on resize). |
 
 The two flag sets differ on purpose:
@@ -75,6 +79,24 @@ The two flag sets differ on purpose:
 
 A resolution switch (daily ↔ weekly/monthly, chosen from the zoom) goes through the partial path
 without animation, after hiding the tooltip.
+
+**Where GrowthChart's code lives.** The component keeps everything reactive; what it computes
+lives in three modules in the same folder, which hold no state and see the component only through
+their arguments:
+
+| File | Holds |
+|---|---|
+| `GrowthChart.svelte` | Props, state, the `$derived` inputs and the memo of each aggregation, zoom handling, the ECharts lifecycle (`renderChart`, `updateChartData`, `applyFullOption`) and the template. `buildChartUpdateSeries` and `buildFullSeries` are thin wrappers that pass the view on screen to the series module. |
+| `growthChartData.ts` | The inputs mapped to one value per day (`mapEurStackedData`, `mapPctValues`, `mapBrokerPnlSeries`, `mapCandlesByDate`, `alignFlowToDates`), the buckets (`buildBucketInfos` for the cascade of Abs, % and the P&L line, `buildLadderBuckets` for the ladder of Candles and Income), their reductions (`aggregateMetric`, `aggregateFlowMetric`, `aggregateCandleMetric` and their `ladder*` counterparts), one entry per resolution or rung (`buildResolutionData`, `buildLadderData`) and the zoom-window geometry (`buildZoomWindow`, `cascadeIndicesAt`, `ladderIndicesAt`). |
+| `growthChartSeries.ts` | What each view draws: `buildGrowthUpdateSeries` (the `{name, data}` of the partial update) and `buildGrowthFullSeries` (every series with its type and style, for the full option), with `splitBySign`, `toCandlestickPoint` (the `'-'` gap), `findReferenceTotalPnl` and `PNL_REFERENCE_SERIES_NAME`. |
+| `growthChartTooltip.ts` | `buildGrowthTooltip`, the HTML ECharts shows on hover, built from a `GrowthTooltipView` the formatter assembles on every hover (entry on screen, mode, labels, translator, currency); amounts are masked under privacy. |
+
+The one rule: an aggregation reads its data only through `AggregationInputs`. Each memo
+(`resolutionCache`, `ladderCache`) is keyed on the identity of the `aggregationInputs` `$derived`
+object, which Svelte rebuilds whenever one of its members changes, so a new input is added to that
+object and to the `AggregationInputs` type, never passed as one more argument (the other arguments
+are the memo's keys: the resolution or rung, and `today` for the ladder). An input that bypasses
+the object does not invalidate the memo, which keeps returning entries computed before it changed.
 
 **Weekly and monthly points.** In the time-axis views (Abs, % and the P&L `line` submode, whose
 daily, weekly and monthly resolutions the code calls the *cascade*), `buildBucketInfos` stands each

@@ -214,6 +214,15 @@ def utils_dev_cli_image(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "dev.py image tests", verbose=verbose)
 
 
+def utils_dev_cli_docker(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Docker lot (CP7a): the image's packages and port, the compose files, docker exec, and one version per image build."""
+    print_section("Utils: dev.py docker commands and the image contract")
+    print_info("Testing: Dockerfile, docker-compose*.yml, dev.py cmd_docker_exec, _docker_frontend_stale_reason, _docker_ensure_frontend_built, _docker_ensure_assets_built, _get_docker_tag, cmd_docker_build, _check_env_file")
+    print_info('Tests: tzdata-legacy, EXPOSE and compose ports, compose environment, exec through gosu and "$@", the frozen version in the bundle, VERSION and the tag')
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_cli_docker.py", test_names)
+    return run_command(cmd, "dev.py docker tests", verbose=verbose)
+
+
 def utils_gate_i18n_usage(verbose: bool = False, test_names: list = None) -> bool:
     """Test the i18n three-verdict classifier (used / not verified / dead)."""
     print_section("Utils: i18n Usage Gate")
@@ -311,6 +320,15 @@ def utils_jwt_secret_blank(verbose: bool = False, test_names: list = None) -> bo
     print_info("Tests: a whitespace-only JWT_SECRET replaced by a random key and tokens signed with it refused; a non-blank secret kept as written; unset or empty still random")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_jwt_secret_blank.py", test_names)
     return run_command(cmd, "JWT secret blank tests", verbose=verbose)
+
+
+def utils_test_server_preparation(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the test server's builds run before its startup timeout, and that a tree without node_modules stops before npx (C-94)."""
+    print_section("Utils: Test Server Preparation")
+    print_info("Testing: dev.py server --build-only, cmd_fe_build/cmd_api_client (frontend/node_modules/.bin check), cmd_mkdocs_gallery; scripts/test_runner/_server.py (build_server_prerequisites, SharedTestServer.start())")
+    print_info("Tests: pre-bind builds in order without binding, missing tools named with npm ci before any npm/npx, port check → build → spawn → STARTUP_TIMEOUT, build env without coverage wiring, gallery build with Playwright's env")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_test_server_preparation.py", test_names)
+    return run_command(cmd, "Test server preparation tests", verbose=verbose)
 
 
 def utils_test_runner_cli(verbose: bool = False, test_names: list = None) -> bool:
@@ -509,6 +527,18 @@ Tests for utility modules and helper functions:
     )
     add_test(
         cat,
+        "dev-cli-docker",
+        utils_dev_cli_docker,
+        name="dev.py docker commands and the image contract",
+        desc="The Docker lot (CP7a): the final image installs tzdata and tzdata-legacy (P-4); EXPOSE and service librefolio of every compose file publish only the CMD's port, 6040 (C-37); both compose files pin PORT, HOST and LIBREFOLIO_DATA_DIR in environment to what the image binds and mounts (N-8); docker exec runs sh -c 'exec gosu \"${LIBREFOLIO_UID:-1000}:${LIBREFOLIO_GID:-1000}\" python dev.py \"$@\"' sh <args>, each argument one element and verbatim through a real sh, as the ids of the image's ENV or, with neither set, entrypoint.sh's 1000:1000, exit 1 without a command (32-3); docker build freezes the version once, rebuilds the frontend when its sources changed, it is not production, has no recorded version or another one, sets LF_APP_VERSION around that build only and gives it back, records .build-version only on success, writes the same version to VERSION, and tags the image from VERSION, not from a later -dirty git answer (M-25); _check_env_file compares PORT only; each static check with synthetic negative controls",
+        # Reads the Dockerfile, compose files and entrypoint.sh; dev.py loaded in-process with its
+        # commands stood in for, a fake project and build markers under tmp_path,
+        # a local sh with stand-ins for gosu and python: no DB, no server, no
+        # network, no Docker, no repo writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "js-cache-fail-loud",
         utils_js_cache_fail_loud,
         name="JS Cache Fail-Loud (I1)",
@@ -644,6 +674,17 @@ Tests for utility modules and helper functions:
         desc="The JWT_SECRET read at import signs session cookies only when it holds something besides whitespace: a value made only of whitespace (three spaces, tab-space-newline, one space) is replaced by a random URL-safe key of at least 64 characters, new in every process, and a token signed with the blank value is refused by decode_jwt_token; a non-blank value is the key exactly as written, surrounding spaces included, and a token signed with it decodes to its user id; an unset or empty JWT_SECRET gives a random key, new in every process",
         # Each case imports auth_service in a fresh interpreter run in tmp_path, with a copy of the
         # environment carrying the case's JWT_SECRET. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "test-server-preparation",
+        utils_test_server_preparation,
+        name="Test Server Preparation",
+        desc="dev.py server --build-only runs exactly the server's pre-bind steps in today's order and mode (the frontend in debug under --test, through cmd_fe_build with --rebuild, then MkDocs, then the non-strict JS cache) and returns their exit code without checking the port, running a command or exec'ing uvicorn, and the runner's prerequisites command is such a run; front build and api client check frontend/node_modules/.bin first (openapi-zod-client, svelte-check, vite; the API client only its generator, symlinks or shim files) and exit 1 naming the missing tools and npm ci before any npm or npx call; SharedTestServer.start() checks the port, then runs python -u dev.py server --test --build-only in the foreground with its output visible and in order on a pipe (its own stdout and stderr flushed right after its info line) and the runner's environment, never the coverage wiring the server gets, and only then spawns the backend and starts STARTUP_TIMEOUT: a build longer than the timeout still starts, a failed build (False, or an exit code it names) spawns nothing, an occupied port builds nothing; mkdocs gallery runs the same step after its database step and port check and before Playwright, with Playwright's environment (LF_APP_VERSION and --test-port included), exits 1 when it fails, and --list builds nothing; without --workers the gallery runs 60% of the CPUs (rounded, the count read at each call) as browser workers, at least one (an explicit --workers wins), and sizes its server from them",
+        # Fakes only: the seams of dev.py and _server.py monkeypatched, every real process and signal forbidden,
+        # node_modules/.bin layouts under tmp_path; --list reads frontend/e2e/gallery.spec.ts. No DB, no server,
+        # no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(

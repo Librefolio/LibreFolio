@@ -2,12 +2,17 @@
 Test: StaticUploads Service — save, list, get, delete, security validation.
 
 Tests the static uploads service layer including file persistence,
-metadata sidecar, security checks, cache invalidation, and user filtering.
+metadata sidecar, security checks, cache invalidation, user filtering
+and listing order.
 """
 
 import json
 import shutil
 import sys
+import uuid
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 
@@ -21,6 +26,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 setup_test_database()
 
 import backend.app.services.files.static_uploads as static_uploads
+from backend.app.schemas.uploads import UploadFileInfo
 from backend.app.services.files.static_uploads import (
     UploadSecurityError,
     _detect_actual_mime_type,
@@ -33,6 +39,7 @@ from backend.app.services.files.static_uploads import (
     get_uploads_dir,
     list_uploads,
     save_upload,
+    seed_default_avatars,
     validate_upload_security,
 )
 from backend.test_scripts.test_utils import print_section, print_success
@@ -252,6 +259,152 @@ class TestListUploads:
         for f in files:
             assert f.uploaded_by_user_id == 1
         print_success(f"User 1 has {count} files")
+
+
+# ============================================================================
+# list_uploads — one order, whatever order the directory lists (G-10)
+# ============================================================================
+
+# The instant shared by uploads that tie, as seed_default_avatars() gives one instant to all its avatars.
+TIED_INSTANT = datetime(2026, 1, 15, 9, 30, tzinfo=UTC)
+
+# Ids are chosen, not drawn: their order is known in advance and made to disagree with the name order.
+FIXED_ID_NUMBERS = (1, 2, 3)
+
+DEFAULT_AVATARS = [f"men_{n:02d}.png" for n in range(1, 16)] + [f"woman_{n:02d}.png" for n in range(1, 16)]
+
+
+def _fixed_id(n: int) -> str:
+    """A canonical UUID that sorts as ``n`` among the fixed ids."""
+    return f"00000000-0000-4000-8000-{n:012d}"
+
+
+def _save_upload_as(name: str, *, file_id: str, at: datetime) -> None:
+    """The real save_upload(), with the id and the upload instant chosen by the test instead of drawn."""
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(static_uploads, "utcnow", lambda: at)
+        mp.setattr(static_uploads, "uuid", SimpleNamespace(uuid4=lambda: uuid.UUID(file_id)))
+        info = save_upload(SAMPLE_CONTENT, name, user_id=1)
+    assert (info.id, info.original_name, info.uploaded_at) == (file_id, name, at)
+
+
+def _list_uploads_with_directory_order(descending: bool) -> list[UploadFileInfo]:
+    """list_uploads() while the uploads directory lists its entries in a forced order.
+
+    Sidecars are named ``{id}.json``, so the forced order is the id order, ascending or descending: two calls see
+    the same uploads in opposite orders, which no filesystem can make agree by chance. The ``Path`` subclass keeps
+    the real directory and ``/`` keeps the subclass, so ``_ensure_dir()``, ``_load_metadata()`` and the file check
+    all resolve to it; only ``glob()`` changes.
+    """
+    real_dir = get_uploads_dir()
+    listed: list[str] = []
+
+    class _ForcedOrderPath(type(real_dir)):
+        def glob(self, pattern, **kwargs):
+            entries = sorted(super().glob(pattern, **kwargs), key=lambda p: p.name, reverse=descending)
+            listed.extend(p.name for p in entries)
+            return iter(entries)
+
+    sidecars = {p.name for p in real_dir.glob("*.json")}
+    # Forget the cached sidecars, so that _load_metadata() reads every one of them through the forced directory too.
+    for sidecar in sidecars:
+        static_uploads._upload_meta_cache.delete(sidecar.removesuffix(".json"))
+
+    forced_dir = _ForcedOrderPath(real_dir)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(static_uploads, "get_uploads_dir", lambda: forced_dir)
+        files, _ = list_uploads()
+
+    assert sidecars <= set(listed), "list_uploads() no longer lists the sidecars through get_uploads_dir().glob(): the forced order never reached it, so this harness proves nothing until it is adapted"
+    return files
+
+
+def _assert_listed_in_order(expected: list[str], label: Callable[[UploadFileInfo], str]) -> None:
+    """Both forced directory orders must give exactly ``expected``; ``label`` renders one upload."""
+    ascending = [label(f) for f in _list_uploads_with_directory_order(descending=False)]
+    descending = [label(f) for f in _list_uploads_with_directory_order(descending=True)]
+    message = "\n".join(
+        [
+            "list_uploads() must give the same, expected order whatever order the directory lists its entries in",
+            f"  expected:                     {expected}",
+            f"  ascending directory listing:  {ascending}",
+            f"  descending directory listing: {descending}",
+        ]
+    )
+    assert ascending == expected and descending == expected, message
+
+
+def _name(info: UploadFileInfo) -> str:
+    return info.original_name
+
+
+def _name_and_id(info: UploadFileInfo) -> str:
+    """The name plus the last digits of the fixed id, which tell apart uploads sharing a name."""
+    return f"{info.original_name} #{info.id[-3:]}"
+
+
+class TestListUploadsOrder:
+    """list_uploads(): newest first, then by name ignoring case, then by id, whatever order the directory lists (G-10).
+
+    Uploads sharing ``uploaded_at`` used to keep the directory's order, which follows their random UUID file names
+    and the filesystem: seed_default_avatars() gives all its avatars one instant, so their listed order changed at
+    every seed, and the documentation gallery with it. Each test lists the same uploads through two opposite
+    directory orders, so no filesystem can make it pass by luck.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _forget_fixed_ids(self):
+        """The fixed ids recur across tests: forget their cached metadata, as the module fixture removes their files."""
+        yield
+        for n in FIXED_ID_NUMBERS:
+            static_uploads._upload_meta_cache.delete(_fixed_id(n))
+
+    def test_same_instant_listed_by_name_ignoring_case(self):
+        """Uploads sharing one instant are listed by name, ignoring case.
+
+        Created b, A, C with ids 1, 3, 2: the expected A, b, C differs from the creation order, from the id order
+        (b, C, A) and its reverse, and from a case-sensitive name order (A, C, b).
+        """
+        print_section("list_uploads: same instant → name order, ignoring case")
+        for name, n in (("b.txt", 1), ("A.txt", 3), ("C.txt", 2)):
+            _save_upload_as(name, file_id=_fixed_id(n), at=TIED_INSTANT)
+
+        _assert_listed_in_order(["A.txt #003", "b.txt #001", "C.txt #002"], _name_and_id)
+        print_success("Same instant → A.txt, b.txt, C.txt for both directory orders")
+
+    def test_newest_first_beats_name_order(self):
+        """A later upload comes first even when its name sorts last: the instant stays the primary key.
+
+        Every upload has its own instant, so the directory order has nothing to decide.
+        """
+        print_section("list_uploads: newest first beats the name order")
+        _save_upload_as("a.txt", file_id=_fixed_id(3), at=TIED_INSTANT)
+        _save_upload_as("m.txt", file_id=_fixed_id(1), at=TIED_INSTANT + timedelta(seconds=1))
+        _save_upload_as("z.txt", file_id=_fixed_id(2), at=TIED_INSTANT + timedelta(seconds=2))
+
+        _assert_listed_in_order(["z.txt #002", "m.txt #001", "a.txt #003"], _name_and_id)
+        print_success("Newest first → z.txt, m.txt, a.txt for both directory orders")
+
+    def test_same_name_same_instant_listed_by_id(self):
+        """Uploads sharing name and instant are listed by id: nothing is left to the directory."""
+        print_section("list_uploads: same name and instant → id order")
+        for n in (2, 3, 1):
+            _save_upload_as("same.txt", file_id=_fixed_id(n), at=TIED_INSTANT)
+
+        _assert_listed_in_order(["same.txt #001", "same.txt #002", "same.txt #003"], _name_and_id)
+        print_success("Same name and instant → id order for both directory orders")
+
+    def test_seeded_avatars_listed_by_name(self):
+        """The seeded avatars share one instant and list men_01 … men_15, then woman_01 … woman_15."""
+        print_section("list_uploads: seeded default avatars in name order")
+        marker = get_uploads_dir() / ".avatars_seeded"
+        assert not marker.exists(), "the uploads directory must start without the marker, or seed_default_avatars() seeds nothing"
+
+        seeded = seed_default_avatars()
+
+        assert seeded == len(DEFAULT_AVATARS), f"seed_default_avatars() seeded {seeded} avatars, expected {len(DEFAULT_AVATARS)}"
+        _assert_listed_in_order(DEFAULT_AVATARS, _name)
+        print_success(f"{seeded} seeded avatars → men_01 … woman_15 for both directory orders")
 
 
 # ============================================================================
