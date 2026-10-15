@@ -117,6 +117,14 @@ runs tests at the same time needs a different one — on the command line, or as
 that worktree's `.env`. If you set `LIBREFOLIO_TEST_DATA_DIR` to an absolute path, give each
 worktree a different one as well.
 
+A lane runs on the instance's defaults. Of the checkout's `.env` and of the shell it keeps only
+the ports, the production data directory, `HOST`, the log level, the version a release job froze
+and every `LIBREFOLIO_TEST_*` name (`kept_in_a_test_lane()` in `scripts/cli_base.py`); every other
+setting of the instance (secrets, profile, block, mail, accounts, plugins) is removed from its
+environment, and in test mode `Settings` does not read `.env` either. A test that needs a setting
+sets it itself — see
+[Security → Test lanes and the instance's configuration](../architecture/security.md#test-lanes-and-the-instances-configuration).
+
 ```bash
 # A second worktree, testing while another one uses the default lane (6041)
 ./dev.py test --test-port 6141 api all
