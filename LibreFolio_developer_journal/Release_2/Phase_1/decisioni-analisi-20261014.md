@@ -1059,6 +1059,33 @@ per le gambe in uscita già spaiate nei database e per «dividi la coppia». Ser
 lotti: un lotto di Numeri e analisi con il test rosso prima; la conversione delle cancellazioni e dei dati già presenti
 la fa Import e transazioni, sopra quella regola.
 
+### Cruscotto e grafici (analisi di Y, 15/10)
+
+#### 48. Un indicatore comune «Aggiornamento…» — 🟢 (C-85, D-Y10)
+- **Oggi**: è una tua richiesta del 14/10: «quando un pacchetto è in volo non si ha chiaro che si sta attendendo la
+  risposta». Ogni pagina che ricarica i dati fa a modo suo, e spesso non si capisce che sta aspettando il server.
+- **Proposta**: un indicatore unico: i dati vecchi restano visibili ma attenuati, con un piccolo badge «Aggiornamento…»
+  con la rotellina, e l'attributo di accessibilità `aria-busy`. Prima su Dashboard, pagina broker, Rischio e lotti.
+  Si armonizza con «Aggiornamento in pausa» dei prezzi dal vivo (Z1).
+- **Alternative**: scheletri grigi al posto dei dati; una barra sottile in cima alla pagina.
+- **Per chi usa già LibreFolio**: vede sempre i dati di prima mentre arrivano i nuovi.
+
+#### 49. La liquidità negativa nel grafico dell'allocazione — 🟡 (54-1, D-Y11)
+- **Oggi**: con un saldo di liquidità negativo, le quote positive sommano più di 100 %. Il grafico dell'allocazione nel
+  tempo ha l'asse fermo a 100 e taglia la cima; tooltip e torta scartano le voci negative, quindi la liquidità negativa
+  non compare da nessuna parte.
+- **Proposta**: mostrarla sotto lo zero. L'asse va oltre il 100 % quando serve e il tooltip ha una riga negativa; nella
+  torta restano le quote positive, con una nota «liquidità negativa: −X».
+- **Alternativa**: Numeri e analisi la toglie dal totale nel backend, e il grafico non la vede.
+- **Per chi usa già LibreFolio**: tocca solo chi ha liquidità negativa.
+
+#### 50. Il PAC sul telefono (difetto 5) — 🟢 (D-Y12)
+- **Oggi**: sul telefono la tabella dei target del PAC non sta nella larghezza: i nomi sono tagliati, gli input Target %
+  escono a destra, «Actions» sta sopra gli input. Le colonne insieme chiedono più di 500 px.
+- **Proposta**: prima la cura generale delle tabelle sul telefono (C-38, la colonna «Azioni» e quella di selezione
+  fisse in `DataTable`); se non basta, un layout da telefono apposta per il PAC.
+- **Per chi usa già LibreFolio**: niente.
+
 ## 3. Decisioni di coordinamento (già prese; correggibili)
 
 - **Forma comune del riordino**. Perché: sei sessioni spostano file insieme, e serve una regola sola per non
