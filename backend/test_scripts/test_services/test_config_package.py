@@ -29,7 +29,8 @@ module elsewhere calls an accessor of the package instead of reading ``os.enviro
     blank one being the empty string; region and backend are stripped and fall back to their default when blank; the
     timeout and the maximum are what ``float()`` and ``int()`` read, the caller's default when unset, blank or refused
     (``0`` and ``nan`` are kept, ``5.0`` is no integer). The API key is stripped and, as every secret now, may come from
-    ``LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE``.
+    ``LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE``. ``LF_APP_VERSION``, read since through ``frozen_app_version()``, is the
+    version as set, stripped, and ``None`` when unset or blank.
 (d) ``PROJECT_ROOT``, now computed from one directory deeper, is still the repository root.
 
 What the detector does not see: a read made on the module's behalf (``os.path.expanduser``, a library honouring
@@ -57,7 +58,7 @@ import pytest
 
 from backend.app.config import PROJECT_ROOT, SecretFileError
 from backend.app.config.accounts import donation_popup_disabled
-from backend.app.config.platform import configured_jwt_secret, owning_test_lane_id, scheduler_disabled
+from backend.app.config.platform import configured_jwt_secret, frozen_app_version, owning_test_lane_id, scheduler_disabled
 from backend.app.config.plugins import (
     web_link_finder_api_key,
     web_link_finder_ddgs_backend,
@@ -379,6 +380,22 @@ def test_owning_test_lane_id_is_the_variable_as_set(monkeypatch, value, expected
     _set_variable(monkeypatch, "LIBREFOLIO_TEST_LANE_ID", value)
     assert owning_test_lane_id() == expected
     print_success(f"LIBREFOLIO_TEST_LANE_ID={value!r}: owning_test_lane_id() == {expected!r}")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param(None, None, id="unset"),
+        pytest.param("", None, id="empty-is-none"),
+        pytest.param("   ", None, id="blank-is-none"),
+        pytest.param(" v1.2.3 ", "v1.2.3", id="stripped"),
+    ],
+)
+def test_frozen_app_version_is_the_variable_stripped_and_none_when_blank(monkeypatch, value, expected):
+    """(c) ``LF_APP_VERSION``: the version as set, stripped; ``None`` when unset, empty or blank."""
+    _set_variable(monkeypatch, "LF_APP_VERSION", value)
+    assert frozen_app_version() == expected
+    print_success(f"LF_APP_VERSION={value!r}: frozen_app_version() == {expected!r}")
 
 
 @pytest.mark.parametrize(
