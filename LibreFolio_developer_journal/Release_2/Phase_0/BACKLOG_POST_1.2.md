@@ -2418,6 +2418,16 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - I test «non admin» non provano la sola lettura: manca l'asserzione che `settings-lock-toggle` non c'è.
   - Si fa con la scheda Utenti (A6), che tocca la stessa pagina.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.9».
+- **A-13 · Su un'istanza bloccata, `/invite` mostra il modulo e la registrazione finisce al login** — minimo;
+  A (15/10, dal merge di H CP6; accettato dal coordinatore).
+  - Contesto: per non perdere l'accesso, `auth.inspect_link_token` e `auth.reset_password_with_link` entrano in
+    `ALLOWED_WHEN_BLOCKED` (lotto piccolo di H dopo A5); `auth.register` resta fuori.
+  - Effetto: `tokens/inspect` risponde anche per gli inviti, quindi `/invite` mostra il modulo. La registrazione
+    riceve poi un 401 (anonimo su una rotta bloccata), e l'interceptor del client porta al login senza spiegare.
+  - Possibile cura: la pagina d'invito che riconosce il blocco (per esempio un campo pubblico e innocuo in
+    `/system/instance`, da concordare con H e con la decisione 15), oppure `tokens/inspect` che sul blocco
+    risponde come per un link non valido quando lo scopo è `invite`.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.10».
 
 ## X · Plugin, asset e ricerca (fase 01)
 

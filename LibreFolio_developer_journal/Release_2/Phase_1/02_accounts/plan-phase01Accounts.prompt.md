@@ -2499,3 +2499,70 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - **Commit proposti**:
 >   1. `test(settings): target editable toggle by key`: la riparazione e l'handle;
 >   2. `docs(journal): A5 validation, A backlog`.
+>
+> **Esito**: il coordinatore ha committato `8e78adca6` (`test(settings): target editable toggle by key`) e `650807850`
+> (journal). Il CHANGELOG lo scrive lui all'ingresso con il mio testo; `enable_registration` → `registration_mode` va
+> sotto ⚠️ Breaking changes.
+
+#### A5b.10 — Secondo aggiornamento di base (`7fa6a14b9`): H CP6, X FE5b, E1, `cryptography` ✅ (2026-10-15)
+> **Note implementazione**:
+> - **Merge** di `dev_release2` a `8fc44558c`, aperto dal coordinatore: 95 file. Cinque conflitti, risolti tenendo
+>   le due parti (`/tmp/libreFolio_a5m3_resolve.py`, che controlla le prime righe attese di ogni blocco):
+>   - `schemas/system.py`: il mio campo `accounts` di `InstanceConfigResponse`, poi la classe `InstanceBlockResponse`
+>     di H (`GET /system/block`, solo per utenti con sessione);
+>   - `security.md`:
+>     - H e `docs-writer` avevano scritto la stessa riga pubblica di `GET /settings/global`: ne resta una, quella
+>       con il link;
+>     - il paragrafo «Private Endpoints» unisce la pagina del blocco di H e la mia frase su `/users` e
+>       `require_admin`;
+>   - `settings.md`: i moduli di `config/`, con i miei accessori, quelli di X ed `email.py` di E.
+>     - La frase finale ora è vera anche per gli URL: un URL non valido non chiude la registrazione.
+>   - `_backend_services.py`: la mia `services_registration` e le quattro azioni e-mail di E. Le due chiamate che
+>     condividevano la chiusura sono ricostruite: 98 azioni, nessun nome doppio.
+>   - `_frontend_utility.py`: nella lista `core-unit`, i miei 3 file e i 2 di H. 28 azioni, nessun doppione.
+> - **File fusi da Git che entrambe le parti toccano**, rivisti, tutti in zone separate: `.env.example`, `models.py`,
+>   `test_system_api.py`, `admin/configuration`, `app-state.md`, `test-author.agent.md`, `_backend_api.py`.
+>   - Nessuna ancora o sezione `.env` doppia.
+>   - Prima dello stage: l'app si importa; OpenAPI ha 146 operazioni, con `InstanceConfigResponse` =
+>     `profile` + `accounts`.
+> - Poi `git add` dei soli 5 file. Il coordinatore ha committato il merge: `7fa6a14b9`, genitori `650807850` e
+>   `8fc44558c`.
+> - **Validazione** chiesta dal coordinatore, in fila e con `nice -n 10` (`/tmp/libreFolio_a5v3.sh`; log
+>   `/tmp/libreFolio_a5v3_<passo>.log`):
+>
+>   | Passo | Esito |
+>   |---|---|
+>   | `api sync` | ✅ |
+>   | `front check` | ✅, 0 errori e 0 avvisi |
+>   | `api registration` | 65 ✅ |
+>   | `api users-admin` | 53 ✅ |
+>   | `api auth` | 60 ✅ |
+>   | `api settings` | 95 ✅ |
+>   | `api system` | 117 ✅, con i test del blocco di H |
+>   | `services config-package` | 640 ✅ |
+>   | `services config-env-example` (mio, `.env.example` fuso da tre parti) | 36 ✅ |
+>   | `db populate --force` | ✅ (la categoria `services` svuota il DB della corsia) |
+>   | E2E `auth` | 33 ✅ |
+>   | E2E `settings` | 46 ✅ |
+>   | `theme-roles.mjs --check` | ✅ |
+>
+>   - Il build del frontend l'ha rifatto l'avvio del server durante `api registration`, alle 15:07:22, sulle
+>     sorgenti fuse; le E2E l'hanno trovato «up to date».
+>   - L'unico avviso, in `api registration`: `StarletteDeprecationWarning` su `HTTP_422_UNPROCESSABLE_ENTITY`, da
+>     un ramo di `api/v1/settings.py` che c'era già (`84d9e3360`, quattro usi in quel file). Non è di A5.
+>   - Porta 6182 libera alla fine.
+> - **I due punti di CP6**, decisi dal coordinatore:
+>   1. le rotte admin di A (inviti, link di reset, `/users`) rispondono 423 sull'istanza bloccata: va bene, coerente
+>      con la decisione 12 (D-A15);
+>   2. il reset della password resta permesso: H aggiunge `auth.inspect_link_token` e `auth.reset_password_with_link` a
+>      `ALLOWED_WHEN_BLOCKED` e al test che fissa l'elenco, in un lotto piccolo dopo A5.
+>      - `auth.register` resta fuori.
+>      - Oggi un anonimo su una rotta bloccata riceve 401, e sulle pagine dei link l'interceptor del client porta al
+>        login, perdendo il token.
+> - **Backlog A-13**: su un'istanza bloccata `/invite` mostra il modulo (`tokens/inspect` risponde anche per gli
+>   inviti), poi la registrazione finisce al login. Accettato dal coordinatore.
+> - **Per A8**: il limitatore `rate_window.py` di E (D-E12) ora è nella base.
+
+### Checkpoint A5, base aggiornata (`7fa6a14b9`) 🧊 (2026-10-15, 15:20) — FROZEN, pronto per l'ingresso
+> - **Delta**, non in stage: il piano (A5b.10 e questo checkpoint) e il backlog (A-13).
+> - **Commit proposto**: `docs(journal): A5 second base update, CP6 notes`.
