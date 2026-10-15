@@ -41,9 +41,17 @@ on 127.0.0.1, on a port the OS picks: nothing reaches the network. The contract 
    any letter case, and nothing else changes.
 9. ``closed_port()``, the fixture's closed port: refused at once, and taken by no ``bind`` without ``SO_REUSEADDR`` until
    the block is left; free again right after.
+10. A blocked instance sends nothing (D-E13, lot E3): while ``LIBREFOLIO_BLOCKED`` blocks it — ``1``, ``true``, ``yes``
+    or ``on``, in any case, spaces around ignored — or cannot be read, ``send_email`` raises ``EmailUnavailableError``
+    with the code ``INSTANCE_BLOCKED`` before anything else: e-mail off, an unusable configuration, a recipient that is
+    not one address, the hourly budget spent — the block is what the caller hears, never a ``ValueError`` —; nothing is
+    spent and no connection opened. Unset, blank, ``0``, ``false``, ``no`` or ``off``: the e-mail goes out.
+    ``sending_blocked()`` says exactly that — true when blocked or unreadable, false otherwise — and never raises: the
+    flows ask it before anything else.
 
 Pure: no database, no server of the lane, no network beyond 127.0.0.1. An autouse fixture removes every inherited
-``LIBREFOLIO_SMTP_*`` (until C-96 lands a lane carries the developer's ``.env``) and each test sets its own; another
+``LIBREFOLIO_SMTP_*`` and ``LIBREFOLIO_BLOCKED`` (until C-96 lands a lane carries the developer's ``.env``) and each test
+sets its own; another
 replaces ``delivery.INSTANCE_BUDGET`` with a private limiter on a fake clock; ``smtp.SMTP_TIMEOUT_SECONDS`` is 5 s
 here, a bound for a defect that hangs, never a wait. The only real wait is the timeout test: 0.2 s. A refused
 connection is held by ``closed_port()`` for the whole test, so no listener started meanwhile can take its port.
@@ -73,6 +81,7 @@ import pytest
 import structlog
 from structlog.testing import capture_logs
 
+from backend.app.config.platform import instance_blocked
 from backend.app.services.email import delivery, smtp
 from backend.app.services.email.delivery import (
     EmailConfigState,
@@ -83,6 +92,7 @@ from backend.app.services.email.delivery import (
     budget_status,
     email_config_state,
     send_email,
+    sending_blocked,
 )
 from backend.app.services.email.messages import EmailContent, EmailKind
 from backend.app.services.email.smtp import SmtpDeliveryError, SmtpErrorCode, SmtpServer, deliver
@@ -100,6 +110,8 @@ PASSWORD_FILE = "LIBREFOLIO_SMTP_PASSWORD_FILE"
 FROM = "LIBREFOLIO_SMTP_FROM"
 REPLY_TO = "LIBREFOLIO_SMTP_REPLY_TO"
 MAX_PER_HOUR = "LIBREFOLIO_SMTP_MAX_PER_HOUR"
+#: The hosting provider's block (``config.platform.instance_blocked``): a blocked instance sends nothing.
+BLOCKED = "LIBREFOLIO_BLOCKED"
 
 DELIVERY_LOGGER = "backend.app.services.email.delivery"
 SMTP_LOGGER = "backend.app.services.email.smtp"
@@ -174,9 +186,9 @@ class FakeClock:
 
 @pytest.fixture(autouse=True)
 def _no_inherited_smtp_variables(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every ``LIBREFOLIO_SMTP_*`` the lane inherited is removed: a test sees only the variables it sets itself."""
+    """Every ``LIBREFOLIO_SMTP_*`` and ``LIBREFOLIO_BLOCKED`` the lane inherited is removed: a test sees only the variables it sets itself."""
     for name in list(os.environ):
-        if name.startswith(SMTP_PREFIX):
+        if name.startswith(SMTP_PREFIX) or name == BLOCKED:
             monkeypatch.delenv(name, raising=False)
 
 
@@ -1129,3 +1141,106 @@ def test_closed_port_refuses_holds_and_releases_its_port() -> None:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as successor:
         successor.bind(("127.0.0.1", port))
     print_success(f"port {port}: refused, held, then released")
+
+
+# =============================================================================
+# 10. A BLOCKED INSTANCE
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", ["1", "true", " YES ", "On"])
+async def test_a_blocked_instance_sends_nothing(monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter, value: str) -> None:
+    """EMD-041 — contract 10: e-mail ready towards a running fake, ``LIBREFOLIO_BLOCKED`` set to ``value``: ``send_email`` raises ``EmailUnavailableError`` — an ``EmailError`` — with the code ``INSTANCE_BLOCKED``; the fake accepted no connection and nothing was spent."""
+    print_section(f"EMD-041: LIBREFOLIO_BLOCKED={value!r}")
+
+    with FakeSmtpServer() as fake:
+        _point_at(monkeypatch, fake)
+        monkeypatch.setenv(BLOCKED, value)
+        with pytest.raises(EmailUnavailableError) as caught:
+            await send_email(CONTENT, to=RECIPIENT)
+
+    assert isinstance(caught.value, EmailError) and caught.value.code == "INSTANCE_BLOCKED", caught.value
+    assert (fake.connections, budget.count()) == (0, 0)
+    print_success("INSTANCE_BLOCKED, no connection, nothing spent")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("also", ["email-off", "configuration-invalid", "recipient-not-one-address", "budget-spent"])
+async def test_the_block_is_refused_before_anything_else(monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter, also: str) -> None:
+    """EMD-042 — contract 10: blocked and, besides, e-mail off, an invalid configuration, a recipient that is not one address, or the hourly budget spent: still ``INSTANCE_BLOCKED`` — not ``EMAIL_NOT_CONFIGURED``, ``SMTP_TLS_INVALID``, a ``ValueError`` nor ``EMAIL_RATE_LIMITED`` —: the block is checked first. Nothing more spent, no connection."""
+    print_section(f"EMD-042: blocked, and {also}")
+    monkeypatch.setenv(BLOCKED, "1")
+    to = "alice@example.com, bob@example.com" if also == "recipient-not-one-address" else RECIPIENT
+
+    with FakeSmtpServer() as fake:
+        if also != "email-off":
+            _point_at(monkeypatch, fake, tls="ssl" if also == "configuration-invalid" else "none", max_per_hour="1")
+        if also == "budget-spent":
+            assert budget.hit(limit=1).allowed, "setup: the only unit of the hour"
+        spent = budget.count()
+        with pytest.raises(EmailUnavailableError) as caught:
+            await send_email(CONTENT, to=to)
+
+    assert caught.value.code == "INSTANCE_BLOCKED", caught.value
+    assert (fake.connections, budget.count()) == (0, spent)
+    print_success(f"INSTANCE_BLOCKED before {also}")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", ["maybe", "2", "blocked"])
+async def test_a_block_that_cannot_be_read_counts_as_blocked(monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter, value: str) -> None:
+    """EMD-043 — contract 10: ``LIBREFOLIO_BLOCKED`` that cannot be read — ``instance_blocked()`` raises ``ValueError`` on it, the precondition —: ``send_email`` raises ``EmailUnavailableError("INSTANCE_BLOCKED")``, never that ``ValueError``, which a caller would take for a bad recipient; nothing spent, no connection."""
+    print_section(f"EMD-043: LIBREFOLIO_BLOCKED={value!r}")
+    monkeypatch.setenv(BLOCKED, value)
+    with pytest.raises(ValueError):
+        instance_blocked()
+
+    with FakeSmtpServer() as fake:
+        _point_at(monkeypatch, fake)
+        with pytest.raises(EmailUnavailableError) as caught:
+            await send_email(CONTENT, to=RECIPIENT)
+
+    assert caught.value.code == "INSTANCE_BLOCKED", caught.value
+    assert (fake.connections, budget.count()) == (0, 0)
+    print_success("unreadable: INSTANCE_BLOCKED, nothing sent")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", [None, "", "   ", "0", "false", "No", " off "], ids=["unset", "empty", "blank", "0", "false", "No", "off-with-spaces"])
+async def test_an_instance_that_is_not_blocked_sends(monkeypatch: pytest.MonkeyPatch, budget: SlidingWindowLimiter, value: str | None) -> None:
+    """EMD-044 — contract 10: ``LIBREFOLIO_BLOCKED`` unset, empty, blank, ``0``, ``false``, ``No`` or `` off ``: the e-mail goes out — one message to the recipient, one unit spent."""
+    print_section(f"EMD-044: LIBREFOLIO_BLOCKED={value!r}")
+    if value is not None:
+        monkeypatch.setenv(BLOCKED, value)
+
+    with FakeSmtpServer() as fake:
+        _point_at(monkeypatch, fake)
+        await send_email(CONTENT, to=RECIPIENT)
+
+    assert ([message.rcpt_tos for message in fake.messages], budget.count()) == ([[RECIPIENT]], 1)
+    print_success("not blocked: sent")
+
+
+@pytest.mark.parametrize(
+    ("value", "blocked"),
+    [
+        pytest.param(None, False, id="unset"),
+        pytest.param("   ", False, id="blank"),
+        pytest.param("0", False, id="0"),
+        pytest.param(" Off ", False, id="off"),
+        pytest.param("1", True, id="1"),
+        pytest.param(" YES ", True, id="yes"),
+        pytest.param("maybe", True, id="unreadable"),
+    ],
+)
+def test_sending_blocked_is_true_when_blocked_or_unreadable_and_never_raises(monkeypatch: pytest.MonkeyPatch, value: str | None, blocked: bool) -> None:
+    """EMD-045 — contract 10: ``sending_blocked()`` — what every flow asks first — is ``True`` for a value that blocks and for one that cannot be read, ``False`` when unset, blank or a value that does not block; it never raises, not even where ``instance_blocked()`` would."""
+    print_section(f"EMD-045: sending_blocked() with LIBREFOLIO_BLOCKED={value!r}")
+    if value is not None:
+        monkeypatch.setenv(BLOCKED, value)
+
+    answer = sending_blocked()
+
+    assert answer is blocked, f"sending_blocked() is {answer!r} for {value!r}"
+    print_success(f"{answer}")
