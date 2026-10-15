@@ -93,7 +93,8 @@
       "eventPickerCreateNew": "Nuovo evento",
       "eventCreateTitle": "Crea evento per {asset}",
       "eventCreateAmountRequired": "L'importo è obbligatorio",
-      "eventCreateDateRequired": "La data è obbligatoria"
+      "eventCreateDateRequired": "La data è obbligatoria",
+      "fxDatesHint": "Le date 'Da' e 'A' di solito coincidono: si separano quando il broker accredita la nuova valuta in un altro giorno."
     },
     "bulk": {
       "resetRow": "Reimposta riga",

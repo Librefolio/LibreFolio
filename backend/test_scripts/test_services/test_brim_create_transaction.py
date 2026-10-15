@@ -17,7 +17,7 @@ import pytest
 from backend.app.schemas.brim import BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMProvider
+from backend.app.services.brim.brim_provider import BRIMProvider
 
 
 class ConcreteBRIMProvider(BRIMProvider):

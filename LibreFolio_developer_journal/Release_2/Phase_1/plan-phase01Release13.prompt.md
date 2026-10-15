@@ -779,7 +779,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > **Fuori pista**:
 > - Due trappole del primo avvio dei test in un worktree nuovo, trovate da H e da J: `npm ci` mancante e build oltre i
 >   300 s del server condiviso. Scritte in `.github/copilot-instructions.md` e nel §6.
-> - Nel piano di H una tabella nominava l'hotfix: resa neutra prima del commit.
+> - Nel piano di H una riga di tabella è stata resa neutra prima del commit.
 > - Dalla verifica di A1 è nata la decisione 36, cosa vede un utente dei dati degli altri.
 > - L'ID T-B4 compare due volte nel backlog: il coordinatore colori rinomina la sua voce.
 >
@@ -870,3 +870,48 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >
 > Gli eventi passano a W (lotto E1): moduli, contratti e righe che restano a X nel messaggio del coordinatore a W del
 > 15/10. Le impostazioni dei plugin di X diventano la migrazione 007.
+
+### W K1, chiarezza, integrato ✅ (2026-10-15, 04:10)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `d915c869f` (K1 `532a1fd9c`, base aggiornata con A3, H CP3
+> e X CP2b in `1d1c7e67d`). O-12 (plurale), C-89 (le due date del cambio), V-38 (i problemi di saldo sotto il loro
+> titolo), P-15 parte W e W-B8 (testi tradotti dell'editor dei dati). I-10 S3 chiusa senza codice, per decisione del
+> coordinatore: il contratto documentato permette di cancellare gli eventi automatici. Validazione di W sulla
+> revisione combinata: build 0/0, `i18n check` stretto, `core-unit` 4 266, `component-unit` 3 198, `tx-unit` 887,
+> `theme-roles` pulito, E2E `transactions-modals` 25, `asset-data-editor` 26, `fx-csv-import` 21, `fx-editor` 4.
+> Con l'ingresso, `ui/data-editor` è libera per T. W-B13 passa a X.
+>
+> **Prossimo di W**: W4 (`services/brim/`). W3 (`api/v1/brokers/`) e W5–W6 (`uploads.py`) aspettano un commit del
+> coordinatore su quei file, come dice il piano di W.
+
+### H, letture di `web_link_finder` in `config/`, integrato ✅ (2026-10-15, 04:25)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `9dda5ccd9` (lotto `fd873f366`, base aggiornata con X CP2b
+> e W K1). Le 7 letture d'ambiente di `services/assets/web_link_finder.py` passano in `config/plugins.py`, la sezione
+> di X, con la stessa semantica; la chiave API vale anche da `..._API_KEY_FILE`. La guardia `config-package` non ha più
+> eccezioni: nessun modulo di `backend/app` fuori da `config/` legge l'ambiente. Validazione di H: `all-backend` 12 185
+> passed, 3 skipped, 0 failed sulla sua base; sopra X CP2b, controllo leggero (guardia 540 = 530 + 12 − 2, raccolta,
+> `api schema`, `mkdocs build` stretto). Le note su `web_link_finder` per X le gira il coordinatore.
+
+### J CP-1, il PAC per tema, integrato ✅ (2026-10-15, 04:35)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `e1fbc801f`. CP-1A (rinomina) e CP-1B (taglio del PAC e
+> guardia dei confini D-J18, allargata a `sqlmodel` e `backend.app.db`), poi quattro aggiornamenti di base. Sulla
+> revisione `b17f8fb85` (con W I1, A3, H CP3 e X CP2b) J ha fatto la prima run completa sulla combinazione X CP2b +
+> H CP3: `all-backend` 13 810 passed, 28 skipped, 0 failed; `openapi.json` identico. Sull'ultima base (`b8d604086`,
+> con W K1 e il lotto di H) un controllo leggero: guardia 567, raccolta +61, API identica.
+>
+> **Strumenti nuovi per i merge**, scritti da J: `patch_effect.py` (bersagli di `patch`/`monkeypatch` che nessuno
+> legge più) e `guard_strings.py` (percorsi nelle stringhe delle guardie che non portano più a niente). Con la
+> risoluzione statica degli import del coordinatore, sono i controlli di ogni aggiornamento di base. J-2 diventa C-94
+> nella sezione C; C-93 non si è ripresentato.
+
+### W4 CP6, BRIM in `services/brim/`, integrato ✅ (2026-10-15, 04:45)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `155d9b050`. Rinomina pura `548a0688d` (C1): i 4 moduli
+> `brim_provider`, `brim_report_sets`, `brim_parse_pool`, `brim_gap_fix` in `services/brim/` (R098–R100), import nei 33
+> plugin, costanti del cancello `gate-event-loop-io`, `applyTo`, skill, doc e devWiki; U-B8 (passo «Capacity table»
+> tolto dalla guida). Validazione di W: `all-backend` 13 749 passed, 28 skipped, 0 failed sulla base `0229dbc6a`;
+> sopra J CP-1 e il lotto di H, controllo leggero (guardia 567, raccolta identica file per file, API identica) e i
+> tre controlli statici del coordinatore puliti. Il taglio (CP7), W3 e W5–W6 aspettano un commit del coordinatore su
+> `brokers.py` e `uploads.py`; intanto W7 e K2.
