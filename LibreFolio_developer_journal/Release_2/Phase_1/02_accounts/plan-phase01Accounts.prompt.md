@@ -3371,3 +3371,22 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   - E2E `admin-users` 10 ✅ e `settings` 46 ✅, con `--workers 2`;
 >   - `mkdocs build` ✅; `check-orphans` ✅.
 >   - Resta `core-unit`, nello slot 1 dopo J, quando lo dà il coordinatore.
+
+#### Nota del coordinatore — `main.py` congelato (15/10, 20:05)
+> - `backend/app/main.py` è congelato fino all'ingresso di CP2b di H. CP2b lo divide in `services/platform/`:
+>   `lifecycle.py` (avvio e spegnimento), `middleware.py`, `static_site.py` e `database_bootstrap.py`.
+> - **Per A**: A6d non tocca l'avvio (default in `schemas/settings.py`, migrazione 008, `LoginCard`, le due GET). A7
+>   (admin iniziale F02 all'avvio) e A8 (controlli di sicurezza all'avvio) aspettano CP2b; dopo basta una riga nel
+>   modulo giusto.
+> - **Rosso preesistente noto** (coordinatore, 15/10 20:08): in `dev_release2`, quindi anche nella mia base dopo il
+>   merge, `htmlInterpolation.gate.test.ts` è rosso sulla chiave `email.problems.SMTP_FROM_INVALID` di E2, che contiene
+>   `<`. E lo corregge. Se compare in `core-unit` lo segnalo come preesistente; ogni altro rosso va guardato.
+> - **Verdetto di G sullo scatto `settings/users`** (`c576a0499`, 15/10 20:09): **ok, può entrare**. Il merge di
+>   `gallery.spec.ts` con E2b è pulito. Le note non bloccanti:
+>   1. il commento citava «(G-10)», che riguarda l'ordine degli avatar: ora rimanda a `registerGalleryAccount`
+>      (`galleryReportSets.ts`). Solo il commento cambia; prettier è pulito;
+>   2. «(admin)» nel titolo: tenuto com'è, `'users - all languages and themes'`, come dice la checklist di G e per
+>      non cambiare il filtro;
+>   3. corpi e rotte in `fixtures/galleryUsers.ts`: rimandato ad A-18, quando lo scatto si ricontrolla comunque.
+>   - `tsc -p tsconfig.e2e.json` sulla revisione combinata (HEAD `97fb199f1`, con il client generato dal mio
+>     `api sync`): i soli 2 errori di base (`e2e/onboarding-tour.spec.ts:863`, `src/lib/types/files.ts:9`).
