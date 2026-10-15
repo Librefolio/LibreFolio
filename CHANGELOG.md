@@ -21,7 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A currency exchange explains its two dates, in the form and in the guide: they usually match, and differ when the broker credits the new currency on another day.
 - `GET /api/v1/system/ready`: 200 when the database answers and its schema is at the latest migration, 503 otherwise, one code per check — for Docker health checks, Uptime Kuma and hosting panels.
 - `LIBREFOLIO_PROFILE`: `selfhosted` (the default, nothing changes) or `managed`, for whoever hosts LibreFolio for others. In the managed profile a `JWT_SECRET` shorter than 32 characters stops the server at startup; elsewhere it stays a warning in the log. Documented in the new admin page "Hosting for Others".
-- **Instance block, for hosting providers**: with `LIBREFOLIO_BLOCKED=1` the data stays, and whoever signs in sees a page saying the instance is blocked, with the deletion date when `LIBREFOLIO_DELETION_DATE` is set. To a signed-in user the API answers `423 instance_blocked` to everything except signing in and out, deleting their own account, the block page, the public configuration and the health, readiness and version probes. A malformed value of either variable stops the server at startup, naming the variable.
+- **Instance block, for hosting providers**: with `LIBREFOLIO_BLOCKED=1` the data stays, and whoever signs in sees a page saying the instance is blocked, with the deletion date when `LIBREFOLIO_DELETION_DATE` is set. To a signed-in user the API answers `423 instance_blocked` to everything except signing in and out, following a password-reset link already sent, deleting their own account, the block page, the public configuration and the health, readiness and version probes. A malformed value of either variable stops the server at startup, naming the variable.
+- On a blocked instance, administrators see **Manage subscription** on the block page, linking to the hosting provider's billing page set in `LIBREFOLIO_BILLING_URL`.
 - `GET /api/v1/system/block`: the block state behind that page, for signed-in users.
 - **Who can sign up**: in Settings › Admin, «Registration» is Open, By invitation or Closed. `LIBREFOLIO_REGISTRATION` can set it from the server; the field then shows the mode in force, read-only.
 - **Invitation links**: an administrator creates single-use links, valid 7 days, with `./dev.py user invite [--admin] [--email …]` or the admin API. The link opens the registration form with the role and, if given, the suggested address, which can be changed.
@@ -86,6 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PAC Allocator: a negative amount to use, declared liquidity or contribution, and an order step of zero or less, are reported on their own field before the request is sent.
 - PAC Allocator: the help texts of "Value after the plan" and "Ideal value" describe a PAC, which starts from zero.
 - Deleting your account: a technical failure now answers "nothing was deleted" instead of a generic server error, and a problem removing report files after the deletion no longer reports the deletion as failed.
+- `./dev.py server` counts only the process listening on its port: a program merely connected to it no longer stops the start, and `--force` no longer kills it.
 
 ### ⚠️ Breaking changes
 
