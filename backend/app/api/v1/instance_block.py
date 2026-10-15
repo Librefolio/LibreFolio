@@ -6,9 +6,11 @@ endpoint answers only when it is in ``ALLOWED_WHEN_BLOCKED``. FastAPI does not g
 ``Route``, a ``WebSocketRoute`` or a ``Mount``, so none of them belongs under ``/api/v1``; a test checks it. The only
 exceptions are FastAPI's own documentation routes, ``/api/v1/openapi.json``, ``/api/v1/docs`` and ``/api/v1/redoc``
 (``main.py``): they carry the API's schema and no data, and answer as they do for anyone; the test pins them. The list is
-short on purpose: signing in and out, the block page, the deletion of one's own account, and the probes. The full backup
-for the admin and the scheduled wake-up join it, one line each, when their routes exist; anything else goes through the
-developer first. A test pins the list.
+short on purpose: signing in and out, a password-reset or invitation link already sent (read it, reset the password
+with it: someone who lost the password must still reach the block page, the account deletion or the backup), the block
+page, the deletion of one's own account, and the probes. Registration stays out. The full backup for the admin and the
+scheduled wake-up join it, one line each, when their routes exist; anything else goes through the developer first. A
+test pins the list.
 
 FastAPI hands a dependency the endpoint function of the matched route (``scope["endpoint"]``), not its full path, so
 the list holds endpoint functions. The refusal is ``423 Locked`` with the code ``instance_blocked``, and only a
@@ -37,6 +39,9 @@ ALLOWED_WHEN_BLOCKED = frozenset(
         auth.login,
         auth.logout,
         auth.get_me,
+        # A link already sent: reading it, and setting a new password with a reset link (no account is created)
+        auth.inspect_link_token,
+        auth.reset_password_with_link,
         # The deletion of one's own account
         auth.delete_own_account,
         # The block page

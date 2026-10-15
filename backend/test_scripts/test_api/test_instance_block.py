@@ -13,9 +13,15 @@ and ``ALLOWED_WHEN_BLOCKED``) and the block page ``GET /api/v1/system/block`` (`
     ``{"detail": {"code": "instance_blocked", "message": ...}}``, before the body is validated: an invalid body gets
     423, not 422. The allowed routes answer as usual: ``/auth/me``, ``/system/block`` (blocked, with the deletion date),
     ``/system/info`` in full, health, the test runner's probe, readiness and the public configuration; signing in and
-    out works, and so does deleting one's own account.
+    out works, and so does deleting one's own account. A link already sent works too: ``POST /auth/tokens/inspect`` and
+    ``POST /auth/password-reset`` answer a caller without a session as on the instance not blocked, and a reset link
+    issued before the block sets the new password, which signs in and reaches the block page. Registration stays out of
+    the list: an invitation reads as valid, and spending it registers nobody. ``/system/block`` gives an administrator
+    ``billing_url``, ``LIBREFOLIO_BILLING_URL`` through A5's ``billing_link()`` (one trailing slash removed; null when
+    unset or not an http(s) address), and anyone else null, whatever the variable says.
 (b) Not blocked (unset, blank, or a value that does not block): the routes answer as before, and ``/system/block`` is
-    ``{"blocked": false, "deletion_date": null}`` with a session and 401 without, on the lane's backend too.
+    ``{"blocked": false, "deletion_date": null, "billing_url": null}`` with the session of a regular user and 401
+    without, on the lane's backend too.
 (c) The guard. FastAPI gives router dependencies to an ``APIRoute`` (and its subclasses) only, never to a plain
     ``Route``, a ``WebSocketRoute`` or a ``Mount``. So every route or mount of the app under ``/api/v1`` must be an
     ``APIRoute`` resolving ``refuse_when_blocked`` first, before the route's own dependencies, so that a signed-in
@@ -23,16 +29,21 @@ and ``ALLOWED_WHEN_BLOCKED``) and the block page ``GET /api/v1/system/block`` (`
     documentation (``openapi_url``, ``docs_url``, ``redoc_url`` of ``main.py``): three plain routes, which the block does
     not reach. Every function of ``ALLOWED_WHEN_BLOCKED`` is the endpoint of a registered route, and the list is pinned
     by name and by route, so an addition shows in review.
-(d) OpenAPI documents ``GET /api/v1/system/block`` with ``InstanceBlockResponse``.
+(d) OpenAPI documents ``GET /api/v1/system/block`` with ``InstanceBlockResponse``: ``blocked`` required, the deletion
+    date and the billing link optional.
 
 The block is set in this process only: the app of ``backend/app/main.py`` runs in process through
-``httpx.ASGITransport`` (its lifespan does not run), and ``LIBREFOLIO_BLOCKED`` and ``LIBREFOLIO_DELETION_DATE`` are set
-through ``monkeypatch``; ``instance_blocked()`` reads them at every request. The lane's shared backend is never blocked:
-only the live checks of (b) run on it. The in-process app reads and writes the lane's database and signs its own
-session tokens, so its sessions are opened in process. Write-scoped: each test that signs in registers a regular user
-of its own while the instance is not blocked, and deletes it. On a lane whose database has no account yet, the first
-registration becomes its administrator (``auth.register``): the test then registers the regular user it needs, and
-deletes that administrator through the service layer, since the API keeps the last administrator.
+``httpx.ASGITransport`` (its lifespan does not run), and ``LIBREFOLIO_BLOCKED``, ``LIBREFOLIO_DELETION_DATE`` and
+``LIBREFOLIO_BILLING_URL`` are set through ``monkeypatch``; ``instance_blocked()`` and ``billing_link()`` read them at
+every request. The lane's shared backend is never blocked: only the live checks of (b) run on it. The in-process app
+reads and writes the lane's database and signs its own session tokens, so its sessions are opened in process.
+Write-scoped: each test that signs in registers a regular user of its own while the instance is not blocked, and deletes
+it. On a lane whose database has no account yet, the first registration becomes its administrator (``auth.register``):
+the test then registers the regular user it needs, and deletes that administrator through the service layer, since the
+API keeps the last administrator. The administrator of a billing case is a user of the test promoted through
+``user_service``, as ``test_users_admin_api.py`` does on the lane, and deleted through the service layer too. The links
+are issued by A5's token service in the lane's database, as ``test_registration_api.py`` issues them: a reset link goes
+with its account, an invitation is deleted by id.
 """
 
 from __future__ import annotations
@@ -47,6 +58,7 @@ import pytest_asyncio
 from fastapi import APIRouter, Depends, FastAPI, WebSocket
 from fastapi.responses import PlainTextResponse
 from fastapi.routing import APIRoute, iter_route_contexts
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 from starlette.routing import Mount, Route, WebSocketRoute
@@ -55,9 +67,11 @@ from backend.app.api.v1.auth import SESSION_COOKIE_NAME
 from backend.app.api.v1.instance_block import ALLOWED_WHEN_BLOCKED, refuse_when_blocked
 from backend.app.config import API_V1_PREFIX, TEST_LANE_HEADER, get_settings, is_test_mode
 from backend.app.config.platform import instance_blocked
+from backend.app.db.models import AccountToken, AccountTokenPurpose
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.system import InstanceBlockResponse, SystemInfoPublicResponse, SystemInfoResponse
-from backend.app.services.accounts import user_service
+from backend.app.services.accounts import token_service, user_service
+from backend.app.services.accounts.registration_service import billing_link
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -65,7 +79,20 @@ BLOCKED_VARIABLE = "LIBREFOLIO_BLOCKED"
 DELETION_DATE_VARIABLE = "LIBREFOLIO_DELETION_DATE"
 DELETION_DATE = "2026-11-14"
 PASSWORD = "InstanceBlockPass123!"
+NEW_PASSWORD = "InstanceBlockReset456!"
 TIMEOUT = 30
+
+BILLING_VARIABLE = "LIBREFOLIO_BILLING_URL"
+#: Where a provider's customer manages the subscription, as the provider writes it, and as the block page gives it.
+BILLING_ADDRESS = "https://billing.example.test/acme/"
+BILLING_LINK = "https://billing.example.test/acme"
+#: Not an http(s) address: billing_link() refuses it.
+INVALID_BILLING_ADDRESS = "ftp://billing.example.test"
+
+#: The two link routes, under /api/v1, and a placeholder token that no link ever carried.
+INSPECT = "/auth/tokens/inspect"
+RESET = "/auth/password-reset"
+NEVER_ISSUED_TOKEN = "never-issued-instance-block-placeholder"
 
 #: The answer of a refused route to a signed-in caller, whole.
 BLOCKED_ANSWER = {"detail": {"code": "instance_blocked", "message": "This instance is blocked by its hosting provider"}}
@@ -92,6 +119,8 @@ ALLOWED_ROUTES = {
     "backend.app.api.v1.auth.login": ("POST", "/api/v1/auth/login"),
     "backend.app.api.v1.auth.logout": ("POST", "/api/v1/auth/logout"),
     "backend.app.api.v1.auth.get_me": ("GET", "/api/v1/auth/me"),
+    "backend.app.api.v1.auth.inspect_link_token": ("POST", "/api/v1/auth/tokens/inspect"),
+    "backend.app.api.v1.auth.reset_password_with_link": ("POST", "/api/v1/auth/password-reset"),
     "backend.app.api.v1.auth.delete_own_account": ("DELETE", "/api/v1/auth/users/me"),
     "backend.app.api.v1.system.block.get_instance_block": ("GET", "/api/v1/system/block"),
     "backend.app.api.v1.system.instance.get_instance_config": ("GET", "/api/v1/system/instance"),
@@ -199,11 +228,12 @@ async def _regular_user(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> tuple[
     return regular, username
 
 
-async def _delete_if_present(app: FastAPI, monkeypatch: pytest.MonkeyPatch, username: str) -> None:
-    """Cleanup while the instance is not blocked: sign in by email, which a rename leaves, and delete the account, unless it is already gone."""
+async def _delete_if_present(app: FastAPI, monkeypatch: pytest.MonkeyPatch, username: str, password: str = PASSWORD) -> None:
+    """Cleanup while the instance is not blocked: sign in by email, which a rename leaves, with ``password``, and delete
+    the account, unless it is already gone. After a password reset the caller tries the new password, then the old."""
     with monkeypatch.context() as unblocked:
         _unblock(unblocked)
-        login = await _request(app, "POST", "/auth/login", json={"username": f"{username}@example.com", "password": PASSWORD})
+        login = await _request(app, "POST", "/auth/login", json={"username": f"{username}@example.com", "password": password})
         if login.status_code == 401:
             return
         deleted = await _request(app, "DELETE", "/auth/users/me", session=_session_of(login))
@@ -236,6 +266,70 @@ async def account(app, monkeypatch) -> AsyncIterator[Account]:
         yield Account(username, session)
     finally:
         await _delete_users_of_this_test(app, monkeypatch, username, administrator)
+
+
+async def _promote(username: str) -> None:
+    """Make one of this test's users an administrator through user_service, in the lane's database, as
+    ``test_users_admin_api.py`` promotes its own on the lane."""
+    assert is_test_mode(), "Precondition: test mode, so the promotion reaches the lane's test database"
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        done, error = await user_service.set_user_admin(session, username, True)
+    assert done, f"Setup: promoting {username} failed: {error}"
+
+
+@pytest_asyncio.fixture
+async def administrator(app, monkeypatch) -> AsyncIterator[Account]:
+    """An administrator of this test: registered while not blocked and promoted through user_service (unless the lane had
+    no account, which made it the administrator already), then signed in through the app in process. Deleted at
+    teardown through the service layer, since the API keeps the last administrator."""
+    username, first_account = await _register(app, monkeypatch)
+    try:
+        if not first_account:
+            await _promote(username)
+        with monkeypatch.context() as unblocked:
+            _unblock(unblocked)
+            session = _session_of(await _request(app, "POST", "/auth/login", json=_credentials(username)))
+            me = await _request(app, "GET", "/auth/me", session=session)
+        assert me.status_code == 200 and me.json()["user"]["is_superuser"] is True, f"Setup: {username} must be signed in as an administrator: {me.status_code} {me.text}"
+        yield Account(username, session)
+    finally:
+        await _delete_administrator_of_this_test(username)
+
+
+async def _reset_link(username: str) -> str:
+    """A password-reset link for one of this test's users, issued by A5's token service in the lane's database and
+    committed, as ``test_registration_api.py`` issues one: its token, shown once. Its row goes with the account."""
+    assert is_test_mode(), "Precondition: test mode, so the link is written in the lane's test database"
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        user = await user_service.get_user_by_username(session, username)
+        assert user is not None, f"Setup: {username} must exist to receive a reset link"
+        issued = await token_service.issue_token(session, AccountTokenPurpose.PASSWORD_RESET, user_id=user.id)
+        await session.commit()
+    return issued.token
+
+
+async def _invitation() -> token_service.IssuedToken:
+    """An invitation that grants no role, issued by A5's token service in the lane's database and committed, as
+    ``test_registration_api.py`` issues one. No account holds its row: the test deletes it by id (``_delete_token``)."""
+    assert is_test_mode(), "Precondition: test mode, so the invitation is written in the lane's test database"
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        issued = await token_service.issue_token(session, AccountTokenPurpose.INVITE)
+        await session.commit()
+    return issued
+
+
+async def _delete_token(token_id: int) -> None:
+    """Cleanup of a link this test issued, by id."""
+    async with AsyncSession(get_async_engine()) as session:
+        await session.execute(delete(AccountToken).where(AccountToken.id == token_id))
+        await session.commit()
+
+
+def _error_code(response: httpx.Response) -> str | None:
+    """``detail.error_code`` of a coded refusal, or None when the body has none."""
+    body = response.json()
+    detail = body.get("detail") if isinstance(body, dict) else None
+    return detail.get("error_code") if isinstance(detail, dict) else None
 
 
 # =============================================================================
@@ -388,16 +482,17 @@ def _answer(response: httpx.Response) -> tuple[int, object]:
     return response.status_code, response.json()
 
 
-async def _usual_then_blocked(app: FastAPI, monkeypatch: pytest.MonkeyPatch, paths: list[str], *, session: dict[str, str] | None = None) -> tuple[dict[str, httpx.Response], dict[str, httpx.Response]]:
-    """GET each path from the same session, or the same anonymity, with the block off for these requests only, then
-    blocked: ``(usual, blocked)``, by path. The block the test set is on again for the second requests, and stays on."""
+async def _usual_then_blocked(app: FastAPI, monkeypatch: pytest.MonkeyPatch, paths: list[str], *, session: dict[str, str] | None = None, method: str = "GET", json: object = None) -> tuple[dict[str, httpx.Response], dict[str, httpx.Response]]:
+    """``method`` each path (GET by default; ``json`` its body, if any) from the same session, or the same anonymity,
+    with the block off for these requests only, then blocked: ``(usual, blocked)``, by path. The block the test set is on
+    again for the second requests, and stays on. Each request is sent twice: only for requests that change nothing."""
     assert instance_blocked(), "Precondition: the test blocks the instance first"
     with monkeypatch.context() as unblocked:
         _unblock(unblocked)
         assert not instance_blocked(), "Barrier: the usual requests run on the instance not blocked"
-        usual = {path: await _request(app, "GET", path, session=session) for path in paths}
+        usual = {path: await _request(app, method, path, session=session, json=json) for path in paths}
     assert instance_blocked(), "Barrier: the block is on again for the blocked requests, and for the rest of the test"
-    blocked = {path: await _request(app, "GET", path, session=session) for path in paths}
+    blocked = {path: await _request(app, method, path, session=session, json=json) for path in paths}
     return usual, blocked
 
 
@@ -492,6 +587,113 @@ async def test_a_user_can_delete_their_own_account_on_a_blocked_instance(app, mo
     print_success("own account deleted while blocked")
 
 
+# =============================================================================
+# (a) Blocked: a link already sent
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("purpose", ["password_reset", "invite"], ids=["reset-link", "invitation"])
+async def test_reading_a_link_answers_a_caller_without_a_session_as_usual(app, monkeypatch, purpose):
+    """(a) POST /auth/tokens/inspect is allowed: blocked, a token no link ever carried gets, without a session, the same
+    status and body as on the instance not blocked (200, ``unknown``): neither the 401 a refused route gives a caller
+    without a session, nor the 423 of the block."""
+    body = {"token": NEVER_ISSUED_TOKEN, "purpose": purpose}
+    _block(monkeypatch)
+
+    usual, blocked = await _usual_then_blocked(app, monkeypatch, [INSPECT], method="POST", json=body)
+
+    before, after = usual[INSPECT], blocked[INSPECT]
+    assert before.status_code == 200 and (before.json()["status"], before.json()["purpose"]) == ("unknown", purpose), f"Barrier: POST {INSPECT} answers a token never issued as unknown when not blocked: {before.status_code} {before.text}"
+    assert after.status_code not in (401, 423), f"POST {INSPECT} must not be refused on a blocked instance: {after.status_code} {after.text}"
+    assert _answer(after) == _answer(before), f"POST {INSPECT} without a session must answer as when not blocked: {before.status_code} {before.text}, blocked {after.status_code} {after.text}"
+    print_success(f"POST {INSPECT} ({purpose}, never issued): 200 unknown, blocked or not")
+
+
+@pytest.mark.asyncio
+async def test_a_reset_with_a_link_never_issued_is_refused_as_usual(app, monkeypatch):
+    """(a) POST /auth/password-reset is allowed: blocked, a token no link ever carried gets, without a session, its usual
+    refusal, 400 ``TOKEN_INVALID``, the same status and body as on the instance not blocked: neither 401 nor 423."""
+    body = {"token": NEVER_ISSUED_TOKEN, "new_password": NEW_PASSWORD}
+    _block(monkeypatch)
+
+    usual, blocked = await _usual_then_blocked(app, monkeypatch, [RESET], method="POST", json=body)
+
+    before, after = usual[RESET], blocked[RESET]
+    assert (before.status_code, _error_code(before)) == (400, "TOKEN_INVALID"), f"Barrier: POST {RESET} refuses a token never issued with TOKEN_INVALID when not blocked: {before.status_code} {before.text}"
+    assert after.status_code not in (401, 423), f"POST {RESET} must not be refused by the block: {after.status_code} {after.text}"
+    assert _answer(after) == _answer(before), f"POST {RESET} without a session must answer as when not blocked: {before.status_code} {before.text}, blocked {after.status_code} {after.text}"
+    print_success(f"POST {RESET} (never issued): 400 TOKEN_INVALID, blocked or not")
+
+
+@pytest.mark.asyncio
+async def test_a_reset_link_sent_before_the_block_sets_a_password_that_signs_in(app, monkeypatch):
+    """(a) Someone who lost the password, on a blocked instance: the reset link sent before the block reads as valid, for
+    their account; spent without a session, it sets the new password (200). The old password no longer signs in, the new
+    one does, and its session reaches /auth/me and the block page."""
+    print_section("Instance block: a password reset with a link already sent")
+    username, administrator = await _regular_user(app, monkeypatch)
+    try:
+        link = await _reset_link(username)
+        _block(monkeypatch)
+
+        inspected = await _request(app, "POST", INSPECT, json={"token": link, "purpose": "password_reset"})
+        reset = await _request(app, "POST", RESET, json={"token": link, "new_password": NEW_PASSWORD})
+        with_old = await _request(app, "POST", "/auth/login", json=_credentials(username))
+        with_new = await _request(app, "POST", "/auth/login", json={"username": username, "password": NEW_PASSWORD})
+
+        assert inspected.status_code == 200 and (inspected.json()["status"], inspected.json()["username"]) == ("valid", username), f"POST {INSPECT} with the reset link while blocked: {inspected.status_code} {inspected.text}"
+        assert reset.status_code == 200, f"POST {RESET} with the reset link while blocked: {reset.status_code} {reset.text}"
+        assert (with_old.status_code, with_old.json()) == (401, {"detail": "Invalid credentials"}), f"the old password must no longer sign in: {with_old.status_code} {with_old.text}"
+        session = _session_of(with_new)
+        me = await _request(app, "GET", "/auth/me", session=session)
+        block = await _request(app, "GET", "/system/block", session=session)
+
+        assert instance_blocked(), "Barrier: every request of this test ran on the blocked instance"
+        assert me.status_code == 200 and me.json()["user"]["username"] == username, f"the new password's session must be this account's: {me.status_code} {me.text}"
+        assert (block.status_code, block.json()) == (200, {"blocked": True, "deletion_date": DELETION_DATE, "billing_url": None}), f"the new password's session must reach the block page: {block.status_code} {block.text}"
+    finally:
+        try:
+            await _delete_if_present(app, monkeypatch, username, password=NEW_PASSWORD)
+        finally:
+            await _delete_users_of_this_test(app, monkeypatch, username, administrator)
+    print_success("reset link read and spent while blocked: the new password signs in and reaches the block page")
+
+
+@pytest.mark.asyncio
+async def test_an_invitation_reads_as_valid_but_registers_nobody_on_a_blocked_instance(app, monkeypatch):
+    """(a) Registration stays out of the list, links or not: blocked, an invitation already sent reads as valid, but
+    POST /auth/register with it gets the 401 of get_current_user, as a registration without a session does: no account
+    is created, and the invitation is still valid afterwards."""
+    username = f"instblock_{uuid4().hex[:12]}"
+    invitation = await _invitation()
+    registered = None
+    try:
+        _block(monkeypatch)
+
+        inspected = await _request(app, "POST", INSPECT, json={"token": invitation.token, "purpose": "invite"})
+        registered = await _request(app, "POST", "/auth/register", json={**_credentials(username), "email": f"{username}@example.com", "invite_token": invitation.token})
+        login = await _request(app, "POST", "/auth/login", json=_credentials(username))
+        afterwards = await _request(app, "POST", INSPECT, json={"token": invitation.token, "purpose": "invite"})
+
+        assert inspected.status_code == 200 and inspected.json()["status"] == "valid", f"Barrier: the invitation reads as valid while blocked: {inspected.status_code} {inspected.text}"
+        assert (registered.status_code, registered.json()) == (401, {"detail": "Not authenticated"}), f"POST /auth/register with an invitation on a blocked instance must get the 401 of get_current_user: {registered.status_code} {registered.text}"
+        assert (login.status_code, login.json()) == (401, {"detail": "Invalid credentials"}), f"the refused registration must create no account: {login.status_code} {login.text}"
+        assert afterwards.status_code == 200 and afterwards.json()["status"] == "valid", f"the refused registration must leave the invitation valid: {afterwards.status_code} {afterwards.text}"
+    finally:
+        try:
+            if registered is not None and registered.status_code == 201:
+                await _delete_users_of_this_test(app, monkeypatch, *_split_by_role(username, registered.json()["user"]["is_superuser"]))
+        finally:
+            await _delete_token(invitation.record.id)
+    print_success("an invitation while blocked: read as valid, registration 401, no account, still valid")
+
+
+# =============================================================================
+# (a) Blocked: the block page
+# =============================================================================
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("deletion_date", "answered"),
@@ -503,13 +705,52 @@ async def test_a_user_can_delete_their_own_account_on_a_blocked_instance(app, mo
     ],
 )
 async def test_the_block_page_answers_the_deletion_date_when_given(app, monkeypatch, account, deletion_date, answered):
-    """(a) GET /system/block on a blocked instance: blocked, and the deletion date in ISO, or null when none is given."""
+    """(a) GET /system/block on a blocked instance: blocked, and the deletion date in ISO, or null when none is given; no
+    billing link for a regular user."""
     _block(monkeypatch, deletion_date)
 
     response = await _request(app, "GET", "/system/block", session=account.session)
 
-    assert (response.status_code, response.json()) == (200, {"blocked": True, "deletion_date": answered}), f"GET /system/block with {DELETION_DATE_VARIABLE}={deletion_date!r}: {response.status_code} {response.text}"
+    assert (response.status_code, response.json()) == (200, {"blocked": True, "deletion_date": answered, "billing_url": None}), f"GET /system/block with {DELETION_DATE_VARIABLE}={deletion_date!r}: {response.status_code} {response.text}"
     InstanceBlockResponse.model_validate(response.json())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("address", "answered"),
+    [
+        pytest.param(BILLING_ADDRESS, BILLING_LINK, id="https-one-trailing-slash-removed"),
+        pytest.param(None, None, id="unset"),
+        pytest.param(INVALID_BILLING_ADDRESS, None, id="not-http"),
+    ],
+)
+async def test_the_block_page_gives_an_administrator_the_billing_link(app, monkeypatch, administrator, address, answered):
+    """(a) GET /system/block on a blocked instance, to an administrator: ``billing_url`` is ``LIBREFOLIO_BILLING_URL``
+    with one trailing slash removed, and null when the variable is unset or not an http(s) address."""
+    if address is None:
+        monkeypatch.delenv(BILLING_VARIABLE, raising=False)
+    else:
+        monkeypatch.setenv(BILLING_VARIABLE, address)
+    _block(monkeypatch)
+
+    response = await _request(app, "GET", "/system/block", session=administrator.session)
+
+    assert (response.status_code, response.json()) == (200, {"blocked": True, "deletion_date": DELETION_DATE, "billing_url": answered}), f"GET /system/block to an administrator with {BILLING_VARIABLE}={address!r}: {response.status_code} {response.text}"
+    InstanceBlockResponse.model_validate(response.json())
+    print_success(f"{BILLING_VARIABLE}={address!r}: an administrator gets billing_url={answered!r}")
+
+
+@pytest.mark.asyncio
+async def test_the_block_page_gives_a_regular_user_no_billing_link(app, monkeypatch, account):
+    """(a) The same variable, a regular user: GET /system/block on a blocked instance answers ``billing_url`` null."""
+    monkeypatch.setenv(BILLING_VARIABLE, BILLING_ADDRESS)
+    _block(monkeypatch)
+    assert billing_link() == BILLING_LINK, "Barrier: the variable is in force in this process, an administrator would get the link"
+
+    response = await _request(app, "GET", "/system/block", session=account.session)
+
+    assert (response.status_code, response.json()) == (200, {"blocked": True, "deletion_date": DELETION_DATE, "billing_url": None}), f"GET /system/block to a regular user with {BILLING_VARIABLE} set: {response.status_code} {response.text}"
+    print_success("a regular user: billing_url null, whatever the variable says")
 
 
 # =============================================================================
@@ -520,7 +761,8 @@ async def test_the_block_page_answers_the_deletion_date_when_given(app, monkeypa
 @pytest.mark.asyncio
 @pytest.mark.parametrize("value", [None, "", "  ", "false", "0", "no", "OFF"], ids=["unset", "empty", "blank", "false", "0", "no", "OFF"])
 async def test_routes_answer_as_before_when_not_blocked(app, monkeypatch, account, value):
-    """(b) Unset, blank or a value that does not block: reads answer, invalid bodies are 422, anonymous callers 401."""
+    """(b) Unset, blank or a value that does not block: reads answer, invalid bodies are 422, anonymous callers 401; the
+    block page reports no block, and no billing link to a regular user."""
     if value is None:
         monkeypatch.delenv(BLOCKED_VARIABLE, raising=False)
     else:
@@ -537,7 +779,7 @@ async def test_routes_answer_as_before_when_not_blocked(app, monkeypatch, accoun
     assert connection.status_code == 200, f"GET /system/connection: {connection.status_code} {connection.text}"
     assert invalid.status_code == 422, f"POST /auth/change-password with an empty body: {invalid.status_code} {invalid.text}"
     assert (anonymous.status_code, anonymous.json()) == (401, {"detail": "Not authenticated"}), f"GET /brokers without a session: {anonymous.status_code} {anonymous.text}"
-    assert (block.status_code, block.json()) == (200, {"blocked": False, "deletion_date": None}), f"GET /system/block: {block.status_code} {block.text}"
+    assert (block.status_code, block.json()) == (200, {"blocked": False, "deletion_date": None, "billing_url": None}), f"GET /system/block: {block.status_code} {block.text}"
     print_success(f"{BLOCKED_VARIABLE}={value!r}: routes as before, not blocked")
 
 
@@ -600,13 +842,14 @@ async def live_session(test_server) -> AsyncIterator[dict[str, str]]:
 
 @pytest.mark.asyncio
 async def test_the_lane_backend_is_not_blocked(live_session):
-    """(b) Live: the lane's backend answers the block page, not blocked and without a date, and only to a session."""
+    """(b) Live: the lane's backend answers the block page, not blocked, without a date or a billing link (a regular
+    user), and only to a session."""
     async with httpx.AsyncClient() as client:
         signed_in = await client.get(f"{API_BASE}/system/block", headers=live_session, timeout=TIMEOUT)
     async with httpx.AsyncClient() as client:
         anonymous = await client.get(f"{API_BASE}/system/block", timeout=TIMEOUT)
 
-    assert (signed_in.status_code, signed_in.json()) == (200, {"blocked": False, "deletion_date": None}), f"GET /system/block on the lane's backend: {signed_in.status_code} {signed_in.text}"
+    assert (signed_in.status_code, signed_in.json()) == (200, {"blocked": False, "deletion_date": None, "billing_url": None}), f"GET /system/block on the lane's backend: {signed_in.status_code} {signed_in.text}"
     assert (anonymous.status_code, anonymous.json()) == (401, {"detail": "Not authenticated"}), f"GET /system/block without a session on the lane's backend: {anonymous.status_code} {anonymous.text}"
     print_success("lane backend: not blocked, the block page behind the session")
 
@@ -760,7 +1003,8 @@ def test_the_allowed_list_is_pinned_by_name_and_route(app):
 
 
 def test_openapi_documents_the_block_page(app):
-    """(d) GET /api/v1/system/block: a System route whose 200 is InstanceBlockResponse, blocked required, the date optional."""
+    """(d) GET /api/v1/system/block: a System route whose 200 is InstanceBlockResponse, blocked required, the date and the
+    billing link optional."""
     document = app.openapi()
     operation = document["paths"][f"{API_V1_PREFIX}/system/block"]["get"]
     schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
@@ -769,7 +1013,9 @@ def test_openapi_documents_the_block_page(app):
     assert operation["tags"] == ["System"], f"GET /system/block belongs to the System tag: {operation['tags']}"
     component = document["components"]["schemas"]["InstanceBlockResponse"]
     properties = component["properties"]
-    assert set(properties) == {"blocked", "deletion_date"} and component.get("required") == ["blocked"], f"InstanceBlockResponse: {component}"
+    assert set(properties) == {"blocked", "deletion_date", "billing_url"} and component.get("required") == ["blocked"], f"InstanceBlockResponse: {component}"
     assert properties["blocked"]["type"] == "boolean", f"blocked: {properties['blocked']}"
     variants = properties["deletion_date"].get("anyOf", [])
     assert {"type": "string", "format": "date"} in variants and {"type": "null"} in variants, f"deletion_date is an ISO date or null: {properties['deletion_date']}"
+    billing_variants = properties["billing_url"].get("anyOf", [])
+    assert {"type": "string"} in billing_variants and {"type": "null"} in billing_variants, f"billing_url is an address or null: {properties['billing_url']}"
