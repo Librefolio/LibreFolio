@@ -68,7 +68,7 @@ The **Registration** setting decides who can create an account:
 | Mode | Who can create an account |
 |---|---|
 | 🌐 **Open** (default) | Anyone who reaches the login page, with **Register here**. |
-| ✉️ **By invitation** | Only people with an invitation link. You create one link per person from the [command line](cli_tools.md#invite), and send it to them. The login page shows no **Register here**. |
+| ✉️ **By invitation** | Only people with an invitation link. You create one link per person from the [Users](users.md#invitations) tab, or from the [command line](cli_tools.md#invite), and send it to them. The login page shows no **Register here**. |
 | 🔒 **Closed** | Nobody, not even with an invitation link. The login page shows no **Register here**. |
 
 - 👑 The first account of a new instance can always be created, whatever the mode: it becomes the
@@ -190,6 +190,7 @@ empties every cache too.
 ## 🔗 Related
 
 - 📝 **[Environment Variables](configuration.md)** — The settings that live in `.env` instead
+- 👥 **[Users & Invitations](users.md)** — The accounts of the instance, invitations and password-reset links
 - 👤 **[User Preferences](../user/settings/preferences.md)** — What each user can change for themselves
 - 🧑‍💻 For developers: **[Settings System](../developer/architecture/settings.md)**,
   **[Cache Registry](../developer/architecture/settings_cache.md)** and
