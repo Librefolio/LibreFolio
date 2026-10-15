@@ -282,7 +282,8 @@ From the highest priority to the lowest:
 4. The defaults listed on this page.
 
 With Docker Compose, the `environment:` block of `docker-compose.yml` wins over `.env`: it fixes
-`HOST` and `LIBREFOLIO_DATA_DIR`. See [Advanced Docker](docker_advanced.md#resolution-priority).
+`HOST`, `LIBREFOLIO_DATA_DIR` and, inside the container, `PORT=6040` (your `PORT` still sets the host
+port). See [Advanced Docker](docker_advanced.md#resolution-priority).
 
 ---
 
