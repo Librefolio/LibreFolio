@@ -2163,3 +2163,18 @@ rifiutata; Auto con media → committata; parametrico tipo × segno = metadati.
 **CHANGELOG** (riga corretta, la tua presupponeva un'API che accetta): 🐛 Fixed — «Editing only the notes, tags or
 description of a transfer received or of an incoming adjustment saved without a cost basis is no longer refused; a
 change to its type, quantity or cost still needs one.»
+
+### Coda dei lotti dopo E1b (coordinatore, 15/10 16:30 e 18:02)
+
+- **E1b committato** (coordinatore, 18:05): `af4408608` feat(events), `0ffaa9127` docs(events), `a62d36062` docs(wiki),
+  `5749cef7d` docs(journal); base aggiornata con `dev_release2` `a718e5281` (J, A6a, H, Z7a, il banner del Lab) senza
+  conflitti → HEAD `949ab6bea`. **Prove sulla revisione combinata** (18:03–18:11, `nice -n 10`, una alla volta): `api sync`
+  (157 righe del client, tutte di A6a e H: anteprima di cancellazione dell'account, sonda dell'indirizzo; nessuna mia);
+  `front check` svelte-check **0/0**; `services asset-event-store` **61/61**; `db populate --force --clean`; `api
+  assets-events` **45/45**; Vitest `eventSaveError` **57/57**, `EventExistsPanel` **8/8**; E2E `asset-event-editor-save`
+  **4/4**, `tx-event-create-exists` **8/8**; `i18n check` stretto pulito (4 440 chiavi); `theme-roles --check` pulito;
+  `test check-orphans` pulito. Porta 6184 libera. Pronto all'ingresso.
+- Ordine: **N2** (dopo l'ingresso, non prima) → **W-B20** (l'aiuto in `db/session.py` per `delete_bulk`) → **A-14** (da A:
+  in `mkdocs_src/docs/developer/architecture/access_control.md` la frase «The last OWNER cannot remove themselves»
+  contraddice la sezione «Self-Management» e `leave_broker`: correggerla secondo il codice). FE8b sul suo binario.
+- Il rischio di Apple condivisa a data fissa in `asset-event-delete` → **W-B29** nel backlog W.

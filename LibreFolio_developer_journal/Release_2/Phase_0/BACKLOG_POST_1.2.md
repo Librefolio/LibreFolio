@@ -2926,6 +2926,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   rifiuti; § 📥 Import from CSV: il `type` e la colonna `currency`), `user/assets/detail/events.en.md` («From you» e il
   nuovo H3 `#new-event`, da tenere con quell'àncora in ogni lingua: `form` la cita), `user/transactions/form.en.md`
   («Missing event?»). IT, FR ed ES con la pipeline, su richiesta del developer. Dettagli: piano 04, sezione E1, passo 5.
+- **W-B29 · `asset-event-delete.spec.ts`: lo scenario 1 scrive su Apple condivisa a una data fissa** — minimo, test; W,
+  15/10 (E1b, segnalato dal test-author). Lo scenario 1 salva un DIVIDEND sull'asset Apple condiviso a una data fissa,
+  con un marcatore `Date.now()`: se i progetti desktop e mobile lo eseguono insieme, il secondo upsert sovrascrive la riga
+  del primo. Lo scenario 2 marca le righe con una sonda `isVisible().catch`. Cura: un asset proprio per test, come in
+  `asset-event-editor-save.spec.ts`. Dettagli: piano 04, sezione E1, passo 3.
 
 ## J · Numeri e analisi (fase 01)
 
