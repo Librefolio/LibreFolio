@@ -129,6 +129,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The allocation pie and its history show the same sector emoji.**
 - **Deleting several brokers at once**: a broker whose deletion fails part-way now stays exactly as it was, with nothing changed on the other broker of a transfer, and the other brokers of the request are still deleted.
 - **Lots: an adjustment that takes units away while carrying a cost now hands them over at that cost**, as the Dashboard already did, so the lots show the same gain instead of reading the units as destroyed. Units from a lot bought at another price realize the difference from that average cost: 10 units bought at 10 and handed over at an average cost of 15 realize +50. In a lot's history these rows show the value handed over at cost instead of proceeds. Lots opened by an adjustment whose cost is in another currency now convert that cost from its own currency.
+- **On a phone, a table's selection and actions columns scroll with it.** The «Actions» header stayed pinned at the right edge while the rows' ⋮ scrolled away, and the checkbox column covered the start of the first column; both now move with the table, and the header still stays on top when the table scrolls.
+- **Resizing a column follows the pointer, and works with a finger.** On several tables (Files, the import wizard, the PAC allocator) dragging a column edge moved it by only part of the drag; it now follows the pointer, a resized column keeps its width on a narrow screen, and columns can be resized by touch.
 
 #### 🔒 Security
 
