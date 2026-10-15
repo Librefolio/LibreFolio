@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Added
 
 - `GET /api/v1/transactions` accepts `asset_event_id` and lists the transactions linked to that asset event, within the brokers you can see.
+- `./dev.py user create … --role user` creates a regular account; without `--role`, the command still creates an administrator.
 
 ### 🧹 Repository cleanup
 
@@ -25,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The asset page now names the data provider (for example "Yahoo Finance") instead of its internal code when the provider list arrives after the asset.
 - **The bulk editor names a broker you can only view, and flags the row it refuses.** Copying a transfer whose receiving broker is shared with you as a viewer showed that side as "—" and reported the refusal on the sending row as "Broker #N". The grid and the message now name the broker, and the refusal sits on the row that caused it; refused edits, deletions and splits are flagged on their own rows too.
 - **Deleting a broker also removes its leftover import folders and lock file**, which used to pile up in the broker reports storage.
+- Sign-in errors (the server does not answer, a server error, too many attempts) now appear in your language, no longer as technical English text.
+- The show/hide button of password fields can be reached with the keyboard and has a translated name.
 
 ---
 
