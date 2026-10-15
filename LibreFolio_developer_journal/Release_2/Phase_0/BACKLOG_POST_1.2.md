@@ -2230,6 +2230,18 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
 ---
 
+## DV · Colori dei grafici (Phase_1/10_colorSystem)
+
+> Workstream DV del programma colori, aperto il 15/10 per le scelte GR1–GR5 del giro 2 della designer (D-T17): colore
+> fisso per tipo e per settore, uguale in torta e storico; tavolozze per tema; emoji dei settori unificate. Codice a due
+> lettere: «D» e «V» erano già usate (developer, 15/10).
+>
+> Valori e controlli: [giro 2 della designer](../Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/README.md)
+> e la sua [analisi](../Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/analisi.md), §4–§6. Il piano
+> arriverà in `../Phase_1/10_colorSystem/DV-chartColors/`. Gli ID di questa sezione sono `DV-n`.
+
+---
+
 ## Sessioni della 1.3.0 (fase 01)
 
 > Aperte il 14/10 dal coordinatore della 1.3. Piano: [fase 01](../Phase_1/README.md). Ogni sessione scrive solo la

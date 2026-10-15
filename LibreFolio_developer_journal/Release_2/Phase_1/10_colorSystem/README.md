@@ -12,7 +12,10 @@
    «Decisioni del developer» e «Workstream e corsie».
 2. **Il materiale della designer**, un giro per cartella in [`designer-feedback/`](designer-feedback/):
    - giro 1 del 14/10, schermate di accesso e palette chiara e scura per tutto il progetto:
-     [`2026-10-14-round1-auth/`](designer-feedback/2026-10-14-round1-auth/README.md).
+     [`2026-10-14-round1-auth/`](designer-feedback/2026-10-14-round1-auth/README.md);
+   - giro 2 del 15/10, barra laterale verde, stati, risposte a N1–N6 e Q2–Q13, colori dei grafici GR1–GR5:
+     [`2026-10-15-round2-palette/`](designer-feedback/2026-10-15-round2-palette/README.md), con
+     [analisi e instradamento](designer-feedback/2026-10-15-round2-palette/analisi.md).
 3. **Cosa c'è che non va nei colori, con file e righe:** [`analysis/00_SINTESI.md`](analysis/00_SINTESI.md) (P1–P11),
    poi i report di dettaglio:
 
@@ -46,6 +49,8 @@
 | `L-designerLab/` | Piano e progressi del workstream L (arriva con i merge di L) | L |
 | `R-colorRefactor/` | Piano e progressi del workstream R (arriva con i merge di R) | R |
 | `G-galleryDeterminism/` | Workstream G (rumore della gallery): README, evidenze, piano | G |
+| `T-tokensTheme/` | Piano e progressi del workstream T, token e tema (arriva con i merge di T) | T |
+| `DV-chartColors/` | Piano e progressi del workstream DV, colori dei grafici (arriverà con i merge di DV) | DV |
 
 ## Fuori dal repo
 
@@ -72,6 +77,10 @@
 - **Giro 1 della designer:** ricevuto il 14/10 sera, in
   [`designer-feedback/2026-10-14-round1-auth/`](designer-feedback/2026-10-14-round1-auth/README.md). Alimenta la fase B
   (token per ruolo).
+- **Giro 2 della designer:** ricevuto il 15/10 alle 15:03 e approvato dal developer (D-T17), in
+  [`designer-feedback/2026-10-15-round2-palette/`](designer-feedback/2026-10-15-round2-palette/README.md). Alimenta
+  T-8, DV e le ondate. Il pacchetto completo inviato, con le miniature della gallery, sta fuori dal repo in
+  `LibreFolio_visual_review/package/round2-palette-2026-10-15/`.
 
 ## Chiusura del programma
 
