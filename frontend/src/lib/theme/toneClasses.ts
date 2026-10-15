@@ -3,9 +3,9 @@
  *
  * The entries on the colour roles (`text-lf-gain`, `bg-lf-loss`…) follow the theme by themselves, with no `dark:`
  * half. The others are still the exact class lists the components wrote before they moved here, until their wave of
- * the colour migration: their variants differ on purpose or by drift — emerald or green for a gain, red-500 or red-600
- * for a loss — and each keeps its own name, so the designer can see them side by side and decide. The thresholds stay
- * with the callers (`>= 0`, `> 0`, three-way with zero): only the colours live here.
+ * the colour migration: their variants differ on purpose or by drift — success in green or emerald, info in sky or
+ * blue, badges at 100/700 or 100/800 — and each keeps its own name, so the designer can see them side by side and
+ * decide. The thresholds stay with the callers (`>= 0`, `> 0`, three-way with zero): only the colours live here.
  *
  * An entry is either all roles or all palette classes, and the element that takes a role entry carries no palette
  * colour of its own: `app.css` exempts every element with a `-lf-` class from its legacy dark remap, so a mixed element
@@ -17,19 +17,19 @@
  * @module lib/theme/toneClasses
  */
 
-/** Text colour of a signed figure, by the surface that draws it. */
+/**
+ * Text colour of a signed figure, by the surface that draws it. Every surface shares the gain and loss roles (TD-2,
+ * W3-b); each keeps its name, so one can take a role of its own without touching its consumers.
+ */
 export const SIGN_TEXT = {
-    /** Asset and FX price deltas, the measure tool. */
+    /** Asset and FX price deltas and live price moves, the measure tool. */
     market: {
-        gain: 'text-emerald-600 dark:text-emerald-400',
-        loss: 'text-red-500 dark:text-red-400',
+        gain: 'text-lf-gain',
+        loss: 'text-lf-loss',
         /** No delta to show (asset and FX tables). */
-        none: 'text-gray-400 dark:text-gray-500',
+        none: 'text-lf-muted',
     },
-    /**
-     * Portfolio tables (exposure, contribution, lots, other effects) and the KPI deltas. This entry, `kpi` and
-     * `headline` share the gain and loss roles (TD-2); each keeps its name, so a surface can take a role of its own.
-     */
+    /** Portfolio tables (exposure, contribution, lots, other effects), the lot custody figures and the KPI deltas. */
     portfolio: {
         gain: 'text-lf-gain',
         loss: 'text-lf-loss',
@@ -46,10 +46,10 @@ export const SIGN_TEXT = {
         loss: 'text-lf-loss',
         neutral: 'text-lf-primary',
     },
-    /** The broker card's gain/loss line: emerald, with the darker red. */
+    /** The broker card's gain/loss line. */
     brokerCard: {
-        gain: 'text-emerald-600 dark:text-emerald-400',
-        loss: 'text-red-600 dark:text-red-400',
+        gain: 'text-lf-gain',
+        loss: 'text-lf-loss',
     },
 } as const;
 
