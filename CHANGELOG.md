@@ -127,6 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The header hides again when you scroll down** after clicking one of its buttons with the mouse; reaching a button with the keyboard still keeps it in view.
 - **The allocation pie and its history show the same sector emoji.**
 - **Deleting several brokers at once**: a broker whose deletion fails part-way now stays exactly as it was, with nothing changed on the other broker of a transfer, and the other brokers of the request are still deleted.
+- **Lots: an adjustment that takes units away while carrying a cost now hands them over at that cost**, as the Dashboard already did, so the lots show the same gain instead of reading the units as destroyed. Units from a lot bought at another price realize the difference from that average cost: 10 units bought at 10 and handed over at an average cost of 15 realize +50. In a lot's history these rows show the value handed over at cost instead of proceeds. Lots opened by an adjustment whose cost is in another currency now convert that cost from its own currency.
 
 #### 🔒 Security
 

@@ -214,7 +214,7 @@ many it deleted. Its callers are in `BrokerService`:
 
 | Caller | When |
 |--------|------|
-| `delete_bulk()` | `DELETE /brokers?ids=…&force=true` on a broker that still has transactions; it requires `OWNER` on the broker |
+| `delete_bulk()` | `DELETE /brokers?ids=…&force=true` on a broker that still has transactions; it requires `OWNER` on the broker. An administrator may pass `as_user_id` (403 for anyone else): `all` skips the role check, `<id>` checks that user's role instead |
 | `leave_broker()` | The last `OWNER` leaves (`DELETE /brokers/{broker_id}/access/me`): it calls `delete_bulk()` with `force`. Account deletion (`delete_user()`, `accounts/user_service.py`) calls `leave_broker()` on every broker of the account |
 
 The method checks neither access nor balances. The broker's own pairs, both halves
@@ -245,15 +245,17 @@ and the receiving half (by quantity for a `TRANSFER`, by amount otherwise), and
 `make_standalone()` re-types one half in place, clears its link — and its asset,
 unless it becomes an `ADJUSTMENT` — and sets `updated_at`.
 
-**A received `TRANSFER` without a cost basis.** One is required since
-(`costBasisRequired`), but older data can lack it. Such a leg first gets its
-sender's **Auto cost**, computed while the sender's rows still exist:
-`_auto_cost_source()` names the pool — the sender's broker up to the date the units
-left, without the outgoing leg — `_auto_cost()` runs `compute_wac_iterative()` on it,
-and `_write_auto_cost()` writes `cost_basis_override` and `cost_basis_currency`
-together; both helpers come from `_compute_wac_for_auto_items()`, which uses them
-too. Every cost is computed before any row changes, so a computation that fails
-leaves every row as it was (`delete_bulk()` reports that broker as failed). An
+**A received `TRANSFER` without a cost basis.** One is required today — a batch
+that creates such a leg without it is refused with `costBasisRequired` (see
+[Persisted Cost Basis](wac.md#persisted-cost-basis)) — but older data can lack it.
+Such a leg first gets its sender's **Auto cost**, computed while the sender's rows
+still exist: `_auto_cost_source()` names the pool — the sender's broker up to the
+date the units left, without the outgoing leg — `_auto_cost()` runs
+`compute_wac_iterative()` on it, and `_write_auto_cost()` writes
+`cost_basis_override` and `cost_basis_currency` together; all three helpers come
+from `_compute_wac_for_auto_items()` (`auto_cost.py`), which uses them too. Every
+cost is computed before any row changes, so a computation that fails leaves every
+row as it was (`delete_bulk()` reports that broker as failed). An
 empty pool gives what Auto gives, a zero cost (backlog P-1); a missing conversion
 writes nothing, and the `ADJUSTMENT` stays without a cost basis (see
 [WAC & Cost Basis — Diagnostics](wac.md#diagnostics)).
