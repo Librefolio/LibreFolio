@@ -31,10 +31,11 @@
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick} from 'svelte';
-import {writable} from 'svelte/store';
+import {get, writable} from 'svelte/store';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {zodiosApi} from '$lib/api';
 import {schemas} from '$lib/api/generated';
+import {_ as translate} from '$lib/i18n';
 import {commitTransactions, validateTransactions} from '$lib/utils/transactions/txCommitApi';
 import {ensureTypesLoaded} from '$lib/stores/transactions/transactionTypeStore';
 import {guideAnchors} from '$lib/features/onboarding/guideAnchors.svelte';
@@ -322,10 +323,15 @@ function openTypeSelect() {
 }
 
 async function chooseFxType() {
+    await chooseDualType('FX_CONVERSION');
+}
+
+/** Pick a type that always comes as a pair (FX_CONVERSION, TRANSFER), and wait for the two-panel layout it brings. */
+async function chooseDualType(code: 'FX_CONVERSION' | 'TRANSFER') {
     await openTypeSelect();
     await waitFor(() => expect(screen.getByRole('listbox')).toBeInTheDocument());
     const dropdown = screen.getByRole('listbox').parentElement as HTMLElement;
-    await fireEvent.click(within(dropdown).getByTestId('search-select-option-FX_CONVERSION'));
+    await fireEvent.click(within(dropdown).getByTestId(`search-select-option-${code}`));
     await waitFor(() => expect(screen.getByTestId('tx-form-dual-split')).toBeInTheDocument());
 }
 
@@ -991,6 +997,66 @@ describe('TransactionFormModal — a quantity the form refuses is never validate
         } finally {
             vi.useRealTimers();
         }
+    });
+});
+
+describe('TransactionFormModal — a currency exchange says why its two dates may differ (C-89)', () => {
+    // The paired layout gives each side its own date, «From» and «To»: a currency exchange and a transfer
+    // share it (`pairLayout`). For an exchange the two dates read as a question to a user who is not an
+    // expert — which one, and why two? The contract: in the exchange's layout only, a hint
+    // (`tx-form-fx-dates-hint`) reads `transactions.form.fxDatesHint` — the two dates usually match, and
+    // differ when the broker credits the new currency on another day. Its text is the message, nothing
+    // else (an icon beside it has no text); the asset transfer, with the same two dates, has no hint.
+    //
+    // The expectation is the app's own formatter, in the locale the form is mounted in, never the English
+    // copied here. A key the catalogue lacks comes back as the key itself, so the first assertion asks the
+    // catalogue, and is soft: the hint's absence is reported too.
+    //
+    // Red today: the key is missing, and so is the hint. The transfer case is a control, green today.
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        guideAnchors.clear();
+        resetGuideState();
+        vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(validMinimalTXTypesResponse);
+        await setupI18n();
+        await ensureTypesLoaded();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+        resetGuideState();
+    });
+
+    const HINT_KEY = 'transactions.form.fxDatesHint';
+    const squash = (text: string | null | undefined): string => (text ?? '').replace(/\s+/g, ' ').trim();
+
+    /** Presence barrier: the paired layout is on screen, each of its two sides with a date of its own. */
+    function expectTwoDates() {
+        for (const side of ['tx-form-dual-from', 'tx-form-dual-to']) {
+            expect(within(screen.getByTestId(side)).getByTestId('single-date-picker-root'), `premise: ${side} has a date of its own`).toBeInTheDocument();
+        }
+    }
+
+    it('FX_CONVERSION: a hint about the two dates reads transactions.form.fxDatesHint', async () => {
+        mount({defaultBrokerId: 17});
+        await chooseFxType();
+        expectTwoDates();
+        const message = get(translate)(HINT_KEY);
+        const hint = screen.queryByTestId('tx-form-fx-dates-hint');
+
+        expect.soft(message, `the catalogue has ${HINT_KEY}: the formatter answers a missing key with the key itself`).not.toBe(HINT_KEY);
+        expect(hint, 'the exchange shows a hint about its two dates').not.toBeNull();
+        expect(squash(hint?.textContent), 'the hint reads the message, and nothing else').toBe(message);
+    });
+
+    it('TRANSFER (control): the asset transfer has the same two dates, and no such hint', async () => {
+        mount({defaultBrokerId: 17});
+        await chooseDualType('TRANSFER');
+        expectTwoDates();
+        expect(screen.queryByTestId('tx-form-cash-from'), 'premise: the transfer layout, not the exchange one').toBeNull();
+
+        expect(screen.queryByTestId('tx-form-fx-dates-hint')).toBeNull();
     });
 });
 

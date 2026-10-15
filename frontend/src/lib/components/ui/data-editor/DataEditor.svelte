@@ -649,7 +649,7 @@
                         onclick={() => (hideStale = !hideStale)}
                         role="switch"
                         aria-checked={hideStale}
-                        aria-label={hideStale ? `Show ${staleCount} stale rows` : `Hide ${staleCount} stale rows`}
+                        aria-label={hideStale ? $t('dataEditor.staleShow', {values: {n: staleCount}}) : $t('dataEditor.staleHide', {values: {n: staleCount}})}
                     >
                         <span
                             class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform
@@ -659,13 +659,13 @@
                 </div>
             {/if}
             {#if modifiedCount > 0}
-                <span class="text-blue-600 dark:text-blue-400">{modifiedCount} modified</span>
+                <span class="text-blue-600 dark:text-blue-400">{$t('dataEditor.counter.edited', {values: {n: modifiedCount}})}</span>
             {/if}
             {#if deletedCount > 0}
-                <span class="text-red-600 dark:text-red-400">{deletedCount} deleted</span>
+                <span class="text-red-600 dark:text-red-400">{$t('dataEditor.counter.deleted', {values: {n: deletedCount}})}</span>
             {/if}
             {#if appendedCount > 0}
-                <span class="text-emerald-600 dark:text-emerald-400">{appendedCount} new</span>
+                <span class="text-emerald-600 dark:text-emerald-400">{$t('dataEditor.counter.appended', {values: {n: appendedCount}})}</span>
             {/if}
             {#if selectedIds.length > 0}
                 <button

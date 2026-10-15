@@ -870,3 +870,25 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >
 > Gli eventi passano a W (lotto E1): moduli, contratti e righe che restano a X nel messaggio del coordinatore a W del
 > 15/10. Le impostazioni dei plugin di X diventano la migrazione 007.
+
+### W K1, chiarezza, integrato ✅ (2026-10-15, 04:10)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `d915c869f` (K1 `532a1fd9c`, base aggiornata con A3, H CP3
+> e X CP2b in `1d1c7e67d`). O-12 (plurale), C-89 (le due date del cambio), V-38 (i problemi di saldo sotto il loro
+> titolo), P-15 parte W e W-B8 (testi tradotti dell'editor dei dati). I-10 S3 chiusa senza codice, per decisione del
+> coordinatore: il contratto documentato permette di cancellare gli eventi automatici. Validazione di W sulla
+> revisione combinata: build 0/0, `i18n check` stretto, `core-unit` 4 266, `component-unit` 3 198, `tx-unit` 887,
+> `theme-roles` pulito, E2E `transactions-modals` 25, `asset-data-editor` 26, `fx-csv-import` 21, `fx-editor` 4.
+> Con l'ingresso, `ui/data-editor` è libera per T. W-B13 passa a X.
+>
+> **Prossimo di W**: W4 (`services/brim/`). W3 (`api/v1/brokers/`) e W5–W6 (`uploads.py`) aspettano il merge
+> dell'hotfix in `dev_release2`, che tocca `brokers.py`, `uploads.py` e `main.py`.
+
+### H, letture di `web_link_finder` in `config/`, integrato ✅ (2026-10-15, 04:25)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `9dda5ccd9` (lotto `fd873f366`, base aggiornata con X CP2b
+> e W K1). Le 7 letture d'ambiente di `services/assets/web_link_finder.py` passano in `config/plugins.py`, la sezione
+> di X, con la stessa semantica; la chiave API vale anche da `..._API_KEY_FILE`. La guardia `config-package` non ha più
+> eccezioni: nessun modulo di `backend/app` fuori da `config/` legge l'ambiente. Validazione di H: `all-backend` 12 185
+> passed, 3 skipped, 0 failed sulla sua base; sopra X CP2b, controllo leggero (guardia 540 = 530 + 12 − 2, raccolta,
+> `api schema`, `mkdocs build` stretto). Le note su `web_link_finder` per X le gira il coordinatore.

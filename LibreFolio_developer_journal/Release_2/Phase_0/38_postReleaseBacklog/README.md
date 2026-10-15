@@ -124,6 +124,8 @@ Origine: [29_i18nAudit](../../phases/29_i18nAudit/plan-phase00I18nAudit.prompt.m
   il test controlla `import-wizard-parse`. Origine: 29, S20.
 - **O-12 · `importWizard.assetsCount` senza plurale** — basso. `ImportWizardModal.svelte:4678` e il catalogo («{n}
   unique assets, {m} need resolution»). Origine: 29, S21.
+  - ✅ **Chiusa il 15/10** con `fix(ui): translate data editor, plural counts, FX hint` (W, lotto K1 della 1.3; in
+    `dev_release2` con `d915c869f`): plurale ICU in `importWizard.assetsCount`.
 - **O-13 · IWR-001 cerca il badge per classe CSS** — minimo. `frontend/e2e/transactions/tx-import-resolution.spec.ts:331`
   usa `[class*="amber"]`, mentre l'aggancio `import-wizard-unresolved-count` esiste. Origine: 29, S21.
 - **O-14 · Riga booleana `scheduler_enabled` senza `data-testid`** — minimo.
@@ -401,6 +403,11 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
   salvato (`DataEditor.svelte:521-530`); le modifiche partono prima delle cancellazioni, quindi spostare un evento
   sulla chiave di uno appena eliminato dà `EVENT_KEY_CONFLICT` (`price_store.py:277`); il toast d'errore mostra il
   messaggio generico di axios (`AssetDataEditorSection.svelte:463-467`). Origine: AssetEvents.
+  - ✅ **S3 chiusa senza codice il 15/10** (decisione del coordinatore, reperto non confermato): il contratto
+    documentato permette di cancellare un evento automatico, che il fornitore ricrea al sync successivo (tooltip
+    `dataEditor.autoEvent.tooltip`, `user/assets/detail/data-editor.en.md:37`, `events.en.md:39`); il menu della riga
+    fa lo stesso e il backend blocca solo gli eventi in uso. Prove nel piano 04, §12, K1. S4 e il resto restano per
+    il lotto E1 di W.
 - **I-11 · limiti del round-trip CSV degli eventi** — basso. `CsvEditor.svelte:416-436` scarta le righe con una data
   ripetuta; l'import ignora `source` (le righe dei provider tornano manuali e poi raddoppiano) e `currency` (un
   backup preso prima di un cambio di valuta torna rietichettato); il selettore della data disabilita le date già
