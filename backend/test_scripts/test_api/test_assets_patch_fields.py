@@ -20,11 +20,11 @@ from backend.app.config import get_settings
 from backend.app.db.models import AssetType
 from backend.app.schemas.assets.assets import (
     FAAssetCreateItem,
-    FAAssetMetadataResponse,
     FAAssetPatchItem,
     FABulkAssetCreateResponse,
     FABulkAssetPatchResponse,
 )
+from backend.app.schemas.assets.metadata import FAAssetMetadataResponse
 
 # Test server fixture
 from backend.test_scripts.test_server_helper import _TestingServerManager

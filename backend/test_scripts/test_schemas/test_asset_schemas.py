@@ -6,7 +6,7 @@ Migrated from:
 - test_utilities/test_distribution_models.py
 - test_utilities/test_geographic_area_integration.py
 
-Schema source: backend/app/schemas/assets/assets.py
+Schema sources: backend/app/schemas/assets/ (scheduled_investment.py, metadata.py, assets.py)
 
 Tests cover:
 - FAInterestRatePeriod: date ranges, rate validation, compounding/frequency logic
@@ -24,15 +24,17 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from backend.app.schemas.assets.assets import (
-    DayCountConvention,
-    FAAssetCreateItem,
+from backend.app.schemas.assets.assets import FAAssetCreateItem
+from backend.app.schemas.assets.metadata import (
     FAClassificationParams,
     FAGeographicArea,
+    FASectorArea,
+)
+from backend.app.schemas.assets.scheduled_investment import (
+    DayCountConvention,
     FAInterestRatePeriod,
     FALateInterestConfig,
     FAScheduledInvestmentSchedule,
-    FASectorArea,
     InterestType,
     MaturationFrequency,
 )
