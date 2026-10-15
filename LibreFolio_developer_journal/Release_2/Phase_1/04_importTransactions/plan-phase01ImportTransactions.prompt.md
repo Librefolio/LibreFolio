@@ -1584,8 +1584,15 @@ decisioni). Durante la finestra: codice e singoli file pytest senza server, uno 
      > BR-U-079 e speculare: ok. La lista dei lotti sotto FAILED la prende J (J-12); W-B19: copia per la metà di cassa.
      > Provato (10:33) su un SQLite in `/tmp` con `aiosqlite` e un `AsyncSession` come quelli dell'app: SELECT, poi
      > `begin_nested()` con un INSERT, poi il rollback esterno → la riga **resta** (il RELEASE ha fatto commit); con un
-     > DML prima del savepoint → nessuna riga. Lo stesso vale per `assets/crud.py:392` (X), dove ogni asset cancellato
-     > in blocco entra subito nel commit: lo segnalo al coordinatore. W-B19 e W-B20 nella sezione W del backlog.
+     > DML prima del savepoint → nessuna riga. ~~Lo stesso vale per `assets/crud.py:392` (X), dove ogni asset cancellato
+     > in blocco entra subito nel commit: lo segnalo al coordinatore.~~ W-B19 e W-B20 nella sezione W del backlog.
+     > **Correzione** (11:19, reperti di X girati dal coordinatore): avevo letto solo la riga 392. `delete_assets_bulk` è
+     > già atomico: un `UPDATE` vuoto prima del primo savepoint (`assets/crud.py:349-351`, da `e50d66408`) fa emettere
+     > `BEGIN`, e lo fissa `test_asset_source.py::test_delete_assets_bulk_commit_failure_propagates_and_rolls_back_tentative_deletes`.
+     > Il listener `begin` generale è scartato (X: lettura, commit di un altro scrittore, poi scrittura → subito
+     > `SQLITE_BUSY_SNAPSHOT`, che `busy_timeout` non aspetta). Cura decisa per W-B20: un aiuto in `db/session.py` che apre
+     > la transazione prima del primo savepoint (lo stesso `UPDATE` vuoto, o `BEGIN IMMEDIATE`), usato da `delete_bulk`
+     > per broker, con un rosso prima: lotto piccolo di W dopo l'ingresso di N1.
      > **Superfici concesse dal coordinatore** (~10:05): testo `brokers.confirmDeleteWithTransactions` (4 lingue, `i18n
      > update`, nessun markup); frase in `user/brokers/index.{en,it,fr,es}.md:49` + `translate-stamp`; riga del
      > CHANGELOG proposta nell'handoff. Fatte (10:03): il testo EN approvato, precisato dopo la restrizione di J (solo
@@ -1647,3 +1654,23 @@ decisioni). Durante la finestra: codice e singoli file pytest senza server, uno 
    > `api batch-split-promote` (il riordino di `apply_splits`); `all-backend`; `front check`; E2E `front-broker
    > detail`, `front-broker list` (testo della conferma), `front-user account-deletion`; `mkdocs build` stretto e
    > `check-links`. Prima di tutto questo, le prove di FE8a-3 già in fila.
+   > **Checkpoint** (coordinatore, 11:04): `6be11ecf3` fix(brokers): user-day summary, orphan pair halves (26 file);
+   > `0737055e0` docs(journal): W N1 checkpoint, W-B17..W-B20; `5e19c6018` fix(db): post-migration fix for orphan pair
+   > halves (4 file), **per ultimo**: senza l'ok sul 46 prima dell'ingresso il ramo entra fino a `0737055e0`. Risposte:
+   > doc di N1b-2 solo in inglese (`developer/architecture/database/index.md`, `admin/cli_tools.en.md`), in un commit
+   > sopra N1b-2, senza IT/FR/ES né stamp (il debito di `cli_tools` sta in A-10: W-B21 nella mia sezione, A-10 non è
+   > ancora nel mio ramo); W-B20 da decidere, non ora (poi, alle 11:19, cura decisa: vedi la correzione sopra);
+   > CHANGELOG all'ingresso, con le mie righe.
+5. ✅ Doc di N1b-2 (docs-writer, EN, 11:20), sopra `5e19c6018`; poi le prove dopo la finestra (punto 4).
+   > **Note implementazione**: `developer/architecture/database/index.md` (la seconda correzione: perché, cosa rileva,
+   > converte e lascia, i controlli, i log, il comando del test) e `admin/cli_tools.en.md` (tre punti per
+   > l'amministratore, e nel riquadro il dry run **prima del primo avvio della nuova versione**: dopo, la correzione è
+   > già passata). Solo EN, niente stamp (W-B21). Il docs-writer ha provato lo script su DB di prova in `/tmp`, poi
+   > cancellati. Corretta la docstring del contratto 8 del mio test (diceva ancora «RED until»).
+   > **⚠️ Fuori pista** (docs-writer): (1) una violazione di FK già nel DB fa fallire `autoincrement` e ferma il giro
+   > prima di `orphan_pair_halves`, a ogni avvio con una copia in più (quadro del piano 34, già prima di N1b-2): W-B22;
+   > (2) lo script a mano non configura il log, quindi niente righe INFO per transazione: W-B23. Tutte e due da
+   > assegnare: file del quadro.
+   > **Docs committate** (coordinatore, 11:19): `3f42dda9d` sopra `5e19c6018`. W-B22 e W-B23 **assegnate a me** come
+   > lotto **N1b-3**, sopra il commit delle docs (W-B22 è legata a N1b-2: un DB che chiede ancora `autoincrement` e ha
+   > un link pendente non arriva mai a `orphan_pair_halves`). Rossi prima; durante la finestra solo prove leggere.

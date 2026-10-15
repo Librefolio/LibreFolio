@@ -2350,15 +2350,41 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `Decimal` della casa toglie il dubbio del `SUM` di SQLite in virgola mobile (`Numeric(18, 6)`; mai visto sbagliare).
   La metà delle quantità resta fuori: la casa non ha la quantità per posizione a una data (J-1 di J). Dettagli: piano
   04, §12, N1.
-- **W-B20 · `delete_bulk` non è atomico per broker** — basso, dati; W, 15/10 (N1, trovato da docs-writer).
-  `BrokerService.delete_bulk` (`backend/app/services/brokers/broker_service.py:424`) cattura gli errori per broker e
-  non riempie mai `errors`, e `DELETE /brokers` fa commit quando `errors` è vuoto (`backend/app/api/v1/brokers.py:389`):
-  ciò che un broker fallito ha già scritto nella sessione entra nel commit. N1b-1 calcola tutti i costi Auto prima di
-  ogni modifica (BR-U-080), quindi la cancellazione stessa non lascia mezze scritture; resta il caso generale. Un
-  SAVEPOINT per broker non basta: senza il listener `begin` di SQLAlchemy per pysqlite (`backend/app/db/session.py`),
-  il RELEASE del savepoint più esterno fa commit (provato su un SQLite di prova: SELECT, savepoint, rollback esterno → la
-  riga resta). Cura: il listener sull'engine (infrastruttura condivisa) e poi
-  `begin_nested()` per broker, con un rosso; da decidere col coordinatore. Dettagli: piano 04, §12, N1.
+- **W-B20 · `delete_bulk` non è atomico per broker** — basso, dati; W, 15/10 (N1, trovato da docs-writer; riscritta il
+  15/10 con i reperti di X). `BrokerService.delete_bulk` (`backend/app/services/brokers/broker_service.py:424`) cattura gli
+  errori per broker e non riempie mai `errors`, e `DELETE /brokers` fa commit quando `errors` è vuoto
+  (`backend/app/api/v1/brokers.py:389`): ciò che un broker fallito ha già scritto nella sessione entra nel commit. N1b-1
+  calcola tutti i costi Auto prima di ogni modifica (BR-U-080), quindi la cancellazione stessa non lascia mezze scritture;
+  resta il caso generale. Un SAVEPOINT per broker da solo non basta: pysqlite non apre la transazione prima del primo
+  DML, e il RELEASE del savepoint più esterno fa commit (provato su un SQLite di prova: SELECT, savepoint, rollback
+  esterno → la riga resta). Reperti di X: `delete_assets_bulk` è **già atomico**, perché un `UPDATE` vuoto prima del
+  primo savepoint fa emettere `BEGIN` (`backend/app/services/assets/crud.py:349-351`, da `e50d66408`), e lo fissa
+  `backend/test_scripts/test_services/test_asset_source.py::test_delete_assets_bulk_commit_failure_propagates_and_rolls_back_tentative_deletes`
+  (rosso senza l'`UPDATE`); il listener `begin` generale è **scartato**, perché una sessione che legge, vede un altro
+  scrittore fare commit e poi scrive fallisce subito con `SQLITE_BUSY_SNAPSHOT`, che `busy_timeout` non aspetta.
+  **Cura decisa** (coordinatore, 15/10): un aiuto in `backend/app/db/session.py` che apre la transazione prima del primo
+  savepoint di un percorso di scrittura (lo stesso `UPDATE` vuoto, o `BEGIN IMMEDIATE` se nessuna transazione è aperta);
+  `delete_bulk` lo usa per broker, con un rosso prima; X potrà poi sostituirci il trucco locale di `crud.py`. Lotto
+  piccolo di W, dopo l'ingresso di N1. Dettagli: piano 04, §12, N1.
+- **W-B21 · `admin/cli_tools`: la correzione `orphan_pair_halves` solo in inglese** — minimo, doc; W, 15/10 (N1b-2).
+  La sezione «Post-Migration Fixes» di `mkdocs_src/docs/admin/cli_tools.en.md` dice la seconda correzione solo in EN
+  (coordinatore: niente IT/FR/ES né stamp, perché il file lo toccano anche A e H). Va nel debito di traduzione di A-10
+  (sezione A), che nel mio ramo non c'è ancora: da riunire alla riconciliazione. Dettagli: piano 04, §12, N1.
+- **W-B22 · Correzioni post-migrazione: una violazione di FK già nel DB blocca ogni correzione, a ogni avvio** — basso,
+  dati; W, 15/10 (N1b-2, provato da docs-writer su un DB di prova). Il controllo comune
+  (`backend/app/db/post_migration/__init__.py`, `_common_problems`) vuole `PRAGMA foreign_key_check` **vuoto** sull'intero
+  DB dopo ogni correzione: su un DB che chiede ancora `autoincrement` e ha un link pendente, `autoincrement` fallisce, il
+  giro si ferma prima di `orphan_pair_halves` (che quel link l'avrebbe tolto), e si ripete a ogni avvio con una copia
+  `.bak` in più ogni volta. Vale per ogni violazione di FK preesistente, in qualunque tabella (già prima di N1b-2). Il
+  caso reale è raro: le cancellazioni dell'app scollegavano sempre prima, con le FK accese. Proposta: il controllo
+  confronta le violazioni prima e dopo, come già fa con i conteggi delle righe (una correzione non ne aggiunge), più un
+  rosso; file del quadro del piano 34, da assegnare. Dettagli: piano 04, §12, N1.
+- **W-B23 · `python -m backend.app.db.post_migration` non registra le righe INFO** — minimo, log; W, 15/10 (N1b-2,
+  trovato da docs-writer). Lo script (`backend/app/db/post_migration/__main__.py`) non chiama `configure_logging()`: si
+  vede il warning su stderr (con gli id per conversione, anche nel dry run), ma una riparazione fatta a mano non lascia
+  la riga per transazione né «applied and verified», che all'avvio del server vanno nel log. Proposta: configurare il
+  log nello script (console e `logs/` della data-dir configurata), con un test che non sporchi la sandbox dei test del
+  piano 34. File del quadro, da assegnare. Dettagli: piano 04, §12, N1.
 
 ## J · Numeri e analisi (fase 01)
 
