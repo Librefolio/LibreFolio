@@ -53,7 +53,7 @@ from backend.app.db.models import (
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas import FAGeographicArea, FASectorArea, SignalVolumeKind
-from backend.app.schemas.assets import FAAssetCreateItem, FAAssetPatchItem, FAClassificationParams
+from backend.app.schemas.assets.assets import FAAssetCreateItem, FAAssetPatchItem, FAClassificationParams
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetDelete, FAPricePoint, FAPriceQueryItem, FAUpsert
 from backend.app.schemas.provider import (
@@ -74,7 +74,7 @@ from backend.app.services.assets import price_query as price_query_module
 from backend.app.services.assets import price_store as price_store_module
 from backend.app.services.assets import refresh as refresh_module
 from backend.app.services.assets import search as search_module
-from backend.app.services.assets.core import AssetSourceProvider
+from backend.app.services.assets.base import AssetSourceProvider
 from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.provider_management import AssetProviderRegistry

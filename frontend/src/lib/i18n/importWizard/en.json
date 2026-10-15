@@ -42,7 +42,7 @@
     "reparseSingle": "Re-parse",
     "previewFile": "Preview file",
     "txCount": "{n} transactions across {k} files",
-    "assetsCount": "{n} unique assets, {m} need resolution",
+    "assetsCount": "{n, plural, one {# unique asset} other {# unique assets}}, {m, plural, one {# needs resolution} other {# need resolution}}",
     "likelyDuplicates": "{n} likely duplicates",
     "viewDetail": "View Detail",
     "detailTitle": "Parse Detail — {file}",

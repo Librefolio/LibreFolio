@@ -16,9 +16,7 @@ from backend.app.schemas import (
     FABulkMetadataRefreshResponse,
     FAMetadataRefreshResult,
 )
-from backend.app.schemas.assets import (
-    FAAssetPatchItem,
-)
+from backend.app.schemas.assets.assets import FAAssetPatchItem
 from backend.app.schemas.common import (
     OldNew,
 )
@@ -26,9 +24,7 @@ from backend.app.schemas.provider import (
     FAProviderRefreshFieldsDetail,
 )
 from backend.app.services.assets import core
-from backend.app.services.assets.core import (
-    AssetSourceProvider,
-)
+from backend.app.services.assets.base import AssetSourceProvider
 from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.assets.registry import AssetProviderRegistry
 

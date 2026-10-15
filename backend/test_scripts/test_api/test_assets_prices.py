@@ -16,7 +16,7 @@ import pytest
 
 from backend.app.config import get_settings
 from backend.app.db.models import IdentifierType, ProviderInputType
-from backend.app.schemas.assets import (
+from backend.app.schemas.assets.assets import (
     FAAssetCreateItem,
     FABulkAssetCreateResponse,
 )

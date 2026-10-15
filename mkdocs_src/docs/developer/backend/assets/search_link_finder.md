@@ -23,7 +23,7 @@ The system is **not** one function — it is a small **standalone module** (the 
 | **`web_link_finder` module** | `backend/app/services/assets/web_link_finder.py` | Self-contained subsystem: the external-engine client (**ddgs** metasearch by default), config, TTL cache, domain filter. Knows nothing about providers or assets. |
 | **Search orchestration** | `backend/app/services/assets/search.py` → `AssetSearchService` | Ties it together: `_augment_with_link_finder`, `_build_link_finder_queries`, `_filter_items_by_known_identifiers`, `_provider_url_for_item`. Decides *when* to fall back and *how* to narrow. |
 | **Provider hook** | each provider's `resolve_url` / `resolvable_url_domains` | Turns a resolved URL back into search-item(s). Only Borsa Italiana implements it today. |
-| **Endpoints** | `backend/app/api/v1/assets.py` | `/assets/provider/search[/stream]` accept the optional `hints` query param. |
+| **Endpoints** | `backend/app/api/v1/assets/providers.py` | `/assets/provider/search[/stream]` accept the optional `hints` query param. |
 
 So the answer to "is it its own subsystem or just a service function?" is **both**: a dedicated
 module for the engine, orchestrated by the service layer, with a thin per-provider hook.

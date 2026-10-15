@@ -9,22 +9,25 @@ responsibility:
 
 | Module | Responsibility |
 |--------|----------------|
-| `core.py` | Provider contract and shared infrastructure: `AssetSourceProvider`, `AssetSourceError`, history start-date types, the five cache singletons, provider-parameter hashing, error sanitization, the OHLC guard, and `_run_provider_in_thread`. |
+| `base.py` | Provider contract: `AssetSourceProvider`, `AssetSourceError`, history start-date types, and the OHLC guard. |
+| `core.py` | Shared infrastructure: the five cache singletons, provider-parameter hashing, error sanitization, and `_run_provider_in_thread`. |
 | `registry.py` | `AssetProviderRegistry`, which discovers the pricing plugins in `backend/app/services/asset_source_providers/`. |
 | `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation; and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
-| `price_store.py` | Price and event upserts/deletes, currency-change market-data wipes, OHLC integrity checks, and bounded write chunks. |
+| `price_store.py` | Price upserts/deletes, OHLC integrity checks, and bounded write chunks. |
+| `currency_change.py` | Currency-change market-data wipes: every price and event of the asset, with the transactions linked to those events unlinked. |
+| `event_store.py` | Event upserts (rows updated in place, committed in the same bounded chunks as prices) and deletes, plus the event queries and reads by id behind `/assets/events`. |
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
 | `refresh.py` | Provider-driven price refresh and its explicit PREPARE/FETCH/PERSIST phases. |
 | `crud.py` | Asset create, list, patch, delete, and merge operations. |
 | `search.py` | Cross-provider batch search, SSE search, query caching, link-finder fallback, and URL resolution. |
 | `web_link_finder.py` | The last-resort web lookup of `search.py`: an external metasearch engine that turns a query into candidate provider-domain URLs (see [Asset Search & Link-Finder](search_link_finder.md)). |
-| `manager.py` | The single `AssetSourceManager` class, composed from the provider, metadata, store, query, and refresh operation mixins. |
+| `manager.py` | The single `AssetSourceManager` class, composed from the provider, metadata, price-store, currency-change, event-store, query, and refresh operation mixins. |
 | `market_calendar.py` | Market holidays and the rule that tells a stored carry from a quote, shared by risk and by the signal price query (see [Market Calendar](../risk/architecture.md#market-calendar)). |
 
 These are behavioral boundaries, not only file boundaries: `refresh.py` orchestrates remote
-acquisition, `price_store.py` owns reusable price/event persistence primitives, and
-`price_query.py` owns database-backed reads plus the separate live-quote path.
+acquisition, `price_store.py` and `event_store.py` own the reusable price and event persistence
+primitives, and `price_query.py` owns database-backed reads plus the separate live-quote path.
 
 `backend/app/services/assets/__init__.py` holds only a docstring: the package re-exports
 nothing, and no compatibility facade exists.
@@ -32,17 +35,18 @@ nothing, and no compatibility facade exists.
 !!! info "Import from the defining module"
 
     Import every name from the module that defines it: the provider base class and error from
-    `backend.app.services.assets.core`, which also owns the thread runner and all cache patch
-    points; `AssetSourceManager` from `backend.app.services.assets.manager`; `AssetCRUDService`
-    from `backend.app.services.assets.crud`; and `AssetSearchService` from
-    `backend.app.services.assets.search`.
+    `backend.app.services.assets.base`; `AssetSourceManager` from
+    `backend.app.services.assets.manager`; `AssetCRUDService` from
+    `backend.app.services.assets.crud`; and `AssetSearchService` from
+    `backend.app.services.assets.search`. The thread runner and all cache patch points live in
+    `backend.app.services.assets.core`.
 
 ## 🧱 Core Components
 
 ### 1️⃣ `AssetSourceProvider` (Plugin Base Class)
 
 Abstract base class for all asset pricing plugins, defined in
-`backend/app/services/assets/core.py`. Each provider auto-registers via
+`backend/app/services/assets/base.py`. Each provider auto-registers via
 `@register_provider(AssetProviderRegistry)`.
 
 | Property / Method | Required | Default | Description |
@@ -123,7 +127,7 @@ graph TD
 
     subgraph "Phase 3 — PERSIST"
         Fetch --> Persist["refresh._persist_refresh_items"]
-        Persist --> Store["price_store operations"]
+        Persist --> Store["price_store / event_store operations"]
         Store --> DB2[("One AsyncSession<br/>per asset")]
     end
 
@@ -142,7 +146,8 @@ graph TD
    current caches, and `core._run_provider_in_thread()` for provider history/current calls.
    Price data and best-effort provider events remain in memory.
 3. **PERSIST** creates a distinct `AsyncSession` for each asset. It compares fetched points with
-   stored rows, then delegates price/event writes to `price_store.py`.
+   stored rows, then delegates price writes to `price_store.py` and event writes to
+   `event_store.py`.
 
 When the range reaches today, FETCH asks a provider's history only up to yesterday, then calls
 `get_current_value()` and adds its value as the close of its `as_of_date` (today when the provider

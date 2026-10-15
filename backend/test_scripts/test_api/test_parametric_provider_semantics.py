@@ -23,8 +23,8 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
-from backend.app.schemas.assets import (
-    AssetType,
+from backend.app.db.models import AssetType
+from backend.app.schemas.assets.assets import (
     FAAssetCreateItem,
     FABulkAssetCreateResponse,
 )
