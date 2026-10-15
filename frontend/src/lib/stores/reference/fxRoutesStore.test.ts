@@ -5,7 +5,7 @@
  * what `getConfiguredCurrencySet()` returns. A currency belongs there when the user
  * can actually convert to it, and that is true only for the two ENDPOINTS of a
  * configured pair: syncing a chain stores the composed rate of its own pair
- * (`fx.py` inserts `FxRate` on `route.base/route.quote`), while the rates of its
+ * (`services/fx/sync.py` inserts `FxRate` on `route.base/route.quote`), while the rates of its
  * legs stay in memory. So the currency a chain passes through (GBP in
  * EUR→GBP→USD) is not convertible, and offering it lets the user pick a currency
  * whose every amount then fails to convert. It becomes convertible — and belongs

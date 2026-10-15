@@ -75,7 +75,7 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | Holding value from quantity and price | `services/financial_math/valuation.py` |
 | Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
-| FX conversion | `services/fx/fx.py` (`convert_bulk`) |
+| FX conversion | `services/fx/conversion.py` (`convert_bulk`) |
 | Technical indicators | `services/signal_plugins/`, `services/signal_runtime.py` |
 | Risk metrics and optimization | `services/risk/quant/` |
 | PAC allocation | `services/pac_allocator/` |
@@ -104,5 +104,5 @@ at the root. The truncation to the database precision reads the models, so it li
 | FX Providers | `backend/app/services/fx_providers/` |
 | Asset Providers | `backend/app/services/asset_source_providers/` |
 | Broker Import | `backend/app/services/brim_providers/` |
-| System & Health | `backend/app/api/v1/system.py` |
+| System & Health | `backend/app/api/v1/system/` (one module per resource) |
 | Test Suite | `backend/test_scripts/` |

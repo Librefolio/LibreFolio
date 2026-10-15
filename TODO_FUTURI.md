@@ -1118,7 +1118,7 @@ da quando parte lo schedule.
 
 ### File candidati (quando si apre il ticket)
 
-- `backend/app/schemas/assets.py` — `FAInterestRatePeriod`,
+- `backend/app/schemas/assets/assets.py` — `FAInterestRatePeriod`,
   nuovo enum `CouponAnchor`.
 - `backend/app/services/asset_source_providers/scheduled_investment/plugin.py`
   — Step 3/4 rifattorizzati.
@@ -2064,7 +2064,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
     l'ultimo;
   - il resolver `AssetPriceSeries` (`backend/app/services/financial_math/price_marks.py:146`), che con `bisect`
     trova l'ultima osservazione ≤ data.
-- `get_prices_bulk` (`backend/app/services/asset_sources/price_query.py:149`), il corrispettivo di
+- `get_prices_bulk` (`backend/app/services/assets/price_query.py:149`), il corrispettivo di
   `convert_bulk` per i prezzi, ha già la finestra con minimo e massimo.
 
 ### Azione Futura

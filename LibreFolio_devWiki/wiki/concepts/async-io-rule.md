@@ -54,6 +54,6 @@ event loop: [[problems/bcrypt-blocks-the-event-loop]] (V-16).
 | Role | Path |
 |------|------|
 | Thread isolation (provider calls) | `backend/app/services/assets/core.py` |
-| FX service (async patterns) | `backend/app/services/fx/fx.py` |
+| FX service (async patterns) | `backend/app/services/fx/sync.py` |
 | Example: yfinance provider | `backend/app/services/asset_source_providers/yahoo_finance/plugin.py` |
 | FastAPI main (sync endpoints) | `backend/app/main.py` |

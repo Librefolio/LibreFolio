@@ -11,7 +11,8 @@ and standardize data exchange between components.
 - prices.py: FA price operation schemas (upsert, delete, query)
 - refresh.py: FA refresh + FX sync operational schemas
 - fx.py: FX-specific schemas (conversion, upsert, delete, pair sources)
-- transactions.py: Transaction CRUD schemas (TX prefix)
+- transactions/: Transaction schemas (TX prefix) — transactions.py (validators, CRUD, query), batch.py (unified batch,
+  validation codes and issues), event_suggest.py, promotion.py, type_metadata.py
 - brokers.py: Broker CRUD schemas
 
 **Naming Conventions**:
@@ -230,7 +231,24 @@ if TYPE_CHECKING:
         PluginDiscoveryFailureInfo,
         SystemInfoResponse,
     )
-    from backend.app.schemas.transactions import (
+    from backend.app.schemas.transactions.batch import (
+        TXBatchResponse,
+        TXBatchResultItem,
+        TXDeleteResult,
+        TXMixedBatch,
+        TXValidationIssue,
+    )
+    from backend.app.schemas.transactions.transactions import (
+        TXCreateItem,
+        TXDeleteItem,
+        TXQueryParams,
+        TXReadItem,
+        TXUpdateItem,
+        tags_to_csv,
+        # Shared utilities
+        validate_tags_list,
+    )
+    from backend.app.schemas.transactions.type_metadata import (
         TX_TYPE_METADATA,
         FieldMode,
         PairFieldConstraint,
@@ -240,20 +258,7 @@ if TYPE_CHECKING:
         # Type aliases
         SignType,
         SplitMeta,
-        TXBatchResponse,
-        TXBatchResultItem,
-        TXCreateItem,
-        TXDeleteItem,
-        TXDeleteResult,
-        TXMixedBatch,
-        TXQueryParams,
-        TXReadItem,
         TXTypeMetadata,
-        TXUpdateItem,
-        TXValidationIssue,
-        tags_to_csv,
-        # Shared utilities
-        validate_tags_list,
     )
 
 __all__ = [  # noqa: RUF022 — grouped by domain with section comments; sorting would scatter related names
@@ -656,7 +661,23 @@ _EXPORT_GROUPS = {
         "PluginDiscoveryFailureInfo",
         "SystemInfoResponse",
     ),
-    "transactions": (
+    "transactions.batch": (
+        "TXBatchResponse",
+        "TXBatchResultItem",
+        "TXDeleteResult",
+        "TXMixedBatch",
+        "TXValidationIssue",
+    ),
+    "transactions.transactions": (
+        "TXCreateItem",
+        "TXDeleteItem",
+        "TXQueryParams",
+        "TXReadItem",
+        "TXUpdateItem",
+        "tags_to_csv",
+        "validate_tags_list",
+    ),
+    "transactions.type_metadata": (
         "TX_TYPE_METADATA",
         "FieldMode",
         "PairFieldConstraint",
@@ -665,19 +686,7 @@ _EXPORT_GROUPS = {
         "PromoteRule",
         "SignType",
         "SplitMeta",
-        "TXBatchResponse",
-        "TXBatchResultItem",
-        "TXCreateItem",
-        "TXDeleteItem",
-        "TXDeleteResult",
-        "TXMixedBatch",
-        "TXQueryParams",
-        "TXReadItem",
         "TXTypeMetadata",
-        "TXUpdateItem",
-        "TXValidationIssue",
-        "tags_to_csv",
-        "validate_tags_list",
     ),
 }
 _EXPORTS = {name: f"{__name__}.{module}" for module, names in _EXPORT_GROUPS.items() for name in names}

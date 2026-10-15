@@ -1,0 +1,32 @@
+{
+  "instance": {
+    "notices": {
+      "label": "Avis de l'instance"
+    },
+    "checks": {
+      "jwtSecret": {
+        "ok": "Les sessions sont signées avec une clé définie par l'administrateur.",
+        "ephemeral": "Aucune clé de signature des sessions n'est définie : chaque redémarrage déconnecte tous les utilisateurs.",
+        "short": "La clé de signature des sessions de {source} fait {length} caractères : utilisez-en au moins {minimum}, aléatoires.",
+        "unreadable": "La clé de signature des sessions est illisible : {reason}"
+      },
+      "secretsSetTwice": {
+        "ok": "Chaque secret est défini à un seul endroit.",
+        "found": "Définis à la fois directement et par un fichier : {variables}. La valeur directe l'emporte et le fichier est ignoré."
+      },
+      "instanceKey": {
+        "ok": "La clé d'instance est utilisable.",
+        "unusable": "La clé d'instance est inutilisable : {reason}",
+        "permissions": "{path} est accessible aux autres utilisateurs : le dossier devrait être en 0700 et le fichier en 0600."
+      },
+      "sessionCookie": {
+        "ok": "Le cookie de session est Secure dès que le navigateur utilise HTTPS.",
+        "never": "Le cookie de session est aussi envoyé en HTTP non chiffré (SESSION_COOKIE_SECURE=never)."
+      },
+      "logLevel": {
+        "ok": "Le niveau de journalisation convient à la production.",
+        "verbose": "Le niveau de journalisation est {log_level} : le journal enregistre des détails de fonctionnement ; INFO suffit en production."
+      }
+    }
+  }
+}

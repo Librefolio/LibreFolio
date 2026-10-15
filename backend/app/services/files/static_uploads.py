@@ -62,7 +62,7 @@ def get_uploads_dir() -> Path:
 # TODO(frozenset): BLOCKED_MIME_TYPES and BLOCKED_EXTENSIONS below are immutable
 # module-level whitelists used only with `in` membership checks. Promote both to
 # `frozenset[str]` to communicate immutability and prevent accidental mutation
-# at runtime (same pattern as EVENT_COMPATIBLE_TYPES in schemas/transactions.py).
+# at runtime (same pattern as EVENT_COMPATIBLE_TYPES in schemas/transactions/transactions.py).
 BLOCKED_MIME_TYPES = {
     # Executables
     "application/x-executable",
