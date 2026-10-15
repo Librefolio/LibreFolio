@@ -73,7 +73,7 @@ confirmed by a red test enters 1.2:
 | `findPromoteMatch` | `frontend/src/lib/stores/transactions/transactionTypeStore.ts` |
 | `cashAmountsCancel` | `frontend/src/lib/utils/transactions/promoteHelpers.ts` |
 | `assetQuantitiesCancel` | `frontend/src/lib/utils/transactions/promoteSuggest.ts` |
-| The selection bar (`selectedForPromote`) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| The selection bar (`selectedForPromote`; its button in `frontend/src/lib/components/transactions/bulk/TxBulkToolbar.svelte`) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | R42a, R42b, G42 | `backend/test_scripts/test_api/test_transactions_batch_split_promote.py` |
 | The editor's rule, tested | `frontend/src/lib/stores/transactions/transactionTypeStore.test.ts` |
 | PC5 | `frontend/e2e/transactions/tx-bulk-promote-cost-basis.spec.ts` |
