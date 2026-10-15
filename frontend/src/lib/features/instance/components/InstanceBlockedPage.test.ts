@@ -9,6 +9,10 @@
  *     `get_instance_block_api_v1_system_block_get`), and shows `instance.block.deletionDate` only when a deletion date
  *     is given: the ISO day written in the interface locale at UTC, so that no time zone moves it to the day before or
  *     after;
+ *   - an administrator whose answer carries `billing_url` gets a link to the subscription (`instance-blocked-billing`):
+ *     `instance.block.manageSubscription`, opened in a new tab without opener or referrer, its icon hidden from
+ *     assistive technology. Only an http(s) address becomes a link, whatever the backend sends (a `javascript:` one
+ *     never does); nobody else gets it, and the logout button stays in every case;
  *   - when the answer says the instance is no longer blocked, the flag is cleared and the page reloads;
  *   - when the answer fails, the page stays, without a date, and the flag stays on;
  *   - the logout button (`instance-blocked-logout`) calls `onlogout`.
@@ -29,7 +33,7 @@ import {uiLocale} from '$lib/stores/app/uiLocale';
 import {instanceBlock} from '../instanceBlock.svelte';
 import InstanceBlockedPage from './InstanceBlockedPage.svelte';
 
-type BlockAnswer = {blocked: boolean; deletion_date?: string | null};
+type BlockAnswer = {blocked: boolean; deletion_date?: string | null; billing_url?: string | null};
 
 const mocks = await vi.hoisted(async () => {
     const {writable} = await import('svelte/store');
@@ -43,6 +47,10 @@ vi.mock('$lib/stores/app/auth', () => ({auth: mocks.auth}));
 vi.mock('$lib/api', () => ({zodiosApi: {get_instance_block_api_v1_system_block_get: mocks.getInstanceBlock}}));
 
 const DELETION_DAY = '2026-11-14';
+/** Where the subscription is managed, as `GET /system/block` gives it to an administrator. */
+const BILLING_URL = 'https://billing.example.test/acme';
+/** A placeholder of an address that is not http(s): nothing here follows it, and the page must never make it a link. */
+const SCRIPT_ADDRESS = 'javascript:void(0)';
 
 function translate(key: string, values?: Record<string, string>): string {
     return get(_)(key, values ? {values} : undefined);
@@ -171,6 +179,71 @@ describe('InstanceBlockedPage — the deletion date', () => {
         expect(screen.getByTestId('instance-blocked'), 'the page stays').toBeInTheDocument();
         expect(screen.queryByTestId('instance-blocked-deletion-date')).toBeNull();
         expect(instanceBlock.blocked, 'still blocked').toBe(true);
+    });
+});
+
+describe('InstanceBlockedPage — the subscription link', () => {
+    it.each([
+        ['an https address', BILLING_URL],
+        ['a scheme in capitals, which the backend accepts too', 'HTTPS://billing.example.test/acme'],
+    ])('gives an administrator a link to the subscription, for %s', async (_case, address) => {
+        mocks.auth.set({user: {is_superuser: true}});
+        const {answer} = mountPage();
+
+        await answerWith(answer, {blocked: true, deletion_date: DELETION_DAY, billing_url: address});
+
+        const link = screen.getByTestId('instance-blocked-billing');
+        expect(link.tagName, 'a link').toBe('A');
+        expect(link.getAttribute('href')).toBe(address);
+        expect(link.getAttribute('target'), 'opened in a new tab').toBe('_blank');
+        expect(link.getAttribute('rel')?.split(/\s+/), 'without opener or referrer').toEqual(expect.arrayContaining(['noopener', 'noreferrer']));
+        expect(text(link)).toBe(translate('instance.block.manageSubscription'));
+        const icon = link.querySelector('svg');
+        expect(icon, 'Barrier: the external-link icon is in the link').not.toBeNull();
+        expect(icon?.getAttribute('aria-hidden'), 'the icon is hidden from assistive technology').toBe('true');
+        expect(screen.getByRole('link', {name: translate('instance.block.manageSubscription')}), 'the accessible name is the text alone').toBe(link);
+        expect(screen.getByTestId('instance-blocked-logout'), 'the logout button stays').toBeInTheDocument();
+    });
+
+    it.each([
+        ['a regular user', {is_superuser: false}],
+        ['a user without the flag', {}],
+        ['a page without a signed-in user', null],
+    ])('gives %s no link, even when the answer carries an address', async (_case, user) => {
+        mocks.auth.set({user});
+        const {answer} = mountPage();
+
+        await answerWith(answer, {blocked: true, deletion_date: DELETION_DAY, billing_url: BILLING_URL});
+
+        expect(screen.getByTestId('instance-blocked-deletion-date'), 'Barrier: the page painted the answer').toBeInTheDocument();
+        expect(screen.queryByTestId('instance-blocked-billing')).toBeNull();
+        expect(screen.getByTestId('instance-blocked-logout'), 'the logout button stays').toBeInTheDocument();
+    });
+
+    it.each<[string, BlockAnswer]>([
+        ['null', {blocked: true, deletion_date: DELETION_DAY, billing_url: null}],
+        ['absent', {blocked: true, deletion_date: DELETION_DAY}],
+    ])('gives an administrator no link when the address is %s', async (_case, value) => {
+        mocks.auth.set({user: {is_superuser: true}});
+        const {answer} = mountPage();
+
+        await answerWith(answer, value);
+
+        expect(screen.getByTestId('instance-blocked-deletion-date'), 'Barrier: the page painted the answer').toBeInTheDocument();
+        expect(screen.queryByTestId('instance-blocked-billing')).toBeNull();
+        expect(screen.getByTestId('instance-blocked-logout'), 'the logout button stays').toBeInTheDocument();
+    });
+
+    it('never makes a link of an address that is not http(s), even for an administrator', async () => {
+        mocks.auth.set({user: {is_superuser: true}});
+        const {answer} = mountPage();
+
+        await answerWith(answer, {blocked: true, deletion_date: DELETION_DAY, billing_url: SCRIPT_ADDRESS});
+
+        expect(screen.getByTestId('instance-blocked-deletion-date'), 'Barrier: the page painted the answer').toBeInTheDocument();
+        expect(screen.queryByTestId('instance-blocked-billing')).toBeNull();
+        expect(document.querySelector(`[href="${SCRIPT_ADDRESS}"]`), 'the address is in no link of the page').toBeNull();
+        expect(screen.getByTestId('instance-blocked-logout'), 'the logout button stays').toBeInTheDocument();
     });
 });
 

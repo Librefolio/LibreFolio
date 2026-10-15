@@ -433,7 +433,8 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | Endpoints | Functions | For |
 |-----------|-----------|-----|
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | `auth.login`, `auth.logout`, `auth.get_me` | Signing in and out, and who is signed in |
-| `DELETE /auth/users/me` | `auth.delete_own_account` | Deleting one's own account; the block page has no button for it yet |
+| `POST /auth/tokens/inspect`, `POST /auth/password-reset` | `auth.inspect_link_token`, `auth.reset_password_with_link` | A link already sent: reading it, and setting a new password with a reset link; without them, someone who lost the password could never reach the block page, the account deletion or the backup |
+| `DELETE /auth/users/me`, `GET /auth/users/me/deletion-preview` | `auth.delete_own_account`, `auth.preview_own_account_deletion` | Deleting one's own account, and seeing first what it would delete; the block page has no button for it yet |
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
@@ -468,12 +469,22 @@ blocked one it runs before the route's own dependencies and before the body is v
 caller of a refused route gets the `423` even with an invalid body, never a `422`.
 
 **`GET /system/block`** (`backend/app/api/v1/system/block.py`) is for signed-in users only, and allowed
-on a blocked instance. It returns `InstanceBlockResponse` (`backend/app/schemas/system.py`): `blocked`,
-and `deletion_date`, `null` without a date. A workstream that owns part of the block page adds one
-field there and fills it in `block.py` with one call to its service.
+on a blocked instance. It returns `InstanceBlockResponse` (`backend/app/schemas/system.py`): `blocked`;
+`deletion_date`, `null` without a date; and `billing_url`, where the subscription is managed
+(`LIBREFOLIO_BILLING_URL`, from `registration_service.billing_link()`), for administrators only: it is
+`null` for the other users, and when the variable is unset or not an `http(s)` address (`billing_link()`
+logs the latter once per process). The block page
+(`frontend/src/lib/features/instance/components/InstanceBlockedPage.svelte`) checks again that it is an
+`http(s)` address, then shows an administrator a **Manage subscription** link to it, opened in a new tab
+(`rel="noopener noreferrer"`). A workstream that owns part of the block page adds one field there and
+fills it in `block.py` with one call to its service.
 
-**Changing the list.** The list is short on purpose. The full backup for the administrator and the
-scheduled wake-up join it, one line each, when their routes exist; any other addition goes through the
+**Changing the list.** The list is short on purpose. The two link endpoints joined it for someone who
+lost the password (see the table above): they read a link already sent or spend a reset link, and
+create no account. Registration (`POST /auth/register`) stays out: it is still one of the public routes
+that answer `401` on a blocked instance, so an invitation link can be read there but not accepted. The
+full backup for the administrator and the scheduled wake-up join the list, one line each, when their
+routes exist; any other addition goes through the
 developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
 pins the list by name and by route, checks that every API route under `/api/v1` resolves
 `refuse_when_blocked` first, and that the only other routes under `/api/v1` are FastAPI's
