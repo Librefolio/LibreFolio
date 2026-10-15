@@ -27,6 +27,12 @@
         "ok": "El nivel de registro es adecuado para producción.",
         "verbose": "El nivel de registro es {log_level}: el registro guarda detalles de funcionamiento; en producción basta con INFO."
       }
+    },
+    "block": {
+      "title": "Esta instancia está bloqueada",
+      "adminDescription": "El proveedor de alojamiento ha bloqueado esta instancia, por ejemplo porque su suscripción no está pagada. Regulariza la situación con el proveedor para desbloquearla.",
+      "userDescription": "El proveedor de alojamiento ha bloqueado esta instancia, por ejemplo porque su suscripción no está pagada. Pide a tu administrador una copia de seguridad de tus datos.",
+      "deletionDate": "La instancia y sus datos se eliminarán el {date}."
     }
   }
 }

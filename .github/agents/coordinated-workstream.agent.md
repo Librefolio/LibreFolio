@@ -177,9 +177,11 @@ Do not wait until the end. The plan is the durable recovery point if context res
 the work left after the release. When a checkpoint leaves something for later — a residual,
 a defect found outside the scope, a follow-up — add one line to **your own workstream's
 section** in the same checkpoint: `- **ID · title** — weight; origin (who, date). Details:
-[where](path), section «…».` The details stay in your plan. Never edit another section
-(report it to the coordinator instead), never delete a line: close yours with ✅, date and
-commit. The coordinator reconciles the index at every train.
+[where](path), section «…».` The ID starts with your workstream code, the one or two
+capital letters of your session name (`DV-3`), so it never collides with another section's
+IDs; if the code clashes anyway, tell the coordinator. The details stay in your plan.
+Never edit another section (report it to the coordinator instead), never delete a line:
+close yours with ✅, date and commit. The coordinator reconciles the index at every train.
 
 ## Code ownership and shared files
 

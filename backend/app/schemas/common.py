@@ -366,8 +366,9 @@ class BackwardFillInfo(BaseModel):
     """
     Backward-fill information when requested date has no data.
 
-    Used by both FX (fx.py) and Asset pricing (asset_source.py) systems
-    to indicate when historical data was used instead of exact date match.
+    Used by both FX (services/fx/conversion.py) and Asset pricing
+    (services/assets/price_query.py) systems to indicate when historical data
+    was used instead of exact date match.
 
     Attributes:
         actual_rate_date: stored as a `date` (accepts ISO string, `date` or `datetime` on input)
