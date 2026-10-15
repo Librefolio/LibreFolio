@@ -15,8 +15,8 @@ from backend.app.schemas.portfolio import (
     PortfolioPlannerCurrentWeight,
     PortfolioPlannerSourceIssue,
 )
-from backend.app.services.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.services.pac_allocator.source.keys import ENGINE_PROVENANCE_ID, asset_key, current_weight_key, field_issue, normalized_fx_pair, text_param
+from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 
 
 def _largest_remainder_weights(values: dict[int, Decimal]) -> dict[int, Decimal]:

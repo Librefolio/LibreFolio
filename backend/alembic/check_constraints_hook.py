@@ -68,7 +68,7 @@ def is_check_constraints_eq(cc1: CheckColumnConstraint, cc2: CheckColumnConstrai
 def get_engine_for_check():
     """Get engine respecting DATABASE_URL environment variable if set.
 
-    This function uses get_data_dir() from config.py to ensure consistent
+    This function uses get_data_dir() from backend.app.config to ensure consistent
     path resolution for both prod and test environments.
 
     Priority:
