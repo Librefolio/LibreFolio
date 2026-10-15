@@ -1434,7 +1434,7 @@ Passi:
    > Il saltato in più è `test_external/test_asset_providers.py::test_current_value[css_scraper]`: la pagina di Borsa
    > Italiana senza prezzo («market closed or in Call status», 07:00), dipende dall'ora, non dalla riga. Porta 6183 libera.
 
-### Checkpoint J-5 🧊 (2026-10-15) — FROZEN, handoff al coordinatore
+### Checkpoint J-5 ✅ (2026-10-15) — `7794e2fb0` (codice) e `cb0bac88d` (journal), in `dev_release2` col merge `743fca514`, record `4fdc0d9c5`
 
 - **Base**: HEAD `786f3e216`.
 - **Elenchi**: nessuna rinomina, nessun taglio, nessun file nuovo. Modificati 4: `backend/app/services/assets/core.py` (1 riga),
@@ -1451,3 +1451,78 @@ Passi:
 >   `matchKey: true` sulla colonna `type`, così che i doppioni del CSV degli eventi siano solo le righe con stessa data e
 >   stesso tipo (I-11a). Prezzi, cambi e distribuzioni non cambiano.
 > Nessuna obiezione da parte mia: non ho modifiche previste su quelle righe.
+
+### X-R8 — l'elenco delle valute dei fornitori dei cambi in cache ✅ (2026-10-15)
+
+Via del coordinatore alle ~07:13: disegno approvato così com'è («nessun cambio all'API; la cache con nome si vede nel
+pannello delle cache»). Finestra della galleria dalle 09:00 (~2 ore): lì solo codice, la run completa prima delle 08:45 o
+dopo l'avviso di fine. Base: HEAD `4fdc0d9c5`.
+
+**Il problema** (X-R8): `list_providers` (`GET /fx/providers`, `api/v1/fx/providers.py:96-101`) chiama
+`get_supported_currencies` di ogni fornitore pubblico a ogni richiesta. La BCE fa una richiesta HTTP senza cache (30 s di
+timeout), la SNB finché non riesce una volta nel processo (15 s): ogni apertura dell'elenco li aspetta, e senza rete
+compaiono con zero valute. È l'unico chiamante dell'app.
+
+**Disegno** (nuovo modulo `services/fx/catalog.py`, una funzione che `list_providers` usa al posto della chiamata diretta):
+- cache con nome `fx_provider_currencies` (`get_ttl_cache`, chiave il codice del fornitore): un elenco riuscito vale 24 ore;
+- se il fornitore fallisce o va oltre il timeout breve (5 s, `asyncio.wait_for`), si risponde con l'ultimo elenco noto
+  nel processo (vuoto prima del primo successo) e lo si mette in cache per 5 minuti, così che senza rete l'elenco non
+  aspetti a ogni richiesta; poi si riprova. `NamedCache.set` accetta un TTL per voce: una sola cache;
+- l'ultimo elenco noto resta anche dopo uno svuotamento dal pannello delle cache;
+- un lock per fornitore contro le richieste simultanee a cache vuota, tenuto per loop (`WeakKeyDictionary`), perché un
+  `asyncio.Lock` conteso resta legato al suo loop;
+- nessun cambio all'API: stessa risposta, stesso `openapi.json`.
+
+Passi:
+1. ✅ `services/fx/catalog.py` e il collegamento in `list_providers`.
+   > **Note implementazione**: `get_supported_currencies_cached(code, provider, *, timeout=5.0)`, ~60 righe; la chiave è il
+   > codice del registro, che `list_providers` ha già (un fornitore finto di `test_fx_api_unit.py` non ha `code`, ed è il
+   > registro a dare l'identità). In `list_providers` la chiamata diretta e il suo `try/except` lasciano il posto a una riga;
+   > `services/fx/__init__.py` elenca `catalog.py`. Prova di fumo fuori dal repository (`/tmp/libreFolio_x_r8_smoke.py`):
+   > due richieste, una chiamata; fallimento senza storia `[]` e nessun nuovo tentativo per 5 minuti; fallimento dopo un
+   > successo, l'ultimo elenco; timeout 0,2 s rispettato; 10 chiamate simultanee, una sola al fornitore, anche in un secondo
+   > loop; cache registrata. `api schema` identico a HEAD (`openapi.json` 114 percorsi, `tool-contracts`); ruff e black
+   > puliti.
+2. ✅ Test senza rete (test-author).
+   > **Note implementazione**: `test_services/test_fx_catalog.py`, 8 test con fornitori finti e una fixture autouse che
+   > svuota cache e ultimi elenchi prima e dopo: copie, fallimento senza storia e attesa di 5 minuti, ultimo elenco anche
+   > dopo uno svuotamento, timeout, una sola chiamata con 8 chiamanti simultanei (con un cancello che si apre quando tutti
+   > hanno trovato la cache vuota) anche in un secondo loop, cache nel pannello, TTL chiesto per un elenco (24 h) e per un
+   > ripiego (5 min) letto da un involucro della cache vera. test-author ha provato che i test del lock possono cadere
+   > (senza lock: «8 fetches for 8 concurrent callers»; un lock unico fra due loop: «bound to a different event loop»),
+   > poi ha tolto le due mutazioni. Azione nuova `services fx-catalog` in `_backend_services.py` (pura). In
+   > `test_fx_api_unit.py` la fixture `fed_currencies_not_cached` toglie la voce `FED` prima e dopo
+   > `test_list_providers_filters_hidden_and_sorts_targets`, che ora passa dalla cache del processo. `services fx-catalog`
+   > 8/8, `api fx-unit` 29/29.
+3. ✅ Doc (docs-writer): la tabella delle cache in `settings_cache.md`, le pagine dei cambi.
+   > **Note implementazione**: cinque pagine per sviluppatori, nessuna con traduzioni. `settings_cache.md`: riga
+   > `fx_provider_currencies` (32, 24 h, `fx/catalog.py`, il ripiego 5 min) e data del registro (le altre 17 righe
+   > ricontrollate); una frase sugli ultimi elenchi, che nessuno svuotamento toglie. `fx_plugin_guide.md`: contratto di
+   > `get_supported_currencies()` (Mermaid, paragrafo della fase 1, tabella, esempio): passa da `catalog.py`, quindi un
+   > fornitore può scaricare l'elenco ma non contare di essere chiamato a ogni richiesta (X-R4 non toccata). `ecb.md` e
+   > `snb.md`: l'elenco resta in cache 24 h. `developer/frontend/fx-chain-algorithm.md:295`: diceva che `GET /fx/providers`
+   > non cambia fino al riavvio del server; ora dice la cache di 24 h e che `currencyGraphStore.ts` tiene il grafo fino al
+   > ricaricamento della pagina (verificato nel codice). `mkdocs build` stretto verde, `check-links` 95 validi, 0 rotti.
+
+> **Fuori pista**:
+> - Quattro imprecisioni preesistenti viste da docs-writer, lasciate e registrate come X-R10 (per il FE4).
+4. ✅ Verifiche: `api schema` identico, ruff e black, test mirati, `api fx` anche senza rete, `all-backend`; journal e handoff.
+   > **Note implementazione** (`/tmp/libreFolio_x_r8_verify.sh`, log `/tmp/libreFolio_x_r8_verify.log`): ruff e black puliti
+   > sui 6 file Python; `openapi.json` (114 percorsi) e `tool-contracts` identici a HEAD; raccolta 14 131 contro 14 122 (+9:
+   > gli 8 test nuovi e il caso `config-package` di `catalog.py`); 0 import irrisolti su 9 658; nessuna patch muta;
+   > `services fx-catalog` 8, `api fx-unit` 29, `api fx` 21 e, senza rete, 21. **`all-backend` sulla 6183, 07:42–08:06, 7/7,
+   > 14 119 passati, 29 saltati**, 0 falliti (`/tmp/libreFolio_x_r8_allbackend.log`). Il +116 sui 14 003 di J-5 è la
+   > differenza di raccolta (+117 −1): i miei 9 e 107 arrivati con l'aggiornamento di base (A4b: `test_session_version` 47,
+   > `test_session_revocation_api` 3; K2a: test BRIM 28 + 27 + 2 + 1). Porta 6183 libera.
+
+### Checkpoint X-R8 🧊 (2026-10-15) — FROZEN, handoff al coordinatore
+
+- **Base**: HEAD `4fdc0d9c5`.
+- **Elenchi**: nessuna rinomina, nessun taglio. Nuovi 2: `backend/app/services/fx/catalog.py`,
+  `backend/test_scripts/test_services/test_fx_catalog.py`. Modificati 11: `backend/app/api/v1/fx/providers.py`,
+  `backend/app/services/fx/__init__.py`, `backend/test_scripts/test_api/test_fx_api_unit.py`,
+  `scripts/test_runner/_backend_services.py` (superficie condivisa: un'azione in più, `fx-catalog`), 5 pagine MkDocs
+  (`settings_cache.md`, `fx_plugin_guide.md`, `fx/providers/ecb.md`, `fx/providers/snb.md`,
+  `frontend/fx-chain-algorithm.md`), il piano e il backlog (X-R8 chiusa, X-R10 nuova).
+- **Messaggi di commit proposti**: `feat(fx): cache the providers' supported currencies for a day` (11 percorsi: tutto
+  tranne il journal) e `docs(journal): X X-R8 log, backlog X-R8 closed, X-R10` (piano e backlog).
