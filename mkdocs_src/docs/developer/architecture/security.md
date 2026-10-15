@@ -109,8 +109,9 @@ curl -b cookies.txt -X POST \
 
 ### 📄 Secrets from Files {: #secrets-from-files }
 
-Every secret of LibreFolio, `JWT_SECRET` and `LIBREFOLIO_INSTANCE_KEY` today, is read by
-`env_secret(name)` in `backend/app/config/__init__.py`:
+Every secret of LibreFolio, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY` and
+`LIBREFOLIO_WEB_LINK_FINDER_API_KEY` today, is read by `env_secret(name)` in
+`backend/app/config/__init__.py`:
 
 1. `NAME`, when not blank, is the secret as written, spaces included;
 2. otherwise `NAME_FILE`, when not blank, is the path of a file that holds it, as Docker and Kubernetes
@@ -131,17 +132,24 @@ message names the variable and the path, never the content. Like every variable 
 names the source without reading the file: `NAME`, `NAME_FILE (<path>)` or `None`
 (`configured_jwt_secret_origin()` and `configured_instance_key_origin()` in `platform.py`).
 
+The caller decides what a `SecretFileError` means. A broken `JWT_SECRET_FILE` or
+`LIBREFOLIO_INSTANCE_KEY_FILE` stops the start ([JWT Secret](#jwt-secret),
+[Configuration Checks](#configuration-checks)). A broken `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`
+does not: `web_link_finder_api_key()` in `backend/app/config/plugins.py` reads it only when a search
+builds the `apikey` engine, and `_build_engine()` in `backend/app/services/assets/web_link_finder.py`
+then logs `web_link_finder: <error>; disabling` and returns no engine, so that search finds no links.
+
 When `NAME` and `NAME_FILE` are both set, neither blank, `NAME` wins. `secrets_set_twice()` lists those
 names for the [configuration checks](#configuration-checks). It covers `JWT_SECRET` and every
 `LIBREFOLIO_*` variable, so a new secret named `LIBREFOLIO_*` and read with `env_secret()` needs no list
 to update.
 
-Test lanes never inherit the instance's secrets. `configure_test_runtime()` in `scripts/cli_base.py`,
-which every test entry point goes through (`dev.py test`, and `dev.py server --test`, which the
-`webServer` of Playwright also runs), removes `JWT_SECRET`, `JWT_SECRET_FILE`,
-`LIBREFOLIO_INSTANCE_KEY` and `LIBREFOLIO_INSTANCE_KEY_FILE` (`INSTANCE_TRUST_SECRETS` in
-`backend/app/config/__init__.py`) from its environment, whether they come from the shell or from
-`.env`. A test lane therefore signs sessions with a key made for its run and derives keys from an
+Test lanes never inherit the secrets that make the instance trust a session or decrypt its data.
+`configure_test_runtime()` in `scripts/cli_base.py`, which every test entry point goes through
+(`dev.py test`, and `dev.py server --test`, which the `webServer` of Playwright also runs), removes
+`JWT_SECRET`, `JWT_SECRET_FILE`, `LIBREFOLIO_INSTANCE_KEY` and `LIBREFOLIO_INSTANCE_KEY_FILE`
+(`INSTANCE_TRUST_SECRETS` in `backend/app/config/__init__.py`) from its environment, whether they
+come from the shell or from `.env`. A test lane therefore signs sessions with a key made for its run and derives keys from an
 instance key generated in its own data directory.
 
 ### 🧬 Instance Key {: #instance-key }

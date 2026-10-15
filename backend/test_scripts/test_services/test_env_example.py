@@ -23,7 +23,7 @@ A variable line is ``NAME=...`` (uncommented) or ``# NAME=...`` (commented), ``N
 What a read is, for rule 1. The sources are parsed with ``ast``, never imported. A read is ``os.environ.get("X")``,
 ``os.environ["X"]`` where it is loaded, ``"X" in os.environ`` and ``os.getenv("X")``, reached through ``os``, an alias
 of it, or the names ``from os import`` binds. A function that reads the variable named by one of its parameters (such
-as ``env_secret(name)`` or ``_env_int(name, default)``) forwards that parameter: a call to it with a literal reads the
+as ``env_secret(name)`` or ``env_secret_origin(name)``) forwards that parameter: a call to it with a literal reads the
 literal. A key built as ``parameter + SUFFIX`` (``name + SECRET_FILE_SUFFIX``) appends the suffix, so
 ``env_secret("X")`` reads both ``X`` and ``X_FILE``; and a function that passes its own parameter on to a forwarder
 forwards it too. Writes (``os.environ["X"] = ...``, ``del os.environ["X"]``) are not reads.
