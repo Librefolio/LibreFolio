@@ -21,8 +21,8 @@ steps), ``middleware.py`` and ``static_site.py``, cut out of ``backend/app/main.
     ``FINALLY_STEPS`` and ``SHUTDOWN_STEPS``, which both report as ``shutdown:<name>``; every ``run`` callable without
     arguments; the steps of CP2b keep their relative order, checked as a subsequence so that a workstream adds a
     step, and a test of its own constraint with ``assert_in_relative_order``, without touching this file's tests;
-    ``FINALLY_STEPS`` is the tool executor alone; the BRIM parse pool is released off the event loop under a deadline;
-    no shutdown deadline yet. A step reaches its function through the module's name when it runs, so
+    ``FINALLY_STEPS`` is the tool executor alone; the BRIM parse pool is released off the event loop under a deadline.
+    A step reaches its function through the module's name when it runs, so
     ``monkeypatch.setattr(app_lifespan, "<name>", ...)`` replaces it.
 (e) Middleware: GZip outside CORS, with their options; ``install_middleware`` adds any stack with its first entry
     outermost; the app of ``backend.app.main`` carries ``MIDDLEWARE_STACK``.
@@ -592,12 +592,6 @@ def test_the_brim_parse_pool_is_released_off_the_event_loop_under_a_deadline() -
     # shutdown_pool(wait=True) joins the workers: under a deadline it must run in a thread for the deadline to hold.
     assert _step(app_lifespan.SHUTDOWN_STEPS, "brim-parse-pool").blocking is True
     print_success("✓ blocking=True")
-
-
-def test_the_shutdown_has_no_deadline_yet() -> None:
-    print_section("No shutdown budget in CP2b")
-    assert app_lifespan.shutdown_deadline() is None
-    print_success("✓ shutdown_deadline() is None")
 
 
 @pytest.mark.parametrize(
