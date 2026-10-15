@@ -842,3 +842,16 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > più lunga (CP3 e CP4, e gli eventi che passano a W), mentre il CP-2 di J aspetta comunque le decisioni del
 > developer. La risoluzione statica degli import sull'albero combinato X + W I1 + A3 + J dà 0 irrisolti su 9 459
 > nomi; J valida poi una sola volta, sopra X.
+
+### H CP3, segreti e chiave d'istanza, integrato ✅ (2026-10-15, 03:50)
+
+> **Note implementazione**: `d08d9358f`, merge di `751bf9ab3` su `ed29f77c2`. Quattro commit di H: due correzioni in
+> commit separati (`8f9e8f018`, un segreto vuoto o di soli spazi vale come assente; `7640313a4`, una corsia di test
+> usa segreti suoi), poi CP3 (`54fd32def`: `env_secret()` con `*_FILE`, chiave d'istanza e `derive_key`, controlli
+> all'avvio, `.env.example` completo) e il journal. Aggiornamento di base `751bf9ab3` con X CP1/CP2a, W I1 e A3: due
+> conflitti additivi risolti da H (`main.py`, `test_dev_cli_image.py`). Validazione di H sulla revisione combinata:
+> `all-backend` 12 125 passed, 3 skipped, 0 failed; `api schema` invariato; `config-package` 475.
+>
+> **Ordine**: H era pronto prima di X, quindi entra prima; X lo assorbe con un controllo leggero (guardia delle
+> letture d'ambiente sui suoi moduli nuovi, raccolta, `api schema`). La run completa sulla combinazione X + H la fa
+> J, che aggiorna la base sopra tutti e due.
