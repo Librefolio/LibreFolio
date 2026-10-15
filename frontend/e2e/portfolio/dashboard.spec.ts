@@ -3,6 +3,7 @@ import {schemas} from '../../src/lib/api/generated';
 import {waitForSettled} from '../fixtures/app-events';
 import {login} from '../fixtures/auth-helpers';
 import {showChartTooltip} from '../fixtures/charts';
+import {focusHeaderControlByKeyboard} from '../fixtures/headerKeyboardFocus';
 import {TEST_USER} from '../fixtures/test-users';
 
 /**
@@ -972,14 +973,14 @@ async function axisLabels(host: Locator, axis: 'xAxis' | 'yAxis', values: number
  * Flip the header's privacy toggle and wait for `host` to redraw under it.
  *
  * House style from privacy-masking.spec.ts: the header hides on scroll, so the
- * toggle is focused and the header proven pinned before the click; the state is
- * asserted on both sides. The renders counter is sampled before the click.
+ * toggle is reached by keyboard and the header proven pinned before the click; the
+ * state is asserted on both sides. The renders counter is sampled before the click.
  */
 async function setPrivacy(page: Page, on: boolean, host: Locator): Promise<void> {
     const toggle = page.getByTestId('privacy-toggle');
     await expect(toggle, 'privacy must start from the opposite state').toHaveAttribute('aria-pressed', String(!on));
     const before = await chartRenders(host);
-    await toggle.focus();
+    await focusHeaderControlByKeyboard(page, 'privacy-toggle');
     await expect(page.getByTestId('app-header')).toHaveAttribute('data-scroll-state', 'pinned');
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', String(on));
@@ -990,7 +991,7 @@ async function setPrivacy(page: Page, on: boolean, host: Locator): Promise<void>
 async function restorePrivacyOff(page: Page): Promise<void> {
     const toggle = page.getByTestId('privacy-toggle');
     if ((await toggle.getAttribute('aria-pressed')) === 'true') {
-        await toggle.focus();
+        await focusHeaderControlByKeyboard(page, 'privacy-toggle');
         await expect(page.getByTestId('app-header')).toHaveAttribute('data-scroll-state', 'pinned');
         await toggle.click();
     }
