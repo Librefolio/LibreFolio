@@ -69,6 +69,12 @@ Picking a **Search Online** result connects its provider for you. To set one up 
    has no history, for example); the test still passes. ❌ is an error: check the identifier and
    the settings.
 
+⚠️ *Paused for too many requests until …* means the provider has refused LibreFolio's requests
+because there were too many: LibreFolio leaves it alone until the time shown, in your local time,
+with the date when the pause ends another day. Your settings may well be right, so the test still
+passes. When the end of the pause is not known, you see *Too many requests: try again later*.
+Meanwhile, the Assets list and the asset page keep showing the last saved price.
+
 An asset has at most one provider; tick **No Provider** if you will enter its prices yourself. See
 [Providers](providers/index.md) for what each one offers.
 
