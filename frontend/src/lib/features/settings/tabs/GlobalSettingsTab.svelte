@@ -597,7 +597,7 @@
                     {@const category = getCategoryForSetting(setting.key)}
                     {#if setting.value_type === 'bool'}
                         <!-- Boolean toggle (self-contained component) -->
-                        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg px-4">
+                        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg px-4" data-testid="global-setting-{setting.key}">
                             <SettingToggle
                                 value={editedValues[setting.key] === 'true'}
                                 label={getSettingLabel(setting.key)}
