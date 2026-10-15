@@ -813,9 +813,361 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   vuoti accanto al DB della corsia: innocui. Il runner mette una copia del DB di test in `.testLog/00_archive/`
 >   (ignorata).
 
-### Checkpoint B1 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+### Checkpoint B1 🧊 (2026-10-15) — committato
 
 > Handoff inviato con l'elenco dei file, le prove e il testo proposto per il CHANGELOG.
+>
+> **Committato dal coordinatore** (14:14): `e35388306` (`feat(backup): …`, con la nota BREAKING CHANGE sui 4
+> segnaposto) e `d37736d05` (journal e devWiki). HEAD verificato `d37736d05`, worktree pulito.
+>
+> **Ingresso**: B0+B1 entrano dopo H, E1, X e A5. Prima il coordinatore aggiorna la base, poi io valido la revisione
+> combinata; conflitti attesi nei cataloghi del runner e in `test_dev_cli_image.py`, insieme al CP7a di H. Il CHANGELOG
+> lo scrive il coordinatore all'ingresso, con il mio testo.
+
+### Via per B6a, B5a e l'accordo con J (coordinatore, 2026-10-15 alle 14:14)
+
+> - **B6a**, la doc della CLI con docs-writer: sì, subito.
+> - **Accordo con J sui totali di controllo**: sì. Scrivo io a J, nel suo perimetro (`financial_math`, il motore); lui
+>   risponde con la firma.
+> - **B5a**, la scheda Backup con il solo scaricamento: sì. La riga nel registro di A va scritta dopo che A5 è nella mia
+>   base: prima il componente, poi la riga. Per le E2E e `front check` serve lo slot del coordinatore.
+> - **B4**: il punto 39 non è deciso. Il developer è al 30; i punti 38 e 39 vengono dopo quelli di Z.
+> - **Corsia**: solo prove leggere di file singoli; le medie su richiesta (la macchina era a 110–139 alle 13:45).
+
+### Accordo con J — totali di controllo (2026-10-15, 14:20) — in attesa della firma
+
+> Richiesta mandata a J (`4c677a01`, in coda): una funzione in sola lettura per i totali di controllo.
+>
+> - **Deterministica**: niente prezzi, cambi, rete né `today`; tutto il registro.
+> - **Su tutta l'istanza**, quota al 100%: cassa nativa per (broker, valuta) e quantità per (broker, asset).
+> - **Senza cache di modulo**: chiamabile su una sessione aperta su un altro file SQLite nello stesso processo;
+>   altrimenti in un sottoprocesso.
+> - **Serializzabile**, con un numero di versione del metodo; costo lineare.
+> - **Forma proposta**: `compute_control_totals(session) -> ControlTotals`.
+>
+> Serve a B2. Il campo `control_totals` del manifest lo aggiungo io.
+>
+> **Risposta di J** (14:35): sì, nel suo lotto **CP-15**.
+>
+> - **Firma**: `backend/app/services/financial_math/ledger_totals.py`
+>   - `CONTROL_TOTALS_VERSION = 1`;
+>   - `ControlTotals(version, cash, quantities)`, frozen e con slots: `cash` è `(broker_id, currency, balance)`,
+>     `quantities` è `(broker_id, asset_id, quantity)`;
+>   - `to_json()` e `from_json()`; `from_json` alza `ValueError` se la versione è diversa;
+>   - `async compute_control_totals(session) -> ControlTotals`.
+> - **JSON**: `{"version": 1, "cash": [{"broker_id", "currency", "balance"}], "quantities": [{"broker_id", "asset_id",
+>   "quantity"}]}`.
+> - **Regole**:
+>   - cassa = Σ `amount` per (broker, valuta), come `native_balances`; quantità = Σ `quantity` per (broker, asset),
+>     come il motore (`daily_state.py:184-187`; split e trasferimenti sono già righe); quota 100 %;
+>   - somme esatte in Python, mai `SUM` SQL, perché `Numeric` su SQLite passa per un float; i residui di polvere restano;
+>   - nessuna riga a zero: una chiave assente vale zero;
+>   - Decimal canonico, senza esponente, senza zeri finali, mai «-0»;
+>   - indipendenti dal tipo di riga: una migrazione che riclassifica (per esempio V-3 di W) non li cambia;
+>   - lettura a blocchi solo dalla `session` passata: niente prezzi, cambi, rete, `today`, `get_settings()` o cache;
+>     `asyncio.run` dal thread del job va bene.
+> - **Versione diversa** (`data["version"] != CONTROL_TOTALS_VERSION`): il report dice «non confrontabile» e non chiama
+>   `from_json`.
+> - **Il costo resta fuori**: dipende dai cambi e da WAC e FIFO, quindi la versione salirebbe spesso. Lo coprono i
+>   controlli per tabella.
+> - **Tempi**: CP-15 parte quando N1 di W (`native_balances`) è nella base di J; l'ordine lo decide il coordinatore. J
+>   avvisa all'integrazione. Fino ad allora i test di B usano una funzione finta della stessa forma.
+
+### B6a — doc della CLI (2026-10-15, dalle 14:20) ✅ (14:51)
+
+> docs-writer lavora su `admin/cli_tools.en.md`: la sezione «💾 Back Up the Instance» (`{: #backup }`), l'introduzione
+> e il suggerimento per Docker.
+>
+> - Solo inglese; nessun timbro di traduzione, perché il debito di traduzione è vero.
+> - `mkdocs build` e `check-links`: lo slot va chiesto al coordinatore.
+> - La riga per `filesystem.en.md` (file di H) la propongo al coordinatore.
+>
+> **Prima stesura** (docs-writer, 14:32): sezione con cinque sottosezioni (crea, cosa contiene, controlla, usa altrove,
+> Docker `{: #backup-docker }`), più l'introduzione e il suggerimento per Docker.
+>
+> **⚠️ Fuori pista — 6 difetti della CLI e dell'archivio di B1**, trovati da docs-writer leggendo il codice e corretti
+> (14:40):
+>
+> 1. **`-o` controllato solo alla fine.** Se lo spostamento falliva (cartella non scrivibile, disco pieno su un altro
+>    volume), il comando andava in traceback dopo tutto il backup. L'archivio restava in `.jobs/` e il backup successivo,
+>    dopo un'ora, lo cancellava.
+>    - Ora `_check_output` controlla prima: nome di file libero, cartella creata se manca, cartella scrivibile.
+>    - `_place_archive` sposta l'archivio, e se non ci riesce lo mette in `<data dir>/backups/` (rinomina sullo stesso
+>      volume), senza lasciare copie parziali, con un avviso e il codice 1.
+>    - Solo se fallisce anche questo l'archivio resta nella cartella del job, con il percorso e la scadenza di un'ora.
+> 2. **Falso «already exists»** con `-o` su una cartella che conteneva un file `librefolio-backup.zip`: il controllo
+>    usava un nome segnaposto. Ora una cartella esistente va sempre bene.
+> 3. **Aiuto di `--no-verify`**: diceva «legge solo il manifest», ma i nomi delle entrate si confrontano comunque.
+>    Corretti l'aiuto e la riga finale.
+> 4. **Percorsi relativi**: `dev.py` fa `chdir` alla radice del progetto, quindi partono da lì, come in
+>    `db upgrade`. Lo dicono ora l'aiuto e l'esempio di `inspect`.
+> 5. **Formulazione dei file esclusi** («cambiati durante il backup»): non era esatta. Ora: link, file speciali, file o
+>    cartelle illeggibili, file tolti durante il backup. Lo stesso testo nella CLI e nella UI, in 4 lingue.
+> 6. **Errore di lettura a metà file** (trovato rileggendo `_add_file` per il punto 5): l'entrata dello zip si chiude
+>    comunque, e l'archivio conteneva un pezzo di file fuori dal manifest. `inspect` lo segnalava, ma il job diceva
+>    «done». Ora `PartialEntryError` ferma il backup (`backup_failed`). Un file che fallisce prima di aprire l'entrata
+>    resta escluso, come prima.
+>
+> ruff e black puliti. I test nuovi (CLI: `-o` scrivibile e ripiego; archivio: errore a metà file) li scrive
+> test-author dopo i Vitest di B5a, uno alla volta nella corsia. La doc è allineata da docs-writer.
+>
+> **⚠️ Fuori pista, seconda tornata** (14:55): docs-writer, rileggendo il codice nuovo, segnala altri tre difetti; un
+> quarto lo trovo io:
+>
+> 7. **`backups/` come link**, per esempio verso un NAS: `ensure_private_dir` alza `BackupPathError`, che la CLI non
+>    prendeva (traceback) e l'API trasformava in un 500 senza codice. Ora:
+>    - nella CLI, un messaggio chiaro e il codice 1; anche un `OSError` prima della corsa ha un messaggio;
+>    - nell'API, 500 con `backup_folder_unusable`, oppure `backup_failed` per un `OSError`, con una riga di log;
+>    - il rifiuto del link resta: l'archivio si costruisce sempre in `backups/.jobs/`, e il disco della cartella dati
+>      deve avere lo spazio anche con `-o`.
+> 8. **`_check_output` creava la cartella di `-o`** prima del backup: un backup fallito lasciava una cartella vuota.
+>    Ora controlla la cartella esistente più vicina (deve essere una cartella, scrivibile); le cartelle mancanti si
+>    creano solo quando l'archivio ci arriva.
+> 9. **Commento di `BuildWarning`** in `archive.py`: stessa formulazione corretta dei file esclusi.
+> 10. **Due backup nello stesso secondo** dalla CLI: il secondo trovava il nome preso e restava nella cartella del job.
+>     Ora una cartella (`backups/` o una cartella `-o`) riceve `-2`, `-3`, … (`_free_path`); un `-o FILE` esplicito non
+>     si rinomina mai.
+>
+> In più, per il punto 6: un disco pieno o una quota superata durante la costruzione, dopo il controllo dello spazio,
+> ora finisce come `backup_no_space` e non come `backup_failed` (`_out_of_space` segue `__cause__` e `__context__`:
+> `ENOSPC`, `EDQUOT`, `SQLITE_FULL`).
+>
+> - `_add_file` ora prende anche gli errori di `archive.open` e della chiusura dell'entrata, quindi anche quelli di
+>   scrittura.
+> - `cmd_create` è diviso in `_run_backup` più il resto, per C901.
+> - ruff e black puliti.
+> - **Verdi** dei file esistenti: `services backup-archive` 125 più 1 saltato; `services backup-jobs` 39;
+>   `utils backup-cli` 25 su 26. Il rosso è `test_inspect_without_verification_reads_the_manifest_only` (poi rinominato
+>   `…_reads_no_entry`), che cercava il vecchio testo di `--no-verify`: è atteso, e lo ripara test-author con i test nuovi.
+> - **Smoke** (`/tmp/librefolio-r13-b-b6/smoke_cli.py`, cartelle dati sintetiche in una cartella temporanea, poi
+>   tolte), cinque casi, tutti come previsto:
+>   1. `backups/` link verso un'altra cartella: codice 1, messaggio chiaro, niente scritto oltre il link;
+>   2. `-o` in cartelle che non esistono: create alla fine, archivio 0600, codice 0;
+>   3. `-o` sotto una cartella in sola lettura: rifiuto prima del backup, nessuna cartella creata, neanche `backups/`;
+>   4. `-o` sotto un file: «is not a folder»;
+>   5. due backup nello stesso secondo: il secondo è `…-2.zip`, tutti e due con codice 0.
+> - **UI**: il codice nuovo `backup_folder_unusable` ha il suo messaggio nelle 4 lingue (34 chiavi).
+>
+> **Fuori dal perimetro, da girare al coordinatore**:
+>
+> - `docker_advanced.en.md#docker-exec` e il commento in testa a `docker-compose.yml` elencano i comandi dell'immagine
+>   senza `backup`;
+> - `admin/index.en.md:21` descrive la pagina della CLI senza i backup;
+> - `filesystem.en.md` (di H): un rimando alla CLI, la nota che una copia della cartella dati prende anche `backups/`,
+>   e `backups/` nell'albero; un'ancora esplicita `{: #what-to-back-up }` nelle 4 lingue (il link della pagina nuova ora
+>   punta a `filesystem.md#backup`).
+>
+> **Terza tornata e verifica** ✅ (14:45-14:51):
+>
+> - docs-writer allinea la pagina alle correzioni 7-10: `backups/` deve essere una cartella vera, mai un link, perché
+>   l'archivio si costruisce lì anche con `-o`; i nomi `-2`, `-3`; i tre rifiuti di `-o`; `backup_no_space` anche a
+>   metà corsa.
+> - Le sue due ultime note:
+>   - il messaggio nominava sempre `backups/` anche quando il link era `.jobs/`: ora `BackupPathError` porta il
+>     percorso (`.path`), e la CLI nomina la cartella vera;
+>   - un disco montato su `backups/` passa il controllo, perché è una cartella vera. Non lo documento come via
+>     consigliata: il lock `flock` e la copia SQLite su una condivisione di rete (NFS, SMB) non sono garantiti. Per un
+>     NAS la doc indica `-o`.
+> - **Verifica**, slot del coordinatore, `nice -n 10`:
+>   - `dev.py mkdocs build`: strict, codice 0, 105 s, nessun avviso (l'unica riga è il riquadro del team di Material);
+>   - `dev.py mkdocs check-links`: 95 link validi;
+>   - nella pagina costruita ci sono le ancore `#backup` e `#backup-docker`, e i link a `../filesystem/#backup`.
+> - **Debito di traduzione** (B-7): la sezione nuova, una frase dell'introduzione e il punto Docker del suggerimento,
+>   in IT, FR ed ES. Nessun timbro.
+> - Log in `/tmp/libreFolio_b_mkdocs_build.log` e `/tmp/libreFolio_b_check_links.log`.
+>
+> **Testo proposto da docs-writer per `filesystem.en.md`** (B-5):
+>
+> - sotto il titolo «💾 Backup»: «To back up without stopping the server, `./dev.py backup create` writes one zip archive
+>   of the database, the uploaded files, the broker reports and the scenarios: see [Back Up the
+>   Instance](cli_tools.md#backup). It leaves out `secrets/`, which you back up as below.»
+> - dopo il blocco di «📦 Simple Backup»: «The copy also takes `backups/`, with every archive `backup create` wrote
+>   there: delete the old ones first, or leave the folder out.»
+
+### B1-fix — test delle correzioni di B6a (2026-10-15, 14:55-16:10) ✅
+
+> **Test** (test-author, backend):
+>
+> - `utils backup-cli` +44 test, più uno riparato e rinominato: `test_inspect_without_verification_reads_no_entry`,
+>   prima `…_reads_the_manifest_only`;
+> - `services backup-archive` +14; `services backup-jobs` +24;
+> - nuovo `test_api/test_backup_instance_errors.py` (selettore `api backup-instance-errors`, puro, 6 test, con
+>   `httpx.ASGITransport`), registrato in `_backend_api.py`, 18 righe in aggiunta;
+> - 32 mutazioni rosse, ogni file ripristinato con lo stesso sha256; `check-orphans` pulito.
+>
+> **⚠️ Fuori pista — altri due difetti**, trovati dai test e corretti (15:45):
+>
+> 1. **Cartelle create per `-o` e rimaste vuote.** Se l'archivio ripiegava su `backups/` (spazio scarso su un altro
+>    disco, spostamento fallito), le cartelle create per `-o` restavano vuote: `target.parent.mkdir(parents=True)`
+>    veniva prima del controllo.
+>    - Ora il controllo di disco e spazio si fa sulla cartella esistente più vicina.
+>    - Le cartelle mancanti si creano solo prima dello spostamento, e se fallisce si tolgono (dalla più profonda, se
+>      vuote).
+>    - `_place_archive` è diviso in `_folders_to_create`, `_move_to` e il resto, per C901.
+>    - Uno spostamento che alza un errore quando l'archivio è già arrivato intero (sorgente sparita, destinazione
+>      presente) è un successo: prima la CLI diceva che l'archivio era rimasto nella cartella del job, dove non c'era
+>      più.
+> 2. **Descrittore perso in `_add_file`.** Se al posto di un file raccolto c'era una cartella, `os.fdopen` alzava
+>    `IsADirectoryError` e il descrittore restava aperto nel processo del server (5 chiamate, 5 descrittori). Ora
+>    `fstat` si fa sul descrittore grezzo, che si chiude a ogni errore finché il file non lo possiede.
+>
+> In più: la descrizione di `utils backup-cli` nel catalogo dice il comportamento nuovo.
+>
+> **Verdi** (corsia 6187, `nice -n 10`, uno alla volta):
+>
+> - `services backup-archive`: 139 passati, 1 saltato;
+> - `services backup-jobs`: 63;
+> - `api backup-instance-errors`: 6;
+> - `api backup`: 23;
+> - `utils backup-cli`: 68 su 70. I 2 rossi fissano le due scelte qui sopra (successo dopo l'arrivo; controllo sulla
+>   cartella esistente). test-author li aggiorna e aggiunge il test di regressione del descrittore.
+>
+> Porta 6187 libera.
+>
+> **Seconda tornata di test-author** (16:00): i due test aggiornati alle scelte.
+>
+> - Il test delle cartelle usa due livelli mancanti (`nas/2026/10`), così si prova anche l'ordine dal più profondo.
+>   Fissa il messaggio esatto dello spazio, misurato su `nas`.
+> - Nuovo `test_a_file_refused_before_its_entry_starts_leaves_no_descriptor_open[folder|fifo]`: 16 chiamate, nessun
+>   descrittore aperto, cercato per dispositivo e inode in `/dev/fd`.
+> - 7 mutazioni rosse, file ripristinati con lo stesso sha256.
+> - In più aggiorno le descrizioni di `services backup-archive` e `services backup-jobs` nel catalogo (righe di B1).
+>
+> **Verifica finale** (16:07-16:12, corsia 6187, `nice -n 10`, uno alla volta), tutto verde:
+>
+> - `utils backup-cli` 70; `services backup-archive` 141 più 1 saltato (nomi non UTF-8, che macOS rifiuta);
+>   `services backup-jobs` 63; `api backup-instance-errors` 6; `api backup` 23; `utils dev-cli-image` 48;
+>   `services config-package` 602;
+> - `check-orphans`: 281 test backend, 379 unitari e 118 spec E2E del frontend, tutti raggiungibili da un `all`;
+> - Vitest, rilanciati da me: `backupApi.test.ts` 51, `backupJob.test.ts` 131, `BackupDownloadCard.test.ts` 51. I due
+>   ultimi passati da Prettier: solo formato, poi di nuovo verdi;
+> - ruff e black puliti sui 13 file Python; Prettier pulito; `theme-roles.mjs --check` pulito; `i18n check` strict;
+>   `git diff --check` pulito; porta 6187 libera.
+
+### B5a — scheda Backup, solo scaricamento (2026-10-15, dalle 14:25) — componente ✅, riga del registro dopo A5
+
+> **Disegno**:
+>
+> - **Feature nuova** `frontend/src/lib/features/backup/`:
+>   - `backupApi.ts`: i tre alias del client generato, l'URL del file (`<a href>`, quindi niente Blob in memoria) e i
+>     codici d'errore (`detail.code`, altrimenti `network` senza risposta e `unexpected` con una risposta senza codice);
+>   - `backupJob.svelte.ts`: `BackupJobController`, una classe con le rune e sette stati (`idle`, `loading` per la
+>     rilettura di un job già seguito, `starting`, `running`, `done`, `deleting`, `failed`). Legge il job ogni secondo, con ritardo crescente fino a 5×, e si ferma dopo 5
+>     letture fallite di fila. L'id del job sta in `sessionStorage`, così un ricaricamento riprende lo stesso job.
+>     Ogni azione apre una nuova generazione, quindi una risposta arrivata in ritardo si scarta.
+>   - `BackupDownloadCard.svelte`: autonomo, così lo può usare anche la pagina di blocco di H. Pubblica `data-state`,
+>     `data-error-code` e `data-busy`; emette gli eventi `backup.created` (toast solo con avvisi), `backup.failed`
+>     (toast d'errore), `backup.deleted` e `backup.download.started`.
+>   - `BackupTab.svelte`: il corpo della scheda.
+> - **i18n**: sottosistema nuovo `lib/i18n/backup/` (prefisso `backup`, libero), 35 chiavi nelle 4 lingue, in forma
+>   canonica.
+> - **Colori**: solo ruoli `*-lf-*` (`bg-lf-panel`, `border-lf-subtle`, `bg-lf-warning-soft`, `bg-lf-danger-soft`,
+>   `bg-lf-action`, `bg-lf-neutral`, …). Nessuna palette, nessun esadecimale, nessun `dark:`. `toneClasses.ts` contiene
+>   ancora stringhe di palette spostate tali e quali, quindi qui non serve.
+> - **Polling**: nessun aiuto comune nella base (l'F26 di Z non c'è ancora). Quando arriva, il controller può
+>   appoggiarsi a quello.
+> - **Riga nel registro di A**: dopo A5 nella base, come chiesto.
+>
+> **Test**: test-author scrive `backupApi.test.ts`, `backupJob.test.ts` e `BackupDownloadCard.test.ts`, registrati nel
+> catalogo (`front_utility_unit` e `front_component_unit`), un file Vitest alla volta.
+>
+> **Prima tornata di test** ✅ (test-author, 14:55):
+>
+> - Verdi: `backupApi.test.ts` 51, `backupJob.test.ts` 71, `BackupDownloadCard.test.ts` 38 (35 s, quasi tutti per
+>   caricare `lucide-svelte`).
+> - Una mutazione per file, rossa e poi ripristinata con lo stesso sha256.
+> - Registrati in `_frontend_utility.py`, tre righe in aggiunta.
+>
+> **⚠️ Fuori pista — tre difetti di disegno**, segnalati da test-author e decisi da me (14:58):
+>
+> 1. **«Controlla di nuovo» dopo un nuovo avvio fallito** riportava l'archivio precedente e lo annunciava come appena
+>    creato. Ora un avvio o una cancellazione falliti tengono l'archivio in offerta, con il banner d'errore. Il
+>    pulsante compare solo dopo letture fallite (`canRecheck` nel controller, con `failure` ∈ `start`, `read`, `remove`,
+>    `job`).
+> 2. **Lo stesso archivio annunciato due volte** (rilettura dopo una cancellazione fallita o una ripresa). Ora la fine
+>    di un job si annuncia una volta sola, e solo se questa scheda l'ha avviato o l'ha visto in corso (`#watched`).
+> 3. **Scheda non occupata durante la cancellazione.** Nuovo stato `deleting`: la scheda è occupata e mostra
+>    `backup-deleting` al posto delle azioni (chiave nuova `backup.download.deleting`).
+>
+> Eventi: `backup.failed` per `start`, `read` e `job`; `backup.delete.failed` per `remove`. Il dettaglio è
+> `{code, what, job_id}`. test-author aggiorna i test e aggiunge i casi delle tre decisioni.
+>
+> **Seconda tornata di test** ✅ (test-author, 15:25):
+>
+> - Verdi: 51, 121 e 49. Una mutazione per decisione, rossa nel test del controller e in quello della scheda, poi
+>   ripristinata con lo stesso sha256.
+> - Due osservazioni di test-author, corrette (15:28):
+>   - `recheck()` da `done`, se falliva la rete, nascondeva l'archivio. Ora `recheck()` agisce solo quando
+>     `canRecheck` è vero, cioè dove la scheda offre il pulsante.
+>   - Dopo le letture fallite di J, «Riprova» rifiutato con `backup_busy` (spesso perché J gira ancora) lasciava J
+>     raggiungibile solo ricaricando la pagina. Ora un avvio fallito in `failed`, se la scheda segue ancora un job,
+>     offre «Controlla di nuovo». Da `done` niente cambia: un avvio rifiutato resta in `done`.
+> - Resta com'è, per scelta: mentre parte un nuovo backup da `done`, l'archivio precedente non si vede. Se l'avvio
+>   fallisce, torna.
+>
+> **Terza tornata di test e statici** ✅ (15:30-15:37):
+>
+> - **Vitest** (test-author), verdi: `backupApi.test.ts` 51, `backupJob.test.ts` 131, `BackupDownloadCard.test.ts` 51.
+>   - La tabella di verità di `canRecheck` ha 28 righe.
+>   - Il caso «J bloccato» (letture fallite, «Riprova» rifiutato) è provato in tutti e due i file.
+>   - Mutazione: senza `failure === 'start' ||`, 14 rossi su 131 e 4 su 51; file ripristinato con lo stesso sha256.
+> - **Statici**, nello slot del coordinatore, con `nice -n 10`:
+>   - `dev.py api sync`: codice 0, 20 s; il client generato (ignorato) ha la risposta 500 nuova;
+>   - `dev.py front check`: svelte-check, 0 errori e 0 avvisi, 66 s;
+>   - in più, leggeri: `i18n_catalog.py check` strict (4427 chiavi), `theme-roles.mjs --check` pulito, Prettier pulito
+>     sui file nuovi;
+>   - `dev.py lint --dead-code --scope backend` (vulture): 4 simboli non usati e 32 usati solo dai test, nessuno di B,
+>     tutti di altre aree. knip (frontend) lo lancio con la riga del registro, dopo A5.
+> - **Lasciato per scelta** (backlog B-8): se la risposta di un avvio si perde (rete), il job gira sul server ma la
+>   scheda non lo sa, e `backup_busy` non dice quale job gira. Succede di rado, e si risolve da solo: la scheda dice
+>   «busy» finché il job finisce, e l'archivio orfano scade dopo un'ora.
+>
+> **Pronto per dopo A5** (non applicato):
+>
+> - **Registro di A** (`settingsTabs.ts`), una riga:
+>   - l'import di `DatabaseBackup` e di `BackupTab`;
+>   - `{id: 'backup', labelKey: 'backup.tab', icon: DatabaseBackup, order: 120, component: BackupTab, visible: (ctx)
+>     => ctx.isSuperuser}`, con il commento «Administrators only: the archive holds every user's data».
+>   - Con `order` 120 la scheda cade dopo «admin» (`alignEnd`, ordine 100), nel gruppo di destra. Niente `props`,
+>     niente `alignEnd`.
+> - **Test del registro** (`settingsTabs.test.ts`): `bodies.backup`, il `vi.mock` di
+>   `$lib/features/backup/BackupTab.svelte` e la riga di `TODAY`.
+>   - Oggi il test fissa «un utente e un admin vedono le stesse quattro schede» (`it.each(CONTEXTS)`). Una scheda solo
+>     admin chiede una colonna di visibilità in `TODAY`, che A5 porta probabilmente con le schede Users e Security
+>     (lo annuncia la docstring del test). Per questo la riga aspetta A5, come chiesto.
+> - **E2E** `frontend/e2e/settings/backup.spec.ts`, scritto da test-author, slot del coordinatore:
+>   - giro dell'admin: `?tab=backup`, «crea», attesa su `data-state="done"`, scaricamento con `waitForEvent('download')`
+>     (nome `librefolio-backup-…zip`, intestazione `PK`), evento `backup.download.started`, cancellazione con
+>     `data-state="idle"` e `backup.deleted`;
+>   - un utente normale non vede `settings-tab-backup`;
+>   - `mode: 'serial'`, perché c'è un backup alla volta per istanza; pulizia del job nell'`afterEach`.
+> - **Galleria** (`gallery.spec.ts`, di G, attraverso il coordinatore): la scheda nello stato `done`, con i job finti
+>   via `page.route` (nome, dimensione e data fissi), quindi uno scatto deterministico; desktop e mobile, 4 lingue,
+>   2 temi.
+> - **i18n**: `backup.tab` non ha lettori finché non c'è la riga. `i18n audit` lo segna «dead», e le chiavi della
+>   scheda «📦» (vive solo per sorgenti non raggiungibili da una rotta). Nessun cancello fallisce: `gate-i18n-usage`
+>   prova il classificatore, non il catalogo vero. knip vede i file nuovi raggiungibili dai test.
+
+### Checkpoint B1-fix + B6a + B5a 🧊 (2026-10-15, 16:15) — FROZEN, in attesa del coordinatore
+
+> Handoff inviato. Quattro commit proposti, su percorsi disgiunti:
+>
+> 1. **`fix(backup): keep the archive safe when --output fails, stop on a partial entry`**:
+>    - `scripts/backup_cli.py`;
+>    - `backend/app/api/v1/backup/instance.py`;
+>    - `backend/app/services/platform/instance_backup/{archive,jobs,paths}.py`;
+>    - i test `test_backup_archive.py`, `test_backup_jobs.py`, `test_backup_cli.py` e il nuovo
+>      `test_api/test_backup_instance_errors.py`;
+>    - nel catalogo, `_backend_api.py` (+18), `_backend_services.py` e `_backend_utils.py` (solo descrizioni).
+> 2. **`docs(admin): document dev.py backup`**: `mkdocs_src/docs/admin/cli_tools.en.md`.
+> 3. **`feat(backup): add the Backup card for administrators`**:
+>    - `frontend/src/lib/features/backup/` (7 file), `frontend/src/lib/i18n/backup/` (5 file);
+>    - `scripts/test_runner/_frontend_utility.py` (+3).
+>
+>    La scheda non si vede finché non c'è la riga nel registro di A, dopo A5.
+> 4. **`docs(journal): B1 fixes, B6a, B5a`**: questo piano e la sezione B del backlog (B-4…B-8).
+>
+> Fuori: i file generati e ignorati (client API, catalogo i18n, `mkdocs_src/site/`), `.testLog/` e i log in `/tmp`.
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 
