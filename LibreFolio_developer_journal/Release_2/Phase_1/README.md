@@ -131,3 +131,4 @@ Sono tutti locali: la push la fa il developer.
 | 44 | 15/10 17:40 | Z7a: registro delle pause dei fornitori (`utils/runtime/cooldown.py`, `provider_cooldown`, `config/sleep_wake.py`), non ancora agganciato (X1–X8) | `2ab8a3a43` |
 | 45 | 15/10 18:08 | Y2: taglio di `DataTable` (`DataTableColumnHeader`, `DataTableCellContent`), `~split` dichiarato | `c747a74c3` |
 | 46 | 15/10 18:13 | W: E1b (salvataggio atomico degli eventi con `delete_ids`, «+ Nuovo evento» che non sovrascrive, pannello `EVENT_EXISTS`) | `fecf88c1a` |
+| 47 | 15/10 18:15 | J: CP-4a (rendimenti di periodo, ritorno netto e rapporto G/L in `financial_math/returns.py`) e CP-4b (V-11, decisione 30: grazia dall'ultima quotazione) | `322d55042` |
