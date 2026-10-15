@@ -1184,3 +1184,22 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >   coordinatore colori); rivista la V-3 di W.
 >
 > Punti nuovi per il developer nel file delle decisioni: 44–47.
+
+### R in `dev_release2`, avvio di B, E e Y (2026-10-15, 11:10–11:30)
+
+> **Note implementazione**: il coordinatore colori ha fuso i lotti A–D di R (`8fd8e494b`, più `23f6578f3`: timbro di
+> `sw.js`); `dev_release2` fermo per loro dalle 11:17 alle 11:22. Sbloccati gli spostamenti di cartella legati ai lotti di
+> R (FE4 e FE5a di X, FE8 di W; FE2, FE3, FE6, FE7 e `DataTable` di Y). Coda dei lotti frontend: L, poi i nostri, poi T.
+> - **B ed E avviati** su delega del developer («riguardo b ed e sei tu il coordinatore, a meno che non devo qualcosa
+>   in particolare, e allora aggiornami, avviali tu»), base `23f6578f3`. B: B0 (divisione di `api/v1/backup.py`, prima
+>   dell'E1 di W, che partirà dal pacchetto nuovo; D-B8, la rinomina `backup_service.py` → `series_export.py`) e B1;
+>   D-B7 e D-B9 come proposte, D-B10 dopo B7. E: E0 ed E1, con `links.py` spostato in E3 (aspetta il punto 45) e la
+>   registrazione in `config_audit.py` in E2 (il file ha modifiche in attesa sul ramo di H); l'aggancio a `cli_base.py`
+>   non serve più, lo copre C-96 di H; D-E1, D-E2, D-E4…D-E6, D-E8…D-E14 come proposte.
+> - **Y avviato** in sola analisi (sessione `17050e81`, corsia 6189), base `23f6578f3`: i tagli di `DataTable` e
+>   `GrowthChart` devono arrivare prima delle ondate W5 e W6 di T.
+> - **W**: committati la doc di N1b-2 (`3f42dda9d`) e il journal (`eb3bb0529`). W-B20 riscritta con i reperti di X:
+>   `delete_assets_bulk` è già atomico (un `UPDATE` vuoto prima del primo savepoint); il listener `begin` generale è
+>   scartato (`SQLITE_BUSY_SNAPSHOT`). Cura decisa: un aiuto mirato in `db/session.py`, lotto piccolo di W dopo N1.
+>   W-B22 e W-B23 (quadro delle correzioni post-migrazione) assegnate a W come N1b-3: W-B22 è legata a N1b-2, perché
+>   una violazione di FK già nel DB ferma il giro prima di `orphan_pair_halves`.
