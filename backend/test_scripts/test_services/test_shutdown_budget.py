@@ -1,8 +1,8 @@
 """The shutdown budget: ``config.sleep_wake``, ``services.platform.shutdown_budget``, ``entrypoint.sh`` and the shutdown grace of the runner and of Playwright — the server exits within about 8 s of SIGTERM or SIGINT, for every install (plan phase01SleepWake §Z6b, decision 35, lot Z6b).
 
 One variable sizes the budget. uvicorn drains the requests in flight for 3/8 of it, the lifespan's steps share what is
-left, and a watchdog armed by the first SIGTERM or SIGINT ends the process with exit code 1 once the whole budget is
-spent, whatever still holds it. The contract pinned here:
+left, and in a process uvicorn serves from its main thread a watchdog armed by the first SIGTERM or SIGINT ends the
+process with exit code 1 once the whole budget is spent, whatever still holds it. The contract pinned here:
 
 1. ``config.sleep_wake``: ``DEFAULT_SHUTDOWN_TIMEOUT_SECONDS`` 8, ``SHUTDOWN_TIMEOUT_MIN_SECONDS`` 2,
    ``SHUTDOWN_TIMEOUT_MAX_SECONDS`` 600.
@@ -34,18 +34,25 @@ spent, whatever still holds it. The contract pinned here:
    ``coverage`` is already imported and ``coverage.Coverage.current()`` exists; stdout, stderr and the logging handlers
    flushed; then ``exit(1)``, even when a step before it fails.
 10. ``install_shutdown_watchdog(*, budget_seconds=None)``: a budget of None is ``shutdown_budget_seconds()``. A budget of
-    0, or a thread other than the main one: None, no handler changed. A callable SIGTERM or SIGINT handler — uvicorn's
-    ``Server.handle_exit`` — is replaced by a wrapper that arms the watchdog, then calls it with ``(signum, frame)``; a
-    handler that is not callable is left alone; with neither signal wrapped, None. The watchdog returned is
-    ``current_shutdown_watchdog()``.
-11. ``reset_shutdown_budget_state()`` forgets the installed watchdog and the cached deadline, never a signal handler.
-12. ``shutdown_deadline(*, clock=time.monotonic)``, on the monotonic clock: None with a budget of 0. With a watchdog, arms
-    it if no signal did — a shutdown that came from elsewhere — and returns its deadline minus
-    ``CLEANUP_MARGIN_SECONDS``, 0.75. Without one, the first call fixes ``clock() + budget - drain`` and every later call
-    returns it.
+    0, or a thread other than the main one: None, no handler changed. Otherwise SIGTERM decides: unless its handler is
+    uvicorn's exit handler — ``handle_exit`` bound to a ``uvicorn.Server``, of a subclass too —, None and no handler
+    changed, whatever SIGINT has. Not uvicorn's: SIG_DFL with ``signal.default_int_handler`` on SIGINT, as in pytest's
+    main thread; SIG_IGN; a function; another class's method, even one named ``handle_exit``; a uvicorn server's other
+    method. With it, SIGTERM's handler, and SIGINT's when it is uvicorn's too, is replaced by a wrapper that arms the
+    watchdog, then calls the handler it replaced with ``(signum, frame)``; any other SIGINT handler is left alone. The
+    watchdog returned is ``current_shutdown_watchdog()``.
+11. ``reset_shutdown_budget_state()`` forgets the installed watchdog, never a signal handler.
+12. ``shutdown_deadline(*, clock=time.monotonic)``, on the monotonic clock. Once a signal armed the watchdog, its
+    deadline minus ``CLEANUP_MARGIN_SECONDS``, 0.75, whatever the clock passed. Otherwise — no watchdog, or one no signal
+    armed —: None with a budget of 0, else ``clock() + budget - drain``, counted afresh at each call, the clock and the
+    variable read again. It never arms a watchdog: a shutdown that came without a signal ends no process.
 13. ``terminate_child_processes(timeout, *, keep=None)``: every child process, recursively, except those ``keep``
     accepts — by default multiprocessing's resource tracker, ``resource_tracker`` in its command line — is terminated,
     given ``timeout`` seconds, then killed; it returns the pids it had to kill.
+14. ``child_processes_step()``: a ``lifecycle.Step`` named "child-processes", the last step of the lifespan's shutdown.
+    With no watchdog installed — in every process but a server under uvicorn — its ``run`` terminates nothing. What it
+    does with one, terminating the children still alive, is pinned in a server process of its own by
+    ``test_shutdown_budget_process.py`` (SDP-004), never in this one.
 
 PURE: no database, no server, no lane port. An autouse fixture removes every ``LIBREFOLIO_SHUTDOWN_*`` and ``UVICORN_*``
 the lane inherited; another puts a stand-in ``coverage`` in ``sys.modules``, so that no ``fire()`` saves the coverage
@@ -53,11 +60,15 @@ data of the run measuring this file. The real ``os._exit`` and the default ``ter
 process: every watchdog gets recorders instead. ``install_shutdown_watchdog`` accepts no injection, so the tests replace
 ``shutdown_budget.ShutdownWatchdog`` — the name it builds through, looked up at call time — with a subclass that hands
 the recorders to the constructor, and refuse to arm any other watchdog. Every watchdog a test arms fires on its
-recorders before the test ends. SIGTERM's and SIGINT's handlers are saved and put back around each test that touches
-them, and no signal is ever delivered: the wrappers are called directly. The real children are short-lived
-``python -I`` processes of the test, killed and reaped at its teardown; ``terminate_child_processes`` runs here with a
-``keep`` that spares every process but the test's own, and with its default ``keep`` only in a fresh interpreter
-(``sys.executable``, run in ``tmp_path``) — like the once-per-process log and the watchdog's ERROR log.
+recorders before the test ends. uvicorn's exit handler is the ``handle_exit`` of a real ``uvicorn.Server``, never
+started, built with ``log_config=None``: uvicorn's default would reconfigure this process's logging. SIGTERM's and
+SIGINT's handlers are saved and put back around each test that touches them; a test leaves its stand-ins on the signals
+only while ``install_shutdown_watchdog`` looks at them, puts back those it found, then calls the wrappers directly. No
+signal is ever delivered; one sent to this process in that short window would reach the stand-in — uvicorn's records it
+on a server that never runs. The real children are short-lived ``python -I`` processes of the test, killed and reaped at
+its teardown; ``terminate_child_processes`` runs here with a ``keep`` that spares every process but the test's own —
+under the child-processes step, through a guard put in its place —, and with its default ``keep`` only in a fresh
+interpreter (``sys.executable``, run in ``tmp_path``) — like the once-per-process log and the watchdog's ERROR log.
 
 Red until ``config/sleep_wake.py`` has the budget and ``services/platform/shutdown_budget.py`` exists: the module does
 not import. Then the cases of ``entrypoint.sh`` stay red until it exports the drain, and the graces until the runner and
@@ -66,6 +77,7 @@ Playwright wait at least 10 s.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import io
 import json
@@ -85,6 +97,7 @@ from pathlib import Path
 
 import psutil
 import pytest
+import uvicorn
 
 from backend.app.config.sleep_wake import (
     DEFAULT_SHUTDOWN_TIMEOUT_SECONDS,
@@ -95,10 +108,11 @@ from backend.app.config.sleep_wake import (
     shutdown_timeout_seconds,
     uvicorn_drain_env,
 )
-from backend.app.services.platform import shutdown_budget
+from backend.app.services.platform import lifecycle, shutdown_budget
 from backend.app.services.platform.shutdown_budget import (
     CLEANUP_MARGIN_SECONDS,
     ShutdownWatchdog,
+    child_processes_step,
     current_shutdown_watchdog,
     install_shutdown_watchdog,
     reset_shutdown_budget_state,
@@ -186,6 +200,9 @@ CHILD_ENV = {"PATH": os.environ.get("PATH", os.defpath)}
 STUBBORN_CHILD = "import signal, sys; signal.signal(signal.SIGTERM, signal.SIG_IGN); print('ready', flush=True); sys.stdin.read()"
 #: Keeps SIGTERM's default action: a terminate() ends it.
 COOPERATIVE_CHILD = "import signal, sys; signal.signal(signal.SIGTERM, signal.SIG_DFL); print('ready', flush=True); sys.stdin.read()"
+#: Keeps SIGTERM's default action and answers each line it reads with ``alive <line>``: an answer proves that it still
+#: runs, and that no SIGTERM reached it before the question.
+ANSWERING_CHILD = "import signal, sys\nsignal.signal(signal.SIGTERM, signal.SIG_DFL)\nprint('ready', flush=True)\nfor line in sys.stdin:\n    print('alive', line.strip(), flush=True)\n"
 #: Ignores SIGTERM and starts a grandchild that ignores it too and sleeps a minute at most; prints the grandchild's pid
 #: once both are ready.
 STUBBORN_PARENT = """
@@ -254,13 +271,25 @@ class ReentrantClock(FakeClock):
         return self.now
 
 
+def _nothing_seen() -> None:
+    """What a test that does not look records at each ``arm()``."""
+    return None
+
+
 class Effects:
-    """What a watchdog does to the process, recorded in order instead of done: ``exit`` stands for ``os._exit``."""
+    """What a watchdog does to the process, recorded in order instead of done: ``exit`` stands for ``os._exit``.
+
+    The watchdogs ``install_shutdown_watchdog`` builds also read ``clock`` — the real one unless a test sets another
+    before it installs — and append what ``seen_at_arm()`` returns to ``arms`` at each ``arm()``, before arming.
+    """
 
     def __init__(self) -> None:
         self.calls: list[tuple[object, ...]] = []
         self.exit_times: list[float] = []
         self.exited = threading.Event()
+        self.clock: Callable[[], float] = time.monotonic
+        self.seen_at_arm: Callable[[], object] = _nothing_seen
+        self.arms: list[object] = []
 
     def exit(self, code: int) -> None:
         self.exit_times.append(time.monotonic())
@@ -278,27 +307,64 @@ class Effects:
         assert self.exited.wait(seconds), f"the watchdog did not fire within {seconds} s; recorded so far: {self.calls}"
 
 
-class PreviousHandler:
-    """Stands for uvicorn's ``Server.handle_exit``: each call recorded, with whether ``watched`` was armed by then.
+async def _never_served(scope: dict, receive: Callable, send: Callable) -> None:
+    """The ASGI app of the uvicorn servers built here: none is ever started, so nothing calls it."""
+    raise AssertionError("a uvicorn server built by test_shutdown_budget.py was started")
 
-    A real delivery — a call with a frame, which no test makes — goes to the handler the test found, so that a signal
-    sent to this process while a test runs is not swallowed.
-    """
 
-    def __init__(self, signum: int, found: object) -> None:
-        self.signum = signum
-        self.found = found
-        self.calls: list[tuple[int, object]] = []
-        self.watched: ShutdownWatchdog | None = None
-        self.armed_when_called: list[bool] = []
+def _uvicorn_config() -> uvicorn.Config:
+    """The configuration of a server that is never started. ``log_config=None``: building it leaves this process's logging as it is, where uvicorn's default would reconfigure its loggers."""
+    return uvicorn.Config(app=_never_served, log_config=None)
 
-    def __call__(self, signum: int, frame: object) -> None:
-        self.calls.append((signum, frame))
-        if self.watched is not None:
-            self.armed_when_called.append(self.watched.armed_at is not None)
-        if frame is not None:
-            signal.signal(self.signum, self.found)
-            signal.raise_signal(self.signum)
+
+def _uvicorn_server() -> uvicorn.Server:
+    """A real uvicorn server, never started: its ``handle_exit`` is the exit handler uvicorn puts on SIGTERM and SIGINT while it serves."""
+    return uvicorn.Server(_uvicorn_config())
+
+
+class FrameRecordingServer(uvicorn.Server):
+    """A subclass of uvicorn's server: its ``handle_exit`` records the signal and the frame it is given, then runs uvicorn's."""
+
+    def __init__(self, config: uvicorn.Config) -> None:
+        super().__init__(config)
+        self.given: list[tuple[int, object]] = []
+
+    def handle_exit(self, sig: int, frame: types.FrameType | None) -> None:
+        self.given.append((sig, frame))
+        super().handle_exit(sig, frame)
+
+
+class ServerWithAnotherHandler(uvicorn.Server):
+    """A uvicorn server with a signal handler of its own besides ``handle_exit``."""
+
+    def on_signal(self, signum: int, frame: types.FrameType | None) -> None:
+        """A uvicorn server's method that is not its exit handler."""
+
+
+class NotUvicorn:
+    """Not a uvicorn server, though one of its methods is named as uvicorn's exit handler."""
+
+    def handle_exit(self, signum: int, frame: types.FrameType | None) -> None:
+        """Named as uvicorn's handler, on another class."""
+
+    def on_signal(self, signum: int, frame: types.FrameType | None) -> None:
+        """Another class's handler."""
+
+
+def _a_function(signum: int, frame: types.FrameType | None) -> None:
+    """A handler that is a plain function."""
+
+
+#: Handlers that are not uvicorn's exit handler, by kind, each built when a test asks for it.
+NOT_UVICORN: dict[str, Callable[[], object]] = {
+    "SIG_DFL": lambda: signal.SIG_DFL,
+    "SIG_IGN": lambda: signal.SIG_IGN,
+    "default_int_handler": lambda: signal.default_int_handler,
+    "a-function": lambda: _a_function,
+    "another-class-method": lambda: NotUvicorn().on_signal,
+    "handle_exit-of-another-class": lambda: NotUvicorn().handle_exit,
+    "another-method-of-a-uvicorn-server": lambda: ServerWithAnotherHandler(_uvicorn_config()).on_signal,
+}
 
 
 class CoverageRecorder:
@@ -448,22 +514,34 @@ def _coverage_module(current: object | None) -> types.ModuleType:
     return module
 
 
-def _previous_handlers(saved: dict[int, object]) -> dict[int, PreviousHandler]:
-    """A recording handler on SIGTERM and on SIGINT, as uvicorn installs ``handle_exit`` before the lifespan starts."""
-    handlers = {signum: PreviousHandler(signum, saved[signum]) for signum in HANDLED_SIGNALS}
-    for signum, handler in handlers.items():
-        signal.signal(signum, handler)
-    return handlers
-
-
 def _handlers() -> dict[int, object]:
     return {signum: signal.getsignal(signum) for signum in HANDLED_SIGNALS}
+
+
+def _put_back(saved: dict[int, object]) -> None:
+    """SIGTERM's and SIGINT's handlers as the test found them, at once."""
+    for signum, handler in saved.items():
+        signal.signal(signum, handler)
+
+
+def _install(saved: dict[int, object], stand_ins: dict[int, object], *, budget_seconds: int | None = None) -> tuple[ShutdownWatchdog | None, dict[int, object]]:
+    """Put each stand-in on its signal, call ``install_shutdown_watchdog(budget_seconds=…)``, read the handlers it left, then put back ``saved`` — whatever happened.
+
+    The stand-ins stay on the signals only while ``install_shutdown_watchdog`` looks at them: the wrappers it built are
+    then called directly, no longer installed. Returns what it returned and the handlers read.
+    """
+    for signum, handler in stand_ins.items():
+        signal.signal(signum, handler)
+    try:
+        return install_shutdown_watchdog(budget_seconds=budget_seconds), _handlers()
+    finally:
+        _put_back(saved)
 
 
 def _injected(watchdog: object, injected: type[ShutdownWatchdog]) -> ShutdownWatchdog:
     """The watchdog ``install_shutdown_watchdog`` returned, once proven to run on the recorders; otherwise the test stops before anything can arm it."""
     if watchdog is None:
-        pytest.fail("install_shutdown_watchdog() returned None on the main thread, with a budget above 0 and a callable handler to wrap")
+        pytest.fail("install_shutdown_watchdog() returned None on the main thread, with a budget above 0 and uvicorn's exit handler on SIGTERM")
     if type(watchdog) is not injected:
         pytest.fail(
             f"install_shutdown_watchdog() returned {watchdog!r}, not the {injected.__name__} put in place of shutdown_budget.ShutdownWatchdog: it must build its "
@@ -482,6 +560,16 @@ def _ready(process: subprocess.Popen[str], seconds: float = 10.0) -> list[str]:
     stderr = process.stderr.read() if process.poll() is not None else ""
     assert words[:1] == ["ready"], f"pid {process.pid} did not start: {line!r} {stderr}"
     return words[1:]
+
+
+def _answer(process: subprocess.Popen[str], question: str, seconds: float = 10.0) -> str:
+    """What ``process`` answers to ``question``, a line on its stdin, waited for ``seconds`` at most; empty once it has ended."""
+    with contextlib.suppress(BrokenPipeError):
+        process.stdin.write(f"{question}\n")
+        process.stdin.flush()
+    readable, _, _ = select.select([process.stdout], [], [], seconds)
+    assert readable, f"pid {process.pid} did not answer in {seconds} s"
+    return process.stdout.readline().strip()
 
 
 def _assert_gone(process: subprocess.Popen[str] | psutil.Process, seconds: float = 5.0) -> None:
@@ -508,7 +596,7 @@ def _coverage_stand_in(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture(autouse=True)
 def _fresh_budget_state() -> Iterator[None]:
-    """No installed watchdog and no cached deadline, before and after each test; the handlers are ``signal_handlers``' business."""
+    """No installed watchdog, before and after each test; the handlers are ``signal_handlers``' business."""
     reset_shutdown_budget_state()
     yield
     reset_shutdown_budget_state()
@@ -535,25 +623,28 @@ def started_threads(monkeypatch: pytest.MonkeyPatch) -> list[threading.Thread]:
 
 @pytest.fixture
 def signal_handlers() -> Iterator[dict[int, object]]:
-    """SIGTERM's and SIGINT's handlers as the test found them, put back after it. Nothing here delivers a signal."""
+    """SIGTERM's and SIGINT's handlers as the test found them, put back after it — and at once by ``_install``. Nothing here delivers a signal."""
     if threading.current_thread() is not threading.main_thread():
         pytest.skip("signal handlers can only be changed from the main thread")
     saved = _handlers()
     if any(handler is None for handler in saved.values()):
         pytest.skip(f"a handler that was not installed from Python cannot be put back: {saved}")
     yield saved
-    for signum, handler in saved.items():
-        signal.signal(signum, handler)
+    _put_back(saved)
 
 
 @pytest.fixture
 def injected(monkeypatch: pytest.MonkeyPatch, effects: Effects) -> type[ShutdownWatchdog]:
-    """``shutdown_budget.ShutdownWatchdog`` replaced by a subclass that hands ``effects``' recorders to the constructor, whatever ``install_shutdown_watchdog`` passes."""
+    """``shutdown_budget.ShutdownWatchdog`` replaced by a subclass that hands ``effects``' recorders and clock to the constructor, whatever ``install_shutdown_watchdog`` passes, and records ``effects.seen_at_arm()`` at each ``arm()``, before arming."""
 
     class InjectedWatchdog(ShutdownWatchdog):
         def __init__(self, budget_seconds: float, **kwargs: object) -> None:
-            kwargs.update(exit=effects.exit, terminate_children=effects.terminate_children, current_step=_install_step)
+            kwargs.update(clock=effects.clock, exit=effects.exit, terminate_children=effects.terminate_children, current_step=_install_step)
             super().__init__(budget_seconds, **kwargs)
+
+        def arm(self) -> float:
+            effects.arms.append(effects.seen_at_arm())
+            return super().arm()
 
     monkeypatch.setattr(shutdown_budget, "ShutdownWatchdog", InjectedWatchdog)
     return InjectedWatchdog
@@ -901,7 +992,7 @@ def test_an_armed_watchdog_fires_at_its_deadline(effects: Effects, started_threa
 
 
 def test_arm_survives_a_signal_handler_arming_it_while_it_runs(effects: Effects, started_threads: list[threading.Thread]) -> None:
-    """SDB-019 — contract 8: the SIGTERM/SIGINT wrapper runs ``arm()`` on the main thread, between two bytecodes of whatever runs there — ``arm()`` itself included, called by ``shutdown_deadline()``. A clock that runs ``arm()`` the first time it is read plays that signal: ``arm()`` returns, one thread is started, one deadline fixed. A lock a thread cannot take twice would hang the process here, with no watchdog left to end it.
+    """SDB-019 — contract 8: the SIGTERM/SIGINT wrapper runs ``arm()`` on the main thread, between two bytecodes of whatever runs there — ``arm()`` itself included, run by the wrapper of a first signal when a second one comes. A clock that runs ``arm()`` the first time it is read plays that signal: ``arm()`` returns, one thread is started, one deadline fixed. A lock a thread cannot take twice would hang the process here, with no watchdog left to end it.
 
     The arming runs in a thread of the test, so that a deadlock fails this test instead of hanging the run.
     """
@@ -1098,28 +1189,31 @@ def test_the_wrapper_arms_the_watchdog_then_calls_uvicorns_handler(
     started_threads: list[threading.Thread],
     signum: int,
 ) -> None:
-    """SDB-026 — contract 10: with uvicorn's handler on both signals, ``install_shutdown_watchdog(budget_seconds=1)`` wraps both and returns the current watchdog, not armed. Called as the signal would call it, the wrapper arms the watchdog first, then calls the handler it replaced once with ``(signum, frame)``, and only that one; the watchdog fires one second later."""
+    """SDB-026 — contract 10: uvicorn's exit handler on each signal — the ``handle_exit`` of a real ``uvicorn.Server``, one server per signal —: ``install_shutdown_watchdog(budget_seconds=1)`` wraps both and returns the current watchdog, not armed. Called as the signal would call it, a wrapper arms the watchdog first, then runs the ``handle_exit`` it replaced, once, with its signal: that server is asked to exit — ``should_exit``, the signal in ``_captured_signals`` —, the other is not. The watchdog fires one second later."""
     print_section(f"SDB-026: the {signal.Signals(signum).name} wrapper")
-    previous = _previous_handlers(signal_handlers)
-    watchdog = _injected(install_shutdown_watchdog(budget_seconds=1), injected)
+    servers = {number: _uvicorn_server() for number in HANDLED_SIGNALS}
+    exit_handlers = {number: server.handle_exit for number, server in servers.items()}
+    result, wrappers = _install(signal_handlers, exit_handlers, budget_seconds=1)
+    watchdog = _injected(result, injected)
     assert watchdog.budget_seconds == 1
     assert current_shutdown_watchdog() is watchdog
     assert (watchdog.armed_at, watchdog.deadline) == (None, None), "installing is not arming"
-    wrappers = _handlers()
-    assert all(callable(wrapper) and wrapper is not previous[number] for number, wrapper in wrappers.items()), f"not both wrapped: {wrappers}"
-    previous[signum].watched = watchdog
+    assert all(callable(wrapper) and wrapper is not exit_handlers[number] for number, wrapper in wrappers.items()), f"not both wrapped: {wrappers}"
+    server = servers[signum]
+    effects.seen_at_arm = lambda: (list(server._captured_signals), server.should_exit)
 
     wrappers[signum](signum, None)
-    assert previous[signum].calls == [(signum, None)]
-    assert previous[signum].armed_when_called == [True], "uvicorn's handler ran before the watchdog was armed"
-    assert all(handler.calls == [] for number, handler in previous.items() if number != signum)
+    assert effects.arms == [([], False)], f"uvicorn's handler ran before the watchdog was armed: {effects.arms}"
+    assert (server._captured_signals, server.should_exit) == ([signum], True), "the wrapper did not run uvicorn's handle_exit once, with its signal"
+    others = [(other._captured_signals, other.should_exit) for number, other in servers.items() if number != signum]
+    assert others == [([], False)], f"the wrapper ran the other signal's handler: {others}"
     assert watchdog.armed_at is not None and watchdog.deadline == pytest.approx(watchdog.armed_at + 1, abs=1e-6)
     assert len(_watchdog_threads(started_threads)) == 1
 
     effects.wait_for_exit(watchdog.deadline - time.monotonic() + 3.0)
     _join(_watchdog_threads(started_threads))
     assert effects.calls == [("terminate_children", CHILDREN_GRACE), ("exit", 1)]
-    print_success("armed, then handle_exit(signum, None); fired at the deadline")
+    print_success("armed, then uvicorn's handle_exit(signum, None); fired at the deadline")
 
 
 @pytest.mark.parametrize(
@@ -1137,9 +1231,10 @@ def test_install_takes_its_budget_from_the_environment(monkeypatch: pytest.Monke
     print_section(f"SDB-027: install_shutdown_watchdog() with {TIMEOUT_VARIABLE}={value!r}")
     if value is not None:
         monkeypatch.setenv(TIMEOUT_VARIABLE, value)
-    _previous_handlers(signal_handlers)
+    server = _uvicorn_server()
 
-    watchdog = _injected(install_shutdown_watchdog(), injected)
+    result, _ = _install(signal_handlers, dict.fromkeys(HANDLED_SIGNALS, server.handle_exit))
+    watchdog = _injected(result, injected)
     assert watchdog.budget_seconds == budget
     assert (watchdog.armed_at, watchdog.deadline) == (None, None)
     print_success(f"budget {budget}")
@@ -1147,23 +1242,23 @@ def test_install_takes_its_budget_from_the_environment(monkeypatch: pytest.Monke
 
 @pytest.mark.parametrize("source", ["argument", "environment"])
 def test_with_a_budget_of_0_install_changes_nothing(monkeypatch: pytest.MonkeyPatch, signal_handlers: dict[int, object], injected: type[ShutdownWatchdog], source: str) -> None:
-    """SDB-028 — contract 10: a budget of 0 — given, or read as "0" — means no limit: None, both handlers as they were, no current watchdog."""
+    """SDB-028 — contract 10: a budget of 0 — given, or read as "0" — means no limit: None, uvicorn's handlers as they were, no current watchdog."""
     print_section(f"SDB-028: a budget of 0 from the {source}")
-    previous = _previous_handlers(signal_handlers)
+    stand_ins = dict.fromkeys(HANDLED_SIGNALS, _uvicorn_server().handle_exit)
     if source == "environment":
         monkeypatch.setenv(TIMEOUT_VARIABLE, "0")
 
-    result = install_shutdown_watchdog() if source == "environment" else install_shutdown_watchdog(budget_seconds=0)
+    result, after = _install(signal_handlers, stand_ins, budget_seconds=None if source == "environment" else 0)
     assert result is None
-    assert _handlers() == previous
+    assert after == stand_ins
     assert current_shutdown_watchdog() is None
     print_success("None; nothing wrapped")
 
 
 def test_off_the_main_thread_install_changes_nothing(signal_handlers: dict[int, object], injected: type[ShutdownWatchdog]) -> None:
-    """SDB-029 — contract 10: called from another thread — the API tests run uvicorn in one, inside the test process — it returns None without raising, wraps nothing and installs nothing."""
+    """SDB-029 — contract 10: called from another thread — the API tests run uvicorn in one, inside the test process — it returns None without raising, wraps nothing and installs nothing, uvicorn's handlers on both signals notwithstanding."""
     print_section("SDB-029: install_shutdown_watchdog() off the main thread")
-    previous = _previous_handlers(signal_handlers)
+    stand_ins = dict.fromkeys(HANDLED_SIGNALS, _uvicorn_server().handle_exit)
     outcome: list[object] = []
 
     def install() -> None:
@@ -1173,29 +1268,34 @@ def test_off_the_main_thread_install_changes_nothing(signal_handlers: dict[int, 
             outcome.append(error)
 
     worker = threading.Thread(target=install, name="sdb-not-main", daemon=True)
-    worker.start()
-    worker.join(5.0)
+    for signum, handler in stand_ins.items():
+        signal.signal(signum, handler)
+    try:
+        worker.start()
+        worker.join(5.0)
+        after = _handlers()
+    finally:
+        _put_back(signal_handlers)
     assert not worker.is_alive(), "install_shutdown_watchdog() did not return"
     assert outcome == [None]
-    assert _handlers() == previous
+    assert after == stand_ins
     assert current_shutdown_watchdog() is None
     print_success("None; nothing wrapped")
 
 
-@pytest.mark.parametrize("plain", [signal.SIG_DFL, signal.SIG_IGN], ids=["SIG_DFL", "SIG_IGN"])
-@pytest.mark.parametrize(("left_alone", "wrapped"), [(signal.SIGTERM, signal.SIGINT), (signal.SIGINT, signal.SIGTERM)], ids=["SIGTERM-plain", "SIGINT-plain"])
-def test_install_leaves_a_handler_it_cannot_call_alone(signal_handlers: dict[int, object], injected: type[ShutdownWatchdog], plain: object, left_alone: int, wrapped: int) -> None:
-    """SDB-030 — contract 10: a signal whose handler is not callable keeps it; the other one is wrapped, and the watchdog is installed."""
-    print_section(f"SDB-030: {signal.Signals(left_alone).name} on {plain!r}")
-    previous = _previous_handlers(signal_handlers)
-    signal.signal(left_alone, plain)
+@pytest.mark.parametrize("kind", ["SIG_DFL", "SIG_IGN", "default_int_handler", "a-function"])
+def test_install_wraps_sigterm_and_leaves_a_sigint_that_is_not_uvicorns(signal_handlers: dict[int, object], injected: type[ShutdownWatchdog], kind: str) -> None:
+    """SDB-030 — contract 10: uvicorn's exit handler on SIGTERM, another handler on SIGINT — SIG_DFL, SIG_IGN, Python's ``default_int_handler``, a function —: the watchdog is installed and SIGTERM wrapped; SIGINT keeps its handler."""
+    print_section(f"SDB-030: SIGINT on {kind}")
+    stand_ins = {signal.SIGTERM: _uvicorn_server().handle_exit, signal.SIGINT: NOT_UVICORN[kind]()}
 
-    watchdog = _injected(install_shutdown_watchdog(budget_seconds=1), injected)
-    assert signal.getsignal(left_alone) == plain
-    wrapper = signal.getsignal(wrapped)
-    assert callable(wrapper) and wrapper is not previous[wrapped]
+    result, after = _install(signal_handlers, stand_ins, budget_seconds=1)
+    watchdog = _injected(result, injected)
+    assert after[signal.SIGINT] == stand_ins[signal.SIGINT], f"SIGINT's handler changed: {after[signal.SIGINT]!r}"
+    wrapper = after[signal.SIGTERM]
+    assert callable(wrapper) and wrapper != stand_ins[signal.SIGTERM], f"SIGTERM not wrapped: {wrapper!r}"
     assert current_shutdown_watchdog() is watchdog
-    print_success(f"{signal.Signals(left_alone).name} left alone, {signal.Signals(wrapped).name} wrapped")
+    print_success(f"SIGTERM wrapped, SIGINT left on {kind}")
 
 
 @pytest.mark.parametrize(
@@ -1206,26 +1306,97 @@ def test_install_leaves_a_handler_it_cannot_call_alone(signal_handlers: dict[int
 def test_with_no_handler_to_wrap_install_returns_none(signal_handlers: dict[int, object], injected: type[ShutdownWatchdog], term: object, interrupt: object) -> None:
     """SDB-031 — contract 10: when neither signal has a callable handler — no uvicorn to call through — there is nothing to arm from: None, both handlers untouched, no current watchdog."""
     print_section(f"SDB-031: SIGTERM {term!r}, SIGINT {interrupt!r}")
-    signal.signal(signal.SIGTERM, term)
-    signal.signal(signal.SIGINT, interrupt)
+    stand_ins = {signal.SIGTERM: term, signal.SIGINT: interrupt}
 
-    assert install_shutdown_watchdog(budget_seconds=1) is None
-    assert _handlers() == {signal.SIGTERM: term, signal.SIGINT: interrupt}
+    result, after = _install(signal_handlers, stand_ins, budget_seconds=1)
+    assert result is None
+    assert after == stand_ins
     assert current_shutdown_watchdog() is None
     print_success("None; nothing wrapped")
+
+
+#: ``(SIGTERM's handler, SIGINT's)``, as kinds of ``NOT_UVICORN``, or "uvicorn" — a real server's ``handle_exit`` —, or
+#: "found" — the one the test found.
+SIGTERM_NOT_UVICORN = [
+    pytest.param("SIG_DFL", "default_int_handler", id="pytest-main-thread"),
+    pytest.param("found", "found", id="this-process-as-it-is"),
+    *(pytest.param(kind, "uvicorn", id=f"{kind}-with-uvicorn-on-SIGINT") for kind in ("SIG_DFL", "SIG_IGN", "a-function", "another-class-method", "handle_exit-of-another-class", "another-method-of-a-uvicorn-server")),
+]
+
+
+@pytest.mark.parametrize(("term", "interrupt"), SIGTERM_NOT_UVICORN)
+def test_without_uvicorns_handler_on_sigterm_install_changes_nothing(signal_handlers: dict[int, object], injected: type[ShutdownWatchdog], term: str, interrupt: str) -> None:
+    """SDB-042 — contract 10: SIGTERM decides. When its handler is not uvicorn's exit handler, ``install_shutdown_watchdog(budget_seconds=1)`` returns None on the main thread, changes no handler and installs nothing — not even with uvicorn's on SIGINT, which is never wrapped alone.
+
+    ``pytest-main-thread``: SIG_DFL and Python's ``default_int_handler``. ``this-process-as-it-is``: the handlers this
+    test process has — SIG_DFL on SIGTERM, or coverage's in a measured run —, those ``test_post_migration``,
+    ``test_signal_runtime``, ``test_risk_scenario_catalog`` and ``test_market_calendar`` find when they run the real
+    lifespan in pytest's main thread: its first step installs nothing there, so no watchdog can end this process.
+    """
+    print_section(f"SDB-042: SIGTERM on {term}, SIGINT on {interrupt}")
+
+    def handler(kind: str, signum: int) -> object:
+        if kind == "found":
+            return signal_handlers[signum]
+        return _uvicorn_server().handle_exit if kind == "uvicorn" else NOT_UVICORN[kind]()
+
+    stand_ins = {signum: handler(kind, signum) for signum, kind in ((signal.SIGTERM, term), (signal.SIGINT, interrupt))}
+
+    result, after = _install(signal_handlers, stand_ins, budget_seconds=1)
+    assert result is None, f"install_shutdown_watchdog() installed {result!r} with {stand_ins[signal.SIGTERM]!r} on SIGTERM"
+    assert after == stand_ins, f"a handler changed: {after}"
+    assert current_shutdown_watchdog() is None
+    print_success("None; nothing wrapped")
+
+
+def test_a_subclass_of_uvicorns_server_counts_and_is_given_the_frame(signal_handlers: dict[int, object], injected: type[ShutdownWatchdog], effects: Effects, started_threads: list[threading.Thread]) -> None:
+    """SDB-043 — contract 10: the ``handle_exit`` of a subclass of ``uvicorn.Server`` — overridden, under the same name — is uvicorn's exit handler too: the watchdog is installed and both signals are wrapped. Each wrapper hands that handler the signal and the frame it was given, as they came, and uvicorn's own ``handle_exit`` still runs under the override. Armed twice, the watchdog starts one thread, which fires — on a fake clock, moved past its deadline."""
+    print_section("SDB-043: a subclass of uvicorn.Server")
+    clock = FakeClock()
+    effects.clock = clock
+    server = FrameRecordingServer(_uvicorn_config())
+    exit_handler = server.handle_exit
+    result, wrappers = _install(signal_handlers, dict.fromkeys(HANDLED_SIGNALS, exit_handler), budget_seconds=1)
+    watchdog = _injected(result, injected)
+    assert all(callable(wrapper) and wrapper is not exit_handler for wrapper in wrappers.values()), f"not both wrapped: {wrappers}"
+    #: Stand for the frames a delivery passes: one per signal, so that each is followed to its handler.
+    frames = {signum: object() for signum in HANDLED_SIGNALS}
+
+    for signum in HANDLED_SIGNALS:
+        wrappers[signum](signum, frames[signum])
+    assert server.given == [(signum, frames[signum]) for signum in HANDLED_SIGNALS]
+    assert server._captured_signals == list(HANDLED_SIGNALS), "uvicorn's handle_exit did not run under the override"
+    assert (watchdog.armed_at, watchdog.deadline) == (START, START + 1)
+    assert len(_watchdog_threads(started_threads)) == 1
+
+    clock.now = START + 2
+    effects.wait_for_exit(5.0)
+    _join(_watchdog_threads(started_threads))
+    assert effects.calls == [("terminate_children", CHILDREN_GRACE), ("exit", 1)]
+    print_success("wrapped; each handler given its signal and frame; one thread, fired")
 
 
 def test_reset_forgets_the_watchdog_and_leaves_the_handlers(signal_handlers: dict[int, object], injected: type[ShutdownWatchdog]) -> None:
     """SDB-032 — contract 11: after ``reset_shutdown_budget_state()`` there is no current watchdog, and the wrappers stay where they are."""
     print_section("SDB-032: reset_shutdown_budget_state()")
-    _previous_handlers(signal_handlers)
-    watchdog = _injected(install_shutdown_watchdog(budget_seconds=1), injected)
-    wrappers = _handlers()
-    assert current_shutdown_watchdog() is watchdog
+    exit_handler = _uvicorn_server().handle_exit
+    for signum in HANDLED_SIGNALS:
+        signal.signal(signum, exit_handler)
+    try:
+        installed = install_shutdown_watchdog(budget_seconds=1)
+        wrappers = _handlers()
+        current = current_shutdown_watchdog()
+        returned = reset_shutdown_budget_state()
+        after = _handlers()
+    finally:
+        _put_back(signal_handlers)
+    watchdog = _injected(installed, injected)
+    assert current is watchdog
+    assert all(wrapper != exit_handler for wrapper in wrappers.values()), f"barrier: not both wrapped: {wrappers}"
 
-    assert reset_shutdown_budget_state() is None
+    assert returned is None
     assert current_shutdown_watchdog() is None
-    assert _handlers() == wrappers
+    assert after == wrappers, f"reset_shutdown_budget_state() changed a handler: {after}"
     print_success("forgotten; the handlers untouched")
 
 
@@ -1262,20 +1433,26 @@ def test_without_a_watchdog_the_deadline_is_the_budget_less_the_drain(monkeypatc
     print_success(f"{deadline}")
 
 
-def test_the_first_deadline_holds_until_reset(monkeypatch: pytest.MonkeyPatch) -> None:
-    """SDB-035 — contract 12: the lifespan asks twice; the second call, later and under another budget, returns the deadline of the first — on any clock —, until ``reset_shutdown_budget_state()``."""
-    print_section("SDB-035: the deadline fixed by the first call")
+def test_without_a_watchdog_the_deadline_is_counted_afresh_at_each_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SDB-045 — contract 12: with no watchdog, each call reads the clock and the variable again — a later shutdown of the same process, as an API test server's, gets its own deadline, never one already past —: 1005 at 1000, 1009 at 1004, 1014 once the budget is 16, None once it is 0, 1009 again once unset. With no clock given, the monotonic clock plus 5 s."""
+    print_section("SDB-045: shutdown_deadline() counted at each call")
     clock = FakeClock()
 
     assert shutdown_deadline(clock=clock) == 1_005.0
     clock.now = 1_004.0
+    assert shutdown_deadline(clock=clock) == 1_009.0
     monkeypatch.setenv(TIMEOUT_VARIABLE, "16")
-    assert shutdown_deadline(clock=clock) == 1_005.0
-    assert shutdown_deadline() == 1_005.0
+    assert shutdown_deadline(clock=clock) == 1_014.0
+    monkeypatch.setenv(TIMEOUT_VARIABLE, "0")
+    assert shutdown_deadline(clock=clock) is None
+    monkeypatch.delenv(TIMEOUT_VARIABLE)
+    assert shutdown_deadline(clock=clock) == 1_009.0
 
-    reset_shutdown_budget_state()
-    assert shutdown_deadline(clock=clock) == 1_004.0 + 16 - 6
-    print_success("1005 twice; 1014 after the reset")
+    before = time.monotonic()
+    deadline = shutdown_deadline()
+    after = time.monotonic()
+    assert deadline is not None and before + 5 - 1e-6 <= deadline <= after + 5 + 1e-6, f"{deadline} is not the monotonic clock plus 5 s ({before} to {after})"
+    print_success("1005, 1009, 1014, None, 1009; the monotonic clock by default")
 
 
 def test_with_a_budget_of_0_there_is_no_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1288,34 +1465,56 @@ def test_with_a_budget_of_0_there_is_no_deadline(monkeypatch: pytest.MonkeyPatch
     print_success("None")
 
 
-@pytest.mark.parametrize("armed_by", ["shutdown-deadline", "a-signal"])
-def test_with_a_watchdog_the_deadline_is_its_own_less_the_cleanup_margin(
+def test_with_an_armed_watchdog_the_deadline_is_its_own_less_the_cleanup_margin(
     signal_handlers: dict[int, object],
     injected: type[ShutdownWatchdog],
     effects: Effects,
     started_threads: list[threading.Thread],
-    armed_by: str,
 ) -> None:
-    """SDB-037 — contract 12: with a watchdog installed, the deadline is the watchdog's minus 0.75 s, on the watchdog's clock — not the one passed —, and the same at each call. A shutdown no signal began — ``armed_by`` shutdown-deadline — arms it; one a signal began keeps the arming of the signal. Either way one thread, which fires."""
-    print_section(f"SDB-037: shutdown_deadline() with a watchdog armed by {armed_by}")
-    _previous_handlers(signal_handlers)
-    watchdog = _injected(install_shutdown_watchdog(budget_seconds=1), injected)
-    if armed_by == "a-signal":
-        signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+    """SDB-037 — contract 12: once a signal armed the watchdog — its SIGTERM wrapper called —, the deadline is the watchdog's minus 0.75 s, on the watchdog's clock — not the one passed —, and the same at each call. Asking does not arm it again: one ``arm()``, the signal's, one thread, which fires."""
+    print_section("SDB-037: shutdown_deadline() once a signal armed the watchdog")
+    result, wrappers = _install(signal_handlers, dict.fromkeys(HANDLED_SIGNALS, _uvicorn_server().handle_exit), budget_seconds=1)
+    watchdog = _injected(result, injected)
+    wrappers[signal.SIGTERM](signal.SIGTERM, None)
     armed_at = watchdog.armed_at
+    assert armed_at is not None, "barrier: the SIGTERM wrapper armed the watchdog"
 
     deadline = shutdown_deadline(clock=FakeClock())
-    assert watchdog.armed_at is not None, "shutdown_deadline() left the watchdog unarmed"
-    if armed_by == "a-signal":
-        assert armed_at is not None and watchdog.armed_at == armed_at, "shutdown_deadline() armed the watchdog again"
     assert deadline == pytest.approx(watchdog.deadline - CLEANUP_MARGIN_SECONDS, abs=1e-6)
     assert shutdown_deadline() == pytest.approx(deadline, abs=1e-6)
+    assert watchdog.armed_at == armed_at and effects.arms == [None], f"shutdown_deadline() armed the watchdog again: {len(effects.arms)} arm() calls"
     assert len(_watchdog_threads(started_threads)) == 1
 
     effects.wait_for_exit(watchdog.deadline - time.monotonic() + 3.0)
     _join(_watchdog_threads(started_threads))
     assert effects.of("exit") == [("exit", 1)]
     print_success("the watchdog's deadline less 0.75 s")
+
+
+def test_a_watchdog_no_signal_armed_stays_unarmed_and_the_deadline_counts_from_the_clock(
+    monkeypatch: pytest.MonkeyPatch,
+    signal_handlers: dict[int, object],
+    injected: type[ShutdownWatchdog],
+    effects: Effects,
+    started_threads: list[threading.Thread],
+) -> None:
+    """SDB-044 — contract 12: a watchdog installed that no signal armed — a shutdown that did not come from a signal: a test, a server at its request limit — is left as it is by ``shutdown_deadline()``: no ``arm()``, no ``armed_at``, no thread, nothing fired, still the current watchdog. The deadline is the one without a watchdog, counted at each call: 1010 at 1000 for a budget of 16, 1014 at 1004."""
+    print_section("SDB-044: shutdown_deadline() with a watchdog no signal armed")
+    monkeypatch.setenv(TIMEOUT_VARIABLE, "16")
+    result, _ = _install(signal_handlers, dict.fromkeys(HANDLED_SIGNALS, _uvicorn_server().handle_exit))
+    watchdog = _injected(result, injected)
+    assert watchdog.budget_seconds == 16, "barrier: the watchdog has the budget in force"
+    clock = FakeClock()
+
+    assert shutdown_deadline(clock=clock) == 1_010.0
+    clock.now = 1_004.0
+    assert shutdown_deadline(clock=clock) == 1_014.0
+    assert effects.arms == [], f"shutdown_deadline() called arm() {len(effects.arms)} time(s)"
+    assert (watchdog.armed_at, watchdog.deadline) == (None, None), "shutdown_deadline() armed the watchdog"
+    assert _watchdog_threads(started_threads) == []
+    assert effects.calls == []
+    assert current_shutdown_watchdog() is watchdog
+    print_success("not armed; 1010, then 1014")
 
 
 # =============================================================================
@@ -1434,3 +1633,38 @@ def test_by_default_every_child_but_the_resource_tracker_is_terminated(tmp_path:
     assert set(result["trackers"]) <= set(result["survivors"]), f"the resource tracker was ended: survivors {result['survivors']}"
     assert not set(pids.values()) & set(result["survivors"]), f"a child survived: {result['survivors']}"
     print_success("the tracker spared; the stubborn child killed, the other terminated")
+
+
+# =============================================================================
+# 14. child_processes_step
+# =============================================================================
+
+
+def test_without_a_watchdog_the_child_processes_step_terminates_nothing(monkeypatch: pytest.MonkeyPatch, children: Children) -> None:
+    """SDB-046 — contract 14: ``child_processes_step()`` is a ``lifecycle.Step`` named "child-processes". With no watchdog installed — this process's case, and that of every test that runs the real lifespan — its ``run``, run as the lifespan runs it, terminates nothing: a child of this process that heeds SIGTERM still answers afterwards.
+
+    ``terminate_child_processes`` is replaced by a guard that records each call and spares every process but that
+    child: were the step to terminate children here, it would end the test's own, never a neighbour's. What the step
+    does with a watchdog is SDP-004's, in a server process of its own. The child is reaped at teardown, whatever happened.
+    """
+    print_section("SDB-046: the child-processes step without a watchdog")
+    step = child_processes_step()
+    assert isinstance(step, lifecycle.Step) and step.name == "child-processes"
+    child = children.start(ANSWERING_CHILD)
+    _ready(child)
+    terminate = shutdown_budget.terminate_child_processes
+    guarded: list[float] = []
+
+    def confined(timeout: float, *, keep: Callable[[psutil.Process], bool] | None = None) -> list[int]:
+        """Record the call, then terminate that child at most, whatever ``keep`` was given."""
+        guarded.append(timeout)
+        return terminate(timeout, keep=lambda process: process.pid != child.pid)
+
+    monkeypatch.setattr(shutdown_budget, "terminate_child_processes", confined)
+    assert current_shutdown_watchdog() is None, "barrier: no watchdog is installed"
+
+    outcomes = asyncio.run(lifecycle.run_shutdown_steps((step,), shutdown_deadline()))
+    assert [(outcome.name, outcome.finished, outcome.error) for outcome in outcomes] == [("child-processes", True, None)]
+    assert guarded == [], f"the step called terminate_child_processes without a watchdog: {guarded}"
+    assert _answer(child, "after-the-step") == "alive after-the-step", f"pid {child.pid} no longer answers: the step ended it"
+    print_success("nothing terminated: the child still answers")

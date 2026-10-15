@@ -13,14 +13,18 @@ Two routes send back a file that a user uploaded:
   answer carries ``nosniff``.
 
 Each router is mounted on a fresh app whose sign-in (and session) dependencies are overridden; the
-broker import router is mounted alone, so its routes answer under ``/api/v1/import``. The storage
-lookups are monkeypatched to hand back a file written under ``tmp_path``. The assertions read
-behaviour only, never a constant of the modules, so the file runs unchanged against older releases.
-No DB, no server, no network.
+broker import router is mounted alone, so its routes answer under ``/api/v1/import``. A broker
+report's storage lookups are monkeypatched to hand back a file written under ``tmp_path``; an
+upload is a real one, its file and sidecar written into a data directory of the test's own under
+``tmp_path``, uploaded by the signed-in user (whom decision 36 lets see it whatever its scope). The
+assertions read behaviour only, never a constant of the modules, so the file runs unchanged against
+older releases. No DB, no server, no network.
 """
 
 from __future__ import annotations
 
+import json
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -30,6 +34,7 @@ from fastapi import FastAPI, HTTPException
 
 import backend.app.api.v1.brokers as brokers
 import backend.app.api.v1.uploads as uploads
+from backend.app.services.files.static_uploads import get_uploads_dir
 
 SIGNED_IN = SimpleNamespace(id=1, is_superuser=False)
 
@@ -84,14 +89,35 @@ def uploads_app() -> FastAPI:
 
 @pytest.fixture
 def store_upload(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """Store one upload under ``tmp_path`` with the given text and stored type; return its id."""
+    """Store one upload of the signed-in user with the given text and stored type; return its id.
+
+    A real file and its sidecar, in a data directory of this test's own under ``tmp_path``: the route
+    finds it, may show it to its uploader and reads the stored type, through the service as for any
+    upload. The id is new at each call, so no sidecar of another test is ever confused with it.
+    """
+    monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")
+    monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
+    uploads_dir = get_uploads_dir()
+    assert uploads_dir.is_relative_to(tmp_path.resolve()), f"the uploads directory must be this test's own, under {tmp_path}, not {uploads_dir}"
 
     def store(text: str, stored_type: str) -> str:
-        path = tmp_path / f"{UPLOAD_ID}.upload"
-        path.write_bytes(text.encode("utf-8"))
-        monkeypatch.setattr(uploads, "get_upload_path", lambda file_id: path if file_id == UPLOAD_ID else None)
-        monkeypatch.setattr(uploads, "get_upload_mime_type", lambda file_id: stored_type if file_id == UPLOAD_ID else None)
-        return UPLOAD_ID
+        file_id = f"{UPLOAD_ID}-{uuid.uuid4().hex[:8]}"
+        content = text.encode("utf-8")
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+        (uploads_dir / f"{file_id}.upload").write_bytes(content)
+        sidecar = {
+            "id": file_id,
+            "original_name": "document.upload",
+            "extension": ".upload",
+            "mime_type": stored_type,
+            "size_bytes": len(content),
+            "uploaded_at": "2026-01-15T09:30:00+00:00",
+            "uploaded_by_user_id": SIGNED_IN.id,
+            "description": None,
+            "scope": "personal",
+        }
+        (uploads_dir / f"{file_id}.json").write_text(json.dumps(sidecar))
+        return file_id
 
     return store
 

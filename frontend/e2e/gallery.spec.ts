@@ -110,9 +110,11 @@ import {
     buildPacDraft,
     calculatePacPlan,
     closePacBrokerEditor,
+    closePacExposures,
     fitScreenToPacProof,
     framePacAssets,
     framePacBrokerEditor,
+    framePacExposures,
     framePacLiquidity,
     framePacPlan,
     framePacProof,
@@ -1067,14 +1069,16 @@ test.describe('Gallery Screenshots', () => {
 
     /**
      * Hide or show amounts from the header's eye button, the state asserted on both sides: privacy-masking.spec.ts's
-     * flipPrivacy. Focused, the button pins the header (Header.svelte, handleFocusIn), so the header stays on screen
-     * however the page scrolls next — which is what keeps the button in the privacy shot.
+     * flipPrivacy, with the mouse alone, as a user does. The header is on screen first, and the button with it. No focus
+     * is given: keyboard focus would pin the header, but it lights the button's focus-visible ring, which the click does
+     * not clear — a ring in every privacy shot. A mouse click leaves none, and does not pin the header (T-7): the scene
+     * brings the header back by scrolling instead.
      */
     async function setPrivacyFromHeader(page: Page, on: boolean): Promise<void> {
         const toggle = page.getByTestId('privacy-toggle');
         await expect(toggle, `privacy must start ${on ? 'off' : 'on'}`).toHaveAttribute('aria-pressed', String(!on));
-        await toggle.focus();
-        await expect(page.getByTestId('app-header'), 'focused, the eye button pins the header').toHaveAttribute('data-scroll-state', 'pinned');
+        await expect(page.getByTestId('app-header'), 'the header is on screen, not slid away').toHaveAttribute('data-scroll-state', 'visible');
+        await expect(toggle, 'and so is the eye button').toBeInViewport({ratio: 1});
         await toggle.click();
         await expect(toggle).toHaveAttribute('aria-pressed', String(on));
     }
@@ -1450,15 +1454,33 @@ test.describe('Gallery Screenshots', () => {
                 }
                 await expect(page.getByTestId('kpi-return-roi-value'), 'ROI stays readable').toHaveText(/\d/);
 
-                // The frame: the KPI row right under the header, which the focused eye button keeps on screen. The date-range
-                // toolbar above the cards scrolls away, and the room it leaves goes to the growth chart below them: on the
-                // desktop its header and the top of its masked axis, on a phone none of it, the cards being stacked there.
+                // The frame: the KPI row right under the header. The date-range toolbar above the cards scrolls away, and the
+                // room it leaves goes to the growth chart below them: on the desktop its header and the top of its masked
+                // axis, on a phone none of it, the cards being stacked there.
                 await page.getByTestId('kpi-row').evaluate((row) => {
                     const header = document.querySelector('[data-testid="app-header"]')?.getBoundingClientRect().height ?? 0;
                     // 16 px: the dashboard's gap between its blocks (space-y-4).
                     window.scrollTo({top: Math.max(0, row.getBoundingClientRect().top + window.scrollY - header - 16), behavior: 'instant'});
                 });
-                await expect(page.getByTestId('app-header'), 'the header stays: the focused eye button pins it').toHaveAttribute('data-scroll-state', 'pinned');
+                // No focus holds the header (its keyboard ring would show in the shot): the header's own scroll rule brings it
+                // back (Header.svelte, the distance accumulated per direction). 8 px further down, HIDE_SCROLL_THRESHOLD, slide
+                // it away; 8 px back up, past SHOW_SCROLL_THRESHOLD (4), to the very frame above, bring it back. The header
+                // reads a scroll in the animation frame its listener schedules: each step waits for its `scroll` event and two
+                // frames, so the state read next is the header's verdict on that step, not on the two at once.
+                const framedTop = await page.evaluate(() => window.scrollY);
+                const scrollSeen = (top: number) =>
+                    page.evaluate(async (y) => {
+                        const from = window.scrollY;
+                        const scrolled = new Promise<void>((resolve) => window.addEventListener('scroll', () => resolve(), {once: true}));
+                        window.scrollTo({top: y, behavior: 'instant'});
+                        if (window.scrollY !== from) await scrolled;
+                        await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+                        return window.scrollY;
+                    }, top);
+                expect(await scrollSeen(framedTop + 8), 'the page has room to scroll 8 px further down').toBeGreaterThan(framedTop);
+                await expect(page.getByTestId('app-header'), '8 px further down, HIDE_SCROLL_THRESHOLD, the header slides away').toHaveAttribute('data-scroll-state', 'hidden');
+                expect(await scrollSeen(framedTop), 'back up, the frame is exactly the framing one again').toBeCloseTo(framedTop, 0);
+                await expect(page.getByTestId('app-header'), 'the header is back after an upward scroll past SHOW_SCROLL_THRESHOLD, not pinned by focus').toHaveAttribute('data-scroll-state', 'visible');
                 await expect(page.getByTestId('privacy-toggle'), 'the eye button is in the shot').toBeInViewport({ratio: 1});
                 await expect(page.getByTestId('kpi-period-pnl').getByTestId('kpi-value'), 'and so is the first masked amount').toBeInViewport({ratio: 1});
                 await parkPointer(page);
@@ -2217,12 +2239,15 @@ test.describe('Gallery Screenshots', () => {
                 await expect(usersTab.getByTestId('users-invite-row'), 'the Users tab does not show the fixed invitations').toHaveCount(inviteRows.length, {timeout: 5_000});
                 await freezeAnimations(page);
                 // One account open, so the picture shows its actions. Every load draws the rows closed (UserRow, `expanded`).
-                const toggle = usersTab.locator('[data-testid="users-row"][data-username="marco"]').getByTestId('users-row-toggle');
+                const marcoRow = usersTab.locator('[data-testid="users-row"][data-username="marco"]');
+                const toggle = marcoRow.getByTestId('users-row-toggle');
                 await expect(toggle, "marco's row starts closed").toHaveAttribute('aria-expanded', 'false', {timeout: 5_000});
                 await toggle.click();
                 await expect(toggle, "marco's actions are open").toHaveAttribute('aria-expanded', 'true', {timeout: 5_000});
                 // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, as for the Profile tab.
+                // PHONE — marco's row framed from its top (frameTarget), so the actions it opened are whole on the screen (G-15).
                 if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/users`);
+                else await frameTarget(page, marcoRow, `${viewport}/${lang}/${theme}/settings/users`);
                 await screenshot(page, viewport, lang, theme, 'settings', 'users');
                 await restoreTallScreen(page);
             });
@@ -2519,7 +2544,8 @@ test.describe('Gallery Screenshots', () => {
             });
         });
 
-        // PAC allocator — user/tools/pac-allocator/index.en.md: one placeholder per wizard step, three for the result.
+        // PAC allocator — user/tools/pac-allocator/index.en.md: one placeholder per wizard step, three for the result; the result
+        // has a fourth shot, the Exposures (pac-result-exposures), with no placeholder there yet.
         // The planner's draft lives in the open page only: it survives a language or theme picked from the header, not a
         // load. What a page has drawn keeps the browser locale it was drawn under (galleryLocale.ts), so each language opens
         // the planner again after its switch and builds the same draft there, at its first combination (perLanguage); its
@@ -2568,7 +2594,7 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('PAC allocator result - all languages and themes', async ({page}, testInfo) => {
-            // A draft and its calculation per language (the local solver: milliseconds for this draft) and 24 shots; on the
+            // A draft and its calculation per language (the local solver: milliseconds for this draft) and 32 shots; on the
             // desktop the proof shot also resizes the screen and back, every combination. With a single draft the test took
             // about 2 minutes on a quiet lane; the budget keeps room for three more.
             test.setTimeout(360_000);
@@ -2597,6 +2623,10 @@ test.describe('Gallery Screenshots', () => {
                 const draft = await draftIn(lang);
                 await shoot(await framePacResult(page), 'the PAC result', lang, theme, 'pac-result', page.locator('[data-testid="pac-planner-result-section"][data-section="allocation"]'));
                 await shoot(await framePacPlan(page, draft), 'the Operational plan', lang, theme, 'pac-result-plan', page.locator('[data-testid="pac-planner-result-section"][data-section="plan"]'));
+                // «Exposures – ideal vs actual» starts closed: opened for its shot, and closed right after it, so the next
+                // combination's result and plan shots find the page under them as before (galleryPac.ts, framePacExposures).
+                await shoot(await framePacExposures(page, viewport), 'the Exposures', lang, theme, 'pac-result-exposures', page.locator('[data-testid="pac-planner-result-section"][data-section="exposures"]'));
+                await closePacExposures(page);
                 // «Proof and timings» opens the section on a language's first combination; it stays open for the second.
                 const proof = await framePacProof(page);
                 // DESKTOP — coordinator's decision, provisional: the simulation shot's rule (see 'risk what-if simulation on the

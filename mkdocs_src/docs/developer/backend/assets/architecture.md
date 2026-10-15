@@ -9,8 +9,8 @@ responsibility:
 
 | Module | Responsibility |
 |--------|----------------|
-| `base.py` | Provider contract: `AssetSourceProvider`, `AssetSourceError`, history start-date types, and the OHLC guard. |
-| `core.py` | Shared infrastructure: the five cache singletons; `configured_provider()`, a new provider instance with its [plugin settings](../../architecture/patterns/plugin_settings.md) bound; `call_provider()`, the single boundary of every provider call, which refuses a provider that is not configured with `NOT_CONFIGURED`, masks its secrets in the call's log lines and errors, and runs the call in a thread of its own (`_run_provider_in_thread`); `settings_cache_part()` and `settings_cache_part_for()`, the part of a cache key that depends on the provider's settings; provider-parameter hashing; error sanitization. |
+| `base.py` | Provider contract: `AssetSourceProvider`, `AssetSourceError`, history start-date types, and the OHLC guard; `AssetRateLimitedError` and the helpers that recognise a refusal for too many requests (`rate_limited_from_response()`, `rate_limited_from_exception()`, `raise_if_rate_limited()`). |
+| `core.py` | Shared infrastructure: the five cache singletons; `configured_provider()`, a new provider instance with its [plugin settings](../../architecture/patterns/plugin_settings.md) bound; `call_provider()`, the single boundary of every provider call, which refuses a provider that is not configured with `NOT_CONFIGURED`, refuses a paused one with `RATE_LIMITED` and pauses one that refuses ([Provider Pauses](#provider-pauses)), masks its secrets in the call's log lines and errors, and runs the call in a thread of its own (`_run_provider_in_thread`); `cooldown_scope_for()`, the part of a provider a pause covers, from the plugin's `cooldown_scope()` hook; `settings_cache_part()` and `settings_cache_part_for()`, the part of a cache key that depends on the provider's settings; provider-parameter hashing; error sanitization. |
 | `registry.py` | `AssetProviderRegistry`, which discovers the pricing plugins in `backend/app/services/asset_source_providers/`. |
 | `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation; and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
@@ -66,6 +66,7 @@ Abstract base class for all asset pricing plugins, defined in
 | `supports_history` | — | `True` | `False` for current-price-only providers |
 | `search()` | — | raises `NOT_SUPPORTED` | Search for assets by name/ticker/ISIN |
 | `fetch_asset_metadata()` | — | `None` | Fetch asset metadata (type, sector, identifiers) |
+| `cooldown_scope()` | — | `None` | The part of the provider a pause after «too many requests» covers (the CSS Scraper: the page's host); `None` pauses the whole provider. See [Provider Pauses](#provider-pauses) |
 | `provider_help_url` | — | `None` | URL to the provider's documentation page |
 
 !!! info "`supports_search` heuristic"
@@ -202,9 +203,9 @@ the pair through its `requiredFxPairs` banners, and its comparison loader drops 
 ### 💹 Current Quotes and Today's OHLC
 
 `get_current_prices_bulk()` is deliberately separate from the DB-only historical query. It checks
-the core current-price cache, calls an assigned provider through
-`core._run_provider_in_thread()`, and falls back to the latest `PriceHistory` row if the provider
-fails or is absent.
+the core current-price cache, calls an assigned provider through `core.call_provider()`, and falls
+back to the latest `PriceHistory` row if the provider fails, is [paused](#provider-pauses) or is
+absent.
 
 A successful provider quote dated today is written back to today's OHLC row:
 
@@ -232,10 +233,20 @@ Operations (selectable per request):
 
 Each operation returns `success`, `execution_time_ms`, and operation-specific data. The frontend
 runs `current_price` + `history` for the **Test Configuration** button in the provider assignment
-section, and automatically after a search result is picked; it counts `NO_DATA` and
-`NOT_IMPLEMENTED` as soft failures (a ⚠️ that still passes the test). The asset modal's
-**Ask Provider**, and the comparison that follows a search selection, run `metadata` alone and
-diff its `patch_data` against the form in the browser: nothing is written until the asset is saved.
+section, and automatically after a search result is picked; it counts `NO_DATA`,
+`NOT_IMPLEMENTED` and `RATE_LIMITED` as soft failures (a ⚠️ that still passes the test). For
+`RATE_LIMITED`, `resolveProviderError.ts` writes «Paused for too many requests until {time}»,
+`{time}` being the end of the pause in local time, rounded up to the minute: the time alone when the
+pause ends today (`providerErrors.RATE_LIMITED`), the date and time when it ends another day
+(`providerErrors.RATE_LIMITED_DAY`, a key of its own because Italian, French and Spanish need a
+different article before a date). With no known wait it writes «Too many requests: try again later»
+(`providerErrors.RATE_LIMITED_NO_TIME`). Each text, date included, must fit the 60 characters of the
+result's one-line summary: `summarizeProbeError()` (`providerProbe.ts`) cuts a longer one. Both
+files are in `frontend/src/lib/components/assets/`.
+
+The asset modal's **Ask Provider**, and the comparison that follows a search selection, run
+`metadata` alone and diff its `patch_data` against the form in the browser: nothing is written until
+the asset is saved.
 
 ---
 
@@ -259,6 +270,54 @@ from a broker report.
     The link-finder and `resolve_url` run only during interactive search. Price sync, current-price
     fetches, and historical fetches never call external search; they use stored identifiers and
     `provider_params` only.
+
+---
+
+## ⏸️ Provider Pauses After «Too Many Requests» {: #provider-pauses }
+
+`call_provider(provider, fn, *, timeout, scope=None)` in `core.py` is the one boundary of every
+asset provider call, the [scheduler](../scheduler.md)'s included: live price, refresh (history and
+today's quote), metadata refresh, search (streaming too), `resolve_url` and the probe. Besides
+`NOT_CONFIGURED` and the masking of the secrets
+([Plugin Settings](../../architecture/patterns/plugin_settings.md)), it consults the process-wide
+pause registry, `backend/app/services/platform/provider_cooldown.py`:
+
+- **A paused provider is not called.** The caller gets `AssetRateLimitedError` at once
+  (`error_code="RATE_LIMITED"`, `retry_after` = the seconds of pause left), with no thread and no
+  I/O.
+- **A refusal pauses it.** When the call meets a refusal (the plugin raises `AssetRateLimitedError`:
+  see the [Asset Plugin Guide](../../architecture/patterns/asset_plugin_guide.md#too-many-requests)),
+  the provider is paused: by default 60 s, then 120 s, 240 s… at each refusal in a row, up to 1 h,
+  plus 0–10 % of jitter; a `Retry-After` the provider sent is honoured up to 24 h. The error goes on
+  with `retry_after` = the pause decided.
+- **An answer ends a pause.** When a pause expires, one trial call goes through and the other
+  callers keep getting `RATE_LIMITED` until its verdict: an answer ends the pause, a new refusal
+  starts a longer one, and any other end (another error, a timeout) lets the next caller try.
+- **Scope.** The callers that have an identifier (live price, refresh, metadata refresh, probe) pass
+  `scope=core.cooldown_scope_for(provider, identifier, identifier_type, provider_params)`, the
+  plugin's `cooldown_scope()` hook: a refusal from a site scraped by the CSS Scraper pauses that host
+  only. Search and `resolve_url` pass none: they use the provider-wide pause.
+- **Caches first.** The caches are read before the boundary: a cached value is still served during a
+  pause.
+- A test double that is not a plugin (no `PluginSettingsMixin`) has no settings and no pause: it is
+  called as it is.
+
+Each process keeps its own pauses, in memory. They are on by default: `.env.example` (section
+«Sleep and Wake») lists the two variables that tune them, `LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS`
+and `LIBREFOLIO_PROVIDER_COOLDOWN_MAX_SECONDS`. With the pauses turned off, nothing is skipped, and a
+refusal still reaches the caller as `RATE_LIMITED`, with the provider's own `Retry-After` (or none).
+The FX boundary, `call_fx_provider()`, does the same for the exchange-rate providers
+([Paused Providers](../fx/configuration.md#paused-providers)).
+
+What a caller returns while a provider is paused, or after it refused:
+
+| Path | Result |
+|---|---|
+| Live price, `POST /assets/prices/current` (`FACurrentPriceItem`) | The last stored price, `source="db:last_known"`, HTTP 200, with `error_code="RATE_LIMITED"` and `retry_after`; with no stored price, `error` and the same two fields. The [live prices](../../frontend/components/features/live-ticker.md) of the Assets list and the asset page show that price, with no new text |
+| Refresh, `POST /assets/prices/sync` (`FARefreshResult`) | `error_code="RATE_LIMITED"` and `retry_after` on every item whose history or today's quote was refused, whatever its status: `failed` when nothing came back, `partial` or `ok` when the other call brought prices, which are saved. With two refusals, the longer wait |
+| Probe, `POST /assets/provider/probe` | A refused or skipped operation fails with `error_code="RATE_LIMITED"`, and `retry_after` both on the operation result and in `error_details`: **Test Configuration** shows a ⚠️ with the time the pause ends ([Provider Probe](#provider-probe)) |
+| Search | The standard endpoint lists the provider in `providers_with_errors`, as for any error; the stream's `provider_error` event adds `error_code` and `retry_after`. In the link-finder fallback, a refused `resolve_url` only skips its URL: the provider is paused, and the search goes on without an error for it |
+| Metadata refresh, `POST /assets/provider/refresh` | The item fails (`success: false`), with the refusal in `message` |
 
 ---
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import html
 import json
+import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -91,6 +92,18 @@ def _fill(template: str, values: Mapping[str, str]) -> str:
     return Template(template).substitute(values)
 
 
+#: Bidirectional embeddings, overrides and isolates: removed, so a value cannot reorder the text around it.
+_BIDI_CONTROLS = frozenset("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069")
+
+
+def _one_line(value: str) -> str:
+    """A value as a single line of plain text: control characters and line or paragraph separators become spaces.
+
+    A username may hold any character: without this, it could add lines of its own to the plain-text part.
+    """
+    return "".join(" " if unicodedata.category(char) in ("Cc", "Zl", "Zp") else char for char in value if char not in _BIDI_CONTROLS)
+
+
 def _render(
     kind: EmailKind,
     language: str,
@@ -101,9 +114,10 @@ def _render(
     values: Mapping[str, str],
     link: str | None = None,
 ) -> EmailContent:
-    """Assemble the two parts of an email from the keys of its section, filled with ``values``."""
+    """Assemble the two parts of an email from the keys of its section, filled with ``values`` (each on one line)."""
     catalog = _CATALOGS[language]
     section = catalog[kind.value]
+    values = {key: _one_line(value) for key, value in values.items()}
     lines_before = [_fill(section[key], values) for key in before]
     lines_after = [_fill(section[key], values) for key in after]
     opening = _fill(catalog["common"][greeting], values)

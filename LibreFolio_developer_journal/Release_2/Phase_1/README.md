@@ -144,3 +144,13 @@ Sono tutti locali: la push la fa il developer.
 | 55b | 15/10 20:56 | B: scatto `settings/backup-ready` (rivisto da G), da solo prima di B2a | `ab2ddf86e` |
 | 56 | 15/10 21:04 | X: CP10, impostazioni dei plugin (migrazione 007, segreti cifrati, `/settings/plugins`, confine unico per famiglia, mascheramento), X-R6 | `9fb7fe6c9` |
 | 57 | 15/10 21:24 | Y8: correzioni ai grafici (I-01, I-03, O-16, 47-1 etichette sull'asse zoomato, 48-1 pulsanti); CHANGELOG scritto da Y | `160562b56` |
+| 58 | 15/10 21:28 | Z6b parte 2: watchdog e scadenza dei passi nel lifespan, processi figli chiusi; spegnimento entro 8 s (decisione 35) | `967094d81` |
+| 59 | 15/10 21:31 | E3 + E3s: link nelle email solo da `LIBREFOLIO_PUBLIC_URL`, `POST /email/links`, «password dimenticata» (spenta fino ad A6e, revisione di sicurezza), controllo `email.links` | `8f908623b` |
+| 60 | 15/10 21:36 | Z: correzione della E2E del flash dal vivo (attesa del primo poll e orologio in pausa), solo test | `93292909d` |
+| 61 | 15/10 22:13 | E3p: sonda dei link della scheda Email dal browser dell'admin (decisione 45) | `e54ae96bb` |
+| 62 | 15/10 22:14 | A: G-15 (la barra delle schede di Settings scorre invece di tagliare; `TabBar` `scrollable`) | `369204ab5` |
+| 63 | 15/10 22:36 | W: F36 (report BRIM senza broker solo al caricatore e all'admin; `/parse` chiede EDITOR sul broker della richiesta; `file_id` non UUID → 404; `can_delete` nella lista; decisione 36, W-B3/W-B4) | `434af2925` |
+| 64 | 15/10 22:38 | J: CP-4d (risolutore MWRR verificato, Newton + Brent, `None` senza radice; via il ritentativo a freddo e `MWRR_SERIES_UNRELIABLE`; golden native-cash rigenerato solo sui `mwrr_*`) | `40f44f364` |
+| 65 | 15/10 22:47 | Z: Z2a (presenza dell'utente e richieste in corso, `ActivityMiddleware` in testa a `MIDDLEWARE_STACK`; D-S1; nessun effetto visibile) | `8b2d4782d` |
+| 66 | 15/10 23:02 | H: CP-U1 (decisione 36: scopo dei file caricati comune/personale, regola legacy alla lettura, personale altrui → 404, `PATCH` scopo, miniature `private`; I/O su disco fuori dal loop) | `6a3a2a1cc` |
+| 67 | 15/10 23:26 | X: X-RL, X1–X8 (pausa dei fornitori su «troppe richieste» sopra Z7a: eccezioni `RATE_LIMITED`, confini `call_provider`/`call_fx_provider`, Yahoo senza ritentativi, `error_code`/`retry_after` nei risultati, la sonda mostra fino a quando; decisione 34) | `da21c48c4` |

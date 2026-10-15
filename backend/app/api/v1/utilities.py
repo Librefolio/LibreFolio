@@ -22,7 +22,7 @@ from backend.app.schemas.utilities import (
 from backend.app.utils.asset.geo import (
     list_countries as list_countries_util,
 )
-from backend.app.utils.asset.sector import FinancialSector
+from backend.app.utils.asset.sector import ALLOCATION_BUCKETS, SECTOR_EMOJI_FALLBACK, FinancialSector, sector_emoji
 from backend.app.utils.fx.currency import (
     list_currencies as list_currencies_util,
 )
@@ -36,10 +36,15 @@ router = APIRouter(prefix="/utilities", tags=["Utilities"])
 @router.get("/sectors", response_model=SectorListResponse)
 async def list_sectors(include_other: bool = Query(True, description="Include 'Other' in the list")):
     """
-    Get list of all standard financial sectors.
+    Get list of all standard financial sectors, with their emoji.
 
     Returns the list of sectors that the system recognizes and stores.
     Based on GICS (Global Industry Classification Standard).
+
+    The emoji come from the one map of `utils/asset/sector.py`, which the allocation views of the portfolio engine read
+    too. `buckets` lists the two allocation buckets the engine adds beside the sectors, the cash and the holdings
+    without a sector: never a sector to choose, listed for their emoji. `fallback_emoji` is the glyph of a key outside
+    both lists.
 
     **Example Request**:
     ```
@@ -47,53 +52,30 @@ async def list_sectors(include_other: bool = Query(True, description="Include 'O
     GET /api/v1/utilities/sectors?include_other=false
     ```
 
-    **Response**:
+    **Response** (items shortened):
     ```json
     {
-      "sectors": [
-        "Industrials",
-        "Technology",
-        "Financials",
-        "Consumer Discretionary",
-        "Health Care",
-        "Real Estate",
-        "Basic Materials",
-        "Energy",
-        "Consumer Staples",
-        "Telecommunication",
-        "Utilities",
-        "Other"
+      "items": [
+        {"key": "Industrials", "emoji": "🏭"},
+        {"key": "Technology", "emoji": "💻"},
+        {"key": "Other", "emoji": "📦"}
       ],
-      "count": 12
+      "buckets": [
+        {"key": "Liquidity", "emoji": "💰"},
+        {"key": "Unknown", "emoji": "❓"}
+      ],
+      "fallback_emoji": "❓"
     }
     ```
     """
-    SECTOR_EMOJI: dict[str, str] = {
-        "Industrials": "🏭",
-        "Technology": "💻",
-        "Financials": "🏦",
-        "Consumer Discretionary": "🛍️",
-        "Health Care": "🏥",
-        "Real Estate": "🏠",
-        "Basic Materials": "⛏️",
-        "Energy": "⚡",
-        "Consumer Staples": "🛒",
-        "Telecommunication": "📡",
-        "Utilities": "💡",
-        "Corporate Bonds": "🏢",
-        "Government Bonds": "🏛️",
-        "Other": "📦",
-        "Liquidity": "💰",
-        "Unknown": "❓",
-    }
-
     if include_other:
         sectors = FinancialSector.list_all_with_other()
     else:
         sectors = FinancialSector.list_all()
 
-    items = [SectorItem(key=s, emoji=SECTOR_EMOJI.get(s, "📊")) for s in sectors]
-    return SectorListResponse(items=items)
+    items = [SectorItem(key=s, emoji=sector_emoji(s)) for s in sectors]
+    buckets = [SectorItem(key=bucket, emoji=sector_emoji(bucket)) for bucket in ALLOCATION_BUCKETS]
+    return SectorListResponse(items=items, buckets=buckets, fallback_emoji=SECTOR_EMOJI_FALLBACK)
 
 
 @router.get("/countries", response_model=CountryListResponse)

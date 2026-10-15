@@ -13,7 +13,7 @@ from decimal import Decimal
 import httpx
 
 from backend.app.logging_config import get_logger
-from backend.app.services.fx.base import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateProvider, FXServiceError
+from backend.app.services.fx.base import FX_HISTORY_MIN_FALLBACK, FXProviderStartDate, FXRateLimitedError, FXRateProvider, FXServiceError, raise_if_fx_rate_limited
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.provider_registry import register_provider
 
@@ -147,6 +147,7 @@ class ECBProvider(FXRateProvider):
                 return sorted(currencies)
 
         except httpx.HTTPError as e:
+            raise_if_fx_rate_limited(e, self.provider_code)
             logger.exception(f"Failed to fetch available currencies from ECB: {e}")
             raise FXServiceError(f"ECB API error: {e}") from e
         except (KeyError, ValueError) as e:
@@ -230,6 +231,7 @@ class ECBProvider(FXRateProvider):
                     return currency, observations
 
             except httpx.HTTPError as e:
+                raise_if_fx_rate_limited(e, self.provider_code)
                 logger.exception(f"Failed to fetch FX rates for {currency}: {e}")
                 raise FXServiceError(f"ECB API error for {currency}: {e}") from e
             except (KeyError, IndexError, ValueError) as e:
@@ -241,6 +243,8 @@ class ECBProvider(FXRateProvider):
             try:
                 _, observations = await _fetch_one(currency)
                 results[currency] = observations
+            except FXRateLimitedError:
+                raise  # refused for too many requests: stop here, the core pauses the provider
             except Exception as e:
                 logger.warning(f"ECB fetch failed for {currency}, skipping: {e}")
                 results[currency] = []

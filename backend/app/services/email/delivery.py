@@ -34,6 +34,7 @@ from backend.app.config.email import (
     smtp_tls_mode,
     smtp_user,
 )
+from backend.app.config.platform import instance_blocked
 from backend.app.services.email import smtp
 from backend.app.services.email.messages import EmailContent, compose_message
 from backend.app.utils.runtime.rate_window import RateDecision, SlidingWindowLimiter
@@ -133,10 +134,13 @@ def email_config_state() -> EmailConfigState:  # noqa: PLR0911 — one return pe
     return EmailConfigState(configured=True, server=server, sender=sender, reply_to=reply_to, max_per_hour=max_per_hour)
 
 
-def email_available() -> bool:
-    """Whether the instance can send emails now: a server is set and every variable can be used. For the public
-    configuration (``GET /system/instance``); it may read the password file, so an async caller runs it in a thread."""
-    return email_config_state().usable
+def sending_blocked() -> bool:
+    """Whether the hosting provider blocks the instance (``LIBREFOLIO_BLOCKED``): then nothing is sent (D-E13). An
+    unreadable value counts as blocked: the startup checks stop the server on it, and nothing should go out meanwhile."""
+    try:
+        return instance_blocked()
+    except ValueError:
+        return True
 
 
 def budget_status(max_per_hour: int | None = None) -> RateDecision:
@@ -157,10 +161,13 @@ def _redacted(detail: str, *, password: str | None, recipient: str) -> str:
 async def send_email(content: EmailContent, *, to: str, user_id: int | None = None) -> None:
     """Send ``content`` to ``to``: one unit of the hourly budget per attempt, SMTP in a worker thread.
 
-    Raises ``EmailUnavailableError`` (nothing spent), ``EmailRecipientError`` (a ``ValueError``) for an address that is
-    not one address (nothing spent), ``EmailRateLimitedError`` (budget spent: nothing sent) and ``EmailDeliveryError``
-    (the server refused).
+    Raises ``EmailUnavailableError`` (nothing spent; ``INSTANCE_BLOCKED`` while the hosting provider blocks the instance),
+    ``EmailRecipientError`` (a ``ValueError``) for an address that is not one address (nothing spent),
+    ``EmailRateLimitedError`` (budget spent: nothing sent) and ``EmailDeliveryError`` (the server refused).
     """
+    # A blocked instance sends nothing (D-E13): its routes are refused already, and this holds for any other caller.
+    if sending_blocked():
+        raise EmailUnavailableError("INSTANCE_BLOCKED")
     # The configuration may come from a password file: read off the event loop.
     state = await asyncio.to_thread(email_config_state)
     if not state.usable or state.server is None or state.sender is None:
