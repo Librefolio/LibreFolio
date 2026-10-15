@@ -61,6 +61,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` and `_MAX` below 1, or not a finite number, take their default. A timeout under a second used to mean no timeout, and `0` still returned one link. A fractional timeout is now honoured, rounded up to whole seconds.
 - **The server stops within 8 seconds.** After a `docker stop`, a restart or Ctrl+C, requests still running after 3 seconds are cancelled and what they had not saved is rolled back; the server's own work (scheduled syncs, workers, caches) gets the rest of the time, and worker processes still alive are ended, so none is left behind. If something still holds the server when the time is up, it ends anyway and its log says what was still running. `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` changes the budget (`0`: no limit, as before). Docker waits 10 seconds by default: if you raise the budget, give the container more time too (`stop_grace_period`).
 
+#### 🎨 A new colour palette
+
+- **A new colour palette, in light and in dark**, chosen with a designer: «Stone and Sage» in light, «Slate and Sage» in dark. It already covers the sign-in pages, the sidebar, the header and its menus; the rest of the app keeps its current look and moves to the new palette over the next updates. Every text and control of the palette meets the WCAG contrast minimum (4.5:1 for text, 3:1 for controls) in both themes.
+- **Green sidebar, neutral header.** The sidebar takes the brand green in both themes, with the page you are on marked by a bar on its left; the header sits on a neutral band, a shade darker than the page in light and lighter in dark. The control you reach with the keyboard shows a clear focus ring. The title bar of the installed app takes the sidebar's green.
+- **Softer red and green in the dark theme**, easier on the eyes, for errors, success marks, the password-strength bar and the connection status. The amounts on the Dashboard follow in a later update.
+- **Sign-in pages, new look:** icons in the fields, a highlighted border under the pointer and in focus, the password requirements in a box of their own, no subtitle under the logo, and the recovery commands in a dark terminal box.
+- **Charts: every asset type and sector keeps one colour everywhere:** the same in the allocation pie and in its history, in every portfolio, broker and period. Liquidity has a colour of its own, subtypes are shades of their family, and the maps, the sharing semi-donut and the correlation matrix follow the light and dark theme.
+
 ### 🧹 Repository cleanup
 
 - The promotional video experiment leaves the repository (`mkdocs_src/videoClipPrject/` and `./dev.py mkdocs video`): it never reached the app or the documentation, and it now lives outside this repository.
@@ -111,6 +119,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Zoomed date axes keep their labels.** Zooming into a long period on the price charts of the asset and FX pages, or on the risk charts, left two or three dates on the axis, on phones especially: the labels are now spaced on the days you see.
 - The **Lot Life & Custody** tooltip says "1 share open out of 10" in the singular, in every language, and stays plural while amounts are hidden.
 - **The money-weighted return (MWRR) is checked before it is shown.** In some portfolios with large withdrawals the Dashboard showed a wrong rate, often +10.01% a year; it now shows the true one, or "—" when there is none.
+- **Sign-in pages on a phone:** the theme, language and help buttons no longer cover the card. They scroll away with the page, and a tall card such as registration starts below them, in the app installed on an iPhone too.
+- **The header hides again when you scroll down** after clicking one of its buttons with the mouse; reaching a button with the keyboard still keeps it in view.
+- **The allocation pie and its history show the same sector emoji.**
 
 #### 🔒 Security
 
