@@ -19,6 +19,7 @@
     import {normalizeToPercentage} from '$lib/utils/chartUtils';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     // =========================================================================
     // Props
@@ -221,7 +222,7 @@
                     {formatFixed(lastRate, 4)}
                 </span>
                 {#if deltaPercent !== null}
-                    <span class="text-sm font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                    <span class="text-sm font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}">
                         {deltaPercent >= 0 ? '▲' : '▼'}
                         {formatPercent(deltaPercent)}
                     </span>

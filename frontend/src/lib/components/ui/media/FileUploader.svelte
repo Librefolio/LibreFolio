@@ -14,6 +14,7 @@
     import {isImageFile} from '$lib/utils/files/imageCrop';
     import {formatBytes} from '$lib/utils/files/upload';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
+    import '$lib/theme/components/media.css';
 
     export let maxSizeMB: number = 10;
     export let multiple: boolean = true;
@@ -289,21 +290,21 @@
         justify-content: center;
         min-height: 150px;
         padding: 1.5rem;
-        border: 2px dashed #cbd5e1;
+        border: 2px dashed var(--lf-cmp-file-uploader-drop-zone-border);
         border-radius: 8px;
-        background: #f8fafc;
+        background: var(--lf-cmp-file-uploader-drop-zone-bg);
         cursor: pointer;
         transition: all 0.2s;
     }
 
     .drop-zone:hover,
     .drop-zone.dragging {
-        border-color: #1a4031;
-        background: #f1f5f9;
+        border-color: var(--lf-cmp-file-uploader-drop-zone-hover-border);
+        background: var(--lf-cmp-file-uploader-drop-zone-hover-bg);
     }
 
     .drop-zone.dragging {
-        background: rgba(26, 64, 49, 0.05);
+        background: var(--lf-cmp-file-uploader-drop-zone-dragging-bg);
     }
 
     .drop-zone.has-files {
@@ -312,35 +313,35 @@
     }
 
     :global(.dark) .drop-zone {
-        border-color: #475569;
-        background: #1e293b;
+        border-color: var(--lf-cmp-file-uploader-drop-zone-border-dark);
+        background: var(--lf-cmp-file-uploader-drop-zone-bg-dark);
     }
 
     :global(.dark) .drop-zone:hover,
     :global(.dark) .drop-zone.dragging {
-        border-color: #4ade80;
-        background: #0f172a;
+        border-color: var(--lf-cmp-file-uploader-drop-zone-hover-border-dark);
+        background: var(--lf-cmp-file-uploader-drop-zone-hover-bg-dark);
     }
 
     :global(.upload-icon) {
-        color: #94a3b8;
+        color: var(--lf-cmp-file-uploader-faint-text);
         margin-bottom: 0.5rem;
     }
 
     .drop-text {
         font-size: 0.9375rem;
         font-weight: 500;
-        color: #475569;
+        color: var(--lf-cmp-file-uploader-text);
         margin: 0;
     }
 
     :global(.dark) .drop-text {
-        color: #e2e8f0;
+        color: var(--lf-cmp-file-uploader-text-dark);
     }
 
     .drop-hint {
         font-size: 0.75rem;
-        color: #94a3b8;
+        color: var(--lf-cmp-file-uploader-faint-text);
         margin: 0.25rem 0 0;
     }
 
@@ -356,57 +357,57 @@
         align-items: center;
         gap: 0.5rem;
         padding: 0.5rem 0.75rem;
-        background: white;
-        border: 1px solid #e2e8f0;
+        background: var(--lf-cmp-file-uploader-file-item-bg);
+        border: 1px solid var(--lf-cmp-file-uploader-file-item-border);
         border-radius: 6px;
     }
 
     :global(.dark) .file-item {
-        background: #0f172a;
-        border-color: #334155;
+        background: var(--lf-cmp-file-uploader-file-item-bg-dark);
+        border-color: var(--lf-cmp-file-uploader-file-item-border-dark);
     }
 
     .file-item :global(svg) {
-        color: #64748b;
+        color: var(--lf-cmp-file-uploader-file-icon-text);
         flex-shrink: 0;
     }
 
     .file-item :global(svg.image) {
-        color: #3b82f6;
+        color: var(--lf-cmp-file-uploader-image-icon-text);
     }
 
     :global(.dark) .file-item :global(svg.image) {
-        color: #60a5fa;
+        color: var(--lf-cmp-file-uploader-image-icon-text-dark);
     }
 
     .file-name {
         flex: 1;
         font-size: 0.8125rem;
-        color: #0f172a;
+        color: var(--lf-cmp-file-uploader-file-name-text);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
     :global(.dark) .file-name {
-        color: #f1f5f9;
+        color: var(--lf-cmp-file-uploader-file-name-text-dark);
     }
 
     .file-size {
         font-size: 0.75rem;
-        color: #94a3b8;
+        color: var(--lf-cmp-file-uploader-faint-text);
         flex-shrink: 0;
     }
 
     /* Edited file indicator */
     .file-item.edited {
-        border-color: #3b82f6;
-        background: #eff6ff;
+        border-color: var(--lf-cmp-file-uploader-file-item-edited-border);
+        background: var(--lf-cmp-file-uploader-file-item-edited-bg);
     }
 
     :global(.dark) .file-item.edited {
-        border-color: #60a5fa;
-        background: #1e3a5f;
+        border-color: var(--lf-cmp-file-uploader-file-item-edited-border-dark);
+        background: var(--lf-cmp-file-uploader-file-item-edited-bg-dark);
     }
 
     .edit-btn,
@@ -419,7 +420,7 @@
         border: none;
         border-radius: 4px;
         background: transparent;
-        color: #94a3b8;
+        color: var(--lf-cmp-file-uploader-faint-text);
         cursor: pointer;
         transition: all 0.15s;
     }
@@ -433,59 +434,59 @@
         border: none;
         border-radius: 4px;
         background: transparent;
-        color: #d97706;
+        color: var(--lf-cmp-file-uploader-restore-btn-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     :global(.dark) .restore-btn {
-        color: #fbbf24;
+        color: var(--lf-cmp-file-uploader-restore-btn-text-dark);
     }
 
     .edit-btn:hover {
-        background: #dbeafe;
-        color: #2563eb;
+        background: var(--lf-cmp-file-uploader-edit-btn-hover-bg);
+        color: var(--lf-cmp-file-uploader-edit-btn-hover-text);
     }
 
     :global(.dark) .edit-btn:hover {
-        background: #1e3a5f;
-        color: #60a5fa;
+        background: var(--lf-cmp-file-uploader-edit-btn-hover-bg-dark);
+        color: var(--lf-cmp-file-uploader-edit-btn-hover-text-dark);
     }
 
     .remove-btn:hover {
-        background: #fee2e2;
-        color: #dc2626;
+        background: var(--lf-cmp-file-uploader-remove-btn-hover-bg);
+        color: var(--lf-cmp-file-uploader-remove-btn-hover-text);
     }
 
     :global(.dark) .remove-btn:hover {
-        background: #7f1d1d;
-        color: #fecaca;
+        background: var(--lf-cmp-file-uploader-remove-btn-hover-bg-dark);
+        color: var(--lf-cmp-file-uploader-remove-btn-hover-text-dark);
     }
 
     .restore-btn:hover {
-        background: #fef3c7;
-        color: #d97706;
+        background: var(--lf-cmp-file-uploader-restore-btn-hover-bg);
+        color: var(--lf-cmp-file-uploader-restore-btn-text);
     }
 
     :global(.dark) .restore-btn:hover {
-        background: #451a03;
-        color: #fbbf24;
+        background: var(--lf-cmp-file-uploader-restore-btn-hover-bg-dark);
+        color: var(--lf-cmp-file-uploader-restore-btn-text-dark);
     }
 
     .errors {
         display: flex;
         gap: 0.5rem;
         padding: 0.75rem;
-        background: #fef2f2;
-        border: 1px solid #fecaca;
+        background: var(--lf-cmp-file-uploader-errors-bg);
+        border: 1px solid var(--lf-cmp-file-uploader-errors-border);
         border-radius: 6px;
-        color: #b91c1c;
+        color: var(--lf-cmp-file-uploader-errors-text);
     }
 
     :global(.dark) .errors {
-        background: #450a0a;
-        border-color: #7f1d1d;
-        color: #fecaca;
+        background: var(--lf-cmp-file-uploader-errors-bg-dark);
+        border-color: var(--lf-cmp-file-uploader-errors-border-dark);
+        color: var(--lf-cmp-file-uploader-errors-text-dark);
     }
 
     .error-list {
@@ -521,39 +522,39 @@
     }
 
     .btn-secondary {
-        background: #f1f5f9;
-        color: #475569;
+        background: var(--lf-cmp-file-uploader-btn-secondary-bg);
+        color: var(--lf-cmp-file-uploader-text);
     }
 
     .btn-secondary:hover {
-        background: #e2e8f0;
-        color: #0f172a;
+        background: var(--lf-cmp-file-uploader-btn-secondary-hover-bg);
+        color: var(--lf-cmp-file-uploader-btn-secondary-hover-text);
     }
 
     :global(.dark) .btn-secondary {
-        background: #334155;
-        color: #e2e8f0;
+        background: var(--lf-cmp-file-uploader-btn-secondary-bg-dark);
+        color: var(--lf-cmp-file-uploader-text-dark);
     }
 
     :global(.dark) .btn-secondary:hover {
-        background: #475569;
+        background: var(--lf-cmp-file-uploader-btn-secondary-hover-bg-dark);
     }
 
     .btn-primary {
-        background: #1a4031;
-        color: white;
+        background: var(--lf-cmp-file-uploader-btn-primary-bg);
+        color: var(--lf-cmp-file-uploader-btn-primary-text);
     }
 
     .btn-primary:hover {
-        background: #143426;
+        background: var(--lf-cmp-file-uploader-btn-primary-hover-bg);
     }
 
     :global(.dark) .btn-primary {
-        background: #4ade80;
-        color: #0f172a;
+        background: var(--lf-cmp-file-uploader-btn-primary-bg-dark);
+        color: var(--lf-cmp-file-uploader-btn-primary-text-dark);
     }
 
     :global(.dark) .btn-primary:hover {
-        background: #22c55e;
+        background: var(--lf-cmp-file-uploader-btn-primary-hover-bg-dark);
     }
 </style>

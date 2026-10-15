@@ -1,5 +1,5 @@
 // LibreFolio Service Worker — offline fallback only (no app caching)
-// build: 3e7bd439
+// build: 2ef2dd96
 const CACHE_NAME = 'offline-fallback';
 const OFFLINE_URL = '/offline.html';
 
