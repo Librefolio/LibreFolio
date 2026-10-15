@@ -3538,3 +3538,9 @@ file operation, like the other entries of 15/10.
 Filed: [[decisions/asset-event-saves-all-or-nothing]], [[problems/provider-event-dated-today-not-synced]],
 [[problems/select-list-under-the-sticky-table-header]], [[problems/testing-library-events-prop-read-as-mount-option]].
 Graph: not updated (P-6); graphify is not available in this worktree.
+
+## [2026-10-15] file | A mutation restored with its old file time skips the frontend rebuild
+Found by test-author during the Backup tab E2E mutations (workstream B, lot B5a): the runner's staleness check compares
+file times, so a restore with `cp -p` would leave the mutated bundle in place for the «final green» run.
+Filed: [[problems/mutation-restore-keeps-old-mtime-skips-frontend-rebuild]]. Graph: not updated (no graph in this
+worktree).
