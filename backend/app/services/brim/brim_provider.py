@@ -1180,14 +1180,17 @@ def _relocated_path(file_id: str, file_path: Path) -> Optional[Path]:
     return moved_path
 
 
-def _refusal_message(plugin: Any, plugin_code: str, file_path: Path, checked_path: Path) -> str:
+def _refusal_message(plugin: Any, plugin_code: str, file_name: str, checked_path: Path) -> str:
     """The parse guard's refusal, completed with the plugin's reason when it gives one.
 
-    The reason is asked on ``checked_path``, the path the guard looked at last. It is read
-    with ``getattr``, so a plugin without the method keeps the plain refusal; a reason
-    that raises is logged and dropped, so the user still gets this 400 and never a 500.
+    It names the plugin by its name and the file by the name it was uploaded with, as the user
+    knows them, never by the plugin code or the stored ``<file_id>.<ext>``. The reason is asked
+    on ``checked_path``, the path the guard looked at last. It is read with ``getattr``, so a
+    plugin without the method keeps the plain refusal; a reason that raises is logged and
+    dropped, so the user still gets this 400 and never a 500.
     """
-    message = f"Plugin '{plugin_code}' cannot parse file '{file_path.name}'"
+    plugin_name = getattr(plugin, "provider_name", None) or plugin_code
+    message = f"Plugin '{plugin_name}' cannot parse file '{file_name}'"
     explain = getattr(plugin, "cannot_parse_reason", None)
     if explain is None:
         return message
@@ -1766,7 +1769,9 @@ def parse_file(file_id: str, plugin_code: str, broker_id: int) -> BRIMParseOutpu
     if not plugin.can_parse(file_path):
         moved_path = _relocated_path(file_id, file_path)
         if moved_path is None or not plugin.can_parse(moved_path):
-            raise ValueError(_refusal_message(plugin, plugin_code, file_path, moved_path or file_path))
+            file_info = get_file_info(file_id)
+            file_name = file_info.filename if file_info else file_path.name
+            raise ValueError(_refusal_message(plugin, plugin_code, file_name, moved_path or file_path))
         logger.info("File moved before parse check, retrying at new location", file_id=file_id, new_path=str(moved_path))
         file_path = moved_path
 

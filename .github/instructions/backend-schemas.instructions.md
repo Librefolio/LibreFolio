@@ -16,7 +16,12 @@ backend/app/schemas/
 ├── fx.py              # FX rate schemas
 ├── brim.py            # Broker import schemas (BRIMPluginInfo, BRIMExtractedAssetInfo, etc.)
 ├── brokers.py         # Broker CRUD schemas
-├── transactions.py    # Transaction schemas
+├── transactions/      # Transaction schemas (TX*), one module per theme; __init__.py holds only a docstring
+│   ├── transactions.py   # Items: TXCreateItem, TXReadItem, TXUpdateItem, TXQueryParams, TXDeleteItem
+│   ├── batch.py          # POST /transactions/validate and /commit: TXMixedBatch, TXBatchResponse, TXValidationIssue, …
+│   ├── event_suggest.py  # POST /transactions/events/suggest
+│   ├── promotion.py      # Pair promotion and its suggestions (POST /transactions/transfers/promote, …)
+│   └── type_metadata.py  # TX_TYPE_METADATA, event type metadata, GET /transactions/types
 ├── auth.py            # Auth schemas
 ├── settings.py        # Settings schemas
 ├── uploads.py         # File upload schemas
