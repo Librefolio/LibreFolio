@@ -1,9 +1,10 @@
-"""``backend.app.services.email.checks``: the configuration checks of the optional e-mail (plan phase01Email §3.2, decision D-E4, lots E1 and E2b).
+"""``backend.app.services.email.checks``: the configuration checks of the optional e-mail (plan phase01Email §3.2, decisions D-E4 and 45, lots E1, E2b and E3).
 
 An invalid SMTP configuration does not stop the start: e-mail stays off, the log says so once, and the admin's
 «Security» tab says it again through a ``ConfigCheck`` of the platform's configuration audit (``config_audit``, owned
-by workstream H). Since lot E2b the two checks end the platform's ``CONFIG_CHECKS``: the startup audit logs them like
-any other check, and ``GET /email/status`` shows them. The contract pinned here:
+by workstream H). Since lot E2b the email checks end the platform's ``CONFIG_CHECKS``: the startup audit logs them like
+any other check, and ``GET /email/status`` shows them. Lot E3 adds the third, ``email.links``: a missing or wrong
+``LIBREFOLIO_PUBLIC_URL`` must not be silent. The contract pinned here:
 
 1. ``check_smtp_configuration`` (``email.smtp``): no host is ``ok`` / ``email.checks.smtp.off`` — e-mail is optional —;
    a usable configuration ``ok`` / ``email.checks.smtp.ok``; an invalid one ``error`` / ``email.checks.smtp.invalid``,
@@ -14,29 +15,37 @@ any other check, and ``GET /email/status`` shows them. The contract pinned here:
    private and CGNAT/VPN ranges, single-label names, ``.localhost``, ``.local``, ``.lan``, ``.home.arpa``,
    ``.internal`` — ``ok`` / ``email.checks.smtpEncryption.localPlain``; ``none`` towards anything else a ``warning`` /
    ``email.checks.smtpEncryption.plain`` with an empty detail.
-3. ``EMAIL_CONFIG_CHECKS`` is the two checks, in that order.
+3. ``EMAIL_CONFIG_CHECKS`` is the three checks, in that order: configuration, encryption, links.
 4. No result holds the SMTP password, in any field; no detail holds the host, the user or the sender's address — the
    detail travels to the admin interface as the parameters of a translated message.
 5. ``config_audit.CONFIG_CHECKS`` ends with exactly ``EMAIL_CONFIG_CHECKS`` — the same functions, in that order, and
-   nowhere else in the tuple —, so ``run_config_checks()`` ends with the two email results, equal to what each check
+   nowhere else in the tuple —, so ``run_config_checks()`` ends with the three email results, equal to what each check
    returns on its own.
 6. Either module can be imported first: in a fresh interpreter, ``checks`` then ``config_audit``, ``config_audit`` then
-   ``checks``, and ``backend.app.api.v1.email`` first all import, end ``CONFIG_CHECKS`` with the two email checks — the
-   very objects of ``EMAIL_CONFIG_CHECKS`` — and run them (``checks`` imports ``ConfigCheck`` when a check runs, never
-   at import, so the two modules never meet half-initialised).
+   ``checks``, ``links`` first and ``backend.app.api.v1.email`` first all import, end ``CONFIG_CHECKS`` with the three
+   email checks — the very objects of ``EMAIL_CONFIG_CHECKS`` — and run them (``checks`` imports ``ConfigCheck`` and the
+   links when a check runs, never at import, so the modules never meet half-initialised).
 7. ``log_configuration_audit()`` logs the email checks as it logs every check that is not ``ok``, and never stops the
    start for them: an unusable SMTP configuration is one ``error`` record, ``check="email.smtp"``, with the check's
    summary and detail; ``LIBREFOLIO_SMTP_TLS=none`` towards a public host one ``warning``,
    ``check="email.smtp_encryption"``, whose summary names the variable and the host (the log only: the interface gets
-   the key and the detail); email off, no email record at all. The SMTP password is in no record of the audit — its own,
-   nor the e-mail delivery's, which reports an unusable configuration once per process.
+   the key and the detail); usable email without ``LIBREFOLIO_PUBLIC_URL`` one ``info``, with a value that is not
+   http(s) one ``warning``, ``check="email.links"``; email off, no email record at all. The SMTP password is in no
+   record of the audit — its own, nor the e-mail delivery's, which reports an unusable configuration once per process.
+8. ``check_email_links`` (``email.links``): ``ok`` / ``email.checks.links.ok`` when email is not usable — off or
+   invalid: nothing to say, whatever the variable — or when links are ready; with usable email, ``info`` /
+   ``email.checks.links.missing`` for ``LIBREFOLIO_PUBLIC_URL`` unset or blank and ``warning`` /
+   ``email.checks.links.invalid`` for a value that is not an http(s) address, or one no link can start from (no host,
+   a space inside, a query, a fragment) — each with a summary for the log that names the variable, never its value.
+   Never a detail.
 
-Pure: no database, no server, no network. An autouse fixture removes every inherited ``LIBREFOLIO_SMTP_*`` (C-96 removes
-them from the lanes; a developer's shell may still carry them); each test sets its own with ``monkeypatch``; password
-files live in ``tmp_path``. The audit runs with the platform isolated as ``test_config_audit.py`` isolates it — test
-mode, its data directory in ``tmp_path`` (no instance key there), no JWT secret, no instance key, no block — and with
-``config_audit``'s logger replaced by a recorder. The fresh interpreters run in test mode, their data directory in
-``tmp_path``, without any ``LIBREFOLIO_SMTP_*``, bounded by a timeout that is never a wait.
+Pure: no database, no server, no network. An autouse fixture removes every inherited ``LIBREFOLIO_SMTP_*`` and
+``LIBREFOLIO_PUBLIC_URL`` (C-96 removes them from the lanes; a developer's shell may still carry them); each test sets
+its own with ``monkeypatch``; password files live in ``tmp_path``. The audit runs with the platform isolated as
+``test_config_audit.py`` isolates it — test mode, its data directory in ``tmp_path`` (no instance key there), no JWT
+secret, no instance key, no block — and with ``config_audit``'s logger replaced by a recorder. The fresh interpreters
+run in test mode, their data directory in ``tmp_path``, without any ``LIBREFOLIO_SMTP_*`` nor ``LIBREFOLIO_PUBLIC_URL``,
+bounded by a timeout that is never a wait.
 
 Red until ``backend/app/services/email/checks.py`` exists: the package does not import.
 """
@@ -57,13 +66,18 @@ import pytest
 from structlog.testing import capture_logs
 
 from backend.app.services.email import delivery
-from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS, check_smtp_configuration, check_smtp_encryption
+from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS, check_email_links, check_smtp_configuration, check_smtp_encryption
 from backend.app.services.platform import config_audit
 from backend.app.services.platform.config_audit import ConfigCheck
 from backend.app.services.platform.instance_key import INSTANCE_KEY_FILE, instance_key_path
 from backend.test_scripts.test_utils import print_section, print_success
 
 SMTP_PREFIX = "LIBREFOLIO_SMTP_"
+PUBLIC_URL_VARIABLE = "LIBREFOLIO_PUBLIC_URL"
+#: A public address of the instance, and a value of the variable that is not an http(s) address: recognisable, so that
+#: a summary or a detail echoing either would show it.
+PUBLIC_URL = "https://folio.zq-public.example.com"
+NOT_A_PUBLIC_URL = "ftp://zq-not-public.example.com"
 HOST = "LIBREFOLIO_SMTP_HOST"
 TLS = "LIBREFOLIO_SMTP_TLS"
 PORT = "LIBREFOLIO_SMTP_PORT"
@@ -120,7 +134,8 @@ LOCAL_HOSTS = [
 ]
 PUBLIC_HOSTS = ["smtp.example.com", "203.0.113.7", "relay.tailnet.ts.net"]
 
-EMAIL_CHECK_IDS = ["email.smtp", "email.smtp_encryption"]
+EMAIL_CHECK_IDS = ["email.smtp", "email.smtp_encryption", "email.links"]
+EMAIL_CHECK_NAMES = ["check_smtp_configuration", "check_smtp_encryption", "check_email_links"]
 #: One unusable configuration each, the SMTP password set beside the fault — in the variable, or in a file that can be
 #: read — wherever the fault leaves room for it: the problem and the variable ``email.smtp`` reports.
 UNUSABLE_FOR_THE_AUDIT = [
@@ -137,34 +152,36 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 FRESH_INTERPRETER_TIMEOUT_SECONDS = 300
 FRESH_IMPORT_MARKER = "FRESH-IMPORT "
 #: What a fresh interpreter runs: it imports the modules named on its command line, in that order, then reports the end
-#: of ``CONFIG_CHECKS`` and what its last two checks return; ``preloaded`` proves that neither module was there before.
+#: of ``CONFIG_CHECKS`` — as many checks as ``EMAIL_CONFIG_CHECKS`` holds — and what they return; ``preloaded`` proves
+#: that no watched module was there before.
 FRESH_IMPORT = textwrap.dedent("""
     import importlib
     import json
     import sys
 
-    watched = ("backend.app.services.email.checks", "backend.app.services.platform.config_audit")
+    watched = ("backend.app.services.email.checks", "backend.app.services.email.links", "backend.app.services.platform.config_audit")
     preloaded = [name for name in watched if name in sys.modules]
     for name in sys.argv[1:]:
         importlib.import_module(name)
     from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
     from backend.app.services.platform.config_audit import CONFIG_CHECKS, run_config_checks
 
+    count = len(EMAIL_CONFIG_CHECKS)
     report = {
         "preloaded": preloaded,
-        "last_two": [check.__name__ for check in CONFIG_CHECKS[-2:]],
-        "same_objects": len(CONFIG_CHECKS) > 2 and all(a is b for a, b in zip(CONFIG_CHECKS[-2:], EMAIL_CONFIG_CHECKS, strict=True)),
-        "ran": [result.check_id for result in run_config_checks()[-2:]],
+        "last": [check.__name__ for check in CONFIG_CHECKS[-count:]],
+        "same_objects": len(CONFIG_CHECKS) > count and all(a is b for a, b in zip(CONFIG_CHECKS[-count:], EMAIL_CONFIG_CHECKS, strict=True)),
+        "ran": [result.check_id for result in run_config_checks()[-count:]],
     }
     print("FRESH-IMPORT " + json.dumps(report))
     """)
 
 
 @pytest.fixture(autouse=True)
-def _no_inherited_smtp_variables(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Every ``LIBREFOLIO_SMTP_*`` the lane inherited is removed: a test sees only the variables it sets itself."""
+def _no_inherited_email_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every ``LIBREFOLIO_SMTP_*`` and ``LIBREFOLIO_PUBLIC_URL`` the lane inherited is removed: a test sees only the variables it sets itself."""
     for name in list(os.environ):
-        if name.startswith(SMTP_PREFIX):
+        if name.startswith(SMTP_PREFIX) or name == PUBLIC_URL_VARIABLE:
             monkeypatch.delenv(name, raising=False)
 
 
@@ -228,8 +245,8 @@ def _as_logged(result: ConfigCheck) -> tuple[str, str, dict]:
 
 
 def _fresh_environment(tmp_path: Path) -> dict[str, str]:
-    """This process's environment for a fresh interpreter: no ``LIBREFOLIO_SMTP_*``, test mode, its data directory in ``tmp_path``, the project root importable."""
-    environment = {name: value for name, value in os.environ.items() if not name.startswith(SMTP_PREFIX)}
+    """This process's environment for a fresh interpreter: no ``LIBREFOLIO_SMTP_*`` nor ``LIBREFOLIO_PUBLIC_URL``, test mode, its data directory in ``tmp_path``, the project root importable."""
+    environment = {name: value for name, value in os.environ.items() if not name.startswith(SMTP_PREFIX) and name != PUBLIC_URL_VARIABLE}
     environment["LIBREFOLIO_TEST_MODE"] = "1"
     environment["LIBREFOLIO_TEST_DATA_DIR"] = str(tmp_path / "data")
     environment["PYTHONPATH"] = os.pathsep.join(filter(None, [str(PROJECT_ROOT), environment.get("PYTHONPATH")]))
@@ -380,12 +397,12 @@ def test_plain_text_to_any_other_host_is_a_warning(monkeypatch: pytest.MonkeyPat
 # =============================================================================
 
 
-def test_email_config_checks_lists_the_two_checks_in_order() -> None:
-    """EMK-008 — contract 3: the two checks, in that order: the tuple ``config_audit.CONFIG_CHECKS`` ends with (EMK-010)."""
+def test_email_config_checks_lists_the_three_checks_in_order() -> None:
+    """EMK-008 — contract 3: the three checks, in that order — configuration, encryption, links —: the tuple ``config_audit.CONFIG_CHECKS`` ends with (EMK-010)."""
     print_section("EMK-008: EMAIL_CONFIG_CHECKS")
 
-    assert EMAIL_CONFIG_CHECKS == (check_smtp_configuration, check_smtp_encryption)
-    print_success("configuration, encryption")
+    assert EMAIL_CONFIG_CHECKS == (check_smtp_configuration, check_smtp_encryption, check_email_links)
+    print_success("configuration, encryption, links")
 
 
 @pytest.mark.parametrize(
@@ -403,11 +420,11 @@ def test_email_config_checks_lists_the_two_checks_in_order() -> None:
     ],
 )
 def test_no_check_holds_the_password_and_no_detail_names_host_user_or_sender(monkeypatch: pytest.MonkeyPatch, variables: dict) -> None:
-    """EMK-009 — contract 4: in every state, no field of either result holds the SMTP password, and no detail holds the host, the user or the sender's address."""
+    """EMK-009 — contract 4: in every state, no field of any of the three results holds the SMTP password, and no detail holds the host, the user or the sender's address."""
     print_section("EMK-009: no secret in the checks")
     _configure(monkeypatch, variables)
 
-    results = [check_smtp_configuration(), check_smtp_encryption()]
+    results = [check() for check in EMAIL_CONFIG_CHECKS]
 
     for result in results:
         assert not [text for text in _texts(dataclasses.asdict(result)) if SMTP_PASSWORD in text], f"{result.check_id} holds the SMTP password"
@@ -422,37 +439,40 @@ def test_no_check_holds_the_password_and_no_detail_names_host_user_or_sender(mon
 
 
 def test_config_checks_ends_with_exactly_the_email_checks() -> None:
-    """EMK-010 — contract 5: the last two functions of ``config_audit.CONFIG_CHECKS`` are the very objects of ``EMAIL_CONFIG_CHECKS``, in that order, and neither appears earlier in the tuple."""
+    """EMK-010 — contract 5: the last three functions of ``config_audit.CONFIG_CHECKS`` are the very objects of ``EMAIL_CONFIG_CHECKS``, in that order, and none of them appears earlier in the tuple."""
     print_section("EMK-010: the end of CONFIG_CHECKS")
     checks = config_audit.CONFIG_CHECKS
-    tail, others = checks[-2:], checks[:-2]
+    tail, others = checks[-3:], checks[:-3]
 
-    assert len(EMAIL_CONFIG_CHECKS) == 2 and len(checks) > 2, f"precondition: two email checks after the platform's own: {checks}"
+    assert len(EMAIL_CONFIG_CHECKS) == 3 and len(checks) > 3, f"precondition: three email checks after the platform's own: {checks}"
     assert all(ours is theirs for ours, theirs in zip(tail, EMAIL_CONFIG_CHECKS, strict=True)), f"CONFIG_CHECKS must end with EMAIL_CONFIG_CHECKS itself: {[check.__name__ for check in tail]}"
     assert not [check.__name__ for check in others if check in EMAIL_CONFIG_CHECKS], f"an email check appears before the end of CONFIG_CHECKS: {[check.__name__ for check in checks]}"
     print_success(f"{len(others)} platform checks, then {', '.join(check.__name__ for check in tail)}")
 
 
 @pytest.mark.parametrize(
-    "variables",
+    ("variables", "public_url"),
     [
-        pytest.param({}, id="off"),
-        pytest.param({**BASE, **CREDENTIALS}, id="usable"),
-        pytest.param({**BASE, **CREDENTIALS, "tls": "none"}, id="plain-to-a-public-host"),
-        pytest.param({**BASE, **CREDENTIALS, "port": "65536"}, id="invalid-port"),
+        pytest.param({}, None, id="off"),
+        pytest.param({**BASE, **CREDENTIALS}, PUBLIC_URL, id="usable-links-ready"),
+        pytest.param({**BASE, **CREDENTIALS}, None, id="usable-links-missing"),
+        pytest.param({**BASE, **CREDENTIALS, "tls": "none"}, NOT_A_PUBLIC_URL, id="plain-to-a-public-host-links-invalid"),
+        pytest.param({**BASE, **CREDENTIALS, "port": "65536"}, None, id="invalid-port"),
     ],
 )
-def test_run_config_checks_ends_with_the_two_email_results(platform: Path, monkeypatch: pytest.MonkeyPatch, variables: dict) -> None:
-    """EMK-011 — contract 5: whatever the SMTP configuration — off, usable, plain text to a public host, invalid —, ``run_config_checks()`` ends with ``email.smtp`` and ``email.smtp_encryption``, each once, equal to what the two checks return on their own."""
-    print_section(f"EMK-011: run_config_checks with {sorted(variables)}")
+def test_run_config_checks_ends_with_the_three_email_results(platform: Path, monkeypatch: pytest.MonkeyPatch, variables: dict, public_url: str | None) -> None:
+    """EMK-011 — contract 5: whatever the SMTP configuration and ``LIBREFOLIO_PUBLIC_URL`` — off, usable with links ready or missing, plain text to a public host with links invalid, invalid —, ``run_config_checks()`` ends with ``email.smtp``, ``email.smtp_encryption`` and ``email.links``, each once, equal to what the three checks return on their own."""
+    print_section(f"EMK-011: run_config_checks with {sorted(variables)}, LIBREFOLIO_PUBLIC_URL={public_url!r}")
     _configure(monkeypatch, variables)
+    if public_url is not None:
+        monkeypatch.setenv(PUBLIC_URL_VARIABLE, public_url)
 
     results = config_audit.run_config_checks()
 
     ids = [result.check_id for result in results]
-    assert ids[-2:] == EMAIL_CHECK_IDS and [ids.count(check_id) for check_id in EMAIL_CHECK_IDS] == [1, 1], f"run_config_checks must end with the two email results, once each: {ids}"
-    assert results[-2:] == [check_smtp_configuration(), check_smtp_encryption()], "run_config_checks must carry what the email checks return on their own"
-    print_success(", ".join(f"{result.check_id}={result.severity}" for result in results[-2:]))
+    assert ids[-3:] == EMAIL_CHECK_IDS and [ids.count(check_id) for check_id in EMAIL_CHECK_IDS] == [1, 1, 1], f"run_config_checks must end with the three email results, once each: {ids}"
+    assert results[-3:] == [check() for check in EMAIL_CONFIG_CHECKS], "run_config_checks must carry what the email checks return on their own"
+    print_success(", ".join(f"{result.check_id}={result.severity}" for result in results[-3:]))
 
 
 @pytest.mark.parametrize(
@@ -460,13 +480,14 @@ def test_run_config_checks_ends_with_the_two_email_results(platform: Path, monke
     [
         pytest.param(("backend.app.services.email.checks", "backend.app.services.platform.config_audit"), id="checks-then-config-audit"),
         pytest.param(("backend.app.services.platform.config_audit", "backend.app.services.email.checks"), id="config-audit-then-checks"),
+        pytest.param(("backend.app.services.email.links", "backend.app.services.platform.config_audit"), id="links-first"),
         pytest.param(("backend.app.api.v1.email", "backend.app.services.platform.config_audit"), id="email-api-first"),
     ],
 )
 def test_either_module_can_be_imported_first_in_a_fresh_interpreter(tmp_path: Path, order: tuple[str, ...]) -> None:
-    """EMK-012 — contract 6: a fresh interpreter — no ``LIBREFOLIO_SMTP_*``, test mode, its data directory in ``tmp_path`` — imports ``order`` in that order and exits 0; it reports ``check_smtp_configuration`` and ``check_smtp_encryption`` as the last two checks of ``CONFIG_CHECKS``, the very objects of ``EMAIL_CONFIG_CHECKS``, and their results ``email.smtp`` and ``email.smtp_encryption``.
+    """EMK-012 — contract 6: a fresh interpreter — no ``LIBREFOLIO_SMTP_*`` nor ``LIBREFOLIO_PUBLIC_URL``, test mode, its data directory in ``tmp_path`` — imports ``order`` in that order and exits 0; it reports ``check_smtp_configuration``, ``check_smtp_encryption`` and ``check_email_links`` as the last three checks of ``CONFIG_CHECKS``, the very objects of ``EMAIL_CONFIG_CHECKS``, and runs them: ``email.smtp``, ``email.smtp_encryption``, ``email.links`` (the last importing the links when it runs).
 
-    Barrier first: neither module was loaded before the first import, so the order is the one the case names.
+    Barrier first: no watched module was loaded before the first import, so the order is the one the case names.
     """
     print_section(f"EMK-012: {' then '.join(order)}")
 
@@ -476,9 +497,9 @@ def test_either_module_can_be_imported_first_in_a_fresh_interpreter(tmp_path: Pa
     reports = [line.removeprefix(FRESH_IMPORT_MARKER) for line in completed.stdout.splitlines() if line.startswith(FRESH_IMPORT_MARKER)]
     assert len(reports) == 1, f"the fresh interpreter must report once: {completed.stdout[-4000:]}"
     report = json.loads(reports[0])
-    assert report["preloaded"] == [], f"barrier: a fresh interpreter loads neither module before the first import: {report['preloaded']}"
-    assert report == {"preloaded": [], "last_two": ["check_smtp_configuration", "check_smtp_encryption"], "same_objects": True, "ran": EMAIL_CHECK_IDS}, f"{' then '.join(order)}: {report}"
-    print_success(f"{' then '.join(order)}: {', '.join(report['last_two'])}")
+    assert report["preloaded"] == [], f"barrier: a fresh interpreter loads no watched module before the first import: {report['preloaded']}"
+    assert report == {"preloaded": [], "last": EMAIL_CHECK_NAMES, "same_objects": True, "ran": EMAIL_CHECK_IDS}, f"{' then '.join(order)}: {report}"
+    print_success(f"{' then '.join(order)}: {', '.join(report['last'])}")
 
 
 # =============================================================================
@@ -488,7 +509,7 @@ def test_either_module_can_be_imported_first_in_a_fresh_interpreter(tmp_path: Pa
 
 @pytest.mark.parametrize(("overrides", "problem", "variable"), UNUSABLE_FOR_THE_AUDIT)
 def test_the_startup_audit_logs_an_unusable_configuration_once_as_an_error_and_goes_on(platform: Path, logged: list, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, overrides: dict, problem: str, variable: str) -> None:
-    """EMK-013 — contract 7: an unusable SMTP configuration, the password set beside the fault where it can be: ``log_configuration_audit()`` returns — the start goes on — after one email record, the ``error`` of ``email.smtp`` with the check's summary and its detail ``{problem, variable}``, and none of ``email.smtp_encryption``. Neither its records nor the events of the e-mail delivery hold the SMTP password.
+    """EMK-013 — contract 7: an unusable SMTP configuration, the password set beside the fault where it can be, ``LIBREFOLIO_PUBLIC_URL`` unset: ``log_configuration_audit()`` returns — the start goes on — after one email record, the ``error`` of ``email.smtp`` with the check's summary and its detail ``{problem, variable}``; none of ``email.smtp_encryption``, none of ``email.links`` (email is not usable: the missing links are not news). Neither its records nor the events of the e-mail delivery hold the SMTP password.
 
     Barriers: the delivery reported the unusable configuration during the audit (its event names the problem), so the
     capture of its events is not blind; the record is the check's own result, so it is the check that spoke.
@@ -509,35 +530,38 @@ def test_the_startup_audit_logs_an_unusable_configuration_once_as_an_error_and_g
 
 
 def test_the_startup_audit_warns_about_plain_text_to_a_public_host(platform: Path, logged: list, monkeypatch: pytest.MonkeyPatch) -> None:
-    """EMK-014 — contract 7: a usable configuration, ``LIBREFOLIO_SMTP_TLS=none`` towards a public host, credentials set: one email record, the ``warning`` of ``email.smtp_encryption`` with the check's summary — naming ``LIBREFOLIO_SMTP_TLS`` and the host — and its empty detail; nothing about ``email.smtp``, which is ok; no record holds the SMTP password."""
+    """EMK-014 — contract 7: a usable configuration, ``LIBREFOLIO_SMTP_TLS=none`` towards a public host, credentials set, links ready: one email record, the ``warning`` of ``email.smtp_encryption`` with the check's summary — naming ``LIBREFOLIO_SMTP_TLS`` and the host — and its empty detail; nothing about ``email.smtp`` nor ``email.links``, both ok; no record holds the SMTP password."""
     print_section("EMK-014: plain text to a public host at startup")
     _configure(monkeypatch, {**BASE, **CREDENTIALS, "tls": "none"})
+    monkeypatch.setenv(PUBLIC_URL_VARIABLE, PUBLIC_URL)
 
     config_audit.log_configuration_audit()
 
     expected = check_smtp_encryption()
     assert (expected.severity, expected.detail) == ("warning", {}), f"precondition: plain text to {HOST_VALUE} must be a warning: {expected}"
-    assert _email_records(logged) == [_as_logged(expected)], f"one warning record of email.smtp_encryption, nothing about email.smtp: {logged}"
+    assert _email_records(logged) == [_as_logged(expected)], f"one warning record of email.smtp_encryption, nothing about email.smtp nor email.links: {logged}"
     assert TLS in expected.summary and HOST_VALUE in expected.summary, f"the log must name the variable and the host it sends to in clear: {expected.summary!r}"
     assert SMTP_PASSWORD not in repr(logged), "the startup audit logged the SMTP password"
     print_success(f"warning: {expected.summary}")
 
 
 @pytest.mark.parametrize(
-    "variables",
+    ("variables", "public_url"),
     [
-        pytest.param({}, id="nothing-set"),
-        pytest.param({**BASE, **CREDENTIALS, "host": None, "tls": "ssl"}, id="everything-but-the-host"),
+        pytest.param({}, None, id="nothing-set"),
+        pytest.param({**BASE, **CREDENTIALS, "host": None, "tls": "ssl"}, NOT_A_PUBLIC_URL, id="everything-but-the-host-links-invalid"),
     ],
 )
-def test_the_startup_audit_says_nothing_about_email_that_is_off(platform: Path, logged: list, monkeypatch: pytest.MonkeyPatch, variables: dict) -> None:
-    """EMK-015 — contract 7: no host — even with the other variables set, an invalid TLS mode included —: no email record, and no record holds the SMTP password.
+def test_the_startup_audit_says_nothing_about_email_that_is_off(platform: Path, logged: list, monkeypatch: pytest.MonkeyPatch, variables: dict, public_url: str | None) -> None:
+    """EMK-015 — contract 7: no host — even with the other variables set, an invalid TLS mode and a ``LIBREFOLIO_PUBLIC_URL`` that is not http(s) included —: no email record, and no record holds the SMTP password.
 
     Barrier first: the audit logged the platform's unset JWT secret, so the recorder hears it and «no email record» is
     an absence, not a deaf recorder.
     """
-    print_section(f"EMK-015: email off at startup, {sorted(variables)}")
+    print_section(f"EMK-015: email off at startup, {sorted(variables)}, LIBREFOLIO_PUBLIC_URL={public_url!r}")
     _configure(monkeypatch, variables)
+    if public_url is not None:
+        monkeypatch.setenv(PUBLIC_URL_VARIABLE, public_url)
 
     config_audit.log_configuration_audit()
 
@@ -545,3 +569,70 @@ def test_the_startup_audit_says_nothing_about_email_that_is_off(platform: Path, 
     assert _email_records(logged) == [], f"email off is the default: nothing to log about it: {logged}"
     assert SMTP_PASSWORD not in repr(logged), "the startup audit logged the SMTP password"
     print_success("nothing logged about email")
+
+
+@pytest.mark.parametrize(
+    ("public_url", "level", "key"),
+    [
+        pytest.param(None, "info", "email.checks.links.missing", id="unset-info"),
+        pytest.param(NOT_A_PUBLIC_URL, "warning", "email.checks.links.invalid", id="not-http-warning"),
+    ],
+)
+def test_the_startup_audit_says_when_email_works_without_its_links(platform: Path, logged: list, monkeypatch: pytest.MonkeyPatch, public_url: str | None, level: str, key: str) -> None:
+    """EMK-017 — contract 7: usable email (``starttls`` to a public host, credentials set) and ``LIBREFOLIO_PUBLIC_URL`` unset or not http(s): ``log_configuration_audit()`` returns after one email record, the ``level`` of ``email.links`` with the check's summary and its empty detail; nothing about ``email.smtp`` nor ``email.smtp_encryption``, both ok; no record holds the SMTP password nor the variable's value."""
+    print_section(f"EMK-017: links {key.rsplit('.', 1)[-1]} at startup")
+    _configure(monkeypatch, {**BASE, **CREDENTIALS})
+    if public_url is not None:
+        monkeypatch.setenv(PUBLIC_URL_VARIABLE, public_url)
+
+    returned = config_audit.log_configuration_audit()
+
+    expected = check_email_links()
+    assert (expected.severity, expected.i18n_key) == (level, key), f"precondition: the links must be {key}: {expected}"
+    assert returned is None
+    assert _email_records(logged) == [_as_logged(expected)], f"one {level} record of email.links, nothing about the configuration nor the encryption: {logged}"
+    assert SMTP_PASSWORD not in repr(logged) and "zq-not-public" not in repr(logged), f"the startup audit logged the SMTP password or the variable's value: {logged}"
+    print_success(f"{level}: {expected.summary}")
+
+
+# =============================================================================
+# 8. check_email_links
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    ("variables", "public_url", "severity", "key"),
+    [
+        pytest.param({}, None, "ok", "email.checks.links.ok", id="email-off-links-unset"),
+        pytest.param({}, NOT_A_PUBLIC_URL, "ok", "email.checks.links.ok", id="email-off-links-invalid"),
+        pytest.param({}, PUBLIC_URL, "ok", "email.checks.links.ok", id="email-off-links-ready"),
+        pytest.param({**BASE, "tls": "ssl"}, None, "ok", "email.checks.links.ok", id="email-invalid-links-unset"),
+        pytest.param({**BASE, "tls": "ssl"}, NOT_A_PUBLIC_URL, "ok", "email.checks.links.ok", id="email-invalid-links-invalid"),
+        pytest.param(BASE, PUBLIC_URL, "ok", "email.checks.links.ok", id="email-usable-links-ready"),
+        pytest.param(BASE, f"{PUBLIC_URL}/", "ok", "email.checks.links.ok", id="email-usable-links-ready-trailing-slash"),
+        pytest.param(BASE, None, "info", "email.checks.links.missing", id="email-usable-links-unset"),
+        pytest.param(BASE, "   ", "info", "email.checks.links.missing", id="email-usable-links-blank"),
+        pytest.param(BASE, NOT_A_PUBLIC_URL, "warning", "email.checks.links.invalid", id="email-usable-links-not-http"),
+        pytest.param(BASE, "zq-not-public.example.com", "warning", "email.checks.links.invalid", id="email-usable-links-without-a-scheme"),
+        pytest.param(BASE, "https://", "warning", "email.checks.links.invalid", id="email-usable-links-the-scheme-alone"),
+        pytest.param(BASE, "https://folio.zq-space.example.com/my folio", "warning", "email.checks.links.invalid", id="email-usable-links-a-space-inside"),
+        pytest.param(BASE, "https://folio.zq-query.example.com/app?lang=it", "warning", "email.checks.links.invalid", id="email-usable-links-a-query"),
+        pytest.param(BASE, "https://folio.zq-fragment.example.com/app#top", "warning", "email.checks.links.invalid", id="email-usable-links-a-fragment"),
+        pytest.param({}, "https://folio.zq-space.example.com/my folio", "ok", "email.checks.links.ok", id="email-off-links-a-space-inside"),
+    ],
+)
+def test_the_links_check_in_each_state(monkeypatch: pytest.MonkeyPatch, variables: dict, public_url: str | None, severity: str, key: str) -> None:
+    """EMK-016 — contract 8: ``check_email_links`` is ``ok`` when email is not usable — off or invalid —, whatever ``LIBREFOLIO_PUBLIC_URL`` says, and when links are ready; with usable email, ``info`` / ``missing`` for the variable unset or blank, ``warning`` / ``invalid`` for a value that is not http(s) or an http(s) address no link can start from (the scheme alone, a space inside, a query, a fragment). Never a detail; a summary for the log when it speaks, naming the variable and never its value nor the SMTP host."""
+    print_section(f"EMK-016: email {sorted(variables) or 'off'}, LIBREFOLIO_PUBLIC_URL={public_url!r}")
+    _configure(monkeypatch, variables)
+    if public_url is not None:
+        monkeypatch.setenv(PUBLIC_URL_VARIABLE, public_url)
+
+    result = check_email_links()
+
+    assert isinstance(result, ConfigCheck)
+    assert (result.check_id, result.severity, result.i18n_key, result.detail) == ("email.links", severity, key, {}), result
+    if severity != "ok":
+        assert PUBLIC_URL_VARIABLE in result.summary, f"the summary must name the variable: {result.summary!r}"
+        assert "zq-" not in result.summary, f"the summary names a configured value: {result.summary!r}"
+    print_success(f"{result.severity} {result.i18n_key}")

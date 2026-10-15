@@ -13,10 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.config import get_settings
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import AccountsInstanceConfig
-from backend.app.schemas.email import EmailInstanceConfig
 from backend.app.schemas.system import InstanceConfigResponse
 from backend.app.services.accounts.registration_service import effective_registration_mode
-from backend.app.services.email.delivery import email_available
+from backend.app.services.email.links import email_instance_config
 
 instance_router = APIRouter()
 
@@ -29,5 +28,5 @@ async def get_instance_config(session: AsyncSession = Depends(get_session_genera
         profile=get_settings().LIBREFOLIO_PROFILE,
         accounts=AccountsInstanceConfig(registration_mode=registration.mode, registration_locked=registration.locked),
         # The email configuration may come from a password file: read off the event loop.
-        email=EmailInstanceConfig(available=await asyncio.to_thread(email_available)),
+        email=await asyncio.to_thread(email_instance_config),
     )

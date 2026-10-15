@@ -4,16 +4,26 @@ LibreFolio can send email through an SMTP server that you name in a few environm
 Email is **optional**: without it nothing changes, nothing is sent, and invitation and
 password-reset links are copied by hand.
 
-Today, the only email LibreFolio sends is the **test email**: an administrator sends it to their
-own address from **Settings › Email**, to check that everything works.
+What LibreFolio sends:
+
+- **A test email**, which an administrator sends to their own address from **Settings › Email**,
+  to check that everything works.
+- **The invitation and password-reset links an administrator creates**, by email instead of copied
+  by hand: [Links Sent by an Administrator](#admin-links). The **Send by email** button is coming
+  with the invitation and reset dialogs.
+- **A reset link for a forgotten password**, to whoever asks for one for their account:
+  [Forgotten Passwords](#forgot-password). The login page will offer it later.
+
+The emails with a link also need `LIBREFOLIO_PUBLIC_URL`: see [Emails with a Link](#public-url).
 
 To set it up:
 
 1. Write the `LIBREFOLIO_SMTP_*` variables in `.env`: at least the server and the sender, and the
    login of your account when the server asks for one. The [examples](#examples) cover the usual
    cases.
-2. Restart LibreFolio.
-3. Open **Settings › Email**: the state reads **Ready**. Send yourself a test email.
+2. For the emails with a link, set `LIBREFOLIO_PUBLIC_URL` too ([Emails with a Link](#public-url)).
+3. Restart LibreFolio.
+4. Open **Settings › Email**: the state reads **Ready**. Send yourself a test email.
 
 ---
 
@@ -28,8 +38,9 @@ secret file.
   password: [Settings › Email](#email-tab) only says whether email works and, when it does not,
   which variable to fix.
 - **Public: only whether email is ready.** `/api/v1/system/instance`, which anyone who can reach the
-  server may read, says whether this instance can send email: `"email": {"available": true}` when
-  the state is **Ready**, `false` otherwise. Nothing else about email is there.
+  server may read, says whether this instance can send email: `"available": true` when the state is
+  **Ready**, and `"links": true` when, on top of that, emails can carry a link
+  ([Emails with a Link](#public-url)). Nothing else about email is there.
 - **Read from the environment.** `./dev.py` and Docker Compose (`env_file: .env`) put the values of
   `.env` there, so these variables go in `.env` like the other [options](configuration.md).
 - **Restart after a change.** With Docker Compose, run `docker compose up -d`:
@@ -84,6 +95,35 @@ The «Email» section of `.env.example` lists them, commented: copy the lines yo
 - The port follows the mode, not the other way around: `LIBREFOLIO_SMTP_PORT=465` alone keeps
   `starttls`, which a server on port 465 does not expect. For port 465, set
   `LIBREFOLIO_SMTP_TLS=tls`.
+
+---
+
+## 🌐 Emails with a Link {: #public-url }
+
+An invitation or a password-reset link sent by email is built from `LIBREFOLIO_PUBLIC_URL` alone:
+that address, then the page that takes the link, such as
+`https://librefolio.example.com/reset-password#token=…`. Never from the address your browser
+used, nor from anything else in a request.
+
+- **Why.** Anyone can send LibreFolio a request that names another address. If a link were built
+  from the request, a stranger could have LibreFolio email one of your users a real link to a site
+  of theirs, and catch its secret part when the user opens it.
+- **What to set.** The address your users open LibreFolio at, with `http://` or `https://`, such
+  as `https://librefolio.example.com`. It is the same variable the command line puts in front of
+  the links it prints: see *Accounts and Sign-ups* in [Configuration](configuration.md).
+- **Without it**, or without `http://` or `https://`, no email with a link goes out: such an email
+  is refused with `EMAIL_LINKS_UNAVAILABLE`, while the test email still works. The links you copy,
+  from the [command line](cli_tools.md) for one, stay as they are.
+- **What the email says**: it names your instance by the host of `LIBREFOLIO_PUBLIC_URL`, and says
+  how long the link still works, 7 days for a new invitation and 30 minutes for a reset link. A
+  link works once.
+- **The secret part** of the link comes after `#`: browsers never send it to the server, so it
+  stays out of server and proxy logs.
+- **To check it**: with email **Ready**, Settings › Email shows a notice when
+  `LIBREFOLIO_PUBLIC_URL` is not set or is not an `http://` or `https://` address, and the start
+  log has a line ([What the Log Says](#logs)). From anywhere, `/api/v1/system/instance` shows
+  `"links": true` once both are fine. LibreFolio does not check that this address leads to it: open
+  it in a browser yourself.
 
 ---
 
@@ -210,7 +250,7 @@ page.
 | State | What it means | What the tab shows |
 | --- | --- | --- |
 | **Off** | `LIBREFOLIO_SMTP_HOST` is not set: nothing is sent. This is the default. | A short explanation, and a pointer to this guide. |
-| **Ready** | Every variable can be used. | The emails left this hour, the encryption warning when it applies, and **Send a test email**. |
+| **Ready** | Every variable can be used. | The emails left this hour, the notices that apply, and **Send a test email**. |
 | **Not working** | A variable cannot be used: email stays off until it is fixed. | The problem, naming the variable at fault, and a reminder to restart after the fix. |
 
 !!! note "✅ Ready is not yet a delivered email"
@@ -226,6 +266,9 @@ page.
   the process that answered.
 - The encryption warning appears when `LIBREFOLIO_SMTP_TLS=none` points to a server outside your
   local network: see [Security Notes](#security).
+- A notice about `LIBREFOLIO_PUBLIC_URL` appears when it is not set (information: emails work, but
+  none with a link can go out) or is not an `http://` or `https://` address (warning): see
+  [Emails with a Link](#public-url).
 
 ### ✉️ The Test Email {: #test-email }
 
@@ -245,6 +288,56 @@ accepted the message: look in your inbox, and in the spam folder. Otherwise the 
 wrong: see [Sending Errors](#sending-errors). While LibreFolio talks to the server, the button reads
 **Sending…**: LibreFolio waits up to 20 seconds for each step, so a server that does not answer
 takes a while to fail.
+
+---
+
+## 📨 Links Sent by an Administrator {: #admin-links }
+
+An invitation or a password-reset link that an administrator creates can go out by email, instead
+of being copied by hand. The **Send by email** button is coming with the invitation and reset
+dialogs; LibreFolio already follows these rules:
+
+- **An invitation** goes to the address you choose, or else to the one written in the invitation,
+  in the language you choose, or else the instance's **Default Language**. It names you as the
+  person who invites, and says so when the new account will be an administrator.
+- **A password-reset link** goes only to the address of its account, in the account's language:
+  no other address is accepted.
+- **Only a live link** goes out: one that has expired, was used or was revoked is refused, and a
+  new one must be created.
+- Each email counts against the hourly limit, and needs `LIBREFOLIO_PUBLIC_URL`
+  ([Emails with a Link](#public-url)).
+
+---
+
+## 🗝️ Forgotten Passwords {: #forgot-password }
+
+Someone who forgot their password can ask for a reset link by email, with their username or their
+email address, without signing in. LibreFolio already answers such requests; the login page will
+send them later, and for now its **Forgot Password?** still shows the command-line reset.
+
+- **The same answer for everyone**: *If an active account matches, its owner gets an email with a
+  link to choose a new password*, whether an account matches or not. The search for the account
+  and the email come after the answer, so nobody can use it to find out which accounts exist.
+- **The account** is found as the login finds it, by username or email address. Only an active
+  account gets the email, at its own address and in its language.
+- **The link** works once, for 30 minutes, and cancels the account's earlier reset links, those an
+  administrator created included.
+- **When email or `LIBREFOLIO_PUBLIC_URL` is not ready**, the request is refused with a short
+  message, the same for everyone.
+
+The limits, kept in the memory of each server process:
+
+| Limit | Past it |
+| --- | --- |
+| 5 requests every 15 minutes from the same address | The request is refused until the oldest of them is 15 minutes old. |
+| 3 requests an hour for the same username or email address, whether an account matches or not | The request is refused until the oldest of them is an hour old. |
+| The hourly limit of the instance, `LIBREFOLIO_SMTP_MAX_PER_HOUR` | The request is refused until an email fits again. |
+| 1 email every 5 minutes, and 3 an hour, for the same account, the reset links an administrator created included | Nothing is sent, and the answer stays the same. |
+
+The address that counts is the one the server sees. Behind a reverse proxy the server does not
+trust, that is the proxy's address, and all your visitors share the 5 requests every 15 minutes.
+The server (uvicorn) takes the visitor's address from the proxy's `X-Forwarded-For` header only
+when the proxy's address is in `FORWARDED_ALLOW_IPS`, which is `127.0.0.1` when not set.
 
 ---
 
@@ -299,6 +392,19 @@ The test email says why it did not go out. For the server's own reply, look at t
 **The state of email could not be read.** means that the tab could not reach the server: reload
 the page and, if it lasts, look at the log.
 
+Emails with a link have reasons of their own. No page shows them yet; the server answers with these
+codes:
+
+| Code | Why | What to do |
+| --- | --- | --- |
+| `EMAIL_LINKS_UNAVAILABLE` | `LIBREFOLIO_PUBLIC_URL` is not set, or does not start with `http://` or `https://`. | Set it, then restart: see [Emails with a Link](#public-url). |
+| `EMAIL_LINK_INVALID` | The link has expired, was used or revoked, or does not exist: the answer says which. | Create a new link, and send that one. |
+| `EMAIL_RECIPIENT_REQUIRED` | An invitation without an address: none given, and none written in the invitation. | Give the address to send it to. |
+| `EMAIL_RECIPIENT_NOT_ALLOWED` | Another address for a password-reset link. | A reset link goes only to the address of its account: to reach the person elsewhere, copy the link instead. |
+
+The other codes mean what they mean for the test email: `EMAIL_UNAVAILABLE`, `EMAIL_RATE_LIMITED`,
+the SMTP codes above, and `EMAIL_RECIPIENT_INVALID`, here for the address the link would go to.
+
 ### 📜 What the Log Says {: #logs }
 
 The log is `logs/librefolio.log` in the data folder, and the server also prints it to its console:
@@ -306,22 +412,35 @@ The log is `logs/librefolio.log` in the data folder, and the server also prints 
 
 At every start, right after `Starting LibreFolio`, the server checks its configuration, email
 included (*Startup Checks* in [Configuration](configuration.md)). A configuration that cannot be
-used shows there in two lines, the first two below, and `none` towards a server outside your local
-network in a warning. Neither stops the start.
+used shows there in two lines, the first two below; `none` towards a server outside your local
+network, and a missing or invalid `LIBREFOLIO_PUBLIC_URL`, in one line each. None of them stops
+the start.
 
 | The log says | Level | When |
 | --- | --- | --- |
 | `Email configuration cannot be used: email stays off` | `error` | A variable cannot be used. Each server process logs it once, at startup, with `variable`, `problem` (the code) and `reason`: the rule it breaks, or why the password file cannot be read. |
 | `LIBREFOLIO_SMTP_… cannot be used (SMTP_…): email stays off until it is fixed` | `error` | At startup, after the line above, with `check` set to `email.smtp`: the startup checks report the same problem. |
 | `LIBREFOLIO_SMTP_TLS=none with …: emails, their links and the SMTP password travel unencrypted; use starttls or tls` | `warning` | At startup, with `check` set to `email.smtp_encryption`: `none` towards a server outside your local network, which the line names ([Security Notes](#security)). |
-| `Email sent` | `info` | The server accepted an email; `kind` is `test` for the test email. |
+| `LIBREFOLIO_PUBLIC_URL is not set: emails work, but none with a link (forgotten password, invitation, reset) can go out` | `info` | At startup, with `check` set to `email.links`: email works, but `LIBREFOLIO_PUBLIC_URL` is not set ([Emails with a Link](#public-url)). |
+| `LIBREFOLIO_PUBLIC_URL is not an http(s) address: no email with a link (forgotten password, invitation, reset) can go out` | `warning` | At startup, with `check` set to `email.links`: email works, but the variable does not start with `http://` or `https://`. |
+| `Email sent` | `info` | The server accepted an email; `kind` says which: `test`, `invite` or `password_reset`. |
 | `Email not sent` | `warning` | The server refused the email or did not answer: `code`, as in [Sending Errors](#sending-errors), and `detail`, the server's own reply, the most precise clue. |
 | `Email not sent: the hourly limit of the instance is reached` | `warning` | The hourly limit stopped an email; `retry_after` is in seconds. |
 | `Test email sent by an administrator` | `info` | A test email went out, with the `admin_id` and the `language`. |
+| `Link emailed by an administrator` | `info` | An administrator emailed a link: `admin_id`, `purpose` (`invite` or `password_reset`), `token_id`, the account's `user_id` for a reset link, and `language`. |
+| `Forgotten password: reset link emailed` | `info` | A reset link went out for a forgotten password: `user_id`, `token_id` and `language`. |
+| `Forgotten password: no active account matches, nothing sent` | `info` | No active account has that username or email address. What was typed is never logged. |
+| `Forgotten password: the account had a reset link moments ago, nothing sent` | `info` | The account's own limits: a reset link less than 5 minutes ago, or 3 in the last hour; with `user_id`. |
+| `Forgotten password: no email sent` | `warning` | Email or `LIBREFOLIO_PUBLIC_URL` stopped working after the answer, the hourly limit was reached, or the server refused the email: `reason` and `code` say which. |
+| `Forgotten password: the request failed` | `error` | An unexpected error, with its details. |
 
-The log never holds the SMTP password, the content of an email or the recipient's full address:
-only its domain, in `recipient_domain`. Servers often quote the address they refuse, so their reply
-is masked too, such as `550 5.1.1 <***@example.com>: Recipient address rejected`.
+Every reset link also leaves a `Password reset link created` line, with `user_id`, `token_id` and,
+when an administrator created it, `created_by_user_id`.
+
+The log never holds the SMTP password, the content of an email, a link or its secret part, what
+someone typed to ask for a reset link, or the recipient's full address: only its domain, in
+`recipient_domain`. Servers often quote the address they refuse, so their reply is masked too, such
+as `550 5.1.1 <***@example.com>: Recipient address rejected`.
 
 ---
 
@@ -338,6 +457,11 @@ is masked too, such as `550 5.1.1 <***@example.com>: Recipient address rejected`
 - **Keep the password in a secret file** (`LIBREFOLIO_SMTP_PASSWORD_FILE`) that only the user
   running LibreFolio can read, out of `.env` and out of the data folder. Use an app password, or an
   account just for LibreFolio, that you can revoke on its own.
+- **Links come only from `LIBREFOLIO_PUBLIC_URL`**, never from a request: nobody can make
+  LibreFolio email one of your users a link to a site of theirs ([Emails with a Link](#public-url)).
+- **A forgotten password tells nobody which accounts exist**: the same answer for everyone, the
+  search after the answer, and limits per address, per username or email address, and per account
+  ([Forgotten Passwords](#forgot-password)).
 - **The hourly limit** caps what the instance can send, whatever happens: raise it only as far as
   you need.
 
@@ -359,8 +483,10 @@ is masked too, such as `550 5.1.1 <***@example.com>: Recipient address rejected`
 
 ## 🔗 Related
 
-- 📝 **[Configuration](configuration.md)** — The `.env` file, secrets in files and the startup
-  checks
+- 📝 **[Configuration](configuration.md)** — The `.env` file, secrets in files, the startup checks
+  and `LIBREFOLIO_PUBLIC_URL`
+- 🛠️ **[Command-Line Tools](cli_tools.md)** — Invitation and password-reset links from the command
+  line
 - 🐳 **[Advanced Docker](docker_advanced.md)** — The Compose file, and the user that runs LibreFolio
   in the container
 - 📂 **[Filesystem Structure](filesystem.md)** — Where the log is kept
