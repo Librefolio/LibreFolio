@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Email links**: every link an email carries is built from `LIBREFOLIO_PUBLIC_URL` alone. While email works, the start log and Settings › Email say when that variable is missing or cannot be used, and `GET /api/v1/system/instance` tells whether emails with a link can go out.
 - Settings › Email checks, from the administrator's browser, that `LIBREFOLIO_PUBLIC_URL` reaches this very instance, and warns, for this device only, when another server answers there or nothing does; the startup warning about `LIBREFOLIO_PUBLIC_URL` now lists every rule the address must follow.
 - `GET /api/v1/brokers/import/files`: each file carries `can_delete`, true when the caller may delete it.
+- Test configuration shows until when a provider is paused after too many requests. API: live prices, asset refresh and FX sync results carry `error_code="RATE_LIMITED"` and `retry_after`.
 
 ### 🔄 Changed
 
@@ -62,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The server stops within 8 seconds.** After a `docker stop`, a restart or Ctrl+C, requests still running after 3 seconds are cancelled and what they had not saved is rolled back; the server's own work (scheduled syncs, workers, caches) gets the rest of the time, and worker processes still alive are ended, so none is left behind. If something still holds the server when the time is up, it ends anyway and its log says what was still running. `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` changes the budget (`0`: no limit, as before). Docker waits 10 seconds by default: if you raise the budget, give the container more time too (`stop_grace_period`).
 - **Uploaded files have a scope.** Common files (images: icons, logos, asset photos, avatars) are visible to every signed-in user; personal files (every other type) only to their uploader and the administrators. Files uploaded before this version follow the same rule.
 - API: `POST /api/v1/uploads` accepts `scope`; `PATCH /api/v1/uploads/{id}` changes it; file info carries `scope` and `can_delete`. Another user's personal file answers 404, as a missing one.
+- **Yahoo Finance no longer retries a "too many requests" refusal three times**: like every price and exchange-rate provider, it pauses. During a pause the last stored price stays on screen.
 
 #### 🎨 A new colour palette
 
