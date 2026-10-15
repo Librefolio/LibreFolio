@@ -23,6 +23,11 @@ test message — is built by one typed builder from the texts of ``templates/{en
    ``X-Auto-Response-Suppress: All``, each once; a ``multipart/alternative`` body, plain text first and HTML last (the
    last alternative is the one a client prefers); exactly one recipient address — a CR or LF, a comma, no ``@`` or
    whitespace inside is a ``ValueError``; a non-ASCII display name still makes an ASCII (RFC 2047) header.
+7. Every value an e-mail shows — the username, the instance, the inviter — goes in as one line of plain text (lot E3,
+   security review): a control character (Cc: a line feed, a carriage return, a tab, NUL…) or a line or paragraph
+   separator (Zl, Zp) becomes one space, so the plain-text part keeps its lines whatever a value holds; a bidirectional
+   embedding, override or isolate (U+202A–U+202E, U+2066–U+2069) is removed, so a value cannot reorder the text around
+   it; the HTML part is escaped as before.
 
 Pure: no database, no server, no network; the catalogue is read from the package, never written. The autouse fixture
 that removes inherited ``LIBREFOLIO_SMTP_*`` variables is here as in every module of the e-mail lot, though nothing
@@ -118,6 +123,35 @@ SIGNATURES = {
     "build_admin_setup": ({"language", "username", "link", "ttl", "instance"}, {}),
     "build_test_message": ({"language", "username", "instance"}, {}),
 }
+#: The arguments of each builder that an e-mail shows to its reader.
+SHOWN_FIELDS = {
+    PASSWORD_RESET: ("username", "instance"),
+    INVITE: ("instance", "inviter"),
+    EMAIL_VERIFICATION: ("username", "instance"),
+    ADMIN_SETUP: ("username", "instance"),
+    TEST: ("username", "instance"),
+}
+SHOWN_FIELD_CASES = [pytest.param(kind, field, id=f"{kind.value}-{field}") for kind, fields in SHOWN_FIELDS.items() for field in fields]
+#: Characters that would break a line of the plain-text part, or hide in it: control characters (Cc), the line and
+#: paragraph separators (Zl, Zp). In a value, each becomes one space.
+LINE_BREAKERS = {
+    "LF": "\n",
+    "CRLF": "\r\n",
+    "CR": "\r",
+    "VT": "\x0b",
+    "FF": "\x0c",
+    "FS": "\x1c",
+    "NEL": "\x85",
+    "LINE SEPARATOR": "\u2028",
+    "PARAGRAPH SEPARATOR": "\u2029",
+    "TAB": "\t",
+    "ESC": "\x1b",
+    "NUL": "\x00",
+}
+#: The ones no template writes itself: none of them may be left anywhere in an e-mail built from a value holding it.
+FOREIGN_BREAKERS = ("VT", "FF", "FS", "NEL", "LINE SEPARATOR", "PARAGRAPH SEPARATOR", "ESC", "NUL")
+#: The bidirectional embeddings, overrides and isolates: in a value, removed.
+BIDI_CONTROLS = "\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069"
 
 SENDER = ("LibreFolio", "noreply@example.com")
 REPLY_TO = ("LibreFolio Support", "support@example.org")
@@ -650,3 +684,57 @@ def test_a_non_ascii_display_name_makes_a_valid_header() -> None:
     assert head.isascii(), "the headers are not ASCII: a server without SMTPUTF8 may refuse them"
     assert _mailboxes(_parsed(message)["From"]) == [("Libre Folìo", "noreply@example.com")]
     print_success("encoded, and read back")
+
+
+# =============================================================================
+# 7. EVERY VALUE ON ONE LINE
+# =============================================================================
+
+
+@pytest.mark.parametrize(("kind", "field"), SHOWN_FIELD_CASES)
+def test_a_value_with_a_line_break_stays_on_one_line(kind: EmailKind, field: str) -> None:
+    """EMM-031 — contract 7: a value the e-mail shows holding a line break of any kind — LF, CRLF, CR, VT, FF, FS, NEL, U+2028, U+2029 — or another control character — TAB, ESC, NUL —: the plain-text part has exactly as many lines as with a plain value; the value reads with each such character turned into one space, in both parts; and a character no template writes itself is left nowhere."""
+    print_section(f"EMM-031: line breaks in the {field} of {kind}")
+    plain = _build(kind, **{field: "zq-first zq-second"})
+    failures = []
+    for name, breaker in LINE_BREAKERS.items():
+        content = _build(kind, **{field: f"zq-first{breaker}zq-second"})
+        one_line = "zq-first" + " " * len(breaker) + "zq-second"
+        if len(content.text.splitlines()) != len(plain.text.splitlines()):
+            failures.append(f"{name}: {len(content.text.splitlines())} lines in the text instead of {len(plain.text.splitlines())}")
+        if one_line not in content.text or one_line not in content.html:
+            failures.append(f"{name}: {one_line!r} missing from the text or the HTML")
+        if name in FOREIGN_BREAKERS and (breaker in content.text or breaker in content.html):
+            failures.append(f"{name}: left in the e-mail")
+
+    assert failures == [], "\n".join(failures)
+    print_success(f"{len(LINE_BREAKERS)} kinds of break, the {field} on one line every time")
+
+
+@pytest.mark.parametrize(("kind", "field"), SHOWN_FIELD_CASES)
+def test_a_value_cannot_reorder_the_text_around_it(kind: EmailKind, field: str) -> None:
+    """EMM-032 — contract 7: a value holding a bidirectional embedding, override or isolate (U+202A–U+202E, U+2066–U+2069) — a right-to-left override would show the end of a value, or of the line after it, backwards — has it removed: the value reads in its own order, the characters around the control joined, and no such control is left in either part."""
+    print_section(f"EMM-032: bidirectional controls in the {field} of {kind}")
+    failures = []
+    for control in BIDI_CONTROLS:
+        content = _build(kind, **{field: f"zq-before{control}zq-after"})
+        if "zq-beforezq-after" not in content.text or "zq-beforezq-after" not in content.html:
+            failures.append(f"U+{ord(control):04X}: the value does not read in its own order")
+        if any(left in content.text or left in content.html for left in BIDI_CONTROLS):
+            failures.append(f"U+{ord(control):04X}: a bidirectional control is left in the e-mail")
+
+    assert failures == [], "\n".join(failures)
+    print_success(f"{len(BIDI_CONTROLS)} controls, all removed")
+
+
+@pytest.mark.parametrize("kind", [PASSWORD_RESET, TEST], ids=["password_reset", "test"])
+def test_markup_across_a_line_break_is_still_escaped(kind: EmailKind) -> None:
+    """EMM-033 — contract 7: a username ``<b>zq\\n<i>evil</i></b>``, markup split across a line feed: the text reads ``<b>zq <i>evil</i></b>`` on one line, and the HTML holds it escaped on one line — never as markup."""
+    print_section(f"EMM-033: markup and a line feed in the username of {kind}")
+
+    content = _build(kind, username="<b>zq\n<i>evil</i></b>")
+
+    assert "<b>zq <i>evil</i></b>" in content.text, content.text
+    assert html.escape("<b>zq <i>evil</i></b>") in content.html, "the username must be escaped, on one line, in the HTML"
+    assert "<i>evil" not in content.html and "<b>zq" not in content.html, "markup from a username reached the HTML"
+    print_success("one line in the text, escaped in the HTML")

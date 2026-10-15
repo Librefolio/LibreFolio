@@ -98,7 +98,7 @@ The filter also applies to the grid view of **Static Resources**. It is saved in
 ## 🔒 Access and limits
 
 - 🌐 **Static resources** — every signed-in user can see them.
-- 🔐 **Broker reports** — only the users with access to the broker can see them; uploading and deleting need Owner or Editor access.
+- 🔐 **Broker reports** — only the users with access to the broker can see them; uploading and deleting need Owner or Editor access. An administrator can see and delete every report.
 - 📏 **Size** — up to the limit the administrator sets in [Global Settings](../../admin/settings.md): 10 MB unless changed.
 - 🚫 **File types** — programs and scripts (such as `.exe`, `.sh` or `.py` files) are refused as static resources; broker reports must be CSV or Excel files.
 

@@ -90,6 +90,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/risk/assetSetI18n.test.ts",
             "src/lib/components/risk/warningTranslatorSites.test.ts",
             "src/lib/components/risk/syncTargets.test.ts",
+            "src/lib/components/risk/stressBucketLabel.test.ts",
             "src/lib/components/assets/providerProbe.test.ts",
             "src/lib/components/assets/resolveProviderError.test.ts",
             "src/lib/components/assets/assetIdentifiers.test.ts",
@@ -124,6 +125,11 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/theme/colorAlpha.test.ts",
             "src/lib/theme/chartTheme.test.ts",
             "src/lib/theme/themeMode.test.ts",
+            "src/lib/theme/chartCategories.test.ts",
+            "src/lib/theme/chartShades.test.ts",
+            "src/lib/theme/contrast.test.ts",
+            "src/lib/theme/roleColors.test.ts",
+            "src/lib/theme/roleColors.dom.test.ts",
             "src/lib/components/brokers/lots/lotChartShared.test.ts",
             "src/lib/components/brokers/lots/lotWacPriceChartHelpers.test.ts",
             "src/lib/components/brokers/lots/lotComparisonChartHelpers.test.ts",
@@ -137,6 +143,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/stores/chartSettingsStoreSsr.test.ts",
             "src/lib/stores/reference/brokerStore.test.ts",
             "src/lib/stores/reference/brokerStoreIconHydration.test.ts",
+            "src/lib/stores/reference/sectorStore.test.ts",
             "src/lib/features/changelog/changelog.test.ts",
             "src/lib/features/update-check/updateCheck.test.ts",
             "src/lib/features/onboarding/guideAnchors.test.ts",
@@ -147,6 +154,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/tools/pac-allocator/planner/decimal.test.ts",
             "src/lib/features/tools/pac-allocator/planner/format.test.ts",
             "src/lib/features/tools/pac-allocator/planner/modeText.test.ts",
+            "src/lib/features/tools/pac-allocator/planner/categoryLabels.test.ts",
             "src/lib/features/tools/pac-allocator/planner/pluralCountSites.test.ts",
             "src/lib/i18n/catalogIcuLocale.test.ts",
             "src/lib/i18n/riskGlossary.test.ts",
@@ -166,6 +174,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/live-updates/activePolling.test.ts",
             "src/lib/features/email/emailText.test.ts",
             "src/lib/features/email/emailApi.test.ts",
+            "src/lib/features/email/emailLinks.test.ts",
             "src/lib/features/backup/backupApi.test.ts",
             "src/lib/features/backup/backupJob.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",
@@ -280,12 +289,14 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/charts/MeasurePanel.test.ts",
             "src/lib/components/charts/PriceChartFull.test.ts",
             "src/lib/components/charts/LineChart.test.ts",
+            "src/lib/components/charts/SemiDonutChart.test.ts",
             "src/lib/components/risk/AssetSetLossComparisonSection.test.ts",
             "src/lib/components/risk/AssetSetRiskReturnSection.test.ts",
             "src/lib/components/charts/ScatterChart.test.ts",
             "src/lib/components/risk/AssetSetReplaySection.test.ts",
             "src/lib/components/risk/AssetSetComparisonLevels.test.ts",
             "src/lib/components/risk/AssetSetCorrelationSection.test.ts",
+            "src/lib/components/risk/CorrelationHeatmap.test.ts",
             "src/lib/components/risk/AssetChip.test.ts",
             "src/lib/features/auth/RegisterCard.test.ts",
             "src/lib/features/auth/LoginCard.test.ts",
@@ -515,7 +526,7 @@ def front_document_title(verbose: bool = False, ui: bool = False, headed: bool =
 
 
 def front_theme_roles(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
-    """Run the colour roles of the sign-in page, in light and in dark, on desktop and mobile (workstream T, step T-2)."""
+    """Run the colour roles of the sign-in page, of its background and of the signed-in app shell, in light and in dark, on desktop and mobile (workstream T, steps T-2, T-3 and T-5)."""
     print_section("Frontend Theme Roles Tests")
     if not _ensure_frontend_build():
         return False
@@ -823,15 +834,22 @@ def populate_registry(registry: dict) -> None:
         desc="Icon-to-dialog, fixed public clipboard payload, native blank-tab reservation, safe navigation and denied-copy cleanup; a refused secure write falls back once to the legacy copy, which fails explicitly because opening the share tab already consumed the click's user activation (known limit)",
         tests="support-copy-and-go.spec.ts",
     )
-    add_test(cat, "header-scroll", front_header_scroll, name="Header Scroll Tests", desc="Desktop/mobile document-scroll geometry, retained layout, menu pins and reduced motion with synthetic APIs", tests="layout/header-scroll.spec.ts")
+    add_test(
+        cat,
+        "header-scroll",
+        front_header_scroll,
+        name="Header Scroll Tests",
+        desc="Desktop/mobile document-scroll geometry, retained layout, menu pins and reduced motion with synthetic APIs; a mouse click on a header control leaves the header free to hide, keyboard focus pins it; signed out, the sign-in page's top bar (auth-page-controls) is fixed on desktop and, on a phone, scrolls away with the page instead of covering the card (T-8b)",
+        tests="layout/header-scroll.spec.ts",
+    )
     add_test(cat, "document-title", front_document_title, name="Document Title Tests", desc="No page changes the tab title: direct landing on every main page and a tool page, sidebar hops in one runtime, a Files query change", prereq="Test users created", tests="layout/document-title.spec.ts")
     add_test(
         cat,
         "theme-roles",
         front_theme_roles,
         name="Theme Roles Tests",
-        desc="The sign-in page draws the colour roles of tokens.css, in light and in dark, as the browser resolves them (a probe element per role, never a hex): the login card's surface and border (in dark, proof that the legacy rounded-container rule of app.css exempts it), the username field's border at rest and in focus, its text and its placeholder (proof that the legacy input rule exempts it), the primary action, and the register card's password requirements on success-soft once every rule passes; a positive control first (the probe resolves, the two themes differ, the page is drawn in the theme set) — workstream T, step T-2",
-        prereq="Test users created",
+        desc="Colour roles as the browser resolves them, in light and in dark (a probe element per role, never a hex), a positive control first (the probe resolves, the two themes differ, the page is drawn in the theme set): (a) signed out on /, the login card in relief (--lf-border-raised, in dark its own colour and proof that the legacy rounded-container rule of app.css exempts it), the username field's border at rest and in focus, its text and its placeholder (proof that the legacy input rule exempts it), the primary action; on desktop the username and password fields under the pointer (--lf-border-input-hover, D-T18) and focused there (--lf-focus beats the hover); the register card's password requirements once every rule passes (the box on --lf-surface-panel with a --lf-border-subtle border, each rule's ✓ in --lf-success and its text in --lf-text-secondary); the forgot-password card in relief, its terminal box on --lf-terminal-bg with a --lf-terminal-border border, its commands in --lf-terminal-prompt and its comment lines in --lf-terminal-comment (Q6); (b) signed in as TEST_USER on /dashboard, --lf-surface-app resolving to --lf-surface-page, the app shell on --lf-surface-app; the green sidebar from its own roles (D-T17): on --lf-surface-bar in --lf-bar-text with no right border (D-T23), its logo block with no surface of its own and its text in --lf-on-brand, its active item (nav-dashboard, whose href is the page on view) on --lf-bar-active-bg in --lf-bar-active-text with a --lf-bar-indicator left border, an inactive item (nav-settings, read at rest) in --lf-bar-text, its connection-security line once the server has answered (the icon in the bar's status role of the level: secure --lf-bar-success, local --lf-bar-warning, insecure --lf-bar-danger; the label in --lf-bar-text), and a sidebar item reached by Tab drawing a solid --lf-bar-focus ring; the neutral header from the page's roles (D-T23): on --lf-surface-header with a --lf-border-subtle bottom border, theme-toggle in --lf-text-secondary, the donation link in --lf-donate, on mobile the burger in --lf-text-primary, and a header control reached by Tab drawing a solid --lf-focus ring; (c) in dark, the negative control: a legacy card of the page content (dashboard-cash-balances) still painted by the legacy remap (var(--theme-bg-card), not the card role, decision D-T3) while the language menu opened over it draws --lf-surface-card with a --lf-border-raised border; (d) signed out on /, the login background (AnimatedBackground) on --lf-surface-page, its three waves (rendered after mount, waited for) each a gradient with a stop in its own --lf-art-hill-N in DOM order and no opacity on top, its three chart lines stroked in --lf-art-line, and in dark none of the retired literals (#11151c, #00ff9a, #4ade80) drawn again — workstream T, steps T-2, T-3, T-5, T-8 and T-8b (decisions D-T17, D-T18, D-T23)",
+        prereq="Test users created (TEST_USER grandfathered on onboarding)",
         tests="layout/theme-roles.spec.ts",
     )
     add_test(

@@ -109,6 +109,28 @@ describe('providerProbe — isRealProbeError', () => {
     });
 });
 
+describe('providerProbe — RATE_LIMITED is a soft failure (X8)', () => {
+    // A provider paused after «too many requests»: the configuration may well be right, and the message says until
+    // when — a warning, never the red that gates «Save Without Testing?».
+    const paused = 'Provider mockprov is paused after too many requests: 60 s left';
+
+    it('is one of the soft codes, whatever its case', () => {
+        expect(SOFT_FAIL_CODES.has('RATE_LIMITED')).toBe(true);
+        expect(isSoftProbeFailure(undefined, 'RATE_LIMITED')).toBe(true);
+        expect(isSoftProbeFailure(paused, 'rate_limited')).toBe(true);
+    });
+
+    it('never counts as a real probe error, with or without its message', () => {
+        expect(isRealProbeError({success: false, error_code: 'RATE_LIMITED', error: paused})).toBe(false);
+        expect(isRealProbeError({success: false, error_code: 'RATE_LIMITED'})).toBe(false);
+    });
+
+    it('it is the code that makes it soft: the same message without it is a real error', () => {
+        expect(isSoftProbeFailure(paused)).toBe(false);
+        expect(isRealProbeError({success: false, error: paused})).toBe(true);
+    });
+});
+
 describe('providerProbe — summarizeProbeError', () => {
     it('returns a generic label when there is no detail', () => {
         expect(summarizeProbeError(undefined)).toBe('Error');

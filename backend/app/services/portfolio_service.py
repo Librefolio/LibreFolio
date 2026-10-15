@@ -49,14 +49,10 @@ from backend.app.schemas.portfolio import (
     BrokerPnlHistoryPoint,
     CostHistoryPoint,
     CostHistorySeries,
-    DataQualityIssue,
     DepositHistoryPoint,
     DepositHistorySeries,
     IncomeHistoryPoint,
     IncomeHistorySeries,
-    IssueCode,
-    IssueDomain,
-    IssueSeverity,
     MissingPriceAsset,
     OtherPeriodEffect,
     PnlCandlePoint,
@@ -1088,12 +1084,10 @@ class PortfolioService:
         date_to: date_type | None = None,
         target_currency_override: str | None = None,
         _precomputed_engine_result=None,
-        _mwrr_use_warm_start: bool = True,
     ) -> list[PortfolioHistoryPoint]:
         """Return daily portfolio value series via PortfolioCalculationEngine.
 
         _precomputed_engine_result: if provided by get_report(), skip engine re-run.
-        _mwrr_use_warm_start: if False, use cold-start for MWRR series (no warm-start).
         """
         from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
         from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
@@ -1134,12 +1128,7 @@ class PortfolioService:
         if period_nav_snapshots and period_cash_flows:
             twrr_series = calculate_twrr_series(period_nav_snapshots, period_cash_flows)
             roi_series = calculate_simple_roi_series(period_nav_snapshots, period_cash_flows)
-            mwrr_series = await asyncio.to_thread(
-                calculate_mwrr_series,
-                period_nav_snapshots,
-                period_cash_flows,
-                use_warm_start=_mwrr_use_warm_start,
-            )
+            mwrr_series = await asyncio.to_thread(calculate_mwrr_series, period_nav_snapshots, period_cash_flows)
             twrr_map = {pt.date: pt.twrr for pt in twrr_series}
             roi_map = {pt.date: pt.roi for pt in roi_series}
             mwrr_map = {pt.date: pt.mwrr for pt in mwrr_series}
@@ -2000,54 +1989,6 @@ class PortfolioService:
                 _precomputed_engine_result=engine_result,
             )
 
-        # ── 3b. MWRR series reliability check ──
-        mwrr_series_unreliable = False
-        _mwrr_divergence_info: dict[str, Any] = {}
-        if summary and history and len(history) >= 2:
-            summary_mwrr_cum = summary.mwrr_cumulative_percent
-            history_last_mwrr_cum = history[-1].mwrr_cumulative
-            if summary_mwrr_cum is not None and history_last_mwrr_cum is not None:
-                divergence = abs(summary_mwrr_cum - history_last_mwrr_cum)
-                # Relative tolerance: 5% of summary value or 50bp absolute, whichever is larger
-                tolerance = max(Decimal("0.005"), abs(summary_mwrr_cum) * Decimal("0.05"))
-                if divergence > tolerance:
-                    # Retry with cold-start
-                    history = await self.get_history(
-                        user_id=user_id,
-                        broker_ids=query.broker_ids,
-                        date_from=date_from,
-                        date_to=effective_date_to,
-                        target_currency_override=base_currency,
-                        _precomputed_engine_result=engine_result,
-                        _mwrr_use_warm_start=False,
-                    )
-                    # Re-check invariant
-                    history_last_mwrr_cum = history[-1].mwrr_cumulative if history else None
-                    if history_last_mwrr_cum is not None:
-                        divergence = abs(summary_mwrr_cum - history_last_mwrr_cum)
-                    if history_last_mwrr_cum is None or divergence > tolerance:
-                        # Find first date where cumulative diverges significantly
-                        first_bad_date: str | None = None
-                        for pt in history:
-                            if pt.mwrr_cumulative is not None and summary.mwrr_annualized_percent is not None:
-                                days_from_start = (pt.date - history[0].date).days
-                                expected_cum = annualized_to_cumulative(summary.mwrr_annualized_percent, days_from_start)
-                                if expected_cum is not None and abs(pt.mwrr_cumulative - expected_cum) > tolerance:
-                                    first_bad_date = str(pt.date)
-                                    break
-                        # Store info for issue
-                        _mwrr_divergence_info = {
-                            "summary_cum": str(round(float(summary_mwrr_cum) * 100, 2)),
-                            "series_cum": str(round(float(history_last_mwrr_cum or 0) * 100, 2)),
-                            "divergence_pp": str(round(float(divergence) * 100, 2)),
-                            "first_bad_date": first_bad_date or "unknown",
-                        }
-                        # Null out MWRR in history
-                        mwrr_series_unreliable = True
-                        for pt in history:
-                            object.__setattr__(pt, "mwrr_annualized", None)
-                            object.__setattr__(pt, "mwrr_cumulative", None)
-
         # ── 4. Allocation history (all 3 dimensions from same engine result) ──
         alloc_history: AllocationHistoryDimensions | None = None
         if query.include_allocation_history:
@@ -2166,17 +2107,6 @@ class PortfolioService:
                 period_from=date_from,
                 period_to=effective_date_to,
             )
-
-        # Append MWRR series unreliable issue if needed
-        if mwrr_series_unreliable and data_quality:
-            mwrr_issue = DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.MWRR_SERIES_UNRELIABLE,
-                severity=IssueSeverity.WARNING,
-                message_i18n_key="dataQuality.mwrrSeriesUnreliable",
-                message_params=_mwrr_divergence_info,
-            )
-            data_quality.issues.append(mwrr_issue)
 
         # ── 6. Metadata ──
         computed_from = engine_result.daily_states[0].date if engine_result.daily_states else None

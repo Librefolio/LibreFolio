@@ -33,9 +33,14 @@
          *  letting it wrap or hiding it outright. `showLabels`/`hideLabelOnMobile` above remain
          *  the only things that ever make a label disappear entirely — this only ever resizes. */
         shrinkLabelsToFit?: boolean;
+        /** Opt-in (default false — the other bars keep their markup): when the tabs do not fit, the row scrolls
+         *  sideways instead of being clipped by the card around it (settings, seven tabs for an administrator), and
+         *  the active tab is kept whole in view — on a change of tab, a resize, or a language switch. The row still
+         *  fills the bar when there is room, so a tab's `ml-auto` keeps pushing it to the right. */
+        scrollable?: boolean;
     }
 
-    let {tabs, activeTab = $bindable(''), onchange, class: className = '', hideLabelOnMobile = false, showLabels, fillWidth = false, shrinkLabelsToFit = false}: Props = $props();
+    let {tabs, activeTab = $bindable(''), onchange, class: className = '', hideLabelOnMobile = false, showLabels, fillWidth = false, shrinkLabelsToFit = false, scrollable = false}: Props = $props();
 
     function handleTabClick(tabId: string) {
         activeTab = tabId;
@@ -85,36 +90,81 @@
         void showLabels;
         requestAnimationFrame(() => remeasure());
     });
+
+    // scrollable: the box that scrolls the row sideways, and the active tab kept whole inside it.
+    let scrollerRef = $state<HTMLDivElement | null>(null);
+
+    /** Scrolls the bar — never the page — just enough to show the active tab whole. */
+    function revealActiveTab() {
+        const scroller = scrollerRef;
+        const button = buttonRefs[activeTab];
+        if (!scroller || !button) return;
+        const bar = scroller.getBoundingClientRect();
+        const tab = button.getBoundingClientRect();
+        if (tab.left < bar.left) scroller.scrollLeft -= bar.left - tab.left;
+        else if (tab.right > bar.right) scroller.scrollLeft += tab.right - bar.right;
+    }
+
+    $effect(() => {
+        const el = scrollerRef;
+        const row = containerRef;
+        if (!el) return;
+        const ro = new ResizeObserver(() => revealActiveTab());
+        ro.observe(el);
+        // The row too: it can grow while the bar keeps its size (a web font arriving late).
+        if (row) ro.observe(row);
+        return () => ro.disconnect();
+    });
+
+    // A change of tab, or of the labels' text (a language switch): revealed once the DOM shows it.
+    $effect(() => {
+        if (!scrollable) return;
+        void activeTab;
+        void tabs.map((t) => t.label).join('|');
+        requestAnimationFrame(() => revealActiveTab());
+    });
 </script>
 
-<div bind:this={containerRef} class={`flex border-b border-gray-200 dark:border-slate-600 ${className}`.trim()} role="tablist">
-    {#each tabs as tab (tab.id)}
-        <button
-            bind:this={buttonRefs[tab.id]}
-            type="button"
-            class={`flex items-center justify-center gap-2 px-3 py-4 sm:px-6 text-sm font-medium transition-all ${fillWidth ? 'flex-1' : 'flex-1 sm:flex-none'} border-b-2 -mb-px ${
-                activeTab === tab.id
-                    ? 'text-libre-green border-libre-green bg-libre-green/5 dark:text-emerald-400 dark:border-emerald-400 dark:bg-emerald-500/10'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800/50 hover:border-gray-300 dark:hover:border-slate-500'
-            } ${tab.className ?? ''}`.trim()}
-            data-testid={tab.testId ?? `tab-${tab.id}`}
-            use:guideAnchor={tab.guideAnchor ?? ''}
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            aria-label={tab.icon && showLabels === false ? tab.label : undefined}
-            title={tab.label}
-            onclick={() => handleTabClick(tab.id)}
-        >
-            {#if tab.icon}
-                <tab.icon size={18} />
-            {/if}
-            <!-- Only a tab with an icon may lose its label: an icon-less tab would be left empty. -->
-            <span bind:this={labelRefs[tab.id]} class={!tab.icon ? '' : showLabels === false ? 'hidden' : showLabels === true ? '' : hideLabelOnMobile ? 'hidden sm:inline' : ''}>{tab.label}</span>
-            {#if tab.badge != null && tab.badge > 0}
-                <span class="text-[10px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-full">
-                    {tab.badge}
-                </span>
-            {/if}
-        </button>
-    {/each}
-</div>
+{#snippet tabRow()}
+    <div bind:this={containerRef} class={['flex border-b border-gray-200 dark:border-slate-600', scrollable ? 'min-w-full w-max' : '', className].filter(Boolean).join(' ')} role="tablist">
+        {#each tabs as tab (tab.id)}
+            <button
+                bind:this={buttonRefs[tab.id]}
+                type="button"
+                class={`flex items-center justify-center gap-2 px-3 py-4 sm:px-6 text-sm font-medium transition-all ${fillWidth ? 'flex-1' : 'flex-1 sm:flex-none'} border-b-2 -mb-px ${
+                    activeTab === tab.id
+                        ? 'text-libre-green border-libre-green bg-libre-green/5 dark:text-emerald-400 dark:border-emerald-400 dark:bg-emerald-500/10'
+                        : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800/50 hover:border-gray-300 dark:hover:border-slate-500'
+                } ${tab.className ?? ''}`.trim()}
+                data-testid={tab.testId ?? `tab-${tab.id}`}
+                use:guideAnchor={tab.guideAnchor ?? ''}
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                aria-label={tab.icon && showLabels === false ? tab.label : undefined}
+                title={tab.label}
+                onclick={() => handleTabClick(tab.id)}
+            >
+                {#if tab.icon}
+                    <tab.icon size={18} />
+                {/if}
+                <!-- Only a tab with an icon may lose its label: an icon-less tab would be left empty. -->
+                <span bind:this={labelRefs[tab.id]} class={!tab.icon ? '' : showLabels === false ? 'hidden' : showLabels === true ? '' : hideLabelOnMobile ? 'hidden sm:inline' : ''}>{tab.label}</span>
+                {#if tab.badge != null && tab.badge > 0}
+                    <span class="text-[10px] px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 rounded-full">
+                        {tab.badge}
+                    </span>
+                {/if}
+            </button>
+        {/each}
+    </div>
+{/snippet}
+
+{#if scrollable}
+    <!-- Sideways scroll instead of clipping: the row is at least as wide as the bar, so ml-auto still pushes the
+         right-hand group while the tabs fit, and wider than the bar when they do not. -->
+    <div bind:this={scrollerRef} class="overflow-x-auto [scrollbar-width:thin]" data-testid="tab-bar-scroller">
+        {@render tabRow()}
+    </div>
+{:else}
+    {@render tabRow()}
+{/if}

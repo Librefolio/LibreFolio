@@ -12,7 +12,6 @@
     "missingFx": "Missing FX rates for {count} pair(s) — totals may be incomplete",
     "navIncomplete": "NAV incomplete for {count} day(s) between {date_from} and {date_to}",
     "mwrrNotAvailable": "MWRR cannot be calculated for this period",
-    "mwrrSeriesUnreliable": "MWRR chart unavailable: series diverged by {divergence_pp}pp from expected {summary_cum}% (first at {first_bad_date})",
     "archivedAsset": "This asset is archived — not updated by scheduler",
     "rangeBeforeData": "Data available from {date}",
     "fxPairMissing": "FX pair not configured — conversion not available",
