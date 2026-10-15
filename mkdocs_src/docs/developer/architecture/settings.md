@@ -40,15 +40,17 @@ catalogue, `SETTINGS_REGISTRY`.
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
       `__init__.py` is the base: constants, data directories, test mode, the secret reader
       `env_secret()`, `Settings` and `get_settings()`. New variables go into one section module per
-      topic, owned by the workstream of that area. Three exist today: `platform.py` (H:
+      topic, owned by the workstream of that area. Four exist today: `platform.py` (H:
       `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
       `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`,
       `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`),
-      `accounts.py` (A: `donation_popup_disabled()`) and `plugins.py` (X: `web_link_finder_enabled()`,
+      `accounts.py` (A: `donation_popup_disabled()`), `plugins.py` (X: `web_link_finder_enabled()`,
       `web_link_finder_engine()`, `web_link_finder_api_key()`, `web_link_finder_ddgs_region()`,
       `web_link_finder_ddgs_backend()`, `web_link_finder_timeout()`,
-      `web_link_finder_max_results()`). `sleep_wake.py`, `backup.py` and `email.py` will follow when
-      their areas add variables.
+      `web_link_finder_max_results()`) and `email.py` (E: `smtp_host()`, `smtp_tls_mode()`,
+      `smtp_port()`, `smtp_user()`, `smtp_password()`, `smtp_sender()`, `smtp_reply_to()`,
+      `smtp_max_per_hour()`; see [Email Service](../backend/email.md#configuration)). `sleep_wake.py`
+      and `backup.py` will follow when their areas add variables.
     - The rule: every environment variable of the application is read inside
       `backend/app/config/`. A module elsewhere calls a function there instead of reading
       `os.environ`. The rule holds with no exception, and a guard test checks it (runner selector

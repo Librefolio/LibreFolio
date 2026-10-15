@@ -115,6 +115,15 @@ def utils_cache_utils(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Cache utils tests", verbose=verbose)
 
 
+def utils_rate_window(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the sliding-window limiter shared by the e-mail budget and the login limits."""
+    print_section("Utils: Rate Window")
+    print_info("Testing: backend/app/utils/runtime/rate_window.py")
+    print_info("Tests: window edge, peek never counts, refused hits not recorded, retry_after, per-call limit, independent keys, LRU eviction, thread safety (fake clock, no sleeps)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_rate_window.py", test_names)
+    return run_command(cmd, "Rate window tests", verbose=verbose)
+
+
 def utils_provider_core_cache(verbose: bool = False, test_names: list = None) -> bool:
     """Test provider core cache & thread isolation infrastructure."""
     print_section("Utils: Provider Core Cache & Thread Isolation")
@@ -445,6 +454,15 @@ Tests for utility modules and helper functions:
     add_test(cat, "sector-normalization", utils_sector_normalization, name="Sector Normalization", desc="FinancialSector enum, aliases")
     add_test(cat, "currency-utils", utils_currency_utils, name="Currency Utils", desc="Currency listing, flag mapping")
     add_test(cat, "cache-utils", utils_cache_utils, name="Cache Utils", desc="NamedCache, TTL, registry, stats")
+    add_test(
+        cat,
+        "rate-window",
+        utils_rate_window,
+        name="Rate Window",
+        desc="SlidingWindowLimiter: a hit counts until exactly window_seconds later, peek never counts, a refused hit records nothing, retry_after waits for enough hits to leave (per-call limit too), independent keys with None among them, reset/clear/len, LRU eviction at max_keys, exactly N allowed under concurrent threads",
+        # PURE: no lane DB, no server, no environment read; an injected fake clock, threads of its own, no sleeps.
+        isolation="pure",
+    )
     add_test(
         cat,
         "container-registry",

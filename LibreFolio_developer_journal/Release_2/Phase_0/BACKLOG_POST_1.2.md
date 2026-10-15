@@ -2710,7 +2710,38 @@ Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione a
 analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega del developer): E0 ed E1, sulla base
 `23f6578f3`.
 
+- ✅ **E-1 · I test del TLS vero dell'email si saltano finché manca `cryptography`** — minimo; E, 15/10 (E1).
+  `EMD-017` (STARTTLS che consegna) ed `EMD-018` (un certificato non fidato è `TLS_FAILED`, nulla parte) fanno
+  `importorskip("cryptography")`, quindi oggi saltano. Entrano da soli con la finestra delle dipendenze, che porta
+  `cryptography` per X; allora vanno visti verdi una volta. Dettagli:
+  [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E1.4».
+  - 15/10, E: chiusa. Con `cryptography` 50.0.2 nell'ambiente condiviso (`dc9a5d232`), sulla base `fc99e9bfe`,
+    `services email-delivery` dà 79 passati e nessun saltato: `EMD-017` consegna dopo STARTTLS ed `EMD-018` rifiuta
+    il certificato non fidato. Dettagli: piano 08, «E1.8».
+
 ## Y · Cruscotto e grafici (fase 01)
 
 Piano: [`09_dashboardCharts`](../Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md). Sessione avviata il
-15/10 alle 11:28, solo analisi, sulla base `23f6578f3`.
+15/10 alle 11:28, solo analisi, sulla base `23f6578f3`. Codice autorizzato il 15/10 alle 12:47 (developer, via il
+coordinatore): Y1 (taglio di `GrowthChart`, con B10) e Y2 (taglio di `DataTable`), sulla base `1e9e567f7`. Righe scritte
+da Y il 15/10.
+
+- **Le voci di Y vivono nelle loro sezioni** (C-85, C-62 e C-38 nella C; B10, 47-1, 48-1 e 54-1 nella I; T-U8 e
+  T-FE2…FE11 nella T; K-13, K-15, C-15, C-34, I-01, I-03 e O-16 nel backlog 38; i difetti 2 e 5 nel README della 13):
+  le chiude il coordinatore a ogni treno. Stato all'analisi e lotto di ciascuna: piano di Y, §2.
+- **Y-1 · I-03 è curata solo a metà** — basso; Y, 15/10 (analisi). Il ripiego da % ad Abs scatta solo per la vista %
+  ripristinata al caricamento (`GrowthChart.svelte:785-789`, dal 24/09); cambiando periodo o broker verso una storia
+  senza dati in percentuale, il bottone resta premuto e disabilitato (`:2539-2546`). Da confermare nel browser, nel lotto
+  Y8. Dettagli: piano di Y, §2.
+- **Y-2 · Nella cascata settimanale una linea di broker che finisce a metà settimana diventa un buco** — basso, da
+  verificare; `test-author` di Y, 15/10 (Y1). Comportamento preesistente, spostato alla lettera in
+  `dashboard/growthChartData.ts` (`aggregateMetric`): il valore di un secchio si cerca sull'ultimo giorno della settimana
+  presente in storia (`bucket.date`), mentre `aggregateLineSeries` lo mette sull'ultimo giorno con un valore. Una serie
+  con valori a inizio settimana e `null` l'ultimo giorno (una linea di broker che esce dal perimetro) mostra un buco in
+  quel secchio; la scala delle candele, invece, tiene l'ultimo valore. Prima un test rosso. Dettagli: piano di Y, §7
+  «Y1 — passo 4».
+- **Y-3 · Il gate della privacy non conosce `t(` come chiamata di traduzione** — minimo; `test-author` di Y, 15/10 (Y1).
+  `moneyRenderSites.test.ts` esclude dai token numerici solo `$_(`, `$t(` e `label(`: nel tooltip di GrowthChart, ora
+  `growthChartTooltip.ts`, il traduttore si chiama `t`, e una chiave come `dashboard.totalPnl` conta come token
+  numerico. Rende il gate più severo, non più cieco: oggi c'è un solo reperto, registrato. Da decidere se aggiungere
+  `\bt\(` alla forma, misurando prima il rumore. Dettagli: come Y-2.

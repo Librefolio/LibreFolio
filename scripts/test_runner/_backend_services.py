@@ -453,6 +453,46 @@ def services_account_tokens(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Account token service tests", verbose=verbose)
 
 
+def services_email_config(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the SMTP configuration accessors of the optional e-mail: LIBREFOLIO_SMTP_* read at call time."""
+    print_section("Services: E-mail Configuration")
+    print_info("Testing: backend/app/config/email.py")
+    print_info("Tests: blank is unset, TLS modes and their ports, ASCII-digit port and hourly limit, one mailbox for From and Reply-To, password through env_secret, EmailConfigError codes, no password in a message")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_config.py", test_names)
+    return run_command(cmd, "E-mail configuration tests", verbose=verbose)
+
+
+def services_email_messages(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the e-mail texts: typed builders, the four-language catalogue and the composed message."""
+    print_section("Services: E-mail Messages")
+    print_info("Testing: backend/app/services/email/messages.py, backend/app/services/email/templates/")
+    print_info("Tests: languages, keyword-only builders, http(s) links only, escaping, no user data in subjects, Babel durations, catalogue guard, headers and multipart/alternative, one recipient")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_messages.py", test_names)
+    return run_command(cmd, "E-mail message tests", verbose=verbose)
+
+
+def services_email_delivery(verbose: bool = False, test_names: list = None) -> bool:
+    """Test SMTP delivery against a fake server on 127.0.0.1, the configuration state, the hourly budget and send_email."""
+    print_section("Services: E-mail Delivery")
+    print_info("Testing: backend/app/services/email/smtp.py, backend/app/services/email/delivery.py")
+    print_info("Tests: the fake SMTP server, error codes (TLS never falls back to plain), config state and its one-time log, budget on a fake clock, smtplib off the event loop, no secret in the logs")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_delivery.py", test_names)
+    return run_command(cmd, "E-mail delivery tests", verbose=verbose)
+
+
+def services_email_checks(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the configuration checks of the optional e-mail (email.smtp, email.smtp_encryption)."""
+    print_section("Services: E-mail Configuration Checks")
+    print_info("Testing: backend/app/services/email/checks.py")
+    print_info("Tests: off/ok/invalid with problem and variable, plain text local or public, EMAIL_CONFIG_CHECKS, no password, host, user or sender in a detail")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_checks.py", test_names)
+    return run_command(cmd, "E-mail configuration check tests", verbose=verbose)
+
+
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
     """Test session revocation through the session version (the sv claim of the session cookie)."""
     print_section("Services: Session Version")
@@ -1131,6 +1171,42 @@ Note: No backend server required.
         desc="issue/inspect/consume/revoke: hash only, one purpose, expiry at expires_at, single use under concurrency, the caller commits, no plaintext in logs",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server. The concurrency test races two connections on that private file only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-config",
+        services_email_config,
+        name="E-mail Configuration",
+        desc="LIBREFOLIO_SMTP_* accessors read at call time: blank is unset, three TLS modes with their default ports, port and hourly limit in ASCII digits, one mailbox for From and Reply-To (no CR/LF, no second address), the password through env_secret, EmailConfigError naming the variable and never the password",
+        # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-messages",
+        services_email_messages,
+        name="E-mail Messages",
+        desc="EMAIL_LANGUAGES = default_language choices, email_language, keyword-only builders, http(s) links only, user values escaped in the HTML and absent from subjects, Babel durations, one more sentence for admin invites, catalogue guard (same keys and placeholders in en/it/fr/es, valid templates), compose_message headers, plain then HTML, exactly one recipient",
+        # PURE: no lane DB, no server, no environment read (inherited SMTP variables removed with monkeypatch); reads the committed templates only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-delivery",
+        services_email_delivery,
+        name="E-mail Delivery",
+        desc="Fake SMTP server self-checks; deliver: plain, AUTH, AUTH_FAILED, TLS_FAILED without fallback, CONNECTION_FAILED, TIMEOUT, refusals, non-221 QUIT is success; email_config_state never raises, one problem and variable per fault, logged once per process without the password; hourly budget on a fake clock; send_email off the event loop; no password, link or body in the logs",
+        # PURE: no lane DB, no server; env set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-checks",
+        services_email_checks,
+        name="E-mail Configuration Checks",
+        desc="email.smtp: off, ok, or error with problem and variable; email.smtp_encryption: ok unless plain text to a non-local host (warning); EMAIL_CONFIG_CHECKS; no password anywhere, no host, user or sender in a detail",
+        # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path.
         isolation="pure",
     )
     add_test(
