@@ -16,7 +16,7 @@ registry constants (e.g. `SETTINGS_REGISTRY.global_.DEFAULT_CURRENCY.key`)
 instead of raw string literals.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Optional
 
 import structlog
@@ -24,6 +24,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.config.accounts import registration_mode_pinned
 from backend.app.db.models import GlobalSetting, UserSettings
 from backend.app.schemas.settings import (
     GLOBAL_SETTINGS_DEFAULTS,
@@ -202,6 +203,21 @@ class GlobalSettingNotFoundError(LookupError):
         self.key = key
 
 
+class GlobalSettingLockedError(PermissionError):
+    """A bulk update writes a setting an environment variable pins (``variable``)."""
+
+    def __init__(self, key: str, variable: str) -> None:
+        super().__init__(f"Setting '{key}' is set by {variable} and cannot be changed here")
+        self.key = key
+        self.variable = variable
+
+
+# The global settings an environment variable pins when it is set: the row then stays as it is.
+_PINNED_BY_ENV: dict[str, tuple[str, Callable[[], bool]]] = {
+    "registration_mode": ("LIBREFOLIO_REGISTRATION", registration_mode_pinned),
+}
+
+
 class GlobalSettingValueError(ValueError):
     """A bulk update carries values their settings refuse; ``errors`` holds every (key, reason)."""
 
@@ -223,6 +239,9 @@ async def update_global_settings(items: Sequence[tuple[str, str]], user_id: int,
     for key in keys:
         if key not in rows:
             raise GlobalSettingNotFoundError(key)
+    for key in keys:
+        if key in _PINNED_BY_ENV and _PINNED_BY_ENV[key][1]():
+            raise GlobalSettingLockedError(key, _PINNED_BY_ENV[key][0])
 
     stored_values: list[str] = []
     errors: list[tuple[str, str]] = []

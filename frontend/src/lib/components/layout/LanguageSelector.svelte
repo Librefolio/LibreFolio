@@ -57,7 +57,7 @@
     }
 </script>
 
-<div bind:this={containerRef} class="relative" data-menu-open={isOpen ? 'true' : 'false'} data-testid="language-selector">
+<div bind:this={containerRef} class="relative" data-language={$currentLanguage} data-menu-open={isOpen ? 'true' : 'false'} data-testid="language-selector">
     <button class="flex items-center space-x-1 p-2 rounded-lg hover:bg-lf-hover transition-all" data-testid="language-selector-button" aria-label={$currentLanguageName} aria-haspopup="menu" aria-expanded={isOpen} aria-controls="language-selector-panel" onclick={() => setOpen(!isOpen)} type="button">
         <span class="text-xl emoji-flag">{$currentLanguageFlag}</span>
         <ChevronDown class="text-lf-secondary transition-transform {isOpen ? 'rotate-180' : ''}" size={14} />

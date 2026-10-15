@@ -1,0 +1,270 @@
+Il lavoro svolto dall'agente di codice è molto rigoroso (ottimo l'adeguamento automatico ai contrasti WCAG e l'analisi puntuale dei token). Tuttavia, guardando gli screenshot dell'app (`05` e `06`), emergono subito tre aspetti da correggere:
+
+1. **La Sidebar attuale è ancora grigia/ardesia** (`#EDF0EE` / `#111615`), mentre tu hai giustamente deciso che deve avere un'**identità verde uniforme (`#1B4334`)** in entrambi i temi.
+
+
+2. Le Card interne dell'app in Dark Mode (`06-app-scuro.jpg`) non sono ancora migrate e mostrano ancora il vecchio blu notte freddo (che stona con lo sfondo `#0D1110`).
+
+
+3. **Le tinte semantiche (`-soft`) generate matematicamente dall'agente sono troppo spente/grigie in Dark Mode** (`#20221C` per l'avviso o `#221F1D` per l'errore sembrano quasi fango/grigio scuro invece di veri stati semantici).
+
+
+
+Ecco il documento di risposta completo e strutturato con tutti i valori esatti, pronto da incollare e inviare direttamente all'agente di codice per chiudere tutte le questioni aperte (`N1–N6` e `Q2–Q13`).
+
+---
+
+## 1. Direttiva Principale: Nuova Sidebar Verde Brand (`#1B4334`) e Migrazione Card
+
+Prima di rispondere ai singoli punti, applichiamo due correzioni strutturali fondamentali:
+
+### A. Sidebar Verde Brand Uniforme (Risolve e supera `N1`
+
+)
+
+La barra laterale abbandona il grigio neutro (`#EDF0EE` / `#111615`) e diventa **Verde Brand (`#1B4334`) sia in Light che in Dark**, proprio come l'header della card di login. Non serve più alcun bordo di separazione perché lo stacco cromatico con lo sfondo dell'app (`#F3F5F3` e `#0D1110`) è netto e naturale.
+
+| Token Sidebar (Unificato Light & Dark) | Valore | Utilizzo |
+| --- | --- | --- |
+| `--lf-surface-sidebar` | **`#1B4334`** | Sfondo uniforme della barra laterale (Desktop e Mobile) |
+| `--lf-sidebar-border` | **`#265946`** | Divisori orizzontali interni alla sidebar e bordo destro (solo in Dark) |
+| `--lf-sidebar-text` | **`#CFE0D8`** | Voci di menu inattive (icone e testo) e info secondarie |
+| `--lf-sidebar-text-muted` | **`#8CA89B`** | Testo versione app (`v1.2.0...`) ed email utente sotto il nome
+
+ |
+| `--lf-sidebar-hover` | **`#21503E`** | Sfondo al passaggio del mouse su una voce inattiva |
+| `--lf-sidebar-active-bg` | **`#285E49`** | Superficie verde più luminosa e discreta per la voce attiva |
+| `--lf-sidebar-active-text` | **`#FFFFFF`** | Testo e icona della voce attiva (massima leggibilità) |
+| `--lf-sidebar-active-bar` | **`#52C493`** | Barretta verticale di accento a sinistra della voce attiva |
+| `--lf-sidebar-logout-bg` | **`#153529`** | Sfondo del pulsante "Esci" (leggermente incassato; hover: `#21503E`) |
+
+(Nota per lo stato connessione nella sidebar verde: su fondo `#1B4334` usare sempre i colori di stato luminosi del tema Dark: Sicura `#36D399`, Locale `#FBBF24`, Non sicura `#F87171`).
+
+### B. Colori Semantici (Ripristino purezza cromatica e tinte `-soft`)
+
+Per evitare che tutto sembri verde o fangoso, gli stati semantici e le loro tinte `-soft` devono avere una tinta chiara e inequivocabile, non grigia:
+
+| Ruolo | Chiaro (Light) | Scuro (Dark) | Note correttive per l'agente |
+| --- | --- | --- | --- |
+| `--lf-warning` | **`#B45309`** | **`#F59E0B`** | In Light passiamo da `#9A5B00` a `#B45309` (ambra viva, meno marrone).
+
+ |
+| `--lf-warning-soft` | **`#FEF3C7`** | **`#291E0C`** | Vero fondo ambra tenue (sostituisce il grigio `#F3EEE8` / `#20221C`).
+
+ |
+| `--lf-warning-line` | **`#FDE68A`** | **`#54380E`** | Bordo ambra coerente. |
+| `--lf-warning-on-soft` | **`#92400E`** | **`#FCD34D`** | Testo su fondo ambra tenue. |
+| `--lf-danger-soft` | **`#FEE2E2`** | **`#2A1417`** | Vero fondo rosso tenue (sostituisce `#F9ECEA` / `#221F1D`).
+
+ |
+| `--lf-danger-line` | **`#FECACA`** | **`#581C24`** | Bordo rosso tenue. |
+| `--lf-danger-on-soft` | **`#991B1B`** | **`#FCA5A5`** | Testo su fondo rosso tenue. |
+| `--lf-info-soft` | **`#DBEAFE`** | **`#131F33`** | Vero fondo blu tenue (sostituisce `#E8EFFB` / `#182124`).
+
+ |
+| `--lf-info-line` | **`#BFDBFE`** | **`#1E3A5F`** | Bordo blu tenue. |
+| `--lf-info-on-soft` | **`#1E40AF`** | **`#93C5FD`** | Testo su fondo blu tenue. |
+| `--lf-success-soft` | **`#E6F4ED`** | **`#13261E`** | Fondo verde tenue per badge/messaggi di successo. |
+| `--lf-success-line` | **`#B8DFCA`** | **`#1F4435`** | Bordo verde tenue. |
+| `--lf-success-on-soft` | **`#145937`** | **`#86EFAC`** | Testo su fondo verde tenue. |
+
+(Nota: nella schermata `06-app-scuro.jpg`, assicurarsi che il contenitore principale "Profilo / Informazioni Profilo" venga migrato dal vecchio blu notte a `--lf-surface-card` `#151B19` con bordi `--lf-border-subtle` `#222C28`).
+
+---
+
+## 2. Risposte puntuali alle domande aperte (`N1–N6` e `Q2–Q13`)
+
+### N1 · Barra laterale: voce attiva, passaggio del mouse, separazione dalla pagina
+
+
+
+* **Risposta:** Risolto con la nuova direttiva **Sidebar Verde Brand (`#1B4334`)** descritta nella tabella sopra. In Light non serve bordo destro; in Dark usa `#265946` (`1px solid`) per staccare elegantemente la sidebar verde dallo sfondo `#0D1110`. Il riquadro bianco dietro lo scudo del logo (`--lf-surface-logo`: `#FFFFFF`) rimane bianco per far risaltare il logo stesso sul fondo `#1B4334`.
+
+
+
+### N2 · Colore della barra del telefono quando l'app è installata (`theme-color`)
+
+
+
+* **Risposta:** Usa **`#1B4334`** (Verde Brand) sia in Light che in Dark. Essendo ora la sidebar e l'header mobile verdi `#1B4334`, l'integrazione con la status bar del telefono sarà continua.
+
+
+
+### N3 · Bordo della card di accesso nel tema scuro
+
+
+
+* **Risposta:** Ha ragione l'agente: `#222C28` sulla pagina di login scura sparisce quasi del tutto, mentre `#7F8883` sarebbe troppo acceso. Introduciamo o usiamo un valore intermedio dedicato alle card elevate (login, modali, dropdown):
+
+
+* **Chiaro:** resta `#D8E0DC` (`--lf-border-subtle`).
+
+
+* **Scuro:** usa **`#2E3B36`** (stacca la card dallo sfondo e dalle colline senza sembrare una cornice metallica).
+
+
+
+### N4 · Sottotitolo «Crea un account»
+
+
+
+* **Risposta:** **Confermato, non rimettere il sottotitolo** (nel render era rimasto solo come refuso del mockup precedente). La testata pulita solo con logo e nome "LibreFolio" come negli screenshot `03` e `04` è molto più ordinata.
+
+
+
+### N5 · Sei valori corretti per la leggibilità (WCAG)
+
+
+
+* **Risposta:**
+* **Approvati** i valori corretti dall'agente per `--lf-text-muted` (`#616D67` / `#7F8C87`), `--lf-danger` dark (`#F84361`) e `--lf-info` dark (`#3F86FA`).
+
+
+* **Rettifica sul Bordo dei campi (`--lf-border-input`):** il valore corretto dall'agente (`#7E8984` in Light e `#606F6A` in Dark) rende gli input un po' troppo pesanti e "ingabbiati" (si nota negli screenshot `01` e `02`). Ammorbidiamoli a metà strada: usa **`#94A09B` in Light** e **`#43524D` in Dark** (passando a `#606F6A` solo in `:hover`).
+
+
+
+
+
+### N6 · Colline e linee dello sfondo del login in scuro
+
+
+
+* **Risposta:** **Niente pallini** sulle linee (mantieni il grafico pulito come nel codice attuale). Per i colori:
+
+
+* **Chiaro:** perfetti quelli attuali (`#9BAF9B` al 25%, 18%, 12% e linea `#1A4235` al 30%).
+
+
+* **Scuro:** quelli attuali sono ottimi ma leggermente troppo grigi; diamo una micro-sfumatura bosco in più mantenendoli scuri:
+
+
+* `--lf-art-hill-1` (vicina): **`#16221D`**
+* `--lf-art-hill-2` (media): **`#121C18`**
+* `--lf-art-hill-3` (lontana): **`#0F1714`**
+* `--lf-art-line`: **`#3B5249`** (oppure `#4A665B` al 55%).
+
+
+
+
+
+### Q2 · Interruttore spento (Toggle switch off)
+
+
+
+* **Risposta:** Non usare il verde per lo stato spento.
+* **Chiaro:** Traccia **`#CBD4D0`**, pallino **`#FFFFFF`** (con bordo o ombra leggera).
+* **Scuro:** Traccia **`#2C3834`**, pallino **`#9BA8A2`**.
+* *(Quando acceso in Dark, il pallino interno diventa `#FFFFFF` o `#EDF2F0` su traccia `#429E79` per brillare di più rispetto al pallino scuro).*
+
+
+
+### Q3 · Pulsanti pieni rossi e arancio al passaggio del mouse (Hover)
+
+
+
+* **Risposta:** Approvata la logica dell'agente, ecco i valori esatti:
+
+
+* **Errore Hover (`--lf-danger-hover`):** Light **`#A81F2D`** | Dark **`#E12D4B`** (testo bianco `#FFFFFF` su entrambi i pulsanti pieni rossi, come "Elimina Account").
+
+
+* **Avviso / Donazione Hover (`--lf-warning-hover`):** Light **`#92400E`** | Dark **`#D97706`**.
+
+
+
+### Q4 · Stato «modificato» nelle impostazioni
+
+
+
+* **Risposta:** **Confermato:** usa i colori semantici dell'**Avviso** (`--lf-warning`, `--lf-warning-soft`, `--lf-warning-line`). Comunica chiaramente "modifiche non salvate" senza introdurre nuovi colori.
+
+
+
+### Q5 · Pallino grigio «inattivo» (Log dello scheduler)
+
+
+
+* **Risposta:** **Approvata** la proposta dell'agente: usa `--lf-text-muted` (`#616D67` in Light, `#7F8C87` in Dark).
+
+
+
+### Q6 · Codice nel testo (`inline code`) e blocco «terminale»
+
+
+
+* **Risposta:**
+* **Codice inline:** Fondo `--lf-surface-panel` (`#E8ECE9` / `#1B2421`), bordo `--lf-border-subtle` (`#D8E0DC` / `#222C28`), testo `--lf-text-primary` (`#1C2420` / `#EDF2F0`).
+
+
+* **Blocco Terminale:** **Sì, resta sempre scuro in entrambi i temi**. Usa sfondo **`#0D1110`**, bordo **`#222C28`**, testo principale **`#EDF2F0`** e prompt/comandi evidenziati in **`#36D399`**.
+
+
+
+
+
+### Q7 · Evidenziazione dei risultati di ricerca (`<mark>`)
+
+
+
+* **Risposta:** Serve un giallo/ambra dedicato ad alto contrasto che non spenga il testo:
+* **Chiaro:** Fondo **`#FDE68A`** (giallo ambra chiaro), testo **`#1C2420`**.
+
+
+* **Scuro:** Fondo **`#78350F`** (ambra brunita profonda) con bordo sottile `#B45309` e testo **`#FEF3C7`**.
+
+
+
+### Q8 · Ombra delle finestre (`box-shadow`)
+
+
+
+* **Risposta:** **Approvata** la proposta dell'agente (`#0D1110` al **25%** in Light e al **50%** in Dark), ma per le card normali nella pagina usa un'ombra molto più leggera in Light (`#0D1110` al **6–8%**) riservando il 25% solo a finestre modali e menu a tendina.
+
+
+
+### Q9 · Tour guidato: alone e sfondo
+
+
+
+* **Risposta:** **Approvata** la proposta dell'agente: alone nel colore `--lf-focus` (`#236B4D` / `#429E79`) al **40%** e sfondo uguale a `--lf-surface-overlay` (`#0D1110` al **60%**).
+
+
+
+### Q10 · Avviso dentro un tooltip
+
+
+
+* **Risposta:** **Approvata** la proposta dell'agente: poiché il tooltip ha fondo invertito (`--lf-surface-inverse`), usa il token avviso del tema opposto (`#F59E0B` sul tooltip scuro del tema Light, e `#B45309` sul tooltip chiaro del tema Dark).
+
+
+
+### Q11 · Viola dell'AI Export
+
+
+
+* **Risposta:** Manteniamolo come accento distintivo per le funzioni AI (così non diventa anche questo verde), ma armonizzato con la saturazione di Pietra/Ardesia:
+* **Chiaro:** Principale **`#6D28D9`**, fondo soft **`#F3E8FF`**, bordo **`#DDD6FE`**.
+* **Scuro:** Principale **`#A78BFA`**, fondo soft **`#1E1B2E`**, bordo **`#3B3054`**.
+
+
+
+### Q12 · Icone colorate della scheda «Informazioni»
+
+
+
+* **Risposta:** Evitiamo l'effetto "arcobaleno" di 8 colori diversi che rompe il rigore dell'interfaccia. **Unificale tutte** usando un badge con fondo `--lf-surface-panel` (`#E8ECE9` in Light / `#1B2421` in Dark) e icona nel colore `--lf-focus` (`#236B4D` in Light / `#429E79` in Dark). Risulterà molto più professionale e pulito.
+
+
+
+### Q13 · Fondale scuro dietro le finestre (`--lf-surface-overlay`)
+
+
+
+* **Risposta:** **Approvato** **`#0D1110` al 60%** in entrambi i temi (attenzione al piccolo refuso nella tabella dove era scritto `#0D1111`: usiamo **`#0D1110`** per coerenza col token di pagina).
+
+
+
+---
+
+Vuoi che prepariamo già anche la **palette dedicata ai grafici e alle serie dati (Data Visualization)** per quando l'agente passerà alla schermata Dashboard e Asset?

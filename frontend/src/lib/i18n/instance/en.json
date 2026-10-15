@@ -27,6 +27,12 @@
         "ok": "The log level suits production.",
         "verbose": "The log level is {log_level}: the log records operational detail; INFO is enough in production."
       }
+    },
+    "block": {
+      "title": "This instance is blocked",
+      "adminDescription": "The hosting provider has blocked this instance, for example because its subscription is not paid. Settle it with the provider to unblock the instance.",
+      "userDescription": "The hosting provider has blocked this instance, for example because its subscription is not paid. Ask your administrator for a backup of your data.",
+      "deletionDate": "The instance and its data will be deleted on {date}."
     }
   }
 }

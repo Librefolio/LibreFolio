@@ -132,11 +132,12 @@
  *     the content is legacy by decision (D-T3), and the migration waves bring their own cases.
  *
  * The test writes nothing server-side. The signed-out cases never sign in or register; the registration link needs
- * `enable_registration`, true by default and closed by no E2E spec (auth.spec.ts stubs it on its own pages only). The
- * signed-in cases sign in as TEST_USER — the server counts the sign-in, as it does for every E2E login — and only read;
- * TEST_USER is grandfathered completed on every onboarding flow (populate_mock_data), which is read back before the
- * dashboard is loaded, so no Welcome, tour or guide stands in the way. The runner's desktop AND mobile projects run every
- * case. Registered in scripts/test_runner/_frontend_utility.py, action `theme-roles` of front-utility.
+ * `registration_mode` 'open': open by default, read by the login card from GET /api/v1/system/instance, and changed by no
+ * E2E spec (auth.spec.ts stubs that read on its own pages only). The signed-in cases sign in as TEST_USER — the server
+ * counts the sign-in, as it does for every E2E login — and only read; TEST_USER is grandfathered completed on every
+ * onboarding flow (populate_mock_data), which is read back before the dashboard is loaded, so no Welcome, tour or guide
+ * stands in the way. The runner's desktop AND mobile projects run every case. Registered in
+ * scripts/test_runner/_frontend_utility.py, action `theme-roles` of front-utility.
  */
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
@@ -342,7 +343,7 @@ test.describe('Colour roles on the sign-in page — every element draws its role
 
             test('the register card: a password meeting every rule, the requirements box on the panel surface, each rule ticked in success', async ({page}) => {
                 const gotoRegister = page.getByTestId('goto-register');
-                await expect(gotoRegister, 'the login card must offer registration: enable_registration is true by default and no E2E spec closes it').toBeVisible();
+                await expect(gotoRegister, 'the login card must offer registration: registration_mode is open by default, read from GET /api/v1/system/instance, and no E2E spec changes it').toBeVisible();
                 await gotoRegister.click();
                 await expect(page.getByTestId('register-modal')).toBeVisible();
 

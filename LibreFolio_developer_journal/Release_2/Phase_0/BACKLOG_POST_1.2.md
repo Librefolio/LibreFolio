@@ -2286,6 +2286,18 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
 ---
 
+## DV · Colori dei grafici (Phase_1/10_colorSystem)
+
+> Workstream DV del programma colori, aperto il 15/10 per le scelte GR1–GR5 del giro 2 della designer (D-T17): colore
+> fisso per tipo e per settore, uguale in torta e storico; tavolozze per tema; emoji dei settori unificate. Codice a due
+> lettere: «D» e «V» erano già usate (developer, 15/10).
+>
+> Valori e controlli: [giro 2 della designer](../Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/README.md)
+> e la sua [analisi](../Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/analisi.md), §4–§6. Il piano
+> arriverà in `../Phase_1/10_colorSystem/DV-chartColors/`. Gli ID di questa sezione sono `DV-n`.
+
+---
+
 ## Sessioni della 1.3.0 (fase 01)
 
 > Aperte il 14/10 dal coordinatore della 1.3. Piano: [fase 01](../Phase_1/README.md). Ogni sessione scrive solo la
@@ -2350,9 +2362,18 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - `translate-validate --hide-localized` conta 102 errori nel repository. 33 vengono da CP5a: un riquadro su
     `/api/v1/system/ready` in `docker_advanced` e in `service_exposure`, in IT, FR ed ES.
   - Gli altri 69 c'erano già, in `configuration`, `filesystem` e `index`; ci sono anche le righe di CP3 e CP4.
+  - CP6 aggiunge la pagina nuova `admin/hosting_providers` (solo inglese, titolo di navigazione compreso), le righe delle
+    variabili del blocco e dei controlli d'avvio in `configuration`, e un punto in `admin/index`.
   - Si chiude con la traduzione, che parte solo su richiesta esplicita del developer.
 
-  Dettagli: piano H, §14 «CP5a passo 2».
+  Dettagli: piano H, §14 «CP5a passo 2» e «CP6 passo 4».
+- **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
+  - «omits a provider section entirely when nothing is installed» e «shows each section only when its own list has
+    something in it» cercano `settings.assetProviders` con un confronto esatto.
+  - L'intestazione è però «etichetta (n)», quindi la ricerca non trova niente anche quando la sezione c'è.
+  - Cura: confrontare con `/settings\.assetProviders/`, come fa il test nuovo di CP5b.
+
+  Dettagli: piano H, §14 «CP5b».
 
 ## A · Account e accessi (fase 01)
 
@@ -2392,6 +2413,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `auth/RegisterCard.svelte` e `validate_password` di `scripts/user_cli.py`.
   - L'API chiede solo 8 caratteri (`schemas/auth.py:31`, `:38`). Da decidere se applicare le stesse regole anche lì.
   - Si fa nel lotto A5, che aggiunge i moduli d'invito e di reset con le stesse regole.
+  - 15/10: **aspetta la decisione 37 del developer** (coordinatore, via di A5). Intanto A5a lascia all'API il minimo di
+    8 caratteri anche nei corpi nuovi (`AuthRegisterRequest` con l'invito, `PasswordResetRequest`).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A1.9».
 - **A-7 · Doc per sviluppatori non allineate al codice, trovate in A3** — minimo; A (15/10, `docs-writer`).
   - `architecture/access_control.md:116-123`:
@@ -2419,7 +2442,60 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Probabile causa: `lib/stores/app/language.ts`, `init()`.
   - Si corregge in un lotto di A che tocca la pagina d'accesso o le preferenze, con il rosso visto prima (E2E con il
     locale del browser `it-IT`).
+  - ✅ **Corretta in A5b** (15/10; commit all'ingresso di A5). Il negozio della lingua segue `locale` di
+    svelte-i18n finché non c'è una preferenza salvata e nessuno ne sceglie una. Il selettore pubblica
+    `data-language`. Rosso visto prima: `language.test.ts` (6 rossi su 7, poi 7 ✅). L'E2E `it-IT`/`fr-FR` in
+    `auth.spec.ts` gira dopo la finestra.
   - Dettagli: idem, «A3.0».
+- **A-9 · Il runner non toglie le variabili degli account dall'ambiente della corsia** — basso; A (15/10, trovata da
+  `test-author` in A5).
+  - `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL` e `LIBREFOLIO_BILLING_URL`: se la shell
+    che lancia il runner ne imposta una, il server della corsia la legge, e cambiano la registrazione o i link per
+    tutti i test che girano lì.
+  - I casi che cambiano queste variabili girano già nel processo del test, con `monkeypatch`: il rischio è solo
+    l'ambiente di chi lancia.
+  - È infrastruttura condivisa dei test (`configure_test_runtime`): decide il coordinatore.
+  - ➡️ **Passa a H come C-96** (coordinatore, 15/10). E ha trovato che il problema è più largo: ogni `LIBREFOLIO_*`
+    del `.env` arriva alle corsie dei test, comprese le future variabili SMTP. La cura generale di H copre anche
+    queste quattro. A non ha scritto né codice né test per A-9.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5.2».
+- **A-10 · Debito di traduzione delle pagine toccate da A5** — basso; A, 15/10.
+  - Le pagine EN di A5a e A5b sono nel lotto; IT, FR ed ES sono indietro su 6 pagine: `admin/configuration`,
+    `admin/cli_tools`, `admin/settings`, `admin/service_exposure`, `community/faq`, `user/getting-started`.
+  - Vanno tradotte insieme: si linkano con ancore esplicite nuove (`#accounts`, `#user-limit`, `#registration`,
+    `#invite`, `#reset-link`, `#reset-onboarding`, `#invitation-link`, `#password-reset-link`), da tenere uguali
+    in ogni lingua.
+  - Finché non sono tradotte il build stretto resta verde: le pagine vecchie non puntano alle ancore nuove.
+  - Si fa dopo A6–A9, che toccano di nuovo le stesse pagine. La prepara il lotto A10, solo su richiesta
+    esplicita del developer (coordinatore, 15/10).
+
+  Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
+- **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
+  letta nel codice e non ancora provata; segnalata dal coordinatore.
+  - Una riga di `user_settings` con un `theme` diverso da `light`, `dark` e `auto` farebbe rispondere 500 a
+    `/auth/login` e a `/settings/user`.
+  - Prima della correzione serve un rosso. È piccola: va in un lotto dopo A5.
+- **A-12 · `e2e/settings.spec.ts`: selettori ancora fragili nei test non toccati da A5b** — minimo; A (15/10,
+  `test-author` della riparazione).
+  - I test dei numeri usano `.first()` su `.setting-row input[type="number"]`, i `title` tradotti «Save» e
+    «Undo» e un XPath su una classe CSS.
+  - Lo sblocco usa il `title` tradotto, mentre esiste `settings-lock-toggle`.
+  - I due `beforeEach` aspettano la classe `.setting-row` invece di `data-busy` della scheda.
+  - Il segnaposto «Coming soon» (disabilitato sempre) non ha più un test: lo copriva per caso il vecchio
+    `.first()`. Basta un test di componente (`SettingToggle`, `disabled` e `badge`).
+  - I test «non admin» non provano la sola lettura: manca l'asserzione che `settings-lock-toggle` non c'è.
+  - Si fa con la scheda Utenti (A6), che tocca la stessa pagina.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.9».
+- **A-13 · Su un'istanza bloccata, `/invite` mostra il modulo e la registrazione finisce al login** — minimo;
+  A (15/10, dal merge di H CP6; accettato dal coordinatore).
+  - Contesto: per non perdere l'accesso, `auth.inspect_link_token` e `auth.reset_password_with_link` entrano in
+    `ALLOWED_WHEN_BLOCKED` (lotto piccolo di H dopo A5); `auth.register` resta fuori.
+  - Effetto: `tokens/inspect` risponde anche per gli inviti, quindi `/invite` mostra il modulo. La registrazione
+    riceve poi un 401 (anonimo su una rotta bloccata), e l'interceptor del client porta al login senza spiegare.
+  - Possibile cura: la pagina d'invito che riconosce il blocco (per esempio un campo pubblico e innocuo in
+    `/system/instance`, da concordare con H e con la decisione 15), oppure `tokens/inspect` che sul blocco
+    risponde come per un link non valido quando lo scopo è `invite`.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.10».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -2429,24 +2505,30 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   14/10 senza codice: già fatta il 10/09 in `e50d66408` (conteggio e link nella cancellazione singola e in quella multipla,
   `FAAssetDeleteResult.transaction_count`, E2E in `e2e/assets/asset-list.spec.ts`); nella devWiki F-095 era già
   `documented`, e `domains/assets.md` non la elenca più fra le cose da fare. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «2.5».
-- **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1,
+- ✅ **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1,
   CP3). La docstring di `create_routes_bulk` (oggi `api/v1/fx/providers.py:183`) cita ancora «``services/fx.py``»; la
   funzione sta in `services/fx/storage.py` dal CP3. Il testo è nella descrizione dell'endpoint in `openapi.json`, e il PL4 è
   un riordino a `openapi.json` invariato: come X-R2, si corregge in un lotto che cambia comunque l'API (il CP6, F05, o
-  prima). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1 e CP3.
-- **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
+  prima). **Chiusa il 15/10**, con X-R2, in un commit sopra X-R11a che entra con FE5b; `openapi.json` cambia solo nelle tre
+  descrizioni. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1, CP3
+  e X-R1 + X-R2.
+- ✅ **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
   docstring di `BackwardFillInfo` (`schemas/common.py:369`) e di `IdentifierType` (`db/models.py:117` e `:123`) citano ancora
   `schemas/assets.py` (diventato `schemas/assets/assets.py` nel CP2b) e `asset_source.py` (tolto nel CP2a). Il testo finisce
   in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima). Nella stessa docstring di
   `db/models.py`, la riga `:127` cita `services/brim_provider.py`, spostato da W (W4 CP6) in `services/brim/`: per la stessa
-  ragione resta, e si corregge insieme alle altre (aggiunta il 15/10, validazione di `d1ef3ddeb`). Dettagli:
-  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a e CP2b.
-- **X-R3 · Tre commenti del frontend citano il modulo degli asset tolto** — minimo; X, 15/10 (CP2b, validazione di
+  ragione resta, e si corregge insieme alle altre (aggiunta il 15/10, validazione di `d1ef3ddeb`). **Chiusa il 15/10** con
+  X-R1; nella stessa docstring anche il passo 1, che mandava la colonna nuova in `001_initial.py` contro la regola delle
+  migrazioni incrementali. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione
+  «15», CP2a, CP2b e X-R1 + X-R2.
+- ✅ **X-R3 · Tre commenti del frontend citano il modulo degli asset tolto** — minimo; X, 15/10 (CP2b, validazione di
   `eb245b624`). `AssetModal.svelte:1507` e `:1636` attribuiscono ad `asset_source.py` le cancellazioni di prezzi ed eventi
   generati (oggi in `services/assets/provider_management.py`, `bulk_assign_providers`), e `assetPayload.test.ts:58` la fusione
   per campo della classificazione (oggi in `services/assets/crud.py`, `patch_assets_bulk`). Fuori dal perimetro dei lotti
-  del backend: si corregge nel FE5, con il taglio di `AssetModal`. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
-  sezione «15», CP2b.
+  del backend: si corregge nel FE5, con il taglio di `AssetModal`. **Chiusa nel FE5b-1 il 15/10**: i due commenti di
+  `AssetModal` puntano a `services/assets/provider_management.py`, quello di `assetPayload.test.ts:58` a
+  `services/assets/crud.py`. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», CP2b e FE5b.
 - **X-R4 · Il diagramma della guida dei plugin FX attribuisce al servizio la divisione per le valute multi-unità** —
   minimo, doc; segnalato da docs-writer il 15/10 (CP3). In `mkdocs_src/docs/developer/architecture/patterns/fx_plugin_guide.md`
   un riquadro Mermaid dice «Service normalizes … Multi-unit ÷100»; la stessa pagina dice che la divisione la fa il plugin, e
@@ -2515,6 +2597,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - la docstring di `create_routes_bulk` (`api/v1/fx/providers.py:180`) cita ancora `services/fx.py`, che dopo il CP3 è
     `services/fx/` (la normalizzazione sta in `storage.py`): segnalata dal coordinatore il 15/10, è la stessa riga di
     **X-R1**, aperta dal CP1; resta lì, perché il testo finisce nella descrizione dell'endpoint in `openapi.json`.
+    ✅ Chiusa il 15/10 con X-R1.
   Proposta: con il FE4 (frontend dei cambi). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
   sezione «15», X-R8.
 - ✅ **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
@@ -2541,6 +2624,22 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   lui a W, proprietario di `DataImportModal.svelte`. **15/10, i due test-id ci sono** (W E0, `d226bc69e`):
   `data-import-cancel` e `data-import-discard-confirm`. Restano a X le quattro righe della spec, con il FE4.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
+- **X-R11 · `AssetModal`: stranezze preesistenti viste dai test di FE5b-2** — minimo; X, 15/10 (FE5b-2, segnalate da
+  test-author). Copiate fedelmente nei moduli puri, nessuna cambiata:
+  - ✅ la riga della descrizione nel dialogo di confronto ha l'etichetta fissa `'Description'`
+    (`assetMetadataComparison.ts`), e `ProviderComparisonModal` la mostra com'è: in IT ed ES resta in inglese. Cura di
+    poche righe: `common.description` c'è già nei quattro cataloghi, basta un'etichetta in più in `ComparisonLabels`.
+    **Chiusa il 15/10** (X-R11a): in un commit a parte sopra FE5b-2, deciso dal coordinatore; entra con FE5b; test
+    rosso prima (3 su 61);
+  - `searchResultIdentifier` controlla che l'identificativo non sia vuoto prima di togliere gli spazi: uno di soli spazi
+    diventa una riga vuota, o un conflitto con un codice vuoto;
+  - `withElectedPrimary` chiama `.trim()` sui valori OTHER senza convertirli in stringa (`mergeOtherIdentifierValues` li
+    converte);
+  - `mergeOtherIdentifierValues` scarta solo `null` e `undefined`: `false` o un oggetto diventano righe `'false'` o
+    `'[object Object]'`;
+  - un `{currency: null}` nei parametri del fornitore blocca la valuta del risultato di ricerca (conta solo la chiave).
+  Proposta: le quattro rimaste con il FE5a. Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», FE5b-2 e X-R11a.
 
 - ✅ **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — basso, robustezza; trovata da J il
   15/10 (C-93), assegnata a X dal coordinatore. `services/assets/core.py:114-119` (`_sync_runner`, dentro
@@ -2691,7 +2790,38 @@ Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione a
 analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega del developer): E0 ed E1, sulla base
 `23f6578f3`.
 
+- ✅ **E-1 · I test del TLS vero dell'email si saltano finché manca `cryptography`** — minimo; E, 15/10 (E1).
+  `EMD-017` (STARTTLS che consegna) ed `EMD-018` (un certificato non fidato è `TLS_FAILED`, nulla parte) fanno
+  `importorskip("cryptography")`, quindi oggi saltano. Entrano da soli con la finestra delle dipendenze, che porta
+  `cryptography` per X; allora vanno visti verdi una volta. Dettagli:
+  [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E1.4».
+  - 15/10, E: chiusa. Con `cryptography` 50.0.2 nell'ambiente condiviso (`dc9a5d232`), sulla base `fc99e9bfe`,
+    `services email-delivery` dà 79 passati e nessun saltato: `EMD-017` consegna dopo STARTTLS ed `EMD-018` rifiuta
+    il certificato non fidato. Dettagli: piano 08, «E1.8».
+
 ## Y · Cruscotto e grafici (fase 01)
 
 Piano: [`09_dashboardCharts`](../Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md). Sessione avviata il
-15/10 alle 11:28, solo analisi, sulla base `23f6578f3`.
+15/10 alle 11:28, solo analisi, sulla base `23f6578f3`. Codice autorizzato il 15/10 alle 12:47 (developer, via il
+coordinatore): Y1 (taglio di `GrowthChart`, con B10) e Y2 (taglio di `DataTable`), sulla base `1e9e567f7`. Righe scritte
+da Y il 15/10.
+
+- **Le voci di Y vivono nelle loro sezioni** (C-85, C-62 e C-38 nella C; B10, 47-1, 48-1 e 54-1 nella I; T-U8 e
+  T-FE2…FE11 nella T; K-13, K-15, C-15, C-34, I-01, I-03 e O-16 nel backlog 38; i difetti 2 e 5 nel README della 13):
+  le chiude il coordinatore a ogni treno. Stato all'analisi e lotto di ciascuna: piano di Y, §2.
+- **Y-1 · I-03 è curata solo a metà** — basso; Y, 15/10 (analisi). Il ripiego da % ad Abs scatta solo per la vista %
+  ripristinata al caricamento (`GrowthChart.svelte:785-789`, dal 24/09); cambiando periodo o broker verso una storia
+  senza dati in percentuale, il bottone resta premuto e disabilitato (`:2539-2546`). Da confermare nel browser, nel lotto
+  Y8. Dettagli: piano di Y, §2.
+- **Y-2 · Nella cascata settimanale una linea di broker che finisce a metà settimana diventa un buco** — basso, da
+  verificare; `test-author` di Y, 15/10 (Y1). Comportamento preesistente, spostato alla lettera in
+  `dashboard/growthChartData.ts` (`aggregateMetric`): il valore di un secchio si cerca sull'ultimo giorno della settimana
+  presente in storia (`bucket.date`), mentre `aggregateLineSeries` lo mette sull'ultimo giorno con un valore. Una serie
+  con valori a inizio settimana e `null` l'ultimo giorno (una linea di broker che esce dal perimetro) mostra un buco in
+  quel secchio; la scala delle candele, invece, tiene l'ultimo valore. Prima un test rosso. Dettagli: piano di Y, §7
+  «Y1 — passo 4».
+- **Y-3 · Il gate della privacy non conosce `t(` come chiamata di traduzione** — minimo; `test-author` di Y, 15/10 (Y1).
+  `moneyRenderSites.test.ts` esclude dai token numerici solo `$_(`, `$t(` e `label(`: nel tooltip di GrowthChart, ora
+  `growthChartTooltip.ts`, il traduttore si chiama `t`, e una chiave come `dashboard.totalPnl` conta come token
+  numerico. Rende il gate più severo, non più cieco: oggi c'è un solo reperto, registrato. Da decidere se aggiungere
+  `\bt\(` alla forma, misurando prima il rumore. Dettagli: come Y-2.
