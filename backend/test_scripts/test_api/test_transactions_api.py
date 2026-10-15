@@ -521,6 +521,7 @@ async def test_get_transactions_with_date_range_and_abs_amount_filters(monkeypat
         amount_abs_max=Decimal("250"),
         only_unlinked=False,
         exclude_ids=None,
+        asset_event_id=None,
         session=object(),
         current_user=SimpleNamespace(id=7),
     )
@@ -571,6 +572,7 @@ async def test_get_transactions_with_date_start_only_and_unlinked_exclusion(monk
         amount_abs_max=None,
         only_unlinked=True,
         exclude_ids=[101, 102],
+        asset_event_id=None,
         session=object(),
         current_user=SimpleNamespace(id=9),
     )
@@ -1341,3 +1343,166 @@ class TestPairDescriptionTagsValidation:
             assert resp2.status_code == 200
             assert resp2.json()["committed"] is True
             print_success("✓ Pair update consistency validated (reject one-sided, accept both)")
+
+
+# ============================================================================
+# C-65b — REVERSE LOOKUP: GET /transactions?asset_event_id=
+# ============================================================================
+#
+# Which transactions point at an asset event? GET /transactions?asset_event_id=<id> answers it, scoped like
+# every other read to the brokers the caller can VIEW; the id is an event id, so it is > 0. Before the fix the
+# parameter does not exist: FastAPI ignores an unknown query parameter, and the call returns every transaction
+# the caller can see, linked or not, whatever the id.
+#
+# The test owns everything it reads: a fresh asset (events are scoped by asset, so the fixed dates below meet
+# no other test's rows), its two DIVIDEND events, one broker and three DIVIDENDs on it. At the end the broker
+# goes first (force takes the transactions that pin the events), then the asset, which cascades its events.
+# Users stay, as in the rest of this module. The helpers are local copies of test_assets_events.py's on
+# purpose: that module belongs to another workstream.
+
+EVENT_LOOKUP_DAYS = (date(2024, 3, 15), date(2024, 4, 15), date(2024, 5, 15))
+EVENT_LOOKUP_WINDOW = {"start": "2024-01-01", "end": "2024-12-31"}
+
+
+class _EventLookupRows:
+    """What the reverse-lookup test created through the API, dropped in FK-safe order at the end."""
+
+    def __init__(self) -> None:
+        self.asset_ids: list[int] = []
+        self.broker_ids: list[int] = []
+
+    async def drop(self, client: httpx.AsyncClient) -> list[str]:
+        """Drop brokers, then assets. Never raises: what could not be removed is returned."""
+        problems: list[str] = []
+        for broker_id in self.broker_ids:
+            try:
+                resp = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+                done = resp.status_code == 200 and any(r.get("id") == broker_id and r.get("success") for r in resp.json().get("results", []))
+                if not done:
+                    problems.append(f"broker {broker_id}: HTTP {resp.status_code} {resp.text}")
+            except Exception as exc:
+                problems.append(f"broker {broker_id}: {exc!r}")
+        if self.asset_ids:
+            try:
+                resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": self.asset_ids}, timeout=TIMEOUT)
+                deleted = {r["asset_id"] for r in resp.json().get("results", []) if r.get("success")} if resp.status_code == 200 else set()
+                problems += [f"asset {asset_id}: HTTP {resp.status_code} {resp.text}" for asset_id in self.asset_ids if asset_id not in deleted]
+            except Exception as exc:
+                problems.append(f"assets {self.asset_ids}: {exc!r}")
+        return problems
+
+
+async def _event_lookup_asset(client: httpx.AsyncClient, owned: _EventLookupRows) -> int:
+    name = f"Event Lookup {uuid.uuid4().hex}"
+    resp = await client.post(f"{API_BASE}/assets", json=[{"display_name": name, "currency": "USD"}], timeout=TIMEOUT)
+    assert resp.status_code in (200, 201), resp.text
+    row = next(r for r in resp.json()["results"] if r["display_name"] == name)
+    assert row["success"] is True, row
+    owned.asset_ids.append(row["asset_id"])
+    return row["asset_id"]
+
+
+async def _event_lookup_dividend_events(client: httpx.AsyncClient, asset_id: int, days: tuple[date, ...]) -> dict[date, int]:
+    """Seed one DIVIDEND event per day on ``asset_id`` and return {day: event id}, read back from the API."""
+    points = [{"date": day.isoformat(), "type": "DIVIDEND", "value": {"code": "USD", "amount": f"{n}.00"}} for n, day in enumerate(days, start=1)]
+    resp = await client.post(f"{API_BASE}/assets/events", json=[{"asset_id": asset_id, "events": points}], timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    row = next(r for r in resp.json()["results"] if r["asset_id"] == asset_id)
+    assert row["count"] == len(points), row
+    query = await client.post(f"{API_BASE}/assets/events/query", json=[{"asset_id": asset_id, "date_range": EVENT_LOOKUP_WINDOW}], timeout=TIMEOUT)
+    assert query.status_code == 200, query.text
+    events = next(item for item in query.json()["items"] if item["asset_id"] == asset_id)["events"]
+    by_day: dict[date, int] = {}
+    for day in days:
+        matches = [event["id"] for event in events if event["date"] == day.isoformat() and event["type"] == "DIVIDEND"]
+        assert len(matches) == 1, f"expected exactly one DIVIDEND on {day} for asset {asset_id}, got {events}"
+        by_day[day] = matches[0]
+    return by_day
+
+
+async def _event_lookup_broker(client: httpx.AsyncClient, owned: _EventLookupRows) -> int:
+    name = f"Event Lookup Broker {uuid.uuid4().hex}"
+    resp = await client.post(f"{API_BASE}/brokers", json=[{"name": name, "allow_cash_overdraft": True}], timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    row = next(r for r in resp.json()["results"] if r["name"] == name)
+    assert row["success"] is True, row
+    owned.broker_ids.append(row["broker_id"])
+    return row["broker_id"]
+
+
+def _event_lookup_dividend(broker_id: int, asset_id: int, day: date, amount: str, event_id: Optional[int]) -> dict:
+    row = {"broker_id": broker_id, "asset_id": asset_id, "type": "DIVIDEND", "date": day.isoformat(), "cash": {"code": "USD", "amount": amount}}
+    if event_id is not None:
+        row["asset_event_id"] = event_id
+    return row
+
+
+@pytest.mark.asyncio
+async def test_get_transactions_filters_by_asset_event_id(test_server):
+    """C-65b: GET /transactions?asset_event_id=E returns the transactions linked to E, within the caller's brokers.
+
+    Two DIVIDEND events E1, E2 on an owned asset; on one owned broker tx1 → E1, tx2 → E2, tx3 unlinked.
+    - a second user, without access to that broker, asks for E1 → nothing (the scope guard; green before the fix too);
+    - the owner asks for E1 → exactly [tx1]: the whole answer is this test's own, E1 exists only here.
+    Before the fix the parameter is ignored and the owner gets [tx1, tx2, tx3].
+    """
+    print_section("C-65b: GET /transactions?asset_event_id= — reverse lookup")
+    owned = _EventLookupRows()
+    async with httpx.AsyncClient() as client, httpx.AsyncClient() as stranger:
+        _, _, session_cookie = await create_test_user(client)
+        assert session_cookie, "Could not authenticate the owner"
+        try:
+            asset_id = await _event_lookup_asset(client, owned)
+            day1, day2, day3 = EVENT_LOOKUP_DAYS
+            events = await _event_lookup_dividend_events(client, asset_id, (day1, day2))
+            e1, e2 = events[day1], events[day2]
+            broker_id = await _event_lookup_broker(client, owned)
+            creates = [
+                _event_lookup_dividend(broker_id, asset_id, day1, "1.25", e1),
+                _event_lookup_dividend(broker_id, asset_id, day2, "2.50", e2),
+                _event_lookup_dividend(broker_id, asset_id, day3, "3.75", None),
+            ]
+            commit = await client.post(f"{API_BASE}/transactions/commit", json={"creates": creates}, timeout=TIMEOUT)
+            assert commit.status_code == 200, commit.text
+            body = commit.json()
+            assert body["committed"] is True, body["issues"]
+            ids = {r["index"]: r["ids"][0] for r in body["results"] if r["operation"] == "create"}
+            assert sorted(ids) == [0, 1, 2], body["results"]
+            tx1, tx2, tx3 = ids[0], ids[1], ids[2]
+
+            # Precondition: the links are what this test says they are.
+            linked = await client.get(f"{API_BASE}/transactions", params={"ids": [tx1, tx2, tx3]}, timeout=TIMEOUT)
+            assert linked.status_code == 200, linked.text
+            assert {tx["id"]: tx["asset_event_id"] for tx in linked.json()} == {tx1: e1, tx2: e2, tx3: None}
+
+            # The scope guard: the event is global, the transactions are not.
+            _, _, stranger_cookie = await create_test_user(stranger)
+            assert stranger_cookie, "Could not authenticate the second user"
+            resp = await stranger.get(f"{API_BASE}/transactions", params={"asset_event_id": e1}, timeout=TIMEOUT)
+            assert resp.status_code == 200, resp.text
+            assert [tx["id"] for tx in resp.json()] == [], f"a user without access to broker {broker_id} sees none of its transactions, whatever the event"
+
+            resp = await client.get(f"{API_BASE}/transactions", params={"asset_event_id": e1}, timeout=TIMEOUT)
+            assert resp.status_code == 200, resp.text
+            found = sorted(tx["id"] for tx in resp.json())
+            assert found == [tx1], f"GET /transactions?asset_event_id={e1} must return only tx1={tx1}, the transaction linked to that event; got {found} (tx2={tx2} is linked to event {e2}, tx3={tx3} to none)"
+            print_success(f"✓ Event {e1} → transaction {tx1}, and nothing for a user outside the broker")
+        finally:
+            leftovers = await owned.drop(client)
+    assert not leftovers, leftovers
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_id", ["0", "-1"])
+async def test_get_transactions_rejects_non_positive_asset_event_id(test_server, bad_id):
+    """C-65b: asset_event_id is an event id, > 0 — 0 or a negative id is a 422, never «no filter».
+
+    Before the fix the parameter is ignored: 200, with every transaction the caller can see.
+    """
+    print_section(f"C-65b: GET /transactions?asset_event_id={bad_id} → 422")
+    async with httpx.AsyncClient() as client:
+        _, _, session_cookie = await create_test_user(client)
+        assert session_cookie, "Could not authenticate the test user"
+        resp = await client.get(f"{API_BASE}/transactions", params={"asset_event_id": bad_id}, timeout=TIMEOUT)
+        assert resp.status_code == 422, f"asset_event_id={bad_id} must be rejected with 422; got {resp.status_code}: {resp.text[:300]}"
+        print_success(f"✓ asset_event_id={bad_id} rejected")

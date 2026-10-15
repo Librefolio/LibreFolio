@@ -215,6 +215,87 @@ def test_get_file_path_falls_back_to_root_folder(isolated_brim_dir) -> None:
 
 
 # =============================================================================
+# DELETING A BROKER'S FILES: ITS FOLDERS AND ITS LOCK GO TOO (C-79 / C-3)
+# =============================================================================
+#
+# save_uploaded_file creates <status>/broker_<id>/ for every status (_ensure_dirs) and, through the broker
+# metadata lock, .locks/broker_<id>.lock. delete_files_for_brokers runs once a broker is deleted: besides the
+# broker's BRIM files, its status folders go when empty and its lock file goes. A folder still holding a file the
+# store did not write is not the store's to delete: it stays, with that file, and no error is raised. Another
+# broker's files, folders and lock are never touched. The return value stays the number of BRIM files removed.
+#
+# Before the fix only the files go: the empty folders and the lock outlive the broker — and a new broker that
+# reuses the id inherits them.
+
+_REPORT_CSV = b"date,type,amount\n2026-01-01,BUY,100\n"
+_STATUS_FOLDERS = tuple(status.value for status in BRIMFileStatus)
+
+
+def _broker_folders(reports_dir: Path, broker_id: int) -> list[Path]:
+    return [reports_dir / status / f"broker_{broker_id}" for status in _STATUS_FOLDERS]
+
+
+def _broker_lock(reports_dir: Path, broker_id: int) -> Path:
+    return reports_dir / ".locks" / f"broker_{broker_id}.lock"
+
+
+def _broker_paths(reports_dir: Path, broker_id: int, *, existing: bool) -> list[str]:
+    """A broker's three status folders and its lock that exist (``existing``) or are missing, relative to the reports directory."""
+    paths = [*_broker_folders(reports_dir, broker_id), _broker_lock(reports_dir, broker_id)]
+    return [str(path.relative_to(reports_dir)) for path in paths if path.exists() == existing]
+
+
+def test_delete_files_for_brokers_removes_the_broker_folders_and_lock(isolated_brim_dir) -> None:
+    """The deleted broker's files go, then its three status folders and its lock; the neighbour keeps all of its own."""
+    deleted, neighbour = 42, 43
+    brim_provider.save_uploaded_file(content=_REPORT_CSV, original_filename="first.csv", user_id=7, broker_id=deleted)
+    failed = brim_provider.save_uploaded_file(content=_REPORT_CSV, original_filename="second.csv", user_id=7, broker_id=deleted)
+    assert brim_provider.move_to_failed(failed.file_id, "probe") is True
+    kept = brim_provider.save_uploaded_file(content=_REPORT_CSV, original_filename="kept.csv", user_id=7, broker_id=neighbour)
+    # Presence barrier: what must go is there, and so is what must stay.
+    for broker_id in (deleted, neighbour):
+        assert _broker_paths(isolated_brim_dir, broker_id, existing=False) == [], f"Precondition: broker {broker_id} has its folders and lock before the call"
+
+    removed = brim_provider.delete_files_for_brokers([deleted])
+
+    assert removed == 2
+    assert _broker_paths(isolated_brim_dir, neighbour, existing=False) == [], "the neighbour keeps its folders and lock"
+    kept_path = brim_provider.get_file_path(kept.file_id)
+    assert kept_path is not None and kept_path.is_file(), "the neighbour keeps its file"
+    assert all((isolated_brim_dir / status).is_dir() for status in _STATUS_FOLDERS), "the status folders are shared: they stay"
+    assert _broker_paths(isolated_brim_dir, deleted, existing=True) == [], f"broker {deleted} is deleted with its files, yet its folders/lock remain"
+
+
+def test_delete_files_for_brokers_keeps_a_folder_holding_a_foreign_file(isolated_brim_dir) -> None:
+    """A file the store did not write stays, and so does its folder; the broker's other, empty folders go; no error."""
+    broker_id = 42
+    brim_provider.save_uploaded_file(content=_REPORT_CSV, original_filename="report.csv", user_id=7, broker_id=broker_id)
+    stray = isolated_brim_dir / "uploaded" / f"broker_{broker_id}" / "stray.tmp"
+    stray.write_bytes(b"not a BRIM file")
+    assert all(folder.is_dir() for folder in _broker_folders(isolated_brim_dir, broker_id)), "Precondition: the broker's three status folders exist"
+
+    removed = brim_provider.delete_files_for_brokers([broker_id])
+
+    assert removed == 1
+    assert stray.is_file() and stray.read_bytes() == b"not a BRIM file", "a file the store did not write is not deleted"
+    emptied = [str(folder.relative_to(isolated_brim_dir)) for folder in _broker_folders(isolated_brim_dir, broker_id) if folder != stray.parent and folder.exists()]
+    assert emptied == [], f"broker {broker_id}'s empty folders must go; the one holding {stray.name} stays"
+
+
+def test_delete_files_for_brokers_removes_the_empty_folders_of_a_broker_without_files(isolated_brim_dir) -> None:
+    """A broker that never kept a file still had its folders made: they go, 0 is returned, and the missing lock is no error."""
+    broker_id = 42
+    brim_provider._ensure_dirs(broker_id)
+    assert all(folder.is_dir() for folder in _broker_folders(isolated_brim_dir, broker_id)), "Precondition: the broker's three status folders exist"
+    assert not _broker_lock(isolated_brim_dir, broker_id).exists(), "Precondition: no lock was ever taken for this broker"
+
+    removed = brim_provider.delete_files_for_brokers([broker_id])
+
+    assert removed == 0
+    assert _broker_paths(isolated_brim_dir, broker_id, existing=True) == [], f"broker {broker_id}'s empty folders must go, and no lock may be left behind"
+
+
+# =============================================================================
 # TEXT ENCODING FALLBACK: CSV exports saved as Windows-1252 or Latin-1
 # =============================================================================
 
