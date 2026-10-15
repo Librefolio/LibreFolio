@@ -13,9 +13,15 @@
  *     reason's `email.smtpErrors.<CODE>` for a refused delivery (`SEND_FAILED` when the reason is missing or
  *     unknown), and `email.test.errors.generic` for anything else;
  *   - every key these produce is in the four catalogues, naming exactly the placeholders the code fills;
+ *   - the check of the emailed links' base (lot E3p): `LINKS_PROBE_KEYS` words each of its six states — `checking` and
+ *     the five outcomes of `probeEmailLinks` — with a key of its own, present in the four catalogues without a
+ *     placeholder, like `email.links.recheck`, while `email.links.base` names the `{base}` the tab fills;
+ *     `linksProbeWarns` is true for the four outcomes worth a second look (`otherInstance`, `unreachable`, `insecure`,
+ *     `invalid`), false for `checking`, `match` and no state;
  *   - the class maps hold whole class strings of colour roles only (theme-roles skill): no palette class, no colour
  *     literal or arbitrary value, no `dark:`, no important modifier, every role declared in tokens.css; and each state
- *     is drawn in its own family, a tinted box pairing its soft surface with the on-soft text.
+ *     is drawn in its own family, a tinted box pairing its soft surface with the on-soft text — `LINKS_PROBE_CLASSES`
+ *     included: `checking` muted, `match` in the success family, the four warnings in the warning family's box.
  *
  * The translator is a recording fake that answers a marker of its own, so a case reads which key and which values
  * were asked for, never a sentence. The catalogue block reads the generated catalogues (`$lib/i18n/<lang>.json`,
@@ -33,7 +39,8 @@ import fr from '$lib/i18n/fr.json';
 import es from '$lib/i18n/es.json';
 import {LEGACY_CLASS_RE, ROLE_CLASS_RE, readTokens, roleNames} from '../../../../scripts/theme/theme-roles.mjs';
 import type {EmailTestFailure} from './emailApi';
-import {minutesUntil, NOTICE_CLASSES, OUTCOME_CLASSES, problemKey, STATE_BADGE_CLASSES, STATE_LABEL_KEYS, testFailureMessage} from './emailText';
+import type {LinksProbeState} from './emailLinks';
+import {LINKS_PROBE_CLASSES, LINKS_PROBE_KEYS, linksProbeWarns, minutesUntil, NOTICE_CLASSES, OUTCOME_CLASSES, problemKey, STATE_BADGE_CLASSES, STATE_LABEL_KEYS, testFailureMessage} from './emailText';
 
 /** The problem codes of `backend/app/config/email.py`, each with a message of its own. */
 const PROBLEM_CODES = ['SMTP_HOST_INVALID', 'SMTP_TLS_INVALID', 'SMTP_PORT_INVALID', 'SMTP_FROM_MISSING', 'SMTP_FROM_INVALID', 'SMTP_REPLY_TO_INVALID', 'SMTP_MAX_PER_HOUR_INVALID', 'SMTP_PASSWORD_UNREADABLE', 'SMTP_CREDENTIALS_INCOMPLETE'];
@@ -204,6 +211,31 @@ describe('every key is in the four catalogues, naming the placeholders the code 
         const {key, values} = asked(failure);
         expectInEveryCatalogue(key ?? '', Object.keys(values ?? {}));
     });
+
+    it.each(Object.entries(LINKS_PROBE_KEYS))('ETX-01: the check of the links’ base, %s — %s: no placeholder', (_state, key) => {
+        expectInEveryCatalogue(key, []);
+    });
+
+    it('ETX-02: the base of the emailed links names the {base} the tab fills; «check again» names nothing', () => {
+        expectInEveryCatalogue('email.links.base', ['base']);
+        expectInEveryCatalogue('email.links.recheck', []);
+    });
+});
+
+// =====================================================================================================================
+/** The six states of the check of the links' base: running, and the five outcomes of `probeEmailLinks`. */
+const LINKS_STATES: LinksProbeState[] = ['checking', 'match', 'otherInstance', 'unreachable', 'insecure', 'invalid'];
+/** The outcomes worth a second look: anything but a running check and a match. */
+const LINKS_WARNINGS: LinksProbeState[] = ['otherInstance', 'unreachable', 'insecure', 'invalid'];
+
+describe('linksProbeWarns — the outcomes worth a second look', () => {
+    it.each(LINKS_STATES.map((state) => [state, LINKS_WARNINGS.includes(state)] as const))('ETX-03: %s → %s', (state, warns) => {
+        expect(linksProbeWarns(state)).toBe(warns);
+    });
+
+    it('ETX-03: no state yet (no base to check) → false', () => {
+        expect(linksProbeWarns(null)).toBe(false);
+    });
 });
 
 // =====================================================================================================================
@@ -233,7 +265,7 @@ const familiesOf = (classes: string) => [
     ),
 ];
 
-const CLASS_STRINGS = Object.entries({STATE_BADGE_CLASSES, NOTICE_CLASSES, OUTCOME_CLASSES}).flatMap(([map, entries]) => Object.entries(entries).map(([entry, classes]) => ({name: `${map}.${entry}`, classes})));
+const CLASS_STRINGS = Object.entries({STATE_BADGE_CLASSES, NOTICE_CLASSES, OUTCOME_CLASSES, LINKS_PROBE_CLASSES}).flatMap(([map, entries]) => Object.entries(entries).map(([entry, classes]) => ({name: `${map}.${entry}`, classes})));
 
 describe('the class maps — whole strings of colour roles (theme-roles skill)', () => {
     it('cover exactly the values they are read with', () => {
@@ -241,6 +273,11 @@ describe('the class maps — whole strings of colour roles (theme-roles skill)',
         expect(Object.keys(STATE_BADGE_CLASSES).sort()).toEqual(['invalid', 'off', 'ready']);
         expect(Object.keys(NOTICE_CLASSES).sort()).toEqual(['error', 'info', 'warning']);
         expect(Object.keys(OUTCOME_CLASSES).sort()).toEqual(['failed', 'sent']);
+    });
+
+    it('ETX-04: the links check — one key per state, each its own, and one class string per state', () => {
+        expect(LINKS_PROBE_KEYS).toEqual(Object.fromEntries(LINKS_STATES.map((state) => [state, `email.links.probe.${state}`])));
+        expect(Object.keys(LINKS_PROBE_CLASSES).sort()).toEqual([...LINKS_STATES].sort());
     });
 
     it('positive control: each detector finds what it rejects, and tokens.css was read', () => {
@@ -279,5 +316,22 @@ describe('the class maps — whole strings of colour roles (theme-roles skill)',
 
     it('STATE_BADGE_CLASSES.off takes no status colour: off is neither good nor bad', () => {
         expect(familiesOf(STATE_BADGE_CLASSES.off)).toEqual([]);
+    });
+
+    it.each(LINKS_WARNINGS)('ETX-05: LINKS_PROBE_CLASSES.%s is a configuration notice: the warning family only, its soft surface, line and on-soft text', (state) => {
+        const classes = LINKS_PROBE_CLASSES[state];
+        expect(familiesOf(classes)).toEqual(['warning']);
+        expect(roleUtilities(classes).map(({role}) => role)).toEqual(expect.arrayContaining(['warning-soft', 'warning-on-soft', 'warning-line']));
+    });
+
+    it('ETX-05: LINKS_PROBE_CLASSES.match reads as a line in the success family; .checking as a muted line, no status colour', () => {
+        expect(familiesOf(LINKS_PROBE_CLASSES.match)).toEqual(['success']);
+        expect(familiesOf(LINKS_PROBE_CLASSES.checking)).toEqual([]);
+        expect(roleUtilities(LINKS_PROBE_CLASSES.checking).map(({role}) => role)).toEqual(['muted']);
+    });
+
+    it('ETX-06: the states drawn as a warning are exactly those linksProbeWarns offers a second look for', () => {
+        const drawnAsWarnings = LINKS_STATES.filter((state) => familiesOf(LINKS_PROBE_CLASSES[state]).includes('warning'));
+        expect(drawnAsWarnings).toEqual(LINKS_STATES.filter((state) => linksProbeWarns(state)));
     });
 });

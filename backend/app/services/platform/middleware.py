@@ -13,6 +13,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
+from backend.app.services.platform.sleep_wake.activity import ActivityMiddleware
+
 
 @dataclass(frozen=True)
 class MiddlewareEntry:
@@ -24,6 +26,9 @@ class MiddlewareEntry:
 
 
 MIDDLEWARE_STACK: tuple[MiddlewareEntry, ...] = (
+    # The user's presence and the requests in flight (workstream Z, decision D-S1): outermost, so it sees every
+    # request first and counts the compression of a response as in flight; the probes are not counted.
+    MiddlewareEntry("activity", ActivityMiddleware),
     # Compress responses (API JSON, SvelteKit JS/CSS, docs HTML) for clients that accept
     # gzip: a first visit drops from ~7.5 MB to ~2.8 MB. Starlette leaves images, fonts,
     # archives, Server-Sent Events, 206 range replies and pre-encoded responses alone,

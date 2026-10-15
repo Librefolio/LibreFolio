@@ -194,17 +194,17 @@ export function aggregateSumSeries(points: LineDataPoint[], resolution: ChartRes
     if (points.length === 0) return [];
 
     return groupPointsByBucket(points, resolution).map((group) => {
-        const sum = group.points.reduce((total, point) => total + point.value, 0);
-        const lastPoint = group.points[group.points.length - 1];
-        return withBucketMeta(
-            {...lastPoint, value: sum},
-            {
-                bucketStart: group.bucketStart,
-                bucketEnd: group.bucketEnd,
-                resolution,
-                sourcePointCount: group.points.length,
-            },
-        );
+        // A missing point exists but has no value: it adds nothing to the sum, and the bucket is a gap only when
+        // nothing in it has a value — a missing last day must not hide the flows of the days before it (I-01).
+        const present = group.points.filter((point) => !point.missing);
+        const sum = present.reduce((total, point) => total + point.value, 0);
+        const {missing: _lastMissing, ...lastPoint} = group.points[group.points.length - 1];
+        return withBucketMeta(present.length === 0 ? {...lastPoint, value: 0, missing: true} : {...lastPoint, value: sum}, {
+            bucketStart: group.bucketStart,
+            bucketEnd: group.bucketEnd,
+            resolution,
+            sourcePointCount: present.length,
+        });
     });
 }
 

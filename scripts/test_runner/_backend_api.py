@@ -699,10 +699,11 @@ def api_portfolio_wac(verbose: bool = False, test_names: list[str] | None = None
 
 
 def api_email(verbose: bool = False, test_names: list[str] | None = None) -> bool:
-    """Run the email administration API tests: GET /email/status, POST /email/test and the email part of GET /system/instance, in-process."""
+    """Run the email API tests: GET /email/status, POST /email/test, POST /email/links, POST /email/password-reset and the email part of GET /system/instance, in-process."""
     print_section("Email Administration API Tests")
-    print_info("Testing GET /email/status and POST /email/test: admin only, state/checks/budget without the SMTP configuration, the test email in the admin's language, 409/429/502/422; GET /system/instance email.available")
-    print_info("In-process: the real auth and email routers and the instance route on a private SQLite, SMTP variables by monkeypatch, a fake SMTP server on 127.0.0.1; the lane's backend is never called")
+    print_info("Testing GET /email/status and POST /email/test: admin only, state/checks/budget/links without the SMTP configuration, the test email in the admin's language, 409/429/502/422; GET /system/instance email.available/links")
+    print_info("Testing POST /email/links (admin, links from LIBREFOLIO_PUBLIC_URL alone, 409/422/429/502) and POST /email/password-reset (anonymous, the same 202 for everyone, limits per address/identifier/budget, the background work)")
+    print_info("In-process: the real auth and email routers and the instance route on a private SQLite, SMTP and public URL variables by monkeypatch, a fake SMTP server on 127.0.0.1; the lane's backend is never called")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_email_api.py", test_names)
     return run_command(cmd, "Email administration API tests", verbose=verbose)
@@ -916,10 +917,10 @@ Tests for REST API endpoints (server auto-started):
         "email",
         api_email,
         name="Email Administration API",
-        desc="GET /email/status (admin: off/ready/invalid, checks, hourly budget, never the SMTP configuration) and POST /email/test (to the admin's own address in their language; 409 off or unusable, 429 with Retry-After, 502 with the SMTP code, 422 not one address; no secret in an answer); GET /system/instance email.available (public, never the configuration, read off the event loop, optional in the OpenAPI)",
+        desc="GET /email/status (admin: off/ready/invalid, three checks, hourly budget, links from LIBREFOLIO_PUBLIC_URL, never the SMTP configuration) and POST /email/test (to the admin's own address in their language; 409 off or unusable, 429 with Retry-After, 502 with the SMTP code, 422 not one address; no secret in an answer); POST /email/links (admin: invite/reset link built from LIBREFOLIO_PUBLIC_URL alone, never the request; 409 email/links/token, 409 an inactive account's reset link, 422 recipient, 429, 502; token never logged); POST /email/password-reset (anonymous: ships held, 409 FORGOT_PASSWORD_DISABLED with one answer for everyone and nothing scheduled; lifted: same 202 for every identifier, 409 without the problem, 429 per address (an IPv6 client by its /64, a mapped IPv4 as the IPv4)/identifier/budget, the background work emails a live link, makes nothing when the configuration went away, revokes a link it could not send and never raises; a client without an address is limited per identifier only); a public URL no link can start from is invalid on every route; on a blocked instance sending refuses (409 INSTANCE_BLOCKED) and /system/instance offers no email; GET /system/instance email.available/links (public, never the configuration nor the public URL, read off the event loop, optional in the OpenAPI)",
         # PURE: the real auth and email routers and the instance route run in-process on a private SQLite file under tmp_path, the
-        # SMTP variables are set with monkeypatch in this process and the fake SMTP server listens on 127.0.0.1: the lane's backend
-        # is never called.
+        # SMTP and LIBREFOLIO_PUBLIC_URL variables are set with monkeypatch in this process, the limiters are private on a fake clock
+        # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
         isolation="pure",
     )
     add_test(
