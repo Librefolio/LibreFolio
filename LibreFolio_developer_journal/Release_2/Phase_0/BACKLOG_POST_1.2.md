@@ -2326,6 +2326,27 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     spagnolo, quindi conviene farla prima di G-13, o accettare un riferimento nuovo.
 
   Dettagli: snapshot `g-new3-a/b` in `LibreFolio_visual_review`, `desktop/<lingua>/light/settings/email.png`.
+- **G-16 · Scatto delle esposizioni del PAC (`tools/pac-result-exposures`)** — medio; coordinatore, 15/10 (TD-1: il
+  developer approva dagli scatti le barre «ideale vs reale» sui colori delle categorie, D-T21).
+  - Fatto da test-author, nel perimetro di G. Lo scatto è nel test `PAC allocator result`, fra il piano e la prova: 8
+    scatti per progetto.
+    - `framePacExposures` apre la sezione, che è chiusa di default, e ne verifica l'esito. Aspetta mappe e barre sugli
+      stati pubblicati (`data-state`, `data-chart-ready`) e controlla le righe attese.
+    - Inquadratura su desktop: dal titolo, e lo schermo alto tiene la sezione intera.
+    - Inquadratura su mobile: il corpo finisce in fondo allo schermo, con le barre intere e sopra quanto ci sta delle
+      mappe.
+    - `closePacExposures` la richiude, così gli scatti esistenti restano com'erano.
+  - Contenuto: le due mappe (USA, e la quota non classificata elencata sotto) e le barre per tipo (ETF, STOCK).
+  - **I settori restano piegati in una riga**: «nessuna classificazione dichiarata · 100% non classificato».
+    - Il seed divide Apple in Technology e Services e Microsoft in Technology e Cloud. Ma Services e Cloud non sono
+      settori di `FinancialSector`, quindi la sorgente del planner rifiuta le due suddivisioni intere
+      (`allocation.classification_invalid`).
+    - Per avere le barre dei settori serve un seed con settori validi. È fuori dal perimetro di G e cambia anche altri
+      scatti, per esempio `assets/detail-classification`.
+  - La pagina utente del PAC non lo mostra: non ha un segnaposto (`data-name`), da aggiungere con la documentazione se
+    serve.
+  - Verifica: statica pulita (`tsc` con i soli 2 errori di base, prettier). La run filtrata a 1 worker parte dopo il
+    merge della punta; poi la coppia di G-13 lo include.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
@@ -2639,7 +2660,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
   Dettagli: piano H, §14 «Lotto "credenziali nei log di accesso"».
 - **H-10 · `services static-uploads` è dichiarata `write-scoped`, ma svuota la cartella degli upload della corsia** —
-  basso; H (test-author, G-10), 15/10.
+  basso; H (test-author, G-10), 15/10. ✅ 15/10 (lotto 36, CP-U1): la fixture `_private_data_dir` punta la cartella dei
+  dati su `tmp_path` e non tocca più quella della corsia.
   - Il fixture autouse di `test_static_uploads.py` cancella e ricrea `custom-uploads` della corsia, dove stanno anche gli
     avatar del seed. Un'altra unità che li legge, in parallelo, li perde.
   - Nessun rosso visto finora; c'era già prima di G-10.
@@ -2682,6 +2704,27 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `LIBREFOLIO_TEST_REGEN_*`. In alternativa, un elenco esplicito `LIBREFOLIO_REGEN_*` in `TEST_LANE_KEEPS`.
 
   Dettagli: piano H, §14 «Ingresso dopo A6a».
+- **H-14 · `derive_key_from`: derivare da una chiave d'istanza data, non solo da quella corrente** — medio; X (CP10,
+  impostazioni dei plugin), 15/10.
+  - Serve al ripristino di B: i segreti dei plugin di un backup sono cifrati con la chiave dell'istanza d'origine, e
+    vanno cifrati di nuovo con quella dell'istanza che ripristina.
+  - Oggi `instance_key.derive_key(purpose)` deriva solo dalla chiave corrente.
+  - Cura: `derive_key_from(key, purpose, length=32)` nello stesso modulo, con lo stesso HKDF; `derive_key` la chiama
+    con la chiave corrente. Da accordare con X e B (nome, firma).
+
+  Dettagli: piano H, §14 «Voci di backlog da X CP10».
+- **H-15 · Un controllo d'avvio per una chiave dei segreti dei plugin inutilizzabile** — medio; X (CP10), 15/10.
+  - `plugin_secrets_key_status` (X) dice se i segreti salvati si possono ancora decifrare con la chiave corrente, con i
+    totali quando non si può, e gira in `to_thread`.
+  - Cura: un controllo in `config_audit.py` che lo usa, con un avviso nei log e nella UI dell'admin, nello stile degli
+    altri controlli (codice, gravità, chiave i18n).
+
+  Dettagli: piano H, §14 «Voci di backlog da X CP10».
+- **H-16 · `developer/architecture/security.md`: due frasi superate dai segreti dei plugin** — basso; X (CP10), 15/10.
+  - L'elenco dei segreti letti con `env_secret()` non ha le variabili dei plugin (`LIBREFOLIO_PLUGIN_*`).
+  - La «known limitation» chiama ancora «planned» un controllo della chiave che il `key_id` di X ora rende possibile.
+
+  Dettagli: piano H, §14 «Voci di backlog da X CP10».
 
 ## A · Account e accessi (fase 01)
 
@@ -3176,6 +3219,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   savepoint di un percorso di scrittura (lo stesso `UPDATE` vuoto, o `BEGIN IMMEDIATE` se nessuna transazione è aperta);
   `delete_bulk` lo usa per broker, con un rosso prima; X potrà poi sostituirci il trucco locale di `crud.py`. Lotto
   piccolo di W, dopo l'ingresso di N1. Dettagli: piano 04, §12, N1.
+  ✅ 15/10 (W-B20): `begin_writes(session, table)` in `backend/app/db/session.py` (in aggiunta: l'`UPDATE` vuoto) e
+  `delete_bulk` con un savepoint per broker (`_delete_one`, il `flush` dentro): un broker che fallisce a metà non lascia
+  niente, gli altri della richiesta si cancellano, la cancellazione dell'account resta tutto o niente. Rossi BR-U-081…085;
+  la mutazione senza l'aiuto fa tornare rossi BR-U-082 e i due test dell'account. Il trucco di `crud.py` resta a X.
+  Dettagli: piano 04, sezione W-B20.
 - **W-B21 · `admin/cli_tools`: la correzione `orphan_pair_halves` solo in inglese** — minimo, doc; W, 15/10 (N1b-2).
   La sezione «Post-Migration Fixes» di `mkdocs_src/docs/admin/cli_tools.en.md` dice la seconda correzione solo in EN
   (coordinatore: niente IT/FR/ES né stamp, perché il file lo toccano anche A e H). Va nel debito di traduzione di A-10
@@ -3247,6 +3295,13 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   caricatore e l'admin, ma nella lista «Uploaded Reports» di **ogni** broker (tutti per l'admin, i propri per gli altri).
   Da decidere: con un filtro di broker esplicito, escluderli (restano nella vista senza filtro della pagina File).
   Dettagli: piano 04, sezione F36.
+- **W-B33 · `transactions/service.md`, «Broker Deletion»: tre imprecisioni di testo** — minimo, doc; W, 15/10 (W-B20,
+  docs-writer). In `mkdocs_src/docs/developer/backend/transactions/service.md`:
+  - «One is required since (`costBasisRequired`)» resta senza data né versione e si legge troncata;
+  - «both helpers come from `_compute_wac_for_auto_items()`» nomina tre aiuti, e quella funzione li usa tutti e tre;
+  - la tabella dei chiamanti dice che `delete_bulk()` chiede `OWNER` e tace il superuser: `as_user_id="all"` salta il
+    controllo, `as_user_id=<id>` controlla quell'utente.
+  Da fare nel lotto di doc A-14 / W-B10. Dettagli: piano 04, sezione W-B20.
 
 ## J · Numeri e analisi (fase 01)
 
@@ -3628,6 +3683,11 @@ analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega 
   scheda nuova obbliga ogni test che importa il registro vero ad aggiungere un mock, o il file non si carica
   (`page.tabs.test.ts` con la scheda Email); toccherà anche B e X. Da valutare con A: corpi caricati pigri o un
   aiuto di mock comune. Dettagli: piano 08, «E2b.4».
+- **E-7 · Un segno «in attesa di verifica» nella scheda Users** — piccolo; coordinatore, 15/10 (E5, domanda 7).
+  Con la verifica dell'email accesa, chi si è registrato e non ha ancora cliccato il link compare nella scheda Users
+  come un account disattivo qualunque: l'admin lo può attivare a mano, ma non vede che aspetta la verifica. Serve un
+  campo nella lista di A (`pending_verification`) e un badge in `UserRow`. Fuori dalla 1.3 per decisione del
+  coordinatore. Dettagli: [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E5.0».
 
 ## Y · Cruscotto e grafici (fase 01)
 

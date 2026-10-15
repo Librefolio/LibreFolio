@@ -82,6 +82,31 @@
       "TIMEOUT": "El servidor SMTP no ha respondido a tiempo.",
       "SEND_FAILED": "El servidor SMTP no ha aceptado el mensaje."
     },
-    "loadError": "No se ha podido leer el estado del correo."
+    "loadError": "No se ha podido leer el estado del correo.",
+    "verification": {
+      "page": {
+        "checking": "Verificando tu dirección de correo…",
+        "expired": "Este enlace ha caducado. Inicia sesión con tu nombre de usuario y tu contraseña: se te ofrecerá un enlace nuevo.",
+        "consumed": "Este enlace ya se ha usado. Si tu cuenta está activa, inicia sesión.",
+        "revoked": "Este enlace ya no funciona: inicia sesión para pedir uno nuevo.",
+        "unknown": "Este enlace no es válido: vuelve a abrirlo completo desde el correo. Si sigue fallando, inicia sesión para pedir uno nuevo.",
+        "missing": "Este enlace está incompleto: vuelve a abrirlo desde el correo.",
+        "error": "No se pudo comprobar el enlace: inténtalo de nuevo."
+      },
+      "verified": "Tu dirección de correo está verificada, {username}: ya puedes iniciar sesión.",
+      "loginRequired": "Tu dirección de correo aún no está verificada: abre el enlace del correo que te enviamos y luego inicia sesión.",
+      "resend": "Enviar el enlace de nuevo",
+      "resending": "Enviando…",
+      "resent": "Un enlace nuevo está en camino: revisa tu bandeja de entrada y el spam. Los enlaces anteriores ya no funcionan.",
+      "resendErrors": {
+        "INVALID_CREDENTIALS": "El nombre de usuario o la contraseña no son correctos: revísalos en el formulario de arriba.",
+        "EMAIL_RATE_LIMITED": "Demasiadas solicitudes por ahora: inténtalo de nuevo en {minutes} min.",
+        "EMAIL_VERIFICATION_NOT_NEEDED": "Tu cuenta ya está activa: inicia sesión.",
+        "USER_LIMIT_REACHED": "Tu enlace ha caducado y esta instancia está completa ahora: pregunta a su administrador.",
+        "ACCOUNT_DISABLED": "Esta cuenta está desactivada: pregunta al administrador de esta instancia.",
+        "unavailable": "Ahora no se puede enviar el correo: inténtalo más tarde o pregunta al administrador de esta instancia.",
+        "generic": "No se pudo enviar el enlace: inténtalo de nuevo."
+      }
+    }
   }
 }
