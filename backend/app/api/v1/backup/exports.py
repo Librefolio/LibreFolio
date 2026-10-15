@@ -22,7 +22,7 @@ from starlette.responses import StreamingResponse
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import Asset, AssetEvent, FxRate, PriceHistory, User
 from backend.app.db.session import get_session_generator
-from backend.app.services.platform.backup_service import (
+from backend.app.services.platform.series_export import (
     EVENT_COLUMNS,
     FX_RATE_COLUMNS,
     PRICE_COLUMNS,
@@ -44,7 +44,7 @@ exports_router = APIRouter()
 # mechanism used by the currency-change wipe UX (Policy D), but they are
 # also useful as a general audit/export trail.
 #
-# Shape conventions (see ``backup_service.py`` for details):
+# Shape conventions (see ``series_export.py`` for details):
 #   * ``?format=csv`` (default): ``text/csv`` with fixed column order.
 #   * ``?format=json``: uniform envelope ``{scope, entity, exported_at,
 #     row_count, rows:[...]}``.
