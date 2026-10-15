@@ -2349,6 +2349,17 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     (`RUN --mount=type=secret,id=extra_ca,required=false`), documentato in `admin/docker_advanced`.
 
   Dettagli: piano H, §14 «Validazione unica dei quattro lotti e prova Docker».
+- **H-12 · Un avvio fallito del server condiviso dei test non dice perché** — basso; H (verifica di A5), 15/10.
+  - `scripts/test_runner/_server.py` avvia `dev.py server --test` con stdout e stderr su `DEVNULL`: il runner stampa
+    solo «Shared backend exited during startup (code 1)».
+  - Le due verifiche della porta sono diverse: il runner guarda solo i listener; `cmd_server` usa `lsof -i :PORT -t`,
+    che conta ogni socket sulla porta, anche quelli del server precedente ancora in chiusura.
+  - Visto una volta, subito dopo un'altra invocazione sulla stessa corsia; non si è ripetuto. La causa resta
+    un'ipotesi.
+  - Cura: le ultime righe dell'output del server nel messaggio d'errore, e in `cmd_server` solo i listener
+    (`-sTCP:LISTEN`), come fa il runner.
+
+  Dettagli: piano H, §14 «Due aggiornamenti di base … e la verifica di C-96».
 
 ## A · Account e accessi (fase 01)
 
