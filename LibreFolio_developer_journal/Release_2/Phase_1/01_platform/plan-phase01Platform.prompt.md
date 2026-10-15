@@ -2087,3 +2087,100 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 >   - Restano fissati i corpi di `/system/block`, che sono di H; si aggiornano con `billing_url`.
 > - **Avvio del server condiviso fallito una volta** (codice 1), 0 s dopo la fine di `api users-admin`; non si è
 >   ripetuto. L'output del server condiviso è scartato, quindi la causa non si vede. H-12 nel backlog.
+
+### Lotto «billing_url e rotte dei link», H-12 e la regressione di `/system/instance` (2026-10-15, pomeriggio) — ✅ provato
+
+> **Richiesta** del coordinatore (15:54), piano approvato (15:59): quattro punti in ordine. Per H-12 serve
+> `all-backend`, perché tocca `dev.py`. Sul mio ramo a `8b5e94be6`, che contiene già A5.
+>
+> - `deletion-preview` (`auth.preview_own_account_deletion`) arriva con A6a e resta fuori. Se entra prima H, la riga
+>   nell'elenco e nel test la aggiunge A; se entra prima A, la aggiunge H.
+>
+> **Note implementazione**:
+>
+> 1. **`billing_url`**:
+>    - `InstanceBlockResponse.billing_url`, riempito in `system/block.py` da `registration_service.billing_link()`
+>      (`LIBREFOLIO_BILLING_URL`, A5) solo per l'admin; `None` per gli altri, e quando la variabile manca o non è
+>      http(s).
+>    - Nella pagina di blocco, l'admin vede il link «Manage subscription» (`target=_blank`, `noopener noreferrer`,
+>      icona `ExternalLink` nascosta agli screen reader).
+>    - `httpAddress()` ricontrolla lo schema http(s) prima di farne un `href`.
+>    - Chiave `instance.block.manageSubscription` nelle 4 lingue (`dev.py i18n add`); `api sync`.
+> 2. **`ALLOWED_WHEN_BLOCKED`**: aggiunti `auth.inspect_link_token` e `auth.reset_password_with_link`.
+>    - Così chi ha perso la password può ancora arrivare alla pagina di blocco, alla cancellazione o al backup: i due
+>      endpoint consumano solo link già inviati.
+>    - `register` resta fuori: un invito si legge ma non si accetta.
+> 3. **`settings.md`**: `LF_APP_VERSION`, `LIBREFOLIO_BLOCKED` e `LIBREFOLIO_DELETION_DATE` nell'elenco delle chiavi fuori
+>    da `Settings` (docs-writer).
+> 4. **H-12**, la metà sul controllo della porta.
+>    - Il rosso prima (test-author): il caso (e) in `test_dev_port_check.py`. Un socket che tiene la porta con una
+>      connessione accettata, a listener chiuso, veniva riportato: 1 failed e 4 passed sul codice di prima.
+>    - Cura: `check_port_in_use` usa `lsof -nP -iTCP:PORT -sTCP:LISTEN -t` dove `lsof` c'è, come `port_holders` del
+>      runner; su Linux senza `lsof` resta `fuser` come ripiego.
+>    - `utils dev-port-check`: 5 passed.
+>    - Ruff: 42 rilievi su `dev.py` come a HEAD; la differenza di black scende da 339 a 322 righe.
+>    - Resta aperta l'altra metà: l'output scartato del server condiviso.
+> 5. **Regressione `/system/instance`** nelle E2E a insieme chiuso (il coordinatore alle 16:42; l'ha trovata Y).
+>    - Lo store di CP4 legge la configurazione d'istanza a ogni caricamento di pagina, e due spec ammettono solo i GET
+>      dichiarati: `files-uploader` (0/8) e `layout/header-scroll` (0/4). Le altre spec con una route `**/*` lasciano
+>      passare con `route.fallback()`.
+>    - Cura (test-author): `plainInstanceConfig()` in `fixtures/instance-config.ts`, un corpo sintetico controllato con lo
+>      schema generato, dichiarato nelle due spec.
+>    - Dopo: 8/8 e 4/4; `auth` 33 e `auth-links` 9, che importano la stessa fixture.
+>
+> **Doc**:
+>
+> - docs-writer: `security.md` («Instance Block»: la riga della tabella, `billing_url`, «Changing the list»),
+>   `admin/hosting_providers.en.md` (la frase d'apertura, il link per l'admin, la riga «What Still Answers») e
+>   `settings.md`.
+> - Io: `admin/configuration.en.md`, la riga di `LIBREFOLIO_BILLING_URL` («the app does not show it yet» non è più vero).
+>   IT, FR ed ES non hanno quella riga, che è debito di A5, quindi non ho timbrato.
+> - Una riga dichiarata in `access_control.md` (pagina di A): `/system/block` fra i posti del link di fatturazione.
+>
+> **Risposte ad A6a**, girate dal coordinatore:
+>
+> - CORS: provato in processo con i parametri di `main.py`. Una GET semplice tiene l'`Access-Control-Allow-Origin: *`
+>   della rotta (il middleware aggiunge solo `Allow-Credentials`, ignorato con `credentials: 'omit'`). Un preflight
+>   avrebbe un `400 Disallowed CORS origin`: quindi niente header, e il nonce nella query.
+> - `derive_key("accounts.address-probe.v1")` va bene, chiamata con `asyncio.to_thread`: legge la chiave a ogni
+>   chiamata.
+>
+> **Prove mirate** (corsia 6181, una alla volta, con `nice`):
+>
+> - `api instance-block` 53 (era 44: le due rotte dei link, il reset con un link davvero emesso a istanza bloccata,
+>   `billing_url` per admin, utente, variabile assente e non valida); `api system` 117; `utils dev-port-check` 5;
+> - Vitest `component-unit` 3389 (`InstanceBlockedPage.test.ts` 22, era 14, con il controllo negativo della guardia);
+> - `front build --debug` con svelte-check 0/0; `i18n check` stretto, 4417 chiavi; theme-roles pulito;
+> - `mkdocs build` stretto e `check-links` 95.
+>
+> **Fuori pista**:
+>
+> - docs-writer aveva messo un link `configuration.md#accounts`. Il build stretto lo rifiuta: sul sito IT la pagina
+>   inglese di riserva punta a `configuration.it.md`, che non ha ancora la sezione Accounts di A5. Ora il link va alla
+>   pagina.
+> - test-author ha aggiornato anche `test_openapi_documents_the_block_page`, che fissava le proprietà dello schema.
+>
+> **`all-backend`** (slot 1, 16:51–17:21): 7/7, **13 792 passed, 3 skipped, 0 failed**. Committato dal coordinatore:
+> `eaba49c6e`, `a4e770365`, `87f9ed6b5`, `9893aeb9d`, `530ed9262`.
+
+#### Ingresso dopo A6a: l'anteprima della cancellazione e A-15 ✅ (2026-10-15, sera)
+
+> **Base**: `69a7f0eb4`, merge di `dev_release2` (`ca4ec658e`, con A6a e il C-94 di J in `cmd_server`), senza conflitti.
+> A6a è entrato prima di H, quindi la riga la aggiunge H (regola delle 15:58).
+>
+> **Note implementazione**:
+>
+> - `auth.preview_own_account_deletion` (`GET /auth/users/me/deletion-preview`) entra in `ALLOWED_WHEN_BLOCKED`, accanto
+>   alla cancellazione che descrive; il suo pin, per nome e rotta, in `test_instance_block.py`.
+> - **A-15**:
+>   - la sonda dell'indirizzo `GET /auth/address-probe` nella docstring di `instance_block.py`, fra le rotte pubbliche
+>     fuori dall'elenco: a istanza bloccata risponde 401 senza intestazioni CORS, e il controllo dell'admin la mostra
+>     come non verificabile, come voluto da A6a;
+>   - la sonda anche fra le letture pubbliche del test (`PUBLIC_READS_OUTSIDE_THE_LIST`), e in
+>     `hosting_providers.en.md`. `security.md` la citava già, con A6a.
+> - **Prove** (corsia 6181, una alla volta, con `nice`):
+>   - `api instance-block` 54, `api system` 117;
+>   - `utils dev-port-check` 5, `test-server-preparation` 63, `runtime-isolation` 195;
+>   - `api sync`; `front check` 0/0; Vitest `InstanceBlockedPage` 22; `front build --debug`;
+>   - E2E `files-uploader` 8/8, `header-scroll` 4/4;
+>   - `check-orphans` pulito; `mkdocs build` stretto e `check-links`.

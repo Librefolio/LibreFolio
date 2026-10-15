@@ -559,7 +559,7 @@ fermati all'handoff, porta verificata libera.
   | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | ~~X, FE5b (`AssetModal`), dal 15/10 alle 08:20~~ **chiuso: entrato in `dev_release2` il 15/10 alle 14:22 (`ec0dc7ebd`)**. La pagina (FE5c) dopo il lotto di Z sul polling |
   | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | ~~W, dal 15/10 alle 07:55~~ **chiuso: entrato il 15/10 alle 16:19 (`14d58cc61`)** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
   | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | ~~Y, FE6a, dal 15/10 alle 12:47~~ **chiuso: entrato il 15/10 alle 15:12 (`badec1465`)** (via libera del coordinatore colori: nessun annuncio loro; T lo converte in W5; restano `data-testid="growth-chart"` e la forma dell'opzione ECharts, letta dalla E2E del Lab) |
-  | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | **Y, Y2 (due figli: `DataTableColumnHeader`, `DataTableCellContent`), dal 15/10 alle 15:24** (via libera del coordinatore colori; le 4 classi di `editable-checkbox` passano al figlio con il record ereditato) |
+  | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | ~~Y, Y2 (due figli: `DataTableColumnHeader`, `DataTableCellContent`), dal 15/10 alle 15:24~~ **chiuso: entrato il 15/10 alle 18:08 (`c747a74c3`)** (via libera del coordinatore colori; le 4 classi di `editable-checkbox` passano al figlio con il record ereditato) |
 
 ## 8. Traguardi, in ordine di dipendenza
 
@@ -591,8 +591,9 @@ pronto, e il riordino frontend legato ai lotti B e C dei colori (la loro convers
   - run completa con coverage anche sotto carico (4 worker con un'altra corsia attiva,
     C-82);
   - galleria completa (con G, mai insieme a un'altra);
-  - upgrade da un DB della 1.2 con le migrazioni nuove; ripristino di un backup della 1.2
-    con la prova su copia;
+  - upgrade da un DB della 1.2 con le migrazioni nuove (il ripristino di uno zip fatto a mano è escluso dalla
+    decisione 42: dalla 1.2 si passa con l'aggiornamento sul posto); ripristino di un backup della 1.3 con la prova
+    su copia;
   - immagine Docker: avvio con Litestream spento e acceso, `docker stop` entro il limite;
   - revisione di sicurezza delle superfici nuove (agente `security-review`): inviti,
     reset, sola lettura, token di risveglio, backup, segreti dei plugin;
@@ -1287,7 +1288,36 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 ### Treno 41, decisioni 38–39 (2026-10-15, 16:40–16:55)
 
 > **Note implementazione**: entrato J (`2faa88a34`: C-94 e CP-2). `copilot-instructions.md` aggiornato con il testo di J
-> sul build in primo piano (`--build-only`). Decisioni del developer: 38, «ok all'idea della busta» (`.lfbackup`,
-> scrypt + AES-256-GCM, solo `cryptography`; lo zip con password classico avrebbe richiesto `pyzipper`); 39, «così
+> sul build in primo piano (`--build-only`). Decisioni del developer: 38, «ok all'idea della busta» (`.lfbk`,
+> scelta dal developer alle 17:00 al posto di `.lfbackup`; scrypt + AES-256-GCM, solo `cryptography`; lo zip con password classico avrebbe richiesto `pyzipper`); 39, «così
 > l'utente sceglie se fare un backup in "chiaro" o un backup "sicuro" e nel messaggio gli viene detto la differenza».
 > B4 dopo B3 e B5: è l'unico pezzo di B che può slittare. Z7a autorizzato dal developer («Sì, Z parta con Z7a»).
+
+### Treni 42–44, decisione 40, Z6b (2026-10-15, 17:15–17:40)
+
+> **Note implementazione**: entrati A6a (treno 42), H (`eacc34784`) e Z7a (`2ab8a3a43`). Decisione 40 del developer: le sessioni
+> si chiudono con l'ora del ripristino (non si rigenera `JWT_SECRET`), l'anteprima elenca gli admin del backup e blocca
+> se non ce n'è nessuno; nel cloud il recupero dell'admin passa da «password dimenticata» via email, nei casi gravi
+> dall'assistenza con `dev.py user reset-link`. Z6b autorizzato dal developer («Sì, Z parta con Z6b»).
+> Scatti nuovi di galleria (`settings/users` di A6b, `settings/backup-ready` di B): li scrivono A e B con la checklist di
+> G, che li rivede prima dell'ingresso.
+
+### Treno 45, decisioni 36–46 scritte (2026-10-15, 17:40–18:10)
+
+> **Note implementazione**: entrato Y2 (`c747a74c3`), con la ripresa della galleria a carico basso (10 su 10; i 10 rossi
+> del primo giro erano carico). Il file delle decisioni è committato con le righe «Decisione» 36–46 (`a718e5281`); 47
+> attende il «sì» del developer. 41: la copia di sicurezza prima del ripristino si cancella se il primo avvio va bene;
+> 42 respinta (solo backup di LibreFolio); 43 approvata; 44 approvata; 45: solo `LIBREFOLIO_PUBLIC_URL`, con il
+> controllo dal browser dell'admin tramite la sonda di A6a. `main.py` congelato per CP2b di H. Scatti nuovi di galleria
+> (A6b, B, E) con la checklist di G.
+
+### Treni 48–49, gate i18n (2026-10-15, 18:30–19:00)
+
+> **Note implementazione**: entrati E2 (`755158aad`), la sua correzione (`be7de95b6`) e Z6b parte 1 (`000090aaf`).
+> Decisioni 48–50 del developer scritte (`bcd680868`); delega del developer sui lotti di Y («Sì, e d'ora in poi decidi tu
+> l'avvio dei lotti di Y»).
+>
+> **⚠️ Fuori pista**: E2 è entrato senza `core-unit` e ha portato un rosso in `dev_release2`
+> (`htmlInterpolation.gate.test.ts`, la chiave `email.problems.SMTP_FROM_INVALID` con `<`), trovato da T nella sua
+> validazione. Corretto in 15 minuti riformulando nelle 4 lingue. **Regola d'ingresso nuova**: un lotto che cambia
+> cataloghi i18n porta `front-utility core-unit` verde (gate di markup, ICU, lingua).

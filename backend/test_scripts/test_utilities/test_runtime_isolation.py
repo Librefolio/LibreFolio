@@ -1346,6 +1346,16 @@ class _PublicationHookServer(test_runner_server.SharedTestServer):
         self.__dict__["_started_here"] = value
 
 
+#: ``stop()``'s grace outside coverage. The scripted clocks of the real ``stop()`` derive from it, never from its value:
+#: the reading meant to end each of its two waits lies one second past that wait's deadline — the first starts at 0 and
+#: ends at ``PLAIN_GRACE_S + 1``, the second starts there and ends at ``2 * PLAIN_GRACE_S + 2`` —, so a longer grace
+#: cannot leave a wait running on the clock's last reading (with the fake sleep, a busy loop).
+PLAIN_GRACE_S = test_runner_server.SHUTDOWN_GRACE_PLAIN
+#: How long ``stop()`` reaps the launcher after a SIGKILL: ``self.proc.wait(timeout=5)``, a literal of ``_server.py`` that
+#: does not follow the grace. The two were both 5 s until the grace became 10 s.
+SIGKILL_REAP_TIMEOUT_S = 5
+
+
 class TestSharedTestServerOwnership:
     def test_start_rejects_an_occupied_port_without_spawning_or_signalling(self, monkeypatch):
         # That PID may be another worktree's lane: refuse before doing anything,
@@ -1399,7 +1409,7 @@ class TestSharedTestServerOwnership:
         monkeypatch.setattr(server, "_process_group_alive", lambda: False)
         monkeypatch.setattr(test_runner_server, "print_error", errors.append)
         monkeypatch.setattr(test_runner_server, "print_success", ready.append)
-        patch_clock(monkeypatch, test_runner_server, 0.0, 0.0, 0.0, 6.0, 6.0, 12.0, forbid_sleep="the bind-race path must not wait on the real clock")
+        patch_clock(monkeypatch, test_runner_server, 0.0, 0.0, 0.0, PLAIN_GRACE_S + 1.0, PLAIN_GRACE_S + 1.0, 2 * PLAIN_GRACE_S + 2.0, forbid_sleep="the bind-race path must not wait on the real clock")
 
         assert server.start() is False
 
@@ -1411,13 +1421,16 @@ class TestSharedTestServerOwnership:
         assert any(str(foreign_pid) in message and "foreign PID" in message for message in errors), errors
 
     @pytest.mark.parametrize(
-        ("poll_results", "group_survives", "clock", "expected_signals"),
+        ("poll_results", "group_survives", "clock", "expected_signals", "expected_waits"),
         [
-            pytest.param([], False, (0.0, 6.0, 6.0, 12.0), ["SIGTERM"], id="group-exits-on-sigterm"),
-            pytest.param([23], True, (0.0, 0.0, 6.0, 6.0, 12.0), ["SIGTERM", 0, 0, "SIGKILL"], id="group-ignores-sigterm"),
+            # The launcher still runs after SIGTERM: stop() waits for it for the grace.
+            pytest.param([], False, (0.0, PLAIN_GRACE_S + 1.0, PLAIN_GRACE_S + 1.0, 2 * PLAIN_GRACE_S + 2.0), ["SIGTERM"], [PLAIN_GRACE_S], id="group-exits-on-sigterm"),
+            # The launcher has exited (23) and its group has not: no grace wait on the launcher, only its reap after the
+            # SIGKILL. The 0.0 inside the first deadline makes one liveness probe and one sleep before it ends.
+            pytest.param([23], True, (0.0, 0.0, PLAIN_GRACE_S + 1.0, PLAIN_GRACE_S + 1.0, 2 * PLAIN_GRACE_S + 2.0), ["SIGTERM", 0, 0, "SIGKILL"], [SIGKILL_REAP_TIMEOUT_S], id="group-ignores-sigterm"),
         ],
     )
-    def test_stop_signals_only_its_own_group_and_merely_reports_a_foreign_pid(self, monkeypatch, poll_results, group_survives, clock, expected_signals):
+    def test_stop_signals_only_its_own_group_and_merely_reports_a_foreign_pid(self, monkeypatch, poll_results, group_survives, clock, expected_signals, expected_waits):
         # Diagnostics are LISTEN-only: a different PID on the port is another
         # lane, never cleanup — so it may be named, never signalled.
         server = test_runner_server.SharedTestServer()
@@ -1437,7 +1450,7 @@ class TestSharedTestServerOwnership:
 
         signals = {"SIGTERM": test_runner_server.signal.SIGTERM, "SIGKILL": test_runner_server.signal.SIGKILL}
         assert group_signals == [(child_group, signals.get(sig, sig)) for sig in expected_signals]
-        assert (holder_lookups, process.poll_calls, process.wait_timeouts) == ([foreign_pid], 1, [test_runner_server.SHUTDOWN_GRACE_PLAIN])
+        assert (holder_lookups, process.poll_calls, process.wait_timeouts) == ([foreign_pid], 1, expected_waits)
         assert any(str(foreign_pid) in message and "foreign PID" in message for message in errors), errors
         assert (server.proc, server.process_group_id, server.started_here) == (None, None, False)
 

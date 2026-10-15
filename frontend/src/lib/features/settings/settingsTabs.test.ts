@@ -12,19 +12,20 @@
  *     where the context is `{isSuperuser}`; `id` is both the `?tab=` value and the suffix of the
  *     `settings-tab-{id}` test id, `visible` absent means visible to everyone, `props` are spread on
  *     the body, `alignEnd` starts the right-hand group on a wide screen;
- *   - `SETTINGS_TABS`: today's tabs and nothing else — profile, preferences, about, admin and, since plan
- *     A6b.1, users. Admin stays visible to everyone and editable only by an administrator (`props: ctx =>
- *     ({canEdit: ctx.isSuperuser})`), and `alignEnd` takes the place of the inline class. Users is shown to
- *     administrators only (`visible: ctx => ctx.isSuperuser`) and sits after admin, in the right-hand group;
+ *   - `SETTINGS_TABS`: today's tabs and nothing else — profile, preferences, about, admin, and users, backup
+ *     and email for administrators only (workstreams A, B and E; users since plan A6b.1). Admin stays visible to
+ *     everyone and editable only by an administrator (`props: ctx => ({canEdit: ctx.isSuperuser})`), and `alignEnd`
+ *     takes the place of the inline class; users, backup and email take no props, and follow admin in the right-hand
+ *     group, in that order;
  *   - `visibleSettingsTabs(tabs, ctx)`: the tabs whose `visible(ctx)` is not false, sorted by
  *     `order`. It takes the list explicitly, so that a test can hand it one of its own, and it leaves
  *     that list as it was.
  *
  * The `order` numbers are not the contract, only their sequence: the cases compare ids in the order
  * the helper gives them, never a number — save one. Users takes 110, the slot plan A6b.1 gives it so
- * that the admin tabs of several workstreams land without a tie (the next slots are theirs), and
- * STAB-02 holds it there. The `TODAY` table below is the registry's content; a workstream that adds a
- * tab adds its row there, in the same change, marked `adminOnly` when only an administrator sees it.
+ * that the admin tabs of several workstreams land without a tie (backup 120 and email 130 took the next ones),
+ * and STAB-02 holds it there. The `TODAY` table below is the registry's content; a workstream that adds a
+ * tab adds its row there, and its id to the `CONTEXTS` lists of those who see it, in the same change.
  *
  * Why the tab modules are mocked. Each tab body imports the API client, the stores and their own
  * children, so importing the real modules would make this file depend on everything they reach (and
@@ -45,7 +46,7 @@
  */
 import {describe, expect, it, vi} from 'vitest';
 import type {Component} from 'svelte';
-import {Info, Shield, Sliders, User, Users} from 'lucide-svelte';
+import {DatabaseBackup, Info, Mail, Shield, Sliders, User, Users} from 'lucide-svelte';
 import type {SupportedLocale} from '$lib/i18n';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
@@ -61,6 +62,8 @@ const bodies = vi.hoisted(() => {
         about: body('AboutTab.svelte'),
         admin: body('GlobalSettingsTab.svelte'),
         users: body('UsersTab.svelte'),
+        backup: body('BackupTab.svelte'),
+        email: body('EmailSettingsTab.svelte'),
     };
 });
 
@@ -69,6 +72,8 @@ vi.mock('$lib/features/settings/tabs/PreferencesTab.svelte', () => ({default: bo
 vi.mock('$lib/features/settings/tabs/AboutTab.svelte', () => ({default: bodies.about}));
 vi.mock('$lib/features/settings/tabs/GlobalSettingsTab.svelte', () => ({default: bodies.admin}));
 vi.mock('$lib/features/settings/tabs/UsersTab.svelte', () => ({default: bodies.users}));
+vi.mock('$lib/features/backup/BackupTab.svelte', () => ({default: bodies.backup}));
+vi.mock('$lib/features/email/EmailSettingsTab.svelte', () => ({default: bodies.email}));
 
 import {SETTINGS_TABS, visibleSettingsTabs, type SettingsTab, type SettingsTabContext} from './settingsTabs';
 
@@ -76,27 +81,22 @@ import {SETTINGS_TABS, visibleSettingsTabs, type SettingsTab, type SettingsTabCo
 const USER: SettingsTabContext = {isSuperuser: false};
 /** An administrator. */
 const ADMIN: SettingsTabContext = {isSuperuser: true};
-const CONTEXTS: [string, SettingsTabContext][] = [
-    ['a user', USER],
-    ['an administrator', ADMIN],
+/** Who is signed in, the ids of the tabs they see, left to right, and their context. */
+const CONTEXTS: [string, string[], SettingsTabContext][] = [
+    ['a user', ['profile', 'preferences', 'about', 'admin'], USER],
+    ['an administrator', ['profile', 'preferences', 'about', 'admin', 'users', 'backup', 'email'], ADMIN],
 ];
 
-/**
- * Today's tabs, left to right as an administrator sees them: the id, the catalogue key of the label, the lucide icon,
- * the tab module, and `adminOnly` on a tab only an administrator sees.
- */
+/** Today's tabs, left to right as an administrator sees them: the id, the catalogue key of the label, the lucide icon and the tab module. */
 const TODAY = [
     {id: 'profile', labelKey: 'settings.profile', icon: User, component: bodies.profile},
     {id: 'preferences', labelKey: 'settings.preferences', icon: Sliders, component: bodies.preferences},
     {id: 'about', labelKey: 'settings.about', icon: Info, component: bodies.about},
     {id: 'admin', labelKey: 'settings.admin', icon: Shield, component: bodies.admin},
-    {id: 'users', labelKey: 'settings.users', icon: Users, component: bodies.users, adminOnly: true},
+    {id: 'users', labelKey: 'settings.users', icon: Users, component: bodies.users},
+    {id: 'backup', labelKey: 'backup.tab', icon: DatabaseBackup, component: bodies.backup},
+    {id: 'email', labelKey: 'email.tab.label', icon: Mail, component: bodies.email},
 ];
-
-/** The ids of TODAY that `ctx` may see, left to right: a row marked `adminOnly` is an administrator's alone. */
-function todayFor(ctx: SettingsTabContext): string[] {
-    return TODAY.filter((tab) => ctx.isSuperuser || !tab.adminOnly).map((tab) => tab.id);
-}
 
 /** What an id must look like to be a `?tab=` value and a test-id suffix as it is. */
 const URL_SAFE_ID = /^[a-z][a-z0-9-]*$/;
@@ -136,15 +136,15 @@ describe('SETTINGS_TABS — today’s tabs, and nothing else', () => {
         expect(new Set(orders).size, `no order is carried twice: ${orders.join(', ')}`).toBe(orders.length);
     });
 
-    it('holds exactly profile, preferences, about, admin and users: a new tab adds its row to TODAY', () => {
-        expect(SETTINGS_TABS.map((tab) => tab.id).sort(), 'the registry is the tabs of TODAY: a tab added (or lost) on the way changes what every user sees').toEqual(TODAY.map((tab) => tab.id).sort());
+    it('holds exactly the tabs of TODAY: a new tab adds its row there', () => {
+        expect(SETTINGS_TABS.map((tab) => tab.id).sort(), 'the registry is today’s tabs: a tab added (or lost) on the way changes what users see').toEqual(TODAY.map((tab) => tab.id).sort());
     });
 
-    it.each(CONTEXTS)('%s sees the tabs of TODAY meant for them, in this order', (_label, ctx) => {
+    it.each(CONTEXTS)('%s sees %j, in this order', (_label, expected, ctx) => {
         expect(
             visibleSettingsTabs(SETTINGS_TABS, ctx).map((tab) => tab.id),
-            'today’s tabs, left to right: admin is visible to everyone, users to an administrator only',
-        ).toEqual(todayFor(ctx));
+            'today’s tabs, left to right: admin is visible to everyone, users, backup and email to administrators only',
+        ).toEqual(expected);
     });
 
     it.each(TODAY)('$id: labelled $labelKey, drawn with its lucide icon, rendering its own tab module', ({id, labelKey, icon, component}) => {
@@ -175,6 +175,29 @@ describe('SETTINGS_TABS — today’s tabs, and nothing else', () => {
         expect(admin.visible?.(ADMIN) ?? true, 'an administrator sees the admin tab').toBe(true);
         expect(admin.props?.(USER), 'a user may read the global settings, not change them').toEqual({canEdit: false});
         expect(admin.props?.(ADMIN), 'an administrator may change them').toEqual({canEdit: true});
+    });
+
+    it('backup is for administrators only: no props, no alignEnd, after admin in the right-hand group', () => {
+        const backup = registryTab('backup');
+
+        expect(backup.visible, 'backup says who may see it: without visible() every user would').toBeTypeOf('function');
+        expect(backup.visible?.(USER) ?? true, 'a user does not see the backup tab: the archive holds every user’s data').toBe(false);
+        expect(backup.visible?.(ADMIN) ?? true, 'an administrator sees the backup tab').toBe(true);
+        expect(backup.props, 'backup is rendered with no props').toBeUndefined();
+        expect(backup.alignEnd, 'backup starts no group of its own: admin starts the right-hand one').toBeFalsy();
+
+        const ids = visibleSettingsTabs(SETTINGS_TABS, ADMIN).map((tab) => tab.id);
+        const adminAt = ids.indexOf('admin');
+        expect(adminAt, `premise: an administrator sees admin: ${ids.join(', ')}`).toBeGreaterThanOrEqual(0);
+        expect(ids.indexOf('backup'), `backup comes after admin, in the right-hand group admin starts: ${ids.join(', ')}`).toBeGreaterThan(adminAt);
+    });
+
+    it('email is visible to administrators only and takes no props', () => {
+        const email = registryTab('email');
+
+        expect(email.visible?.(USER) ?? true, 'a user does not see the email tab').toBe(false);
+        expect(email.visible?.(ADMIN) ?? true, 'an administrator sees it').toBe(true);
+        expect(email.props, 'the email tab is rendered with no props').toBeUndefined();
     });
 
     it('only admin takes props, and only admin starts the right-hand group (alignEnd)', () => {

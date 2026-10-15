@@ -233,8 +233,9 @@ an invalid mode (`_max_users()`).
 | `./dev.py user create`, `./dev.py user invite`, `./dev.py user activate` of an inactive account | The warning `The instance is at its limit (LIBREFOLIO_MAX_USERS: <used> of <max> places taken): the command line <action> anyway`, `<action>` being `creates the account`, `creates the invitation` or `reactivates the account`; then the command goes ahead |
 
 `billing_link()` returns `LIBREFOLIO_BILLING_URL` to administrators only: in `usage.billing_url` of
-`GET /users` and `GET /users/invites`, and in the `409` `USER_LIMIT_REACHED` of the administrator
-routes. An invalid `LIBREFOLIO_BILLING_URL` or `LIBREFOLIO_PUBLIC_URL` is treated as unset and logged
+`GET /users` and `GET /users/invites`, in the `409` `USER_LIMIT_REACHED` of the administrator
+routes, and in `billing_url` of `GET /system/block`, the block page of a blocked instance
+([Security → Instance Block](security.md#instance-block)). An invalid `LIBREFOLIO_BILLING_URL` or `LIBREFOLIO_PUBLIC_URL` is treated as unset and logged
 like an invalid mode, with its own `consequence`: *the billing link stays hidden until it is fixed*,
 or *links show the bare path until it is fixed*.
 
