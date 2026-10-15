@@ -331,6 +331,15 @@ def utils_jwt_secret_blank(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "JWT secret blank tests", verbose=verbose)
 
 
+def utils_test_server_preparation(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the test server's builds run before its startup timeout, and that a tree without node_modules stops before npx (C-94)."""
+    print_section("Utils: Test Server Preparation")
+    print_info("Testing: dev.py server --build-only, cmd_fe_build/cmd_api_client (frontend/node_modules/.bin check), cmd_mkdocs_gallery; scripts/test_runner/_server.py (build_server_prerequisites, SharedTestServer.start())")
+    print_info("Tests: pre-bind builds in order without binding, missing tools named with npm ci before any npm/npx, port check → build → spawn → STARTUP_TIMEOUT, build env without coverage wiring, gallery build with Playwright's env")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_test_server_preparation.py", test_names)
+    return run_command(cmd, "Test server preparation tests", verbose=verbose)
+
+
 def utils_test_runner_cli(verbose: bool = False, test_names: list = None) -> bool:
     """Test the test-runner CLI's own command-building contract."""
     print_section("Utils: Test Runner CLI")
@@ -356,6 +365,15 @@ def utils_dev_port_check(verbose: bool = False, test_names: list = None) -> bool
     print_info("Tests: Linux fuser branch through the real subprocess.run argument check, host lsof/fuser on a 127.0.0.1 listener and on a released port, no capture_output with stdout=/stderr= in dev.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_port_check.py", test_names)
     return run_command(cmd, "dev.py port check tests", verbose=verbose)
+
+
+def utils_dev_designer_lab_banner(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that dev.py lists the Designer Lab (/designer-lab) among the server's endpoints only when the frontend build carries it, and under front dev unless LF_DESIGNER_LAB=0."""
+    print_section("Utils: dev.py Designer Lab banner")
+    print_info("Testing: dev.py _frontend_build_has_designer_lab, DESIGNER_LAB_MARKER (= LAB_MARKER of frontend/scripts/designer-lab/vite-plugin.mjs), cmd_server's «Available endpoints», cmd_fe_dev")
+    print_info("Tests: fake builds (none, release, debug with and without the Lab, production with LF_DESIGNER_LAB=1, rebuilt by the auto-build), only _app/immutable/**/*.js counts, listing and read errors read as no Lab and never stop the start, --build-only never asks, front dev hides it only for LF_DESIGNER_LAB=0")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_dev_designer_lab_banner.py", test_names)
+    return run_command(cmd, "dev.py Designer Lab banner tests", verbose=verbose)
 
 
 def utils_coverage_combine(verbose: bool = False, test_names: list = None) -> bool:
@@ -687,6 +705,17 @@ Tests for utility modules and helper functions:
     )
     add_test(
         cat,
+        "test-server-preparation",
+        utils_test_server_preparation,
+        name="Test Server Preparation",
+        desc="dev.py server --build-only runs exactly the server's pre-bind steps in today's order and mode (the frontend in debug under --test, through cmd_fe_build with --rebuild, then MkDocs, then the non-strict JS cache) and returns their exit code without checking the port, running a command or exec'ing uvicorn, and the runner's prerequisites command is such a run; front build and api client check frontend/node_modules/.bin first (openapi-zod-client, svelte-check, vite; the API client only its generator, symlinks or shim files) and exit 1 naming the missing tools and npm ci before any npm or npx call; SharedTestServer.start() checks the port, then runs python -u dev.py server --test --build-only in the foreground with its output visible and in order on a pipe (its own stdout and stderr flushed right after its info line) and the runner's environment, never the coverage wiring the server gets, and only then spawns the backend and starts STARTUP_TIMEOUT: a build longer than the timeout still starts, a failed build (False, or an exit code it names) spawns nothing, an occupied port builds nothing; mkdocs gallery runs the same step after its database step and port check and before Playwright, with Playwright's environment (LF_APP_VERSION and --test-port included), exits 1 when it fails, and --list builds nothing; without --workers the gallery runs 60% of the CPUs (rounded, the count read at each call) as browser workers, at least one (an explicit --workers wins), and sizes its server from them",
+        # Fakes only: the seams of dev.py and _server.py monkeypatched, every real process and signal forbidden,
+        # node_modules/.bin layouts under tmp_path; --list reads frontend/e2e/gallery.spec.ts. No DB, no server,
+        # no network, no writes outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "test-runner-cli",
         utils_test_runner_cli,
         name="Test Runner CLI Contract",
@@ -715,6 +744,18 @@ Tests for utility modules and helper functions:
         # platform.system and subprocess.run monkeypatched for the Linux case, a 127.0.0.1
         # socket on a port the OS picks, read-only lsof/fuser/ps children, dev.py parsed:
         # no DB, no server, no network beyond loopback, no writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "dev-designer-lab-banner",
+        utils_dev_designer_lab_banner,
+        name="Dev Designer Lab banner",
+        desc="dev.py server lists 🎨 Designer Lab: http://localhost:<port>/designer-lab right after the Frontend line of «Available endpoints» only when a script under frontend/build/_app/immutable/ (any depth) holds DESIGNER_LAB_MARKER, the LAB_MARKER the Vite plugin exports, inside a longer string too: not without a build, not for a release build nor a debug build made with LF_DESIGNER_LAB=0 (whatever .build-debug says), yes for a debug build with the Lab and a production build made with LF_DESIGNER_LAB=1, as the auto-build left it; source maps, CSS, HTML, _app/env.js and the static files never count; a listing that fails or a script that cannot be read reads as no Lab (the script skipped, the scan going on) and the server still reaches its launch; --build-only prints no endpoint list and never asks; front dev lists http://localhost:5173/designer-lab after its URL unless LF_DESIGNER_LAB is exactly 0",
+        # The real helper on fake builds under tmp_path; cmd_server and cmd_fe_dev run in-process with their runtime
+        # configuration, builds, port check and launcher stood in for, every real process, exec and signal forbidden,
+        # os.environ compared before and after; reads frontend/scripts/designer-lab/vite-plugin.mjs. No DB, no server,
+        # no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(

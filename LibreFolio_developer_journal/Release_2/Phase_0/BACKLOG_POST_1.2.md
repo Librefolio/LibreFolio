@@ -2503,6 +2503,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Si fa nel lotto A5, che aggiunge i moduli d'invito e di reset con le stesse regole.
   - 15/10: **aspetta la decisione 37 del developer** (coordinatore, via di A5). Intanto A5a lascia all'API il minimo di
     8 caratteri anche nei corpi nuovi (`AuthRegisterRequest` con l'invito, `PasswordResetRequest`).
+  - 15/10 pomeriggio: **la decisione 37 è presa**. Le regole stanno nel backend, che le applica anche all'API; un
+    endpoint le espone al frontend; la CLI usa la stessa funzione; l'indicatore di robustezza resta; le password già
+    salvate restano valide. **Si fa nel lotto A6c**, dopo A6b e prima di A8: dettagli nel piano, «Decisione 37».
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A1.9».
 - **A-7 · Doc per sviluppatori non allineate al codice, trovate in A3** — minimo; A (15/10, `docs-writer`).
   - `architecture/access_control.md:116-123`:
@@ -2556,6 +2559,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Finché non sono tradotte il build stretto resta verde: le pagine vecchie non puntano alle ancore nuove.
   - Si fa dopo A6–A9, che toccano di nuovo le stesse pagine. La prepara il lotto A10, solo su richiesta
     esplicita del developer (coordinatore, 15/10).
+  - In `admin/configuration` IT, FR ed ES manca tutta la sezione «Accounts and Sign-ups» (`#accounts`): nessuna
+    delle tre variabili `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`. Il coordinatore
+    (15/10, 16:56) conferma che è debito di A.
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
 - **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
@@ -2584,6 +2590,20 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `/system/instance`, da concordare con H e con la decisione 15), oppure `tokens/inspect` che sul blocco
     risponde come per un link non valido quando lo scopo è `invite`.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.10».
+- **A-14 · `access_control.md`: «The last OWNER cannot remove themselves» contraddice «Self-Management»** — minimo;
+  trovata dal `docs-writer` di A6a (15/10), fuori dal perimetro di A, segnalata al coordinatore.
+  - In «Key Rules & Constraints» l'ultimo OWNER non può togliersi; in «Self-Management», e nel codice
+    (`BrokerService.leave_broker`), l'ultimo OWNER che se ne va elimina il broker.
+  - La pagina è del controllo d'accesso ai broker: la correzione è di chi la tiene (W, o chi decide il coordinatore).
+  - **Assegnata a W** dal coordinatore (15/10, 16:56), con la doc di `leave_broker`.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6.5».
+- **A-15 · La docstring di `instance_block.py` non cita la sonda dell'indirizzo** — minimo; trovata dal
+  `docs-writer` di A6a (15/10). Il file è di H.
+  - La docstring elenca come esempi le rotte pubbliche fuori da `ALLOWED_WHEN_BLOCKED`. Da A6a ce n'è un'altra,
+    `GET /auth/address-probe`, che con l'istanza bloccata risponde 401 come le altre.
+  - Una riga, da mettere nel lotto piccolo di H su `ALLOWED_WHEN_BLOCKED`, o da A al prossimo aggiornamento di base.
+  - **Girata ad H** dal coordinatore (15/10, 16:56).
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6.5».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -2901,6 +2921,15 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   - `ai_export/components/fx_timing_context.py:361-362` (rendimenti dal minimo e dal massimo) → U9, CP-12;
   - frontend, per Y con U8: `lib/charts/signals/CompoundSignal.ts:69` (curva what-if, eccezione interattiva da
     dichiarare, R19) e `lib/components/risk/levels/levelHelpers.ts:359` (rendimento che recupera una perdita).
+  - **15/10, nella revisione di V-3 per W**: la quantità per posizione a una data non ha una funzione nella casa, e oggi
+    si conta in più posti: in `transactions/balances.py` (`get_asset_holdings` e la metà delle quantità di
+    `_get_balances_before_date` e del replay della validazione) e nel `cumulative_qty` del motore. Da decidere se il
+    registro delle quantità appartiene alla casa. La metà della cassa la rifà W come W-B19, su `native_balances`.
+  - **15/10, nel piano di CP-6**: un buco nei cambi si legge in due modi. Il motore valuta i titoli e la cassa in
+    transito a giorno esatto (`fx_rate_map.get`: niente cambio → valore mancante, `daily_state.py:1031`,
+    `_convert`); la cassa nativa porta avanti l'ultimo cambio noto senza limite (`native_cash._rate_at`). Con un buco
+    oltre la finestra di riempimento di `convert_bulk`, la cassa resta valutata e i titoli no. Una sola regola per i
+    buchi → U1, CP-11. CP-6 usa una sola funzione dei giorni di cambio, che riceve la lettura del chiamante.
 
   Dettagli: [piano J](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §1.2 «Copie nuove».
 - ↪ **J-2 · Il server di test costruisce frontend e documentazione dentro i 300 s d'avvio** — spostata nella sezione C
@@ -2938,6 +2967,129 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
     gate-aiosqlite-leak` (9). `all-backend --workers 2` verde senza rapporti. Dettagli: piano J, §10 «J-6».
   - In `dev_release2` con `e2cb55054` (J-6 `b49a54645`); la regola è la n. 7 di
     `.github/instructions/backend-testing.instructions.md`.
+- **J-7 · Il frontend dei test si costruisce in produzione e in debug** — basso, tempo dei test; J, 15/10 (C-94),
+  da smistare a un treno dal coordinatore. Le due parti chiedono build diverse:
+  - il server di test vuole il debug: `dev.py:204` (`debug_mode = True` in modalità test) e `auto_build_frontend`
+    (`dev.py:2110`), che ricostruisce quando il marcatore `frontend/build/.build-debug` non corrisponde (`:2124`);
+  - il runner frontend chiede la produzione: `_frontend_common.py:93` (`debug=False`), attraverso il controllo
+    generico `cli_base.auto_build_frontend` (`:620`), che il marcatore non lo legge.
+
+  Effetti, letti nel codice:
+  - **server condiviso** (il percorso normale): il server costruisce in debug prima dei test, poi il runner trova la
+    build aggiornata. Quindi i test frontend girano sul bundle di debug, anche se il runner chiede la produzione;
+  - **copertura JS**: ogni run costruisce due volte. Il server ricostruisce in debug, perché il marcatore della run
+    precedente dice produzione; quella build cancella `.coverage-instrumented`, perché adapter-static svuota
+    `build/`; allora `_ensure_frontend_build` (`:71-74`) forza la build strumentata di produzione;
+  - **server avviato da Playwright** (galleria, `--no-shared-server`, `playwright test` diretto): prima la build di
+    produzione, del runner o della CI (`release.yml:172`), poi il `webServer` ricostruisce in debug.
+
+  Da decidere: un solo tipo di build per i test, su cui le due parti concordano (debug, strumentata sotto la
+  copertura JS), oppure un server di test che accetta la build che trova. Collegato, da C-94: con `--no-shared-server`
+  e `playwright test` diretto le build restano dentro il tempo massimo del `webServer`. Il suo env
+  (`playwright.config.ts:31-39`) porta la strumentazione della copertura JS, e un passo `--build-only` senza
+  quell'env costruirebbe un'altra cosa. Deciso il tipo di build, anche quei percorsi possono avere il passo prima di
+  Playwright. Dettagli: piano J, §10 «C-94».
+- **J-8 · Il runner frontend chiama ancora `npx` senza controllare `node_modules`** — basso, robustezza; J, 15/10
+  (C-94), runner condiviso: da spostare nella sezione C se il coordinatore preferisce. C-94 ferma con un messaggio
+  chiaro il percorso delle build (`dev.py front build`, `api client|sync`, quindi il server di test e
+  `_ensure_frontend_build`); restano fuori le chiamate dirette del runner, che senza `frontend/node_modules` vanno al
+  registro: `npx vitest run` in `_frontend_ai_export.py:45`, `_frontend_asset.py:14,66`, `_frontend_broker.py:17`,
+  `_frontend_fx.py:14`, `_frontend_portfolio.py:143-295`, `_frontend_transaction.py:13`, `_frontend_user.py:14`,
+  `_frontend_utility.py:20,190,343`, `_consolidate.py:265`; `npx playwright test` in `_consolidate.py:179`. Le azioni
+  Playwright passano prima da `_ensure_frontend_build`, che ora si ferma, e lanciano `npm run test:e2e`, non `npx`;
+  quelle solo Vitest no. Cura possibile: lo stesso controllo di `dev.require_frontend_dependencies` in un punto comune
+  del runner, oppure i binari di `frontend/node_modules/.bin` al posto di `npx`. Dettagli: piano J, §10 «C-94».
+- **J-9 · Il lotto da ADJUSTMENT-in prende la valuta della riga, non quella del costo** — medio, numeri; trovata dal
+  test-author di W (V-3), verificata da J il 15/10. `fifo/engine.py:353` apre il lotto con la `currency` della riga,
+  mentre il prezzo è `cost_basis_override`, che sta in `cost_basis_currency`. Con `currency` nulla, ammessa perché
+  l'importo è 0 (`db/models.py`, docstring di `Transaction`), `FxRateResolver.convert` (`financial_math/lots/conversions.py:59-60`)
+  tratta il costo come già nella valuta del report: niente conversione, niente segnalazione. Il costo medio legge
+  invece `cost_basis_currency` (`average_cost.py:280-289`), quindi i due motori leggono lo stesso costo in due valute.
+  Tocca ogni ADJUSTMENT-in con il costo in un'altra valuta, e anche le righe convertite da V-3. Cura: la valuta del
+  lotto è `cost_basis_currency` quando il prezzo viene dall'override. Prima il rosso: un ADJUSTMENT-in in USD e un
+  report in EUR, con `currency` diversa e con `currency` nulla. Dettagli: piano J, §10 «Domande di W N1».
+- **J-10 · I lotti falliscono quando il broker mittente di un TRANSFER è fuori dallo scope** — medio, numeri e
+  chiarezza; trovata dal test-author di W, allargata da J il 15/10. Letta nel codice, non provata.
+  `_load_transactions` (`lots_analysis_service.py:518-520`) carica solo i broker dello scope, e la pagina del broker
+  apre i lotti con `broker_ids=[broker.id]` (`brokers/[id]/+page.svelte:676`). Quindi anche il proprietario, sulla
+  pagina di B, vede `FAILED` con `TRANSFER_PAIR_MISSING` per un titolo arrivato da A con la coppia intera; un
+  co-proprietario che non vede A lo vede ovunque. Solo `PERFORMANCE_HISTORY` rifà il giro su tutti i broker
+  accessibili (`:213-216`). L4 (`test_portfolio_cost_currency.py:1053`) copre solo il caso con entrambi i broker nello
+  scope. Da decidere:
+  - per il proprietario, girare sui broker accessibili e filtrare l'uscita sullo scope, come la performance;
+  - per chi non vede il mittente, leggere la gamba come l'orfano dopo V-3: un ADJUSTMENT al suo costo congelato.
+
+  Dettagli: piano J, §10 «Domande di W N1».
+- **J-11 · Un ADJUSTMENT in uscita senza costo si legge come unità distrutte** — da decidere (developer), numeri; J,
+  15/10, nella revisione di V-3. Letta nel codice, non provata.
+  - **Il caso**: si cancella il broker che riceve un TRANSFER. Sopravvive la gamba in uscita, che non può avere costo
+    (`cost_basis_pair: ["forbidden", …]`). Alla lettera della decisione del 13/10 diventa un ADJUSTMENT −q senza
+    override.
+  - **Dashboard**: senza override `_is_capital_adjustment` (`daily_state.py:1119-1133`) è falso, quindi il capitale
+    non scende. P&L di A da +80, uscita al mercato con `_transfer_leg_capital`, a −20.
+  - **Lotti**: l'`ADJUSTMENT_OUT` chiude a prezzo 0 (`fifo/engine.py:374-382`, `:613`): realizzato −80 e lotto a −20
+    (`lots_analysis_service.py:745-769`).
+  - **Con un override**: la Dashboard dà già 60, cioè il guadagno della posizione. I lotti restano a −20 finché FIFO
+    non legge un `ADJUSTMENT_OUT` con costo come una distribuzione al suo costo.
+  - **Lo split di una coppia** (`batch_edits.py:126-139`) produce oggi la stessa uscita senza costo: nella vista
+    combinata il P&L scende del costo delle unità spostate.
+  - **Opzioni mandate al coordinatore il 15/10**:
+    1. raccomandata: override sulla gamba in uscita dalla funzione dell'Auto, più la regola FIFO, lotto di J con il
+       suo rosso;
+    2. intanto, solo le gambe in entrata;
+    3. alla lettera.
+
+  - **Decisione del coordinatore, 15/10 10:04: la 2 per ora.** Si convertono solo le gambe di titoli in arrivo; quelle
+    in uscita restano TRANSFER orfani come oggi. Le gambe di cassa diventano DEPOSIT o WITHDRAWAL come previsto: capitale
+    e P&L invariati, ma cambiano due serie della Dashboard (finanziamento degli acquisti dai pool K/R/W, punti dei
+    depositi), da dichiarare (detto a W).
+  - **La scelta definitiva va al developer come punto 47**, con la raccomandazione di J (la 1) e la stessa domanda sullo
+    split di una coppia: che cosa vuol dire per le unità in uscita. Se sceglie la 1: lotto di J con il rosso prima, poi
+    la correzione degli orfani in uscita.
+
+  Dettagli: piano J, §10 «Domande di W N1».
+- **J-12 · Con l'analisi dei lotti `FAILED` il pannello disegna lo stesso lotti e cifre** — medio, chiarezza (utenti
+  non esperti); trovata dal test-author di W (V-3, caso speculare), confermata da J nel codice il 15/10.
+  - **Il caso**: un TRANSFER in uscita orfano. FIFO salta la coppia irrisolta (`_resolve_transfer_pair`, `FAILED` con
+    `TRANSFER_PAIR_MISSING`), quindi il lotto di A resta con 10 X aperti, valore 300 e P&L 100, mentre la posizione e
+    le righe WAC dicono 6.
+  - **Il pannello** (`LotsAnalysisPanel.svelte:478-482`) mostra l'avviso rosso, poi disegna lo stesso grafici e lotti.
+  - **Da decidere col coordinatore**:
+    - il backend non dà le cifre dei lotti quando lo stato è `FAILED` (`_QUANTITATIVE_FAILURE_CODES` dice già «whole
+      FIFO reconstruction unreliable»): un solo punto per ogni consumatore, AI Export compreso;
+    - oppure il pannello le nasconde.
+
+  Prima un rosso sul caso speculare di W. Dettagli: piano J, §10 «Domande di W N1».
+- **J-13 · Volatilità, Sharpe e Beta mobili mostrano «giorni» ma contano osservazioni** — basso, chiarezza (utenti
+  non esperti); J, 15/10, nella nota sul punto 29 per il coordinatore.
+  - `rolling_volatility`, `rolling_sharpe` e `rolling_beta` dichiarano `"x-suffix": "days"` sulla finestra (come oggi
+    `rolling_return`), mentre il tooltip condiviso `signals.tooltips.riskWindow` dice «Number of prepared daily return
+    observations».
+  - Per questi stimatori le osservazioni sono la misura giusta (annualizzazione per periodi): si cambia **solo
+    l'etichetta**, in «osservazioni», nei 4 cataloghi. Deciso dal coordinatore il 15/10: nessun cambio di calcolo.
+  -   Va con CP-10a, insieme al punto 29 (un solo Rolling Return a giorni di calendario, approvato dal developer il 15/10).
+
+  Dettagli: piano J, §10 «Decisioni 26–30 (15/10) e piano dei lotti sbloccati».
+- **J-14 · Copie del realizzato e della G/L % da portare alla regola del punto 26** — medio, numeri; J, 15/10. Il
+  developer (punto 26): «se ci sono altre aree di codice che fanno una cosa simile, magari duplicando, segna che bisogna
+  fattorizzare e ottenere il meglio dalle 2 con la policy corretta». Regola: costo al cambio dell'acquisto, proventi al
+  cambio della vendita; il motore della Dashboard la applica già.
+  - nei lotti di J (CP-7, con un rosso per ogni comportamento che cambia): `lots/histories.py:160-182`,
+    `lots_analysis_service.py:728-770` e `:1042-1045`, e di riflesso l'AI Export (`payloads/portfolio_broker.py:604-606`,
+    `:775-776`);
+  - duplicati senza cambio di valore: l'identità del periodo nell'AI Export (`portfolio_financial.py:489`,
+    `broker_financial.py:434`, CP-12); la G/L % in `portfolio_service.py:824`, `:939` (CP-4);
+  - **in un file di W**: `brokers/summary.py:119-135`, terza copia della G/L %, nella valuta dell'asset: da smistare
+    dal coordinatore.
+
+  Dettagli: piano J, §10 «Decisioni 26–30 (15/10) e piano dei lotti sbloccati», «Inventario del punto 26».
+- **J-15 · La galleria ristampa l'output di Playwright senza flush** — basso, strumenti (programma colori); J, 15/10,
+  nella prova di C-94. `dev.py`, `cmd_mkdocs_gallery`, `print(line, end='')` nel ciclo su `proc.stdout`: su una pipe
+  (il `tee` di `gallery_snapshot.sh`, i log) Python bufferizza a blocchi, e l'avanzamento di Playwright arriva a pezzi da
+  8 KB o tutto alla fine, nell'ordine giusto ma senza l'ora vera; sul terminale va bene. Com'era prima di C-94. Cura
+  proposta: `flush=True` su quella riga, col via del coordinatore colori.
+
+  Dettagli: piano J, §10, C-94, passo 6 (3), «Fuori pista».
 
 ## Z · Sospensione e risveglio (fase 01)
 
