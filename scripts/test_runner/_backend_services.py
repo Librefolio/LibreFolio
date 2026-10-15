@@ -496,11 +496,31 @@ def services_email_delivery(verbose: bool = False, test_names: list = None) -> b
 def services_email_checks(verbose: bool = False, test_names: list = None) -> bool:
     """Test the configuration checks of the optional e-mail (email.smtp, email.smtp_encryption)."""
     print_section("Services: E-mail Configuration Checks")
-    print_info("Testing: backend/app/services/email/checks.py")
-    print_info("Tests: off/ok/invalid with problem and variable, plain text local or public, EMAIL_CONFIG_CHECKS, no password, host, user or sender in a detail")
+    print_info("Testing: backend/app/services/email/checks.py, their place in backend/app/services/platform/config_audit.py")
+    print_info("Tests: off/ok/invalid with problem and variable, plain text local or public, EMAIL_CONFIG_CHECKS, no password, host, user or sender in a detail; the end of CONFIG_CHECKS, run_config_checks, either module imported first in a fresh interpreter, the startup log")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_checks.py", test_names)
     return run_command(cmd, "E-mail configuration check tests", verbose=verbose)
+
+
+def services_email_flows(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what an action of the application sends: the language of an account's emails, and the test email."""
+    print_section("Services: E-mail Flows")
+    print_info("Testing: backend/app/services/email/flows.py")
+    print_info("Tests: account language (its own, else default_language, else English; no settings row created), the test email to the account's own address in its language, nothing sent when e-mail is off or unusable, configuration read off the event loop")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_flows.py", test_names)
+    return run_command(cmd, "E-mail flow tests", verbose=verbose)
+
+
+def services_provider_cooldown(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the process's provider pauses after HTTP 429 and their two variables."""
+    print_section("Services: Provider Cooldown")
+    print_info("Testing: backend/app/services/platform/provider_cooldown.py, backend/app/config/sleep_wake.py")
+    print_info("Tests: LIBREFOLIO_PROVIDER_COOLDOWN_BASE/MAX_SECONDS and settings, instance read per call, (domain, provider, scope) keys, base/max read at each refusal, in-flight answers ignored, base 0 off, defaults if invalid, logged once per (variable, code) per process (fake clock)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_cooldown.py", test_names)
+    return run_command(cmd, "Provider cooldown tests", verbose=verbose)
 
 
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
@@ -511,6 +531,26 @@ def services_session_version(verbose: bool = False, test_names: list = None) -> 
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_session_version.py", test_names)
     return run_command(cmd, "Session version tests", verbose=verbose)
+
+
+def services_address_probe(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the address probe: the signed nonce of the Invite dialog's server-address check (A6a, D-A3)."""
+    print_section("Services: Address Probe")
+    print_info("Testing: backend/app/services/accounts/address_probe.py (issue_probe_nonce, verify_probe_nonce)")
+    print_info("Tests: 56-byte layout under derive_key('accounts.address-probe.v1'), valid while expiry >= now, every forgery and malformed text refused, another instance refused, hmac.compare_digest, never raises")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_address_probe.py", test_names)
+    return run_command(cmd, "Address probe tests", verbose=verbose)
+
+
+def services_account_deletion_preview(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what deleting an account would take, the one helper both deletions use, and the hook of lot A7 (A6a)."""
+    print_section("Services: Account Deletion Preview")
+    print_info("Testing: backend/app/services/accounts/user_service.py (preview_user_deletion, delete_account, account_protection)")
+    print_info("Tests: the preview is what delete_user then deletes in seven scenarios, transaction counts, transfers left unpaired in both directions, writes nothing; report files removed once after the commit, off the loop, never when nothing is deleted or the deletion fails; the hook protects nobody")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_deletion_preview.py", test_names)
+    return run_command(cmd, "Account deletion preview service tests", verbose=verbose)
 
 
 def services_edge_cases(verbose: bool = False, test_names: list = None) -> bool:
@@ -1246,8 +1286,30 @@ Note: No backend server required.
         "email-checks",
         services_email_checks,
         name="E-mail Configuration Checks",
-        desc="email.smtp: off, ok, or error with problem and variable; email.smtp_encryption: ok unless plain text to a non-local host (warning); EMAIL_CONFIG_CHECKS; no password anywhere, no host, user or sender in a detail",
-        # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path.
+        desc="email.smtp: off, ok, or error with problem and variable; email.smtp_encryption: ok unless plain text to a non-local host (warning); EMAIL_CONFIG_CHECKS; no password anywhere, no host, user or sender in a detail; config_audit.CONFIG_CHECKS ends with them, run_config_checks carries their results, either module imports first in a fresh interpreter; the startup audit logs an error, a warning, nothing when off, never the password",
+        # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path; the
+        # startup audit runs in test mode with its data directory in tmp_path, and so do the fresh interpreters of the import order.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-flows",
+        services_email_flows,
+        name="E-mail Flows",
+        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server; LIBREFOLIO_SMTP_* removed then set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "provider-cooldown",
+        services_provider_cooldown,
+        name="Provider Cooldown",
+        desc="config.sleep_wake: LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS (ASCII digits, 0–86400, 0 = off, default 60) and _MAX_SECONDS (1–86400, default 3600) read at each call, blank is unset, SleepWakeConfigError with variable and code, a max below an enabled base refused; provider_cooldown: PROVIDER_COOLDOWNS read at call time, keys (domain, provider, scope), wait_before_call/record_refusal/record_success/record_no_verdict over check/refused/succeeded/released with base and max read at each refusal and retry_after passed on, cooldown_snapshot, reset_provider_cooldowns; the answers of calls in flight while a pause runs change nothing (five 429s at once count one refusal, a late success does not lift the pause); base 0 records and skips nothing; an invalid configuration never raises, works on 60/3600 and is logged once per (variable, code) per process",
+        # PURE: no DB, no server; environment changed only through monkeypatch, process-local; the module instance
+        # replaced by monkeypatch. The once-per-process log is read in a fresh interpreter of its own (sys.executable,
+        # run in tmp_path, with a copy of this environment): no DB, no server there either.
         isolation="pure",
     )
     add_test(
@@ -1258,6 +1320,28 @@ Note: No backend server required.
         desc="sv claim: SessionClaims round trip, no sv = version 0, untrusted tokens are None, get_current_user refuses another version, end_sessions, +1 by reset/deactivate/demote only, refusals change nothing",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server. The JWT secret and hash_password are replaced with monkeypatch, in this process only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "address-probe",
+        services_address_probe,
+        name="Address Probe",
+        desc="issue_probe_nonce/verify_probe_nonce: base64url(rand16 ‖ expiry_be8 ‖ HMAC-SHA256(derive_key('accounts.address-probe.v1'))), 120 s while expiry >= now, every altered, malformed, oversized, non-canonical or foreign nonce refused, hmac.compare_digest, never raises",
+        # PURE: no lane DB, no server, no network; the instance key is set with monkeypatch and the data directory points
+        # to tmp_path, where the generated keys of the «another instance» case live.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "account-deletion-preview",
+        services_account_deletion_preview,
+        name="Account Deletion Preview",
+        desc="preview_user_deletion = what delete_user deletes (sole owner, two owners, owner over editor and viewer, editor/viewer only, inactive co-owner, mixed, no broker), transaction counts, transfers_unpaired both directions, writes nothing; delete_account: report files once after the commit, off the loop, not when nothing is deleted, nothing on failure; account_protection None",
+        # PURE: every database is a private file under tmp_path, copied from one taken to head by the real migrations in a
+        # child process (create_all lacks the ON DELETE CASCADE of broker_user_access that delete_user relies on); no session
+        # on the lane DB, no server. The BRIM report directory is moved under tmp_path and the report cleanup replaced with
+        # monkeypatch, in this process only.
         isolation="pure",
     )
     add_test(cat, "edge-cases", services_edge_cases, name="Transaction Edge Cases", desc="Decimal precision, currency validation, date edge cases")

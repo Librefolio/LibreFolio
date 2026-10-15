@@ -352,7 +352,7 @@ describe('DataTable — multi selection', () => {
 
     it('select-all replaces the selection with the current page, deselect-all only drops it', async () => {
         await setupI18n();
-        // Documented as intentional at DataTable.svelte:713 — the asymmetry is the
+        // Documented as intentional in toggleAllPageRows (DataTable.svelte) — the asymmetry is the
         // contract, so it is pinned here rather than reported.
         const {component, onSelectionChange} = mount('multi-pages', {data: rows(6), defaultPageSize: 3, alwaysShowPagination: true});
         const api = component as unknown as {toggleRowSelectionById: (id: string) => void};

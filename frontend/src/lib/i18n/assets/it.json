@@ -379,7 +379,27 @@
     "deleteSuccess": "{n} evento/i eliminato/i",
     "deleteNotFound": "Evento/i non trovato/i: {ids}",
     "deleteBlocked": "Impossibile eliminare: {n} evento/i ancora in uso da transazioni ({accessible} visibili a te, {hidden} nei portafogli di altri utenti)",
-    "fxBannerContext": "per eventi dividendi/cassa"
+    "fxBannerContext": "per eventi dividendi/cassa",
+    "exists": {
+      "title": "Questo evento esiste già",
+      "hint": "L'asset ha già un evento di questo tipo in questa data: usalo, oppure modificalo. Non è stato salvato nulla.",
+      "use": "Usa questo",
+      "edit": "Modifica questo",
+      "fromProvider": "Dal fornitore dei dati",
+      "manual": "Inserito a mano",
+      "linked": "{n, plural, =0 {non collegato a transazioni} one {collegato a # transazione} other {collegato a # transazioni}}",
+      "providerNotEditable": "Il fornitore dei dati aggiorna i suoi eventi: questo non si modifica da qui."
+    },
+    "saveError": {
+      "currencyMismatch": "Non è stato salvato nulla: l'evento del {date} ({type}) è in {currency}, ma l'asset è in {expected}. Convertine l'importo o togli la riga{more, plural, =0 {} one { (e # altro)} other { (e altri #)}}.",
+      "keyConflict": "Non è stato salvato nulla: due eventi manuali di tipo {type} cadrebbero il {date}. Cambia la data o il tipo di uno dei due.",
+      "notEditable": "Non è stato salvato nulla: uno degli eventi non esiste più o non si può modificare da qui. Ricarica i dati e riprova.",
+      "assetNotFound": "Non è stato salvato nulla: l'asset non esiste più. Ricarica la pagina.",
+      "unknownType": "Non è stato salvato nulla: «{value}» (riga del {date}) non è un tipo di evento. Usa DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT o MATURITY_SETTLEMENT.",
+      "generic": "Non è stato salvato nulla: {message}",
+      "inUse": "Non è stato salvato nulla: l'evento {type} del {date} è collegato a {n, plural, one {# transazione} other {# transazioni}} e non si può cancellare. Togli prima il collegamento dalle transazioni{more, plural, =0 {} one { (e un altro evento)} other { (e altri # eventi)}}.",
+      "notDeletable": "Non è stato salvato nulla: uno degli eventi da cancellare non esiste più o non si può cancellare da qui. Ricarica i dati e riprova."
+    }
   },
   "providerErrors": {
     "NO_DATA": "Nessun dato disponibile per questo strumento sul provider.",

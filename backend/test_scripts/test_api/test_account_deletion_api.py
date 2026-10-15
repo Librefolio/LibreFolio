@@ -32,25 +32,43 @@ The administrator guard (ACCDEL-002 to ACCDEL-005) runs on a private instance in
 SQLite file and BRIM directory under ``tmp_path``, the handler called in-process. The shared lane
 always has e2e_test_admin, so «the only active administrator» can be a real state only there, and
 nothing of it reaches the lane.
+
+Lot A6a (plan phase01Accounts §A6.1) adds what the account itself can ask before deleting:
+``GET /auth/users/me/deletion-preview``, for any signed-in account, 401 without a session, answers
+``{user_id, username, brokers_deleted: [{id, name, transactions}], brokers_left: [{id, name, role}],
+transfers_unpaired}`` for the caller — the shape of the administrator's ``GET /users/{id}/deletion-preview``
+—, both lists by broker id, by the rule above; it writes nothing. ACCDEL-006 and ACCDEL-007 run it on
+the lane, on accounts and brokers of their own; red until A6a, the route does not exist. The handler
+of ``DELETE /auth/users/me`` moves to ``user_service.delete_account`` in the same lot, its behaviour
+unchanged: ACCDEL-001 to ACCDEL-005 hold as they are, and ACCDEL-002 to ACCDEL-005 still call it
+with ``response``, ``http_request``, ``current_user`` and ``session``.
+
+ACCDEL-008 (lot A6a) pins the failure path of ``DELETE /auth/users/me`` on a private instance: a
+technical failure part-way — after a shared broker was already left inside the transaction — answers
+500 «nothing was deleted», leaves every row in place, removes no report file, and logs «Account
+deletion failed: nothing was deleted» with the account's ``user_id``. Red until the handler stops
+reading ``current_user`` after ``delete_user``'s rollback, which expires it: ``MissingGreenlet``
+escapes instead of the 500.
 """
 
 import asyncio
 import io
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 import httpx
 import pytest
 import pytest_asyncio
 from fastapi import HTTPException, Request, Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
+from structlog.testing import capture_logs
 
 from backend.app.api.v1 import auth as auth_api
 from backend.app.config import is_test_mode
@@ -83,6 +101,11 @@ TRANSFER_COST_BASIS = ("USD", Decimal("50"))
 REPORT_CSV = b"date,description,amount,currency\n2026-01-05,account deletion probe,1000.00,EUR\n"
 PRIVATE_PASSWORD = "PrivateInstance123!"
 ACCOUNT_DELETED = {"message": "Account deleted successfully"}
+SELF_PREVIEW_PATH = "/auth/users/me/deletion-preview"
+NOTHING_WAS_DELETED = "nothing was deleted"
+#: The one event the handler logs when the deletion fails, word for word.
+DELETION_FAILED_EVENT = "Account deletion failed: nothing was deleted"
+LOG_CANARY = "canary: the capture sees the events of the auth endpoints' own logger"
 
 
 # ============================================================================
@@ -846,3 +869,262 @@ class TestLastActiveAdministrator:
         assert after == expected_others, f"The regular user must be gone and nobody else touched: {after}"
 
         print_success("✓ The regular user's account is deleted: the guard concerns administrators only")
+
+
+# ============================================================================
+# WHAT A DELETION WOULD TAKE, ASKED BY THE ACCOUNT ITSELF (lot A6a)
+# ============================================================================
+
+
+async def _broker_facts(engine: AsyncEngine, broker_ids: list[int]) -> tuple[dict[int, str], dict[int, int]]:
+    """(name, transaction count) of this test's brokers, by id: read in the test database, scoped to them."""
+    async with AsyncSession(engine) as session:
+        named = (await session.execute(select(Broker.id, Broker.name).where(Broker.id.in_(broker_ids)))).all()
+        counted = (await session.execute(select(Transaction.broker_id, func.count()).where(Transaction.broker_id.in_(broker_ids)).group_by(Transaction.broker_id))).all()
+    counts = dict(counted)
+    return dict(named), {broker_id: counts.get(broker_id, 0) for broker_id in broker_ids}
+
+
+def _preview_body(user_id: int, username: str, deleted: list[int], left: dict[int, str], facts: tuple[dict[int, str], dict[int, int]], *, unpaired: int) -> dict:
+    """The exact answer of GET /auth/users/me/deletion-preview: both lists by broker id, the role as its value."""
+    names, counts = facts
+    return {
+        "user_id": user_id,
+        "username": username,
+        "brokers_deleted": [{"id": broker_id, "name": names[broker_id], "transactions": counts[broker_id]} for broker_id in sorted(deleted)],
+        "brokers_left": [{"id": broker_id, "name": names[broker_id], "role": role} for broker_id, role in sorted(left.items())],
+        "transfers_unpaired": unpaired,
+    }
+
+
+async def _self_preview(client: httpx.AsyncClient) -> tuple[int, object]:
+    """(status, body) of GET /auth/users/me/deletion-preview with ``client``'s session, if any; the text when the body is not JSON."""
+    resp = await client.get(f"{API_BASE}{SELF_PREVIEW_PATH}", timeout=TIMEOUT)
+    try:
+        return resp.status_code, resp.json()
+    except ValueError:
+        return resp.status_code, resp.text
+
+
+class TestDeletionPreview:
+    """GET /auth/users/me/deletion-preview: what deleting one's own account would take (lot A6a), on the lane."""
+
+    @pytest.mark.asyncio
+    async def test_each_account_previews_what_its_deletion_would_take(self, test_server):
+        """ACCDEL-006 — NEW (A6a), red today: the route does not exist.
+
+        On the scenario of ACCDEL-001, before anything is deleted, each account asks for itself:
+        - A: X and Z would go (A their last OWNER) with their transactions; Y would stay with A an OWNER, W with A a
+          VIEWER; one transfer half would be left alone — Y's incoming leg, once X's outgoing leg is gone;
+        - B: W would go (B its only OWNER; A only views it), with no transaction; Y would stay with B an OWNER, Z with B
+          an EDITOR; no half left alone.
+        Names and transaction counts are read from the test database, scoped to this test's brokers. Asking writes
+        nothing: the scenario is in place afterwards, files included.
+        """
+        print_section("ACCDEL-006: each account previews what its deletion would take")
+        engine = _test_db_engine()
+        owned = _Owned()
+
+        async with httpx.AsyncClient() as client_a, httpx.AsyncClient() as client_b:
+            try:
+                s = await _build_scenario(client_a, client_b, owned)
+                await _assert_scenario_in_place(client_a, client_b, engine, s)
+                facts = await _broker_facts(engine, s.broker_ids)
+
+                a_preview = await _self_preview(client_a)
+                b_preview = await _self_preview(client_b)
+
+                expected_a = _preview_body(s.a_id, s.a_username, [s.x, s.z], {s.y: "OWNER", s.w: "VIEWER"}, facts, unpaired=1)
+                expected_b = _preview_body(s.b_id, owned.users[s.b_id][1], [s.w], {s.y: "OWNER", s.z: "EDITOR"}, facts, unpaired=0)
+                violations: list[str] = []
+                _expect(violations, a_preview == (200, expected_a), f"A: expected 200 with {expected_a}, got {a_preview}")
+                _expect(violations, b_preview == (200, expected_b), f"B: expected 200 with {expected_b}, got {b_preview}")
+                try:
+                    await _assert_scenario_in_place(client_a, client_b, engine, s)
+                except AssertionError as changed:
+                    violations.append(f"asking must write nothing, yet the scenario changed: {changed}")
+                assert not violations, "GET /auth/users/me/deletion-preview broke its contract:\n- " + "\n- ".join(violations)
+            finally:
+                cleanup_errors = await _cleanup(owned, engine)
+                assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"
+
+        print_success("✓ A would lose X and Z and leave one transfer half alone; B would lose W; nothing written")
+
+    @pytest.mark.asyncio
+    async def test_anonymous_gets_401_and_an_account_without_brokers_has_nothing_to_lose(self, test_server):
+        """ACCDEL-007 — NEW (A6a), red today: the route does not exist.
+
+        A fresh account of this test, with no broker: 200, exactly {user_id, username, brokers_deleted: [],
+        brokers_left: [], transfers_unpaired: 0} — the presence barrier that gives the 401 its meaning. Without a
+        session: 401.
+        """
+        print_section("ACCDEL-007: anonymous 401; an account without brokers has nothing to lose")
+        engine = _test_db_engine()
+        owned = _Owned()
+
+        async with httpx.AsyncClient() as client, httpx.AsyncClient() as anonymous:
+            try:
+                user_id, username, _ = await _register(client, owned, "accdel_bare")
+
+                own = await _self_preview(client)
+                stranger = await _self_preview(anonymous)
+
+                expected = {"user_id": user_id, "username": username, "brokers_deleted": [], "brokers_left": [], "transfers_unpaired": 0}
+                assert own == (200, expected), f"Presence barrier: an account without brokers must get 200 with {expected}, got {own}"
+                assert stranger[0] == 401, f"Without a session the preview must be 401, got {stranger}"
+            finally:
+                cleanup_errors = await _cleanup(owned, engine)
+                assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"
+
+        print_success("✓ 200 with nothing to lose for the account; 401 without a session")
+
+
+# ============================================================================
+# A TECHNICAL FAILURE DELETES NOTHING (lot A6a)
+# ============================================================================
+
+
+class _InjectedFailure(RuntimeError):
+    """The technical error a test injects half-way through an account deletion."""
+
+
+async def _co_owned_broker(engine: AsyncEngine, owner_ids: tuple[int, int]) -> tuple[int, int]:
+    """A broker of the private instance with two OWNERs, ``owner_ids``, and one DEPOSIT; return (broker id, deposit id)."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        broker = Broker(name="AccDel co-owned broker")
+        session.add(broker)
+        await session.flush()
+        session.add_all([BrokerUserAccess(user_id=owner_id, broker_id=broker.id, role=UserRole.OWNER, share_percentage=Decimal("0.5")) for owner_id in owner_ids])
+        deposit = Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=date.fromisoformat(DEPOSIT_DATE), amount=Decimal("1000"), currency="EUR")
+        session.add(deposit)
+        await session.commit()
+        return broker.id, deposit.id
+
+
+async def _private_rows(engine: AsyncEngine) -> dict[str, list[tuple[object, ...]]]:
+    """Every account, broker, access row and transaction of the private instance, read in a fresh session: the test owns them all."""
+    async with AsyncSession(engine) as session:
+        accounts = (await session.execute(select(User.id, User.username, User.is_active, User.is_superuser))).all()
+        brokers = (await session.execute(select(Broker.id, Broker.name))).all()
+        grants = (await session.execute(select(BrokerUserAccess.broker_id, BrokerUserAccess.user_id, BrokerUserAccess.role))).all()
+        transactions = (await session.execute(select(Transaction.id, Transaction.broker_id))).all()
+    return {
+        "accounts": sorted((user_id, username, bool(active), bool(superuser)) for user_id, username, active, superuser in accounts),
+        "brokers": sorted(tuple(row) for row in brokers),
+        "grants": sorted((broker_id, user_id, UserRole(role).value) for broker_id, user_id, role in grants),
+        "transactions": sorted(tuple(row) for row in transactions),
+    }
+
+
+def _delete_bulk_that_fails(shared_id: int, user_id: int, reached: list[tuple[list[int], bool]]) -> Callable[..., Awaitable[Any]]:
+    """A ``BrokerService.delete_bulk`` that raises ``_InjectedFailure``, the kind of failure UADM-054 injects.
+
+    Before raising it records what it was asked to delete, and whether ``user_id`` still holds its access to
+    ``shared_id`` — read in the deletion's own session, inside its transaction: the evidence that the failure strikes
+    part-way, once the shared broker was already left.
+    """
+
+    async def delete_bulk(self: BrokerService, items: list[BRDeleteItem], *args: Any, **kwargs: Any) -> Any:
+        access = await self.session.scalar(select(BrokerUserAccess.id).where(BrokerUserAccess.broker_id == shared_id, BrokerUserAccess.user_id == user_id))
+        reached.append((sorted(item.id for item in items), access is not None))
+        raise _InjectedFailure("injected technical failure while deleting a broker the account was the last owner of")
+
+    return delete_bulk
+
+
+def _spy_on_report_cleanup(monkeypatch: pytest.MonkeyPatch) -> list[list[int]]:
+    """Replace delete_files_for_brokers, under both names a caller may reach, by a spy that removes nothing; the broker ids of each call."""
+    calls: list[list[int]] = []
+
+    def delete_files_for_brokers(broker_ids: Any) -> int:
+        calls.append([int(broker_id) for broker_id in broker_ids])
+        return 0
+
+    monkeypatch.setattr(brim_provider, "delete_files_for_brokers", delete_files_for_brokers)
+    monkeypatch.setattr(user_service, "delete_files_for_brokers", delete_files_for_brokers, raising=False)
+    return calls
+
+
+async def _attempt_own_deletion(engine: AsyncEngine, user_id: int) -> tuple[Union[dict[str, str], HTTPException, None], Optional[Exception]]:
+    """``_delete_own_account``, with whatever else escapes the handler caught too: (what it answered, what escaped instead).
+
+    The helper's own setup assertions are not the handler's doing: they propagate.
+    """
+    try:
+        return await _delete_own_account(engine, user_id), None
+    except AssertionError:
+        raise
+    except Exception as escaped:  # reported by the test: a red must say what escaped, not stop at it
+        return None, escaped
+
+
+def _answer_violations(outcome: object, escaped: Optional[Exception]) -> list[str]:
+    """What is wrong with the handler's answer to the failure: anything but an HTTPException 500 saying «nothing was deleted»."""
+    if escaped is not None:
+        return [f"the handler must answer HTTPException 500 «{NOTHING_WAS_DELETED}»; instead {type(escaped).__name__} escaped from it ({escaped}), raised while handling {escaped.__context__!r}"]
+    if not (isinstance(outcome, HTTPException) and outcome.status_code == 500 and NOTHING_WAS_DELETED in str(outcome.detail)):
+        return [f"the handler must answer HTTPException 500 «{NOTHING_WAS_DELETED}», it answered {outcome!r}"]
+    return []
+
+
+class TestTechnicalFailure:
+    """DELETE /auth/users/me when the deletion fails half-way: all or nothing (D6), on a private instance."""
+
+    @pytest.mark.asyncio
+    async def test_a_failure_part_way_answers_500_logs_it_and_deletes_nothing(self, private_instance: _PrivateInstance, monkeypatch: pytest.MonkeyPatch):
+        """ACCDEL-008 — NEW (A6a), red today: the self-deletion twin of UADM-054.
+
+        leaver, an ordinary account, is an OWNER of a broker it shares with partner and the only OWNER of a broker
+        created after it, each with a DEPOSIT. Its deletion leaves the shared broker first (lower id), inside the
+        transaction, then reaches its own broker, where BrokerService.delete_bulk raises: delete_user rolls back and the
+        failure propagates.
+
+        The handler runs on the request's shape: ``_delete_own_account`` loads ``current_user`` in the very session it
+        hands to the handler, as get_current_user loads it in the request's session, so the rollback expires the very
+        object the handler holds. Expected:
+        - an HTTPException 500 whose detail says «nothing was deleted», and nothing else escaping;
+        - every row as before: both accounts, leaver's access rows (the shared one restored by the rollback), both
+          brokers and their DEPOSITs, partner's access;
+        - the report cleanup never called;
+        - exactly one structlog event «Account deletion failed: nothing was deleted», carrying leaver's user_id. Barrier
+          first: a canary through the auth module's own logger reaches the capture.
+        Evidence that the failure struck part-way: delete_bulk is reached once, for leaver's own broker, when leaver's
+        access to the shared broker is already gone inside the transaction.
+
+        Red today: the handler's except reads ``current_user.id`` to log, after the rollback expired it; that lazy load
+        cannot run outside SQLAlchemy's greenlet, so MissingGreenlet escapes instead of the 500 and the event is never
+        logged. create_all's schema is enough here: nothing is deleted on this path, so the ON DELETE CASCADE it lacks is
+        never needed.
+        """
+        print_section("ACCDEL-008: a technical failure part-way answers 500, logs it and deletes nothing")
+        engine = private_instance.engine
+        ids = await _create_accounts(engine, _Account("leaver", superuser=False), _Account("partner", superuser=False))
+        leaver, partner = ids["leaver"], ids["partner"]
+        shared, shared_deposit = await _co_owned_broker(engine, (leaver, partner))
+        sole, sole_deposit = await _sole_owned_broker(engine, leaver)
+        calls = _spy_on_report_cleanup(monkeypatch)
+        reached: list[tuple[list[int], bool]] = []
+        monkeypatch.setattr(BrokerService, "delete_bulk", _delete_bulk_that_fails(shared, leaver, reached))
+
+        # Presence barrier: every «still there» checked after the failure was a «there» right before it.
+        before = await _private_rows(engine)
+        assert shared < sole, f"Precondition: the shared broker must have the lower id, so that the deletion leaves it before failing: shared {shared}, sole {sole}"
+        assert [row[1] for row in before["accounts"]] == ["leaver", "partner"], f"Precondition: the two accounts: {before}"
+        assert before["grants"] == sorted([(shared, leaver, "OWNER"), (shared, partner, "OWNER"), (sole, leaver, "OWNER")]), f"Precondition: the three access rows: {before}"
+        assert before["transactions"] == sorted([(shared_deposit, shared), (sole_deposit, sole)]), f"Precondition: one DEPOSIT per broker: {before}"
+
+        with capture_logs() as events:
+            auth_api.logger.info(LOG_CANARY)
+            outcome, escaped = await _attempt_own_deletion(engine, leaver)
+        after = await _private_rows(engine)
+
+        assert any(event.get("event") == LOG_CANARY for event in events), "barrier: the events of the auth module's own logger do not reach capture_logs, so what this test reads of the log proves nothing"
+        logged = [event.get("user_id", "<no user_id>") for event in events if event.get("event") == DELETION_FAILED_EVENT]
+        violations = _answer_violations(outcome, escaped)
+        _expect(violations, reached == [([sole], False)], f"the failure must strike part-way: delete_bulk reached once, for the sole broker {sole}, once the shared broker {shared} was left inside the transaction; reached {reached} as (brokers, access to the shared broker still there)")
+        _expect(violations, after == before, f"a failed deletion must change nothing: before {before}, after {after}")
+        _expect(violations, calls == [], f"a failed deletion must touch no report file: the cleanup was called with {calls}")
+        _expect(violations, logged == [leaver], f"exactly one «{DELETION_FAILED_EVENT}» event carrying user_id {leaver} expected; the events with that message carry the user_ids {logged}")
+        assert not violations, "A technical failure of DELETE /auth/users/me must answer 500 and delete nothing:\n- " + "\n- ".join(violations)
+
+        print_success("✓ 500 «nothing was deleted», every row in place, no file touched, the failure logged with the account's id")

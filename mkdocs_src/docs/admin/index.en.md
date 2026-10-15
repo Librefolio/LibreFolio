@@ -16,6 +16,7 @@ command line, through environment variables, or in the app's **Admin** settings 
 
 ### ⚙️ System Configuration
 - 📝 **[Environment Variables](configuration.md)**: Full list of supported `.env` variables (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.) and variable resolution precedence.
+- 📧 **[Email](email.md)**: Optional SMTP email: the variables, the test email in Settings › Email, and what to check when it fails.
 - ⚙️ **[Global Settings](settings.md)**: Configure system-wide runtime settings (session TTL, upload limits, market data sync intervals).
 
 ### 🧹 Maintenance & Operations
