@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `GET /api/v1/transactions` accepts `asset_event_id` and lists the transactions linked to that asset event, within the brokers you can see.
 - `./dev.py user create … --role user` creates a regular account; without `--role`, the command still creates an administrator.
-- Secrets can be read from files: `JWT_SECRET_FILE` and `LIBREFOLIO_INSTANCE_KEY_FILE`, as Docker and Kubernetes secrets mount them.
+- Secrets can be read from files: `JWT_SECRET_FILE`, `LIBREFOLIO_INSTANCE_KEY_FILE` and `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`, as Docker and Kubernetes secrets mount them.
 - **Instance key**: one secret per installation, generated on first use in the `secrets/` folder of the data directory, or given through the environment. LibreFolio derives its encryption keys from it: back up `secrets/` together with the data.
 - At startup the log warns about settings that leave the instance weaker: a short session key, a secret set twice, loose permissions on the instance key, `SESSION_COOKIE_SECURE=never`, a verbose log level.
 - `.env.example` lists every option LibreFolio reads, grouped by function.
