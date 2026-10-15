@@ -292,7 +292,7 @@ export async function getOrBuildGraph(): MultiDirectedGraph {
 }
 ```
 
-**Why this works**: provider capabilities (`GET /fx/providers`) and currency lists (`GET /utilities/currencies`) are constant for the entire server session — they only change on server restart. No cache invalidation is needed.
+**Why this works**: the currency list (`GET /utilities/currencies`, built from `pycountry`) and the FX providers with their base currencies do not change while the server runs. Each provider's `target_currencies` in `GET /fx/providers` come from a 24 h backend cache (`backend/app/services/fx/catalog.py`): when the provider's fetch fails or takes longer than 5 s, the backend answers with the last list that provider returned in this process (empty before its first success) and retries after 5 minutes. `currencyGraphStore.ts` has no invalidation API: it keeps the graph in module state until the page is reloaded — client-side navigation reuses it, a full reload fetches both endpoints again, and a failed request is not kept (the next use retries). Until that reload the graph keeps the lists it was built with, including an empty one served before a provider's first successful fetch.
 
 ## Route Sorting in the UI
 

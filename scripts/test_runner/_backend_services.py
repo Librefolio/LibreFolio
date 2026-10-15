@@ -493,6 +493,17 @@ def services_fx_core(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "FX core helpers tests", verbose=verbose)
 
 
+def services_fx_catalog(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the cached supported-currency catalog of the FX providers (X-R8)."""
+    print_section("Services: FX Provider Currency Catalog")
+    print_info("Testing: backend/app/services/fx/catalog.py (get_supported_currencies_cached, behind GET /fx/providers)")
+    print_info("Tests: 24 h cache and copies, last known list on failure/timeout, 5-minute retry delay, one fetch per event loop, cache panel")
+    print_info("Fake providers only — no network, no database, no server")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_catalog.py", test_names)
+    return run_command(cmd, "FX provider currency catalog tests", verbose=verbose)
+
+
 def services_static_uploads(verbose: bool = False, test_names: list = None) -> bool:
     """Test static uploads service."""
     print_section("Services: Static Uploads")
@@ -1139,6 +1150,16 @@ Note: No backend server required.
         name="FX Core Helpers",
         desc="normalize_rate, upsert/delete bulk, changes",
         exclusive_because="an autouse fixture truncates fx_rates before every test, so any concurrent unit reading rates loses them mid-test",
+    )
+    add_test(
+        cat,
+        "fx-catalog",
+        services_fx_catalog,
+        name="FX Provider Currency Catalog",
+        desc="Supported currencies cached 24 h and handed out as copies, last known list on failure or timeout, 5-minute retry delay, one fetch per provider and event loop, listed in the cache panel",
+        # PURE: fake providers only, no session and no server. The one shared surface is this process's
+        # fx_provider_currencies cache and last known lists, which an autouse fixture empties before and after each test.
+        isolation="pure",
     )
     add_test(cat, "static-uploads", services_static_uploads, name="Static Uploads", desc="File save/list/get/delete, security")
     add_test(cat, "brim-parse-error", services_brim_parse_error, name="BRIM Parse Error", desc="Exception class tests")
