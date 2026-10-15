@@ -13,6 +13,7 @@
     import {AlertTriangle, Check, ChevronDown, ChevronUp, X, XCircle} from 'lucide-svelte';
     import {fade} from 'svelte/transition';
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import '$lib/theme/components/dialogs.css';
 
     interface Props {
         /** Whether modal is open */
@@ -162,23 +163,23 @@
         align-items: center;
         gap: 0.75rem;
         padding: 1rem 1.25rem;
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid var(--lf-cmp-confirm-border);
     }
 
     :global(.dark) .modal-header {
-        border-bottom-color: #334155;
+        border-bottom-color: var(--lf-cmp-confirm-border-dark);
     }
 
     .modal-title {
         flex: 1;
         font-size: 1.125rem;
         font-weight: 600;
-        color: #0f172a;
+        color: var(--lf-cmp-confirm-title-text);
         margin: 0;
     }
 
     :global(.dark) .modal-title {
-        color: #f1f5f9;
+        color: var(--lf-cmp-confirm-title-text-dark);
     }
 
     .close-btn {
@@ -190,19 +191,19 @@
         border: none;
         border-radius: 6px;
         background: transparent;
-        color: #64748b;
+        color: var(--lf-cmp-confirm-close-btn-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .close-btn:hover {
-        background: #f1f5f9;
-        color: #0f172a;
+        background: var(--lf-cmp-confirm-hover-bg);
+        color: var(--lf-cmp-confirm-title-text);
     }
 
     :global(.dark) .close-btn:hover {
-        background: #334155;
-        color: #f1f5f9;
+        background: var(--lf-cmp-confirm-hover-bg-dark);
+        color: var(--lf-cmp-confirm-title-text-dark);
     }
 
     .modal-body {
@@ -211,24 +212,24 @@
     }
 
     .message {
-        color: #475569;
+        color: var(--lf-cmp-confirm-message-text);
         line-height: 1.6;
         margin: 0;
     }
 
     :global(.dark) .message {
-        color: #94a3b8;
+        color: var(--lf-cmp-confirm-message-text-dark);
     }
 
     .description {
-        color: #64748b;
+        color: var(--lf-cmp-confirm-muted-text);
         font-size: 0.8125rem;
         line-height: 1.5;
         margin: 0.5rem 0 0;
     }
 
     :global(.dark) .description {
-        color: #94a3b8;
+        color: var(--lf-cmp-confirm-muted-text-dark);
     }
 
     .results-list {
@@ -245,11 +246,11 @@
         align-items: center;
         gap: 0.5rem;
         font-size: 0.8125rem;
-        color: #334155;
+        color: var(--lf-cmp-confirm-result-item-text);
     }
 
     :global(.dark) .result-item {
-        color: #e2e8f0;
+        color: var(--lf-cmp-confirm-result-item-text-dark);
     }
 
     .result-label {
@@ -257,35 +258,35 @@
     }
 
     .result-detail {
-        color: #64748b;
+        color: var(--lf-cmp-confirm-muted-text);
         font-size: 0.75rem;
     }
 
     :global(.dark) .result-detail {
-        color: #94a3b8;
+        color: var(--lf-cmp-confirm-muted-text-dark);
     }
 
     .result-action {
         margin-left: auto;
-        color: #2563eb;
+        color: var(--lf-cmp-confirm-result-action-text);
         font-size: 0.75rem;
         font-weight: 500;
         white-space: nowrap;
     }
 
     :global(.dark) .result-action {
-        color: #60a5fa;
+        color: var(--lf-cmp-confirm-result-action-text-dark);
     }
 
     .items-section {
         margin-top: 1rem;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-confirm-border);
         border-radius: 8px;
         overflow: hidden;
     }
 
     :global(.dark) .items-section {
-        border-color: #334155;
+        border-color: var(--lf-cmp-confirm-border-dark);
     }
 
     .items-toggle {
@@ -294,25 +295,25 @@
         justify-content: space-between;
         width: 100%;
         padding: 0.625rem 0.875rem;
-        background: #f8fafc;
+        background: var(--lf-cmp-confirm-items-toggle-bg);
         border: none;
-        color: #64748b;
+        color: var(--lf-cmp-confirm-muted-text);
         font-size: 0.875rem;
         cursor: pointer;
         transition: background 0.15s;
     }
 
     .items-toggle:hover {
-        background: #f1f5f9;
+        background: var(--lf-cmp-confirm-hover-bg);
     }
 
     :global(.dark) .items-toggle {
-        background: #1e293b;
-        color: #94a3b8;
+        background: var(--lf-cmp-confirm-items-toggle-bg-dark);
+        color: var(--lf-cmp-confirm-muted-text-dark);
     }
 
     :global(.dark) .items-toggle:hover {
-        background: #334155;
+        background: var(--lf-cmp-confirm-hover-bg-dark);
     }
 
     .items-list {
@@ -321,24 +322,24 @@
         padding: 0.5rem 0;
         max-height: 200px;
         overflow-y: auto;
-        background: white;
+        background: var(--lf-cmp-confirm-items-list-bg);
     }
 
     :global(.dark) .items-list {
-        background: #0f172a;
+        background: var(--lf-cmp-confirm-items-list-bg-dark);
     }
 
     .item {
         padding: 0.375rem 0.875rem;
         font-size: 0.8125rem;
-        color: #475569;
+        color: var(--lf-cmp-confirm-message-text);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
     :global(.dark) .item {
-        color: #94a3b8;
+        color: var(--lf-cmp-confirm-message-text-dark);
     }
 
     .modal-footer {
@@ -346,11 +347,11 @@
         justify-content: flex-end;
         gap: 0.75rem;
         padding: 1rem 1.25rem;
-        border-top: 1px solid #e2e8f0;
+        border-top: 1px solid var(--lf-cmp-confirm-border);
     }
 
     :global(.dark) .modal-footer {
-        border-top-color: #334155;
+        border-top-color: var(--lf-cmp-confirm-border-dark);
     }
 
     .btn {
@@ -364,47 +365,47 @@
     }
 
     .btn-secondary {
-        background: #f1f5f9;
-        color: #475569;
+        background: var(--lf-cmp-confirm-hover-bg);
+        color: var(--lf-cmp-confirm-btn-secondary-text);
     }
 
     .btn-secondary:hover {
-        background: #e2e8f0;
+        background: var(--lf-cmp-confirm-btn-secondary-hover-bg);
     }
 
     :global(.dark) .btn-secondary {
-        background: #334155;
-        color: #e2e8f0;
+        background: var(--lf-cmp-confirm-hover-bg-dark);
+        color: var(--lf-cmp-confirm-btn-secondary-text-dark);
     }
 
     :global(.dark) .btn-secondary:hover {
-        background: #475569;
+        background: var(--lf-cmp-confirm-btn-secondary-hover-bg-dark);
     }
 
     .btn-primary {
-        background: #1a4031;
-        color: white;
+        background: var(--lf-cmp-confirm-btn-primary-bg);
+        color: var(--lf-cmp-confirm-on-fill-text);
     }
 
     .btn-primary:hover {
-        background: #153428;
+        background: var(--lf-cmp-confirm-btn-primary-hover-bg);
     }
 
     .btn-danger {
-        background: #dc2626;
-        color: white;
+        background: var(--lf-cmp-confirm-btn-danger-bg);
+        color: var(--lf-cmp-confirm-on-fill-text);
     }
 
     .btn-danger:hover {
-        background: #b91c1c;
+        background: var(--lf-cmp-confirm-btn-danger-hover-bg);
     }
 
     .btn-warning {
-        background: #f59e0b;
-        color: white;
+        background: var(--lf-cmp-confirm-btn-warning-bg);
+        color: var(--lf-cmp-confirm-on-fill-text);
     }
 
     .btn-warning:hover {
-        background: #d97706;
+        background: var(--lf-cmp-confirm-btn-warning-hover-bg);
     }
 </style>

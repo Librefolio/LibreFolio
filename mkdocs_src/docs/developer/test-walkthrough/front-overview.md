@@ -57,7 +57,7 @@ category's Vitest files need none of it):
 ## 🏁 Flags
 
 Every frontend test category — `front-utility`, `front-broker`, `front-user`, `front-fx`,
-`front-asset`, `front-transaction`, `front-portfolio`, `front-ai-export` — supports these flags.
+`front-asset`, `front-transaction`, `front-portfolio`, `front-ai-export`, `front-designer-lab` — supports these flags.
 `--headed`, `--debug`, `--ui` and `--list` follow the category (`./dev.py test front-fx all --headed`);
 `--coverage` belongs to `./dev.py test` and comes before it (`./dev.py test --coverage js front-fx all`).
 
@@ -104,6 +104,7 @@ The UI mode provides a rich interactive experience:
 | **Front-Transaction** | `./dev.py test front-transaction all` | Transaction modals, table, bulk operations, WAC, import wizard (Playwright) + payload and commit helpers (Vitest) |
 | **Front-Portfolio** | `./dev.py test front-portfolio all` | Dashboard charts, banners, page cache, privacy masking, risk analysis (Playwright) + portfolio and risk stores (Vitest) |
 | **Front-AI-Export** | `./dev.py test front-ai-export all` | AI Export panel, catalog, session memory, contracts (Playwright) + AI Export and signal units (Vitest) |
+| **Front-Designer-Lab** | `./dev.py test front-designer-lab all` | Designer Lab: live preview in another tab, element picker, neutrality (Playwright) + Lab units (Vitest) |
 
 The categories without a walkthrough page list their actions with `./dev.py test <category> -h`.
 

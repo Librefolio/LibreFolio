@@ -128,7 +128,7 @@ import {
 } from './fixtures/galleryPac';
 import {closeProviderCompare, fitScreenToCompareDialog, mockProviderCompare, openProviderCompare, restoreCompareScreen, settleProviderCompareShot} from './fixtures/galleryProviderCompare';
 import {extendScreenToBlock, fitScreenToDialog, PAGE_BLOCK, restoreTallScreen} from './fixtures/galleryTallShots';
-import {boxStill, captureShot, COLUMN_FILTER_GAP, DROPDOWN_GAP, expectDropdownAt, frameTarget, logApiOnFailure, scrollStill, settledToOpen, settleShot, type ShotOptions, trackApiRequests} from './fixtures/galleryShot';
+import {boxStill, bringIntoViewFromTop, captureShot, COLUMN_FILTER_GAP, DROPDOWN_GAP, expectDropdownAt, frameTarget, logApiOnFailure, scrollStill, settledToOpen, settleShot, type ShotOptions, trackApiRequests} from './fixtures/galleryShot';
 import {brimFileId, chooseTheme, closePreview, FILES_SAMPLES, filesTableReady, fontsLoaded, gridPreviewReady, imagePreviewReady, imagesInViewLoaded, languageMenuClosed, markdownPreviewReady, openPreview, pdfPreviewReady, staticFileId, textPreviewReady} from './fixtures/galleryFiles';
 import {expectDrawnUnder, setBrowserLocale, stampDocumentLocale} from './fixtures/galleryLocale';
 import {completeWelcome, prepareOnboardingAccount} from './fixtures/onboarding-accounts';
@@ -2015,7 +2015,10 @@ test.describe('Gallery Screenshots', () => {
 
                     // Click the configure button to open SchedulerConfigModal: drawn on All, where every load opens
                     const configBtn = page.getByTestId('scheduler-config-btn');
-                    await configBtn.scrollIntoViewIfNeeded();
+                    // The dialog freezes the page behind it where the button's scroll left it. A bare scroll into view, on a page
+                    // not settled yet and from wherever the clicks above had left it, centred the button in one run and not in the
+                    // other: the page 59 px apart behind the same dialog (plan 56). From the top of the settled page instead.
+                    await bringIntoViewFromTop(page, configBtn, `${viewport}/${lang}/${theme}/settings/scheduler-config`);
                     await configBtn.click();
                     const configModal = page.getByTestId('scheduler-config-modal');
                     await expect(configModal).toBeVisible({timeout: 5_000});
@@ -2045,7 +2048,9 @@ test.describe('Gallery Screenshots', () => {
                     // Click the scheduler status row to open SchedulerLogModal: drawn on All, where every load opens
                     const statusRow = page.getByTestId('scheduler-status-row');
                     await expect(statusRow).toBeVisible({timeout: 10_000});
-                    await statusRow.scrollIntoViewIfNeeded();
+                    // The dialog freezes the page behind it where the row's scroll left it: brought into view from the top of the
+                    // settled page, as the configure button is — a bare scroll into view jumped the same way (plan 56).
+                    await bringIntoViewFromTop(page, statusRow, `${viewport}/${lang}/${theme}/settings/scheduler-log`);
                     await statusRow.click();
                     const logModal = page.getByTestId('scheduler-log-modal');
                     await expect(logModal).toBeVisible({timeout: 5_000});
@@ -2155,16 +2160,20 @@ test.describe('Gallery Screenshots', () => {
                         await diagnostics.locator('summary').click();
                         await expect(diagnostics).toHaveAttribute('open', '', {timeout: 3_000});
                     }
-                    await diagnostics.scrollIntoViewIfNeeded();
+                    // The Tools panel grows the block once its catalogue is in, so the frame is taken after it, on both viewports. A
+                    // scroll taken before raced it: 7 desktop frames of b5_c4_5 held the whole block and 1 did not, and on a phone
+                    // two runs of 15/10 landed 92 px apart on a page of the same height (plan 56).
+                    await expect(diagnostics.getByTestId('tool-about-panel')).toHaveAttribute('data-state', /^(ready|degraded)$/, {timeout: 15_000});
                     await freezeAnimations(page);
-                    await page.waitForTimeout(300);
-                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts). The scroll above races the Tools panel,
-                    // which grows the block once its catalogue is in (b5_c4_5: 7 frames scrolled to the whole block, 1 not):
-                    // on the desktop the frame is taken again once the panel is in, so every combination frames the whole block.
                     if (viewport === 'desktop') {
-                        await expect(diagnostics.getByTestId('tool-about-panel')).toHaveAttribute('data-state', /^(ready|degraded)$/, {timeout: 15_000});
+                        // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the block scrolled into view, on a
+                        // screen grown to its end.
                         await diagnostics.scrollIntoViewIfNeeded();
                         await extendScreenToBlock(page, diagnostics, `desktop/${lang}/${theme}/settings/about-plugin-diagnostics`);
+                    } else {
+                        // PHONE — framed from the top of the page, the block 8 px under the screen's edge, or as near as the page's
+                        // end allows (frameTarget): a scroll into view moves from wherever the page stands.
+                        await frameTarget(page, diagnostics, `${viewport}/${lang}/${theme}/settings/about-plugin-diagnostics`);
                     }
                     await screenshot(page, viewport, lang, theme, 'settings', 'about-plugin-diagnostics');
                     await restoreTallScreen(page);
@@ -5539,7 +5548,12 @@ test.describe('Gallery Screenshots', () => {
                     await expect(measuresToggle).toBeVisible({timeout: 15_000});
                     if (!(await measuresPanel.isVisible())) await measuresToggle.click();
                     await expect(measuresPanel, 'the measures panel is open').toBeVisible();
-                    await detailChart.scrollIntoViewIfNeeded();
+                    // The desktop keeps its scroll into view: the same frame in every run. On a phone it moved only when the chart
+                    // was out of view, from wherever the toggle's click had left the page, and the header followed that last scroll
+                    // — es/light at y 491 with the header in one run, at 416 without it in the other (plan 56). There the chart is
+                    // framed from the top of the page, 8 px under the screen's edge, or as near as the page's end allows.
+                    if (viewport === 'desktop') await detailChart.scrollIntoViewIfNeeded();
+                    else await frameTarget(page, detailChart, `${viewport}/${lang}/${theme}/assets/detail-measures`);
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-measures');
 
                     // Screenshot 2: panel with a measurement added (full date range)
@@ -5547,10 +5561,16 @@ test.describe('Gallery Screenshots', () => {
                     await expect(addMeasureBtn, 'the chart has the two points a measure needs').toBeEnabled({timeout: 10_000});
                     await addMeasureBtn.click();
                     await expect(measuresPanel.locator('tr[data-row-id="main"]'), "the asset's measure is listed").toBeVisible({timeout: 10_000});
-                    await detailChart.scrollIntoViewIfNeeded();
-                    await freezeAnimations(page);
-                    // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
-                    if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('asset-detail-measures-section'), `desktop/${lang}/${theme}/assets/detail-measures-active`);
+                    if (viewport === 'desktop') {
+                        await detailChart.scrollIntoViewIfNeeded();
+                        await freezeAnimations(page);
+                        // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts).
+                        await extendScreenToBlock(page, page.getByTestId('asset-detail-measures-section'), `desktop/${lang}/${theme}/assets/detail-measures-active`);
+                    } else {
+                        await freezeAnimations(page);
+                        // PHONE — framed as the first shot, once the measure is listed: the click on Add scrolled the page again.
+                        await frameTarget(page, detailChart, `${viewport}/${lang}/${theme}/assets/detail-measures-active`);
+                    }
                     await screenshot(page, viewport, lang, theme, 'assets', 'detail-measures-active');
                     await restoreTallScreen(page);
                 }

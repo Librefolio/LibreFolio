@@ -12,7 +12,13 @@ lib/components/assets/AssetCurrencyChangeModal.svelte	79
 lib/components/assets/AssetDataEditorSection.svelte	17
 lib/components/assets/AssetIcon.svelte	4
 lib/components/assets/AssetMergeModal.svelte	68
-lib/components/assets/AssetModal.svelte	214
+lib/components/assets/AssetModal.svelte	26
+lib/components/assets/AssetModalDetails.svelte	79
+lib/components/assets/AssetModalFooter.svelte	29
+lib/components/assets/AssetModalIdentifiers.svelte	12
+lib/components/assets/AssetModalImportNotices.svelte	10
+lib/components/assets/AssetModalProvider.svelte	20
+lib/components/assets/AssetModalSelectionPrompts.svelte	38
 lib/components/assets/AssetPriceSummary.svelte	19
 lib/components/assets/AssetSearchAutocomplete.svelte	57
 lib/components/assets/AssetTable.svelte	33	#fef3c7	#fffbeb	rgb(120 53 15/0.24)	rgb(120 53 15/0.36)
@@ -293,7 +299,7 @@ lib/features/tools/pac-allocator/planner/steps/ScenarioStep.svelte	2
 lib/features/tools/pac-allocator/planner/steps/StrategyStep.svelte	19
 lib/features/tools/pac-allocator/planner/steps/TargetsStep.svelte	20
 lib/features/tools/pac-allocator/planner/ui.ts	162
-lib/stores/app/themeStore.ts	0	#156534	#1a4031
+lib/stores/app/themeStore.ts	0	#166534	#1a4031
 lib/utils/assetTypes.ts	80
 lib/utils/broker/brokerRoleHelpers.ts	4
 lib/utils/currency/fxConversionHelper.ts	6
@@ -313,3 +319,5 @@ routes/(app)/settings/+page.svelte	3
 routes/(app)/transactions/+page.svelte	37
 routes/(app)/welcome/+page.svelte	4
 routes/+page.svelte	1
+~accept	lib/stores/app/themeStore.ts	D3 (developer, 14/10): theme-color meta dark #156534 -> #166534, the sidebar green; pair checked by themeColorMeta
+~split	lib/components/assets/AssetModal.svelte	lib/components/assets/AssetModal.svelte,lib/components/assets/AssetModalImportNotices.svelte,lib/components/assets/AssetModalDetails.svelte,lib/components/assets/AssetModalIdentifiers.svelte,lib/components/assets/AssetModalProvider.svelte,lib/components/assets/AssetModalFooter.svelte,lib/components/assets/AssetModalSelectionPrompts.svelte	214
