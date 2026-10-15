@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Instance backup**: an administrator downloads a zip of the whole instance from **Settings › Backup**, or writes one with `./dev.py backup create` (and checks it with `./dev.py backup inspect`); it also works when the hosting provider has blocked the instance. Documented in Admin › Command-Line Tools.
 - Hosting panels can download backups of the whole instance with a token: set `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` (or its `_FILE`) and call `/api/v1/backup/panel/jobs` with `Authorization: Bearer`, also on a blocked instance. Off by default.
 - **Users tab for administrators** (Settings → Users): see every account and the open invitations with the places taken; deactivate, reactivate, promote, demote, sign out everywhere, send a password-reset link, restart the guides, and delete an account after a preview of what goes (deactivation offered first); invite with a single-use link whose server address can be edited and is checked from the browser. Deleting your own account now shows the same preview first.
+- **Plugin settings, the foundation**: an asset or exchange-rate provider plugin can declare the settings it needs (an API key, a region, a limit). Administrators set the instance-wide ones and each user their own, through `GET /api/v1/settings/plugins` and `PATCH /api/v1/settings/plugins/bulk` (all or nothing). Secrets are write-only and stored encrypted with a key derived from the instance key. An instance-wide field can also come from `LIBREFOLIO_PLUGIN_<FAMILY>_<CODE>_<FIELD>` or its `_FILE` form, which locks it. The shipped plugins declare none yet; the settings screen comes later.
 
 ### 🔄 Changed
 
@@ -54,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Saving the asset events editor is all or nothing.** The Events tab saves deletions, edits and new rows in one step: if anything is refused, none of them is kept, and the message, in your language, names the event at fault. An event linked to transactions can no longer be deleted together with other changes: the save stops and says which event and how many transactions use it, so remove the link first. Until now the other changes were saved and that deletion was skipped with a warning. Deleting an event and giving its date and type to another in the same save now works.
 - **«+ New event» never overwrites an event.** On a date and type the asset already has, entered by hand or from a data provider, nothing is saved: the form shows the event already there, to use it or, if entered by hand, to edit it. Until now the new event replaced the manual one of that day and type, or added a manual copy next to a provider's.
 - Logs: the startup and shutdown lines are written by the logger `backend.app.services.platform.app_lifespan` (before: `backend.app.main`).
+- `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` and `_MAX` below 1, or not a finite number, take their default. A timeout under a second used to mean no timeout, and `0` still returned one link. A fractional timeout is now honoured, rounded up to whole seconds.
 
 ### 🧹 Repository cleanup
 
