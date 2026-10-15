@@ -30,9 +30,9 @@ what it may not convert (point 47 of release 1.3). The contract pinned here:
 8. A row of a type no pair has — an ADJUSTMENT, a DEPOSIT — whose link names a deleted row loses that link only,
    as delete_by_broker treats "a link no split knows": ``updated_at`` moves, every other column stays, the row is
    listed under ``unlinked_only`` and gets its ``unlinked`` line; the run is ``applied`` beside a half it converts
-   and on its own. RED until the fix knows such rows: today it reads only the three paired types, so beside a
-   conversion the foreign key check of the whole database fails the run — the backup kept, at every start — and on
-   their own they stay broken under a ``clean`` outcome. A row of another type whose link names an existing row is
+   and on its own. Seen RED before the fix knew such rows (15/10): it read only the three paired types, so beside a
+   conversion the foreign key check of the whole database failed the run — the backup kept, at every start — and on
+   their own they stayed broken under a ``clean`` outcome. A row of another type whose link names an existing row is
    left untouched (guard).
 
 The databases. One is built at head by the real migrations — ``alembic upgrade head`` in a child process, always
@@ -735,7 +735,7 @@ def test_a_failed_verification_leaves_the_database_as_it_was_and_keeps_the_backu
 
 
 # =============================================================================
-# 8. A LINK ON A ROW OF ANOTHER TYPE (RED until the fix knows such rows)
+# 8. A LINK ON A ROW OF ANOTHER TYPE (red before the fix knew such rows, 15/10)
 # =============================================================================
 
 
