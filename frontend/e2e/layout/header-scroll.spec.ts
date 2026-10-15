@@ -35,6 +35,7 @@
  */
 import {test as base, expect} from '../fixtures/playwright';
 import type {Locator, Page} from '../fixtures/playwright';
+import {INSTANCE_CONFIG_PATH, plainInstanceConfig} from '../fixtures/instance-config';
 
 const GEOMETRY_ID = 'review-header-geometry';
 const NESTED_ID = 'review-header-nested-scroll';
@@ -63,9 +64,8 @@ const test = base.extend<{reviewHeader: Page}>({
             ['/api/v1/settings/global', {items: []}],
             // The sidebar's connection-security line (plan 36): the answer the lane's plain-HTTP loopback gets.
             ['/api/v1/system/connection', {client_class: 'loopback', cookie_secure: false}],
-            // The instance's public configuration (InstanceConfigResponse), read by the (app) layout on mount: a
-            // self-hosted instance, the store's own DEFAULT_INSTANCE_CONFIG, so the page draws what it draws unanswered.
-            ['/api/v1/system/instance', {profile: 'selfhosted'}],
+            // The instance configuration, read by the (app) layout on every page load (instanceConfig.load()): a plain one.
+            [INSTANCE_CONFIG_PATH, plainInstanceConfig()],
             [
                 '/api/v1/settings/onboarding',
                 {

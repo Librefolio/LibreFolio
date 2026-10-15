@@ -10,12 +10,13 @@ from datetime import datetime
 from typing import Optional
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import AccountTokenPurpose, BrokerUserAccess, User, UserSettings
+from backend.app.db.models import AccountTokenPurpose, Broker, BrokerUserAccess, Transaction, User, UserRole, UserSettings
 from backend.app.services.accounts import token_service
 from backend.app.services.accounts.auth_service import hash_password
+from backend.app.services.brim import brim_provider
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.utils.datetime_utils import utcnow
 
@@ -33,6 +34,47 @@ class AccountDeletion:
 
 class AccountDeletionError(Exception):
     """A broker of the account could not be released: nothing was deleted."""
+
+
+@dataclass(frozen=True)
+class BrokerDeletionItem:
+    """A broker that goes with the account, which is its last owner, with its transactions."""
+
+    broker_id: int
+    name: str
+    transactions: int
+
+
+@dataclass(frozen=True)
+class BrokerAccessItem:
+    """A broker that stays: only the account's access to it goes."""
+
+    broker_id: int
+    name: str
+    role: UserRole
+
+
+@dataclass(frozen=True)
+class AccountDeletionPreview:
+    """What deleting an account would take with it, by the rule of ``delete_user``, computed without writing.
+
+    ``transfers_unpaired``: the transactions that stay and are linked, in either direction, to one that goes — the
+    halves of transfers left alone (backlog V-3).
+    """
+
+    user_id: int
+    username: str
+    brokers_deleted: list[BrokerDeletionItem]
+    brokers_left: list[BrokerAccessItem]
+    transfers_unpaired: int
+
+
+@dataclass(frozen=True)
+class AccountDeletionResult:
+    """What a deletion took with it: the brokers it deleted, and their report files removed after the commit."""
+
+    deleted_broker_ids: list[int]
+    files_removed: int
 
 
 logger = structlog.get_logger(__name__)
@@ -515,6 +557,74 @@ async def delete_user(session: AsyncSession, user_id: int) -> Optional[AccountDe
 
     logger.warning("User deleted", user_id=user_id, username=username, brokers_deleted=deleted_broker_ids)
     return AccountDeletion(deleted_broker_ids=deleted_broker_ids)
+
+
+async def _count_unpaired_halves(session: AsyncSession, deleted_broker_ids: list[int]) -> int:
+    """The transactions outside ``deleted_broker_ids`` linked, in either direction, to a transaction inside them."""
+    if not deleted_broker_ids:
+        return 0
+    going = select(Transaction.id).where(Transaction.broker_id.in_(deleted_broker_ids))
+    pointed_by_going = select(Transaction.related_transaction_id).where(Transaction.broker_id.in_(deleted_broker_ids), Transaction.related_transaction_id.is_not(None))
+    staying = Transaction.broker_id.not_in(deleted_broker_ids)
+    query = select(func.count(Transaction.id)).where(staying, or_(Transaction.related_transaction_id.in_(going), Transaction.id.in_(pointed_by_going)))
+    return (await session.execute(query)).scalar_one()
+
+
+async def preview_user_deletion(session: AsyncSession, user_id: int) -> Optional[AccountDeletionPreview]:
+    """What ``delete_user`` would take with the account, without writing anything; ``None`` for an unknown user.
+
+    The rule is ``BrokerService.leave_broker``'s, the one ``delete_user`` applies broker by broker: a broker the user
+    is the last OWNER of goes, with its transactions; on any other broker only the user's access goes. Each broker is
+    decided on its own, so evaluating them together gives what the deletion does one at a time.
+    """
+    user = await get_user_by_id(session, user_id)
+    if user is None:
+        return None
+    accesses = (await session.execute(select(BrokerUserAccess.broker_id, BrokerUserAccess.role, Broker.name).join(Broker, Broker.id == BrokerUserAccess.broker_id).where(BrokerUserAccess.user_id == user_id).order_by(BrokerUserAccess.broker_id))).all()
+    broker_ids = [row.broker_id for row in accesses]
+    owners: dict[int, int] = {}
+    if broker_ids:
+        owner_rows = await session.execute(select(BrokerUserAccess.broker_id, func.count()).where(BrokerUserAccess.broker_id.in_(broker_ids), BrokerUserAccess.role == UserRole.OWNER).group_by(BrokerUserAccess.broker_id))
+        owners = dict(owner_rows.tuples().all())
+    deleted_ids = [row.broker_id for row in accesses if row.role == UserRole.OWNER and owners.get(row.broker_id, 0) <= 1]
+    transactions: dict[int, int] = {}
+    if deleted_ids:
+        count_rows = await session.execute(select(Transaction.broker_id, func.count()).where(Transaction.broker_id.in_(deleted_ids)).group_by(Transaction.broker_id))
+        transactions = dict(count_rows.tuples().all())
+    deleted = set(deleted_ids)
+    return AccountDeletionPreview(
+        user_id=user.id,
+        username=user.username,
+        brokers_deleted=[BrokerDeletionItem(broker_id=row.broker_id, name=row.name, transactions=transactions.get(row.broker_id, 0)) for row in accesses if row.broker_id in deleted],
+        brokers_left=[BrokerAccessItem(broker_id=row.broker_id, name=row.name, role=UserRole(row.role)) for row in accesses if row.broker_id not in deleted],
+        transfers_unpaired=await _count_unpaired_halves(session, deleted_ids),
+    )
+
+
+async def delete_account(session: AsyncSession, user: User) -> AccountDeletionResult:
+    """Delete ``user`` by the rule of ``delete_user``, then remove the report files of the brokers it deleted.
+
+    The files live on disk and go after the commit, off the event loop. A failure there is logged and leaves the
+    deletion done: the account and its data are already gone.
+    """
+    deletion = await delete_user(session, user.id)
+    deleted_ids = deletion.deleted_broker_ids if deletion else []
+    files_removed = 0
+    if deleted_ids:
+        try:
+            files_removed = await asyncio.to_thread(brim_provider.delete_files_for_brokers, deleted_ids)
+        except Exception:
+            logger.exception("The report files of the deleted brokers could not be removed", broker_ids=deleted_ids)
+    return AccountDeletionResult(deleted_broker_ids=deleted_ids, files_removed=files_removed)
+
+
+def account_protection(user: User) -> Optional[str]:
+    """Why ``user`` may be neither deleted, deactivated nor demoted by anyone; ``None`` when nothing protects it.
+
+    The hook of lot A7: on a managed instance the administrator created from the environment, who pays for it, is
+    protected. Until then no account is.
+    """
+    return None
 
 
 async def search_users(
