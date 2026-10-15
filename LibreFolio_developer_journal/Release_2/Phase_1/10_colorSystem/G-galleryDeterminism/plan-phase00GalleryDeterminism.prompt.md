@@ -7,6 +7,13 @@
 > deterministica (56)» di [BACKLOG_POST_1.2.md](../../../Phase_0/BACKLOG_POST_1.2.md).
 > Dal merge di `dev_release2` del 14/10 (`424adb31c`) la cartella 56 è `Phase_1/10_colorSystem/G-galleryDeterminism/` e
 > il programma 55 è `Phase_1/10_colorSystem/`: «la 56» resta il nome del workstream.
+>
+> **✅ Chiuso il 15/10/2026** su decisione del coordinatore (16:05).
+> - La DoD finale (§1) è raggiunta con la misura `g-final3` (passo 6). Dopo sono arrivati il passo 7, G-9 (passo 8) e
+>   G-10 (corretta da H).
+> - Unico residuo di G nel backlog: G-11.
+> - Il prossimo compito di G, fuori da questo piano, è G-13: la nuova coppia di riferimento sul target dopo l'ingresso
+>   di T (§4, registro del 15/10, 16:05).
 
 ## 0. Baseline e corsia
 
@@ -47,6 +54,12 @@ come rumore coperto dalle maschere.
 
 **Definition of done finale:** instabili di **stile** ridotte al minimo spiegabile; differenze di solo contenuto
 elencate come accettate.
+- ✅ **Raggiunta il 15/10** con `g-final3` (passo 6): da 27 a 6 instabili su 177. Il contenuto accettato è elencato
+  nell'[analisi del 15/10](evidence/analysis-final-2026-10-15.md).
+- Le 4 instabili di inquadratura sono corrette al passo 7 e verificate con run mirate. Resta 1 variante su 16 di
+  `assets/detail-measures`, che diventa G-11 nel backlog.
+- `media/asset-picker-modal` è corretta alla radice da G-10 (H, `b4533a949`).
+- Chiusura decisa dal coordinatore il 15/10 alle 16:05.
 
 ## 2. Analisi (14/10/2026)
 
@@ -891,3 +904,14 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
       macchina. Finché C-94 di J non entra nel target, le gallery complete vanno lanciate con `-- --workers 6`, come
       dice il README del toolkit.
   - Delta non committato: questa riga e il backlog (G-10 ✅, G-12 instradata). FROZEN.
+- **15/10, 16:05 — Piano chiuso** (decisione del coordinatore). Journal `5fb5d3767`, portato in `dev_release2` con un
+  avanzamento veloce; HEAD di G `5fb5d3767`.
+  - **DoD ✅** (§1) e **G-1 ✅** nel backlog, con la misura `g-final3`. G-11 resta aperta nel backlog.
+  - **Prossimo compito di G, assegnato dal coordinatore: G-13**, la nuova coppia di riferimento.
+    - Quando T entra in `dev_release2`: D-T20, dopo la revisione di T-8 da parte del developer.
+    - Due gallery complete dello stesso giorno sul target, con `-- --workers 6`, più l'analisi di stabilità.
+    - Diventano il riferimento delle ondate e della 1.3.
+    - Devono confermare la previsione: 0 instabili di inquadratura e `media/asset-picker-modal` stabile.
+    - Via e slot li dà il coordinatore; fino ad allora G resta in attesa, senza run.
+  - Delta non committato: questa riga, l'intestazione, la DoD (§1), il README di G e il backlog (G-1 ✅, G-13).
+    FROZEN.
