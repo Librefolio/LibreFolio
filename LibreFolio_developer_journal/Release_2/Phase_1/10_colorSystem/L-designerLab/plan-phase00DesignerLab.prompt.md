@@ -828,3 +828,37 @@ La prova avviene con `transition: none` iniettata, per non leggere un valore a m
 1. gallery A/B al via del coordinatore, dopo il suo aggiornamento della base con G;
 2. L-10, quando T-1 è nella base, con la riga JS e la riga Python di `tw_custom_re` nello stesso cambio e la parità prima e dopo;
 3. L-11 al via.
+
+## ✅ Validazione del fuso con X (15/10/2026, 10:18–10:25)
+
+- **Base:** merge `6991ac085` di `dev_release2` = `2338aaf79` (X), sopra `eb79f7127` (i miei file di journal, committati dal coordinatore). Merge pulito, albero uguale alla simulazione. FROZEN fino al via del coordinatore delle 10:16, dopo la misura r2 di G.
+- **Controllo di sola lettura alle 09:03–09:12:**
+  - il merge porta 984 file e nessun file del Lab;
+  - fra i condivisi: `runner_architecture.md` cambia solo in prosa (riga e totali di L intatti); `_frontend_common.py` cambia gli utenti di test (solo `e2e_test_admin` è amministratore, mentre i test del Lab usano l'utente normale);
+  - **T-1 è nella base:** `lib/theme/tokens.css` con `@theme inline`, gate `themeRoles` e `themeTokens`, ratchet `theme-roles.mjs`, che esenta il Lab (`LAB_PREFIXES`);
+  - i bersagli degli E2E sono intatti.
+- **Script:** `/tmp/libreFolio_L7_validate.sh`, copia negli artefatti `files/L-validate-2026-10-15/`. Primo passo `dev.py api sync`: il client API generato, ignorato da git, era di ieri sera, prima del merge. Il passo tocca solo file ignorati. È lo stesso rimedio che T ha segnalato al coordinatore per `features/instance`; da me non è comparso alcun errore.
+
+| Passo | Esito |
+|---|---|
+| `dev.py api sync` | exit 0, `git status` 0 righe |
+| unit del Lab (`vitest run src/lib/dev/designer-lab src/routes/designer-lab`) | **15 file, 394/394** |
+| `npm run check` | **0 errori, 0 avvisi** |
+| gate di `src/*.gate.test.ts` + `(app)/layout.gate` (ora compresi `themeRoles` e `themeTokens`) | **7 file, 110/110** |
+| `node frontend/scripts/theme/theme-roles.mjs --check` | exit 0, «Colour gates: clean» |
+| release (`npm run build`) | exit 0; **0** file col marcatore, 0 col catalogo, 0 con l'indice; nodo stub `17.Bk39cjPb.js` di **488 B** (stessa dimensione; il nome cambia perché l'hash dipende dai chunk importati, cambiati col merge) |
+| `dev.py test --test-port 6152 --data-dir /tmp/librefolio-r2-l --fresh-run front-designer-lab all` (predefinito, 1 worker) | exit 0, Playwright **11/11** (22,5 s), Vitest **394/394**, 5 azioni ✓, «Frontend build is up to date» |
+| idem `--fresh-run --workers 4 … e2e` | exit 0, **11/11** (14,2 s) |
+| `dev.py test check-orphans` | exit 0: e2e 121, unit 385, backend 277, tutti raggiungibili da `all` |
+| scanner + `color_inventory.py` sullo stesso albero | **parità identica**: totali e righe (hex 1651/1651, funzioni 225/225); file 1062, classi 10599, custom 764, arbitrarie 12, `var()` 202 su 94, definizioni 217 |
+| porta 6152 a fine giro | libera (`lsof` exit 1) |
+| `frontend/build` lasciato | **debug** (`.build-debug` = 1, marcatore in 10 file), pronto per la gallery candidata; `git status` 0 righe |
+
+> **⚠️ Fuori pista:** il primo confronto di parità diceva `custom 764≠NaN`. Era un difetto del mio script: l'etichetta del riepilogo Python «(libre-*/theme-*/…)» contiene asterischi, che la mia regex `[^*]*` non poteva attraversare. Corretto con `.*?`, rieseguito il solo passo di parità sui file già scritti: identica.
+
+> **Effetto di T-1 sul Lab, misurato prima di L-10:**
+> - i 50 ruoli `--lf-*` sono già nelle «Variabili dell'app», con i valori chiaro/scuro giusti, e il selettore porta già a `--lf-…`;
+> - mancano **143 usi di classi `*-lf-*`** (in 9 file Svelte), non contati nella palette (L-10 (1));
+> - le **45 definizioni `--color-lf-*` di `@theme inline`** compaiono come variabili `scoped` senza effetto a runtime, vicoli ciechi (L-10 (2)).
+>
+> L-10 è ora dovuta: «appena T-1 entra nella tua base». Si fa dopo la gallery candidata del coordinatore, che gira nella mia corsia sul mio checkout, e richiede il suo via.
