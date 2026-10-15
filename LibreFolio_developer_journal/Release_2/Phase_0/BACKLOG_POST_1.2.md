@@ -2380,14 +2380,16 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   Dettagli: piano di T, passo T-6, «Validazione del fuso», e T-8, punto 10.
 - **TC-8 · Giro 3 della designer: quello che resta da confermare** — medio; T, 15/10. Per D-T21 la designer rivede
   tutto insieme nel giro 3.
-  - Le otto correzioni minime di contrasto di T-8 (D-T6): sette sui valori del giro 2 e una sul colore del caffè
-    della barra scelto in D-T19. Ciascuna ha il valore chiesto accanto, in `tokens.css`.
+  - Le sette correzioni minime di contrasto di T-8 sui valori del giro 2 (D-T6), ciascuna col valore chiesto accanto in
+    `tokens.css`. L'ottava, sul caffè dell'header verde, è decaduta col suo ruolo in T-8b (D-T23: header neutro).
   - I derivati provvisori: hover dell'azione in chiaro, testo su un pieno AI (`--lf-on-ai`), commenti del terminale,
     ombra delle card in scuro (40 %).
-  - Le scelte di T: indicatore della voce attiva a sinistra; pallino di sicurezza `#F87171` (lo stato «errore» della
-    barra) al posto di `#F84361`; la fascia del logo fusa nella barra.
+  - Le scelte di T: indicatore della voce attiva a sinistra; la fascia del logo fusa nella barra. (Il pallino di
+    sicurezza `#F87171` della barra verde è tornato `--lf-danger` con l'header neutro di D-T23.)
   - Interruttore spento: in chiaro si riconosce solo dal bordo del pallino, e il gate dei contrasti non lo misura.
   - Da TC-2: guadagno e perdita distinti da successo ed errore.
+  - Il rosso e il verde del tema scuro scelti dal developer dopo l'anteprima (D-T25 `#FF7A86`, D-T26 `#5ED69A`), estesi
+    agli stati della barra verde: per D-T21 la designer li rivede nel giro 3.
 
   Dettagli: piano di T, passo T-8 nell'avanzamento.
 - **TC-9 · Il `background_color` del manifest resta il beige delle icone** — basso; T, 15/10. Da decidere.

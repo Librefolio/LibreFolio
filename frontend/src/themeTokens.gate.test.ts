@@ -28,9 +28,10 @@
  *   C3  the pairs of `CONTRAST_PAIRS` reach their minimum in both themes: 4.5:1 for text (WCAG 1.4.3) — a status on
  *       its own tint included — and for the mark of a selected control (D-T16); 3:1 for the border of a field at rest
  *       and under the pointer (D-T18), a focus ring, the fill of a selected control, the knob of a switch turned on
- *       and the marks the green bars draw (WCAG 1.4.11). The green bars, sidebar and header (D-T17, D-T19), are no
- *       neutral surface: they have pairs of their own. A pair under its minimum is red unless `KNOWN_EXCEPTIONS` holds
- *       it, and an entry there is the designer's decision, not ours;
+ *       and the marks the green sidebar draws (WCAG 1.4.11). The header is a neutral surface (D-T23), one of
+ *       `SURFACES`; the green sidebar (D-T17) is none, and has pairs of its own, in the --lf-bar-* family, its alone. A
+ *       pair under its minimum is red unless `KNOWN_EXCEPTIONS` holds it, and an entry there is the designer's
+ *       decision, not ours;
  *   C4  every class the legacy remap rewrites (`html.dark .bg-white` …) is still written by a production source: a
  *       rule whose class lost its last use is dead, and leaves app.css in the change that removed that use.
  * And app.css imports tokens.css, and every rule of the remap that targets a field (`input`, `select`, `textarea`),
@@ -220,8 +221,8 @@ describe('tokens.css: the table of the roles (C1, C2)', () => {
 const TEXT = 4.5;
 const NON_TEXT = 3;
 const STATUSES = ['success', 'warning', 'danger', 'info'];
-/** The neutral surfaces text and controls are set on. The green bars are not one of them: their pairs are their own. */
-const SURFACES = ['surface-app', 'surface-page', 'surface-card', 'surface-panel', 'surface-field'];
+/** The neutral surfaces text and controls are set on, the header's among them (D-T23); the green sidebar's pairs are its own. */
+const SURFACES = ['surface-app', 'surface-page', 'surface-header', 'surface-card', 'surface-panel', 'surface-field'];
 
 interface ContrastPair {
     foreground: string;
@@ -233,28 +234,34 @@ interface ContrastPair {
 const pairs = (foregrounds: string[], backgrounds: string[], min: number): ContrastPair[] => foregrounds.flatMap((foreground) => backgrounds.map((background) => ({foreground: `--lf-${foreground}`, background: `--lf-${background}`, min})));
 
 /**
- * What the roles promise, in both themes: the designer's round 2, approved whole by the developer (D-T17, 15/10).
+ * What the roles promise, in both themes: the designer's round 2, approved whole by the developer (D-T17, 15/10), with
+ * the corrections of his review of the preview (D-T23).
  *
  * On the neutral surfaces, `SURFACES`, text reaches 4.5:1 (WCAG 1.4.3) wherever it is set; the border of a field
  * reaches 3:1 at rest and under the pointer — the hover border is the muted text colour (D-T18) — and so does the
- * focus ring (WCAG 1.4.11). A status is legible as text on the surfaces and on its own tint, where its on-soft text,
- * the muted and the primary text are held to the same minimum; text on a solid status is --lf-on-status, on the hover
- * of a solid warning or donation button too, and on a solid destructive button --lf-on-danger-solid, at rest and
- * hovered. A selected control (D-T16: checkbox, radio, switch on, selected day or preset): its fill, --lf-checked,
- * reaches 3:1 on every surface it sits on; its mark, --lf-on-checked, is held to the text minimum on the fill, as the
- * decision quotes it; and the knob of a switch turned on, --lf-switch-knob-on, reaches 3:1 on it.
+ * focus ring (WCAG 1.4.11). The header is one of them since D-T23: a surface of its own, --lf-surface-header, a step
+ * darker than the page in light and a step lighter in dark, its controls drawn in the page's roles, its focus ring the
+ * page's --lf-focus; «Offrimi un caffè», --lf-donate, is text on it and, under the pointer, on --lf-surface-hover. A
+ * status is legible as text on the surfaces — the danger dot of the mobile menu, ringed in the header's colour, among
+ * them — and on its own tint, where its on-soft text, the muted and the primary text are held to the same minimum;
+ * text on a solid status is --lf-on-status, on the hover of a solid warning or donation button too, and on a solid
+ * destructive button --lf-on-danger-solid, at rest and hovered. A selected control (D-T16: checkbox, radio, switch on,
+ * selected day or preset): its fill, --lf-checked, reaches 3:1 on every surface it sits on; its mark, --lf-on-checked,
+ * is held to the text minimum on the fill, as the decision quotes it; and the knob of a switch turned on,
+ * --lf-switch-knob-on, reaches 3:1 on it.
  *
- * The green bars are no neutral surface. The sidebar is green in both themes (D-T17, which supersedes the neutral
- * sidebar of D-T15), and so is the header, both drawn from one family of roles, --lf-bar-* (D-T19). On them, text: the
- * bar text on the bar, under the pointer, on the active fill (the icon of the default avatar) and on the logout button
- * at rest and hovered; the muted bar text (the version, the e-mail) on the bar and under the pointer; the active text
- * on its fill (the active item, its icon included), on the bar (the username) and under the pointer (the username
- * hovered, the docs link of the connection line); the logo block's --lf-on-brand on the bar, the block having no
- * surface of its own; the bright warning and «Offrimi un caffè» on the bar and under the pointer — the warning of the
- * connection line to the administrators sits on its details panel, drawn in the hover colour. And marks, at 3:1: the
- * indicator of the active item, on the bar beside it and on its fill; the keyboard focus ring of the bars on every bar
- * surface it surrounds — there the page's --lf-focus would give 1.73:1 in light; the connection-security icons, on the
- * bar and on their toggle hovered; and the danger dot of the mobile menu.
+ * The green sidebar is no neutral surface. It is green in both themes (D-T17, which supersedes the neutral sidebar of
+ * D-T15), drawn from a family of roles of its own, --lf-bar-*: D-T19 shared the family with the header, and D-T23 gave
+ * the header back a neutral surface, so the family is the sidebar's alone. On the sidebar, text: the bar text on the
+ * bar, under the pointer, on the active fill (the icon of the default avatar) and on the logout button at rest and
+ * hovered; the muted bar text (the version, the e-mail) on the bar and under the pointer; the active text on its fill
+ * (the active item, its icon included), on the bar (the username) and under the pointer (the username hovered, the
+ * docs link of the connection line); the logo block's --lf-on-brand on the bar, the block having no surface of its
+ * own; the bright warning on the bar and under the pointer — the warning of the connection line to the administrators
+ * sits on its details panel, drawn in the hover colour. And marks, at 3:1: the indicator of the active item, on the
+ * bar beside it and on its fill; the sidebar's keyboard focus ring on every surface of it the ring surrounds — there
+ * the page's --lf-focus would give 1.73:1 in light; and the connection-security icons, on the bar and on their toggle
+ * hovered.
  *
  * And the rest of round 2: a warning inside the tooltip, --lf-warning-on-inverse on --lf-surface-inverse; a highlighted
  * search result; the terminal box, its text, its prompt and its comments; the AI accent as text on its tint, on the
@@ -265,13 +272,13 @@ const pairs = (foregrounds: string[], backgrounds: string[], min: number): Contr
  * --lf-border-input edge the knob is drawn with — an edge between two fills, which no pair holds. An item for the
  * designer's round 3. Nor a colour that is no role: the «insecure» tint behind the connection-security toggle is
  * `bg-lf-bar-danger/20`, composited over the bar — translucent, so no role, and no background a ratio could be taken
- * on: the icon on it measures 3.19:1 and the focus ring 4.06:1, checked by hand (15/10).
+ * on: the icon on it measures 3.41:1 and the focus ring 3.94:1, checked by hand (15/10, after D-T25).
  */
 const CONTRAST_PAIRS: readonly ContrastPair[] = [
     ...pairs(['text-primary', 'text-secondary', 'text-muted', 'text-placeholder'], SURFACES, TEXT),
     ...pairs(['link'], ['surface-app', 'surface-page', 'surface-card', 'surface-panel'], TEXT),
     ...pairs(STATUSES, SURFACES, TEXT),
-    ...pairs(['donate'], ['surface-app', 'surface-page'], TEXT),
+    ...pairs(['donate'], ['surface-app', 'surface-page', 'surface-header', 'surface-hover'], TEXT),
     ...STATUSES.flatMap((status) => pairs([status, `${status}-on-soft`, 'text-muted', 'text-primary'], [`${status}-soft`], TEXT)),
     ...pairs(['on-brand'], ['brand'], TEXT),
     ...pairs(['on-action'], ['action', 'action-hover'], TEXT),
@@ -284,16 +291,16 @@ const CONTRAST_PAIRS: readonly ContrastPair[] = [
     ...pairs(['ai'], ['ai-soft', 'surface-card', 'surface-panel'], TEXT),
     ...pairs(['on-ai'], ['ai'], TEXT),
     ...pairs(['border-input', 'border-input-hover'], SURFACES, NON_TEXT),
-    ...pairs(['focus'], ['surface-app', 'surface-card', 'surface-panel', 'surface-field'], NON_TEXT),
+    ...pairs(['focus'], ['surface-app', 'surface-header', 'surface-card', 'surface-panel', 'surface-field'], NON_TEXT),
     ...pairs(['checked'], ['surface-card', 'surface-panel', 'surface-field'], NON_TEXT),
     ...pairs(['switch-knob-on'], ['checked'], NON_TEXT),
 
-    // The green bars, sidebar and header (D-T17, D-T19)
+    // The green sidebar (D-T17): the --lf-bar-* family, the sidebar's alone since D-T23
     ...pairs(['bar-text'], ['surface-bar', 'bar-hover', 'bar-active-bg', 'bar-logout-bg', 'bar-logout-hover'], TEXT),
     ...pairs(['bar-text-muted'], ['surface-bar', 'bar-hover'], TEXT),
     ...pairs(['bar-active-text'], ['bar-active-bg', 'surface-bar', 'bar-hover'], TEXT),
     ...pairs(['on-brand'], ['surface-bar'], TEXT),
-    ...pairs(['bar-warning', 'bar-donate'], ['surface-bar', 'bar-hover'], TEXT),
+    ...pairs(['bar-warning'], ['surface-bar', 'bar-hover'], TEXT),
     ...pairs(['bar-indicator'], ['surface-bar', 'bar-active-bg'], NON_TEXT),
     ...pairs(['bar-focus'], ['surface-bar', 'bar-hover', 'bar-active-bg', 'bar-logout-bg'], NON_TEXT),
     ...pairs(['bar-success', 'bar-danger'], ['surface-bar', 'bar-hover'], NON_TEXT),
