@@ -41,7 +41,7 @@ graph LR
 
 The main entry point is `scheduler_loop()` located in `backend/app/services/platform/scheduler/scheduler.py`.
 
-* **Lifespan Task:** It is spawned during FastAPI startup in `backend/app/main.py` using `asyncio.create_task()`.
+* **Lifespan Task:** The `scheduler` startup step, the last of `STARTUP_STEPS` in `backend/app/services/platform/app_lifespan.py`, spawns it with `asyncio.create_task()`. On shutdown, the `scheduler` step, the first of `SHUTDOWN_STEPS`, sets the shutdown event and awaits the task before the providers are shut down.
 * **Shutdown Event:** The loop listens to `shutdown_event: asyncio.Event`. When the event is set, it gracefully breaks the loop and completes.
 * **Tick:** After an initial 5-second delay, the leader re-reads the scheduler settings on every tick and skips both jobs while `scheduler_enabled` is false; the loop then sleeps 60 seconds in 5-second steps, so a shutdown is noticed quickly.
 * **Environment Bypass:** Any non-empty value of `LIBREFOLIO_NO_SCHEDULER` keeps the loop from starting. `./dev.py server --no-scheduler` and the gallery screenshot generation set it to `1`.

@@ -135,3 +135,6 @@ Sono tutti locali: la push la fa il developer.
 | 48 | 15/10 18:30 | E2: `GET /email/status`, `POST /email/test`, controlli d'avvio email, `/system/instance.email`, scheda Email (130), scatto `settings/email` (rivisto da G) | `755158aad` |
 | 48b | 15/10 18:44 | E2: correzione del gate `htmlInterpolation` (`SMTP_FROM_INVALID` senza `<` né `>`), dopo il rosso di `core-unit` trovato da T | `be7de95b6` |
 | 49 | 15/10 18:58 | Z6b parte 1: `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` (8 s), drenaggio di uvicorn a 3 s da `dev.py server` ed `entrypoint.sh`, grazia del runner e di Playwright a 10 s; watchdog cablato dopo CP2b | `000090aaf` |
+| 50 | 15/10 19:07 | B: B0 (`backup.py` diviso, `series_export.py`), B1 (backup dell'istanza, API e CLI), B5a (scheda Backup), B6a (doc CLI), backup a istanza bloccata (`backup_available`), via i 4 segnaposto | `629d63306` |
+| 51 | 15/10 19:37 | W: N2 (regola del costo dai metadati; modifiche controllate solo se toccano tipo, quantità, costo, valuta o evento) | `f421e418a` |
+| 52 | 15/10 20:00 | H: CP2b (`main.py` diviso in `app_lifespan`, `lifecycle`, `middleware`, `static_site`, `database_bootstrap`; passi nominati; uno spegnimento che fallisce non salta gli altri); `main.py` scongelato | `4fb017a9a` |

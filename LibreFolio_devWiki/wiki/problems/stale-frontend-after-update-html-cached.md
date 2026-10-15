@@ -25,7 +25,7 @@ build, still cached as immutable. Nothing told the browser to ask again.
 ## Solution (2026-10-08, `333bfc985`)
 
 Every HTML document of a build is served with `Cache-Control: no-cache, must-revalidate` (`REVALIDATE_HTML`,
-`_revalidated_file()` in `backend/app/main.py`): the browser revalidates the entry point on each load and picks up a
+`_revalidated_file()` in `backend/app/services/platform/static_site.py`): the browser revalidates the entry point on each load and picks up a
 new build at once. The `/_app` chunks stay `public, max-age=31536000, immutable` — their names change with their
 content, so caching them forever is safe.
 
@@ -43,5 +43,5 @@ Bug reports after upgrades that could not be reproduced on a fresh browser; a mi
 
 | Role | Path |
 |------|------|
-| `REVALIDATE_HTML`, `_revalidated_file`, immutable `/_app` | `backend/app/main.py` |
+| `REVALIDATE_HTML`, `_revalidated_file`, immutable `/_app` | `backend/app/services/platform/static_site.py` |
 | Plan (Step 9) | `LibreFolio_developer_journal/Release_2/phases/26_brimDanskeBank/plan-phase00BrimDanskeBankStep9StaleFrontend.prompt.md` |
