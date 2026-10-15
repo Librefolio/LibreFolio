@@ -6,11 +6,9 @@
 
     interface Props {
         onOpenChange?: (open: boolean) => void;
-        /** On a green bar (the app header, D-T19): the bar's text, hover and focus ring; the menu stays on the card */
-        onBar?: boolean;
     }
 
-    let {onOpenChange = () => {}, onBar = false}: Props = $props();
+    let {onOpenChange = () => {}}: Props = $props();
 
     let isOpen = $state(false);
     let menuRef: HTMLDivElement | null = $state(null);
@@ -96,9 +94,7 @@
 <div bind:this={menuRef} class="relative" data-menu-open={isOpen ? 'true' : 'false'} data-testid="help-menu">
     <button
         type="button"
-        class={onBar
-            ? 'flex items-center space-x-1 p-2 rounded-lg hover:bg-lf-bar-hover transition-colors text-lf-bar-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-bar-focus'
-            : 'flex items-center space-x-1 p-2 rounded-lg hover:bg-lf-hover transition-colors text-lf-secondary'}
+        class="flex items-center space-x-1 p-2 rounded-lg hover:bg-lf-hover transition-colors text-lf-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls="help-menu-panel"

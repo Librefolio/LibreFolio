@@ -8,10 +8,30 @@
  * 15/10). Header.test.ts states the focus kind by owning `:focus-visible`;
  * here Chrome decides it, from a real click and a real Tab.
  *
- * The runner's desktop AND mobile projects run every case. No seeded user,
- * financial fixture, database mutation or third-party request is involved:
- * every API the protected layout calls is answered from the synthetic table
- * below, and a request that is not in it fails the fixture's teardown.
+ * And the other bar at the top of a page: the controls at the top right of the
+ * sign-in page, `auth-page-controls` (AuthPageFrame, decision D-T23 of the
+ * colour workstream T). Below the shell's lg breakpoint the bar is absolute,
+ * so it scrolls away with the page instead of covering the card; from lg up it
+ * is fixed. On the mobile project the case shortens the window to 430 × 560:
+ * still below lg, roughly a phone with its keyboard up, where the developer
+ * saw the bar over the card — at the project's own 740 px the page cannot
+ * scroll, the register card with its password requirements fitting it (about
+ * 732 px with the frame's padding, by its CSS). It reads the positions — the
+ * bar's, and that no ancestor is fixed or sticky, so that nothing pins it to
+ * the window — then opens the register card and types a password, so that the
+ * requirements box makes the page taller than the window; checks there is
+ * room to scroll by a known amount; scrolls by it, and reads the bar's top
+ * move up by as much, within 1 px.
+ *
+ * The runner's desktop AND mobile projects run every case of the app header;
+ * the sign-in bar has one case per project. No seeded user, financial fixture,
+ * database mutation or third-party request is involved: every API the
+ * protected layout calls is answered from the synthetic table below, and a
+ * request that is not in it fails the fixture's teardown. The sign-in cases
+ * load `/` signed out from the lane's own backend, which they only read
+ * (GET /auth/me answers 401 before the card shows; the registration link
+ * needs `registration_mode` 'open', the default, which no E2E spec changes),
+ * and submit nothing: the password is typed, never sent.
  */
 import {test as base, expect} from '../fixtures/playwright';
 import type {Locator, Page} from '../fixtures/playwright';
@@ -303,4 +323,76 @@ test('keyboard focus on a header control keeps the header pinned and on screen t
     await expect(header, 'focus left the header: the pin is released').toHaveAttribute('data-scroll-state', 'visible');
     await scrollDocumentSeen(page, down + 100);
     expect(await header.getAttribute('data-scroll-state'), 'without the focus pin, the same barrier sees the header hide').toBe('hidden');
+});
+
+// The sign-in page's bar (AuthPageFrame, D-T23): its position on each side of the shell's lg breakpoint.
+
+/** The shell's lg breakpoint, Tailwind's `lg` (64rem): below it the bar is absolute, from it up fixed. */
+const LG_BREAKPOINT_PX = 1024;
+/** The first paint of `/`: it asks GET /auth/me before it shows the login (the budget auth.spec.ts gives the same step). */
+const SIGN_IN_FIRST_PAINT_MS = 20_000;
+/** A phone with its keyboard up: the mobile project's width, below lg, in a shorter window — where the bar covered the card. */
+const PHONE_WITH_KEYBOARD = {width: 430, height: 560};
+/** How far the case scrolls the sign-in page: well inside the room the register card leaves at that height (about 170 px). */
+const SIGN_IN_SCROLL_PX = 100;
+/** Meets every rule of PasswordStrength, so its requirements box shows. Typed, never submitted. */
+const REGISTER_PASSWORD = 'Glacier!Quill7-Marmot-Sundial';
+
+/** Signed out, on a fresh load of `/`: the sign-in page's bar, once the login card shows below it. */
+async function openSignInBar(page: Page): Promise<Locator> {
+    await page.goto('/');
+    const frame = page.getByTestId('login-page');
+    await expect(frame.getByTestId('login-modal')).toBeVisible({timeout: SIGN_IN_FIRST_PAINT_MS});
+    const bar = frame.getByTestId('auth-page-controls');
+    await expect(bar).toBeVisible();
+    return bar;
+}
+
+test.describe('the sign-in page bar, auth-page-controls — signed out on /', () => {
+    test('below the lg breakpoint (the mobile project, its window shortened as by a keyboard) the bar is absolute and scrolls away with the page instead of covering the card', async ({page}, testInfo) => {
+        test.skip(testInfo.project.name !== 'mobile', 'Mobile project only: the desktop project is at or above the lg breakpoint, where the bar is fixed (the next case)');
+        // At the project's own 740 px the sign-in page cannot scroll, even with the register card and its requirements.
+        await page.setViewportSize(PHONE_WITH_KEYBOARD);
+        const size = page.viewportSize();
+        expect(size, 'precondition, read back: the window took the size set').toEqual(PHONE_WITH_KEYBOARD);
+        expect(size?.width ?? Infinity, `precondition: the window is narrower than the lg breakpoint, ${LG_BREAKPOINT_PX}px`).toBeLessThan(LG_BREAKPOINT_PX);
+        const bar = await openSignInBar(page);
+        await expect(bar, 'below lg the bar is absolute (D-T23)').toHaveCSS('position', 'absolute');
+        // An absolute box scrolls with the document unless an ancestor pins it to the window: none may be fixed or sticky.
+        const pinned = await bar.evaluate((element) => {
+            const out: string[] = [];
+            for (let node = element.parentElement; node; node = node.parentElement) {
+                const position = getComputedStyle(node).position;
+                if (position === 'fixed' || position === 'sticky') out.push(`${node.tagName.toLowerCase()}${node.dataset.testid ? `[data-testid="${node.dataset.testid}"]` : ''}: ${position}`);
+            }
+            return out;
+        });
+        expect(pinned, 'no ancestor of the bar is fixed or sticky: nothing pins it to the window').toEqual([]);
+
+        // The register card, with the requirements box a typed password opens, makes the page taller than the window.
+        const gotoRegister = page.getByTestId('goto-register');
+        await expect(gotoRegister, 'the login card offers registration: registration_mode is open by default, and no E2E spec changes it').toBeVisible();
+        await gotoRegister.click();
+        await expect(page.getByTestId('register-modal')).toBeVisible();
+        const password = page.getByTestId('register-password');
+        await password.fill(REGISTER_PASSWORD);
+        await expect(password).toHaveValue(REGISTER_PASSWORD);
+        await expect(page.getByTestId('password-requirements')).toBeVisible();
+        // Positive control: there is room to scroll by the known amount, or the reading below would have nothing to measure.
+        await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight), {message: `the sign-in page is scrollable: its scrollHeight exceeds innerHeight by at least ${SIGN_IN_SCROLL_PX}px`, timeout: 5_000}).toBeGreaterThanOrEqual(SIGN_IN_SCROLL_PX);
+
+        // Scroll by a known amount from the top: an absolute bar leaves with the page, a fixed one would stay put.
+        const barTop = (): Promise<number> => bar.evaluate((element) => element.getBoundingClientRect().top);
+        await scrollDocument(page, 0);
+        const before = await barTop();
+        await scrollDocument(page, SIGN_IN_SCROLL_PX);
+        await expect.poll(async () => Math.abs(before - (await barTop()) - SIGN_IN_SCROLL_PX), {message: `the bar's top moved up by the ${SIGN_IN_SCROLL_PX}px the page scrolled, within 1px (it stood at ${before}px)`, timeout: 5_000}).toBeLessThanOrEqual(1);
+    });
+
+    test('from the lg breakpoint up (the desktop project) the bar is fixed: it keeps its place at the top right of the window', async ({page}, testInfo) => {
+        test.skip(testInfo.project.name !== 'desktop', 'Desktop project only: the mobile project is below the lg breakpoint, where the bar is absolute (the case above)');
+        expect(page.viewportSize()?.width ?? 0, `precondition: the desktop project's window is at or above the lg breakpoint, ${LG_BREAKPOINT_PX}px`).toBeGreaterThanOrEqual(LG_BREAKPOINT_PX);
+        const bar = await openSignInBar(page);
+        await expect(bar, 'from lg up the bar is fixed').toHaveCSS('position', 'fixed');
+    });
 });

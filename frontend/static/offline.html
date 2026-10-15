@@ -45,7 +45,7 @@
             --lf-on-action: #edf2f0;
             --lf-focus: #429e79;
             --lf-selected: color-mix(in oklab, #429e79 12%, transparent);
-            --lf-danger: #f84361;
+            --lf-danger: #ff7a86;
             --lf-donate: #f59e0b;
             --lf-donate-hover: #d97706;
             --lf-shadow-raised: color-mix(in oklab, #0d1110 50%, transparent);
@@ -538,7 +538,7 @@
             document.documentElement.classList.toggle('dark', theme === 'dark');
             document.getElementById('icon-sun').style.display = theme === 'dark' ? 'none' : 'block';
             document.getElementById('icon-moon').style.display = theme === 'dark' ? 'block' : 'none';
-            // PWA title bar: the green bars' --lf-surface-bar, the same in both themes (N2, D-T17); kept a pair, as in app.html
+            // PWA title bar: the green sidebar's --lf-surface-bar, the same in both themes (N2, D-T17, D-T24); kept a pair, as in app.html
             var meta = document.querySelector('meta[name="theme-color"]');
             if (meta) meta.setAttribute('content', theme === 'dark' ? '#1b4334' : '#1b4334');
         }

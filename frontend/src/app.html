@@ -21,7 +21,7 @@
                 } catch (e) {}
                 var theme = stored === 'dark' ? 'dark' : stored === 'light' ? 'light' : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                 document.documentElement.classList.add(theme);
-                // PWA title bar: the green bars' --lf-surface-bar, the same in both themes (N2, D-T17). Kept a pair,
+                // PWA title bar: the green sidebar's --lf-surface-bar, the same in both themes (N2, D-T17, D-T24). Kept a pair,
                 // so a theme of its own stays one edit away; themeColorMeta.gate.test.ts reads the three copies.
                 var meta = document.querySelector('meta[name="theme-color"]');
                 if (meta) meta.setAttribute('content', theme === 'dark' ? '#1b4334' : '#1b4334');

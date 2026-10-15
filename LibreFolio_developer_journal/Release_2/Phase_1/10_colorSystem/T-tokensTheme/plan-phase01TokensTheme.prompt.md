@@ -45,6 +45,10 @@ e le tue integrazioni».
 | D-T19 | (15/10, 15:50, supera l'interpretazione di N2 in `analisi.md` §5) «credo che la designer si aspetti che anche in desktop sia verde, non solo in mobile»: header e barra laterale `#1B4334` nei due temi, una sola famiglia di ruoli, `--lf-bar-*` (i nomi della designer, `--lf-surface-sidebar` e `--lf-sidebar-*`, restano nei commenti). Anello di focus dedicato `#52C493` (5,10:1); icone sul testo della barra `#CFE0D8`; «Offrimi un caffè» `#F59E0B` nei due temi; anello del pallino di sicurezza nel verde della barra; bordo inferiore solo in scuro, `#265946`. Restano il comportamento di T-7 e i menu sulla card |
 | D-T20 | (15/10, 15:55) Integrazione progressiva: T entra in `dev_release2` dopo la revisione del developer di T-8 sull'anteprima 6160; da lì ogni gruppo di lotti delle ondate entra appena validato, senza accumulo sul ramo. Il merge lo fa il coordinatore; a ogni ingresso la 1.3 rifà la sua galleria di riferimento |
 | D-T21 | (15/10, 15:55) «si principalmente io, se lei è disponibile te lo faccio sapere»: l'aspetto lo approva il developer, dal contact sheet e dal diff della galleria. La designer rivede tutto insieme nel giro 3; sostituisce la sua revisione a ogni ondata |
+| D-T23 | (15/10, sera, dopo l'anteprima di T-8; supera D-T19 per l'header) «l'header con lo stesso colore del menù verticale non ci piace, sarebbe meglio usare il colore di sfondo con una variante più scura nel tema chiaro e una più chiara nel tema scuro»: opzione A, la barra neutra della designer, `#EDF0EE` / `#111615`, ruolo `--lf-surface-header`, desktop e mobile. Controlli dell'header nel loro aspetto di pagina, bordo inferiore `--lf-border-subtle`. La barra laterale resta verde (D-T17), senza il bordo destro scuro (la «lineetta» fra il menu e l'header) |
+| D-T24 | (15/10, sera) La barra del titolo della PWA (`theme-color`) resta verde `#1B4334` nei due temi, come la barra laterale, anche con l'header neutro di D-T23: opzione A di T, nessun cambio alle tre copie né al gate |
+| D-T25 | (15/10, sera) Il rosso del tema scuro è `#FF7A86` al posto di `#F84361`, per `--lf-danger` (testi, bordi, icone di errore): 7,0:1 sulla card. Invariati `--lf-danger-solid` e `--lf-danger-hover` (il riempimento dei pulsanti pieni sotto testo bianco, che `#FF7A86` non regge), le tinte `-soft`, `-line`, `-on-soft`, `--lf-bar-danger` e tutto il tema chiaro. |
+| D-T26 | (15/10, sera) Il verde del tema scuro è `#5ED69A` al posto di `#36D399`, per `--lf-success` (testi, icone ✓, barra di robustezza, «Forte»): 9,6:1 sulla card, 8,8:1 sulla superficie secondaria. Con D-T25 chiude il punto 5 di T-8b. Per coerenza con la regola della designer sulla barra verde («gli stati luminosi del tema scuro», indicazione del coordinatore): `--lf-bar-success` `#5ED69A` e `--lf-bar-danger` `#FF7A86` |
 
 **Vincoli:**
 - **Fino alle 22:45 del 14/10:** solo scrittura. Niente `npm ci`, build, test né server: G misura la gallery. Dopo,
@@ -180,6 +184,17 @@ flowchart LR
 - TC-7: `--resolve` a tre vie, prima di W1.
 - Fuori perimetro: l'applicazione nei componenti degli altri (Q4, Q5, Q6 codice nel testo, Q7, Q9, Q10, Q11, Q12, card
   scure di Profilo e Allocazione) va nelle ondate; i grafici (GR1–GR5) a DV.
+
+### T-8b · Correzioni del developer dopo l'anteprima (D-T23)
+
+- Header neutro, `--lf-surface-header`; i suoi controlli tornano all'aspetto di pagina (via la prop `onBar`), col
+  ring di focus della pagina.
+- Barra laterale senza bordo destro; via `--lf-bar-edge` e `--lf-bar-donate`, che nessuno usa più.
+- `ForgotPasswordCard`: via la riga «Password Recovery» e la chiave `auth.passwordRecovery` (OK della 1.3).
+- `AuthPageFrame` (di A, OK della 1.3): i controlli in alto `absolute` sotto `lg`, `fixed` su desktop.
+- Rosso e verde del tema scuro: punto preparato, valori dal developer.
+- `theme-color`: resta `#1B4334` (D-T24); solo i commenti delle tre copie passano da «le barre verdi» alla barra laterale.
+- Test con `test-author`: C3, `theme-roles` (b), `header-scroll`.
 
 ### W1–W6 · Ondate di migrazione (sotto-agenti)
 
@@ -524,6 +539,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 5 | T-6 palette del giro 2 e barra neutra (D-T15, D-T16) | ✅ checkpoint `078dec1ae`; base con `dc9a5d232` nel merge `e1443e952`, validato il 15/10; candidata T6 fatta, l'ingresso aspetta il via del developer |
 | 6 | T-7 header che si nasconde di nuovo, fascia verde del logo nella barra laterale | ✅ checkpoint `0580c92ab`; base `8f1abf89e` nel merge `fe618a0e3` |
 | 7 | T-8 giro 2 della designer (D-T17, D-T18, D-T19), T-4, TC-7 | ✅ checkpoint `68c990b35`; base `d22eb6f43` nel merge `02c23c773`, validato il 15/10 con contact sheet; correzione della marca di `sw.js` e del `background_color` da committare |
+| 8 | T-8b correzioni del developer (D-T23–D-T26), `ForgotPasswordCard`, `AuthPageFrame` | ⏳ checkpoint scritto il 15/10; merge di base con `c747a74c3` e prove pesanti al via del coordinatore |
 
 ## Avanzamento
 
@@ -1204,3 +1220,84 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > - `theme-roles --check` pulito, 82 file sotto il record;
 > - grammatica 0 sui 12 file toccati;
 > - Prettier sui file toccati: `manifest.json` non era formattato già in `HEAD`, lasciato com'era.
+
+### T-8b — 🔄 15/10/2026 (correzioni del developer dopo l'anteprima, D-T23)
+
+> **Avvio** (coordinatore, 17:59): T-8 e la sua validazione committati in `63de39c45`; TC-9 accettata (il manifest
+> resta beige). Scrittura subito, prove pesanti al via del coordinatore.
+
+> ✅ **1 · Header neutro (D-T23).** Ruolo nuovo `--lf-surface-header`, `#EDF0EE` in chiaro e `#111615` in scuro
+> (utility `bg-lf-header`); header `bg-lf-header text-lf-primary border-b border-lf-subtle`. I quattro controlli
+> perdono la prop `onBar`: un solo aspetto, quello di pagina, col ring `focus-visible:outline-lf-focus`, anche nella
+> cornice delle pagine di accesso (prima non avevano un ring proprio). Caffè `text-lf-donate`, icona del menu
+> `text-lf-primary`, pallino di sicurezza `bg-lf-danger ring-lf-header`.
+> - **Contrasti:** testo primario 13,84 / 16,15; secondario 6,76 / 7,41; caffè 4,70 in chiaro e 4,53 sull'hover;
+>   focus 5,58 / 5,57; pallino 4,79 / 5,19. Lo script della sessione: 0 coppie sotto soglia su 270.
+
+> ✅ **2 · La «lineetta».** Via `border-r border-lf-bar-edge` dalla barra laterale. `--lf-bar-edge` e
+> `--lf-bar-donate` escono da `tokens.css` con le loro utility: nessuno li usa più. La correzione D-T6 n. 8 (il caffè
+> sulla barra, `#FAA319`) decade con il suo ruolo.
+
+> ✅ **3 · `ForgotPasswordCard`.** Via la riga «Password Recovery» sotto il logo. `dev.py i18n remove
+> "auth.passwordRecovery" -f`: tolta da `i18n/auth/{en,it,fr,es}.json`; `dev.py i18n check` rigoroso, 4.421 chiavi.
+
+> ✅ **4 · `AuthPageFrame`.** I controlli in alto passano da `fixed` a `absolute lg:fixed`: sotto il breakpoint della
+> shell (`lg`, come il menu mobile) salgono con la pagina e non coprono più la card; su desktop restano fissi.
+> `data-testid="auth-page-controls"` per la E2E. Il componente non ha test che leggano quelle classi.
+
+> ✅ **5 · Rosso e verde del tema scuro: il punto, pronto per i valori del developer.**
+> - **Ruoli e tinte di oggi (scuro):**
+>   - `--lf-success` `#36D399` (e `--lf-gain`); `-soft` `#13261E`, `-line` `#1F4435`, `-on-soft` `#86EFAC`;
+>   - `--lf-danger` `#F84361` (e `--lf-loss`); `-soft` `#2A1417`, `-line` `#581C24`, `-on-soft` `#FCA5A5`;
+>     `-solid` `#E1284F`, `-hover` `#D51C42`;
+>   - sulla barra verde, nei due temi: `--lf-bar-success` `#36D399`, `--lf-bar-danger` `#F87171`; terminale:
+>     `--lf-terminal-prompt` `#36D399`.
+> - **Margini** (`files/T8b-tools/dark_status_range.mjs` della sessione T, alla tinta di oggi):
+>   - il rosso è già alla luminosità minima: `#F84361` dà 4,52 sul pannello. Per farlo meno acceso si può solo
+>     desaturarlo a pari luminosità: croma ×0,75 `#DF5E6B`, ×0,5 `#C57075`;
+>   - il verde ha margine: si può scurire fino a L 0,605 (`#009D67`), o scurire e desaturare (`#319A71`, `#599579`).
+> - **Da sapere prima di scegliere:** i verdi e i rossi accesi della dashboard in scuro non sono questi ruoli, ma le
+>   tabelle centrali di R (`lib/theme/toneClasses.ts`: `emerald-400`, `green-400`, `red-400`, `red-500`). Un valore
+>   nuovo dei ruoli li raggiunge solo quando quelle voci passano a `text-lf-gain` e `text-lf-loss` (W3, B2).
+> - **Strumento:** `files/T8b-tools/dark_status_candidates.mjs danger=#… success=#… [--fix]` misura le 34 coppie
+>   in cui entrano e propone la correzione minima D-T6.
+
+> ✅ **6 · `theme-color` (D-T24).** Il developer lo tiene verde, `#1B4334`, come la barra laterale. Nessun cambio a
+> coppia, copie e gate; aggiornati solo i commenti delle tre copie («the green sidebar's», D-T24) e la dicitura di
+> `themeColorMeta` (test-author).
+> - **⚠️ Fuori pista evitato:** il commento cambia i byte di `offline.html`, quindi anche la marca di `sw.js`: rifatta
+>   come la scrive `dev.py` (`md5(offline.html)[:8]` = `f58c3888`). `dev.py test … utils pwa-assets` 20/20.
+
+> ✅ **7 · Rosso scuro (D-T25).** `--lf-danger` scuro `#FF7A86` (e con lui `--lf-loss`): 6,97 sulla card, 6,92 sul suo
+> fondo tenue, e il testo della card sul rosso pieno 6,97. Lo script dei candidati: 0 coppie sotto soglia su 34; lo
+> script della sessione: 0 su 270. Aggiornata la copia scura di `offline.html`, quindi di nuovo la marca di `sw.js`
+> (`7e726c69`); `utils pwa-assets` 20/20. Per DV: il ripiego del ponte, con il suo gate di parità, deve dire
+> `#FF7A86` per `--lf-danger` scuro.
+
+> ✅ **8 · Verde scuro (D-T26) e stati della barra verde.** `--lf-success` scuro `#5ED69A` (e con lui `--lf-gain`): 9,61
+> sulla card, 8,75 sul pannello, 8,73 sul suo fondo tenue. Sulla barra verde, nei due temi, `--lf-bar-success`
+> `#5ED69A` (6,09 sulla barra, 5,07 sull'hover) e `--lf-bar-danger` `#FF7A86` (4,41 e 3,67: meglio del `#F87171` di
+> prima). La tinta «non sicura», traslucida, che il gate non misura: icona 3,41 (era 3,19), anello di focus 3,94 (era
+> 4,06), etichetta 6,24. Invariati: `--lf-terminal-prompt` `#36D399` (Q6, ruolo suo), il tema chiaro, le tinte, il
+> rosso pieno. Il verde non ha copie statiche: niente marca nuova per `sw.js`. Script della sessione: 0 su 270.
+
+> ✅ **9 · Test (`test-author`, solo scrittura).**
+> - `themeTokens.gate.test.ts` (C3): `surface-header` fra le superfici; caffè sull'header e sul suo hover, focus
+>   sull'header; via le coppie di `bar-donate`. 137 coppie per tema. Nel commento le cifre nuove della tinta «non
+>   sicura» (icona 3,41, anello 3,94).
+> - `themeColorMeta.gate.test.ts`: solo la dicitura, «la barra laterale verde» e D-T24; coppia e (d) invariate.
+> - `e2e/layout/theme-roles.spec.ts` (b): la barra laterale verde senza bordo destro (`border-right-width` 0), l'header
+>   neutro su `--lf-surface-header` (prima controllato diverso da `app` e da `bar`), i suoi controlli coi ruoli di
+>   pagina, i due anelli da tastiera (`--lf-focus` sull'header, `--lf-bar-focus` sulla barra) controllati diversi
+>   fra loro. Via `declaredRole`.
+> - `e2e/layout/header-scroll.spec.ts`: describe nuovo per `auth-page-controls`. Desktop: `fixed`. Mobile: finestra
+>   `430×560` (un telefono con la tastiera aperta: a 740 px la pagina non scorre), `absolute`, nessun antenato fisso,
+>   pagina scorribile, e la barra sale di 100 px con lo scorrimento, entro 1 px.
+> - Prove leggere: Prettier e `tsc` mirato puliti su tutti e quattro.
+
+> ✅ **10 · Runner e istruzioni.** Le `desc` di `theme-roles` e `header-scroll` in `_frontend_utility.py`; la skill
+> `theme-roles` e la sezione «Design System» (`bg-lf-header`, la famiglia verde è della sola barra laterale).
+
+> **Prove leggere del checkpoint:** `--check` pulito (82 file sotto il record); grammatica 0 sui 9 componenti
+> toccati; `dev.py i18n check` rigoroso; script dei contrasti 0 su 270; `utils pwa-assets` 20/20; Prettier e
+> `git diff --check` puliti. Delta: 26 file tracciati, nessun file nuovo.

@@ -1,12 +1,13 @@
 /**
- * Gate: the PWA title bar has one light/dark colour pair, and every copy of it agrees (colour workstream T, decision
- * D-T17); and the static copies of the colour roles, in the splash and the offline page, agree with tokens.css (T-4).
+ * Gate: the PWA title bar has one light/dark colour pair, and every copy of it agrees (colour workstream T, decisions
+ * D-T17 and D-T24); and the static copies of the colour roles, in the splash and the offline page, agree with
+ * tokens.css (T-4).
  *
  * ## What this protects
  *
  * `<meta name="theme-color">` colours the browser chrome around the app — the window of the installed PWA, the
- * address bar on a phone — and the app rewrites it on every theme so that the chrome continues the green bars, the
- * sidebar and the header. Three places write it, and they cannot share a module:
+ * address bar on a phone — and the app rewrites it on every theme so that the chrome continues the green sidebar.
+ * Three places write it, and they cannot share a module:
  *
  *   - `src/app.html`, the anti-FOUC inline script: it runs before any bundle is loaded;
  *   - `applyTheme()` in `src/lib/stores/app/themeStore.ts`: every theme switch inside the app;
@@ -17,9 +18,10 @@
  * one digit away from the sidebar's `#166534`, in all three copies, until R corrected it (the developer's decision D3,
  * 14/10/2026). Two greens one digit apart do not look different — which is exactly why nobody noticed, and why a test
  * has to. R wrote this gate; T took it over with the designer's round 2, approved whole by the developer (D-T17,
- * 15/10/2026): the sidebar and the header are green in both themes, and the title bar continues them with one colour,
- * `#1b4334`, in both themes (N2). The copies keep a pair whose two branches are equal, so that a theme of its own stays
- * one edit away, and this gate still reads three pairs.
+ * 15/10/2026): the sidebar is green in both themes, and the title bar continues it with one colour, `#1b4334`, in both
+ * themes (N2). The header, green for a while too (D-T19), is neutral since D-T23; the title bar stays the sidebar's
+ * green by decision (D-T24). The copies keep a pair whose two branches are equal, so that a theme of its own stays one
+ * edit away, and this gate still reads three pairs.
  *
  * ## The rule, as this file checks it
  *
@@ -27,12 +29,13 @@
  *       (or its `'light'` mirror) and looks the meta up exactly once. This is the positive control of everything
  *       below: a statement renamed, moved or rewritten in a form the scanner does not read shows here as 0, loudly,
  *       instead of leaving (b) to compare nothing.
- *   (b) The three pairs are one pair, and it is the pair D-T17 settled: `#1b4334` in light and in dark (N2).
+ *   (b) The three pairs are one pair, and it is the pair D-T17 settled and D-T24 kept: `#1b4334` in light and in dark,
+ *       the green sidebar's (N2).
  *   (c) Before any script has run, the light value is what shows: it is the static `content` of the meta in both
  *       documents, and the `theme_color` of `static/manifest.json`.
- *   (d) The pair is the green bars': `--lf-surface-bar`, the one surface of the sidebar and of the header (D-T19),
- *       resolved from `src/lib/theme/tokens.css` in each theme by the module of the colour gates, is the light and the
- *       dark value of the pair. This is the drift D3 corrected, seen from the other side: should the bars change colour
+ *   (d) The pair is the green sidebar's: `--lf-surface-bar`, the surface of the sidebar, resolved from
+ *       `src/lib/theme/tokens.css` in each theme by the module of the colour gates, is the light and the dark value of
+ *       the pair (D-T24). This is the drift D3 corrected, seen from the other side: should the sidebar change colour
  *       and the title bar not follow, (b) alone would stay green.
  *   (e) Nothing else writes the meta: no other source under `src`, and no other page or script of `static`, names it.
  *       A fourth copy would sit outside (a)–(b).
@@ -85,7 +88,7 @@ interface Pair {
     dark: string;
 }
 
-/** The pair D-T17 settled on (15/10/2026): the green bars' `#1b4334`, in both themes (N2). Before it, D3's. */
+/** D-T17's pair (15/10/2026), kept by D-T24: the green sidebar's `#1b4334`, in both themes (N2). Before it, D3's. */
 const PAIR: Pair = {light: '#1b4334', dark: '#1b4334'};
 
 // ---------------------------------------------------------------------------
@@ -258,7 +261,7 @@ describe('PWA theme-color — one light/dark pair, the same in every copy (T, D-
         expect([...distinct], ['', 'The copies of the title-bar pair disagree:', ...pairs.map(describePair), ''].join('\n  ')).toHaveLength(1);
     });
 
-    it('(b) and it is the pair D-T17 settled: #1b4334 in both themes, the green bars (N2)', () => {
+    it("(b) and it is the pair D-T17 settled and D-T24 kept: #1b4334 in both themes, the green sidebar's (N2)", () => {
         const pairs = Object.fromEntries(
             SOURCES.map((file) => {
                 const {light, dark} = theOnePairOf(file);
@@ -277,10 +280,13 @@ describe('PWA theme-color — one light/dark pair, the same in every copy (T, D-
         }).toEqual({[APP_HTML]: [PAIR.light], [OFFLINE_HTML]: [PAIR.light], [MANIFEST]: [PAIR.light]});
     });
 
-    it("(d) the pair is the green bars': --lf-surface-bar of tokens.css, resolved in each theme", () => {
+    it("(d) the pair is the green sidebar's: --lf-surface-bar of tokens.css, resolved in each theme", () => {
         const tokens = readTokens();
-        const bars = Object.fromEntries(THEMES.map((theme) => [theme, reading(colourOf(tokens, 'var(--lf-surface-bar)', theme))]));
-        expect(bars, `${TOKENS_CSS}: --lf-surface-bar, the surface of the sidebar and of the header (D-T19) — if the bars change colour, move the title-bar pair with them (all three sources and PAIR), or record why they now differ`).toEqual({light: PAIR.light, dark: PAIR.dark});
+        const sidebar = Object.fromEntries(THEMES.map((theme) => [theme, reading(colourOf(tokens, 'var(--lf-surface-bar)', theme))]));
+        expect(sidebar, `${TOKENS_CSS}: --lf-surface-bar, the surface of the green sidebar, whose colour the title bar keeps (D-T24) — if the sidebar changes colour, move the title-bar pair with it (all three sources and PAIR), or record why they now differ`).toEqual({
+            light: PAIR.light,
+            dark: PAIR.dark,
+        });
     });
 
     describe('(e) nothing else writes the meta', () => {
