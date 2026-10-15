@@ -2350,3 +2350,152 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - **Commit proposti**:
 >   1. `feat(accounts): invite and reset link pages`: codice, test, runner, doc EN, devWiki;
 >   2. `docs(journal): A5b progress, A backlog`: piano e backlog.
+>
+> **Esito**: il coordinatore ha committato `2b0715532` (`feat(accounts): invite and reset link pages`, 87 file; il corpo
+> cita le correzioni di A5a, TC-6 e il debito A-10) e `db887eca3` (journal). Le tre righe del CHANGELOG le scrive lui
+> all'ingresso.
+
+#### A5b.7 — Aggiornamento di base con R e L (`246863005`) ✅ (2026-10-15)
+> **Note implementazione**:
+> - **Nuova regola per tutta la macchina** (coordinatore, 13:01, dopo che il carico era arrivato a 65): al massimo 2
+>   suite pesanti alla volta.
+>   - Le pesanti (`all-backend`, una categoria `front-*` intera, `utils all`, la galleria) le assegna lui.
+>   - Libere, con `nice -n 10`: azioni singole, Vitest, una spec E2E con `--workers 2`, `front build`,
+>     `front check`, `mkdocs build`.
+>   - Il runner passa `--workers N` a Playwright come `E2E_WORKERS`.
+> - **Merge** di `dev_release2` a `13705dd05`, aperto dal coordinatore. Porta R e L dei colori, X-R8, W E0, J-6 e
+>   l'analisi di E: 43 commit, 227 file.
+>   - **Unico conflitto**: `LibreFolio_devWiki/log.md`. Risolto unendo le due parti in ordine di tempo: la mia voce di
+>     A5b (commit delle 10:35), poi quella di R (11:45).
+>   - **File fusi da Git che entrambe le parti toccano**, rivisti: `index.md`, il backlog, `runner_architecture.md` e
+>     `_frontend_utility.py`. In ognuno ci sono tutte e due le parti, in zone separate.
+>     - Il runner non ha azioni doppie, e i percorsi Vitest tornano: 285 della base + 11 miei + 6 loro = 302.
+>     - I 16 percorsi elencati due volte c'erano già nella base e nei due genitori.
+>   - **Sovrapposizioni che Git non vede**: R e L non toccano nessuno dei componenti né dei moduli che A5b usa o
+>     cambia. Cambiano però la baseline del ratchet dei colori e aggiungono tre gate che leggono tutto `src/`.
+>   - **Controlli sull'albero fuso**, prima dello stage:
+>     - ruff e black sul runner: puliti;
+>     - `theme-roles.mjs --check`: pulito. Segnala «81 file sotto il loro record», tutti di R: stringere la baseline
+>       spetta al programma colori;
+>     - i 9 gate `src/*.gate.test.ts`, ciascuno lanciato da solo, tutti verdi: `themeRoles` 36, `themeTokens` 14,
+>       `themeComponentTokens` 18, `themeModeReads` 24, `themeColorMeta` 10, `htmlSink` 7, `htmlInterpolation` 26,
+>       `clipboardSink` 11, `flagFont` 13.
+>   - Poi `git add` del solo `log.md`. Il coordinatore ha committato il merge: `246863005`, genitori `db887eca3` e
+>     `13705dd05`.
+> - **T-B4 → TC-4**: nel backlog fuso la sezione «T (colori)» usa ancora T-B4. I richiami di A-6 e del piano restano
+>   com'erano fino alla rinomina.
+> - **Finestra delle dipendenze** (13:10): il developer installa `cryptography` nell'ambiente condiviso. Niente comandi
+>   Python finché il coordinatore non dà la ripresa; dopo, lo script leggero (`/tmp/libreFolio_a5light.sh`).
+>   - Lo script parte da `api sync`, perché un merge può lasciare vecchio il client generato. `front build` lo fa già
+>     da sé (`dev.py:627`), ma il passo esplicito lascia un log suo.
+>   - `all-backend` (`/tmp/libreFolio_a5heavy.sh`) aspetta lo slot del coordinatore, dopo H e X.
+
+#### Nota per A8 — il limitatore di E (coordinatore, 15/10 13:03, D-E12)
+> Il limite dei tentativi di A8 **riusa** `backend/app/utils/runtime/rate_window.py`, che entra con E1 nel prossimo
+> treno. Non se ne scrive un altro.
+> - `SlidingWindowLimiter(limit, window_seconds, *, max_keys=10_000, clock=time.monotonic)`.
+> - `hit(key, *, limit=None)` restituisce `RateDecision(allowed, remaining, retry_after)`; un colpo rifiutato non
+>   conta.
+> - `peek` e `count` non creano chiavi; ci sono anche `reset(key)` e `clear()`.
+> - Vale per processo ed è thread-safe.
+
+#### A5b.8 — Validazione della revisione combinata `246863005`: la parte leggera ✅, il resto nello slot ⏳ (2026-10-15)
+> **Note implementazione**:
+> - Ripresa alle 13:36, dopo la finestra delle dipendenze (`cryptography 50.0.2` nell'ambiente condiviso).
+> - Script leggero `/tmp/libreFolio_a5light.sh`, con `nice -n 10`, un passo alla volta; log in
+>   `/tmp/libreFolio_a5full_<passo>.log`.
+>
+>   | Passo | Esito |
+>   |---|---|
+>   | `api sync` | ✅ |
+>   | `front build --debug` | ✅, 0 errori e 0 avvisi |
+>   | `front check` | ✅, 0 errori e 0 avvisi |
+>   | `mkdocs build` (strict) | ✅, nessuna riga `WARNING`; il riquadro di Material su MkDocs 2.0 è il solito banner |
+>   | `mkdocs check-links` | ✅, 95 link validi |
+>   | `theme-roles.mjs --check` | ✅ |
+>   | `check-orphans` | ✅, tutto registrato |
+>   | `front-utility core-unit` | 4 419 ✅ |
+>   | `front-utility component-unit` | 3 366 ✅, in 451 s |
+>   | `utils gate-i18n-catalog` | 176 ✅ |
+>
+> - **⚠️ Fuori pista — il carico**: alle 13:56 il carico della macchina era fra 110 e 139.
+>   - Il coordinatore ha chiesto di lasciar finire il comando in corso e poi fermarsi. Le categorie Vitest ed E2E
+>     sono passate fra le prove pesanti, da fare in uno slot assegnato.
+>   - `component-unit` (una dozzina di worker) era pesante, anche se lo script la trattava come leggera.
+>   - Ho fermato lo script con `kill` del solo processo bash, lasciando finire `gate-i18n-catalog`. Nessun altro
+>     comando mio è in corso; la porta 6182 è libera.
+> - **Nello slot del coordinatore**, il terzo, dopo H: `/tmp/libreFolio_a5slot.sh`.
+>   - `all-backend` seriale, con `nice -n 10`. Copre tutte le categorie del backend (external, db, services, utils,
+>     schemas, api, e2e), quindi anche le azioni `api` di A5 (registration, users-admin, auth, settings, system),
+>     `gate-i18n-usage` e `dev-cli-image`. Non le lancio a parte.
+>   - Poi le 5 spec E2E, una alla volta, con `--workers 2`: `auth`, `auth-links`, `settings`, `theme-roles`,
+>     `app-start-auth`.
+
+#### A5b.9 — Slot pesante 2: `all-backend` ed E2E; riparazione di `settings.spec.ts` ✅ (2026-10-15)
+> **Note implementazione**: slot assegnato dal coordinatore alle 14:01; `/tmp/libreFolio_a5slot.sh`, `nice -n 10`, un
+> passo alla volta; log in `/tmp/libreFolio_a5full_<passo>.log`.
+> - **`all-backend`**, seriale, su `246863005`: exit 0 in 29 min 22 s.
+>   - **14 640 ✅**, 28 saltati, 0 falliti, 0 errori; 7 categorie su 7.
+>   - **Guardia J-6**: nessuna segnalazione sui test reali. Le due che compaiono vengono da `test_synthetic_leaks.py`,
+>     cioè le perdite volute che `gate-aiosqlite-leak` usa per provarsi. «Event loop is closed» compare solo nel
+>     testo esplicativo della guardia.
+> - **E2E**, una spec alla volta con `--workers 2`:
+>
+>   | Spec | Esito |
+>   |---|---|
+>   | `auth` | 33 ✅, compreso TC-6 con `it-IT` e `fr-FR` |
+>   | `auth-links` | 9 ✅ |
+>   | `theme-roles` | 8 ✅ |
+>   | `app-start-auth` | 3 ✅ |
+>   | `settings` | 43 ✅ e **3 ❌** |
+>
+> - **⚠️ Fuori pista — i 3 rossi di `settings` li ha causati A5b** (triage §1: un'ipotesi di posizione).
+>   - Il blocco «Toggle & Number Interaction» prendeva il primo interruttore della scheda per posizione (`.first()`).
+>     Prima di A5b era «Enable Registration»; ora la registrazione è una select, e il primo interruttore è «Require
+>     Email Verification», un segnaposto sempre disabilitato.
+>   - «toggles are disabled when locked» passava per il motivo sbagliato, e così il test «non admin».
+>   - **Cura**, approvata dal coordinatore:
+>     - `GlobalSettingsTab.svelte`: le righe booleane pubblicano `data-testid="global-setting-<key>"`, come già quelle
+>       numeriche e di testo. È un attributo aggiunto; nessun test contava questi handle;
+>     - un `test-author` nuovo ha riscritto i quattro test e il non-admin su `scheduler_enabled`.
+>       - Lo stato si legge da `aria-checked`; si usano `setting-save` e `setting-undo`, mai Save;
+>       - «disabled when locked» ora prova anche lo sblocco; `settings.spec.ts` +58/−42, Prettier pulito.
+>   - **Verifiche**: Vitest `GlobalSettingsTab` 98 ✅ (`--maxWorkers 2`); `front build --debug` 0 errori e 0 avvisi;
+>     `theme-roles.mjs` pulito.
+> - **Ripetizione di `settings`** (14:47), senza bisogno del via, come detto dal coordinatore: **45 ✅ e 1 ❌**.
+>   - Il rosso: «admin can unlock global settings for editing», che la cura non tocca. Superati i 30 s del test nel
+>     `beforeEach`, con la scheda ancora su «Loading...».
+>   - Nel mio comando di una riga l'exit stampato era sbagliato: `$(date)` girava prima di `$?` e lo azzerava. Il
+>     runner diceva FAILED; da lì in poi `rc=$?` subito dopo il comando.
+>   - **Triage** (skill `test-triage`; prove salvate in `/tmp/libreFolio_a5fix_evidence/`):
+>     - §1, la forma: non c'entra. Il test aspetta la condizione giusta, le impostazioni caricate, e nessuna posizione;
+>     - §2, l'orologio: nessuna attesa fissa. Il tempo è finito nell'insieme login + navigazione + caricamento;
+>     - in quella run **ogni** test è stato 4–6 volte più lento dello stesso test alle 14:32 (per esempio «number
+>       inputs are disabled when locked»: 1,7 s, poi 7,8 s), e la spec intera è passata da 1,7 a 3,0 minuti;
+>     - l'altro test del blocco, partito insieme sull'altro worker, è passato a 27,6 s;
+>     - nel log del server, nei minuti del rosso (12:48–12:49 UTC), solo accessi ordinari: nessun errore, nessuna
+>       attesa di lock;
+>     - la ripetizione (14:53–14:57), con il carico salito da 68 a 86, dà **46 ✅ su 46**; lo stesso test in 4,4 s, il
+>       blocco fra 4 e 8 s.
+>   - **Verdetto: lentezza da contesa sulla macchina**, non un difetto di A5b né un'ipotesi del test. Nessuna modifica.
+>     Il carico della macchina lo governa il coordinatore.
+> - **Backlog**:
+>   - A-11: il tema non valido che blocca l'accesso, dal `test-author` di E, segnalata dal coordinatore;
+>   - A-12: i selettori fragili rimasti in `settings.spec.ts`, notati dal `test-author` della riparazione; si fanno
+>     con A6.
+
+### Checkpoint A5 d'ingresso (A5a + A5b) 🧊 (2026-10-15, 15:05) — FROZEN, in attesa del commit e dell'ingresso
+> - **Base**: HEAD `246863005` (merge di `dev_release2` a `13705dd05` sopra A5a e A5b).
+> - **Delta**, non in stage:
+>   - `GlobalSettingsTab.svelte`, l'handle delle righe booleane;
+>   - `e2e/settings.spec.ts`, la riparazione;
+>   - il piano (da A5b.7 ad A5b.9 e questo checkpoint);
+>   - il backlog (A-11 e A-12).
+> - **Validazione della combinazione**:
+>   - leggera (A5b.8): `api sync`, build, check, mkdocs strict, link, `theme-roles`, `check-orphans`, `core-unit`
+>     4 419, `component-unit` 3 366, `gate-i18n-catalog` 176;
+>   - pesante (A5b.9): `all-backend` 14 640 ✅ e 0 ❌; E2E `auth` 33, `auth-links` 9, `theme-roles` 8,
+>     `app-start-auth` 3, `settings` 46 dopo la riparazione.
+> - **Commit proposti**:
+>   1. `test(settings): target editable toggle by key`: la riparazione e l'handle;
+>   2. `docs(journal): A5 validation, A backlog`.
