@@ -11,7 +11,10 @@
  *     refused by the SMTP server (502 EMAIL_DELIVERY_FAILED, AUTH_FAILED) and refused by the hourly limit (429
  *     EMAIL_RATE_LIMITED). Each answer reaches the tab through the generated client as it really rejects — the
  *     composition that once read every refusal as UNKNOWN (lot E2) — and is recorded as an event of `notify()`; the
- *     status is read again after every attempt.
+ *     status is read again after every attempt. The routes answer their path and their method only — `GET` the status,
+ *     `POST` the test email — and let anything else fall back. What a success sends is checked against the generated
+ *     schemas (`EmailStatusResponse`, `EmailTestResponse`), as the client checks it on arrival; a refusal is a plain
+ *     `detail` error, which has no generated schema.
  *
  * Nothing here sends an email or writes a row: the real backend is only read, and the test email only ever reaches the
  * simulated server. No test shares state with another, so the file runs in parallel (the config's default).
@@ -21,20 +24,30 @@
  * on the lane (`LIBREFOLIO_SMTP_HOST` unset).
  */
 import type {Route} from '@playwright/test';
+import {schemas} from '../../src/lib/api/generated';
 import {expect, type Locator, type Page, test} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER} from '../fixtures/test-users';
 import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
 
-const STATUS_URL = '**/api/v1/email/status';
-const TEST_URL = '**/api/v1/email/test';
+const STATUS_PATH = '/api/v1/email/status';
+const TEST_PATH = '/api/v1/email/test';
+const isStatus = (url: URL): boolean => url.pathname === STATUS_PATH;
+const isTest = (url: URL): boolean => url.pathname === TEST_PATH;
+
+/** What the two endpoints answer on success, as the generated client types it. */
+type EmailStatusResponse = ReturnType<typeof schemas.EmailStatusResponse.parse>;
+type EmailTestResponse = ReturnType<typeof schemas.EmailTestResponse.parse>;
 
 /** The administrators' page on email, in English or under a language prefix: what the tab's DocsLink opens. */
 const DOCS_PAGE = /\/mkdocs\/(?:[a-z]{2}\/)?admin\/email\/$/;
 
-/** A status as `GET /api/v1/email/status` answers it (`backend/app/schemas/email.py`): ready, this budget, a warning notice. */
-function readyStatus(remaining: number, retryAfterSeconds = 0) {
-    return {
+/**
+ * A status as `GET /api/v1/email/status` answers it (`backend/app/schemas/email.py`): ready, this budget, a warning
+ * notice. Checked against the generated schema when it is built: a contract that moved fails here, with Zod's message.
+ */
+function readyStatus(remaining: number, retryAfterSeconds = 0): EmailStatusResponse {
+    return schemas.EmailStatusResponse.parse({
         state: 'ready',
         problem: null,
         variable: null,
@@ -43,20 +56,25 @@ function readyStatus(remaining: number, retryAfterSeconds = 0) {
             {check_id: 'email.smtp_encryption', severity: 'warning', i18n_key: 'email.checks.smtpEncryption.plain', detail: {}},
         ],
         budget: {max_per_hour: 50, remaining, retry_after_seconds: retryAfterSeconds},
-    };
+    });
 }
 
-/** How the simulated server answers `POST /api/v1/email/test`. */
+/** How the simulated server answers `POST /api/v1/email/test`: the email sent, or a refusal (a plain `detail` error). */
 interface TestAnswer {
     status: number;
-    body: object;
+    body: EmailTestResponse | {detail: Record<string, unknown>};
     headers?: Record<string, string>;
 }
 
+/** The test email sent, in this language: checked against the generated schema. */
+function sentAnswer(language: EmailTestResponse['language']): TestAnswer {
+    return {status: 200, body: schemas.EmailTestResponse.parse({language, message: 'Test email sent'})};
+}
+
 interface SimulatedServer {
-    /** How many times the tab has read the status. */
+    /** How many times the tab has read the status (`GET`s answered). */
     statusReads: () => number;
-    /** The method of every request the test email endpoint received. */
+    /** The method of every request the test email path received, answered or fallen back. */
     testRequests: string[];
     /** Let a held test email be answered. */
     release: () => void;
@@ -66,10 +84,11 @@ interface SimulatedServer {
 
 /**
  * Answer the Email tab from a simulated server: the status (`before` until a test email has been asked for, `after` from
- * then on) and the test email (`answer`). With `hold`, the test email's answer waits for `release()`, so that "in
- * flight" is a state the test controls rather than a moment it races.
+ * then on) and the test email (`answer`). Each route answers its path and its method only — `GET` the status, `POST`
+ * the test email — and lets anything else fall back. With `hold`, the test email's answer waits for `release()`, so
+ * that "in flight" is a state the test controls rather than a moment it races.
  */
-async function simulateEmailServer(page: Page, {before, after, answer, hold = false}: {before: object; after: object; answer: TestAnswer; hold?: boolean}): Promise<SimulatedServer> {
+async function simulateEmailServer(page: Page, {before, after, answer, hold = false}: {before: EmailStatusResponse; after: EmailStatusResponse; answer: TestAnswer; hold?: boolean}): Promise<SimulatedServer> {
     let reads = 0;
     let asked = false;
     const testRequests: string[] = [];
@@ -80,25 +99,27 @@ async function simulateEmailServer(page: Page, {before, after, answer, hold = fa
     if (!hold) release();
 
     const status = async (route: Route) => {
+        if (route.request().method() !== 'GET') return route.fallback();
         reads += 1;
-        await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(asked ? after : before)});
+        await route.fulfill({json: asked ? after : before});
     };
     const sendTest = async (route: Route) => {
         testRequests.push(route.request().method());
+        if (route.request().method() !== 'POST') return route.fallback();
         asked = true;
         await released;
-        await route.fulfill({status: answer.status, contentType: 'application/json', headers: answer.headers, body: JSON.stringify(answer.body)});
+        await route.fulfill({status: answer.status, headers: answer.headers, json: answer.body});
     };
-    await page.route(STATUS_URL, status);
-    await page.route(TEST_URL, sendTest);
+    await page.route(isStatus, status);
+    await page.route(isTest, sendTest);
     return {
         statusReads: () => reads,
         testRequests,
         release: () => release(),
         unroute: async () => {
             release();
-            await page.unroute(STATUS_URL, status);
-            await page.unroute(TEST_URL, sendTest);
+            await page.unroute(isStatus, status);
+            await page.unroute(isTest, sendTest);
         },
     };
 }
@@ -154,7 +175,7 @@ test.describe('Settings › Email — on the lane’s backend', () => {
 
 test.describe('Settings › Email — a test email, on a simulated server', () => {
     test('ready, 48 of 50 left, a warning: the test email is sent, recorded, and the status read again', async ({page}) => {
-        const server = await simulateEmailServer(page, {before: readyStatus(48), after: readyStatus(47), answer: {status: 200, body: {language: 'en', message: 'Test email sent'}}, hold: true});
+        const server = await simulateEmailServer(page, {before: readyStatus(48), after: readyStatus(47), answer: sentAnswer('en'), hold: true});
         try {
             const tab = await openEmailTab(page);
             await expect(page.getByTestId('email-state')).toHaveAttribute('data-state', 'ready');
