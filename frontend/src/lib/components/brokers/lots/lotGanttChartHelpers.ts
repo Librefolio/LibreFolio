@@ -24,6 +24,8 @@ import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {clamp} from './lotChartShared';
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {themed} from '$lib/theme/themePair';
+import {CHART_GAIN_LOSS, LOT_GANTT_COLORS} from '$lib/theme/chartTheme';
 
 /** The marker kinds the Gantt can draw for a lot event. */
 export type EventMarkerKind = 'BUY' | 'SELL' | 'TRANSFER' | 'ADJUSTMENT_IN' | 'ADJUSTMENT_OUT' | 'SPLIT';
@@ -120,7 +122,7 @@ export function signedColorField(value: unknown, formatter: (v: unknown) => stri
     const num = parseUnknownNumber(value);
     const text = escapeHtml(formatter(value));
     if (num == null || num === 0) return text;
-    const color = num > 0 ? (themeDark ? '#4ade80' : '#16a34a') : themeDark ? '#f87171' : '#dc2626';
+    const color = num > 0 ? themed(CHART_GAIN_LOSS.portfolio.gain, themeDark) : themed(CHART_GAIN_LOSS.portfolio.loss, themeDark);
     return `<span style="color:${color}">${text}</span>`;
 }
 
@@ -139,8 +141,8 @@ interface ColorSegment {
  * broker, else the broker's vivid colour (theme-adjusted).
  */
 export function segmentBaseColor(segment: ColorSegment, themeDark: boolean, brokers: ReadonlyArray<BrokerLike>): string {
-    if (segment.custodyType === 'IN_TRANSIT') return themeDark ? '#c084fc' : '#7c3aed';
-    if (segment.brokerId == null) return themeDark ? '#60a5fa' : '#2563eb';
+    if (segment.custodyType === 'IN_TRANSIT') return themed(LOT_GANTT_COLORS.inTransit, themeDark);
+    if (segment.brokerId == null) return themed(LOT_GANTT_COLORS.noBroker, themeDark);
     const brokerColor = getBrokerColor(segment.brokerId, brokers);
     return themeDark ? brokerColor.vivid : brokerColor.vividLight;
 }

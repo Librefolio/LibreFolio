@@ -37,7 +37,7 @@
  * aborts every provider probe, recording it as a failure. {@link mockProviderCompare} registers two routes after it —
  * Playwright tries the routes registered last first — that answer this one fund instead:
  * - `GET /assets/provider/search/stream` (and the REST search the client falls back to): one `provider_results` event per
- *   provider asked, the fund under `yfinance`, nothing under the others, then `done` (asset_sources/search.py);
+ *   provider asked, the fund under `yfinance`, nothing under the others, then `done` (services/assets/search.py);
  * - `POST /assets/provider/probe` for `yfinance`/`NWGE`: the operations asked, the metadata as the backend sends it
  *   (`FAAssetPatchItem.model_dump(mode="json")`: decimals as strings).
  * Every body is checked against the generated Zod schemas before it is sent, as the client checks it on arrival. Any

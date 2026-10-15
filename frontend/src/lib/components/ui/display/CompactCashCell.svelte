@@ -22,6 +22,7 @@
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
     import {decimalArrowStep, filterDecimalInput, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {computeSignHint} from '$lib/utils/transactions/signHintColor';
+    import '$lib/theme/components/table.css';
 
     interface CashValue {
         amount: string;
@@ -165,8 +166,8 @@
            is dropped below Qty on narrow screens. */
         font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
         font-variant-numeric: tabular-nums;
-        background: white;
-        border: 1px solid rgb(229 231 235); /* gray-200 */
+        background: var(--lf-cmp-compact-cash-cell-input-bg);
+        border: 1px solid var(--lf-cmp-compact-cash-cell-input-border); /* gray-200 */
         border-radius: 0.5rem;
         padding: 0.5rem 0.625rem;
         outline: none;
@@ -183,33 +184,33 @@
         margin: 0;
     }
     :global(.dark) .amount-input {
-        background: rgb(30 41 59); /* slate-800 */
-        border-color: rgb(71 85 105); /* slate-600 */
-        color: rgb(241 245 249); /* slate-100 */
+        background: var(--lf-cmp-compact-cash-cell-input-bg-dark); /* slate-800 */
+        border-color: var(--lf-cmp-compact-cash-cell-input-border-dark); /* slate-600 */
+        color: var(--lf-cmp-compact-cash-cell-input-text-dark); /* slate-100 */
     }
     .amount-input:hover {
-        border-color: rgb(156 163 175); /* gray-400 */
+        border-color: var(--lf-cmp-compact-cash-cell-input-hover-border); /* gray-400 */
     }
     :global(.dark) .amount-input:hover {
-        border-color: rgb(100 116 139); /* slate-500 */
+        border-color: var(--lf-cmp-compact-cash-cell-input-hover-border-dark); /* slate-500 */
     }
     .amount-input:focus {
-        border-color: rgb(16 185 129); /* libre-green */
-        box-shadow: 0 0 0 2px rgb(16 185 129 / 0.25);
+        border-color: var(--lf-cmp-compact-cash-cell-input-focus-border); /* libre-green */
+        box-shadow: 0 0 0 2px var(--lf-cmp-compact-cash-cell-input-focus-shadow);
     }
     .compact-cash.sign-ok .amount-input {
-        border-color: rgb(16 185 129 / 0.7); /* emerald-500 */
+        border-color: var(--lf-cmp-compact-cash-cell-sign-ok-border); /* emerald-500 */
     }
     .compact-cash.sign-bad .amount-input {
-        border-color: rgb(239 68 68 / 0.7); /* red-500 */
+        border-color: var(--lf-cmp-compact-cash-cell-sign-bad-border); /* red-500 */
     }
     .amount-input:disabled {
-        color: rgb(156 163 175); /* gray-400 */
-        background: rgb(243 244 246); /* gray-100 */
+        color: var(--lf-cmp-compact-cash-cell-input-disabled-text); /* gray-400 */
+        background: var(--lf-cmp-compact-cash-cell-input-disabled-bg); /* gray-100 */
         opacity: 0.6;
     }
     :global(.dark) .amount-input:disabled {
-        background: rgb(15 23 42); /* slate-900 */
+        background: var(--lf-cmp-compact-cash-cell-input-disabled-bg-dark); /* slate-900 */
     }
     .sr-only {
         position: absolute;

@@ -23,6 +23,7 @@
     import {assetTypeBadgeClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     // =========================================================================
     // Props
@@ -227,13 +228,13 @@
             <span class="text-xs text-gray-500 dark:text-gray-400 emoji-flag">{currencyFlag(asset.currency)}</span>
             <span class="text-xs text-gray-500 dark:text-gray-400">{asset.currency}</span>
             {#if cardViewMode === 'absolute' && deltaAbs !== null}
-                <span class="text-sm font-medium {deltaAbs >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                <span class="text-sm font-medium {deltaAbs >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}">
                     {deltaAbs >= 0 ? '▲' : '▼'}
                     {formatFixed(Number(deltaAbs), 2, {signed: true})}
                     {asset.currency}
                 </span>
             {:else if deltaPercent !== null}
-                <span class="text-sm font-medium {deltaPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                <span class="text-sm font-medium {deltaPercent >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}">
                     {deltaPercent >= 0 ? '▲' : '▼'}
                     {formatPercent(Number(deltaPercent))}
                 </span>

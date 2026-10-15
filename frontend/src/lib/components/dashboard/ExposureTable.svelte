@@ -29,6 +29,7 @@
     import {safeDecimal, safeNumber, safeScalar, safeString} from '$lib/types';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     interface Holding {
         asset_id: number;
@@ -133,7 +134,7 @@
 
     function signedAmountCell(value: number | null) {
         if (value == null) return '—';
-        const classes = value > 0 ? 'text-green-600 dark:text-green-400' : value < 0 ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-gray-400';
+        const classes = value > 0 ? SIGN_TEXT.portfolio.gain : value < 0 ? SIGN_TEXT.portfolio.loss : SIGN_TEXT.portfolio.zero;
         return {
             type: 'html' as const,
             html: `<span class="font-medium ${classes}">${escapeHtml(formatCurrencyAmountPlain(value, displayCurrency, {showSign: value !== 0}))}</span>`,
@@ -142,7 +143,7 @@
 
     function percentChangeCell(value: number | null) {
         if (value == null) return '—';
-        const classes = value >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400';
+        const classes = value >= 0 ? SIGN_TEXT.portfolio.gain : SIGN_TEXT.portfolio.loss;
         return {
             type: 'html' as const,
             html: `<span class="font-medium ${classes}">${formatPercent(value, {scale: 100})}</span>`,

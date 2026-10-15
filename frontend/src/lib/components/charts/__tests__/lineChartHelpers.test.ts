@@ -7,7 +7,11 @@
 import * as echarts from 'echarts';
 import {describe, expect, it} from 'vitest';
 
-import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, getStaleOpacity, hexToRgba, updateArrowRotations} from '../lineChartHelpers';
+import {buildBandSeries, buildBarSeries, buildMainSeries, buildSignalReferencePrimitives, COLORS, getStaleOpacity, updateArrowRotations} from '../lineChartHelpers';
+// `toRgba` replaced `hexToRgba` (colour workstream R, R-4) and builds the expected colours below. On a #rrggbb it
+// writes the old helper's string character for character — `$lib/theme/colorAlpha.test.ts` pins that against
+// the old code — so these expectations are the strings they always were.
+import {toRgba} from '$lib/theme/colorAlpha';
 import type {RenderedSignal} from '$lib/charts/signals';
 
 const BASE_COLOR = '#1a4031';
@@ -41,8 +45,8 @@ describe('buildMainSeries', () => {
 
         // 2 segments expected: green (above baseline) then red (below).
         expect(result.length).toBe(2);
-        expect(result[0].itemStyle.color).toBe(hexToRgba(GREEN, 1));
-        expect(result[1].itemStyle.color).toBe(hexToRgba(RED, 1));
+        expect(result[0].itemStyle.color).toBe(toRgba(GREEN, 1));
+        expect(result[1].itemStyle.color).toBe(toRgba(RED, 1));
     });
 
     it('keeps a single color as one series when there is no baseline crossing', () => {
@@ -50,7 +54,7 @@ describe('buildMainSeries', () => {
         const staleDays = values.map(() => 0);
         const result = buildMainSeries(values, staleDays, BASE_COLOR, GREEN, RED, false, false, 2, 'Value', true, 0, false);
         expect(result.length).toBe(1);
-        expect(result[0].itemStyle.color).toBe(hexToRgba(GREEN, 1));
+        expect(result[0].itemStyle.color).toBe(toRgba(GREEN, 1));
     });
 
     it('keeps legacy output unchanged when no point is missing', () => {
@@ -68,8 +72,8 @@ describe('buildMainSeries', () => {
                 showSymbol: false,
                 sampling: 'lttb',
                 yAxisIndex: 0,
-                lineStyle: {width: 2, color: hexToRgba(BASE_COLOR, 1)},
-                itemStyle: {color: hexToRgba(BASE_COLOR, 1)},
+                lineStyle: {width: 2, color: toRgba(BASE_COLOR, 1)},
+                itemStyle: {color: toRgba(BASE_COLOR, 1)},
                 emphasis: {focus: 'none'},
                 z: 2,
             },
@@ -128,8 +132,8 @@ describe('buildMainSeries', () => {
         // The whole series collapses under the merge cap (750 points, 300 original
         // segments) — the resulting color must reflect the true 4:1 red majority.
         const colors = result.map((s) => s.itemStyle.color);
-        expect(colors).not.toContain(hexToRgba(GREEN, 1));
-        expect(colors).toContain(hexToRgba(RED, 1));
+        expect(colors).not.toContain(toRgba(GREEN, 1));
+        expect(colors).toContain(toRgba(RED, 1));
     });
 
     it('renders an all-missing series as a single untouched pass-through series', () => {
@@ -191,8 +195,8 @@ describe('buildMainSeries', () => {
         expect(staleSeg.lineStyle.color).toBeInstanceOf(echarts.graphic.LinearGradient);
         const stops = staleSeg.lineStyle.color.colorStops;
         // getStaleOpacity(7, 14) = 1 - (7/14)*0.85 = 0.575; getStaleOpacity(14,14) = 0.15
-        expect(stops[0].color).toBe(hexToRgba(BASE_COLOR, getStaleOpacity(7)));
-        expect(stops[1].color).toBe(hexToRgba(BASE_COLOR, getStaleOpacity(14)));
+        expect(stops[0].color).toBe(toRgba(BASE_COLOR, getStaleOpacity(7)));
+        expect(stops[1].color).toBe(toRgba(BASE_COLOR, getStaleOpacity(14)));
     });
 
     it('leaves data untouched when neither baseline nor stale coloring is requested', () => {
@@ -200,7 +204,7 @@ describe('buildMainSeries', () => {
         const result = buildMainSeries(values, [0, 0, 0], BASE_COLOR, GREEN, RED, false, false, 2, 'Value', false, 0, false);
         expect(result).toHaveLength(1);
         expect(result[0].data).toEqual(values);
-        expect(result[0].itemStyle.color).toBe(hexToRgba(BASE_COLOR, 1));
+        expect(result[0].itemStyle.color).toBe(toRgba(BASE_COLOR, 1));
     });
 });
 
@@ -278,15 +282,15 @@ describe('buildBandSeries', () => {
     it('scales the band fill opacity by isDark and the signal opacity, and colors it with the signal color', () => {
         const light = buildBandSeries(signal, dates, false);
         const dark = buildBandSeries(signal, dates, true);
-        // areaStyle.color = hexToRgba(bandColor, (isDark ? 0.18 : 0.12) * opacity)
-        expect(light[1].areaStyle.color).toBe(hexToRgba('#112233', 0.12 * 0.8));
-        expect(dark[1].areaStyle.color).toBe(hexToRgba('#112233', 0.18 * 0.8));
+        // areaStyle.color = toRgba(bandColor, (isDark ? 0.18 : 0.12) * opacity)
+        expect(light[1].areaStyle.color).toBe(toRgba('#112233', 0.12 * 0.8));
+        expect(dark[1].areaStyle.color).toBe(toRgba('#112233', 0.18 * 0.8));
     });
 
     it('defaults opacity to 1 when the signal does not specify one', () => {
         const noOpacity = makeSignal({...signal, opacity: undefined});
         const result = buildBandSeries(noOpacity, dates, false);
-        expect(result[1].areaStyle.color).toBe(hexToRgba('#112233', 0.12));
+        expect(result[1].areaStyle.color).toBe(toRgba('#112233', 0.12));
     });
 
     it('forwards the signal yAxisIndex to every series, defaulting to 0 when unset', () => {
@@ -391,8 +395,8 @@ describe('buildSignalReferencePrimitives', () => {
         const signal = makeSignal({valueRegions: [{key: 'r', label: 'Band', semantic: 'band', lower: 0, upper: 1, includeLower: true, includeUpper: true}]});
         const light = buildSignalReferencePrimitives(signal, false).markArea;
         const dark = buildSignalReferencePrimitives(signal, true).markArea;
-        expect((light!.itemStyle as {color: string}).color).toBe(hexToRgba(signal.color, 0.06));
-        expect((dark!.itemStyle as {color: string}).color).toBe(hexToRgba(signal.color, 0.08));
+        expect((light!.itemStyle as {color: string}).color).toBe(toRgba(signal.color, 0.06));
+        expect((dark!.itemStyle as {color: string}).color).toBe(toRgba(signal.color, 0.08));
     });
 });
 
