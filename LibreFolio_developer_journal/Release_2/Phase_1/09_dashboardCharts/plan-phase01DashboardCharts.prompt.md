@@ -316,3 +316,47 @@ sessione) e nel §2; si scrivono qui quando partono.
 >
 > **Non eseguiti**: le azioni intere `front-utility core-unit`/`component-unit` e `front-asset asset-unit`, di cui ho
 > girato uno per uno i file toccati; la galleria filtrata, cancello d'ingresso dopo il commit.
+
+### Y1 — commit e aggiornamento di base ✅ (2026-10-15, 14:40–14:45)
+
+> **Note implementazione**: committati dal coordinatore `495fe0eae` (`refactor(dashboard): cut GrowthChart into
+> modules`) e `374dcca8a` (journal). Aggiornamento di base con `f46a93ffd` (H CP6, X FE5b, E1): unico conflitto
+> `frontend/src/themeRoles.baseline.tsv`, come previsto; `theme-roles.mjs --resolve` ha tenuto le due righe `~split`
+> (AssetModal e GrowthChart), `--check` pulito, nessun caso R-8; `git add` del solo baseline; merge committato dal
+> coordinatore in `ceb0e09a3`. Nessuno dei 104 file fusi in automatico tocca le cartelle di Y.
+>
+> **Sull'albero unito**: `npm run check` → 1 errore in `features/instance/components/InstanceBlockedPage.svelte` (H),
+> perché il client API generato era di prima della merge; dopo `dev.py api sync` (solo file ignorati) **0/0**. Vitest
+> del taglio, un file alla volta: 265, 6, 159, 6, 36, verdi.
+>
+> **Fuori pista**: dopo ogni aggiornamento di base che porta endpoint nuovi va rifatto `api sync` prima di
+> svelte-check: il client generato è ignorato da git e non segue la merge.
+
+### Y1 — galleria filtrata, cancello d'ingresso ✅ (2026-10-15, 14:44–15:12)
+
+> **Note implementazione**: slot del programma colori; `gallery_snapshot.sh y1-fe6a-ceb0e09a3` sulla corsia 6189,
+> `-f "Dashboard|Brokers" --workers 6`, carico della macchina 45–65. 882 PNG, 55 test passati, 4 rossi di timeout
+> sotto carico (desktop `main dashboard`: `waitForLoadState` 20 s nella prima ondata; mobile `growth P&L submodes`:
+> click sul pulsante delle candele, in attesa che sia stabile; mobile `allocation charts`: stesso errore su un pannello
+> che Y1 non tocca; mobile `fifo lots panel`: «frame still moving», instabilità nota). `live_price_check` exit 0.
+> Confronto con `g-final3-r1` (commit `2338aaf79`, 09:14; `--common-only`, maschere e stabilità di
+> `g-final3__r1__vs__r2`): 762 identiche, 120 cambiate — 79 low, 29 medium (passi del wizard d'import, fifo-lots), 7
+> unstable (`import-nway-compare`), 5 stable minime (`import-modal`, rumore noto; due fifo-lots da 10 px, Δ1;
+> `import-bulk-staging` 5 px, Δ1). **GrowthChart**: 46 scatti presi, 3 cambiati (`main-pct` ×2 e `growth-pnl-candles`
+> mobile, 4 px, Δ ≤ 4, antialiasing); `brokers/detail` 4 cambiati, low, ≤ 16 px, Δ ≤ 3. **Nessuna differenza dal
+> taglio.** Buco di copertura: `main`, `main-pct`, `kpi-top` desktop e 18 dei 24 `growth-pnl` mobile; proposto al
+> coordinatore il rilancio isolato dei due test a `--workers 2`.
+>
+> **Riprese isolate** (via del coordinatore, stesso slot; `--no-populate --workers 2`, `nice -n 10`):
+> `y1-fe6a-ceb0e09a3-retry-desktop-main` (`--desktop-only -f "main dashboard - all languages and themes"`): 1 test
+> verde in 1,3 min, 24 PNG, **24/24 identiche** a `g-final3-r1`. `y1-fe6a-ceb0e09a3-retry-mobile-growth`
+> (`--mobile-only -f "dashboard growth P&L submodes - all languages and themes"`): 1 test verde in 1,4 min, 24 PNG,
+> 23 identiche e 1 cambiata, `mobile/en/light/dashboard/growth-pnl-candles`: 4 px, Δ 4, bbox `[1035, 1979, 1042,
+> 1983]`, lo stesso scarto della prima run. Lo stesso scarto, nella stessa area, compare già nei confronti di
+> `g-final3-r1` con `g-final3-candR` (`87b7c34b8`) e `g-final3-candL` (`c0556a240`): due antenati della HEAD senza il
+> taglio. È una variazione mobile già esistente, non di Y1. Copertura completa del grafico: 96 scatti (48 per
+> piattaforma). Restano senza ripresa i rossi mobile di `allocation charts` e `fifo lots panel`, componenti che Y1 non
+> tocca. `dirty_files: 1` nei `meta.json` è questo piano, fuori dalla build.
+>
+> **Fuori pista**: uno scarto ripetibile non è per forza del commit sotto esame. Prima di attribuirlo, cerco lo stesso
+> scarto nei confronti già fatti su commit antenati (`$W/diffs/g-final3__r1__vs__cand*`).
