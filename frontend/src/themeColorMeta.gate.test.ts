@@ -39,7 +39,7 @@
  *
  * Colours are compared case-insensitively (`#1B4334` is the same colour) and found by content, never by line, so an
  * unrelated edit above a statement cannot turn the gate red. The static copies of the roles are the business of the
- * last block of this file, (f)–(i), which says what it protects on its own.
+ * last block of this file, (f)–(h), which says what it protects on its own.
  *
  * ## What it cannot see
  *
@@ -303,7 +303,7 @@ describe('PWA theme-color — one light/dark pair, the same in every copy (T, D-
 // ---------------------------------------------------------------------------
 
 /*
- * The static copies of the roles: the splash and the offline page (T-4; their background, decision D-T7).
+ * The static copies of the roles: the splash and the offline page (T-4).
  *
  * ## Why the copies exist
  *
@@ -314,8 +314,7 @@ describe('PWA theme-color — one light/dark pair, the same in every copy (T, D-
  * So each carries, in its `<style>`, copies of the `--lf-*` roles it draws with — a light block and an `html.dark` one;
  * the splash scopes them to `#app-splash`, so that they never reach the app — and draws everything else through
  * `var()`. A copy drifts the way the title-bar pair did, by hand, one value at a time, in a file the gates of the roles
- * do not read: themeRoles reads the sources of `src`, themeTokens reads tokens.css. And `static/manifest.json` hands
- * the launch screen of the installed app its `background_color`, the page surface in light (D-T7).
+ * do not read: themeRoles reads the sources of `src`, themeTokens reads tokens.css.
  *
  * ## The rule
  *
@@ -331,7 +330,6 @@ describe('PWA theme-color — one light/dark pair, the same in every copy (T, D-
  *       roles, and every name they copy is a role of tokens.css — a copy of a role that is gone is a stale copy.
  *   (h) No stray literal: outside the `--lf-*` declarations, no value of either `<style>` holds a colour literal — a
  *       hex, or a colour function: `rgb()`, `rgba()`, `hsl()`, `hsla()` and those of CSS Color 4.
- *   (i) The manifest's `background_color` is `--lf-surface-page` in light (D-T7).
  *
  * ## What it cannot see
  *
@@ -342,7 +340,10 @@ describe('PWA theme-color — one light/dark pair, the same in every copy (T, D-
  *   - whether the page draws with the roles it copies, or with one it never copied: a `var()` with no copy behind it
  *     falls back, or draws nothing — a browser shows that, this file does not;
  *   - in (h): a CSS colour name (`white`), and a declaration that sits beside a nested rule — the scan reads the values
- *     of the leaf rules only. It skips the selectors on purpose: an id such as `#cafe` is no colour.
+ *     of the leaf rules only. It skips the selectors on purpose: an id such as `#cafe` is no colour;
+ *   - the `background_color` of `static/manifest.json`, which is no copy of a role: the maskable icons, painted edge to
+ *     edge in the splash beige, pin it, and `backend/test_scripts/test_utilities/test_pwa_assets.py` checks it — moving
+ *     it to `--lf-surface-page` (D-T7) means repainting those icons, a decision still open with the coordinator.
  */
 
 /** The `--lf-*` declarations of a stylesheet, by theme: what a document copies from tokens.css. */
@@ -544,10 +545,5 @@ describe('static copies of the roles — the splash and the offline page paint w
         const strays = MIRRORS.flatMap((file) => scans[file].strays.map((stray) => `${file}  ${stray}`));
         const rule = 'Outside its --lf-* copies a static page names no colour: copy the role it needs from tokens.css, and draw with var(--lf-…).';
         expect(strays, ['', rule, '', ...strays, ''].join('\n  ')).toEqual([]);
-    });
-
-    it("(i) the manifest's background_color is --lf-surface-page in light: the launch screen of the installed app (D-T7)", () => {
-        const manifest = JSON.parse(read(MANIFEST)) as {background_color?: unknown};
-        expect(String(manifest.background_color ?? '').toLowerCase(), `${MANIFEST}: background_color must be the light --lf-surface-page of ${TOKENS_CSS}`).toBe(reading(colourOf(readTokens(), 'var(--lf-surface-page)', 'light')));
     });
 });

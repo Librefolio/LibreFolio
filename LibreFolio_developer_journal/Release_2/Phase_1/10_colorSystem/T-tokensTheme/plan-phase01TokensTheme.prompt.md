@@ -523,7 +523,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 4 | T-5 sfondo del login, prima della gallery candidata del 15/10 | ✅ checkpoint `f43aa7200`; spacchettamento W1/W2 `48cc52e5b`; base con X nel merge `2c7553e0b` |
 | 5 | T-6 palette del giro 2 e barra neutra (D-T15, D-T16) | ✅ checkpoint `078dec1ae`; base con `dc9a5d232` nel merge `e1443e952`, validato il 15/10; candidata T6 fatta, l'ingresso aspetta il via del developer |
 | 6 | T-7 header che si nasconde di nuovo, fascia verde del logo nella barra laterale | ✅ checkpoint `0580c92ab`; base `8f1abf89e` nel merge `fe618a0e3` |
-| 7 | T-8 giro 2 della designer (D-T17, D-T18, D-T19), T-4, TC-7 | ⏳ checkpoint scritto il 15/10; prove pesanti e contact sheet sulla revisione fusa (sequenza del coordinatore) |
+| 7 | T-8 giro 2 della designer (D-T17, D-T18, D-T19), T-4, TC-7 | ✅ checkpoint `68c990b35`; base `d22eb6f43` nel merge `02c23c773`, validato il 15/10 con contact sheet; correzione della marca di `sw.js` e del `background_color` da committare |
 
 ## Avanzamento
 
@@ -1126,7 +1126,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > ✅ **9 · T-4: barra del titolo e superfici statiche.**
 > - `theme-color` `#1B4334` nei due temi in `app.html`, `themeStore.ts` e `offline.html`. Resta una coppia
 >   chiaro/scuro con i due rami uguali: un tema suo resta a una modifica di distanza, e il gate legge le tre copie.
-> - `manifest.json`: `theme_color` `#1B4334`, `background_color` `#F3F5F3` (D-T7).
+> - `manifest.json`: `theme_color` `#1B4334`. `background_color` resta il beige `#F5F4EF`: vedi il punto 15.
 > - Splash di `app.html`: copie `--lf-*` limitate a `#app-splash`, così non arrivano all'app; spinner sul verde focus.
 > - `offline.html`: un blocco `--lf-*` per tema, copiato da `tokens.css`; le variabili della pagina puntano ai ruoli;
 >   colline e linee come in `AnimatedBackground`; nessun colore letterale fuori dalle copie.
@@ -1152,7 +1152,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 >   3,19, anello 4,06, misurati a mano).
 > - `themeColorMeta.gate.test.ts`, ripreso da R: coppia `#1b4334` nei due temi (D-T17); (d) su `--lf-surface-bar`;
 >   blocco nuovo sulle copie statiche: (f) ogni copia uguale a `tokens.css` nei due temi, (g) controllo positivo,
->   (h) nessun colore letterale fuori dalle copie, (i) `background_color` del manifest = `--lf-surface-page` chiaro.
+>   (h) nessun colore letterale fuori dalle copie. Una (i) sul `background_color` del manifest è stata tolta alla
+>   validazione (punto 15).
 > - `themeRoles.gate.test.ts`: TC-7, casi da 1 a 10, simmetria compresa; i casi 1–3 falliscono con l'algoritmo di
 >   prima.
 > - `e2e/layout/theme-roles.spec.ts`: (a) card in rilievo; campi sotto il puntatore e a fuoco lì (solo desktop: Tailwind
@@ -1163,6 +1164,41 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 
 > ✅ **13 · Descrizione nel runner.** La voce `theme-roles` di `scripts/test_runner/_frontend_utility.py`, scritta da T
 > in T-2 e T-6, descrive i casi di oggi: solo il testo di `desc`, superficie condivisa.
+
+> ✅ **14 · Checkpoint e merge di base (15/10).** Il coordinatore ha committato T-8 in `68c990b35` e ha aperto il merge
+> con `d22eb6f43` (J C-94, W FE8a, Z1, L-10, G-9).
+> - **Un conflitto, nella baseline:** le righe del wizard di FE8a accanto alla riga di `AnimatedBackground`, che T-5
+>   aveva tolto e il target aveva ancora uguale alla base. Risolto con `--resolve`, il primo a tre vie su un caso reale
+>   (TC-7): restano le 6 righe del wizard, esce `AnimatedBackground`.
+> - **Controllo riga per riga** contro le tre fasi dell'indice: 303 righe invariate, 10 dal lato di T, 15 dal target,
+>   nessuna cambiata dai due lati, nessuna errata. Le 7 righe `~` ci sono tutte: i due `~accept` di `themeStore` e i
+>   cinque `~split`. `--check` pulito sull'albero fuso.
+> - **Fusi in automatico e rivisti:** il runner (le registrazioni di Z1 e la `desc` di T) e il backlog.
+> - Merge committato dal coordinatore: `02c23c773`, padri `68c990b35` e `d22eb6f43`.
+> - **Per la validazione:** nessun manifesto delle dipendenze cambiato, quindi niente `npm ci` né venv; l'API è
+>   cambiata (eventi degli asset, broker), quindi `api sync` prima di `front check`.
+
+> ✅ **15 · Validazione della revisione fusa `02c23c773`** (15/10, slot pesante dalle 17:12, un comando alla volta nella
+> corsia 6155, comandi `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py …`):
+> - `api sync` rc 0 (l'API era cambiata: eventi degli asset, broker); `front check` 0 errori, 0 avvisi;
+> - `test … front-utility core-unit` 4.655/4.655 (150 file); i tre gate di T anche da soli, `vitest run` dei file:
+>   79/79, con C3, le copie statiche (f)–(h), (d) su `--lf-surface-bar` e i casi TC-7;
+> - `component-unit` 3.416/3.416 (129 file); `onboarding-component-unit` 449/449 (15 file);
+> - E2E a 1 worker: `theme-roles` 24 passati e 2 saltati (l'hover sul progetto mobile, come previsto),
+>   `header-scroll` 8/8, `connection-security` 8/8, `auth` 33/33;
+> - `front-designer-lab all`: unit 422/422 (15 file), E2E 13/13;
+> - contact sheet: 28 scatti e due fogli, `files/T8-shots/contact-sheet-{desktop,mobile}.png` della sessione T; server
+>   della corsia avviato per gli scatti e fermato, porta 6155 libera (`lsof` senza listener).
+> - **⚠️ Fuori pista — la marca di `sw.js`:** la build riscrive `// build: <md5(offline.html)[:8]>` in
+>   `frontend/static/sw.js`, e `utils pwa-assets` (`test_pwa_assets.py`, di K) controlla che coincida: senza, i client
+>   installati tengono la pagina offline vecchia. T-8 ha cambiato `offline.html` senza rifare la marca: in `02c23c773`
+>   resta `2ef2dd96`, la pagina dà `5e99e50d`. La build della validazione l'ha riscritta; va nel commit.
+> - **⚠️ Fuori pista — `background_color` del manifest:** lo stesso test fissa il beige `#F5F4EF`, perché le icone
+>   maskable sono dipinte fino al bordo in quel colore e il ritaglio del launcher incontra lo splash di sistema senza
+>   cucitura. Il `#F3F5F3` di T-8 (D-T7) lo rendeva rosso, e la (i) nuova di `themeColorMeta` diceva il contrario.
+>   Riportato `background_color` a `#F5F4EF`; `test-author` toglie la (i). Seguire D-T7 anche qui vuol dire ridipingere
+>   le icone: decisione aperta, TC-9 nel backlog.
+> - Dopo le due correzioni: `utils pwa-assets` 20/20; i tre gate 78/78 (la (i) in meno); `--check` pulito.
 
 > **Prove leggere** (nessuna prova pesante: lo slot è di altre corsie):
 > - `theme-roles --check` pulito, 82 file sotto il record;
