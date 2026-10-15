@@ -718,3 +718,29 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 > **Base**: HEAD `d42b4c32f`. Delta: 34 file tracciati modificati, 1 nuovo (`e2e/settings/email-tab.spec.ts`).
 > Righe nei file altrui dichiarate nel messaggio di consegna. Resta di E2: far girare l'E2E e lo scatto della galleria
 > nello slot che assegna il coordinatore, poi la pagina admin può mostrare lo scatto.
+
+#### E2b.6 — Base `da3e06e1c` e tre correzioni ✅ (2026-10-15)
+> **Note implementazione**: E2b committato (`fab8e2d09`, `f4f995ce7`). Merge di base aperto dal coordinatore
+> (`dev_release2` `a718e5281`: A6a, H billing e link, Z7a, J, il banner del Lab), un conflitto in
+> `scripts/test_runner/_backend_services.py`: due funzioni nello stesso punto, tenute entrambe (`services_email_flows`,
+> poi `services_provider_cooldown`), nessun nome doppio (105 azioni); in stage solo quel file. Controllati i file fusi
+> da git: `billing_url` di H sta in `InstanceBlockResponse`, `/system/instance` resta `{profile, accounts, email}`;
+> `*EMAIL_CONFIG_CHECKS` resta l'ultima riga; `security.md`, `configuration.en.md`, CHANGELOG con i due lati.
+> Merge committato: `da3e06e1c`.
+>
+> Le tre correzioni chieste dal coordinatore (dopo A6b di A):
+> 1. ordine della scheda Email **130** (110 è Users di A6b, 120 Backup di B): `settingsTabs.ts` e le due pagine
+>    sviluppatore che lo citavano;
+> 2. lo scatto `email (admin)` contro la checklist di G (via `test-author`): rotta registrata prima della navigazione,
+>    solo `GET` del suo path, il resto `route.fallback()`, nessun `unroute`, corpo validato con
+>    `schemas.EmailStatusResponse.parse` in un file nuovo `e2e/fixtures/galleryEmail.ts`, i passi e la cornice di G,
+>    tolti gli attesi in più già coperti da `screenshot()`. Lo stesso filtro di metodo e la stessa validazione
+>    nell'E2E `email-tab.spec.ts`;
+> 3. CHANGELOG: tolta la mia voce (superficie del coordinatore), il testo va nel messaggio.
+>
+> Prove, una alla volta con `nice -n 10`: `api sync`; `front check` 0/0; `api system` 117, `api instance-block` 54,
+> `services config-audit` 90; Vitest `settingsTabs` 18, `page.tabs` 18; `check-orphans` (124 spec, 413 unità);
+> `tsc -p tsconfig.e2e.json` con i soli 2 errori di base (`onboarding-tour.spec.ts:863`, `src/lib/types/files.ts:9`);
+> `prettier --check`. **Slot pesante 1**: `front-utility email-tab` con `--workers 2`: 5 passati in 34 s; porta 6188
+> libera prima e dopo. Log `/tmp/libreFolio_e2b2_*.log`. Resta lo scatto della galleria, due volte con il diff vuoto,
+> nello slot che assegna il coordinatore.
