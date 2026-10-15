@@ -651,6 +651,15 @@ def services_asset_source_guards(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Asset Source guard tests", verbose=verbose)
 
 
+def services_asset_event_store(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the manual asset-event store contract tests (release 1.3, W E1a: decisions 20-23)."""
+    print_section("Services: Asset Event Store")
+    print_info("Testing: backend/app/services/assets/event_store.py, backend/app/schemas/assets/events.py")
+    print_info("Tests: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_event_store.py", test_names)
+    return run_command(cmd, "Asset Event Store tests", verbose=verbose)
+
+
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
     """Test Portfolio Engine vNext: inline WAC, last_buy_price, 3-pool, position states."""
     print_section("Services: Portfolio Engine vNext")
@@ -1214,6 +1223,18 @@ Note: No backend server required.
         # asset this unit creates and every price/event row written against it are
         # visible to all concurrent tests. Rows are uniquely named and dropped in
         # teardown, but the tables themselves are shared surfaces.
+        isolation="write-global",
+    )
+    add_test(
+        cat,
+        "asset-event-store",
+        services_asset_event_store,
+        name="Asset Event Store",
+        desc="Manual events: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset",
+        # WRITE_GLOBAL: Asset and AssetEvent carry no user_id (nor do the AssetProviderAssignment,
+        # Broker and Transaction written beside them), so the two assets this unit creates and
+        # every event and transaction written against them are visible to all concurrent tests.
+        # Rows are uniquely named and dropped in teardown, but the tables are shared surfaces.
         isolation="write-global",
     )
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
