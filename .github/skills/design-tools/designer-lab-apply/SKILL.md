@@ -55,7 +55,9 @@ node frontend/scripts/designer-lab/verify-export.mjs <export.json> --json   # ma
 | `element` | A **specialisation**: one colour property of one component, decided on an element the designer pointed at in the app. The shared source (`anchor.source`) stays as it is: only this component changes | Create a component-scoped variable (or role token) and bind it at the places `occurrences[]` lists — see «Specialisations» below. `target` is the selector the preview wrote: context, not code to paste |
 
 Values may be any CSS colour. `oklch()` outside sRGB is legitimate in CSS (the Lab warned the designer); a
-`var(--x)` target means "use this variable here" — an unification proposal.
+`var(--x)` target means "use this variable here" — an unification proposal. `color-mix(in <space>, <base> p%,
+transparent)` is the base at opacity p, the form the role tokens use for shadows and the backdrop: apply it as written,
+which keeps a `var()` base referenced — usually only the percentage changed.
 
 ### Specialisations (`element`)
 
