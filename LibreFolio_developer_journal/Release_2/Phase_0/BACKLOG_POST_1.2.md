@@ -2664,6 +2664,16 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `settings`/`admin-users` E2E e lo scatto della galleria da ricontrollare (il corpo arriva dopo un `await`).
   - Nello stesso giro, nota di G (15/10): i corpi e le rotte dello scatto `settings/users` in `fixtures/galleryUsers.ts`,
     come `galleryEmail.ts`.
+- **A-19 · Su un'istanza su invito «Register here» lampeggia al caricamento del login** — basso; deciso dal
+  coordinatore in A6d (15/10).
+  - Finché `GET /system/instance` non risponde, `LoginCard` usa `DEFAULT_INSTANCE_CONFIG` (`open`) e offre il link;
+    poi lo ritira. Il default resta `open` per non mettere in corsa gli scatti del login (G, theme-roles) e per lasciare
+    alle E2E negative di `auth.spec.ts` il loro controllo «prima».
+  - Possibile cura: nascondere il link finché l'istanza non risponde, con uno stato `data-*` sulla scheda che le prove
+    e la galleria possano aspettare. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
+    «A6d.1».
+- **A-20 · `black` fallisce su `scripts/test_runner/_backend_services.py`** — minimo; da E tramite il coordinatore
+  (15/10). Il `print_info` di `services_account_deletion_preview` (A6a, `5928176cf`) ha 305 caratteri: si spezza in A6d.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
