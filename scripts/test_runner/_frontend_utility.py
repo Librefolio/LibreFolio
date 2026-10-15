@@ -652,6 +652,17 @@ def front_scheduler(verbose: bool = False, ui: bool = False, headed: bool = Fals
     return _run_playwright("settings/scheduler.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_backup(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the Settings › Backup tab E2E (workstream B, lot B5a) on desktop: the tab for administrators only, a backup created, downloaded, deleted, picked up after a reload."""
+    print_section("Frontend Backup Settings Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    # Desktop only (the default project), like every other serial spec: the tab's mobile rendering is the gallery's to cover.
+    return _run_playwright("settings/backup.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, coverage: bool = False) -> bool:
     """Run all frontend utility/component E2E tests."""
     print_header("Frontend Utility Tests (Playwright)")
@@ -828,5 +839,14 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(cat, "tooltip", front_tooltip, name="Tooltip Component Tests", desc="Pinned hover/click model: hover-only, click-to-pin, grace dismiss, click-outside", prereq="Login working", tests="tooltip-component.spec.ts")
     add_test(cat, "scheduler", front_scheduler, name="Scheduler Settings E2E", desc="ConfigModal, LogModal, status row, fetch_interval regression", prereq="Admin user + populated DB", tests="settings/scheduler.spec.ts")
+    add_test(
+        cat,
+        "backup",
+        front_backup,
+        name="Backup Settings E2E",
+        desc="Settings › Backup (lot B5a), desktop: a regular user has no Backup tab and ?tab=backup opens the first tab, an administrator has it and it opens the card idle; from ?tab=backup a backup started and followed to done (backup.created with its 32-hex job id), the card naming the archive, a link to that job's file, the download a zip as large as the job reports under librefolio-backup-YYYYMMDD-HHMMSS.zip (backup.download.started); the delete back to idle (backup.deleted, GET of the job 404 backup_job_not_found); a reload picks the finished job up again without a second backup.created. Serial (one backup at a time per instance); every job deleted and the followed job id cleared after each test",
+        prereq="Admin user + populated DB",
+        tests="settings/backup.spec.ts",
+    )
     add_test(cat, "all", front_utility_all, test_names=False, name="All Frontend Utility Tests", desc="Run all utility/component E2E tests")
     registry["front-utility"] = cat
