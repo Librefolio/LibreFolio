@@ -781,3 +781,23 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > - CP2b: il taglio di `main.py`, dopo il commit del coordinatore.
 >
 > Così CP3 (segreti) e CP4 (configurazione pubblica) non aspettano più la release.
+
+### Riordino del backend: sette lotti integrati ✅ (2026-10-15, 02:20)
+
+> **Note implementazione**: in `dev_release2`, nell'ordine:
+> - A1 (`769cc31cb`);
+> - H CP1 (`6a605904c`);
+> - A2, il frontend in `lib/features/` (`76e61889b`);
+> - W1 e W2, transazioni e broker per tema (`998fd2701`);
+> - H CP2a, il pacchetto `config/` con la guardia sulle letture d'ambiente (`60f8a35ce`);
+> - X CP1 e CP2a, registri per famiglia e `services/assets/` senza shim (`64a5a3fe7`).
+>
+> Ogni ingresso dopo un aggiornamento di base e la validazione della revisione combinata nel worktree del figlio:
+> - `all-backend` uguale alla base, più i test nuovi;
+> - `api schema` invariato;
+> - ricerca dei vecchi percorsi a zero;
+> - per X, anche la ricerca degli import vecchi che si fondono senza conflitto.
+>
+> **Fuori pista**:
+> - X, partito con due lotti dalla base iniziale, ha avuto 35 conflitti d'import, tutti risolti nel suo worktree.
+> - Gli ingressi frontend seguono la finestra della galleria del 15/10: prima delle 08:45 o dopo la chiusura.
