@@ -703,7 +703,7 @@ merge è suo; J risolve, mette in stage solo i file risolti o corretti e valida.
 >
 > **⚠️ Fuori pista**: nessuno.
 
-#### Aggiornamento di base 2 — X, `dev_release2` `75a20ce29` 🧊 (2026-10-15) — FROZEN, validato; ingresso di CP-1 al coordinatore
+#### Aggiornamento di base 2 — X, `dev_release2` `75a20ce29` ✅ (2026-10-15) — merge `ea3d80a83`, nota `cf47ffc94`
 
 Merge del coordinatore `ea3d80a83` (genitori `4492c3b42` e `75a20ce29`): X CP1 (un registro per famiglia) e CP2a
 (`services/assets/`, `services/fx/` pacchetto, senza shim); da `64a5a3fe7` a `75a20ce29` solo journal. I 5 file in
@@ -748,3 +748,68 @@ comune con CP-1 si sono fusi da soli, come nella simulazione; nessun conflitto. 
 >
 > **⚠️ Fuori pista**: nessuno. (Per leggere i file con `git ls-files` nella copia estratta del bersaglio ho fatto
 > `git init` dentro `/tmp/libreFolio_j/target_75a20ce29/`, un repository usa e getta fuori dal worktree.)
+
+#### Assegnazioni nuove dal coordinatore (15/10, notte)
+
+- **C-93** (backlog, sezione C, scritta da W il 15/10): sotto carico, nel gruppo parallelo di `all-backend`, un test
+  dell'AI Export (`test_ai_export_components_portfolio_broker_financial.py::TestPerformanceBuckets::
+  test_performance_path_uses_detail_owned_uniform_density[broker-…-full-30]`) lascia un thread di aiosqlite dopo la
+  chiusura del loop (`PytestUnhandledThreadExceptionWarning`, «Event loop is closed»). Non è un rosso; da solo passa.
+  A J dopo CP-1, priorità bassa come G-8, con la skill `test-triage`. La riga resta nella sezione C, dove l'ha scritta W.
+- **Ordine d'ingresso**: X CP2b prima di CP-1; poi un solo aggiornamento di base per J con W I1, A3, H CP3 e X CP2b.
+
+#### Aggiornamento di base 3 — W I1, A3, H CP3, X CP2b, `dev_release2` `05c21b2b6` 🧊 (2026-10-15) — FROZEN, validato; ingresso di CP-1 al coordinatore
+
+Merge del coordinatore `b17f8fb85` (genitori `cf47ffc94` e `05c21b2b6`): W I1 (`dc7e4e48e`), A3 (`90491071d`,
+frontend), H CP3 (`d08d9358f`: segreti da `*_FILE`, chiave d'istanza, `config-env-example`, guardia `config-package`
+estesa), X CP2b (`92b42d796`: `schemas/assets/` e `schemas/assets/events.py`, contratto dei plugin in
+`services/assets/base.py`, eventi in `event_store.py` e `currency_change.py`, router `api/v1/assets/`). Unione
+automatica (backlog e `_backend_services.py`), nessun conflitto. J valida la revisione combinata, prima delle 08:45.
+
+> **Note implementazione** (log in `/tmp/libreFolio_j/merge3/`; copie estratte dei due genitori in
+> `/tmp/libreFolio_j/tree_cf47ffc94/` e `/tmp/libreFolio_j/tree_05c21b2b6/`):
+> - **Albero**: il delta di `b17f8fb85` rispetto a `05c21b2b6` è il delta di CP-1, gli stessi 84 file con lo stesso
+>   stato; i file Python tornano (836 del bersaglio − 3 percorsi vecchi del PAC + 31 nuovi = 864). Le righe del PAC nel
+>   runner ci sono (guardia in `PAC_PLANNER_CORE_TEST_PATHS`, descrizione, `print_info` di `source/`). Nessun cambio di
+>   dipendenze (`package*.json`, `Pipfile*`, `pyproject.toml`) né migrazioni.
+> - **Ricerca semantica**, sui tre alberi (fuso e i due genitori), riportando solo ciò che il fuso ha in più di
+>   entrambi:
+>   - risoluzione statica estesa (`import_resolve2.py`: import, letture d'attributo su alias di modulo, `setattr`/
+>     `patch.object` su alias, stringhe di `patch`): 864 file, 2 853 controlli, **0 reperti** (0 anche nei genitori);
+>   - **patch mute in tutto l'albero** (`patch_effect.py`, nuovo): ogni bersaglio di `patch("M.N")`,
+>     `monkeypatch.setattr("M.N", …)`, `patch.object(alias, "N")`, `monkeypatch.setattr(alias, "N", …)`, cicli sulle
+>     tuple di nomi compresi, deve essere letto a tempo d'esecuzione (il modulo legge il nome, o un modulo legge
+>     `alias.N`, o un import pigro lo prende alla chiamata). 498 bersagli a livello di modulo, **0 muti e 0 mancanti**,
+>     come nei due genitori; 367 bersagli su classi o oggetti saltati (un attributo sparito lì solleva a tempo
+>     d'esecuzione, quindi lo prende `all-backend`). Autocontrollo su un albero sintetico: segnala i 4 casi muti o
+>     mancanti, lascia i 4 vivi (globale proprio, attributo via alias, import pigro), salta i 2 di classe;
+>   - stringhe delle guardie (`guard_strings.py`, nuovo: nomi puntati `backend.app.…` e percorsi in ogni costante
+>     stringa che non portano più a niente): fuso 82, `cf47ffc94` 75, `05c21b2b6` 81; **nessun reperto del fuso che
+>     manchi in entrambi i genitori** (gli altri sono finti apposta nelle fixture, assenze volute come le vecchie case
+>     della matematica e l'oracolo del PAC, o testo di X);
+>   - testo, con gli spostamenti di X CP2b (`schemas/assets.py`, classi degli eventi in `schemas.prices`, contratto in
+>     `services.assets.core`, `api/v1/assets.py`, metodi degli eventi in `price_store`): 15 citazioni nel fuso e 15 nel
+>     bersaglio, identiche a meno del numero di riga; quella in `TODO_FUTURI.md:1121` è di X (le mie righe sono 874 e
+>     2207). Nessuna viene dal merge.
+> - **Build**: `dev.py front build --debug` (A3 ha cambiato 18 file del frontend): svelte-check 0 errori e 0 avvisi,
+>   build in `frontend/build/`; `dev.py mkdocs build` stretto: 0 avvisi, 3 012 URL relativi risolti.
+> - **Cancelli**:
+>   - `dev.py api sync` contro `dev.py api schema` del bersaglio estratto: `openapi.json` identico byte per byte una
+>     volta rimessa la stringa della versione, `tool-contracts.openapi.json` identico (impronta dei Tool `202402e5…`);
+>     `generated.ts` e `openapi.json` cambiano rispetto all'aggiornamento 2 per l'API del bersaglio (W, A3, X);
+>   - `pytest --collect-only` (ambiente della corsia): fuso 13 821, bersaglio 13 760. Differenza esatta: +34 della
+>     guardia D-J18, +27 della guardia d'ambiente di H (+30 moduli nuovi, −3 percorsi vecchi del PAC). Nessun test
+>     perso;
+>   - `services config-package` 512, `services config-env-example` 36, `services pac-planner-core` 264;
+>   - `dev.py lint` pulito; patch del PAC 41, nessuna muta; equivalenza AST del taglio intatta;
+>   - **`all-backend`** sulla 6185 (04:02–04:23, frontend e sito già costruiti, server pronto subito;
+>     `LIBREFOLIO_TEST_STARTUP_TIMEOUT=600` solo come margine): 7/7, «ALL BACKEND TESTS PASSED»; 23 invocazioni,
+>     **13 810 passed, 28 skipped, 0 failed**. Prima run completa sulla combinazione X CP2b + H CP3. Rispetto
+>     all'aggiornamento 2: +317, esattamente la differenza delle raccolte (bersagli `75a20ce29` → `05c21b2b6`, e fusi,
+>     13 443 → 13 760 e 13 504 → 13 821), divisa come nelle cartelle dei test: `services` +273 (+280 −7), `utils` +35
+>     (+36 −1), `api` +9. Gli altri 20 conteggi sono invariati; i 6 avvisi della sessione `schemas` sono quelli della
+>     base;
+>   - **C-93 non riprodotto**: nessun `PytestUnhandledThreadExceptionWarning` nel log di questo giro;
+>   - porta 6185 libera; worktree pulito tranne questo piano.
+>
+> **⚠️ Fuori pista**: nessuno.
