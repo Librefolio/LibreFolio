@@ -1068,3 +1068,157 @@ secondo aggiornamento con un controllo leggero (cambi e schemi delle transazioni
 4. ✅ **`services config-package`**: 578 passed = 492 casi per modulo di `backend/app` fuori da `config/` (487 a
    `5d21f2d85`, più i 5 del pacchetto: 6 id sotto `schemas/transactions/` al posto di `schemas/transactions.py`) e 86
    test fissi. Porta libera.
+
+   > **Note implementazione (coordinatore, 15/10 ~05:36)**: W7a e W7b in `dev_release2` con l'avanzamento veloce a
+   > `1cd7300f3`; record in `58be885a9` (nessuna riga nel CHANGELOG: è un riordino); il mio ramo è avanzato lì, pulito.
+
+### K2a — C-70 (a) e L6: i rifiuti dei plugin DEGIRO e Generic CSV, tradotti ✅ (2026-10-15) — 🧊 FROZEN
+
+**Via del coordinatore** (15/10 ~05:36): «Via per K2a, con un checkpoint FROZEN. Le run pesanti vanno chiuse entro le
+08:45, oppure dopo l'avviso di fine della finestra della galleria.» Divisione approvata alle 05:34: K2a ora; K2b (il 400
+strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordinatore su `brokers.py` e `uploads.py`; per
+`file_preview.py` accordo con H attraverso il coordinatore (D-W17). Base: HEAD `58be885a9`, pulito, porta libera (05:36).
+
+**Disegno** (verificato sul codice di `58be885a9`):
+
+- Il canale c'è: `BRIMRefusal(code, message, context)` (`schemas/brim.py:292`), da `BRIMProvider.cannot_parse_detail`;
+  il frontend (`utils/brim/defaultPluginCheck.ts:86`, `resolveParseRefusalMessage`) traduce
+  `importWizard.parseRefusal.<code>` coi parametri di `context` (`plugin_code` → `plugin_name`), e senza traduzione
+  mostra la frase inglese. Oggi lo usano solo i due plugin Scalable (`_scalable.py:210-236`), con 4 chiavi condivise in
+  `frontend/src/lib/i18n/importWizard/`.
+- **Codici** (in `importWizard.parseRefusal`, il vocabolario condiviso del sottosistema di W, come quelli di Scalable;
+  nessun cambio di codice nel frontend): generici `csv_only` (con `plugin_code`), `file_unreadable`, `no_header_row`,
+  `missing_columns` (con `columns` e `count`, plurale ICU), `no_movement_rows`; di DEGIRO `degiro_csv_only` e
+  `degiro_not_account_statement`.
+- **Backend**: come chiede la guida (e come fa Scalable), Generic CSV (`broker_generic_csv/plugin.py:356-375`) e DEGIRO
+  (`broker_degiro/plugin.py:669-685`, `_inspect`) costruiscono il `BRIMRefusal` una volta; `cannot_parse_reason`
+  restituisce il suo `message`, identico a oggi (i testi inglesi sono fissati dai test di contratto,
+  `test_brim_providers.py:906-913`).
+- **L6**: il rifiuto del parse (`_refusal_message`, `services/brim/brim_provider.py:1183-1199`) dice oggi `Plugin
+  '<codice>' cannot parse file '<nome salvato uuid>'`; nomina invece il plugin col suo `provider_name` e il file col nome
+  originale (`get_file_info(file_id).filename`, `parse_file` ha il `file_id`). Il 400 resta inglese fino a K2b.
+- **Dove stanno le chiavi**: nel sottosistema `importWizard`, non nel frammento del plugin come suggerisce la voce C-70.
+  È la regola scritta (`mkdocs_src/docs/developer/backend/brim/architecture.md:312`: le parole del wizard per avvisi e
+  rifiuti «belongs to no plugin»), e il cancello lo impone: R1 di `gate-plugin-i18n-ownership` vuole nel frammento di un
+  plugin BRIM solo chiavi `brimPlugins.<code>.*`. Precedente: `importWizard.brimNotice.corporate_action`, del solo Generic
+  CSV (`importWizard/en.json:195`). Cinque codici su sette sono vocabolario condiviso; i due `degiro_*` seguono Scalable.
+
+**Passi**:
+
+1. ✅ **Rossi** (test-author, 15/10 05:37–06:00; nessun file nuovo, runner invariato, ruff/black/prettier/svelte-check
+   puliti). Preambolo `… --test-port 6184 --data-dir /tmp/librefolio-r13-w`:
+   - Generic CSV, `external brim-providers TestGenericCSVRefusesWithACode TestPluginSaysWhyWithACode
+     TestGenericCSVSaysWhyItRefuses`: **17 rossi**, 60 verdi. Oggi `(None, msg, {})` invece di
+     `('csv_only', msg, {'plugin_code': 'broker_generic_csv'})`; sul corpus «58 of 86 answers miss the code of their
+     cause».
+   - DEGIRO, `external brim-degiro TestRefusalCodes TestRecognition`: **16 rossi**, 53 verdi (41 di `TestRecognition`);
+     «78 of 92».
+   - Frontend, `front-transaction tx-unit`: **16 rossi**, 887 verdi. Le 7 chiavi mancano in en/it/fr/es; gli altri
+     mostrano la frase inglese di ripiego (una sentinella la distingue dalla traduzione); `csv_only` deve nominare il
+     plugin in 4 lingue (anche DEGIRO, dal suo codice); `missing_columns` deve cambiare fra 1 e 2 oltre la cifra.
+   - L6, `services brim-provider-base test_the_parse_refusal_names_the_plugin_and_the_file_as_uploaded`: **2 rossi**
+     (`my_statement.txt`, `my_statement.csv`): oggi `Plugin 'broker_generic_csv' cannot parse file '300adede-….csv'`.
+   - Ritoccato per tenerne l'intento: `TestPluginSaysWhyWithACode::test_the_default_wraps_the_reason_without_a_code`
+     chiama `BRIMProvider.cannot_parse_detail(plugin, path)`, il default della base, perché il Generic CSV ora lo
+     ridefinisce.
+
+   > **⚠️ Fuori pista**: test-author segnala tre siti che fissano il difetto, fuori dai suoi file:
+   > `test_brim_api.py` RS-G05 (`:2047`, il vecchio prefisso) e RS-PC03 (`:2650`, `code: null` del Generic CSV), e
+   > `test_brim_parse_race.py:205-351` (6 test, 8 casi, sul nome salvato). I sostituti di plugin di quel file non
+   > hanno `provider_name`: da qui il ripiego sul codice nella cura. Dopo K2a nessun plugin reale rifiuta senza
+   > codice, e un test API non può piantare un sostituto nel server: RS-PC03 passa al rifiuto con codice del Generic
+   > CSV, e il percorso senza codice resta coperto dal contratto e da Vitest. Ritocco affidato a test-author prima
+   > della cura, per vederne il rosso.
+
+   > **Note implementazione (ritocco dei siti che fissavano il difetto, 06:00–06:14)**: test-author, prima della cura.
+   > `test_brim_parse_race.py` (+33 −17): `_plain_refusal(plugin_name, info)` costruisce il testo dal nome del plugin e
+   > da `info.filename`; `_RefusingPlugin.provider_name = "Refusing stand-in"`; il ripiego sul codice di un plugin
+   > senza `provider_name` è fissato una volta, in `test_a_plugin_without_the_method_keeps_the_plain_refusal`.
+   > `test_brim_api.py` (+30 −19): RS-G05 confronta il `detail` intero (`Plugin 'Generic CSV' cannot parse file
+   > 'no_date_….csv': required column 'date' …`) e l'`error_message` del file `failed`; RS-PC03 rinominato
+   > `test_the_generic_csv_refuses_a_csv_without_date_with_its_code_and_context`, con `GENERIC_REFUSAL` = `missing_columns`,
+   > `{"columns": "date", "count": 1}`; RS-PC07 (accesso) confronta codice del plugin, `can_parse` e messaggio inglese,
+   > uguali prima e dopo (il rifiuto intero lo fissa RS-PC03): scelta accettata. Docstring di
+   > `test_brim_providers.py:971` aggiornata. Rossi: `services brim-parse-race` **8 rossi**, 34 verdi (oggi
+   > `Plugin 'broker_generic_csv' cannot parse file '<uuid>.csv'`); `api brim TestParseRefusalReason
+   > TestPluginCheckEndpoint` **2 rossi** (RS-G05, RS-PC03 con `code: None`), 7 verdi. Nessuno su una premessa.
+   > Il vecchio nome di RS-PC03 non è citato da altri file tracciati.
+
+2. ✅ **Cure** (06:03–06:15).
+   - Chiavi aggiunte (06:03) con `/tmp/libreFolio_w_k2a_i18n.sh`: 7 chiavi × 4 lingue in
+     `frontend/src/lib/i18n/importWizard/{en,it,fr,es}.json` (+8 −1 righe ciascuno).
+   - Backend (06:15) con `/tmp/libreFolio_w_k2a_backend.py` (8 sostituzioni, ognuna verificata unica prima a secco):
+     - `broker_generic_csv/plugin.py`: `cannot_parse_detail` costruisce il `BRIMRefusal` (`csv_only` con
+       `{"plugin_code": self.provider_code}`, `file_unreadable`, `no_header_row`, `missing_columns` con
+       `{"columns": ", ".join(missing), "count": len(missing)}`); `cannot_parse_reason` ne restituisce il `message`,
+       identico a prima.
+     - `broker_degiro/plugin.py`: `_inspect` restituisce `(layout, Optional[BRIMRefusal])` (`degiro_csv_only`,
+       `file_unreadable`, `no_movement_rows`, `degiro_not_account_statement`); `cannot_parse_detail` e
+       `cannot_parse_reason` ne derivano. `_inspect` non ha altri chiamanti.
+     - `services/brim/brim_provider.py`: `_refusal_message(plugin, plugin_code, file_name, checked_path)` nomina
+       `getattr(plugin, "provider_name", None) or plugin_code`; `parse_file` passa `get_file_info(file_id).filename`,
+       e il nome salvato solo se i metadati mancano.
+     - `ruff check --select I --fix`, `ruff check`, `black --check` puliti sui 3 file.
+3. ✅ Verdi, guida per sviluppatori, piano, CHANGELOG proposto, handoff FROZEN (06:36).
+   - Guide aggiornate: `brim_plugin_guide.md` (frase del 400 a `:66` e «What the user reads», tabella del Generic CSV
+     con codice e contesto, «Shared codes», esempio DEGIRO, dove stanno le traduzioni), `generic_csv.md:213-217`,
+     `import-wizard.md:196-203`; devWiki `concepts/brim-texts-translated-by-code.md` (riga dei rifiuti).
+     `mkdocs build` stretto verde (06:07, 0 avvisi), `mkdocs check-links` 95 validi.
+   - Verdi, una invocazione alla volta (06:15–06:19):
+     - `services brim-parse-race` 42 passed; `services brim-provider-base` 39 passed; `utils gate-event-loop-io` 14;
+     - `external brim-providers` 733 passed, 1 skipped; `external brim-degiro` 197; `external brim-scalable` 151;
+     - `api brim TestParseRefusalReason TestPluginCheckEndpoint` 9 passed;
+     - `front-transaction tx-unit` 22 file, **903** passed (887 + 16);
+     - `utils gate-i18n-catalog` 176, `gate-i18n-usage` 195, `gate-plugin-i18n-ownership` 45; `i18n check` stretto
+       (4 378 chiavi); `i18n audit`: 0 inutilizzate, le 7 chiavi nuove «used» (i 4 «not verified» sono di prima);
+     - `front-utility core-unit` 132 file, 4 266 passed (con `catalogIcuLocale.test.ts`);
+     - `api schema` contro `58be885a9` (albero `git archive` in `/tmp/libreFolio_w_ref_58be/`): OpenAPI e contratti
+       dei Tool identici.
+     - `pytest --collect-only` contro `58be885a9`: 13 981 → **14 038** (+57): `test_brim_degiro.py` 169 → 197,
+       `test_brim_providers.py` 707 → 734, `test_brim_provider_base.py` 37 → 39; identico sugli altri 269 file.
+     - **`all-backend`** (06:19–06:31, `--workers 2`; unità in `/tmp/libreFolio_w_k2a_testlog/`): **7/7 verdi, 14 027
+       passed, 28 skipped, 0 failed**; 14 027 + 28 = 14 038 + 17 (le unità ripetute), come nelle run precedenti.
+     - `front build --debug` (06:32–06:34): svelte-check 0 errori, 0 avvisi.
+     - E2E `front-transaction tx-import-broker-mismatch` 5 passed (il prompt del broker sbagliato, dove compare il
+       rifiuto tradotto; i casi sono di Scalable) e `tx-import-degiro` 4 passed (06:34–06:35).
+     - `git diff --check` pulito; porta 6184 libera (06:35).
+
+   > **Note implementazione (coordinatore, 15/10 ~06:35)**: (1) W-B15 nella sezione W (`c81670354`):
+   > `tx-bulk-operations.spec.ts:428` prende la chiusura per testo; nella stessa famiglia X-R9 chiede due `data-testid`
+   > in `DataImportModal.svelte` (componente di W): il `ConfirmModal` di `:305` e il pulsante Annulla di `:287`, per
+   > `fx-csv-import.spec.ts:250,261` (X li userà col FE4). Vanno nel primo lotto di W che tocca già quel file. (2)
+   > `.github/instructions/backend-schemas.instructions.md`: l'albero aveva ancora `transactions.py`; sistemato in K2a
+   > col pacchetto `schemas/transactions/` e i suoi 5 moduli. Restano fuori dal mio dominio, e li segnalo al
+   > coordinatore: `assets.py` (ora `schemas/assets/`, di X) e i moduli assenti dall'albero (`ai_export_runtime`,
+   > `pac_allocator/`, `portfolio`, `risk`, `risk_scenarios`, `signals`, `system`, `tools`, `wac`).
+
+   > **CHANGELOG proposto** (`[Unreleased]`, al coordinatore): «🔄 Changed — Import wizard: when a broker's default
+   > plugin, DEGIRO or the Generic CSV, cannot read an uploaded file, the wrong-broker prompt gives the reason in your
+   > language: not a CSV, unreadable, no header row, missing `date`/`type` columns, no movement rows, not a DEGIRO Account
+   > Statement.» e «🐛 Fixed — A parse that a plugin refuses names the plugin and the file as you know them (for example
+   > «Generic CSV» and «export.csv»), not the plugin code and the stored file id.» Il 400 del parse resta in inglese
+   > fino a K2b.
+
+   ✅ **K2a completato** (06:36) — 🧊 FROZEN in attesa del checkpoint del coordinatore.
+
+   > **Note implementazione (coordinatore, 15/10 ~06:38)**: K2a committato come `0eac8e1b6` (`fix(brim): coded
+   > DEGIRO/Generic CSV refusals`, 18 file) e `4cb9fa5bf` (journal). Aggiornamento di base: merge `388a20f65` di
+   > `dev_release2` a `786f3e216` (J C-93, H CP4 col router di sistema e l'area degli avvisi nel layout, J G-8, X CP4
+   > con gli schemi degli asset per tema); `backend-schemas.instructions.md` fuso da solo, con `assets/` e
+   > `transactions/`. X-R9 e W-B15 nel lotto E1; le altre righe superate di quel file restano al coordinatore, per una
+   > passata unica a fine riordino.
+
+### Controllo leggero di `388a20f65` (K2a + J C-93, H CP4, J G-8, X CP4) ✅ (2026-10-15) — 🧊 FROZEN
+
+1. ✅ **Base** (06:38): HEAD `388a20f65` (genitori `4cb9fa5bf`, `786f3e216`), pulito, porta libera. Il merge non tocca
+   nessun file di K2a salvo `backend-schemas.instructions.md`, con i due pacchetti presenti.
+2. ✅ **Frontend**: `front build --debug` (06:38–06:40) con svelte-check 0 errori, 0 avvisi; `i18n check` stretto
+   (4 392 chiavi, 18 sottosistemi); Vitest `tx-unit` 22 file, 903 passed; `core-unit` 134 file, 4 290 passed (le 2
+   file in più sono i test di `features/instance/` di H CP4, registrati in `_frontend_utility.py`).
+3. ✅ **E2E** col layout nuovo di H: `tx-import-broker-mismatch` 5 passed, `tx-import-degiro` 4 passed (06:41–06:43).
+4. ✅ **Contro `786f3e216`** (albero `git archive` in `/tmp/libreFolio_w_ref_786f/`): `api schema` con OpenAPI e
+   contratti dei Tool identici; `pytest --collect-only` 14 014 → 14 071 (+57: `test_brim_degiro.py` +28,
+   `test_brim_providers.py` +27, `test_brim_provider_base.py` +2), identico sugli altri 269 file.
+5. ✅ **Selettori di K2a** sul fuso (06:44–06:45): `services brim-parse-race` 42, `brim-provider-base` 39;
+   `external brim-providers` 733 (1 skipped), `brim-degiro` 197; `api brim TestParseRefusalReason
+   TestPluginCheckEndpoint` 9. `git diff --check` pulito; porta 6184 libera.

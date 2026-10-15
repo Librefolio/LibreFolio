@@ -34,9 +34,9 @@ from backend.app.schemas.assets.assets import (
     FABulkAssetCreateResponse,
     FABulkAssetDeleteResponse,
     FABulkAssetPatchResponse,
-    FAClassificationParams,
     FAinfoResponse,
 )
+from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import (
     OldNew,
 )

@@ -1479,3 +1479,230 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - **`all-backend`**: uscita 0, **7/7 categorie**, 24 min. 24 righe di riepilogo pytest: **13 960 passati,
 >   28 saltati, 0 falliti**.
 > - `git diff --check` pulito, porta 6182 libera, worktree pulito prima di questa nota.
+>
+> **Esito**: il coordinatore ha integrato A4 in `dev_release2` con un avanzamento veloce a `e476d2ed4`, che contiene il
+> journal, più il suo commit di record `be2ad6573`. Il ramo è avanzato lì. Nessuna riga nel CHANGELOG: A4 non ha ancora
+> niente di visibile.
+
+### A4b — versione della sessione (`sv`) (CP A4b) — in corso
+
+#### A4b.0 — Via e base ✅ (2026-10-15)
+> Via del coordinatore (15/10, ~05:17), alla lettera: «Il disegno di A4b va bene così: è la decisione D-A17 del
+> developer. **Via per A4b**, con un suo checkpoint FROZEN. Nell'handoff elenca le pagine in 4 lingue che correggi
+> (`admin/cli_tools`), e se le timbri; la riga di `TODO_FUTURI.md` che chiudi. Le run pesanti vanno chiuse entro le
+> 08:45, oppure dopo l'avviso di fine della finestra della galleria.»
+>
+> **Note implementazione**:
+> - Base `be2ad6573`, worktree pulito, porta libera. Il CP3 di H è nella base: `configured_jwt_secret()` legge anche
+>   `JWT_SECRET_FILE`.
+> - **Disegno** (§4.5 e D-A17):
+>   - il JWT porta il claim `sv`; `decode_jwt_token` restituisce `SessionClaims(user_id, session_version)`, e un cookie
+>     senza `sv` vale 0;
+>   - `get_current_user` dà 401 «Session expired or invalid» quando la versione non coincide;
+>   - la versione sale di 1 con il cambio della password (con il cookie del dispositivo corrente riemesso nella stessa
+>     risposta), con `reset_password` (CLI `user reset`, poi il link di A5), con la disattivazione e con il
+>     declassamento; mai con un'operazione rifiutata;
+>   - A-3: `reset_password` passa bcrypt in `asyncio.to_thread`.
+> - **Rischio noto**: una richiesta già in volo dallo stesso dispositivo, col cookie vecchio, può arrivare dopo il
+>   commit e prendere 401. L'intercettore (`zodios-client.ts:130`) porta al login, e la radice rientra col cookie nuovo.
+> - Il server di test genera il suo segreto JWT all'avvio, quindi un test API non può fabbricare un cookie senza `sv`:
+>   quel caso si prova nel processo del test, a livello di servizio e chiamando `get_current_user` direttamente.
+
+#### A4b.1 — Test rossi (`test-author`) ✅ (2026-10-15)
+> **Note implementazione**:
+>
+> | File | Voce del runner | Test | Rossi prima |
+> |---|---|---|---|
+> | nuovo `test_services/test_session_version.py` | `services session-version` (`pure`) | 47 | 25 |
+> | nuovo `test_api/test_session_revocation_api.py` | `api session-revocation` (`write-scoped`, default della categoria) | 3 | 1 |
+>
+> - **Motivi dei rossi**:
+>   - `SessionClaims` e `end_sessions` mancano;
+>   - `create_jwt_token` non accetta `session_version`;
+>   - un `sv` malformato viene accettato;
+>   - un `sub` non numerico fa uscire `ValueError`;
+>   - un cookie di un'altra versione viene accettato;
+>   - la versione non sale con reset, disattivazione e declassamento;
+>   - bcrypt gira sul thread del loop (A-3);
+>   - nel test API il cambio della password non emette `Set-Cookie`, e il vecchio cookie e il secondo dispositivo
+>     restano a 200.
+> - **Verdi già prima** (22 di servizio e 2 API):
+>   - token non fidati, cookie alla versione giusta, account disattivato;
+>   - attivazione e promozione che non toccano la versione;
+>   - i rifiuti;
+>   - password sbagliata o uguale: 400 e nessun cookie nuovo.
+> - **Fissati oltre la lista**:
+>   - il payload esatto `{sub, iat, exp, sv}`;
+>   - il controllo di `is_active` prima di quello della versione;
+>   - il login successivo emette la versione corrente;
+>   - il cookie riemesso ha gli attributi di quello del login.
+> - Il test API legge `users.session_version` dei suoi due utenti dal DB della corsia.
+> - **⚠️ Fuori pista**: la voce `services` della corsia ha svuotato il DB; `test-author` l'ha ripopolato con
+>   `db populate --force`, la stessa chiamata del setup `api`. Ha segnalato anche `LOOP-003` di `test_auth_api.py:1848`,
+>   che chiama `change_password` per nome e si rompe con i parametri nuovi.
+
+#### A4b.2 — Implementazione ✅ (2026-10-15)
+> **Note implementazione** (script `/tmp/libreFolio_a4b/patch_a4b.py`, provato prima su una copia dei file):
+> - `auth_service.py`:
+>   - `SessionClaims`;
+>   - `create_jwt_token(user_id, ttl_hours, session_version)`, con `sv` nel payload;
+>   - `decode_jwt_token` restituisce `SessionClaims`, e un token senza `sv` vale 0;
+>   - un `sv` non intero, booleani compresi, dà `None`; un `sub` mancante o non numerico dà `None` invece di
+>     un'eccezione;
+>   - `_JWT_SECRET` resta del modulo e si legge a ogni chiamata.
+> - `api/v1/auth.py`:
+>   - `get_current_user` controlla la versione dopo esistenza e attività;
+>   - due aiuti, `_session_ttl_hours` e `_issue_session_cookie`, usati da login e cambio password;
+>   - `change_password` riceve `response` e `http_request`, alza la versione e riemette il cookie nella stessa
+>     risposta.
+> - `user_service.py`:
+>   - `end_sessions(user)`, senza commit;
+>   - chiamata da `reset_password` (che passa bcrypt in `asyncio.to_thread`, chiudendo A-3), da
+>     `set_user_active(False)` e da `set_user_admin(False)`;
+>   - via il commento «JWT tokens cannot be revoked».
+> - ruff e black puliti. `LOOP-003` lo adatta `test-author`.
+
+#### A4b.3 — Doc in 4 lingue, timbri, devWiki ✅ (2026-10-15)
+> **Note implementazione**:
+> - **Pagine corrette in en, it, fr ed es**, piccole modifiche dello stesso senso:
+>   - `admin/cli_tools`: il reset chiude le sessioni aperte e la disattivazione non le fa tornare; anche il
+>     declassamento disconnette l'account;
+>   - `user/settings/profile`: dopo il cambio della password gli altri dispositivi vengono disconnessi;
+>   - `user/connection-security`: cambiare la password disconnette anche gli altri dispositivi.
+> - **Timbri** con `dev.py mkdocs translate-stamp --file …` (prova a vuoto prima). Legittimi: prima della modifica la
+>   cache delle tre pagine aveva l'MD5 della versione inglese corrente, con es/fr/it fatti.
+>   - `cli_tools`: `df53c747 → 36e0f264`;
+>   - `profile`: `ee81e8e4 → b0cde443`;
+>   - `connection-security`: `95e2f750 → ed3e331c`.
+> - devWiki `domains/auth.md`: una decisione sulla revoca per versione.
+
+#### A4b.4 — Doc per sviluppatori (`docs-writer`) ✅ (2026-10-15)
+> **Note implementazione**:
+> - `architecture/security.md`:
+>   - payload `{sub, sv, iat, exp}`;
+>   - «Token Expiration» e «Logout» aggiornati;
+>   - sezione nuova «🔁 Session Revocation» (`#session-revocation`): cosa alza la versione, cosa la lascia stare, come
+>     si decodifica un token, ordine dei controlli in `get_current_user`, il cookie riemesso, la corsa innocua, i test.
+>   - Ho cambiato l'emoji della sottosezione «Transactions and Logs» dei token di A4 da 🔁 a 🧾, perché l'emoji era
+>     doppia; l'ancora non cambia.
+> - `architecture/users_and_brokers.md`: introduzione, passi del login e punti «Stateless», «TTL» e «Revocation».
+> - `architecture/access_control.md`: reset, disattivazione e declassamento chiudono le sessioni.
+>   - `docs-writer` ha corretto anche due derive di A-7, fuori da A4b ma nelle stesse righe: la regola dell'ultimo
+>     admin e il 403 `ACCOUNT_DISABLED`.
+> - `database/users_access.md`: `session_version` ora è descritta come in uso.
+> - `frontend/state/app-state.md:11`: lo store tiene lo stato della sessione, mentre la sessione è il cookie HttpOnly
+>   (A-7).
+> - `backend/app/db/models.py`: il commento su `session_version` diceva «il codice arriva dopo». Corretto.
+> - Backlog A-7: chiuse tre righe, più una riga nuova (`users_and_brokers.md` dice «via CLI or API»; l'API arriva con
+>   A5).
+
+#### A4b.5 — Test verdi e controlli ✅ (2026-10-15)
+> **Note implementazione**:
+> - `test-author` ha adattato `LOOP-003` in `test_auth_api.py:1848`: alla chiamata di `change_password` passa
+>   `response=Response(), http_request=_request("http")`. Nient'altro: il TTL viene dal DB privato (24 h di riserva) e
+>   il cookie è firmato col segreto del processo di test.
+> - Verdi:
+>   - `services session-version`: **47**;
+>   - `api session-revocation`: **3**;
+>   - `api auth`: **60**, compreso `LOOP-003`.
+> - La voce `services` della corsia svuota il DB, e `test-author` l'ha ripopolato con `db populate --force` prima delle
+>   voci `api`.
+> - **API**: confronto con lo schema esportato in A4. Le 7 rotte `auth` cambiano solo nella `description` di
+>   `change-password`, che ora dice che le altre sessioni finiscono. Gli schemi `ChangePassword*`, `AuthUserResponse` e
+>   `AuthLoginResponse` sono identici, e nello schema non ci sono `session_version` né `sv`. Il client generato è
+>   ignorato da git: niente `api sync` da committare.
+> - **vulture**: nessun reperto nuovo; restano le 5 funzioni di `token_service` di A4.
+> - **`TODO_FUTURI.md`**: la voce «🔑 Sessioni — il cambio della password non chiude le sessioni già aperte» passa in
+>   cima a `TODO_Completati.md`, come «🔑 Il cambio della password chiude le altre sessioni ✅», con data, risultato e
+>   origine (la decisione del 09/10 e la D-A17).
+
+#### A4b.6 — Validazione del checkpoint ✅ (2026-10-15)
+> **Note implementazione** (`bash /tmp/libreFolio_a4b_validate.sh`, corsia 6182, dalle 05:52 alle 06:13):
+> - `dev.py mkdocs build`: exit 0. `mkdocs check-links`: 95 link validi.
+> - `check-orphans`: 367 unitari, 118 E2E, **274** file backend (272 più i 2 nuovi), tutti raggiungibili.
+> - **`all-backend`**: uscita 0, **7/7 categorie**, 20 min.
+>   - 24 riepiloghi pytest: **14 010 passati, 28 saltati, 0 falliti**.
+>   - Rispetto ai 13 960 di A4.7 la differenza è di 50, cioè i test nuovi (47 più 3).
+> - `git diff --check` pulito, porta 6182 libera. Frontend non toccato.
+>
+> **⚠️ Fuori pista**: ho lanciato lo script con `&` dentro una chiamata sincrona invece che in modalità asincrona.
+> Ho controllato che il processo fosse vivo e unico nella corsia, e l'ho seguito dal suo log. Nessun effetto sulla run.
+
+### Checkpoint A4b (versione della sessione) 🧊 (2026-10-15, mattina) — FROZEN, in attesa del commit del coordinatore
+> - **Delta** sulla base `be2ad6573`, non in stage: 2 file nuovi e 30 modificati, fra codice, test, runner, doc, traduzioni, cache
+>   di traduzione, devWiki, `TODO_FUTURI.md`, `TODO_Completati.md`, il piano e la sezione A del backlog.
+> - **Conflitti attesi con `dev_release2`** (`6d67fdaac`): nessuno testuale.
+>   - `TODO_FUTURI.md`: lì le righe 1121 e 2067, qui il blocco 2176–2199.
+>   - `security.md`: lì le righe 221 e 266, qui le 11, 30, 78–89 e 347.
+>   - `app-state.md`: lì le righe 5, 19 e 75, qui la 11.
+>   - `_backend_api.py`: lì la riga 50, qui le 578 e 783.
+>   - `_backend_services.py`: lì le righe 173–782, qui l'inserimento dopo la 455 e la 1108.
+>   - Backlog: sezioni diverse.
+> - **Commit proposti**:
+>   1. `feat(accounts): end sessions on password change`;
+>   2. `docs(journal): A4b progress, A backlog, TODO`.
+>
+> **Esito**: il coordinatore ha committato `3ac4114d5` (`feat(accounts): end sessions on password change`, 28 file) e
+> `6160a71ce` (journal, backlog, `TODO_FUTURI.md`, `TODO_Completati.md`), dopo aver riletto la logica di
+> `get_current_user`, `decode_jwt_token` e `change-password`. Le due righe del CHANGELOG vanno sotto «🔄 Changed».
+>
+> Poi ha aggiornato la base con il merge `9c3047ce9` di `dev_release2` a `6d67fdaac`. Porta X CP3, W7, X CP3b, J C-93 e
+> H CP4: router di sistema per risorsa, `/system/instance` pubblico, area degli avvisi nel layout.
+> - Unione automatica di `security.md`, `app-state.md`, `_backend_api.py`, `_backend_services.py`, `TODO_FUTURI.md` e
+>   del backlog.
+> - `decode_jwt_token` ha un solo chiamante, `auth.py`.
+>
+> **Nota per A5 e i lotti dopo**, alla lettera: «`GET /api/v1/system/instance` è **pubblico**. Ogni campo che aggiungi in
+> `InstanceConfigResponse` deve essere innocuo per un anonimo. `registration_mode` va bene; dati di utenti, email o
+> versioni no (decisione 15).»
+
+#### A4b.7 — Validazione completa della revisione combinata `9c3047ce9` ✅ (2026-10-15)
+> Richiesta del coordinatore:
+> - `services session-version`, `api session-revocation`, `api auth`, `api system`;
+> - `all-backend`, con `front build --debug` e `mkdocs build` prima;
+> - E2E `front-utility auth` e `front-utility settings`;
+> - `api schema` contro `6d67fdaac`;
+> - handoff entro le 08:20.
+>
+> **Note implementazione**:
+> - **`api schema`**: l'ho esportato da HEAD e dalla base `6d67fdaac`. La base l'ho estratta con `git archive` in
+>   `/tmp` ed esportata con il Python del venv condiviso, senza un altro checkout. Risultato: 114 percorsi e 587 schemi
+>   da tutte e due le parti. Cambia solo la `description` di `POST /api/v1/auth/change-password`, e il resto è uguale.
+> - **⚠️ Fuori pista**: nessuna E2E invia la modale del cambio password. `settings.spec.ts` la apre, ne controlla i
+>   campi e la annulla, quindi le E2E `auth` e `settings` non provano il cookie riemesso nel browser. Ho chiesto a
+>   `test-author` un test in `settings.spec.ts`: un utente suo cambia la password dalla modale, il dispositivo resta
+>   collegato, un secondo contesto del browser riceve 401. Non è un rosso visto prima: è la prova nel browser,
+>   scritta dopo il codice.
+> - **Prima parte** (`bash /tmp/libreFolio_a4bc_validate.sh`, corsia 6182, dalle 06:18 alle 06:42, tutto exit 0):
+>   - `dev.py front build --debug`: svelte-check 0/0. `dev.py mkdocs build`: exit 0.
+>   - Le voci `api` girano prima, sul DB popolato della corsia, perché la voce `services` lo svuota:
+>     - `api session-revocation`: **3**;
+>     - `api auth`: **60**;
+>     - `api system`: **94**;
+>     - `services session-version`: **47**.
+>   - **`all-backend`**: uscita 0, **7/7 categorie**, 20 min. 24 riepiloghi: **14 046 passati, 28 saltati, 0 falliti**.
+>     Rispetto ai 14 010 di A4b.6, i 36 in più vengono dai lotti entrati col merge.
+>   - `git diff --check` pulito, porta libera.
+> - **E2E del cambio password**: scritta da `test-author` in `frontend/e2e/settings.spec.ts`, nella describe
+>   «Password change and sessions».
+>   - Usa un utente usa e getta, `registerDisposableUser`, e lo cancella alla fine.
+>   - Il dispositivo A cambia la password dalla modale. Il test controlla che il barattolo dei cookie abbia un solo
+>     `session`, con un valore nuovo, e che `/dashboard` e `/auth/me` funzionino ancora.
+>   - Il dispositivo B riceve 401 e torna al login. La password vecchia viene rifiutata, la nuova entra.
+> - **E2E**, lanciate da `test-author` nella corsia dopo `all-backend`, una alla volta:
+>
+>   | Run | Esito |
+>   |---|---|
+>   | `front-utility settings "Password change and sessions"` | **1/1**, 6,6 s |
+>   | `front-utility settings` | **46/46** (43 più i 3 di `fx/fx-chart-settings.spec.ts`, che il runner prende per sottostringa) |
+>   | `front-utility settings` con `--workers 4` | **46/46**; il test nuovo in 14,2 s, su un budget di 90 s |
+>   | `front-utility auth` | **29/29** (26 più i 3 di `layout/app-start-auth.spec.ts`) |
+>   | `check-orphans` | pulito: 118 spec E2E, 370 file di test unitari |
+>   | `dev.py front check` | 0 errori, 0 avvisi |
+>
+>   - `front check` esclude `e2e/`, quindi `test-author` ha controllato i tipi della spec con il `tsc` del
+>     repository, `--noEmit` in modalità strict: 0 errori.
+>   - Il log del backend mostra, per ognuno dei tre utenti `guides_pwchange_*`: registrazione, due accessi, «Password
+>     changed, other sessions ended», password vecchia rifiutata, cancellazione.
+> - Porta 6182 libera. Delta: `frontend/e2e/settings.spec.ts` (il test nuovo, più `type BrowserContext`
+>   nell'import) e questo piano.

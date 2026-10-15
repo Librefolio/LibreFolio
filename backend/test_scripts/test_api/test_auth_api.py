@@ -1845,7 +1845,8 @@ class TestPasswordWorkLeavesTheEventLoopFree:
             user = await user_service.get_user_by_username(session, private_account.username)
             assert user is not None, f"Setup: {private_account.username} must be in the private database"
             async with _heartbeat() as ticks:
-                await auth_api.change_password(request=ChangePasswordRequest(current_password=private_account.password, new_password=new_password), current_user=user, session=session)
+                # Since A4b the handler re-issues the session cookie on the response, its Secure decided by the request: FastAPI hands it both.
+                await auth_api.change_password(request=ChangePasswordRequest(current_password=private_account.password, new_password=new_password), response=Response(), http_request=_request("http"), current_user=user, session=session)
 
         assert check.calls == [{"plain_password": private_account.password, "hashed_password": private_account.hashed_password}], f"change-password must check the current password against the stored hash, once: {check.calls}"
         assert hashing.calls == [{"password": new_password}], f"change-password must hash the new password, once: {hashing.calls}"

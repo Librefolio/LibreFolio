@@ -4,6 +4,30 @@ Questo file documenta i TODO che sono stati completati durante lo sviluppo di Li
 
 ---
 
+## 🔑 Il cambio della password chiude le altre sessioni ✅
+
+**Data completamento:** 15 Ottobre 2026
+**Status:** ✅ COMPLETATO — piano `LibreFolio_developer_journal/Release_2/Phase_1/02_accounts/plan-phase01Accounts.prompt.md`
+(workstream A della 1.3, lotto A4b)
+
+### Risultato
+- Il JWT porta `sv`, la versione della sessione dell'account (`users.session_version`, migrazione 005). A ogni
+  richiesta `get_current_user` rifiuta un cookie di un'altra versione con 401.
+- **Cambio della password**: la versione sale e il cookie del dispositivo che cambia la password viene riemesso
+  nella stessa risposta; tutti gli altri dispositivi escono alla richiesta successiva.
+- La versione sale anche con `./dev.py user reset`, la disattivazione (una riattivazione non fa tornare le sessioni
+  di prima) e il declassamento.
+- Un cookie emesso prima, senza `sv`, vale versione 0: l'aggiornamento non ha disconnesso nessuno.
+- Nessun archivio delle sessioni: il controllo legge la riga dell'utente che ogni richiesta carica già.
+
+### Origine
+- Voce di `TODO_FUTURI.md` del 9 Ottobre 2026 (reperto dell'onda 3 della doc inglese). Il developer l'aveva lasciata
+  in attesa; poi, con la decisione D-A17 del 14/10/2026, ha scelto la strada della versione per utente con il
+  cookie riemesso al dispositivo corrente.
+- Resta da coordinare con l'accesso OIDC (#27), che tocca lo stesso punto.
+
+---
+
 ## 🔤 L'audit i18n distingue «usata», «morta» e «non verificata» ✅
 
 **Data completamento:** 9 Ottobre 2026
