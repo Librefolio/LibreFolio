@@ -1,0 +1,49 @@
+{
+  "backup": {
+    "tab": "Backup",
+    "intro": "The data of this LibreFolio in one archive, to keep somewhere safe or to move to another installation.",
+    "download": {
+      "title": "Back up the instance",
+      "description": "One archive with the database, the uploaded files, the broker reports and the risk scenarios. The logs and the instance key are not included.",
+      "privacy": "The archive holds every user's data and is not encrypted: store it somewhere private.",
+      "create": "Create backup",
+      "createAgain": "Create a new backup",
+      "creating": "Creating the backup…",
+      "checking": "Checking the backup…",
+      "phase": {
+        "preparing": "Preparing",
+        "database": "Copying the database",
+        "files": "Adding the files",
+        "finalizing": "Finishing"
+      },
+      "progress": "{done} of {total}",
+      "ready": "Backup ready",
+      "readyDetails": "{name}, {size}, created on {date}",
+      "download": "Download",
+      "delete": "Delete from the server",
+      "deleting": "Deleting the backup…",
+      "retention": "The archive stays on the server for one hour, then it is deleted.",
+      "recheck": "Check again",
+      "retry": "Try again",
+      "warningsTitle": "The backup is complete, with warnings",
+      "warnings": {
+        "database_integrity": "The database failed its integrity check: it was archived as it is.",
+        "foreign_key_violations": "The database has broken references between tables: it was archived as it is.",
+        "files_skipped": "Some files were left out: links, special files, files or folders that could not be read, or files removed during the backup."
+      },
+      "errors": {
+        "backup_busy": "Another backup is running: try again when it ends.",
+        "backup_no_space": "Not enough free space on the server for the backup.",
+        "backup_folder_unusable": "The backups folder on the server is a link or a file: LibreFolio builds backups only in a plain folder of its data directory.",
+        "backup_failed": "The backup failed: the server log has the details.",
+        "backup_interrupted": "The backup was interrupted, for example by a restart: create a new one.",
+        "backup_job_not_found": "This backup is no longer on the server: create a new one.",
+        "network": "The server could not be reached.",
+        "unexpected": "The server answered with an error: reload the page and try again."
+      },
+      "toast": {
+        "warnings": "Backup ready, with warnings: check them before you rely on it."
+      }
+    }
+  }
+}

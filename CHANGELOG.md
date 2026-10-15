@@ -21,7 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A currency exchange explains its two dates, in the form and in the guide: they usually match, and differ when the broker credits the new currency on another day.
 - `GET /api/v1/system/ready`: 200 when the database answers and its schema is at the latest migration, 503 otherwise, one code per check — for Docker health checks, Uptime Kuma and hosting panels.
 - `LIBREFOLIO_PROFILE`: `selfhosted` (the default, nothing changes) or `managed`, for whoever hosts LibreFolio for others. In the managed profile a `JWT_SECRET` shorter than 32 characters stops the server at startup; elsewhere it stays a warning in the log. Documented in the new admin page "Hosting for Others".
-- **Instance block, for hosting providers**: with `LIBREFOLIO_BLOCKED=1` the data stays, and whoever signs in sees a page saying the instance is blocked, with the deletion date when `LIBREFOLIO_DELETION_DATE` is set. To a signed-in user the API answers `423 instance_blocked` to everything except signing in and out, deleting their own account, the block page, the public configuration and the health, readiness and version probes. A malformed value of either variable stops the server at startup, naming the variable.
+- **Instance block, for hosting providers**: with `LIBREFOLIO_BLOCKED=1` the data stays, and whoever signs in sees a page saying the instance is blocked, with the deletion date when `LIBREFOLIO_DELETION_DATE` is set. To a signed-in user the API answers `423 instance_blocked` to everything except signing in and out, following a password-reset link already sent, deleting their own account, the block page, the public configuration and the health, readiness and version probes. A malformed value of either variable stops the server at startup, naming the variable.
+- On a blocked instance, administrators see **Manage subscription** on the block page, linking to the hosting provider's billing page set in `LIBREFOLIO_BILLING_URL`.
 - `GET /api/v1/system/block`: the block state behind that page, for signed-in users.
 - **Who can sign up**: in Settings › Admin, «Registration» is Open, By invitation or Closed. `LIBREFOLIO_REGISTRATION` can set it from the server; the field then shows the mode in force, read-only.
 - **Invitation links**: an administrator creates single-use links, valid 7 days, with `./dev.py user invite [--admin] [--email …]` or the admin API. The link opens the registration form with the role and, if given, the suggested address, which can be changed.
@@ -31,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `./dev.py user reset-onboarding <username> [--flow …]` restarts an account's guides.
 - `GET /api/v1/brokers/{id}/summary` accepts `as_of`, the day to read the summary for; the broker page sends your today.
 - `POST /api/v1/assets/events` accepts `mode: "create"` for an event that must be new. One on a day and type the asset already has, manual or from a provider, is refused with 409 `EVENT_EXISTS` listing the events already there, instead of overwriting them. Each result also gives the `event_ids` it wrote, in request order.
+- `POST /api/v1/assets/events` accepts `delete_ids`: events of the asset deleted first, in the same transaction. An id that is not an event of the asset is a 400 `EVENT_NOT_DELETABLE`, an event linked to transactions a 409 `EVENT_IN_USE`. Each result lists the `deleted_ids`.
+- **Email, optional**: LibreFolio can send emails through your own SMTP server, named only by the `LIBREFOLIO_SMTP_*` variables, the password also from a file (`LIBREFOLIO_SMTP_PASSWORD_FILE`). Nothing of it is stored, shown in the app or put in a backup, and without a server nothing changes. **Settings › Email**, for administrators, says whether email works, which variable to fix when it does not, and sends a test email to your own address in your language. `LIBREFOLIO_SMTP_MAX_PER_HOUR` caps the emails of the instance (50 an hour by default); the startup checks report an unusable configuration and a server reached without encryption. Documented in the new admin page "Email".
+- **Instance backup**: an administrator downloads a zip of the whole instance from **Settings › Backup**, or writes one with `./dev.py backup create` (and checks it with `./dev.py backup inspect`); it also works when the hosting provider has blocked the instance. Documented in Admin › Command-Line Tools.
 
 ### 🔄 Changed
 
@@ -45,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API: refusals of `POST /auth/register` carry an error code (`REGISTRATION_DISABLED`, `INVITE_REQUIRED`, `INVITE_INVALID`, `USER_LIMIT_REACHED`). `GET /system/instance` carries `accounts`.
 - Docker: the image exposes only port 6040, and both compose files set `PORT=6040` inside the container; `PORT` in `.env` still chooses the host port. The unused 6041 mapping is gone.
 - **Live prices pause while you are away.** On the Assets page (every minute) and on an asset's page (every 30 seconds), live prices stop refreshing while the tab is in the background or after two minutes without using the page, with a small «Updates paused» label, and start again by themselves as soon as you come back. An asset's page now sends one request per refresh instead of two, and none at all on a date range that ends in the past.
+- **Saving the asset events editor is all or nothing.** The Events tab saves deletions, edits and new rows in one step: if anything is refused, none of them is kept, and the message, in your language, names the event at fault. An event linked to transactions can no longer be deleted together with other changes: the save stops and says which event and how many transactions use it, so remove the link first. Until now the other changes were saved and that deletion was skipped with a warning. Deleting an event and giving its date and type to another in the same save now works.
+- **«+ New event» never overwrites an event.** On a date and type the asset already has, entered by hand or from a data provider, nothing is saved: the form shows the event already there, to use it or, if entered by hand, to edit it. Until now the new event replaced the manual one of that day and type, or added a manual copy next to a provider's.
 
 ### 🧹 Repository cleanup
 
@@ -86,12 +92,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PAC Allocator: a negative amount to use, declared liquidity or contribution, and an order step of zero or less, are reported on their own field before the request is sent.
 - PAC Allocator: the help texts of "Value after the plan" and "Ideal value" describe a PAC, which starts from zero.
 - Deleting your account: a technical failure now answers "nothing was deleted" instead of a generic server error, and a problem removing report files after the deletion no longer reports the deletion as failed.
+- `./dev.py server` counts only the process listening on its port: a program merely connected to it no longer stops the start, and `--force` no longer kills it.
+- **An events CSV line in another currency is refused instead of being relabelled.** The Events tab saved it in the asset's currency, with an amount that was wrong.
+- **The transaction form's event picker shows an event's new values** right after it is edited from the form.
+- Data quality: the "valued at cost" warning counts its two weeks from the asset's last market quote, as its text says. An asset quoted the day before and bought again is no longer flagged, and a price feed that stopped long ago is flagged at once; an asset never quoted still counts from its first purchase.
 
 ### ⚠️ Breaking changes
 
 - The global setting `enable_registration` becomes `registration_mode` (`open`, `invite`, `closed`): an API client that read the old key must read the new one.
 - **`DELETE /api/v1/assets/events` requires `asset_id`.** Only that asset's events are deleted, so a wrong or crafted request can no longer delete another asset's events. A request with `ids` alone is refused (422), and an id of another asset answers `not_found`, its event untouched. A client deleting events must send their asset.
 - **`POST /api/v1/assets/events` answers a refusal with an object.** `detail` is `{error_code, message, params}` instead of a sentence; `params` names the item (`item_index`, `asset_id`) and the events at fault. A missing asset is now a 400 instead of a 200 that saved nothing. A client showing `detail` as text must read `detail.message`.
+- **The four placeholder backup endpoints are removed**: `/api/v1/backup/export`, `/backup/restore`, `/backup/formats` and `/backup/status` only answered "not implemented". The instance backup has its own endpoints under `/api/v1/backup/instance`.
 
 ---
 

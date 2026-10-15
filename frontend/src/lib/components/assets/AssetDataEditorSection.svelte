@@ -23,6 +23,7 @@
     import PriceDataImportModal from './PriceDataImportModal.svelte';
     import EventDataImportModal from './EventDataImportModal.svelte';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
+    import {eventSaveErrorMessage} from '$lib/components/transactions/events/eventSaveError';
     import {_ as t, locale} from '$lib/i18n';
     import {getEventTypeOptions, EVENT_TYPES_ALL} from '$lib/utils/transactions/eventTypes';
     import {generateUUID} from '$lib/utils/core/uuid';
@@ -351,88 +352,49 @@
                 const upsertEvents = dirtyEvents.filter((r) => r.status === 'edited' || r.status === 'appended');
                 const deleteEvents = dirtyEvents.filter((r) => r.status === 'deleted');
 
-                if (upsertEvents.length > 0) {
-                    const validEvents = upsertEvents.filter((r) => {
-                        const amount = Number(r.values.amount);
-                        return !isNaN(amount) && r.values.type;
+                // Only saved events are deleted on the server. A new row deleted before its
+                // first save just goes: its rowId is a date, never an id.
+                const idsToDelete = deleteEvents.map((r) => dbEventId(r)).filter((id): id is number => id !== null);
+                const validEvents = upsertEvents.filter((r) => {
+                    const amount = Number(r.values.amount);
+                    return !isNaN(amount) && r.values.type;
+                });
+
+                if (idsToDelete.length > 0 || validEvents.length > 0) {
+                    // #R5-3 (Policy D): an event is in the asset's currency. A row imported from a CSV keeps the
+                    // currency it was written in (I-11c): one in another currency is refused by the server, with
+                    // its row, instead of being relabelled in silence — its amount would be wrong.
+                    const eventCurrency = currency || 'USD';
+                    const eventItems = validEvents.map((r) => ({
+                        // A saved event travels with its id: the server edits that row
+                        // in place, its type included, instead of matching (date, type).
+                        id: dbEventId(r) ?? undefined,
+                        date: r.date,
+                        type: String(r.values.type),
+                        value: {
+                            code: r.values.currency ? String(r.values.currency) : eventCurrency,
+                            amount: Number(r.values.amount),
+                        },
+                        notes: r.values.notes ? String(r.values.notes) : undefined,
+                    }));
+                    // One request, one transaction (decision 22): the server deletes first, so an edit can take the
+                    // date and type of an event deleted in the same save (I-10), and a refusal keeps nothing — the
+                    // deletions included — and says which row stopped it.
+                    const resp = await zodiosApi.upsert_events_bulk_api_v1_assets_events_post([{asset_id: assetId, delete_ids: idsToDelete, events: eventItems}]).catch((err: unknown) => {
+                        throw new Error(eventSaveErrorMessage(err, $t, eventItems, (type) => $t(`assetDetail.eventType.${type}`) || type));
                     });
 
-                    if (validEvents.length > 0) {
-                        // #R5-3 (Policy D): use ``asset.currency`` for every event
-                        // instead of letting the user pick per-row.
-                        // The Zodios ``Currency_Input`` schema requires ``code`` as a
-                        // non-optional string, so we populate it from the ``currency``
-                        // prop (same value shown in the tab label). The backend
-                        // validates ``event.currency == asset.currency`` anyway
-                        // (``EVENT_CURRENCY_MISMATCH`` hard-400) so sending the
-                        // matching code is always safe.
-                        const eventCurrency = currency || 'USD';
-                        const eventItems = validEvents.map((r) => ({
-                            // A saved event travels with its id: the server edits that row
-                            // in place, its type included, instead of matching (date, type).
-                            id: dbEventId(r) ?? undefined,
-                            date: r.date,
-                            type: String(r.values.type),
-                            value: {
-                                code: eventCurrency,
-                                amount: Number(r.values.amount),
-                            },
-                            notes: r.values.notes ? String(r.values.notes) : undefined,
-                        }));
-                        await zodiosApi.upsert_events_bulk_api_v1_assets_events_post([
-                            {
-                                asset_id: assetId,
-                                events: eventItems,
-                            },
-                        ]);
-                        parts.push(`${validEvents.length} events saved`);
-                    }
-                }
-
-                if (deleteEvents.length > 0) {
-                    // Only saved events are deleted on the server. A new row deleted before its
-                    // first save just goes: its rowId is a date, never an id.
-                    const idsToDelete = deleteEvents.map((r) => dbEventId(r)).filter((id): id is number => id !== null);
-                    if (idsToDelete.length > 0) {
-                        // Single bulk call, scoped to this asset (decision 21); per-item status (deleted/not_found/in_use).
-                        const bulkResp = await zodiosApi.delete_events_bulk_api_v1_assets_events_delete(undefined, {
-                            queries: {asset_id: assetId, ids: idsToDelete},
-                        });
-                        const allResults = bulkResp.results ?? [];
-
-                        const deletedIds = new Set<number>(allResults.filter((r: any) => r.status === 'deleted').map((r: any) => r.event_id));
-                        const blocked = allResults.filter((r: any) => r.status === 'in_use');
-                        const notFound = allResults.filter((r: any) => r.status === 'not_found');
-
+                    const deletedIds = new Set<number>(resp.results?.[0]?.deleted_ids ?? []);
+                    if (deletedIds.size > 0) {
                         // Remove the deleted rows from the in-memory table so they don't linger.
                         eventRows = eventRows.filter((row) => {
                             const id = dbEventId(row);
                             return id === null || !deletedIds.has(id);
                         });
-
-                        if (deletedIds.size > 0) {
-                            parts.push($t('events.deleteSuccess', {values: {n: deletedIds.size}}));
-                        }
-                        if (blocked.length > 0) {
-                            const totalVisible = blocked.reduce((sum: number, b: any) => sum + b.accessible_transactions.length, 0);
-                            const totalHidden = blocked.reduce((sum: number, b: any) => sum + (b.hidden_transactions_count || 0), 0);
-                            toasts.warning(
-                                $t('events.deleteBlocked', {
-                                    values: {
-                                        n: blocked.length,
-                                        accessible: totalVisible,
-                                        hidden: totalHidden,
-                                    },
-                                }),
-                            );
-                        }
-                        if (notFound.length > 0) {
-                            toasts.warning(
-                                $t('events.deleteNotFound', {
-                                    values: {ids: notFound.map((r: any) => r.event_id).join(', ')},
-                                }),
-                            );
-                        }
+                        parts.push($t('events.deleteSuccess', {values: {n: deletedIds.size}}));
+                    }
+                    if (validEvents.length > 0) {
+                        parts.push(`${validEvents.length} events saved`);
                     }
                 }
             }

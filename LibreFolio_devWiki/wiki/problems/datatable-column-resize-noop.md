@@ -3,7 +3,7 @@ title: "DataTable column-resize handle has no effect in some tables"
 category: problem
 status: open
 date: 2026-07-07
-updated: 2026-10-12
+updated: 2026-10-15
 tags: [frontend, datatable, svelte5, ui, low-priority, pre-existing]
 related:
   - problems/datatable-actions-column-on-mobile
@@ -62,3 +62,4 @@ DataTable is drag-tested, so «some tables» stays open, to re-test after releas
 | Role | Path |
 |------|------|
 | Component | `frontend/src/lib/components/table/DataTable.svelte` |
+| Resize handle markup and its rules (cut out of `DataTable.svelte` in release 1.3, Y2; `startResize()` and the width state stay in the parent) | `frontend/src/lib/components/table/DataTableColumnHeader.svelte` |
