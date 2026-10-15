@@ -2555,3 +2555,91 @@ remove`); 3. ✅ prove (`i18n check`, `utils gate-i18n-catalog`, `utils gate-i18
    > **Note implementazione**: non girati, per la finestra G-13 (00:00–01:15): `mkdocs build` stretto e `check-links`
    > del secondo giro (il primo giro: 0 avvisi, 96 link validi); li giro dopo «galleria finita», o li gira il
    > coordinatore al treno. W-B34 attende il developer.
+
+> **Lotto di doc salvato** (coordinatore 00:02: `bf66d4fe7`, `f062418e4`, `865bccb9d`, `32f8f659c`; worktree pulito). Dopo
+> le 01:15: `mkdocs build` stretto e `check-links`, poi l'ingresso. A-14 nella sezione di A la chiude il coordinatore.
+> **W-B20 entrato** (treno 69, merge `23ff56b95`, riga 🐛 nel CHANGELOG). **W-B30** alla lista di domattina: proposta
+> inviata alle 00:10 (un `null` esplicito toglie il costo manuale, la regola di N2 risponde `costBasisRequired` dove serve).
+
+### W-B31 — la regola 12 del costo letta dai metadati ⏳ (2026-10-16)
+
+Via del coordinatore (00:02): prove leggere; l'import circolare lo risolvo come preferisco, annotando la scelta.
+
+**Analisi** (00:15, codice di `32f8f659c`):
+- La regola 12 di `validate_transaction_business_rules` (`backend/app/schemas/transactions/transactions.py:190-205`)
+  ammette `cost_basis_mode` solo per TRANSFER e ADJUSTMENT con quantità > 0, scritto a mano. I metadati
+  (`type_metadata.py`) dicono lo stesso oggi: TRANSFER `cost_basis_pair = [forbidden, required_qty_pos]`, ADJUSTMENT
+  `cost_basis_mode = required_qty_pos`, tutti gli altri `forbidden`, nessun tipo `optional`. È una copia che deriva al
+  primo cambio della tabella; il frontend legge già la tabella (`getCostBasisRule` → `cbAllowed`,
+  `frontend/src/lib/utils/transactions/txPayloadHelpers.ts`). Nessun test del backend copre la regola 12 (solo l'E2E
+  FM9 di `tx-wac-formmodal.spec.ts`: un BUY senza `costBasisModeIncompatible`).
+- Il ciclo: `type_metadata.py:18` importa `_swap_group_codes` da `transactions.py` (per riempire `swap_group`), e
+  `transactions.py` dovrebbe importare la regola da `type_metadata.py`.
+
+**Decisione notturna, da rivedere** — il ciclo si scioglie spostando i gruppi di scambio (`SWAP_GROUPS`,
+`get_swap_group`, `_swap_group_codes`, tali e quali) da `transactions.py` a `type_metadata.py`, che diventa la casa
+foglia delle regole per tipo; `transactions.py` importa da lì in testa, `services/transactions/batch_edits.py` prende
+`get_swap_group` da lì, il test di N2 (`test_transaction_cost_basis_rule.py:590-591`) patcha `type_metadata.SWAP_GROUPS`
+(regole P2: niente shim, `patch` sul percorso nuovo, grep dei vecchi a zero). Scartato l'import tardivo dentro il
+validatore: lascia la dipendenza al contrario, e le regole 5–11, anch'esse copie a mano dei metadati (`asset_mode`,
+`cash_mode`, `quantity_sign`, `cash_sign`, `event_compatible`), vorrebbero lo stesso trucco.
+
+**Disegno**:
+1. `type_metadata.py`: i gruppi di scambio spostati; `cost_basis_allowed(tx_type, quantity)` accanto a
+   `cost_basis_required()`, con la scelta del lato in comune (`_cost_basis_rule`): ammesso quando la regola del lato non è
+   `forbidden` e non è `required_qty_pos` con quantità ≤ 0 (lo stesso `cbAllowed` del frontend).
+2. Regola 12: `if cost_basis_mode is not None and not cost_basis_allowed(tx_type, quantity)`; il messaggio inglese
+   perde l'elenco scritto a mano; codice e parametri invariati.
+3. `schemas/transactions/__init__.py`: la docstring dice dove stanno ora i gruppi di scambio.
+4. Rossi (test-author, `schemas transactions`): la parità su ogni tipo × segno (verde oggi), e due rossi che provano la
+   lettura dei metadati (un BUY reso `optional` deve ammettere `cost_basis_mode`; un ADJUSTMENT reso `forbidden` deve
+   rifiutarlo).
+5. Prove: `schemas transactions`, `services transaction-cost-basis-rule`, `services transaction`; dopo le 01:15 `api
+   transactions-types` e `api sync` senza differenze.
+
+**Passi**: 1. ⏳ rossi; 2. cura; 3. prove; 4. doc e handoff.
+
+1. ✅ **Rossi** (2026-10-16 00:19). test-author: sezione 1.10 `TestCostBasisModeRule12` in
+   `backend/test_scripts/test_schemas/test_transaction_schemas.py` (azione `schemas transactions`, nessuna registrazione
+   nuova): TX-S-090 la parità su 12 tipi × quantità −1/0/1 (verde), TX-S-091 senza `cost_basis_mode` mai il codice
+   (verde), **TX-S-092** un BUY reso `optional` deve ammettere `cost_basis_mode` (rosso), **TX-S-093** un ADJUSTMENT reso
+   `forbidden` deve rifiutarlo (rosso), TX-S-094 il percorso di creazione: un BUY con `cost_basis_mode` riceve
+   esattamente `costBasisModeIncompatible` con `{type, qty}` (verde, guardia di codice e parametri).
+   > **Note implementazione**: `nice -n 10 … schemas transactions TestCostBasisModeRule12` → **2 failed, 3 passed**,
+   > per il motivo atteso («still the hand-written copy»: 092 rifiutato, 093 ammesso). Log
+   > `/tmp/libreFolio_w_wb31_red1.log`.
+2. ✅ **Cura** (2026-10-16 00:22). `/tmp/libreFolio_w_wb31_fix.py --apply` (dry run prima):
+   - `backend/app/schemas/transactions/type_metadata.py`: arrivano `SWAP_GROUPS`, `get_swap_group`, `_swap_group_codes`
+     tali e quali (prima di `_build_tx_type_metadata`), via l'import da `transactions.py`; nuovo `_cost_basis_rule()` (la
+     scelta del lato, ora in comune), `cost_basis_required()` lo usa, nuovo `cost_basis_allowed()`; docstring del modulo.
+   - `backend/app/schemas/transactions/transactions.py`: importa `cost_basis_allowed` in testa; la regola 12 diventa
+     `if cost_basis_mode is not None and not cost_basis_allowed(tx_type, quantity)`, il messaggio inglese senza l'elenco
+     a mano (codice e parametri invariati); tolto il blocco dei gruppi di scambio.
+   - `backend/app/services/transactions/batch_edits.py`: `get_swap_group` da `type_metadata`.
+   - `backend/app/schemas/transactions/__init__.py`: la docstring dice dove stanno i gruppi di scambio e le regole.
+   - `backend/test_scripts/test_services/test_transaction_cost_basis_rule.py`: il modulo patchato è `type_metadata`
+     (`SWAP_GROUPS`), percorso nuovo come vuole P2.
+   > **Note implementazione**: `black` (1 file riformattato), `ruff check` pulito; grep dei vecchi percorsi a zero
+   > (`transactions.transactions` con `get_swap_group`/`_swap_group_codes`/`SWAP_GROUPS`, `transaction_schemas.`). Import
+   > freschi in ogni ordine (`transactions`, `type_metadata`, `backend.app.schemas`, `batch_edits`, `backend.app.main`):
+   > nessun ciclo. `cost_basis_allowed` su 12 tipi × −1/0/1 ammette solo ADJUSTMENT +1 e TRANSFER +1, come prima; i
+   > gruppi di scambio invariati (BUY ↔ SELL, `swap_group` di BUY = `['SELL']`).
+   > Nota (test-author): a quantità 0 su un tipo appaiato il frontend legge il lato `self` (`cost_basis_mode`), il backend
+   > `cost_basis_pair[0]`; oggi tutti e due «forbidden». Divergerebbero solo con un primo lato `optional` e un modo
+   > diverso: nessuna azione.
+3. ✅ **Prove** (00:23–00:26, `nice -n 10`, una alla volta col carico controllato prima): `schemas transactions`
+   **80/80** (i 5 nuovi compresi); `services transaction-cost-basis-rule` **67/67** (con lo scambio BUY → ADJUSTMENT,
+   che fallisce se la patch di `SWAP_GROUPS` non viene letta); `services transaction` **66/66**. Dopo le 01:15: `api
+   transactions-types` e `api sync` (atteso senza differenze: OpenAPI e metadati invariati), con la build del lotto di
+   doc.
+4. ⏳ **Doc e handoff**. docs-writer (00:28–00:34, senza build per la finestra):
+   `mkdocs_src/docs/developer/backend/transactions/wac.md` +13 / −1, un paragrafo nuovo dopo quello di
+   `cost_basis_required()` (la regola 12 legge la stessa tabella con `cost_basis_allowed()`, il lato scelto da
+   `_cost_basis_rule()`, lo stesso `cbAllowed` del frontend; con la tabella di oggi ammette esattamente le righe che
+   vogliono un costo) e un rimando a `#persisted-cost-basis` nella frase della riga ~602. Nessuna traduzione. Notato e
+   non toccato: la descrizione di `cost_basis_pair` (`type_metadata.py:135`) dice «qty<0» per l'indice 0 (è ≤ 0) e usa
+   le etichette italiane «Da»/«A» in un testo dell'API (finisce nell'OpenAPI: semmai con W-B36). Backlog: W-B31 ✅,
+   **W-B36** nuova (le regole 5–11, copie a mano dei metadati).
+   > Restano per dopo le 01:15, in serie: `mkdocs build` stretto e `check-links` (anche per il lotto di doc), `db
+   > populate`, `api transactions` (copre `GET /transactions/types`), `api transactions-validate`, `api
+   > transactions-wac`, `api sync` (atteso senza differenze).
