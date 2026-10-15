@@ -67,7 +67,7 @@ Each row has a **Type** (Dividend, Interest, Split, Price Adjustment or Maturity
 
     `value` is accepted in place of `amount`, so an events file exported by LibreFolio (the backup offered when you [change an asset's currency](../create-edit.md#editing-an-asset)) imports back, its other columns ignored. Mind two limits:
 
-    - **One event per date**: rows sharing a date are all left out as duplicates, so import such events from separate files.
+    - **One event per date and type**: rows sharing both a date and a type are all left out as duplicates; a dividend and a split on the same day import together.
     - **Every row becomes your own event**, a provider's included: leave out the rows whose `source` is `PROVIDER` if the provider will send them again, or they will show twice.
 
 - Dates are `YYYY-MM-DD`, and decimals can use `.` or `,`.

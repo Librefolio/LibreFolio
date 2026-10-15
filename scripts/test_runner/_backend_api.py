@@ -765,7 +765,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "assets-crud", api_assets_crud, name="Assets CRUD API", desc="Create, list, filter, delete assets, and held-now flags in the list")
     add_test(api, "asset-merge", api_asset_merge, name="Asset Merge API", desc="POST /assets/merge: dry-run, execution, identifier union, refusals")
     add_test(api, "utilities", api_utilities, name="Utilities API", desc="Sectors, countries")
-    add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps")
+    add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready, route order")
     add_test(api, "backup", api_backup, name="Backup API", desc="Placeholder endpoints")
     add_test(api, "transactions", api_transactions, name="Transactions API", desc="Bulk create, query, patch, delete")
     add_test(api, "transfer-promotion", api_transfer_promotion, name="Transfer Promotion", desc="DEPOSIT/WITHDRAWAL → TRANSFER")

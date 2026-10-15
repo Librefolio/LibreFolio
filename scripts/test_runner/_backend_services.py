@@ -503,6 +503,17 @@ def services_fx_core(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "FX core helpers tests", verbose=verbose)
 
 
+def services_fx_catalog(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the cached supported-currency catalog of the FX providers (X-R8)."""
+    print_section("Services: FX Provider Currency Catalog")
+    print_info("Testing: backend/app/services/fx/catalog.py (get_supported_currencies_cached, behind GET /fx/providers)")
+    print_info("Tests: 24 h cache and copies, last known list on failure/timeout, 5-minute retry delay, one fetch per event loop, cache panel")
+    print_info("Fake providers only — no network, no database, no server")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_catalog.py", test_names)
+    return run_command(cmd, "FX provider currency catalog tests", verbose=verbose)
+
+
 def services_static_uploads(verbose: bool = False, test_names: list = None) -> bool:
     """Test static uploads service."""
     print_section("Services: Static Uploads")
@@ -770,6 +781,14 @@ def services_config_env_example(verbose: bool = False, test_names: list = None) 
     print_info("Testing: .env.example against backend/app/, Settings and the compose files")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_env_example.py", test_names)
     return run_command(cmd, ".env.example guard tests", verbose=verbose)
+
+
+def services_platform_readiness(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the readiness checks: database and migration codes, the head read once, no detail in the response."""
+    print_section("Services: Instance Readiness")
+    print_info("Testing: backend/app/services/platform/readiness.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_platform_readiness.py", test_names)
+    return run_command(cmd, "Instance readiness tests", verbose=verbose)
 
 
 def services_donation_popup(verbose: bool = False, test_names: list = None) -> bool:
@@ -1153,6 +1172,16 @@ Note: No backend server required.
         desc="normalize_rate, upsert/delete bulk, changes",
         exclusive_because="an autouse fixture truncates fx_rates before every test, so any concurrent unit reading rates loses them mid-test",
     )
+    add_test(
+        cat,
+        "fx-catalog",
+        services_fx_catalog,
+        name="FX Provider Currency Catalog",
+        desc="Supported currencies cached 24 h and handed out as copies, last known list on failure or timeout, 5-minute retry delay, one fetch per provider and event loop, listed in the cache panel",
+        # PURE: fake providers only, no session and no server. The one shared surface is this process's
+        # fx_provider_currencies cache and last known lists, which an autouse fixture empties before and after each test.
+        isolation="pure",
+    )
     add_test(cat, "static-uploads", services_static_uploads, name="Static Uploads", desc="File save/list/get/delete, security")
     add_test(cat, "brim-parse-error", services_brim_parse_error, name="BRIM Parse Error", desc="Exception class tests")
     add_test(cat, "brim-parse-pool", services_brim_parse_pool, name="BRIM Parse Pool", desc="Process-pool off-loading, pickle round-trip, thread fallback")
@@ -1236,6 +1265,7 @@ Note: No backend server required.
     add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
+    add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
     add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
     add_test(cat, "file-preview", services_file_preview, name="File Preview", desc="CSV/Excel/text preview detection helpers")

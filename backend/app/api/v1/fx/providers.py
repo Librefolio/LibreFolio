@@ -27,6 +27,7 @@ from backend.app.schemas.fx import (
     FXProviderInfo,
     FXRouteStep,
 )
+from backend.app.services.fx.catalog import get_supported_currencies_cached
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx_providers.manual.plugin import MANUAL_PRIORITY
 
@@ -93,12 +94,8 @@ async def list_providers(
             # Get base currencies (property always available in base class)
             base_currencies = instance.base_currencies
 
-            # Get target currencies via async call
-            try:
-                target_currencies = await instance.get_supported_currencies()
-            except Exception as e:
-                logger.warning(f"Failed to fetch target currencies for {code}: {e}")
-                target_currencies = []
+            # Target currencies: cached 24 h; the last known list when the provider fails (services/fx/catalog.py)
+            target_currencies = await get_supported_currencies_cached(code, instance)
 
             result.append(
                 FXProviderInfo(
