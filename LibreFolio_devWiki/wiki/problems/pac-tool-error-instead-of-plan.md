@@ -61,7 +61,7 @@ fail-closed by design — but in each case the engine had produced something its
 | Role | Path |
 |------|------|
 | Exposure issue | `backend/app/services/pac_allocator/normalize.py` |
-| Result models and their validators | `backend/app/schemas/pac_allocator.py` |
+| Result models and their validators | `backend/app/schemas/pac_allocator/results.py` |
 | Published gap, objective rows | `backend/app/services/pac_allocator/planner_report.py` |
 | Posting scope | `backend/app/services/pac_allocator/constraints.py` |
 | Engine-failure log | `backend/app/services/tool_plugins/pac_allocator/plugin.py` |

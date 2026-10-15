@@ -208,7 +208,7 @@
         <div class="flex items-center gap-2">
             <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100">{title}</h2>
             {#if helpContent}
-                <button aria-label="Help" class="p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded transition-colors" onclick={() => (showHelp = !showHelp)} title={$t('csvImport.helpTitle')}>
+                <button aria-label={$t('csvImport.helpTitle')} data-testid="data-import-modal-help" class="p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 rounded transition-colors" onclick={() => (showHelp = !showHelp)} title={$t('csvImport.helpTitle')}>
                     <HelpCircle size={18} />
                 </button>
             {/if}
@@ -217,7 +217,7 @@
             {#if headerActions}
                 {@render headerActions()}
             {/if}
-            <button aria-label="Close" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded" onclick={requestClose}>✕ </button>
+            <button aria-label={$t('common.close')} data-testid="data-import-modal-close" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded" onclick={requestClose}>✕ </button>
         </div>
     </div>
 

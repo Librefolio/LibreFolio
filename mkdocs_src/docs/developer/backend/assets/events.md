@@ -41,7 +41,7 @@ erDiagram
 
 ## 🔄 Dedup Strategy
 
-`_upsert_asset_events()` (`assets/price_store.py`) writes both kinds of events **in place**,
+`_upsert_asset_events()` (`assets/event_store.py`) writes both kinds of events **in place**,
 one source per call: a sync passes the assignment's id, the manual upsert passes `None`. It groups
 the incoming events by `(date, type)` and matches each key against the stored rows of the **same**
 source only (same `asset_id` and `provider_assignment_id`, `IS NULL` for manual events):
@@ -90,7 +90,7 @@ a deletion lasts only until the provider returns the event again.
 
 `POST /api/v1/assets/events` (`bulk_upsert_events()`) takes a list of `FAEventUpsert` items,
 `{asset_id, events}`, whose points are `FAEventUpsertPoint`: an `FAAssetEventPoint` with an
-optional `id` (`schemas/prices.py`). For each item:
+optional `id` (`schemas/assets/events.py`). For each item:
 
 - An event with an explicit currency other than the asset's → HTTP 400 `EVENT_CURRENCY_MISMATCH`.
 - An event **with `id`** edits that manual row in place, every field included (`date`, `type`,
@@ -114,8 +114,8 @@ The whole item is checked before anything is written:
 Allowed: two edits swapping their keys, edits that keep a shared key (legacy duplicates stay
 editable), and an event without `id` on a key a mover vacates. These checks only cover keys an
 edit ends on: an event without `id` on the key of a manual row the item does not edit updates
-that row, and two events without `id` on one key are both stored. `assets.py` maps the three codes
-to HTTP 400; any other `AssetSourceError` is a 500.
+that row, and two events without `id` on one key are both stored. `api/v1/assets/events.py` maps
+the three codes to HTTP 400; any other `AssetSourceError` is a 500.
 
 A type change is allowed even when a transaction is linked to the event: the link stays, and the
 transaction is then read according to the new type. `compute_wac_iterative()`

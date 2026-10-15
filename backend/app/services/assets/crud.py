@@ -22,7 +22,7 @@ from backend.app.db.models import (
     Transaction,
     UserRole,
 )
-from backend.app.schemas.assets import (
+from backend.app.schemas.assets.assets import (
     FAAinfoFiltersRequest,
     FAAssetCreateItem,
     FAAssetCreateResult,
@@ -40,7 +40,7 @@ from backend.app.schemas.assets import (
 from backend.app.schemas.common import (
     OldNew,
 )
-from backend.app.services.assets.core import AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.utils.asset.identifier import merge_other_identifiers
 

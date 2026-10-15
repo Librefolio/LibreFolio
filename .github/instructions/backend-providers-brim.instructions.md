@@ -1,5 +1,5 @@
 ---
-applyTo: "backend/app/services/brim_providers/**,backend/app/services/brim_provider.py"
+applyTo: "backend/app/services/brim_providers/**,backend/app/services/brim/**"
 ---
 
 # BRIM Providers (Broker Report Import Manager)
@@ -28,7 +28,7 @@ Each plugin parses a specific broker's export file format and extracts transacti
 
 ## Base Class
 
-The abstract base class `BRIMProvider` is defined in `backend/app/services/brim_provider.py`. Read that file for the full contract (abstract methods, properties, return types). Key methods: `parse_file()` → returns (transactions, warnings, extracted_assets), `detect()` for auto-detection.
+The abstract base class `BRIMProvider` is defined in `backend/app/services/brim/brim_provider.py`. Read that file for the full contract (abstract methods, properties, return types). Key methods: `parse_file()` → returns (transactions, warnings, extracted_assets), `detect()` for auto-detection.
 
 ## Fake Asset ID Flow
 
@@ -36,7 +36,7 @@ BRIM plugins use **fake asset IDs** — high positive placeholders counting down
 
 ## Adding a New Plugin
 
-The abstract base class is in `backend/app/services/brim_provider.py`. Read that file for the full contract.
+The abstract base class is in `backend/app/services/brim/brim_provider.py`. Read that file for the full contract.
 
 1. Create the folder `backend/app/services/brim_providers/broker_mybroker/` with `__init__.py` (the plugin's
    docstring only, no re-export) and `plugin.py` (the code); helpers private to it go beside as `_*.py`, helpers shared

@@ -40,9 +40,9 @@ from backend.app.schemas.brim import (
     BRIMTruthCash,
     BRIMVerification,
 )
-from backend.app.services import brim_provider
+from backend.app.services.brim import brim_provider
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError
 from backend.app.services.brim.registry import BRIMProviderRegistry
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError
 
 logger = structlog.get_logger(__name__)
 

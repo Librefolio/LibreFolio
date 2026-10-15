@@ -63,7 +63,11 @@ The contract:
   or blank one (**IMG-010b**), which used to survive (a ``JWT_SECRET=`` left in ``.env``,
   then each worker made its own secret and users were logged out at random); a set one is
   kept and nothing else changes (**IMG-010c**); every start gets a secret of its own
-  (**IMG-010d**). The process environment is only read, to show it is left alone.
+  (**IMG-010d**). With ``JWT_SECRET_FILE`` set, every worker reads the secret from that
+  file: nothing is generated and the env is left as it is (**IMG-010e**), a blank
+  ``JWT_SECRET`` beside it included, which the server ignores as unset (**IMG-010f**); an
+  empty or blank ``JWT_SECRET_FILE`` names no file, so a fresh secret again (**IMG-010g**).
+  The process environment is only read, to show it is left alone.
 * **IMG-011**: ``user create`` gives the account the role it is asked for. With no ``--role``
   it still creates an active administrator, as it always did (**IMG-011**); ``--role admin``
   does the same (**IMG-011b**); ``--role user`` creates an active account that is not an
@@ -1032,6 +1036,38 @@ class TestSharedJwtSecret:
 
         assert first["JWT_SECRET"] != second["JWT_SECRET"], "two starts got the same secret"
         print_success("two starts, two secrets")
+
+    def test_secret_file_is_left_to_the_workers(self, devpy):
+        """IMG-010e: JWT_SECRET_FILE set and no JWT_SECRET: every worker reads the file, so nothing is generated and the env is left as is."""
+        print_section("IMG-010e: dev.py server, JWT_SECRET_FILE set")
+        given = {"JWT_SECRET_FILE": "/run/secrets/jwt", "PORT": "6040"}
+
+        env = ensure_secret(devpy, dict(given))
+
+        assert env == given, f"with JWT_SECRET_FILE set the helper must not add a JWT_SECRET nor change anything: {env}"
+        print_success("nothing generated, the file left to the workers")
+
+    @pytest.mark.parametrize("blank", ["", "   "], ids=["empty", "spaces"])
+    def test_blank_secret_beside_a_secret_file_is_left_alone(self, devpy, blank):
+        """IMG-010f: a blank JWT_SECRET beside JWT_SECRET_FILE: the server ignores it as unset and reads the file, so the env is left exactly as it is."""
+        print_section(f"IMG-010f: dev.py server, JWT_SECRET={blank!r} and JWT_SECRET_FILE set")
+        given = {"JWT_SECRET": blank, "JWT_SECRET_FILE": "/run/secrets/jwt", "PORT": "6040"}
+
+        env = ensure_secret(devpy, dict(given))
+
+        assert env == given, f"with JWT_SECRET_FILE set the helper must generate nothing and remove nothing, JWT_SECRET={blank!r} included: {env}"
+        print_success(f"JWT_SECRET={blank!r} and JWT_SECRET_FILE left as they are")
+
+    @pytest.mark.parametrize("blank", ["", "  "], ids=["empty", "spaces"])
+    def test_blank_secret_file_variable_counts_as_missing(self, devpy, blank):
+        """IMG-010g: an empty or blank JWT_SECRET_FILE names no file: a fresh secret, as without it, and the variable is left as it is."""
+        print_section(f"IMG-010g: dev.py server, JWT_SECRET_FILE={blank!r}")
+
+        env = ensure_secret(devpy, {"JWT_SECRET_FILE": blank})
+
+        assert set(env) == {"JWT_SECRET", "JWT_SECRET_FILE"} and env["JWT_SECRET_FILE"] == blank, f"the helper must add JWT_SECRET and change nothing else: {env}"
+        assert_usable_secret(env["JWT_SECRET"], f", with JWT_SECRET_FILE={blank!r}: a blank file variable must count as missing")
+        print_success(f"a fresh secret of {len(env['JWT_SECRET'])} characters")
 
 
 # ---------------------------------------------------------------------------

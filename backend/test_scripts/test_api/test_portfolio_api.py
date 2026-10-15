@@ -26,7 +26,7 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
 from backend.app.services.accounts import user_service
-from backend.app.services.portfolio_allocation_source import (
+from backend.app.services.pac_allocator.source.portfolio_allocation_source import (
     PortfolioPlannerSourceAccessError,
     PortfolioPlannerSourceAssetNotFoundError,
     PortfolioPlannerSourceBrokerNotFoundError,

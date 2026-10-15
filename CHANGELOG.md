@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `GET /api/v1/transactions` accepts `asset_event_id` and lists the transactions linked to that asset event, within the brokers you can see.
 - `./dev.py user create … --role user` creates a regular account; without `--role`, the command still creates an administrator.
+- Secrets can be read from files: `JWT_SECRET_FILE`, `LIBREFOLIO_INSTANCE_KEY_FILE` and `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`, as Docker and Kubernetes secrets mount them.
+- **Instance key**: one secret per installation, generated on first use in the `secrets/` folder of the data directory, or given through the environment. LibreFolio derives its encryption keys from it: back up `secrets/` together with the data.
+- At startup the log warns about settings that leave the instance weaker: a short session key, a secret set twice, loose permissions on the instance key, `SESSION_COOKIE_SECURE=never`, a verbose log level.
+- `.env.example` lists every option LibreFolio reads, grouped by function.
+- A currency exchange explains its two dates, in the form and in the guide: they usually match, and differ when the broker credits the new currency on another day.
+
+### 🔄 Changed
+
+- An empty or blank secret counts as not set, as if the variable were absent.
 
 ### 🧹 Repository cleanup
 
@@ -28,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Deleting a broker also removes its leftover import folders and lock file**, which used to pile up in the broker reports storage.
 - Sign-in errors (the server does not answer, a server error, too many attempts) now appear in your language, no longer as technical English text.
 - The show/hide button of password fields can be reached with the keyboard and has a translated name.
+- The import wizard counts assets in the singular too ("1 unique asset, 1 needs resolution").
+- The data editor's counters (modified, deleted, new), its stale-rows switch and the import window's Help and Close buttons follow your language instead of English.
+- The transaction form lists a cash or quantity shortfall under its own heading, as the bulk editor does, instead of among the field problems.
 
 ---
 

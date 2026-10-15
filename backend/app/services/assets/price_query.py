@@ -29,19 +29,18 @@ from backend.app.schemas import (
     SignalSourceCapability,
     SignalVolumeKind,
 )
+from backend.app.schemas.assets.events import FAAssetEventPointOut
 from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     FxBackwardFillInfo,
 )
-from backend.app.schemas.prices import AssetBackwardFillInfo, FAAssetEventPointOut, FAPriceQueryResult
+from backend.app.schemas.prices import AssetBackwardFillInfo, FAPriceQueryResult
 from backend.app.schemas.provider import (
     FAVolumeKind,
 )
 from backend.app.services.assets import core
-from backend.app.services.assets.core import (
-    AssetSourceProvider,
-)
+from backend.app.services.assets.base import AssetSourceProvider
 from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.fx.fx import convert_bulk

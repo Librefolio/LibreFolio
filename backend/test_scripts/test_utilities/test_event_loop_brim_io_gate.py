@@ -1,7 +1,7 @@
 """
 Gate: no synchronous BRIM file-store call runs on the event loop (L5).
 
-``backend/app/services/brim_provider.py`` is the BRIM file store. Its module-level functions read and write
+``backend/app/services/brim/brim_provider.py`` is the BRIM file store. Its module-level functions read and write
 ``broker_reports/`` — data files, metadata sidecars, the per-broker ``flock`` under ``.locks/`` — synchronously;
 the coroutines among them (asset search, duplicate detection) are the exception, and are awaited. An
 ``async def`` handler that calls one of the synchronous ones directly runs that I/O on uvicorn's single event
@@ -14,8 +14,8 @@ What it reads, with ``ast`` only — nothing is imported:
 
 - the module's synchronous functions: its top-level ``def`` (not ``async def``), and the module-level aliases of
   one (``broker_metadata_lock = _broker_metadata_lock``);
-- in every ``backend/app/api/v1/**/*.py``, the names bound to the module (``from backend.app.services import
-  brim_provider [as x]``, ``import backend.app.services.brim_provider [as x]``, the relative forms) and the
+- in every ``backend/app/api/v1/**/*.py``, the names bound to the module (``from backend.app.services.brim import
+  brim_provider [as x]``, ``import backend.app.services.brim.brim_provider [as x]``, the relative forms) and the
   synchronous functions imported from it by name;
 - inside every ``async def``, each call to one of them: ``<alias>.<fn>(...)``, or ``<fn>(...)`` for a function
   imported by name.
@@ -44,8 +44,8 @@ from backend.test_scripts.test_utils import print_section, print_success
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 # The guarded module, by path: if it moves, the gate fails loudly instead of scanning for nothing.
-BRIM_PROVIDER = REPO_ROOT / "backend" / "app" / "services" / "brim_provider.py"
-BRIM_PROVIDER_MODULE = "backend.app.services.brim_provider"
+BRIM_PROVIDER = REPO_ROOT / "backend" / "app" / "services" / "brim" / "brim_provider.py"
+BRIM_PROVIDER_MODULE = "backend.app.services.brim.brim_provider"
 API_DIR = REPO_ROOT / "backend" / "app" / "api" / "v1"
 # The package of the API modules, for the relative imports of the control cases.
 API_PACKAGE = "backend.app.api.v1"
@@ -75,7 +75,7 @@ def package_of(path: Path) -> str:
 class Bindings:
     """How one source file reaches the module."""
 
-    # Dotted names that denote the module itself: "brim_provider", "store", "backend.app.services.brim_provider".
+    # Dotted names that denote the module itself: "brim_provider", "store", "backend.app.services.brim.brim_provider".
     modules: frozenset[str]
     # Local name → function name, for the module's synchronous functions imported by name.
     functions: dict[str, str] = field(default_factory=dict)
@@ -209,7 +209,7 @@ class BRIMProvider:
 """
 
 DIRECT_CALL = """
-from backend.app.services import brim_provider
+from backend.app.services.brim import brim_provider
 
 
 async def preview(file_id):
@@ -220,7 +220,7 @@ async def preview(file_id):
 ALLOWED_SHAPES = """
 import asyncio
 
-from backend.app.services import brim_provider, brim_report_sets
+from backend.app.services.brim import brim_provider, brim_report_sets
 
 
 async def preview(file_id):
@@ -242,15 +242,15 @@ def sync_route(file_id):
 
 # Every way to reach the module or a sync function of it; each source makes exactly one call on the loop.
 IMPORT_FORMS = {
-    "from-import as": ("from backend.app.services import brim_provider as store\n\n\nasync def h(f):\n    return store.get_file_path(f)\n", "h", "get_file_path"),
-    "import as": ("import backend.app.services.brim_provider as store\n\n\nasync def h(f):\n    return store.get_file_path(f)\n", "h", "get_file_path"),
-    "plain import": ("import backend.app.services.brim_provider\n\n\nasync def h(f):\n    return backend.app.services.brim_provider.get_file_path(f)\n", "h", "get_file_path"),
-    "relative import": ("from ...services import brim_provider\n\n\nasync def h(f):\n    return brim_provider.get_file_path(f)\n", "h", "get_file_path"),
-    "function by name": ("from backend.app.services.brim_provider import get_file_path as locate\n\n\nasync def h(f):\n    return locate(f)\n", "h", "get_file_path"),
-    "lazy import": ("async def h(f):\n    from backend.app.services import brim_provider\n\n    return brim_provider.get_file_path(f)\n", "h", "get_file_path"),
-    "alias of a function": ("from backend.app.services import brim_provider\n\n\nasync def h(b):\n    with brim_provider.broker_lock(b):\n        return b\n", "h", "broker_lock"),
-    "nested async def": ("from backend.app.services import brim_provider\n\n\ndef outer():\n    async def inner(f):\n        return brim_provider.get_file_path(f)\n\n    return inner\n", "inner", "get_file_path"),
-    "async method": ("from backend.app.services import brim_provider\n\n\nclass Routes:\n    async def h(self, f):\n        return brim_provider.get_file_path(f)\n", "h", "get_file_path"),
+    "from-import as": ("from backend.app.services.brim import brim_provider as store\n\n\nasync def h(f):\n    return store.get_file_path(f)\n", "h", "get_file_path"),
+    "import as": ("import backend.app.services.brim.brim_provider as store\n\n\nasync def h(f):\n    return store.get_file_path(f)\n", "h", "get_file_path"),
+    "plain import": ("import backend.app.services.brim.brim_provider\n\n\nasync def h(f):\n    return backend.app.services.brim.brim_provider.get_file_path(f)\n", "h", "get_file_path"),
+    "relative import": ("from ...services.brim import brim_provider\n\n\nasync def h(f):\n    return brim_provider.get_file_path(f)\n", "h", "get_file_path"),
+    "function by name": ("from backend.app.services.brim.brim_provider import get_file_path as locate\n\n\nasync def h(f):\n    return locate(f)\n", "h", "get_file_path"),
+    "lazy import": ("async def h(f):\n    from backend.app.services.brim import brim_provider\n\n    return brim_provider.get_file_path(f)\n", "h", "get_file_path"),
+    "alias of a function": ("from backend.app.services.brim import brim_provider\n\n\nasync def h(b):\n    with brim_provider.broker_lock(b):\n        return b\n", "h", "broker_lock"),
+    "nested async def": ("from backend.app.services.brim import brim_provider\n\n\ndef outer():\n    async def inner(f):\n        return brim_provider.get_file_path(f)\n\n    return inner\n", "inner", "get_file_path"),
+    "async method": ("from backend.app.services.brim import brim_provider\n\n\nclass Routes:\n    async def h(self, f):\n        return brim_provider.get_file_path(f)\n", "h", "get_file_path"),
 }
 
 

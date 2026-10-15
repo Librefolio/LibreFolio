@@ -105,7 +105,7 @@ const eventsBlob  = await api.get(`/backup/asset/${assetId}/events?format=csv`);
 |------|------|
 | Router definition | `backend/app/api/v1/backup.py` |
 | Mount | `backend/app/api/v1/router.py` |
-| Asset events serializer | `backend/app/services/assets/price_store.py::query_events_bulk` |
+| Asset events serializer | `backend/app/services/assets/event_store.py::query_events_bulk` |
 | FX rates serializer | `backend/app/services/fx/fx.py` |
 | Tests | `backend/test_scripts/test_api/test_backup_export_extras.py`, `test_asset_prices_export.py` |
 | Frontend consumer | `frontend/src/lib/components/assets/AssetCurrencyChangeModal.svelte` |
