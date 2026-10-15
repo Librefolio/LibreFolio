@@ -6,16 +6,21 @@ endpoint answers only when it is in ``ALLOWED_WHEN_BLOCKED``. FastAPI does not g
 ``Route``, a ``WebSocketRoute`` or a ``Mount``, so none of them belongs under ``/api/v1``; a test checks it. The only
 exceptions are FastAPI's own documentation routes, ``/api/v1/openapi.json``, ``/api/v1/docs`` and ``/api/v1/redoc``
 (``main.py``): they carry the API's schema and no data, and answer as they do for anyone; the test pins them. The list is
-short on purpose: signing in and out, the block page, the deletion of one's own account, the probes, and the full backup
-of an administrator (decision 12: on a blocked instance an administrator can still take the data away). The scheduled
-wake-up joins it when its route exists; anything else goes through the developer first. A test pins the list.
+short on purpose: signing in and out, a password-reset or invitation link already sent (read it, reset the password
+with it: someone who lost the password must still reach the block page, the account deletion or the backup), the block
+page, the deletion of one's own account and its preview, the probes, and the full backup of an administrator
+(decision 12: on a blocked instance an administrator can still take the data away). Registration stays out. The
+scheduled wake-up joins it when its route exists; anything else goes through the developer first. A test pins the
+list.
 
 FastAPI hands a dependency the endpoint function of the matched route (``scope["endpoint"]``), not its full path, so
 the list holds endpoint functions. The refusal is ``423 Locked`` with the code ``instance_blocked``, and only a
 signed-in user gets it: anyone else gets the 401 of ``get_current_user``, so a protected route answers a caller without
 a session the same way whether or not the instance is blocked. A public route outside the list (registration, the
-reference lists of ``utilities``, the global settings, the AI Export catalogue) answers that 401 only while the instance
-is blocked: from those, a caller without a session can tell that it is blocked, and nothing more. The web app tells 423
+address probe ``GET /auth/address-probe``, the reference lists of ``utilities``, the global settings, the AI Export
+catalogue) answers that 401 only while the instance is blocked: from those, a caller without a session can tell that it
+is blocked, and nothing more. The address probe's 401 carries no CORS header, so an administrator's check from another
+address reads it as not verifiable: intended (A6a). The web app tells 423
 from a permission refusal (403) and shows the block page.
 """
 
@@ -38,8 +43,12 @@ ALLOWED_WHEN_BLOCKED = frozenset(
         auth.login,
         auth.logout,
         auth.get_me,
-        # The deletion of one's own account
+        # A link already sent: reading it, and setting a new password with a reset link (no account is created)
+        auth.inspect_link_token,
+        auth.reset_password_with_link,
+        # The deletion of one's own account, and what it would delete (A6a)
         auth.delete_own_account,
+        auth.preview_own_account_deletion,
         # The full backup, for an administrator (decision 12): start, poll, download, delete
         backup_instance.start_instance_backup,
         backup_instance.get_instance_backup_job,

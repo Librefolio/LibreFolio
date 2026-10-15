@@ -77,47 +77,32 @@ from scripts.cli_tree_parser import TreeParser, format_help
 # =============================================================================
 
 def check_port_in_use(port: int) -> list:
-    """Check if port is in use and return list of (PID, process_name) tuples."""
+    """The processes listening on ``port``, as (PID, process_name) tuples; empty when nothing listens.
 
-    processes = []
+    Only a listener counts, as in the test runner's ``port_holders`` (``scripts/test_runner/_server.py``): a client
+    connected to the port, or the accepted connection of a server that closed its listener, keeps nobody from binding
+    it (H-12). ``lsof`` answers that wherever it exists. On Linux without ``lsof``, ``fuser`` is the fallback, and it
+    also names a process that only holds an accepted connection on the port.
+    """
+    pids = []
     try:
-        if platform.system() == "Darwin":  # macOS
-            # Get PIDs first
-            result = subprocess.run(
-                ["lsof", "-i", f":{port}", "-t"],
-                capture_output=True, text=True
-                )
-            if result.stdout.strip():
-                pids = [int(p) for p in result.stdout.strip().split('\n') if p]
-                # Get process name for each PID
-                for pid in pids:
-                    try:
-                        ps_result = subprocess.run(
-                            ["ps", "-p", str(pid), "-o", "comm="],
-                            capture_output=True, text=True
-                            )
-                        proc_name = ps_result.stdout.strip() or "unknown"
-                        processes.append((pid, proc_name))
-                    except Exception:
-                        processes.append((pid, "unknown"))
+        if shutil.which("lsof"):
+            result = subprocess.run(["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"], capture_output=True, text=True)
+            pids = [int(p) for p in result.stdout.split() if p.isdigit()]
         elif platform.system() == "Linux":
             # fuser prints the PIDs on stdout and the "port/tcp:" label on stderr. `capture_output`
             # cannot be combined with `stderr=`: Python raises ValueError before running anything.
             result = subprocess.run(["fuser", f"{port}/tcp"], stdout=subprocess.PIPE, text=True, stderr=subprocess.DEVNULL)
-            if result.stdout.strip():
-                pids = [int(p) for p in result.stdout.strip().split() if p]
-                for pid in pids:
-                    try:
-                        ps_result = subprocess.run(
-                            ["ps", "-p", str(pid), "-o", "comm="],
-                            capture_output=True, text=True
-                            )
-                        proc_name = ps_result.stdout.strip() or "unknown"
-                        processes.append((pid, proc_name))
-                    except Exception:
-                        processes.append((pid, "unknown"))
+            pids = [int(p) for p in result.stdout.split() if p.isdigit()]
     except Exception:
         pass
+    processes = []
+    for pid in dict.fromkeys(pids):
+        try:
+            ps_result = subprocess.run(["ps", "-p", str(pid), "-o", "comm="], capture_output=True, text=True)
+            processes.append((pid, ps_result.stdout.strip() or "unknown"))
+        except Exception:
+            processes.append((pid, "unknown"))
     return processes
 
 
@@ -131,7 +116,7 @@ def _print_port_help(port: int, processes: list):
         print(f"  • PID {pid} ({proc_name})")
     print()
     print(f"{Colors.BLUE}To view details:{Colors.NC}")
-    print(f"  lsof -i :{port}")
+    print(f"  lsof -nP -iTCP:{port} -sTCP:LISTEN")
     print()
     print(f"{Colors.BLUE}To kill these processes:{Colors.NC}")
     print(f"  kill -9 {' '.join(pids)}")
@@ -298,6 +283,8 @@ def cmd_server(args):
     print()
     print(f"{Colors.BLUE}{Colors.BOLD}Available endpoints:{Colors.NC}")
     print(f" ├── 🏠 {Colors.YELLOW}Frontend:  http://localhost:{port}/{Colors.NC}")
+    if _frontend_build_has_designer_lab():
+        print(f" ├── 🎨 {Colors.YELLOW}Designer Lab: http://localhost:{port}/designer-lab{Colors.NC}")
     print(f" ├── 💻 {Colors.YELLOW}API Redoc: http://localhost:{port}/api/v1/redoc{Colors.NC}")
     print(f" ├── 🚀 {Colors.YELLOW}API Docs:  http://localhost:{port}/api/v1/docs{Colors.NC}")
     print(f" └── 📚 {Colors.YELLOW}User Doc:  http://localhost:{port}/mkdocs/{Colors.NC}")
@@ -614,6 +601,9 @@ def cmd_fe_dev(args):
     """Start frontend development server."""
     print(Colors.success("Starting frontend development server..."))
     print(Colors.warning("URL: http://localhost:5173"))
+    # `vite dev` carries the Designer Lab unless LF_DESIGNER_LAB=0 (designerLabEnabled in vite-plugin.mjs).
+    if os.environ.get("LF_DESIGNER_LAB") != "0":
+        print(Colors.warning("🎨 Designer Lab: http://localhost:5173/designer-lab"))
     print()
     return run_command_live(["npm", "run", "dev"], cwd=PROJECT_ROOT / "frontend")
 
@@ -2239,6 +2229,30 @@ def _read_frontend_build_version() -> Optional[str]:
         return FRONTEND_BUILD_VERSION_MARKER.read_text().strip() or None
     except OSError:
         return None
+
+
+#: A string every Designer Lab runtime module contains: LAB_MARKER of frontend/scripts/designer-lab/vite-plugin.mjs.
+DESIGNER_LAB_MARKER = b"lf-designer-lab"
+
+
+def _frontend_build_has_designer_lab(build_dir: Path = PROJECT_ROOT / "frontend" / "build") -> bool:
+    """Whether the frontend build carries the Designer Lab (/designer-lab): one of its scripts holds the Lab's marker.
+
+    The debug-mode marker cannot tell, since a debug build made with LF_DESIGNER_LAB=0 has no Lab. The marker can: when
+    the Lab is off, the Vite plugin fails the build if any emitted file contains it. Reads the scripts of
+    _app/immutable/ up to the first hit: a few milliseconds on a debug build, a few tens when it reads them all.
+    """
+    try:
+        scripts = sorted((build_dir / "_app" / "immutable").rglob("*.js"))
+    except OSError:
+        return False
+    for script in scripts:
+        try:
+            if DESIGNER_LAB_MARKER in script.read_bytes():
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def auto_build_frontend(debug=False):
