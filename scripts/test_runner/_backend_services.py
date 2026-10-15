@@ -526,6 +526,16 @@ def services_email_flows(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "E-mail flow tests", verbose=verbose)
 
 
+def services_email_verification(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the verification of an email address at sign-up (developer decision 44): the hold, the emailed link, the click and «resend»."""
+    print_section("Services: E-mail Verification")
+    print_info("Testing: backend/app/services/email/verification.py")
+    print_info("Tests: the option and whether a link can go, hold_for_verification, awaiting_verification, registration_email_work, confirm_email, resend_verification (limits per address and per account, the password as the login checks it), no secret in the logs")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_verification.py", test_names)
+    return run_command(cmd, "E-mail verification tests", verbose=verbose)
+
+
 def services_email_links(verbose: bool = False, test_names: list = None) -> bool:
     """Test the links an email carries: built from LIBREFOLIO_PUBLIC_URL alone (developer decision 45)."""
     print_section("Services: E-mail Links")
@@ -783,11 +793,11 @@ def services_brim_create_transaction(verbose: bool = False, test_names: list = N
 
 
 def services_financial_math(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the financial_math layer: average cost, native cash, and the boundaries of the whole layer."""
-    print_section("Services: Financial Math (average cost, native cash, layer boundaries)")
-    print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py; imports and packages of every module)")
-    print_info("Tests: compute_average_costs, cost_movement_from_transaction, determine_target_currency, compute_native_cash, cash_movement_from_transaction, effective_share, exchange_results, layer boundaries")
-    print_info("Pure — convert_bulk is stubbed: no server, no DB")
+    """Test the financial_math layer: average cost, native cash, returns, periods, ledger control totals, and the boundaries of the whole layer."""
+    print_section("Services: Financial Math (average cost, native cash, returns, periods, ledger totals, layer boundaries)")
+    print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py, returns.py, portfolio/period.py, ledger_totals.py; imports and packages of every module)")
+    print_info("Tests: average costs and cost movements, native cash and cash movements, effective share, exchange results, rebasing and ratios, the verified MWRR root, periods and unit costs, control totals, layer boundaries")
+    print_info("Pure — convert_bulk is stubbed: no server, no shared DB (the ledger totals read private SQLite files under tmp_path)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial_math/", test_names)
     return run_command(cmd, "Financial math tests", verbose=verbose)
@@ -895,7 +905,7 @@ def services_scheduler_due(verbose: bool = False, test_names: list = None) -> bo
     """Test scheduler due-check logic (due_current_price, due_history_sync)."""
     print_section("Services: Scheduler Due-Check Logic")
     print_info("Testing: backend/app/services/platform/scheduler/scheduler.py")
-    print_info("Tests: SD-001..010 — never run, overdue, wrong day, multi-slot, midnight crossing")
+    print_info("Tests: SD-001..022 — never run, overdue, wrong day, multi-slot, midnight crossing, time zones, DST, missed slots of the last 7 days (D-Z3-1)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_due.py", test_names)
     return run_command(cmd, "Scheduler due-check tests", verbose=verbose)
 
@@ -916,6 +926,15 @@ def services_scheduler_loop(verbose: bool = False, test_names: list = None) -> b
     print_info("Tests: SLO-001..003 — both jobs due, enabled flag, state serialization roundtrip")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_loop.py", test_names)
     return run_command(cmd, "Scheduler loop integration tests", verbose=verbose)
+
+
+def services_scheduler_catchup(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the scheduler's catch-up on return and its shared lock: run_due_jobs and scheduler_loop (lot Z3)."""
+    print_section("Services: Scheduler Catch-up and Lock")
+    print_info("Testing: backend/app/services/platform/scheduler/scheduler.py (run_due_jobs, scheduler_loop), with sleep_wake/activity.py")
+    print_info("Tests: SCU-001..032 — constants, types, busy span, settle before clock and lock, a lock per event loop, short circuits in order, off-loop I/O, jobs and outcomes, failures by class name, cancellation, status, blocked then caught up, the loop: listener, nudges, shutdown")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_scheduler_catchup.py", test_names)
+    return run_command(cmd, "Scheduler catch-up tests", verbose=verbose)
 
 
 def services_brim_versioning(verbose: bool = False, test_names: list = None) -> bool:
@@ -1475,6 +1494,17 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "email-verification",
+        services_email_verification,
+        name="E-mail Verification",
+        desc="verification_required (the global setting, off by default); links_can_go/ensure_verification_can_be_enabled (not blocked, email usable, links ready; read off the event loop); hold_for_verification: never the first account nor with the option off, EMAIL_VERIFICATION_UNAVAILABLE when no link can go, else inactive + a hold without address, 24 h, flushed not committed, its text never out; awaiting_verification: inactive + an unspent verification token; registration_email_work: a new link with the address replaces the hold, exactly build_verification in the account's language from LIBREFOLIO_PUBLIC_URL, nothing for an account that no longer waits or when no email can go, any failure after the commit leaves the token without its address (the account waits, nothing counted), never twice in 5 minutes, never raises; confirm_email: live links only, a token without address refused as revoked but left live, another address revoked, the account active and verified, its other tokens revoked, a link spent meanwhile consumed; resend_verification: per address (address_key) before the password, the password as the login checks it, NOT_NEEDED/ACCOUNT_DISABLED before the configuration, per account on emailed links (5 min, 3/h), USER_LIMIT_REACHED for an expired link on a full instance, the budget, a link emailed meanwhile rolled back; no token, password, identifier or address in the logs",
+        # PURE: every database is a private file under tmp_path built with create_all, the option set in that file only; no
+        # session on the lane DB, no server; LIBREFOLIO_SMTP_*, PUBLIC_URL, BLOCKED and MAX_USERS removed then set with
+        # monkeypatch; the limiters are private on a fake clock; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "email-links",
         services_email_links,
         name="E-mail Links",
@@ -1564,7 +1594,7 @@ Note: No backend server required.
         "sleep-wake-activity",
         services_sleep_wake_activity,
         name="Sleep and Wake Activity",
-        desc="request_kind: the probes (system/health, ready, test-lane-health) and system/wake-sync under API_V1_PREFIX, trailing slashes ignored, then exact and case-sensitive, anything else user; Activity on an injected clock (time.time by default): request(presence) in flight for its whole body, an exception or a cancellation included, presence stamped at start and at end, return listeners at or below the silence called with it in registration order on the calling thread before the body (one that raises logged and skipped, a name registered again replaced), presence=False only in flight, idle_seconds from started_at or the last user request and never below 0; busy(reason) nestable across threads, a blank reason refused; busy checks read at every call, true or raising = busy, a raising one warned once per streak; busy_reasons without duplicates, is_busy; thread safety; current_activity read at call time; ActivityMiddleware: other scopes untouched, probes uncounted, wake-sync in flight without presence, any other path (a 404 included) presence and in flight through the last chunk of a stream and its background tasks, errors and cancellations propagate, current_activity read per request without activity=; activity the outermost entry of MIDDLEWARE_STACK",
+        desc="request_kind: the probes (system/health, ready, test-lane-health) and system/wake-sync under API_V1_PREFIX, trailing slashes ignored, then exact and case-sensitive, anything else user; Activity on an injected clock (time.time by default): request(presence) in flight for its whole body, an exception or a cancellation included, presence stamped at start and at end, return listeners at or below the silence called with it in registration order on the calling thread before the body (one that raises logged and skipped, a name registered again replaced, remove_return_listener: never called again, an unknown name a no-op, a blank one refused), presence=False only in flight, idle_seconds from started_at or the last user request and never below 0; busy(reason) nestable across threads, a blank reason refused; busy checks read at every call, true or raising = busy, a raising one warned once per streak; busy_reasons without duplicates, is_busy; thread safety; current_activity read at call time; ActivityMiddleware: other scopes untouched, probes uncounted, wake-sync in flight without presence, any other path (a 404 included) presence and in flight through the last chunk of a stream and its background tasks, errors and cancellations propagate, current_activity read per request without activity=; activity the outermost entry of MIDDLEWARE_STACK",
         # PURE: no DB, no server, no lane port, no network; every Activity is the test's own, on a fake clock, and the
         # process's ACTIVITY is replaced only through monkeypatch; the FastAPI apps are built in the test and served in
         # this process by httpx.ASGITransport (no socket); its threads are daemon threads joined within a deadline.
@@ -1645,10 +1675,11 @@ Note: No backend server required.
         "financial-math",
         services_financial_math,
         name="Financial Math",
-        desc="Average cost and native cash: movements, conversions through the FX service, diagnostics; boundaries of the whole layer",
+        desc="Average cost, native cash, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer",
         # PURE: each module's only I/O is convert_bulk, which every test replaces on its
-        # module with a double; the session handed to it is None or a sentinel. The layer
-        # guard only parses source files.
+        # module with a double; the session handed to it is None or a sentinel, or, for the
+        # ledger control totals, one on a private SQLite file under tmp_path that no other
+        # test reads. The layer guard only parses source files.
         isolation="pure",
     )
     add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price marks")
@@ -1712,9 +1743,21 @@ Note: No backend server required.
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
     add_test(cat, "scheduler-state", services_scheduler_state, name="Scheduler State", desc="Load/save/atomic write, corrupt/partial JSON recovery")
     add_test(cat, "scheduler-settings", services_scheduler_settings, name="Scheduler Settings", desc="_parse_times, _parse_days pure functions")
-    add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases")
+    add_test(cat, "scheduler-due", services_scheduler_due, name="Scheduler Due-Check", desc="due_current_price + due_history_sync edge cases; a missed slot of a configured day in the last 7 days is due once a run exists (D-Z3-1)")
     add_test(cat, "scheduler-leader", services_scheduler_leader, name="Scheduler Leader Election", desc="Mock psutil, multi-worker, Docker PID1, --reload, exception safe")
     add_test(cat, "scheduler-loop", services_scheduler_loop, name="Scheduler Loop Integration", desc="due_* + state roundtrip, no real loop")
+    add_test(
+        cat,
+        "scheduler-catchup",
+        services_scheduler_catchup,
+        name="Scheduler Catch-up and Lock",
+        desc="run_due_jobs: an unknown reason refused before anything; busy 'scheduler' from start to end (settle and lock wait included, also on an exception or a cancellation); return/wake settle the clock before the due checks and before the lock; one asyncio.Lock per event loop (no overlap, the second run loads what the first saved, two loops in a row); under the lock disabled, blocked, not_leader, setting off, in order, without loading the state; am_i_leader/load_state/save_state off the loop; one now for both due checks; jobs in order, each saved, outcomes copied from JobState; a job or a save raising is an error outcome by class name only, logged, the next job runs; report status ok/partial/error; blocked runs nothing, then the missed slot is caught up (D-Z3-4, D-Z3-1). scheduler_loop: disabled registers nothing; listener scheduler-catch-up at 60 s; startup after the first delay or a nudge; tick or return; a nudge from any thread; two nudges, one run; a failing run logged; shutdown ends it and removes the listener",
+        # PURE: no DB, no server, no lane port, no network. Every collaborator of run_due_jobs (switches, leader, settings, state
+        # store, jobs, due functions, utc_now, settle_clock) is a fake set with monkeypatch; the process's ACTIVITY is replaced
+        # only through monkeypatch by an Activity on a fake clock. The loop runs as a task of the test's own event loop, against
+        # a recorder in place of run_due_jobs, and is stopped and awaited within a deadline; its worker threads are asyncio's.
+        isolation="pure",
+    )
     add_test(
         cat,
         "scheduler-jobs",
