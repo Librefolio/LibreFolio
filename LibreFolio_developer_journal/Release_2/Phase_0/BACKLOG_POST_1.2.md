@@ -3314,6 +3314,14 @@ sulla base `23f6578f3`.
     chiavi `backup.checks.*` nelle 4 lingue.
 
   Dettagli: piano 07, §13, «B8 — il token del pannello, rimesso sopra `ef61f0e7f`».
+- **B-10 · Un pulsante del pannello che chiede all'istanza il link di reset dell'admin** — piccolo; B, 15/10 (decisione
+  40, assegnata a B dal coordinatore). Recupero dell'admin dopo un ripristino o una password persa: oggi passa da
+  «password dimenticata» via email (E), o dall'assistenza con `dev.py user reset-link`.
+  - Cura: una rotta col token del pannello, come B8 (`require_panel_token`, permessa sull'istanza bloccata se il
+    developer lo vuole), che chiama la funzione dei link di reset di A e restituisce il link al pannello.
+  - Non per la 1.3, a meno che resti tempo (coordinatore, 15/10).
+
+  Dettagli: piano 07, §13, «Base `10697e618`, prove d'ingresso e decisioni 40–43».
 
 ## E · Email (fase 01)
 
