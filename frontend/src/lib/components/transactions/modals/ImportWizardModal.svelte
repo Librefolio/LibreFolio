@@ -106,6 +106,13 @@
     import {onboardingGuide, type ImportGuideStepId} from '$lib/features/onboarding/onboardingGuide.svelte';
 
     import type {TransactionCreateItem, BrimFile, BrimParseResponse, BrimPlugin, BrimSetCombineResponse, BrimSetPreview, FilePreviewResponse} from '$lib/types';
+    import type {BrokerOpeningIssue, FileSelection, ParsedFileResult, ParsedSetInfo, PendingFileEntry, SetPreviewEntry, StepId, Step1SetWarning} from '../wizard/wizardTypes';
+    import UploadStep from '../wizard/UploadStep.svelte';
+    import SelectFilesStep from '../wizard/SelectFilesStep.svelte';
+    import AnalyzeStep from '../wizard/AnalyzeStep.svelte';
+    import DuplicatesStep from '../wizard/DuplicatesStep.svelte';
+    import ReviewStep from '../wizard/ReviewStep.svelte';
+    import WizardFooter from '../wizard/WizardFooter.svelte';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
 
@@ -153,7 +160,6 @@
      * the same security would appear twice there, indistinguishable, so half the rows would land
      * on half the instrument. Unifying first makes that choice unambiguous and asks it once.
      */
-    type StepId = 'upload' | 'select' | 'analyze' | 'assets' | 'fix' | 'duplicates' | 'review' | 'gapFix';
 
     const STEP_DEFS: ReadonlyArray<{id: StepId; titleKey: string}> = [
         {id: 'upload', titleKey: 'step1Title'},
@@ -216,18 +222,6 @@
     // Step 1 State — Upload & Assign Broker
     // =========================================================================
 
-    interface PendingFileEntry {
-        id: string;
-        file: globalThis.File;
-        fileName: string;
-        brokerId: number | null;
-        status: 'pending' | 'uploading' | 'uploaded' | 'error';
-        serverFileId?: string;
-        /** The server's file info, from the upload response: role detection needs its plugins and batch. */
-        serverInfo?: BrimFile;
-        errorMessage?: string;
-    }
-
     let pendingFiles = $state<PendingFileEntry[]>([]);
     let globalBrokerId = $state<number | null>(null);
     let uploading = $state(false);
@@ -241,19 +235,6 @@
      * (design D-S22), and an export dropped after the "missing export" warning joins that set.
      */
     let uploadBatchId = $state(generateUUID());
-
-    /** A required export missing from a set this session uploaded (design §4.2). */
-    interface Step1SetWarning {
-        key: string;
-        pluginCode: string;
-        pluginName: string;
-        docsUrl: string | null;
-        roleCode: string;
-        roleLabel: string;
-        extensions: string;
-        start: string | null;
-        end: string | null;
-    }
 
     let step1SetWarnings = $state<Step1SetWarning[]>([]);
 
@@ -286,13 +267,6 @@
     // Step 2 State — Select Files from Broker Panels (DataTable)
     // =========================================================================
 
-    interface FileSelection {
-        fileId: string;
-        fileName: string;
-        brokerId: number;
-        pluginCode: string;
-    }
-
     let selectedFiles = $state<FileSelection[]>([]);
     let brokerFilesMap = $state<Map<number, BrimFile[]>>(new Map());
     let brokerFilesLoading = $state(false);
@@ -305,8 +279,6 @@
 
     // Report sets (design §4.3): the plugin catalogue, the files grouped into sets, each set's
     // preview, and which cards are open. A set is selected, analysed and imported as a whole.
-    /** A set's preview, with the members it was asked for: another membership needs another preview. */
-    type SetPreviewEntry = SetPreviewState & {preview?: BrimSetPreview | null; members?: string};
     let importPlugins = $state<BrimPlugin[]>([]);
     let setPreviews = $state<Map<string, SetPreviewEntry>>(new Map());
     let expandedSets = $state<Set<string>>(new Set());
@@ -346,36 +318,6 @@
     // =========================================================================
     // Step 3 State — Parse Engine & Results
     // =========================================================================
-
-    interface ParsedFileResult {
-        fileId: string;
-        fileName: string;
-        brokerId: number;
-        brokerName: string;
-        brokerIconUrl: string | null;
-        brokerPortalUrl: string | null;
-        pluginUsed: string;
-        pluginName: string;
-        status: 'pending' | 'parsing' | 'done' | 'error';
-        response: BrimParseResponse | null;
-        errorMessage?: string;
-        /** Set when the row is a report set, analysed as one through its combined file. */
-        set?: ParsedSetInfo;
-    }
-
-    /** A report set analysed as one row: its files, and the combined file it is parsed through. */
-    interface ParsedSetInfo {
-        key: string;
-        batchId: string;
-        /** The originals of the upload left out of the set: the combine must leave them out too. */
-        excludeFileIds: string[];
-        uploadedAt: string;
-        memberIds: string[];
-        memberNames: string[];
-        combinedFileId: string | null;
-        summary: Record<string, unknown> | null;
-        reused: boolean;
-    }
 
     let parseResults = $state<ParsedFileResult[]>([]);
     let abortParsing = $state(false);
@@ -827,14 +769,6 @@
     let step4DeselectPendingDup = $derived(step4LegRows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index) && t.duplicateStatus === 'pending_duplicate').length);
     let step4DeselectDbDup = $derived(step4LegRows.filter((t) => !t.selected && !beforeOpeningIndices.has(t.index) && !beforeHistoryIndices.has(t.index) && t.duplicateStatus === 'likely').length);
     let step4HasDeselectReasons = $derived(step4BeforeOpeningCount > 0 || step4DeselectPendingDup > 0 || step4DeselectDbDup > 0);
-
-    interface BrokerOpeningIssue {
-        brokerId: number;
-        broker: BrokerInfo | {id: number; name: string};
-        openedAt: string;
-        minTxDate: string;
-        count: number;
-    }
 
     /** Brokers whose opening date is later than one or more of their (before-opening) transactions. */
     let brokerOpeningIssues = $derived.by<BrokerOpeningIssue[]>(() => {
@@ -4494,407 +4428,91 @@ ${arrow}<span>${label}</span></span>`,
         <!-- Step 1: Upload & Assign Broker -->
         <!-- ============================================================ -->
         {#if currentStepId === 'upload'}
-            <div class="space-y-4" data-testid="import-wizard-step1" data-busy={brokersLoading || uploading}>
-                <!-- Info hint -->
-                <p class="text-xs text-gray-500 dark:text-gray-400 italic">{$t('importWizard.step1Optional')}</p>
-
-                <!-- Upload error banner -->
-                {#if uploadError}
-                    <InfoBanner variant="error" message={uploadError} dismissible ondismiss={() => (uploadError = null)} />
-                {/if}
-
-                <!-- A report set this upload left incomplete: the missing export dropped here joins the same set -->
-                {#each step1SetWarnings as warning (warning.key)}
-                    <div
-                        class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-200"
-                        data-testid="import-wizard-step1-set-warning"
-                        data-plugin-code={warning.pluginCode}
-                        data-role={warning.roleCode}
-                    >
-                        <AlertTriangle size={16} class="mt-0.5 shrink-0" />
-                        <div class="space-y-1">
-                            <p>{$t('importWizard.reportSet.step1Missing', {values: {plugin: warning.pluginName, role: warning.roleLabel, ext: warning.extensions}})}</p>
-                            {#if warning.start && warning.end}
-                                <p>{$t('importWizard.reportSet.missingPeriod', {values: {start: formatSetDay(warning.start), end: formatSetDay(warning.end)}})}</p>
-                            {/if}
-                            <p class="text-xs">
-                                {$t('importWizard.reportSet.step1MissingHint')}
-                                {#if warning.docsUrl}
-                                    <a class="ml-1 text-libre-green hover:underline" href={warning.docsUrl} target="_blank" rel="noopener noreferrer">{$t('importWizard.reportSet.howToExport')}</a>
-                                {/if}
-                            </p>
-                        </div>
-                    </div>
-                {/each}
-
-                <!-- T2: Collapsible drop zone -->
-                {#if dropZoneExpanded}
-                    <div bind:this={dropZoneContainerRef}>
-                        <FileUploader bind:this={fileUploaderRef} on:change={handleFilesChanged} on:error={(e) => (uploadError = e.detail.message)} multiple={true} accept=".csv,.xlsx,.xls" hideActions={true} />
-                    </div>
-                {:else}
-                    <button
-                        type="button"
-                        class="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400 hover:border-libre-green hover:text-libre-green dark:hover:text-libre-green transition-colors"
-                        onclick={() => (dropZoneExpanded = true)}
-                        data-testid="import-wizard-upload-more"
-                    >
-                        <Plus size={16} />
-                        {$t('importWizard.uploadMore')}
-                    </button>
-                {/if}
-
-                <!-- Pending files DataTable -->
-                {#if pendingFiles.length > 0}
-                    <div class="space-y-3">
-                        <!-- "Assign all" global broker -->
-                        <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-lg">
-                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">{$t('importWizard.globalBroker')}:</span>
-                            <div class="flex-1 max-w-xs" data-testid="import-wizard-step1-broker-select">
-                                <BrokerSearchSelect
-                                    {brokers}
-                                    value={globalBrokerId}
-                                    onchange={onGlobalBrokerChange}
-                                    placeholder={$t('common.broker')}
-                                    createLabel={$t('common.createNew')}
-                                    onCreateNew={() => {
-                                        createBrokerContext = 'global';
-                                        createBrokerOpen = true;
-                                    }}
-                                />
-                            </div>
-                        </div>
-
-                        <!-- Toolbar for bulk actions on selected files -->
-                        {#if step1SelectedIds.length > 0}
-                            <DataTableToolbar
-                                selectedCount={step1SelectedIds.length}
-                                bulkActions={[
-                                    {
-                                        id: 'bulk-delete',
-                                        icon: Trash2,
-                                        label: () => $t('common.remove'),
-                                        variant: 'danger',
-                                        onClick: () => {
-                                            removePendingFilesByIds(step1SelectedIds);
-                                            step1SelectedIds = [];
-                                            step1TableRef?.clearSelection();
-                                        },
-                                    },
-                                ]}
-                                onClearSelection={() => {
-                                    step1SelectedIds = [];
-                                    step1TableRef?.clearSelection();
-                                }}
-                            />
-                        {/if}
-
-                        <!-- Files DataTable with selection -->
-                        <DataTable
-                            bind:this={step1TableRef}
-                            data={pendingFiles}
-                            columns={pendingFileColumns}
-                            getRowId={(row) => row.id}
-                            storageKey="import-wizard-pending"
-                            enableSelection={true}
-                            selectionMode="multi"
-                            onSelectionChange={(ids) => (step1SelectedIds = ids)}
-                            enableActions={true}
-                            actionsColumnWidth="64px"
-                            rowActions={pendingFileActions}
-                            enableSorting={false}
-                            enableColumnFilters={false}
-                            enableColumnResize={false}
-                            enablePagination={false}
-                            enableColumnVisibility={false}
-                            defaultPageSize={100}
-                            tableLayout="auto"
-                            stickyActions={false}
-                            enableContextMenu={true}
-                        />
-                    </div>
-                {/if}
-            </div>
+            <UploadStep
+                {brokers}
+                {brokersLoading}
+                bind:createBrokerContext
+                bind:createBrokerOpen
+                bind:dropZoneContainerRef
+                bind:dropZoneExpanded
+                bind:fileUploaderRef
+                {globalBrokerId}
+                {pendingFiles}
+                bind:step1SelectedIds
+                {step1SetWarnings}
+                bind:step1TableRef
+                bind:uploadError
+                {uploading}
+                {pendingFileActions}
+                {pendingFileColumns}
+                {formatSetDay}
+                {handleFilesChanged}
+                {onGlobalBrokerChange}
+                {removePendingFilesByIds}
+            />
 
             <!-- ============================================================ -->
             <!-- Step 2: Select Files from Broker Panels (DataTable) -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'select'}
-            <div class="space-y-4" data-testid="import-wizard-step2" data-busy={brokerFilesLoading || uploading || setPreviewsLoading || setUploadingRole.size > 0}>
-                {#if brokerFilesLoading}
-                    <div class="py-8 text-center">
-                        <LoadingSpinner size="md" />
-                    </div>
-                {:else}
-                    <!-- Header: selected count + column visibility -->
-                    <div class="flex items-center justify-between flex-wrap gap-2">
-                        <span class="text-sm font-medium text-gray-700 dark:text-gray-200">
-                            {#if allReportSets.length > 0}
-                                {$t('importWizard.reportSet.selectedCount', {values: {sets: selectedSetCount, n: parseUnits.length - selectedSetCount, b: selectedBrokerCount}})}
-                            {:else}
-                                {$t('importWizard.selectedCount', {values: {n: selectedFiles.length, b: selectedBrokerCount}})}
-                            {/if}
-                        </span>
-                        <div class="flex items-center gap-2">
-                            <ColumnVisibilityToggle tableRef={tableRefs.find((table) => table != null)} additionalTableRefs={tableRefs.filter((table) => table != null).slice(1)} />
-                        </div>
-                    </div>
-
-                    <!-- Pre-selected hint -->
-                    {#if pendingFiles.some((f) => f.status === 'uploaded')}
-                        <p class="text-xs text-libre-green italic">{$t('importWizard.preSelectedHint')}</p>
-                    {/if}
-
-                    <!-- Broker panels with DataTable -->
-                    {#each brokers as broker, brokerIdx}
-                        {@const brokerFiles = brokerFilesMap.get(broker.id) ?? []}
-                        {@const brokerGroups = brokerSetGroups.get(broker.id) ?? {sets: [], singles: brokerFiles}}
-                        {#if brokerFiles.length > 0}
-                            <div class="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden" data-testid={`import-wizard-broker-files-${broker.id}`}>
-                                <!-- Broker header (collapsible) -->
-                                <button
-                                    type="button"
-                                    class="w-full flex items-center gap-2 px-3 py-2.5 bg-gray-50 dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-750 text-left"
-                                    onclick={() => toggleBrokerExpand(broker.id)}
-                                    aria-expanded={expandedBrokers.has(broker.id)}
-                                    data-testid={`import-wizard-broker-toggle-${broker.id}`}
-                                >
-                                    {#if expandedBrokers.has(broker.id)}
-                                        <ChevronDown size={14} class="text-gray-400" />
-                                    {:else}
-                                        <ChevronRight size={14} class="text-gray-400" />
-                                    {/if}
-                                    <BrokerIcon brokerId={broker.id} iconUrl={broker.icon_url} portalUrl={broker.portal_url} pluginCode={broker.default_import_plugin} altText={broker.name} size="sm" />
-                                    <span class="font-medium text-sm text-gray-800 dark:text-gray-200">{broker.name}</span>
-                                    {#if selectedFiles.filter((f) => f.brokerId === broker.id).length > 0}
-                                        <span class="text-xs font-medium text-libre-green ml-1">({selectedFiles.filter((f) => f.brokerId === broker.id).length})</span>
-                                    {/if}
-                                    <span class="text-xs text-gray-400 ml-auto">
-                                        {#if brokerGroups.sets.length > 0}{$t('importWizard.reportSet.setCount', {values: {n: brokerGroups.sets.length}})} ·{/if}
-                                        {brokerGroups.singles.length + brokerGroups.sets.reduce((total, set) => total + set.files.length, 0)} file(s)
-                                    </span>
-                                </button>
-
-                                <!-- Report sets, one card each; the single files stay in the table -->
-                                {#if expandedBrokers.has(broker.id) && brokerGroups.sets.length > 0}
-                                    <div class="space-y-2 border-t border-gray-200 p-2 dark:border-gray-700" data-testid={`import-wizard-broker-sets-${broker.id}`}>
-                                        {#each brokerGroups.sets as set (set.key)}
-                                            <ReportSetCard
-                                                {set}
-                                                plugin={setPluginInfos.find((p) => p.code === set.pluginCode) ?? null}
-                                                previewState={setPreviews.get(set.key)}
-                                                selection={setSelectionState(set, selectedFileIdSet)}
-                                                expanded={expandedSets.has(set.key)}
-                                                analysed={isSetAnalysed(set)}
-                                                uploadingRole={setUploadingRole.get(set.key) ?? null}
-                                                onToggleSelected={() => toggleSetSelection(set)}
-                                                onToggleExpanded={() => toggleSetExpanded(set.key)}
-                                                onUploadMissing={(roleCode, file) => void uploadMissingIntoSet(set, roleCode, file)}
-                                                onPreviewFile={(fileId) => openPreview(fileId)}
-                                                onDeleteFile={(file) => requestDeleteFile(file as BrimFile, broker.id)}
-                                                plugins={setPluginInfos}
-                                                brokerDefaultPlugin={broker.default_import_plugin ?? null}
-                                                onReadAs={(code) => readSetAs(set, code)}
-                                                onReadAlone={(fileId, code) => readFileAlone(fileId, code)}
-                                                onRemoveFromSet={(fileId) => removeFileFromSet(fileId)}
-                                            />
-                                        {/each}
-                                    </div>
-                                {/if}
-
-                                <!-- DataTable per broker: the single files -->
-                                {#if expandedBrokers.has(broker.id) && brokerGroups.singles.length > 0}
-                                    <div class="border-t border-gray-200 dark:border-gray-700">
-                                        {#if brokerGroups.sets.length > 0}
-                                            <p class="px-3 pt-2 text-xs font-medium text-gray-600 dark:text-gray-300" data-testid={`import-wizard-other-files-${broker.id}`}>{$t('importWizard.reportSet.otherFiles')}</p>
-                                        {/if}
-                                        <!-- The table reads the selection only when it mounts (initialSelectedIds), so it is
-                                             remounted whenever a file joins or leaves it: a file that arrives from a set keeps
-                                             its tick, and the next click on another row cannot drop it (step H). -->
-                                        {#key brokerGroups.singles.map((file) => file.file_id).join(',')}
-                                            <DataTable
-                                                bind:this={tableRefs[brokerIdx]}
-                                                data={brokerGroups.singles}
-                                                columns={fileTableColumns}
-                                                getRowId={(row) => row.file_id}
-                                                storageKey={`import-wizard-files-${broker.id}`}
-                                                enableSelection={true}
-                                                selectionMode="multi"
-                                                initialSelectedIds={selectedFiles.filter((f) => f.brokerId === broker.id && brokerGroups.singles.some((single) => single.file_id === f.fileId)).map((f) => f.fileId)}
-                                                onSelectionChange={(ids) => handleSelectionChange(broker.id, ids)}
-                                                onRowDoubleClick={(row) => openPreview(row.file_id)}
-                                                enableActions={true}
-                                                actionsColumnWidth="64px"
-                                                rowActions={[
-                                                    {id: 'preview', icon: Eye, label: $t('common.preview'), onClick: (row) => openPreview(row.file_id)},
-                                                    {id: 'delete', icon: Trash2, label: $t('common.delete'), variant: 'danger', onClick: (row) => requestDeleteFile(row, broker.id)},
-                                                ]}
-                                                enableSorting={true}
-                                                enableColumnFilters={true}
-                                                enableColumnResize={true}
-                                                enablePagination={brokerGroups.singles.length > 5}
-                                                alwaysShowPagination={brokerGroups.singles.length > 5}
-                                                enableColumnVisibility={false}
-                                                defaultPageSize={5}
-                                                pageSizeOptions={[5, 10, 25, 50, 100, 0]}
-                                                tableLayout="auto"
-                                                stickyActions={false}
-                                                enableContextMenu={true}
-                                                initialFilters={undefined}
-                                                onColumnResize={(colId, w) => handleColumnResize(brokerIdx, colId, w)}
-                                            />
-                                        {/key}
-                                    </div>
-                                {/if}
-                            </div>
-                        {/if}
-                    {/each}
-
-                    <!-- No files at all -->
-                    {#if brokers.every((b) => (brokerFilesMap.get(b.id) ?? []).length === 0)}
-                        <div class="py-8 text-center text-sm text-gray-400 dark:text-gray-500">
-                            <p>{$t('importWizard.noFiles')}</p>
-                            <p class="text-xs mt-1">{$t('importWizard.noFilesHint')}</p>
-                        </div>
-                    {/if}
-                {/if}
-            </div>
+            <SelectFilesStep
+                {brokerFilesLoading}
+                {brokerFilesMap}
+                {brokers}
+                {expandedBrokers}
+                {expandedSets}
+                {pendingFiles}
+                {selectedFiles}
+                {setPreviews}
+                {setUploadingRole}
+                bind:tableRefs
+                {uploading}
+                {allReportSets}
+                {brokerSetGroups}
+                {parseUnits}
+                {selectedBrokerCount}
+                {selectedFileIdSet}
+                {selectedSetCount}
+                {setPluginInfos}
+                {setPreviewsLoading}
+                {fileTableColumns}
+                {handleColumnResize}
+                {handleSelectionChange}
+                {isSetAnalysed}
+                {openPreview}
+                {readFileAlone}
+                {readSetAs}
+                {removeFileFromSet}
+                {requestDeleteFile}
+                {toggleBrokerExpand}
+                {toggleSetExpanded}
+                {toggleSetSelection}
+                {uploadMissingIntoSet}
+            />
 
             <!-- ============================================================ -->
             <!-- Step 3: Parse Engine -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'analyze'}
-            <div class="flex flex-col gap-4 p-4" data-testid="import-wizard-step3" data-parse-state={parseState} data-busy={candidatesRefreshing || duplicateRecheckRunning} aria-busy={candidatesRefreshing || duplicateRecheckRunning}>
-                <!-- Progress bar -->
-                <div class="space-y-1">
-                    <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                        {#if usingCachedResults}
-                            <span class="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                                <CheckCircle size={14} />
-                                {$t('importWizard.cachedResults')}
-                            </span>
-                        {:else if parseDone}
-                            <span>{$t('importWizard.parseComplete')}</span>
-                        {:else}
-                            <span>{$t('importWizard.parsingProgress', {values: {done: parseCompletedCount, total: parseTotalCount}})}</span>
-                        {/if}
-                        <span>{parseCompletedCount}/{parseTotalCount}</span>
-                    </div>
-                    <div class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div class="h-full rounded-full transition-all duration-300 ease-out" class:bg-libre-green={!parseHasErrors} class:bg-amber-500={parseHasErrors} style="width: {parseTotalCount > 0 ? (parseCompletedCount / parseTotalCount) * 100 : 0}%"></div>
-                    </div>
-                </div>
-
-                <!-- Parse failures: show WHY, not just "Error".
-                     Without this the only signal is a red badge, which is useless for
-                     diagnosing e.g. a stale client bundle rejecting a new response shape. -->
-                {#if parseFailures.length > 0}
-                    <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 text-xs" data-testid="import-wizard-parse-errors">
-                        <div class="font-medium text-red-800 dark:text-red-200 mb-1.5">
-                            {$t('importWizard.parseErrorsTitle', {values: {n: parseFailures.length}})}
-                        </div>
-                        <ul class="space-y-1">
-                            {#each parseFailures as failure}
-                                <li class="text-red-700 dark:text-red-300">
-                                    <span class="font-medium">{failure.fileName}</span>
-                                    <span class="opacity-80"> — {failure.errorMessage ?? $t('common.error')}</span>
-                                </li>
-                            {/each}
-                        </ul>
-                    </div>
-                {/if}
-
-                <!-- Results DataTable -->
-                <DataTable
-                    data={parseResults}
-                    columns={step3Columns}
-                    getRowId={(row) => row.fileId}
-                    storageKey="import-wizard-parse-results"
-                    enableSelection={false}
-                    enableActions={true}
-                    actionsColumnWidth="64px"
-                    rowActions={step3RowActions}
-                    onRowDoubleClick={(row) => {
-                        if (row.status === 'done') openParseDetail(row);
-                    }}
-                    enableSorting={true}
-                    enableColumnFilters={false}
-                    enablePagination={false}
-                    enableColumnVisibility={false}
-                    defaultPageSize={100}
-                    tableLayout="auto"
-                    stickyActions={false}
-                    enableContextMenu={true}
-                />
-
-                <!-- Aggregate summary -->
-                {#if parseHasSuccess}
-                    {@const stats = parseAggregateStats()}
-                    <div class="grid grid-cols-2 md:grid-cols-8 gap-3 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <div class="text-center">
-                            <div class="text-lg font-semibold text-gray-900 dark:text-white">{stats.totalTx}</div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.txCount', {values: {n: stats.totalTx, k: stats.doneFileCount}})}</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-lg font-semibold text-gray-900 dark:text-white">
-                                {stats.uniqueAssets}
-                                {#if stats.unresolvedCount > 0}
-                                    <span class="text-amber-500 text-sm">({stats.unresolvedCount}?)</span>
-                                {/if}
-                            </div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.assetsCount', {values: {n: stats.uniqueAssets, m: stats.unresolvedCount}})}</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-lg font-semibold" class:text-amber-500={stats.totalIssues > 0} class:text-gray-900={stats.totalIssues === 0} class:dark:text-white={stats.totalIssues === 0}>{stats.totalIssues}</div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.validationIssueCount', {values: {n: stats.totalIssues}})}</div>
-                        </div>
-                        <div class="text-center">
-                            <div
-                                class="text-lg font-semibold"
-                                class:text-red-600={stats.todoBlockers > 0}
-                                class:dark:text-red-400={stats.todoBlockers > 0}
-                                class:text-amber-500={stats.todoBlockers === 0 && stats.totalTodos > 0}
-                                class:text-gray-900={stats.totalTodos === 0}
-                                class:dark:text-white={stats.totalTodos === 0}
-                            >
-                                {stats.totalTodos}
-                            </div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.fieldTodoCount', {values: {n: stats.totalTodos}})}</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-lg font-semibold" class:text-amber-500={stats.totalWarnings > 0} class:text-gray-900={stats.totalWarnings === 0} class:dark:text-white={stats.totalWarnings === 0}>{stats.totalWarnings}</div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.warningsCount', {values: {n: stats.totalWarnings}})}</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="text-lg font-semibold" class:text-amber-500={stats.likelyDuplicates > 0} class:text-gray-900={stats.likelyDuplicates === 0} class:dark:text-white={stats.likelyDuplicates === 0}>{stats.likelyDuplicates}</div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.likelyDuplicates', {values: {n: stats.likelyDuplicates}})}</div>
-                        </div>
-                        <!-- View All action cell -->
-                        {#if parseDone || usingCachedResults}
-                            <button
-                                type="button"
-                                class="flex flex-col items-center justify-center gap-1 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 transition-colors px-2 py-1.5"
-                                data-testid="import-wizard-view-all"
-                                onclick={() => {
-                                    showAggregateDetail = true;
-                                }}
-                            >
-                                <Eye size={16} />
-                                <span class="text-xs font-medium">{$t('importWizard.viewAll')}</span>
-                            </button>
-                            <button
-                                type="button"
-                                class="flex flex-col items-center justify-center gap-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-slate-800 hover:bg-gray-100 dark:hover:bg-slate-700 text-gray-500 dark:text-gray-400 transition-colors px-2 py-1.5"
-                                data-testid="import-wizard-reparse"
-                                onclick={handleReparse}
-                            >
-                                <RefreshCw size={16} />
-                                <span class="text-xs font-medium">{$t('importWizard.reparse')}</span>
-                            </button>
-                        {/if}
-                    </div>
-                {/if}
-            </div>
+            <AnalyzeStep
+                {candidatesRefreshing}
+                {duplicateRecheckRunning}
+                {parseResults}
+                bind:showAggregateDetail
+                {usingCachedResults}
+                {parseAggregateStats}
+                {parseCompletedCount}
+                {parseDone}
+                {parseFailures}
+                {parseHasErrors}
+                {parseHasSuccess}
+                {parseState}
+                {parseTotalCount}
+                {step3Columns}
+                {step3RowActions}
+                {handleReparse}
+                {openParseDetail}
+            />
 
             <!-- ============================================================ -->
             <!-- Step ASSETS: how many distinct securities are really here -->
@@ -4946,423 +4564,75 @@ ${arrow}<span>${label}</span></span>`,
             <!-- Step DUPLICATES: arbitrate against the database -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'duplicates'}
-            <div class="space-y-4" data-testid="import-wizard-step-duplicates">
-                <InfoBanner variant="info" message={$t('importWizard.duplicatesStepIntro')} />
-                {#if duplicateRecheckError}
-                    <InfoBanner variant="error" message={$t('importWizard.duplicateRecheckFailed', {values: {error: duplicateRecheckError}})} />
-                {/if}
-
-                {#if duplicateGroups.length > 0}
-                    <section class="rounded-lg border border-gray-200 bg-gray-50/60 dark:border-slate-700 dark:bg-slate-800/40" data-testid="import-wizard-duplicate-resolver">
-                        <button
-                            type="button"
-                            class="flex w-full items-center gap-2 border-gray-200 px-3 py-2 text-left dark:border-slate-700"
-                            class:border-b={!duplicateResolverCollapsed}
-                            onclick={() => (duplicateResolverCollapsed = !duplicateResolverCollapsed)}
-                            data-testid="import-wizard-duplicate-resolver-toggle"
-                        >
-                            {#if duplicateResolverCollapsed}
-                                <ChevronRight size={16} class="shrink-0 text-gray-400" />
-                            {:else}
-                                <ChevronDown size={16} class="shrink-0 text-gray-400" />
-                            {/if}
-                            <div class="min-w-0 flex-1">
-                                <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-100">{$t('importWizard.resolver.title')}</h3>
-                                <p class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.subtitle', {values: {n: duplicateGroups.length}})}</p>
-                            </div>
-                            <span
-                                class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 {resolverPartialCount > 0
-                                    ? 'bg-orange-100 text-orange-800 ring-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:ring-orange-700'
-                                    : 'bg-emerald-100 text-emerald-800 ring-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:ring-emerald-700'}"
-                                data-testid="import-wizard-resolver-status"
-                            >
-                                {resolverPartialCount > 0 ? $t('importWizard.resolver.statusToVerify', {values: {n: resolverPartialCount}}) : $t('importWizard.resolver.statusAllAuto')}
-                            </span>
-                        </button>
-
-                        <div class="min-w-0 gap-3 p-3 lg:grid-cols-[var(--priority-w)_minmax(0,1fr)] {duplicateResolverCollapsed ? 'hidden' : 'grid'}" style="--priority-w: {duplicatePriorityWidth}px">
-                            <div class="relative min-w-0 space-y-2 rounded-lg border border-gray-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-900/60" data-testid="import-wizard-file-priority">
-                                <div class="text-xs font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400">{$t('importWizard.resolver.filePriority')}</div>
-                                <p class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.priorityPanelHint')}</p>
-                                <OrderableList
-                                    items={duplicateFilePriorityIds}
-                                    keyFn={(id) => id}
-                                    onReorder={(ids) => {
-                                        duplicateFilePriorityIds = ids;
-                                        reapplyResolverGroups();
-                                    }}
-                                    compact
-                                >
-                                    {#snippet children({item, index})}
-                                        <div class="flex min-w-0 items-center gap-2" data-testid="import-wizard-priority-file-{item}">
-                                            <span class="w-5 shrink-0 text-xs font-semibold text-gray-400">{index + 1}</span>
-                                            <span use:scrollOnOverflow class="{overflowScrollTextClass} flex-1 text-xs text-gray-700 dark:text-gray-200" title={getSourceFileName(item)}>{getSourceFileName(item)}</span>
-                                        </div>
-                                    {/snippet}
-                                </OrderableList>
-                                <div class="flex justify-end">
-                                    <button
-                                        type="button"
-                                        class="inline-flex items-center gap-1 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-200 dark:hover:bg-slate-700"
-                                        onclick={recalcResolverDefaults}
-                                        data-testid="import-wizard-resolver-recalc"
-                                    >
-                                        <RefreshCw size={13} />
-                                        {$t('importWizard.resolver.recalcDefaults')}
-                                    </button>
-                                </div>
-                                <!-- Drag handle: file names are long and unpredictable, so the split
-                                     between the priority list and the groups is the user's to make. -->
-                                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-                                <div role="separator" aria-orientation="vertical" class="absolute top-0 -right-2 hidden h-full w-2 cursor-col-resize touch-none lg:block" onpointerdown={startPriorityResize} data-testid="import-wizard-priority-resize">
-                                    <span class="absolute top-1/2 left-1/2 h-10 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded bg-gray-300 dark:bg-slate-600"></span>
-                                </div>
-                            </div>
-
-                            <div class="min-w-0 space-y-2">
-                                {#each resolverTierPanels as panel (panel.tier)}
-                                    {@const tierOpen = expandedDuplicateTiers.has(panel.tier)}
-                                    <section class="min-w-0 overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700" data-testid="import-wizard-resolver-tier-{panel.tier}">
-                                        <button
-                                            type="button"
-                                            class="flex w-full items-center gap-2 bg-gray-50 px-3 py-2 text-left hover:bg-gray-100 dark:bg-slate-800/70 dark:hover:bg-slate-800"
-                                            onclick={() => toggleDuplicateTier(panel.tier)}
-                                            data-testid="import-wizard-resolver-tier-toggle-{panel.tier}"
-                                        >
-                                            {#if tierOpen}
-                                                <ChevronDown size={14} class="shrink-0 text-gray-400" />
-                                            {:else}
-                                                <ChevronRight size={14} class="shrink-0 text-gray-400" />
-                                            {/if}
-                                            <span class="min-w-0 flex-1 text-sm font-medium text-gray-800 dark:text-gray-100">
-                                                {panel.tier === 'sure' ? $t('importWizard.resolver.tierTotalTitle') : $t('importWizard.resolver.tierPartialTitle')}
-                                            </span>
-                                            <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 {duplicateTierBadgeClass(panel.tier)}">
-                                                {$t('importWizard.resolver.groupCount', {values: {n: panel.groups.length}})}
-                                            </span>
-                                        </button>
-                                        {#if tierOpen}
-                                            <div class="min-w-0 space-y-2 border-t border-gray-100 p-2 dark:border-slate-700/60">
-                                                {#each panel.groups as group (group.key)}
-                                                    <div class="min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900/60" data-testid="import-wizard-duplicate-group">
-                                                        <button type="button" class="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-slate-800/60" onclick={() => toggleDuplicateGroup(group.key)}>
-                                                            {#if expandedDuplicateGroupKeys.has(group.key)}
-                                                                <ChevronDown size={14} class="shrink-0 text-gray-400" />
-                                                            {:else}
-                                                                <ChevronRight size={14} class="shrink-0 text-gray-400" />
-                                                            {/if}
-                                                            <span use:scrollOnOverflow class="{overflowScrollTextClass} flex-1 text-sm font-medium text-gray-800 dark:text-gray-100">{getDuplicateGroupTitle(group)}</span>
-                                                            <span class="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-slate-700 dark:text-gray-300">{$t('importWizard.resolver.memberCount', {values: {n: group.memberIndices.length}})}</span>
-                                                            <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ring-1 {duplicateTierBadgeClass(group.tier)}" title={$t('importWizard.resolver.similarityTooltip')}>{duplicateSimilarityLabel(group.tier)}</span>
-                                                        </button>
-
-                                                        {#if expandedDuplicateGroupKeys.has(group.key)}
-                                                            <div class="min-w-0 border-t border-gray-100 p-3 dark:border-slate-700/60">
-                                                                <div class="mb-2 flex items-center justify-between gap-2">
-                                                                    <p class="text-xs text-gray-500 dark:text-gray-400">{$t('importWizard.resolver.groupHelp')}</p>
-                                                                    <div class="flex shrink-0 items-center gap-3">
-                                                                        <button type="button" class="inline-flex items-center gap-1 text-xs text-libre-green hover:underline" onclick={() => openLotCompare(group)} data-testid="import-wizard-resolver-compare-{group.key}">
-                                                                            <Search size={13} />
-                                                                            {$t('importWizard.compareModal.openAction')}
-                                                                        </button>
-                                                                        {#if resolverHasManualChoice(group)}
-                                                                            <button type="button" class="text-xs text-libre-green hover:underline" onclick={() => resetDuplicateResolverChoice(group)} data-testid="import-wizard-resolver-reset">
-                                                                                {$t('importWizard.resolver.resetDefault')}
-                                                                            </button>
-                                                                        {/if}
-                                                                    </div>
-                                                                </div>
-                                                                <div use:marqueeDescendants class="min-w-0" data-testid="import-wizard-resolver-member-table-{group.key}">
-                                                                    <DataTable
-                                                                        data={resolverGroupMembers(group)}
-                                                                        columns={resolverMemberColumns(group)}
-                                                                        getRowId={(mt) => String(mt.index)}
-                                                                        storageKey="import-wizard-resolver-members"
-                                                                        enableSelection={false}
-                                                                        enableActions={false}
-                                                                        enablePagination={false}
-                                                                        enableSorting={false}
-                                                                        enableColumnFilters={false}
-                                                                        enableColumnVisibility={false}
-                                                                        enableColumnResize={false}
-                                                                        enableContextMenu={false}
-                                                                        stickyHeader={false}
-                                                                        tableLayout="fixed"
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        {/if}
-                                                    </div>
-                                                {/each}
-                                            </div>
-                                        {/if}
-                                    </section>
-                                {/each}
-                            </div>
-                        </div>
-                    </section>
-                {/if}
-            </div>
+            <DuplicatesStep
+                bind:duplicateFilePriorityIds
+                {duplicateGroups}
+                {duplicatePriorityWidth}
+                {duplicateRecheckError}
+                bind:duplicateResolverCollapsed
+                {expandedDuplicateGroupKeys}
+                {expandedDuplicateTiers}
+                {resolverPartialCount}
+                {resolverTierPanels}
+                {duplicateSimilarityLabel}
+                {duplicateTierBadgeClass}
+                {getDuplicateGroupTitle}
+                {getSourceFileName}
+                {marqueeDescendants}
+                {openLotCompare}
+                {reapplyResolverGroups}
+                {recalcResolverDefaults}
+                {resetDuplicateResolverChoice}
+                {resolverGroupMembers}
+                {resolverHasManualChoice}
+                {resolverMemberColumns}
+                {startPriorityResize}
+                {toggleDuplicateGroup}
+                {toggleDuplicateTier}
+            />
 
             <!-- ============================================================ -->
             <!-- Step 4: Review & Import -->
             <!-- ============================================================ -->
         {:else if currentStepId === 'review'}
-            <div
-                class="flex flex-col gap-4 h-full overflow-y-auto"
-                data-testid="import-wizard-step4"
-                data-busy={autoFixingBrokerId !== null || recheckingOpenings || candidatesRefreshing || duplicateRecheckRunning || importPreparing || inspectAssetLoading}
-                aria-busy={autoFixingBrokerId !== null || recheckingOpenings || candidatesRefreshing || duplicateRecheckRunning || importPreparing || inspectAssetLoading}
-                data-selected-count={step4SelectedCount}
-                data-total-count={step4TotalCount}
-            >
-                {#if duplicateRecheckError}
-                    <div data-testid="import-wizard-duplicate-recheck-error">
-                        <InfoBanner variant="error" message={$t('importWizard.duplicateRecheckFailed', {values: {error: duplicateRecheckError}})} />
-                    </div>
-                {/if}
-                <!-- ── Resolve Assets section ─────────────────────────── -->
-                {#if assetResolutions.length > 0}
-                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden" data-testid="import-wizard-resolve-section">
-                        <!-- Section header -->
-                        <button
-                            type="button"
-                            class="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-700/50 transition-colors"
-                            onclick={() => (step4ShowResolveSection = !step4ShowResolveSection)}
-                            data-testid="import-wizard-resolve-toggle"
-                        >
-                            <div class="flex items-center gap-2">
-                                {#if step4ShowResolveSection}<ChevronDown size={16} />{:else}<ChevronRight size={16} />{/if}
-                                <span class="font-semibold text-sm">{$t('importWizard.resolveAssets')}</span>
-                                {#if step4UnresolvedCount > 0}
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" data-testid="import-wizard-unresolved-count">
-                                        {$t('importWizard.unresolvedCount', {values: {n: step4UnresolvedCount}})}
-                                    </span>
-                                {:else}
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
-                                        <Check size={12} class="mr-1" />{$t('importWizard.allResolved')}
-                                    </span>
-                                {/if}
-                            </div>
-                        </button>
-
-                        {#if step4MissingAssetCount > 0}
-                            <div class="px-3 pt-3" data-testid="import-wizard-manual-asset-help">
-                                <InfoBanner variant="info">
-                                    <p class="font-semibold mb-1">{$t('importWizard.manualAssets.title')}</p>
-                                    <p>{$t('importWizard.manualAssets.body')}</p>
-                                </InfoBanner>
-                            </div>
-                        {/if}
-
-                        {#if step4ShowResolveSection}
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 p-3">
-                                {#each assetResolutions as res (res.fakeAssetId)}
-                                    {@const isResolved = res.resolvedAssetId !== null}
-                                    <div class="border rounded-lg p-3 {isResolved ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-900/10' : 'border-gray-200 dark:border-gray-700'}">
-                                        <!-- Card header — name + badges on same flex-wrap row, TX count right -->
-                                        <div class="flex items-start justify-between gap-2 mb-1">
-                                            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 flex-1 min-w-0">
-                                                <span class="font-semibold text-sm text-gray-900 dark:text-gray-100 truncate max-w-full">
-                                                    {res.extractedName ?? res.extractedSymbol ?? '?'}
-                                                </span>
-                                                {#if res.extractedSymbol}
-                                                    {@const tc = getIndexColor(0, 200)}
-                                                    <span class="font-mono text-xs px-1.5 py-0.5 rounded-full shrink-0" style="background-color:{tc.bg};color:{tc.text}">
-                                                        Ticker: {res.extractedSymbol}
-                                                    </span>
-                                                {/if}
-                                                {#if res.extractedIsin}
-                                                    {@const ic = getIndexColor(1, 200)}
-                                                    <span class="font-mono text-xs px-1.5 py-0.5 rounded-full shrink-0" style="background-color:{ic.bg};color:{ic.text}">
-                                                        ISIN: {res.extractedIsin}
-                                                    </span>
-                                                {/if}
-                                            </div>
-                                            <span class="shrink-0 text-xs font-medium text-gray-500 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded whitespace-nowrap">
-                                                {res.txCount} TX
-                                            </span>
-                                        </div>
-                                        <div class="text-xs text-gray-400 mb-3 truncate">{res.sourceFiles.join(', ')}</div>
-
-                                        <!-- AssetSelect: candidates pinned at top via suggestedIds prop -->
-                                        <AssetSelect
-                                            value={res.resolvedAssetId}
-                                            placeholder={$t('importWizard.searchAll')}
-                                            compact={true}
-                                            createLabel={$t('importWizard.createNew')}
-                                            onCreateNew={() => startCreateAsset(res)}
-                                            suggestedIds={res.candidates.map((c) => ({
-                                                id: c.asset_id,
-                                                badge: $t(`importWizard.confidence.${c.match_confidence.toLowerCase()}`) || c.match_confidence,
-                                                badgeClass: confidenceBadgeClass(c.match_confidence.toLowerCase()),
-                                                badgeTooltip: $t(`importWizard.confidenceTip.${c.match_confidence.toLowerCase()}`) || c.match_confidence,
-                                            }))}
-                                            onchange={(id) => {
-                                                if (id !== null) resolveAssetManual(res.fakeAssetId, id, res);
-                                                else clearResolution(res.fakeAssetId);
-                                            }}
-                                        />
-                                        {#if duplicateCandidates(res).length >= 2}
-                                            <div class="mt-1.5 flex items-center gap-2 rounded border border-amber-300 bg-amber-50 px-2 py-1.5 dark:border-amber-700/60 dark:bg-amber-900/20" data-testid="import-wizard-duplicate-hint-{res.fakeAssetId}">
-                                                <AlertTriangle size={13} class="shrink-0 text-amber-500" />
-                                                <span class="min-w-0 flex-1 text-[11px] text-gray-600 dark:text-gray-300">{$t('importWizard.duplicateAssetHint')}</span>
-                                                <button type="button" class="shrink-0 rounded bg-amber-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-amber-700" onclick={() => openMergeFromCard(res)} data-testid="import-wizard-merge-assets-{res.fakeAssetId}">
-                                                    {$t('importWizard.duplicateAssetMerge')}
-                                                </button>
-                                            </div>
-                                        {/if}
-                                        {#if res.resolvedAssetId !== null}
-                                            <button
-                                                type="button"
-                                                class="ml-auto mt-1.5 flex w-fit items-center gap-1 text-xs text-gray-500 hover:text-libre-green disabled:opacity-50 dark:text-gray-400"
-                                                onclick={() => void openAssetInspector(res.resolvedAssetId!)}
-                                                disabled={inspectAssetLoading}
-                                                title={$t('importWizard.inspectAssetHint')}
-                                                data-testid="import-wizard-inspect-asset-{res.fakeAssetId}"
-                                            >
-                                                <Pencil size={12} />
-                                                {$t('importWizard.inspectAsset')}
-                                            </button>
-                                        {/if}
-                                    </div>
-                                {/each}
-                            </div>
-                        {/if}
-                    </div>
-                {/if}
-
-                {#if brokerOpeningIssues.length > 0}
-                    <div class="space-y-2 mb-3" data-testid="import-wizard-broker-opening-issues">
-                        {#each brokerOpeningIssues as issue (issue.brokerId)}
-                            <div class="flex flex-col gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 dark:border-amber-700/60 dark:bg-amber-900/20 sm:flex-row sm:items-center sm:gap-3">
-                                <div class="flex min-w-0 flex-1 items-start gap-2 sm:items-center">
-                                    <AlertTriangle size={16} class="mt-0.5 shrink-0 text-amber-500 sm:mt-0" />
-                                    <div class="min-w-0">
-                                        <BrokerBadge broker={issue.broker} size={18} showName={true} />
-                                        <p class="mt-0.5 text-xs text-gray-600 dark:text-gray-300">
-                                            {$t('importWizard.brokerOpeningMsg', {values: {count: issue.count, openedAt: issue.openedAt, minDate: issue.minTxDate}})}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div class="flex shrink-0 items-center gap-2">
-                                    <button
-                                        type="button"
-                                        class="flex items-center gap-1 rounded bg-libre-green px-2 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
-                                        onclick={() => void autoFixBrokerOpening(issue)}
-                                        disabled={autoFixingBrokerId !== null || !issue.minTxDate}
-                                        data-testid="broker-opening-autofix-{issue.brokerId}"
-                                        title={$t('importWizard.autoFixOpeningTip')}
-                                    >
-                                        {#if autoFixingBrokerId === issue.brokerId}
-                                            <Loader2 size={12} class="animate-spin" />
-                                        {:else}
-                                            <Wand2 size={12} />
-                                        {/if}
-                                        <span>{$t('importWizard.autoFixOpening', {values: {date: issue.minTxDate}})}</span>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        class="flex items-center gap-1 rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50 dark:border-slate-600 dark:hover:bg-slate-700"
-                                        onclick={() => void openBrokerOpeningEditById(issue.brokerId)}
-                                        data-testid="broker-opening-edit-{issue.brokerId}"
-                                    >
-                                        <Pencil size={12} /><span>{$t('importWizard.status.editBrokerDate')}</span>
-                                    </button>
-                                </div>
-                            </div>
-                        {/each}
-                    </div>
-                {/if}
-
-                <!-- ── TX Table (DataTable) ───────────────────────────── -->
-                <div class="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                    <!-- Toolbar row -->
-                    <div class="flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-200 dark:border-gray-700">
-                        <div class="flex items-center gap-3 text-sm">
-                            <span class="font-semibold">{$t('transactions.title')}</span>
-                            <span class="text-gray-500">{step4SelectedCount} / {step4TotalCount}</span>
-                            {#if step4SelectedDuplicateCount > 0}
-                                <Tooltip text={$t('importWizard.duplicatesSelectedTip')} position="top" maxWidth="320px" wrapperClass="inline-flex">
-                                    <span class="cursor-help text-xs text-amber-600 underline decoration-dotted dark:text-amber-400">⚠ {$t('importWizard.duplicatesSelected', {values: {n: step4SelectedDuplicateCount}})}</span>
-                                </Tooltip>
-                            {/if}
-                            {#if step4BeforeOpeningCount > 0}
-                                <span class="text-xs text-gray-500 dark:text-gray-400">⛔ {step4BeforeOpeningCount} {$t('importWizard.beforeOpeningCount')}</span>
-                            {/if}
-                            {#if step4BeforeHistoryCount > 0}
-                                <span class="text-xs text-gray-500 dark:text-gray-400" data-testid="import-wizard-before-history-count" data-count={step4BeforeHistoryCount}>⏮ {$t('importWizard.reportSet.beforeHistoryCount', {values: {n: step4BeforeHistoryCount}})}</span>
-                                <button type="button" class="text-xs text-libre-green hover:underline" onclick={() => (showBeforeHistory = !showBeforeHistory)} aria-pressed={showBeforeHistory} data-testid="import-wizard-before-history-toggle">
-                                    {showBeforeHistory ? $t('importWizard.reportSet.hideBeforeHistory') : $t('importWizard.reportSet.showBeforeHistory')}
-                                </button>
-                            {/if}
-                        </div>
-                        <div class="flex items-center gap-2">
-                            {#if step4BeforeOpeningCount > 0}
-                                <button
-                                    type="button"
-                                    class="text-xs text-libre-green hover:underline flex items-center gap-1 disabled:opacity-50"
-                                    onclick={() => void recheckOpenings()}
-                                    disabled={recheckingOpenings}
-                                    data-testid="import-wizard-recheck-openings"
-                                    title={$t('importWizard.recheckOpeningsTip')}
-                                >
-                                    <RefreshCw size={12} class={recheckingOpenings ? 'animate-spin' : ''} /><span class="hidden sm:inline">{$t('importWizard.recheckOpenings')}</span>
-                                </button>
-                                <span class="text-gray-300 dark:text-gray-600">|</span>
-                            {/if}
-                            <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1" onclick={step4SelectAll} data-testid="import-wizard-select-all">
-                                <CheckSquare size={12} /><span class="hidden sm:inline">{$t('common.selectAll')}</span>
-                            </button>
-                            <span class="text-gray-300 dark:text-gray-600">|</span>
-                            <button type="button" class="text-xs text-libre-green hover:underline flex items-center gap-1" onclick={step4SelectVisible} data-testid="import-wizard-select-visible" title={$t('importWizard.selectVisibleTip')}>
-                                <ListChecks size={12} /><span class="hidden sm:inline">{$t('importWizard.selectVisible')}</span>
-                            </button>
-                            <span class="text-gray-300 dark:text-gray-600">|</span>
-                            <button type="button" class="text-xs text-gray-500 hover:underline flex items-center gap-1" onclick={step4DeselectAll} data-testid="import-wizard-deselect-all">
-                                <Square size={12} /><span class="hidden sm:inline">{$t('common.deselectAll')}</span>
-                            </button>
-                            <span class="text-gray-300 dark:text-gray-600">|</span>
-                            <ColumnVisibilityToggle tableRef={step4TableRef} />
-                        </div>
-                    </div>
-
-                    {#if step4HasDeselectReasons}
-                        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-900/20 dark:text-amber-200" data-testid="import-wizard-deselect-banner">
-                            <span class="font-medium">{$t('importWizard.deselectReasons.title')}</span>
-                            {#if step4BeforeOpeningCount > 0}
-                                <span class="inline-flex items-center gap-1">⛔ {$t('importWizard.deselectReasons.beforeOpening', {values: {n: step4BeforeOpeningCount}})}</span>
-                            {/if}
-                            {#if step4DeselectPendingDup > 0}
-                                <span class="inline-flex items-center gap-1">⧉ {$t('importWizard.deselectReasons.pendingDuplicate', {values: {n: step4DeselectPendingDup}})}</span>
-                            {/if}
-                            {#if step4DeselectDbDup > 0}
-                                <span class="inline-flex items-center gap-1">⚠ {$t('importWizard.deselectReasons.dbDuplicate', {values: {n: step4DeselectDbDup}})}</span>
-                            {/if}
-                        </div>
-                    {/if}
-
-                    <DataTable
-                        bind:this={step4TableRef}
-                        data={step4Rows}
-                        columns={step4Columns}
-                        getRowId={(mt) => String(mt.index)}
-                        storageKey="import-wizard-step4"
-                        enableSelection={false}
-                        enableActions={false}
-                        enablePagination={true}
-                        defaultPageSize={25}
-                        pageSizeOptions={[10, 25, 50, 100, 0]}
-                        enableSorting={true}
-                        enableColumnFilters={true}
-                        enableColumnResize={true}
-                        enableColumnVisibility={true}
-                        tableLayout="auto"
-                        getRowClass={(mt) => `${!mt.selected ? 'opacity-50' : ''} ${mt.isDupKeeper ? 'bg-emerald-50/60 dark:bg-emerald-900/10' : ''}`.trim()}
-                        emptyMessage={$t('importWizard.noFiles')}
-                    />
-                </div>
-            </div>
+            <ReviewStep
+                {assetResolutions}
+                {autoFixingBrokerId}
+                {candidatesRefreshing}
+                {duplicateRecheckError}
+                {duplicateRecheckRunning}
+                {importPreparing}
+                {inspectAssetLoading}
+                {recheckingOpenings}
+                bind:showBeforeHistory
+                bind:step4ShowResolveSection
+                bind:step4TableRef
+                {brokerOpeningIssues}
+                {step4BeforeHistoryCount}
+                {step4BeforeOpeningCount}
+                {step4Columns}
+                {step4DeselectDbDup}
+                {step4DeselectPendingDup}
+                {step4HasDeselectReasons}
+                {step4MissingAssetCount}
+                {step4Rows}
+                {step4SelectedCount}
+                {step4SelectedDuplicateCount}
+                {step4TotalCount}
+                {step4UnresolvedCount}
+                {autoFixBrokerOpening}
+                {clearResolution}
+                {confidenceBadgeClass}
+                {openAssetInspector}
+                {openBrokerOpeningEditById}
+                {openMergeFromCard}
+                {recheckOpenings}
+                {resolveAssetManual}
+                {startCreateAsset}
+                {step4DeselectAll}
+                {step4SelectAll}
+                {step4SelectVisible}
+            />
         {:else if currentStepId === 'gapFix' && gapFixView}
             <!-- ============================================================ -->
             <!-- Align with the bank (report sets) -->
@@ -5374,248 +4644,47 @@ ${arrow}<span>${label}</span></span>`,
     <!-- ================================================================== -->
     <!-- Footer -->
     <!-- ================================================================== -->
-    <div class="flex items-center justify-between p-4 border-t border-gray-200 dark:border-gray-700">
-        {#if currentStepId === 'upload'}
-            <div class="flex items-center gap-1">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={handleClose}>
-                    {$t('common.cancel')}
-                </button>
-                {#if pendingFiles.length > 0 && step1HasUnassigned}
-                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                        <AlertTriangle size={14} />
-                        {$t('importWizard.brokerRequired')}
-                    </span>
-                {:else if pendingFiles.length > 0 && step1ValidCount > 0}
-                    <span class="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle size={14} />
-                        {$t('importWizard.allConfigured')}
-                    </span>
-                {/if}
-            </div>
-            <div class="flex items-center gap-2">
-                {#if pendingFiles.length > 0}
-                    <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={clearAllPendingFiles} data-testid="import-wizard-clear">
-                        {$t('common.clear') || 'Clear'}
-                    </button>
-                {/if}
-                <button
-                    type="button"
-                    class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                    onclick={goNext}
-                    disabled={!step1CanProceed || uploading || step1Continuing || brokersLoading}
-                    data-testid="import-wizard-next"
-                    use:guideAnchor={'import.action.upload'}
-                >
-                    {#if uploading || step1Continuing || brokersLoading}
-                        <LoadingSpinner size="sm" />
-                    {:else if step1ValidCount > 0}
-                        {$t('importWizard.next')} ({step1ValidCount}) ▶
-                    {:else}
-                        {$t('importWizard.next')} ▶
-                    {/if}
-                </button>
-            </div>
-        {:else if currentStepId === 'select'}
-            <div class="flex items-center gap-1">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
-                    ◀ {$t('common.back')}
-                </button>
-                {#if setBlockReason !== null}
-                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400" data-testid="import-wizard-set-blocks" data-reason={setBlockReason} data-file-ids={setBlockReason === 'ungrouped' ? ungroupedFiles.map((file) => file.fileId).join(',') : undefined}>
-                        <AlertTriangle size={14} />
-                        {#if setBlockReason === 'partly-selected'}
-                            {$t('importWizard.reportSet.partlySelectedBlocks')}
-                        {:else if setBlockReason === 'ungrouped'}
-                            {$t('importWizard.reportSet.ungroupedBlocks', {values: {files: ungroupedFiles.map((file) => file.fileName).join(', ')}})}
-                        {:else}
-                            {$t('importWizard.reportSet.incompleteBlocks')}
-                        {/if}
-                    </span>
-                {:else if selectedFiles.length > 0 && !step2CanParse}
-                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                        <AlertTriangle size={14} />
-                        {$t('importWizard.pluginRequired')}
-                    </span>
-                {:else if step2CanParse}
-                    <span class="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle size={14} />
-                        {$t('importWizard.allConfigured')}
-                    </span>
-                {/if}
-            </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={goNext} disabled={!step2CanParse} data-testid="import-wizard-parse" use:guideAnchor={'import.action.select'}>
-                {$t('importWizard.parse', {values: {n: parseUnits.length}})} ▶
-            </button>
-        {:else if currentStepId === 'analyze'}
-            <div class="flex items-center gap-1">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
-                    ◀ {$t('common.back')}
-                </button>
-                {#if parseParsing}
-                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                        <LoadingSpinner size="sm" />
-                        {$t('importWizard.parsingProgress', {values: {done: parseCompletedCount, total: parseTotalCount}})}
-                    </span>
-                {:else if parseDone && parseHasErrors && !parseHasSuccess}
-                    <span class="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
-                        <AlertTriangle size={14} />
-                        {$t('importWizard.parseCompleteWithErrors')}
-                    </span>
-                {:else if parseDone && parseHasErrors}
-                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                        <AlertTriangle size={14} />
-                        {$t('importWizard.parseCompleteWithErrors')}
-                    </span>
-                {:else if parseDone && parseHasSuccess}
-                    <span class="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle size={14} />
-                        {$t('importWizard.parseComplete')}
-                    </span>
-                {:else if usingCachedResults}
-                    <span class="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle size={14} />
-                        {$t('importWizard.cachedResults')}
-                    </span>
-                {/if}
-            </div>
-            <button
-                type="button"
-                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                onclick={goNext}
-                disabled={!step3CanContinue || candidatesRefreshing || duplicateRecheckRunning}
-                data-testid="import-wizard-continue"
-                use:guideAnchor={'import.action.analyze'}
-            >
-                {$t('common.continue')} ▶
-            </button>
-            <!--
-              The unification step had no footer branch of its own and fell through to the review
-              one, which judges *transactions*: it announced "select at least one transaction" on a
-              step that has none and disabled the only way forward.
-            -->
-        {:else if currentStepId === 'assets'}
-            <div class="flex items-center gap-1">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
-                    ◀ {$t('common.back')}
-                </button>
-                {#if assetGroupOpenProposals > 0}
-                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                        <AlertTriangle size={14} />
-                        {$t('importWizard.assetUnify.openProposals', {values: {n: assetGroupOpenProposals}})}
-                    </span>
-                {:else}
-                    <span class="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle size={14} />
-                        {$t('importWizard.assetUnify.allSettled', {values: {n: assetGroups.length}})}
-                    </span>
-                {/if}
-            </div>
-            <button
-                type="button"
-                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50"
-                onclick={goNext}
-                disabled={assetGroupOpenProposals > 0 || candidatesRefreshing || duplicateRecheckRunning}
-                data-testid="import-wizard-assets-continue"
-                use:guideAnchor={'import.action.assets'}
-            >
-                {$t('common.continue')} ▶
-            </button>
-        {:else if currentStepId === 'fix'}
-            <div class="flex items-center gap-1">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
-                    ◀ {$t('common.back')}
-                </button>
-                {#if fixStepPendingCount > 0}
-                    <span class="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
-                        <AlertTriangle size={14} />
-                        {$t('importWizard.fixStep.pending', {values: {n: fixStepPendingCount}})}
-                    </span>
-                {:else}
-                    <span class="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle size={14} />
-                        {$t('importWizard.fixStep.allDone')}
-                    </span>
-                {/if}
-            </div>
-            <button
-                type="button"
-                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                onclick={goNext}
-                disabled={fixStepPendingCount > 0 || duplicateRecheckRunning || candidatesRefreshing}
-                data-testid="import-wizard-fix-continue"
-                use:guideAnchor={'import.action.fix'}
-            >
-                {#if duplicateRecheckRunning}
-                    <LoadingSpinner size="sm" />
-                {:else}
-                    {$t('common.continue')} ▶
-                {/if}
-            </button>
-        {:else if currentStepId === 'duplicates'}
-            <div class="flex items-center gap-1">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
-                    ◀ {$t('common.back')}
-                </button>
-                {#if resolverPartialCount > 0}
-                    <span class="flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400">
-                        <AlertTriangle size={14} />
-                        {$t('importWizard.resolver.statusToVerify', {values: {n: resolverPartialCount}})}
-                    </span>
-                {:else}
-                    <span class="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle size={14} />
-                        {$t('importWizard.resolver.statusAllAuto')}
-                    </span>
-                {/if}
-            </div>
-            <button
-                type="button"
-                class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50"
-                onclick={goNext}
-                disabled={candidatesRefreshing || duplicateRecheckRunning}
-                data-testid="import-wizard-duplicates-continue"
-                use:guideAnchor={'import.action.duplicates'}
-            >
-                {$t('common.continue')} ▶
-            </button>
-        {:else if currentStepId === 'gapFix'}
-            <div class="flex items-center gap-2">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
-                    ◀ {$t('common.back')}
-                </button>
-                <span class="text-xs text-gray-600 dark:text-gray-300" data-testid="import-wizard-gapfix-count" data-count={gapFixSelectedTotal}>
-                    {$t('importWizard.reportSet.gapFix.selectedCount', {values: {n: gapFixSelectedTotal}})}
-                </span>
-            </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50" onclick={handleGapFixContinue} disabled={importPreparing} data-testid="import-wizard-gapfix-continue" use:guideAnchor={'import.action.gapFix'}>
-                {$t('common.continue')} ▶
-            </button>
-        {:else}
-            <div class="flex items-center gap-1">
-                <button type="button" class="px-4 py-2 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={goBack} data-testid="import-wizard-back">
-                    ◀ {$t('common.back')}
-                </button>
-                {#if step4HasUnresolvedSelected}
-                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                        <AlertTriangle size={14} />
-                        {$t('importWizard.importDisabledUnresolved') || 'Resolve all assets to import'}
-                    </span>
-                {:else if step4SelectedCount === 0}
-                    <span class="flex items-center gap-1 text-xs text-gray-400">
-                        {$t('importWizard.importDisabledEmpty') || 'Select at least one transaction'}
-                    </span>
-                {:else if step4SelectedDuplicateCount > 0}
-                    <span class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                        <AlertTriangle size={14} />
-                        {$t('importWizard.duplicatesSelected', {values: {n: step4SelectedDuplicateCount}})}
-                    </span>
-                {/if}
-            </div>
-            <button type="button" class="px-4 py-2 text-sm rounded-lg bg-libre-green text-white hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed" onclick={handleImport} disabled={!step4CanImport} data-testid="import-wizard-import" use:guideAnchor={'import.action.review'}>
-                {$t('importWizard.importToEditor', {values: {n: step4SelectedCount}})} ▶
-            </button>
-        {/if}
-    </div>
+    <WizardFooter
+        {assetGroups}
+        {brokersLoading}
+        {candidatesRefreshing}
+        {currentStepId}
+        {duplicateRecheckRunning}
+        {importPreparing}
+        {pendingFiles}
+        {selectedFiles}
+        {step1Continuing}
+        {uploading}
+        {usingCachedResults}
+        {assetGroupOpenProposals}
+        {fixStepPendingCount}
+        {gapFixSelectedTotal}
+        {parseCompletedCount}
+        {parseDone}
+        {parseHasErrors}
+        {parseHasSuccess}
+        {parseParsing}
+        {parseTotalCount}
+        {parseUnits}
+        {resolverPartialCount}
+        {setBlockReason}
+        {step1CanProceed}
+        {step1HasUnassigned}
+        {step1ValidCount}
+        {step2CanParse}
+        {step3CanContinue}
+        {step4CanImport}
+        {step4HasUnresolvedSelected}
+        {step4SelectedCount}
+        {step4SelectedDuplicateCount}
+        {ungroupedFiles}
+        {clearAllPendingFiles}
+        {goBack}
+        {goNext}
+        {handleClose}
+        {handleGapFixContinue}
+        {handleImport}
+    />
 </ModalBase>
 
 <!-- Unsaved guard -->

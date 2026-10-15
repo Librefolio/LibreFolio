@@ -513,6 +513,26 @@ def services_session_version(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Session version tests", verbose=verbose)
 
 
+def services_address_probe(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the address probe: the signed nonce of the Invite dialog's server-address check (A6a, D-A3)."""
+    print_section("Services: Address Probe")
+    print_info("Testing: backend/app/services/accounts/address_probe.py (issue_probe_nonce, verify_probe_nonce)")
+    print_info("Tests: 56-byte layout under derive_key('accounts.address-probe.v1'), valid while expiry >= now, every forgery and malformed text refused, another instance refused, hmac.compare_digest, never raises")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_address_probe.py", test_names)
+    return run_command(cmd, "Address probe tests", verbose=verbose)
+
+
+def services_account_deletion_preview(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what deleting an account would take, the one helper both deletions use, and the hook of lot A7 (A6a)."""
+    print_section("Services: Account Deletion Preview")
+    print_info("Testing: backend/app/services/accounts/user_service.py (preview_user_deletion, delete_account, account_protection)")
+    print_info("Tests: the preview is what delete_user then deletes in seven scenarios, transaction counts, transfers left unpaired in both directions, writes nothing; report files removed once after the commit, off the loop, never when nothing is deleted or the deletion fails; the hook protects nobody")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_deletion_preview.py", test_names)
+    return run_command(cmd, "Account deletion preview service tests", verbose=verbose)
+
+
 def services_edge_cases(verbose: bool = False, test_names: list = None) -> bool:
     """Test edge cases and regression scenarios for transactions."""
     print_section("Services: Transaction Edge Cases")
@@ -671,6 +691,16 @@ def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "ROI/FIFO/Portfolio service tests", verbose=verbose)
 
 
+def services_orphan_transfer_numbers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the lots and the Dashboard of a broker whose TRANSFER partner was deleted with its broker (V-3, D-J4)."""
+    print_section("Services: Orphan Transfer After Broker Delete (V-3 numbers)")
+    print_info("Testing: LotsAnalysisService and PortfolioService after BrokerService.delete_bulk leaves the other half of a TRANSFER")
+    print_info("Tests: TRANSFER_PAIR_MISSING vs the ADJUSTMENT-in lot, in-kind capital at market value vs at cost basis, against a control book")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_orphan_transfer_after_broker_delete.py", test_names)
+    return run_command(cmd, "Orphan transfer numbers tests", verbose=verbose)
+
+
 def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test the read-only PAC/Rebalancer portfolio source snapshot."""
     print_section("Services: Portfolio Allocation Source")
@@ -700,6 +730,15 @@ def services_asset_source_guards(verbose: bool = False, test_names: list = None)
     print_info("Tests: OHLC rejection policy, close-only bound widening, identifier filters, event FX pass")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source_upsert_guards.py", test_names)
     return run_command(cmd, "Asset Source guard tests", verbose=verbose)
+
+
+def services_asset_event_store(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the manual asset-event store contract tests (release 1.3, W E1a: decisions 20-23)."""
+    print_section("Services: Asset Event Store")
+    print_info("Testing: backend/app/services/assets/event_store.py, backend/app/schemas/assets/events.py")
+    print_info("Tests: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_event_store.py", test_names)
+    return run_command(cmd, "Asset Event Store tests", verbose=verbose)
 
 
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
@@ -1241,6 +1280,28 @@ Note: No backend server required.
         # server. The JWT secret and hash_password are replaced with monkeypatch, in this process only.
         isolation="pure",
     )
+    add_test(
+        cat,
+        "address-probe",
+        services_address_probe,
+        name="Address Probe",
+        desc="issue_probe_nonce/verify_probe_nonce: base64url(rand16 ‖ expiry_be8 ‖ HMAC-SHA256(derive_key('accounts.address-probe.v1'))), 120 s while expiry >= now, every altered, malformed, oversized, non-canonical or foreign nonce refused, hmac.compare_digest, never raises",
+        # PURE: no lane DB, no server, no network; the instance key is set with monkeypatch and the data directory points
+        # to tmp_path, where the generated keys of the «another instance» case live.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "account-deletion-preview",
+        services_account_deletion_preview,
+        name="Account Deletion Preview",
+        desc="preview_user_deletion = what delete_user deletes (sole owner, two owners, owner over editor and viewer, editor/viewer only, inactive co-owner, mixed, no broker), transaction counts, transfers_unpaired both directions, writes nothing; delete_account: report files once after the commit, off the loop, not when nothing is deleted, nothing on failure; account_protection None",
+        # PURE: every database is a private file under tmp_path, copied from one taken to head by the real migrations in a
+        # child process (create_all lacks the ON DELETE CASCADE of broker_user_access that delete_user relies on); no session
+        # on the lane DB, no server. The BRIM report directory is moved under tmp_path and the report cleanup replaced with
+        # monkeypatch, in this process only.
+        isolation="pure",
+    )
     add_test(cat, "edge-cases", services_edge_cases, name="Transaction Edge Cases", desc="Decimal precision, currency validation, date edge cases")
     add_test(
         cat,
@@ -1293,6 +1354,16 @@ Note: No backend server required.
     add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price marks")
     add_test(
         cat,
+        "orphan-transfer-numbers",
+        services_orphan_transfer_numbers,
+        name="Orphan Transfer Numbers",
+        desc="Lots and Dashboard once a broker deletion leaves the other half of a TRANSFER: the orphan against an ADJUSTMENT-in control",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+    )
+    add_test(
+        cat,
         "portfolio-allocation-source",
         services_portfolio_allocation_source,
         name="Portfolio Allocation Source",
@@ -1322,6 +1393,18 @@ Note: No backend server required.
         # asset this unit creates and every price/event row written against it are
         # visible to all concurrent tests. Rows are uniquely named and dropped in
         # teardown, but the tables themselves are shared surfaces.
+        isolation="write-global",
+    )
+    add_test(
+        cat,
+        "asset-event-store",
+        services_asset_event_store,
+        name="Asset Event Store",
+        desc="Manual events: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset",
+        # WRITE_GLOBAL: Asset and AssetEvent carry no user_id (nor do the AssetProviderAssignment,
+        # Broker and Transaction written beside them), so the two assets this unit creates and
+        # every event and transaction written against them are visible to all concurrent tests.
+        # Rows are uniquely named and dropped in teardown, but the tables are shared surfaces.
         isolation="write-global",
     )
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
