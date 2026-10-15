@@ -93,17 +93,22 @@ Provider codes are discovered by **regex-parsing** the Python source files — t
 
 ## 🔄 yfinance Retry Logic
 
-The Yahoo Finance provider includes automatic retry with exponential backoff for transient network errors (API instability, rate limiting, timeouts).
+The Yahoo Finance provider includes automatic retry with exponential backoff for transient network errors (API instability, timeouts).
 
 | Parameter | Value |
 |-----------|-------|
-| Max retries | 3 |
-| Base delay | 1.5 s (→ 1.5 s, 3 s, 6 s) |
-| Transient keywords | `curl`, `connection`, `timeout`, `reset`, `503`, `429`, `rate limit`, etc. |
+| Attempts | At most 3 (`_YF_MAX_RETRIES`) |
+| Delays | 1.5 s, then 3 s |
+| Transient keywords | `curl`, `connection`, `timeout`, `reset`, `503`, `ssl`, `broken pipe`, etc. |
 
 **Wrapped operations:** `get_current_value`, `get_history_value`, `search`, `fetch_asset_metadata`.
 
-Non-transient errors (e.g., `INVALID_IDENTIFIER_TYPE`) are raised immediately without retry.
+Non-transient errors (e.g., `INVALID_IDENTIFIER_TYPE`) are raised immediately without retry. So is a
+refusal for too many requests (`YFRateLimitError`, or «429», «too many requests», «rate limit» in the
+message): it leaves at once as `AssetRateLimitedError` (`RATE_LIMITED`), for the core to pause the
+provider (see [Yahoo Finance Provider](../backend/assets/provider_yahoo_finance.md#limitations)).
+These tests call the provider directly, not through the core's boundary: a refusal fails the test
+with that error, and no pause follows.
 
 !!! note "Thread safety"
 

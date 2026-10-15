@@ -146,10 +146,20 @@ frontend/src/lib/components/
 
 ## 🖥️ Backend Support
 
-- **Image preview API**: `GET /api/v1/uploads/file/{id}?img_preview=WxH`
+- **Image preview API**: `GET /api/v1/uploads/file/{id}?img_preview=WxH`, answered with `Cache-Control: private, max-age=3600`
 - **Preview cache**: Size-based (`PREVIEW_CACHE_MAX_MB` in `.env`, default 50MB), TTL 1h, invalidated on delete
 - **No-op for small images**: If requested size ≥ original, serves file directly without processing
-- **Seed avatars**: 30 default avatar PNGs copied to `custom-uploads/` on first startup via `seed_default_avatars()`
+- **Scope**: every upload is `common` (every signed-in user sees it) or `personal` (its uploader and the admins).
+  `POST /api/v1/uploads` takes an optional multipart field `scope`; without it, a file whose validated type (below) is
+  `image/*` is stored common and any other file personal. `PATCH /api/v1/uploads/{id}` with `{"scope": "common"}` or
+  `{"scope": "personal"}` changes it, for the uploader or an admin. Every `UploadFileInfo` carries `scope` and
+  `can_delete`: whether the requesting user may delete the file and change its scope. The full rule, older files
+  included: [Uploaded Files: Common and Personal](../../../architecture/security.md#upload-scope)
+- **Seed avatars**: 30 default avatar PNGs copied to `custom-uploads/` on first startup via `seed_default_avatars()`,
+  with uploader `0` (the system): they are common
+- **Off the event loop**: the handlers of uploaded files (`api/v1/uploads.py`) run the service's synchronous disk work
+  (`save_upload`, `list_uploads`, `get_upload_info`, `get_upload_path`, `set_upload_scope`, `delete_upload`) through
+  `asyncio.to_thread`
 - **Upload utility**: Centralized `uploadFile()` in `utils/upload.ts` — single FormData creation point
 - **Size formatting**: Centralized i18n-aware `formatBytes()` in `utils/upload.ts`
 
@@ -169,8 +179,13 @@ Server side:
   `python-magic` (libmagic) loads, the content's detected type must not be in
   `BLOCKED_MIME_TYPES`, otherwise the type is guessed from the extension (`mimetypes`). A
   declared type that differs from the detected one is only logged. A refused file returns `400`.
-- **Static delete** — only the uploader or a superuser (`403` *Cannot delete files uploaded by
-  other users*); the UI shows the action to everyone.
+- **Static delete and scope change** — `DELETE` and `PATCH /uploads/{id}` belong to the uploader or a superuser.
+  Another user gets `403` on a common file (*Cannot delete files uploaded by other users*, *Cannot change files
+  uploaded by other users*) and, on a personal one, the `404` of a file that does not exist; the UI shows the delete
+  action to everyone.
 - **Broker reports** — EDITOR or OWNER on the target broker (`403`), an empty file is refused
   (`400`), `batch_id` must be a UUID (`422`). There is no server-side extension check: only the
   uploader's `accept` limits them to CSV and Excel.
+
+The two families differ deliberately: someone else's personal static file answers `404`, so its existence is not
+revealed, while the broker report routes answer `403` to a user without access to the file's broker.
