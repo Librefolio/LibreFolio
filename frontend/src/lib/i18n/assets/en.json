@@ -377,8 +377,6 @@
   },
   "events": {
     "deleteSuccess": "{n} event(s) deleted",
-    "deleteNotFound": "Event(s) not found: {ids}",
-    "deleteBlocked": "Cannot delete: {n} event(s) still in use by transactions ({accessible} visible to you, {hidden} in other users' portfolios)",
     "fxBannerContext": "for dividend/cash events",
     "exists": {
       "title": "This event already exists",
