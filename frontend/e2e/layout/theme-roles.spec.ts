@@ -3,7 +3,8 @@
  * in the light and in the dark theme — and the page content not migrated yet keeps today's look (colour programme,
  * workstream T: step T-2, the login/registration pilot; step T-3, the app shell; step T-5, the login background; then
  * the designer's round 2 of the palette, «Pietra e Salvia» in light and «Ardesia e Salvia» in dark, with decision
- * D-T15: the sidebar turns neutral, and the brand green stays on the login header and the primary buttons only).
+ * D-T15: the sidebar turns neutral, and the brand green stays on the login header and the primary buttons only — and,
+ * at the developer's request of 15/10, on the logo block at the top of the sidebar, as on the login card header).
  *
  * ## What this protects
  *
@@ -19,8 +20,9 @@
  * Round 2 changed values, which this spec never writes, and four things it reads: the app and the standalone pages
  * share one background (--lf-surface-app is derived from --lf-surface-page); the sidebar left the brand green for a
  * neutral surface of its own, --lf-surface-sidebar, and the text roles (D-T15), its active item marked on the panel
- * surface, in the link colour, with a focus border; the connection-security line on it draws its level in a status
- * role; and the password requirements left success-soft for the panel surface.
+ * surface, in the link colour, with a focus border — all but its logo block, which the developer brought back to the
+ * brand green (15/10); the connection-security line on it draws its level in a status role; and the password
+ * requirements left success-soft for the panel surface.
  *
  * The login background (ui/AnimatedBackground.svelte, fixed behind `/` and the error page) left its literals for roles
  * as well, and its dark rules (`:global(html.dark)`) with them: its surface is --lf-surface-page, its illustration the
@@ -43,6 +45,10 @@
  *   - `app-shell`: background --lf-surface-app;
  *   - the sidebar — the `<nav>` that holds `sidebar-collapse-toggle`, since it has no test id of its own: background
  *     --lf-surface-sidebar, text --lf-text-primary, right border --lf-border-subtle;
+ *   - its logo block, `sidebar-brand`, the one green part of it: background --lf-brand, text --lf-on-brand, the pair of
+ *     the login card header, with --lf-brand and --lf-surface-sidebar resolved to two different colours first. Text
+ *     colour is inherited, so its reading proves the block's own role only where --lf-on-brand differs from the
+ *     sidebar's --lf-text-primary: in light, where that is checked first; in dark --lf-on-brand is --lf-text-primary;
  *   - its active item, `nav-dashboard` — the item whose href is the page on view, both read back first: background
  *     --lf-surface-panel, text --lf-link, right border --lf-focus; an inactive item, `nav-settings`, read at rest (no
  *     pointer over it, checked): text --lf-text-secondary;
@@ -110,7 +116,8 @@
  *   - the sidebar as it slides: on mobile it waits off-canvas and is read there — a computed colour does not depend on
  *     where the drawer is, so it is not opened;
  *   - what is fleeting: the sidebar's hover states (an inactive item's `hover:bg-lf-hover hover:text-lf-primary`, which
- *     is why that item is read at rest), the collapsed sidebar's tooltips (shown on hover only), and the shell's waiting
+ *     is why that item is read at rest, and the tint of the logo block's close button, `hover:bg-lf-on-brand/10`, a
+ *     button drawn on mobile only), the collapsed sidebar's tooltips (shown on hover only), and the shell's waiting
  *     screens (`app-auth-checking`, `app-bootstrap-loading`, `onboarding-redirecting`) and `welcome-shell`, which a
  *     signed-in landing passes through, or never reaches, before anything could be read;
  *   - the connection-security levels the lane does not report: on its localhost the line is secure, so the other two
@@ -369,7 +376,7 @@ test.describe('Colour roles in the app shell — signed in as TEST_USER, on /das
     test.describe.configure({timeout: 120_000});
 
     for (const theme of THEMES) {
-        test(`(b) ${theme} theme: the shell draws the app background, the neutral sidebar and the header from the roles`, async ({page}) => {
+        test(`(b) ${theme} theme: the shell draws the app background, the neutral sidebar with its green logo block, and the header from the roles`, async ({page}) => {
             await openDashboard(page, theme);
 
             // Round 2: the app and the standalone pages share one background, --lf-surface-app derived from --lf-surface-page.
@@ -381,10 +388,25 @@ test.describe('Colour roles in the app shell — signed in as TEST_USER, on /das
             // and is read there, since a computed colour does not depend on where the drawer is.
             const sidebar = page.locator('nav').filter({has: page.getByTestId('sidebar-collapse-toggle')});
             await expect(sidebar, 'one <nav> holds sidebar-collapse-toggle: the sidebar').toHaveCount(1);
-            // D-T15: neutral, on a surface of its own and the text roles, no longer the brand green.
+            // D-T15: neutral, on a surface of its own and the text roles, no longer the brand green — but for its logo block.
             await expectRole(page, sidebar, 'background-color', '--lf-surface-sidebar', 'the sidebar');
             await expectRole(page, sidebar, 'color', '--lf-text-primary', 'the sidebar text');
             await expectRole(page, sidebar, 'border-right-color', '--lf-border-subtle', 'the sidebar right border');
+
+            // The logo block keeps the green of the login card header (developer, 15/10): a surface and a text role of its
+            // own, inside the sidebar that stays neutral around it.
+            const brand = sidebar.getByTestId('sidebar-brand');
+            await expect(brand, 'the sidebar holds its logo block, sidebar-brand').toHaveCount(1);
+            const sidebarSurface = await role(page, '--lf-surface-sidebar', 'background-color');
+            expect(await role(page, '--lf-brand', 'background-color'), `positive control: --lf-brand is not --lf-surface-sidebar (${sidebarSurface}), or the logo block could not be told from the sidebar it sits on`).not.toBe(sidebarSurface);
+            await expectRole(page, brand, 'background-color', '--lf-brand', 'the logo block, sidebar-brand');
+            if (theme === 'light') {
+                // `color` is inherited: a block with no text role of its own would draw the sidebar's. In light the two roles
+                // differ, so the reading below tells them apart; in dark --lf-on-brand is --lf-text-primary itself.
+                const sidebarText = await role(page, '--lf-text-primary', 'color');
+                expect(await role(page, '--lf-on-brand', 'color'), `positive control: in light --lf-on-brand is not the sidebar text, --lf-text-primary (${sidebarText}), so the logo block's text reads its own role, not an inherited one`).not.toBe(sidebarText);
+            }
+            await expectRole(page, brand, 'color', '--lf-on-brand', 'the logo block text');
 
             // The active item is the one whose href is the page on view: both read back, never inferred from a class.
             await expect(page, 'the page on view is /dashboard').toHaveURL(DASHBOARD_URL);
