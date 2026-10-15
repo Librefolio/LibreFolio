@@ -1259,3 +1259,20 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   - In ogni run E2E `_ensure_test_users` stampa «Test users ready», senza errori. Nella base della corsia c'è un
 >     solo 👑, `e2e_test_admin`.
 >   - Porta 6182 libera. Worktree: cambia solo questo piano.
+>
+> **Esito**: il coordinatore ha committato questo piano in `211a05e0b` (`docs(journal): A3 combined validation`).
+> Poi ha aggiornato la base con il merge `d851c39bc` di `dev_release2` a `f39be79b7`, che porta W I1: backend di
+> transazioni e broker, `TransactionBulkModal.svelte`, `e2e/transactions/tx-broker-access.spec.ts` e il cancello
+> `utils gate-event-loop-io`, unito da solo in `_backend_utils.py`. Merge pulito, worktree pulito.
+
+#### A3.9 — Validazione mirata della revisione `d851c39bc` ✅ (2026-10-15)
+> **Note implementazione** (`bash /tmp/libreFolio_a3d_validate.sh`, corsia 6182, dalle 03:06 alle 03:16, tutto exit 0;
+> niente `all-backend`, su indicazione del coordinatore: A3 non tocca `backend/app/`, e il backend di W lo valida W):
+> - `dev.py front build --debug` e `front check`: svelte-check «0 errors and 0 warnings».
+> - Vitest: `core-unit` 131 file e **4 261** test; `component-unit` 119 file e **3 192** test.
+> - `theme-roles.mjs --check`: «clean».
+> - `check-orphans`: 366 unitari, 118 E2E e **265** file backend (più `test_event_loop_brim_io_gate.py` di W).
+> - `utils dev-cli-image`: **39** passati; `utils gate-event-loop-io`: **14** passati.
+> - `dev.py mkdocs build`: exit 0, perché il merge cambia due pagine e il server ricostruisce il sito dentro i 300 s.
+> - E2E: `front-utility auth` **29**, `front-utility settings` **45**, `front-transaction tx-broker-access` **5**.
+> - Tutti i conteggi sono quelli attesi dal coordinatore. `git diff --check` pulito, porta 6182 libera.
