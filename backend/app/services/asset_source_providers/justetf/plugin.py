@@ -14,19 +14,22 @@ from typing import Dict, List, Optional
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.logging_config import get_logger
-from backend.app.schemas.assets import (
-    FAAssetEventPoint,
-    FAAssetPatchItem,
+from backend.app.schemas.assets.assets import FAAssetPatchItem
+from backend.app.schemas.assets.events import FAAssetEventPoint
+from backend.app.schemas.assets.metadata import (
     FAClassificationParams,
-    FACurrentValue,
     FAGeographicArea,
-    FAHistoricalData,
-    FAPricePoint,
     FASectorArea,
 )
 from backend.app.schemas.common import Currency as CurrencyAmount
-from backend.app.services.asset_source import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
-from backend.app.services.provider_registry import AssetProviderRegistry, register_provider
+from backend.app.schemas.prices import (
+    FACurrentValue,
+    FAHistoricalData,
+    FAPricePoint,
+)
+from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector
 from backend.app.utils.runtime.cache import get_ttl_cache
 

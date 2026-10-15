@@ -35,17 +35,27 @@
  * back down to the same scroll — the header sees a scroll down and slides away, and the frame keeps its place. An open
  * dialog pins the header (`modalScrollLockCount`): there is nothing to put back.
  *
+ * ## Before the first measurement
+ *
+ * A fit measures the subject before `screenshot()` settles the page. Content still loading changes the subject's height after
+ * the fit, and the image's height with it: the import plugins' «Loading…» line under the edit modal's select, the KPI
+ * skeletons of a broker's page, the scheduler's state in Global settings — the six «size changed» images of the noise run,
+ * three shots (plan 56). So every fit first waits for the page's `/api/` requests to be answered and for no loader on screen,
+ * the first two steps of every shot's settle ({@link apiQuiet} and {@link noLoaderOnScreen}, galleryShot.ts), and measures
+ * after.
+ *
  * ## After a resize
  *
  * A chart may redraw (its container's ResizeObserver, a `resize` listener), and content that came into view may load its
- * images. Every fit ends on the subject's images loaded, its charts' pixels and render counters still ({@link chartsStill}),
- * nothing animating and nothing moving, the pointer parked with no tooltip — then on the whole subject asserted in the shot,
- * and one line in the run's log (📐).
+ * images. Every fit ends on the subject's images loaded, its charts drawn and their pixels and render counters still
+ * ({@link chartsStill}, galleryShot.ts — every shot's settle reads them the same way), nothing animating and nothing moving,
+ * the pointer parked with no tooltip — then on the whole subject asserted in the shot, and one line in the run's log (📐).
  */
 
 import {expect, type Locator, type Page} from './playwright';
 import {waitForStillness} from './galleryReportSets';
 import {imagesSettled, parkPointer} from './galleryRiskLab';
+import {apiQuiet, chartsStill, noLoaderOnScreen} from './galleryShot';
 
 /** The whole page, as a block for {@link extendScreenToBlock}: the screen becomes as tall as the page. */
 export const PAGE_BLOCK = 'body';
@@ -162,43 +172,6 @@ async function animationsSettled(scope: Locator, what: string): Promise<void> {
     await expect.poll(() => scope.evaluate((root) => root.getAnimations({subtree: true}).filter((animation) => animation.playState === 'running').length), {message: `${what} is still animating`, timeout: 5_000}).toBe(0);
 }
 
-/**
- * The charts in `scope` have stopped drawing: their pixels and their render counters (`data-chart-renders`, chartReady.ts) are
- * the same twice running — galleryRiskDashboard.ts `canvasStill`, for canvases the page may not read too. The holdings map
- * draws the brokers' logos, pictures from other sites, and a canvas that holds one is closed to reading (`toDataURL` throws):
- * its size stands for it, and its render counter tells when ECharts drew it again.
- */
-async function chartsStill(scope: Locator, what: string): Promise<void> {
-    let previous: string | null = null;
-    await expect
-        .poll(
-            async () => {
-                const now = await scope.evaluate((root) => {
-                    const canvases = Array.from(root.querySelectorAll('canvas'));
-                    let hash = 0;
-                    for (const canvas of canvases) {
-                        let pixels = `${canvas.width}x${canvas.height}`;
-                        if (canvas.width > 0 && canvas.height > 0) {
-                            try {
-                                pixels = canvas.toDataURL();
-                            } catch {
-                                // A picture from another site is drawn in it: its size stands for its pixels.
-                            }
-                        }
-                        for (let index = 0; index < pixels.length; index += 1) hash = (Math.imul(hash, 31) + pixels.charCodeAt(index)) | 0;
-                    }
-                    const passes = Array.from(root.querySelectorAll('[data-chart-renders]'), (chart) => chart.getAttribute('data-chart-renders') ?? '').join(',');
-                    return `${canvases.length}:${hash}:${passes}`;
-                });
-                const still = now === previous;
-                previous = now;
-                return still;
-            },
-            {message: `${what} is still drawing`, timeout: 15_000, intervals: [150, 250]},
-        )
-        .toBe(true);
-}
-
 /** What a resize can change in the subject: images that came into view, charts redrawn, anything still moving. */
 async function settleAfterResize(page: Page, subject: Locator, what: string): Promise<void> {
     await imagesSettled(subject);
@@ -207,6 +180,16 @@ async function settleAfterResize(page: Page, subject: Locator, what: string): Pr
     await waitForStillness(subject, what);
     // The subject may have moved under the pointer: parked again, where nothing reacts to it, and no tooltip left.
     await parkPointer(page);
+}
+
+/**
+ * The page has finished loading what the fit is about to measure: no `/api/` request in flight, and no loader on screen — the
+ * first two steps of the shot's own settle (galleryShot.ts), run here because the fit measures before the shot settles. A
+ * height measured while a «Loading…» line or a skeleton still stood in for the content was the height of that run only.
+ */
+async function loadedBeforeMeasuring(page: Page, shot: string): Promise<void> {
+    await apiQuiet(page, shot);
+    await noLoaderOnScreen(page, shot);
 }
 
 /** Take the marks of an earlier dialog fit off the page. */
@@ -228,15 +211,17 @@ async function clearMarks(page: Page): Promise<void> {
  * stays where the test scrolled it — and grow the screen down to `block`'s end plus the frame's margin, `max(720,
  * ceil(bottom) + 8)` with the bottom read on the screen, width and scale unchanged; never past the end of the page, which
  * would pull the frame up. `footer`, a bar that sticks to the screen's bottom edge over the page (the PAC wizard's Back and
- * Continue), is made room for under the block. Measured with the block standing still, every combination — its sentences
- * wrap differently in each language — and again after each resize: a block that follows the screen gets the screen that holds
- * it grown, one whose height grows as fast as the screen fails here instead of being cut. Ends on the header as it was, the
- * block settled again (a resize may redraw a chart), asserted whole in the shot and clear of the footer, and logged (📐) under
- * `shot`. {@link restoreTallScreen} puts the project's screen back when the test goes on.
+ * Continue), is made room for under the block. Measured once the page has loaded ({@link loadedBeforeMeasuring}) and with the
+ * block standing still, every combination — its sentences wrap differently in each language — and again after each resize: a
+ * block that follows the screen gets the screen that holds it grown, one whose height grows as fast as the screen fails here
+ * instead of being cut. Ends on the header as it was, the block settled again (a resize may redraw a chart), asserted whole in
+ * the shot and clear of the footer, and logged (📐) under `shot`. {@link restoreTallScreen} puts the project's screen back when
+ * the test goes on.
  */
 export async function extendScreenToBlock(page: Page, block: Locator, shot: string, options: {footer?: Locator} = {}): Promise<void> {
     await refuseOnPhone(page);
     const own = rememberScreen(page);
+    await loadedBeforeMeasuring(page, shot);
     await expect(block, `${shot}: the block is not on the page`).toBeVisible();
     await waitForStillness(block, `${shot}: the block`);
     // The screen the block asks for, on the screen it is on now.
@@ -404,16 +389,18 @@ function dialogTarget(measure: DialogMeasure, own: Screen): number {
  * galleryProviderCompare.ts `fitScreenToCompareDialog`, generalised. `dialog` is the dialog's element — its backdrop
  * (ModalBase puts the test id there), its column or its body; `body`, when given, is the box that scrolls, found otherwise as
  * the one inside `dialog` with the most content hidden. The screen becomes the height at which no capped box holds the body
- * back ({@link dialogTarget}), width and scale unchanged — measured with the dialog standing still, every combination, and
- * again after each resize: a cap in pixels does not follow the screen, and the fit fails naming it instead of shooting a body
- * that still hides its content. Ends on the body showing all its content in flow, the dialog settled again, its box asserted
- * whole in the shot, and logged (📐) under `shot` — with the scroll left by a box hanging out of the flow, when there is one.
- * Returns the dialog's box — ModalBase's content: the title, the body and the buttons — valid until the next fit or the
- * restore. {@link restoreTallScreen} puts the project's screen back.
+ * back ({@link dialogTarget}), width and scale unchanged — measured once the page has loaded ({@link loadedBeforeMeasuring})
+ * and with the dialog standing still, every combination, and again after each resize: a cap in pixels does not follow the
+ * screen, and the fit fails naming it instead of shooting a body that still hides its content. Ends on the body showing all
+ * its content in flow, the dialog settled again, its box asserted whole in the shot, and logged (📐) under `shot` — with the
+ * scroll left by a box hanging out of the flow, when there is one. Returns the dialog's box — ModalBase's content: the title,
+ * the body and the buttons — valid until the next fit or the restore. {@link restoreTallScreen} puts the project's screen
+ * back.
  */
 export async function fitScreenToDialog(page: Page, dialog: Locator, shot: string, options: {body?: Locator} = {}): Promise<Locator> {
     await refuseOnPhone(page);
     const own = rememberScreen(page);
+    await loadedBeforeMeasuring(page, shot);
     await expect(dialog, `${shot}: the dialog is not on the page`).toBeVisible();
     await clearMarks(page);
     await animationsSettled(dialog, `${shot}: the dialog`);

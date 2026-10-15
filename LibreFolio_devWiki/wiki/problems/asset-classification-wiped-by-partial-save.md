@@ -30,7 +30,7 @@ Two independent faults, each enough on its own:
 - The edit form loads the asset's **full** edit data, and the frontend PATCHes **only the blocks that changed**.
 - The bulk PATCH distinguishes *absent* from *present*: `classification_params` is applied only when it is in the
   patch's `model_fields_set`, and then dumped with `exclude_unset=True` — only the nested fields the caller actually
-  supplied (`backend/app/services/asset_sources/crud.py`, the patch loop).
+  supplied (`backend/app/services/assets/crud.py`, the patch loop).
 
 ## Prevention
 
@@ -49,7 +49,7 @@ charts.
 
 | Role | Path |
 |------|------|
-| Bulk asset PATCH (`model_fields_set`, `exclude_unset`) | `backend/app/services/asset_sources/crud.py` |
-| Asset patch schema | `backend/app/schemas/assets.py` |
+| Bulk asset PATCH (`model_fields_set`, `exclude_unset`) | `backend/app/services/assets/crud.py` |
+| Asset patch schema | `backend/app/schemas/assets/assets.py` |
 | Asset edit modal used by the wizard | `frontend/src/lib/components/assets/AssetModal.svelte` |
 | Plan (E1/E2) | `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgent.prompt.md` |

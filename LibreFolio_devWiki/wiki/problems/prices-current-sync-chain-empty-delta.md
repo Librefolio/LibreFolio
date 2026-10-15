@@ -73,7 +73,7 @@ Landed in I-bis #24 v4 (2026-04-24).
 
 | Role | Path |
 |------|------|
-| Backend writer (root cause) | `backend/app/services/asset_source.py` (`AssetSourceManager.get_current_prices_bulk`, ~L2877) |
+| Backend writer (root cause) | `backend/app/services/assets/price_query.py` (`AssetSourceManager.get_current_prices_bulk`) |
 | Frontend fix | `frontend/src/routes/(app)/assets/[id]/+page.svelte` (`pollCurrentPriceOnce`) |
 | Post-mortem | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte3/plan-phase07-transaction-Part3_1_Closure_2.prompt.md` (§ "I-bis #24 — Auto-refresh mirato post-sync", v3→v4) |
 | Commit message | `/tmp/libreFolio_commit_ibis24_v4.txt` |

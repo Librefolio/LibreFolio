@@ -41,7 +41,7 @@ from sqlmodel import select
 
 from backend.app.db.models import FxRate
 from backend.app.db.session import get_async_engine
-from backend.app.services.fx import ensure_rates_multi_source
+from backend.app.services.fx.sync import ensure_rates_multi_source
 
 
 @pytest.mark.asyncio

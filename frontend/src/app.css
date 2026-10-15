@@ -1,4 +1,9 @@
 @import 'tailwindcss';
+/* Colour roles (--lf-*) and their utilities (bg-lf-card, text-lf-muted…): the colours of migrated components. */
+@import './lib/theme/tokens.css';
+/* The colour gates hold class names as data, not interface: Tailwind must not generate CSS from them. */
+@source not '../scripts/theme';
+@source not './theme*.gate.test.ts';
 
 /* dark: variant uses html.dark class (set by anti-FOUC script in app.html) */
 @custom-variant dark (&:where(.dark, .dark *));
@@ -119,7 +124,15 @@ textarea,
     display: none; /* Chrome, Safari, Opera */
 }
 
-/* ===== Theme System ===== */
+/* ===== Legacy theme system and dark remap (P1) =====
+   Components not yet migrated to the colour roles of lib/theme/tokens.css take their dark look from the rules below:
+   unlayered, several !important, so they beat the dark: classes those components write. Their values are frozen —
+   a component keeps today's look until it migrates. Retirement: a rule on a class goes in the change that brings the
+   class's last use to zero (src/themeTokens.gate.test.ts reports the dead ones); the structural rules, the --theme-*
+   variables and `html.dark body` go in the clean-up (B6).
+   The four structural rules (fields, placeholders, rounded containers, options) exempt every element that carries a
+   role utility (`-lf-` in its classes). `:where()` keeps their specificity unchanged, so a legacy element — scoped
+   component CSS included — renders exactly as before. */
 
 /* Light theme (default) */
 :root,
@@ -221,26 +234,22 @@ html.dark .hover\:bg-gray-100:hover {
     background-color: var(--theme-bg-hover) !important;
 }
 
-html.dark input,
-html.dark select,
-html.dark textarea {
+html.dark input:where(:not([class*='-lf-'])),
+html.dark select:where(:not([class*='-lf-'])),
+html.dark textarea:where(:not([class*='-lf-'])) {
     /* NO background override - let component styles work */
     border-color: #546175;
     color: var(--theme-text-primary);
 }
 
-html.dark input::placeholder,
-html.dark textarea::placeholder {
+html.dark input:where(:not([class*='-lf-']))::placeholder,
+html.dark textarea:where(:not([class*='-lf-']))::placeholder {
     color: var(--theme-text-tertiary);
 }
 
 /* Dark mode: Main background and beige areas */
 html.dark .bg-libre-beige {
     background-color: var(--theme-bg-primary) !important;
-}
-
-html.dark .bg-surface-100 {
-    background-color: var(--theme-bg-secondary) !important;
 }
 
 /* Dark mode: Text colors on brand elements */
@@ -259,8 +268,8 @@ html.dark .bg-white\/95 {
 }
 
 /* Dark mode: Rounded containers */
-html.dark .rounded-xl,
-html.dark .rounded-2xl {
+html.dark .rounded-xl:where(:not([class*='-lf-'])),
+html.dark .rounded-2xl:where(:not([class*='-lf-'])) {
     border-color: var(--theme-border-primary);
 }
 
@@ -274,8 +283,8 @@ html.dark .focus\:ring-libre-green:focus {
     --tw-ring-color: #4ade80;
 }
 
-/* Dark mode: Dropdown/Select options */
-html.dark option {
+/* Dark mode: Dropdown/Select options (those of a migrated select are exempt) */
+html.dark option:where(:not(select[class*='-lf-'] option)) {
     background-color: var(--theme-bg-secondary);
     color: var(--theme-text-primary);
 }
@@ -292,11 +301,6 @@ html.dark .shadow-xl {
 /* Dark mode: Primary buttons */
 html.dark .bg-libre-green {
     background-color: #166534 !important; /* Darker green for better contrast */
-}
-
-/* Dark mode: AnimatedBackground (login page) */
-html.dark .animated-bg-gradient {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
 }
 
 /* ===== Live price flash (asset detail — AssetPriceSummary) =====

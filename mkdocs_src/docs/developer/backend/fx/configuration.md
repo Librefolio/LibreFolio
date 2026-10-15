@@ -214,7 +214,7 @@ This ensures resilience to individual provider outages and supports currency pai
 
 ### 📅 Chain Dates, Writes and Counters
 
-- **Strict date matching.** `compute_chain_rate()` (`backend/app/services/fx.py`) produces a chain
+- **Strict date matching.** `compute_chain_rate()` (`backend/app/services/fx/conversion.py`) produces a chain
   rate for a date only when every leg has a rate on that exact date; a missing leg skips the date.
   A chain through a sparse series therefore has rates only on the dates that series publishes.
 - **Upsert, the provider wins.** Rates are written with
@@ -236,6 +236,6 @@ This ensures resilience to individual provider outages and supports currency pai
 | `skipped` | Every route of the pair is `MANUAL` |
 | `failed` | The pair has no route, or every route failed; `errors` lists the failure of each route |
 
-The scheduler's history-sync job (`run_history_sync()`, `backend/app/services/scheduler/jobs.py`)
+The scheduler's history-sync job (`run_history_sync()`, `backend/app/services/platform/scheduler/jobs.py`)
 calls the same function for every pair with a route that has no `MANUAL` step, from today minus
 `scheduler_history_sync_horizon_days` (default 14) to today.

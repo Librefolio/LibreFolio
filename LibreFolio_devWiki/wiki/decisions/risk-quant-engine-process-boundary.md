@@ -72,7 +72,7 @@ measured repeatable concurrent speedups at an approximately linear memory cost.
 |------|------|
 | Generic spawn pool | `backend/app/services/risk/quant/spawn_worker.py` |
 | Pool configuration | `backend/app/services/risk/quant/workers.py` |
-| Idle timeout settings | `backend/app/config.py` |
+| Idle timeout settings | `backend/app/config/__init__.py` |
 | QuantLib child engine | `backend/app/services/risk/quant/quantlib_worker.py` |
 | Riskfolio child engine | `backend/app/services/risk/quant/riskfolio_worker.py` |
 | Simulation parent boundary | `backend/app/services/risk/quant/engine.py` |

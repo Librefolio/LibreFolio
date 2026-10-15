@@ -1,0 +1,571 @@
+"""
+Configuration checks at startup (workstream H, platform, checkpoint CP3).
+
+Under test: ``backend/app/services/platform/config_audit.py``. Each check reads the configuration and returns a
+``ConfigCheck``: an id, a severity, the i18n key of its message for the admin interface, the parameters of that message
+and an English summary for the log. ``log_configuration_audit()`` runs them at startup, from the lifespan of
+``backend/app/main.py``. The contract:
+
+(a) Every check in every state: id, severity, i18n key and detail. ``JWT_SECRET`` unset, empty or blank is only info (a
+    new signing key at every start is the default), shorter than 32 characters a warning naming where the key comes from
+    (``JWT_SECRET`` or ``JWT_SECRET_FILE (<path>)``), a ``JWT_SECRET_FILE`` that cannot be read an error; a secret set
+    both as ``NAME`` and as ``NAME_FILE``, neither blank, a warning; an unusable instance key an error (a key file that
+    cannot be reached included), a generated one open to group or others a warning; ``SESSION_COOKIE_SECURE=never`` a
+    warning; a ``DEBUG`` or ``TRACE`` log level info. Everything else is ok.
+(b) A check never puts a secret in its result: recognisable values for ``JWT_SECRET``, the instance key and the content
+    of the secret files appear in no field of any result, in no log record and in no startup error.
+(c) A check changes nothing: ``run_config_checks`` evaluates every check in the order of ``CONFIG_CHECKS``, leaves the
+    environment as it was and generates no key file.
+(d) ``log_configuration_audit``: a ``JWT_SECRET_FILE`` that cannot be read stops the start (``SecretFileError``), and so
+    does a configured instance key that cannot be used (``InstanceKeyError``), since the admin asked for that source and
+    the server must not start without it; nothing is logged first, and a blank ``NAME`` beside the file hides nothing. A
+    generated key file gone bad, or one that cannot be reached, is logged as an error and the start goes on. Every check
+    that is not ok is logged at the level of its severity, in order, with its id and detail; an ok check is not logged.
+
+Pure: the data directory is in ``tmp_path``, every variable the checks read is set or removed through ``monkeypatch``
+(environment values win over a ``.env``), and the module's logger is replaced by a recorder. No database, no server, no
+network, nothing written in the repository. A key file that cannot be reached is set up in a production data directory
+in ``tmp_path`` (``LIBREFOLIO_TEST_MODE=0``): in test mode the guard of test roots stops on it first, by a rule of its own.
+"""
+
+from __future__ import annotations
+
+import errno
+import os
+import traceback
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
+
+from backend.app.config import SECRET_FILE_MAX_BYTES, SecretFileError
+from backend.app.services.platform import config_audit
+from backend.app.services.platform.config_audit import (
+    CONFIG_CHECKS,
+    ConfigCheck,
+    check_instance_key,
+    check_jwt_secret,
+    check_log_level,
+    check_secrets_set_twice,
+    check_session_cookie,
+    log_configuration_audit,
+    run_config_checks,
+)
+from backend.app.services.platform.instance_key import INSTANCE_KEY_FILE, InstanceKeyError, derive_key, instance_key_path
+from backend.test_scripts.test_utils import print_section, print_success
+
+POSIX = os.name != "nt"
+needs_posix_modes = pytest.mark.skipif(not POSIX, reason="file modes are POSIX only")
+needs_permission_checks = pytest.mark.skipif(not POSIX or os.geteuid() == 0, reason="needs POSIX permissions, which root bypasses")
+needs_posix_paths = pytest.mark.skipif(not POSIX, reason="Windows reports a path below a file as missing, not as ENOTDIR")
+
+CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
+    check_jwt_secret: "platform.jwt_secret",
+    check_secrets_set_twice: "platform.secrets_set_twice",
+    check_instance_key: "platform.instance_key",
+    check_session_cookie: "platform.session_cookie",
+    check_log_level: "platform.log_level",
+}
+SEVERITIES = ("ok", "info", "warning", "error")
+I18N_PREFIX = "instance.checks."
+
+GOOD_JWT_SECRET = "jwt-signing-key-of-a-careful-admin-0123456789"
+GOOD_INSTANCE_KEY = "instance-key-of-a-careful-admin-0123456789"
+#: Marks every secret of the leak tests: no field of a result, no log record, no startup error may contain it.
+CANARY = "Zq7canary"
+
+
+@dataclass
+class Configuration:
+    """What one test configures: variables through ``monkeypatch``, files in ``tmp_path``, and its own data directory."""
+
+    monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path
+    data_dir: Path
+
+    @property
+    def key_file(self) -> Path:
+        return self.data_dir / INSTANCE_KEY_FILE
+
+    def set(self, **variables: str) -> None:
+        for name, value in variables.items():
+            self.monkeypatch.setenv(name, value)
+
+    def file(self, name: str, content: bytes) -> Path:
+        path = self.tmp_path / name
+        path.write_bytes(content)
+        return path
+
+    def generated_key(self) -> Path:
+        """Generate the key file as the first use of the instance key does."""
+        derive_key("config.audit.v1")
+        return self.key_file
+
+    def damaged_key(self, content: bytes) -> Path:
+        """A generated key file whose content went bad, in a folder and with a mode as generated."""
+        self.key_file.parent.mkdir(mode=0o700, parents=True)
+        self.key_file.write_bytes(content)
+        self.key_file.chmod(0o600)
+        return self.key_file
+
+
+def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: bool) -> Configuration:
+    """No secret set either way, cookie ``auto``, log level ``INFO``, no key yet, a data directory in ``tmp_path``."""
+    for variable in [name for name in os.environ if name.endswith("_FILE") and (name == "JWT_SECRET_FILE" or name.startswith("LIBREFOLIO_"))]:
+        monkeypatch.delenv(variable)
+    for variable in ("JWT_SECRET", "LIBREFOLIO_INSTANCE_KEY", "LIBREFOLIO_LOG_LEVEL", "LIBREFOLIO_DATA_DIR", "LIBREFOLIO_TEST_DATA_DIR"):
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "0" if production else "1")
+    monkeypatch.setenv("LIBREFOLIO_DATA_DIR" if production else "LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "auto")
+    monkeypatch.setenv("LOG_LEVEL", "INFO")
+    configuration = Configuration(monkeypatch, tmp_path, (tmp_path / "data").resolve())
+    assert instance_key_path() == configuration.key_file, f"the key file must live in the data directory of this test, not at {instance_key_path()}"
+    return configuration
+
+
+@pytest.fixture
+def configuration(monkeypatch, tmp_path) -> Configuration:
+    """Test mode: every check is ok but JWT_SECRET, which is unset (info)."""
+    return _configure(monkeypatch, tmp_path, production=False)
+
+
+@pytest.fixture
+def production_configuration(monkeypatch, tmp_path) -> Configuration:
+    """The same, on a production data directory in ``tmp_path``: the guard of test roots stays out of the way."""
+    return _configure(monkeypatch, tmp_path, production=True)
+
+
+class LogRecorder:
+    """Stands in for the module's structlog logger: one ``(level, summary, fields)`` per call."""
+
+    def __init__(self) -> None:
+        self.records: list[tuple[str, str, dict]] = []
+
+    def info(self, event: str, **fields) -> None:
+        self.records.append(("info", event, fields))
+
+    def warning(self, event: str, **fields) -> None:
+        self.records.append(("warning", event, fields))
+
+    def error(self, event: str, **fields) -> None:
+        self.records.append(("error", event, fields))
+
+
+@pytest.fixture
+def logged(monkeypatch) -> list[tuple[str, str, dict]]:
+    recorder = LogRecorder()
+    monkeypatch.setattr(config_audit, "logger", recorder)
+    return recorder.records
+
+
+def _assert_check(result: ConfigCheck, check: Callable[[], ConfigCheck], severity: str, message: str, detail: dict) -> None:
+    """``result`` is the expected state of ``check``, and has what the admin interface and the log need."""
+    actual = (result.check_id, result.severity, result.i18n_key, result.detail)
+    expected = (CHECK_IDS[check], severity, I18N_PREFIX + message, detail)
+    assert actual == expected, f"{check.__name__}() must be {expected}, not {actual}"
+    assert all(isinstance(value, str | int) for value in result.detail.values()), f"the parameters of an i18n message are strings or integers: {result.detail}"
+    if severity != "ok":
+        assert result.summary.strip(), f"{check.__name__}() is {severity} without a summary for the log"
+
+
+# =============================================================================
+# (a) Every check in every state
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    ("check", "variables", "severity", "message", "detail"),
+    [
+        pytest.param(check_jwt_secret, {}, "info", "jwtSecret.ephemeral", {}, id="jwt-secret-unset"),
+        pytest.param(check_jwt_secret, {"JWT_SECRET": ""}, "info", "jwtSecret.ephemeral", {}, id="jwt-secret-empty-is-unset"),
+        pytest.param(check_jwt_secret, {"JWT_SECRET": "   "}, "info", "jwtSecret.ephemeral", {}, id="jwt-secret-blank-is-unset"),
+        pytest.param(check_jwt_secret, {"JWT_SECRET": " " * 64}, "info", "jwtSecret.ephemeral", {}, id="jwt-secret-blank-of-any-length-is-unset"),
+        pytest.param(check_jwt_secret, {"JWT_SECRET": "x" * 31}, "warning", "jwtSecret.short", {"source": "JWT_SECRET", "length": 31, "minimum": 32}, id="jwt-secret-31-characters"),
+        pytest.param(check_jwt_secret, {"JWT_SECRET": "x" * 32}, "ok", "jwtSecret.ok", {}, id="jwt-secret-32-characters"),
+        pytest.param(check_secrets_set_twice, {}, "ok", "secretsSetTwice.ok", {}, id="nothing-set-twice"),
+        pytest.param(check_secrets_set_twice, {"JWT_SECRET": "   ", "JWT_SECRET_FILE": "/run/secrets/jwt"}, "ok", "secretsSetTwice.ok", {}, id="blank-name-beside-a-file-is-not-set-twice"),
+        pytest.param(check_secrets_set_twice, {"JWT_SECRET": GOOD_JWT_SECRET, "JWT_SECRET_FILE": "/run/secrets/jwt"}, "warning", "secretsSetTwice.found", {"variables": "JWT_SECRET"}, id="jwt-secret-set-twice"),
+        pytest.param(
+            check_secrets_set_twice,
+            {"LIBREFOLIO_INSTANCE_KEY": GOOD_INSTANCE_KEY, "LIBREFOLIO_INSTANCE_KEY_FILE": "/run/secrets/key", "JWT_SECRET": GOOD_JWT_SECRET, "JWT_SECRET_FILE": "/run/secrets/jwt"},
+            "warning",
+            "secretsSetTwice.found",
+            {"variables": "JWT_SECRET, LIBREFOLIO_INSTANCE_KEY"},
+            id="two-secrets-set-twice-sorted",
+        ),
+        pytest.param(check_instance_key, {}, "ok", "instanceKey.ok", {"source": "not_created"}, id="instance-key-not-created-yet"),
+        pytest.param(check_instance_key, {"LIBREFOLIO_INSTANCE_KEY": GOOD_INSTANCE_KEY}, "ok", "instanceKey.ok", {"source": "configured"}, id="instance-key-configured"),
+        pytest.param(
+            check_instance_key,
+            {"LIBREFOLIO_INSTANCE_KEY": "short-key"},
+            "error",
+            "instanceKey.unusable",
+            {"source": "configured", "reason": "LIBREFOLIO_INSTANCE_KEY: the instance key is 9 characters long, it needs at least 32"},
+            id="instance-key-configured-too-short",
+        ),
+        pytest.param(check_session_cookie, {"SESSION_COOKIE_SECURE": "never"}, "warning", "sessionCookie.never", {}, id="session-cookie-never"),
+        pytest.param(check_session_cookie, {"SESSION_COOKIE_SECURE": " NEVER "}, "warning", "sessionCookie.never", {}, id="session-cookie-never-in-any-case"),
+        pytest.param(check_session_cookie, {"SESSION_COOKIE_SECURE": "auto"}, "ok", "sessionCookie.ok", {}, id="session-cookie-auto"),
+        pytest.param(check_session_cookie, {"SESSION_COOKIE_SECURE": "always"}, "ok", "sessionCookie.ok", {}, id="session-cookie-always"),
+        pytest.param(check_log_level, {"LOG_LEVEL": "DEBUG"}, "info", "logLevel.verbose", {"log_level": "DEBUG"}, id="log-level-debug"),
+        pytest.param(check_log_level, {"LOG_LEVEL": "debug"}, "info", "logLevel.verbose", {"log_level": "DEBUG"}, id="log-level-debug-in-any-case"),
+        pytest.param(check_log_level, {"LOG_LEVEL": "TRACE"}, "info", "logLevel.verbose", {"log_level": "TRACE"}, id="log-level-trace"),
+        pytest.param(check_log_level, {"LOG_LEVEL": "INFO"}, "ok", "logLevel.ok", {}, id="log-level-info"),
+        pytest.param(check_log_level, {"LOG_LEVEL": "WARNING"}, "ok", "logLevel.ok", {}, id="log-level-warning"),
+        pytest.param(check_log_level, {"LOG_LEVEL": "INFO", "LIBREFOLIO_LOG_LEVEL": "debug"}, "info", "logLevel.verbose", {"log_level": "DEBUG"}, id="log-level-debug-from-librefolio-log-level"),
+        pytest.param(check_log_level, {"LOG_LEVEL": "DEBUG", "LIBREFOLIO_LOG_LEVEL": "info"}, "ok", "logLevel.ok", {}, id="log-level-librefolio-log-level-wins"),
+    ],
+)
+def test_a_check_in_each_of_its_states(configuration, check, variables, severity, message, detail):
+    """(a) The states a variable alone decides."""
+    configuration.set(**variables)
+    result = check()
+    _assert_check(result, check, severity, message, detail)
+    print_success(f"{check.__name__} with {sorted(variables)}: {severity} {result.i18n_key}")
+
+
+@pytest.mark.parametrize(
+    ("jwt_secret", "content", "severity", "message", "detail"),
+    [
+        pytest.param(None, b"y" * 64 + b"\n", "ok", "jwtSecret.ok", {}, id="from-the-file"),
+        pytest.param("   ", b"y" * 64 + b"\n", "ok", "jwtSecret.ok", {}, id="a-blank-variable-falls-through-to-the-file"),
+        pytest.param(None, b"short-from-the-file\n", "warning", "jwtSecret.short", {"source": "JWT_SECRET_FILE (<file>)", "length": 19, "minimum": 32}, id="short-from-the-file"),
+        pytest.param("   ", b"short-from-the-file\n", "warning", "jwtSecret.short", {"source": "JWT_SECRET_FILE (<file>)", "length": 19, "minimum": 32}, id="short-from-the-file-beside-a-blank-variable"),
+        pytest.param(None, None, "error", "jwtSecret.unreadable", {"reason": "JWT_SECRET_FILE: <file> does not exist"}, id="file-missing"),
+        pytest.param("   ", None, "error", "jwtSecret.unreadable", {"reason": "JWT_SECRET_FILE: <file> does not exist"}, id="a-blank-variable-hides-no-broken-file"),
+        pytest.param(None, b"\n", "error", "jwtSecret.unreadable", {"reason": "JWT_SECRET_FILE: <file> is empty or blank"}, id="file-empty"),
+        pytest.param(None, b"   \n", "error", "jwtSecret.unreadable", {"reason": "JWT_SECRET_FILE: <file> is empty or blank"}, id="file-blank"),
+        pytest.param("x" * 32, None, "ok", "jwtSecret.ok", {}, id="the-variable-wins-over-a-broken-file"),
+    ],
+)
+def test_check_jwt_secret_with_jwt_secret_file(configuration, jwt_secret, content, severity, message, detail):
+    """(a) The secret of JWT_SECRET_FILE is checked like the variable, which a blank value does not hide; a file that cannot be read is an error naming it."""
+    secret_file = configuration.tmp_path / "jwt-secret" if content is None else configuration.file("jwt-secret", content)
+    configuration.set(JWT_SECRET_FILE=str(secret_file))
+    if jwt_secret is not None:
+        configuration.set(JWT_SECRET=jwt_secret)
+    detail = {name: value.replace("<file>", str(secret_file)) if isinstance(value, str) else value for name, value in detail.items()}
+
+    result = check_jwt_secret()
+
+    _assert_check(result, check_jwt_secret, severity, message, detail)
+    print_success(f"JWT_SECRET={jwt_secret!r}, JWT_SECRET_FILE {content!r:.30}: {severity} {result.i18n_key}")
+
+
+@pytest.mark.parametrize("source", ["variable", "file"])
+def test_the_summary_of_a_short_jwt_secret_names_where_it_comes_from(configuration, source):
+    """(a) The log line of a short signing key says where the admin set it: the variable, or the file variable with its path."""
+    if source == "variable":
+        configuration.set(JWT_SECRET="x" * 20)
+        origin = "JWT_SECRET"
+    else:
+        secret_file = configuration.file("jwt-secret", b"x" * 20 + b"\n")
+        configuration.set(JWT_SECRET_FILE=str(secret_file))
+        origin = f"JWT_SECRET_FILE ({secret_file})"
+
+    summary = check_jwt_secret().summary
+
+    expected = f"The session signing key from {origin} is 20 characters long: use at least 32 random characters"
+    assert summary == expected, f"the summary of a short JWT secret must name its origin:\n  expected {expected!r}\n  got      {summary!r}"
+    print_success(summary)
+
+
+def test_check_instance_key_of_a_generated_key(configuration):
+    """(a) A generated key, as generated: ok, from the generated source."""
+    configuration.generated_key()
+    _assert_check(check_instance_key(), check_instance_key, "ok", "instanceKey.ok", {"source": "generated"})
+    print_success("generated key: ok")
+
+
+@pytest.mark.parametrize(
+    ("damage", "reason"),
+    [
+        pytest.param(b"", "instance key file: <file> is empty or blank", id="empty"),
+        pytest.param(b" " * 40 + b"\n", "instance key file: <file> is empty or blank", id="blank"),
+        pytest.param(b"too-short-key\n", "<file>: the instance key is 13 characters long, it needs at least 32", id="too-short"),
+    ],
+)
+def test_check_instance_key_of_a_damaged_generated_key(configuration, damage, reason):
+    """(a) A generated key file gone bad is an error, with the reason naming the file; the file is left as it is."""
+    key_file = configuration.damaged_key(damage)
+    _assert_check(check_instance_key(), check_instance_key, "error", "instanceKey.unusable", {"source": "generated", "reason": reason.replace("<file>", str(key_file))})
+    assert key_file.read_bytes() == damage, "a check must not touch the key file"
+    print_success(f"damaged key file {damage!r}: error")
+
+
+@pytest.mark.parametrize(
+    ("content", "reason"),
+    [
+        pytest.param(None, "LIBREFOLIO_INSTANCE_KEY_FILE: <file> does not exist", id="missing"),
+        pytest.param(b"short-key\n", "LIBREFOLIO_INSTANCE_KEY_FILE (<file>): the instance key is 9 characters long, it needs at least 32", id="too-short"),
+    ],
+)
+def test_check_instance_key_of_a_key_file_variable_that_cannot_be_used(configuration, content, reason):
+    """(a) A configured LIBREFOLIO_INSTANCE_KEY_FILE missing or too short: an error from the configured source, naming the file."""
+    key_file = configuration.tmp_path / "instance-key" if content is None else configuration.file("instance-key", content)
+    configuration.set(LIBREFOLIO_INSTANCE_KEY_FILE=str(key_file))
+    _assert_check(check_instance_key(), check_instance_key, "error", "instanceKey.unusable", {"source": "configured", "reason": reason.replace("<file>", str(key_file))})
+    print_success(f"LIBREFOLIO_INSTANCE_KEY_FILE {content!r}: error")
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        pytest.param("unsearchable-secrets-folder", marks=needs_permission_checks),
+        pytest.param("secrets-is-a-file", marks=needs_posix_paths),
+    ],
+)
+def test_a_key_file_that_cannot_be_reached_is_an_error_and_the_start_goes_on(production_configuration, logged, shape):
+    """(a)(d) The key may be there but the server cannot reach it: the check is an error, logged at startup, which goes on."""
+    configuration = production_configuration
+    if shape == "unsearchable-secrets-folder":
+        configuration.generated_key()
+        configuration.key_file.parent.chmod(0o000)
+        reason = f"{configuration.key_file}: the instance key cannot be reached ({os.strerror(errno.EACCES)})"
+    else:
+        configuration.data_dir.mkdir()
+        (configuration.data_dir / "secrets").write_bytes(b"a file where the key folder should be\n")
+        reason = f"{configuration.key_file}: the instance key cannot be reached ({os.strerror(errno.ENOTDIR)})"
+    try:
+        result = check_instance_key()
+        log_configuration_audit()
+    finally:
+        if shape == "unsearchable-secrets-folder":
+            configuration.key_file.parent.chmod(0o700)
+
+    _assert_check(result, check_instance_key, "error", "instanceKey.unusable", {"source": "generated", "reason": reason})
+    errors = [(fields["check"], fields["detail"]) for level, _, fields in logged if level == "error"]
+    assert errors == [("platform.instance_key", {"source": "generated", "reason": reason})], f"an unreachable key file must be logged once as an error, and the start go on: {logged}"
+    print_success(f"{shape}: error logged, the start went on")
+
+
+@needs_posix_modes
+def test_check_instance_key_of_a_generated_key_open_to_others(configuration):
+    """(a) A usable generated key in a folder or file group and others can reach: a warning with the modes and the path."""
+    key_file = configuration.generated_key()
+    key_file.chmod(0o644)
+    key_file.parent.chmod(0o755)
+    try:
+        result = check_instance_key()
+    finally:
+        key_file.parent.chmod(0o700)
+        key_file.chmod(0o600)
+    _assert_check(result, check_instance_key, "warning", "instanceKey.permissions", {"path": str(key_file), "directory": "0755", "file": "0644"})
+    print_success(f"open key file: {result.summary}")
+
+
+# =============================================================================
+# (b) No secret in any result
+# =============================================================================
+
+
+def _secrets_in_the_variables(configuration: Configuration) -> list[str]:
+    """Too-short secrets set both ways: warned about by length and by name only."""
+    secrets = [f"jwt-{CANARY}", f"jwt-file-{CANARY}", f"key-{CANARY}", f"key-file-{CANARY}"]
+    configuration.set(
+        JWT_SECRET=secrets[0],
+        JWT_SECRET_FILE=str(configuration.file("jwt-secret", secrets[1].encode() + b"\n")),
+        LIBREFOLIO_INSTANCE_KEY=secrets[2],
+        LIBREFOLIO_INSTANCE_KEY_FILE=str(configuration.file("instance-key", secrets[3].encode() + b"\n")),
+    )
+    return secrets
+
+
+def _secrets_in_files_that_cannot_be_read(configuration: Configuration) -> list[str]:
+    """Secret files too large or not UTF-8: refused without being read out."""
+    secrets = [f"jwt-file-{CANARY}", f"key-file-{CANARY}"]
+    too_large = (secrets[0] * (SECRET_FILE_MAX_BYTES // len(secrets[0]) + 1)).encode()[: SECRET_FILE_MAX_BYTES + 1]
+    configuration.set(
+        JWT_SECRET_FILE=str(configuration.file("jwt-secret", too_large)),
+        LIBREFOLIO_INSTANCE_KEY_FILE=str(configuration.file("instance-key", secrets[1].encode() + b"\xff\xfe")),
+    )
+    return secrets
+
+
+def _secret_in_a_damaged_key_file(configuration: Configuration) -> list[str]:
+    """A generated key file holding a key too short: an error by length only."""
+    secret = f"generated-{CANARY}"
+    configuration.damaged_key(secret.encode() + b"\n")
+    return [secret]
+
+
+def _generated_key_open_to_others(configuration: Configuration) -> list[str]:
+    """A usable generated key in a loose folder: a warning naming the path and the modes, never the key."""
+    key_file = configuration.generated_key()
+    if POSIX:
+        key_file.parent.chmod(0o755)
+    return [key_file.read_text(encoding="ascii").rstrip("\n")]
+
+
+@pytest.mark.parametrize(
+    "configure",
+    [
+        pytest.param(_secrets_in_the_variables, id="short-secrets-set-both-ways"),
+        pytest.param(_secrets_in_files_that_cannot_be_read, id="files-that-cannot-be-read"),
+        pytest.param(_secret_in_a_damaged_key_file, id="damaged-generated-key"),
+        pytest.param(_generated_key_open_to_others, id="generated-key-open-to-others"),
+    ],
+)
+def test_no_secret_value_reaches_a_result_a_log_record_or_a_startup_error(configuration, logged, configure):
+    """(b) Results, log records and the error that stops the start name variables, paths, lengths and modes; never a secret."""
+    secrets = configure(configuration)
+    try:
+        results = run_config_checks()
+        try:
+            log_configuration_audit()
+            startup = repr(logged)
+        except (SecretFileError, InstanceKeyError) as exc:
+            startup = "".join(traceback.format_exception(exc))
+    finally:
+        if configuration.key_file.exists():
+            configuration.key_file.parent.chmod(0o700)
+
+    flagged = [result.check_id for result in results if result.severity != "ok"]
+    assert flagged, "the configuration must make some check speak, or the absence of secrets proves nothing"
+    leaks = [f"{result.check_id}: {secret}" for result in results for secret in secrets if secret in repr(result)]
+    assert not leaks, f"a configuration check put a secret in its result: {leaks}"
+    shown = [secret for secret in secrets if secret in startup]
+    assert not shown, f"the startup audit showed a secret in its log or its error: {shown}"
+    print_success(f"{len(secrets)} secret(s) behind {flagged}: none shown")
+
+
+# =============================================================================
+# (c) run_config_checks
+# =============================================================================
+
+
+def test_run_config_checks_evaluates_every_check_in_order_and_changes_nothing(configuration):
+    """(c) The order of CONFIG_CHECKS, each result what the check alone returns; no variable changed, no key generated."""
+    print_section("Configuration checks: run_config_checks")
+    environment = dict(os.environ)
+
+    results = run_config_checks()
+
+    assert [result.check_id for result in results] == [CHECK_IDS[check] for check in CONFIG_CHECKS], f"run_config_checks must follow CONFIG_CHECKS: {[result.check_id for result in results]}"
+    assert set(CONFIG_CHECKS) == set(CHECK_IDS), f"CONFIG_CHECKS changed: {[check.__name__ for check in CONFIG_CHECKS]}: give every check its tests"
+    assert results == [check() for check in CONFIG_CHECKS], "run_config_checks must return what each check returns on its own"
+    assert all(result.severity in SEVERITIES for result in results), f"unknown severity in {results}"
+    assert dict(os.environ) == environment, "a configuration check changed the environment"
+    assert not configuration.data_dir.exists(), f"a configuration check created files: {list(configuration.data_dir.rglob('*'))}"
+    print_success(f"{len(results)} checks in order, nothing changed")
+
+
+# =============================================================================
+# (d) log_configuration_audit
+# =============================================================================
+
+
+@pytest.mark.parametrize("jwt_secret", [pytest.param(None, id="jwt-secret-unset"), pytest.param("   ", id="jwt-secret-blank")])
+@pytest.mark.parametrize(
+    ("content", "problem"),
+    [
+        pytest.param(None, "does not exist", id="missing"),
+        pytest.param(b"", "is empty or blank", id="empty"),
+        pytest.param(b"\xff\xfe", "is not UTF-8 text", id="not-utf8"),
+    ],
+)
+def test_startup_stops_on_a_jwt_secret_file_that_cannot_be_read(configuration, logged, content, problem, jwt_secret):
+    """(d) The admin asked for that file: without it the server must not start with a signing key of its own, a blank JWT_SECRET beside it or not."""
+    secret_file = configuration.tmp_path / "jwt-secret" if content is None else configuration.file("jwt-secret", content)
+    configuration.set(JWT_SECRET_FILE=str(secret_file))
+    if jwt_secret is not None:
+        configuration.set(JWT_SECRET=jwt_secret)
+
+    with pytest.raises(SecretFileError) as raised:
+        log_configuration_audit()
+
+    assert str(raised.value) == f"JWT_SECRET_FILE: {secret_file} {problem}", f"the startup error must name JWT_SECRET_FILE, the path and the problem: {raised.value}"
+    assert logged == [], f"nothing is logged before the start is stopped: {logged}"
+    print_success(f"start stopped: {raised.value}")
+
+
+@pytest.mark.parametrize(
+    ("variables", "problem"),
+    [
+        pytest.param({"LIBREFOLIO_INSTANCE_KEY": "short-key"}, "LIBREFOLIO_INSTANCE_KEY: the instance key is 9 characters long, it needs at least 32", id="key-too-short"),
+        pytest.param({"LIBREFOLIO_INSTANCE_KEY_FILE": "<short file>"}, "LIBREFOLIO_INSTANCE_KEY_FILE (<short file>): the instance key is 9 characters long, it needs at least 32", id="key-file-too-short"),
+        pytest.param({"LIBREFOLIO_INSTANCE_KEY_FILE": "<missing file>"}, "LIBREFOLIO_INSTANCE_KEY_FILE: <missing file> does not exist", id="key-file-missing"),
+        pytest.param({"LIBREFOLIO_INSTANCE_KEY": "   ", "LIBREFOLIO_INSTANCE_KEY_FILE": "<missing file>"}, "LIBREFOLIO_INSTANCE_KEY_FILE: <missing file> does not exist", id="key-file-missing-beside-a-blank-key"),
+    ],
+)
+def test_startup_stops_on_a_configured_instance_key_that_cannot_be_used(configuration, logged, variables, problem):
+    """(d) A configured key the server cannot use stops the start: generating another would encrypt with the wrong key."""
+    files = {"<short file>": str(configuration.file("short-instance-key", b"short-key\n")), "<missing file>": str(configuration.tmp_path / "missing-instance-key")}
+    configuration.set(**{name: files.get(value, value) for name, value in variables.items()})
+    for placeholder, path in files.items():
+        problem = problem.replace(placeholder, path)
+
+    with pytest.raises(InstanceKeyError) as raised:
+        log_configuration_audit()
+
+    assert str(raised.value) == problem, f"the startup error must say which source and why:\n  expected {problem!r}\n  got      {raised.value!r}"
+    assert logged == [], f"nothing is logged before the start is stopped: {logged}"
+    assert not configuration.data_dir.exists(), "a configured key that cannot be used must not make the start generate a key file"
+    print_success(f"start stopped: {raised.value}")
+
+
+def test_startup_goes_on_with_a_damaged_generated_key_and_logs_an_error(configuration, logged):
+    """(d) A generated key file gone bad is an error in the log, not a stop: the file is left for the admin to restore."""
+    key_file = configuration.damaged_key(b"")
+
+    log_configuration_audit()
+
+    errors = [(fields["check"], fields["detail"]["source"]) for level, _, fields in logged if level == "error"]
+    assert errors == [("platform.instance_key", "generated")], f"a damaged generated key must be logged once as an error of the instance key check: {logged}"
+    assert key_file.read_bytes() == b"", "the startup audit must not touch the key file"
+    print_success("logged as an error, the start went on")
+
+
+def test_startup_logs_nothing_when_every_check_is_ok(configuration, logged):
+    """(d) An ok check is not logged: a well-configured instance starts with a quiet log."""
+    configuration.set(JWT_SECRET=GOOD_JWT_SECRET, LIBREFOLIO_INSTANCE_KEY=GOOD_INSTANCE_KEY)
+    assert all(result.severity == "ok" for result in run_config_checks()), f"the configuration of this test must be all ok: {run_config_checks()}"
+
+    log_configuration_audit()
+
+    assert logged == [], f"ok checks must not be logged: {logged}"
+    print_success("all ok, nothing logged")
+
+
+def test_startup_logs_every_check_that_is_not_ok_at_the_level_of_its_severity(configuration, logged):
+    """(d) In the order of the checks, each with its summary, its id and its detail."""
+    print_section("Configuration checks: the startup log")
+    configuration.set(
+        LIBREFOLIO_INSTANCE_KEY=GOOD_INSTANCE_KEY,
+        LIBREFOLIO_INSTANCE_KEY_FILE=str(configuration.file("instance-key", GOOD_INSTANCE_KEY.encode())),
+        SESSION_COOKIE_SECURE="never",
+        LOG_LEVEL="DEBUG",
+    )
+
+    log_configuration_audit()
+
+    levels = [(level, fields["check"]) for level, _, fields in logged]
+    assert levels == [("info", "platform.jwt_secret"), ("warning", "platform.secrets_set_twice"), ("warning", "platform.session_cookie"), ("info", "platform.log_level")], f"each check that is not ok must be logged once, in order, at the level of its severity: {levels}"
+    expected = [(result.severity, result.summary, {"check": result.check_id, "detail": result.detail}) for result in run_config_checks() if result.severity != "ok"]
+    assert logged == expected, "each record must carry the summary of its check, its id and its detail"
+    print_success(f"{len(logged)} records: {levels}")
+
+
+def test_startup_does_not_generate_the_instance_key(configuration, logged):
+    """(d) The key is generated by its first use, not by the audit: no key yet is fine and not logged."""
+    configuration.set(JWT_SECRET=GOOD_JWT_SECRET)
+
+    log_configuration_audit()
+
+    assert logged == [], f"no key yet is the normal state of a new instance: nothing to log, got {logged}"
+    assert not configuration.data_dir.exists(), f"the startup audit must not generate the key: {list(configuration.data_dir.rglob('*'))}"
+    print_success("no key generated, nothing logged")
+
+
+@pytest.mark.parametrize(("variable", "value"), [pytest.param("JWT_SECRET", GOOD_JWT_SECRET, id="jwt-secret"), pytest.param("LIBREFOLIO_INSTANCE_KEY", GOOD_INSTANCE_KEY, id="instance-key")])
+def test_a_set_variable_wins_over_its_broken_file_at_startup(configuration, logged, variable, value):
+    """(d) NAME wins, so its broken NAME_FILE is never read and stops nothing; being set twice is still a warning."""
+    configuration.set(**{variable: value, f"{variable}_FILE": str(configuration.tmp_path / "missing")})
+
+    log_configuration_audit()
+
+    warnings = [fields["detail"] for level, _, fields in logged if level == "warning"]
+    assert warnings == [{"variables": variable}], f"{variable} set both ways must be one warning naming it: {logged}"
+    print_success(f"{variable} won over its broken file, warned as set twice")

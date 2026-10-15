@@ -2,7 +2,7 @@
 
 How to create a new **FX Rate Provider** to fetch exchange rates from a new central bank or data source.
 
-**Base class**: `FXRateProvider` (in `backend/app/services/fx.py`)
+**Base class**: `FXRateProvider` (in `backend/app/services/fx/base.py`)
 **Plugin folder**: `backend/app/services/fx_providers/<name>/` — the code in `plugin.py`, beside an `__init__.py` holding only its docstring (see [Plugin Folder](#plugin-folder))
 **Registry**: `FXProviderRegistry`
 
@@ -40,7 +40,7 @@ The system calls provider methods in two distinct phases:
 ```mermaid
 graph TD
     subgraph "Phase 1 — Exploration"
-        E1["get_supported_currencies()"] --> E2["Returns: list[str]<br/><small>e.g., ['USD','GBP','JPY','CHF']</small>"]
+        E1["get_supported_currencies()<br/><small>called by GET /fx/providers<br/>through fx/catalog.py, cached 24 h</small>"] --> E2["Returns: list[str]<br/><small>e.g., ['USD','GBP','JPY','CHF']</small>"]
         E2 --> E3["Frontend builds<br/>currency graph<br/><small>Available pairs for routing</small>"]
     end
 
@@ -61,7 +61,7 @@ graph TD
     style S4 fill:#f3e5f5,stroke:#7b1fa2
 ```
 
-**Phase 1** happens when a user adds a new currency pair — the system queries providers to discover which currencies they support.
+**Phase 1** happens when a user adds a new currency pair — the system queries providers to discover which currencies they support. That query is `GET /fx/providers`, which reaches `get_supported_currencies()` only through `backend/app/services/fx/catalog.py`: each provider's list is cached for 24 hours (named cache `fx_provider_currencies`, see [Cache Registry](../settings_cache.md)); if the call raises or takes longer than 5 seconds, the endpoint answers with the last list that provider returned in this process (empty before its first success) and tries again 5 minutes later. A provider may therefore fetch its list over the network, but must not rely on being called on every request.
 
 **Phase 2** happens during sync — the system requests actual rate data for specific date ranges.
 
@@ -79,7 +79,7 @@ graph TD
 | `code` | `@property → str` | Provider code (e.g., `"ECB"`, `"FED"`) |
 | `name` | `@property → str` | Display name (e.g., `"European Central Bank"`) |
 | `base_currency` | `@property → str` | Primary base currency (e.g., `"EUR"` for ECB) |
-| `get_supported_currencies()` | `async → list[str]` | List of available quote currencies (can be static or dynamic) |
+| `get_supported_currencies()` | `async → list[str]` | List of available quote currencies (static, or fetched over the network). Reached only through a 24 h cache with a 5 s timeout — see Phase 1 in [Flow](#flow) |
 | `fetch_rates(date_range, currencies, base_currency)` | `async → dict[str, list[tuple]]` | Fetch rates for date range. Returns `{currency: [(date, base, quote, rate), ...]}` |
 
 ### 🔧 Optional (Override)
@@ -105,8 +105,9 @@ graph TD
 
 from datetime import date
 from decimal import Decimal
-from backend.app.services.fx import FXRateProvider
-from backend.app.services.provider_registry import register_provider, FXProviderRegistry
+from backend.app.services.fx.base import FXRateProvider
+from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 @register_provider(FXProviderRegistry)
 class MyCentralBankProvider(FXRateProvider):
@@ -132,7 +133,8 @@ class MyCentralBankProvider(FXRateProvider):
         return {"JPY"}  # JPY quoted per 100 units by this bank
 
     async def get_supported_currencies(self) -> list[str]:
-        # Return list of currencies this provider can fetch
+        # Return list of currencies this provider can fetch — static here, but an API call is fine:
+        # GET /fx/providers reaches it through services/fx/catalog.py (24 h cache, 5 s timeout).
         return ["USD", "EUR", "GBP", "JPY", "CHF"]
 
     async def fetch_rates(

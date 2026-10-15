@@ -39,7 +39,7 @@
 
 import type {APIResponse, Route} from '@playwright/test';
 import {expect, type Locator, type Page} from './playwright';
-import {ANSWER_TIMEOUT, isRecord, ISO_DAY, type Json, jsonOf, RISK_QUERY, type RiskItem, riskItemsOf} from './galleryRiskLab';
+import {ANSWER_TIMEOUT, isRecord, ISO_DAY, type Json, jsonOf, parkPointer, RISK_QUERY, type RiskItem, riskItemsOf} from './galleryRiskLab';
 
 /**
  * The benchmark of `dashboard/risk-paid`. The page advises a tracker of a broad world index, and the seed prices this
@@ -134,29 +134,228 @@ export async function historicalReplayPreset(page: Page, scenarioId: string): Pr
     return {id: scenarioId, start, end};
 }
 
+/** The time the crisis menu has to offer the crisis, and then again to highlight it: the old single wait's budget, each. */
+const CRISIS_MENU_TIMEOUT = 20_000;
+
+/** How many lines of the crisis menu's record a failure quotes: the last ones, where it went wrong. */
+const CRISIS_MENU_QUOTED = 6;
+
+/**
+ * The crisis menu at one instant, read in one pass so its parts agree. Every option is named by the value its id ends in
+ * (`<listbox>-option-<encodeURIComponent(value)>`, SimpleSelect.svelte, `getOptionId`): `__empty__` is «No preset».
+ */
+interface CrisisMenuState {
+    /** The trigger says the menu is open (`aria-expanded`). */
+    open: boolean;
+    /** The open menu's options, in order; none while it is closed — SimpleSelect renders them only open. */
+    options: string[];
+    /** Those of them that are disabled: no key lands on one (optionFilter.ts, `stepSelectable`). */
+    disabled: string[];
+    /** The option the trigger names in `aria-activedescendant`, '' when it names none. */
+    highlighted: string;
+    /** The option the pointer is over, by the browser's own hover state — the one `mouseenter` follows — '' when none of the menu's. */
+    hovered: string;
+    /** What the pointer is over: the nearest test id, else the tag, else `nothing`. */
+    pointer: string;
+}
+
+/** One line of the record: a step, what the menu showed after it, and how many times in a row that step showed it. */
+interface CrisisMenuLine {
+    step: 'read' | 'ArrowDown' | 'ArrowUp';
+    shown: string;
+    times: number;
+}
+
+/** What was read off the crisis menu while a crisis was chosen: what a failure names, instead of a cause guessed. */
+interface CrisisMenuRecord {
+    /** The crisis, by the value its option's id ends in. */
+    wanted: string;
+    lines: CrisisMenuLine[];
+    last: CrisisMenuState | null;
+}
+
+/**
+ * Read the crisis menu through the combobox's own contract — the trigger's `aria-expanded`, `aria-controls` (its listbox's
+ * id) and `aria-activedescendant`, and the ids SimpleSelect gives the options of that listbox — never through a label. The
+ * pointer is read off the browser's hover state, which is what moves the highlight, rather than off a position assumed.
+ */
+async function readCrisisMenu(trigger: Locator): Promise<CrisisMenuState> {
+    return trigger.evaluate((element): CrisisMenuState => {
+        const listboxId = element.getAttribute('aria-controls') ?? '';
+        const prefix = `${listboxId}-option-`;
+        const valueOf = (id: string): string => (id.startsWith(prefix) ? id.slice(prefix.length) : id);
+        const listbox = listboxId === '' ? null : document.getElementById(listboxId);
+        const options = listbox === null ? [] : Array.from(listbox.querySelectorAll('[role="option"]'));
+        const hovers = document.querySelectorAll(':hover');
+        const under = hovers.length > 0 ? hovers[hovers.length - 1] : null;
+        const hoveredOption = under?.closest('[role="option"]') ?? null;
+        return {
+            open: element.getAttribute('aria-expanded') === 'true',
+            options: options.map((option) => valueOf(option.id)),
+            disabled: options.filter((option) => option.hasAttribute('disabled') || option.getAttribute('aria-disabled') === 'true').map((option) => valueOf(option.id)),
+            highlighted: valueOf(element.getAttribute('aria-activedescendant') ?? ''),
+            hovered: hoveredOption !== null && options.includes(hoveredOption) ? valueOf(hoveredOption.id) : '',
+            pointer: under === null ? 'nothing' : (under.closest('[data-testid]')?.getAttribute('data-testid') ?? under.tagName.toLowerCase()),
+        };
+    });
+}
+
+/** Where `value` sits among the open menu's options, as `i/n`, or null when the menu does not hold it. */
+function placeInCrisisMenu(state: CrisisMenuState, value: string): string | null {
+    const index = value === '' ? -1 : state.options.indexOf(value);
+    return index < 0 ? null : `${index + 1}/${state.options.length}`;
+}
+
+/** A state as a line of the record: open or closed, the highlighted option, the crisis and what the pointer is over. */
+function describeCrisisMenu(state: CrisisMenuState, wanted: string): string {
+    const pointer = state.hovered === '' ? state.pointer : `option ${placeInCrisisMenu(state, state.hovered)} ${state.hovered}`;
+    if (!state.open) return `closed · pointer on ${pointer}`;
+    const highlighted = state.highlighted === '' ? 'none' : `${placeInCrisisMenu(state, state.highlighted) ?? 'outside the menu:'} ${state.highlighted}`;
+    const crisis = `${placeInCrisisMenu(state, wanted) ?? 'absent'}${state.disabled.includes(wanted) ? ' (disabled)' : ''}`;
+    return `open · highlight ${highlighted} · crisis ${crisis} · pointer on ${pointer}`;
+}
+
+/**
+ * Write into the record what the menu showed after `step`. A read that shows what the last line shows adds nothing, and a
+ * key that shows what the same key showed last counts on that line: a highlight no key moves reads `ArrowDown ×212 → …`.
+ */
+function recordCrisisMenu(record: CrisisMenuRecord, step: CrisisMenuLine['step'], state: CrisisMenuState): void {
+    record.last = state;
+    const shown = describeCrisisMenu(state, record.wanted);
+    const line = record.lines.at(-1);
+    if (line?.shown === shown && step === 'read') return;
+    if (line?.shown === shown && line.step === step) {
+        line.times += 1;
+        return;
+    }
+    record.lines.push({step, shown, times: 1});
+}
+
+/** The crisis is the highlighted option of the open menu: Enter chooses it. */
+function crisisHighlighted(state: CrisisMenuState, wanted: string): boolean {
+    return state.open && state.highlighted === wanted && state.options.includes(wanted);
+}
+
+/**
+ * The key that moves the highlight one option nearer the crisis, whichever side of it the highlight is on — ↓ also opens a
+ * closed menu, on the option chosen now — or null when no key would: the crisis is highlighted, or not in the menu.
+ */
+function keyTowardCrisis(state: CrisisMenuState, wanted: string): 'ArrowDown' | 'ArrowUp' | null {
+    if (!state.open) return 'ArrowDown';
+    const target = state.options.indexOf(wanted);
+    const from = state.highlighted === '' ? -1 : state.options.indexOf(state.highlighted);
+    if (target < 0 || from === target) return null;
+    return from < target ? 'ArrowDown' : 'ArrowUp';
+}
+
+/** What the last state read says went wrong, in one sentence. Only the wait for the crisis to be offered blames the catalogue. */
+function crisisMenuVerdict(record: CrisisMenuRecord, phase: 'offered' | 'highlighted'): string {
+    const state = record.last;
+    if (state === null) return 'the menu was never read';
+    if (!state.open) return 'the menu is closed';
+    const crisis = placeInCrisisMenu(state, record.wanted);
+    if (crisis === null) {
+        return phase === 'offered' ? `the open menu holds ${state.options.length} option(s), none of them the crisis: the scenario catalogue did not reach the replay box` : `the crisis left the open menu, which holds ${state.options.length} option(s)`;
+    }
+    if (state.disabled.includes(record.wanted)) return `the crisis is option ${crisis}, disabled: no key lands on it`;
+    const highlighted = placeInCrisisMenu(state, state.highlighted);
+    if (highlighted === null) return `no option is highlighted; the crisis is option ${crisis}`;
+    const where = `option ${highlighted} ${state.highlighted}${state.hovered === state.highlighted ? ', under the pointer' : ''}`;
+    const line = record.lines.at(-1);
+    if (line !== undefined && line.step !== 'read' && line.times > 1) return `the highlight is stuck on ${where} (${line.step} ×${line.times} moved nothing); the crisis is option ${crisis}`;
+    return `the highlight is on ${where}; the crisis is option ${crisis}`;
+}
+
+/** The failure of a choice: what the menu never did, why by its last state, its options, and the last lines of the record. */
+function crisisMenuFailure(record: CrisisMenuRecord, scenarioId: string, phase: 'offered' | 'highlighted', cause?: unknown): Error {
+    const lines = record.lines.slice(-CRISIS_MENU_QUOTED).map((line) => `    ${line.step}${line.times > 1 ? ` ×${line.times}` : ''} → ${line.shown}`);
+    if (record.lines.length > CRISIS_MENU_QUOTED) lines.unshift(`    … ${record.lines.length - CRISIS_MENU_QUOTED} earlier line(s)`);
+    const last = record.last;
+    const options = last?.open ? `\n  the open menu's options, by the value their ids end in: ${last.options.join(' · ') || 'none'}` : '';
+    const message = `the crisis menu never ${phase} "${scenarioId}": ${crisisMenuVerdict(record, phase)}${options}\n  what it showed, oldest first (step → state):\n${lines.join('\n')}`;
+    return cause === undefined ? new Error(message) : new Error(message, {cause});
+}
+
 /**
  * Choose `scenarioId` in the replay box's crisis menu, as a keyboard does. The menu's options carry no test id (L4Replay
- * gives SimpleSelect no `optionTestId`) and their labels are translated, so the choice goes through the combobox's own
- * contract: ↓ opens it on the option chosen now, each ↓ moves the highlight, the trigger names the highlighted option in
- * `aria-activedescendant` — an id ending in the option's value — and Enter chooses it. The menu fills once the scenario
- * catalogue, asked when What if…? first opens, is in; until then it holds «No preset» alone and ↓ moves nothing, so the
- * loop goes on until the crisis is highlighted, or fails naming it. The choice itself is proved by the replay the box
- * asks next: {@link injectCrisisReplay} answers only the crisis's own dates.
+ * gives SimpleSelect no `optionTestId`) and their labels are translated, so the choice never goes through a label but
+ * through the combobox's own contract: the trigger names its listbox in `aria-controls` and the highlighted option in
+ * `aria-activedescendant`; each option's id is `<listbox>-option-<encodeURIComponent(value)>`; ↓ opens the menu on the
+ * option chosen now; ↓ and ↑ move the highlight one option at a time, stopping at either end — never wrapping round
+ * (optionFilter.ts, `stepSelectable`); Enter chooses the highlighted option.
+ *
+ * The menu fills once the scenario catalogue, asked when What if…? first opens, is in; until then it holds «No preset»
+ * alone. So the crisis is first awaited among the open menu's options — the one wait about the catalogue, and the only
+ * failure that blames it — and only then walked to.
+ *
+ * The keys are not all that moves the highlight, and the walk is built for the two other writers:
+ * - the pointer (H1). Each option takes the highlight on `mouseenter`, and Chromium sends the boundary events of a pointer
+ *   that does not move when content appears under it. The menu is `position: fixed` and opens above the trigger when less
+ *   than 200 px are left below it (`dropdownPosition="auto"`): over the head of the box and the Add: row, around where the
+ *   click that added the box left the pointer. An option hovered below the crisis took the highlight where ↓ alone could
+ *   never bring it back: the likeliest reading of the 20 s reds of 14/10/2026, desktop only (where the menu opens is the
+ *   layout's call), two runs in three. So the pointer is parked first ({@link parkPointer}), where the menu never
+ *   reaches, and the walk goes both ways.
+ * - the menu itself (H2). SimpleSelect puts the highlight back on the chosen option whenever its options, its value or its
+ *   open state change, and its options are derived (the catalogue, the language): a change mid-walk sends the highlight
+ *   back to «No preset».
+ * So each step reads where the highlight and the crisis are, presses ↓ or ↑ toward the crisis and reads again, until the
+ * trigger names the crisis, wherever the highlight was moved in between. Every state read is recorded, and a failure
+ * names the last ones — open or closed, the highlighted option as i/n, the crisis, the option under the pointer — rather
+ * than a cause guessed. After Enter the menu is closed. The choice itself is proved by the caller: the period the crisis
+ * sets, then the replay the box asks, which {@link injectCrisisReplay} answers only over the crisis's own dates.
  */
 export async function chooseReplayPreset(replay: Locator, scenarioId: string): Promise<void> {
     const trigger = replay.getByTestId('risk-replay-preset-button');
-    const wanted = `-option-${encodeURIComponent(scenarioId)}`;
-    const highlighted = async (): Promise<boolean> => ((await trigger.getAttribute('aria-activedescendant')) ?? '').endsWith(wanted);
+    const record: CrisisMenuRecord = {wanted: encodeURIComponent(scenarioId), lines: [], last: null};
+    const look = async (step: CrisisMenuLine['step']): Promise<CrisisMenuState> => {
+        const state = await readCrisisMenu(trigger);
+        recordCrisisMenu(record, step, state);
+        return state;
+    };
+    const press = async (key: 'ArrowDown' | 'ArrowUp'): Promise<CrisisMenuState> => {
+        await trigger.press(key);
+        return look(key);
+    };
     await expect(trigger).toBeEnabled();
-    await expect
+    // H1: parked before the menu opens, the pointer never lies under it, so no option takes the highlight by being hovered.
+    await parkPointer(replay.page());
+
+    // The crisis among the open menu's options: the scenario catalogue has reached the box. ↓ opens a closed menu and
+    // moves nothing else; an open one is only read, until the catalogue fills it.
+    const notOffered = await expect
         .poll(
             async () => {
-                if ((await trigger.getAttribute('aria-expanded')) !== 'true' || !(await highlighted())) await trigger.press('ArrowDown');
-                return highlighted();
+                const state = await look('read');
+                return (state.open ? state : await press('ArrowDown')).options.includes(record.wanted);
             },
-            {message: `the crisis menu never highlighted "${scenarioId}": the scenario catalogue did not reach the replay box`, timeout: 20_000, intervals: [50]},
+            {message: `the crisis menu offers "${scenarioId}"`, timeout: CRISIS_MENU_TIMEOUT, intervals: [50]},
         )
-        .toBe(true);
+        .toBe(true)
+        .then(
+            () => null,
+            (error: unknown) => error,
+        );
+    if (notOffered !== null) throw crisisMenuFailure(record, scenarioId, 'offered', notOffered);
+    if (record.last?.disabled.includes(record.wanted)) throw crisisMenuFailure(record, scenarioId, 'highlighted');
+
+    // The walk: one key toward the crisis, from wherever the highlight stands, then read again — until the trigger names it.
+    const notHighlighted = await expect
+        .poll(
+            async () => {
+                const state = await look('read');
+                const key = keyTowardCrisis(state, record.wanted);
+                return crisisHighlighted(key === null ? state : await press(key), record.wanted);
+            },
+            {message: `the crisis menu highlights "${scenarioId}"`, timeout: CRISIS_MENU_TIMEOUT, intervals: [50]},
+        )
+        .toBe(true)
+        .then(
+            () => null,
+            (error: unknown) => error,
+        );
+    if (notHighlighted !== null) throw crisisMenuFailure(record, scenarioId, 'highlighted', notHighlighted);
+
     await trigger.press('Enter');
     await expect(trigger, 'the crisis menu stayed open').toHaveAttribute('aria-expanded', 'false');
 }

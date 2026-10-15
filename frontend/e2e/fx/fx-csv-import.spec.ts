@@ -244,7 +244,7 @@ test.describe('FX CSV Import', () => {
         await textarea.fill('date;EUR>USD\n2020-01-15;1.0823');
 
         // Try to close via ✕ button
-        await modal.locator('button[aria-label="Close"]').click();
+        await modal.getByTestId('data-import-modal-close').click();
 
         // Should show discard confirm
         await expect(page.locator('text=Discard import')).toBeVisible();
@@ -273,7 +273,7 @@ test.describe('FX CSV Import', () => {
         await swapBtn.click();
 
         // Close should NOT show discard confirm (only header changed, no user data)
-        await modal.locator('button[aria-label="Close"]').click();
+        await modal.getByTestId('data-import-modal-close').click();
 
         // Modal should just close — no discard prompt
         await expect(modal).not.toBeVisible();

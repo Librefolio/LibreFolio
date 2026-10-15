@@ -56,11 +56,14 @@ Questi comandi scrivono direttamente nel database, quindi funzionano anche mentr
 # Create an administrator account
 pipenv run ./dev.py user create <username> <email> <password>
 
+# Create a regular account
+pipenv run ./dev.py user create <username> <email> <password> --role user
+
 # List all users: ID, username, email, active, administrator
 pipenv run ./dev.py user list
 ```
 
-- 👑 Gli account creati qui sono sempre **amministratori**. Per un account normale, lascia che la persona si registri con **Registrati qui** nella pagina di login (quando la registrazione è aperta nelle [Impostazioni globali](settings.md)), oppure `demote` il nuovo account.
+- 👑 `user create` crea un **amministratore**, a meno che tu non aggiunga `--role user`, che crea un account normale. Una persona può avere un account normale anche registrandosi con **Registrati qui** nella pagina di login, quando la registrazione è aperta nelle [Impostazioni globali](settings.md).
 - 🔒 La password deve avere almeno 8 caratteri, con una lettera maiuscola, una lettera minuscola, una cifra e un simbolo.
 
 ### 🔑 Reimpostare una password o bloccare un account {: #reset-a-password-or-lock-an-account }
@@ -74,7 +77,7 @@ pipenv run ./dev.py user deactivate <username>
 pipenv run ./dev.py user activate <username>
 ```
 
-- ⏱️ Una reimpostazione non termina le sessioni già aperte: restano valide fino alla scadenza. Per bloccare subito qualcuno, disattiva l'account: gli viene negato l'accesso dalla richiesta successiva.
+- ⏱️ Una reimpostazione termina le sessioni già aperte: ogni dispositivo collegato all'account viene disconnesso alla richiesta successiva. Per escludere qualcuno del tutto, disattiva l'account: gli viene negato l'accesso dalla richiesta successiva, e riattivarlo non fa tornare valide le sessioni di prima.
 - 👑 `deactivate` rifiuta l'ultimo amministratore attivo: si ferma con l'errore `User '<username>' is the last active administrator: promote or activate another administrator first` ed esce con `1`.
 - 💬 La schermata **Password dimenticata?** dell'app mostra questo comando per entrambe le installazioni: `docker compose exec librefolio python dev.py user reset …` per Docker, e `./dev.py user reset …` per un'installazione host, da eseguire dopo `pipenv shell` o con `pipenv run` davanti.
 
@@ -85,7 +88,7 @@ pipenv run ./dev.py user promote <username>
 pipenv run ./dev.py user demote <username>
 ```
 
-`demote` rifiuta l'ultimo amministratore attivo: si ferma con l'errore `User '<username>' is the last active administrator: promote another user first` ed esce con `1`.
+`demote` rifiuta l'ultimo amministratore attivo: si ferma con l'errore `User '<username>' is the last active administrator: promote another user first` ed esce con `1`. Un declassamento disconnette l'account da ogni dispositivo.
 
 ---
 

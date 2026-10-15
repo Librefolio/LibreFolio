@@ -6,11 +6,11 @@ catalogue, `SETTINGS_REGISTRY`.
 
 !!! info "A third layer, outside these two tiers: process configuration (`.env`)"
 
-    Startup values (ports, data folder, log level, risk-engine workers) come from `.env` and the
-    environment; the admin-facing list is [Configuration](../../admin/configuration.md). How they
-    load:
+    Startup values (ports, data folder, log level, instance profile, secrets, risk-engine workers)
+    come from `.env` and the environment; the admin-facing list is
+    [Configuration](../../admin/configuration.md). How they load:
 
-    - `Settings(BaseSettings)` in `backend/app/config.py` reads the project-root `.env`;
+    - `Settings(BaseSettings)` in `backend/app/config/__init__.py` reads the project-root `.env`;
       environment variables override it, names are case-sensitive, unknown keys are ignored.
     - `get_settings()` builds a fresh, validated instance on every call. `main.py` calls it at
       import, so a mistyped or out-of-range value stops the startup. It also computes
@@ -18,11 +18,46 @@ catalogue, `SETTINGS_REGISTRY`.
     - `get_data_dir()` picks the data root: in test mode `LIBREFOLIO_TEST_DATA_DIR` or
       `backend/data/test` (refused if it overlaps production), otherwise `LIBREFOLIO_DATA_DIR`,
       otherwise `backend/data/prod`.
-    - Keys outside the class — `LIBREFOLIO_DATA_DIR`, `LIBREFOLIO_TEST_MODE`, `JWT_SECRET`,
-      `LIBREFOLIO_WEB_LINK_FINDER_*`, `LIBREFOLIO_NO_SCHEDULER` — are read from `os.environ`.
+    - Keys outside the class — `LIBREFOLIO_DATA_DIR`, `LIBREFOLIO_TEST_DATA_DIR`,
+      `LIBREFOLIO_TEST_MODE`, `LIBREFOLIO_LOG_LEVEL`, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY` (both
+      also as `_FILE`), `LIBREFOLIO_NO_SCHEDULER`, `LIBREFOLIO_DISABLE_DONATION_POPUP`,
+      `LIBREFOLIO_TEST_LANE_ID`, `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key also as `_FILE`) — are
+      read in `backend/app/config/` (base or section module), from `os.environ` only.
       pydantic-settings does not export `.env` there, so they arrive through the launcher:
       `./dev.py server` copies `.env` into the environment (shell values win), Compose uses
       `env_file:`.
+    - Secrets go through `env_secret(name)` in `__init__.py`: `NAME` when it is not blank, otherwise
+      the content of the file named by `NAME_FILE` when that is not blank (Docker and Kubernetes
+      secrets), otherwise `None`. Blank means empty or whitespace only, so a stray space never becomes
+      a key. A `NAME_FILE` that cannot give its secret, an empty or blank file included, raises
+      `SecretFileError`; the full rules are in
+      [Security → Secrets from Files](security.md#secrets-from-files). A new secret is named
+      `LIBREFOLIO_*` and read with `env_secret()`: its `_FILE` form then works, and the startup check
+      of secrets set twice covers it without a list to update. `INSTANCE_TRUST_SECRETS` lists, in
+      both forms, the secrets that a test runtime never inherits (`configure_test_runtime()` in
+      `scripts/cli_base.py`).
+    - `backend/app/config/` is a package; the import path is still `backend.app.config`.
+      `__init__.py` is the base: constants, data directories, test mode, the secret reader
+      `env_secret()`, `Settings` and `get_settings()`. New variables go into one section module per
+      topic, owned by the workstream of that area. Three exist today: `platform.py` (H:
+      `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
+      `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`),
+      `accounts.py` (A: `donation_popup_disabled()`) and `plugins.py` (X: `web_link_finder_enabled()`,
+      `web_link_finder_engine()`, `web_link_finder_api_key()`, `web_link_finder_ddgs_region()`,
+      `web_link_finder_ddgs_backend()`, `web_link_finder_timeout()`,
+      `web_link_finder_max_results()`). `sleep_wake.py`, `backup.py` and `email.py` will follow when
+      their areas add variables.
+    - The rule: every environment variable of the application is read inside
+      `backend/app/config/`. A module elsewhere calls a function there instead of reading
+      `os.environ`. The rule holds with no exception, and a guard test checks it (runner selector
+      `services config-package`, file `backend/test_scripts/test_services/test_config_package.py`).
+    - `.env.example`, at the repository root, documents the variables, grouped by function. A new
+      variable goes into its section as a commented line that shows the default: the uncommented
+      lines must not change, because the file becomes `/app/.env` in the Docker image. A guard test
+      checks that the variables the code reads, the `Settings` fields and the variables of the
+      compose files are documented there, and that the uncommented lines stay the same (runner
+      selector `services config-env-example`, file
+      `backend/test_scripts/test_services/test_env_example.py`).
 
 ## 🗃️ Two storage models, kept separate on purpose
 
@@ -145,6 +180,29 @@ explicit user choice always wins afterwards.
     every reader silently fell back to `EUR` regardless of the configured default. Any new code
     that needs "the user's base currency" must call this helper — the three current consumers
     are `financial_math/portfolio/engine.py`, `portfolio_service.py`, and `lots_analysis_service.py`.
+
+## 🌍 Public instance configuration {: #public-instance-configuration }
+
+`GET /api/v1/system/instance` answers, without a session, what the web app needs to know about the
+instance before anyone signs in. The app reads it at startup: the `(app)` layout calls
+`instanceConfig.load()` when it mounts, before the auth check, and works with a self-hosted default
+until the server answers (see [Instance configuration](../frontend/state/app-state.md#instance-config)).
+Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and today it has one field:
+
+| Field | Values | Source |
+|-------|--------|--------|
+| `profile` | `selfhosted`, an install run by its owner, or `managed`, an instance a hosting provider runs for its customers | `LIBREFOLIO_PROFILE`, a field of `Settings`, so it comes from `.env` or the environment like `PORT`. Default `selfhosted`; case and spaces around the value are ignored, and any other value stops the startup. Admin side: [Configuration](../../admin/configuration.md). |
+
+The rule for a workstream that owns part of the public configuration:
+
+- it adds **one** field to `InstanceConfigResponse`, typed with a model of its own schemas;
+- it fills that field in `get_instance_config()` (`backend/app/api/v1/system/instance.py`) with one
+  call to its service;
+- the field holds only what is public and the same for whoever asks: nothing private, nothing that
+  depends on the user or the session.
+
+After `./dev.py api sync`, the field appears in the frontend type `InstanceConfig`, inferred from the
+generated client.
 
 ## 🧹 Related: cache administration
 

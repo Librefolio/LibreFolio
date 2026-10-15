@@ -53,6 +53,6 @@ did. Four workers did not cause it; they made it reproducible.
 
 | Role | Path |
 |------|------|
-| File store | `backend/app/services/brim_provider.py` — `get_file_path`, `_move_file` |
-| Atomic metadata write | `backend/app/services/brim_provider.py` — `_write_metadata_atomic` |
+| File store | `backend/app/services/brim/brim_provider.py` — `get_file_path`, `_move_file` |
+| Atomic metadata write | `backend/app/services/brim/brim_provider.py` — `_write_metadata_atomic` |
 | BRIM developer guide | `mkdocs_src/docs/developer/backend/brim/` |

@@ -199,7 +199,7 @@ Phase 3 — PERSIST (per-task session, parallel)
 
 | Role | Path |
 |------|------|
-| FX sync (Phase 1-3) | `backend/app/services/fx.py` (sync_pairs_bulk) |
-| Asset sync (Phase 1-3) | `backend/app/services/asset_source.py` (bulk_refresh_prices) |
+| FX sync (Phase 1-3) | `backend/app/services/fx/sync.py` (sync_pairs_bulk) |
+| Asset sync (Phase 1-3) | `backend/app/services/assets/refresh.py` (bulk_refresh_prices) |
 | Asset sync tests | `backend/test_scripts/test_services/test_asset_source_refresh.py` |
 | Source plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/Bugfix-Step2/plan-phase06Step2cSyncDeleteRefactor.prompt.md` |

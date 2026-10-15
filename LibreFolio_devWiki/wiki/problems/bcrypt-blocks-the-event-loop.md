@@ -60,8 +60,8 @@ event loop proves it without timing the library itself.
 | Role | Path |
 |------|------|
 | Handlers (`login`, `register`, `change_password`) | `backend/app/api/v1/auth.py` |
-| bcrypt calls (`hash_password`, `verify_password_or_dummy`) | `backend/app/services/auth_service.py` |
-| Registration path (`create_user`) | `backend/app/services/user_service.py` |
+| bcrypt calls (`hash_password`, `verify_password_or_dummy`) | `backend/app/services/accounts/auth_service.py` |
+| Registration path (`create_user`) | `backend/app/services/accounts/user_service.py` |
 | Event-loop tests (`TestPasswordWorkLeavesTheEventLoopFree`) | `backend/test_scripts/test_api/test_auth_api.py` |
 | Backlog (V-16) | `LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md` |
 | Journal (§12.7) | `LibreFolio_developer_journal/Release_2/Phase_0/46_dataQualityE2E/plan-phase00DataQualityE2E.prompt.md` |

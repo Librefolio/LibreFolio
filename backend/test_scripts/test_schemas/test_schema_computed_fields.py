@@ -16,7 +16,7 @@ import pytest
 from backend.app.schemas.common import BaseBulkResponse, Currency
 from backend.app.schemas.fx import FXUpsertResult
 from backend.app.schemas.prices import FAPricePoint
-from backend.app.schemas.transactions import TXCreateItem, TXUpdateItem
+from backend.app.schemas.transactions.transactions import TXCreateItem, TXUpdateItem
 
 # Helper for creating BRSummary with all required fields
 _NOW = datetime.now(UTC)

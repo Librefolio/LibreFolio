@@ -462,6 +462,15 @@ Once the container has started, the one-time key is used up: it disappears from 
     | `STARTUP_TIMEOUT` | Seconds the script waits for the *Running* state (default `180`) before it exits and Docker restarts the container. Raise it only on a very slow server. |
     | `DEBUG` | Not in the example above. `DEBUG=1` prints every command the script runs to the container log, for troubleshooting. Off by default to keep the log readable. |
 
+??? tip "📈 Watching LibreFolio with a monitor (Uptime Kuma)"
+
+    The `librefolio` service has a health check of its own, on `GET /api/v1/system/health` (see the compose file below): it tells Docker that the server answers. To watch LibreFolio from another device, for example with **Uptime Kuma**, point the monitor at `/api/v1/system/ready` on the address you open LibreFolio with, such as `https://librefolio.your-tailnet.ts.net/api/v1/system/ready`. It needs no sign-in and answers:
+
+    * **`200`** when LibreFolio is ready to serve requests;
+    * **`503`** when it is not, with the check at fault in the answer: `database` (`unreachable`) or `migrations` (`mismatch`, `unknown`).
+
+    The [Advanced Docker Guide](docker_advanced.md), section «Service: `librefolio`», explains the codes.
+
 ??? example "📄 View the complete production Docker Compose file (LibreFolio + Tailscale)"
 
     A complete `docker-compose.yml`: the `librefolio` service of the official `docker-compose.prod.yml`, with the Tailscale sidecar next to it:

@@ -31,7 +31,7 @@ if db_url:
     print(f"[Alembic env.py] Using DATABASE_URL from -x parameter: {db_url}")
     config.set_main_option("sqlalchemy.url", db_url)
 else:
-    # Use URL from config.py (reads from environment/env file)
+    # Use URL from backend.app.config (reads from environment/env file)
     settings = get_settings()
     print(f"[Alembic env.py] Using DATABASE_URL from config: {settings.DATABASE_URL}")
     config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)

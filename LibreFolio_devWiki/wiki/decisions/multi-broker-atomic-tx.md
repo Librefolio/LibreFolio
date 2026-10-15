@@ -70,5 +70,5 @@ POST   /transactions/validate (dry-run — mixed create+update+delete)
 
 | Role | Path |
 |------|------|
-| Transaction service | `backend/app/services/transaction_service.py` |
+| Transaction service | `backend/app/services/transactions/transaction_service.py` |
 | Transaction API | `backend/app/api/v1/transactions.py` |

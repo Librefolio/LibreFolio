@@ -3,10 +3,12 @@
 The external engine is always MOCKED — no live ddgs/network call is made.
 """
 
+import logging
+
 import pytest
 
-from backend.app.services import web_link_finder as wlf
-from backend.app.services.asset_source import AssetSearchService
+from backend.app.services.assets import web_link_finder as wlf
+from backend.app.services.assets.search import AssetSearchService
 
 
 class _FakeEngine:
@@ -173,7 +175,70 @@ def test_build_engine_ddgs_region_backend_override(monkeypatch):
 def test_build_engine_apikey_without_key_is_disabled(monkeypatch):
     monkeypatch.setenv("LIBREFOLIO_WEB_LINK_FINDER_ENGINE", "apikey")
     monkeypatch.delenv("LIBREFOLIO_WEB_LINK_FINDER_API_KEY", raising=False)
+    monkeypatch.delenv("LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE", raising=False)
     assert wlf._build_engine() is None
+
+
+# ── API key from LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE (a mounted secret) ──
+
+
+def _apikey_engine_with_key_file(monkeypatch, key_file):
+    """ENGINE=apikey, the key only in ``key_file``: no API key variable, the link finder on."""
+    monkeypatch.setenv("LIBREFOLIO_WEB_LINK_FINDER_ENGINE", "apikey")
+    monkeypatch.delenv("LIBREFOLIO_WEB_LINK_FINDER_API_KEY", raising=False)
+    monkeypatch.setenv("LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE", str(key_file))
+    monkeypatch.delenv("LIBREFOLIO_WEB_LINK_FINDER_ENABLED", raising=False)
+
+
+def test_build_engine_apikey_from_key_file(monkeypatch, tmp_path):
+    """A key mounted as a file builds the API-key engine, the file's trailing newline dropped."""
+    key_file = tmp_path / "web_link_finder_api_key"
+    key_file.write_text("s3arch-api-key\n", encoding="utf-8")
+    _apikey_engine_with_key_file(monkeypatch, key_file)
+
+    eng = wlf._build_engine()
+
+    assert isinstance(eng, wlf.ApiKeyEngine)
+    assert eng._api_key == "s3arch-api-key"
+
+
+@pytest.mark.parametrize("content", [None, b"", b"c4nary-api-key\xff\xfe"], ids=["missing", "empty", "not-utf8"])
+def test_build_engine_broken_key_file_is_disabled_with_a_warning(monkeypatch, tmp_path, caplog, content):
+    """A key file that cannot be read disables the engine: one warning naming the variable and the path, never the content."""
+    key_file = tmp_path / "web_link_finder_api_key"
+    if content is not None:
+        key_file.write_bytes(content)
+    _apikey_engine_with_key_file(monkeypatch, key_file)
+
+    with caplog.at_level(logging.WARNING, logger=wlf.logger.name):
+        assert wlf._build_engine() is None
+
+    warnings = [r.getMessage() for r in caplog.records if r.name == wlf.logger.name and r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert warnings[0].startswith(f"web_link_finder: LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE: {key_file} ")
+    assert warnings[0].endswith("; disabling")
+    assert "c4nary" not in warnings[0]
+
+
+@pytest.mark.asyncio
+async def test_broken_key_file_is_best_effort(monkeypatch, tmp_path):
+    """find_candidate_urls never raises on a broken key file: no engine is built, no search runs, the result is []."""
+    _apikey_engine_with_key_file(monkeypatch, tmp_path / "missing_api_key")
+    monkeypatch.setattr(wlf, "_DDGS_OK", True)  # reach _build_engine whatever the install
+    monkeypatch.setattr(wlf, "DDGS", _FakeDDGS)
+    monkeypatch.setattr(_FakeDDGS, "last_text_kwargs", None)
+    built = []
+    real_build_engine = wlf._build_engine
+
+    def recording_build_engine():
+        built.append(real_build_engine())
+        return built[-1]
+
+    monkeypatch.setattr(wlf, "_build_engine", recording_build_engine)
+
+    assert await wlf.find_candidate_urls("q", ["borsaitaliana.it"]) == []
+    assert built == [None]  # the broken key file was reached, and disabled the engine
+    assert _FakeDDGS.last_text_kwargs is None  # no search ran, not even through ddgs
 
 
 # ── orchestration: AssetSearchService._augment_with_link_finder ──────────

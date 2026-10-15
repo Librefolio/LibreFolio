@@ -94,8 +94,8 @@ Broker List/Detail UI v2 (Phase 9 Milestone 3) is done — see
 | Broker sharing docs | `mkdocs_src/docs/user/brokers/sharing.en.md` |
 | Files docs | `mkdocs_src/docs/user/files/index.en.md` |
 | Broker API | `backend/app/api/v1/brokers.py` |
-| Broker service | `backend/app/services/broker_service.py` |
-| BRIM abstract base | `backend/app/services/brim_provider.py` |
+| Broker service | `backend/app/services/brokers/broker_service.py` |
+| BRIM abstract base | `backend/app/services/brim/brim_provider.py` |
 | BRIM plugins | `backend/app/services/brim_providers/` |
 | File upload API | `backend/app/api/v1/uploads.py` |
 | DB models (Broker, BrokerUserAccess) | `backend/app/db/models.py` |

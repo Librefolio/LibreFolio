@@ -20,9 +20,28 @@
  * The data mirrors the Scalable Capital pair that motivated the check: `broker_scalable` refuses the
  * overnight account's file, which `broker_scalable_deposit` and the generic CSV read. The browser
  * side is `e2e/transactions/tx-import-broker-mismatch.spec.ts`.
+ *
+ * The last block reads the real catalogues instead of a fake `$t` (workstream W, lot K2a — backlog
+ * C-70, part a): the generic CSV and DEGIRO refuse a file with seven codes of their own (`csv_only`,
+ * `file_unreadable`, `no_header_row`, `missing_columns`; `no_movement_rows`, `degiro_csv_only`,
+ * `degiro_not_account_statement`; backend: category 4e of `test_brim_providers.py`, A2 of
+ * `test_brim_degiro.py`), and each must reach the user in the UI language. The four generated
+ * catalogues (`$lib/i18n/<lang>.json`, built by Vitest's global setup) must have the seven keys, the
+ * message is formatted by svelte-i18n as the app formats it, the language switched in place as the
+ * language selector does. `csv_only` names the plugin its context gives by `plugin_code`; `missing_columns`
+ * names its `columns` and is a plural on its integer `count`. English is checked text by text, never
+ * against a wording: the other three languages only for what the code must carry, their wording stays
+ * the translators'. Red until the seven keys are in the four catalogues.
  */
 
-import {describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
+import {get} from 'svelte/store';
+import {init, waitLocale} from 'svelte-i18n';
+import {_, locale, SUPPORTED_LOCALES, type SupportedLocale} from '$lib/i18n';
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
 import {findDefaultPluginMismatch, resolveParseRefusalMessage, type MismatchBroker, type MismatchOptions, type ParseRefusal} from './defaultPluginCheck';
 
 const SCALABLE = 'broker_scalable';
@@ -335,5 +354,110 @@ describe('resolveParseRefusalMessage — the plugin’s own sentence', () => {
     ])('an %s message stays empty — no lone period, with or without an untranslated code', (_label, message) => {
         expect(resolveParseRefusalMessage({message}, makeT())).toBe('');
         expect(resolveParseRefusalMessage({code: 'scalable_unknown', message}, makeT())).toBe('');
+    });
+});
+
+// ---------------------------------------------------------------------------------------------------------
+// The generic CSV's and DEGIRO's refusals in the UI language, from the real catalogues (workstream W, lot
+// K2a — backlog C-70, part a). See the last paragraph of the header.
+// ---------------------------------------------------------------------------------------------------------
+
+/** The seven codes of lot K2a, each with a context its plugin gives (the backend contract). */
+const K2A_REFUSALS: ReadonlyArray<{code: string; context: Record<string, unknown>}> = [
+    {code: 'csv_only', context: {plugin_code: GENERIC}},
+    {code: 'file_unreadable', context: {}},
+    {code: 'no_header_row', context: {}},
+    {code: 'missing_columns', context: {columns: 'date, type', count: 2}},
+    {code: 'no_movement_rows', context: {}},
+    {code: 'degiro_csv_only', context: {}},
+    {code: 'degiro_not_account_statement', context: {}},
+];
+
+/** A plugin sentence no catalogue says: the refusal shows it only when its code has no translation. */
+const PLUGIN_SENTENCE = 'the plugin’s own English sentence, shown when its code has no translation';
+/** That sentence as the wizard shows it: a capital letter, a final period. */
+const PLUGIN_SENTENCE_SHOWN = 'The plugin’s own English sentence, shown when its code has no translation.';
+
+/** The four shipped catalogues, generated from their sources by Vitest's global setup. */
+const CATALOGUES: Record<SupportedLocale, unknown> = {en, it: itCatalogue, fr, es};
+
+/** The value behind a dotted key of a catalogue, if any. */
+const leafOf = (catalogue: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node !== null && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalogue);
+
+/** Whether a catalogue has a non-blank text at `key`. */
+function hasText(lang: SupportedLocale, key: string): boolean {
+    const text = leafOf(CATALOGUES[lang], key);
+    return typeof text === 'string' && text.trim() !== '';
+}
+
+/** Each of `keys` that some catalogue has no text for, with those catalogues: `{}` when the four have all of them. */
+function catalogueGaps(keys: readonly string[]): Record<string, SupportedLocale[]> {
+    const gaps = keys.map((key) => [key, SUPPORTED_LOCALES.filter((lang) => !hasText(lang, key))] as const);
+    return Object.fromEntries(gaps.filter(([, langs]) => langs.length > 0));
+}
+
+/** The app's `$_` in the current UI language, as the wizard passes it. */
+const appTranslate: Parameters<typeof resolveParseRefusalMessage>[1] = (key, opts) => get(_)(key, opts);
+
+/** The refusal `code` with `context`, as the wizard shows it in the current UI language. */
+const shown = (code: string, context: Record<string, unknown>): string => resolveParseRefusalMessage({code, message: PLUGIN_SENTENCE, context}, appTranslate);
+
+/** Change the UI language in place, as the language selector does; its catalogue is loaded before the next step. */
+async function uiLanguage(lang: SupportedLocale): Promise<void> {
+    locale.set(lang);
+    await waitLocale(lang);
+}
+
+describe('resolveParseRefusalMessage — the generic CSV’s and DEGIRO’s refusals in the UI language (K2a, C-70a)', () => {
+    beforeAll(async () => {
+        init({fallbackLocale: 'en', initialLocale: 'en'});
+        await waitLocale('en');
+    });
+
+    afterEach(async () => {
+        // The UI language is module-level state shared by every test of the block.
+        await uiLanguage('en');
+    });
+
+    it('the four catalogues have a text for each of the seven codes', () => {
+        const keys = K2A_REFUSALS.map(({code}) => `importWizard.parseRefusal.${code}`);
+
+        expect(catalogueGaps(keys), 'the catalogues without a text for the code, by key: the wizard shows the plugin’s English sentence there').toEqual({});
+    });
+
+    it.each(K2A_REFUSALS)('English: $code is the catalogue’s text formatted with its context, never the plugin’s sentence', async ({code, context}) => {
+        await uiLanguage('en');
+        const key = `importWizard.parseRefusal.${code}`;
+
+        const text = shown(code, context);
+
+        expect(text, `${key} is missing from the English catalogue: the wizard shows the plugin’s own sentence`).not.toBe(PLUGIN_SENTENCE_SHOWN);
+        const values = typeof context.plugin_code === 'string' ? {...context, plugin_name: leafOf(en, `brimPlugins.${context.plugin_code}.name`)} : context;
+        expect(text, 'the English catalogue’s text, with the context as its values').toBe(appTranslate(key, {values}));
+        expect(text, 'every argument the text names has its value').not.toMatch(/[{}]/);
+    });
+
+    it.each(SUPPORTED_LOCALES)('%s: csv_only names the plugin its context gives by plugin_code, by that plugin’s name in the catalogue', async (lang) => {
+        await uiLanguage(lang);
+        const genericName = leafOf(CATALOGUES[lang], `brimPlugins.${GENERIC}.name`);
+        const degiroName = leafOf(CATALOGUES[lang], `brimPlugins.${DEGIRO}.name`);
+        expect([typeof genericName, typeof degiroName], `premise: ${lang}.json names the generic CSV and DEGIRO`).toEqual(['string', 'string']);
+
+        const text = shown('csv_only', {plugin_code: GENERIC});
+
+        expect(text, `${lang}: importWizard.parseRefusal.csv_only is missing — the wizard shows the plugin’s own sentence`).not.toBe(PLUGIN_SENTENCE_SHOWN);
+        expect(text, 'the generic CSV, by its name in the UI language').toContain(genericName as string);
+        expect(shown('csv_only', {plugin_code: DEGIRO}), 'the name comes from the context ({plugin_name}), not from the text: another plugin_code, another name').toContain(degiroName as string);
+    });
+
+    it.each(SUPPORTED_LOCALES)('%s: missing_columns names its columns, and one missing column does not read as two with its 2 written as 1', async (lang) => {
+        await uiLanguage(lang);
+        // The columns stay the same: only the count changes between the two renderings.
+        const one = shown('missing_columns', {columns: 'date', count: 1});
+        const two = shown('missing_columns', {columns: 'date', count: 2});
+
+        expect(two, `${lang}: importWizard.parseRefusal.missing_columns is missing — the wizard shows the plugin’s own sentence`).not.toBe(PLUGIN_SENTENCE_SHOWN);
+        expect(shown('missing_columns', {columns: 'date, type', count: 2}), 'the columns of the context are named').toContain('date, type');
+        expect(one, `count is an ICU plural: count 1 must not be the count 2 text «${two}» with its 2 written as 1`).not.toBe(two.replace(/(?<!\d)2(?!\d)/, '1'));
     });
 });

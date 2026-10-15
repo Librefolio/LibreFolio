@@ -393,8 +393,9 @@ bigger `N`.
     instead of 3224 — *more* covered, despite doing strictly less work, which is causally impossible
     for a deterministic number.
 
-    Compared file by file, the difference sits entirely in `asset_source.py` and
-    `asset_source_providers/borsa_italiana/plugin.py`: the two modules that talk to the live internet. Test
+    Compared file by file, the difference sits entirely in the asset pricing service (a single
+    module at the time, now split across the `backend/app/services/assets/` package) and
+    `asset_source_providers/borsa_italiana/plugin.py`: the two places that talk to the live internet. Test
     and skip counts were identical in all three runs, so nothing changed about *what* ran — only
     which branch the provider took given what the site returned that day.
 

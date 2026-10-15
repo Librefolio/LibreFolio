@@ -12,8 +12,8 @@ from backend.app.schemas.risk import (
     RiskOutputKind,
     RiskScopeKind,
 )
-from backend.app.services.data_quality_thresholds import RISK_MIN_OBSERVATIONS
-from backend.app.services.provider_registry import RiskAnalyticRegistry, register_plugin
+from backend.app.services.platform.data_quality_thresholds import RISK_MIN_OBSERVATIONS
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.risk.analytic_helpers import prepared_scope_series, require_annualization_factor
 from backend.app.services.risk.base import (
     RiskAnalytic,
@@ -22,6 +22,7 @@ from backend.app.services.risk.base import (
     RiskUnavailableError,
 )
 from backend.app.services.risk.metrics import calendar_days_to_observations, historical_var_cvar
+from backend.app.services.risk.registry import RiskAnalyticRegistry
 
 
 class AssetSetVarParams(BaseModel):

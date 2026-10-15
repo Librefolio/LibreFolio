@@ -7,7 +7,7 @@
 | **API Endpoint** | `https://data-api.ecb.europa.eu/service/data/EXR/` |
 | **API Format** | JSON (SDMX) |
 | **API Key** | Not required |
-| **Currencies** | Discovered at runtime by `get_supported_currencies()`: on 2026-10-08, 29 published daily and 44 plus EUR in the history |
+| **Currencies** | Discovered at runtime by `get_supported_currencies()`: on 2026-10-08, 29 published daily and 44 plus EUR in the history. `GET /fx/providers` caches the list for 24 h (`backend/app/services/fx/catalog.py`) |
 | **Update Frequency** | Daily, ~16:00 CET on ECB business days |
 | **Historical Data** | Available from 1999 |
 | **API Docs** | [ECB Data Portal API](https://data.ecb.europa.eu/help/api/overview) |

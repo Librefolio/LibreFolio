@@ -97,7 +97,7 @@ Additional Phase 7 deliverables not in the original gap list:
 | Role | Path |
 |------|------|
 | Transaction API | `backend/app/api/v1/transactions.py` |
-| Transaction service | `backend/app/services/transaction_service.py` |
+| Transaction service | `backend/app/services/transactions/transaction_service.py` |
 | DB model (Transaction) | `backend/app/db/models.py` |
 | Transaction pages | `frontend/src/routes/(app)/transactions/` |
-| BRIM abstract base | `backend/app/services/brim_provider.py` |
+| BRIM abstract base | `backend/app/services/brim/brim_provider.py` |

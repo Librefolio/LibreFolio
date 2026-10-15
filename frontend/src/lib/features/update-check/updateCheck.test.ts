@@ -323,7 +323,7 @@ describe('checkForUpdates', () => {
      * The GHCR token/manifest handshake (challenge parsing and trust checks,
      * the credential-free token fetch, the Bearer-only retry) is same-origin
      * backend work with no client-observable HTTP surface — see
-     * `backend/app/services/container_registry.py`. From here,
+     * `backend/app/services/platform/container_registry.py`. From here,
      * `checkForUpdates` only ever sees the typed `ImageProbe` seam's result, so
      * these cases pin down consumption of that result only: every reported
      * reason maps to the correct outcome and no error path is ever reported as

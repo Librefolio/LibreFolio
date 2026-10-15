@@ -51,9 +51,10 @@ import structlog
 from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions import TXCreateItem
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
-from backend.app.services.provider_registry import BRIMProviderRegistry, register_provider
+from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
 

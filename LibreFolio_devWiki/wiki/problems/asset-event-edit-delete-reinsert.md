@@ -35,10 +35,10 @@ In the asset detail's event editor (dividends, interest, splits, price adjustmen
 - `FAEventUpsertPoint` carries an optional **`id`**: with an id, the stored manual event is **edited in place** —
   every field may change, date and type included, and the id is kept, so linked transactions follow; without an
   id, the event replaces the stored manual events with the same `(date, type)`, updated in place
-  (`backend/app/schemas/prices.py`, `_upsert_asset_events` in `backend/app/services/asset_sources/price_store.py`).
+  (`backend/app/schemas/assets/events.py`, `_upsert_asset_events` in `backend/app/services/assets/event_store.py`).
   Historical duplicates are merged by moving their transactions to the surviving row first.
 - New 400 codes from the API: `EVENT_NOT_EDITABLE` (unknown id, another asset's, or a provider event) and
-  `EVENT_KEY_CONFLICT` (an edit that collides with another event's key) — `backend/app/api/v1/assets.py`.
+  `EVENT_KEY_CONFLICT` (an edit that collides with another event's key) — `backend/app/api/v1/assets/events.py`.
 - Frontend: `dbEventId()` returns a database id only for rows that have one; the import passes
   `importMatchKeys={['type']}` so rows match on date **and** type; the `amount` column accepts `value` as an alias
   (`AssetDataEditorSection.svelte`, `DataEditor.svelte`, `EventDataImportModal.svelte`).
@@ -59,9 +59,9 @@ In the asset detail's event editor (dividends, interest, splits, price adjustmen
 
 | Role | Path |
 |------|------|
-| Upsert schema with `id`; `FAAssetEventPoint.type: str` (I-09) | `backend/app/schemas/prices.py` |
-| `_upsert_asset_events` (in-place edit, duplicate merge) | `backend/app/services/asset_sources/price_store.py` |
-| Events API, 400 codes | `backend/app/api/v1/assets.py` |
+| Upsert schema with `id`; `FAAssetEventPoint.type: str` (I-09) | `backend/app/schemas/assets/events.py` |
+| `_upsert_asset_events` (in-place edit, duplicate merge) | `backend/app/services/assets/event_store.py` |
+| Events API, 400 codes | `backend/app/api/v1/assets/events.py` |
 | Event editor section (`dbEventId`, `importMatchKeys`) | `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` |
 | Shared data editor (match keys) | `frontend/src/lib/components/ui/data-editor/DataEditor.svelte` |
 | Events CSV import (`value` alias) | `frontend/src/lib/components/assets/EventDataImportModal.svelte` |

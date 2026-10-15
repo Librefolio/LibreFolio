@@ -59,7 +59,7 @@ reached only from the review's **Import**, and only for a [report set](#report-s
 
 8. **Review & Confirm** — The user reviews the final list. Importing is blocked while any selected row still points at an unresolved asset. On **Import**, the wizard hands the selected rows to the bulk transaction editor (`TransactionBulkModal`), whose save (`POST /api/v1/transactions/commit`) goes through the standard `TransactionService`.
 
-9. **Align with the bank (`gapFix`)** — Report sets only. Before the hand-off, the wizard sends the truth points to `POST /api/v1/brokers/import/gap-fix` (`backend/app/services/brim_gap_fix.py`). For each checkpoint, in date order, the backend compares the cash balance and positions the bank states with what LibreFolio will know at that date — the saved transactions, minus the ones the bulk editor is deleting, plus its unsaved rows, the wizard's selection and the corrections of the earlier checkpoints — and proposes only the difference, as ordinary transactions tagged `gap_fix`. Verifications are compared, never corrected, and the endpoint writes nothing. The step opens only when there is something to show (a correction, a failed verification, an error); every correction starts selected, and the ones the user keeps join the review's rows in the editor.
+9. **Align with the bank (`gapFix`)** — Report sets only. Before the hand-off, the wizard sends the truth points to `POST /api/v1/brokers/import/gap-fix` (`backend/app/services/brim/brim_gap_fix.py`). For each checkpoint, in date order, the backend compares the cash balance and positions the bank states with what LibreFolio will know at that date — the saved transactions, minus the ones the bulk editor is deleting, plus its unsaved rows, the wizard's selection and the corrections of the earlier checkpoints — and proposes only the difference, as ordinary transactions tagged `gap_fix`. Verifications are compared, never corrected, and the endpoint writes nothing. The step opens only when there is something to show (a correction, a failed verification, an error); every correction starts selected, and the ones the user keeps join the review's rows in the editor.
 
 ### 🧺 Report sets {: #report-sets }
 
@@ -69,7 +69,7 @@ from a custody export and a cash export. A **report-set plugin** declares the ex
 imported as one set:
 
 - **Membership** — the set is the original files of one upload batch (`batch_id`) for one broker that
-  the plugin can read (`collect_members` in `backend/app/services/brim_report_sets.py`). The plugin
+  the plugin can read (`collect_members` in `backend/app/services/brim/brim_report_sets.py`). The plugin
   never parses an original on its own: that request answers 422 `set_required`, and the file is
   **not** moved to `failed/`.
 - **Preview** — `POST /api/v1/brokers/import/sets/preview` reads the members through the plugin
@@ -103,6 +103,16 @@ backend/data/{prod|test}/broker_reports/
 
 Each file is stored with a companion `.json` metadata sidecar recording status, original filename, and any errors encountered. A file keeps its `broker_<id>/` folder for its whole life: a move changes only the status folder.
 
+Deleting a broker clears its storage. Its files live on disk, outside the ORM cascade, so
+`delete_files_for_brokers` (`backend/app/services/brim/brim_provider.py`) runs after the commit that
+deleted the broker — `DELETE /brokers`, the last owner leaving it, an account deletion — and removes
+its files, then (`_remove_broker_storage`, under the broker's metadata lock) its empty
+`uploaded|parsed|failed/broker_<id>/` folders and its `.locks/broker_<id>.lock`, unlinked while held.
+`rmdir` keeps a folder that still holds a file the store did not write, with a warning in the log.
+Broker ids are never reused (`AUTOINCREMENT`), so these leftovers used to pile up; the in-process
+re-entrant lock in `_BROKER_LOCKS` stays on purpose, because dropping it could hand a second lock for
+the same key to a thread already waiting on the first.
+
 ### 🗂️ Sidecar fields
 
 | Field | Written by | Meaning |
@@ -133,8 +143,9 @@ serialised by the server no matter how parallel the client was.
 |---|---|
 | **Upload** | `save_uploaded_file` runs in `asyncio.to_thread`. A thread is enough: the transfer itself is the OS's work; we only write the file and re-read it to sniff compatible plugins |
 | **Plugin discovery** | `auto_discover()` (`backend/app/services/provider_registry.py`) imports the plugin modules once, under the registry's own `RLock`, and marks discovery done only after every module has run. The first uploads after a start run on worker threads: one that arrives mid-discovery waits for the full catalogue instead of detecting against a half-filled one |
-| **Parse** | `backend/app/services/brim_parse_pool.py` — a **lazy** `ProcessPoolExecutor`, `min(cpu_count, 4)` workers. Parsing is CPU work: a thread would leave it serialised by the GIL |
+| **Parse** | `backend/app/services/brim/brim_parse_pool.py` — a **lazy** `ProcessPoolExecutor`, `min(cpu_count, 4)` workers. Parsing is CPU work: a thread would leave it serialised by the GIL |
 | **Sidecar writes** | Every write of a broker's sidecars holds that broker's lock (`broker_metadata_lock`: a re-entrant thread lock plus an advisory `flock` on `broker_reports/.locks/broker_<id>.lock`). `combine_set` holds it, in a worker thread, from the reuse check to the save of the combined file: analysing the same set twice — a double click, two tabs — reuses the first combined file instead of building a second one. See [The broker metadata lock](../../architecture/patterns/brim_plugin_guide.md#broker-metadata-lock) |
+| **File reads** | The preview and download routes (`get_brim_file_preview`, `download_file` in `backend/app/api/v1/brokers.py`) resolve the file's path in a worker thread, `await asyncio.to_thread(brim_provider.get_file_path, file_id)`: `get_file_path` finds and reads the sidecar. `./dev.py test utils gate-event-loop-io` fails on any direct call of a synchronous `brim_provider.py` function inside an `async def` of `backend/app/api/v1/`. See the [Event Loop Blocking Rule](../../architecture/patterns/async.md) |
 | **Candidate search** | `search_asset_candidates_bulk` issues **one** query per file instead of up to five per extracted asset, then applies the same five priorities in memory |
 | **Frontend** | `lib/utils/core/requestConcurrency.ts` — `mapWithConcurrency` bounds the upload and parse loops instead of awaiting one file at a time |
 
@@ -211,7 +222,7 @@ Confidence levels:
 
 An incoming `DEPOSIT` or `WITHDRAWAL` is also compared with the saved legs of `CASH_TRANSFER` and
 `FX_CONVERSION` pairs (`_MERGED_LEG_TYPES`, read by `detect_tx_duplicates` in
-`backend/app/services/brim_provider.py`): same broker, date and quantity, same amount — sign
+`backend/app/services/brim/brim_provider.py`): same broker, date and quantity, same amount — sign
 included — and currency. A deposit thus meets the leg that received the money, a withdrawal the
 leg that sent it.
 
