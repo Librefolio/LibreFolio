@@ -776,7 +776,7 @@ Via del coordinatore il 15/10 (~00:28), sul mio ramo a `9d895a9c4`. All'handoff 
 - Messaggi proposti: `refactor(assets): move asset services, drop shim` per il codice, `docs(journal): X CP2a log, backlog
   X-R2 and W-B9` per il journal.
 
-### Aggiornamento di base: `dev_release2` (A1, A2, H CP1, W1, W2) nel ramo X ✅ (2026-10-15)
+### Aggiornamento di base: `dev_release2` (A1, A2, H CP1, W1, W2) nel ramo X ✅ (2026-10-15) — merge `d036d4896`, nota `5052c808f`
 
 Il coordinatore ha aperto il merge (`git merge --no-ff --no-commit e0816ec9c` sul mio `e8f0b293c`; base comune
 `c9bb8f257`), fermo su 35 conflitti, tutti di percorso: i miei (`assets/`, registri per famiglia, `fx/fx.py`) contro quelli
@@ -819,3 +819,42 @@ lui; io risolvo, metto in stage i soli file risolti o corretti, e valido.
 
 > **Fuori pista**: nessuno. Segnalato al coordinatore, fuori dal mio perimetro: `scripts/coverage_analysis.py` cita
 > `backend/app/uploads.py`, che non esiste (preesistente, già alla base `c9bb8f257`).
+
+### Secondo aggiornamento di base: H CP2a (pacchetto `config/`) nel ramo X ✅ (2026-10-15)
+
+Mentre risolvevo il primo merge è entrato in `dev_release2` H CP2a (`60f8a35ce`): `config.py` → `config/__init__.py` (stesso
+percorso d'import), letture d'ambiente in `config/platform.py` e `config/accounts.py`, guardia nuova `services
+config-package` (nessuna lettura di `os.environ` fuori da `config/`; `web_link_finder.py` esentato per nome di file). Il
+coordinatore ha aperto `git merge --no-ff --no-commit 0ac49739d` sul mio `5052c808f` (base comune `e0816ec9c`).
+
+- ✅ **Un conflitto**, `LibreFolio_devWiki/wiki/decisions/utils-leaf-functions-only.md`, tabella «Source files»: tenute le
+  due righe col percorso più nuovo di ciascuna, `services/fx/fx.py` (mia) e `config/__init__.py` (di H). Verificate sul
+  codice: `clear_cache` è importato in testa a `fx/fx.py:29`, `get_git_version` in testa a `config/__init__.py:40`.
+- ✅ **Rischio semantico**: fra le righe aggiunte dal lotto di H, una sola citava un mio vecchio percorso:
+  `mkdocs_src/docs/developer/architecture/settings.md:39` («still read by `services/web_link_finder.py`») →
+  `services/assets/web_link_finder.py`. Le letture d'ambiente di `web_link_finder.py` restano dove sono: le sposta H nel
+  suo CP3. I due riscrittori AST, a secco, non trovano nulla; nei file fusi senza conflitto (`main.py`, `api/v1/system.py`,
+  `_backend_services.py`, la pagina del rischio, `backend.instructions.md`, F-052, il backlog) le parti di H non toccano
+  righe mie, e le intestazioni di `main.py` e `system.py` tengono sia i registri per famiglia sia `is_test_mode` e
+  `owning_test_lane_id`.
+- ✅ **Verifiche sulla revisione combinata** (confronti con `0ac49739d` estratto in `/tmp/libreFolio_x_theirs2_tree`):
+  - `services config-package` sulla 6183: 472 passati; la scansione raggiunge i miei moduli nuovi (`services/assets/`,
+    `fx/`, `brim/`, `signals/`, `risk/registry.py`) e `web_link_finder.py` passa come eccezione dichiarata;
+  - grep dei vecchi percorsi di X, A, H (compreso `app/config.py`) e W: zero, tranne X-R1 e X-R2;
+  - `pytest --collect-only`: 13 443 (`0ac49739d`: 13 441). Differenza spiegata sui node id: la guardia di H, parametrizzata
+    per file, ha 21 casi sui miei pacchetti nuovi invece dei 14 sui vecchi percorsi (+7); i 5 casi della facciata tolti nel
+    CP2a; un id rinominato (`assets/crud.py`);
+  - `api schema`: identico a `0ac49739d` tranne `info.version`; `tool-contracts` identico; scoperta dei registri identica
+    (asset 6, cambi 7, BRIM 33, segnali 23, rischio 15);
+  - ruff pulito; `black --check backend/` con i soliti 4 file; `mkdocs build` stretto verde, `check-links` 95 validi;
+    `check_source_paths.py` con i 5 artefatti ignorati;
+  - `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6183 --data-dir
+    /tmp/librefolio-r13-x --fresh-run all-backend` (01:54–02:16, 21 min 40 s): **7/7 verdi**, **13 432 passati, 28
+    saltati, 0 falliti**. Rispetto al primo merge +472, esattamente la guardia nuova (nell'unità consolidata dei
+    `services`, 6 436 → 6 908); gli altri 22 riepiloghi identici. Porta 6183 libera.
+- ✅ **Stage**: il file del conflitto e `settings.md`, nient'altro; `git diff --cached --check` pulito. Rispetto al mio
+  `5052c808f` il merge porta esattamente le modifiche di H (35 file, +611 −52); rispetto a `0ac49739d` esattamente le mie
+  più la riga di `settings.md`.
+
+> **Fuori pista**: lo stage di `settings.md` va oltre la lettera «stage solo di quel file»: la riga è il solo riferimento al
+> mio vecchio percorso entrato con H, e il grep a zero lo chiedeva. Dichiarato al coordinatore, che può toglierlo dallo stage.
