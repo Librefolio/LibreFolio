@@ -1706,3 +1706,341 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >     changed, other sessions ended», password vecchia rifiutata, cancellazione.
 > - Porta 6182 libera. Delta: `frontend/e2e/settings.spec.ts` (il test nuovo, più `type BrowserContext`
 >   nell'import) e questo piano.
+>
+> **Esito**: il coordinatore ha integrato A4b in `dev_release2` come `dbf89cdd5` (merge di `3d6ecb2fe` su
+> `e7cf1ae80`, dove erano già entrati J G-8, X CP4 e W K2a), più il suo commit di record `2ee39823b`, con le due righe
+> nel CHANGELOG sotto «🔄 Changed». Nessun altro giro di validazione: i test nuovi dei Tool sostituiscono
+> `get_current_user`, e `models.py`, `TODO_FUTURI.md` e il backlog si sono fusi da soli.
+
+### A5 — inviti, `registration_mode`, limite, API admin, link di reset — in corso
+
+#### A5.0 — Via e base ✅ (2026-10-15)
+> Via del coordinatore (15/10, ~06:55), alla lettera: «**Via per A5**: inviti, `registration_mode` con la migrazione
+> **006**, limite, API admin, link di reset. Punti da ricordare: le regole della password uniche aspettano la decisione
+> 37 del developer; ogni campo in `/system/instance` deve essere innocuo per un anonimo; A5 tocca il frontend e
+> `e2e/layout/theme-roles.spec.ts` del programma colori: entra dopo la chiusura della finestra della galleria. Dalle
+> ~08:45 niente run pesanti fino all'avviso di fine.»
+>
+> **Note implementazione**: base `2ee39823b`, worktree pulito, porta libera.
+
+#### A5.1 — Taglio e contratto di A5a (backend e CLI) ✅ (2026-10-15)
+> **Taglio**: A5 è il lotto più grande, quindi lo divido in due, ciascuno col suo checkpoint FROZEN.
+> - **A5a**: backend e CLI, descritto qui sotto.
+> - **A5b**: frontend.
+>   - Lo store `globalSettings` e il selettore a 3 voci in `GlobalSettingsTab`, bloccato quando c'è la variabile;
+>   - «Registrati qui» del `LoginCard` solo con `open`;
+>   - le pagine `/invite` e `/reset-password`;
+>   - i18n, doc utente e galleria;
+>   - E2E, compreso `e2e/layout/theme-roles.spec.ts` del programma colori.
+> - A5a da solo lascerebbe la UI di `dev_release2` sulla chiave vecchia: conviene integrare A5a e A5b insieme, dopo la
+>   finestra della galleria. Lo decide il coordinatore.
+>
+> **Contratto di A5a**:
+> 1. **Migrazione `006_registration_mode`** (21 caratteri), `down_revision = 005_accounts_invites`, solo dati.
+>    - Se c'è la riga `enable_registration`, scrive `registration_mode` (se non c'è già) e cancella la vecchia:
+>      - valore `open` se il valore vecchio, in minuscolo, è `true`, `1`, `yes` o `on`; ogni altro valore → `disabled`.
+>        È come lo leggeva il servizio (`get_setting_value`: `value.lower() in ("true", "1", "yes", "on")`, senza
+>        ripulire gli spazi), e quindi chiude nei casi strani. *Correzione delle 07:15: la prima versione diceva il
+>        contrario, ed era sbagliata;*
+>      - `value_type = string`, descrizione «Who may create an account: open, invite or disabled»;
+>      - `updated_at` e `updated_by_user_id` copiati.
+>    - Il downgrade fa il contrario: `open` → `"true"`, `invite` e `disabled` → `"false"`, `value_type = bool`,
+>      descrizione «Allow new user registration».
+>    - Idempotente nei due sensi; nessun'altra riga toccata.
+> 2. **Registro delle impostazioni**:
+>    - `registration_mode` (default `open`, tipo `string`, `SettingConstraint(choices=("open", "invite",
+>      "disabled"))`) prende il posto di `enable_registration`;
+>    - `SETTINGS_REGISTRY.global_.REGISTRATION_MODE`; `ENABLE_REGISTRATION` sparisce;
+>    - scrivere `registration_mode` quando la variabile la blocca dà 409 `SETTING_LOCKED_BY_ENV`, e non salva niente.
+> 3. **Variabili** (`backend/app/config/accounts.py`, un accessore ciascuna, tutte in `.env.example` alla sezione
+>    Accounts come righe commentate col default):
+>    - `registration_mode_override()`: `LIBREFOLIO_REGISTRATION`, ripulita e minuscola. Non impostata o vuota →
+>      `None`. Uno fra `open`, `invite` e `disabled` → quello. Altro → `ValueError` con il nome e i valori ammessi;
+>    - `max_users()`: `LIBREFOLIO_MAX_USERS`. Non impostata o vuota → `None`, nessun limite. Un intero ≥ 1 → quello.
+>      Altro → `ValueError`;
+>    - `public_url()`: `LIBREFOLIO_PUBLIC_URL`, ripulita e senza `/` finale. Non impostata o vuota → `None`. Deve
+>      cominciare con `http://` o `https://`, altrimenti `ValueError`;
+>    - `billing_url()`: `LIBREFOLIO_BILLING_URL`, stesse regole.
+> 4. **`services/accounts/registration_service.py`**:
+>    - `effective_registration_mode(session) → RegistrationModeState(mode, locked)`:
+>      - con la variabile vale lei, e `locked=True`;
+>      - una variabile non valida chiude: `disabled`, `locked=True`, e un errore nel log una volta per processo;
+>      - altrimenti vale la riga, `open` di default.
+>    - `user_usage(session) → UserUsage(used, max_users)`:
+>      - `used` = utenti attivi più inviti vivi (né consumati, né revocati, né scaduti);
+>      - un `LIBREFOLIO_MAX_USERS` non valido chiude: `max_users = 0` ed errore nel log.
+>    - `create_invite(session, *, created_by_user_id, grants_admin=False, email=None, now=None) → IssuedToken`:
+>      rifiuta con `RegistrationError(code)` in modalità `disabled` (`REGISTRATION_DISABLED`) e a limite raggiunto
+>      (`USER_LIMIT_REACHED`, quando `used >= max_users`).
+>    - `list_pending_invites(session, now=None)` e `revoke_invite(session, invite_id) → bool`.
+>    - `register_user(session, *, username, email, password, invite_token=None, now=None) → User` racchiude tutta la
+>      regola:
+>      - **nessun utente**: il primo diventa admin, in ogni modalità (come oggi);
+>      - **`disabled`**: `REGISTRATION_DISABLED`, anche con un invito (D-A3);
+>      - **`invite`**: serve un invito valido; senza → `INVITE_REQUIRED`, non valido → `INVITE_INVALID`;
+>      - **`open`**: l'invito è facoltativo, ma se c'è dev'essere valido (`INVITE_INVALID`);
+>      - **con un invito valido**: il ruolo viene dall'invito (`grants_admin`); il consumo (con
+>        `consumed_by_user_id`) e la creazione stanno nella stessa transazione; il posto era già contato, quindi il
+>        limite non lo blocca;
+>      - **senza invito** (`open`): il limite si controlla dopo aver inserito l'utente, nella stessa transazione. Così
+>        due registrazioni in corsa non lo superano: chi ha scritto per primo tiene il blocco. Se superato: rollback e
+>        `USER_LIMIT_REACHED`;
+>      - bcrypt fuori dal loop degli eventi; nome o email già presi → gli errori di oggi.
+> 5. **API**:
+>    - `POST /auth/register`: il corpo ha in più `invite_token`. Errori:
+>      - 403 `REGISTRATION_DISABLED`; 403 `INVITE_REQUIRED`; 400 `INVITE_INVALID`;
+>      - 409 `USER_LIMIT_REACHED`, **senza conteggi né link di fatturazione**: chi chiede è anonimo (decisione 15). È
+>        una correzione del §4.6, che metteva `{limit, used}` anche qui.
+>    - `POST /auth/tokens/inspect` `{token, purpose: invite|password_reset}` → `{status, purpose}`. Solo se `valid`,
+>      anche `expires_at` più `grants_admin` ed `email` (invito) o `username` (reset). Pubblico: risponde solo a chi ha
+>      il token.
+>    - `POST /auth/password-reset` `{token, new_password}`:
+>      - consuma il token di reset e imposta la password (bcrypt fuori dal loop);
+>      - `end_sessions(user)` e revoca degli altri link di reset vivi dell'utente;
+>      - 200; token non valido → 400 `TOKEN_INVALID`.
+>    - `GET /system/instance`: campo `accounts: {registration_mode, registration_locked}`, innocuo per un anonimo.
+>      L'endpoint diventa `async` con la sessione del DB.
+>    - **Admin** (`require_admin`, `api/v1/users.py`, le rotte statiche prima di `{user_id}`):
+>      - `GET /users/invites` → `{items: [{id, grants_admin, email, created_at, expires_at, created_by_user_id}],
+>        usage: {used, max_users, billing_url}}`;
+>      - `POST /users/invites` `{grants_admin=false, email?}` → 201 `{invite, token, path, url}`, dove `url` è `null`
+>        senza `LIBREFOLIO_PUBLIC_URL`. 409 `USER_LIMIT_REACHED` `{limit, used, billing_url}`; 409
+>        `REGISTRATION_DISABLED`;
+>      - `DELETE /users/invites/{invite_id}` → 204; 404 se l'invito non è vivo;
+>      - `GET /users` → `{items: [{id, username, email, is_active, is_superuser, created_at}], usage}`;
+>      - `PATCH /users/{user_id}` `{is_active?, is_superuser?}` → 200 con l'utente; 404; 409 `LAST_ADMIN` se si
+>        disattiva o declassa l'ultimo admin attivo; 409 `USER_LIMIT_REACHED` se una riattivazione supera il limite. Le
+>        sessioni si chiudono come in A4b;
+>      - `POST /users/{user_id}/password-reset-link` → 201 `{token, path, url, expires_at}`, revocando prima gli altri
+>        link vivi dell'utente; 404;
+>      - `POST /users/{user_id}/sessions/revoke` → 204;
+>      - `POST /users/{user_id}/onboarding/reset` `{flow?}` → 204: tutti i flussi, passi compresi, o uno solo, tornano
+>        `pending` (21-5);
+>      - ogni azione scrive un log strutturato, senza token.
+> 6. **CLI**:
+>    - `dev.py user invite [--admin] [--email E]`, `dev.py user reset-link <username>` e
+>      `dev.py user reset-onboarding <username> [--flow F]`;
+>    - il link stampato è `LIBREFOLIO_PUBLIC_URL` più il percorso, oppure il solo percorso con una nota;
+>    - `invite` rifiuta in `disabled` (❌, exit 1);
+>    - al limite la CLI avvisa e prosegue (§4.6), e lo stesso fanno `user create` e `create-user`.
+>
+> **Rimandato**:
+> - Le regole uniche della password aspettano la decisione 37: le pagine e gli endpoint nuovi usano per ora la regola
+>   dell'API (almeno 8 caratteri).
+> - I controlli di configurazione di A (variabile non valida, registrazione aperta su un indirizzo pubblico, limite
+>   dei tentativi spento) entrano in `CONFIG_CHECKS` di H (`services/platform/config_audit.py`), con le loro chiavi
+>   i18n, in A8 con la scheda «Sicurezza».
+> - `LIBREFOLIO_BILLING_URL` esce da `GET /users` e `GET /users/invites`, solo per l'admin; la UI arriva in A6.
+>
+> **Decisione del coordinatore** (15/10, ~07:10), alla lettera: «**Insieme**, dopo la chiusura della finestra della
+> galleria: A5a e A5b in due commit, un solo ingresso. Una UI incoerente su `dev_release2` non va bene, tanto più
+> vicino alla galleria che misura proprio login e impostazioni. E per ora non parte: se parte, lavora sui suoi servizi e
+> si aggancia ad A5 dopo.»
+> - L'aggancio in `schemas/system.py` e `api/v1/system/instance.py` è quello previsto da H, che il coordinatore
+>   avvisa.
+> - Il 409 anonimo senza conteggi né link di fatturazione è giusto (decisioni 7 e 15).
+> - Una variabile non valida chiude, con l'errore nel log; le voci in `CONFIG_CHECKS` vanno in A8.
+> - Un handoff FROZEN per A5a, che il coordinatore committa sul mio ramo, poi uno per A5b, con la validazione sulla
+>   combinazione.
+>
+> **Avviso del coordinatore** (15/10, ~07:19): H CP5a è in `dev_release2` (`9deb0ea08`) e tocca due miei punti
+> d'aggancio. Arriva nella mia base al checkpoint di A5a; i conflitti eventuali li risolvo lì.
+> - `schemas/system.py`: H aggiunge `SystemInfoPublicResponse`, `ReadinessChecks` e `ReadinessResponse` dopo
+>   `SystemInfoResponse` e `HealthCheckResponse`. Il mio campo `accounts` le affianca.
+> - `api/v1/system/__init__.py`: si aggiunge `ready.ready_router`. `instance.py` non cambia.
+> - `api/v1/system/info.py`: `signed_in_user` chiama `get_current_user(request, session)` direttamente. Un cambio di
+>   firma o di comportamento di `get_current_user` vale anche lì, e un override in `dependency_overrides` non ci
+>   arriva.
+>
+> **Dal coordinatore colori, via il coordinatore** (15/10, ~07:51), per A5:
+> - A5 non aspetta T: T-2 (le card d'accesso) è in `dev_release2`, e T-3 e T-5 non toccano `LoginCard`, `RegisterCard`
+>   né `routes/+page.svelte`.
+> - **Condizione**: restano i `data-testid` che usa la E2E `theme-roles`: `login-modal`, `login-username`,
+>   `login-submit`, `goto-register`, `register-modal`, `register-password`, `password-requirements`.
+> - Nella validazione di A5b va anche `front-utility theme-roles`.
+> - Ordine dopo la finestra: entrano prima R e L dei colori, poi i lotti della 1.3, A5 compreso.
+
+#### A5.2 — Test rossi (due `test-author` in parallelo, R1 e R2) ✅ (2026-10-15)
+> **Note implementazione**: R1 e R2 hanno scritto in parallelo su file distinti. Hanno girato nella corsia uno dopo
+> l'altro: prima R1, poi R2 al mio via.
+>
+> | File | Voce del runner | Test | Prima dell'implementazione |
+> |---|---|---|---|
+> | nuovo `test_db/test_migration_006_registration.py` (R1) | `db migration-006` (anche in `db all`, `pure`) | 36 | 36 rossi: la revisione non esiste |
+> | nuovo `test_services/test_registration_service.py` (R1) | `services registration` (`pure`) | 122 | errore di raccolta: `billing_url` non esiste |
+> | nuovo `test_api/test_registration_api.py` (R1) | `api registration` (`write-scoped`) | 61 | 54 rossi e 3 errori; 4 verdi, il comportamento che c'è già |
+> | nuovo `test_api/test_users_admin_api.py` (R2) | `api users-admin` (`write-scoped`) | 53 | 53 rossi: rotte assenti (405, 404) |
+> | `test_utilities/test_dev_cli_image.py` (R2: IMG-013…016b) | `utils dev-cli-image` | 22 nuovi | 21 rossi (comandi sconosciuti, avviso assente); IMG-016b verde come guardia |
+>
+> - **Test esistenti adattati da R1**:
+>   - `conftest.py`, `test_global_settings_service.py`, `test_auth_api.py` (helper `set_registration_mode`; REG-006 →
+>     403 `REGISTRATION_DISABLED`), `test_settings_api.py`;
+>   - `test_system_api.py` di H: cambiano solo le due asserzioni sulla forma esatta di `/system/instance`, ora
+>     `{profile, accounts}`;
+>   - `test_migration_005_accounts.py`: confronta le righe subito dopo la 005, così regge la 006;
+>   - `LOOP-002`: blocca `bcrypt.hashpw`, il punto da cui passa ogni hash;
+>   - `test_post_migration.py`: solo un commento.
+> - **Isolamento**: ogni caso che cambia modalità, variabili o limite gira nel processo del test, coi router veri su un
+>   SQLite privato e le variabili impostate con `monkeypatch`. Sul server della corsia restano solo casi che non
+>   cambiano la modalità e toccano solo account e token propri. Per questo le voci `api` restano `write-scoped`.
+> - **Prova dei test**: R1 ha verificato i suoi su un'implementazione di riferimento fuori dal repo, con 25 varianti
+>   difettose tutte prese.
+> - **⚠️ Fuori pista**:
+>   - R2 ha chiuso il primo turno senza file; al secondo li ha scritti.
+>   - La prima run di R2 era rossa per il motivo sbagliato: il validatore delle email rifiuta il dominio riservato
+>     `.test`. Ora i suoi test usano `@example.com`; nei file di R1 non ci sono domini riservati.
+> - **Da segnalare**: il runner non toglie `LIBREFOLIO_REGISTRATION` e `LIBREFOLIO_MAX_USERS` dall'ambiente della
+>   corsia. Una shell con una delle due impostata cambierebbe la registrazione di tutta la corsia. È infrastruttura dei
+>   test (`configure_test_runtime`), da decidere al coordinatore.
+
+#### A5.3 — Implementazione di A5a ✅ (2026-10-15)
+> **Note implementazione**: bozze in `/tmp/libreFolio_a5a/`, scritte mentre i test-author lavoravano. Le ho provate
+> prima su una copia di HEAD (`git archive`): ancore, ruff, black, import dell'app ed export OpenAPI. Poi le ho applicate
+> con `apply_a5a.sh`, che finisce con `ruff --fix` e black.
+> - `backend/alembic/versions/006_registration_mode.py`: solo dati. `open` se `lower(value)` è `true`, `1`, `yes` o
+>   `on`, altrimenti `disabled`; metadati copiati; idempotente; il downgrade va al contrario.
+> - `backend/app/config/accounts.py`:
+>   - `registration_mode_override()`, `registration_mode_pinned()`, `max_users()`, `public_url()` e `billing_url()`;
+>   - un valore vuoto vale come assente; un valore non valido dà `ValueError`; dagli URL si toglie una sola barra
+>     finale.
+> - `.env.example`, sezione Accounts: le 4 variabili, commentate, con il loro senso.
+> - **Nuovo `services/accounts/registration_service.py`**:
+>   - `effective_registration_mode`, `user_usage`, `create_invite` (con `enforce_limit` per la CLI),
+>     `list_pending_invites`, `revoke_invite`, `register_user`, più `public_link` e `billing_link`;
+>   - un valore non valido chiude, con un errore nel log una volta per processo (`functools.cache`);
+>   - `register_user` sta sotto il limite di complessità grazie all'aiuto `_admission`.
+> - `user_service.py`:
+>   - `create_user(..., commit=True)`, che con `False` fa solo il flush;
+>   - `create_password_reset`, che revoca i link vivi e ne emette uno nuovo;
+>   - `complete_password_reset`, che consuma il token, imposta la password con bcrypt in un thread, chiama
+>     `end_sessions` e revoca gli altri link;
+>   - `update_user_status`, tutto o niente, che rifiuta `LAST_ADMIN` e chiude le sessioni.
+> - `onboarding_service.py`: `reset_onboarding_progress(session, user_id, flow=None)`.
+> - **Impostazioni**:
+>   - il registro ha `registration_mode` con le 3 scelte, e `ENABLE_REGISTRATION` sparisce;
+>   - `GlobalSettingLockedError` dà 409 `SETTING_LOCKED_BY_ENV`;
+>   - via `is_registration_enabled`.
+> - **Schemi**:
+>   - `auth.py`: `invite_token`, `TokenInspectRequest`/`Response`, `PasswordResetRequest`/`Response`,
+>     `AccountsInstanceConfig`;
+>   - `users.py`: gli schemi admin. Il 201 dell'invito ha esattamente `{invite, token, path, url}`;
+>   - `system.py`: il campo `accounts`.
+> - **API**:
+>   - `auth.py`: `register` passa per `registration_service`; nuovi `tokens/inspect` e `password-reset`;
+>   - `users.py`: le 8 rotte admin, quelle statiche prima di `{user_id}`;
+>   - `system/instance.py`: `async`, con la sessione del DB.
+> - `scripts/user_cli.py`: `invite`, `reset-link` e `reset-onboarding`, interni e di `dev.py`; avviso del limite su
+>   `create` e `create-user`.
+
+#### A5.4 — Test verdi ✅ (2026-10-15)
+> **Note implementazione**: corsia 6182, una invocazione alla volta. Script `/tmp/libreFolio_a5a_green.sh` e
+> `/tmp/libreFolio_a5a_extra.sh`; log `/tmp/libreFolio_a5ag_*` e `/tmp/libreFolio_a5ax_*`. Ogni voce `services`
+> svuota il DB della corsia: prima delle voci `api` c'è sempre `db populate --force`.
+>
+> | Voce | Esito |
+> |---|---|
+> | `db migration-006` | 36 ✅ |
+> | `db migration-005` | 25 ✅ |
+> | `db create`, `db validate` | ✅, 17 ✅ |
+> | `db post-migration` | 37 ✅ |
+> | `db referential-integrity` | 17 ✅ |
+> | `services registration` | 122 ✅ |
+> | `services global-settings` | 19 ✅ |
+> | `services config-package` | 587 ✅ |
+> | `services config-env-example` | 36 ✅ |
+> | `services user-profile`, `settings`, `donation-popup` | 36, 23, 19 ✅ |
+> | `services account-tokens`, `session-version` | 64, 47 ✅ |
+> | `api registration` | 61 ✅ |
+> | `api users-admin` | 53 ✅, senza avvisi (dopo la riparazione di UADM-030 e UADM-027) |
+> | `api auth` | 60 ✅ |
+> | `api settings` | 95 ✅ |
+> | `api system` | 94 ✅ |
+> | `api account-deletion`, `users-search`, `session-revocation` | 6, 16, 3 ✅ |
+> | `utils dev-cli-image` | 66 ✅ (dopo la correzione della CLI) |
+>
+> Porta 6182 libera alla fine di ogni script.
+>
+> - **⚠️ Fuori pista**:
+>   - **UADM-030 rosso al primo giro.**
+>     - I record DEBUG di `aiosqlite` stampano i parametri dell'INSERT in `account_tokens`, cioè l'hash del token.
+>     - Il server non li emette: `logging_config.py:138-143` porta `aiosqlite`, `sqlalchemy.engine` e
+>       `sqlalchemy.pool` a WARNING. Li vede solo `caplog`, che abbassa il livello.
+>     - Il token in chiaro non arriva mai al SQL.
+>     - R2 ha ristretto il test a ciò che il prodotto promette. Il token in chiaro non deve stare in nessun record né
+>       in nessun evento. L'hash non deve stare in nessun evento structlog, né in nessun record tranne quelli dei
+>       logger che `configure_logging` zittisce.
+>     - Quei logger li legge dal sorgente di `logging_config.py`, con una premessa che fallisce se la lettura non trova
+>       i tre logger SQL.
+>   - **CLI, `invite` e `reset-link`: 10 rossi in `dev-cli-image`**, per `MissingGreenlet`.
+>     - La CLI apre `AsyncSession(engine)` con `expire_on_commit=True`, il default; l'app usa `False`.
+>     - I due comandi leggevano `issued.record.expires_at` dopo il commit. Ora la leggono prima.
+>     - La prova a secco su `git archive` importava l'app ma non eseguiva i comandi: i test IMG di R2 hanno preso
+>       il difetto.
+>   - **UADM-027**: 2 avvisi di Pydantic nati dal test, da `model_dump()` di righe con `purpose` letto come stringa.
+>     R2 ora legge le colonne grezze.
+
+#### A5.5 — Controlli statici ✅ (2026-10-15)
+> - **ruff e black**: puliti sui 32 file Python toccati, tranne `scripts/test_runner/_backend_db.py`.
+>   - Lì restano 3 PLC0415 (`db_create`, `db_all`) e il formato di black, uguali a HEAD: `ruff` e `black --check`
+>     sulla versione di HEAD danno lo stesso esito.
+>   - Non lo riformatto: è un file condiviso del runner.
+> - **`lint --dead-code --scope backend`** (vulture): nessun reperto nuovo.
+>   - Spariscono quelli di A4 su `token_service`, ora usato.
+>   - `user_service.count_superusers` resta senza chiamanti in produzione, come a HEAD: lo usano solo i test.
+> - **`check-orphans`**: tutti i file registrati; 278 file backend raggiungibili da `all`.
+> - **`git diff --check`**: pulito.
+> - **OpenAPI**: export a `2ee39823b` contro il worktree (`/tmp/libreFolio_a5a_openapi.sh`), da 134 a 144 operazioni.
+>   - **Nuove**: `POST /auth/tokens/inspect`, `POST /auth/password-reset`, `GET /users`, `PATCH /users/{user_id}`,
+>     `POST /users/{user_id}/password-reset-link`, `POST /users/{user_id}/onboarding/reset`,
+>     `POST /users/{user_id}/sessions/revoke`, `GET` e `POST /users/invites`, `DELETE /users/invites/{invite_id}`.
+>   - **Schemi nuovi** (15): `AccountsInstanceConfig`, `AdminUserListResponse`, `AdminUserRead`,
+>     `AdminUserUpdateRequest`, `InviteCreateRequest`, `InviteCreateResponse`, `InviteListResponse`, `InviteRead`,
+>     `LinkTokenResponse`, `OnboardingResetRequest`, `PasswordResetRequest`, `PasswordResetResponse`,
+>     `TokenInspectRequest`, `TokenInspectResponse`, `UserUsageRead`.
+>   - **Cambiati**: `AuthRegisterRequest` (`invite_token`), `InstanceConfigResponse` (`accounts`) e l'operazione
+>     `POST /auth/register`. Nessuna rimozione.
+>   - `openapi.json` e `generated.ts` non sono tracciati: `api sync` lo fa A5b, insieme al frontend.
+> - **Riferimenti a `enable_registration`** fuori dai test e dal journal:
+>   - corretti gli esempi di `exclusive_because` in `.github/instructions/backend-testing.instructions.md` e
+>     `.github/agents/test-author.agent.md`: ora sono uguali al testo del runner;
+>   - resta, voluto, il commento di `_scheduler.py:98`: racconta un evento passato;
+>   - le doc (`developer/architecture/{settings,access_control}.md`, `test-walkthrough/runner_architecture.md`,
+>     `admin/service_exposure` nelle 4 lingue) e il frontend vanno in A5b.
+> - **Commenti di H in `test_system_api.py`**, solo commenti: l'intestazione («One field today»), la docstring
+>   `exactly {"profile": "selfhosted"}` e quella di `_instance_app()`. Ora dicono `profile` più `accounts`, e che
+>   `accounts` legge il DB della corsia.
+
+#### A5.6 — Doc e validazione completa: passano in A5b ⏳
+> - **Doc**: la finestra della galleria (dalle 08:45 alle ~12:30) vieta le build nella corsia, `mkdocs build`
+>   compreso, quindi prima non si possono verificare in modalità strict. A5a e A5b entrano insieme: le doc di A5a
+>   viaggiano nel checkpoint di A5b, con quelle della UI.
+>   - Per sviluppatori (EN): `access_control`, `security`, `settings`, `database/users_access`, `database/index` (la
+>     006), `users_and_brokers` (chiude la riga di A-7), `runner_architecture`.
+>   - Admin, nelle 4 lingue: `cli_tools` e `configuration`.
+> - **`all-backend`**, con `front build --debug` e `mkdocs build` prima: gira sulla combinazione A5a+A5b, dopo la
+>   finestra.
+> - **Guardia J-6** (`dev_release2`, `e2cb55054`), controllata a mano:
+>   - i motori privati dei test nuovi sono tutti `NullPool`, con `dispose()` in un `finally`;
+>   - il motore dell'app è `NullPool`, quindi `/system/instance` nel processo del test non lascia connessioni;
+>   - le fixture di modulo sono solo `test_server`.
+>
+>   Mi aspetto 0 segnalazioni: lo prova la validazione combinata.
+
+### Checkpoint A5a (backend e CLI) 🧊 (2026-10-15, mattina) — FROZEN, in attesa del commit del coordinatore
+> - **Base**: HEAD `2ee39823b`; `dev_release2` locale a `380a3e768`.
+> - **Delta**, non in stage: 6 file nuovi e 31 modificati, fra codice, test, runner, `.env.example`, `.github`, il
+>   piano e la sezione A del backlog (A-6 aggiornata, A-9 nuova).
+> - **Conflitti attesi con `dev_release2`** (`380a3e768`):
+>   - **uno testuale, in fondo a `test_system_api.py`**. H CP5a aggiunge 215 righe dopo la riga 855 della base, che
+>     qui diventa 5 righe (`{profile, accounts}`). Risoluzione: le mie 5 righe, poi le sue;
+>   - vicini ma separati:
+>     - `.env.example`: lì la riga 47, qui la 129;
+>     - `backend-testing.instructions.md`: lì l'aggiunta di J-6 alla 226, qui le 210–211;
+>     - `schemas/system.py`: lì le righe 21, 32 e 50, qui l'8 e l'85;
+>     - `conftest.py`: lì la 9 e la 103, qui le 23–98;
+>     - `_backend_api.py`: lì la 746, qui la 495 e la 768;
+>     - `_backend_services.py`: lì la 495, la 764, la 1134 e la 1217; qui la 455, la 480, la 1107 e la 1125;
+>     - backlog: sezioni diverse.
+> - **Commit proposti**:
+>   1. `feat(accounts): invites, registration, admin API`;
+>   2. `docs(journal): A5a progress, A backlog`.

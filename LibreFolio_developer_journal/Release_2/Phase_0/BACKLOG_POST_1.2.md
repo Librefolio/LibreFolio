@@ -2107,6 +2107,8 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `auth/RegisterCard.svelte` e `validate_password` di `scripts/user_cli.py`.
   - L'API chiede solo 8 caratteri (`schemas/auth.py:31`, `:38`). Da decidere se applicare le stesse regole anche lì.
   - Si fa nel lotto A5, che aggiunge i moduli d'invito e di reset con le stesse regole.
+  - 15/10: **aspetta la decisione 37 del developer** (coordinatore, via di A5). Intanto A5a lascia all'API il minimo di
+    8 caratteri anche nei corpi nuovi (`AuthRegisterRequest` con l'invito, `PasswordResetRequest`).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A1.9».
 - **A-7 · Doc per sviluppatori non allineate al codice, trovate in A3** — minimo; A (15/10, `docs-writer`).
   - `architecture/access_control.md:116-123`:
@@ -2135,6 +2137,15 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Si corregge in un lotto di A che tocca la pagina d'accesso o le preferenze, con il rosso visto prima (E2E con il
     locale del browser `it-IT`).
   - Dettagli: idem, «A3.0».
+- **A-9 · Il runner non toglie le variabili degli account dall'ambiente della corsia** — basso; A (15/10, trovata da
+  `test-author` in A5).
+  - `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL` e `LIBREFOLIO_BILLING_URL`: se la shell
+    che lancia il runner ne imposta una, il server della corsia la legge, e cambiano la registrazione o i link per
+    tutti i test che girano lì.
+  - I casi che cambiano queste variabili girano già nel processo del test, con `monkeypatch`: il rischio è solo
+    l'ambiente di chi lancia.
+  - È infrastruttura condivisa dei test (`configure_test_runtime`): decide il coordinatore.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5.2».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
