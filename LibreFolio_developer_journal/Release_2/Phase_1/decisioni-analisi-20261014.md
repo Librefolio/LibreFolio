@@ -797,6 +797,10 @@ Nota dev: mmm non sono convinto, tutto quello che descrivi è un problema solo s
   pagina di login.
 - Chi lo fa: i file personali e comuni Piattaforma, i file dei broker Import e transazioni, registrazione e impostazioni
   Account e accessi.
+- **Precisazioni approvate il 15/10 sera** (analisi di Piattaforma): un'immagine personale scelta come icona di un
+  oggetto condiviso (asset, broker) diventa comune, con un avviso; i file già caricati non si toccano, lo scopo si legge
+  al volo (immagini comuni, altri tipi personali), senza migrazione; un file personale di un altro utente risponde 404,
+  così non se ne conosce nemmeno l'esistenza. I report dei broker senza broker seguono la regola dei personali.
 
 #### 37. Le regole della password, uguali dappertutto — 🟢 (A-6)
 - **Oggi**: le regole della password (lunghezza, maiuscole, cifre…) sono scritte in quattro posti: l'indicatore di
