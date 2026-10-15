@@ -1050,3 +1050,165 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 > - `git diff --check` pulito; porta 6181 libera.
 
 ### Checkpoint del lotto `web_link_finder` 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+
+> Handoff inviato. Il coordinatore ha committato il lotto (`fd873f366` e `d495add66`) e ha aggiornato la base a
+> `9dda5ccd9`, il merge di `dev_release2` a `0229dbc6a` (X CP2b, W K1), senza conflitti.
+>
+> - Controllo leggero sulla 6181:
+>   - `config-package` 540, cioè 530 più i 12 percorsi nuovi di X, meno i 2 spariti;
+>   - `config-env-example` 36, `config-secrets` 58, `web-link-finder` 29;
+>   - la raccolta dei test, contro `0229dbc6a` estratto, differisce di +61/−1, solo per i test del lotto;
+>   - `api schema` uguale; `mkdocs build` stretto e `check-links` passano.
+> - Integrazione: `dev_release2` avanzato in fast-forward a `9dda5ccd9`; poi i record del coordinatore
+>   (`11922ee8b`, `d9b853395`).
+
+### CP4 — configurazione pubblica dell'istanza e avvisi (2026-10-15, notte) — in corso
+
+> **Via** del coordinatore (2026-10-15, 04:20): `/system/instance`, gli avvisi d'istanza e i controlli per la scheda
+> «Sicurezza» di A. Un lotto che tocca il frontend entra solo prima delle 08:45 o dopo la finestra della galleria.
+>
+> **Divisione**: CP4a, il backend, che può entrare a qualunque ora; CP4b, il frontend (store, area avvisi, layout,
+> i18n, Vitest).
+
+#### CP4a passo 1 — il pacchetto `api/v1/system/` (C2) e `GET /system/instance` (2026-10-15, notte)
+
+> **Note implementazione**:
+>
+> - **Taglio (C2)**: `api/v1/system.py` diventa il pacchetto `api/v1/system/`, un modulo per risorsa, col codice
+>   spostato tale e quale.
+>   - I moduli: `info.py`, `diagnostics.py`, `container_image.py`, `connection.py` e `health.py`, cioè `health` e il
+>     `test-lane-health` del runner.
+>   - L'`__init__.py` compone solo `router` (`/system`, tag `System`) nell'ordine di oggi. `router.py` è intatto.
+>   - **Prove**:
+>     - `api schema` identico;
+>     - la lista effettiva delle rotte (`fastapi.routing.iter_route_contexts`) è identica per ordine, percorso,
+>       endpoint, nome, flag dello schema e modello;
+>     - l'unica differenza col confronto su `git archive` è il mount statico `/_app`, che `main.py` aggiunge solo
+>       quando esiste `frontend/build`.
+>   - **Patch dei test sui moduli nuovi**: `info`, `health` e `container_image`. In `test_config_package.py`,
+>     `KNOWN_MODULES` cita `api/v1/system/health.py`.
+>   - **Percorsi**: 6 righe «Source files» della devWiki (C6) e la tabella di `backend.instructions.md`. La prosa
+>     (`F-102.md:24`, `docker-system-info-missing-deps.md:24`) va in H-1. `check_source_paths` resta a 5/8.
+> - **`GET /system/instance`**, pubblico, in `api/v1/system/instance.py` e registrato per ultimo. Risponde con
+>   `InstanceConfigResponse` (`schemas/system.py`): per ora un solo campo, `profile`.
+>   - **Meccanismo per le altre sessioni**: chi possiede una parte della configurazione pubblica aggiunge un campo,
+>     tipato con un modello dei suoi schemi, e lo riempie in `get_instance_config()` con una chiamata al suo servizio.
+>     Tutto è pubblico e uguale per chiunque chieda. A ci metterà `registration_mode`, `setup_required` e i link.
+>   - **`LIBREFOLIO_PROFILE`**: campo di `Settings`, `selfhosted` di default oppure `managed`, indifferente a maiuscole
+>     e spazi. Un valore diverso ferma l'avvio.
+>     - Oggi decide solo cosa riporta `/system/instance`. I default del profilo gestito arrivano con CP6 e CP7b.
+>     - In `.env.example` c'è la sezione «Instance Profile», con la riga commentata.
+>
+> **Fuori pista**: con FastAPI 0.141 i router inclusi restano involucri (`_IncludedRouter`), quindi
+> `router.routes` non contiene più le `APIRoute`. Il test `_route_dependency_calls` di `test_system_api.py` va
+> riparato con `iter_route_contexts` (test-author).
+>
+> **Correzione per l'audit i18n**: `config_audit.py` ora scrive le 13 chiavi `instance.checks.*` per intero, non più
+> come `f"{_I18N_PREFIX}…"`. Così l'audit le vede usate: una f-string conta solo se la testa puntata è letterale. I
+> valori non cambiano.
+
+#### CP4b passo 1 — il frontend: store, avvisi, layout, i18n (2026-10-15, notte)
+
+> **Note implementazione**:
+>
+> - **CP4 resta un solo checkpoint**, a commit separati: rinomina, taglio, backend, frontend, journal. Così non ci
+>   sono incroci su `settings.md`, che toccano tutti e due.
+> - **`features/instance/instanceConfig.svelte.ts`**, store con le rune, di `GET /system/instance`:
+>   - `load()` fa una richiesta per caricamento di pagina, condivisa da chi chiama insieme o dopo; `force` richiede di
+>     nuovo;
+>   - un errore lascia `DEFAULT_INSTANCE_CONFIG` (self-hosted) e consente di riprovare; scrive solo la richiesta più
+>     recente;
+>   - il tipo viene dal client generato (`z.infer<typeof schemas.InstanceConfigResponse>`).
+> - **`features/instance/instanceNotices.svelte.ts`**, registro degli avvisi:
+>   - `show` aggiunge, oppure sostituisce sul posto un avviso con lo stesso id; `hide` toglie, e un avviso nascosto
+>     torna visibile se rimostrato; `dismiss` chiude un avviso chiudibile fino al prossimo caricamento;
+>   - `list` mette prima `danger`, poi `warning`, poi `info`, e dentro ogni gravità l'ordine di arrivo;
+>   - all'uscita il registro si svuota (`registerClientSessionReset`).
+> - **`features/instance/components/InstanceNotices.svelte`**: sui soli ruoli di colore, con una stringa letterale
+>   intera per gravità (`bg-lf-X-soft border-lf-X-line text-lf-X-on-soft`, icona `text-lf-X`), senza `dark:`. Il
+>   bordo nomina sempre il suo ruolo. Senza avvisi non rende niente.
+> - **`routes/(app)/+layout.svelte`**: tre aggiunte, senza riordinare niente: due import, `void instanceConfig.load()`
+>   in cima a `onMount` e `<InstanceNotices />` in `<main>`, dopo il banner dell'onboarding.
+> - **i18n**: sottosistema nuovo `lib/i18n/instance/` (prefisso `instance`), scritto con `dev.py i18n add`. Contiene
+>   `instance.notices.label` e i 13 messaggi `instance.checks.*` per la scheda «Sicurezza» di A, nelle 4 lingue. Per
+>   il pulsante di chiusura si usa il `common.close` che c'era già.
+> - **Verifiche**:
+>   - `api sync` ok;
+>   - prettier sui file nuovi;
+>   - `front check`: svelte-check 0 errori e 0 avvisi;
+>   - porta dei colori pulita (`theme-roles.mjs --check`);
+>   - `i18n check` stretto: 4385 chiavi, 18 sottosistemi;
+>   - `i18n audit`: 0 chiavi inutilizzate; le 4 «not verified» erano già alla base.
+
+#### CP4 passo 2 — test, doc e commit separati della divisione (2026-10-15, notte)
+
+> **Note implementazione**:
+>
+> - **Test di CP4a** (test-author):
+>   - riparato `_route_dependency_calls`: ora percorre il `dependant` effettivo del contesto
+>     (`iter_route_contexts`), che vede anche una dipendenza aggiunta all'`include_router`. Una prova di mutazione lo
+>     dimostra;
+>   - aggiunto il perno d'ordine C2, sulle prime sei rotte di `system.py`, nel loro ordine;
+>   - test di `/system/instance`: nessuna sessione nel cammino, risposta esatta dal vivo e in processo;
+>   - `test_config_misc.py`: la validazione di `LIBREFOLIO_PROFILE`. Un valore vuoto ferma l'avvio, come
+>     `SESSION_COOKIE_SECURE`;
+>   - risultati: `api system` 94 (+8), `config-misc` 12 (+8), `config-package` 546, `config-env-example` 36 (vede
+>     `LIBREFOLIO_PROFILE`), `utils container-registry` 30;
+>   - aggiornata la descrizione di `config-misc` nel catalogo del runner.
+> - **Doc** (docs-writer):
+>   - CP4a: `configuration.en.md` (riga `LIBREFOLIO_PROFILE`), `security.md` (endpoint pubblici), `settings.md`
+>     (sezione «Public instance configuration» con la regola per i proprietari), `api/index.md`;
+>   - CP4b: `frontend/state/app-state.md` (store e registro degli avvisi, col contratto `data-testid` e i ruoli),
+>     `state/index.md`, `frontend/i18n.md` (18 sottosistemi), `settings.md` (l'app la legge all'avvio), `security.md`
+>     (le chiavi dei controlli ora sono nel catalogo);
+>   - `mkdocs build` e `check-links` passano. Debito di traduzione solo su `configuration.en.md`: 15 errori e 69
+>     avvisi per lingua.
+> - **Commit separati della divisione (C2)**, patch in `/tmp/librefolio-r13-h-cp4/split/`:
+>   - **R**: la rinomina pura `system.py` → `system/__init__.py`;
+>   - **C**: il taglio, in 16 file. Sono `__init__` e i 5 moduli; le patch dei test, cioè il perno e la riparazione
+>     del cammino, senza la parte di `/system/instance`; le 6 righe della devWiki e la riga delle istruzioni.
+>   - Verifica su `git archive HEAD` con R e C applicate:
+>     - lista effettiva delle rotte identica;
+>     - `api schema` identico (`76085551e2d02d83`, `238c1e4b84afdbdc`);
+>     - 653 test senza server passano (`test_config_package.py`, `test_container_registry.py` e
+>       `test_system_api.py`). I 9 test dal vivo girano sull'albero finale con `api system`.
+> - **knip**: nessun reperto per `features/instance`.
+> - **Test di CP4b** (test-author): `instanceConfig.test.ts`, `instanceNotices.test.ts` e
+>   `components/InstanceNotices.test.ts`, 35 test.
+>   - I due test del layout ora fanno il mock dei moduli nuovi. Verificano anche che `load()` venga chiamato una volta
+>     al mount, senza aspettare la risposta e qualunque sia l'esito dell'autenticazione.
+>   - Tre righe nel catalogo `_frontend_utility.py`, solo aggiunte.
+>   - Risultati: `front-utility core-unit` 134 file / 4290 test, `component-unit` 120 / 3209,
+>     `onboarding-component-unit` 15 / 441.
+>
+> **Fuori pista**: test-author ha trovato due difetti nel mio codice, corretti con un test ciascuno.
+>
+> - `load()` con un `fetchConfig` che solleva subito non riprovava più. Ora la richiesta parte sempre subito, un
+>   errore sincrono diventa una promessa rifiutata, e un fallimento libera `pending` solo se è ancora suo.
+> - Una chiusura nascondeva anche un avviso rimostrato come non chiudibile. Ora `list` nasconde un avviso solo
+>   finché è chiudibile.
+
+#### CP4 passo 3 — i verdi ✅ (2026-10-15, notte)
+
+> **Note implementazione**:
+>
+> - **Build**: `front build --debug` rc 0, svelte-check 0 errori e 0 avvisi. `mkdocs build` rc 0, con 3012 URL
+>   relativi; `check-links` 95 validi.
+> - **Mirati**, uno alla volta sulla corsia 6181, tutti verdi:
+>   - `api system` 94, `utils container-registry` 30;
+>   - `services config-package` 546, `config-env-example` 36, `config-misc` 12, `config-audit` 65;
+>   - `utils gate-i18n-catalog` 176, `gate-i18n-usage` 195.
+> - **`api schema`**: rispetto alla base, solo il percorso `/api/v1/system/instance` e lo schema
+>   `InstanceConfigResponse` in più. Niente di cambiato o tolto; i contratti dei Tool sono identici. Hash openapi
+>   `bf955f7849342437`.
+> - **`all-backend`** (`-q --fresh-run --workers 2`, corsia 6181): 7/7 in 12 min 10 s, **12 217 passed, 3 skipped, 0
+>   failed**.
+>   - Sono 32 in più rispetto al lotto `web_link_finder` (12 185): 10 della guardia sui moduli di X CP2b, entrati con
+>     l'aggiornamento di base, e 22 di CP4 (`api system` +8, `config-misc` +8, `config-package` +6).
+> - **Statici**:
+>   - ruff e black puliti sui 16 file Python; prettier pulito sui file del frontend;
+>   - porta dei colori pulita; `i18n check` stretto; knip senza reperti nuovi;
+>   - `git diff --check` pulito; porta 6181 libera.
+> - **Backlog**: H-1 registra le due menzioni in prosa di `system.py` nella devWiki.
+
+### Checkpoint CP4 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore

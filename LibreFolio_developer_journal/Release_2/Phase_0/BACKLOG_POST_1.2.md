@@ -1986,7 +1986,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
 Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
-- **H-1 · Nella prosa della devWiki restano menzioni dei percorsi spostati da CP1 e CP2a** — minimo; H, 14-15/10.
+- **H-1 · Nella prosa della devWiki restano menzioni dei percorsi spostati da CP1, CP2a e CP4** — minimo; H, 14-15/10.
   - **CP1**: 9 menzioni in 8 pagine, fuori dalle tabelle «Source files»: `domains/scheduler.md:13`,
     `features/F-011.md:20`, `F-014.md:20`, `F-052.md:22`, `F-073.md:25`, `entities/market-data-scheduler.md:22-23`.
     - Due sono storiche: `features/F-078.md:34` e `sources/phase00-brim-danske-bank-2026-10.md:37`.
@@ -1996,6 +1996,9 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `port-6040-scheme.md:34`, `problems/db-path-argument-ignored-by-alembic.md:22`, `features/F-011.md:20`,
     `F-064.md:20`, `sources/r2-parallel-features-pwa-borsa-fx.md:82` e `:91`. L'ultima è una tabella sotto un
     titolo che il controllo dei percorsi non legge.
+  - **CP4**: 2 menzioni di `backend/app/api/v1/system.py`, oggi il pacchetto `backend/app/api/v1/system/`, in prosa:
+    `features/F-102.md:24` e `problems/docker-system-info-missing-deps.md:24`. Le 6 righe «Source files» sono già
+    aggiornate.
   - È lo stesso caso di T-W1.
 
   Dettagli: [piano H](../Phase_1/01_platform/plan-phase01Platform.prompt.md), §14 «CP1 passo 1».
