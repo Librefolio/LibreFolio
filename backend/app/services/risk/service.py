@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetProviderAssignment, BrokerUserAccess, PriceHistory
 from backend.app.logging_config import get_logger
-from backend.app.schemas.assets.assets import FAClassificationParams
+from backend.app.schemas.assets.metadata import FAClassificationParams
 from backend.app.schemas.common import DateRangeModel, OpenDateRangeModel
 from backend.app.schemas.portfolio import (
     DataQualityExclusionReason,
