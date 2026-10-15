@@ -1,0 +1,28 @@
+/** Shapes of the Users tab (administrators), as `GET /users` and `GET /users/invites` return them. */
+
+export interface AdminAccount {
+    id: number;
+    username: string;
+    email: string;
+    is_active: boolean;
+    is_superuser: boolean;
+    created_at: string;
+    /** Nobody may delete, deactivate or demote it (the paying administrator of a managed instance). */
+    protected: boolean;
+}
+
+export interface OpenInvite {
+    id: number;
+    grants_admin: boolean;
+    email?: string | null;
+    created_at: string;
+    expires_at: string;
+}
+
+export interface AccountsUsage {
+    used: number;
+    max_users?: number | null;
+    billing_url?: string | null;
+}
+
+export type UserAction = 'deactivate' | 'reactivate' | 'promote' | 'demote' | 'reset-link' | 'sign-out' | 'restart-guides' | 'delete';
