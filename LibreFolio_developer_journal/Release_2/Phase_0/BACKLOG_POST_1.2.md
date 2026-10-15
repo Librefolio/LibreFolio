@@ -2262,6 +2262,27 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - fra quelle di contenuto, solo `brokers/import-nway-compare`, accettata.
 
   Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), §4, registro del 15/10, 16:05.
+- **G-14 · Gli orari della gallery dipendono dal fuso della macchina** — basso; G, 15/10, su domanda del coordinatore
+  (revisione di `settings/backup-ready`, B). **Proposta: valore e momento li decide il developer.**
+  - Ogni istante si disegna nel fuso del browser, e la gallery lo lascia alla macchina: non c'è `timezoneId`.
+    - Qui il fuso è Europe/Rome. La gallery pubblicata nasce invece in CI (`release.yml`, `mkdocs gallery --workers 4`),
+      su un runner GitHub in UTC.
+    - Quindi la documentazione mostra ore diverse da quelle delle run locali: pagina File, scheduler, `updated_at` delle
+      impostazioni globali, Users, Backup.
+    - I 5 grafici con un asse `time` di ECharts (Growth, AllocationHistory e i tre dei lotti) mettono le tacche alla
+      mezzanotte locale.
+    - Il backend non aggiunge differenze: `server_tz` e il default di `scheduler_timezone` sono sempre UTC.
+  - Non riguarda il cancello di R né la coppia di G-13: sulla stessa macchina il fuso è lo stesso. Un istante fisso si
+    disegna con l'offset di quell'istante, quindi nemmeno il cambio d'ora del 25/10 lo sposta.
+  - Correzione proposta (perimetro G, test-author): una riga a livello di file in `gallery.spec.ts`,
+    `test.use({timezoneId: …})`, accanto a quella di `launchOptions`. `playwright.config.ts` resta com'è.
+  - Il valore:
+    - `Europe/Rome`, consigliato: è il fuso di questa macchina, quindi non cambia nessuno scatto locale. Riferimenti e
+      candidate restano validi in qualunque ordine d'ingresso; cambiano una volta sola le ore delle immagini generate
+      in CI.
+    - `UTC`: neutro e uguale alle immagini pubblicate oggi, ma cambia ogni scatto locale con un'ora o un asse del tempo.
+      Dovrebbe entrare prima di G-13, e ogni candidata dovrebbe averlo nella base prima del suo cancello.
+  - Verifica: una run filtrata di `settings/backup-ready`, che con `Europe/Rome` deve mostrare la stessa ora di prima.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
