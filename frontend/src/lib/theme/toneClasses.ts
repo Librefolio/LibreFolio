@@ -1,11 +1,11 @@
 /**
  * Tailwind classes that colour signed figures and states — the one home for them.
  *
- * The entries on the colour roles (`text-lf-gain`, `bg-lf-loss`…) follow the theme by themselves, with no `dark:`
- * half. The others are still the exact class lists the components wrote before they moved here, until their wave of
- * the colour migration: their variants differ on purpose or by drift — success in green or emerald, info in sky or
- * blue, badges at 100/700 or 100/800 — and each keeps its own name, so the designer can see them side by side and
- * decide. The thresholds stay with the callers (`>= 0`, `> 0`, three-way with zero): only the colours live here.
+ * Every entry is on the colour roles (`text-lf-gain`, `bg-lf-success-soft`…), which follow the theme by themselves, with
+ * no `dark:` half — except the kinds told apart by hue alone (`KIND_TONES`, the combined file set), which stay palette
+ * classes until the categorical roles come. Several entries now hold the same classes: each keeps its own name, so one
+ * surface can take a role of its own without touching its consumers. The thresholds stay with the callers (`>= 0`,
+ * `> 0`, three-way with zero): only the colours live here.
  *
  * An entry is either all roles or all palette classes, and the element that takes a role entry carries no palette
  * colour of its own: `app.css` exempts every element with a `-lf-` class from its legacy dark remap, so a mixed element
@@ -86,114 +86,126 @@ export const POLARITY_TONES = {
         negative: 'bg-lf-danger-soft text-lf-danger-on-soft',
         positive: 'bg-lf-info-soft text-lf-info-on-soft',
     },
-    /** Risk contribution bars: a negative contribution red, the rest blue, the same in both themes. */
+    /** Risk contribution bars: a negative contribution in the danger role, the rest in info — the correlation's poles. */
     riskContributionBar: {
-        negative: 'bg-red-500',
-        positive: 'bg-blue-500',
+        negative: 'bg-lf-danger',
+        positive: 'bg-lf-info',
     },
-    /** Diversification divergence, where higher is worse: positive red, the rest emerald. */
+    /** Diversification divergence, where higher is worse: positive in the danger role, the rest in success. */
     divergenceText: {
-        positive: 'text-red-600 dark:text-red-400',
-        negative: 'text-emerald-600 dark:text-emerald-400',
+        positive: 'text-lf-danger',
+        negative: 'text-lf-success',
     },
     divergenceBar: {
-        positive: 'bg-red-500 dark:bg-red-400',
-        negative: 'bg-emerald-500 dark:bg-emerald-400',
+        positive: 'bg-lf-danger',
+        negative: 'bg-lf-success',
     },
 } as const;
 
 /**
- * Colours of states — badges, notices, chips, toasts — one table per surface.
- *
- * The same kinds of state are drawn in several patterns today: badges at 100/700 or 100/800 with a dark 900/30 or
- * 900/40, success in green or emerald, info in sky or blue, and the data-quality banner draws errors in amber like
- * warnings (only its icon tells them apart). Layout classes stay with the components; only colours live here.
+ * Colours of states — badges, notices, chips, toasts — one table per surface, on the state roles (W3-c), with X one of
+ * `success`, `warning`, `danger`, `info`: a tint is `bg-lf-X-soft text-lf-X-on-soft`, with `border-lf-X-line` when it
+ * has an edge; a solid fill is `bg-lf-X text-lf-on-status`; a neutral chip is `bg-lf-neutral text-lf-secondary`. The
+ * data-quality banner still draws errors in the warning tone, like warnings (only its icon tells them apart), as it did
+ * before the roles. Layout classes stay with the components; only colours live here.
  */
 export const STATUS_TONES = {
-    /** Sync result icons: no dark variant. */
+    /** Sync result icons. */
     syncIcon: {
-        ok: 'text-emerald-500',
-        partial: 'text-amber-500',
-        failed: 'text-red-500',
-        skipped: 'text-gray-400',
+        ok: 'text-lf-success',
+        partial: 'text-lf-warning',
+        failed: 'text-lf-danger',
+        skipped: 'text-lf-muted',
         /** A status the table does not know. */
-        unknown: 'text-gray-400',
+        unknown: 'text-lf-muted',
     },
     /** PAC planner badges (`BADGE` in the planner's `ui.ts` adds the layout). */
     pacBadge: {
-        neutral: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
-        success: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
-        info: 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200',
-        warning: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
-        danger: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200',
+        neutral: 'bg-lf-neutral text-lf-secondary',
+        success: 'bg-lf-success-soft text-lf-success-on-soft',
+        info: 'bg-lf-info-soft text-lf-info-on-soft',
+        warning: 'bg-lf-warning-soft text-lf-warning-on-soft',
+        danger: 'bg-lf-danger-soft text-lf-danger-on-soft',
     },
-    /** PAC planner notices (`NOTICE` in the planner's `ui.ts` adds the layout). */
+    /** PAC planner notices (`NOTICE` in the planner's `ui.ts` adds the layout and the `border`). */
     pacNotice: {
-        info: 'border-sky-200 bg-sky-50 text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100',
-        warning: 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100',
-        danger: 'border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100',
-        success: 'border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
+        info: 'border-lf-info-line bg-lf-info-soft text-lf-info-on-soft',
+        warning: 'border-lf-warning-line bg-lf-warning-soft text-lf-warning-on-soft',
+        danger: 'border-lf-danger-line bg-lf-danger-soft text-lf-danger-on-soft',
+        success: 'border-lf-success-line bg-lf-success-soft text-lf-success-on-soft',
     },
-    /** PAC asset distribution editor, bar fill by total: brand green at 100 %, red above, amber below. */
+    /**
+     * PAC asset distribution editor, bar fill by total: success at 100 %, danger above, warning below. `unknown` takes
+     * the neutral fill: its track in `TargetsStep` is still a palette class, so the two stay apart.
+     */
     pacTargetBar: {
-        balanced: 'bg-libre-green',
-        excess: 'bg-red-400',
-        missing: 'bg-amber-400',
-        unknown: 'bg-gray-300 dark:bg-gray-600',
+        balanced: 'bg-lf-success',
+        excess: 'bg-lf-danger',
+        missing: 'bg-lf-warning',
+        unknown: 'bg-lf-neutral',
     },
-    /** PAC asset distribution editor, total figure: only balanced and unknown have a dark variant. */
+    /** PAC asset distribution editor, total figure. */
     pacTargetTotal: {
-        balanced: 'text-green-600 dark:text-green-400',
-        excess: 'text-red-500',
-        missing: 'text-amber-500',
-        unknown: 'text-gray-500 dark:text-gray-400',
+        balanced: 'text-lf-success',
+        excess: 'text-lf-danger',
+        missing: 'text-lf-warning',
+        unknown: 'text-lf-muted',
     },
-    /** Toasts: solid fills, the same in both themes. */
+    /** Toasts: solid fills; `ToastContainer` draws the dismiss button and the countdown in the same `on-status` colour. */
     toast: {
-        success: 'bg-emerald-600 text-white',
-        error: 'bg-red-600 text-white',
-        warning: 'bg-amber-500 text-white',
-        info: 'bg-blue-500 text-white',
+        success: 'bg-lf-success text-lf-on-status',
+        error: 'bg-lf-danger text-lf-on-status',
+        warning: 'bg-lf-warning text-lf-on-status',
+        info: 'bg-lf-info text-lf-on-status',
     },
-    /** Import wizard, status of a report set: success in green, the error text at 700. */
+    /** Import wizard, status of a report set. */
     reportSet: {
-        loading: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300',
-        complete: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-        incomplete: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-        error: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+        loading: 'bg-lf-neutral text-lf-secondary',
+        complete: 'bg-lf-success-soft text-lf-success-on-soft',
+        incomplete: 'bg-lf-warning-soft text-lf-warning-on-soft',
+        error: 'bg-lf-danger-soft text-lf-danger-on-soft',
     },
-    /** File-set badges in the files area. */
+    /**
+     * File-set badges in the files area. `combined` names a kind, not a state: indigo, a palette class until the
+     * categorical roles come.
+     */
     fileSet: {
         combined: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-200',
-        stale: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200',
-        usedInCombined: 'bg-gray-100 text-gray-700 dark:bg-slate-700 dark:text-gray-200',
-        set: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200',
-        incomplete: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200',
+        stale: 'bg-lf-warning-soft text-lf-warning-on-soft',
+        usedInCombined: 'bg-lf-neutral text-lf-secondary',
+        set: 'bg-lf-success-soft text-lf-success-on-soft',
+        incomplete: 'bg-lf-danger-soft text-lf-danger-on-soft',
     },
     /** Asset chips of the risk panels (`AssetChip` adds the border widths and style). */
     riskAssetChip: {
-        default: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300',
-        warning: 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-300',
-        excluded: 'border-gray-300 text-gray-400 dark:border-slate-600 dark:text-gray-500',
+        default: 'bg-lf-neutral text-lf-secondary',
+        warning: 'border-lf-warning-line bg-lf-warning-soft text-lf-warning-on-soft',
+        excluded: 'border-lf-subtle text-lf-muted',
     },
-    /** Data-quality banner: errors and warnings share the amber tone; info is sky. */
+    /**
+     * Data-quality banner: errors and warnings share the warning tone; info is the info tone. Its buttons stand a step
+     * above the tint, on its edge colour.
+     */
     dataQuality: {
         attention: {
-            container: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400',
-            button: 'bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/40',
+            container: 'bg-lf-warning-soft border-lf-warning-line text-lf-warning-on-soft',
+            button: 'bg-lf-warning-line/50 hover:bg-lf-warning-line',
         },
         info: {
-            container: 'bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-400',
-            button: 'bg-sky-100 dark:bg-sky-800/40 hover:bg-sky-200 dark:hover:bg-sky-700/40',
+            container: 'bg-lf-info-soft border-lf-info-line text-lf-info-on-soft',
+            button: 'bg-lf-info-line/50 hover:bg-lf-info-line',
         },
     },
-    /** The «Updates paused» pill of the live prices: a neutral chip on the roles, which follow the theme by themselves. */
+    /** The «Updates paused» pill of the live prices: a neutral chip. */
     liveUpdates: {
         paused: 'bg-lf-neutral text-lf-secondary',
     },
 } as const;
 
-/** Badges that tell kinds apart rather than states: one hue per kind. */
+/**
+ * Badges that tell kinds apart rather than states: one hue per kind. Categorical, so still palette classes, until the
+ * categorical roles come.
+ */
 export const KIND_TONES = {
     /** Import wizard, identifier badges: ISIN sky, symbol violet, name slate. */
     identifier: {
