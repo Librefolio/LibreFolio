@@ -1222,3 +1222,97 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
 5. ✅ **Selettori di K2a** sul fuso (06:44–06:45): `services brim-parse-race` 42, `brim-provider-base` 39;
    `external brim-providers` 733 (1 skipped), `brim-degiro` 197; `api brim TestParseRefusalReason
    TestPluginCheckEndpoint` 9. `git diff --check` pulito; porta 6184 libera.
+
+### Analisi di E1 (eventi) e via per E0 ✅ (2026-10-15)
+
+> **Note implementazione (coordinatore, 15/10 ~06:46)**: K2a in `dev_release2` con l'avanzamento veloce a `62c964242`;
+> record `e7cf1ae80` (CHANGELOG con le due righe; chiuse C-70 parte a e L6; C-95 nuova, l'albero delle istruzioni). Il
+> mio ramo è avanzato lì, pulito.
+
+**Analisi di E1, in sola lettura** (06:46–06:55, su `e7cf1ae80`; appunti fuori dal repo). In sintesi:
+
+- I-09 confermata: `FAAssetEventPoint.type` è un `str` senza controllo (`schemas/assets/events.py:49`), la colonna è
+  l'enum `AssetEventType` (`db/models.py:983`); i plugin di X emettono solo tipi maiuscoli, quindi un validatore sul punto
+  condiviso non li rompe e l'OpenAPI non cambia.
+- I-12 confermata: `DELETE /assets/events?ids=` non è limitato all'asset (`api/v1/assets/events.py:76-98`,
+  `services/assets/event_store.py:471-537`); l'upsert fa un commit per elemento e, nel ramo senza id, uno per blocco di
+  chiavi (`_upsert_asset_events`, condiviso col refresh dei fornitori, `refresh.py:557`).
+- V-22 confermata, con una correzione alla premessa della decisione 20: senza id si toccano solo gli eventi **manuali**
+  della stessa data e dello stesso tipo (`event_store.py:84-93`); l'evento del fornitore entra in gioco con S4.
+- I-10 S4 confermata (`EventCreateMiniModal.svelte:135-152`); il resto di I-10 confermato nel salvataggio dell'editor,
+  righe di X (`AssetDataEditorSection.svelte:349-438`, `:461-466`).
+- I-11: (a) e (d) confermate; (b) in parte già chiusa; (c) tocca i numeri (il salvataggio mette la valuta dell'asset su
+  ogni evento, `AssetDataEditorSection.svelte:365-378`); l'export degli eventi non porta gli id (`api/v1/backup.py:277-330`).
+
+> **Note implementazione (coordinatore, 15/10 ~06:55)**: (1) decisioni 20–23 aggiornate nel file delle decisioni
+> (`ee5d81a6f`), con la premessa corretta del 20, l'export senza id, la proposta precisata («Usa questo», «Crea
+> comunque», «Annulla») e le strade A e B del 23; il developer non ha ancora risposto, E1a ed E1b aspettano. (2)
+> Migrazione di E1a: la **008** (C7: 005 e 006 ad A, 007 a X); `down_revision` sulla testa trovata all'aggiornamento di
+> base; se entro prima della 006 o della 007, il primo numero libero, da riallineare all'aggiornamento. (3) Le righe di X
+> in `AssetDataEditorSection.svelte` le scrivo io in E1b, sul mio contratto. (4) **Via per E0**, che non dipende dalle
+> decisioni: X-R9, W-B15, I-11a, I-11d; in `ui/data-editor` solo logica, niente classi né markup; E0 entra dopo la
+> chiusura della finestra della galleria (build ed E2E prima delle 08:45 o dopo l'avviso di fine). (5) W-B16 (I-11b,
+> `source`) nella mia sezione del backlog, con la proposta. Alle ~06:58: via anche per la riga di X in
+> `EventDataImportModal.svelte` (`matchKey: true` sulla colonna `type`), da segnalare nell'handoff come file di X.
+
+### E0 — X-R9, W-B15, I-11a, I-11d ✅ (2026-10-15) — 🧊 FROZEN
+
+**Disegno** (verificato sul codice di `e7cf1ae80`):
+
+- **I-11a** — `CsvEditor.svelte:416-437` scarta come doppioni tutte le righe con la stessa data, qualunque sia il tipo:
+  un dividendo e uno split dello stesso giorno non entrano (la guida lo dice come limite, `data-editor.en.md:70`). Cura:
+  un flag `matchKey?: boolean` in `CsvColumnDef` (mio); due righe sono doppioni solo con la stessa data (o identità) e gli
+  stessi valori delle colonne marcate. `EventDataImportModal.svelte:38` (file di X, riga concessa) marca `type`. Prezzi,
+  cambi e distribuzioni non marcano nulla: restano come oggi (anche la colonna `currency` dei prezzi è una stringa
+  obbligatoria, quindi una regola implicita sbaglierebbe).
+- **I-11d** — il selettore della data di una riga nuova disabilita tutti i giorni che hanno una riga
+  (`DataEditor.svelte:141`, `:160-170`). Cura: con `importMatchKeys` (gli eventi passano `['type']`) disabilita solo i
+  giorni delle altre righe con gli stessi valori di quelle chiavi; senza chiavi, come oggi. Solo logica.
+- **X-R9** — `DataImportModal.svelte:287` (Annulla, senza testid) → `data-testid="data-import-cancel"`; `:305`
+  (`ConfirmModal`, prop `testId` già esistente) → `testId="data-import-discard-confirm"`. Le userà X in
+  `fx-csv-import.spec.ts:250,261` (FE4).
+- **W-B15** — il pulsante Annulla di `TransactionPickerModal.svelte:180-186` ha **già** `data-testid="tx-picker-cancel"`:
+  resta da usarlo in `tx-bulk-operations.spec.ts:428` al posto del testo (e chiudere il picker senza condizioni). Nessun
+  difetto di prodotto, quindi nessun rosso di prodotto.
+- **Guida**: `data-editor.en.md:70` («One event per date») passa a «one event per date and type», nelle 4 lingue, poi
+  `translate-stamp`.
+
+**Passi**:
+
+1. ✅ **Rossi** (test-author, 07:00–07:22; nessun file nuovo, runner invariato, prettier pulito). `DataEditor.test.ts`
+   +296 −17 (blocchi I-11d a `:680`, I-11a a `:839`, X-R9 a `:1296`; `eventImportModal()`/`importedRows()` spostati,
+   invariati, a livello di modulo; `parsedCsv` con un terzo argomento facoltativo); `tx-bulk-operations.spec.ts` +4 −5.
+   Preambolo `… --test-port 6184 --data-dir /tmp/librefolio-r13-w`:
+   - `front-utility component-unit`: **9 rossi**, 3 216 verdi (3 225). X-R9: `data-import-cancel` non trovato (2) e
+     `data-import-discard-confirm` assente sulla conferma (1); I-11a: dividendo e split dello stesso giorno danno
+     `data-valid-rows="0"` (1), e a livello di `CsvEditor` con una colonna `matchKey` tutte e due le righe finiscono nei
+     doppioni (3); I-11d: il giorno di un evento d'altro tipo è disabilitato (1) e lo spostamento non arriva al padre (1).
+   - 7 guardie verdi: stessa data e stesso tipo restano doppioni; nei prezzi la `currency` diversa resta un doppione;
+     senza `importMatchKeys` il selettore e lo spostamento restano come oggi; il giorno di un evento dello stesso tipo
+     resta rifiutato.
+   - `front-transaction tx-bulk-operations` col nuovo selettore: 10 passed (W-B15 non ha un difetto di prodotto).
+   - `svelte-check`: 3 errori attesi (`matchKey` sconosciuto nei test) fino alla cura; il selettore reale del calendario
+     gira in jsdom, senza `vi.mock`.
+2. ✅ **Cure** (07:22, `/tmp/libreFolio_w_e0_fix.py`, 7 sostituzioni verificate prima a secco):
+   - `CsvEditor.svelte`: `CsvColumnDef.matchKey?: boolean`; i doppioni si cercano sulla data (o l'identità) più i valori
+     delle colonne `matchKey`; il messaggio dice `Duplicate date · type: <data> · <tipo>`.
+   - `EventDataImportModal.svelte:38` (**file di X**, riga concessa): `matchKey: true` sulla colonna `type`.
+   - `DataEditor.svelte`: `takenDates(row)` sostituisce il `$derived` `existingDates`; vale per il selettore e per
+     `handleDateChange`.
+   - `DataImportModal.svelte`: `data-testid="data-import-cancel"` e `testId="data-import-discard-confirm"`.
+   - Solo logica e due attributi di test: nessuna classe né struttura cambiata (`ui/data-editor` è anche di T).
+3. ✅ **Verdi, guida, W-B16** (07:22–07:32):
+   - `prettier --check` sui 6 file toccati: pulito.
+   - `front-utility component-unit`: 120 file, **3 225 passed**.
+   - `front build --debug`: svelte-check 0 errori, 0 avvisi.
+   - E2E: `front-asset asset-data-editor` 26, `front-fx fx-csv-import` 21, `front-fx fx-editor` 4,
+     `front-transaction tx-bulk-operations` 10 (07:27–07:31).
+   - Guida utente `data-editor.{en,it,fr,es}.md:70`: «One event per date and type» (ES «desdoblamiento», come il resto
+     della pagina); `translate-stamp` sulla pagina (solo le sue voci in `.translate-hashes.json`); `translate-validate`
+     non ha errori su `data-editor` (i 69 sono di altre pagine). Pagina per sviluppatori
+     `frontend/components/core-ui/data-editor.md`: selettore della data, `matchKey`, il modale degli eventi, la tabella
+     dei messaggi. `mkdocs build` stretto con 0 avvisi; `check-links` 95 validi.
+   - W-B16 (I-11b, `source`) nella mia sezione del backlog, con la proposta.
+   - `git diff --check` pulito; porta 6184 libera.
+
+   ✅ **E0 completato** (07:33) — 🧊 FROZEN; entra dopo la chiusura della finestra della galleria.
