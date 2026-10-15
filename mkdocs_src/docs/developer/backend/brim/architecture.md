@@ -118,6 +118,7 @@ the same key to a thread already waiting on the first.
 | Field | Written by | Meaning |
 |-------|------------|---------|
 | `status`, `uploaded_at`, `processed_at`, `error_message` | Upload, moves | Where the file is in its lifecycle |
+| `uploaded_by_user_id`, `target_broker_id` | Upload, combine | Who uploaded the file (for a combined file, who combined it) and its broker: they decide [who reaches the file](#file-access). A sidecar written before uploads required a broker (late January 2026, before any tagged version) has neither |
 | `compatible_plugins`, `plugins_signature` | Upload; re-detection on read | The plugins whose `can_parse` accepted the file, and the app version that detected them (`detection_signature()`). A combined file lists only the plugin that built it and is never detected again |
 | `batch_id` | Upload | The upload batch: the files of one wizard session, which a report-set plugin reads as one set |
 | `kind` | Combine | `combined` for a file built by a report-set plugin; absent means `original` |
@@ -129,6 +130,49 @@ the same key to a thread already waiting on the first.
 
 A combined file keeps working when one of its originals is deleted, because it carries the values it
 was built from; deleting a combined file removes it from its originals' `combined_into`.
+
+### 🔐 Who reaches a report file {: #file-access }
+
+Every per-file route, `/api/v1/brokers/import/files/{file_id}…`, starts with
+`_get_brim_file_with_access` (`backend/app/api/v1/brokers.py`), which reads the file's sidecar and
+lets through only the users of the table below (decision 36 of release 1.3; the roles are those of
+[Broker Access Control](../../architecture/access_control.md)). The administrator (`is_superuser`)
+reaches every file; anyone else gets 403.
+
+| Route | A file of a broker | A file with no broker |
+|-------|--------------------|-----------------------|
+| `GET /files/{file_id}`, `…/preview`, `…/download`, `…/last-parse`, `…/plugin-check` | Any role on that broker (VIEWER+) | Its uploader |
+| `POST /files/{file_id}/parse`, `DELETE /files/{file_id}` | EDITOR or OWNER of that broker | Its uploader |
+
+- **On a file of a broker, the role decides alone**: having uploaded the file grants nothing, so an
+  uploader who is now a VIEWER of its broker reads it but neither parses nor deletes it.
+- **A file with no broker** (`target_broker_id` null) sits in the root of its status folder
+  (`<status>/{file_id}.{ext}` and its `.json`, not under `broker_<id>/`). Uploads have required a
+  broker since late January 2026, before any tagged version, so only a development build of that
+  time wrote one, and its sidecar records no uploader either: such a file is the administrator's
+  alone. Nothing migrates these files; they stay where they are. Before 1.3 any signed-in user could
+  list, read, parse and delete them (W-B3).
+- **The id is checked first** (`_is_brim_file_id`, W-B4): a `file_id` that is not a UUID in the
+  canonical lower-case 8-4-4-4-12 form an upload writes (`str(uuid.uuid4())`) answers 404 before any
+  lookup; an upper-case id too, which a case-insensitive disk would otherwise still find. An id of 300
+  characters used to answer 500 (the file system refuses so long a name), and a file named `<uuid>-1`
+  used to be served.
+- **The parse checks the broker it imports into.** `POST /files/{file_id}/parse` imports into the
+  `broker_id` of its body (`BRIMParseRequest`) and compares the duplicates and the report-set history
+  against that broker, so the caller must also be its EDITOR or OWNER (`_require_broker_editor`, the
+  check of `/duplicates`, `/sets/preview`, `/sets/combine` and `/gap-fix`): otherwise 403, before
+  anything is parsed. The administrator passes. Before 1.3 an EDITOR of the file's broker could parse
+  it into a broker they could not see.
+
+**The list.** `GET /api/v1/brokers/import/files` gives a regular user the files of the brokers they
+hold a role on, plus the files with no broker they uploaded; the administrator gets every file, as
+before. `broker_ids` is intersected with the user's brokers and narrows the brokers only: the files
+with no broker that the caller may see come with any filter (`brim_provider.list_files` keeps
+them). Each item is a `BRIMFileListItem`, a `BRIMFileInfo` plus `can_delete`, which says what
+`DELETE /files/{file_id}` would answer: true for the administrator, for an EDITOR or OWNER of the
+file's broker and for the uploader of a file with no broker; false otherwise, a VIEWER included.
+
+Tests: `./dev.py test api brim`, Category 18 of `backend/test_scripts/test_api/test_brim_api.py`.
 
 ---
 
