@@ -93,6 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `./dev.py server` counts only the process listening on its port: a program merely connected to it no longer stops the start, and `--force` no longer kills it.
 - **An events CSV line in another currency is refused instead of being relabelled.** The Events tab saved it in the asset's currency, with an amount that was wrong.
 - **The transaction form's event picker shows an event's new values** right after it is edited from the form.
+- Data quality: the "valued at cost" warning counts its two weeks from the asset's last market quote, as its text says. An asset quoted the day before and bought again is no longer flagged, and a price feed that stopped long ago is flagged at once; an asset never quoted still counts from its first purchase.
 
 ### ⚠️ Breaking changes
 
