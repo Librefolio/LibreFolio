@@ -1,8 +1,9 @@
 # 📝 Configuration
 
-Startup options live in a `.env` file: ports, the data folder, logging, login sessions, secrets and a
-few optional features. It sits at the root of the project, or next to `docker-compose.yml` with
-Docker. The options you change from inside the app are [Global Settings](settings.md) instead.
+Startup options live in a `.env` file: ports, the data folder, logging, login sessions, sign-ups,
+secrets and a few optional features. It sits at the root of the project, or next to
+`docker-compose.yml` with Docker. The options you change from inside the app are
+[Global Settings](settings.md) instead.
 
 ---
 
@@ -236,6 +237,48 @@ again.
 | `LIBREFOLIO_NO_SCHEDULER` | — | Any non-empty value, `0` included, turns the scheduled price and FX syncs off. Set by `./dev.py server --no-scheduler`. |
 | `LIBREFOLIO_TEST_MODE` | — | `1`, `true` or `yes` switches to the test data folder. Set by `./dev.py server --test` and the test runners. |
 | `LIBREFOLIO_TEST_DATA_DIR` | `./backend/data/test` | Folder of the test data; it may not overlap the production one. |
+
+---
+
+## 👥 Accounts and Sign-ups {: #accounts }
+
+Who may create an account, and how many accounts the instance may hold. Without these variables,
+nothing changes: the **Registration** setting of the [Global Settings](settings.md#registration)
+decides who may sign up, and there is no limit. All four are optional: uncomment a line of the
+**Accounts** section of `.env.example` to set one.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `LIBREFOLIO_REGISTRATION` | _not set_ | Who may create an account: `open` (anyone), `invite` (only with an invitation link) or `disabled` (nobody). Not set: the **Registration** global setting decides, **Open** unless an administrator changed it. Set: this value wins, and the global setting cannot be changed from the app. Case and spaces around the value do not matter. On a new instance, `invite` and `disabled` leave the login page without **Register here**: see [Who Can Sign Up](settings.md#registration) to create the first administrator. |
+| `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
+| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. The [command line](cli_tools.md#invite) puts it in front of the invitation and password-reset links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. |
+| `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. LibreFolio gives it to administrators only, with the numbers of the user limit; the app does not show it yet. |
+
+An empty value counts as not set. A wrong value does not stop the server, unlike the main options:
+LibreFolio stays on the safe side, and writes an error to its log the first time each server
+process needs the value: `Invalid account configuration`, with the variable and its value in
+`problem`, and in `consequence` what it costs until you fix it. Fix the value, then restart:
+
+| Wrong value | What LibreFolio does | `consequence` in the log |
+| --- | --- | --- |
+| `LIBREFOLIO_REGISTRATION` other than the three modes | Registration is closed, and the global setting stays locked | `registration stays closed until it is fixed` |
+| `LIBREFOLIO_MAX_USERS` that is not a whole number of at least 1, `0` included | A limit of 0: nobody can sign up without an invitation | `registration stays closed until it is fixed` |
+| `LIBREFOLIO_PUBLIC_URL` without `http://` or `https://` | Ignored: links show the path only, and the [command line](cli_tools.md#invite) says why under each link | `links show the bare path until it is fixed` |
+| `LIBREFOLIO_BILLING_URL` without `http://` or `https://` | Ignored, as if it were not set | `the billing link stays hidden until it is fixed` |
+
+### 📏 When the Instance Is Full {: #user-limit }
+
+When the active accounts and the pending invitations reach `LIBREFOLIO_MAX_USERS`:
+
+- nobody can sign up without an invitation, whatever the [Registration](settings.md#registration)
+  mode;
+- an invitation link already sent still works: its place was counted when it was created;
+- administrators cannot create invitations or reactivate accounts, except from the
+  [command line](cli_tools.md): `user create`, `user invite` and `user activate` print a warning,
+  then go ahead.
+
+A place frees up when an account is deactivated or deleted, or when an invitation is revoked or
+expires. The first account of a new instance can always be created.
 
 ---
 

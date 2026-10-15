@@ -10,6 +10,7 @@
     import {type SelectOption} from '$lib/components/ui/select';
     import type {GlobalSetting} from '$lib/types';
     import {globalSettings} from '$lib/stores/app/globalSettings';
+    import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
@@ -36,7 +37,7 @@
     // Default values for global settings
     const SETTING_DEFAULTS: Record<string, string> = {
         session_ttl_hours: '24',
-        enable_registration: 'true',
+        registration_mode: 'open',
         require_email_verification: 'false',
         max_file_upload_mb: '10',
         scheduler_enabled: 'true',
@@ -58,7 +59,7 @@
 
     const baseCategories: Category[] = [
         {id: 'session', icon: Clock, keys: ['session_ttl_hours']},
-        {id: 'security', icon: Shield, keys: ['enable_registration', 'require_email_verification']},
+        {id: 'security', icon: Shield, keys: ['registration_mode', 'require_email_verification']},
         {id: 'sync', icon: RefreshCw, keys: ['scheduler_enabled']},
         {id: 'memory', icon: Database, keys: ['max_file_upload_mb']},
         {id: 'defaults', icon: Users, keys: ['default_currency', 'default_language', 'default_theme']},
@@ -70,6 +71,22 @@
 
     // Placeholder settings: rendered read-only with a "Coming soon" badge until the feature lands
     const PLACEHOLDER_KEYS = new Set(['require_email_verification']);
+
+    // LIBREFOLIO_REGISTRATION pins the registration mode on the server (`GET /system/instance`): the field then shows
+    // the mode in force, read-only, and the bulk reset leaves it alone — a save would only meet 409 SETTING_LOCKED_BY_ENV.
+    let registrationLocked = $derived(instanceConfig.config.accounts.registration_locked);
+    let registrationModeOptions: SelectOption[] = $derived.by(() => {
+        $currentLanguage;
+        return [
+            {value: 'open', label: $_('settings.registrationModes.open')},
+            {value: 'invite', label: $_('settings.registrationModes.invite')},
+            {value: 'disabled', label: $_('settings.registrationModes.disabled')},
+        ];
+    });
+
+    function isLockedByEnv(key: string): boolean {
+        return key === 'registration_mode' && registrationLocked;
+    }
 
     let settings: GlobalSetting[] = $state([]);
     let editedValues: Record<string, string> = $state({});
@@ -152,6 +169,7 @@
 
             // Sync globalSettings store
             syncGlobalSettingsStore();
+            refreshInstanceConfig([key]);
 
             const label = getSettingLabel(key);
             notify({
@@ -160,15 +178,7 @@
                 toast: {variant: 'success', message: `"${label}" ${$_('settings.savedSuccessfully')}`},
             });
         } catch (e) {
-            if (isAxiosError(e)) {
-                if (e.response?.status === 403) {
-                    error = $_('settings.adminRequired');
-                } else {
-                    error = e.message;
-                }
-            } else {
-                error = $_('settings.saveFailed');
-            }
+            error = saveErrorMessage(e);
         } finally {
             isSaving = false;
         }
@@ -208,15 +218,7 @@
                 }
             }
         } catch (e) {
-            if (isAxiosError(e)) {
-                if (e.response?.status === 403) {
-                    error = $_('settings.adminRequired');
-                } else {
-                    error = e.message;
-                }
-            } else {
-                error = $_('settings.saveFailed');
-            }
+            error = saveErrorMessage(e);
         }
 
         // Trigger reactivity
@@ -226,6 +228,7 @@
         if (savedLabels.length > 0 && !error) {
             // Sync globalSettings store
             syncGlobalSettingsStore();
+            refreshInstanceConfig(keysToSave);
 
             // A saved global setting is invisible: the control already showed the new value
             // before Save, so the page looks identical whether the write landed or not.
@@ -250,11 +253,27 @@
 
     function resetAllToDefaults() {
         for (const key of Object.keys(editedValues)) {
-            if (SETTING_DEFAULTS[key] !== undefined && !PLACEHOLDER_KEYS.has(key)) {
+            if (SETTING_DEFAULTS[key] !== undefined && !PLACEHOLDER_KEYS.has(key) && !isLockedByEnv(key)) {
                 editedValues[key] = SETTING_DEFAULTS[key];
             }
         }
         editedValues = {...editedValues}; // Trigger reactivity
+    }
+
+    /** Why a save failed, as the tab says it. */
+    function saveErrorMessage(e: unknown): string {
+        if (!isAxiosError(e)) return $_('settings.saveFailed');
+        if (e.response?.status === 403) return $_('settings.adminRequired');
+        const detail = e.response?.data?.detail;
+        if (e.response?.status === 409 && detail?.error_code === 'SETTING_LOCKED_BY_ENV') {
+            return $_('settings.lockedByEnv', {values: {variable: detail.variable}});
+        }
+        return e.message;
+    }
+
+    /** The public configuration carries the registration mode: ask for it again once the mode has changed. */
+    function refreshInstanceConfig(savedKeys: string[]): void {
+        if (savedKeys.includes('registration_mode')) void instanceConfig.load({force: true});
     }
 
     /**
@@ -624,7 +643,7 @@
                         </div>
                     {:else}
                         <!-- Language / Currency / Theme use the shared wrappers (same controls as PreferencesTab); any other string setting keeps the generic text row -->
-                        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4" data-testid="global-setting-{setting.key}">
+                        <div class="bg-gray-50 dark:bg-slate-800 rounded-lg p-4" data-locked={setting.key === 'registration_mode' ? String(registrationLocked) : undefined} data-testid="global-setting-{setting.key}">
                             {#if setting.key === 'default_language'}
                                 <SettingSelect
                                     value={editedValues[setting.key]}
@@ -635,6 +654,26 @@
                                     isModified={changedKeys.includes(setting.key)}
                                     isNonDefault={nonDefaultKeys.includes(setting.key)}
                                     {isLocked}
+                                    {isSaving}
+                                    embedded
+                                    onsave={() => saveSetting(setting.key)}
+                                    onundo={() => undoSetting(setting.key)}
+                                    onreset={() => resetSettingToDefault(setting.key)}
+                                    onchange={(val) => {
+                                        editedValues[setting.key] = val;
+                                        editedValues = {...editedValues};
+                                    }}
+                                />
+                            {:else if setting.key === 'registration_mode'}
+                                <SettingSelect
+                                    value={registrationLocked ? instanceConfig.config.accounts.registration_mode : editedValues[setting.key]}
+                                    options={registrationModeOptions}
+                                    label={getSettingLabel(setting.key)}
+                                    hint={registrationLocked ? $_('settings.lockedByEnv', {values: {variable: 'LIBREFOLIO_REGISTRATION'}}) : getSettingHint(setting.key)}
+                                    icon={category?.icon ?? null}
+                                    isModified={changedKeys.includes(setting.key)}
+                                    isNonDefault={nonDefaultKeys.includes(setting.key)}
+                                    isLocked={isLocked || registrationLocked}
                                     {isSaving}
                                     embedded
                                     onsave={() => saveSetting(setting.key)}

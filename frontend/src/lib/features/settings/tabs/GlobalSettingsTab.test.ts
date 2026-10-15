@@ -35,10 +35,26 @@
  *     their own.
  *   - clickOutside's detection algorithm. The Runes cases below exercise only
  *     this tab's listener lifetime and its bound mobile dropdown reference.
+ *
+ * Accounts lot A5b (plan A5b.1). A5a replaced the bool `enable_registration`
+ * with `registration_mode` — `open`, `invite` or `disabled`, a string setting —
+ * and the security category now holds it: the rows that used the old key as
+ * "a bool of the security category" moved to `scheduler_enabled` (a bool) or to
+ * `registration_mode` (the security row). Its own describe pins the row: a
+ * `SettingSelect` of the three modes in `global-setting-registration_mode`, and
+ * the case where `LIBREFOLIO_REGISTRATION` pins the mode on the server
+ * (`instanceConfig.config.accounts.registration_locked`): the control locked on
+ * the mode in force, the hint `settings.lockedByEnv`, `data-locked="true"` on
+ * the row, «reset all» passing it by, the 409 `SETTING_LOCKED_BY_ENV` worded by
+ * that key with its variable, and `instanceConfig.load({force: true})` after a
+ * save that wrote the mode. `$lib/features/instance/instanceConfig.svelte` is a
+ * fake with the real store's shape — enumerable getters over `$state`
+ * (`reactiveBox`) and a `load` spy — unpinned and open before every test.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick} from 'svelte';
 import {get, readable, writable, type Writable} from 'svelte/store';
+import type {InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {fireEvent, render, screen, waitFor, within} from '$test/component';
 
 // --- Mocks --------------------------------------------------------------
@@ -49,7 +65,7 @@ import {fireEvent, render, screen, waitFor, within} from '$test/component';
  * treat as "no translation, use the fallback".
  */
 const DICT: Record<string, string> = {
-    'settings.globalSettingNames.enable_registration': 'Registration open',
+    'settings.globalSettingNames.scheduler_enabled': 'Market data sync',
     'settings.globalSettingNames.session_ttl_hours': 'Session lifetime',
     'settings.globalSettingDescriptions.session_ttl_hours': 'How long a login lasts',
     'settings.globalSettingUnits.session_ttl_hours': 'hours',
@@ -115,6 +131,36 @@ vi.mock('$lib/stores/app/notify.svelte', () => ({notify: (...args: unknown[]) =>
 
 const setGlobalDirect = vi.fn();
 vi.mock('$lib/stores/app/globalSettings', () => ({globalSettings: {setDirect: (...a: unknown[]) => setGlobalDirect(...a), subscribe: (run: (v: unknown) => void) => (run(null), () => undefined)}}));
+
+/**
+ * The public configuration of the instance (`GET /system/instance`), held by the test: the accounts part says whether
+ * `LIBREFOLIO_REGISTRATION` pins the registration mode, and which mode is in force. Getters over `$state`, as in the
+ * real store, so the tab re-reads them; `load` is a spy, unpinned and open before every test.
+ */
+const instance = await vi.hoisted(async () => {
+    const {reactiveBox} = await import('$test/runes.svelte');
+    const UNPINNED: InstanceConfig = {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}};
+    return {
+        UNPINNED,
+        box: reactiveBox<{config: InstanceConfig}>({config: UNPINNED}),
+        load: vi.fn<(options?: {force?: boolean}) => Promise<void>>().mockName('instanceConfig.load'),
+    };
+});
+vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({
+    DEFAULT_INSTANCE_CONFIG: instance.UNPINNED,
+    instanceConfig: {
+        get config() {
+            return instance.box.config;
+        },
+        get loaded() {
+            return true;
+        },
+        get failed() {
+            return false;
+        },
+        load: instance.load,
+    },
+}));
 
 vi.mock('$lib/stores/reference/currencyStore', () => ({
     ensureCurrenciesLoaded: async () => undefined,
@@ -209,6 +255,8 @@ beforeEach(() => {
     vi.clearAllMocks();
     axiosGet.mockResolvedValue({data: {server_tz: 'Europe/Rome'}} as never);
     axiosPatch.mockResolvedValue({data: null} as never);
+    instance.box.config = instance.UNPINNED;
+    instance.load.mockResolvedValue(undefined);
     vi.spyOn(window, 'confirm').mockReturnValue(true);
 });
 
@@ -409,11 +457,11 @@ describe('GlobalSettingsTab — loading the list', () => {
 // =========================================================================
 describe('GlobalSettingsTab — how a value type chooses its control', () => {
     it('renders a bool as a switch, labelled by the setting', async () => {
-        await mount([setting('enable_registration', 'true', 'bool')]);
+        await mount([setting('scheduler_enabled', 'true', 'bool')]);
 
         // The label comes from the dictionary, so the switch is addressable by a
         // name this file owns.
-        expect(screen.getByRole('switch', {name: 'Toggle Registration open'})).toBeInTheDocument();
+        expect(screen.getByRole('switch', {name: 'Toggle Market data sync'})).toBeInTheDocument();
     });
 
     it('renders an int and a float as number boxes', async () => {
@@ -540,7 +588,7 @@ describe('GlobalSettingsTab — every row it renders is named in the four catalo
     /** What the instance sends: every key of the backend's `GLOBAL_SETTINGS_DEFAULTS` (`schemas/settings.py`), at its default. */
     const SERVER_LIST: Fixture[] = [
         setting('session_ttl_hours', '24', 'int'),
-        setting('enable_registration', 'true', 'bool'),
+        setting('registration_mode', 'open', 'string'),
         setting('require_email_verification', 'false', 'bool'),
         setting('max_file_upload_mb', '10', 'int'),
         setting('scheduler_enabled', 'true', 'bool'),
@@ -791,7 +839,7 @@ describe('GlobalSettingsTab — when the server refuses a save', () => {
 
 // =========================================================================
 describe('GlobalSettingsTab — saving everything at once', () => {
-    const ITEMS = [setting('session_ttl_hours', '24', 'int'), setting('enable_registration', 'true', 'bool'), setting('custom_banner', 'hello', 'string')];
+    const ITEMS = [setting('session_ttl_hours', '24', 'int'), setting('scheduler_enabled', 'true', 'bool'), setting('custom_banner', 'hello', 'string')];
 
     it('offers no bulk save while the tab is clean', async () => {
         await mountUnlocked(ITEMS);
@@ -816,12 +864,12 @@ describe('GlobalSettingsTab — saving everything at once', () => {
 
     it('leaves the untouched keys out of the payload', async () => {
         await mountUnlocked(ITEMS);
-        await fireEvent.click(screen.getByRole('switch', {name: 'Toggle Registration open'}));
+        await fireEvent.click(screen.getByRole('switch', {name: 'Toggle Market data sync'}));
 
         await fireEvent.click(saveAll());
 
         await waitFor(() => expect(axiosPatch).toHaveBeenCalled());
-        expect(lastPatchBody().items).toEqual([{key: 'enable_registration', value: 'false'}]);
+        expect(lastPatchBody().items).toEqual([{key: 'scheduler_enabled', value: 'false'}]);
     });
 
     it('names every key it persisted in the event', async () => {
@@ -980,15 +1028,19 @@ describe('GlobalSettingsTab — the three picker rows', () => {
 
 // =========================================================================
 describe('GlobalSettingsTab — the category filter', () => {
-    const ITEMS = [setting('session_ttl_hours', '24', 'int'), setting('enable_registration', 'true', 'bool'), setting('custom_banner', 'hello', 'string')];
+    // `registration_mode` is the row of the security category (A5b): the old bool `enable_registration` played that part.
+    const ITEMS = [setting('session_ttl_hours', '24', 'int'), setting('registration_mode', 'open', 'string'), setting('custom_banner', 'hello', 'string')];
+    /** The registration row, or null while the filter hides it. */
+    const registrationRow = () => screen.queryByTestId('global-setting-registration_mode');
 
     it('shows everything the server sent by default, with no duplicate rows', async () => {
         await mount(ITEMS);
 
         expect(screen.getByRole('spinbutton')).toBeInTheDocument();
-        expect(screen.getByRole('switch', {name: 'Toggle Registration open'})).toBeInTheDocument();
+        expect(registrationRow()).toBeInTheDocument();
         expect(textInput('custom_banner')).toBeInTheDocument();
         expect(document.querySelectorAll('#custom_banner')).toHaveLength(1);
+        expect(screen.getAllByTestId('global-setting-registration_mode')).toHaveLength(1);
     });
 
     it('narrows to the keys a category claims', async () => {
@@ -996,7 +1048,7 @@ describe('GlobalSettingsTab — the category filter', () => {
 
         await fireEvent.click(screen.getByTestId('global-settings-category-session'));
 
-        await waitFor(() => expect(screen.queryByRole('switch', {name: 'Toggle Registration open'})).toBeNull());
+        await waitFor(() => expect(registrationRow()).toBeNull());
         expect(screen.getByRole('spinbutton')).toBeInTheDocument();
         expect(textInput('custom_banner')).toBeNull();
     });
@@ -1009,35 +1061,35 @@ describe('GlobalSettingsTab — the category filter', () => {
         await fireEvent.click(screen.getByTestId('global-settings-category-security'));
 
         await waitFor(() => expect(screen.queryByRole('spinbutton')).toBeNull());
-        expect(screen.getByRole('switch', {name: 'Toggle Registration open'})).toBeInTheDocument();
+        expect(registrationRow(), 'the security category holds registration_mode').toBeInTheDocument();
         expect(textInput('custom_banner')).toBeNull();
 
         await fireEvent.click(screen.getByTestId('global-settings-category-other'));
 
         await waitFor(() => expect(textInput('custom_banner')).toBeInTheDocument());
         expect(screen.queryByRole('spinbutton')).toBeNull();
-        expect(screen.queryByRole('switch', {name: 'Toggle Registration open'})).toBeNull();
+        expect(registrationRow()).toBeNull();
     });
 
     it('hides the Other category when every visible key is already claimed', async () => {
-        await mount([setting('session_ttl_hours', '24', 'int'), setting('enable_registration', 'true', 'bool')]);
+        await mount([setting('session_ttl_hours', '24', 'int'), setting('registration_mode', 'open', 'string')]);
 
-        expect(screen.queryByTestId('global-settings-category-other')).toBeNull();
+        expect(screen.queryByTestId('global-settings-category-other'), 'registration_mode is claimed by security, not left to Other').toBeNull();
 
         await fireEvent.click(screen.getByTestId('global-settings-category-security'));
 
         await waitFor(() => expect(screen.queryByRole('spinbutton')).toBeNull());
-        expect(screen.getByRole('switch', {name: 'Toggle Registration open'})).toBeInTheDocument();
+        expect(registrationRow()).toBeInTheDocument();
     });
 
     it('restores the full list when All is chosen again', async () => {
         await mount(ITEMS);
         await fireEvent.click(screen.getByTestId('global-settings-category-session'));
-        await waitFor(() => expect(screen.queryByRole('switch', {name: 'Toggle Registration open'})).toBeNull());
+        await waitFor(() => expect(registrationRow()).toBeNull());
 
         await fireEvent.click(screen.getByRole('button', {name: /^All/}));
 
-        await waitFor(() => expect(screen.queryByRole('switch', {name: 'Toggle Registration open'})).not.toBeNull());
+        await waitFor(() => expect(registrationRow()).not.toBeNull());
     });
 
     it('carries a pending edit through a filter round-trip', async () => {
@@ -1050,6 +1102,194 @@ describe('GlobalSettingsTab — the category filter', () => {
 
         await waitFor(() => expect(screen.getByRole('spinbutton')).toHaveValue(48));
         expect(screen.queryByTitle('common.save')).not.toBeNull();
+    });
+});
+
+// =========================================================================
+/**
+ * Who may create an account: `registration_mode` (accounts lot A5b, plan A5b.1).
+ *
+ * A5a made the mode a string setting — `open`, `invite`, `disabled`, default `open` — and let the operator pin it with
+ * `LIBREFOLIO_REGISTRATION`: then the database row is not what is in force, saving it answers 409
+ * `SETTING_LOCKED_BY_ENV`, and `GET /system/instance` says `registration_locked: true` with the mode in force. The row:
+ *   - a `SettingSelect` of the three modes (`setting-select-option-<mode>`, labelled `settings.registrationModes.*`) in
+ *     `global-setting-registration_mode`, the security category's;
+ *   - pinned: the control locked on the mode in force, not on the row's value; the hint `settings.lockedByEnv`;
+ *     `data-locked="true"` on the row (`"false"` otherwise); no save, undo or reset; «reset all» passes it by;
+ *   - a 409 `SETTING_LOCKED_BY_ENV` (the pin arrived after the page read the configuration) worded by
+ *     `settings.lockedByEnv` with its variable, not by the transport's sentence;
+ *   - after a save that wrote the mode, `instanceConfig.load({force: true})`, so the login page and the link pages of
+ *     this tab's session read the new mode — and only after the write landed.
+ *
+ * The mode labels are keys (this file's dictionary has none of them), so the select's trigger reads the key of the mode
+ * it shows.
+ */
+describe('GlobalSettingsTab — registration_mode, who may create an account (A5b)', () => {
+    const MODES = ['open', 'invite', 'disabled'] as const;
+    type Mode = (typeof MODES)[number];
+
+    const mode = (value: Mode) => setting('registration_mode', value, 'string');
+    const row = () => screen.getByTestId('global-setting-registration_mode');
+    const modeSelect = () => within(row()).getByRole('combobox');
+    const option = (value: Mode) => `setting-select-option-${value}`;
+    const label = (value: Mode) => `settings.registrationModes.${value}`;
+    /** The forced reloads of the instance configuration the tab asked for. */
+    const forcedReloads = () => instance.load.mock.calls.filter(([options]) => options?.force === true);
+
+    /** The server pins the mode with LIBREFOLIO_REGISTRATION, and `value` is the one in force. */
+    function pinnedOnServer(value: Mode): void {
+        instance.box.config = {profile: 'selfhosted', accounts: {registration_mode: value, registration_locked: true}};
+    }
+
+    /** Opens the select of an unlocked, unpinned row and picks `value`. */
+    async function pick(value: Mode): Promise<void> {
+        await fireEvent.click(modeSelect());
+        await fireEvent.click(await within(row()).findByTestId(option(value)));
+        await waitFor(() => expect(within(row()).queryByTitle('common.save'), 'premise: the pick made the row modified').not.toBeNull());
+    }
+
+    /** A 409 the bulk route answers when LIBREFOLIO_REGISTRATION pins the mode. */
+    function lockedByEnv(): Error {
+        return Object.assign(new Error('Request failed with status code 409'), {
+            isAxiosError: true,
+            response: {
+                status: 409,
+                data: {detail: {error_code: 'SETTING_LOCKED_BY_ENV', message: 'An English sentence the administrator must not read', key: 'registration_mode', variable: 'LIBREFOLIO_REGISTRATION'}},
+            },
+        });
+    }
+
+    /** The file's dictionary, which also prints the values a message is given: `key value…`. */
+    const withValues = ((input: string | {id: string; values?: Record<string, unknown>}, options?: {values?: Record<string, unknown>}) => {
+        const id = typeof input === 'string' ? input : input.id;
+        const values = typeof input === 'string' ? options?.values : input.values;
+        const base = DICT[id] ?? id;
+        return values ? `${base} ${Object.values(values).join(' ')}` : base;
+    }) as unknown as (key: string) => string;
+
+    it('is a select of the three modes, not a text box', async () => {
+        await mountUnlocked([mode('open')]);
+
+        expect(textInput('registration_mode'), 'not the generic text row').toBeNull();
+        await fireEvent.click(modeSelect());
+        await waitFor(() => expect(within(row()).queryByTestId(option('open'))).not.toBeNull());
+
+        const offered = Array.from(row().querySelectorAll('[data-testid^="setting-select-option-"]'), (el) => el.getAttribute('data-testid'));
+        expect(offered.sort()).toEqual(MODES.map(option).sort());
+        for (const value of MODES) expect(within(row()).getByTestId(option(value))).toHaveTextContent(label(value));
+    });
+
+    it('is an ordinary row while the server does not pin the mode: unlocked, the stored mode, a reset off the default', async () => {
+        await mountUnlocked([mode('invite')]);
+
+        expect(row()).toHaveAttribute('data-locked', 'false');
+        expect(modeSelect()).toBeEnabled();
+        expect(modeSelect()).toHaveTextContent(label('invite'));
+        expect(row()).not.toHaveTextContent('settings.lockedByEnv');
+        expect(within(row()).getByTestId('setting-reset'), 'invite is off the default, open').toBeInTheDocument();
+    });
+
+    it('saves a new mode through the bulk route, then reloads the instance configuration, forced, once the save landed', async () => {
+        const flight = deferred<{data: null}>();
+        // Not a `…Once`: a once-value left unconsumed by a red would leak into the next test (`clearAllMocks` keeps it);
+        // the file's `beforeEach` replaces this implementation.
+        axiosPatch.mockImplementation(() => flight.promise as never);
+        await mountUnlocked([mode('open')]);
+        await pick('invite');
+
+        await fireEvent.click(within(row()).getByTitle('common.save'));
+
+        expect(axiosPatch).toHaveBeenCalledTimes(1);
+        expect(lastPatchBody()).toEqual({items: [{key: 'registration_mode', value: 'invite'}]});
+        expect(forcedReloads(), 'not while the write is in flight').toEqual([]);
+
+        flight.resolve({data: null});
+
+        await waitFor(() => expect(forcedReloads()).toHaveLength(1));
+    });
+
+    it('reloads it too after a save all that wrote the mode', async () => {
+        await mountUnlocked([setting('session_ttl_hours', '24', 'int'), mode('open')]);
+        await fireEvent.input(screen.getByRole('spinbutton'), {target: {value: '48'}});
+        await pick('disabled');
+
+        await fireEvent.click(saveAll());
+
+        await waitFor(() => expect(axiosPatch).toHaveBeenCalledTimes(1));
+        expect(lastPatchBody().items).toEqual([
+            {key: 'session_ttl_hours', value: '48'},
+            {key: 'registration_mode', value: 'disabled'},
+        ]);
+        await waitFor(() => expect(forcedReloads()).toHaveLength(1));
+    });
+
+    it('does not reload it after a save that left the mode alone', async () => {
+        await mountUnlocked([setting('session_ttl_hours', '24', 'int'), mode('open')]);
+        await fireEvent.input(screen.getByRole('spinbutton'), {target: {value: '48'}});
+
+        await fireEvent.click(within(screen.getByTestId('global-setting-session_ttl_hours')).getByTitle('common.save'));
+
+        // The barrier: the save landed and was announced.
+        await waitFor(() => expect(notify).toHaveBeenCalledTimes(1));
+        expect(forcedReloads()).toEqual([]);
+    });
+
+    it('is locked while the server pins the mode: the mode in force, the hint, data-locked, no actions', async () => {
+        // The row stores invite; LIBREFOLIO_REGISTRATION=disabled is what is in force.
+        pinnedOnServer('disabled');
+        await mountUnlocked([setting('session_ttl_hours', '24', 'int'), mode('invite')]);
+
+        expect(screen.getByRole('spinbutton'), 'premise: the tab itself is unlocked').toBeEnabled();
+        expect(row()).toHaveAttribute('data-locked', 'true');
+        expect(modeSelect(), 'the control is locked').toBeDisabled();
+        expect(modeSelect(), 'it shows the mode in force, from /system/instance').toHaveTextContent(label('disabled'));
+        expect(modeSelect(), 'not the stored row').not.toHaveTextContent(label('invite'));
+        expect(row()).toHaveTextContent('settings.lockedByEnv');
+        for (const action of ['setting-save', 'setting-undo', 'setting-reset']) {
+            expect(within(row()).queryByTestId(action), `${action}: nothing to do on a pinned mode`).toBeNull();
+        }
+    });
+
+    it('control: reset all moves a mode the server does not pin back to open', async () => {
+        await mountUnlocked([setting('session_ttl_hours', '48', 'int'), mode('invite')]);
+
+        await fireEvent.click(resetAll());
+        await waitFor(() => expect(screen.getByRole('spinbutton')).toHaveValue(24));
+        await fireEvent.click(saveAll());
+
+        await waitFor(() => expect(axiosPatch).toHaveBeenCalledTimes(1));
+        expect(lastPatchBody().items).toEqual([
+            {key: 'session_ttl_hours', value: '24'},
+            {key: 'registration_mode', value: 'open'},
+        ]);
+    });
+
+    it('reset all passes a pinned mode by', async () => {
+        // Green against a tab with no default for the mode, for the wrong reason: the control above is the half that
+        // proves reset all reaches the mode at all.
+        pinnedOnServer('disabled');
+        await mountUnlocked([setting('session_ttl_hours', '48', 'int'), mode('invite')]);
+
+        await fireEvent.click(resetAll());
+        await waitFor(() => expect(screen.getByRole('spinbutton')).toHaveValue(24));
+        await fireEvent.click(saveAll());
+
+        await waitFor(() => expect(axiosPatch).toHaveBeenCalledTimes(1));
+        expect(lastPatchBody().items).toEqual([{key: 'session_ttl_hours', value: '24'}]);
+    });
+
+    it.each(['the row', 'save all'] as const)('words a 409 SETTING_LOCKED_BY_ENV on a save from %s by settings.lockedByEnv and its variable', async (path) => {
+        translator.set(withValues);
+        axiosPatch.mockRejectedValue(lockedByEnv());
+        await mountUnlocked([mode('open')]);
+        await pick('invite');
+
+        await fireEvent.click(path === 'the row' ? within(row()).getByTitle('common.save') : saveAll());
+
+        await waitFor(() => expect(errorBanner()).not.toBeNull());
+        expect(errorBanner()!).toHaveTextContent('settings.lockedByEnv');
+        expect(errorBanner()!, 'the variable to change, from the answer').toHaveTextContent('LIBREFOLIO_REGISTRATION');
+        expect(errorBanner()!, 'not the transport sentence').not.toHaveTextContent('Request failed with status code 409');
     });
 });
 
@@ -1253,7 +1493,8 @@ describe('GlobalSettingsTab — the dates in the interface language (M-17, M-18 
 
 // =========================================================================
 describe('GlobalSettingsTab — the mobile category dropdown', () => {
-    const ITEMS = [setting('session_ttl_hours', '24', 'int'), setting('enable_registration', 'true', 'bool')];
+    // Both keys claimed (registration_mode by security, A5b), so the list has no Other: All plus the five base categories.
+    const ITEMS = [setting('session_ttl_hours', '24', 'int'), setting('registration_mode', 'open', 'string')];
 
     /** The whole `sm:hidden` block: its trigger, and the list when it is open. */
     const mobileSection = () => screen.getByText('settings.category').parentElement!;

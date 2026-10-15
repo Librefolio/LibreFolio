@@ -8,7 +8,7 @@ password-reset link, and the app learns the mode before anyone signs in. The pub
    403 ``REGISTRATION_DISABLED``, 403 ``INVITE_REQUIRED``, 400 ``INVITE_INVALID``, 409 ``USER_LIMIT_REACHED`` — the
    last one without counts and without the billing link: whoever asks is anonymous (decision 15). A refusal creates no
    account and consumes no invitation. A valid invitation gives its role; the first account is the administrator in
-   every mode.
+   every mode, and spends the invitation it comes with like any other (review of 15/10).
 2. ``POST /auth/tokens/inspect`` ``{token, purpose: invite|password_reset}`` → ``{status, purpose}``. Only a ``valid``
    token adds ``expires_at``, and ``grants_admin`` and ``email`` for an invitation or ``username`` for a reset link;
    any other status shows nothing more (each detail absent or null). Public — it answers only whoever holds the token —,
@@ -22,6 +22,10 @@ password-reset link, and the app learns the mode before anyone signs in. The pub
 5. ``PATCH /settings/global/bulk`` writing ``registration_mode`` while ``LIBREFOLIO_REGISTRATION`` sets it: 409
    ``SETTING_LOCKED_BY_ENV``, nothing saved — the other items of the request included. Without the variable the write
    goes through, within the three choices.
+6. Review of 15/10: a new install seeds ``registration_mode`` as ``open`` with ``value_type`` ``str``, the type of every
+   text setting; an invalid ``LIBREFOLIO_PUBLIC_URL`` or ``LIBREFOLIO_BILLING_URL`` costs its link and nothing else, so
+   the instance answers open and registrations go through (what its log says is pinned in
+   ``test_services/test_registration_service.py``).
 
 Coded refusals are read from ``detail.error_code``, the shape ``POST /auth/login`` already gives ``ACCOUNT_DISABLED``.
 
@@ -83,8 +87,9 @@ PASSWORD_RESET = AccountTokenPurpose.PASSWORD_RESET
 MODE_KEY = "registration_mode"
 REGISTRATION_VARIABLE = "LIBREFOLIO_REGISTRATION"
 MAX_USERS_VARIABLE = "LIBREFOLIO_MAX_USERS"
+PUBLIC_URL_VARIABLE = "LIBREFOLIO_PUBLIC_URL"
 BILLING_URL_VARIABLE = "LIBREFOLIO_BILLING_URL"
-ACCOUNTS_VARIABLES = (REGISTRATION_VARIABLE, MAX_USERS_VARIABLE, "LIBREFOLIO_PUBLIC_URL", BILLING_URL_VARIABLE)
+ACCOUNTS_VARIABLES = (REGISTRATION_VARIABLE, MAX_USERS_VARIABLE, PUBLIC_URL_VARIABLE, BILLING_URL_VARIABLE)
 BILLING_LINK = "https://billing.example.test/subscription/acme-family"
 
 PASSWORD = "Registration-Api-2026"
@@ -105,6 +110,7 @@ LOGIN = f"{API_V1_PREFIX}/auth/login"
 ME = f"{API_V1_PREFIX}/auth/me"
 INSTANCE = f"{API_V1_PREFIX}/system/instance"
 BULK = f"{API_V1_PREFIX}/settings/global/bulk"
+MODE_SETTING = f"{API_V1_PREFIX}/settings/global/{MODE_KEY}"
 
 
 @pytest.fixture(scope="module")
@@ -172,7 +178,7 @@ async def _set_mode_row(engine: AsyncEngine, mode: str) -> None:
     async with AsyncSession(engine) as session:
         row = await session.get(GlobalSetting, MODE_KEY)
         if row is None:
-            row = GlobalSetting(key=MODE_KEY, value=mode, value_type="string", updated_at=utcnow())
+            row = GlobalSetting(key=MODE_KEY, value=mode, value_type="str", updated_at=utcnow())
         row.value = mode
         session.add(row)
         await session.commit()
@@ -383,6 +389,28 @@ class TestRegisterByMode:
 
         assert response.status_code == 201, f"the first account must be allowed in every mode: {response.status_code} {response.text}"
         assert response.json()["user"]["is_superuser"] is True
+
+    @pytest.mark.asyncio
+    async def test_the_first_account_spends_the_invitation_it_registers_with(self, private: _Private) -> None:
+        """REG-API-008 (review of 15/10): on an empty instance, ``POST /auth/register`` with a valid invitation → 201, the administrator, and the invitation consumed by it; the same link again → 400 ``INVITE_INVALID``, no second account.
+
+        An invitation can exist before anyone registered (``dev.py user invite``): given with the first registration, it
+        is spent like any other, or its link would open a second account for the rest of its 7 days.
+        """
+        print_section("REG-API-008: the first account spends its invitation")
+        issued = await _issue(private.engine)
+        assert await _usernames(private.engine) == set(), "setup: the instance has no account"
+
+        async with _browser(private) as client:
+            first = await _register(client, "founder", invite_token=issued.token)
+            stored = await _token_row(private.engine, issued.record.id)
+            again = await _register(client, "second", invite_token=issued.token)
+
+        assert first.status_code == 201 and first.json()["user"]["is_superuser"] is True, f"the first account is the administrator: {first.status_code} {first.text}"
+        assert stored.consumed_by_user_id == first.json()["user"]["id"], f"the invitation must be consumed by the first account: consumed_by_user_id {stored.consumed_by_user_id}, consumed_at {stored.consumed_at}"
+        assert (again.status_code, _error_code(again)) == (400, "INVITE_INVALID"), f"the spent link must open no second account: {again.status_code} {again.text}"
+        assert await _usernames(private.engine) == {"founder"}
+        print_success("201 administrator, the invitation consumed by it, the link refused the second time")
 
     @pytest.mark.asyncio
     async def test_the_limit_answers_409_to_an_anonymous_caller_without_counts_or_billing_link(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -748,6 +776,44 @@ class TestRegistrationModeLockedByTheVariable:
         assert after_save[MODE_KEY][0] == "invite" and after_save[MODE_KEY][2] is not None, f"saved, with its author: {after_save}"
         assert refused.status_code == 422, f"only open, invite and disabled: {refused.status_code} {refused.text}"
         assert await _stored_settings(private.engine, MODE_KEY) == after_save
+
+
+# ============================================================================
+# 5b. THE SETTING'S TYPE, AND THE URL VARIABLES (REVIEW OF 15/10) — IN-PROCESS
+# ============================================================================
+
+
+class TestReviewOfTheSettingAndTheUrls:
+    """The ``registration_mode`` row a new install seeds, and what an invalid URL variable does to registration: nothing."""
+
+    @pytest.mark.asyncio
+    async def test_a_new_install_seeds_registration_mode_open_as_a_str_setting(self, private: _Private) -> None:
+        """SETTING-001: on a new install, the public ``GET /settings/global/registration_mode`` answers ``open`` with ``value_type`` ``str`` — the documented type of every text setting ("str", "int", "bool", "json"), and the one migration 006 writes on an upgraded install."""
+        async with _browser(private) as client:
+            response = await client.get(MODE_SETTING)
+
+        assert response.status_code == 200, f"{response.status_code} {response.text}"
+        body = response.json()
+        assert (body.get("key"), body.get("value"), body.get("value_type")) == (MODE_KEY, "open", "str"), f"a new install seeds {MODE_KEY} open, as a 'str' setting: {body}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("variable", [PUBLIC_URL_VARIABLE, BILLING_URL_VARIABLE])
+    async def test_an_invalid_url_variable_leaves_registration_open(self, private: _Private, monkeypatch: pytest.MonkeyPatch, variable: str) -> None:
+        """URL-001 — GUARD: an invalid ``LIBREFOLIO_PUBLIC_URL`` or ``LIBREFOLIO_BILLING_URL`` closes nothing: ``GET /system/instance`` still answers open, not locked, and an open ``POST /auth/register`` still creates a regular account.
+
+        A guard: these endpoints do not read the URL variables today. It keeps a later "invalid account configuration →
+        closed" from catching a mistyped link along with the settings that really close registration.
+        """
+        await _add_user(private.engine, "alice")
+        monkeypatch.setenv(variable, "www.example.com/folio")
+
+        async with _browser(private) as client:
+            instance = await client.get(INSTANCE)
+            registered = await _register(client, "walkin")
+
+        assert instance.status_code == 200 and instance.json().get("accounts") == {"registration_mode": "open", "registration_locked": False}, f"an invalid {variable} must leave the instance open: {instance.status_code} {instance.text}"
+        assert registered.status_code == 201, f"an invalid {variable} must not stop an open registration: {registered.status_code} {registered.text}"
+        assert registered.json()["user"]["is_superuser"] is False
 
 
 # ============================================================================

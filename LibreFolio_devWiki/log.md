@@ -3467,3 +3467,10 @@ The two rows that existed only after publication are filled on [[sources/release
 `cf00fac7d`, the merge of PR #46 into `main`, with the tree of `a3fe2eb04` on `dev_release2`; the release pipeline's
 run 38540086298 is green (images `1.2.0`, `1.2.0-light` and `latest`, the `docker pull` lines on the GitHub release,
 the docs site deployed from `cf00fac7d`). Status `released`; index row updated. Graph: not updated (P-6).
+
+## [2026-10-15] file | Account link tokens travel in the URL fragment
+Release 1.3, workstream A, lot A5b. A review of the A5a docs found that `/invite?token=…` would put the token in
+uvicorn's access log (on in the Docker image) and in any proxy log; the token now travels in the fragment, before
+A5a was integrated. Filed [[decisions/link-tokens-in-the-url-fragment]]; updated [[domains/auth]] (registration
+modes, invitations, admin API, limit, K-5 until A7, what comes next in workstream A) and [[features/F-001]] (the
+register link reads `GET /system/instance`). Graph: not updated (P-6).

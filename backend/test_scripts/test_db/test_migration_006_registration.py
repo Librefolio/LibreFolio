@@ -1,7 +1,7 @@
 """Migration ``006_registration_mode``: who may create an account (plan phase01Accounts §17 A5.1, lot A5a, contract point 1).
 
 Until 1.3 one boolean row decided it, ``global_settings.enable_registration``. Release 1.3 has three modes — ``open``,
-``invite``, ``disabled`` — held by one string row, ``registration_mode``, and 006 converts the first into the second on
+``invite``, ``disabled`` — held by one row, ``registration_mode``, and 006 converts the first into the second on
 installations that hold real data. Data only: no table, no column. The contract pinned here:
 
 1. The revision: id ``006_registration_mode`` (21 characters; ``alembic_version.version_num`` holds 32), in
@@ -11,8 +11,10 @@ installations that hold real data. Data only: no table, no column. The contract 
    ``bool`` as ``value.lower() in ("true", "1", "yes", "on")`` — no strip — and anything else as False. So the new row
    is ``open`` for those four spellings in any case, and ``disabled`` for every other value: ``false``, ``0``, ``no``,
    ``off``, the empty string, odd text, a value with spaces around it. Fail-closed, and what the server already did with
-   that row. The new row has ``value_type`` ``string`` and the description «Who may create an account: open, invite or
-   disabled»; ``updated_at`` and ``updated_by_user_id`` are the old row's, ``NULL`` included; the old row is gone.
+   that row. The new row has ``value_type`` ``str`` — the type of every text setting in ``schemas/settings.py``
+   ("str", "int", "bool", "json"; review of 15/10), so the row an upgrade writes is the row a new install seeds — and the
+   description «Who may create an account: open, invite or disabled»; ``updated_at`` and ``updated_by_user_id`` are the
+   old row's, ``NULL`` included; the old row is gone.
 3. The downgrade converts back: ``open`` → ``"true"``, ``invite`` and ``disabled`` → ``"false"``; ``value_type``
    ``bool``, the description «Allow new user registration», the metadata copied, the new row gone.
 4. Idempotent both ways. An upgrade that finds ``registration_mode`` already there keeps it exactly as it is and only
@@ -30,7 +32,8 @@ Safety and fidelity: the harness of ``test_migration_005_accounts``, reused as i
 real install holds them, never through the models.
 
 Red until the migration exists: every test migrates to ``006_registration_mode`` (Alembic cannot locate it) or first
-checks that the database it reads includes it.
+checks that the database it reads includes it. Since the review of 15/10, the cases that read the converted row are red
+until 006 writes ``value_type`` ``str`` instead of ``string``.
 """
 
 from __future__ import annotations
@@ -41,6 +44,7 @@ from typing import Any, Optional
 
 import pytest
 
+from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS
 from backend.test_scripts.test_db.test_migration_005_accounts import (
     REV_005,
     Rows,
@@ -62,6 +66,8 @@ REV_006 = "006_registration_mode"
 OLD_KEY = "enable_registration"
 NEW_KEY = "registration_mode"
 NEW_DESCRIPTION = "Who may create an account: open, invite or disabled"
+#: The value_type of every text setting in schemas/settings.py ("str", "int", "bool", "json"): what a new install seeds.
+NEW_TYPE = "str"
 OLD_DESCRIPTION = "Allow new user registration"
 # Alembic's own bookkeeping: its row is expected to change.
 BOOKKEEPING = frozenset({"alembic_version"})
@@ -217,11 +223,11 @@ def test_the_upgrade_converts_enable_registration_as_the_application_read_it(at_
     assert OLD_KEY not in settings, f"the upgrade must delete {OLD_KEY}: {settings}"
     assert settings.get(NEW_KEY) == (
         mode,
-        "string",
+        NEW_TYPE,
         NEW_DESCRIPTION,
         STAMP,
         author,
-    ), f"{OLD_KEY}={old_value!r} was read as {'True' if mode == 'open' else 'False'} by the application until now (value.lower() in true/1/yes/on, no strip): {NEW_KEY} must be {mode!r}, a string with its description, written at {STAMP} by user {author}; got {settings.get(NEW_KEY)}"
+    ), f"{OLD_KEY}={old_value!r} was read as {'True' if mode == 'open' else 'False'} by the application until now (value.lower() in true/1/yes/on, no strip): {NEW_KEY} must be {mode!r}, value_type {NEW_TYPE!r} with its description, written at {STAMP} by user {author}; got {settings.get(NEW_KEY)}"
     assert _others(settings) == neighbours, f"the upgrade touched other settings: {_others(settings)}"
     print_success(f"{old_value!r} → {mode}, metadata copied, neighbours untouched")
 
@@ -237,8 +243,29 @@ def test_the_upgrade_keeps_a_row_without_an_author_without_one(at_005: Path, tmp
     _migrate(db, "upgrade", REV_006)
     _assert_includes_006(db)
 
-    assert _settings(db) == {NEW_KEY: ("open", "string", NEW_DESCRIPTION, STAMP, None)}
+    assert _settings(db) == {NEW_KEY: ("open", NEW_TYPE, NEW_DESCRIPTION, STAMP, None)}
     print_success("open, written at the old row's time, by nobody")
+
+
+def test_the_converted_row_is_the_row_a_new_install_seeds(at_005: Path, tmp_path: Path) -> None:
+    """Contract 2 (review of 15/10): the ``value_type`` and the description 006 writes are the registry's, ``GLOBAL_SETTINGS_DEFAULTS["registration_mode"]``, from which a new install seeds its row: an upgraded install and a new one hold the same row.
+
+    GUARD: it compares the migration with the registry, whatever both say, so that they cannot drift apart again;
+    ``NEW_TYPE`` pins what they say.
+    """
+    print_section("Contract 2: the converted row is a new install's row")
+    db = _copy(at_005, tmp_path / "app.db")
+    with _foreign_keys_on(db) as conn:
+        _write_setting(conn, OLD_KEY, ("true", "bool", "Allow new users to register", STAMP, None))
+        conn.commit()
+
+    _migrate(db, "upgrade", REV_006)
+    _assert_includes_006(db)
+    converted = _settings(db).get(NEW_KEY)
+    seeded = GLOBAL_SETTINGS_DEFAULTS[NEW_KEY]
+
+    assert converted is not None and converted[1:3] == (seeded["type"], seeded["description"]), f"the migration writes {converted}, a new install seeds {seeded}: an upgraded install and a new one must hold the same row"
+    print_success(f"value_type {seeded['type']!r} and the description, as a new install seeds them")
 
 
 # =============================================================================
@@ -255,7 +282,7 @@ def test_the_downgrade_converts_registration_mode_back(at_005: Path, tmp_path: P
     _assert_includes_006(db)
     with _foreign_keys_on(db) as conn:
         author = _insert_user(conn, "author")
-        _write_setting(conn, NEW_KEY, (mode, "string", NEW_DESCRIPTION, STAMP, author))
+        _write_setting(conn, NEW_KEY, (mode, NEW_TYPE, NEW_DESCRIPTION, STAMP, author))
         neighbours = _write_neighbours(conn, author)
         conn.commit()
 
@@ -282,7 +309,7 @@ def test_an_upgrade_that_finds_registration_mode_keeps_it_and_drops_the_old_row(
     """
     print_section("Contract 4: the upgrade keeps an existing registration_mode")
     db = _copy(at_005, tmp_path / "app.db")
-    existing: Setting = ("invite", "string", "Seeded before the migration ran", NEIGHBOUR_STAMP, None)
+    existing: Setting = ("invite", NEW_TYPE, "Seeded before the migration ran", NEIGHBOUR_STAMP, None)
     with _foreign_keys_on(db) as conn:
         author = _insert_user(conn, "author")
         _write_setting(conn, OLD_KEY, ("true", "bool", "Allow new users to register", STAMP, author))
@@ -309,7 +336,7 @@ def test_a_downgrade_that_finds_enable_registration_keeps_it_and_drops_the_new_r
     existing: Setting = ("true", "bool", "Allow new users to register", NEIGHBOUR_STAMP, None)
     with _foreign_keys_on(db) as conn:
         author = _insert_user(conn, "author")
-        _write_setting(conn, NEW_KEY, ("disabled", "string", NEW_DESCRIPTION, STAMP, author))
+        _write_setting(conn, NEW_KEY, ("disabled", NEW_TYPE, NEW_DESCRIPTION, STAMP, author))
         _write_setting(conn, OLD_KEY, existing)
         neighbours = _write_neighbours(conn, author)
         conn.commit()
@@ -391,7 +418,7 @@ def test_a_1_1_install_upgraded_to_head_holds_its_mode_with_its_metadata(install
 
     assert _revision(db) == _scripts().get_current_head()
     assert OLD_KEY not in settings
-    assert settings.get(NEW_KEY) == ("disabled", "string", NEW_DESCRIPTION, V110_ROW_STAMP, V110_ROW_AUTHOR), f"the 1.1 install had registration off: {NEW_KEY} must be disabled, by user {V110_ROW_AUTHOR} at {V110_ROW_STAMP}; got {settings.get(NEW_KEY)}"
+    assert settings.get(NEW_KEY) == ("disabled", NEW_TYPE, NEW_DESCRIPTION, V110_ROW_STAMP, V110_ROW_AUTHOR), f"the 1.1 install had registration off: {NEW_KEY} must be disabled, value_type {NEW_TYPE!r}, by user {V110_ROW_AUTHOR} at {V110_ROW_STAMP}; got {settings.get(NEW_KEY)}"
     print_success("enable_registration=false became registration_mode=disabled, same author, same time")
 
 

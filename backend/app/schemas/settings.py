@@ -288,7 +288,7 @@ GLOBAL_SETTINGS_DEFAULTS = {
     # Who may create an account; LIBREFOLIO_REGISTRATION, when set, pins it and the row is read-only.
     "registration_mode": {
         "value": "open",
-        "type": "string",
+        "type": "str",
         "description": "Who may create an account: open, invite or disabled",
     },
     # placeholder — email verification not implemented (see TODO_FUTURI email server)

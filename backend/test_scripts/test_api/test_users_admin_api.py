@@ -10,7 +10,9 @@ An administrator manages the accounts from the API. Every route below sits behin
    (null without a limit, 0 when the variable is not valid: a bad limit closes); ``billing_url`` is
    ``LIBREFOLIO_BILLING_URL``, null when unset.
 2. ``POST /users/invites`` ``{grants_admin=false, email?}`` → 201 ``{invite, token, path, url}``: ``invite`` as listed,
-   ``token`` the plaintext shown once, ``path`` its page (``/invite?token=…``), ``url`` the public URL plus the path, null
+   ``token`` the plaintext shown once, ``path`` its page with the token in the URL fragment (``/invite#token=…``: a
+   browser never sends a fragment, so the token stays out of the access log and of proxy logs), ``url`` the public URL
+   plus the path, null
    without ``LIBREFOLIO_PUBLIC_URL``. An invitation lives 7 days and only its hash is stored. 409 ``USER_LIMIT_REACHED``
    with ``limit``, ``used`` and ``billing_url`` when ``used >= max_users`` (the caller is an administrator: the counts and
    the subscription link are for them); 409 ``REGISTRATION_DISABLED`` while registration is ``disabled``, by the row or
@@ -23,9 +25,9 @@ An administrator manages the accounts from the API. Every route below sits behin
    ``LAST_ADMIN`` to deactivate or demote the last active administrator; 409 ``USER_LIMIT_REACHED`` (with the counts) to
    reactivate an account over the limit, which blocks nothing else. Deactivation and demotion end the account's sessions
    (A4b); activation and promotion end none, and a reactivation does not bring the old sessions back.
-6. ``POST /users/{user_id}/password-reset-link`` → 201 ``{token, path, url, expires_at}``, 30 minutes, after revoking the
-   account's other live reset links (another account's stay); the link works once with ``POST /auth/password-reset``.
-   404.
+6. ``POST /users/{user_id}/password-reset-link`` → 201 ``{token, path, url, expires_at}``, ``path`` being
+   ``/reset-password#token=…``, 30 minutes, after revoking the account's other live reset links (another account's
+   stay); the link works once with ``POST /auth/password-reset``. 404.
 7. ``POST /users/{user_id}/sessions/revoke`` → 204: every session of that account ends, no other one; 404.
 8. ``POST /users/{user_id}/onboarding/reset`` ``{flow?}`` → 204: every flow, steps included, or only the one named, back
    to ``pending``, as the account itself reads it from ``GET /settings/onboarding`` (21-5); an unknown flow is a 422 that
@@ -76,6 +78,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 import pytest
@@ -98,7 +101,7 @@ from backend.app.db.session import get_async_engine, get_session_generator
 from backend.app.services.accounts import auth_service, user_service
 from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
 from backend.app.services.accounts.settings_service import initialize_global_settings
-from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, consume_token, hash_token, issue_token, token_path
+from backend.app.services.accounts.token_service import DEFAULT_TTL, IssuedToken, consume_token, hash_token, issue_token
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_db_config import verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
@@ -131,6 +134,8 @@ ISSUED_INVITE_KEYS = frozenset({"invite", "token", "path", "url"})
 RESET_LINK_KEYS = frozenset({"token", "path", "url", "expires_at"})
 #: secrets.token_urlsafe(32): 43 URL-safe characters.
 TOKEN_SHAPE = re.compile(r"[A-Za-z0-9_-]{43}")
+#: The page of each kind of link; the token follows in the fragment, ``#token=…``.
+LINK_PAGES = {INVITE: "/invite", PASSWORD_RESET: "/reset-password"}
 #: GET /auth/me's answer to a cookie whose session was ended.
 SESSION_EXPIRED = (401, {"detail": "Session expired or invalid"})
 
@@ -253,6 +258,19 @@ def _user_item_violations(item: Any, account: _Account, *, active: bool, superus
     return violations
 
 
+def _link_path_violations(path: Any, purpose: AccountTokenPurpose, token: str) -> list[str]:
+    """What is wrong with a link's ``path``: the purpose's page, no query, and the token alone in the URL fragment (``#token=…``).
+
+    The fragment because a browser never sends it: the token stays out of the access log and of every proxy's log.
+    """
+    if not isinstance(path, str):
+        return [f"path: a string expected, got {path!r}"]
+    parts = urlparse(path)
+    found = {"page": (parts.scheme, parts.netloc, parts.path), "query": parts.query, "fragment": parse_qs(parts.fragment)}
+    expected = {"page": ("", "", LINK_PAGES[purpose]), "query": "", "fragment": {"token": [token]}}
+    return [] if found == expected else [f"path: expected {LINK_PAGES[purpose]}#token=<the token>, nothing in the query; got {path!r}, read as {found}"]
+
+
 def _issued_invite_violations(issued: Any, *, grants_admin: bool, email: Optional[str], created_by: int) -> list[str]:
     """What is wrong with the 201 of POST /users/invites: its keys, the token, its path, the invitation and its seven days."""
     if not isinstance(issued, dict) or set(issued) != ISSUED_INVITE_KEYS:
@@ -260,7 +278,7 @@ def _issued_invite_violations(issued: Any, *, grants_admin: bool, email: Optiona
     token, invite = str(issued["token"]), issued["invite"]
     violations: list[str] = []
     _expect(violations, TOKEN_SHAPE.fullmatch(token) is not None, f"token: 43 URL-safe characters expected, got {token!r}")
-    _expect(violations, issued["path"] == token_path(INVITE, token), f"path: expected {token_path(INVITE, token)!r}, got {issued['path']!r}")
+    violations += _link_path_violations(issued["path"], INVITE, token)
     if not isinstance(invite, dict) or set(invite) != INVITE_ITEM_KEYS:
         return [*violations, f"invite: exactly {sorted(INVITE_ITEM_KEYS)} expected, got {invite}"]
     found = (invite["grants_admin"], invite["email"], invite["created_by_user_id"])
@@ -278,15 +296,19 @@ def _reset_link_violations(link: Any) -> list[str]:
     token = str(link["token"])
     violations: list[str] = []
     _expect(violations, TOKEN_SHAPE.fullmatch(token) is not None, f"token: 43 URL-safe characters expected, got {token!r}")
-    _expect(violations, link["path"] == token_path(PASSWORD_RESET, token), f"path: expected {token_path(PASSWORD_RESET, token)!r}, got {link['path']!r}")
+    violations += _link_path_violations(link["path"], PASSWORD_RESET, token)
     _expect(violations, _instant(link["expires_at"]) is not None, f"expires_at is not a timestamp: {link['expires_at']!r}")
     return violations
 
 
 def _url_violations(body: dict[str, Any], public_origin: Optional[str]) -> list[str]:
-    """``url`` is the public URL (its trailing slash dropped) plus ``path``, or null without one."""
+    """``url`` is the public URL (its trailing slash dropped) plus ``path``, the token still in the fragment; or null without a public URL."""
     expected = None if public_origin is None else f"{public_origin}{body.get('path')}"
-    return [] if body.get("url") == expected else [f"url: expected {expected!r}, got {body.get('url')!r} (path {body.get('path')!r})"]
+    if body.get("url") != expected:
+        return [f"url: expected {expected!r}, got {body.get('url')!r} (path {body.get('path')!r})"]
+    url_parts = urlparse(expected) if expected else None
+    in_the_fragment = url_parts is None or (url_parts.query == "" and parse_qs(url_parts.fragment) == {"token": [str(body.get("token"))]})
+    return [] if in_the_fragment else [f"url: the token must travel in the fragment, not in the query: {expected!r}"]
 
 
 def _onboarding_reading(body: Any) -> dict[str, tuple[str, dict[str, str]]]:
@@ -1322,7 +1344,7 @@ class TestLinksAndInvitationsInProcess:
         origin = PUBLIC_ORIGIN if public_url else None
         violations: list[str] = []
         for label, body, purpose in (("invitation", invitation.json(), INVITE), ("reset link", link.json(), PASSWORD_RESET)):
-            _expect(violations, body.get("path") == token_path(purpose, str(body.get("token"))), f"{label}: path {body.get('path')!r} is not the page of its token")
+            violations += [f"{label}: {problem}" for problem in _link_path_violations(body.get("path"), purpose, str(body.get("token")))]
             violations += [f"{label}: {problem}" for problem in _url_violations(body, origin)]
         assert not violations, f"The links must follow LIBREFOLIO_PUBLIC_URL:{_verdict(violations)}"
         print_success(f"url {'built on the public URL' if public_url else 'null'}")

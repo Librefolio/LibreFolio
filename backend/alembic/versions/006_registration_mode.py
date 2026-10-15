@@ -55,7 +55,7 @@ def upgrade() -> None:
                 INSERT INTO global_settings (key, value, value_type, description, updated_at, updated_by_user_id)
                 SELECT :new_key,
                        CASE WHEN lower(value) IN ('true', '1', 'yes', 'on') THEN 'open' ELSE 'disabled' END,
-                       'string', :description, updated_at, updated_by_user_id
+                       'str', :description, updated_at, updated_by_user_id
                 FROM global_settings WHERE key = :old_key
                 """),
             {"new_key": _NEW_KEY, "old_key": _OLD_KEY, "description": _NEW_DESCRIPTION},
