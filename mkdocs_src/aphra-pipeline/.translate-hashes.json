@@ -6424,7 +6424,7 @@
     }
   },
   "user/dashboard/charts.en.md": {
-    "md5": "436647e55202365337ce462d3856b6a0",
+    "md5": "d441e03de61e06fd1fe61876d22ecb93",
     "langs_done": [
       "es",
       "fr",
@@ -6444,7 +6444,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 247.2,
-        "stamped_at": "2026-10-12T02:45:03.889334+00:00",
+        "stamped_at": "2026-10-15T17:45:23.899769+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6457,7 +6457,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 215.1,
-        "stamped_at": "2026-10-12T02:45:03.889334+00:00",
+        "stamped_at": "2026-10-15T17:45:23.899769+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6470,7 +6470,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 183.7,
-        "stamped_at": "2026-10-12T02:45:03.889334+00:00",
+        "stamped_at": "2026-10-15T17:45:23.899769+00:00",
         "stamped_by": "translate-stamp"
       }
     }

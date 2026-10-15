@@ -36,7 +36,8 @@
     import {buildCandleSeriesData, computePercentageBase, formatCandlePrice, formatVolume, hasRenderableVolume, isBullishBar, parseCandleTooltipValue} from './candlestickChartHelpers';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {truncateName} from '$lib/utils/text';
-    import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
+    import {buildResponsiveXAxisPolicy, categoryAxisLabelPatch, visiblePointCountFromZoom, ZOOM_LABEL_SETTLE_MS} from './responsiveXAxis';
+    import {clearTimer} from '$lib/utils/core/clearTimer';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
@@ -139,6 +140,39 @@
     let lastRenderedResolution: ChartResolution | null = null;
     let lastRenderedDates: string[] = [];
     let responsiveXAxisCompact = false;
+    /** The last zoom window, and the timer that re-spaces the x labels on it once the gesture settles (47-1). Plain variables: the teardown reads them. */
+    let lastZoomEvent: unknown = null;
+    let zoomLabelTimer: ReturnType<typeof setTimeout> | null = null;
+
+    /** How many of the drawn categories the last zoom left visible; undefined before any zoom. */
+    function zoomedCategoryCount(): number | undefined {
+        return visiblePointCountFromZoom(lastZoomEvent, lastRenderedDates.length) ?? undefined;
+    }
+
+    function scheduleZoomedAxisLabels(event: unknown) {
+        lastZoomEvent = event;
+        zoomLabelTimer = clearTimer(zoomLabelTimer);
+        zoomLabelTimer = setTimeout(() => {
+            zoomLabelTimer = null;
+            applyZoomedAxisLabels();
+        }, ZOOM_LABEL_SETTLE_MS);
+    }
+
+    /** Re-space the category labels on the zoomed window: the step is computed on all the points otherwise (47-1). */
+    function applyZoomedAxisLabels() {
+        if (!chartInstance || !chartContainer || lastRenderedDates.length === 0) return;
+        const visibleCount = zoomedCategoryCount();
+        if (visibleCount === undefined) return;
+        const policy = buildResponsiveXAxisPolicy({
+            width: chartContainer.clientWidth,
+            values: lastRenderedDates,
+            locale: uiLocale(),
+            axisType: 'category',
+            visibleCount,
+        });
+        responsiveXAxisCompact = policy.compact;
+        chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
+    }
 
     // =========================================================================
     // Lifecycle
@@ -177,6 +211,8 @@
         chartOptionSet = false;
         lastRenderedResolution = null;
         lastRenderedDates = [];
+        zoomLabelTimer = clearTimer(zoomLabelTimer);
+        lastZoomEvent = null;
         dataZoomTouchPanHandle?.dispose();
         dataZoomTouchPanHandle = null;
         if (chartContainer) {
@@ -220,11 +256,12 @@
                                 values: lastRenderedDates,
                                 locale: uiLocale(),
                                 axisType: 'category',
+                                visibleCount: zoomedCategoryCount(),
                             });
                             const wasCompact = responsiveXAxisCompact;
                             responsiveXAxisCompact = policy.compact;
                             if (policy.axisLabel) {
-                                chartInstance.setOption({xAxis: {axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                                chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
                             } else if (wasCompact) {
                                 renderChart();
                             }
@@ -249,8 +286,9 @@
             attachChartReady(chartInstance, chartContainer, 'candlestick');
             needsInitialLayoutStabilityPass = true;
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
-            chartInstance.on('dataZoom', () => {
+            chartInstance.on('dataZoom', (event: unknown) => {
                 if (chartInstance) updateArrowRotations(chartInstance);
+                scheduleZoomedAxisLabels(event);
             });
 
             // Measure mode: click handler
@@ -408,12 +446,29 @@
             });
         }
 
+        let savedZoom: {start: number; end: number} | null = null;
+        if (chartOptionSet && chartInstance) {
+            const currentOption = chartInstance.getOption() as {
+                dataZoom?: Array<{start?: unknown; end?: unknown}>;
+            };
+            const currentZoom = currentOption.dataZoom?.[0];
+            if (typeof currentZoom?.start === 'number' && typeof currentZoom.end === 'number') {
+                savedZoom = {
+                    start: currentZoom.start,
+                    end: currentZoom.end,
+                };
+            }
+        }
+
         // ── X-axes ──
+        // The zoom about to be restored is read first, so the labels are spaced on that window (47-1).
+        const restoredZoomCount = savedZoom ? visiblePointCountFromZoom(savedZoom, dates.length) : null;
         const xAxisPolicy = buildResponsiveXAxisPolicy({
             width: rect.width,
             values: dates,
             locale: uiLocale(),
             axisType: 'category',
+            visibleCount: restoredZoomCount ?? undefined,
         });
         responsiveXAxisCompact = xAxisPolicy.compact;
         const xAxisBase = {
@@ -549,20 +604,6 @@
             },
             series,
         };
-
-        let savedZoom: {start: number; end: number} | null = null;
-        if (chartOptionSet && chartInstance) {
-            const currentOption = chartInstance.getOption() as {
-                dataZoom?: Array<{start?: unknown; end?: unknown}>;
-            };
-            const currentZoom = currentOption.dataZoom?.[0];
-            if (typeof currentZoom?.start === 'number' && typeof currentZoom.end === 'number') {
-                savedZoom = {
-                    start: currentZoom.start,
-                    end: currentZoom.end,
-                };
-            }
-        }
 
         // Resolution switch: same ECharts tooltip-crash risk as PriceChartFull's line view
         // (full rebuild via setOption(option,true) while an axis-trigger tooltip + mousewheel
