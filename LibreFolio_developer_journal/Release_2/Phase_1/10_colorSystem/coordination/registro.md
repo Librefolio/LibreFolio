@@ -554,3 +554,659 @@
   - i test per ogni lotto.
 
   Handoff con FROZEN entro le 08:30; lo committo prima del merge di base.
+- **01:10:** la 1.3 assegna TC-6 ad A, che possiede la pagina d'accesso, il suo selettore della lingua e le
+  preferenze. Quando la voce entra con T, A aggiunge un richiamo nella sua sezione e la corregge in un suo lotto, a
+  priorità bassa.
+- **01:12:** la 1.3 integra W1 e W2 della sua workstream W, il riordino e il taglio di transazioni e broker; non
+  sono le nostre ondate di T. `dev_release2` = `998fd2701`, merge di `9198698c3` sopra `9a12e623d`.
+  - 104 file: backend, MkDocs per sviluppatori, un commento in un E2E delle transazioni e il backlog.
+  - Nessun file dei rami R, L e T, a parte il backlog, in sezioni diverse.
+  - Simulazione dei merge di base: L e T puliti, R solo con il conflitto noto della baseline.
+
+## 01:30 (15/10) — Spacchettamento di W1 e W2 (T)
+
+- **Analisi di T committata:** `48cc52e5b`, figlio di `f43aa7200`. Piano +300 righe, backlog +3 (solo un richiamo in
+  TC-2).
+  - 16 lotti:
+    - W1: 7 lotti, 35 file, m1 1.085, m2 12;
+    - W2: 9 lotti, 34 file, m1 1.501, m2 16.
+
+    Per ogni file: m1, m2, chi altro lo tocca, test e gallery.
+  - Nessun ramo attivo ha commit sui file di W1 e W2. I file in comune con la 1.3 vengono dai piani: 10 lotti su 16,
+    lista mandata alla 1.3; il via si chiede lotto per lotto.
+- **Da decidere domattina (developer o designer): Q1, che blocca W1-a.**
+  - Il problema: il colore dei controlli selezionati (casella, interruttore, giorno, preset, segmento). Il ruolo
+    `action` sulla card scura sta a 2,10:1, sotto i 3:1 di WCAG 1.4.11.
+  - Proposta di T: `--lf-checked` = focus e `--lf-on-checked` = card, a 6,03:1 e 5,13:1.
+  - Q2–Q13 non bloccano: per ogni lotto si usa la risposta, una proposta provvisoria o si lascia l'elemento legacy.
+- **H, CP4:** il suo piano scrive `InstanceNotices` con le classi ambra di `OnboardingBootstrapBanner`, e R3 lo
+  respingerebbe. Segnalato alla 1.3: deve nascere sui ruoli `warning`. T converte il banner in W2-a.
+- **Per test-author, prima dei lotti:**
+  - Vitest: `SimpleSelect.test.ts:74-76`, `DateRangePicker.test.ts:949-954`, `GlobalSettingsTab.test.ts:885`;
+  - E2E: `fx-list.spec.ts:155`, `asset-data-editor.spec.ts:115,126,287`, `fx-csv-import.spec.ts:53,56`.
+
+  Tutti leggono classi legacy.
+- **Per G, dopo la misura:** AI Export e `ServerUnreachable` non sono nella gallery. Va proposta una voce G-9 o
+  un'aggiunta.
+- **01:26, vincoli della 1.3 sui lotti di W1 e W2.** Da girare a T domattina, insieme al merge di base e alla
+  risposta su Q1.
+  - **`features/settings`, di A:** si parte dopo l'ingresso di A3 (`SettingsLayout` e la rotta `settings`), che
+    la 1.3 mi annuncia, probabilmente stanotte.
+    - Dopo A3, A aggiunge le schede Utenti e Sicurezza e cambia il registro delle impostazioni. Le righe funzionali
+      sono di A, le classi nostre: chi arriva per secondo somma.
+  - **`support` e `update-check`:** liberi dopo A3. `DonationPopupModal` solo con l'OK di A, che chiede la 1.3.
+  - **`ui/data-editor`, di W:** va in coda all'ondata. Si aspetta l'avviso dell'ingresso di K1 (P-15, I-10), che
+    viene dopo l'I1 in corso.
+  - **`SyncModalBase` e `PageSyncModal`, di X (C-66):** possiamo andare prima noi; X somma dopo.
+  - **Liberi:**
+    - `ChangelogModal` (H);
+    - `ServerUnreachable` e le modali dello scheduler (Z, non ancora partito);
+    - `features/ai-export` (J, lotto fra gli ultimi).
+  - **H, CP4:** la 1.3 ha girato ad H la nota su `InstanceNotices`.
+- **01:36:** la 1.3 integra **H CP2a**, il pacchetto `config/` che raccoglie le letture d'ambiente. Avanzamento
+  veloce a `60f8a35ce`; backend, devWiki e MkDocs; nessun file dei nostri rami.
+  - Controllo per la misura di domani: le variabili della corsia sono lette come prima, ora da
+    `backend/app/config/`.
+    - `LIBREFOLIO_TEST_MODE` in `is_test_mode()`;
+    - `LIBREFOLIO_TEST_DATA_DIR` in `get_data_dir()`, con la stessa validazione;
+    - `LIBREFOLIO_LOG_LEVEL`, cioè le righe DEBUG per `live_price_check`;
+    - `LIBREFOLIO_NO_SCHEDULER`.
+
+    `gallery_snapshot.sh` e `live_price_check` non cambiano.
+- **02:20:** la 1.3 integra **X CP1 e CP2a**: un registro per famiglia di plugin e i servizi degli asset in
+  `services/assets/`. Avanzamento veloce a `64a5a3fe7`, 325 file.
+  - Nei nostri file X ha cambiato solo commenti, e l'avviso non li citava (gliel'ho fatto notare):
+    - `scripts/visual_review/live_price_check.py`: il percorso di `price_query.py` nel commento;
+    - `scripts/test_runner/_server.py`: un commento.
+  - I 7 marcatori di `live_price_check` sono ancora emessi dal backend, con gli stessi conteggi prima e dopo.
+  - Simulazione dei merge di base: L e T puliti. `runner_architecture.md`, toccato anche da L, si fonde da solo;
+    R ha solo il conflitto noto della baseline.
+- **03:01:** la 1.3 integra **W I1** (rifiuti d'accesso, pulizia BRIM): `dc7e4e48e`, merge di `625e3dacc` sopra
+  `ae998da78`, più un commit di CHANGELOG e journal.
+  - Frontend: `TransactionBulkModal.svelte` (nomi dei broker in sola lettura, nessuna classe) ed
+    `e2e/transactions/tx-broker-access.spec.ts`. Nessuno dei due è nei rami R, L, T o G.
+  - Simulazione dei merge di base invariata.
+  - Prossimo ingresso, prima delle 08:45: A3 (registro delle schede di Settings, `PasswordInput`, `LoginCard`,
+    `e2e/global-setup.ts`). T-3 e T-5 non toccano questi file. Con A3 dentro, `features/settings` è libera per T.
+- **Risveglio programmato alle 08:40:** conferma della finestra alla 1.3 e misura di G alle 09:00.
+- **03:17:** la 1.3 integra **A3**. Avanzamento veloce a `90491071d`, 37 file.
+  - La pagina Impostazioni ora si costruisce da un registro delle schede: nuovo `settingsTabs.ts`, markup e classi
+    invariati.
+  - `PasswordInput`: aria-label e title tradotti; il pulsante è raggiungibile da tastiera.
+  - `LoginCard`: gli errori di accesso sono chiavi di catalogo.
+  - `e2e/global-setup.ts`: solo `e2e_test_admin` è amministratore. Nel DB popolato non cambia niente; le nostre
+    spec (`theme-roles`, `designer-lab`) entrano come `TEST_USER`.
+  - In comune con R e T: `_frontend_utility.py`, che si fonde da solo. Ho controllato il file fuso: si compila,
+    nessuna voce duplicata, restano i gate di R e i test nuovi di A3. Ho chiesto alla 1.3 di aggiungerlo ai
+    percorsi controllati.
+  - Simulazione dei merge di base invariata: L e T puliti; R solo con il conflitto noto della baseline.
+  - **Per T domattina:**
+    - `features/settings` ora è libera;
+    - va rifatta la lista dei lotti di W2 su settings: la rotta passa dal registro delle schede.
+  - **Prossimi della 1.3, solo backend:** X CP2b verso le 04:30, poi J CP-1, con il loro avviso.
+- **03:45:** la 1.3 integra **H CP3**: segreti letti dai file `*_FILE`, chiave d'istanza, controlli all'avvio.
+  Merge `d08d9358f`, poi `940297265` di record.
+  - Nessun file del frontend né del programma colori.
+  - Nella corsia di test `JWT_SECRET` non viene più dal `.env`. `dev.py` è tra le sorgenti dei codec dei Tool,
+    quindi il primo server dopo l'ingresso ricostruisce il frontend.
+- **Prova della corsia 6150 su `940297265`**, per anticipare un eventuale blocco all'avvio prima della finestra:
+  - `test db populate --force --clean` in `/tmp/librefolio-r2-main`: rc 0 in 10 s;
+  - `front-utility theme-roles`: 8/8 verdi in 3 min, compresi l'avvio del server della corsia e la ricostruzione.
+  - Dopo la prova il checkout è pulito e la porta 6150 è libera. I controlli all'avvio di H CP3 non bloccano la
+    corsia.
+- **03:50:** la 1.3 integra **X CP2b**: i servizi degli asset divisi per tema, `api/v1/assets/` diventa un pacchetto,
+  API identica. Avanzamento veloce a `92b42d796`, 126 file, solo backend.
+  - Con i rami ha in comune solo il backlog.
+  - I 7 marcatori di `live_price_check` sono ancora emessi, con gli stessi conteggi.
+  - Simulazione dei merge di base invariata.
+- **04:05:** la 1.3 integra **W K1**. Avanzamento veloce a `d915c869f`, 27 file.
+  - `DataEditor` e `DataImportModal`: testi, aria-label e due `data-testid`; classi invariate.
+  - `TransactionFormModal`: un suggerimento nuovo, già sui ruoli (`text-lf-muted`).
+  - i18n nelle 4 lingue e test.
+  - In comune con R e T: `_frontend_utility.py`, con una riga in `core-unit`.
+    - Si fonde da solo e si compila.
+    - Le 16 voci doppie del file fuso c'erano già nel target, per scelta (un test in una categoria e nel registro);
+      nessuna nuova.
+  - Simulazione dei merge di base invariata.
+  - **Per T domattina:**
+    - `ui/data-editor` ora è libera;
+    - nella lista di test-author va aggiunto `e2e/assets/asset-data-editor.spec.ts:384`, che cerca il contatore
+      delle righe vecchie per classe (`span.text-amber-600, span.text-amber-400`): serve un `data-testid`.
+- **04:19:** la 1.3 integra il lotto `web_link_finder` di H (nuovo `config/plugins.py`, la chiave da file).
+  Avanzamento veloce a `9dda5ccd9`, 11 file, solo backend e doc. Nessun file dei rami.
+- **04:29:** la 1.3 integra **J CP-1**: il PAC diviso per tema, API identica. Avanzamento veloce a `e1fbc801f`,
+  84 file. Del frontend cambia solo un commento in `pac-allocator/.../result/model.ts`. Nessun file dei rami,
+  oltre al backlog; simulazione dei merge di base invariata.
+- **04:38:** la 1.3 integra **W4 CP6**: i moduli BRIM in `services/brim/`, solo spostamenti, API identica.
+  Avanzamento veloce a `155d9b050`, 100 file. Del frontend cambia solo un commento in `lib/utils/brim/pluginKind.ts`
+  e nel suo test. Simulazione dei merge di base invariata.
+- **05:15:** la 1.3 integra **A4**: migrazione Alembic 005, con la tabella `account_tokens` e tre colonne in
+  `users`. Avanzamento veloce a `e476d2ed4`, 14 file, solo backend e doc; nessun file dei rami.
+  - La gallery non ne risente: a ogni run `gallery_snapshot.sh` lancia `dev.py mkdocs gallery`, che ripopola il DB
+    da zero (`dev.py:980`, `db populate --force --clean --with-static --with-reports`).
+  - I DB delle corsie dei figli sono di prima della 005: il runner li migra da solo dopo il merge di base.
+- **05:24:** la 1.3 integra **X CP3**: il servizio dei cambi diviso in `services/fx/` e il router in `api/v1/fx/`,
+  API identica. Avanzamento veloce a `8000aba5a`, 100 file, solo backend. Simulazione dei merge di base
+  invariata.
+  - **Per il checkpoint 2 di G**, dopo la finestra: aggiornare tre commenti con percorsi tolti dal riordino.
+    - `galleryOfflineData.ts:62`: `api/v1/fx.py` → `api/v1/fx/providers.py` (`list_providers`);
+    - `galleryProviderCompare.ts:40`: `asset_sources/search.py` → `services/assets/search.py`;
+    - `galleryReportSets.ts:398`: lo stesso cambio.
+
+    Si aggiungono alla correzione della docstring di `live_price_check.py`.
+- **05:36:** la 1.3 integra **W7a e W7b**: gli schemi delle transazioni in `schemas/transactions/`, API identica.
+  Avanzamento veloce a `1cd7300f3`, 95 file, solo backend; del frontend cambia un commento in un test.
+  Simulazione dei merge di base invariata.
+- **05:54:** la 1.3 integra **X CP3b**: i test dei fornitori di cambi senza rete, docstring e commenti.
+  Avanzamento veloce a `63a1f675c`, 14 file. Del frontend cambiano 5 file, senza classi né markup.
+  - In `fx-csv-import.spec.ts` la ✕ ora si prende col `data-testid` (righe 247 e 276).
+  - Le righe 53 e 56, quelle della lista di test-author di T, leggono ancora `.text-red-500`, e la voce resta.
+  - Nessun file dei rami; simulazione dei merge di base invariata.
+- **05:58:** la 1.3 integra **J C-93**: 7 test dell'AI Export che lasciavano aperte connessioni al DB di prova ora
+  le chiudono. Merge `c412f8dad`; solo test backend, journal e backlog. Simulazione dei merge di base invariata.
+- **06:08:** la 1.3 integra **H CP4**, l'ultimo ingresso con frontend prima della finestra. Avanzamento veloce a
+  `1b3eb54c7`, 47 file.
+  - Nuovo `lib/features/instance/`. `InstanceNotices` usa solo ruoli: `bg-lf-*-soft`, `border-lf-*-line`,
+    `text-lf-*-on-soft`, niente `dark:`; la nota delle 01:30 è stata seguita.
+  - Senza avvisi non disegna nessun nodo. In più c'è solo una `GET /api/v1/system/instance` all'avvio, che non
+    blocca il render: per la gallery non cambia niente.
+  - **In comune con T:** `routes/(app)/+layout.svelte` (righe aggiunte da H) e `_frontend_utility.py`.
+    - La simulazione del merge di base di T su `1b3eb54c7` è pulita.
+    - Il layout fuso tiene le 6 `bg-lf-app` e le 4 `text-lf-link` di T-3 più `<InstanceNotices />`.
+    - Il runner fuso si compila, senza doppioni nuovi, sia per R sia per T.
+  - Simulazione dei merge di base: L e T puliti; R solo con il conflitto noto della baseline.
+- **06:24:** la 1.3 integra **J G-8**: il catalogo dei Tool e la diagnostica dei plugin non scadono più sotto
+  carico. Il login era verificato dentro la finestra d'ingresso di 2 s e oltre quella dava 503; ora corre nel budget
+  di 20 s. Merge `c75f08101`, solo backend.
+  - È la voce G-8 di G; la riga nel backlog, sezione G, la chiude la 1.3 con il riferimento.
+  - La misura delle 09:00 la comprende già.
+- **06:34:** la 1.3 integra **X CP4**: gli schemi degli asset in `schemas/assets/`, API identica. Merge
+  `7f4618494`, 37 file. Del frontend cambiano solo 3 commenti in `ScheduledInvestmentEditor.svelte`; nessun file
+  dei rami. Simulazione dei merge di base invariata.
+- **06:46:** la 1.3 integra **W K2a**: DEGIRO e Generic CSV rifiutano un file con codici tradotti nel wizard.
+  Avanzamento veloce a `62c964242`. Del frontend cambiano solo le 4 sorgenti i18n `importWizard` (7 chiavi nuove)
+  e un test, senza componenti né classi. Nessun file dei rami; simulazione dei merge di base invariata.
+- **06:54:** la 1.3 integra **A4b**: il JWT porta la versione di sessione, e un cambio password chiude le altre
+  sessioni. Merge `dbf89cdd5`, 34 file.
+  - Del frontend cambia solo `e2e/settings.spec.ts`, con un test nuovo che la gallery non usa.
+  - Nessun file dei rami; simulazione dei merge di base invariata.
+- **06:55:** la 1.3 annuncia in anticipo **W E0**: logica di `CsvEditor` (doppioni per data e tipo) e di
+  `DataEditor` (selettore della data), più due `data-testid` in `DataImportModal` e `TransactionPickerModal`.
+  Entra dopo la finestra.
+  - Via libera dato: nessun ramo lavora su quei file.
+  - Nel piano di T, `ui/data-editor` è W1-f2, l'ultimo lotto di W1, quindi non prima di domani: T converte sopra
+    l'ingresso di E0.
+  - `TransactionPickerModal` è in W4.
+- **07:12:** la 1.3 integra **X J-5**. Merge `743fca514` sopra `ee5d81a6f`; una riga in
+  `services/assets/core.py`: `asyncio.set_event_loop(None)` prima di `loop.close()` nel thread del provider.
+  - È igiene dei loop del thread: non tocca il percorso dei prezzi dal vivo.
+  - Simulazione dei merge di base invariata.
+  - In arrivo prima delle 08:45: H CP5a, solo backend, un commento in `dev.py` e doc.
+- **07:17:** la 1.3 integra **H CP5a**: nuovo `/system/ready`; `/system/info` senza sessione dà solo la versione;
+  `pyproject.toml` alla versione 0.0.0. Il client e la build si rifanno alla prossima run, e ora `LF_APP_VERSION`
+  vince anche nel backend.
+- **07:20, buco trovato nella misura:**
+  - la barra laterale, il changelog e la scheda Informazioni mostrano `git describe`, diverso fra due commit
+    qualsiasi;
+  - le run di G erano tutte su `b631308d5`, quindi il problema non era mai emerso;
+  - ogni candidata, con il suo SHA, avrebbe differito da r1 in ogni schermata desktop, e il cancello «stesso
+    aspetto» di R sarebbe stato tutto rumore.
+- **Correzione `70c84accc`**, `fix(scripts): pin app version in gallery snapshots`:
+  - `gallery_snapshot.sh` esporta `LF_APP_VERSION`, con valore predefinito `v0.0.0-review`;
+  - se la build del checkout non è di debug o non porta quella versione, la rifà prima con `front build --debug`
+    (`build.log`);
+  - `meta.json` registra `app_version`; README aggiornato.
+  - Prova `zz-pin-test-0735` («about tab», solo desktop, corsia 6150): build rifatta, 8 PNG, rc 0. La scheda
+    Informazioni mostra «Versione v0.0.0-review» e la barra laterale `v0.0.0-review`.
+  - Il `front build` a mano dei comandi di G non serve più: è stato tolto dal risveglio delle 08:40.
+- **07:36, annuncio «chi parte prima» della 1.3: W FE8a**, il taglio di `ImportWizardModal`,
+  `TransactionBulkModal` e `TransactionFormModal`, senza spostare la cartella.
+  - Via libera dato: nessun ramo dei colori li tocca, né nei commit né nei worktree. Nel piano di T sono
+    nell'ondata W4, molto più avanti.
+  - Record da ripartire con `--split` nel commit del taglio: 595 + `#dc2626`, 190 e 218.
+  - Durante la finestra W scrive solo codice; l'ingresso è dopo, in fila con R, L e T.
+- **07:40:** la 1.3 integra **J-6** (e2cb55054). Una fixture autouse in `conftest.py` manda in ERROR,
+  al teardown, ogni test pytest del backend che lascia aperta una connessione aiosqlite sua. Nuova azione
+  `utils gate-aiosqlite-leak`. Solo backend: gallerie ed E2E non cambiano. Simulazione dei merge di base invariata.
+- **07:45, coda degli ingressi frontend, concordata con la 1.3:**
+  - **Prima della finestra:** E0 di W (`ui/data-editor`, la riga 38 di `EventDataImportModal`, una E2E) entra se
+    riesce, così fa parte di X; altrimenti dopo R e L.
+  - **Dopo la finestra:**
+    1. R e L, appena passano le candidate: il primo con avanzamento veloce, il secondo rifonde;
+    2. i lotti della 1.3, ognuno con il suo avviso: H CP5b (`AboutTab`, `package.json` 0.0.0), H CP6 (pagina di
+       blocco), W FE8a, A5 (inviti e registrazione);
+    3. T quando il developer approva T-3 e T-5.
+  - **A5 non aspetta T:** T-3 e T-5 non toccano `LoginCard`, `RegisterCard` né `routes/+page.svelte`. A5 deve però
+    tenere i `data-testid` della E2E `theme-roles` ed eseguirla nella sua validazione.
+- **07:51:** E0 è entrato prima della finestra: merge `d226bc69e` sopra `989991f78`. Fa parte di X.
+  - Simulazione dei merge di base invariata.
+  - Ordine confermato dalla 1.3, che ha girato ad A la condizione sui `data-testid`.
+  - FE8a entrerà a pezzi (Form, Bulk, Wizard), ognuno con il suo avviso, nelle cartelle nuove
+    `components/transactions/{form,bulk,wizard}/`; con FE8b `wizard/` confluirà in `import/`.
+- **07:53, via libera a J C-94.** `dev.py mkdocs gallery` costruirà frontend e doc con
+  `server --test --build-only` prima del tempo massimo del webServer di Playwright; lo stesso vale in `_server.py`.
+  `dev.py` si ferma subito se mancano i `node_modules`.
+  - Condizione: `LF_APP_VERSION` deve arrivare al passo di build. Nella prova di J, con `LF_APP_VERSION=x-c94`,
+    la barra laterale deve mostrare `x-c94`.
+  - Ingresso dopo R e L. La prova di J, una categoria nella sua corsia, dopo la chiusura della finestra, che
+    annuncio io.
+  - La finestra può arrivare alle 12:30: 5 gallery complete in serie (r1, r2, candidate di R, L e T), circa
+    30–35 minuti l'una.
+- **08:12, via libera a FE5b di X**, il taglio di `AssetModal.svelte`. Nessun ramo dei colori lo tocca.
+  - Record da ripartire: m1 214, m2 vuoto.
+  - Restano fuori FE5a, lo spostamento della cartella dopo il lotto A, e FE5c, la pagina dell'asset dopo Z.
+- **Regola della finestra precisata alla 1.3:**
+  - dalle 08:45 alla fine di r2, `dev_release2` non si muove affatto, nemmeno per lotti solo backend, perché r1 e r2
+    girano nel working tree del checkout principale;
+  - dopo r2, i lotti solo backend possono entrare con il loro avviso;
+  - X-R8 (cache delle valute dei fornitori dei cambi) entra prima delle 08:45 o dopo r2.
+- **08:20:** X-R8 è entrato prima della conferma: merge `173ba19e2` sopra `1dac6b326`.
+  - Nuovo `services/fx/catalog.py`: le valute di ogni fornitore di cambi sono chieste al massimo una volta al giorno,
+    con un tempo massimo e senza mai sollevare eccezioni.
+  - La gallery serve il catalogo dei fornitori dai dati offline di `galleryOfflineData.ts`, quindi gli scatti non
+    cambiano.
+  - Da qui alla fine di r2 `dev_release2` resta fermo; prima delle 08:45 può arrivare al massimo il record della
+    1.3.
+- **08:38:** la 1.3 conferma `dev_release2` fermo a **`2338aaf79`** fino al mio avviso di fine r2. Dopo X-R8 sono
+  entrati solo record del journal (`380a3e768`, `2338aaf79`). Fino ad allora la 1.3 committa solo nei worktree dei
+  figli e non tocca il checkout principale. **X = `2338aaf79`**, da verificare al risveglio delle 08:40.
+
+## 09:00 (15/10) — Finestra della gallery: misura di G e merge di base
+
+- **08:41, controlli:** `dev_release2` = **X = `2338aaf79`**, pulito, nessun merge in corso. Corsie libere. Finestra
+  confermata alla 1.3 dalle 09:00 a circa le 12:30.
+- **08:42–08:45, riscaldamento** nella corsia 6150, con `LF_APP_VERSION=v0.0.0-review`:
+  - la E2E `theme-roles` 8/8 ha fatto ricostruire il bundle (`index.html` delle 08:43, più recente dei file di E0
+    delle 07:51), con la versione fissata e in debug;
+  - il sito delle doc era aggiornato.
+- **Journal committati prima dei merge:**
+  - L `eb79f7127`: link di Phase_1 e il record del checkpoint 2;
+  - R `2c8508efb`: il record del merge con T-1.
+- **09:00, r1 lanciata.** Carico a 9,5 e in calo. `g-final2-r1`: sha `2338aaf79`, dirty 0, `app_version`
+  `v0.0.0-review`.
+- **09:02, merge di base con X:**
+  - **L:** `6991ac085`, padri `eb79f7127` e `2338aaf79`, albero uguale alla simulazione;
+  - **T:** `2c7553e0b`, padri `48cc52e5b` e `2338aaf79`, albero uguale alla simulazione;
+  - **R:** fermo sul conflitto noto in `themeRoles.baseline.tsv`, con `MERGE_HEAD` `2338aaf79`. R lo risolve con
+    `--resolve`, mette in stage solo la baseline, poi FROZEN.
+- **Validazioni dei figli e candidate:** dopo r2, verso le 10:15, ognuna nella corsia del figlio, in serie.
+  - R deve ricatturare la baseline CSS: A2 sposta i file e Svelte 5.48 cambia l'hash del CSS.
+  - T niente `--update` fino a dopo la candidata.
+- **09:07, R:** dopo `--resolve`, `--check` è rosso sulla riga D3 (`themeStore.ts`, `#166534` fuori record).
+  - Causa: `mergeBaselines` dà alla riga presente nei due lati solo i colori comuni, ignorando la base e
+    `~accept`, e così annulla l'accettazione D3 di ieri.
+  - Autorizzato: lo stesso `--accept` con la stessa ragione D3, poi `--check` e lo stage della sola baseline.
+  - **Per T, nuova voce di backlog:** `mergeBaselines` deve fare un vero merge a tre vie (se un lato è uguale alla
+    base vince l'altro), oppure far vincere il lato che ha un `~accept`. Finché R non entra, ogni `--resolve` sul
+    ramo R annulla il D3 allo stesso modo.
+- **09:03–09:10, prima r1 (`g-final2-r1`, 10 worker) fermata:**
+  - in 10 minuti 8 test rossi, con il carico generato dalla run stessa fra 64 e 67: 10 worker browser più 3 del
+    server su 10 CPU (8 P + 2 E);
+  - errori tipici della fame del renderer: una modale che non si chiude in 3 s, clic che scadono a 20 s, la lingua
+    che non cambia in 15 s, `about:blank` che non arriva in 10 s;
+  - fermata con `stop_bash`. Il server della corsia era rimasto orfano (`dev.py server --test`, PID 78922 e uvicorn
+    79098, con env `LIBREFOLIO_TEST_DATA_DIR=/tmp/librefolio-r2-main`): fermato con `kill`, porta libera.
+  - Lo snapshot `g-final2-r1` resta parziale e non va usato.
+- **09:11, classificazione:** gli 8 test rifatti da soli, solo desktop, con 2 worker (`zz-r1fails-0915`): 8/8 verdi
+  in 2,9 minuti. Era il carico, non una regressione della notte.
+- **09:15, r1 rilanciata con 6 worker** (`g-final3-r1`): le stesse impostazioni per r2 e per tutte le candidate.
+  Fine stimata di r2 verso le 10:35; la 1.3 è avvisata.
+- **09:07, R:** il merge è risolto, la baseline in stage e `--check` pulito; FROZEN fino al via. L e T hanno preso
+  nota e sono fermi.
+- **09:45, r1 finita (`g-final3-r1`):** rc 0, 2824 PNG in 30,5 min con 6 worker, carico 13–16, nessun test rosso.
+  - `dirty_files` 0, `app_version` `v0.0.0-review`, commit `2338aaf79`.
+  - `live_price_check`: rc 0, 416 904 righe nella finestra, nessuna riga di prezzo dal vivo.
+  - Le 32 stale sono scatti vecchi rimasti nella cartella della gallery, che la gallery non produce più (per
+    esempio `assets/detail-metadata`, `dashboard/allocation-charts`, `files/preview-modal`).
+- **09:47, r2 lanciata** (`g-final3-r2`), con le stesse impostazioni.
+- **Piano dopo r2, verso le 10:18:**
+  1. avviso alla 1.3;
+  2. via libera alle validazioni di R, L e T insieme, ciascuno nella sua corsia, mentre non gira nessuna gallery;
+  3. le candidate in serie, R poi L poi T, 31 minuti l'una con 6 worker;
+  4. i diff con `nice` mentre gira la candidata successiva.
+- **10:16, r2 finita (`g-final3-r2`):** rc 0, 2824 PNG in 29,9 min, nessun test rosso.
+  - `live_price_check` rc 0.
+  - Stesso commit, dirty 0, stessa `app_version`, la stessa lista di 32 stale.
+- **La misura di G è fatta.**
+  - Diff r1 contro r2 (`diffs/g-final3__r1__vs__r2/`): 2107 identiche, 717 cambiate, 717 maschere.
+  - Stabilità: 40 stabili, 112 low, 19 medium, **6 unstable**, contro i 27 di ieri:
+    - `assets/detail-measures-active` e `assets/detail-measures`, fino al 49 %;
+    - `settings/about-plugin-diagnostics`, fino al 40 %;
+    - `media/asset-picker-modal`, 24 %;
+    - `settings/scheduler-config`, fino al 7,9 %;
+    - `brokers/import-nway-compare`, 1,1 %.
+  - Il cancello delle candidate userà `--ignore-masks …/g-final3__r1__vs__r2/masks --stability …/stability.json`.
+- **10:16, comunicazioni:**
+  - alla 1.3: `dev_release2` può muoversi di nuovo, solo per lotti solo backend, con avviso; niente suite pesanti
+    fino alla chiusura;
+  - a R, L e T: via alle validazioni, ciascuno nella sua corsia;
+  - a G: risultati e lista del checkpoint 2 (6 worker, versione fissata, docstring, 3 commenti di X, README),
+    run mirate solo dopo la finestra.
+- **10:23, T ha validato il fuso `2c7553e0b`:** tutto verde, worktree pulito, FROZEN.
+  - `theme-roles --check` pulito; `core-unit` 4.291/4.291; E2E `theme-roles` 18/18.
+  - `front check` 0/0, ma solo dopo `dev.py api sync`: il client generato, ignorato da git, era più vecchio di
+    `/system/instance` di H. Ho girato la nota a R e L.
+  - La migrazione 005 si è applicata da sola al DB della corsia.
+  - La candidata di T parte quando R e L hanno finito di validare: nessuna gallery mentre girano altre suite.
+- **10:25, R ha validato il fuso:** tutto verde.
+  - `core-unit` 140 file, 4.380 test.
+  - `front check` 0/0 dopo `api sync`.
+  - `theme-roles --check` pulito, con 81 file sotto il loro record: la stretta è di T.
+  - CSS del target uguale a quello del fuso, 11 file regola per regola e 12 byte per byte; nuova baseline CSS
+    ricatturata. `r3_reach` 36/36; `check-orphans` pulito.
+  - **Merge chiuso da me:** `87b7c34b8`, padri `2c8508efb` e `2338aaf79`. Rispetto all'albero simulato cambia solo
+    `themeRoles.baseline.tsv`. Worktree pulito.
+  - Il record nel piano lo scrive R dopo la candidata.
+- **10:27:** L sta validando. Le candidate partono dopo il suo handoff, per non sovrapporre carico: R, poi T, poi L.
+- **10:27, L ha validato il fuso `6991ac085`:** tutto verde.
+  - Unit del Lab 394/394; gate 110/110; `npm run check` 0/0; `theme-roles --check` pulito.
+  - E2E `front-designer-lab` 11/11, sia a 1 sia a 4 worker; parità dello scanner identica.
+  - Ho committato il piano: `c0556a240`.
+  - La candidata di L è con il Lab presente nella build di debug ma mai aperto.
+  - **L-10 approvata dopo la sua candidata,** con un suo checkpoint: classi `*-lf-*`, `tw_custom_re` e le
+    `--color-lf-*`.
+  - Nuovo ordine delle candidate: R, L, T.
+- **10:28, candidata di R lanciata** (`g-final3-candR`): worktree R `87b7c34b8` pulito, corsia 6154
+  (`/tmp/librefolio-r2-r`), 6 worker.
+- **10:30, note della 1.3 da A5b:**
+  - **TC-6 / A-8 chiusa da A in A5b.** Lo store della lingua segue svelte-i18n finché l'utente non ha una
+    preferenza; il selettore ha `data-language`.
+    - Entra con A5, dopo R e L.
+    - La chiudiamo nella sezione «T (colori)» quando A5 e T sono entrambi in `dev_release2`: TC-6 arriva con
+      l'ingresso di T.
+  - **Debito di doc per la revisione MkDocs finale:**
+    - `developer/frontend/components/features/auth.md` descrive ancora la barra della robustezza a cinque
+      colori, che dopo D-T13 sono tre;
+    - `core-ui/atoms.md` non ha la prop `icon` di `PasswordInput`.
+
+    Da dare a T alla ripresa, come voce TC di doc.
+- **10:33, analisi di G su `g-final3`,** in sola lettura: 27 instabili → 6.
+  - 2 sono di solo contenuto, già accettati: `asset-picker-modal` (ordine del seed) e `import-nway-compare` (ordine
+    dei file).
+  - 4 sono inquadrature messe a nudo da G, da correggere in G:
+    - `detail-measures` e `-active`, mobile, per lo scroll dopo il toggle;
+    - `about-plugin-diagnostics`, mobile, perché l'attesa di `ready|degraded` c'è solo su desktop;
+    - `scheduler-config`, desktop: lo sfondo del modale si sposta di 59 px.
+  - Le 19 medium sono contenuto, oppure residui già spiegati.
+  - **G-2, verdetto:** con 10 worker la macchina satura; con 6 worker 0 rossi.
+- **G aggiornato con un avanzamento veloce a `6ed99c694`,** X più un commit di journal della 1.3.
+  - Piano approvato: test-author corregge le 4 inquadrature, poi le modifiche leggere; le run mirate solo dopo la
+    chiusura della finestra, nella corsia 6153.
+  - Il default dei worker in `dev.py` (`round(0.6 * cpu_count)`) è proposto a J dentro C-94, che tocca la stessa
+    funzione.
+  - Per R: il prossimo riferimento dello stesso giorno dovrà contenere le 4 inquadrature nuove.
+- **10:40, J mette i worker predefiniti della gallery in C-94:** `default_gallery_workers()` = `max(1, round(0.6 × CPU))`,
+  cioè 6 worker browser e 2 del server su questo Mac.
+  - Ha test puri; un `--workers` esplicito vince.
+  - Aggiorna l'aiuto di `--workers` e la skill `devpy-mkdocs`.
+  - Quando C-94 è entrato, il nostro `-- --workers 6` diventa superfluo, ma resta valido.
+- **10:53, G:** il codice del checkpoint 2 è pronto sopra `6ed99c694`, 10 file modificati e 2 nuovi, statica pulita.
+  - Inquadrature: `frameTarget` su mobile; la diagnostica aspetta Tools su entrambi i viewport;
+    `bringIntoViewFromTop` per lo scheduler; `🔎` registra `lock`.
+  - Modifiche leggere fatte; backlog G: G-2, G-3 e G-6 chiuse.
+  - Run mirate dopo la chiusura della finestra, nella corsia 6153: 2 run da 1 worker, circa 25 minuti.
+  - Commit dopo le run, insieme alle evidenze.
+- **11:02, candidata di R finita (`g-final3-candR`):** rc 0, 2824 PNG; commit `87b7c34b8`, dirty 0;
+  `live_price_check` rc 0.
+- **Cancello di R: superato.**
+  - Diff contro r1 con le maschere r1↔r2: 2370 identiche, 454 cambiate (258 low, 135 medium, 46 unstable, 15 su
+    scatti stabili).
+  - **Controllo sistematico:** solo 9 immagini superano il massimo di rumore del loro scatto (×1,5, +0,02 punti,
+    Δ>3):
+    - 8 sono `files/static-grid` desktop, per l'orario di caricamento (09:15 contro 10:29) e l'ottava miniatura
+      (`men_04` contro `woman_07`): contenuto del DB della corsia;
+    - 1 è `detail-signals`, con Δ5: antialiasing.
+  - I 15 cambi su scatti stabili:
+    - `brokers/import-modal` en/it: l'orario troncato nella colonna «Uploaded»;
+    - una × in hover in una sola variante di `whatif-simulation`;
+    - per il resto Δ≤3.
+  - Verdetto: l'aspetto è invariato.
+  - **Per G:** la miniatura di `static-grid` cambia con la corsia. Va capito se dipende da file rimasti nella
+    cartella dati o dall'ordine; da proporre come G-9.
+- **11:03, candidata di L lanciata** (`g-final3-candL`, corsia 6152, worktree `c0556a240`).
+- **11:10, avviso alla 1.3:** R entra in `dev_release2` con un merge di base sopra `6ed99c694`, solo journal, poi
+  avanzamento veloce. Aspetto che la 1.3 confermi di aver fermato i commit.
+- **11:12, il developer chiede un server con i colori nuovi e il Lab.** Ha scelto «subito».
+  - Worktree temporaneo `LibreFolio-worktrees/preview-colori`, ramo locale `preview-colori-1015`: T `2c7553e0b`
+    più L `c0556a240` = `9df586720`, pulito.
+  - `npm ci` dal lock, 15 s.
+  - `designer_live.sh`, staccato, shellId `preview6160`: dati copiati da `/tmp/librefolio-r2-main` (r2) in
+    `/tmp/librefolio-color-review`; server test sulla porta 6160.
+  - Alle 11:20 `/system/ready`, `/` e `/designer-lab` rispondono 200.
+  - **Da togliere dopo l'uso:** il server, il worktree e il ramo `preview-colori-1015`.
+- **11:21, R integrato in `dev_release2`.**
+  - La 1.3 aveva fermato i commit a `6ed99c694`.
+  - `8fd8e494b`: merge di `6ed99c694` in R, albero uguale alla simulazione; avanzamento veloce del target. Il file
+    del developer `decisioni-analisi-20261014.md`, aperto nel canvas, è intatto.
+  - **`23f6578f3` `fix(pwa): restamp the service worker`.** Il lotto A di R (`d80b9e0cd`) aveva cambiato
+    `offline.html` senza aggiornare il timbro di `sw.js`, che è l'MD5 dei primi 8 caratteri; ogni build lo
+    riscriveva. Commit nel ramo di R, poi avanzamento veloce. **`dev_release2` = `23f6578f3`.**
+  - 1.3 avvisata: commit ripresi; spostamenti di cartella sbloccati; T-4 sbloccata.
+  - R avvisato: W10, cioè piano, link di Phase_1 nel backlog, eccezioni, wiki, handoff e la voce `mergeBaselines`
+    per T.
+
+## 11:35 (15/10) — Palette «Pietra e Salvia» / «Ardesia e Salvia», L al cancello, documenti di R
+
+- **Il developer e la designer** notano che lo scuro è rimasto quasi fermo e non è chiaro a che punto sia il
+  refactoring.
+  - Spiegato: R ha fattorizzato a parità di aspetto. T ha i ruoli, ma ha migrato solo accesso, shell e sfondo del
+    login; il resto dell'app (m1 circa 11.000) resta legacy fino alle ondate W1–W6.
+  - Hanno mandato la palette nuova (tabella in 17 ruoli, chiaro e scuro) e un render del login.
+- **D-T15 (developer, 11:4x), testuale:** «Barra laterale neutra, come scrive la designer: #EDF0EE / #111615; il
+  verde #1B4334 resta per l'header del login e i pulsanti». Supera D-T2.
+- **T incaricato:**
+  - la palette in `tokens.css` e la Sidebar neutra;
+  - il box dei requisiti sulla superficie secondaria e la fascia verde nella card;
+  - le colline ritarate, i derivati provvisori, i contrasti, la E2E aggiornata;
+  - la lista dei «rimasti fuori». Proposta per Q1: «selezionato» = focus.
+  - Poi la candidata di T e l'aggiornamento dell'anteprima sulla 6160.
+- **11:38, candidata di L** (`g-final3-candL`): rc 0, 2824 PNG, `live_price_check` rc 0.
+  - Contro r1: 2360 identiche, 464 cambiate. Solo 10 sopra il rumore:
+    - 8 `static-grid`, contenuto della corsia;
+    - 1 `brim-report-sets`, il nome casuale dell'account demo;
+    - 1 `detail-signals-macd` mobile it chiaro, scattato col menu degli indicatori aperto: tempi della gallery,
+      per G.
+  - **Cancello di L superato:** il Lab chiuso è neutro.
+- **R, W10 chiusa** (handoff finale):
+  - piano, backlog sezione R (R-1…R-4 ✅, i 6 link riallineati, **R-8 «per T»**: `--resolve` perde un `--accept`);
+  - devWiki: 3 pagine nuove e 5 aggiornate; eccezioni verificate;
+  - inventario finale: letterali fuori da `lib/theme/**` e `app.css` da 1554 a 85 hex e da 198 a 50 funzioni.
+  - Commit sul ramo R `ecd6f02b9`, merge di `5795e84ad` in R `ed9fb6996`, albero uguale alla simulazione.
+  - **`dev_release2` = `ed9fb6996`**, 1.3 avvisata.
+  - Da fare: spostare R-8 nella sezione T come TC-7 alla prossima riconciliazione; `dev.py graph update` nel
+    checkout principale.
+- **Ingresso di L:** merge del target in L `eeeb467f4`, padri `c0556a240` e `ed9fb6996`, uguale alla simulazione.
+  L valida il fuso con R nella corsia 6152, poi avanzamento veloce.
+- **11:50, decisioni del developer, testuali:**
+  - **niente ponte (D-T3 confermata):** «Solo le ondate W1–W6, come da D-T3: chi non è migrato resta visibilmente
+    vecchio»;
+  - **Q1 chiusa (D-T16):** «Verde focus: riempimento #236B4D / #429E79, segno nel colore della card (6,1:1 in
+    chiaro, 5,3:1 in scuro)». W1-a sbloccata.
+  - Girate entrambe a T.
+- **`--report` sul target `ed9fb6996`:** m1 11.216 classi legacy in 276 file, m2 92 letterali (la baseline ne
+  registrava 1782: è l'effetto di R).
+  - Per area: transactions 2334, ui 1206, brokers 992, assets 984 + pagine 546, settings 910, tools 881, risk 763,
+    charts 431, dashboard 328 + 77, fx 162 + 266, onboarding 236, layout 219, `lib/theme` 214 (la tabella dei toni
+    di R).
+  - 81 file sono sotto il loro record (la stretta tocca a T); 22 mosse riconosciute.
+- **11:57, L valida il fuso con R (`eeeb467f4`):** tutto verde tranne 2 spec E2E del Lab, rosse a 1 e a 4 worker.
+  - Causa: R-3 ha spostato il colore dell'intestazione di DataTable su `var(--lf-cmp-datatable-header-text)`. La
+    spec del selettore si aspetta `rule-literal`; il test di export si aspetta `#64748b` in `DataTable.svelte`.
+  - Il Lab regge: L2 riscrive anche i `--lf-cmp-*`; L3 regge sulle tabelle chart di R.
+  - Parità identica: hex 1291, funzioni 238, definizioni di variabili da 217 a 945.
+  - L corregge solo `frontend/e2e/designer-lab/**`, con le attese ricavate a runtime. Nuovo handoff verso le 12:30;
+    poi l'ingresso.
+- **12:09, T-6: palette del giro 2 e barra neutra.** Commit `078dec1ae`, figlio di `2c7553e0b`, 11 file.
+  - `tokens.css` sui valori della designer, più:
+    - `--lf-surface-sidebar`;
+    - app = pagina;
+    - `checked` = focus (D-T16).
+  - Sidebar neutra con bordo destro; voce attiva provvisoria, pannello e link con una barretta focus.
+  - Controllo di sicurezza della connessione nei colori di stato, che chiude il caso della barra verde in TC-2.
+  - Box dei requisiti sul pannello. `app.css` e le tabelle di R intatti (D-T3).
+  - **6 correzioni D-T6**: attenuato e bordo campi nei due temi, errore e info in scuro. Con i valori esatti 46
+    coppie su 180 erano sotto soglia, ora nessuna.
+  - Evidenze: `core-unit` 4291, `component-unit` 3225, onboarding 441; E2E `theme-roles` 18,
+    `connection-security` 8, `auth` 29; `--check` pulito.
+  - **Domande per la designer N1–N6:** voce attiva e bordo della barra; colore della PWA (blocca T-4); bordo della
+    card di accesso in scuro; sottotitolo «Crea un account»; le correzioni D-T6; colline. Restano aperte Q2–Q13.
+- **12:11, anteprima aggiornata:** il ramo `preview-colori-1015` = `7a94a1553` (con T-6); server riavviato,
+  shellId `preview6160b`. `/system/ready`, `/` e `/designer-lab` rispondono 200. Foglio di contatto
+  `review/T6-palette/`, canvas `t6-palette-review`.
+- **Candidata di T:** dopo che L ha finito di usare la sua corsia, verso le 12:30.
+- **12:21, L ha validato il fuso con R:** 2 spec E2E corrette dopo R-3; unit 394, gate 162, E2E del Lab 11/11 a 1 e a
+  4 worker; parità identica. Nuova voce L-13: le E2E del Lab cadranno in modo esplicito con W4, W6, B6 e W5.
+- **12:23, L integrato:** commit `9d57aa4c0` sopra `eeeb467f4`; avanzamento veloce di `dev_release2` da
+  `ed9fb6996`. **`dev_release2` = `9d57aa4c0`.** 1.3 avvisata. L-10 approvata, con le run pesanti dopo la chiusura
+  della finestra.
+- **12:24, candidata di T lanciata** (`g-final3-candT6`): worktree T `078dec1ae` (T-6), corsia 6155, 6 worker.
+- **12:24, G:** via alle run mirate nella corsia 6153, a 1 worker, in parallelo alla candidata di T. Segnalati
+  `detail-signals-macd` (tempi) e la miniatura di `static-grid`, che cambia con la corsia.
+- **12:35, la 1.3 integra la 1.2.1**, con le correzioni di sicurezza pubblicate dal developer: merge `6c349f907`
+  (`9d57aa4c0` + `064fb4fc2`), poi avanzamento veloce di `dev_release2`.
+  - 16 file: backend, test, runner, CHANGELOG nelle 4 lingue. Nessun file del programma colori.
+  - Nessun effetto sulle run in corso, che usano i worktree dei figli. Per i merge di base futuri c'è un CHANGELOG
+    nuovo nel target.
+- **12:38:** la 1.2.1 è entrata. **`dev_release2` = `6c349f907`**, con un avanzamento veloce da `9d57aa4c0`.
+- **12:46, via libera a FE6a di Y:** taglio sul posto di `GrowthChart.svelte` in `growthChartData.ts`,
+  `growthChartSeries.ts` e `growthChartTooltip.ts`.
+  - Nessun ramo dei colori lo tocca; il lotto D di R è dentro.
+  - Condizioni:
+    - `--split` e `--check`;
+    - tenere `data-testid="growth-chart"` e la forma dell'opzione ECharts;
+    - eseguire `front-designer-lab`, perché la E2E dal vivo del Lab legge i colori del grafico.
+  - Gallery filtrata «Dashboard|Brokers» dopo la finestra, nella corsia 6189, contro `g-final3-r1`, con le maschere e
+    `--common-only`.
+  - Y2 (`DataTable`) da annunciare quando ci arrivano: tocca i `--lf-cmp-*` di R, la E2E del Lab e W6 di T.
+- **12:52, checkpoint 2 di G:**
+  - inquadrature stabili: run mirate A↔B a 1 worker con 80 impronte su 80 identiche, tranne un header in spagnolo
+    (G-11);
+  - `scheduler-config` resta a `y` 880 bloccato, come la baseline del 14/10;
+  - il contenuto di `scheduler-log` dipende dall'ora: riferimento e candidata vanno catturati dalla stessa parte delle
+    06:00, 12:10, 18:00 e 23:00 circa (D2).
+  - Commit `fcf6c6686`; merge del target `09a536cd0` in G `9f3b141a8`, uguale alla simulazione; `tsc` E2E con i
+    soli 2 errori di base.
+  - **`dev_release2` = `9f3b141a8`**, 1.3 avvisata.
+  - **Backlog G:**
+    - G-9: MACD, dopo la finestra con test-author;
+    - **G-10: `list_uploads` ordina solo per `uploaded_at`**, così i pari restano in ordine di UUID casuale. È la causa
+      di `asset-picker-modal` (24 %) e di `static-grid`. Instradata alla 1.3, probabilmente ad H;
+    - G-11: un header in spagnolo a scroll fermo.
+  - **Nota per i prossimi riferimenti:** dopo G cambiano 4 inquadrature rispetto a `g-final3`, quindi le candidate
+    future vogliono un riferimento nuovo dello stesso giorno. La candidata di T in corso usa ancora la spec di X.
+- **12:55, via libera a W E1** (eventi degli asset): `EventCreateMiniModal` e `AssetDataEditorSection` con logica,
+  tag e testi; nuovo `EventExistsPanel` sui ruoli.
+  - Nessun ramo dei colori li tocca. Ricordati l'eccezione `#a855f7` (R-6) e i ruoli che esistono già nel target.
+  - La 1.3 gira G-10 ad H.
+- **13:01, candidata di T6 finita** (`g-final3-candT6`, T `078dec1ae`): rc 0, 2824 PNG in 37,5 min, nessun test rosso;
+  `live_price_check` rc 0.
+  - Contro r1: 2814 cambiate e 10 identiche, tutte di onboarding. È atteso: la shell, cioè la barra neutra e lo
+    sfondo dell'app, compare in ogni schermata autenticata; poi il login e la palette.
+  - È il materiale per la revisione del developer, in `diffs/g-final3__r1__vs__candT6/index.html`.
+- **13:01, finestra della gallery chiusa:** 1.3 avvisata, via a G-9 e alle run pesanti di L-10.
+- **13:05, `--accept` D3 autorizzato anche a X:** è il caso R-8 di nuovo. La correzione di `--resolve` va nel backlog
+  di T come TC-7.
+- **13:05, finestra delle dipendenze:** il developer installa `cryptography` nell'ambiente condiviso
+  `LibreFolio-SAUMUTtc`.
+  - G e L fermi sui comandi Python; il mio diff è finito; «fermo» comunicato alla 1.3.
+  - Resta acceso e fermo il server dell'anteprima sulla 6160.
+- **13:36, finestra delle dipendenze chiusa:** `cryptography 50.0.2`, `pycparser` 3.11; commit `dc9a5d232` su
+  `dev_release2`.
+  - Ripresa a G (run di G-9) e a L (L-10).
+  - La 1.3 limita le sue suite pesanti a 2 alla volta; per una gallery va avvisata prima.
+- **13:38, merge di base di T sul target `dc9a5d232`:** `e1443e952`, padri `078dec1ae` e `dc9a5d232`, pulito e uguale
+  alla simulazione, baseline compresa.
+  - `--check` pulito (82 file sotto il record); `~accept` D3 intatto.
+  - T valida il fuso nella corsia 6155: `core-unit`, `component-unit`, onboarding, E2E `theme-roles`,
+    `connection-security`, `auth`, `front-designer-lab`.
+  - Nel journal di T: TC-7 (`--resolve`, da R-8), D-T15/16, N1–N6, Q2–Q13.
+  - **Ingresso di T: aspetta il via del developer.**
+- **13:48, budget comune del carico** (proposto dalla 1.3, accettato): al massimo 3 suite pesanti sulla macchina,
+  2 della 1.3 e 1 nostra. Le gallery contano come pesanti; ogni avvio si annuncia prima.
+  - Il carico era a 84: H `all-backend`, X `front-asset`, G-9 a 5 worker, la validazione di T, L-10 sulla 6152.
+  - Il nostro posto va alla validazione di T. G finisce la run breve di G-9 e poi si ferma; L non avvia altre run
+    pesanti.
+- **13:52, coda del nostro posto pesante:**
+  1. la validazione di T, in corso;
+  2. L, circa 25 minuti per chiudere L-10 (le E2E `live` e `picker`, la build di release, `front-designer-lab` a
+     1 worker, le E2E a 4); per il resto L-10 è verde, con unit 422, check, gate e parità;
+  3. G, solo per eventuali ripetizioni di G-9.
+
+  Per ogni posto aspetto il via della 1.3.
+- **13:58, G-9 (MACD):** `selectIndicatorFromTree` scelto da tastiera e verificato; `waitForSignalCardsSettled`
+  richiede almeno una card. Commit `5da3c9eba` sopra `9f3b141a8`; **non ancora integrato**.
+  - Run filtrata a 5 worker, sotto carico fra 84 e 150: 5 verdi e 5 rossi, tutti fuori dall'helper e per il
+    carico.
+  - DoD 10/10 dopo la ripetizione dei 4 test (EMA, RSI, Bollinger, drawdown) a 1 worker, circa 15 minuti, in coda per
+    il posto.
+  - Fuori pista: dopo un aggiornamento di base, build debug (4,6 min) e MkDocs (2,8 min) scadono e sforano i 300 s
+    del server di test. Vanno ricostruite prima.
+- **Coda del posto pesante:** T, in validazione; poi L, circa 25 minuti; poi G, circa 15 minuti. 1.3 informata.
+- **13:58, la 1.3:** il posto pesante è nostro. Dopo T si passa a L e poi a G senza chiedere; il loro via serve solo
+  per una seconda run pesante in parallelo.
+- **14:07, feedback del developer sull'anteprima:** la resa finale non piace molto, ma va verso l'uniformità.
+  - **Regressione:** l'header non si nasconde più scorrendo verso il basso. Assegnata a T. `Header.svelte` dopo X è
+    stato toccato solo da T-3; da indagare anche i contenitori del layout e `InstanceNotices` di H.
+  - **Richiesta:** il riquadro del logo nella barra laterale diventa verde brand, come la testata del login (T).
+  - **Serve una tabella con TUTTE le voci.** Fatta: `review/round2-palette/index.html` (canvas
+    `round2-palette-table`) e `tabella-ruoli-e-domande.md`.
+    - 52 ruoli con i valori reali, chiari e scuri, calcolati da Chrome sull'anteprima della 6160;
+    - per ognuno l'uso e l'origine: designer, corretto, derivato, provvisorio o decisione.
+  - **Le domande non erano chiare e Q2–Q13 non erano reperibili:** riscritte tutte e 18 (N1–N6, Q2–Q13), ognuna con
+    «dove si vede», «oggi», «cosa ci serve» e gli scatti della candidata T6.
+- **14:10, validazione di T sul fuso, verde:** `c5a8a03a4`.
+  - Il gate di controllo positivo del cricchetto ora regge il progresso della migrazione.
+  - Il journal ha TC-7, D-T15/16, N1–N6 e Q2–Q13.
+  - Due avvii del server oltre i 300 s per il carico.
+- **Posto pesante:** a T per l'header e il logo, poi L, poi G.
+- **14:17, la 1.3 annuncia l'ingresso di X**: FE5b (`AssetModal` in sei pezzi), X-R11a, X-R1/R2 e D-X4; merge di
+  `e78eb7b6f` sopra `dc9a5d232`.
+  - Tocca nostri file: la baseline, con lo split dichiarato (214 = 26 + i 6 pezzi) e l'`~accept` D3 ripristinato,
+    e `_frontend_utility.py`, solo aggiunte.
+  - X ha validato `core-unit` 4510, `front-asset` e le E2E del Lab: `live` 7/7, `picker` 3/3, `neutral` 1/1.
+  - **Per T:** dopo questo ingresso serve un nuovo merge di base, con la baseline da riverificare (TC-7: `--resolve`
+    potrebbe perdere di nuovo l'`~accept`).
+- **14:18:** prima entra **H CP5b+CP6** (pagina di blocco dell'istanza, `/system/info` lato frontend), con un
+  avanzamento veloce a `83eaa5a28`; dei nostri file tocca solo il runner, con aggiunte. Subito dopo X. Al loro
+  arrivo va rifatta la simulazione del merge di base di T: CP6 può toccare i layout.
+- **14:21, entrati H CP5b+CP6** (`83eaa5a28`) **e X FE5b** (`ec0dc7ebd`, merge di `e78eb7b6f`). **`dev_release2` =
+  `ec0dc7ebd`.**
+  - La 1.3 ha verificato `theme-roles --check` pulito e `npm run check` 0/0 dopo `api sync`.
+  - Simulazione di T su `ec0dc7ebd`: pulita, `~accept` intatto. CP6 ha cambiato `routes/(app)/+layout.svelte`;
+    l'ho segnalato a T per la correzione dell'header.
+- **14:22, il developer chiede al massimo 6 schermate per orientare la designer**, nella cartella di
+  `round2-palette`. Fatte, catturate con Playwright sull'anteprima della 6160 (T-6), in italiano, con contorni e
+  numeri:
+  - `01-accesso-chiaro`;
+  - `02-accesso-scuro-focus`;
+  - `03-registrazione-requisiti-scuro`;
+  - `04-app-chiaro-menu-lingua`;
+  - `05-app-scuro`;
+  - `06-mobile-scuro-menu-aperto`.
+  - Nel documento è la sezione 2: per ogni elemento i ruoli, con la ✓ quando il colore misurato nel browser coincide
+    (62 ✓). Le domande diventano la sezione 3. La versione `.md` è aggiornata.
+  - Le schermate sono prima del riquadro del logo verde: da rifare dopo il checkpoint di T, se serve.
+
+## 14:38 — Z, slot a Y1, E1
+- 1.3/Z: pillola «Aggiornamento in pausa» → risposto: ruolo `bg-lf-neutral text-lf-secondary` in `STATUS_TONES.liveUpdates.paused` (no legacy: deroga lib/theme è per classi spostate; contrasto 5,8:1 T-6; G3).
+- Slot pesante ceduto a Y1 (galleria 1.3, 6189, `-f "Dashboard|Brokers" --workers 6`); T avvisato: solo statiche fino al via. Coda nostra dopo: T → L (L-10) → G (G-9 4 test a 1 worker).
+- E1 entrato: `dev_release2` = `f46a93ffd` (backend email; nessuna sovrapposizione con T).
+
+## 14:40–15:10 — materiale designer round 2, T pronto
+- 1.3: journal `396b9eba0`; Y galleria filtrata su `ceb0e09a3` nel nostro slot → attendo «galleria finita».
+- T (header + logo): causa = focus lasciato nell'header dal clic (blocco focus dal 9/9, `ef722b552`); fix: blocca solo `:focus-visible`. Logo: fascia `sidebar-brand` `bg-lf-brand`. Statiche + header-scroll 8/8 fatti; chiede slot ~15 min (theme-roles E2E, component-unit, onboarding-component-unit, scatti) → dopo Y.
+- round2-palette: 8 schermate annotate (chiaro+scuro per accesso, registrazione, app, mobile); sezione 3 «Grafici» (11 tipi, 14 settori + Liquidità/Non classificato, tavolozze torta/storico 14×4, regole, altre tavolozze, GR1–GR5, colonne gialle da compilare); 09/10 grafici torta/storico chiaro|scuro (colori letti da ECharts); `galleria/` con 30 miniature copiate → cartella autosufficiente (5,6 MB).
+- Da backlog (sezione T, prossimo treno): emoji settori diverse torta vs storico (Sanità 💊/🏥, Immobiliare 🏢/🏠, Servizi pubblici 🔌/💡, Liquidità 💵/💰; `derived_views.SECTOR_EMOJIS` vs `utilities.SECTOR_EMOJI`); in torta Immobiliare e Obbligazioni societarie entrambe 🏢; commento AllocationHistoryChart conta 15 chiavi settore ma con «Unknown» sono 16; SEMI_DONUT senza variante scura.
+
+## 15:03–15:55 — Giro 2 della designer approvato (D-T17), T-7, DV
+- **Developer, 15:03** (testuale): «archiviali opportunamente e poi dai mandato ai vari sotto agenti di realizzare quanto pianificato». Due risposte della designer: la 1 su schermate 01–08 e domande, la 2 su 09–10 e GR1–GR5.
+  - Archivio: `10_colorSystem/designer-feedback/2026-10-15-round2-palette/` (README trascritto, `analisi.md`, i due originali, `materiale-inviato/`); pacchetto completo fuori repo in `LibreFolio_visual_review/package/round2-palette-2026-10-15/`; copia in sessione `review/round2-palette/risposte-designer/`.
+  - D-T17: giro 2 approvato per intero; supera D-T15 (barra laterale verde `#1B4334` nei due temi).
+  - D-T18 aperta: bordo dei campi (N5). Oggi i campi non hanno hover; tre versioni a confronto (designer, via di mezzo `#899490`/`#5A6863`, attuale 3:1 + hover = testo attenuato) in `materiale-inviato/bordi-dei-campi.html`.
+  - Pre-controlli: 15 coppie sotto soglia, 14 con la politica D-T6 (in T-8), una (N5) al developer. ΔE00: Materia prima/Immobiliare chiaro 5,0, Immobiliare/Energia scuro 5,1 → giro 3.
+- **Developer:** «per le lettere se 1 non basta usiamone 2» → regola in `.github/agents/release-coordinator.agent.md` e `coordinated-workstream.agent.md`. Nuovo figlio: `DV - colori dei grafici` (D, V, N in uso o ambigue), corsia 6156 + `/tmp/librefolio-r2-dv`.
+- **Slot:** galleria Y1 finita → T (validazione T-7) → L (L-10, in corso) → G (G-9) → galleria Y2 della 1.3 (promessa).
+- **T-7 committato** sul ramo di T: `0580c92ab` (padre `c5a8a03a4`), 7 file. L'header si nasconde dopo un clic sui suoi controlli (blocco solo con `:focus-visible`); fascia del logo `bg-lf-brand`. Prove: E2E `header-scroll` 8/8, `theme-roles` 18/18, `component-unit` 3.227, `onboarding-component-unit` 443, `front check` 0/0.
+- **1.3:** Y1 `badec1465` (taglio di `GrowthChart`, `~split` nella baseline); A5 `8bcb23502` (registrazione a tre modi, inviti). Risposte: `ProfileTab` → prima A (A6, `AccountDeletionDialog`, senza `--split` se nasce a zero); `DataTable` → prima Y (Y2, `--split` delle 4 classi). DV: analisi libera; codice da ordinare con Y (FE2, Y8–Y10) e J (`derived_views.py`, segnali PL1).
+- **Simulazione del merge di base di T** su `8bcb23502`: conflitti in `frontend/e2e/layout/theme-roles.spec.ts` e `lib/components/layout/LanguageSelector.svelte`; automatici `PasswordStrength`, `(app)/+layout.svelte`, baseline, `_frontend_utility.py`, backlog.
+- **Ondate al 15/10:** m1 11.435 → 11.216 su `dev_release2` (−1,9 %), 11.069 sul ramo di T (−3,2 %); m2 1.782 → 92/83 (−95 %, merito di R). W1+W2 spacchettate (69 file, 2.586 classi, 16 lotti), non partite: aspettavano T-4, cioè N2. W3–W6 ~8.500 classi da spacchettare.

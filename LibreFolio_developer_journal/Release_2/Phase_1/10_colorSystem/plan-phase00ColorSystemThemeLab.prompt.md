@@ -91,16 +91,38 @@
   - **Ordine:** T-1 fondamenta (nessun pixel); T-2 accesso (ingresso subito, A aspetta); T-3 shell; T-4 PWA dopo il
     lotto A di R; T-5 sfondo del login dopo G; ondate W1–W6; B6.
 
+## 📥 Giro 2 della designer (15/10/2026) → T-8, DV, ondate
+
+- **Materiale:** [`designer-feedback/2026-10-15-round2-palette/`](designer-feedback/2026-10-15-round2-palette/README.md),
+  con originali, trascrizione e [analisi](designer-feedback/2026-10-15-round2-palette/analisi.md).
+- **D-T17, approvato per intero** dal developer il 15/10 alle 15:03. Testuale: «archiviali opportunamente e poi dai
+  mandato ai vari sotto agenti di realizzare quanto pianificato».
+  - Barra laterale verde `#1B4334` nei due temi: **supera D-T15** (barra neutra).
+  - Stati con fondi, bordi e testi tenui espliciti al posto della ricetta; avviso chiaro `#B45309`.
+  - N1–N6, Q2–Q13 e i colori dei grafici GR1–GR5, con un colore fisso per ognuno degli 11 tipi e dei 14 settori.
+- **D-T18, aperta:** il bordo dei campi (N5). La designer lo vuole più leggero, sotto il 3:1 di D-T6; tre versioni a
+  confronto nell'analisi, §2.
+- **Codici delle sessioni** a una o due lettere, liberi ovunque (developer, 15/10: «per le lettere se 1 non basta
+  usiamone 2»). Regola scritta in `.github/agents/release-coordinator.agent.md` e `coordinated-workstream.agent.md`.
+- **Instradamento:**
+  - T-8: ruoli e valori, con T-4 sbloccato da N2;
+  - DV, figlio nuovo: i grafici;
+  - ondate W1–W6: l'applicazione nei componenti;
+  - L: Designer Lab per il giro 3.
+
+  Dettagli nell'analisi, §6.
+
 ## 🛤️ Workstream e corsie
 
-| Lettera | Sessione | Cartella del piano | Corsia (porta + dati) | Stato |
+| Codice | Sessione | Cartella del piano | Corsia (porta + dati) | Stato |
 |---|---|---|---|---|
 | — | coordinatore | questo file | 6150 + `/tmp/librefolio-r2-main` | — |
-| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | piano approvato il 14/10; branch `e-alfy-designer-lab`; passi 0–5 `6e967202e`, passi 5b–6 `87ceceede`; base allineata (`93bf8c98a`, piano spostato in `L-designerLab/`); manca la gallery A/B, domani dopo G |
-| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | codice `e23bf842c` + `0076f4269` **integrato in `dev_release2`** (`60b3f27aa`); misura finale il 15/10 alle 09:00 sul target, poi checkpoint delle evidenze |
-| R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154 + `/tmp/librefolio-r2-r` | piano approvato il 14/10; branch `e-alfy-r-fattorizzazione-colori`; lotti A `d80b9e0cd`, B `75c45d923`, C `0b660632f`, D `98731240d`: codice completo; base allineata con T-1 (`418ea8042`); cancello unico A+B+C+D dopo l'ingresso di G, poi W10 |
-| — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | su richiesta |
-| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | analisi approvata dal developer il 14/10 alle 22:00; branch `e-alfy-t-tokens-theme`; T-1 (fondamenta, gate) `2018fd853` e T-2 (accesso) `a73eb7eda` **integrati in `dev_release2`** (`d80b986bf`); T-3 (shell) `bd51acbc2` e T-5 (sfondo del login) `f43aa7200` committati sul ramo, in attesa della gallery candidata del 15/10 e della revisione del developer; poi T-4 dopo l'ingresso di R, poi le ondate W1–W6 |
+| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | **integrato** in `dev_release2` (`9d57aa4c0`); L-10, la chiusura delle prove, nello slot pesante il 15/10; poi nel Lab i ruoli di T-8 e i colori di categoria di DV, per il giro 3 |
+| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | **integrato** (`60b3f27aa`, `9f3b141a8`); G-9 (MACD scelto da tastiera) committato in `5da3c9eba`, da ripetere 4 test a 1 worker prima dell'ingresso; G-10 passato a H della 1.3 |
+| R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154, chiusa | **chiuso**, integrato in `dev_release2` (`8fd8e494b`, `23f6578f3`, `ed9fb6996`) |
+| — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo: worktree `preview-colori` (T-6 più L, `7a94a1553`); da aggiornare con T-8 |
+| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | T-1 e T-2 **integrati**. Sul ramo: T-3, T-5, T-6 (palette, `078dec1ae`), validazione `c5a8a03a4`, T-7 (header e fascia del logo) `0580c92ab`. Prossimi: merge di base, T-8 con T-4, poi W1 e W2 |
+| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | aperto il 15/10 per GR1–GR5 (D-T17): analisi in sola lettura; codice nell'ordine concordato con Y e J della 1.3 |
 
 Superfici condivise e relativi proprietari:
 
