@@ -2471,7 +2471,25 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 ## B · Backup e Docker (fase 01)
 
 Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md). Sessione avviata il 15/10 alle
-07:10, solo analisi, sulla base `ee5d81a6f`.
+07:10, solo analisi, sulla base `ee5d81a6f`; B0 e B1 autorizzati alle 11:23, sulla base `23f6578f3`.
+
+- **B-1 · devWiki: F-073 e `domains/infrastructure` danno per fatto il backup completo** — minimo, doc; B, 15/10
+  (analisi).
+  - `features/F-073.md` è `implemented`, ma il backup completo risponde 501; dice «streaming, nessun accumulo», ma gli
+    export per serie materializzano le righe; chiama `GET /backup/export`, che è un `POST`; cita una sezione di
+    backup in Impostazioni che non esiste.
+  - `domains/infrastructure.md`, riga F-073: «export and import the full SQLite database — implemented».
+  - Le righe «Source files» sono giuste da B0 (15/10); la prosa si corregge con B1, che fa il backup vero, o con
+    `project-historian`.
+
+  Dettagli: [piano 07](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md), §2, punto 1.
+- **B-2 · Un commento di `DataEditor.test.ts` cita `backend/app/api/v1/backup.py`** — minimo; B, 15/10 (B0).
+  `frontend/src/lib/components/ui/data-editor/DataEditor.test.ts:802`: l'export degli eventi ora sta in
+  `backend/app/api/v1/backup/exports.py`. Il file è di T (`ui/data-editor`): non lo tocco. Dettagli: piano 07, §13, B0
+  passo 3.
+- **B-3 · La docstring di `backup_asset_prices` cita `backup_service.PRICE_COLUMNS`, ed è nell'OpenAPI** — minimo, doc;
+  B, 15/10 (B0). `backend/app/api/v1/backup/exports.py:71`: il modulo ora è `series_export.py`. Un lotto di riordino
+  lascia lo schema identico, quindi la correggo in B1, che cambia comunque l'API. Dettagli: piano 07, §13, B0 passo 2.
 
 ## E · Email (fase 01)
 
