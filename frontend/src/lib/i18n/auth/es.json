@@ -52,6 +52,11 @@
     "invalidCredentials": "Nombre de usuario o contraseña no válidos",
     "invalidInput": "Datos no válidos",
     "loginFailed": "No se pudo iniciar sesión",
-    "accountDisabled": "Esta cuenta está desactivada: pide a un administrador que la reactive."
+    "accountDisabled": "Esta cuenta está desactivada: pide a un administrador que la reactive.",
+    "loginServerUnreachable": "El servidor no responde: comprueba tu conexión y vuelve a intentarlo en un momento.",
+    "loginServerError": "El servidor ha tenido un error: vuelve a intentarlo en un momento y, si vuelve a ocurrir, avisa a un administrador.",
+    "tooManyAttempts": "Demasiados intentos de inicio de sesión: espera unos minutos y vuelve a intentarlo.",
+    "showPassword": "Mostrar contraseña",
+    "hidePassword": "Ocultar contraseña"
   }
 }
