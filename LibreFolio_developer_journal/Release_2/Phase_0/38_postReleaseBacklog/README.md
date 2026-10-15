@@ -131,6 +131,12 @@ Origine: [29_i18nAudit](../../phases/29_i18nAudit/plan-phase00I18nAudit.prompt.m
   `:626`). Origine: 29, S21.
 - **O-15 · Errori di rete al login in inglese** — basso. `auth.ts:143` mostra il messaggio di axios, mentre
   `auth.serverUnreachable` esiste già. Origine: 29, S21.
+  - ✅ **Chiusa il 15/10** con `feat(accounts): tab registry, O-15, K-17, L12` (A, lotto A3 della 1.3). Ogni errore del
+    login è una chiave di catalogo:
+    - nessuna risposta o 502/503/504 → `auth.loginServerUnreachable`;
+    - altri 5xx → `auth.loginServerError`;
+    - 429 → `auth.tooManyAttempts`;
+    - non `auth.serverUnreachable`, che dice a chi è già dentro «non sei stato disconnesso».
 - **O-16 · Plurale scritto a mano nel tooltip del Gantt dei lotti** — basso. `LotGanttChart.svelte:701`. Origine: 29, §6.
 - **O-17 · Debito Prettier in `DistributionDialog.svelte`** — minimo, dominio del PAC (D): `DistributionDialog.svelte:74-126`,
   già alla base; anche i piani della 13 lo citano. Origine: 29, §8.
@@ -166,6 +172,10 @@ Origine: [26_brimDanskeBank](../../phases/26_brimDanskeBank/plan-phase00BrimDans
   gli upload BRIM il developer la vuole risolta «per un futuro in cui generalizziamo generic csv» (06/10 22:50).
 - **L5 · `get_file_path` sull'event loop** — basso. `backend/app/api/v1/brokers.py:693`, `:765`: solo `:863` usa
   `asyncio.to_thread`.
+  - ✅ **Chiusa il 15/10** con `fix: per-row access refusals, BRIM storage cleanup` (W, lotto I1 della 1.3; in
+    `dev_release2` con `dc7e4e48e`).
+    - Anteprima e download risolvono il percorso del file BRIM in un thread (`asyncio.to_thread`).
+    - Cancello puro `utils gate-event-loop-io`.
 - **L6 · Il nome salvato nel rifiuto del plugin** — basso. `brim_provider.py:1169` mostra il nome salvato, non
   quello originale.
 - **L7 · Un plugin di set scelto a mano per un file che non legge** — basso. `importReportSets.ts:131-139` contro
@@ -179,6 +189,11 @@ Origine: [26_brimDanskeBank](../../phases/26_brimDanskeBank/plan-phase00BrimDans
   CAC-009/010, T1–T8, CAC-001/006/007/011/012, `tx-brim-import` seriale: il dettaglio è nel §7 del piano 33.
 - **L12 · Gli utenti E2E alice…eve creati amministratori** — basso. `scripts/test_runner/_frontend_common.py:192` li
   crea con `create-superuser`; dovrebbero essere utenti normali, salvo `e2e_test_admin`.
+  - ✅ **Chiusa il 15/10** con `feat(accounts): tab registry, O-15, K-17, L12` (A, lotto A3 della 1.3).
+    - Nuovo comando interno `user_cli.py create-user` e `dev.py user create … [--role admin|user]` (admin di default,
+      come prima).
+    - Il runner e `e2e/global-setup.ts` creano gli utenti normali con `create-user`.
+    - Test IMG-011 e IMG-012 in `test_dev_cli_image.py`.
 
 ## K · Bulk delle transazioni
 
@@ -243,6 +258,10 @@ K-5…K-26 dalla verifica d'archivio di K su `586a4f0ea`; i percorsi senza prefi
 - **K-17 · `PasswordInput`: pulsante «occhio» con `title` inglese fisso e `tabindex="-1"`** — basso.
   `lib/components/ui/input/PasswordInput.svelte:47` («Hide password», «Show password»): servono due chiavi di
   catalogo, e il pulsante è fuori dall'ordine di tabulazione. Origine: step 13.
+  - ✅ **Chiusa il 15/10** con `feat(accounts): tab registry, O-15, K-17, L12` (A, lotto A3 della 1.3).
+    - `aria-label` e `title` = `$_('auth.showPassword' | 'auth.hidePassword')`, e il pulsante è nell'ordine di
+      tabulazione.
+    - Niente `aria-pressed`, di proposito: il nome dice già l'azione (WAI-ARIA APG).
 - **K-18 · Dashboard: nei 2 s di debounce il filtro nomina già il broker** — basso. `routes/(app)/dashboard/+page.svelte:686-691`
   (`scheduleReload`): la pagina mostra ancora i totali di tutti i broker, e niente dice che un ricaricamento è in arrivo.
   Origine: step 15 (15.5).
@@ -406,6 +425,9 @@ Raccolto dal 06/10 nei controlli dei treni e nei messaggi dei figli; riverificat
 - **C-3 · Cartelle `broker_<id>` vuote dopo la cancellazione di un broker** — minimo. `delete_files_for_brokers`
   (`brim_provider.py:1203-1222`) cancella i file ma lascia le cartelle in uploaded, parsed e failed; con
   `AUTOINCREMENT` gli id non tornano, quindi le cartelle vuote si accumulano, innocue (I, 08/10).
+  - ✅ **Chiusa il 15/10** con `fix: per-row access refusals, BRIM storage cleanup` (W, lotto I1 della 1.3; in
+    `dev_release2` con `dc7e4e48e`): la cancellazione del broker toglie le cartelle di stato vuote e il suo lock (C-79
+    nel backlog post 1.2).
 - **C-4 · Stato dei plugin BRIM (Stable/Beta/Alpha) solo nella doc** — basso. Sta in `providers_list.md` (per esempio
   `:9`, `:29`), nelle card dell'indice e nell'avviso della pagina utente; nessun attributo nel codice lo tiene
   allineato (Q, 08/10).
