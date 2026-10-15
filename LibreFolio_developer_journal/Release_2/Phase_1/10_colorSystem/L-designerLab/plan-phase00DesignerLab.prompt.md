@@ -1244,3 +1244,166 @@ Richiesta del coordinatore (16:50), compito 2: cosa serve perché la designer mo
   - D2: con T-8, ombre come ruoli e uso delle isole;
   - D3: con T, `CONTRAST_PAIRS` condiviso;
   - D4: priorità fra ruoli e categorie.
+
+**Decisioni sul giro 3** (coordinatore, 17:30; mandato del developer D-T17: «archiviali opportunamente e poi dai mandato ai vari sotto agenti di realizzare quanto pianificato»):
+- **D1:** contratto C1–C4 approvato e già passato a DV. C4 = `onChartColorsChange(cb)` in `lib/theme/themeMode.ts`, lo scrive DV.
+- **D2:** le ombre sono già ruoli di solo colore sul ramo di T (`--lf-shadow-raised`, `--lf-shadow-card`, un `color-mix` con alfa); niente isole (`--lf-terminal-*`, `--lf-bar-*`). Quindi niente isole nel Lab; il **cursore dell'alfa** serve, per ombre e fondale.
+- **D3:** `CONTRAST_PAIRS` in un modulo condiviso, lo sposta T dopo T-8; L-15 lo leggerà da lì.
+- **D4:** prima i ruoli, con l'ingresso di T; le categorie quando entra il modulo di DV.
+
+Ordine: ora il cursore dell'alfa, con i test unitari, senza run pesanti. Dopo l'ingresso di T, verifica del catalogo e prova L1 sui ruoli nuovi. Le categorie quando DV ha C1–C4. Gli E2E nello slot, al checkpoint.
+
+## ✅ Cursore dell'opacità nell'editor (giro 3, D2) — 15/10/2026
+
+**Base:** `a4d1884b4`, dopo il fast-forward del coordinatore; albero pulito.
+
+**Fatti verificati prima del progetto:**
+- I valori con alfa dei ruoli sono `color-mix(in oklab, X p%, transparent)`: il fondale `--lf-surface-overlay` (`tokens.css:76`), le ombre di T, `--lf-selected`. `parseColor` rifiuta `color-mix`, quindi oggi l'editor li dà per non validi: «Applica» è spento e i cursori L/C/H non compaiono.
+- `setFromOklch` forza l'alfa a 1 e il selettore sRGB è opaco: un valore traslucido perde l'alfa al primo tocco.
+- I motori compongono già l'alfa: `cssWithAlpha` e `canvasString` moltiplicano l'alfa del bersaglio per quella di ogni occorrenza. L'import accetta qualunque valore sicuro (`isSafeCssValue`), e L1 scrive il testo così com'è.
+- `resolveTarget` (motori di L2, L3 e delle specializzazioni dei grafici) usa `parseColor`, quindi scarterebbe un `to` in forma di mix.
+- L'id di test `lab-editor-alpha` è già preso dalla casella «anche le varianti trasparenti».
+- `--lab-check` è definito in `labTheme.ts` ma non è usato da nessuna parte.
+
+**Progetto:**
+1. **Modulo puro nuovo `colorValue.ts`**, senza DOM; le `var()` si risolvono con una funzione passata dal chiamante.
+   - `parseTransparentMix` e `joinTransparentMix`: la forma `color-mix(in <spazio>, <base> <p>%, transparent)`, con la percentuale prima o dopo e `transparent` da una parte o dall'altra. Somme diverse da 100 → null. La base è un letterale o `var(--x)`.
+   - `resolveValue`: letterale, `var()` (anche annidata, fino a profondità 4) o mix → Rgba.
+   - `valueOpacity`: mix → p; letterale → la sua alfa; `var()` → 1.
+   - `withOpacity`: mix → cambia la percentuale e tiene la base (così il riferimento a un ruolo resta); `var()` → mix in `oklab`; letterale → la stessa notazione con l'alfa (`#rrggbbaa`, oppure `oklch(… / a)` per OKLCH o fuori sRGB). A 100 % il mix si riduce alla base.
+   - `withBase`: cambia il colore e tiene l'opacità. `baseVar`: la variabile della base, per «Aggancia».
+2. **`ColorEditor.svelte`:**
+   - `resolved` usa `resolveValue`;
+   - nuovo cursore **A** in `.sliders`, con `data-testid="lab-editor-a"`, valori 0–1 a passi di 0,01 e la percentuale accanto;
+   - L/C/H, il selettore sRGB e «Aggancia» passano da `withBase`, quindi l'opacità resta;
+   - i due campioni su una scacchiera `--lab-check` / `--lab-panel`;
+   - chiave i18n `editor.opacity`.
+3. **`engine/targets.ts`:** `resolveTarget` usa `resolveValue`. Un valore con base `var()` resta un bersaglio anche se oggi non si risolve, come prima per `var()`.
+4. **Test** (`test-author`): unit del modulo; `resolveTarget` e `cssWithAlpha` su un mix; un test di componente dell'editor in jsdom con `@testing-library/svelte`, che il progetto usa già. I file nuovi si registrano in `_frontend_designer_lab.py`, solo con aggiunte (N2 ①).
+5. **Documentazione:** `docs-writer`, editor e valori dell'export; una riga nella skill `designer-lab-apply`.
+6. **Prove leggere:** Vitest del Lab, Prettier, `tsc` sui file TS. `svelte-check` ed E2E nello slot, al checkpoint.
+
+**✅ Passo 1 — codice (15/10, 17:4x).**
+> **Note implementazione:**
+> - **Nuovo `colorValue.ts`**, puro, 150 righe. Contiene `parseTransparentMix`, `joinTransparentMix`, `resolveValue`, `valueOpacity`, `withOpacity`, `withBase` e `baseVar`, come da progetto.
+> - **`ColorEditor.svelte`:**
+>   - `resolved` passa da `resolveValue`;
+>   - nuovo cursore **A** (`lab-editor-a`, con la percentuale accanto);
+>   - L/C/H, colore sRGB e «Aggancia» passano da `withBase`; `snap` viene da `baseVar`;
+>   - i due campioni su scacchiera (`--lab-check`, finora inutilizzato, e `--lab-panel`).
+> - **`i18n.ts`:** `editor.opacity`, in it/en.
+> - **`engine/targets.ts`:** `resolveTarget` passa da `resolveValue`; un valore con base `var()` resta un bersaglio anche se oggi non si risolve.
+> - **Skill `designer-lab-apply`:** una frase. `color-mix(…, transparent)` è la base all'opacità p, e va applicato come scritto: la base `var()` resta.
+>
+> **Prove leggere:**
+> - Prettier pulito.
+> - `tsc` sui moduli TS del Lab (config temporanea): nessun errore nei miei file. L'unico errore è `$app/environment` in `src/lib/i18n/index.ts`, un modulo di SvelteKit che `tsc` da solo non vede.
+> - Micro-verifica temporanea, poi cancellata:
+>   - mix → la base resta e cambia la percentuale; a 100 % torna la base;
+>   - `var()` → mix;
+>   - `#64748b` a 25 % → `#64748b40`; `oklch(… / 0.5)` → `/ 0.25`;
+>   - `withBase('#64748b80', '#ff00aa')` → `#ff00aa80`;
+>   - percentuali con somma diversa da 100 → null;
+>   - catena di `var()` risolta.
+> - Unit del Lab invariati: 15 file, 422/422.
+> - `svelte-check` non eseguito: è un controllo pesante e lo slot non è mio. Va al checkpoint.
+
+**✅ Passo 2 — documentazione (15/10, 17:5x).** `docs-writer` ha aggiornato `designer-lab.md`. Nessuna traduzione, quindi niente stamp; build e `check-links` al checkpoint.
+> - **Editor (623–635):** il cursore A sulle tre forme, la scacchiera, i controlli del colore che tengono l'opacità, la moltiplicazione dell'alfa in L2/L3.
+> - **Known Limits (955–958):** gli altri `color-mix()` restano non riconosciuti, cioè quelli di due colori o con percentuali che non sommano 100.
+> - **Schema dell'export (1103–1105):** `to` può essere la forma `color-mix(…, transparent)`, e la skill la applica com'è scritta.
+> - **File Map (1317):** riga di `colorValue.ts`.
+> - **Seams (1368–1369):** `colorValue.ts`.
+>
+> **⚠️ Fuori pista:** `docs-writer` ha notato che solo OKLCH conserva la notazione: un letterale sRGB di qualunque altra forma diventa `#rrggbbaa`. Ho corretto il commento di `withOpacity`, che diceva «keeps its notation»; il codice era già giusto. Le ombre di T non sono ancora in questo `tokens.css`, quindi la pagina cita solo il fondale e `--lf-selected`.
+
+**✅ Passo 3 — test (`test-author`, 15/10, 17:4x–18:1x).**
+> **Primo giro:** 3 file nuovi, registrati in `_frontend_designer_lab.py` con sole aggiunte.
+> - `colorValue.test.ts`: 66 test puri.
+> - `targets.test.ts`: 13 test in jsdom.
+> - `colorEditor.test.ts`: 10 test di componente in jsdom con `@testing-library/svelte`, senza toccare il codice. Ogni test esercita una riga che prima del cambio si comportava in modo diverso, controllato su `git show HEAD:`.
+>
+> Totale da 15 file e 422 test a 18 file e 511. `check-orphans` verde.
+>
+> **⚠️ Fuori pista — 5 difetti miei trovati da `test-author`, corretti (18:0x):**
+> 1. **`cssWithAlpha` su un mix:** sulle occorrenze traslucide congelava in un valore fisso un mix con base `var()`. Ora compone la quota (`percent × alfa`) e resta un mix vivo.
+> 2. **Spazio colore non controllato:** `in oklabb` passava. Ora si accettano solo i 15 spazi di CSS Color 5, e il metodo della tinta solo su quelli polari.
+> 3. **NaN:** `withOpacity` ora restituisce null.
+> 4. **Letterale appena sotto 1:** usciva `#…ff` o `/ 1`. Ora anche i letterali sono arrotondati al decimo di punto.
+> 5. **Colore scelto su un letterale del tutto trasparente:** usciva invisibile. Ora arriva opaco; un mix allo 0 % tiene il suo 0 %.
+>
+> Dopo la correzione restano rossi solo i due vecchi `cssWithAlpha` di `targets.test.ts`, voluti dal punto 1. Li sto facendo aggiornare a `test-author`, con i casi nuovi dei punti 2–5.
+
+> **Contratto C3–C4 scritto da DV** (avviso del coordinatore, 18:00; ramo di DV, non ancora entrato). Serve al livello `category`; per ora niente da fare.
+> - **C3 · aggancio:** il modulo chiama `if (typeof __LF_DESIGNER_LAB__ !== 'undefined' && __LF_DESIGNER_LAB__) globalThis.__lfDesignerLab?.categoryColor?.(kind, key, dark)`. Il `typeof` serve perché in Vitest il `define` manca. **Il metodo `categoryColor` di `LabHook` (`types.ts`, pubblicato da `client.ts`) lo aggiunge L.**
+> - **C4 · segnale:** in `lib/theme/themeMode.ts` ci sono `onChartColorsChange(cb)` e `notifyChartColorsChange()`, che emette `lf:chart-colors-change` su `document`. Il Lab chiama `notifyChartColorsChange()` dopo ogni modifica di categoria e quando carica uno stato.
+> **Secondo giro (18:1x):** test aggiornati per le correzioni 1–5, da 511 a **548** test.
+> - `colorValue.test.ts`: 95 test, fra cui:
+>   - i 15 spazi accettati, uno per uno;
+>   - il metodo della tinta rifiutato sugli 11 spazi rettangolari e accettato sui 4 polari;
+>   - NaN e ±Infinity;
+>   - l'arrotondamento dei letterali;
+>   - il colore che arriva opaco su un letterale trasparente;
+>   - il mix allo 0 %;
+>   - l'invariante 11 valori × 3 basi.
+> - `targets.test.ts`: 17 test. La composizione della quota in un solo mix, con la base `var()` viva sia risolta sia no; e la proprietà generale: l'uscita si risolve nel colore del bersaglio all'alfa del bersaglio per quella dell'occorrenza.
+> - `colorEditor.test.ts`: 14 test, fra cui il mix allo 0 %, il colore scelto su un letterale trasparente e gli spazi errati segnalati come non validi.
+>
+> Nessun difetto nuovo. Registrazione nel runner invariata, cioè i 3 file aggiunti al primo giro.
+
+**✅ Passo 4 — verifica leggera (15/10, 18:1x).**
+> - unit del Lab: **18 file, 548/548**, su un mio giro e due di `test-author`;
+> - Prettier pulito su `scripts/designer-lab`, sul Lab, sulla rotta e su `e2e/designer-lab`;
+> - `check-orphans` verde, eseguito da `test-author`: 413 file unit raggiungibili;
+> - `git diff --check` pulito, porta 6152 libera.
+>
+> **Delta finora:** 7 file tracciati (+162/−19) e 4 nuovi (`colorValue.ts` e 3 test).
+> **Per lo slot del checkpoint:** `npm run check` (`svelte-check` sul componente), i gate, `theme-roles --check`, `mkdocs build` strict e `check-links`, la build di release col controllo del marcatore, `front-designer-lab all` (con l'E2E nuovo del cursore) a 1 worker ed `e2e` a 4, `check-orphans`, la porta.
+
+**✅ Passo 5 — E2E del cursore (`test-author` li scrive; eseguiti nello slot del 15/10, alle 19:08).**
+> **Fase 1 (18:1x–18:2x), solo scrittura:** due test nuovi in `designer-lab-live.spec.ts`. Prettier pulito, `tsc` temporaneo 0 errori.
+> - «A: the opacity of a colour role reaches another tab». È lo sfondo del `login-modal`: A da 1 a 0,5, poi la scheda dell'app mostra lo stesso colore con alfa ≈ 0,5. Controlla anche l'export e il reset.
+> - «A on a translucent mix keeps its base». La variabile si trova a runtime nella scheda Variabili, e oggi è `--lf-selected`, dal 12 al 25 %. Controlla:
+>   - il valore calcolato su `<html>`;
+>   - l'alfa di una sonda;
+>   - che il mix segua la sua base `var()`;
+>   - il reset.
+> - Helper nuovi in `lab-helpers.ts`:
+>   - `openEditor`, ricavato dalla prima metà di `applyChange`, con gli stessi passi;
+>   - `setSlider`, perché `fill()` non accetta un input di tipo range;
+>   - `paintedColours`, `sameColour`, `describeColour`, `expectPainted`, `rootValueOf`;
+>   - `transparentMixOf`, un parser indipendente da quello del Lab.
+
+**⏸️ Slot (15/10, 18:29–18:32): eseguita solo la parte statica, poi pausa chiesta dal coordinatore.** Lo slot va prima a T-8b, circa 40 minuti; il resto parte al suo via. Il messaggio è arrivato quando la parte `pre` era già finita. Comando `/tmp/libreFolio_alpha_validate.sh pre`, log in `/tmp/libreFolio_alpha/val-pre/` e negli artefatti.
+> - `api sync` exit 0;
+> - unit **548/548**;
+> - `npm run check` **0/0**;
+> - gate 168/168;
+> - `theme-roles` pulito;
+> - Prettier pulito;
+> - `mkdocs build` strict **0 WARNING / 0 ERROR**; `check-links` **95** validi;
+> - build di release exit 0: marcatore 0, catalogo 0, indice 0, `parseTransparentMix` 0;
+> - porta libera.
+>
+> Nel worktree ora c'è la build di release: la rifà in debug il primo `server --test` della corsia.
+> **Da fare al via:** `front-designer-lab live` con `test-author` sugli E2E nuovi, poi `/tmp/libreFolio_alpha_validate.sh post` (`all` a 1 worker, `e2e` a 4, `check-orphans`, porta).
+
+**✅ Passo 6 — slot del checkpoint (15/10, 19:07–19:22).** Via del coordinatore alle 19:07. Prima della run: HEAD `a4d1884b4`, 13 righe di stato, porta libera, nessun processo nella corsia, nel worktree la build di release.
+> **⚠️ Fuori pista:** il `test-author` degli E2E non esisteva più, perché l'id era scaduto. Ho eseguito `live` io: era verde al primo giro, quindi non è servita una riparazione né un nuovo agente.
+
+| Passo | Comando (corsia `--test-port 6152 --data-dir /tmp/librefolio-r2-l --fresh-run`) | Esito |
+|---|---|---|
+| `live` (19:08–19:13) | `front-designer-lab live` | **10/10** in 39,7 s. I due test nuovi durano 1,3 s («A: the opacity of a colour role…») e 2,1 s («A on a translucent mix keeps its base»; oggi `--lf-selected`). La build di debug è stata ricostruita nel passo `--build-only` in primo piano, poi «Frontend build is up to date» |
+| `all`, 1 worker (19:13–19:17) | `/tmp/libreFolio_alpha_validate.sh post` | exit 0: **15/15 E2E** (live 10, picker 4, neutral 1) + **548** unit; 5 azioni ✓ |
+| `e2e`, 4 worker (19:17–19:21) | stesso script | exit 0: **15/15** in 1,5 min |
+| `check-orphans` | stesso script | raggiungibili 123 e2e e 413 unit |
+| porta e build | — | 6152 libera (`lsof` exit 1); build di debug (`.build-debug=1`, 10 file col marcatore) |
+
+Con la parte statica delle 18:29–18:32 (unit 548, check 0/0, gate 168, `theme-roles`, Prettier, `mkdocs` strict 0 WARNING, `check-links` 95, release senza marcatore) il checkpoint è completo. Log in `/tmp/libreFolio_alpha/` e negli artefatti di sessione (`files/L-validate-2026-10-15/alpha-val-{pre,post}/`).
+
+> **Rivista** la parte E2E di `test-author`:
+> - i test hanno controlli positivi, testo esatto del mix, colori confrontati dipingendoli, export, base `var()` che segue (con la proprietà inline tolta in `finally`) e reset;
+> - `openEditor` è la prima metà di `applyChange`, con gli stessi passi;
+> - `setSlider` verifica il valore dopo l'evento.
+>
+> **Backlog:** nuova voce **L-16**, «Giro 3 della designer nel Lab»: ruoli di T-8 dopo l'ingresso di T, livello `category` dopo DV. L-15 annota la decisione D3.
