@@ -24,8 +24,9 @@ The full table, with the light and dark values, is in `tokens.css`.
 
 | Meaning | Utility |
 |---|---|
-| Background behind the app shell (sidebar, header, pages) | `bg-lf-app` |
+| Background behind the app shell (header, pages) | `bg-lf-app` (today the same colour as `page`) |
 | Background of a standalone page (login, error) | `bg-lf-page` |
+| The sidebar (neutral, D-T15) | `bg-lf-sidebar` with the text roles; active item `bg-lf-panel text-lf-link border-lf-focus` |
 | Card, modal, menu, dropdown | `bg-lf-card` |
 | Secondary surface: panels, table heads, boxes inside a card | `bg-lf-panel` |
 | Inside of an input | `bg-lf-field` |
@@ -42,9 +43,10 @@ The full table, with the light and dark values, is in `tokens.css`.
 | Border, divider | `border-lf-subtle`, `divide-lf-subtle` |
 | Border of an input | `border-lf-input` |
 | Focus | `focus:ring-lf-focus`, `focus:border-lf-focus`, `focus-visible:outline-lf-focus` |
-| Brand surface: card headers, sidebar | `bg-lf-brand` with `text-lf-on-brand` (`/70` for secondary text, `border-lf-on-brand/20`, `bg-lf-on-brand/10` for hovers) |
+| Brand surface: the login card header | `bg-lf-brand` with `text-lf-on-brand` (`/70` for secondary text, `border-lf-on-brand/20`, `bg-lf-on-brand/10` for hovers) |
 | Primary button | `bg-lf-action hover:bg-lf-action-hover text-lf-on-action` |
 | Selected item | `bg-lf-selected` |
+| Selected control: checkbox, radio, switch on, selected day or preset, active segment (D-T16) | `bg-lf-checked` with `text-lf-on-checked` for its mark |
 | State, with X = `success`, `warning`, `danger`, `info` | `text-lf-X` (text, icon); `bg-lf-X-soft` + `border-lf-X-line` + `text-lf-X-on-soft` (alert, badge); `bg-lf-X text-lf-on-status` (solid) |
 | Signed figures | `text-lf-gain`, `text-lf-loss` |
 | Donation link («Offrimi un caffè») | `text-lf-donate` |
@@ -74,7 +76,7 @@ Convert by **meaning and step**, not by colour family: `gray` and `slate` go to 
 | `border-gray-100/200` + `dark:border-slate-600/700` | `border-lf-subtle` |
 | `border-gray-300/400` on inputs + `dark:border-slate-600` | `border-lf-input` |
 | `bg-libre-green text-white hover:bg-libre-green/90` (button) | `bg-lf-action text-lf-on-action hover:bg-lf-action-hover` |
-| `bg-libre-green` on headers, banners, the sidebar | `bg-lf-brand text-lf-on-brand` |
+| `bg-libre-green` on headers and banners | `bg-lf-brand text-lf-on-brand` |
 | `text-libre-green` + `dark:text-green-400` (links, accents) | `text-lf-link` |
 | `bg-libre-green/10` + `dark:bg-libre-green/20` | `bg-lf-selected` |
 | `focus:ring-libre-green`, `focus:border-libre-green` | `focus:ring-lf-focus`, `focus:border-lf-focus` |
