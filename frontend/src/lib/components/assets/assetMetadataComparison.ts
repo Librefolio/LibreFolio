@@ -44,6 +44,7 @@ export interface ComparisonLabels {
     name: string;
     type: string;
     currency: string;
+    description: string;
     sector: string;
     geographic: string;
 }
@@ -157,7 +158,7 @@ export function compareMetadata(patchData: Record<string, any>, snapshot: Compar
             const tail = description.trim();
             actions.push({kind: 'mergeDescription', field: 'short_description', value: provDesc.includes(tail) ? provDesc : `${provDesc}\n\n${tail}`});
         } else {
-            compareStringField('short_description', 'Description', description, provDesc);
+            compareStringField('short_description', labels.description, description, provDesc);
         }
     }
 

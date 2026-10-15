@@ -11,7 +11,8 @@ import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
 import {compareMetadata, type ComparisonLabels, type ComparisonScope, type ComparisonSnapshot, type MetadataComparison} from './assetMetadataComparison';
 import type {Distribution} from './assetPayload';
 
-const LABELS: ComparisonLabels = {name: 'Name', type: 'Type', currency: 'Currency', sector: 'Sector', geographic: 'Geo'};
+/** The caller's labels. `description` is not 'Description' on purpose: the row once showed that English literal in every language (X-R11). */
+const LABELS: ComparisonLabels = {name: 'Name', type: 'Type', currency: 'Currency', description: 'Desc', sector: 'Sector', geographic: 'Geo'};
 
 /** `manuallyChanged` for a request during which the user edited exactly `fields`. */
 const editedDuring = (fields: string[]) => (field: string) => fields.includes(field);
@@ -189,7 +190,7 @@ describe('compareMetadata — order', () => {
             stringRow('display_name', 'Name', 'Apple', 'Apple Inc.'),
             stringRow('asset_type', 'Type', 'ETF', 'STOCK'),
             stringRow('currency', 'Currency', 'EUR', 'USD'),
-            stringRow('short_description', 'Description', 'My own notes', 'Apple designs consumer electronics.'),
+            stringRow('short_description', LABELS.description, 'My own notes', 'Apple designs consumer electronics.'),
             {field: 'sector_area', label: 'Sector', type: 'distribution', currentValue: {Health: 1}, providerValue: {Technology: 1}, selected: true},
             {field: 'geographic_area', label: 'Geo', type: 'distribution', currentValue: {ITA: 1}, providerValue: {USA: 1}, selected: true},
         ]);
@@ -387,11 +388,11 @@ describe('compareMetadata — the description', () => {
         expect(forField(result, 'short_description')).toEqual({actions: [{kind: 'fill', field: 'short_description', value: 'Apple designs consumer electronics.'}], differences: []});
     });
 
-    it('asks about a prefill the user touched, under the literal label "Description"', () => {
+    it("asks about a prefill the user touched, under the caller's label like every other row (X-R11)", () => {
         const result = compare(provider('Apple designs consumer electronics.'), {form: {shortDescription: 'APPLE INC / AAPL', descriptionFromPrefill: true}, touched: ['short_description']});
         expect(forField(result, 'short_description')).toEqual({
             actions: [],
-            differences: [{field: 'short_description', label: 'Description', type: 'string', currentValue: 'APPLE INC / AAPL', providerValue: 'Apple designs consumer electronics.', selected: true}],
+            differences: [{field: 'short_description', label: LABELS.description, type: 'string', currentValue: 'APPLE INC / AAPL', providerValue: 'Apple designs consumer electronics.', selected: true}],
         });
     });
 
@@ -399,7 +400,7 @@ describe('compareMetadata — the description', () => {
         const typed = (shortDescription: string) => forField(compare(provider('Apple designs consumer electronics.'), {form: {shortDescription, descriptionFromPrefill: false}}), 'short_description');
         expect(typed('My own notes')).toEqual({
             actions: [],
-            differences: [{field: 'short_description', label: 'Description', type: 'string', currentValue: 'My own notes', providerValue: 'Apple designs consumer electronics.', selected: true}],
+            differences: [{field: 'short_description', label: LABELS.description, type: 'string', currentValue: 'My own notes', providerValue: 'Apple designs consumer electronics.', selected: true}],
         });
         expect(typed('')).toEqual({actions: [{kind: 'fill', field: 'short_description', value: 'Apple designs consumer electronics.'}], differences: []});
         expect(typed('Apple designs consumer electronics.')).toEqual({actions: [{kind: 'agree', field: 'short_description'}], differences: []});
