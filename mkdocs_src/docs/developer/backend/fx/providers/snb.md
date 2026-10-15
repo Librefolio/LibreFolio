@@ -7,7 +7,7 @@
 | **API Endpoint** | `https://data.snb.ch/api/cube` |
 | **API Format** | JSON — `/devkum/dimensions/en` (currency list), `/devkum/data/json/en` (rates) |
 | **API Key** | Not required |
-| **Currencies** | ~25, read from the dataset's dimensions at first use (e.g. USD, EUR, GBP, JPY, CNY, AUD, CAD, …) |
+| **Currencies** | ~25, read from the dataset's dimensions at first use (e.g. USD, EUR, GBP, JPY, CNY, AUD, CAD, …). `GET /fx/providers` caches the list for 24 h (`backend/app/services/fx/catalog.py`) |
 | **Dataset** | `devkum` — monthly averages (`M0`); month-end values (`M1`) are not used |
 | **Update Frequency** | Monthly, published around the 2nd business day of the following month |
 | **API Docs** | [SNB Data Portal — devkum](https://data.snb.ch/en/topics/ziredev/cube/devkum) |
