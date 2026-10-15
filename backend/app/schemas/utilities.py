@@ -58,4 +58,12 @@ class SectorItem(BaseModel):
 
 
 class SectorListResponse(BaseListResponse[SectorItem]):
-    """Response for sectors list endpoint."""
+    """Response for sectors list endpoint.
+
+    ``items`` are the sectors an asset can be classified in. ``buckets`` are the two allocation buckets the portfolio
+    engine adds on its own, the cash (``Liquidity``) and the holdings without a sector (``Unknown``): never a sector to
+    choose, listed for their emoji. ``fallback_emoji`` is the glyph of a key outside both lists.
+    """
+
+    buckets: List[SectorItem] = Field(..., description="Allocation buckets the engine adds on its own (cash, unclassified), with their emoji; never a sector to choose")
+    fallback_emoji: str = Field(..., description="Emoji of a key outside the sectors and the buckets")
