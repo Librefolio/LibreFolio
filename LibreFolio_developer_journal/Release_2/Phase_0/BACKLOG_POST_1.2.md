@@ -2331,6 +2331,24 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura: `close()` su ogni gestore tolto, oppure lasciare la pulizia a `basicConfig(force=True)`.
 
   Dettagli: piano H, §14 «Lotto "credenziali nei log di accesso"».
+- **H-10 · `services static-uploads` è dichiarata `write-scoped`, ma svuota la cartella degli upload della corsia** —
+  basso; H (test-author, G-10), 15/10.
+  - Il fixture autouse di `test_static_uploads.py` cancella e ricrea `custom-uploads` della corsia, dove stanno anche gli
+    avatar del seed. Un'altra unità che li legge, in parallelo, li perde.
+  - Nessun rosso visto finora; c'era già prima di G-10.
+  - Cura: una cartella di upload temporanea per ogni test, sostituendo `get_uploads_dir`, oppure dichiarare l'unità
+    esclusiva.
+
+  Dettagli: piano H, §14 «Lotto piccolo: G-10 e due note di E».
+- **H-11 · Un build locale dell'immagine, dietro un proxy che ri-firma il TLS, si ferma a `pip install`** — basso; H
+  (prova Docker di CP7a), 15/10.
+  - Il container di build non conosce la CA del proxy: PyPI risponde «self-signed certificate in certificate chain».
+  - Le immagini di rilascio si costruiscono in CI: tocca solo chi costruisce in locale, in una rete aziendale o dietro un
+    proxy.
+  - Cura possibile: un secret di build facoltativo con una CA in più per pip
+    (`RUN --mount=type=secret,id=extra_ca,required=false`), documentato in `admin/docker_advanced`.
+
+  Dettagli: piano H, §14 «Validazione unica dei quattro lotti e prova Docker».
 
 ## A · Account e accessi (fase 01)
 
