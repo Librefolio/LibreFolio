@@ -218,7 +218,7 @@ it should be. Each check is a function that returns a `ConfigCheck`:
 |-------|---------|
 | `check_id` | Stable id, such as `platform.jwt_secret` |
 | `severity` | `ok`, `info`, `warning` or `error` |
-| `i18n_key` | Key of its message, under `instance.checks.`; the frontend catalogue has no such keys yet, as the checks only reach the log |
+| `i18n_key` | Key of its message, `instance.checks.*`, written whole in `config_audit.py` so the i18n usage scan (`scripts/i18n_usage.py`) sees it. The 13 messages are in the `instance` i18n subsystem; no page shows them yet, as the checks only reach the log |
 | `detail` | The parameters of that message |
 | `summary` | The English sentence written to the log |
 
@@ -263,6 +263,7 @@ All endpoints that access or modify user data require a valid session cookie (`D
 | `/auth/register` | POST | New user registration |
 | `/system/health` | GET | Health check |
 | `/system/info` | GET | System information |
+| `/system/instance` | GET | Public instance configuration, needed before sign-in: see [Public instance configuration](settings.md#public-instance-configuration) |
 | `/utilities/*` | GET | Reference data (countries, currencies, sectors) |
 | `/ai-export/catalog` | GET | Static AI Export catalogue (no user data) |
 
