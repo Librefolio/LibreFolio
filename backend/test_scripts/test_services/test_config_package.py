@@ -21,8 +21,9 @@ module elsewhere calls an accessor of the package instead of reading ``os.enviro
     the reason as value. The exceptions are a ratchet: an entry whose file no longer reads, or no longer exists, fails
     until it is removed.
 (c) The accessors that replaced the reads keep the exact semantics of the call sites they replaced, quirks included:
-    any non-empty ``LIBREFOLIO_NO_SCHEDULER`` disables the scheduler, ``0`` and ``false`` too; an empty ``JWT_SECRET``
-    is no secret, a whitespace-only one is returned as is.
+    any non-empty ``LIBREFOLIO_NO_SCHEDULER`` disables the scheduler, ``0`` and ``false`` too. One semantic changed on
+    purpose since: an empty or blank ``JWT_SECRET`` is no secret; any other value is the secret as written, spaces
+    included.
 (d) ``PROJECT_ROOT``, now computed from one directory deeper, is still the repository root.
 
 What the detector does not see: a read made on the module's behalf (``os.path.expanduser``, a library honouring
@@ -310,13 +311,14 @@ def test_scheduler_disabled_by_any_non_empty_value(monkeypatch, value, expected)
     [
         pytest.param(None, None, id="unset"),
         pytest.param("", None, id="empty-is-none"),
-        pytest.param("  ", "  ", id="whitespace-returned-as-is"),
+        pytest.param("  ", None, id="blank-is-none"),
+        pytest.param(" \t\n", None, id="any-whitespace-is-none"),
         pytest.param(" padded ", " padded ", id="never-stripped"),
         pytest.param("s3cret-signing-key", "s3cret-signing-key", id="set"),
     ],
 )
-def test_configured_jwt_secret_treats_only_the_empty_value_as_none(monkeypatch, value, expected):
-    """(c) ``JWT_SECRET``: unset or empty is no secret; anything else, whitespace included, is the secret as written."""
+def test_configured_jwt_secret_treats_an_empty_or_blank_value_as_none(monkeypatch, value, expected):
+    """(c) ``JWT_SECRET``: unset, empty or blank is no secret; anything else is the secret as written, spaces included."""
     _set_variable(monkeypatch, "JWT_SECRET", value)
     assert configured_jwt_secret() == expected
     print_success(f"JWT_SECRET={value!r}: configured_jwt_secret() == {expected!r}")

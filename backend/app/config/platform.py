@@ -6,7 +6,8 @@ Owner: workstream H (platform). Every environment variable of the application is
 section module.
 
 The variables below are read from the process environment only, never from ``.env``: ``./dev.py`` and Docker Compose
-put them there. Each function keeps the exact semantics the call site had before it moved here.
+put them there. Each function keeps the exact semantics the call site had before it moved here, except that a blank
+secret counts as unset.
 """
 
 import os
@@ -22,8 +23,12 @@ def scheduler_disabled() -> bool:
 
 
 def configured_jwt_secret() -> str | None:
-    """``JWT_SECRET``: the key that signs session tokens, when the environment provides one; an empty value is none."""
-    return os.environ.get("JWT_SECRET") or None
+    """``JWT_SECRET``: the key that signs session tokens, when the environment provides one.
+
+    An empty or blank value is none, so a stray space is never used as a key and the server makes a random one.
+    """
+    value = os.environ.get("JWT_SECRET", "")
+    return value if value.strip() else None
 
 
 def owning_test_lane_id() -> str | None:
