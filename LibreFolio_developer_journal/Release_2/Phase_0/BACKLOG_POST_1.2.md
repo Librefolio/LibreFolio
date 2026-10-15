@@ -2451,7 +2451,9 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     (`RUN --mount=type=secret,id=extra_ca,required=false`), documentato in `admin/docker_advanced`.
 
   Dettagli: piano H, §14 «Validazione unica dei quattro lotti e prova Docker».
-- **H-12 · Un avvio fallito del server condiviso dei test non dice perché** — basso; H (verifica di A5), 15/10.
+- **H-12 · Un avvio fallito del server condiviso dei test non dice perché** — basso; H (verifica di A5), 15/10. Metà ✅
+  15/10 (lotto «billing_url e rotte dei link»): `check_port_in_use` conta solo i listener, come il runner. Resta
+  l'output scartato del server condiviso.
   - `scripts/test_runner/_server.py` avvia `dev.py server --test` con stdout e stderr su `DEVNULL`: il runner stampa
     solo «Shared backend exited during startup (code 1)».
   - Le due verifiche della porta sono diverse: il runner guarda solo i listener; `cmd_server` usa `lsof -i :PORT -t`,
@@ -2503,6 +2505,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Si fa nel lotto A5, che aggiunge i moduli d'invito e di reset con le stesse regole.
   - 15/10: **aspetta la decisione 37 del developer** (coordinatore, via di A5). Intanto A5a lascia all'API il minimo di
     8 caratteri anche nei corpi nuovi (`AuthRegisterRequest` con l'invito, `PasswordResetRequest`).
+  - 15/10 pomeriggio: **la decisione 37 è presa**. Le regole stanno nel backend, che le applica anche all'API; un
+    endpoint le espone al frontend; la CLI usa la stessa funzione; l'indicatore di robustezza resta; le password già
+    salvate restano valide. **Si fa nel lotto A6c**, dopo A6b e prima di A8: dettagli nel piano, «Decisione 37».
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A1.9».
 - **A-7 · Doc per sviluppatori non allineate al codice, trovate in A3** — minimo; A (15/10, `docs-writer`).
   - `architecture/access_control.md:116-123`:
@@ -2556,6 +2561,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Finché non sono tradotte il build stretto resta verde: le pagine vecchie non puntano alle ancore nuove.
   - Si fa dopo A6–A9, che toccano di nuovo le stesse pagine. La prepara il lotto A10, solo su richiesta
     esplicita del developer (coordinatore, 15/10).
+  - In `admin/configuration` IT, FR ed ES manca tutta la sezione «Accounts and Sign-ups» (`#accounts`): nessuna
+    delle tre variabili `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`. Il coordinatore
+    (15/10, 16:56) conferma che è debito di A.
 
   Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.5».
 - **A-11 · Un tema non valido in `user_settings` blocca l'accesso** — basso; trovata dal `test-author` di E (15/10),
@@ -2584,6 +2592,20 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `/system/instance`, da concordare con H e con la decisione 15), oppure `tokens/inspect` che sul blocco
     risponde come per un link non valido quando lo scopo è `invite`.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.10».
+- **A-14 · `access_control.md`: «The last OWNER cannot remove themselves» contraddice «Self-Management»** — minimo;
+  trovata dal `docs-writer` di A6a (15/10), fuori dal perimetro di A, segnalata al coordinatore.
+  - In «Key Rules & Constraints» l'ultimo OWNER non può togliersi; in «Self-Management», e nel codice
+    (`BrokerService.leave_broker`), l'ultimo OWNER che se ne va elimina il broker.
+  - La pagina è del controllo d'accesso ai broker: la correzione è di chi la tiene (W, o chi decide il coordinatore).
+  - **Assegnata a W** dal coordinatore (15/10, 16:56), con la doc di `leave_broker`.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6.5».
+- **A-15 · La docstring di `instance_block.py` non cita la sonda dell'indirizzo** — minimo; trovata dal
+  `docs-writer` di A6a (15/10). Il file è di H.
+  - La docstring elenca come esempi le rotte pubbliche fuori da `ALLOWED_WHEN_BLOCKED`. Da A6a ce n'è un'altra,
+    `GET /auth/address-probe`, che con l'istanza bloccata risponde 401 come le altre.
+  - Una riga, da mettere nel lotto piccolo di H su `ALLOWED_WHEN_BLOCKED`, o da A al prossimo aggiornamento di base.
+  - **Girata ad H** dal coordinatore (15/10, 16:56).
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6.5».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -3078,6 +3100,9 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 - **C-49 (sezione C) · presa in carico da Z** — prove senza codice in Z6a (autorizzate il 15/10), cura in Z6b con il
   punto 35 delle decisioni. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione
   «Z6a — prove su C-49, senza codice di prodotto».
+  - 15/10, Z: 9 cicli di vita puliti su spec singole; il coordinatore cerca l'avviso nelle sue run di categoria. Dalla
+    lettura di uvicorn 0.52.4, con SIGTERM l'ipotesi dei thread è esclusa; restano le richieste in volo (la più
+    probabile), i passi del lifespan e i processi figli. Disegno della cura: piano 06, sezione «Z6b — disegno».
 - ✅ **Z-1 · Il ciclo del grafico del dettaglio asset gira anche su un intervallo passato** — chiusa da Z1 il 15/10
   (commit `74d028ec6`): il ciclo unico del dettaglio ha la guardia `isHeadToday`; il test E2E `front-asset live-pause`
   (f) prova che un intervallo passato non chiede nulla (rosso prima: richieste a +2,1 e +57,1 s). Era: basso, da
@@ -3113,6 +3138,13 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   portafoglio (`portfolioMutation.ts`). La testa del grafico invece salta senza fornitore. Cura possibile: non avviare il
   ciclo senza un fornitore assegnato. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
   sezione «Passi di Z1».
+- **Z-9 · Doc delle pause dei fornitori** — basso; Z, 15/10 (Z7a). Due pagine:
+  - la pagina admin `admin/configuration.en.md`, con le due variabili, il default acceso e l'eccezione della decisione
+    34;
+  - la pagina d'architettura degli asset: il confine e le pause.
+
+  Le variabili esistono da Z7a ma non hanno effetto finché X non aggancia il confine (X1–X4): la doc va scritta con
+  l'aggancio. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7a», passo 5.
 
 ## B · Backup e Docker (fase 01)
 

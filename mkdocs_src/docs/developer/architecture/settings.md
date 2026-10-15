@@ -22,8 +22,10 @@ catalogue, `SETTINGS_REGISTRY`.
       `LIBREFOLIO_TEST_MODE`, `LIBREFOLIO_LOG_LEVEL`, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY` (both
       also as `_FILE`), `LIBREFOLIO_NO_SCHEDULER`, `LIBREFOLIO_DISABLE_DONATION_POPUP`,
       `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`,
-      `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key
-      also as `_FILE`) — are read in `backend/app/config/` (base or section module), from
+      `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release
+      job or `./dev.py docker build` freezes), `LIBREFOLIO_BLOCKED`, `LIBREFOLIO_DELETION_DATE`,
+      `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key also as `_FILE`) — are read in
+      `backend/app/config/` (base or section module), from
       `os.environ` only. pydantic-settings does not export `.env` there, so they arrive through the
       launcher: `./dev.py server` copies `.env` into the environment (shell values win), Compose uses
       `env_file:`.
