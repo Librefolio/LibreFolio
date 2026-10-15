@@ -16,7 +16,7 @@ from backend.app.schemas.provider import (
     FAProviderSearchResultItem,
 )
 from backend.app.services.assets import core, web_link_finder
-from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 
 logger = structlog.get_logger(__name__)
@@ -264,6 +264,9 @@ class AssetSearchService:
                 elif isinstance(e, AssetSourceError) and e.error_code == "NOT_CONFIGURED":
                     logger.info("Search skipped: provider not configured", provider=code, missing=e.details.get("missing"))
                     return (code, [], str(e))
+                elif isinstance(e, AssetRateLimitedError):
+                    logger.info("Search skipped: provider paused after too many requests", provider=code, retry_after=e.retry_after)
+                    return (code, [], str(e))
                 else:
                     logger.exception(f"Search error from provider '{code}': {e}")
                     return (code, [], str(e))
@@ -374,7 +377,7 @@ class AssetSearchService:
             cached_query, q_ok = core._search_query_cache.get(query_cache_key)
             if q_ok and cached_query is not None:
                 logger.debug(f"Search stream query cache HIT for '{query}' on provider '{code}'")
-                await queue.put((code, cached_query, None))
+                await queue.put((code, cached_query, None, {}))
                 return
 
             try:
@@ -384,10 +387,13 @@ class AssetSearchService:
                     items = await AssetSearchService._augment_with_link_finder(code, provider, query, hints)
                 # Populate Layer 2
                 core._search_query_cache.set(query_cache_key, items)
-                await queue.put((code, items, None))
+                await queue.put((code, items, None, {}))
+            except AssetRateLimitedError as e:
+                logger.info("Search stream: provider paused after too many requests", provider=code, retry_after=e.retry_after)
+                await queue.put((code, [], str(e), {"error_code": e.error_code, "retry_after": e.retry_after}))
             except Exception as e:
                 logger.warning(f"Search stream: provider '{code}' error: {e}")
-                await queue.put((code, [], str(e)))
+                await queue.put((code, [], str(e), {}))
 
         # Launch all providers concurrently
         tasks = [asyncio.create_task(_search_one(code, prov)) for code, prov in valid_providers]
@@ -395,13 +401,13 @@ class AssetSearchService:
         # Yield results as they complete
         completed = 0
         while completed < len(tasks):
-            code, items, error = await queue.get()
+            code, items, error, refusal_fields = await queue.get()
             completed += 1
             providers_queried.append(code)
 
             if error:
                 providers_with_errors.append(code)
-                yield f'data: {json.dumps({"event": "provider_error", "provider_code": code, "error": error})}\n\n'
+                yield f'data: {json.dumps({"event": "provider_error", "provider_code": code, "error": error, **refusal_fields})}\n\n'
                 continue
 
             # Convert items to serializable dicts
