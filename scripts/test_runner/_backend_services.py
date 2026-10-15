@@ -526,6 +526,16 @@ def services_email_flows(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "E-mail flow tests", verbose=verbose)
 
 
+def services_email_verification(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the verification of an email address at sign-up (developer decision 44): the hold, the emailed link, the click and «resend»."""
+    print_section("Services: E-mail Verification")
+    print_info("Testing: backend/app/services/email/verification.py")
+    print_info("Tests: the option and whether a link can go, hold_for_verification, awaiting_verification, registration_email_work, confirm_email, resend_verification (limits per address and per account, the password as the login checks it), no secret in the logs")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_verification.py", test_names)
+    return run_command(cmd, "E-mail verification tests", verbose=verbose)
+
+
 def services_email_links(verbose: bool = False, test_names: list = None) -> bool:
     """Test the links an email carries: built from LIBREFOLIO_PUBLIC_URL alone (developer decision 45)."""
     print_section("Services: E-mail Links")
@@ -1421,6 +1431,17 @@ Note: No backend server required.
         desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop; send_link_email: email, then links, then the token, then the recipient, an inactive account's reset link refused, exactly the PUBLIC_URL link, the token never logged; admit_forgotten_password: held first (FORGOT_PASSWORD_DISABLED), then per address keyed by address_key (IPv6 by its /64, a mapped IPv4 as the IPv4, none without one), per identifier, the budget peeked; forgotten_password_work: per-account limits, an administrator's live link, per mailbox, the configuration read again before the link is made, a link made meanwhile rolled back, the new link revoked whatever stops the email, never raises, an unexpected error logged as its type alone; a blocked instance is refused first by every flow and makes no link",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server; LIBREFOLIO_SMTP_* removed then set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-verification",
+        services_email_verification,
+        name="E-mail Verification",
+        desc="verification_required (the global setting, off by default); links_can_go/ensure_verification_can_be_enabled (not blocked, email usable, links ready; read off the event loop); hold_for_verification: never the first account nor with the option off, EMAIL_VERIFICATION_UNAVAILABLE when no link can go, else inactive + a hold without address, 24 h, flushed not committed, its text never out; awaiting_verification: inactive + an unspent verification token; registration_email_work: a new link with the address replaces the hold, exactly build_verification in the account's language from LIBREFOLIO_PUBLIC_URL, nothing for an account that no longer waits or when no email can go, any failure after the commit leaves the token without its address (the account waits, nothing counted), never twice in 5 minutes, never raises; confirm_email: live links only, a token without address refused as revoked but left live, another address revoked, the account active and verified, its other tokens revoked, a link spent meanwhile consumed; resend_verification: per address (address_key) before the password, the password as the login checks it, NOT_NEEDED/ACCOUNT_DISABLED before the configuration, per account on emailed links (5 min, 3/h), USER_LIMIT_REACHED for an expired link on a full instance, the budget, a link emailed meanwhile rolled back; no token, password, identifier or address in the logs",
+        # PURE: every database is a private file under tmp_path built with create_all, the option set in that file only; no
+        # session on the lane DB, no server; LIBREFOLIO_SMTP_*, PUBLIC_URL, BLOCKED and MAX_USERS removed then set with
+        # monkeypatch; the limiters are private on a fake clock; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
         isolation="pure",
     )
     add_test(
