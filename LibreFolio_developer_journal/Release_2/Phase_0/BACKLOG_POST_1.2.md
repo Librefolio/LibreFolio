@@ -2349,7 +2349,9 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     (`RUN --mount=type=secret,id=extra_ca,required=false`), documentato in `admin/docker_advanced`.
 
   Dettagli: piano H, §14 «Validazione unica dei quattro lotti e prova Docker».
-- **H-12 · Un avvio fallito del server condiviso dei test non dice perché** — basso; H (verifica di A5), 15/10.
+- **H-12 · Un avvio fallito del server condiviso dei test non dice perché** — basso; H (verifica di A5), 15/10. Metà ✅
+  15/10 (lotto «billing_url e rotte dei link»): `check_port_in_use` conta solo i listener, come il runner. Resta
+  l'output scartato del server condiviso.
   - `scripts/test_runner/_server.py` avvia `dev.py server --test` con stdout e stderr su `DEVNULL`: il runner stampa
     solo «Shared backend exited during startup (code 1)».
   - Le due verifiche della porta sono diverse: il runner guarda solo i listener; `cmd_server` usa `lsof -i :PORT -t`,
