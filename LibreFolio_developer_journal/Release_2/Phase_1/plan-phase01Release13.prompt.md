@@ -990,3 +990,12 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > finestra. Rosso prima e verde dopo (`api tools` 12); `api schema` identico. Senza nuovo controllo di J: H CP4 non
 > tocca il router dei Tool. Entra prima della galleria delle 09:00, così la misura finale di G ne tiene conto; la
 > riga G-8 nella sezione G è chiusa dal coordinatore. CHANGELOG con una riga in «🐛 Fixed».
+
+### X CP4, gli schemi degli asset per tema, integrato ✅ (2026-10-15, 06:40)
+
+> **Note implementazione**: `7f4618494`, merge di `805f2f112` su `78043417` (CP4 `b31ae0fce`). `schemas/assets/assets.py`
+> (1 001 righe, l'unico modulo di schemi di X sopra la soglia di C3) cede `metadata.py` e `scheduled_investment.py`;
+> via l'`__all__` che faceva da barile. Controllo del coordinatore sull'AST: 49/49 nomi identici. Validazione di X:
+> `all-backend` 13 972 passed, 28 skipped, 0 failed; `openapi.json` identico. Senza nuovo controllo di X: nessun file
+> in comune con J C-93, H CP4 e J G-8, controlli statici del coordinatore puliti. `schemas/fx.py` e gli altri restano
+> interi, sotto soglia. Poi J-5 e X-R8.
