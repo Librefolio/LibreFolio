@@ -174,9 +174,10 @@ def _ensure_shared_jwt_secret(env: dict) -> None:
 
 
 def cmd_server(args):
-    """Start the development server."""
+    """Start the development server; with --build-only, only build what it serves and exit."""
     test_mode = getattr(args, 'test', False)
     rebuild = getattr(args, 'rebuild', False)
+    build_only = getattr(args, 'build_only', False)
     debug_mode = getattr(args, 'debug', False)
     force = getattr(args, 'force', False)
     try:
@@ -239,6 +240,12 @@ def cmd_server(args):
 
     auto_build_mkdocs()
     update_js_cache()
+
+    # The test runner and the gallery run this first, in the foreground, so that these builds
+    # (minutes after a merge) never count against the startup timeout of the server they start next.
+    if build_only:
+        print_success("Server prerequisites ready (--build-only): frontend, documentation and JS cache; server not started")
+        return 0
 
     # Check immediately before binding. Builds can take minutes, so checking
     # before them left a large race in which another worktree could claim the
@@ -611,8 +618,41 @@ def cmd_fe_dev(args):
     return run_command_live(["npm", "run", "dev"], cwd=PROJECT_ROOT / "frontend")
 
 
+#: Where `npm ci` (in frontend/, from the lock) installs the frontend's command-line tools.
+FRONTEND_NODE_BIN = PROJECT_ROOT / "frontend" / "node_modules" / ".bin"
+#: What a frontend build calls: the API client generator (`generate-api`), `svelte-check`, and `vite` (`npm run build`).
+FRONTEND_BUILD_BINARIES = ("openapi-zod-client", "svelte-check", "vite")
+#: The API client and the Tool codecs need only their generator: `generate-api` runs it, `generate-tools` imports it.
+API_CLIENT_BINARIES = ("openapi-zod-client",)
+
+
+def missing_frontend_binaries(names) -> list[str]:
+    """The tools of ``names`` that ``frontend/node_modules/.bin`` does not hold, in the order asked."""
+    return [name for name in names if not (FRONTEND_NODE_BIN / name).exists()]
+
+
+def require_frontend_dependencies(names, *, purpose: str) -> int:
+    """0 when the frontend tools ``names`` are installed; otherwise say what is missing and return 1.
+
+    Checked before any npm or npx call. Without ``frontend/node_modules``, ``npx`` does not fail: it fetches
+    whatever version the registry serves (or one cached earlier) instead of the one the lock pins.
+    """
+    missing = missing_frontend_binaries(names)
+    if not missing:
+        return 0
+    print_error(f"Cannot run {purpose}: the frontend dependencies are not installed (missing from frontend/node_modules/.bin: {', '.join(missing)})")
+    print("   Install them from the lock file, then retry:  cd frontend && npm ci")
+    print("   dev.py never falls back to npx: without node_modules it would run unpinned versions from the registry.")
+    return 1
+
+
 def cmd_fe_build(args):
     """Build frontend for production."""
+    # Before anything that runs npm or npx: the API client generation and svelte-check below go through npx.
+    deps_result = require_frontend_dependencies(FRONTEND_BUILD_BINARIES, purpose="the frontend build")
+    if deps_result != 0:
+        return deps_result
+
     # Ensure fonts/JS libs exist before SvelteKit prerender (validates app.html refs)
     # Only resources the frontend ships can stop this build: MathJax lives in
     # mkdocs_src/ and is never referenced from frontend/, so letting it abort
@@ -703,6 +743,9 @@ def cmd_api_schema(args):
 
 def cmd_api_client(args):
     """Generate the API client and exact Tool codecs from exported schemas."""
+    deps_result = require_frontend_dependencies(API_CLIENT_BINARIES, purpose="the TypeScript contracts generation")
+    if deps_result != 0:
+        return deps_result
     print(Colors.success("Generating TypeScript contracts..."))
     script = "generate-tools" if getattr(args, "tools_only", False) else "generate-api"
     return run_command_live(
@@ -930,6 +973,20 @@ def _reuse_gallery_test_db() -> bool:
     return True
 
 
+#: Share of the CPUs the gallery gives to browser workers when --workers is not given. One per CPU saturated a
+#: 10-CPU Mac (load 65, 8 reds in 10 minutes, requests stuck 10-20 s); 6 ran two 30-minute galleries green at load 11-16.
+GALLERY_BROWSER_WORKERS_PER_CPU = 0.6
+
+
+def default_gallery_workers(cpu_count: Optional[int] = None) -> int:
+    """Browser workers of `mkdocs gallery` without --workers: 60% of the CPUs, at least one.
+
+    ``None`` reads the CPU count when called, so a test (or a container) that changes it is seen.
+    """
+    cpus = cpu_count if cpu_count is not None else (os.cpu_count() or 2)
+    return max(1, round(GALLERY_BROWSER_WORKERS_PER_CPU * cpus))
+
+
 def cmd_mkdocs_gallery(args):
     """Generate gallery screenshots for documentation using Playwright."""
 
@@ -996,13 +1053,12 @@ def cmd_mkdocs_gallery(args):
         return 1
 
     failures = []
-    # Determine worker count: --workers flag or CPU count
+    # Determine worker count: --workers flag, or 60% of the CPUs (default_gallery_workers)
     explicit_workers = getattr(args, 'workers', None)
-    cpu_count = os.cpu_count() or 2
-    worker_count = explicit_workers if explicit_workers else max(2, cpu_count)
+    worker_count = explicit_workers if explicit_workers else default_gallery_workers()
     # Server workers: browser workers here spend most of their time rendering,
     # so one server per four of them (vs one per two for API/E2E).
-    from scripts.test_runner._server import CLIENTS_PER_SERVER_WORKER_GALLERY, server_workers_for
+    from scripts.test_runner._server import CLIENTS_PER_SERVER_WORKER_GALLERY, build_server_prerequisites, server_workers_for
     server_workers = server_workers_for(worker_count, CLIENTS_PER_SERVER_WORKER_GALLERY)
     print(f"{Colors.BLUE}Browser workers: {worker_count}  |  Server workers: {server_workers}{Colors.NC}")
 
@@ -1067,7 +1123,6 @@ def cmd_mkdocs_gallery(args):
         cmd.extend(["-g", filter_text])
 
     viewport_labels = ', '.join(v[0] for v in viewports)
-    print(f"\n{Colors.CYAN}📸 Running screenshots for: {viewport_labels}...{Colors.NC}")
     # Pass server worker count + optional port via env so playwright.config.ts can use it
     # Stream output live to terminal (no capture_output) so user sees progress
     gallery_env = os.environ.copy()
@@ -1086,6 +1141,15 @@ def cmd_mkdocs_gallery(args):
     if test_port:
         gallery_env["TEST_PORT"] = str(test_port)
 
+    # Playwright's webServer starts `dev.py server --test` and waits STARTUP_TIMEOUT_S for it, and that
+    # server builds a stale frontend (debug) and MkDocs before it binds. Built here first, in the
+    # foreground, they no longer count against that wait. Same environment as the webServer's:
+    # LF_APP_VERSION included, which the build bakes into the sidebar of every screenshot.
+    if not build_server_prerequisites(env=gallery_env):
+        print_error("The test server's builds failed: gallery not started")
+        return 1
+
+    print(f"\n{Colors.CYAN}📸 Running screenshots for: {viewport_labels}...{Colors.NC}")
     run_cmd = cmd
 
     try:
@@ -1482,33 +1546,40 @@ def cmd_graph_report(args):
 # =============================================================================
 
 def _get_docker_tag(override: str | None = None) -> str:
-    """Get Docker image tag from git version or override.
+    """Get Docker image tag: the version the image reports, or the override.
 
-    Uses the same git-based versioning as `./dev.py info version`:
+    The same git-based versioning as `./dev.py info version`:
       - On a tag:       librefolio:v1.2.3
       - After commits:  librefolio:v1.2.3-5-gabcdef
       - Dirty tree:     librefolio:v1.2.3-dirty
       - No tags:        librefolio:v0.0.0-gabcdef
 
-    Note: We call get_git_version() fresh (bypassing lru_cache) because
-    _docker_ensure_assets_built() may have dirtied the tree after a prior
-    cached call.
+    Called after _docker_ensure_assets_built(), which froze the version before any build step and wrote it to
+    VERSION: the tag reads that file, so the tag, VERSION and the frontend bundle name one version even when a build
+    step wrote a tracked file meanwhile. Without the file, the version is computed afresh.
     """
     if override:
         return override
 
+    version_file = PROJECT_ROOT / "VERSION"
+    try:
+        frozen = version_file.read_text().strip()
+    except OSError:
+        frozen = ""
+    if frozen:
+        return f"librefolio:{frozen}"
+
     from backend.app.utils.runtime.version import get_git_version
-    # Clear lru_cache so that asset-build artefacts don't produce a stale result
+
     get_git_version.cache_clear()
-    version = get_git_version()  # e.g. "v0.5.0" or "v0.5.0-3-gabcdef-dirty"
-    return f"librefolio:{version}"
+    return f"librefolio:{get_git_version()}"
 
 
 def _check_env_file():
     """Check that .env exists; if not, abort with helpful instructions.
 
     Also warns when terminal environment variables override .env values
-    for Docker-relevant variables (PORT, TEST_PORT).
+    for the Docker-relevant variable PORT (the host side of the port mapping).
     """
     env_file = PROJECT_ROOT / ".env"
     if not env_file.exists():
@@ -1523,7 +1594,7 @@ def _check_env_file():
         return False
 
     # Check for shell env vars that override .env values
-    DOCKER_VARS = ("PORT", "TEST_PORT")
+    DOCKER_VARS = ("PORT",)
     try:
         for line in env_file.read_text().splitlines():
             line = line.strip()
@@ -1546,13 +1617,72 @@ def _check_env_file():
     return True
 
 
+def _docker_frontend_stale_reason(version: str, check_frontend_needs_build) -> Optional[str]:
+    """Why the frontend bundle cannot go into an image of ``version`` as it is, or None when it can.
+
+    The image needs a production bundle of this version: the sources changed, the last build was a debug one (or
+    of unknown mode), or it carries another version, e.g. after a commit that touched no frontend file.
+    """
+    if check_frontend_needs_build():
+        return "missing or outdated"
+    if _read_frontend_build_mode_marker() is not False:
+        return "not a production build"
+    recorded = _read_frontend_build_version()
+    if recorded is None:
+        return "made without a recorded version (not by docker build)"
+    if recorded != version:
+        return f"built for {recorded}, not {version}"
+    return None
+
+
+def _docker_ensure_frontend_built(version: str, check_frontend_needs_build) -> int:
+    """Rebuild the frontend in production mode with ``LF_APP_VERSION=version`` unless the bundle already fits."""
+    stale_reason = _docker_frontend_stale_reason(version, check_frontend_needs_build)
+    if stale_reason is None:
+        print(Colors.info(f"ℹ️  Frontend build is up to date ({version})"))
+        return 0
+    print_warning(f"Frontend build {stale_reason} — building now...")
+
+    class BuildArgs:
+        debug = False
+
+    previous = os.environ.get("LF_APP_VERSION")
+    os.environ["LF_APP_VERSION"] = version
+    try:
+        result = cmd_fe_build(BuildArgs())
+    finally:
+        if previous is None:
+            os.environ.pop("LF_APP_VERSION", None)
+        else:
+            os.environ["LF_APP_VERSION"] = previous
+    if result != 0:
+        print_error("Frontend build failed. Cannot build Docker image.")
+        return result
+    _write_frontend_build_version(version)
+    print_success(f"Frontend build ready ({version})")
+    return 0
+
+
 def _docker_ensure_assets_built():
     """Ensure frontend, docs, JS cache, requirements.txt and VERSION are ready before Docker build.
 
     Uses the same staleness checks as the 'server' command so that
-    ``dev.py docker build`` always produces an image with fresh assets.
+    ``dev.py docker build`` always produces an image with fresh assets. The
+    version is frozen once, first: the frontend bundle (as ``LF_APP_VERSION``)
+    and the VERSION file carry the same one.
     """
+    from backend.app.utils.runtime.version import get_git_version
     from scripts.cli_base import check_frontend_needs_build
+
+    # --- 0. The image's version, frozen once ----------------------------------
+    # Before any step can write a tracked file and make `git describe` say
+    # "-dirty". get_git_version() reads VERSION only where there is no .git/ or
+    # `git describe` fails: remove the file of a previous build first, so such a
+    # checkout gets "unknown" instead of the old value.
+    version_file = PROJECT_ROOT / "VERSION"
+    version_file.unlink(missing_ok=True)
+    get_git_version.cache_clear()
+    version = get_git_version()
 
     # --- 1. JS library cache (fonts must exist before SvelteKit prerender) ----
     # No narrowing here on purpose: the image copies mkdocs_src/site/ next to
@@ -1564,19 +1694,9 @@ def _docker_ensure_assets_built():
         return cache_result
 
     # --- 2. Frontend ----------------------------------------------------------
-    if check_frontend_needs_build():
-        print_warning("Frontend build missing or outdated — building now...")
-
-        class BuildArgs:
-            debug = False
-
-        result = cmd_fe_build(BuildArgs())
-        if result != 0:
-            print_error("Frontend build failed. Cannot build Docker image.")
-            return result
-        print_success("Frontend build ready")
-    else:
-        print(Colors.info("ℹ️  Frontend build is up to date"))
+    result = _docker_ensure_frontend_built(version, check_frontend_needs_build)
+    if result != 0:
+        return result
 
     # --- 3. MkDocs ------------------------------------------------------------
     docs_index = PROJECT_ROOT / "mkdocs_src" / "site" / "index.html"
@@ -1630,18 +1750,8 @@ def _docker_ensure_assets_built():
 
     # --- 5. VERSION file for Docker (no .git/ in the runtime image) -----------
     # The image has no .git/, so get_git_version()'s `git describe` can't run at
-    # container runtime. Freeze the version now (on the host, where .git/ exists)
-    # into a plain file that gets COPYed into the image.
-    from backend.app.utils.runtime.version import get_git_version
-
-    # get_git_version() reads VERSION only where there is no .git/ (inside the
-    # container) or when `git describe` fails. Remove any VERSION file from a
-    # previous build first, so a checkout where git cannot answer writes
-    # "unknown" instead of copying the old value forward.
-    version_file = PROJECT_ROOT / "VERSION"
-    version_file.unlink(missing_ok=True)
-    get_git_version.cache_clear()
-    version = get_git_version()
+    # container runtime: the version frozen at step 0 goes into a plain file
+    # that gets COPYed into the image.
     version_file.write_text(version)
     print_success(f"VERSION file generated ({version})")
 
@@ -1805,7 +1915,10 @@ def cmd_docker_exec(args):
         print(f"  ./dev.py docker exec db current")
         return 1
 
-    cmd = ["docker", "compose", "exec", "librefolio", "python", "dev.py"] + extra
+    # As the server: gosu drops to the numeric ids the entrypoint uses (LIBREFOLIO_UID/GID, set in the image, with the
+    # entrypoint's defaults), so a file a command creates in the data volume belongs to them, not to root. sh hands the
+    # arguments on as "$@".
+    cmd = ["docker", "compose", "exec", "librefolio", "sh", "-c", 'exec gosu "${LIBREFOLIO_UID:-1000}:${LIBREFOLIO_GID:-1000}" python dev.py "$@"', "sh", *extra]
     print(Colors.info(f"🐳 Running in container: dev.py {' '.join(extra)}"))
     return run_command_live(cmd)
 
@@ -2103,6 +2216,27 @@ def _read_frontend_build_mode_marker() -> Optional[bool]:
     """Return whether the last build was a debug build, or None if unknown (e.g. never built)."""
     try:
         return FRONTEND_BUILD_MODE_MARKER.read_text().strip() == "1"
+    except OSError:
+        return None
+
+
+#: The version the last frontend build for a Docker image carries (_docker_ensure_assets_built). Every build empties
+#: frontend/build/, so the file exists only when the last build was made for an image.
+FRONTEND_BUILD_VERSION_MARKER = PROJECT_ROOT / "frontend" / "build" / ".build-version"
+
+
+def _write_frontend_build_version(version: str) -> None:
+    """Record the version the frontend bundle was built with (LF_APP_VERSION), for the next image build."""
+    try:
+        FRONTEND_BUILD_VERSION_MARKER.write_text(version)
+    except OSError:
+        pass  # non-critical bookkeeping — worst case, the next image build rebuilds the frontend
+
+
+def _read_frontend_build_version() -> Optional[str]:
+    """Return the version the last image-bound frontend build carries, or None if unknown."""
+    try:
+        return FRONTEND_BUILD_VERSION_MARKER.read_text().strip() or None
     except OSError:
         return None
 
@@ -2445,6 +2579,8 @@ Examples:
     p = subparsers.add_parser("server", help="🖥️  Start development server")
     p.add_argument("--test", "-t", action="store_true", help="Use test database (port 6041)")
     p.add_argument("--rebuild", "-r", action="store_true", help="Force rebuild frontend before starting")
+    p.add_argument("--build-only", action="store_true", dest="build_only",
+                   help="Only build what the server serves (frontend, docs, JS cache), then exit without starting it")
     p.add_argument("--debug", "-d", action="store_true", help="Debug mode: verbose logging + frontend debug build")
     p.add_argument("--force", "-f", action="store_true", help="Kill blocking processes on port before starting")
     p.add_argument("--workers", "-w", metavar="N|auto", default=1, help="Number of uvicorn workers, or 'auto' for 2 × (CPU-1) (default: 1)")
@@ -2561,7 +2697,7 @@ Examples:
     mk_p.add_argument("--no-populate", action="store_true",
                       help="Reuse the existing test database as it is (faster re-runs; needs one earlier full run)")
     mk_p.add_argument("--workers", "-w", type=int, default=None,
-                      help="Number of Playwright workers (default: CPU count)")
+                      help="Number of Playwright workers (default: 60%% of the CPU count, at least 1)")
     mk_p.add_argument("--test-port", type=int, default=None,
                       help="Port for the test server (default: TEST_PORT env or 6041)")
     mk_p.add_argument("--headed", action="store_true",

@@ -5,6 +5,14 @@ uploads one or more broker files, the backend BRIM plugin parses each into draft
 transactions, and the wizard lets the user review, deduplicate and stage them before they
 land in the `TransactionBulkModal` editor.
 
+The modal owns the whole state machine — the step, the files, the parse results, the
+resolutions, every handler. Each step's markup is a component that reads that state as props,
+writes back only what it binds, and calls the modal's handlers: `UploadStep`, `SelectFilesStep`,
+`AnalyzeStep`, `DuplicatesStep`, `ReviewStep` and the `WizardFooter` (each step's Back, Continue
+and Import buttons), in `frontend/src/lib/components/transactions/wizard/`, with the types they
+share in `wizardTypes.ts` (`StepId` among them); the `assets`, `fix` and `gapFix` steps were
+already components, in `components/transactions/import/`.
+
 This page documents the two things that are easy to get wrong when working on it: **how we
 decide that two transactions are the same** and **the review UIs built on top of that
 decision**.
