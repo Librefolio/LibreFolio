@@ -43,7 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.config import get_settings
 from backend.app.db.models import ProviderInputType
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.assets import (
+from backend.app.schemas.assets.assets import (
     FAAssetCreateItem,
     FABulkAssetCreateResponse,
 )

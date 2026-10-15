@@ -72,7 +72,7 @@ from typing import Literal
 from pyscipopt import Model
 
 from backend.app.services.pac_allocator.compiler import CompiledProgram
-from backend.app.services.pac_allocator.evaluator import evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.evaluator import evaluate_exact_candidate
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,
@@ -208,7 +208,7 @@ class SolverTolerances:
 class SolverStageReport:
     """Floating facts about one cascade stage, as SCIP reported them.
 
-    Mirrors ``schemas/pac_allocator.SolverStageEvidence`` field for field so
+    Mirrors ``schemas/pac_allocator/evidence.SolverStageEvidence`` field for field so
     ``planner_report.py`` can project it without re-deriving anything, but
     stays a plain dataclass: this module must not import wire schemas.
     ``infeasible`` is reserved for SCIP's verdict on the first, still-global

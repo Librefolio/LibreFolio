@@ -78,7 +78,7 @@ preceded it — which is precisely what is needed when the suspicion is a cascad
 | Role | Path |
 |------|------|
 | Session generation and in-flight slots | `frontend/src/lib/stores/app/clientSession.ts`, `frontend/src/lib/stores/risk/riskStore.svelte.ts` |
-| BRIM file store | `backend/app/services/brim_provider.py` |
+| BRIM file store | `backend/app/services/brim/brim_provider.py` |
 | Backend test conftest | `backend/test_scripts/conftest.py` |
 | Hygiene fixture and gating | `frontend/e2e/fixtures/playwright.ts`, `scripts/test_runner/_consolidate.py` |
 | AI Export endpoint | `backend/app/api/v1/ai_export.py` |

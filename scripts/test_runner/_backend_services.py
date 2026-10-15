@@ -90,6 +90,7 @@ RISK_SERVICE_TEST_PATHS = (
 PAC_PLANNER_CORE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_pac_planner_exact.py",
     "backend/test_scripts/test_services/test_pac_planner_normalize.py",
+    "backend/test_scripts/test_services/test_pac_planner_engine_boundaries.py",
 )
 PAC_PLANNER_EVALUATOR_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_evaluator.py"
 PAC_PLANNER_ORACLE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_oracle.py"
@@ -102,7 +103,7 @@ PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_pla
 
 
 def services_pac_planner_core(verbose: bool = False, test_names: list = None) -> bool:
-    """Test exact PAC/Rebalancer primitives, models, and normalization."""
+    """Test exact PAC/Rebalancer primitives, models, normalization, and the engine's data boundary."""
     print_section("Services: PAC/Rebalancer Exact Core")
     cmd = [*pipenv_prefix(), "python", "-m", "pytest", *PAC_PLANNER_CORE_TEST_PATHS, "-v"]
     if test_names:
@@ -413,7 +414,7 @@ def services_transaction(verbose: bool = False, test_names: list = None) -> bool
 def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> bool:
     """Test that parsing off-loads to a process pool and degrades safely."""
     print_section("Services: BRIM Parse Pool")
-    print_info("Testing: backend/app/services/brim_parse_pool.py")
+    print_info("Testing: backend/app/services/brim/brim_parse_pool.py")
     print_info("Tests: real parse through the pool, pickle round-trip, thread fallback")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_pool.py", test_names)
@@ -495,7 +496,7 @@ def services_static_uploads(verbose: bool = False, test_names: list = None) -> b
 def services_brim_parse_error(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIMParseError exception class."""
     print_section("Services: BRIM Parse Error")
-    print_info("Testing: backend/app/services/brim_provider.py (BRIMParseError)")
+    print_info("Testing: backend/app/services/brim/brim_provider.py (BRIMParseError)")
     print_info("Tests: Constructor, message/details attributes, exception hierarchy")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_error.py", test_names)
@@ -505,7 +506,7 @@ def services_brim_parse_error(verbose: bool = False, test_names: list = None) ->
 def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> bool:
     """Test parse resilience when the file is renamed underfoot."""
     print_section("Services: BRIM Parse Race")
-    print_info("Testing: backend/app/services/brim_provider.py (uploaded → parsed rename race)")
+    print_info("Testing: backend/app/services/brim/brim_provider.py (uploaded → parsed rename race)")
     print_info("Tests: retry after the rename, no retry on a genuine read error, path resolution on stale metadata")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_race.py", test_names)
@@ -551,7 +552,7 @@ def services_brim_provider_base(verbose: bool = False, test_names: list = None) 
 def services_brim_report_sets(verbose: bool = False, test_names: list = None) -> bool:
     """Test BRIM report-set schemas, plugin-contract defaults and combined-file storage."""
     print_section("Services: BRIM Report Sets")
-    print_info("Testing: backend/app/schemas/brim.py + backend/app/services/brim_provider.py (report roles, truth points, combined files)")
+    print_info("Testing: backend/app/schemas/brim.py + backend/app/services/brim/brim_provider.py (report roles, truth points, combined files)")
     print_info("Tests: schemas, BRIMProvider set defaults, two-role fake plugin, batch_id, combined-file write/save/reuse/stale/delete/list")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_report_sets.py", test_names)
@@ -561,7 +562,7 @@ def services_brim_report_sets(verbose: bool = False, test_names: list = None) ->
 def services_brim_gap_fix(verbose: bool = False, test_names: list = None) -> bool:
     """Test the BRIM gap-fix: LibreFolio's balances at a date, the gap-fix schemas and compute_gap_fix."""
     print_section("Services: BRIM Gap-fix")
-    print_info("Testing: backend/app/services/brim_gap_fix.py + TransactionService balances at a date + gap-fix schemas in backend/app/schemas/brim.py")
+    print_info("Testing: backend/app/services/brim/brim_gap_fix.py + TransactionService balances at a date + gap-fix schemas in backend/app/schemas/brim.py")
     print_info("Tests: exclude_tx_ids, get_balances_at_end_of, request/response schemas, proposals, cost todos, explanation, verifications, one import vs three")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_gap_fix.py", test_names)
@@ -602,7 +603,7 @@ def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> 
 def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test the read-only PAC/Rebalancer portfolio source snapshot."""
     print_section("Services: Portfolio Allocation Source")
-    print_info("Testing: backend/app/services/portfolio_allocation_source.py")
+    print_info("Testing: backend/app/services/pac_allocator/source/")
     print_info("Tests: selectors, exact facts, saved evidence, provenance and no side effects")
 
     cmd = _build_pytest_cmd(
@@ -717,6 +718,38 @@ def services_config_package(verbose: bool = False, test_names: list = None) -> b
     print_info("Testing: backend/app/config/ (env reads, section accessors)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_package.py", test_names)
     return run_command(cmd, "Config package tests", verbose=verbose)
+
+
+def services_config_secrets(verbose: bool = False, test_names: list = None) -> bool:
+    """Test secrets given as NAME or NAME_FILE: precedence, file rules and errors, secrets set twice."""
+    print_section("Services: Config Secrets")
+    print_info("Testing: backend/app/config/__init__.py (env_secret, read_secret_file, secrets_set_twice)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_secrets.py", test_names)
+    return run_command(cmd, "Config secrets tests", verbose=verbose)
+
+
+def services_config_instance_key(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance key: HKDF-SHA256, key sources, first-use generation, never replaced, race between processes."""
+    print_section("Services: Instance Key")
+    print_info("Testing: backend/app/services/platform/instance_key.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_instance_key.py", test_names)
+    return run_command(cmd, "Instance key tests", verbose=verbose)
+
+
+def services_config_audit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the startup configuration checks: states, no secret in results, startup stops on a broken configured secret."""
+    print_section("Services: Configuration Checks")
+    print_info("Testing: backend/app/services/platform/config_audit.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_config_audit.py", test_names)
+    return run_command(cmd, "Configuration checks tests", verbose=verbose)
+
+
+def services_config_env_example(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the .env.example guard: every variable read is documented, the uncommented lines unchanged."""
+    print_section("Services: .env.example Guard")
+    print_info("Testing: .env.example against backend/app/, Settings and the compose files")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_env_example.py", test_names)
+    return run_command(cmd, ".env.example guard tests", verbose=verbose)
 
 
 def services_donation_popup(verbose: bool = False, test_names: list = None) -> bool:
@@ -951,7 +984,7 @@ Note: No backend server required.
         "pac-planner-core",
         services_pac_planner_core,
         name="PAC/Rebalancer Exact Core",
-        desc="Canonical rational arithmetic, posting, fee, FX and tax primitives plus strict v2 normalization, exact model mapping and typed issue precedence",
+        desc="Canonical rational arithmetic, posting, fee, FX and tax primitives plus strict v2 normalization, exact model mapping, typed issue precedence and the engine's data boundary (no database, no planner source)",
         isolation="pure",
     )
     add_test(
@@ -1158,6 +1191,10 @@ Note: No backend server required.
     )
     add_test(cat, "config-misc", services_config_misc, name="Config Helpers", desc="get_data_dir test-mode/env-override branches")
     add_test(cat, "config-package", services_config_package, name="Config Package", desc="Env vars read only in backend/app/config/, section accessors keep their semantics", isolation="pure")
+    add_test(cat, "config-secrets", services_config_secrets, name="Config Secrets", desc="NAME / NAME_FILE secrets: precedence, file rules and errors, secrets set twice", isolation="pure")
+    add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
+    add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
+    add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
     add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
     add_test(cat, "file-preview", services_file_preview, name="File Preview", desc="CSV/Excel/text preview detection helpers")

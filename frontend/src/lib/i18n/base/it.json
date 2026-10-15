@@ -184,7 +184,14 @@
       "edited": "Modificato",
       "deleted": "Eliminato",
       "appended": "Nuovo"
-    }
+    },
+    "counter": {
+      "edited": "{n, plural, one {# modificato} other {# modificati}}",
+      "deleted": "{n, plural, one {# eliminato} other {# eliminati}}",
+      "appended": "{n, plural, one {# nuovo} other {# nuovi}}"
+    },
+    "staleShow": "{n, plural, one {Mostra # riga non aggiornata} other {Mostra # righe non aggiornate}}",
+    "staleHide": "{n, plural, one {Nascondi # riga non aggiornata} other {Nascondi # righe non aggiornate}}"
   },
   "datePicker": {
     "presets": {

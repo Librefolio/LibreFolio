@@ -19,10 +19,17 @@ module elsewhere calls an accessor of the package instead of reading ``os.enviro
 (b) The guard. No module under ``backend/app/`` outside ``config/`` reads the environment, except the files declared in
     ``ENVIRONMENT_READ_EXCEPTIONS``: keyed by basename, so an entry survives its module moving between packages, with
     the reason as value. The exceptions are a ratchet: an entry whose file no longer reads, or no longer exists, fails
-    until it is removed.
+    until it is removed. None is declared at the moment: the last one, ``web_link_finder.py``, left when its reads moved
+    into ``config/plugins.py``; the mechanism stays for the next debt.
 (c) The accessors that replaced the reads keep the exact semantics of the call sites they replaced, quirks included:
-    any non-empty ``LIBREFOLIO_NO_SCHEDULER`` disables the scheduler, ``0`` and ``false`` too; an empty ``JWT_SECRET``
-    is no secret, a whitespace-only one is returned as is.
+    any non-empty ``LIBREFOLIO_NO_SCHEDULER`` disables the scheduler, ``0`` and ``false`` too. One semantic changed on
+    purpose since: an empty or blank ``JWT_SECRET`` is no secret; any other value is the secret as written, spaces
+    included. The link finder's accessors in ``config/plugins.py`` keep the reads of ``web_link_finder.py``:
+    ``LIBREFOLIO_WEB_LINK_FINDER_ENABLED`` unset is on and set but empty is off; the engine is stripped and lowercased, a
+    blank one being the empty string; region and backend are stripped and fall back to their default when blank; the
+    timeout and the maximum are what ``float()`` and ``int()`` read, the caller's default when unset, blank or refused
+    (``0`` and ``nan`` are kept, ``5.0`` is no integer). The API key is stripped and, as every secret now, may come from
+    ``LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE``.
 (d) ``PROJECT_ROOT``, now computed from one directory deeper, is still the repository root.
 
 What the detector does not see: a read made on the module's behalf (``os.path.expanduser``, a library honouring
@@ -30,23 +37,36 @@ What the detector does not see: a read made on the module's behalf (``os.path.ex
 application reads itself, and those are written ``os.environ`` and ``os.getenv``.
 
 Pure: the sources are parsed with ``ast``, never imported, and the accessors run against variables set through
-``monkeypatch`` — no database, no server, no network, no file written. The guard asserts an absence, so the detector
-first proves it sees a presence: it flags every read shape of a synthetic source and nothing allowed, and the scan must
-reach known modules, find the writes of ``spawn_worker.py`` without calling them reads, and find the reads of the config
-package itself (an empty parametrization would be skipped, never red).
+``monkeypatch`` (the one secret file in ``tmp_path``) — no database, no server, no network, no file written in the
+repository. The guard asserts an absence, so the detector first proves it sees a presence: it flags every read shape of a
+synthetic source and nothing allowed, and the scan must reach known modules, find the writes of ``spawn_worker.py``
+without calling them reads, and find the reads of the config package itself (an empty parametrization would be skipped,
+never red). The ratchet, with no entry to check today, proves on synthetic modules that it flags an entry excusing
+nothing; it is one test over the whole dictionary, so an empty one passes instead of adding a skip.
 """
 
 from __future__ import annotations
 
 import ast
+import math
+from collections.abc import Callable
 from pathlib import Path
 from typing import NamedTuple
 
 import pytest
 
-from backend.app.config import PROJECT_ROOT
+from backend.app.config import PROJECT_ROOT, SecretFileError
 from backend.app.config.accounts import donation_popup_disabled
 from backend.app.config.platform import configured_jwt_secret, owning_test_lane_id, scheduler_disabled
+from backend.app.config.plugins import (
+    web_link_finder_api_key,
+    web_link_finder_ddgs_backend,
+    web_link_finder_ddgs_region,
+    web_link_finder_enabled,
+    web_link_finder_engine,
+    web_link_finder_max_results,
+    web_link_finder_timeout,
+)
 from backend.test_scripts.test_utils import print_section, print_success
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -60,10 +80,8 @@ ENVIRONMENT_MEMBERS = ENVIRONMENT_MAPPINGS | ENVIRONMENT_GETTERS
 
 # (b) Files still allowed to read the environment, by basename (robust to the module moving between packages), with the
 # reason. Each entry is a debt: the ratchet fails as soon as its file stops reading, so the entry leaves with the move
-# that pays it.
-ENVIRONMENT_READ_EXCEPTIONS: dict[str, str] = {
-    "web_link_finder.py": "LIBREFOLIO_WEB_LINK_FINDER_*: workstream H moves these reads into backend/app/config/ after the module moves to services/assets/ (plan 01_platform, CP3)",
-}
+# that pays it. Empty since the reads of web_link_finder.py moved into config/plugins.py.
+ENVIRONMENT_READ_EXCEPTIONS: dict[str, str] = {}
 
 # Presence barrier: modules the scan must reach, relative to backend/app/. The writer sets environment variables for
 # its spawned children and reads none.
@@ -263,14 +281,38 @@ def test_a_module_outside_the_config_package_reads_no_environment_variable(modul
     print_success(f"backend/app/{module}: no environment read")
 
 
-@pytest.mark.parametrize("basename", sorted(ENVIRONMENT_READ_EXCEPTIONS))
-def test_a_declared_exception_still_has_reads_to_excuse(basename):
-    """(b) An exception is a debt: it goes as soon as its file stops reading the environment."""
-    modules = [module for module in SCANNED_MODULES if Path(module).name == basename]
-    assert modules, f"no {basename} is left under backend/app/ outside config/: remove its entry from ENVIRONMENT_READ_EXCEPTIONS"
-    reads = [f"backend/app/{module}:{line}" for module in modules for line, _ in _accesses_of(module).reads]
-    assert reads, f"{', '.join(modules)} no longer read the environment: remove the {basename} entry from ENVIRONMENT_READ_EXCEPTIONS so the rule covers it again"
-    print_success(f"{basename}: {len(reads)} read(s) still excused in {', '.join(modules)}")
+def _stale_exceptions(exceptions: dict[str, str], modules: list[str], reads_of: Callable[[str], list[tuple[int, str]]]) -> list[str]:
+    """The entries of ``exceptions`` that excuse nothing any more: no file of that basename is left, or none still reads."""
+    stale = []
+    for basename, reason in sorted(exceptions.items()):
+        matching = [module for module in modules if Path(module).name == basename]
+        if not matching:
+            stale.append(f"{basename}: no such file is left under backend/app/ outside config/ ({reason})")
+        elif not any(reads_of(module) for module in matching):
+            stale.append(f"{basename}: {', '.join(matching)} no longer read the environment ({reason})")
+    return stale
+
+
+def test_every_declared_exception_still_has_reads_to_excuse():
+    """(b) An exception is a debt: it goes as soon as its file stops reading the environment. None declared, none owed."""
+    stale = _stale_exceptions(ENVIRONMENT_READ_EXCEPTIONS, SCANNED_MODULES, lambda module: _accesses_of(module).reads)
+    assert not stale, "remove these entries from ENVIRONMENT_READ_EXCEPTIONS so the rule covers their files again:\n" + "\n".join(stale)
+    print_success(f"{len(ENVIRONMENT_READ_EXCEPTIONS)} exception(s) declared, each still excusing reads" if ENVIRONMENT_READ_EXCEPTIONS else "no exception declared: every module outside config/ is under the rule")
+
+
+def test_the_ratchet_flags_an_exception_that_excuses_nothing():
+    """(b) Presence barrier of the ratchet: through the real detector, it keeps a file that still reads and flags a file
+    that no longer does and one that is gone."""
+    sources = {
+        "services/a/still_reads.py": 'import os\n\nvalue = os.environ.get("X")\n',
+        "services/b/paid_off.py": "from backend.app.config.plugins import web_link_finder_enabled\n\nvalue = web_link_finder_enabled()\n",
+    }
+    exceptions = {"still_reads.py": "a debt", "paid_off.py": "a paid debt", "moved_away.py": "a file that is gone"}
+
+    stale = _stale_exceptions(exceptions, sorted(sources), lambda module: _environment_accesses(sources[module]).reads)
+
+    assert [entry.split(":", 1)[0] for entry in stale] == ["moved_away.py", "paid_off.py"], f"the ratchet must flag the file that is gone and the one that no longer reads, and only them: {stale}"
+    print_success(f"{len(stale)} stale entries flagged, the one still excusing reads kept")
 
 
 # =============================================================================
@@ -310,13 +352,15 @@ def test_scheduler_disabled_by_any_non_empty_value(monkeypatch, value, expected)
     [
         pytest.param(None, None, id="unset"),
         pytest.param("", None, id="empty-is-none"),
-        pytest.param("  ", "  ", id="whitespace-returned-as-is"),
+        pytest.param("  ", None, id="blank-is-none"),
+        pytest.param(" \t\n", None, id="any-whitespace-is-none"),
         pytest.param(" padded ", " padded ", id="never-stripped"),
         pytest.param("s3cret-signing-key", "s3cret-signing-key", id="set"),
     ],
 )
-def test_configured_jwt_secret_treats_only_the_empty_value_as_none(monkeypatch, value, expected):
-    """(c) ``JWT_SECRET``: unset or empty is no secret; anything else, whitespace included, is the secret as written."""
+def test_configured_jwt_secret_treats_an_empty_or_blank_value_as_none(monkeypatch, value, expected):
+    """(c) ``JWT_SECRET``: unset, empty or blank is no secret; anything else is the secret as written, spaces included."""
+    monkeypatch.delenv("JWT_SECRET_FILE", raising=False)  # its file would stand in for an unset or empty JWT_SECRET
     _set_variable(monkeypatch, "JWT_SECRET", value)
     assert configured_jwt_secret() == expected
     print_success(f"JWT_SECRET={value!r}: configured_jwt_secret() == {expected!r}")
@@ -358,6 +402,156 @@ def test_donation_popup_disabled_by_1_true_or_yes_in_any_case(monkeypatch, value
     _set_variable(monkeypatch, "LIBREFOLIO_DISABLE_DONATION_POPUP", value)
     assert donation_popup_disabled() is expected
     print_success(f"LIBREFOLIO_DISABLE_DONATION_POPUP={value!r}: donation_popup_disabled() is {expected}")
+
+
+# The link finder's variables, read in config/plugins.py since they left services/assets/web_link_finder.py.
+LINK_FINDER = "LIBREFOLIO_WEB_LINK_FINDER_"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param(None, True, id="unset-is-on"),
+        pytest.param("", False, id="set-but-empty-is-off"),
+        pytest.param("  ", False, id="blank-is-off"),
+        pytest.param("1", True, id="1"),
+        pytest.param("true", True, id="true"),
+        pytest.param("YES", True, id="YES-any-case"),
+        pytest.param(" On ", True, id="On-spaces-around"),
+        pytest.param("0", False, id="0"),
+        pytest.param("false", False, id="false"),
+        pytest.param("off", False, id="off"),
+        pytest.param("2", False, id="2-is-off"),
+    ],
+)
+def test_web_link_finder_enabled_by_1_true_yes_or_on(monkeypatch, value, expected):
+    """(c) ``LIBREFOLIO_WEB_LINK_FINDER_ENABLED``: unset is on, set but empty is off; ``1``, ``true``, ``yes``, ``on`` in any case, spaces around."""
+    _set_variable(monkeypatch, LINK_FINDER + "ENABLED", value)
+    assert web_link_finder_enabled() is expected
+    print_success(f"{LINK_FINDER}ENABLED={value!r}: web_link_finder_enabled() is {expected}")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param(None, "ddgs", id="unset-is-ddgs"),
+        pytest.param("", "", id="empty-is-empty"),
+        pytest.param("   ", "", id="blank-is-empty"),
+        pytest.param(" APIKEY ", "apikey", id="stripped-and-lowercased"),
+        pytest.param("SearXNG", "searxng", id="lowercased"),
+    ],
+)
+def test_web_link_finder_engine_is_stripped_and_lowercased(monkeypatch, value, expected):
+    """(c) ``LIBREFOLIO_WEB_LINK_FINDER_ENGINE``: ``ddgs`` when unset; otherwise stripped and lowercased, blank giving the empty string."""
+    _set_variable(monkeypatch, LINK_FINDER + "ENGINE", value)
+    assert web_link_finder_engine() == expected
+    print_success(f"{LINK_FINDER}ENGINE={value!r}: web_link_finder_engine() == {expected!r}")
+
+
+@pytest.mark.parametrize(
+    ("accessor", "variable", "default"),
+    [
+        pytest.param(web_link_finder_ddgs_region, LINK_FINDER + "DDGS_REGION", "wt-wt", id="region"),
+        pytest.param(web_link_finder_ddgs_backend, LINK_FINDER + "DDGS_BACKEND", "auto", id="backend"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param(None, None, id="unset-is-the-default"),
+        pytest.param("", None, id="empty-is-the-default"),
+        pytest.param("   ", None, id="blank-is-the-default"),
+        pytest.param(" it-it ", "it-it", id="stripped"),
+        pytest.param("Google,Bing", "Google,Bing", id="case-kept"),
+    ],
+)
+def test_web_link_finder_ddgs_option_is_stripped_or_its_default(monkeypatch, accessor: Callable[[], str], variable, default, value, expected):
+    """(c) ``…_DDGS_REGION`` (``wt-wt``) and ``…_DDGS_BACKEND`` (``auto``): stripped, case kept, the default when unset or blank."""
+    _set_variable(monkeypatch, variable, value)
+    expected = default if expected is None else expected
+    assert accessor() == expected
+    print_success(f"{variable}={value!r}: {accessor.__name__}() == {expected!r}")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param(None, 7.5, id="unset-is-the-default"),
+        pytest.param("", 7.5, id="empty-is-the-default"),
+        pytest.param("  ", 7.5, id="blank-is-the-default"),
+        pytest.param("2.5", 2.5, id="2.5"),
+        pytest.param(" 3 ", 3.0, id="spaces-around-and-a-float"),
+        pytest.param("0", 0.0, id="0-kept"),
+        pytest.param("-1", -1.0, id="negative-kept"),
+        pytest.param("1e1", 10.0, id="exponent"),
+        pytest.param("nan", math.nan, id="nan-kept"),
+        pytest.param("inf", math.inf, id="inf-kept"),
+        pytest.param("six", 7.5, id="not-a-number-is-the-default"),
+    ],
+)
+def test_web_link_finder_timeout_is_what_float_reads(monkeypatch, value, expected):
+    """(c) ``LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT``: ``float()`` of the stripped value, the caller's default when unset, blank or refused."""
+    _set_variable(monkeypatch, LINK_FINDER + "TIMEOUT", value)
+    timeout = web_link_finder_timeout(7.5)
+    # repr() tells nan from nan as == cannot, and 3.0 from 3
+    assert repr(timeout) == repr(expected), f"{LINK_FINDER}TIMEOUT={value!r} must give {expected!r}, web_link_finder_timeout gave {timeout!r}"
+    print_success(f"{LINK_FINDER}TIMEOUT={value!r}: web_link_finder_timeout(7.5) == {timeout!r}")
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param(None, 9, id="unset-is-the-default"),
+        pytest.param("", 9, id="empty-is-the-default"),
+        pytest.param("3", 3, id="3"),
+        pytest.param(" 7 ", 7, id="spaces-around"),
+        pytest.param("0", 0, id="0-kept"),
+        pytest.param("-2", -2, id="negative-kept"),
+        pytest.param("5.0", 9, id="5.0-is-no-integer"),
+        pytest.param("five", 9, id="not-a-number-is-the-default"),
+    ],
+)
+def test_web_link_finder_max_results_is_what_int_reads(monkeypatch, value, expected):
+    """(c) ``LIBREFOLIO_WEB_LINK_FINDER_MAX``: ``int()`` of the stripped value, the caller's default when unset, blank or refused."""
+    _set_variable(monkeypatch, LINK_FINDER + "MAX", value)
+    maximum = web_link_finder_max_results(9)
+    assert (maximum, type(maximum)) == (expected, int), f"{LINK_FINDER}MAX={value!r} must give {expected!r}, web_link_finder_max_results gave {maximum!r}"
+    print_success(f"{LINK_FINDER}MAX={value!r}: web_link_finder_max_results(9) == {maximum!r}")
+
+
+@pytest.mark.parametrize(
+    ("key", "key_file", "expected"),
+    [
+        pytest.param(None, None, "", id="neither-set-is-empty"),
+        pytest.param("", None, "", id="empty-is-empty"),
+        pytest.param("   ", None, "", id="blank-is-empty"),
+        pytest.param(" k3y ", None, "k3y", id="stripped"),
+        pytest.param(None, "   ", "", id="blank-file-variable-is-no-file"),
+        pytest.param(None, "<key file>", "from-the-file", id="from-the-file-stripped"),
+        pytest.param("   ", "<key file>", "from-the-file", id="blank-key-falls-to-the-file"),
+        pytest.param("from-the-variable", "<key file>", "from-the-variable", id="key-wins-over-the-file"),
+    ],
+)
+def test_web_link_finder_api_key_from_the_variable_or_its_file_stripped(monkeypatch, tmp_path, key, key_file, expected):
+    """(c) ``LIBREFOLIO_WEB_LINK_FINDER_API_KEY``, or else ``…_API_KEY_FILE`` as every secret; stripped, the empty string when neither."""
+    if key_file == "<key file>":
+        key_file = str(tmp_path / "web-link-finder-api-key")
+        Path(key_file).write_text("  from-the-file \n", encoding="utf-8")
+    _set_variable(monkeypatch, LINK_FINDER + "API_KEY", key)
+    _set_variable(monkeypatch, LINK_FINDER + "API_KEY_FILE", key_file)
+    assert web_link_finder_api_key() == expected
+    print_success(f"{LINK_FINDER}API_KEY={key!r}, {LINK_FINDER}API_KEY_FILE={key_file!r}: {expected!r}")
+
+
+def test_web_link_finder_api_key_raises_on_a_file_that_cannot_give_it(monkeypatch, tmp_path):
+    """(c) A ``…_API_KEY_FILE`` that cannot give the key is an error naming the variable and the path, never a silent empty key."""
+    missing = tmp_path / "missing-api-key"
+    monkeypatch.delenv(LINK_FINDER + "API_KEY", raising=False)
+    monkeypatch.setenv(LINK_FINDER + "API_KEY_FILE", str(missing))
+    with pytest.raises(SecretFileError) as raised:
+        web_link_finder_api_key()
+    assert str(raised.value) == f"{LINK_FINDER}API_KEY_FILE: {missing} does not exist", f"the error must name {LINK_FINDER}API_KEY_FILE and the path: {raised.value}"
+    print_success(f"{raised.value}")
 
 
 # =============================================================================

@@ -206,8 +206,9 @@ Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9.
 6. Testi e igiene: errori di rete al login in inglese (O-15), occhio della password
    (K-17), utenti E2E creati admin (L12). Se c'è spazio: «Novità dalla tua ultima
    versione» (C-54).
-7. Migrazione Alembic 005 (token e inviti, modalità di registrazione, versione del
-   token di sessione, `email_verified_at` già pronto per E).
+7. Migrazione Alembic 005 in A4, solo backend (tabella `account_tokens`, colonne nuove di `users`,
+   `email_verified_at` già pronto per E, `NULL` sugli utenti esistenti); 006 in A5, la conversione di
+   `enable_registration` in `registration_mode`, con il suo codice e la sua interfaccia (coordinatore, 15/10).
 
 ### X · Plugin, asset e ricerca
 
@@ -237,7 +238,7 @@ Si parte con 6 sessioni (indicazione del developer), poi si sale fino a 9.
      revisione di sicurezza a fine lavoro;
    - primo uso: justETF e Borsa Italiana con paese e valuta preferiti (feedback
      dell'utente C); traduzioni dei plugin montati a runtime se servono (U-B1);
-   - migrazione Alembic 006; dipendenza nuova `cryptography` (finestra delle dipendenze,
+   - migrazione Alembic 007; dipendenza nuova `cryptography` (finestra delle dipendenze,
      §6).
 4. Ordine dei fornitori nella ricerca (F21): priorità e livello (premium, community)
    dichiarati dal plugin e sovrascrivibili; premium in testa con badge; «Non lo trovi?
@@ -348,12 +349,12 @@ dall'audit del 14/10: ogni sessione le riverifica nell'analisi.
 | Profilo gestito (F05) | H, A, X | interruttore e sola lettura (H); popup, aggiornamenti, link, limite utenti (A); elenchi dei fornitori (X) | no | `LIBREFOLIO_PROFILE`, `LIBREFOLIO_ASSET_PROVIDERS_ALLOWED`, `LIBREFOLIO_FX_PROVIDERS_ALLOWED`, `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_SUPPORT_URL`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_READ_ONLY` | pytest per ogni default e per la sola lettura su ogni metodo; Vitest dei link; E2E dell'avviso | medio |
 | Disclaimer e link legali (F09) | A | onboarding, login e registrazione, Informazioni, modello dell'AI Export | no | `LIBREFOLIO_TOS_URL`, `LIBREFOLIO_PRIVACY_URL` | Vitest; controllo del testo nell'export | piccolo |
 | Admin iniziale (F02) | A | servizi account, `auth.py`, pagina `/setup` | no | `LIBREFOLIO_ADMIN_EMAIL`, `LIBREFOLIO_ADMIN_USERNAME` (admin), `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN(_FILE)` | pytest: idempotenza, token monouso e scaduto | piccolo |
-| Inviti e utenti (F13) | A | servizi account, router utenti admin, scheda Utenti, pagina d'invito | sì (005) | `LIBREFOLIO_REGISTRATION=disabled\|invite\|open` | pytest del ciclo di vita dei token; Vitest; E2E invito → registrazione e reset | medio-grande |
+| Inviti e utenti (F13) | A | servizi account, router utenti admin, scheda Utenti, pagina d'invito | sì (005, 006) | `LIBREFOLIO_REGISTRATION=disabled\|invite\|open` | pytest del ciclo di vita dei token; Vitest; E2E invito → registrazione e reset | medio-grande |
 | Email (F04) | E | servizio email nuovo, modelli nelle 4 lingue, flussi di A | no (campi già in 005) | `LIBREFOLIO_SMTP_HOST`, `_PORT`, `_USER`, `_PASSWORD(_FILE)`, `_FROM`, `_TLS`, limite di invii | server SMTP finto; E2E del reset | medio |
 | Backup e ripristino (F01) | B | servizio di backup, `api/v1/backup.py` (oggi 501), avvio (ripristino in attesa), CLI, scheda Backup, guida | no | limite di caricamento per il ripristino; eventuale token per scaricare i backup (§10) | pytest: andata e ritorno, revisione vecchia e nuova, percorsi nell'archivio; E2E stessi totali | grande |
 | Litestream (F25) | B | `Dockerfile`, `entrypoint.sh`, doc Docker avanzato | no | destinazione della replica, credenziali (`_FILE`), chiave SSE-C facoltativa | prova Docker con replica su cartella o S3 locale; SIGTERM attraverso la catena | medio |
 | Avvio e risveglio (F07) | Z | scheduler, avvio, `wake-sync`, stato «Aggiornamento prezzi…» | no | `LIBREFOLIO_WAKE_TOKEN(_FILE)`, jitter, attesa sui 429, tempo massimo di spegnimento | pytest del prossimo orario (fusi e ora legale), spegnimento entro il limite; E2E dello stato | medio |
-| Impostazioni dei plugin | X | contratti delle famiglie, archivio delle impostazioni, API, zona in Impostazioni, «Configura» | sì (006) | sovrascritture per campo da variabile o `*_FILE` | pytest: scope, cifratura, segreti mai restituiti, blocco da env; Vitest del modulo generato; E2E | grande |
+| Impostazioni dei plugin | X | contratti delle famiglie, archivio delle impostazioni, API, zona in Impostazioni, «Configura» | sì (007) | sovrascritture per campo da variabile o `*_FILE` | pytest: scope, cifratura, segreti mai restituiti, blocco da env; Vitest del modulo generato; E2E | grande |
 | Ordine dei fornitori (F21) | X | contratto dell'asset, ricerca in streaming, `AssetSearchAutocomplete`, `AssetModal` | no | eventuale priorità da configurazione | pytest dell'ordine; Vitest dei gruppi; E2E della ricerca | medio |
 
 ## 6. Regole comuni
@@ -402,8 +403,9 @@ dall'audit del 14/10: ogni sessione le riverifica nell'analisi.
   di `dev.py api schema`.
 - **C6 — devWiki.** Le tabelle «Source files» le aggiorna la sessione che sposta i file, nello stesso lotto;
   `check_source_paths.py` non deve peggiorare.
-- **C7 — Migrazioni.** 005 di A (account e inviti), 006 di X (impostazioni dei plugin), poi le correzioni dei dati di
-  W. Chi integra dopo riallinea `down_revision` all'aggiornamento di base.
+- **C7 — Migrazioni.** 005 e 006 di A (A4: token e colonne degli utenti; A5: `registration_mode`), 007 di X
+  (impostazioni dei plugin), poi le correzioni dei dati di W. Chi integra dopo riallinea `down_revision` all'aggiornamento
+  di base, e se entra prima di una migrazione con il numero più basso prende quel numero (coordinatore, 15/10).
 
 ### Superfici condivise: un solo scrittore
 
@@ -415,7 +417,7 @@ dall'audit del 14/10: ogni sessione le riverifica nell'analisi.
 | Scheduler | H lo sposta, poi è di Z |
 | Registro delle schede di Impostazioni | A; B e X aggiungono la loro scheda con una riga |
 | File Docker | H fino al lotto operativo, poi B |
-| Catena delle migrazioni Alembic | ordine assegnato dal coordinatore: 005 A, 006 X; chi integra dopo rimette `down_revision` all'aggiornamento di base |
+| Catena delle migrazioni Alembic | ordine assegnato dal coordinatore: 005 e 006 A, 007 X; chi integra dopo rimette `down_revision` all'aggiornamento di base |
 | Client API generato | rigenerato con `./dev.py api sync` da chi integra, mai unito a mano |
 | Cataloghi i18n | ognuno scrive solo le sorgenti del proprio sottosistema; i cataloghi generati si ricostruiscono |
 | Catalogo del runner dei test | ognuno le voci del proprio dominio, in aggiunta; i test speculari (TS1), se decisi, a H |
@@ -533,9 +535,10 @@ fermati all'handoff, porta verificata libera.
   base.
 - **Avvisi di merge: file del programma colori** (richiesta del coordinatore colori, 15/10). Ogni avviso di merge in
   `dev_release2` elenca i file toccati sotto `scripts/visual_review/`, `frontend/scripts/theme/`,
-  `frontend/src/themeRoles*`, `frontend/e2e/gallery.spec.ts` e `Phase_1/10_colorSystem/`, anche quando cambia solo un
-  commento: G e T li modificano nei loro checkpoint. Prima dell'avviso, il coordinatore 1.3 li cerca con
-  `git diff --name-only <target> <ramo> -- <quei percorsi>`.
+  `frontend/src/themeRoles*`, `frontend/e2e/gallery.spec.ts`, `scripts/test_runner/_frontend_utility.py` e
+  `Phase_1/10_colorSystem/`, anche quando cambia solo un commento: G, R e T li modificano nei loro checkpoint. Prima
+  dell'avviso, il coordinatore 1.3 li cerca con `git diff --name-only <target> <ramo> -- <quei percorsi>`.
+  `_frontend_utility.py` si è aggiunto il 15/10, dopo A3, su richiesta del coordinatore colori.
 - **Regola «chi parte prima»** (concordata fra i due coordinatori il 14/10 alle 22:05). Serve perché nessun riordino
   della 1.3 blocchi il tag.
   - Vale per i tagli di file della 1.3 su un'area che T converte (tabella sotto).
@@ -776,7 +779,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > **Fuori pista**:
 > - Due trappole del primo avvio dei test in un worktree nuovo, trovate da H e da J: `npm ci` mancante e build oltre i
 >   300 s del server condiviso. Scritte in `.github/copilot-instructions.md` e nel §6.
-> - Nel piano di H una tabella nominava l'hotfix: resa neutra prima del commit.
+> - Nel piano di H una riga di tabella è stata resa neutra prima del commit.
 > - Dalla verifica di A1 è nata la decisione 36, cosa vede un utente dei dati degli altri.
 > - L'ID T-B4 compare due volte nel backlog: il coordinatore colori rinomina la sua voce.
 >
@@ -839,3 +842,76 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > più lunga (CP3 e CP4, e gli eventi che passano a W), mentre il CP-2 di J aspetta comunque le decisioni del
 > developer. La risoluzione statica degli import sull'albero combinato X + W I1 + A3 + J dà 0 irrisolti su 9 459
 > nomi; J valida poi una sola volta, sopra X.
+
+### H CP3, segreti e chiave d'istanza, integrato ✅ (2026-10-15, 03:50)
+
+> **Note implementazione**: `d08d9358f`, merge di `751bf9ab3` su `ed29f77c2`. Quattro commit di H: due correzioni in
+> commit separati (`8f9e8f018`, un segreto vuoto o di soli spazi vale come assente; `7640313a4`, una corsia di test
+> usa segreti suoi), poi CP3 (`54fd32def`: `env_secret()` con `*_FILE`, chiave d'istanza e `derive_key`, controlli
+> all'avvio, `.env.example` completo) e il journal. Aggiornamento di base `751bf9ab3` con X CP1/CP2a, W I1 e A3: due
+> conflitti additivi risolti da H (`main.py`, `test_dev_cli_image.py`). Validazione di H sulla revisione combinata:
+> `all-backend` 12 125 passed, 3 skipped, 0 failed; `api schema` invariato; `config-package` 475.
+>
+> **Ordine**: H era pronto prima di X, quindi entra prima; X lo assorbe con un controllo leggero (guardia delle
+> letture d'ambiente sui suoi moduli nuovi, raccolta, `api schema`). La run completa sulla combinazione X + H la fa
+> J, che aggiorna la base sopra tutti e due.
+
+### X CP2b, asset per tema e router per risorsa, integrato ✅ (2026-10-15, 04:00)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `92b42d796`. CP2b è `870c9956f` (124 file): rinomina pura
+> `schemas/assets.py` → `schemas/assets/assets.py` (R099, l'unica coppia di git) e tagli nello stesso commit (§6,
+> opzione 1); `services/assets/core` → `base` + `core`, `price_store` → `price_store` + `currency_change` +
+> `event_store`, `api/v1/assets.py` → pacchetto per risorsa, schemi degli eventi in `schemas/assets/events.py`.
+> Controllo indipendente del coordinatore sull'AST: definizioni spostate identiche, salvo docstring, percorsi e 6
+> richiami a `EventStoreOperations`; 50 file con soli import, 8 rivisti a mano. Validazione di X: revisione
+> `eb245b624` (con W I1 e A3) `all-backend` 13 476 passed, 28 skipped, 0 failed; 139 rotte e `api schema`
+> identici; poi, sopra H CP3 (`92b42d796`), controllo leggero: guardia 485 (+10, i moduli nuovi), raccolta, schema
+> e rotte identici.
+>
+> Gli eventi passano a W (lotto E1): moduli, contratti e righe che restano a X nel messaggio del coordinatore a W del
+> 15/10. Le impostazioni dei plugin di X diventano la migrazione 007.
+
+### W K1, chiarezza, integrato ✅ (2026-10-15, 04:10)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `d915c869f` (K1 `532a1fd9c`, base aggiornata con A3, H CP3
+> e X CP2b in `1d1c7e67d`). O-12 (plurale), C-89 (le due date del cambio), V-38 (i problemi di saldo sotto il loro
+> titolo), P-15 parte W e W-B8 (testi tradotti dell'editor dei dati). I-10 S3 chiusa senza codice, per decisione del
+> coordinatore: il contratto documentato permette di cancellare gli eventi automatici. Validazione di W sulla
+> revisione combinata: build 0/0, `i18n check` stretto, `core-unit` 4 266, `component-unit` 3 198, `tx-unit` 887,
+> `theme-roles` pulito, E2E `transactions-modals` 25, `asset-data-editor` 26, `fx-csv-import` 21, `fx-editor` 4.
+> Con l'ingresso, `ui/data-editor` è libera per T. W-B13 passa a X.
+>
+> **Prossimo di W**: W4 (`services/brim/`). W3 (`api/v1/brokers/`) e W5–W6 (`uploads.py`) aspettano un commit del
+> coordinatore su quei file, come dice il piano di W.
+
+### H, letture di `web_link_finder` in `config/`, integrato ✅ (2026-10-15, 04:25)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `9dda5ccd9` (lotto `fd873f366`, base aggiornata con X CP2b
+> e W K1). Le 7 letture d'ambiente di `services/assets/web_link_finder.py` passano in `config/plugins.py`, la sezione
+> di X, con la stessa semantica; la chiave API vale anche da `..._API_KEY_FILE`. La guardia `config-package` non ha più
+> eccezioni: nessun modulo di `backend/app` fuori da `config/` legge l'ambiente. Validazione di H: `all-backend` 12 185
+> passed, 3 skipped, 0 failed sulla sua base; sopra X CP2b, controllo leggero (guardia 540 = 530 + 12 − 2, raccolta,
+> `api schema`, `mkdocs build` stretto). Le note su `web_link_finder` per X le gira il coordinatore.
+
+### J CP-1, il PAC per tema, integrato ✅ (2026-10-15, 04:35)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `e1fbc801f`. CP-1A (rinomina) e CP-1B (taglio del PAC e
+> guardia dei confini D-J18, allargata a `sqlmodel` e `backend.app.db`), poi quattro aggiornamenti di base. Sulla
+> revisione `b17f8fb85` (con W I1, A3, H CP3 e X CP2b) J ha fatto la prima run completa sulla combinazione X CP2b +
+> H CP3: `all-backend` 13 810 passed, 28 skipped, 0 failed; `openapi.json` identico. Sull'ultima base (`b8d604086`,
+> con W K1 e il lotto di H) un controllo leggero: guardia 567, raccolta +61, API identica.
+>
+> **Strumenti nuovi per i merge**, scritti da J: `patch_effect.py` (bersagli di `patch`/`monkeypatch` che nessuno
+> legge più) e `guard_strings.py` (percorsi nelle stringhe delle guardie che non portano più a niente). Con la
+> risoluzione statica degli import del coordinatore, sono i controlli di ogni aggiornamento di base. J-2 diventa C-94
+> nella sezione C; C-93 non si è ripresentato.
+
+### W4 CP6, BRIM in `services/brim/`, integrato ✅ (2026-10-15, 04:45)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `155d9b050`. Rinomina pura `548a0688d` (C1): i 4 moduli
+> `brim_provider`, `brim_report_sets`, `brim_parse_pool`, `brim_gap_fix` in `services/brim/` (R098–R100), import nei 33
+> plugin, costanti del cancello `gate-event-loop-io`, `applyTo`, skill, doc e devWiki; U-B8 (passo «Capacity table»
+> tolto dalla guida). Validazione di W: `all-backend` 13 749 passed, 28 skipped, 0 failed sulla base `0229dbc6a`;
+> sopra J CP-1 e il lotto di H, controllo leggero (guardia 567, raccolta identica file per file, API identica) e i
+> tre controlli statici del coordinatore puliti. Il taglio (CP7), W3 e W5–W6 aspettano un commit del coordinatore su
+> `brokers.py` e `uploads.py`; intanto W7 e K2.

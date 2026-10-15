@@ -36,7 +36,7 @@ from backend.app.schemas.provider import (
     ProbeOperation,
 )
 from backend.app.services.assets import core
-from backend.app.services.assets.core import (
+from backend.app.services.assets.base import (
     AssetSourceError,
     AssetSourceProvider,
 )

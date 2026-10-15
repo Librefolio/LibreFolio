@@ -81,7 +81,7 @@ domain with section comments — sorting would scatter related names away from t
 - `backend/app/db/__init__.py`
 - `backend/app/db/base.py`
 - `backend/app/schemas/__init__.py`
-- `backend/app/schemas/assets.py`
+- `backend/app/schemas/assets/assets.py`
 
 Each carries `# noqa: RUF022 — grouped by domain with section comments; sorting would scatter related names`.
 

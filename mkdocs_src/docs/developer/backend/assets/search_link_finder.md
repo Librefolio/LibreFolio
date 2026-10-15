@@ -23,7 +23,7 @@ The system is **not** one function — it is a small **standalone module** (the 
 | **`web_link_finder` module** | `backend/app/services/assets/web_link_finder.py` | Self-contained subsystem: the external-engine client (**ddgs** metasearch by default), config, TTL cache, domain filter. Knows nothing about providers or assets. |
 | **Search orchestration** | `backend/app/services/assets/search.py` → `AssetSearchService` | Ties it together: `_augment_with_link_finder`, `_build_link_finder_queries`, `_filter_items_by_known_identifiers`, `_provider_url_for_item`. Decides *when* to fall back and *how* to narrow. |
 | **Provider hook** | each provider's `resolve_url` / `resolvable_url_domains` | Turns a resolved URL back into search-item(s). Only Borsa Italiana implements it today. |
-| **Endpoints** | `backend/app/api/v1/assets.py` | `/assets/provider/search[/stream]` accept the optional `hints` query param. |
+| **Endpoints** | `backend/app/api/v1/assets/providers.py` | `/assets/provider/search[/stream]` accept the optional `hints` query param. |
 
 So the answer to "is it its own subsystem or just a service function?" is **both**: a dedicated
 module for the engine, orchestrated by the service layer, with a thin per-provider hook.
@@ -159,11 +159,15 @@ def is_enabled() -> bool
 
 ### ⚙️ Configuration (env vars, all optional)
 
+The variables are read in `backend/app/config/plugins.py`, from the process environment only:
+`web_link_finder.py` calls its `web_link_finder_*()` accessors and reads no variable itself.
+
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `LIBREFOLIO_WEB_LINK_FINDER_ENABLED` | `1` | `1`/`0` master switch. |
 | `LIBREFOLIO_WEB_LINK_FINDER_ENGINE` | `ddgs` | `ddgs` \| `apikey` (`searxng` reserved for Fase B). |
 | `LIBREFOLIO_WEB_LINK_FINDER_API_KEY` | `""` | Key for the `apikey` engine (engine self-disables if absent). |
+| `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE` | `""` | Path of a file holding the API key instead: the key is a secret, read by `env_secret()` ([Secrets from Files](../../architecture/security.md#secrets-from-files)), so a blank value counts as unset. Read only when the `apikey` engine is built: a file that cannot give the key makes `_build_engine()` log `web_link_finder: <error>; disabling` and return no engine, so the search returns `[]` and the server keeps running. |
 | `LIBREFOLIO_WEB_LINK_FINDER_DDGS_REGION` | `wt-wt` | ddgs region (e.g. `wt-wt` worldwide, `it-it`). The worldwide default avoids US bias so IT pages aren't down-ranked. |
 | `LIBREFOLIO_WEB_LINK_FINDER_DDGS_BACKEND` | `auto` | ddgs backend(s): `auto` rotates/aggregates, or a comma list (e.g. `google,bing`). |
 | `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` | `6` | Per-request timeout, seconds. |

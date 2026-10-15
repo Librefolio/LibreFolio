@@ -752,3 +752,301 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 >   `git diff --check` pulito; porta 6181 libera.
 
 ### Checkpoint CP2a 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+
+> Handoff inviato; il coordinatore ha committato CP2a in tre commit: `88bb9d346` (rinomina), `103489f3f` (sezioni e
+> letture), `b884efcb7` (journal).
+
+### Aggiornamento di base con A2, W1 e W2 ✅ (2026-10-15, notte)
+
+> **Note implementazione**:
+>
+> - Il coordinatore ha fuso `dev_release2` a `e0816ec9c` nel mio ramo: merge `60f8a35ce`, senza conflitti.
+>   `_backend_services.py` e il backlog si sono fusi da soli. Porta A2 (frontend in `lib/features/`), W1 e W2
+>   (`services/transactions/`, `services/brokers/`).
+> - **Revisione combinata `60f8a35ce`**:
+>   - `services config-package`: 465 passed. Sono 14 casi in più, uno per ogni modulo nuovo di W, e nessuno legge
+>     l'ambiente;
+>   - `api schema` uguale a quello di `e0816ec9c`, escluso `info.version` (`1da07e609d1ffad8` e
+>     `238c1e4b84afdbdc`);
+>   - `front build --debug` rc 0, svelte-check 0 errori: serviva, perché A2 ha cambiato `frontend/src`;
+>   - `all-backend` (`-q --fresh-run --workers 2`, corsia 6181): 7/7 in 12 min 06 s, **11 816 passed, 3 skipped, 0
+>     failed**. Rispetto a CP2a sono i 14 casi della guardia: W1 e W2 hanno modificato 12 file di test senza
+>     aggiungerne.
+> - **Integrazione**: `dev_release2` = `60f8a35ce` in fast-forward (coordinatore). Il mio ramo coincide.
+
+### CP3 — segreti e chiave d'istanza (F03) (2026-10-15) — in corso
+
+> **Via** del coordinatore (2026-10-15, notte), subito dopo l'ingresso di CP2a. Le 7 letture di `web_link_finder.py`
+> si spostano quando X ha portato il file in `services/assets/`.
+>
+> **Avvisi all'admin: la scheda «Sicurezza» di A** (decisione del developer, punto 4: un posto solo per le cose
+> sospette). A definisce il registro dei controlli nel suo A8: un controllo è id, gravità, chiave i18n e dettaglio,
+> valutato a richiesta da un endpoint solo per admin. In CP3 i controlli vanno solo nei log, scritti come funzioni che
+> rendono lo stato; li registro nel registro di A quando A8 è entrato. `/system/admin-notices` (D12) non si fa.
+>
+> **Disegno**:
+>
+> - **Base di `config/`** (H): `env_secret(nome)` legge `NOME`, se non vuoto, altrimenti il file indicato da
+>   `NOME_FILE`.
+>   - Del file si tolgono solo gli a capo finali. Un percorso relativo parte dalla cartella del progetto.
+>   - File mancante, illeggibile, vuoto, non UTF-8 o più grande di 64 KiB: `SecretFileError`, con la variabile e il
+>     percorso, mai il contenuto.
+>   - Con `NOME` e `NOME_FILE` insieme vince `NOME` (D3), e il controllo lo segnala. Vale per `JWT_SECRET` e per ogni
+>     variabile `LIBREFOLIO_*`, quindi anche per i segreti che le altre sessioni aggiungeranno.
+>   - Come `JWT_SECRET` oggi, si legge solo dall'ambiente: `dev.py` e Compose ci mettono `.env`.
+> - **`config/platform.py`**: `configured_jwt_secret()` passa da `env_secret`; nuovo `configured_instance_key()`.
+>   La semantica di `JWT_SECRET` resta quella di CP2a.
+> - **`services/platform/instance_key.py`**: la chiave d'istanza.
+>   - Da `LIBREFOLIO_INSTANCE_KEY`, poi da `LIBREFOLIO_INSTANCE_KEY_FILE`, poi da `<DATA_DIR>/secrets/instance.key`.
+>   - Il file si genera al primo uso: 32 byte casuali in base64url, cartella 0700, file 0600. Viene scritto in un file
+>     temporaneo e pubblicato con `os.link`, così fra più worker vince una chiave sola. Dove i link fisici non ci sono,
+>     si crea con `O_EXCL`.
+>   - Una chiave è un testo di almeno 32 caratteri. Un file vuoto o corto è un errore e non si rigenera mai.
+>   - I consumatori non vedono la chiave: `derive_key(scopo)` è HKDF-SHA256 (RFC 5869) con la sola libreria standard.
+>     Serve a X (segreti dei plugin) e a B (backup). Finché non lo chiamano, il dead code lo segnala come «usato solo
+>     dai test».
+> - **`services/platform/config_audit.py`**: i controlli, ognuno una funzione che rende id, gravità, chiave i18n,
+>   dettaglio e sintesi inglese per il log.
+>   - JWT effimero (info) o corto (warning); `NOME` insieme a `NOME_FILE` (warning); chiave d'istanza illeggibile
+>     (error) o con permessi larghi (warning); `SESSION_COOKIE_SECURE=never` (warning); log `DEBUG` o `TRACE` (info).
+>   - All'avvio, una riga nel lifespan di `main.py`: un segreto configurato ma rotto ferma l'avvio. Un file generato
+>     rovinato invece si scrive come errore, e l'avvio continua.
+> - **`dev.py`**: `_ensure_shared_jwt_secret` non genera niente con `JWT_SECRET_FILE`, e toglie un `JWT_SECRET` vuoto
+>   che nasconderebbe il file.
+> - **`validate_test_data_dir`**: `secrets/` e `secrets/instance.key` fra i percorsi gestiti.
+> - **`.env.example`**: completo e diviso per funzione.
+>   - Sezioni nuove: segreti, motori di rischio, le sezioni vuote di A, X, Z, B ed E, le variabili impostate dagli
+>     strumenti.
+>   - Le righe non commentate restano quelle di oggi, perché il file diventa `/app/.env` nell'immagine.
+>   - `LIBREFOLIO_DISABLE_DONATION_POPUP` resta fuori, per scelta di A.
+>   - Una guardia controlla che ogni variabile letta in `config/`, ogni campo di `Settings` e ogni variabile del
+>     compose sia documentata, e che l'insieme delle righe non commentate non cambi.
+
+#### CP3 passo 1 — il codice ✅ (2026-10-15, notte)
+
+> **Note implementazione**:
+>
+> - **`config/__init__.py`**:
+>   - nuova sezione «Secrets»: `SecretFileError`, `env_secret()`, `read_secret_file()`, `secrets_set_twice()`;
+>   - `secrets/` e `secrets/instance.key` fra i percorsi gestiti di `validate_test_data_dir`;
+>   - la docstring del modulo cita `secrets/` e la regola `NOME_FILE`.
+> - **`config/platform.py`**: `configured_jwt_secret()` passa da `env_secret("JWT_SECRET")`, con la stessa semantica di
+>   prima quando `_FILE` manca; nuovo `configured_instance_key()`.
+> - **Moduli nuovi in `services/platform/`**: `instance_key.py` (`derive_key`, `hkdf_sha256`, `instance_key_status`,
+>   `InstanceKeyError`) e `config_audit.py` (`ConfigCheck`, cinque controlli, `run_config_checks`,
+>   `log_configuration_audit`). Aggiornata la docstring del pacchetto.
+> - **`main.py`**: un import e una riga nel lifespan, dopo «Starting LibreFolio»:
+>   `await asyncio.to_thread(log_configuration_audit)`. Righe lontane dai gestori statici.
+> - **`dev.py`**: `_ensure_shared_jwt_secret` gestisce `JWT_SECRET_FILE`.
+> - **`.env.example`**: diviso in sezioni, 167 righe. Le 9 righe non commentate sono quelle di prima, con gli stessi
+>   valori.
+> - **`.github/instructions/backend.instructions.md`**: la mappa di `platform/` e la riga «Config & Data Paths».
+> - **Prove a mano** (script in `/tmp`, dati in una cartella temporanea poi cancellata):
+>   - `hkdf_sha256` rende i tre vettori della RFC 5869;
+>   - `JWT_SECRET_FILE` funziona, `JWT_SECRET` vince sul file, file mancante o vuoto danno errore;
+>   - la chiave nasce 0600 in una cartella 0700, 44 byte, senza file temporanei rimasti, ed è stabile;
+>   - con il file a 0644 il controllo dà `warning`; una chiave configurata corta ferma `log_configuration_audit`.
+> - **Statici**: `import backend.app.main` passa. ruff e black puliti sui file del backend. `dev.py` era già sporco per
+>   black alla base, quindi non lo riformatto; ruff non lo controlla (`dev.py lint` guarda solo `backend/`).
+>   `api schema` è identico alla base (`1da07e609d1ffad8`, `238c1e4b84afdbdc`).
+>
+> **Fuori pista**: nessuno. Le scelte rispetto al §3.3:
+>
+> - `JWT_SECRET_FILE` non è un campo `SecretStr` di `Settings`, ma passa da `env_secret()`, solo dall'ambiente. È la
+>   regola di CP2a, che `JWT_SECRET` segue già.
+> - Ai `_FILE` che aggiungeranno A, X, Z, B ed E basta chiamare `env_secret()`.
+> - Il controllo «metriche senza token» cade con D9, quello «sola lettura» con D4.
+
+> **Dal coordinatore (2026-10-15, notte)**: X CP1 e CP2a sono in `dev_release2` (`64a5a3fe7`). `web_link_finder.py` è
+> ora `services/assets/web_link_finder.py`, e la guardia `config-package` lo esenta ancora per nome di file. Le sue 7
+> letture si spostano in un lotto a parte, dopo l'aggiornamento di base che il coordinatore fa al checkpoint di CP3:
+> CP3 parte da `60f8a35ce`, che non contiene lo spostamento.
+
+#### CP3 passo 2 — test, doc e revisione di sicurezza ✅ (2026-10-15, notte)
+
+> **Note implementazione**:
+>
+> - **Test** (test-author): quattro file nuovi in `backend/test_scripts/test_services/`.
+>   - `test_config_secrets.py` (44), `test_instance_key.py` (75), `test_config_audit.py` (48) e
+>     `test_env_example.py` (36).
+>   - `test_instance_key.py` copre anche i vettori della RFC 5869, la gara fra 6 processi con e senza link fisici, e
+>     l'attesa limitata sul file appena creato.
+>   - `test_env_example.py` controlla che ogni variabile letta sia documentata, compresi i campi di `Settings` e le
+>     variabili dei compose, e che le righe non commentate restino quelle.
+>   - Nei file esistenti: IMG-010e/f/g in `test_dev_cli_image.py`, `secrets/` in `test_runtime_isolation.py`, il test
+>     del JWT di `test_config_package.py` reso ermetico.
+>   - Nel runner, quattro voci nuove e pure: `services config-secrets`, `config-instance-key`, `config-audit`,
+>     `config-env-example`.
+>   - Primo giro, tutti verdi: 44, 75, 48, 36; `config-package` 467; `utils dev-cli-image` 35; `runtime-isolation`
+>     170.
+> - **Doc** (docs-writer), solo inglese, senza timbro: il debito di traduzione resta visibile.
+>   - Admin: `configuration.en.md` (segreti, `*_FILE` con l'esempio dei Docker secrets, chiave d'istanza, controlli
+>     all'avvio), `filesystem.en.md` (`secrets/`, backup) e `index.en.md`.
+>   - Sviluppatori: `security.md`, `settings.md`, `database/index.md`, e in più `overview.md` (il passo nuovo del
+>     lifespan) e `users_and_brokers.md`.
+>   - `mkdocs build` e `check-links` passano. `translate-validate` dà 63 errori, tutti debito nuovo delle tre pagine
+>     admin tradotte.
+> - **Revisione di sicurezza** (agente `security-review`): quattro reperti. I dettagli sono solo nei messaggi al
+>   coordinatore.
+> - **Cambi di comportamento** dopo la revisione e i reperti di test-author:
+>   - un segreto vuoto o di soli spazi conta come assente, per `NOME` e per `NOME_FILE`. Cambia la regola di CP2a, per
+>     cui un `JWT_SECRET` di soli spazi era la chiave;
+>   - un file vuoto o bianco ferma l'avvio;
+>   - il BOM UTF-8 iniziale si toglie;
+>   - `_ensure_shared_jwt_secret` non toglie più niente dall'ambiente;
+>   - una corsia di test firma le sessioni e deriva le chiavi con segreti suoi: `configure_test_runtime` toglie
+>     `INSTANCE_TRUST_SECRETS` dal suo ambiente. `scripts/cli_base.py` è condiviso: aspetto l'OK del coordinatore;
+>   - `derive_key`: la lunghezza entra nella derivazione, e scopo e lunghezza si validano prima di leggere la chiave;
+>   - `_key_file_present()`: una cartella `secrets/` che non si apre è un `InstanceKeyError` chiaro, mai una chiave
+>     nuova. Prima era un `PermissionError` di `Path.exists()` su Python 3.13. Un link simbolico rotto conta come
+>     presente;
+>   - i messaggi indicano la fonte della chiave, compresa la variabile `_FILE` col suo percorso.
+>
+> **Fuori pista**: il controllo d'isolamento `validate_test_data_dir`, in modalità test, ora controlla anche
+> `secrets/instance.key`. Con `secrets/` non attraversabile solleva un `PermissionError` grezzo, come già faceva per
+> `sqlite/`. È fail-closed e preesistente: non lo cambio.
+
+> **Decisioni del coordinatore** (2026-10-15, 02:41):
+>
+> - **(A)** OK a modificare `scripts/cli_base.py` in CP3: le 3 righe più la costante `INSTANCE_TRUST_SECRETS`, con i
+>   test in `test_runtime_isolation.py`.
+> - **(B)** Le due correzioni stanno in commit separati dal resto di CP3, sopra la base di CP2a: «un segreto vuoto o
+>   di soli spazi vale come assente» e «una corsia di test usa segreti suoi».
+> - **(C)** Per CP6: nel profilo gestito, un `JWT_SECRET` sotto i 32 caratteri ferma l'avvio; nel self-hosted resta un
+>   avviso, che finirà nella scheda «Sicurezza» di A.
+> - H-3 confermato nel backlog, da fare con X e B al primo uso di `derive_key`. Le note di progetto per X e B le gira
+>   il coordinatore.
+>
+> **Cambio di semantica rispetto a CP2a**: in CP2a, `configured_jwt_secret()` restituiva un `JWT_SECRET` di soli
+> spazi così com'era. Da CP3 un segreto vuoto o di soli spazi vale come assente, quindi a ogni avvio si genera una
+> chiave casuale. Il test `config-package` lo dice.
+
+#### CP3 passo 3 — commit separati e verdi ✅ (2026-10-15, notte)
+
+> **Note implementazione**:
+>
+> - **Le due correzioni in commit separati (decisione B)**: due patch sopra la base di CP2a, in
+>   `/tmp/librefolio-r13-h-cp3/split/`, con una copia nella cartella di sessione.
+>   - **S1** «un segreto vuoto o di soli spazi vale come assente»: `config/platform.py` e `test_config_package.py`.
+>   - **S2** «una corsia di test usa segreti suoi»: la costante `INSTANCE_TRUST_SECRETS = ("JWT_SECRET",)` in
+>     `config/__init__.py`, `scripts/cli_base.py` (uguale alla versione finale) e il blocco `TestTestLaneSecrets` di
+>     `test_runtime_isolation.py`.
+>   - Verifica: `git apply --cached --check` passa sull'indice della base. In un albero esportato con
+>     `git archive HEAD`, con le due patch applicate, 647 test passano (`test_config_package.py`,
+>     `test_config_misc.py`, `test_runtime_isolation.py`, IMG-010).
+>   - Con il `platform.py` della base, il test di S1 dà 2 rossi, come deve. La prova di mutazione di S2 l'ha fatta
+>     test-author.
+>   - Il commit di CP3 contiene il resto, nelle versioni finali.
+> - **Parole neutre**: i commenti, le docstring e la doc dicono «un segreto vuoto o di soli spazi vale come assente»
+>   e «una corsia di test usa segreti suoi», senza scenari.
+> - **Build**: `front build --debug`, rc 0 e svelte-check 0 errori. Serviva perché `dev.py` è fra le sorgenti dei
+>   codec dei Tool. Poi `mkdocs build`, rc 0 (3012 URL relativi risolti), e `check-links`, 95 link validi.
+> - **Mirati**, uno alla volta sulla corsia 6181, tutti verdi:
+>   - `services`: `config-secrets` 58, `config-instance-key` 98, `config-audit` 65, `config-env-example` 36,
+>     `config-package` 468, `config-misc` 4, `donation-popup` 19, `scheduler-loop` 5;
+>   - `utils`: `dev-cli-image` 36, `runtime-isolation` 175, `dev-cli-db-path` 15;
+>   - `db post-migration`: 37.
+> - **`all-backend`**
+>   (`PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test -q --fresh-run --workers 2 --log-file /tmp/librefolio-r13-h-cp3/all-backend.log --test-port 6181 --data-dir /tmp/librefolio-r13-h all-backend`):
+>   7/7 in 12 min 45 s, **12 089 passed, 3 skipped, 0 failed**.
+>   - Sono 273 in più rispetto ai 11 816 della base `60f8a35ce`, cioè esattamente i test nuovi: 58 + 98 + 65 + 36
+>     nei quattro file nuovi, 3 in `config-package`, 5 in `dev-cli-image` e 8 in `runtime-isolation`.
+> - **Statici**:
+>   - ruff e black puliti sui 14 file Python del backend;
+>   - in `dev.py` e `scripts/cli_base.py`, che erano già sporchi per black alla base, le righe toccate sono pulite e i
+>     reperti di ruff sono gli stessi della base (42 e 0);
+>   - `api schema` identico alla base (`1da07e609d1ffad8`, `238c1e4b84afdbdc`);
+>   - dead code: un solo reperto nuovo, `derive_key` fra quelli «usati solo dai test». È voluto: è l'API per X e B;
+>   - devWiki: `check_source_paths.py` a 5/8, invariato;
+>   - `git diff --check` pulito; porta 6181 libera.
+
+### Checkpoint CP3 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+
+> Handoff inviato. Il coordinatore ha committato CP3 in quattro commit:
+>
+> - `8f9e8f018` «un segreto vuoto o di soli spazi vale come assente»;
+> - `7640313a4` «una corsia di test usa segreti suoi»;
+> - `54fd32def`, il resto di CP3;
+> - `32bdb5b95`, il journal.
+
+### Aggiornamento di base con X CP1, CP2a, W I1 e A3 ✅ (2026-10-15, notte)
+
+> **Note implementazione**:
+>
+> - Il coordinatore ha aperto `git merge --no-ff --no-commit 4696ef699` sopra `32bdb5b95`. Due conflitti, tutti e due
+>   additivi:
+>   - `backend/app/main.py`, negli import: tenuti `FXProviderRegistry` (X) e `log_configuration_audit` (H). Tolta la
+>     mia riga del vecchio `services.market_calendar`: il lato di X lo importa già da `services.assets.market_calendar`;
+>   - `test_dev_cli_image.py`: tenuti IMG-010e/f/g (H) e IMG-011/012 di A (`TestAccountRole`), nella docstring e nei
+>     test.
+> - Fusi da soli e rivisti: `backend.instructions.md`, `settings.md` (la menzione di X su
+>   `services/assets/web_link_finder.py`), `_backend_services.py` (89 azioni, nessuna doppia) e il backlog.
+> - **Revisione combinata**:
+>   - `front build --debug` e `mkdocs build`, rc 0;
+>   - mirati tutti verdi: `config-package` 475 (7 casi in più per i moduli spostati da X, con l'eccezione che regge sul
+>     percorso nuovo), `dev-cli-image` 44 (8 casi in più, di A);
+>   - `api schema` uguale a quello di `4696ef699` (`76085551e2d02d83`, `238c1e4b84afdbdc`);
+>   - `all-backend` 7/7 in 12 min 52 s: **12 125 passed, 3 skipped, 0 failed**.
+> - **Integrazione**: il merge è `751bf9ab3`, entrato in `dev_release2` con `d08d9358f`. Il coordinatore ha aggiunto i
+>   suoi record in `940297265` e ha portato il mio ramo in avanzamento veloce fin lì. Nel CHANGELOG ci sono le quattro
+>   righe ✨ e la 🔄.
+
+### Lotto `web_link_finder` — le ultime letture d'ambiente in `config/` ✅ (2026-10-15, notte)
+
+> **Via** del coordinatore (2026-10-15, 03:47): prima la nota del merge, poi questo lotto, poi CP4.
+>
+> **Note implementazione**:
+>
+> - **Sezione nuova `config/plugins.py`**, di X secondo D2, scritta da H. Ha sette funzioni con la semantica esatta di
+>   prima: `web_link_finder_enabled`, `_engine`, `_api_key`, `_ddgs_region`, `_ddgs_backend`, `_timeout(default)` e
+>   `_max_results(default)`.
+>   - Unica novità: la chiave API è un segreto e passa da `env_secret()`, quindi vale anche
+>     `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`, come chiede la specifica per tutti i segreti.
+> - **`services/assets/web_link_finder.py`**: `is_enabled()` delega alla sua funzione; spariscono `_env_int`,
+>   `_env_float` e `import os`.
+>   - Un `_FILE` rotto non ferma niente: `_build_engine()` lo scrive come avviso e spegne il motore, così
+>     `find_candidate_urls` mantiene la promessa di non sollevare mai.
+>   - Il file ora è pulito anche per black.
+> - **`.env.example`**: la riga commentata `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`.
+> - **Prova a mano**: 23 casi di semantica uguali a prima, comprese le stranezze (vuoto contro non impostato, `"0"`,
+>   `"5.0"`, gli spazi); un `_FILE` rotto dà `None` con l'avviso.
+> - **Test** (test-author):
+>   - `test_config_package.py`: `ENVIRONMENT_READ_EXCEPTIONS` ora è vuoto. Il meccanismo resta: il cricchetto è un
+>     solo test che scorre il dizionario e, quando è vuoto, passa invece di essere saltato. Un test prova il cricchetto
+>     su moduli finti. Ci sono 54 casi di semantica per le sette funzioni di `plugins.py`. Totale: 530 (erano 475).
+>   - `test_web_link_finder.py`, file di X, solo aggiunte: cinque test. La chiave da `_FILE` costruisce
+>     l'`ApiKeyEngine`; un file mancante, vuoto o non UTF-8 spegne il motore con un solo avviso, che non contiene il
+>     segreto; `find_candidate_urls` rende `[]` senza sollevare.
+>     - Con una copia senza la cattura di `SecretFileError`, i quattro test del file rotto vanno in rosso.
+>     - In più c'è una riga che rende ermetico un test esistente, che dipendeva dalla variabile nuova.
+>     - Totale: 29 (erano 24).
+>   - `test_env_example.py`: solo una docstring. Le otto variabili del motore si trovano soltanto in `config/plugins.py`,
+>     tutte documentate.
+> - **Doc** (docs-writer):
+>   - `settings.md`: la regola vale senza eccezioni; le sezioni sono tre: `platform`, `accounts` e `plugins`;
+>   - `configuration.en.md`: i segreti ora sono tre; un `_FILE` rotto della chiave API spegne solo la ricerca web;
+>   - `search_link_finder.md`: dove si leggono le variabili;
+>   - `security.md`: le corsie di test non ereditano «i segreti che fanno fidare l'istanza di una sessione o le fanno
+>     decifrare i dati». La chiave API la ereditano.
+>   - `mkdocs build` e `check-links` passano; `translate-validate` dà 3 errori in più per lingua su
+>     `configuration.en.md`.
+> - **Statici**: ruff e black puliti; `api schema` identico a `940297265`; dead code senza reperti nuovi (le
+>   differenze da CP3 sono solo i percorsi spostati da X).
+> - **Build e mirati**: `front build --debug` rc 0. Serviva per il `CHANGELOG.md` dei record del coordinatore, che
+>   entra nella modale. Poi `services config-package` 530, `config-env-example` 36, `config-secrets` 58, `config-audit`
+>   65 e `web-link-finder` 29.
+>
+> **Fuori pista**: vecchie stranezze del motore, lette nel codice da test-author e lasciate com'erano (sono di X):
+>
+> - `TIMEOUT` a `nan` o `inf` fa fallire `int(timeout)` in `DdgsEngine.search`, e la ricerca rende `[]`;
+> - un valore sotto 1 vuol dire nessun timeout;
+> - `MAX=0` rende comunque fino a un URL.
+>
+> **`all-backend`** (`-q --fresh-run --workers 2`, corsia 6181): 7/7 in 12 min 37 s, **12 185 passed, 3 skipped, 0
+> failed**.
+>
+> - Sono 60 in più rispetto alla revisione combinata di CP3 (12 125): 55 in `config-package` e 5 in `web-link-finder`.
+> - Nessun test saltato in più.
+> - `git diff --check` pulito; porta 6181 libera.
+
+### Checkpoint del lotto `web_link_finder` 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore

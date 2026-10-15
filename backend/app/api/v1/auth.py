@@ -27,7 +27,6 @@ from backend.app.schemas.auth import (
     UpdateProfileRequest,
     UpdateProfileResponse,
 )
-from backend.app.services import brim_provider
 from backend.app.services.accounts import settings_service, user_service
 from backend.app.services.accounts.auth_service import (
     create_jwt_token,
@@ -38,6 +37,7 @@ from backend.app.services.accounts.auth_service import (
 )
 from backend.app.services.accounts.donation_popup_service import record_login_and_maybe_show_popup
 from backend.app.services.accounts.global_settings_service import get_session_ttl_hours, is_registration_enabled
+from backend.app.services.brim import brim_provider
 
 logger = structlog.get_logger(__name__)
 

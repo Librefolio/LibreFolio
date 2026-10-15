@@ -283,7 +283,7 @@ def test_identifier_columns_match_enum():
     If this test fails, see IdentifierType docstring for full update checklist.
     """
     from backend.app.db.models import Asset, IdentifierType  # noqa: PLC0415 — test setup — imports after sys.path/db config
-    from backend.app.schemas.assets import (  # noqa: PLC0415 — test setup — imports after sys.path/db config
+    from backend.app.schemas.assets.assets import (  # noqa: PLC0415 — test setup — imports after sys.path/db config
         FAAinfoFiltersRequest,
         FAAssetCreateItem,
         FAAssetPatchItem,

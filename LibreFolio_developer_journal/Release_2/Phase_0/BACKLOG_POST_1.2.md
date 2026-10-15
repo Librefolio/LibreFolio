@@ -371,10 +371,12 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
 - **C-88 · Un pacchetto di dati di qualità in abbonamento** — minimo, un'idea da valutare per `TODO_FUTURI.md`; utente
   C, chat del 04/09. Prezzi storici e composizioni dei fondi a pagamento, per chi li vuole, anche come sostegno al
   progetto. Da valutare: licenze dei dati, costi, convivenza con l'installazione self-hosted. Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voce 14.
-- **C-89 · Spiegare le due date del cambio valuta** — minimo; utente C, chat del 04/09. Nel modulo, accanto alle date
+- ✅ **C-89 · Spiegare le due date del cambio valuta** — minimo; utente C, chat del 04/09. Nel modulo, accanto alle date
   «Da» e «A» (`TransactionFormModal.svelte:1645`, `:1693`), un suggerimento: di solito coincidono, e si separano quando
   il broker accredita la nuova valuta in un altro giorno. La stessa frase nella guida (`user/transactions/form.*.md`).
   Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voce 31.
+  - ✅ **Chiusa il 15/10** da W (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`):
+    il suggerimento nel form (`tx-form-fx-dates-hint`) e la stessa frase nella guida, nelle 4 lingue.
 - **C-90 · «Testa configurazione» dice che è solo una prova** — minimo; utente C, chat del 04/09. Accanto al risultato
   dello storico, una riga: la prova legge gli ultimi giorni, e alla creazione dell'asset LibreFolio scarica tutto lo
   storico disponibile. Oggi lo dice solo la guida (`user/assets/create-edit.en.md:67`). Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voce 11.
@@ -393,6 +395,17 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   Non è un rosso; da solo il test passa senza avvisi. Dominio dell'AI Export: a J dopo il CP-1, con la skill
   `test-triage`. Dettagli: [piano 04](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md),
   «Revisione combinata `123c21efc`», passo 6.
+  - 15/10: non riprodotto nella `all-backend` di J sulla revisione `b17f8fb85` (13 810 passed, nessun avviso).
+- **C-94 · Il server di test costruisce frontend e documentazione dentro i 300 s d'avvio** — basso, infrastruttura;
+  J, 14/10 (era J-2), con una nota del coordinatore. In un worktree nuovo il primo `all-backend` cade anche dopo
+  `npm ci`: prima di uvicorn `dev.py server --test` fa la build di debug del frontend (~4 min) e quella del sito, se
+  mancano, dentro `STARTUP_TIMEOUT` (`scripts/test_runner/_server.py:48`), con lo stdout in `DEVNULL` (`:274-275`).
+  Lo stesso succede dopo un merge che cambia il frontend o la doc. Rimedio di oggi, scritto in
+  `.github/copilot-instructions.md`: `front build --debug` e `mkdocs build` prima della run, oppure
+  `LIBREFOLIO_TEST_STARTUP_TIMEOUT=600`. Cura proposta: le build prima che parta il tempo massimo, con un messaggio
+  che dica cosa sta costruendo. Nota: senza `node_modules` il runner arriva a `npx` attraverso `generate-api`, e
+  dovrebbe fermarsi subito. Il runner è condiviso: va assegnato a una sessione. Dettagli: piano J, §10
+  «`all-backend` — la base».
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
@@ -567,6 +580,11 @@ sezione T, e P-7 (chiudere le issue #32 e #35) è un compito del rilascio, non d
 - **P-15 · Altre etichette inglesi scritte nel codice** — basso; test-author di P (11/10). `DataEditor`: «Date», i
   contatori «modified/deleted/new», un `aria-label`, «Reset layout»; `BrokerSharingPanel:832`: «max». Dettagli: idem,
   8.1 e 8.
+  - ✅ **Parte di W chiusa il 15/10** (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`):
+    i contatori e l'`aria-label` della levetta delle righe vecchie in `DataEditor`, «Help» e «Close» di
+    `DataImportModal` (W-B8). «Date» era già `common.date`. Restano «Reset layout»
+    (`components/table/ColumnVisibilityToggle.svelte:177`) e «max» (`BrokerSharingPanel:832`), a Y (decisione Q6 del
+    piano 04).
 
 ## T · Matematica finanziaria e riordino (43)
 
@@ -1698,7 +1716,7 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     - Dettagli: piano della 46, §12.16.
   - **Resta aperto, dopo la 1.2: V-37b, il pre-step completo** (§2 dell'analisi): ⚡ sempre cliccabile, prima gli
     obbligatori e poi il formato, il rosso su tutte le celle in errore, in singola, coppia e FX. Circa 1,5-2 giorni.
-- **V-38 · Il form elenca un problema di saldo tra i problemi dei campi** — basso, UX; letto nel codice da test-author
+- ✅ **V-38 · Il form elenca un problema di saldo tra i problemi dei campi** — basso, UX; letto nel codice da test-author
   di V, 13/10, e verificato da me; **non visto a schermo**.
   - Il form divide i problemi per indice: `index >= 0` sono dei campi, `< 0` di saldo
     (`TransactionFormModal.svelte:944-945`).
@@ -1707,6 +1725,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
   - Il bulk editor divide invece per codice (`isBulkBalanceIssue`, `utils/transactions/bulkDisplay.ts:145`), e mette lo
     stesso problema sotto il titolo del saldo.
   - Da verificare a schermo prima di decidere. Dettagli: piano della 46, §12.14.
+  - ✅ **Chiusa il 15/10** da W (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`):
+    visto a schermo, poi il form divide i problemi per codice come il bulk editor (`isBulkBalanceIssue`).
 
 ## 09 · Feedback e backlog strutturale
 
@@ -2001,6 +2021,29 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - È vicina a I-06 del backlog 38.
 
   Dettagli: piano H, §14 «CP1 passo 0» e «Fuori pista 3».
+- **H-3 · Una chiave d'istanza persa dopo il primo uso sembra un primo uso** — medio-basso; H, revisione di sicurezza di
+  CP3 (15/10).
+  - Se `secrets/instance.key` sparisce, per esempio con un ripristino senza `secrets/`, `derive_key` ne genera una
+    nuova senza avvisi.
+  - Ciò che la vecchia chiave cifrava resta illeggibile, e i dati nuovi si cifrano con una chiave che non sta in nessun
+    backup.
+  - Cura proposta: al primo uso, un valore di controllo della chiave nel DB (per esempio un HMAC con la chiave derivata
+    `instance.key-check.v1`). Se il valore c'è, `derive_key` non genera mai una chiave e rifiuta una chiave diversa.
+  - Serve il DB: si fa con X e B al loro primo uso di `derive_key`. Oggi la doc admin chiede di ripristinare
+    `secrets/` insieme ai dati.
+  - Note di progetto per X e B:
+    - una chiave per istanza, mai la stessa su più istanze;
+    - un backup cifrato con una chiave derivata non deve contenere anche `secrets/`;
+    - una chiave configurata è casuale, non una passphrase.
+
+  Dettagli: piano H, §14 «CP3 passo 2».
+- **H-4 · `validate_test_data_dir` solleva un `PermissionError` grezzo per una cartella gestita non attraversabile** —
+  minimo; H, 15/10.
+  - In modalità test, `_same_filesystem_location` chiama `Path.exists()`, che su Python 3.13 solleva con `EACCES`.
+  - Vale per `sqlite/`, e da CP3 anche per `secrets/`.
+  - È fail-closed, ma senza un messaggio chiaro: andrebbe trasformato in `ValueError` col percorso.
+
+  Dettagli: piano H, §14 «CP3 passo 2», «Fuori pista».
 
 ## A · Account e accessi (fase 01)
 
@@ -2079,15 +2122,27 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   La docstring di `api/v1/fx.py:767` cita ancora «``services/fx.py``», che dal CP1 è `services/fx/fx.py`: è nella
   descrizione dell'endpoint in `openapi.json`, quindi resta fino al PL4, che dà alla funzione la sua casa definitiva.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1.
-- **X-R2 · Il vecchio percorso degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a). Le docstring
-  di `BackwardFillInfo` (`schemas/common.py:369`) e di `IdentifierType` (`db/models.py:123`) citano ancora `asset_source.py`,
-  tolto nel CP2a. Il testo finisce in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima).
-  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a.
+- **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
+  docstring di `BackwardFillInfo` (`schemas/common.py:369`) e di `IdentifierType` (`db/models.py:117` e `:123`) citano ancora
+  `schemas/assets.py` (diventato `schemas/assets/assets.py` nel CP2b) e `asset_source.py` (tolto nel CP2a). Il testo finisce
+  in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima). Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a e CP2b.
+- **X-R3 · Tre commenti del frontend citano il modulo degli asset tolto** — minimo; X, 15/10 (CP2b, validazione di
+  `eb245b624`). `AssetModal.svelte:1507` e `:1636` attribuiscono ad `asset_source.py` le cancellazioni di prezzi ed eventi
+  generati (oggi in `services/assets/provider_management.py`, `bulk_assign_providers`), e `assetPayload.test.ts:58` la fusione
+  per campo della classificazione (oggi in `services/assets/crud.py`, `patch_assets_bulk`). Fuori dal perimetro dei lotti
+  del backend: si corregge nel FE5, con il taglio di `AssetModal`. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», CP2b.
 - **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
   `test_api/test_fx_api.py::test_providers_include_target_currencies` passa da `GET /fx/providers`, che chiama dal vivo
   `get_supported_currencies` di `fx_providers/ecb/plugin.py`; su un errore di rete il gestore in `api/v1/fx.py` (righe
   ~139-143) rende una lista vuota. Va contro la regola dei test senza rete. Da sistemare con il CP3 (PL4, router dei cambi)
   o prima. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a.
+
+- **W-B13 · `fx-csv-import.spec.ts` prende la ✕ della modale d'importazione per testo** — minimo, test; trovato da W
+  il 15/10 (K1), assegnato a X dal coordinatore. `frontend/e2e/fx/fx-csv-import.spec.ts:247` e `:276` usano
+  `button[aria-label="Close"]`; con P-15 l'etichetta viene da `common.close`, quindi il selettore regge solo in
+  inglese. Cura: il `data-testid` `data-import-modal-close`, aggiunto in K1. Dettagli: piano 04, §12, K1 passo 4.
 
 ## W · Import e transazioni (fase 01)
 
@@ -2119,9 +2174,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `POST /transactions/events/suggest`, i test API sono 10 e non 8, `suggest_events_bulk` sta in
   `services/transactions/transaction_service.py:492`. Si aggiorna quando la voce entra nel lotto K3. Dettagli: piano 04,
   §2.
-- **W-B8 · `DataImportModal`: «Help» e «Close» in inglese** — minimo; W, 14/10 (analisi). Gli `aria-label` di
+- ✅ **W-B8 · `DataImportModal`: «Help» e «Close» in inglese** — minimo; W, 14/10 (analisi). Gli `aria-label` di
   `components/ui/data-editor/DataImportModal.svelte:211` e `:220` sono scritti nel codice; vanno con P-15 (lotto K1).
-  Dettagli: piano 04, §2 (P-15).
+  Dettagli: piano 04, §2 (P-15). ✅ Chiusa il 15/10 (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`).
 - ↪ **W-B9 · `test_fx_api.py` raggiunge ECB via rete** — spostata nella sezione X dal coordinatore il 15/10
   (dominio dei cambi), dove X l'ha già ripresa con i dettagli.
 - **W-B10 · `access_control.md`: l'elenco degli endpoint d'accesso non è quello dell'API** — minimo, doc; W, 15/10 (W2).
@@ -2137,10 +2192,47 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   (test-author di I1), 15/10. Il test (`backend/test_scripts/test_api/test_broker_multiuser_api.py`, MULTI-008d) crea
   due broker e non li cancella; i test V-23 della stessa classe nuova (`TestAccessRefusalPlacement`) puliscono anche dopo
   un rosso, e possono fargli da modello. Dettagli: piano 04, §12, I1.
+- ↪ **W-B13 · `fx-csv-import.spec.ts` prende la ✕ della modale d'importazione per testo** — spostata nella sezione X
+  dal coordinatore il 15/10 (spec di X).
+- **W-B14 · La docstring di `IdentifierType` cita percorsi vecchi, ed è nell'OpenAPI** — minimo, doc; W, 15/10 (W4,
+  CP6). `backend/app/db/models.py:127` dice ancora `backend/app/services/brim_provider.py` (ora `services/brim/`), accanto
+  a `services/asset_source.py` e `schemas/assets.py` di X. La docstring diventa la descrizione dell'enum nell'OpenAPI,
+  quindi un lotto di riordino, che vuole lo schema identico, non la tocca. Cura: un lotto che accetta la differenza
+  nella descrizione, insieme a X per le sue due righe. Dettagli: piano 04, §12, W4.
 
 ## J · Numeri e analisi (fase 01)
 
-Piano: [`05_numbersAnalysis`](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md).
+Piano: [`05_numbersAnalysis`](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md). Righe scritte da J
+il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 scritte il 15/10, nel checkpoint CP-1.
+
+- **J-1 · Copie della matematica comune fuori dall'inventario del 43** — basso; J, 14/10 (analisi). Ognuna va nel
+  lotto che unifica la sua famiglia:
+  - `risk/metrics.py:741` (giorni di calendario → osservazioni, con 365) → U4a, CP-10;
+  - `portfolio_service.py:824` (G/L % della posizione) → U4b, CP-4;
+  - `series_preparation.py:184` (fattore di cambio ricavato dal close) → U1, CP-11;
+  - `fx.py:717` (inversione del tasso nella catena delle rotte) → U1, nei file di X dopo il suo PL4 (D-J17);
+  - `ai_export/components/fx_timing_context.py:361-362` (rendimenti dal minimo e dal massimo) → U9, CP-12;
+  - frontend, per Y con U8: `lib/charts/signals/CompoundSignal.ts:69` (curva what-if, eccezione interattiva da
+    dichiarare, R19) e `lib/components/risk/levels/levelHelpers.ts:359` (rendimento che recupera una perdita).
+
+  Dettagli: [piano J](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), §1.2 «Copie nuove».
+- ↪ **J-2 · Il server di test costruisce frontend e documentazione dentro i 300 s d'avvio** — spostata nella sezione C
+  dal coordinatore il 15/10 (runner condiviso), come C-94.
+- **J-3 · Monte Carlo e ricampionamento a 365 giorni fissi** — da verificare; T, 11/10 (piano 43, §5, «da segnalare a
+  parte»), ripresa da J, che ora possiede il rischio. `risk/quant/quantlib_worker.py:116,195` e
+  `risk/quant/resampling.py:235` contano 365 giorni all'anno, mentre il resto del rischio usa il fattore osservato. Può
+  essere una convenzione di calendario coerente: prima un test che lo provi, poi l'eventuale cura in CP-10. Dettagli:
+  [piano 43](43_financialMathHome/plan-phase00FinancialMathHome.prompt.md), §5.
+- **G-8 · Il catalogo dei Tool sotto carico supera i 2 s d'ingresso** — basso; G (galleria del programma colori),
+  assegnata a J dal coordinatore il 14/10, dopo CP-1. Sotto carico la lettura del catalogo supera
+  `ToolRoute.ingress_timeout_ms` (2 000 ms, `schemas/tools.py:83`, applicato in `api/v1/tools.py:92`) e la pagina
+  «about plugin diagnostics» è andata in rosso nella galleria. Proposte di G: un limite proprio per il catalogo, oppure
+  un catalogo in cache. Prima un rosso che lo riproduca. Dettagli: piano J, §10 «Checkpoint J-0».
+- **J-4 · Prosa della devWiki con i percorsi del PAC di prima del riordino** — basso, documentazione; J, 15/10 (CP-1).
+  C6 riguarda le tabelle «Source files», aggiornate in CP-1; restano tre passi di prosa al presente che citano i file
+  com'erano prima del riordino: `features/F-107.md:49-50`, `features/F-108.md:31`,
+  `problems/i18n-audit-false-dead-and-false-used.md:48`. Da rinfrescare in un passaggio di `wiki-lint`. Dettagli: piano
+  J, §10 «A — rinomina», «Restano di proposito».
 
 ## Z · Sospensione e risveglio (fase 01)
 

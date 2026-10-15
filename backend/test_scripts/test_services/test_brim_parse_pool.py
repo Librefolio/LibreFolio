@@ -22,8 +22,8 @@ from pathlib import Path
 import pytest
 
 from backend.app.schemas.brim import BRIMParseOutput
-from backend.app.services import brim_parse_pool, brim_provider
-from backend.app.services.brim_provider import BRIMParseError, delete_file, get_file_path, save_uploaded_file
+from backend.app.services.brim import brim_parse_pool, brim_provider
+from backend.app.services.brim.brim_provider import BRIMParseError, delete_file, get_file_path, save_uploaded_file
 
 SAMPLE = Path(__file__).resolve().parents[2] / "app" / "services" / "brim_providers" / "sample_reports" / "schwab-export.csv"
 

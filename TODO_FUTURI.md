@@ -871,7 +871,7 @@ stabilizza: a quel punto «dichiarato e non usato» smette di essere una fase
 normale dello sviluppo e torna a essere il segnale che è.
 
 **Terzo caso, un campo che non può più portare informazione** (02/10/2026): `fx_cost` della riga d'ordine del
-PAC (`PlannerBuyOrderRow.fx_cost` in `backend/app/schemas/pac_allocator.py`, costruito sempre a zero in
+PAC (`PlannerBuyOrderRow.fx_cost` in `backend/app/schemas/pac_allocator/rows.py`, costruito sempre a zero in
 `backend/app/services/pac_allocator/planner_report.py`, letto dal client dei Tool). Dopo la decisione del
 developer del 02/10 sugli FX nel PAC (nessuna commissione di conversione oltre lo spread) vale sempre 0 e non avrà
 mai un altro valore. Va tolto dal contratto: cambia il contratto e la versione del Tool, quindi non in questo
@@ -2204,7 +2204,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 
 ### Contesto
 - Reperto della gallery (M, 09/10/2026) e analisi di D (opzione «e»): le decisioni di cambio sono una per rotta d'ordine
-  × valuta del pool (`backend/app/services/pac_allocator/evaluator.py`, `constraints.py`), quindi il piano può contenere
+  × valuta del pool (`backend/app/services/pac_allocator/evaluation/bounds.py`, `constraints.py`), quindi il piano può contenere
   più conversioni separate della stessa coppia sullo stesso broker, che il report poi somma (`planner_report.py`).
 - Con la regola «arrotondamento sempre contro il piano» (crediti per difetto, debiti per eccesso, 1.2) queste
   conversioni spezzate non creano più valore, ma allungano il piano e lo rendono meno leggibile.
