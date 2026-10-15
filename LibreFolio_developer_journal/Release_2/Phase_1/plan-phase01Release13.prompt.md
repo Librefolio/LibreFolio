@@ -1039,3 +1039,21 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > all'analisi: i segreti nello zip (specifica F01, D-X2, note di H-3), dove vive il backup dell'istanza rispetto agli
 > export per asset di `backup.py`, l'aggancio all'avvio dopo il CP2b di H, le decisioni 6–9 del §10, come si prova
 > lo scambio all'avvio. E parte dopo il checkpoint A5a (inviti), Y dopo il lotto B dei colori.
+
+### H CP5a, prontezza e versione, integrato ✅ (2026-10-15, 07:30)
+
+> **Note implementazione**: `9deb0ea08`, merge di `5d1242ae5` su `4fdc0d9c5`. Commit di H: `e8ceda504`
+> (`GET /system/ready`: 200 se il DB risponde ed è alla head delle migrazioni, 503 altrimenti, un codice per
+> controllo; `/system/info` senza sessione risponde solo `app_version`, decisione 15), `6e78b8c96` (R2: in un checkout
+> vince `git describe`; prima di tutto `LF_APP_VERSION`, come in `vite.config.ts`; `pyproject.toml` a 0.0.0, metà di
+> C-84), `d80c0a091` (la head delle migrazioni si legge in un thread, non nel ciclo di eventi: correzione chiesta dal
+> coordinatore all'handoff), più i log. Base aggiornata con G-8, X CP4, W K2a e A4b in `cf6f08856`. Validazione di
+> H: `all-backend` 12 436 passed, 3 skipped, 0 failed sulla base `6d67fdaac`; sopra il fuso, controllo leggero
+> (`platform-readiness` 14, `api system` 116, `api auth` 60, `session-revocation` 3, `utils version` 51,
+> `config-package` 592, `config-env-example` 36, `check-orphans`, `mkdocs build` stretto, `check-links` 95; `api
+> schema` con le sole aggiunte di CP5a). X J-5 entrato nel frattempo tocca solo file di X: niente nuovo controllo.
+> Il client generato non è versionato: si rifà alla prossima build in ogni corsia (avvisato il coordinatore colori).
+> CHANGELOG con tre righe; R2 chiusa (sezione 09 e piano d'origine), C-84 per metà; H-5 nuova (debito di
+> traduzione delle pagine admin). Note per gli altri: a Z, per Z2, `/system/ready`, `/system/health` e `/system/info`
+> anonimo non contano come attività dell'utente; ad A, `signed_in_user` chiama `get_current_user` direttamente, quindi
+> un override in `dependency_overrides` non arriva a `/system/info`. Poi CP5b dopo la finestra della galleria, e CP6.
