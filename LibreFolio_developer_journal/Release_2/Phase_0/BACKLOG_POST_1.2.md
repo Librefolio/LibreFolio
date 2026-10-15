@@ -2039,6 +2039,17 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     filtrate dello stesso giorno 10 delle 27 instabili sono diventate stabili e 10 «rumore minimo». La prima misura
     completa è stata invalidata dalla fuga del prezzo live (G-6). Misura finale il 15/10 su `dev_release2` con G dentro.
     Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), passi 3 e 6.
+  - *Stato al 15/10 (G):* misura finale `g-final3` (X = `2338aaf79`, 6 worker, `live_price_check` pulito): **6 instabili
+    su 177**.
+    - 2 di solo contenuto, accettate: ordine delle immagini del seed, ordine dei file del set.
+    - 4 di inquadratura (`detail-measures*` e `about-plugin-diagnostics` su mobile, la pagina dietro `scheduler-config`):
+      corrette nel checkpoint 2 di G, verifica nella corsia 6153.
+    - Le 19 medie sono contenuto o residui di resa spiegati.
+    - ✅ *Verifica del checkpoint 2:* 2 run da sole, 8/8 + 8/8 verdi, `live_price_check` 0. Diagnostica e
+      `scheduler-log` stabili, `scheduler-config` e `detail-measures-active` `low`. Su `detail-measures` resta 1
+      variante su 16 (G-11).
+
+    Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md).
 - **G-2 · 4–5 test desktop falliti in ogni esecuzione completa a 10 worker, ogni volta diversi** — medio; coordinatore,
   14/10.
   - Login fermo su «auth-loading» nel primo blocco; modali delle transazioni.
@@ -2056,6 +2067,14 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
     Da soli passano 2/2. Proposta non fatta: dare a `headerOutOfShot` la stessa scadenza di `frameTarget`. Dettagli:
     piano della 56, verifica del checkpoint.
+  - ✅ **15/10, verdetto:** saturazione della macchina.
+    - A 10 worker la prima r1 della misura finale ha avuto 8 rossi desktop nei primi 10 minuti, a carico 65, con
+      richieste in volo da 10–20 s. Da soli passano.
+    - A 6 worker: 0 rossi in 2 run complete.
+    - `dev.py mkdocs gallery` avvia di default un worker browser per CPU più 3 worker server.
+    - Il README del toolkit dice `-- --workers 6`; il default in `dev.py` passa a J (C-94), decisione del coordinatore.
+
+    Dettagli: piano della 56, passo 5.
 - **G-3 · `Dashboard Risk › what-if crisis replay` su desktop** — medio-basso; coordinatore, 14/10.
   - Fallisce in 2 esecuzioni su 3.
   - Il menu contiene «Global Financial Crisis», ma `chooseReplayPreset`
@@ -2066,6 +2085,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - *Stato al 14/10 (G):* `chooseReplayPreset` riscritto (puntatore parcheggiato, cammino nei due versi, messaggio con
     gli ultimi stati), nel checkpoint di G. Verde in 4 run desktop sotto carico su 5: smoke a 6 worker, 2 complete a 10
     e `g-verify2` a 5 con carico fino a 94. La quinta arriva con la misura finale del 15/10.
+  - ✅ **15/10:** verde in 6 run desktop sotto carico su 6, con le due della misura finale (`g-final3`). Dettagli: piano
+    della 56, passo 2.
 - **G-4 · Difetto del prodotto trovato col rumore: il chip del provider resta sul codice** — basso; G, 14/10,
   correzione autorizzata dal coordinatore. Causa: nell'intestazione del dettaglio asset il nome è
   `getAssetProviderName(code)`, che legge una `Map` non reattiva; se `assetInfo` arriva prima del catalogo dei provider
@@ -2089,6 +2110,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Correzione nel checkpoint di G: lasciare la pagina, poi togliere le rotte. Verifica:
     `scripts/visual_review/live_price_check.py` sugli snapshot, che dà 0 righe di prezzo live nel log della corsia
     (`g-alone4`, `g-verify2`, `g-alone5` del 14/10).
+  - ✅ **15/10:** la correzione è in `dev_release2` dal checkpoint 1 di G (`0076f4269`). `live_price_check` dà 0 su
+    entrambe le run della misura finale (`g-final3-r1`, `g-final3-r2`).
 
   Dettagli: piano della 56, passo 6.
 - **G-7 · Lo stesso varco di G-6 negli E2E fuori dalla gallery** — basso; G, 14/10, su richiesta del coordinatore.
@@ -2116,6 +2139,57 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     checkpoint di J. La voce nella sezione di J la scrive J.
 
   Dettagli: piano della 56, passo 6.
+- **G-9 · La gallery può fotografare un indicatore non applicato** — basso-medio; coordinatore, 15/10 (candidata di L,
+  `assets/detail-signals-macd`, mobile it chiaro: menu degli indicatori ancora aperto, MACD non applicato, 1 variante su
+  16).
+  - Causa (G, verificata nel codice): `selectIndicatorFromTree` (`frontend/e2e/gallery.spec.ts:165`) clicca l'opzione e
+    non verifica l'esito: né il menu chiuso né la card dell'indicatore. `waitForSignalCardsSettled` (`:182`) aspetta che
+    non resti nessun `signal-loading`, e passa a vuoto se la card non c'è ancora.
+  - Correzione proposta (perimetro G, test-author):
+    - dopo il clic, il menu chiuso (`aria-expanded` false sul trigger di `TreeSelect`) e una card `signal-card-*` con
+      `data-signal-type` uguale all'opzione;
+    - `waitForSignalCardsSettled` che richiede almeno una card.
+
+    Un clic perso diventa un rosso con un messaggio chiaro, invece di uno scatto sbagliato. Vale per tutti i chiamanti:
+    EMA, RSI, MACD, Bollinger.
+
+  Dettagli: piano della 56, passo 7.
+- **G-10 · Ordine casuale delle immagini del seed nelle liste di file** — medio-basso; G, 15/10, su segnalazione del
+  coordinatore (`files/static-grid`: miniatura `men_04` in una corsia, `woman_07` in un'altra).
+  - Causa (prodotto, verificata nel codice):
+    - `seed_default_avatars()` (`backend/app/services/files/static_uploads.py:480`) scrive tutti gli avatar con lo
+      stesso `uploaded_at` (un solo `now`) e con un UUID casuale come nome;
+    - `list_uploads()` (`:335`) legge i metadati con `glob("*.json")`, cioè nell'ordine della directory, e ordina solo
+      per `uploaded_at`. L'ordinamento è stabile, quindi a parità di data resta l'ordine dei nomi casuali, diverso a ogni
+      populate.
+  - Non dipende da file rimasti nella cartella dati: `--clean` svuota `custom-uploads`, marker compreso, e il populate
+    ricrea gli avatar.
+  - Effetto: `media/asset-picker-modal`, la prima instabile rimasta (16/16, 24 %), perché `AssetPickerModal` legge lo
+    stesso `GET /api/v1/uploads`. Inoltre l'ordine in `files/static-grid` e `static-tab`, e la miniatura che cambia da
+    una corsia all'altra. Oggi è contenuto accettato.
+  - Correzione proposta (fuori dal perimetro di G): una chiave secondaria deterministica nell'ordinamento di
+    `list_uploads`, per esempio il nome originale a parità di `uploaded_at`. Non cambia lo stile. Per un utente conta
+    solo fra file caricati nello stesso istante. Da instradare dal coordinatore.
+
+  Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md).
+- **G-11 · Su mobile, a scroll fermo in fondo alla pagina, l'header resta a volte visibile, solo in spagnolo** — basso;
+  G, 15/10, verifica del checkpoint 2.
+  - Sintomo: in `assets/detail-measures`, dove la pagina finisce prima del grafico (scroll fermo a 552 px), l'header
+    dovrebbe essere nascosto come dopo ogni scroll verso il basso. È rimasto visibile 3 volte, sempre in es: 2 con il
+    percorso vecchio (`g-final3-r1`, chiaro e scuro) e 1 con `frameTarget` (`g-c2-w1-a`, chiaro, ↕️ «header visible»);
+    nelle altre lingue mai. Una variante su 16, circa 5,8 % dei pixel: la fascia dell'header.
+  - Ipotesi: `Header.svelte` rimette `visible` senza scroll a ogni `syncScrollContext()`. Lo chiamano il focus che esce
+    dall'header, il suo ResizeObserver, un `resize`, un cambio di `routeKey` (`pathname + search`), menu e blocco dei
+    modali. Quale scatti in spagnolo non si vede dal codice.
+  - Proposta (perimetro G, test-author):
+    - una run filtrata con un osservatore, lato test, delle transizioni di `data-scroll-state` e degli eventi vicini,
+      per trovare la causa;
+    - nella gallery, a scroll fermo, un breve su-e-giù che porti l'header nello stato di uno scroll in basso, prima
+      dello scatto.
+
+    Se la causa è nel prodotto, va segnalata e non corretta qui.
+
+  Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md), «Verifica delle correzioni».
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
@@ -2220,9 +2294,18 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - `translate-validate --hide-localized` conta 102 errori nel repository. 33 vengono da CP5a: un riquadro su
     `/api/v1/system/ready` in `docker_advanced` e in `service_exposure`, in IT, FR ed ES.
   - Gli altri 69 c'erano già, in `configuration`, `filesystem` e `index`; ci sono anche le righe di CP3 e CP4.
+  - CP6 aggiunge la pagina nuova `admin/hosting_providers` (solo inglese, titolo di navigazione compreso), le righe delle
+    variabili del blocco e dei controlli d'avvio in `configuration`, e un punto in `admin/index`.
   - Si chiude con la traduzione, che parte solo su richiesta esplicita del developer.
 
-  Dettagli: piano H, §14 «CP5a passo 2».
+  Dettagli: piano H, §14 «CP5a passo 2» e «CP6 passo 4».
+- **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
+  - «omits a provider section entirely when nothing is installed» e «shows each section only when its own list has
+    something in it» cercano `settings.assetProviders` con un confronto esatto.
+  - L'intestazione è però «etichetta (n)», quindi la ricerca non trova niente anche quando la sezione c'è.
+  - Cura: confrontare con `/settings\.assetProviders/`, come fa il test nuovo di CP5b.
+
+  Dettagli: piano H, §14 «CP5b».
 
 ## A · Account e accessi (fase 01)
 
@@ -2299,24 +2382,30 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   14/10 senza codice: già fatta il 10/09 in `e50d66408` (conteggio e link nella cancellazione singola e in quella multipla,
   `FAAssetDeleteResult.transaction_count`, E2E in `e2e/assets/asset-list.spec.ts`); nella devWiki F-095 era già
   `documented`, e `domains/assets.md` non la elenca più fra le cose da fare. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «2.5».
-- **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1,
+- ✅ **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1,
   CP3). La docstring di `create_routes_bulk` (oggi `api/v1/fx/providers.py:183`) cita ancora «``services/fx.py``»; la
   funzione sta in `services/fx/storage.py` dal CP3. Il testo è nella descrizione dell'endpoint in `openapi.json`, e il PL4 è
   un riordino a `openapi.json` invariato: come X-R2, si corregge in un lotto che cambia comunque l'API (il CP6, F05, o
-  prima). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1 e CP3.
-- **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
+  prima). **Chiusa il 15/10**, con X-R2, in un commit sopra X-R11a che entra con FE5b; `openapi.json` cambia solo nelle tre
+  descrizioni. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1, CP3
+  e X-R1 + X-R2.
+- ✅ **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
   docstring di `BackwardFillInfo` (`schemas/common.py:369`) e di `IdentifierType` (`db/models.py:117` e `:123`) citano ancora
   `schemas/assets.py` (diventato `schemas/assets/assets.py` nel CP2b) e `asset_source.py` (tolto nel CP2a). Il testo finisce
   in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima). Nella stessa docstring di
   `db/models.py`, la riga `:127` cita `services/brim_provider.py`, spostato da W (W4 CP6) in `services/brim/`: per la stessa
-  ragione resta, e si corregge insieme alle altre (aggiunta il 15/10, validazione di `d1ef3ddeb`). Dettagli:
-  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a e CP2b.
-- **X-R3 · Tre commenti del frontend citano il modulo degli asset tolto** — minimo; X, 15/10 (CP2b, validazione di
+  ragione resta, e si corregge insieme alle altre (aggiunta il 15/10, validazione di `d1ef3ddeb`). **Chiusa il 15/10** con
+  X-R1; nella stessa docstring anche il passo 1, che mandava la colonna nuova in `001_initial.py` contro la regola delle
+  migrazioni incrementali. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione
+  «15», CP2a, CP2b e X-R1 + X-R2.
+- ✅ **X-R3 · Tre commenti del frontend citano il modulo degli asset tolto** — minimo; X, 15/10 (CP2b, validazione di
   `eb245b624`). `AssetModal.svelte:1507` e `:1636` attribuiscono ad `asset_source.py` le cancellazioni di prezzi ed eventi
   generati (oggi in `services/assets/provider_management.py`, `bulk_assign_providers`), e `assetPayload.test.ts:58` la fusione
   per campo della classificazione (oggi in `services/assets/crud.py`, `patch_assets_bulk`). Fuori dal perimetro dei lotti
-  del backend: si corregge nel FE5, con il taglio di `AssetModal`. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
-  sezione «15», CP2b.
+  del backend: si corregge nel FE5, con il taglio di `AssetModal`. **Chiusa nel FE5b-1 il 15/10**: i due commenti di
+  `AssetModal` puntano a `services/assets/provider_management.py`, quello di `assetPayload.test.ts:58` a
+  `services/assets/crud.py`. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», CP2b e FE5b.
 - **X-R4 · Il diagramma della guida dei plugin FX attribuisce al servizio la divisione per le valute multi-unità** —
   minimo, doc; segnalato da docs-writer il 15/10 (CP3). In `mkdocs_src/docs/developer/architecture/patterns/fx_plugin_guide.md`
   un riquadro Mermaid dice «Service normalizes … Multi-unit ÷100»; la stessa pagina dice che la divisione la fa il plugin, e
@@ -2385,6 +2474,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - la docstring di `create_routes_bulk` (`api/v1/fx/providers.py:180`) cita ancora `services/fx.py`, che dopo il CP3 è
     `services/fx/` (la normalizzazione sta in `storage.py`): segnalata dal coordinatore il 15/10, è la stessa riga di
     **X-R1**, aperta dal CP1; resta lì, perché il testo finisce nella descrizione dell'endpoint in `openapi.json`.
+    ✅ Chiusa il 15/10 con X-R1.
   Proposta: con il FE4 (frontend dei cambi). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
   sezione «15», X-R8.
 - ✅ **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
@@ -2411,6 +2501,22 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   lui a W, proprietario di `DataImportModal.svelte`. **15/10, i due test-id ci sono** (W E0, `d226bc69e`):
   `data-import-cancel` e `data-import-discard-confirm`. Restano a X le quattro righe della spec, con il FE4.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
+- **X-R11 · `AssetModal`: stranezze preesistenti viste dai test di FE5b-2** — minimo; X, 15/10 (FE5b-2, segnalate da
+  test-author). Copiate fedelmente nei moduli puri, nessuna cambiata:
+  - ✅ la riga della descrizione nel dialogo di confronto ha l'etichetta fissa `'Description'`
+    (`assetMetadataComparison.ts`), e `ProviderComparisonModal` la mostra com'è: in IT ed ES resta in inglese. Cura di
+    poche righe: `common.description` c'è già nei quattro cataloghi, basta un'etichetta in più in `ComparisonLabels`.
+    **Chiusa il 15/10** (X-R11a): in un commit a parte sopra FE5b-2, deciso dal coordinatore; entra con FE5b; test
+    rosso prima (3 su 61);
+  - `searchResultIdentifier` controlla che l'identificativo non sia vuoto prima di togliere gli spazi: uno di soli spazi
+    diventa una riga vuota, o un conflitto con un codice vuoto;
+  - `withElectedPrimary` chiama `.trim()` sui valori OTHER senza convertirli in stringa (`mergeOtherIdentifierValues` li
+    converte);
+  - `mergeOtherIdentifierValues` scarta solo `null` e `undefined`: `false` o un oggetto diventano righe `'false'` o
+    `'[object Object]'`;
+  - un `{currency: null}` nei parametri del fornitore blocca la valuta del risultato di ricerca (conta solo la chiave).
+  Proposta: le quattro rimaste con il FE5a. Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», FE5b-2 e X-R11a.
 
 - ✅ **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — basso, robustezza; trovata da J il
   15/10 (C-93), assegnata a X dal coordinatore. `services/assets/core.py:114-119` (`_sync_runner`, dentro
@@ -2560,6 +2666,15 @@ sulla base `23f6578f3`.
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
 analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega del developer): E0 ed E1, sulla base
 `23f6578f3`.
+
+- ✅ **E-1 · I test del TLS vero dell'email si saltano finché manca `cryptography`** — minimo; E, 15/10 (E1).
+  `EMD-017` (STARTTLS che consegna) ed `EMD-018` (un certificato non fidato è `TLS_FAILED`, nulla parte) fanno
+  `importorskip("cryptography")`, quindi oggi saltano. Entrano da soli con la finestra delle dipendenze, che porta
+  `cryptography` per X; allora vanno visti verdi una volta. Dettagli:
+  [piano 08](../Phase_1/08_email/plan-phase01Email.prompt.md), «E1.4».
+  - 15/10, E: chiusa. Con `cryptography` 50.0.2 nell'ambiente condiviso (`dc9a5d232`), sulla base `fc99e9bfe`,
+    `services email-delivery` dà 79 passati e nessun saltato: `EMD-017` consegna dopo STARTTLS ed `EMD-018` rifiuta
+    il certificato non fidato. Dettagli: piano 08, «E1.8».
 
 ## Y · Cruscotto e grafici (fase 01)
 
