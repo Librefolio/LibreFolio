@@ -26,7 +26,7 @@ from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.services.asset_source_providers.justetf import plugin as je
 from backend.app.services.asset_source_providers.justetf.plugin import JustETFProvider
-from backend.app.services.assets.core import AssetSourceError
+from backend.app.services.assets.base import AssetSourceError
 
 # Captured at import, before the autouse fixture swaps in the no-op stub, so the
 # real function's early-return can be exercised directly.

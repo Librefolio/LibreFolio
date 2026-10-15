@@ -32,7 +32,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, AssetProviderAssignment
-from backend.app.schemas.assets import FAClassificationParams
+from backend.app.schemas.assets.assets import FAClassificationParams
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse, OpenDateRangeModel, PortfolioReportQuery, PortfolioReportResponse
 from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResult

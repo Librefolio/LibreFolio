@@ -694,5 +694,8 @@ nota dev, in pratica il cerca nella versione gestita ha i badge degli attuali pr
 - Una sola finestra per installare `cryptography` (impostazioni dei plugin), a corsie ferme. Facoltativa `tzdata`.
 - Docker acceso quando Piattaforma arriva al lotto dell'immagine.
 - Togliere il tag `test` da GHCR (C-26): è un'azione sul remoto.
+- Lato pannello di controllo (repo privato): **una chiave d'istanza diversa per ogni istanza**, generata a caso e mai
+  ricavata da una parola d'ordine. Con la stessa chiave, i segreti cifrati di un'istanza sarebbero leggibili da
+  un'altra. Serve anche un'azione «reinvia il link di attivazione» (punto 3).
 - Lato pannello di controllo (repo privato): le macchine con `auto_stop_machines="off"` e `auto_start_machines=true`,
   perché è l'istanza a decidere quando sospendersi.

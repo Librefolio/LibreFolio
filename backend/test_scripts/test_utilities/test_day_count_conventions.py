@@ -15,7 +15,7 @@ from decimal import Decimal
 
 import pytest
 
-from backend.app.schemas.assets import DayCountConvention
+from backend.app.schemas.assets.assets import DayCountConvention
 from backend.app.services.asset_source_providers.scheduled_investment.plugin import (
     calculate_day_count_fraction,
     calculate_simple_interest,

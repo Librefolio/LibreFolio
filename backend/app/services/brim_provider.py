@@ -52,7 +52,7 @@ from pydantic import ValidationError
 from sqlalchemy import String, and_, cast, or_, select
 
 from backend.app.db.models import Asset, Transaction, TransactionType
-from backend.app.schemas.assets import FAAinfoFiltersRequest
+from backend.app.schemas.assets.assets import FAAinfoFiltersRequest
 from backend.app.schemas.brim import (
     BRIMAssetCandidate,
     BRIMAssetMapping,
@@ -1262,7 +1262,8 @@ def delete_files_for_brokers(broker_ids: List[int]) -> int:
     broker and its transactions never touches them: the callers run this after the commit that
     deleted the brokers — ``DELETE /brokers``, the last owner leaving a broker, an account
     deletion. Best-effort: only files whose ``target_broker_id`` matches exactly are removed;
-    legacy files with no broker (``None``) are left untouched.
+    legacy files with no broker (``None``) are left untouched. Once a broker's files are gone,
+    its storage goes too (``_remove_broker_storage``).
 
     Returns the number of files removed. Synchronous filesystem I/O: async callers run it
     through ``asyncio.to_thread``.
@@ -1273,9 +1274,31 @@ def delete_files_for_brokers(broker_ids: List[int]) -> int:
             for file_info in list_files(broker_ids=[broker_id]):
                 if file_info.target_broker_id == broker_id and delete_file(file_info.file_id):
                     removed += 1
+            _remove_broker_storage(broker_id)
         except Exception as exc:  # best-effort: the broker is already deleted
             logger.warning("Failed to clean BRIM files for deleted broker", broker_id=broker_id, error=str(exc))
     return removed
+
+
+def _remove_broker_storage(broker_id: int) -> None:
+    """Remove a deleted broker's status folders, when empty, and its lock file.
+
+    Runs under the broker's lock, so no writer of this process or another sits between a read and a
+    write of its sidecars. ``rmdir`` removes only an empty folder: one still holding a file the store
+    did not write stays, with a warning. The lock file is unlinked while held. The re-entrant lock in
+    ``_BROKER_LOCKS`` stays: dropping it could hand a second lock for the same key to a thread already
+    waiting on the first.
+    """
+    with _broker_metadata_lock(broker_id):
+        for status in BRIMFileStatus:
+            folder = _get_folder_for_status(status, broker_id)
+            try:
+                folder.rmdir()
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                logger.warning("Kept a non-empty folder of a deleted broker", broker_id=broker_id, folder=str(folder), error=str(exc))
+        (get_broker_reports_dir() / ".locks" / f"{_broker_lock_key(broker_id)}.lock").unlink(missing_ok=True)
 
 
 def _delete_file_locked(file_id: str) -> bool:

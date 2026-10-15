@@ -1005,3 +1005,274 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   0 files dropped, 22 moves recognized. Grammar: 0 violations».
 > - E2E sul backend riordinato da H: `front-utility auth` 29 passati, `front-utility settings` 45 passati.
 > - Porta 6182 libera, worktree pulito dopo le prove.
+>
+> **Esito**: il coordinatore ha integrato A2 in `dev_release2` con un avanzamento veloce a `76e61889b`, che contiene
+> anche questo journal. Il ramo coincide con `dev_release2`.
+
+### A3 — registro delle schede, O-15, K-17, L12 (CP3) — in corso
+
+#### A3.0 — Via e base ✅ (2026-10-15)
+> Via del coordinatore (15/10, ~01:04), alla lettera: «**Via per A3**: registro delle schede di Impostazioni, O-15,
+> K-17 e L12. Checkpoint FROZEN alla fine. Ricorda le regole di T-1: un file frontend nuovo, come il runtime del
+> registro, nasce senza classi di palette. K-17 su `PasswordInput` si somma alla prop `icon` di T.»
+>
+> **Note implementazione**:
+> - HEAD `76e61889b` = `dev_release2` all'integrazione di A2, worktree pulito.
+> - Finestra della galleria dalle 09:00: niente `all-backend` né build pesanti; il lotto entra prima delle 08:45 o
+>   dopo la chiusura.
+> - **TC-6** (programma colori, 15/10): alla prima visita con il browser in `it-IT` il selettore della lingua mostra
+>   l'inglese. La riga che la richiama va nella mia sezione del backlog al checkpoint; la correzione va in un lotto
+>   che tocca la pagina d'accesso o le preferenze, con il rosso visto prima.
+
+#### A3.1 — Disegno verificato sul codice ✅ (2026-10-15)
+> **Note implementazione**:
+> - **Registro** `lib/features/settings/settingsTabs.ts`:
+>   - campi `{id, labelKey, icon, order, component, visible?(ctx), props?(ctx), alignEnd?}`;
+>   - contesto `{isSuperuser}`;
+>   - `visibleSettingsTabs(tabs, ctx)` filtra e ordina, e riceve l'elenco in modo esplicito, così un test può dargli
+>     un elenco finto.
+> - **Le 4 schede di oggi**:
+>   - `admin` resta visibile a tutti, modificabile solo dall'admin (`props: ctx => ({canEdit: ctx.isSuperuser})`);
+>   - `alignEnd` prende il posto di `className: 'sm:ml-auto'`.
+> - **Pagina** in rune, con lo stesso markup e le stesse classi, quindi il cricchetto dei colori non sale.
+>   - `?tab=` vale solo per l'id di una scheda visibile, e solo quando cambia.
+>   - `$effect.pre`, come il `$:` di prima: la scheda giusta c'è già al primo disegno, e non si monta ProfileTab per
+>     un istante.
+> - **O-15**: il tipo `AuthError` perde la variante `{message}`, che nessuno produce più.
+>
+>   | Caso | Chiave |
+>   |---|---|
+>   | nessuna risposta, 502, 503, 504 | `auth.loginServerUnreachable` |
+>   | altri 5xx | `auth.loginServerError` (un 500 non è «non raggiungibile») |
+>   | 429 | `auth.tooManyAttempts` (§4.11; A8 aggiungerà il proprio 429) |
+>   | ogni altro stato | `auth.loginFailed` |
+>
+>   401, 403 `ACCOUNT_DISABLED` e 422 restano come oggi.
+> - **K-17**: due chiavi, `auth.showPassword` e `auth.hidePassword`.
+>   - `aria-label` e `title` cambiano con lo stato; `tabindex="-1"` se ne va.
+>   - **Niente `aria-pressed`**: un pulsante a interruttore il cui nome cambia non deve averlo (WAI-ARIA APG), e il
+>     nome che dice l'azione è lo schema di GOV.UK. Il §4.11 lo prevedeva: è una correzione del mio disegno.
+> - **L12**:
+>   - il popolamento di prova crea già ognuno col ruolo giusto (`populate_mock_data.py:481-493`), quindi il
+>     `create-superuser` del runner e di `global-setup.ts` vale solo se l'utente manca;
+>   - nuovo comando interno `create-user`;
+>   - `dev.py user create … [--role admin|user]`, con `admin` di default come oggi;
+>   - il runner e `global-setup.ts` creano gli utenti normali con `create-user`.
+
+#### A3.2 — Test rossi (`test-author`) ✅ (2026-10-15)
+> **Note implementazione**:
+>
+> | File | Test | Rossi prima dell'implementazione, e perché |
+> |---|---|---|
+> | nuovo `features/settings/settingsTabs.test.ts` (`core-unit`) | 16 | tutti: il modulo non esiste |
+> | nuovo `routes/(app)/settings/page.tabs.test.ts` (`component-unit`) | 18 | tutti: la pagina disegna le 4 schede a mano |
+> | nuovo `__tests__/harness/SettingsTabProbe.svelte` | — | corpo finto delle schede, senza classi di palette |
+> | `stores/app/auth.test.ts` | 53 → 74 | 30: il testo grezzo di axios e le 3 chiavi che mancano |
+> | `features/auth/LoginCard.test.ts` | 22 → 24 | 0 a runtime; rosso solo per i tipi, finché l'unione delle chiavi non cresce |
+> | `components/ui/input/PasswordInput.test.ts` | 8 → 18 | 8: `title` inglese, `tabindex="-1"`, chiavi assenti |
+> | `test_dev_cli_image.py` (IMG-011, IMG-012) | 31 → 39 | 6: `--role` e `create-user` sconosciuti (exit 2) |
+>
+> - I casi che fissano il comportamento che resta sono verdi già sulla base: 401, 422, `ACCOUNT_DISABLED`,
+>   ciclo di vita dell'errore, `type="button"`, `create-superuser` e `user create` senza ruolo.
+> - `test-author` ha verificato i test su un'implementazione di riferimento usa e getta, poi cancellata.
+>   Ha anche rotto quell'implementazione di proposito, un difetto alla volta, e ogni difetto ha fatto
+>   cadere il test giusto (per esempio `$effect` al posto di `$effect.pre` fa montare la scheda di default
+>   per un istante).
+> - Registrazione nel runner e `check-orphans` puliti; nessun test copre `_ensure_test_users`.
+
+#### A3.3 — Implementazione ✅ (2026-10-15)
+> **Note implementazione**:
+> - **Registro**: nuovo `features/settings/settingsTabs.ts`.
+>   - `order`: 10, 20, 30, e 100 per l'admin, con spazi per le schede nuove.
+>   - Le schede da `alignEnd` in poi formano il gruppo di destra.
+> - **Pagina** `routes/(app)/settings/+page.svelte` in rune: markup e classi identici; `$effect.pre` sceglie la scheda
+>   prima del primo disegno, con `untrack` sulla scheda attiva, così un clic non riesegue l'effetto. Se la scheda
+>   attiva smette di essere visibile si apre la prima visibile.
+> - **O-15**:
+>   - `types/user.ts`: `AuthError` = `{key}` e basta, con 3 chiavi nuove;
+>   - `stores/app/auth.ts`: la mappatura sta in `loginErrorKey(status, body)`;
+>   - `LoginCard.svelte`: `{$_($authError.key)}`.
+> - **K-17**: `PasswordInput.svelte`, con `aria-label` e `title` = `$_(auth.showPassword | auth.hidePassword)` e senza
+>   `tabindex`; formattato con Prettier.
+> - **i18n**: 5 chiavi nella sorgente `auth/` (`/tmp/libreFolio_a3_i18n_add.sh`): `loginServerUnreachable`,
+>   `loginServerError`, `tooManyAttempts`, `showPassword`, `hidePassword`.
+> - **L12**:
+>   - `scripts/user_cli.py`: `cmd_create_user(…, is_superuser)` al posto di `cmd_create_superuser`, comando interno
+>     `create-user`, `dev.py user create … [--role admin|user]`;
+>   - `_frontend_common.py::_ensure_test_users` e `e2e/global-setup.ts` creano gli utenti normali con `create-user`
+>     e solo `e2e_test_admin` con `create-superuser`; il passo `promote` resta.
+> - **A-5, la parte di `user_cli.py`**: black, W293 e PLC0415 sistemati (`set_test_mode` importato in cima:
+>   `backend.app.config` lo importava già `db.session`).
+>
+> **⚠️ Fuori pista**:
+> - Il ramo in più portava `_dispatch_user_command` a C901 (11 > 10): ora è una tabella comando → azione.
+> - Niente `aria-pressed`: lo chiedeva il §4.11, ma un pulsante il cui nome cambia non deve averlo (WAI-ARIA APG).
+
+#### A3.4 — Pagina `admin/cli_tools` in 4 lingue ✅ (2026-10-15)
+> **Note implementazione**:
+> - en/it/fr/es: un esempio `--role user` e il primo punto riscritto («`user create` crea un amministratore, a meno
+>   che tu non aggiunga `--role user`»).
+> - Timbro di traduzione legittimo: prima della modifica l'MD5 della cache (`02fa5f95…`) era quello di HEAD,
+>   con `langs_done` es/fr/it. `dev.py mkdocs translate-stamp --file admin/cli_tools.en.md` (prova a vuoto prima):
+>   `02fa5f95 → df53c747`.
+
+#### A3.5 — Doc per sviluppatori (`docs-writer`) e devWiki ✅ (2026-10-15)
+> **Note implementazione** (solo modifiche: build e link li ho lanciati io dopo, perché la corsia era occupata):
+> - `frontend/components/features/settings.md`:
+>   - sezione nuova «🗂️ Tab registry» (`#tab-registry`), con campi, le 4 schede, il runtime della pagina e la regola
+>     di `?tab=`;
+>   - «come aggiungere una scheda», con esempio, spazi di `order`, `visible`, `props`, `alignEnd` e la riga nella
+>     tabella `TODAY` del test;
+>   - il paragrafo di GlobalSettingsTab ora parla delle `props` del registro.
+> - `frontend/pages/index.md`: le 4 schede vengono dal registro, più la regola di `?tab=`.
+> - `frontend/components/features/auth.md`: la mappatura di `loginErrorKey` (O-15) e il pulsante occhio (K-17).
+> - `frontend/components/core-ui/atoms.md`: il pulsante occhio (K-17).
+> - `architecture/access_control.md`: `user create` crea un admin solo di default; `--role user` crea un account
+>   normale (L12).
+> - `architecture/database/users_access.md:66`: lo stesso.
+> - devWiki `domains/layout-settings.md`: una decisione («le schede vengono da un registro») e 3 righe nella tabella
+>   «Source files».
+> - `check_source_paths.py`: gli stessi 5 percorsi generati di A2, nessuno nuovo.
+>
+> **⚠️ Fuori pista**: `docs-writer` ha trovato delle derive fuori da A3, registrate come A-7 nel backlog:
+> - `access_control.md:116-123`, sulle regole dell'ultimo admin e sul 403 `ACCOUNT_DISABLED`: si allinea in A6;
+> - il titolo della scheda globale «(Admin only)»: in A6;
+> - «JWT tokens» in `state/app-state.md:11`: in A4;
+> - la prop `icon` di T che manca nella doc: la segnalo al coordinatore.
+
+#### A3.6 — Controlli statici ✅ (2026-10-15)
+> **Note implementazione** (`/tmp/libreFolio_a3_validate1.sh`):
+> - `dev.py front check`: «0 errors and 0 warnings».
+> - `dev.py i18n check`: pulito, 4 365 chiavi.
+> - Cancello dei colori, `--check`: «clean». `--report`: «Ratchet: 0 violations, 0 files dropped, 22 moves
+>   recognized. Grammar: 0 violations».
+>   - Il file nuovo `settingsTabs.ts` non ha classi.
+>   - `SettingsTabProbe.svelte` non ha classi di palette.
+>   - La pagina tiene le stesse classi.
+> - Prettier: pulito sui file toccati. `PasswordInput.svelte` è stato riformattato: il pulsante va su più righe.
+> - ruff e black puliti su `scripts/user_cli.py`, sui file del runner e su `test_dev_cli_image.py`.
+> - knip (`dev.py lint --dead-code --scope frontend`): identico allo stato dopo A2 (exit 1 già alla base),
+>   nessun reperto nei file nuovi.
+> - `check-orphans`: 366 test unitari registrati e raggiungibili.
+
+#### A3.7 — Test ✅ (2026-10-15)
+> **Note implementazione** (corsia 6182, una invocazione alla volta; `/tmp/libreFolio_a3_validate1.sh` e `…2.sh`):
+>
+> | Suite | Esito | Rispetto alla base |
+> |---|---|---|
+> | `front-utility core-unit` | 131 file, **4 261** test | 130/4 245, più `settingsTabs.test.ts` (16) |
+> | `front-utility component-unit` | 119 file, **3 192** test | 118/3 162, più `page.tabs` (18), `PasswordInput` (+10), `LoginCard` (+2) |
+> | `front-utility onboarding-component-unit` | 15 file, **437** test | come la base |
+> | `front-user user-unit` | 2 file, **78** test | `auth.test.ts` da 53 a 74 |
+> | `utils dev-cli-image` | **39** passati | da 31, più IMG-011 e IMG-012 |
+>
+> - Prima delle E2E: `dev.py front build --debug` (exit 0, svelte-check 0/0), `dev.py mkdocs build` (exit 0) e
+>   `mkdocs check-links` (95 link validi).
+> - E2E, tutte exit 0:
+>   - `front-utility auth`: 29;
+>   - `front-utility settings`: 45;
+>   - `front-utility app-start-auth`: 3;
+>   - `front-utility onboarding-guides`: 24, apre `/settings?tab=preferences`;
+>   - `front-utility theme-roles`: 8, legge `PasswordInput`;
+>   - `front-user account-deletion`: 1.
+> - `_ensure_test_users` è passato con `create-user`: «Test users ready». Nella base della corsia solo
+>   `e2e_test_admin` è admin (`user_cli.py --test-db list-users`).
+> - Porta 6182 libera dopo le run. `git diff --check` pulito.
+> - Non eseguiti:
+>   - `all-backend`: il codice dell'app backend non cambia, cambiano solo `scripts/user_cli.py` e un test;
+>   - la suite E2E completa e la galleria: il markup della pagina delle impostazioni è lo stesso.
+
+### Checkpoint A3 (CP3) 🧊 (2026-10-15, notte) — FROZEN, in attesa del commit del coordinatore
+> - **Delta** sulla base `76e61889b`, non in stage:
+>   - 4 file nuovi;
+>   - 30 file di codice, test, documentazione e devWiki modificati;
+>   - in più questo piano, la sezione A del backlog e le chiusure di O-15, K-17 e L12 nel README del backlog 38.
+> - **Conflitti attesi con `dev_release2`** (`75a20ce29`): tre file in comune, su righe diverse.
+>   - `BACKLOG_POST_1.2.md`: ognuno scrive nella sua sezione.
+>   - `access_control.md`: l'altra parte tocca le righe 87-92, io le 110-115.
+>   - `_backend_utils.py`: l'altra parte tocca la riga 112, io le 194 e 422.
+>   - Semantica: `user_cli.py` importa `set_test_mode` in cima, e il pacchetto `config` di H lo esporta ancora
+>     (`config/__init__.py:63`).
+> - **Commit proposti**:
+>   1. `feat(accounts): tab registry, O-15, K-17, L12`;
+>   2. `docs(journal): A3 progress, A and 38 backlog`.
+> - **Ingresso in `dev_release2`**: prima delle 08:45 o dopo la finestra della galleria.
+>
+> **Esito**: il coordinatore ha committato `755eaa27d` (`feat(accounts): tab registry, O-15, K-17, L12`: 4 file
+> aggiunti, 30 modificati) e `a8eefdb44` (journal; le chiusure nel README del 38 vanno bene). Poi ha aggiornato la
+> base con il merge `35f1e0a16` di `dev_release2` a `75a20ce29`: unione automatica di backlog, `access_control.md` e
+> `_backend_utils.py`, albero uguale alla simulazione, worktree pulito. Il merge porta W1 e W2 (`transactions/`,
+> `brokers/`), H CP2a (pacchetto `config/` e guardia su `os.environ`), X CP1 e CP2a (registri per famiglia,
+> `services/assets/`).
+>
+> Indicazioni del coordinatore (15/10, ~02:24):
+> - **CHANGELOG**: lo aggiorna lui all'ingresso, con le tre righe proposte.
+> - **T-B4 → TC-4**: il coordinatore colori rinomina la sua sezione col prefisso `TC-` il 15/10, con T-3. Poi
+>   aggiorno il richiamo in A-6 e in questo piano.
+> - **Lotti successivi**, un checkpoint FROZEN ciascuno:
+>   - A4: migrazione 005 e token; la parte delle sessioni (`sv`) dopo il CP3 di H, che fa i segreti;
+>   - A5: inviti, limite, API admin, link di reset. Le regole uniche della password aspettano la decisione 37 del
+>     developer;
+>   - A6: scheda Utenti, con l'eliminazione degli utenti;
+>   - A8: limite dei tentativi e scheda «Sicurezza».
+> - **Contratto della scheda «Sicurezza»** (A8), alla lettera: «un registro aperto di controlli che altre sessioni
+>   possono usare. Un controllo è id, gravità, chiave i18n e dettaglio, valutato a richiesta da un endpoint solo per
+>   admin. H ci registrerà i suoi avvisi di configurazione: segreto JWT corto, `NOME` e `NOME_FILE` insieme, permessi
+>   larghi sulla chiave d'istanza, cookie `never`. Tienilo semplice, ma usabile da un'altra sessione.»
+> - H ha preparato `backend/app/config/accounts.py` per A, con `donation_popup_disabled()`: le variabili nuove di A
+>   vanno lì. La catena delle migrazioni arriva alla 004: la 005 resta di A.
+
+#### A3.8 — Validazione completa della revisione combinata `35f1e0a16` ✅ (2026-10-15)
+> Richiesta del coordinatore: build, `front check`, core-unit, component-unit, cancello dei colori;
+> `utils dev-cli-image` e `services config-package` («`user_cli.py` non deve leggere `os.environ` fuori da
+> `config/`»); `all-backend`; E2E `auth`, `settings`, `app-start-auth`, `onboarding-guides`.
+>
+> **Note implementazione**:
+> - Il guardiano di `config-package` scandisce solo `backend/app/`, quindi `scripts/user_cli.py` resta fuori dal suo
+>   perimetro. L'ho controllato a mano, con il rilevatore del test
+>   (`test_config_package._environment_accesses`): `reads=[]`, `writes=[]`.
+>   - `user_cli.py` cambia il modo di test solo con `set_test_mode()`, che il pacchetto `config` esporta ancora.
+>   - Le letture dell'ambiente in `scripts/test_runner/_frontend_common.py` c'erano già, e la regola vale per
+>     `backend/app/`.
+> - **Esito** (`bash /tmp/libreFolio_a3c_validate.sh`, corsia 6182, dalle 02:24 alle 02:57, tutto exit 0):
+>   - `dev.py front build --debug` e `front check`: svelte-check «0 errors and 0 warnings».
+>   - `dev.py mkdocs build`: exit 0, per tenere l'avvio del server dentro i 300 s.
+>   - Vitest:
+>     - `core-unit`: 131 file, **4 261** test;
+>     - `component-unit`: 119 file, **3 192** test;
+>     - `user-unit`: 2 file, **78** test.
+>
+>     Sono gli stessi numeri di A3.7: il merge non tocca i test frontend.
+>   - Cancello dei colori: `--check` «clean»; `--report` «Ratchet: 0 violations, 0 files dropped, 22 moves
+>     recognized. Grammar: 0 violations».
+>   - `check-orphans`: 366 unitari, 118 E2E e 264 file backend registrati e raggiungibili da `all`.
+>   - `utils dev-cli-image`: **39** passati. `services config-package`: **472** passati.
+>   - **`all-backend`**: uscita 0, **7/7 categorie verdi**, 20 min (02:30 → 02:51).
+>     - 23 righe di riepilogo pytest: **13 440 passati, 28 saltati, 0 falliti**.
+>     - In A1.9 erano 12 965: la differenza viene dai lotti entrati con il merge (fra cui `config-package`, 472) e
+>       dagli 8 test IMG-011 e IMG-012.
+>   - E2E sul backend riordinato da W, H e X:
+>     - `front-utility auth`: 29;
+>     - `front-utility settings`: 45;
+>     - `front-utility app-start-auth`: 3;
+>     - `front-utility onboarding-guides`: 24.
+>   - In ogni run E2E `_ensure_test_users` stampa «Test users ready», senza errori. Nella base della corsia c'è un
+>     solo 👑, `e2e_test_admin`.
+>   - Porta 6182 libera. Worktree: cambia solo questo piano.
+>
+> **Esito**: il coordinatore ha committato questo piano in `211a05e0b` (`docs(journal): A3 combined validation`).
+> Poi ha aggiornato la base con il merge `d851c39bc` di `dev_release2` a `f39be79b7`, che porta W I1: backend di
+> transazioni e broker, `TransactionBulkModal.svelte`, `e2e/transactions/tx-broker-access.spec.ts` e il cancello
+> `utils gate-event-loop-io`, unito da solo in `_backend_utils.py`. Merge pulito, worktree pulito.
+
+#### A3.9 — Validazione mirata della revisione `d851c39bc` ✅ (2026-10-15)
+> **Note implementazione** (`bash /tmp/libreFolio_a3d_validate.sh`, corsia 6182, dalle 03:06 alle 03:16, tutto exit 0;
+> niente `all-backend`, su indicazione del coordinatore: A3 non tocca `backend/app/`, e il backend di W lo valida W):
+> - `dev.py front build --debug` e `front check`: svelte-check «0 errors and 0 warnings».
+> - Vitest: `core-unit` 131 file e **4 261** test; `component-unit` 119 file e **3 192** test.
+> - `theme-roles.mjs --check`: «clean».
+> - `check-orphans`: 366 unitari, 118 E2E e **265** file backend (più `test_event_loop_brim_io_gate.py` di W).
+> - `utils dev-cli-image`: **39** passati; `utils gate-event-loop-io`: **14** passati.
+> - `dev.py mkdocs build`: exit 0, perché il merge cambia due pagine e il server ricostruisce il sito dentro i 300 s.
+> - E2E: `front-utility auth` **29**, `front-utility settings` **45**, `front-transaction tx-broker-access` **5**.
+> - Tutti i conteggi sono quelli attesi dal coordinatore. `git diff --check` pulito, porta 6182 libera.

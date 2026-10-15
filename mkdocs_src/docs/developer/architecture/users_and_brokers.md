@@ -23,7 +23,7 @@ session state, neither in memory nor in the database.
 ### 💾 Session State, Restarts & TTL
 
 - 🧠 **Stateless**: Nothing is stored server-side, so any uvicorn worker can validate any token, provided all workers share the same `JWT_SECRET`.
-- 🔑 **Restarts**: Sessions survive a restart only if `JWT_SECRET` is set to a fixed value. Without it, every start generates a new random key, existing tokens no longer verify, and everyone is signed out. See [JWT Secret](security.md#jwt-secret) for how the key is resolved.
+- 🔑 **Restarts**: Sessions survive a restart only if `JWT_SECRET`, or the file named by `JWT_SECRET_FILE`, holds a fixed value. Without it, every start generates a new random key, existing tokens no longer verify, and everyone is signed out. See [JWT Secret](security.md#jwt-secret) for how the key is resolved.
 - ⏱️ **TTL (Time To Live)**: The session duration is configurable via the `session_ttl_hours` Global Setting (default: 24 hours), read at login. There is no refresh: after expiry the user logs in again.
 - 🚪 **Revocation**: Logout only deletes the cookie, and a password change leaves existing tokens valid until they expire. Deactivating or deleting the user cuts access at the next request; changing `JWT_SECRET` signs everyone out.
 

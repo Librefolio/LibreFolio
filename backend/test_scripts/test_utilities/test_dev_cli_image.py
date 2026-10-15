@@ -63,15 +63,38 @@ The contract:
   or blank one (**IMG-010b**), which used to survive (a ``JWT_SECRET=`` left in ``.env``,
   then each worker made its own secret and users were logged out at random); a set one is
   kept and nothing else changes (**IMG-010c**); every start gets a secret of its own
-  (**IMG-010d**). The process environment is only read, to show it is left alone.
+  (**IMG-010d**). With ``JWT_SECRET_FILE`` set, every worker reads the secret from that
+  file: nothing is generated and the env is left as it is (**IMG-010e**), a blank
+  ``JWT_SECRET`` beside it included, which the server ignores as unset (**IMG-010f**); an
+  empty or blank ``JWT_SECRET_FILE`` names no file, so a fresh secret again (**IMG-010g**).
+  The process environment is only read, to show it is left alone.
+* **IMG-011**: ``user create`` gives the account the role it is asked for. With no ``--role``
+  it still creates an active administrator, as it always did (**IMG-011**); ``--role admin``
+  does the same (**IMG-011b**); ``--role user`` creates an active account that is not an
+  administrator, even as the only account of an empty database, and ``user list`` shows it
+  without 👑 (**IMG-011c**); any other role is refused by argparse itself — exit 2, "invalid
+  choice" for ``--role`` — and nobody is created (**IMG-011d**);
+* **IMG-012**: the internal commands behind it, run as the test runner and
+  ``e2e/global-setup.ts`` run them, ``python scripts/user_cli.py <command> …``:
+  ``create-user`` creates an active account that is not an administrator, even as the only
+  account of an empty database, prints ``✅`` and exits 0 (**IMG-012**); with a password that
+  breaks the rules, or a username already taken, it prints ``❌``, exits 1 and creates or
+  changes nobody (**IMG-012b**); ``create-superuser``, which still creates the E2E
+  administrators, keeps creating an active administrator (**IMG-012c**).
 
 IMG-002b, IMG-004 and IMG-007 pin decision 1 of plan 35_devCliImage §0.1, IMG-008 its
 decision 4: a group whose sources the image lacks stays listed and answers for itself,
 instead of crashing or vanishing into argparse's "invalid choice". IMG-006b, IMG-009 and
-IMG-010 pin the decisions of plan 34_accountAndIdReuse step 2 §0.1. The messages are
-English CLI output, not UI text, so the fragments above are the contract: "not available in
-this installation" and "last active administrator" (case aside), the missing directory,
-``❌``, nothing more.
+IMG-010 pin the decisions of plan 34_accountAndIdReuse step 2 §0.1. IMG-011 and IMG-012 pin
+backlog 38, item L12 (plan A3 of workstream A): ``user create`` mapped to ``create-superuser``
+and so did the runner's ``_ensure_test_users`` and ``e2e/global-setup.ts`` for every E2E
+user, so on an empty database the users meant to be ordinary were administrators; a
+populated database hid it, because ``populate_mock_data.py`` creates them first with the
+right role. The messages are English CLI output, not UI text, so the fragments above are the
+contract: "not available in this installation", "last active administrator" and "invalid
+choice" (case aside), the missing directory, the option argparse names, ``❌`` and ``✅``,
+nothing more. Roles are read from the database itself: no exit code tells an administrator
+from an ordinary user.
 
 "Without a traceback" means none of ``Traceback (most recent call last)``,
 ``ModuleNotFoundError`` and ``No module named`` in the combined output.
@@ -167,6 +190,18 @@ LOCAL_URL_PORT = re.compile(r"https?://(?:localhost|127\.0\.0\.1|\[::1\]):([^/\s
 FAILED = "❌"
 LAST_ACTIVE_ADMIN = "last active administrator"
 GUARDED_COMMANDS = ["demote", "deactivate"]
+
+#: Backlog 38, item L12 (plan A3): ``user create … [--role {admin,user}]``, ``admin`` by
+#: default as before, and the internal ``create-user`` for an ordinary account. An account
+#: as the database holds it, ``account()`` below.
+ADMIN_ACCOUNT = {"is_superuser": True, "is_active": True}
+ORDINARY_ACCOUNT = {"is_superuser": False, "is_active": True}
+SUCCEEDED = "✅"
+INVALID_CHOICE = "invalid choice"
+#: The internal CLI, as the runner and ``e2e/global-setup.ts`` run it, from the project root.
+USER_CLI = "scripts/user_cli.py"
+#: Breaks scripts/user_cli.py::validate_password: no uppercase letter, no digit, no special character.
+WEAK_PASSWORD = "weakpassword"
 
 #: ``dev.py`` loaded in this process, for its JWT secret helper; private, so the ``dev``
 #: other tests import is not replaced.
@@ -567,6 +602,19 @@ def active_admins(db_path: Path) -> list[str]:
     """The usernames of the active administrators, oldest first, read from the database itself."""
     with closing(sqlite3.connect(db_path)) as conn:
         return [name for (name,) in conn.execute("SELECT username FROM users WHERE is_superuser AND is_active ORDER BY id")]
+
+
+def account(db_path: Path, username: str) -> dict[str, bool] | None:
+    """``is_superuser`` and ``is_active`` of ``username``, read from the database itself; None when it is not there."""
+    with closing(sqlite3.connect(db_path)) as conn:
+        row = conn.execute("SELECT is_superuser, is_active FROM users WHERE username = ?", (username,)).fetchone()
+    return None if row is None else {"is_superuser": bool(row[0]), "is_active": bool(row[1])}
+
+
+def usernames(db_path: Path) -> list[str]:
+    """Every username in the database, oldest first."""
+    with closing(sqlite3.connect(db_path)) as conn:
+        return [name for (name,) in conn.execute("SELECT username FROM users ORDER BY id")]
 
 
 def user_row(listed: Run, username: str) -> str:
@@ -988,3 +1036,164 @@ class TestSharedJwtSecret:
 
         assert first["JWT_SECRET"] != second["JWT_SECRET"], "two starts got the same secret"
         print_success("two starts, two secrets")
+
+    def test_secret_file_is_left_to_the_workers(self, devpy):
+        """IMG-010e: JWT_SECRET_FILE set and no JWT_SECRET: every worker reads the file, so nothing is generated and the env is left as is."""
+        print_section("IMG-010e: dev.py server, JWT_SECRET_FILE set")
+        given = {"JWT_SECRET_FILE": "/run/secrets/jwt", "PORT": "6040"}
+
+        env = ensure_secret(devpy, dict(given))
+
+        assert env == given, f"with JWT_SECRET_FILE set the helper must not add a JWT_SECRET nor change anything: {env}"
+        print_success("nothing generated, the file left to the workers")
+
+    @pytest.mark.parametrize("blank", ["", "   "], ids=["empty", "spaces"])
+    def test_blank_secret_beside_a_secret_file_is_left_alone(self, devpy, blank):
+        """IMG-010f: a blank JWT_SECRET beside JWT_SECRET_FILE: the server ignores it as unset and reads the file, so the env is left exactly as it is."""
+        print_section(f"IMG-010f: dev.py server, JWT_SECRET={blank!r} and JWT_SECRET_FILE set")
+        given = {"JWT_SECRET": blank, "JWT_SECRET_FILE": "/run/secrets/jwt", "PORT": "6040"}
+
+        env = ensure_secret(devpy, dict(given))
+
+        assert env == given, f"with JWT_SECRET_FILE set the helper must generate nothing and remove nothing, JWT_SECRET={blank!r} included: {env}"
+        print_success(f"JWT_SECRET={blank!r} and JWT_SECRET_FILE left as they are")
+
+    @pytest.mark.parametrize("blank", ["", "  "], ids=["empty", "spaces"])
+    def test_blank_secret_file_variable_counts_as_missing(self, devpy, blank):
+        """IMG-010g: an empty or blank JWT_SECRET_FILE names no file: a fresh secret, as without it, and the variable is left as it is."""
+        print_section(f"IMG-010g: dev.py server, JWT_SECRET_FILE={blank!r}")
+
+        env = ensure_secret(devpy, {"JWT_SECRET_FILE": blank})
+
+        assert set(env) == {"JWT_SECRET", "JWT_SECRET_FILE"} and env["JWT_SECRET_FILE"] == blank, f"the helper must add JWT_SECRET and change nothing else: {env}"
+        assert_usable_secret(env["JWT_SECRET"], f", with JWT_SECRET_FILE={blank!r}: a blank file variable must count as missing")
+        print_success(f"a fresh secret of {len(env['JWT_SECRET'])} characters")
+
+
+# ---------------------------------------------------------------------------
+# IMG-011..IMG-012: the role of an account created from the command line (L12)
+# ---------------------------------------------------------------------------
+
+
+class TestAccountRole:
+    """``dev.py user create`` made every account an administrator (backlog 38, item L12; plan A3).
+
+    The command maps to ``user_cli.py create-superuser``, and so did the runner's
+    ``_ensure_test_users`` and ``e2e/global-setup.ts`` for every E2E user: on an empty
+    database the users meant to be ordinary were administrators, so a test of what an
+    ordinary user may not do could pass for the wrong reason. The approved change:
+    ``user create <username> <email> <password> [--role {admin,user}]``, ``admin`` by default
+    as before, and an internal ``create-user`` for an ordinary account, which the runner and
+    the global setup will use for the ordinary E2E users.
+
+    The ordinary account is created as the only account of a fresh database: that is the
+    case L12 is about. Every other case uses the module's database and a username of its own.
+    """
+
+    def test_create_without_a_role_makes_an_administrator(self, image, image_db):
+        """IMG-011: user create with no --role still creates an active administrator: admin stays the default."""
+        print_section("IMG-011: user create with no --role, in the image")
+        name = unique_username()
+
+        run = run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, env=image_db.env)
+
+        assert_succeeds(run)
+        assert account(image_db.path, name) == ADMIN_ACCOUNT, f"with no --role, user create must still make an active administrator, as it always did: {account(image_db.path, name)}; {run}"
+        print_success(f"{name}: an active administrator")
+
+    def test_create_with_role_admin_makes_an_administrator(self, image, image_db):
+        """IMG-011b: user create --role admin creates an active administrator."""
+        print_section("IMG-011b: user create --role admin, in the image")
+        name = unique_username()
+
+        run = run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, "--role", "admin", env=image_db.env)
+
+        assert_succeeds(run)
+        assert account(image_db.path, name) == ADMIN_ACCOUNT, f"--role admin must make an active administrator: {account(image_db.path, name)}; {run}"
+        print_success(f"{name}: an active administrator")
+
+    def test_create_with_role_user_makes_an_ordinary_account(self, image, fresh_db):
+        """IMG-011c: user create --role user creates an active account that is not an administrator, even alone in an empty database, and user list shows it without 👑."""
+        print_section("IMG-011c: user create --role user on an empty database, in the image")
+        name = unique_username()
+        assert usernames(fresh_db.path) == [], "premise: the fresh database has no account yet"
+
+        run = run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, "--role", "user", env=fresh_db.env)
+
+        assert_succeeds(run)
+        assert usernames(fresh_db.path) == [name], f"premise: {name} is the only account of its database"
+        assert account(fresh_db.path, name) == ORDINARY_ACCOUNT, f"--role user must make an active account that is not an administrator, even the first one: {account(fresh_db.path, name)}; {run}"
+        listed = run_dev(image, "user", "list", env=fresh_db.env)
+        assert_succeeds(listed)
+        row = user_row(listed, name)
+        assert "👑" not in row and "✅" in row, f"user list must show {name} active (✅) and without 👑: {row}"
+        print_success(f"{name}: an active ordinary account, alone in its database")
+
+    def test_create_with_an_unknown_role_is_refused(self, image, image_db):
+        """IMG-011d: user create --role owner is refused by argparse, as an invalid choice for --role: exit 2, and nobody is created."""
+        print_section("IMG-011d: user create --role owner, in the image")
+        name = unique_username()
+
+        run = run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, "--role", "owner", env=image_db.env)
+
+        assert_no_crash(run)
+        assert run.returncode == 2, f"an unknown role is an argparse error, exit 2: {run}"
+        assert INVALID_CHOICE in run.output.lower() and "--role" in run.output, f"argparse must refuse the value of --role ({INVALID_CHOICE!r} for --role), not an option it does not know: {run}"
+        assert account(image_db.path, name) is None, f"a refused role must create nobody, yet {name} is in the database: {account(image_db.path, name)}"
+        print_success(f"--role owner: {INVALID_CHOICE}, exit 2, {name} not created")
+
+    def test_internal_create_user_makes_an_ordinary_account(self, image, fresh_db):
+        """IMG-012: user_cli.py create-user creates an active account that is not an administrator, even alone in an empty database, prints ✅ and exits 0."""
+        print_section("IMG-012: user_cli.py create-user on an empty database, in the image")
+        name = unique_username()
+        assert usernames(fresh_db.path) == [], "premise: the fresh database has no account yet"
+
+        run = run_python(image, USER_CLI, "create-user", name, f"{name}@example.com", OLD_PASSWORD, env=fresh_db.env)
+
+        assert_succeeds(run)
+        assert SUCCEEDED in run.output, f"expected the creation to be reported with {SUCCEEDED}: {run}"
+        assert usernames(fresh_db.path) == [name], f"premise: {name} is the only account of its database"
+        assert account(fresh_db.path, name) == ORDINARY_ACCOUNT, f"create-user must make an active account that is not an administrator, even the first one: {account(fresh_db.path, name)}; {run}"
+        print_success(f"{name}: an active ordinary account, {SUCCEEDED}, exit 0")
+
+    def test_internal_create_user_refuses_a_password_that_breaks_the_rules(self, image, image_db):
+        """IMG-012b: user_cli.py create-user with a password that breaks the rules prints ❌, exits 1 and creates nobody."""
+        print_section("IMG-012b: user_cli.py create-user with a weak password, in the image")
+        valid, _ = validate_password(WEAK_PASSWORD)
+        assert not valid, f"test bug: {WEAK_PASSWORD!r} satisfies the CLI's password rules"
+        name = unique_username()
+
+        run = run_python(image, USER_CLI, "create-user", name, f"{name}@example.com", WEAK_PASSWORD, env=image_db.env)
+
+        assert_no_crash(run)
+        assert FAILED in run.output, f"expected the refusal to be reported with {FAILED}: {run}"
+        assert run.returncode == 1, f"a failed create-user must exit 1: {run}"
+        assert account(image_db.path, name) is None, f"a refused password must create nobody, yet {name} is in the database"
+        print_success(f"{name}: {FAILED}, exit 1, not created")
+
+    def test_internal_create_user_refuses_a_username_already_taken(self, image, image_db):
+        """IMG-012b: user_cli.py create-user of a username already taken prints ❌, exits 1, and the existing account keeps its role."""
+        print_section("IMG-012b: user_cli.py create-user of a username already taken, in the image")
+        name = unique_username()
+        assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, env=image_db.env))
+        assert account(image_db.path, name) == ADMIN_ACCOUNT, f"premise: {name} exists as an active administrator"
+
+        run = run_python(image, USER_CLI, "create-user", name, f"other-{name}@example.com", OLD_PASSWORD, env=image_db.env)
+
+        assert_no_crash(run)
+        assert FAILED in run.output, f"expected the refusal to be reported with {FAILED}: {run}"
+        assert run.returncode == 1, f"a failed create-user must exit 1: {run}"
+        assert account(image_db.path, name) == ADMIN_ACCOUNT, f"create-user must never change an existing account: {account(image_db.path, name)}"
+        print_success(f"{name}: {FAILED}, exit 1, still an active administrator")
+
+    def test_internal_create_superuser_still_makes_an_administrator(self, image, image_db):
+        """IMG-012c: user_cli.py create-superuser, which still creates the E2E administrators, creates an active administrator, prints ✅ and exits 0."""
+        print_section("IMG-012c: user_cli.py create-superuser, in the image")
+        name = unique_username()
+
+        run = run_python(image, USER_CLI, "create-superuser", name, f"{name}@example.com", OLD_PASSWORD, env=image_db.env)
+
+        assert_succeeds(run)
+        assert SUCCEEDED in run.output, f"expected the creation to be reported with {SUCCEEDED}: {run}"
+        assert account(image_db.path, name) == ADMIN_ACCOUNT, f"create-superuser must make an active administrator: {account(image_db.path, name)}; {run}"
+        print_success(f"{name}: an active administrator, {SUCCEEDED}, exit 0")

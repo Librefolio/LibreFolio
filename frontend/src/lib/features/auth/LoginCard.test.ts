@@ -299,24 +299,40 @@ describe('LoginCard — «Register here» follows the instance setting', () => {
 });
 
 /**
- * The sign-in error (O, step 21, finding 5).
+ * The sign-in error (O, step 21, finding 5; backlog 38, item O-15; plan A3).
  *
  * The card printed `{$authError}` as it was, and the store put an English
- * sentence there, so the error read in English in every language. The approved
- * contract: `authError` holds an `AuthError` (`$lib/types`) or `null`, and the
- * card draws it in `login-error`:
+ * sentence there, so the error read in English in every language. Step 21 made
+ * `authError` an `AuthError` (`$lib/types`) the card draws in `login-error`: a
+ * `{key}` through the translator, a `{message}` — the axios words — verbatim.
+ * Plan A3 (O-15) removes the `{message}` variant: the store now turns every
+ * failure into a catalogue key (`stores/app/auth.test.ts`), so the card has one
+ * way left to draw an error, and the cases that drew a message as it came are
+ * gone with it:
  *   - `{key}`, a catalogue key, through the translator (`$_(key)`): translated
  *     when it is drawn, not when the sign-in failed, so it also follows a
  *     language change while it is on screen;
- *   - `{message}`, the transport's own words, verbatim — never through `$_`;
  *   - `null`: no error box at all.
  *
  * These cases swap the identity for a translator that marks what it translated,
- * `⟦key⟧`: a key must come out marked, a message unmarked. Today the box prints
- * the object itself, "[object Object]"; the `null` case is green, and stays so.
+ * `⟦key⟧`. The keys come from a `Record<AuthErrorKey, true>`, so a key the store
+ * can emit and this file does not draw fails `front check`. Every case is green
+ * at runtime today — the card already sends a `{key}` through `$_` — and the
+ * three keys of O-15 fail only the type check until `AuthErrorKey` grows: what
+ * A3 changes in the card is that the verbatim branch can no longer be reached.
  */
-describe('LoginCard — the sign-in error: a key is translated, a message is shown as it came', () => {
-    const KEYS: AuthErrorKey[] = ['auth.invalidCredentials', 'auth.invalidInput', 'auth.loginFailed'];
+describe('LoginCard — the sign-in error is a key, drawn through the translator', () => {
+    /** Every key the store can emit, each drawn below. */
+    const EMITTED: Record<AuthErrorKey, true> = {
+        'auth.invalidCredentials': true,
+        'auth.invalidInput': true,
+        'auth.loginFailed': true,
+        'auth.accountDisabled': true,
+        'auth.loginServerUnreachable': true,
+        'auth.loginServerError': true,
+        'auth.tooManyAttempts': true,
+    };
+    const KEYS = Object.keys(EMITTED) as AuthErrorKey[];
     const marked = (key: string): string => `⟦${key}⟧`;
     const errorBox = () => screen.queryByTestId('login-error');
     /** What the box reads, whitespace collapsed: the markup around the text is the card's business. */
@@ -330,16 +346,6 @@ describe('LoginCard — the sign-in error: a key is translated, a message is sho
 
         expect(errorBox(), 'premise: an error draws the box').not.toBeNull();
         expect(shown(errorBox()), 'a {key} error is drawn through the translator, in the language of the page').toBe(marked(key));
-    });
-
-    it.each(['Request failed with status code 500', 'Network Error'])('draws {message: "%s"} as it came, never through the translator', (message) => {
-        translator.set(marked);
-        signInError.set({message});
-
-        mount();
-
-        expect(errorBox(), 'premise: an error draws the box').not.toBeNull();
-        expect(shown(errorBox()), 'a {message} error is the transport’s own words, drawn verbatim').toBe(message);
     });
 
     it('follows a language change while the error is on screen', async () => {

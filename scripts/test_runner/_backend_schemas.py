@@ -36,7 +36,7 @@ def schemas_common(verbose: bool = False, test_names: list = None) -> bool:
 def schemas_assets(verbose: bool = False, test_names: list = None) -> bool:
     """Test asset-related Pydantic schemas."""
     print_section("Schemas: Assets (FAGeographicArea, FAInterestRatePeriod, etc.)")
-    print_info("Testing: backend/app/schemas/assets.py")
+    print_info("Testing: backend/app/schemas/assets/assets.py")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_asset_schemas.py", test_names)
     return run_command(cmd, "Asset schemas tests", verbose=verbose)

@@ -182,6 +182,9 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   nel form. Mancano il modale al cambio di provider (vecchio evento → nuovo, con la proposta di ricollegare) e la
   ricerca inversa `GET /transactions?asset_event_id=`. Vicina ma diversa: «🔗 Suggerimento eventi collegabili nella
   bulk modal» in [`TODO_FUTURI.md`](../../../TODO_FUTURI.md). Dettagli: [F-090](../../../LibreFolio_devWiki/wiki/features/F-090.md).
+  - ✅ **Ricerca inversa chiusa il 15/10** da W (lotto I1 della 1.3, `5e96df752`; in `dev_release2` con `dc7e4e48e`):
+    `GET /transactions?asset_event_id=`, nei broker che l'utente vede (C-65b nel piano 04). Resta aperta la modale al
+    cambio di provider (C-65a, X e W).
 - **C-66 · Sync: l'avviso prima di sovrascrivere i dati (F-094)** — basso; W (C-64), 12/10. Il dialogo c'è già ed è
   comune a cambi e asset: `SyncModalBase`, con `FxSyncModal`, `AssetSyncModal` (lista degli asset) e `PageSyncModal`
   (pagine di dettaglio), che sincronizzano l'intervallo della pagina. Manca solo l'avviso quando l'intervallo scelto
@@ -308,11 +311,13 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
     `modeText.test.ts:11-16`, `pluralCountSites.test.ts:13-19` e `pac-allocator-real.spec.ts:19`.
 
   Dettagli: piano della 53, §4 e §5.
-- **C-79 · Cancellare un broker lascia il suo lock e la sua cartella vuota in `broker_reports`** — minimo; R, 14/10, run
+- ✅ **C-79 · Cancellare un broker lascia il suo lock e la sua cartella vuota in `broker_reports`** — minimo; R, 14/10, run
   finale. Alla cancellazione di un broker restano `.locks/broker_N.lock` e la cartella vuota `uploaded/broker_N/`: nella
   run finale, 89 lock e circa 107 cartelle dei broker temporanei delle spec di import. Nessun file di report resta
   orfano. Cura: la pulizia del file system nella cancellazione del broker (BRIM/import), dopo la 1.2. Dettagli:
   [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md), §3.
+  - ✅ **Chiusa il 15/10** da W (lotto I1 della 1.3, `5e96df752`; in `dev_release2` con `dc7e4e48e`): la cancellazione
+    del broker toglie anche le sue cartelle di stato vuote e il suo lock. Con lei C-3 del backlog 38.
 - **C-80 · Backend: i moduli sotto l'80 %** — basso; R, run finale del 13/10 (§4.1). In 1.2 la copertura
   complessiva è 91,55 %, ma alcuni moduli restano indietro:
   - `services/scheduler/scheduler.py` 60,18 %;
@@ -381,6 +386,13 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   Italiana, e l'import CSV delle distribuzioni per settore e paese sono nella 1.2.0, ma il capitolo non li nomina. Due
   strade: aggiungerle come correzione dopo il rilascio, in 4 lingue con lo stamp del pezzo (il capitolo è rilasciato,
   quindi `translate-validate` è severo), oppure lasciare il capitolo com'è. Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voci 8 e 17.
+- **C-93 · Un test dell'AI Export lascia un thread di aiosqlite dopo la chiusura del loop, sotto carico** — minimo, da
+  verificare; W, 15/10 (`all-backend` della revisione combinata di I1). Due `PytestUnhandledThreadExceptionWarning`
+  («Event loop is closed») nel gruppo parallelo, worker 1, in
+  `test_ai_export_components_portfolio_broker_financial.py::TestPerformanceBuckets::test_performance_path_uses_detail_owned_uniform_density[broker-broker.performance-components1-full-30]`.
+  Non è un rosso; da solo il test passa senza avvisi. Dominio dell'AI Export: a J dopo il CP-1, con la skill
+  `test-triage`. Dettagli: [piano 04](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md),
+  «Revisione combinata `123c21efc`», passo 6.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
@@ -1395,7 +1407,7 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
 
   Un dividendo «nuovo» nello stesso giorno di uno esistente, magari del provider, ne sovrascrive importo e note. Da
   decidere se è voluto. Se non lo è, il rosso va scritto prima della cura. Dettagli: piano della 46, §12.8.
-- **V-23 · Il bulk editor nasconde il broker di sola lettura e attacca l'errore d'accesso alla riga sbagliata** — basso,
+- ✅ **V-23 · Il bulk editor nasconde il broker di sola lettura e attacca l'errore d'accesso alla riga sbagliata** — basso,
   UX; test-author di V (triage di WB5), 12/10:
   - un TRANSFER verso un broker di sola lettura mostra il ricevente come «To: —». `renderBrokerHtml`
     (`TransactionBulkModal.svelte` ~`:1608`) cerca il broker solo nella lista dei broker modificabili
@@ -1405,6 +1417,9 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     `operation="create", index=0`. La griglia lo mette sulla riga 1a (IB, modificabile) e non sulla 1b (DEGIRO).
 
   Dettagli: piano della 46, §12.8.
+
+  ✅ **Chiusa il 15/10** da W (lotto I1 della 1.3, `5e96df752`; in `dev_release2` con `dc7e4e48e`): un rifiuto per
+  riga e per broker negato, sulla riga che lo causa; il bulk editor nomina anche i broker di sola lettura.
 
 - **V-24 · Nel bulk editor la cella del costo in Auto può mostrare per un attimo «💡 0.00» come `ready`** — basso, UX;
   test-author di V (lacuna 5), 12/10, letto nel codice e non visto a schermo. Appena un TRANSFER in Auto passa dal form
@@ -1986,6 +2001,29 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - È vicina a I-06 del backlog 38.
 
   Dettagli: piano H, §14 «CP1 passo 0» e «Fuori pista 3».
+- **H-3 · Una chiave d'istanza persa dopo il primo uso sembra un primo uso** — medio-basso; H, revisione di sicurezza di
+  CP3 (15/10).
+  - Se `secrets/instance.key` sparisce, per esempio con un ripristino senza `secrets/`, `derive_key` ne genera una
+    nuova senza avvisi.
+  - Ciò che la vecchia chiave cifrava resta illeggibile, e i dati nuovi si cifrano con una chiave che non sta in nessun
+    backup.
+  - Cura proposta: al primo uso, un valore di controllo della chiave nel DB (per esempio un HMAC con la chiave derivata
+    `instance.key-check.v1`). Se il valore c'è, `derive_key` non genera mai una chiave e rifiuta una chiave diversa.
+  - Serve il DB: si fa con X e B al loro primo uso di `derive_key`. Oggi la doc admin chiede di ripristinare
+    `secrets/` insieme ai dati.
+  - Note di progetto per X e B:
+    - una chiave per istanza, mai la stessa su più istanze;
+    - un backup cifrato con una chiave derivata non deve contenere anche `secrets/`;
+    - una chiave configurata è casuale, non una passphrase.
+
+  Dettagli: piano H, §14 «CP3 passo 2».
+- **H-4 · `validate_test_data_dir` solleva un `PermissionError` grezzo per una cartella gestita non attraversabile** —
+  minimo; H, 15/10.
+  - In modalità test, `_same_filesystem_location` chiama `Path.exists()`, che su Python 3.13 solleva con `EACCES`.
+  - Vale per `sqlite/`, e da CP3 anche per `secrets/`.
+  - È fail-closed, ma senza un messaggio chiaro: andrebbe trasformato in `ValueError` col percorso.
+
+  Dettagli: piano H, §14 «CP3 passo 2», «Fuori pista».
 
 ## A · Account e accessi (fase 01)
 
@@ -2016,8 +2054,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - black riformatterebbe 4 file, già così alla base: `scripts/user_cli.py`, `scripts/coverage_analysis.py`,
     `test_portfolio_api.py`, `test_portfolio_wac.py`.
   - ruff segnala W293 a `user_cli.py:208` e PLC0415 a `:271`.
-  - `user_cli.py` si sistema con A5, che ne tocca i comandi.
-  - Dettagli: idem, «A1.6».
+  - ✅ **`user_cli.py` chiuso il 15/10** con A3, che ne tocca i comandi (L12): black, W293 e PLC0415, più il C901
+    portato dal comando nuovo (ora una tabella). Restano gli altri tre file, fuori dal dominio di A.
+  - Dettagli: idem, «A1.6» e «A3.3».
 - **A-6 · Una fonte sola per le regole della password** (richiama T-B4 della sezione «T (colori)») — basso; A
   (15/10).
   - Quattro copie delle stesse cinque regole: `ui/input/PasswordStrength.svelte`, `settings/PasswordChangeModal.svelte`,
@@ -2025,6 +2064,26 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - L'API chiede solo 8 caratteri (`schemas/auth.py:31`, `:38`). Da decidere se applicare le stesse regole anche lì.
   - Si fa nel lotto A5, che aggiunge i moduli d'invito e di reset con le stesse regole.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A1.9».
+- **A-7 · Doc per sviluppatori non allineate al codice, trovate in A3** — minimo; A (15/10, `docs-writer`).
+  - `architecture/access_control.md:116-123`:
+    - dice che `set_user_admin()` non controlla l'ultimo admin, ma da `2fb8b8502` l'ultimo admin attivo non si
+      declassa né si disattiva;
+    - dice che un account disattivato riceve un 401, ma riceve un 403 `ACCOUNT_DISABLED`, e solo con la password
+      giusta.
+    - Si allinea con A6, che riscrive le regole dell'admin.
+  - `frontend/components/features/settings.md`: il titolo «GlobalSettingsTab (Admin only)», ma la scheda la vedono
+    tutti. Si sistema in A6, con le schede Utenti e Sicurezza (attenzione all'ancora).
+  - `frontend/state/app-state.md:11`: dice che lo store dell'autenticazione gestisce token JWT, ma usa il cookie
+    HttpOnly. Si sistema in A4 (sessioni).
+  - La prop `icon` di `PasswordInput`, aggiunta da T, manca in `core-ui/atoms.md` e `features/auth.md`. È di T:
+    segnalata al coordinatore.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A3.5».
+- **A-8 · Richiama TC-6** della sezione «T (colori)»: alla prima visita con il browser in `it-IT`, il selettore della
+  lingua mostra l'inglese — basso; programma colori (15/10).
+  - Probabile causa: `lib/stores/app/language.ts`, `init()`.
+  - Si corregge in un lotto di A che tocca la pagina d'accesso o le preferenze, con il rosso visto prima (E2E con il
+    locale del browser `it-IT`).
+  - Dettagli: idem, «A3.0».
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -2038,10 +2097,17 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   La docstring di `api/v1/fx.py:767` cita ancora «``services/fx.py``», che dal CP1 è `services/fx/fx.py`: è nella
   descrizione dell'endpoint in `openapi.json`, quindi resta fino al PL4, che dà alla funzione la sua casa definitiva.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1.
-- **X-R2 · Il vecchio percorso degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a). Le docstring
-  di `BackwardFillInfo` (`schemas/common.py:369`) e di `IdentifierType` (`db/models.py:123`) citano ancora `asset_source.py`,
-  tolto nel CP2a. Il testo finisce in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima).
-  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a.
+- **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
+  docstring di `BackwardFillInfo` (`schemas/common.py:369`) e di `IdentifierType` (`db/models.py:117` e `:123`) citano ancora
+  `schemas/assets.py` (diventato `schemas/assets/assets.py` nel CP2b) e `asset_source.py` (tolto nel CP2a). Il testo finisce
+  in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima). Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a e CP2b.
+- **X-R3 · Tre commenti del frontend citano il modulo degli asset tolto** — minimo; X, 15/10 (CP2b, validazione di
+  `eb245b624`). `AssetModal.svelte:1507` e `:1636` attribuiscono ad `asset_source.py` le cancellazioni di prezzi ed eventi
+  generati (oggi in `services/assets/provider_management.py`, `bulk_assign_providers`), e `assetPayload.test.ts:58` la fusione
+  per campo della classificazione (oggi in `services/assets/crud.py`, `patch_assets_bulk`). Fuori dal perimetro dei lotti
+  del backend: si corregge nel FE5, con il taglio di `AssetModal`. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», CP2b.
 - **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
   `test_api/test_fx_api.py::test_providers_include_target_currencies` passa da `GET /fx/providers`, che chiama dal vivo
   `get_supported_currencies` di `fx_providers/ecb/plugin.py`; su un errore di rete il gestore in `api/v1/fx.py` (righe
@@ -2081,16 +2147,21 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
 - **W-B8 · `DataImportModal`: «Help» e «Close» in inglese** — minimo; W, 14/10 (analisi). Gli `aria-label` di
   `components/ui/data-editor/DataImportModal.svelte:211` e `:220` sono scritti nel codice; vanno con P-15 (lotto K1).
   Dettagli: piano 04, §2 (P-15).
-- **W-B9 · `test_fx_api.py` raggiunge ECB via rete** — basso, test; W, 15/10 (triage del CP1); **dominio dei cambi, da
-  spostare nella sezione X**. `test_providers_include_target_currencies` chiama `GET /fx/providers`, che legge dal vivo
-  le valute di ECB (`fx_providers/ecb/plugin.py:94-150`) e su un errore di rete risponde con la lista vuota
-  (`api/v1/fx.py:147-151`). Rosso d'ambiente nella run del CP1, verde rilanciato da solo: va contro la regola 6 delle
-  istruzioni dei test backend. Dettagli: piano 04, §12, W1 passo 8.
+- ↪ **W-B9 · `test_fx_api.py` raggiunge ECB via rete** — spostata nella sezione X dal coordinatore il 15/10
+  (dominio dei cambi), dove X l'ha già ripresa con i dettagli.
 - **W-B10 · `access_control.md`: l'elenco degli endpoint d'accesso non è quello dell'API** — minimo, doc; W, 15/10 (W2).
   `mkdocs_src/docs/developer/architecture/access_control.md`, «API Endpoints», elenca `POST /brokers/{id}/access` e
   `PATCH`/`DELETE /brokers/{id}/access/{user_id}`; l'API ha `GET` e `PUT /brokers/{broker_id}/access` (tutta la
   configurazione in un colpo), `PATCH` e `DELETE /brokers/{broker_id}/access/me` (`backend/app/api/v1/brokers.py:408`,
   `:440`, `:493`, `:519`). L'elenco dei metodi sopra è stato corretto in W2. Dettagli: piano 04, §12, W2 passo 5.
+- **W-B11 · `TransactionBulkModal.svelte`: `brokerName()` non ha chiamanti** — minimo, codice morto; W, 15/10 (I1). La
+  funzione (`frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte:1597`) non è usata da nessuna
+  parte del file né altrove; i nomi dei broker passano da `renderBrokerHtml`. Si toglie col taglio della modale (FE8a).
+  Dettagli: piano 04, §12, I1.
+- **W-B12 · `test_cross_broker_access_failure_is_atomic` lascia i suoi broker nel DB condiviso** — minimo, test; W
+  (test-author di I1), 15/10. Il test (`backend/test_scripts/test_api/test_broker_multiuser_api.py`, MULTI-008d) crea
+  due broker e non li cancella; i test V-23 della stessa classe nuova (`TestAccessRefusalPlacement`) puliscono anche dopo
+  un rosso, e possono fargli da modello. Dettagli: piano 04, §12, I1.
 
 ## J · Numeri e analisi (fase 01)
 

@@ -60,6 +60,8 @@ class TransactionQueryMixin:
             stmt = stmt.where(Transaction.broker_id == params.broker_id)
         if params.asset_id:
             stmt = stmt.where(Transaction.asset_id == params.asset_id)
+        if params.asset_event_id:
+            stmt = stmt.where(Transaction.asset_event_id == params.asset_event_id)
         if params.types:
             stmt = stmt.where(Transaction.type.in_(params.types))
         if params.date_range:
