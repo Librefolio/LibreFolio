@@ -1426,3 +1426,40 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
    `decisions/transfer-pair-same-asset-opposite-quantity.md` (le righe che descrivono i banner e la barra puntano anche
    ai pezzi); `check_source_paths.py` invariato. `mkdocs build` stretto con 0 avvisi; `check-links` verde (08:43,
    prima della finestra).
+
+   > **Note implementazione (coordinatore, 15/10 ~08:45)**: FE8a-2 committato come `464350cc7` (`refactor(tx-bulk): cut
+   > bulk modal banners, toolbar`, 9 file; 190 = 88 + 54 + 48, `--check` pulito anche dal coordinatore) e `ba9819ec0`
+   > (journal, W-B11 chiusa). Via per il Wizard, solo codice. svelte-check concesso durante la finestra: al massimo 3
+   > volte, una alla volta, con `nice -n 15`, niente Vitest, E2E né build; le righe-sonda fuori dal commit.
+
+#### FE8a-3 — il Wizard ⏳ (2026-10-15) — codice scritto, prove dopo la finestra
+
+1. ✅ **Tipi** (08:45–08:51): dei 123 nomi del padre usati dai cinque passi grandi, 93 hanno un tipo scritto nella
+   dichiarazione (generico di `$state`/`$derived`, annotazione, letterale, parametri tipati, `void` per le funzioni
+   senza `return` di un valore; `/tmp/libreFolio_w_fe8/autotypes.mjs`); i 30 `$derived` inferiti li ha stampati
+   svelte-check, con righe-sonda temporanee (`const __p_x: __Probe = x;`) e `noErrorTruncation` acceso solo per quella
+   corsa (svelte-check 1/3, 08:47); padre e `tsconfig.json` rimessi com'erano subito dopo. Lo stesso per i 12 della barra
+   in fondo (svelte-check 2/3, 08:50, insieme al primo controllo dei pezzi).
+2. ✅ **Taglio** (08:49–08:52, `gen_cut.py`): `ImportWizardModal.svelte` 5 984 → 5 053 righe; in
+   `components/transactions/wizard/`: `UploadStep.svelte` (20 props), `SelectFilesStep.svelte` (32), `AnalyzeStep.svelte`
+   (17), `DuplicatesStep.svelte` (24), `ReviewStep.svelte` (36), `WizardFooter.svelte` (i pulsanti di ogni passo, 39);
+   `wizardTypes.ts` con `StepId`, `PendingFileEntry`, `Step1SetWarning`, `FileSelection`, `SetPreviewEntry`,
+   `ParsedFileResult`, `ParsedSetInfo`, `BrokerOpeningIssue`, spostati alla lettera. I passi `assets`, `fix` e `gapFix`
+   erano già componenti in `components/transactions/import/` (non toccata). Restano nel padre la macchina a stati, gli
+   handler, le modali impilate e l'unico `{@html}` (con `sanitizeHtml`); il padre non ha `<style>`.
+
+   > **⚠️ Fuori pista**: (1) la prima configurazione della barra usava righe contate prima di `prettier`, e prendeva
+   > blocchi di altri passi: il generatore si è fermato sui tipi mancanti, e l'intervallo è stato ricalcolato sul file.
+   > (2) svelte-check 3/3 (08:52): 3 errori, tutti import di tipo mancanti in `WizardFooter.svelte`
+   > (`PendingFileEntry`, `FileSelection`, `ParseUnit`), più un `BrimFile` doppio in `SelectFilesStep.svelte` corretto
+   > prima: aggiunti; un controllo statico conferma che ogni nome di tipo nei `Props` dei sei pezzi è importato. Il
+   > generatore ora fonde anche nelle righe `import type {…}`. La conferma con svelte-check arriva dopo la finestra.
+3. ✅ **Cricchetto**: `--split` del Wizard nei sei pezzi; m1 595 = 222 (padre) + 20 + 22 + 67 + 77 + 86 + 101; il
+   letterale `#dc2626` (`dotColor` nello script) resta nella riga del padre; `--check` pulito.
+4. ✅ **Doc**: `developer/frontend/components/features/import-wizard.md` (i componenti dei passi e `wizardTypes.ts`).
+   devWiki: `decisions/brim-broker-scoped.md`, `problems/playwright-probes-ignore-timeout.md`,
+   `entities/import-wizard-modal.md` (le righe su ciò che ora sta nei passi); `check_source_paths.py` invariato. Nessun
+   pezzo muta in loco una prop ricevuta senza `bind:` (controllo statico).
+5. ⏳ **Prove dopo l'avviso di fine finestra**: svelte-check, Vitest `tx-unit`, `core-unit`, `component-unit`
+   (`ImportWizardModal.test.ts`), E2E `front-transaction all --workers 4`, `front-utility onboarding-tour` (la guida
+   dell'import ancora le sue àncore ai passi), `mkdocs build` e `check-links`; poi l'handoff FROZEN.
