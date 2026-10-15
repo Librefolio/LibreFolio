@@ -268,6 +268,15 @@ def utils_runtime_isolation(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Runtime isolation tests", verbose=verbose)
 
 
+def utils_test_server_preparation(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the test server's builds run before its startup timeout, and that a tree without node_modules stops before npx (C-94)."""
+    print_section("Utils: Test Server Preparation")
+    print_info("Testing: dev.py server --build-only, cmd_fe_build/cmd_api_client (frontend/node_modules/.bin check), cmd_mkdocs_gallery; scripts/test_runner/_server.py (build_server_prerequisites, SharedTestServer.start())")
+    print_info("Tests: pre-bind builds in order without binding, missing tools named with npm ci before any npm/npx, port check → build → spawn → STARTUP_TIMEOUT, build env without coverage wiring, gallery build with Playwright's env")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_test_server_preparation.py", test_names)
+    return run_command(cmd, "Test server preparation tests", verbose=verbose)
+
+
 def utils_test_runner_cli(verbose: bool = False, test_names: list = None) -> bool:
     """Test the test-runner CLI's own command-building contract."""
     print_section("Utils: Test Runner CLI")
@@ -549,6 +558,17 @@ Tests for utility modules and helper functions:
         desc="Per-lane port/data propagation, production guards, readiness identity and process ownership",
         # Only monkeypatches os.environ/sys.argv and builds argparse parsers;
         # no DB, no server, no filesystem writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "test-server-preparation",
+        utils_test_server_preparation,
+        name="Test Server Preparation",
+        desc="dev.py server --build-only runs exactly the server's pre-bind steps in today's order and mode (the frontend in debug under --test, through cmd_fe_build with --rebuild, then MkDocs, then the non-strict JS cache) and returns their exit code without checking the port, running a command or exec'ing uvicorn, and the runner's prerequisites command is such a run; front build and api client check frontend/node_modules/.bin first (openapi-zod-client, svelte-check, vite; the API client only its generator, symlinks or shim files) and exit 1 naming the missing tools and npm ci before any npm or npx call; SharedTestServer.start() checks the port, then runs python -u dev.py server --test --build-only in the foreground with its output visible and in order on a pipe (its own stdout and stderr flushed right after its info line) and the runner's environment, never the coverage wiring the server gets, and only then spawns the backend and starts STARTUP_TIMEOUT: a build longer than the timeout still starts, a failed build (False, or an exit code it names) spawns nothing, an occupied port builds nothing; mkdocs gallery runs the same step after its database step and port check and before Playwright, with Playwright's environment (LF_APP_VERSION and --test-port included), exits 1 when it fails, and --list builds nothing; without --workers the gallery runs 60% of the CPUs (rounded, the count read at each call) as browser workers, at least one (an explicit --workers wins), and sizes its server from them",
+        # Fakes only: the seams of dev.py and _server.py monkeypatched, every real process and signal forbidden,
+        # node_modules/.bin layouts under tmp_path; --list reads frontend/e2e/gallery.spec.ts. No DB, no server,
+        # no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(
