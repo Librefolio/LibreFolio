@@ -23,7 +23,7 @@ from backend.app.schemas.common import (
 )
 from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.price_store import PRICE_UPSERT_CHUNK_SIZE
-from backend.app.services.fx.fx import convert_bulk
+from backend.app.services.fx.conversion import convert_bulk
 from backend.app.utils.datetime_utils import utcnow
 
 # The natural key of an asset event within one source: (date, type value).
