@@ -1422,3 +1422,95 @@ tool.
    > un plugin. Senza segreti lascia l'evento com'è. Il thread del watchdog è un `threading.Thread` semplice, che non
    > eredita il `ContextVar`, quindi il suo rapporto non cambia. La prova da capo a fondo è SDP-003: il rapporto del
    > watchdog nomina ancora il thread bloccato, nell'uscita del server.
+
+## Z2–Z4 — risveglio, attività, `wake-sync`, sospensione (autorizzati il 15/10)
+
+> **Via del developer, alla lettera** (15/10 21:3x, inoltrato dal coordinatore, alla domanda su Z2–Z4): «Sì, e d'ora in
+> poi decidi tu l'avvio dei lotti di Z». Da qui l'avvio dei lotti di Z lo dà il coordinatore. **Base**: `93292909d`
+> (merge del lotto del flash in `dev_release2`).
+>
+> **Decisioni approvate come proposte** (coordinatore, 15/10 ~21:50):
+> - **D-W1**: un secondo `wake-sync` mentre uno gira risponde 409 `wake_in_progress`;
+> - **D-W2**: un token separato da quello dei backup, con le regole di B;
+> - **D-W3**: su un'istanza bloccata la rotta risponde `status: "blocked"` e non esegue job;
+> - **D-S1**: conta come presenza ogni richiesta, tranne le sonde e `wake-sync`;
+> - **D-S2**: «in corso» comprende un backup (`backup_in_progress()` di B, una riga dichiarata);
+> - **D-S3**: se la sospensione su Fly fallisce, WARNING e nuovo tentativo con attesa crescente fino a 10 minuti.
+>
+> **Ordine**: Z2a, Z3, Z4 (con la sua `security-review`), Z2b. Un checkpoint per lotto, prima i rossi. Le righe nei
+> file di H (`middleware.py`, `app_lifespan.py`, `api/v1/system/__init__.py`, `instance_block.py`) sono dichiarate,
+> una ciascuna; la doc admin «Sleep and wake» la scrive docs-writer.
+
+### Z2a — attività
+
+**Contratto.**
+- `backend/app/services/platform/sleep_wake/__init__.py`: il pacchetto di Z (attività, sospensione, risveglio); non
+  riesporta niente.
+- `backend/app/services/platform/sleep_wake/activity.py`:
+  - `PROBE_PATHS` (`/api/v1/system/health`, `/ready`, `/test-lane-health`) e `WAKE_PATHS` (`/api/v1/system/wake-sync`,
+    la rotta di Z4), costruiti su `API_V1_PREFIX`; `request_kind(path)` dà `"probe"`, `"wake"` o `"user"`, con le barre
+    finali ignorate; ogni altro percorso è `"user"`, anche `/system/healthz` o `/system/health/x`;
+  - `Activity(*, clock=time.time)`, in memoria e thread-safe, sull'orologio di parete (il tempo di una sospensione deve
+    contare come silenzio); `started_at` è il momento della creazione:
+    - `request(*, presence=True)`, gestore di contesto: la richiesta è in volo per tutta la sua durata, anche se
+      solleva o viene cancellata; con `presence` l'ultima richiesta dell'utente è segnata all'inizio e alla fine;
+    - `in_flight`, `last_user_request_at` (`None` se nessuna), `idle_seconds(now=None)`: i secondi dall'ultima
+      richiesta dell'utente, o dalla creazione se non ce n'è stata nessuna; mai negativi, anche se l'orologio torna
+      indietro;
+    - `register_return_listener(name, after_seconds, callback)`: all'inizio di una richiesta dell'utente arrivata dopo
+      almeno `after_seconds` di inattività, `callback(silenzio)` gira prima della richiesta; se solleva è registrato
+      nel log e la richiesta prosegue; lo stesso nome sostituisce. Servirà al recupero di Z3;
+    - `busy(reason)`, gestore di contesto annidabile, da qualunque thread; una ragione vuota è un `ValueError`;
+    - `register_busy_check(name, check)`: valutato a ogni lettura; vero o un'eccezione contano come occupato (nel
+      dubbio non si sospende), l'eccezione con un WARNING al primo errore di una serie; lo stesso nome sostituisce;
+    - `busy_reasons()`: `"requests"` se c'è una richiesta in volo, le ragioni di `busy()` aperte, i controlli veri o
+      in errore, senza doppioni; vuota a riposo. `is_busy()`.
+  - `ACTIVITY` e `current_activity()`, letta al momento della chiamata, così un test la sostituisce;
+  - `ActivityMiddleware(app, *, activity=None)`, ASGI puro: le sonde passano senza contare; `wake-sync` è in volo ma
+    non è presenza; ogni altra richiesta `http` è presenza e in volo fino all'uscita dell'app, cioè fino all'ultimo
+    pezzo di una risposta in streaming e ai suoi task in background; gli altri tipi di scope passano invariati. Senza
+    `activity` legge `current_activity()` a ogni richiesta.
+- In `MIDDLEWARE_STACK` di H, una voce in testa: `MiddlewareEntry("activity", ActivityMiddleware)`. Sta all'esterno,
+  così vede ogni richiesta per prima e conta come in volo anche la compressione.
+- I due test di H che fissano la pila (accordo con H, 15/10): `test_the_middleware_stack_is_gzip_then_cors` passa
+  all'ordine relativo (`assert_in_relative_order`), con le opzioni di GZip e CORS lette per nome;
+  `test_install_middleware_adds_the_stack_with_its_options_first_outermost` ricava l'attesa da `MIDDLEWARE_STACK`.
+  Il vincolo «activity per prima» sta in un test mio. H aggiungerà gli header di sicurezza in CP7b.
+- I controlli d'occupazione dei tool e del backup si registrano in Z2b, dove li usa il monitor. Il backup:
+  `backup_in_progress(*, data_dir=None)` di B in `instance_backup/jobs.py`, vera anche durante la prova su copia di
+  un ripristino (`.restore/stage/.stage.lock`), che gira in un thread dopo la risposta; entra col checkpoint B2.
+- Lo stream SSE della ricerca (`assets/providers.py`, `/search/stream`) finisce con `done`: tiene la richiesta in volo
+  solo finché i provider rispondono.
+
+**Passi.**
+1. ✅ 15/10 — Test di test-author (`services sleep-wake-activity`, PURE) e i due test di H.
+   > **Note implementazione**: `test_services/test_sleep_wake_activity.py`, SWA-001…037, 89 casi; contratto (a)…(n)
+   > nella docstring; registrazione in `_backend_services.py` subito dopo `shutdown-process`. In `test_app_lifecycle.py`
+   > (di H, accordo del 15/10): `test_the_middleware_stack_is_gzip_then_cors` in ordine relativo, con classe e opzioni
+   > di GZip e CORS lette per nome; l'altro test ricava l'attesa da `MIDDLEWARE_STACK`; `assert_in_relative_order`
+   > accetta anche le voci della pila; voce (e) della docstring riscritta. Test-author ha fissato in più: richieste
+   > che finiscono in ordine non LIFO, `busy("requests")` senza doppioni, una richiesta cancellata timbrata alla fine,
+   > un'esca al posto di `ACTIVITY` in ogni test, il listener chiamato esattamente 1600 volte sotto 8 thread.
+2. ✅ 15/10 — Rossi: `services sleep-wake-activity` → `ModuleNotFoundError: …platform.sleep_wake`, uscita 2.
+   `services app-lifecycle` 42/42 sul codice di allora: i due test di H passano già.
+3. ✅ 15/10 — Codice: `sleep_wake/__init__.py` e `sleep_wake/activity.py` come da contratto; in `middleware.py` di H
+   l'import e la voce `activity` in testa, con il suo commento (dichiarati).
+   > **Note implementazione**: le funzioni di ritorno girano fuori dal lock, dopo il timbro e il conteggio: leggono
+   > `in_flight` e `last_user_request_at` già aggiornati senza stallo. `idle_seconds` è sempre un `float`, anche con un
+   > orologio intero. I controlli d'occupazione girano fuori dal lock; la serie d'errori si azzera a ogni risposta e a
+   > ogni nuova registrazione dello stesso nome.
+   > **⚠️ Fuori pista**: la docstring di `services/platform/__init__.py` e la riga dei servizi di piattaforma in
+   > `backend.instructions.md` non citavano neanche `shutdown_budget.py` (Z6b): aggiunti con `sleep_wake/`. La frase
+   > della docstring di `middleware.py` «GZip outermost, CORS inside it» ora è storica: la lascio a H (CP7b).
+4. Verdi:
+   - ✅ 15/10 `services sleep-wake-activity` 89/89 (0,66 s); `services app-lifecycle` 42/42; `check-orphans` pulito
+     (327 raggiungibili); ruff e black puliti sui cinque file Python toccati.
+   - Audit del frontend: l'unico ciclo che chiama l'API passa da `activePolling` (Z1); gli altri timer sono
+     debounce o una tantum. Scheda nascosta o utente fermo da 10 min → nessuna richiesta → silenzio.
+   - ✅ 15/10 ~22:40, ciclo vero col via del coordinatore, uno alla volta con `nice`: `api system` 117/117 (10,7 s),
+     `api http-compression` 10/10 (5,3 s), GZip sul server vivo dietro la nuova voce; porta 6186 libera dopo ciascuno.
+     Nel log dell'app: «Shutdown watchdog installed» a ogni avvio, nessun SIGTERM ignorato, nessun «Return listener
+     failed» o «Busy check failed». L'avviso del download di mathjax (certificato SSL) è della rete, non del lotto.
+   - Backlog: chiusa la riga di C-49 nella mia sezione (✅, commit di Z6b); la riga della sezione C resta al
+     coordinatore.
+5. ✅ 15/10 — Checkpoint FROZEN inviato al coordinatore.
