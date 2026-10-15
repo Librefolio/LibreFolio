@@ -29,7 +29,7 @@ it draws the bar and the active body from that list. Each entry is a `SettingsTa
 | `alignEnd?` | On a wide screen, starts the right-hand group: this tab and every tab after it sit on the right (`sm:ml-auto` on its button) |
 
 `ctx` is a `SettingsTabContext`, `{isSuperuser}`, which the page derives from the auth store
-(`$auth.user?.is_superuser ?? false`). The registry holds five tabs:
+(`$auth.user?.is_superuser ?? false`). The registry holds seven tabs:
 
 | `id` | `order` | Body | Visible to | Extras |
 |---|---|---|---|---|
@@ -37,7 +37,13 @@ it draws the bar and the active body from that list. Each entry is a `SettingsTa
 | `preferences` | 20 | `PreferencesTab` | everyone | — |
 | `about` | 30 | `AboutTab` | everyone | — |
 | `admin` | 100 | `GlobalSettingsTab` | everyone | `props: (ctx) => ({canEdit: ctx.isSuperuser})`, `alignEnd: true` |
-| `users` | 110 | [`UsersTab`](#userstab) | administrators: `visible: (ctx) => ctx.isSuperuser` | — |
+| `users` | 110 | [`UsersTab`](#userstab) | administrators | `visible: (ctx) => ctx.isSuperuser` |
+| `backup` | 120 | `BackupTab` | administrators | `visible: (ctx) => ctx.isSuperuser` |
+| `email` | 130 | `EmailSettingsTab` | administrators | `visible: (ctx) => ctx.isSuperuser` |
+
+The first five bodies are in `lib/features/settings/tabs/`. The Backup tab's body, `lib/features/backup/BackupTab.svelte`
+(label `backup.tab`), and the Email tab's, `lib/features/email/EmailSettingsTab.svelte` (label `email.tab.label`), live
+with their features: for the Email tab see [The Email Tab](../../../backend/email.md#email-tab).
 
 The page is the runtime of the registry, written in Svelte 5 runes:
 
@@ -74,8 +80,8 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
 - **`visible`**: `(ctx) => ctx.isSuperuser` keeps the tab out of a regular user's bar altogether,
   and a `?tab=` naming it is ignored for them. Leave `visible` out for a tab everyone sees.
 - **`props`**: only when the body depends on the context, as `admin` does for `canEdit`.
-- **`alignEnd`**: one tab carries it, today `admin`. A tab with a higher `order` (above 100), such
-  as `users`, joins the right-hand group, after Admin.
+- **`alignEnd`**: one tab carries it, today `admin`. A tab with a higher `order` (above 100) joins
+  the right-hand group, after Admin, as `users` (110), `backup` (120) and `email` (130) do.
 - **`id` and `labelKey`**: the `id` is unique, made of lowercase letters, digits and dashes, and
   starts with a letter; the `labelKey` is a sentence in all four catalogues.
 - **Tests**: `lib/features/settings/settingsTabs.test.ts` pins the content of the registry through

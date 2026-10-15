@@ -1,0 +1,70 @@
+{
+  "email": {
+    "tab": {
+      "label": "E-mail",
+      "title": "E-mail",
+      "intro": "LibreFolio peut envoyer des e-mails par un serveur SMTP, configuré par la personne qui gère l'instance. L'e-mail est facultatif : sans lui, tout le reste fonctionne."
+    },
+    "state": {
+      "off": "Désactivé",
+      "ready": "Prêt",
+      "invalid": "Ne fonctionne pas"
+    },
+    "off": {
+      "explanation": "Aucun serveur SMTP n'est configuré (LIBREFOLIO_SMTP_HOST), donc rien n'est envoyé : les liens d'invitation et de réinitialisation du mot de passe se copient à la main. Le guide explique comment en configurer un."
+    },
+    "invalid": {
+      "explanation": "L'e-mail reste désactivé tant que la configuration n'est pas corrigée : corrigez la variable, puis redémarrez LibreFolio."
+    },
+    "problems": {
+      "SMTP_HOST_INVALID": "{variable} n'est pas un nom de serveur valide : écrivez seulement le nom d'hôte ou l'adresse IP, sans schéma, port ni chemin.",
+      "SMTP_TLS_INVALID": "{variable} doit valoir starttls, tls ou none.",
+      "SMTP_PORT_INVALID": "{variable} doit être un nombre entier de 1 à 65535.",
+      "SMTP_FROM_MISSING": "Il manque {variable} : l'adresse de l'expéditeur est obligatoire.",
+      "SMTP_FROM_INVALID": "{variable} doit être une seule adresse, par exemple noreply@example.com, éventuellement après un nom, l'adresse étant alors entre chevrons.",
+      "SMTP_REPLY_TO_INVALID": "{variable} doit être une seule adresse.",
+      "SMTP_MAX_PER_HOUR_INVALID": "{variable} doit être un nombre entier d'au moins 1.",
+      "SMTP_PASSWORD_UNREADABLE": "Le fichier du mot de passe indiqué par {variable} ne peut pas être lu.",
+      "SMTP_CREDENTIALS_INCOMPLETE": "{variable} est définie seule : définissez à la fois l'utilisateur SMTP et son mot de passe, ou aucun des deux.",
+      "unknown": "{variable} ne peut pas être utilisée."
+    },
+    "checks": {
+      "smtp": {
+        "off": "L'e-mail est désactivé : aucun serveur SMTP n'est configuré.",
+        "ok": "La configuration SMTP peut être utilisée.",
+        "invalid": "{variable} ne peut pas être utilisée ({problem}) : l'e-mail reste désactivé tant qu'elle n'est pas corrigée."
+      },
+      "smtpEncryption": {
+        "ok": "Les e-mails circulent chiffrés, ou l'e-mail est désactivé.",
+        "localPlain": "Les e-mails partent en clair vers un serveur du réseau local.",
+        "plain": "Les e-mails, leurs liens et le mot de passe SMTP circulent en clair vers un serveur hors du réseau local : réglez LIBREFOLIO_SMTP_TLS sur starttls ou tls."
+      }
+    },
+    "budget": {
+      "remaining": "Il reste {remaining} e-mails sur {max} pour cette heure.",
+      "spent": "La limite de {max} e-mails par heure est atteinte : le prochain pourra partir dans {minutes} min."
+    },
+    "test": {
+      "hint": "Envoyez un e-mail de test à votre adresse pour vérifier la configuration.",
+      "button": "Envoyer un e-mail de test",
+      "sending": "Envoi…",
+      "sent": "E-mail de test envoyé à votre adresse : vérifiez votre boîte de réception, et aussi les spams.",
+      "errors": {
+        "EMAIL_UNAVAILABLE": "L'e-mail est désactivé ou ne fonctionne pas sur cette instance.",
+        "EMAIL_RATE_LIMITED": "La limite d'e-mails par heure est atteinte : réessayez dans {minutes} min.",
+        "EMAIL_RECIPIENT_INVALID": "L'adresse de votre compte n'est pas une adresse e-mail valide.",
+        "generic": "L'e-mail de test n'a pas pu être envoyé."
+      }
+    },
+    "smtpErrors": {
+      "CONNECTION_FAILED": "LibreFolio n'arrive pas à joindre le serveur SMTP : vérifiez l'hôte et le port.",
+      "TLS_FAILED": "La connexion sécurisée a échoué : vérifiez LIBREFOLIO_SMTP_TLS et le certificat du serveur.",
+      "AUTH_FAILED": "Le serveur SMTP a refusé la connexion : vérifiez l'utilisateur et le mot de passe.",
+      "SENDER_REFUSED": "Le serveur SMTP a refusé l'adresse de l'expéditeur (LIBREFOLIO_SMTP_FROM).",
+      "RECIPIENT_REFUSED": "Le serveur SMTP a refusé votre adresse.",
+      "TIMEOUT": "Le serveur SMTP n'a pas répondu à temps.",
+      "SEND_FAILED": "Le serveur SMTP n'a pas accepté le message."
+    },
+    "loadError": "L'état de l'e-mail n'a pas pu être lu."
+  }
+}
