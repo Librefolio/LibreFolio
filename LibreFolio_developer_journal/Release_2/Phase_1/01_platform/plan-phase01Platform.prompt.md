@@ -2352,3 +2352,206 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 >   test» (42, prima 41) finché il watchdog di Z6b non lo usa.
 
 ### Checkpoint CP2b 🧊 (2026-10-15, sera) — FROZEN, in attesa del coordinatore
+
+> **Committato** dal coordinatore: `956789beb` (taglio), `3acb28896` (doc), `6ad489f86` (journal).
+
+#### Aggiornamento di base prima dell'ingresso ✅ (2026-10-15, sera)
+
+> **Merge** di `dev_release2` `00aa2ab3c` (E2, B, J CP-4, Z6b parte 1, W E1b e N2, Y2, L), con due conflitti:
+>
+> - `.github/instructions/backend.instructions.md`: nell'albero, una riga sola con i due lati; nella mappa, la mia riga
+>   sui passi d'avvio più la riga «Platform services» del lato `dev_release2` (`series_export.py`, `instance_backup/`);
+> - `scripts/test_runner/_backend_services.py`: `services_app_lifecycle` e le due di B (`backup_archive`,
+>   `backup_jobs`). Le registrazioni sono 110, senza nomi doppi.
+>
+> **Controlli di significato**:
+>
+> - il merge non tocca `main.py` né i moduli di CP2b;
+> - `shutdown_budget.py` di Z legge `current_step` in modo pigro e ora trova il modulo: `services shutdown-budget` 178;
+> - `config_audit.py` ha `*EMAIL_CONFIG_CHECKS` di E, e `test_config_audit.py` le righe di E con la mia docstring;
+> - il `Dockerfile` non cambia; i riferimenti a `backend.app.main` prendono solo `app`.
+>
+> **Prove** (corsia 6181, una alla volta): `services app-lifecycle` 43, `shutdown-budget` 178, `db post-migration` 41;
+> `db populate --force`; `api system` 117, `instance-block` 56, `backup` 23; `utils runtime-isolation` 195,
+> `test-server-preparation` 63; `check-orphans`; E2E `app-start-auth` 3.
+>
+> **Ingresso**: `dev_release2` = `4fb017a9a` (merge `7fa313269`), CHANGELOG `9b82187f6` con la riga 🐛 sullo
+> spegnimento e la 🔄 sui logger. Il mio ramo è avanzato a `9b82187f6`. `main.py` è scongelato. Lo SHA a Z e a B lo
+> manda il coordinatore.
+
+### Lotto «scopo dei file caricati» (decisione 36) — analisi (2026-10-15, sera) — FROZEN
+
+> **Base**: `9b82187f6`. Decisione 36 del developer: i file comuni (icone, loghi, foto degli asset, risorse statiche)
+> li vede ogni utente con il login; i file personali solo chi li ha caricati e l'admin (elenco, anteprima, scarico).
+> Un file caricato da un selettore d'immagine è comune; dalla pagina File è personale, con un interruttore per
+> condividerlo. I file già caricati: le immagini diventano comuni, gli altri personali. I file dei broker sono di W.
+>
+> **Stato reale**:
+>
+> - Per gli upload non c'è una tabella: ogni file è `<data>/custom-uploads/<uuid><ext>` con i metadati in un file JSON
+>   accanto (`services/files/static_uploads.py`). Nei metadati non c'è uno scopo. Il modello d'accesso di oggi non
+>   distingue i file: l'elenco e la lettura sono per tutti gli utenti con il login; la cancellazione è del proprietario
+>   o dell'admin.
+> - Il frontend ha un solo client di caricamento, `lib/utils/files/upload.ts` (`uploadFile`), senza scopo. La pagina
+>   File ha le schede «static» e «brim». I selettori d'immagine passano da `ImagePickerWrapper` e `AssetPickerModal`
+>   (`AssetModal`, `BrokerForm`, `ProfileTab`, `WelcomePage`). Ritaglio e rinomina caricano un file nuovo.
+> - Gli avatar di default hanno `uploaded_by_user_id` 0, cioè il sistema.
+>
+> **Proposta**:
+>
+> 1. Un campo `scope` (`common` o `personal`) nei metadati. Quando manca vale la regola d'eredità, calcolata alla
+>    lettura: `image/*` è comune, il resto personale. I file esistenti si classificano così senza scrivere niente.
+> 2. `POST /uploads` accetta `scope` facoltativo; senza, la stessa regola. I selettori mandano `common`, la pagina File
+>    `personal`.
+> 3. Elenco: i comuni più i propri personali; l'admin vede tutto, con il proprietario. Lettura, anteprima e scarico di
+>    un file personale altrui rispondono 404, admin escluso. I file del sistema sono comuni.
+> 4. `PATCH /uploads/{id}` con `{scope}`, per il proprietario o l'admin: è l'interruttore della pagina File.
+> 5. Ritaglio e rinomina tengono lo scopo dell'originale.
+> 6. `can_delete` per voce nell'elenco; la tabella nasconde «elimina» quando vale false.
+> 7. Gli handler toccati rispettano la regola dell'I/O asincrono (`def` o `asyncio.to_thread`).
+>
+> **Accordo con W** (15/10, sera):
+>
+> - W aggiunge `can_delete` a ogni voce di `GET /brokers/brim/files`; io cablo la tabella per le due schede;
+> - i report senza broker seguono la regola dei personali (chi li ha caricati e l'admin);
+> - codici diversi, scelti apposta: `/uploads` 404, i report BRIM 403 (già fissato dai test di W);
+> - `file_preview.py` resta comune e puro; la pagina File e i componenti condivisi sono miei.
+>
+> **Decisioni aperte**: D36-1, un'immagine personale scelta in un selettore per un oggetto condiviso (asset, broker)
+> diventa comune con un avviso, oppure il selettore mostra solo le comuni; D36-2, regola d'eredità letta al volo
+> (proposta) o correzione dopo le migrazioni che scrive il campo; D36-3, 404 per il file personale altrui (proposta).
+
+> **Via del developer** (15/10, 20:0x, inoltrato dal coordinatore alla lettera): «Approvo le tre proposte».
+>
+> - D36-1: un'immagine personale scelta per un oggetto condiviso diventa comune, con un avviso.
+> - D36-2: la regola d'eredità letta al volo, senza migrazione.
+> - D36-3: 404 per il file personale di un altro utente.
+>
+> **Condizioni del coordinatore**: due checkpoint, prima backend e test, poi frontend; prima i rossi; la correzione
+> dell'I/O asincrono entra nel lotto, dichiarata; in `ProfileTab` (di A) cambia solo lo scopo nel caricamento, una riga
+> dichiarata; la pagina File e `FilesTable` sono miei, d'accordo con W; revisione di sicurezza mirata prima del secondo
+> checkpoint; le prove pesanti si chiedono.
+
+#### CP-U1 — backend e test: il contratto (2026-10-15, sera) — in corso
+
+> **Regola dello scopo** (`static_uploads.py`):
+>
+> - `effective_scope(metadata)`: vince lo `scope` salvato, se è `common` o `personal`. Altrimenti si applica la regola
+>   d'eredità: i file del sistema (id 0) sono comuni, `image/*` è comune, il resto personale.
+> - Un caricamento con `scope` lo salva com'è. Senza, salva lo scopo risolto dalla regola: il dato resta esplicito.
+> - `UploadFileInfo` porta sempre `scope`, quello effettivo, e `can_delete`, calcolato per chi chiede.
+>
+> **Accesso** (`uploads.py`), per il proprietario, un altro utente e l'admin:
+>
+> - Elenco: i comuni di tutti più i propri personali; l'admin vede tutto. `my_files_only` resta: solo i propri.
+> - Info, anteprima e `/file/{id}` (scarico, anteprima d'immagine e di testo): un file personale altrui risponde 404,
+>   identico a un file che non c'è. Il controllo viene prima della cache delle miniature.
+> - `DELETE` e il nuovo `PATCH /uploads/{id}` `{scope}`: il proprietario o l'admin. Un altro utente riceve 403 su un
+>   file comune, 404 su uno personale.
+> - Le miniature escono con `Cache-Control: private, max-age=3600`, non più `public`: sono contenuti dietro login, e
+>   una cache condivisa davanti all'istanza non deve servirle ad altri.
+>
+> **Coerenza fra processi** (`dev.py server --workers N`): la cache dei metadati, per processo e di un'ora, si convalida
+> con l'inode, l'mtime e la dimensione del file JSON. Un cambio di scopo fatto da un altro worker si vede subito. I
+> metadati si scrivono in modo atomico (file temporaneo, poi `os.replace`).
+>
+> **I/O asincrono**: gli handler toccati chiamano le funzioni sincrone del servizio con `asyncio.to_thread`.
+
+##### Passo 1 — i rossi ✅ (2026-10-15, sera)
+
+> test-author, sul codice di prima, una prova alla volta (log in `/tmp/librefolio-r13-h-u1/`):
+>
+> - `services static-uploads`: 70, di cui 32 rossi nuovi. Le cause: `effective_scope` e `set_upload_scope` che
+>   mancano, `scope` né salvato né restituito, la cache servita dopo che il file è cambiato o sparito.
+> - `api uploads`: 40, di cui 13 rossi nuovi: elenco e lettura dei personali altrui, 422 mancanti, `PATCH` 405, campi
+>   assenti. SCOPE-DEL-1 è verde di proposito (guardia), UPLOAD-013 era già saltato.
+> - `api uploads-serve-file`: 12, di cui 4 rossi: i personali altrui serviti in sei modi, anche dalla cache delle
+>   miniature, e `public` nel `Cache-Control`. SCOPE-SERVE-2 è verde di proposito (guardia).
+> - Test esistenti cambiati: la fixture di `test_static_uploads.py` non svuota più la `custom-uploads/` condivisa della
+>   corsia, ma usa `tmp_path`; il test che fissava la cache servita dopo la cancellazione è sostituito; UPLOAD-008 carica
+>   il file come `common`; G7§2.4 chiede `private`.
+>
+> **Fuori pista**: test-author ha segnalato i test che la cura avrebbe rotto fuori dal contratto
+> (`TestServeFileOffEventLoop`, UPLOAD-U1/U2, `test_served_content_types.py`, CAPI-008) e l'ordine dei controlli: lo
+> scopo va prima dei 400 sul tipo. Riparazioni e casi in più nel passo 3.
+
+##### Passo 2 — la cura ✅ (2026-10-15, sera; senza prove, pausa della macchina)
+
+> **Note implementazione**:
+>
+> - `schemas/uploads.py`: `UploadScope`; `UploadFileInfo.scope` obbligatorio e `can_delete` (default false);
+>   `UploadUpdateRequest`.
+> - `static_uploads.py`: `effective_scope`, `can_view_upload`, `can_manage_upload`, `set_upload_scope`,
+>   `save_upload(scope=…)`. La cache tiene `(timbro, metadati)` e il timbro si controlla a ogni lettura. La scrittura è
+>   atomica: `mkstemp`, poi `os.replace`; il timbro si prende con `fstat` prima della rinomina, così il file messo da
+>   un altro worker non lo eguaglia mai.
+> - `api/v1/uploads.py`: `_visible_upload` per prima in info, anteprima, `/file`, cancellazione e `PATCH`; `_for_user`
+>   imposta `can_delete`; `scope` nel `POST` validato da FastAPI (422); il lavoro su disco va in `asyncio.to_thread`;
+>   miniature `private, max-age=3600`.
+> - OpenAPI: `PATCH /uploads/{file_id}`; `scope` obbligatorio nelle risposte, `can_delete` no, per via del default.
+>   Quindi le risposte finte senza `scope` nelle E2E e nei Vitest vanno aggiornate (passo 3).
+>
+> **Fuori pista** (docs-writer, 15/10 sera): un `PATCH` in contemporanea con un `DELETE` dello stesso file poteva
+> riscrivere il sidecar dopo la cancellazione. `set_upload_scope` ora ricontrolla il contenuto dopo la scrittura e, se
+> è sparito, toglie il sidecar e risponde «non trovato». Doc per sviluppatori: `security.md` (sottosezione
+> `#upload-scope`), `file-upload.md`, una cella di `database/index.md`. Le tre frasi della pagina utente dei File che
+> CP-U1 rende false (`user/files/index.en.md` righe 5, 16, 100) si correggono con CP-U2, insieme all'interfaccia.
+
+### Voci di backlog da X CP10 (2026-10-15, sera)
+
+> Il coordinatore ha girato tre richieste di X (CP10, impostazioni dei plugin), da fare fuori dal lotto 36:
+>
+> - **H-14**: `derive_key_from(key, purpose)` in `instance_key.py`, per il ripristino di B, che deve cifrare di nuovo i
+>   segreti dei plugin con la chiave dell'istanza che ripristina.
+> - **H-15**: un controllo d'avvio in `config_audit.py` che usa `plugin_secrets_key_status` di X; con una chiave
+>   inutilizzabile restituisce i totali, e gira in `to_thread`.
+> - **H-16**: due frasi di `developer/architecture/security.md` superate: l'elenco dei segreti letti con `env_secret()`
+>   senza `LIBREFOLIO_PLUGIN_*`, e la «known limitation» che chiama «planned» un controllo che il `key_id` rende
+>   possibile.
+>
+> H-10 è chiusa dal lotto 36: la fixture di `test_static_uploads.py` non svuota più la cartella della corsia.
+
+##### Passo 3 — riparazioni, casi in più e prove ✅ (2026-10-15, sera)
+
+> **Note implementazione** (test-author):
+>
+> - riparati sui nomi nuovi i test che la cura rompeva fuori dal contratto: `TestServeFileOffEventLoop` (2),
+>   UPLOAD-U1/U2, UPLOAD-005G, la fixture di `test_served_content_types.py` (ora un file e un sidecar veri sotto
+>   `tmp_path`);
+> - casi nuovi: SCOPE-SERVE-5, cioè i modi che non c'entrano col tipo, che per B danno il 404 del file mancante, mai
+>   un 400; UPLOAD-U4/U5/U6, una spia che `list_files`, `get_file_info` e `upload_file` lavorano fuori dal ciclo di
+>   eventi; la corsa fra `set_upload_scope` e una cancellazione (2 casi);
+> - fixture del frontend con `scope`: `e2e/files-uploader.spec.ts`, `FilesTable.test.ts`, `AssetPickerModal.test.ts`;
+> - il commento del runner per `served-content-types`.
+>
+> **Prove** (corsia 6181, una alla volta, `nice -n 10`, carico sotto 70; log in `/tmp/librefolio-r13-h-u1/`):
+>
+> - `services static-uploads` 72; `api uploads` 42 + 1 saltato (UPLOAD-013, già prima); `api uploads-serve-file` 13;
+>   `api preview-cache` 15; `utils served-content-types` 36; `api cache-admin` 8 (CAPI-008 compreso);
+> - `api sync`: `scope` obbligatorio e `can_delete` facoltativo nel client generato; `front check` 0 errori, 0 avvisi;
+>   Vitest `FilesTable`, `AssetPickerModal`, `FilePreviewModal` 74;
+> - E2E `front-utility files-uploader` 8, `files` 28, `files-destructive` 6, `files-pdf-offline` 1;
+> - `mkdocs build --strict` e `check-links` (96) puliti.
+>
+> **Fuori pista**: il primo giro della revisione di sicurezza è fallito per un errore d'infrastruttura («requested model
+> is not supported»), non sul merito: rilanciata.
+
+##### Passo 4 — la revisione di sicurezza mirata (2026-10-15, sera)
+
+> **Fuori pista**: l'agente `security-review` è fallito due volte per lo stesso errore d'infrastruttura. Ho fatto io la
+> revisione mirata, sui punti del brief. Gli esiti stanno solo nei messaggi al coordinatore.
+>
+> - Correzione: un id che il filesystem non sa nominare faceva sollevare `ValueError` a `stat()` e dava un 500; ora
+>   conta come file mancante, come prima del lotto. test-author aggiunge i due casi.
+> - Controllati e a posto: le altre vie verso `custom-uploads/` (il seed degli avatar; il backup, solo admin);
+>   l'ordine dei controlli; le chiavi delle cache; la convalida del corpo del `PATCH` e del campo del `POST`; la regola
+>   dello scopo; il timbro e la scrittura atomica; il `SameSite=lax` del cookie davanti al nuovo `PATCH`.
+> - Casi della correzione (test-author): `services static-uploads` 73, `api uploads` 43 + 1 saltato (UPLOAD-NUL-1).
+
+##### Passo 5 — `all-backend` ✅ (2026-10-15, sera)
+
+> Slot pesante 1, 22:16–22:42 (`-q --fresh-run --workers 2`, `nice -n 10`, corsia 6181): 7/7, **15 181 passed,
+> 4 skipped, 0 failed**. I quattro saltati sono i tre di sempre più UPLOAD-013, che saltava già prima del lotto. La
+> porta 6181 è libera, `git diff --check` pulito.
+
+#### Checkpoint CP-U1 🧊 (2026-10-15, sera) — FROZEN, in attesa del coordinatore

@@ -13,6 +13,13 @@ from backend.app.schemas.common import StrictModel
 from backend.app.utils.datetime_utils import UTCDateTime
 
 
+class UploadScope(StrEnum):
+    """Who sees an uploaded file (decision 36): every signed-in user, or only its uploader and the admins."""
+
+    COMMON = "common"
+    PERSONAL = "personal"
+
+
 class UploadFileInfo(StrictModel):
     """Information about an uploaded file."""
 
@@ -22,6 +29,8 @@ class UploadFileInfo(StrictModel):
     size_bytes: int = Field(..., description="File size in bytes")
     uploaded_at: UTCDateTime = Field(..., description="Upload timestamp (UTC)")
     uploaded_by_user_id: int = Field(..., description="ID of user who uploaded the file")
+    scope: UploadScope = Field(..., description="common: every signed-in user sees the file; personal: only its uploader and the admins")
+    can_delete: bool = Field(default=False, description="Whether the requesting user may delete the file and change its scope: its uploader or an admin")
 
     # Optional metadata
     description: Optional[str] = Field(default=None, description="User-provided description")
@@ -43,6 +52,12 @@ from backend.app.schemas.common import BaseListResponse
 
 class UploadListResponse(BaseListResponse[UploadFileInfo]):
     """Response for listing uploads."""
+
+
+class UploadUpdateRequest(StrictModel):
+    """Change of an uploaded file: its scope."""
+
+    scope: UploadScope = Field(..., description="The new scope of the file")
 
 
 class UploadDeleteResponse(BaseModel):

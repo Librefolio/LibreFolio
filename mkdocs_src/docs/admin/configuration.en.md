@@ -317,6 +317,8 @@ each finding is one line of the log, at its level, with the name of the check in
 | ℹ️ `info` | `The log level is DEBUG: the log records operational detail; …` (or `TRACE`) | Go back to `INFO` once you are done troubleshooting. |
 | ❌ `error` | `LIBREFOLIO_SMTP_… cannot be used (SMTP_…): email stays off until it is fixed` (`check` is `email.smtp`) | Email is off, nothing else is: fix the variable the line names, then restart. What each code means: [Configuration Problems](email.md#configuration-problems). The server starts anyway. |
 | ⚠️ `warning` | `LIBREFOLIO_SMTP_TLS=none with …: emails, their links and the SMTP password travel unencrypted; use starttls or tls` | Set `LIBREFOLIO_SMTP_TLS` to `starttls` or `tls`, or send through a relay on your own network: see [Security Notes](email.md#security). |
+| ℹ️ `info` | `LIBREFOLIO_PUBLIC_URL is not set: emails work, but none with a link (forgotten password, invitation, reset) can go out` (`check` is `email.links`) | Nothing, if no link has to go out by email. Otherwise set `LIBREFOLIO_PUBLIC_URL` to the address your users open LibreFolio at ([Accounts and Sign-ups](#accounts)), then restart: see [Email](email.md). |
+| ⚠️ `warning` | `LIBREFOLIO_PUBLIC_URL cannot start a link (it needs http:// or https:// and a host, with no user name, password, ? or #): no email with a link (forgotten password, invitation, reset) can go out` (`check` is `email.links`) | Write the address with `http://` or `https://` and a host name, without user name, password, `?` or `#`, such as `https://librefolio.example.com`, then restart: see [Email](email.md). |
 
 Some secrets you configured stop the start instead when they cannot be used: a `JWT_SECRET_FILE` or a
 `LIBREFOLIO_INSTANCE_KEY_FILE` that cannot give its secret (see [Secrets in Files](#secret-files)),
@@ -330,6 +332,47 @@ A `LIBREFOLIO_BLOCKED` or `LIBREFOLIO_DELETION_DATE` value that LibreFolio canno
 start, and a blocked instance logs a warning at every start,
 `Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): …`: see
 [Hosting for Others](hosting_providers.md#block-variables).
+
+---
+
+## ⏹️ Stopping the Server {: #shutdown }
+
+When the server is asked to stop, it must be done within a time limit, the **shutdown budget**:
+8 seconds unless you change it, counted from the signal (SIGTERM from `docker stop`,
+`docker compose down` or a restart; SIGINT from Ctrl+C). Most of the time users notice nothing,
+except restarts that are quicker and cleaner.
+
+| Variable | Default | What it does |
+| --- | --- | --- |
+| `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` | `8` | The shutdown budget, in seconds: a whole number from `2` to `600`, or `0` for no limit, as before release 1.3. A value that cannot be used does not stop the server, unlike the main options: the log says `Shutdown budget setting cannot be used: the default applies`, and the budget stays at 8 seconds. |
+| `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN` | 3/8 of the budget | How many seconds uvicorn, the web server, waits for the requests in flight: `3` with the default budget. The Docker image and `./dev.py server` work it out from the budget. A value you set yourself wins: keep it below the budget, which still counts for the whole stop. |
+
+The budget is spent in this order:
+
+1. **Requests in flight**: the web server accepts no new ones and gives those already running 3/8 of
+   the budget, 3 seconds by default. Then it cancels those still running, such as a long broker
+   import: what they had not saved yet is rolled back, so they can simply be repeated once
+   LibreFolio is back.
+2. **The server's own work**: the scheduled syncs, the worker processes, the caches… stop one after
+   the other, each within the time left. The last step ends the child processes still running
+   (broker imports, risk simulations, Tools), so none outlives the server.
+3. **When the budget runs out**: if anything still holds the server, it ends anyway, with exit
+   status 1, and its log says what was still running: `Shutdown budget exhausted: ending the process`.
+
+!!! warning "🐳 Give the container more time than the budget"
+
+    Docker gives a container 10 seconds to stop by default, then kills it: the default budget of
+    8 seconds fits. If you raise `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`, give the container at least
+    2 seconds more: set `stop_grace_period` on the `librefolio` service of `docker-compose.yml`, keep
+    the rest of the service as it is, then run `docker compose up -d`.
+
+    ```yaml
+    services:
+      librefolio:
+        stop_grace_period: 32s  # for LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS=30
+    ```
+
+    Otherwise Docker kills the server after 10 seconds, whatever its budget.
 
 ---
 
@@ -358,7 +401,7 @@ decides who may sign up, and there is no limit. All four are optional: uncomment
 | --- | --- | --- |
 | `LIBREFOLIO_REGISTRATION` | _not set_ | Who may create an account: `open` (anyone), `invite` (only with an invitation link) or `disabled` (nobody). Not set: the **Registration** global setting decides, **Open** unless an administrator changed it. Set: this value wins, and the global setting cannot be changed from the app. Case and spaces around the value do not matter. On a new instance, `invite` and `disabled` leave the login page without **Register here**: see [Who Can Sign Up](settings.md#registration) to create the first administrator. |
 | `LIBREFOLIO_MAX_USERS` | _not set_ (no limit) | The most accounts the instance may hold: a whole number, at least `1`. Active accounts count, and so does each invitation until it is used, revoked or expires; deactivated accounts do not. See [When the Instance Is Full](#user-limit). |
-| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md#invite) puts it in front of the invitation and password-reset links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. |
+| `LIBREFOLIO_PUBLIC_URL` | _not set_ | The address your users open LibreFolio at, with `http://` or `https://`, such as `https://librefolio.example.com`. In the [Users](users.md) tab of Settings, the invitation and password-reset dialogs fill in their **Server address** with it; without it, with the address the administrator's browser is using. The administrator can change that address, and the browser then checks that this LibreFolio answers there. The [command line](cli_tools.md#invite) puts it in front of the invitation and password-reset links it prints; without it, it prints the path only (`/invite#token=…`) and you add the address yourself. Emails with a link need it too, with no fallback to the browser's address: without it, no invitation, password-reset link or forgotten-password email goes out ([Email](email.md)). |
 | `LIBREFOLIO_BILLING_URL` | _not set_ | For hosting providers: the page where the administrator of a managed instance manages the subscription, with `http://` or `https://`. Only administrators see it, as **Manage subscription**: in the [Users](users.md) tab of Settings, next to the count of places taken and in the banner shown when the instance is full, and on the block page of a [blocked instance](hosting_providers.md#instance-block). Not set: no such link. |
 
 An empty value counts as not set. A wrong value does not stop the server, unlike the main options:
@@ -370,7 +413,7 @@ process needs the value: `Invalid account configuration`, with the variable and 
 | --- | --- | --- |
 | `LIBREFOLIO_REGISTRATION` other than the three modes | Registration is closed, and the global setting stays locked | `registration stays closed until it is fixed` |
 | `LIBREFOLIO_MAX_USERS` that is not a whole number of at least 1, `0` included | A limit of 0: nobody can sign up without an invitation | `registration stays closed until it is fixed` |
-| `LIBREFOLIO_PUBLIC_URL` without `http://` or `https://` | Ignored, as if it were not set: the [command line](cli_tools.md#invite) prints the path only and says why under each link, and the dialogs of the [Users](users.md) tab start from the browser's address | `links show the bare path until it is fixed` |
+| `LIBREFOLIO_PUBLIC_URL` without `http://` or `https://` | Ignored, as if it were not set: the [command line](cli_tools.md#invite) prints the path only and says why under each link, and the dialogs of the [Users](users.md) tab start from the browser's address. No email with a link goes out, and while email works the start log has a [warning](#startup-checks) too ([Email](email.md)) | `links show the bare path until it is fixed` |
 | `LIBREFOLIO_BILLING_URL` without `http://` or `https://` | Ignored, as if it were not set | `the billing link stays hidden until it is fixed` |
 
 ### 📏 When the Instance Is Full {: #user-limit }

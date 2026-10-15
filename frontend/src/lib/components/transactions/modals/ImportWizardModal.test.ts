@@ -312,6 +312,7 @@ describe('ImportWizardModal — Confirm All parent merge', () => {
                 uploaded_at: '2026-09-14T08:00:00Z',
                 compatible_plugins: ['owned-parser'],
                 target_broker_id: broker.id,
+                can_delete: true,
             },
         ]);
         const mappings = [

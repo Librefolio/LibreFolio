@@ -520,7 +520,7 @@ const HEADER = [
     '# Colour ratchet baseline (workstream T): the legacy colours left in each production source of frontend/src.',
     '# One line per file: <path under src> TAB <m1: legacy colour classes> TAB <m2: colour literals, normalized; ×N repeats>. No totals: the gate computes them.',
     '# Written only by `node frontend/scripts/theme/theme-roles.mjs` (--init, --update, --split, --accept, --resolve).',
-    '# Merge conflict: keep the tighter side (the lower m1, the m2 values both sides have) — `--resolve` does it — then the gate must pass on the merged tree. Never widen a line to pass.',
+    "# Merge conflict: `--resolve` merges the three sides — a line one side left as it was takes the other side's; changed on both, an accepted file keeps its accepting side, otherwise the tighter side wins (the lower m1, the m2 values both sides have) — then the gate must pass on the merged tree. Never widen a line to pass.",
     '# Lines starting with ~ declare a split file (old, new files, its record then) or a file taken as it is (file, reason).',
 ];
 
@@ -764,17 +764,31 @@ export function acceptFile(/** @type {Scan} */ scan, /** @type {Baseline} */ bas
 }
 
 /**
- * Three-way merge of baselines, the tighter side winning: a line on both sides takes the lower m1 and the m2 values
- * both hold; a line one side removed stays removed; a line one side added (a split, an accepted file) stays.
+ * Three-way merge of baselines (TC-7). Per file line: a side that left it as the base had it takes the other side's
+ * line, removal and addition included. Changed on both sides: a side that accepted the file (a `~accept` the base does
+ * not have) wins, both accepting is refused, otherwise the tighter side wins — the lower m1 and the m2 values both
+ * hold — and a line removed on one side stays removed. Declarations: those of both sides, once.
  */
 export function mergeBaselines(/** @type {Baseline} */ base, /** @type {Baseline} */ ours, /** @type {Baseline} */ theirs) {
+    const baseDeclarations = new Set(base.declarations);
+    const acceptedIn = (/** @type {Baseline} */ side) => new Set(side.declarations.filter((line) => line.startsWith('~accept\t') && !baseDeclarations.has(line)).map((line) => line.split('\t')[1]));
+    const [acceptedOurs, acceptedTheirs] = [acceptedIn(ours), acceptedIn(theirs)];
+    const same = (/** @type {Measure | undefined} */ a, /** @type {Measure | undefined} */ b) => (a && b ? a.m1 === b.m1 && excessValues(a.m2, b.m2).length === 0 && excessValues(b.m2, a.m2).length === 0 : a === b);
     /** @type {Map<string, Measure>} */
     const files = new Map();
     for (const key of new Set([...base.files.keys(), ...ours.files.keys(), ...theirs.files.keys()])) {
+        const was = base.files.get(key);
         const mine = ours.files.get(key);
         const other = theirs.files.get(key);
-        if (mine && other) files.set(key, {m1: Math.min(mine.m1, other.m1), m2: commonValues(mine.m2, other.m2)});
-        else if ((mine || other) && !base.files.has(key)) files.set(key, /** @type {Measure} */ (mine ?? other));
+        /** @type {Measure | undefined} */
+        let merged;
+        if (same(mine, was)) merged = other;
+        else if (same(other, was)) merged = mine;
+        else if (acceptedOurs.has(key) && acceptedTheirs.has(key)) throw new Error(`${key}: accepted on both sides of the merge — merge the sources, then --accept the file again on the merged tree`);
+        else if (acceptedOurs.has(key)) merged = mine;
+        else if (acceptedTheirs.has(key)) merged = other;
+        else if (mine && other) merged = {m1: Math.min(mine.m1, other.m1), m2: commonValues(mine.m2, other.m2)};
+        if (merged) files.set(key, merged);
     }
     return {files, declarations: [...new Set([...ours.declarations, ...theirs.declarations])]};
 }
@@ -1114,7 +1128,7 @@ function main(argv) {
         }
         if (flag('--resolve')) {
             writeBaseline(resolveConflict());
-            console.log(`Resolved ${shown(BASELINE)}, the tighter side winning. Next: \`git add\` it, then --check on the merged tree.`);
+            console.log(`Resolved ${shown(BASELINE)}: a three-way merge, an accepting side keeping its file, otherwise the tighter side winning. Next: \`git add\` it, then --check on the merged tree.`);
             return 0;
         }
         const scan = scanTree();
