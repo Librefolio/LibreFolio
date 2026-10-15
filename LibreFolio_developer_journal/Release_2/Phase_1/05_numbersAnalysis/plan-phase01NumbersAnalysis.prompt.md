@@ -758,7 +758,7 @@ comune con CP-1 si sono fusi da soli, come nella simulazione; nessun conflitto. 
   A J dopo CP-1, priorità bassa come G-8, con la skill `test-triage`. La riga resta nella sezione C, dove l'ha scritta W.
 - **Ordine d'ingresso**: X CP2b prima di CP-1; poi un solo aggiornamento di base per J con W I1, A3, H CP3 e X CP2b.
 
-#### Aggiornamento di base 3 — W I1, A3, H CP3, X CP2b, `dev_release2` `05c21b2b6` 🧊 (2026-10-15) — FROZEN, validato; ingresso di CP-1 al coordinatore
+#### Aggiornamento di base 3 — W I1, A3, H CP3, X CP2b, `dev_release2` `05c21b2b6` ✅ (2026-10-15) — merge `b17f8fb85`, nota `d3c06d2d0`
 
 Merge del coordinatore `b17f8fb85` (genitori `cf47ffc94` e `05c21b2b6`): W I1 (`dc7e4e48e`), A3 (`90491071d`,
 frontend), H CP3 (`d08d9358f`: segreti da `*_FILE`, chiave d'istanza, `config-env-example`, guardia `config-package`
@@ -811,5 +811,40 @@ automatica (backlog e `_backend_services.py`), nessun conflitto. J valida la rev
 >     base;
 >   - **C-93 non riprodotto**: nessun `PytestUnhandledThreadExceptionWarning` nel log di questo giro;
 >   - porta 6185 libera; worktree pulito tranne questo piano.
+>
+> **⚠️ Fuori pista**: nessuno.
+
+#### Aggiornamento di base 4 — W K1, H `web_link_finder`, `dev_release2` `d9b853395` 🧊 (2026-10-15) — FROZEN, validato; ingresso di CP-1 al coordinatore
+
+Merge del coordinatore `b8d604086` (genitori `d3c06d2d0` e `d9b853395`): W K1 (`d915c869f`, frontend dell'editor dei
+dati e una riga di `_frontend_utility.py`) e il lotto `web_link_finder` di H (`9dda5ccd9`: le letture d'ambiente in
+`config/plugins.py`, guardia `config-package` senza più eccezioni). Unione automatica, solo il backlog. Il coordinatore
+chiede un controllo leggero, senza `all-backend`.
+
+> **Note implementazione** (log in `/tmp/libreFolio_j/merge4/`; bersaglio estratto in
+> `/tmp/libreFolio_j/tree_d9b853395/`):
+> - **Albero**: il delta di `b8d604086` rispetto a `d9b853395` è il delta di CP-1, 84 file con lo stesso stato;
+>   nessun cambio di dipendenze né migrazioni.
+> - **`services config-package` 567** (512 nell'aggiornamento 3; bersaglio 540, cioè +27 dei moduli di J). Le +55:
+>   - +54 casi degli accessori del cercatore di link in `config/plugins.py`: chiave API dalla variabile o dal suo file
+>     (8 + 1 sul file illeggibile), opzioni DDGS (10), abilitazione (11), motore (5), numero massimo di risultati (8),
+>     timeout (11);
+>   - +2 test del cricchetto delle eccezioni (`test_every_declared_exception_still_has_reads_to_excuse`,
+>     `test_the_ratchet_flags_an_exception_that_excuses_nothing`);
+>   - −1: il caso dell'eccezione `web_link_finder.py`, che non c'è più.
+>   - `config/plugins.py` sta dentro `config/`, quindi non aggiunge un caso al test per modulo, che resta invariato.
+> - `services config-env-example` 36, `services pac-planner-core` 264.
+> - `pytest --collect-only` (ambiente della corsia): fuso 13 881, bersaglio 13 820. Differenza esatta, +61: +34 della
+>   guardia D-J18, +27 della guardia d'ambiente di H (+30 moduli nuovi, −3 percorsi vecchi). Nessun test perso.
+> - **API**: `dev.py api sync` nel fuso contro `dev.py api schema` del bersaglio estratto: `openapi.json` identico
+>   byte per byte una volta rimessa la stringa della versione, `tool-contracts.openapi.json` identico. Rispetto
+>   all'aggiornamento 3 cambia solo `info.version`; gli altri 4 generati sono identici byte per byte.
+> - **Strumenti sul fuso**:
+>   - `patch_effect.py`: 501 bersagli di modulo, **0 muti e 0 mancanti** (0 anche nel bersaglio e nell'aggiornamento 3);
+>   - `guard_strings.py`: 84 reperti, nessuno che manchi in entrambi i genitori (bersaglio 83, aggiornamento 3 82). I 2
+>     in più rispetto all'aggiornamento 3 sono percorsi finti dell'autocontrollo del cricchetto di H
+>     (`services/a/still_reads.py`, `services/b/paid_off.py`), presenti anche nel bersaglio;
+>   - `import_resolve2.py`: 865 file, 2 863 controlli, 0 reperti.
+> - `dev.py lint` pulito; patch del PAC 41, nessuna muta; equivalenza AST del taglio intatta; porta 6185 libera.
 >
 > **⚠️ Fuori pista**: nessuno.
