@@ -2111,6 +2111,10 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   (test-author di I1), 15/10. Il test (`backend/test_scripts/test_api/test_broker_multiuser_api.py`, MULTI-008d) crea
   due broker e non li cancella; i test V-23 della stessa classe nuova (`TestAccessRefusalPlacement`) puliscono anche dopo
   un rosso, e possono fargli da modello. Dettagli: piano 04, §12, I1.
+- **W-B13 · `fx-csv-import.spec.ts` prende la ✕ della modale d'importazione per testo** — minimo, test; W, 15/10 (K1);
+  **spec di X**. `frontend/e2e/fx/fx-csv-import.spec.ts:247` e `:276` usano `button[aria-label="Close"]`; con P-15
+  l'etichetta viene da `common.close`, quindi il selettore regge solo in inglese. Cura: il `data-testid`
+  `data-import-modal-close`, aggiunto in K1. Dettagli: piano 04, §12, K1 passo 4.
 
 ## J · Numeri e analisi (fase 01)
 
