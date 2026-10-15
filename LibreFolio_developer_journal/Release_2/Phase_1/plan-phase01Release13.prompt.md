@@ -981,3 +981,12 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > contano le richieste), `all-backend` 12 343 passed, 3 skipped, 0 failed; senza avvisi l'area non disegna niente, e
 > la galleria resta invariata. Sopra X CP3, W7, X CP3b e J C-93: controllo leggero (guardia 584, raccolta, `api
 > schema` con il solo endpoint nuovo, build e `core-unit`). CHANGELOG con l'endpoint; `LIBREFOLIO_PROFILE` con CP6.
+
+### J G-8, il catalogo dei Tool sotto carico, integrato ✅ (2026-10-15, 06:30)
+
+> **Note implementazione**: `c75f08101`, merge di `47e0f9eec` su `6d67fdaac` (fix `6ce5ea180`). FastAPI risolve
+> `get_current_user` prima che l'endpoint sposti la scadenza, quindi il login del catalogo girava dentro la finestra
+> d'ingresso di 2 s: sotto carico 503. Le rotte senza corpo partono con il loro budget di 20 s; il compute tiene la
+> finestra. Rosso prima e verde dopo (`api tools` 12); `api schema` identico. Senza nuovo controllo di J: H CP4 non
+> tocca il router dei Tool. Entra prima della galleria delle 09:00, così la misura finale di G ne tiene conto; la
+> riga G-8 nella sezione G è chiusa dal coordinatore. CHANGELOG con una riga in «🐛 Fixed».

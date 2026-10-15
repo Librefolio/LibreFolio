@@ -1941,7 +1941,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
   - Tutte proteggono `POST /assets/prices/current`. Correzione: lasciare la pagina prima di togliere le rotte.
 
   Dettagli: piano della 56, passo 6.
-- **G-8 · Il catalogo dei Tools risponde 503 sotto carico** — medio-basso; G, 14/10, rosso della gallery
+- ✅ **G-8 · Il catalogo dei Tools risponde 503 sotto carico** — medio-basso; G, 14/10, rosso della gallery
   `about plugin diagnostics`.
   - Causa: `ToolRoute` (`backend/app/api/v1/tools.py:92`) limita ogni richiesta `/tools` a
     `ingress_timeout_ms = 2000` (`backend/app/schemas/tools.py:83`). `GET /api/v1/tools/catalog` ha impiegato 2.649 ms
@@ -1950,6 +1950,9 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     identici.
   - Per la regola [«un rosso solo sotto carico è un difetto del prodotto»](../../../LibreFolio_devWiki/wiki/concepts/load-only-red-is-a-product-defect.md)
     è un candidato difetto del prodotto: un host lento vedrebbe lo stesso errore.
+  - ✅ **Chiusa il 15/10** da J (`6ce5ea180`; in `dev_release2` con `c75f08101`): l'autenticazione girava dentro la
+    finestra d'ingresso di 2 s, prima che l'endpoint spostasse la scadenza. Le rotte senza corpo (catalogo,
+    diagnostica) partono con il loro budget di 20 s; il compute tiene la finestra. Dettagli: piano J, §10 «G-8».
   - **Instradata a J (1.3, «Numeri e analisi»)** dal coordinatore, il 14/10, a priorità bassa, dopo il primo
     checkpoint di J. La voce nella sezione di J la scrive J.
 
