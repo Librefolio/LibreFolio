@@ -2470,6 +2470,19 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     (`-sTCP:LISTEN`), come fa il runner.
 
   Dettagli: piano H, §14 «Due aggiornamenti di base … e la verifica di C-96».
+- **H-13 · `LIBREFOLIO_REGEN_NATIVE_CASH_GUARD` non arriva al test: la corsia la toglie (C-96)** — basso; DV dei colori
+  (DV-1), 15/10. ✅ 15/10: chiusa da J in CP-4, con la variabile rinominata `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD`.
+  - Il comando documentato per rigenerare `backend/test_scripts/fixtures/native_cash_guard/eur_only_golden.json`
+    (`test_native_cash_guard.py`, la docstring e `_REGEN_COMMAND`) esporta la variabile nella shell.
+    `configure_test_runtime()` toglie ogni `LIBREFOLIO_*` che la corsia non tiene (`_test_lane_drops`), quindi pytest non la
+    vede e il golden non si rigenera.
+  - È l'unica variabile di rigenerazione del repo. Le password del probe AI Export non passano da una corsia: il probe si
+    lancia con `pipenv run python`.
+  - Cura proposta: rinominarla `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD`, il prefisso che la corsia già tiene, senza un
+    elenco nuovo; aggiornare la docstring e `_REGEN_COMMAND`; un caso di `utils runtime-isolation` che fissi il passaggio di
+    `LIBREFOLIO_TEST_REGEN_*`. In alternativa, un elenco esplicito `LIBREFOLIO_REGEN_*` in `TEST_LANE_KEEPS`.
+
+  Dettagli: piano H, §14 «Ingresso dopo A6a».
 
 ## A · Account e accessi (fase 01)
 
