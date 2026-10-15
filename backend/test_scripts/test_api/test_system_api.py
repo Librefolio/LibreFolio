@@ -11,6 +11,7 @@ Covers:
 - GET /api/v1/system/plugin-diagnostics: session required (live HTTP), failure-list shape for a logged-in user
 - classify_ip / client_address (utils/runtime/network.py): the class of a client address, and which address (plan 36, §2.1)
 - GET /api/v1/system/connection: session required, {client_class, cookie_secure} live and in-process (plan 36, §2.1)
+- GET /api/v1/system/instance: public, no session; {profile} live (the lane's default) and in-process (a profile set)
 """
 
 from collections.abc import AsyncIterator
@@ -20,7 +21,7 @@ from uuid import uuid4
 import httpx
 import pytest
 import pytest_asyncio
-from fastapi import HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.routing import iter_route_contexts
 
@@ -764,3 +765,91 @@ class TestConnectionSecurityInProcess:
         assert result.client_class == "lan", f"[new] X-Forwarded-For: garbage holds no address, so the class must be the TCP peer's, 192.168.1.20 → lan: got {result!r}"
 
         print_success("✓ An unreadable header: the peer decides, lan")
+
+
+# ============================================================================
+# GET /api/v1/system/instance — THE PUBLIC CONFIGURATION OF THE INSTANCE
+# ============================================================================
+#
+# What the app reads at startup, before anyone signs in: public by design, the same for
+# whoever asks, so behind no session. One field today, the profile from LIBREFOLIO_PROFILE
+# (selfhosted unless set). Live on the lane's backend for the lane's default, in-process for
+# a profile set through the environment, which the lane's server cannot be given from here.
+# The Settings field itself (default, normalisation, refusal) is in test_config_misc.py.
+
+INSTANCE_URL = f"{API_BASE}/system/instance"
+
+
+class TestInstanceConfigIsPublic:
+    """GET /system/instance resolves no session gate, wherever one could be declared."""
+
+    def test_the_walk_sees_a_gate_declared_where_a_router_is_included(self):
+        """Presence barrier of the next test: a gate added by include_router, not on the handler, is still found."""
+        resource = APIRouter()
+
+        @resource.get("/probe")
+        def probe() -> dict:
+            return {}
+
+        gated, open_router = APIRouter(prefix="/gated"), APIRouter(prefix="/open")
+        gated.include_router(resource, dependencies=[Depends(get_current_user)])
+        open_router.include_router(resource)
+
+        assert get_current_user in _route_dependency_calls("/gated/probe", gated.routes), "the walk missed a session gate declared on include_router: it would call public a route that is not"
+        assert get_current_user not in _route_dependency_calls("/open/probe", open_router.routes), "the walk found a session gate on a route that has none"
+
+    def test_route_depends_on_no_session(self):
+        """Structural: no get_current_user among the dependencies FastAPI resolves for GET /system/instance."""
+        # Control first: the walk finds the gate where it is declared, so a pass below means the gate is absent.
+        assert get_current_user in _route_dependency_calls("/system/container-image-status")
+        assert get_current_user not in _route_dependency_calls("/system/instance"), "GET /system/instance resolves get_current_user: the app reads it before anyone signs in, so it must need no session"
+
+
+class TestInstanceConfigLive:
+    """GET /system/instance on the lane's backend: anyone gets the declared fields, and nothing else."""
+
+    @pytest.fixture(autouse=True)
+    def lane_sets_no_profile(self):
+        """Precondition: the default profile. The server reads the same .env and environment as this process."""
+        profile = get_settings().LIBREFOLIO_PROFILE
+        assert profile == "selfhosted", f"Precondition: these tests read the default profile; this lane runs {profile!r} (LIBREFOLIO_PROFILE set in .env or in the environment)"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("forged_cookie", [False, True], ids=["no-cookie", "forged-session-cookie"])
+    async def test_anyone_gets_the_public_configuration(self, test_server, forged_cookie):
+        """No session, or a session cookie the server never issued: 200 and exactly {"profile": "selfhosted"}."""
+        async with httpx.AsyncClient() as client:
+            if forged_cookie:
+                client.cookies.set(SESSION_COOKIE_NAME, f"forged-{uuid4().hex}")
+            response = await client.get(INSTANCE_URL, timeout=TIMEOUT)
+
+        assert response.status_code == 200, f"GET /system/instance is public: expected 200 without a valid session, got {response.status_code}: {response.text}"
+        assert response.json() == {"profile": "selfhosted"}, f"the public configuration must be exactly the declared fields, the profile the lane's default: {response.text}"
+
+
+def _instance_app() -> FastAPI:
+    """The system router in an app of this test, as test_container_registry.py builds one; no session override, none needed."""
+    app = FastAPI()
+    app.include_router(system_module.router, prefix="/api/v1")
+    return app
+
+
+class TestInstanceConfigInProcess:
+    """GET /system/instance answers the profile LIBREFOLIO_PROFILE sets, as get_settings() reads it at each request."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("configured", "profile"),
+        [
+            pytest.param("managed", "managed", id="managed"),
+            pytest.param(" MANAGED ", "managed", id="stripped-and-lowercased"),
+            pytest.param("selfhosted", "selfhosted", id="selfhosted"),
+        ],
+    )
+    async def test_the_configured_profile_is_answered(self, monkeypatch, configured, profile):
+        monkeypatch.setenv("LIBREFOLIO_PROFILE", configured)
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=_instance_app()), base_url="http://test") as client:
+            response = await client.get("/api/v1/system/instance")
+
+        assert response.status_code == 200, f"GET /system/instance with LIBREFOLIO_PROFILE={configured!r}: expected 200, got {response.status_code}: {response.text}"
+        assert response.json() == {"profile": profile}, f"LIBREFOLIO_PROFILE={configured!r} must be answered as exactly {{'profile': {profile!r}}}: {response.text}"
