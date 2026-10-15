@@ -3493,6 +3493,52 @@ Pages updated:
 Filed: [[decisions/colour-factorisation-at-pixel-parity]], [[problems/esbuild-colour-minify-skips-custom-properties]],
 [[problems/colour-ratchet-resolve-drops-an-accept]]. Graph: not updated (P-6).
 
+## [2026-10-15] file | Asset event saves all or nothing — workstream W, lot E1 (decisions 20–23)
+Release 1.3, workstream W, lot E1, filed from plan 04 (sections «Analisi di E1», «E0», «E1»), the decisions file
+(points 20–23) and the code, every claim checked on the worktree.
+
+What the lot is:
+- E1a (`a2fb6936f`) and E1c (`313dde70e`) entered `dev_release2` with `14d58cc61`;
+- E1b and its docs were still uncommitted in W's worktree.
+
+The decision page covers decisions 20–23 and the coordinator's «one request» (`delete_ids`):
+- a save that is one transaction, with structured refusals;
+- `mode: "create"` and the existing-events panel;
+- the scoped `DELETE` and the type check;
+- the post-migration fix `event_types`, with the framework's `row_count_changes()`;
+- the editor's one-`POST` save, the translated refusals and the picker's re-read.
+
+A correction landed while filing (W, 17:50, found by the docs-writer). The first E1b cure let `delete_ids` take
+manual events only, so a save that deleted a provider's read-only row was refused whole. Now:
+- `_delete_item_events()` (renamed from `_delete_manual_events()`) takes any event of the asset, as in 1.2;
+- `EVENT_NOT_DELETABLE` covers only unknown, gone, or other-asset ids;
+- `EVENT_IN_USE` covers any linked event.
+
+The decision page records both, and S3's contract holds.
+
+Three problems filed, from E1b's reds:
+- a provider event dated today waits for a later sync (X's area, open);
+- a `SimpleSelect` list under the sticky table header (W-B26, open);
+- `@testing-library/svelte` reading a prop named `events` as a mount option.
+
+The fourth discovery, pysqlite's deferred `BEGIN`, was already filed on 2026-09-10: its page gains the recurrence
+W-B20 instead of a duplicate.
+
+Pages updated:
+- [[features/F-031]]: the routes, the model's real fields (`details` JSON never existed), the 1.3 notes and sources;
+- [[features/F-090]]: the scoped `DELETE`, the editor's `EVENT_IN_USE`, and the reverse lookup built on 15/10
+  (C-65b, `5e96df752`), noted in [[features/registry]] too;
+- [[problems/asset-event-edit-delete-reinsert]]: I-09…I-12 closed, I-11b open as W-B16;
+- [[domains/assets]], [[problems/datatable-actions-column-on-mobile]] and
+  [[problems/sqlite-savepoint-without-write-begins-as-transaction]].
+
+`check_source_paths.py` gives 5 missing (8 occurrences) before and after, all pre-existing. No ingest-registry row: a
+file operation, like the other entries of 15/10.
+
+Filed: [[decisions/asset-event-saves-all-or-nothing]], [[problems/provider-event-dated-today-not-synced]],
+[[problems/select-list-under-the-sticky-table-header]], [[problems/testing-library-events-prop-read-as-mount-option]].
+Graph: not updated (P-6); graphify is not available in this worktree.
+
 ## [2026-10-15] file | A mutation restored with its old file time skips the frontend rebuild
 Found by test-author during the Backup tab E2E mutations (workstream B, lot B5a): the runner's staleness check compares
 file times, so a restore with `cp -p` would leave the mutated bundle in place for the «final green» run.

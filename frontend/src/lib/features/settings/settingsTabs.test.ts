@@ -12,19 +12,21 @@
  *     where the context is `{isSuperuser}`; `id` is both the `?tab=` value and the suffix of the
  *     `settings-tab-{id}` test id, `visible` absent means visible to everyone, `props` are spread on
  *     the body, `alignEnd` starts the right-hand group on a wide screen;
- *   - `SETTINGS_TABS`: today's four tabs and nothing else — profile, preferences, about, admin. Admin
- *     stays visible to everyone and editable only by an administrator (`props: ctx => ({canEdit:
- *     ctx.isSuperuser})`), and `alignEnd` takes the place of the inline class;
+ *   - `SETTINGS_TABS`: today's tabs and nothing else — profile, preferences, about, admin, and backup
+ *     and email for administrators only (workstreams B and E). Admin stays visible to everyone and
+ *     editable only by an administrator (`props: ctx => ({canEdit: ctx.isSuperuser})`), and `alignEnd`
+ *     takes the place of the inline class; backup and email take no props, and follow admin in the
+ *     right-hand group;
  *   - `visibleSettingsTabs(tabs, ctx)`: the tabs whose `visible(ctx)` is not false, sorted by
  *     `order`. It takes the list explicitly, so that a test can hand it one of its own, and it leaves
  *     that list as it was.
  *
  * The `order` numbers are not the contract, only their sequence: the cases compare ids in the order
  * the helper gives them, never a number. The `TODAY` table below is the registry's content; a
- * workstream that adds a tab adds its row there, in the same change. A tab that only administrators
- * see carries `adminOnly` in its row: workstream B's `backup` is the first one.
+ * workstream that adds a tab adds its row there, and its id to the `CONTEXTS` lists of those who see
+ * it, in the same change.
  *
- * Why the four tab modules are mocked. Each tab body imports the API client, the stores and their own
+ * Why the tab modules are mocked. Each tab body imports the API client, the stores and their own
  * children, so importing the real modules would make this file depend on everything they reach (and
  * on whatever any of them does at import time) while it asks one thing of them: which module each tab
  * points at. Each module is replaced, by its path, with a function of its own, and the registry's
@@ -41,6 +43,7 @@
 import {describe, expect, it, vi} from 'vitest';
 import type {Component} from 'svelte';
 import {DatabaseBackup, Info, Shield, Sliders, User} from 'lucide-svelte';
+import {Mail} from 'lucide-svelte';
 import type {SupportedLocale} from '$lib/i18n';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
@@ -56,6 +59,7 @@ const bodies = vi.hoisted(() => {
         about: body('AboutTab.svelte'),
         admin: body('GlobalSettingsTab.svelte'),
         backup: body('BackupTab.svelte'),
+        email: body('EmailSettingsTab.svelte'),
     };
 });
 
@@ -64,6 +68,7 @@ vi.mock('$lib/features/settings/tabs/PreferencesTab.svelte', () => ({default: bo
 vi.mock('$lib/features/settings/tabs/AboutTab.svelte', () => ({default: bodies.about}));
 vi.mock('$lib/features/settings/tabs/GlobalSettingsTab.svelte', () => ({default: bodies.admin}));
 vi.mock('$lib/features/backup/BackupTab.svelte', () => ({default: bodies.backup}));
+vi.mock('$lib/features/email/EmailSettingsTab.svelte', () => ({default: bodies.email}));
 
 import {SETTINGS_TABS, visibleSettingsTabs, type SettingsTab, type SettingsTabContext} from './settingsTabs';
 
@@ -71,18 +76,20 @@ import {SETTINGS_TABS, visibleSettingsTabs, type SettingsTab, type SettingsTabCo
 const USER: SettingsTabContext = {isSuperuser: false};
 /** An administrator. */
 const ADMIN: SettingsTabContext = {isSuperuser: true};
-const CONTEXTS: [string, SettingsTabContext][] = [
-    ['a user', USER],
-    ['an administrator', ADMIN],
+/** Who is signed in, the ids of the tabs they see, left to right, and their context. */
+const CONTEXTS: [string, string[], SettingsTabContext][] = [
+    ['a user', ['profile', 'preferences', 'about', 'admin'], USER],
+    ['an administrator', ['profile', 'preferences', 'about', 'admin', 'backup', 'email'], ADMIN],
 ];
 
-/** Today's tabs, left to right: the id, the catalogue key of the label, the lucide icon and the tab module; `adminOnly` for those only an administrator sees. */
+/** Today's tabs, left to right: the id, the catalogue key of the label, the lucide icon and the tab module. */
 const TODAY = [
     {id: 'profile', labelKey: 'settings.profile', icon: User, component: bodies.profile},
     {id: 'preferences', labelKey: 'settings.preferences', icon: Sliders, component: bodies.preferences},
     {id: 'about', labelKey: 'settings.about', icon: Info, component: bodies.about},
     {id: 'admin', labelKey: 'settings.admin', icon: Shield, component: bodies.admin},
-    {id: 'backup', labelKey: 'backup.tab', icon: DatabaseBackup, component: bodies.backup, adminOnly: true},
+    {id: 'backup', labelKey: 'backup.tab', icon: DatabaseBackup, component: bodies.backup},
+    {id: 'email', labelKey: 'email.tab.label', icon: Mail, component: bodies.email},
 ];
 
 /** What an id must look like to be a `?tab=` value and a test-id suffix as it is. */
@@ -127,11 +134,11 @@ describe('SETTINGS_TABS — today’s tabs, and nothing else', () => {
         expect(SETTINGS_TABS.map((tab) => tab.id).sort(), 'the registry is today’s tabs: a tab added (or lost) on the way changes what users see').toEqual(TODAY.map((tab) => tab.id).sort());
     });
 
-    it.each(CONTEXTS)('%s sees today’s tabs in this order, the administrators’ ones only as an administrator', (_label, ctx) => {
+    it.each(CONTEXTS)('%s sees %j, in this order', (_label, expected, ctx) => {
         expect(
             visibleSettingsTabs(SETTINGS_TABS, ctx).map((tab) => tab.id),
-            'today’s tabs, left to right: admin is visible to everyone, backup to administrators only',
-        ).toEqual(TODAY.filter((tab) => !tab.adminOnly || ctx.isSuperuser).map((tab) => tab.id));
+            'today’s tabs, left to right: admin is visible to everyone, backup and email to administrators only',
+        ).toEqual(expected);
     });
 
     it.each(TODAY)('$id: labelled $labelKey, drawn with its lucide icon, rendering its own tab module', ({id, labelKey, icon, component}) => {
@@ -177,6 +184,14 @@ describe('SETTINGS_TABS — today’s tabs, and nothing else', () => {
         const adminAt = ids.indexOf('admin');
         expect(adminAt, `premise: an administrator sees admin: ${ids.join(', ')}`).toBeGreaterThanOrEqual(0);
         expect(ids[adminAt + 1], `backup comes right after admin, in the right-hand group admin starts: ${ids.join(', ')}`).toBe('backup');
+    });
+
+    it('email is visible to administrators only and takes no props', () => {
+        const email = registryTab('email');
+
+        expect(email.visible?.(USER) ?? true, 'a user does not see the email tab').toBe(false);
+        expect(email.visible?.(ADMIN) ?? true, 'an administrator sees it').toBe(true);
+        expect(email.props, 'the email tab is rendered with no props').toBeUndefined();
     });
 
     it('only admin takes props, and only admin starts the right-hand group (alignEnd)', () => {
