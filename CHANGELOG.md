@@ -126,6 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sign-in pages on a phone:** the theme, language and help buttons no longer cover the card. They scroll away with the page, and a tall card such as registration starts below them, in the app installed on an iPhone too.
 - **The header hides again when you scroll down** after clicking one of its buttons with the mouse; reaching a button with the keyboard still keeps it in view.
 - **The allocation pie and its history show the same sector emoji.**
+- **Deleting several brokers at once**: a broker whose deletion fails part-way now stays exactly as it was, with nothing changed on the other broker of a transfer, and the other brokers of the request are still deleted.
 
 #### 🔒 Security
 
