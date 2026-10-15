@@ -29,6 +29,9 @@ DESIGNER_LAB_UNIT_TEST_PATHS = (
     "src/lib/dev/designer-lab/elementRules.test.ts",
     "src/lib/dev/designer-lab/designerLabImports.gate.test.ts",
     "src/routes/designer-lab/page.test.ts",
+    "src/lib/dev/designer-lab/colorValue.test.ts",
+    "src/lib/dev/designer-lab/targets.test.ts",
+    "src/lib/dev/designer-lab/colorEditor.test.ts",
 )
 
 DESIGNER_LAB_E2E_SPECS = (
