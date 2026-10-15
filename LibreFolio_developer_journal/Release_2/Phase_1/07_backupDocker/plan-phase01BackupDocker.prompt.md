@@ -1808,6 +1808,107 @@ della replica di Litestream dopo un ripristino non è un residuo: è lo spike di
 >   17:18, prima delle righe «Decisione» del treno 45 (17:40-18:10), che le danno decise.
 > - **Prossimo**: lo scatto `settings/backup-ready`, con la checklist di G. Lo slot della galleria lo chiede il
 >   coordinatore; il doppio lancio lo farà probabilmente la coppia G-13, come per Users ed Email.
+> - **B8 entrato** (coordinatore): `dev_release2` = `56d3d3182`; CHANGELOG in `6102d5097`. Le 41–43 seguono le righe
+>   «Decisione» del file: il suo messaggio era arrivato in ritardo dalla coda. Il pulsante del pannello per il link di
+>   reset è di B: **B-10** nel backlog, non per la 1.3 se non resta tempo. La precondizione nuova in
+>   `test_instance_block.py` la comunica lui ad H. **Ordine**: lo scatto, poi B2, poi B3 (con i passi in
+>   `app_lifespan.py`).
+
+### Scatto di galleria `settings/backup-ready` (2026-10-15, 20:25-20:45) ✅ — scritto, da girare nello slot di G
+
+> - **Fatti per il brief**, verificati sul codice:
+>   - la scheda ritrova un job finito dall'id in `sessionStorage`, chiave `librefolio.backup.job`, che deve rispettare
+>     `^[0-9a-f]{32}$`, e lo rilegge con `GET /api/v1/backup/instance/jobs/{id}`;
+>   - la scheda non mostra niente di relativo all'orologio: una data assoluta (`finished_at`) e frasi fisse;
+>   - il nome dell'archivio è in UTC (`jobs.archive_name`);
+>   - `waitForSettled` aspetta `data-busy="false"` sul primo elemento che lo porta, cioè la card.
+> - **Checklist di G**, come l'ha applicata E (piano 08): rotta registrata prima della prima navigazione e mai tolta;
+>   solo `GET` del suo percorso, il resto `route.fallback()`; corpo validato una volta con
+>   `schemas.InstanceBackupJob.parse` in `e2e/fixtures/galleryBackup.ts`; i passi e la cornice di G; nessun atteso in
+>   più oltre la prova che lo stato simulato è arrivato. Nota di G (registro dei colori, 18:27): ogni scheda nuova
+>   cambia i 13 scatti di `Settings`, e la riga Backup è già entrata.
+> - **test-author** (in background): fixture nuova con l'id nel `sessionStorage` (`addInitScript`) e la rotta del
+>   `GET`, più un test in `gallery.spec.ts` dopo quello dell'Email (file di G, solo in aggiunta). Solo prove statiche:
+>   `tsc -p tsconfig.e2e.json` (prima e dopo), prettier, `playwright test --list` se non avvia server. Niente galleria.
+> - **Esito di test-author** (20:25-20:41):
+>   - `frontend/e2e/fixtures/galleryBackup.ts`, nuovo. L'id fisso è `5c9e2f1a…`, 32 cifre esadecimali. Il job è `done`,
+>     46,0 MB, creato alle 09:41:12Z e finito alle 09:41:19Z; `file_name` è il nome UTC del backend; niente avvisi.
+>     Il corpo è validato una volta con `schemas.InstanceBackupJob.parse`. L'id va nel `sessionStorage` con
+>     `addInitScript`, in un try/catch per `about:blank`. Solo il `GET` del job ha risposta, il resto `fallback`; niente
+>     `unroute`.
+>   - `frontend/e2e/gallery.spec.ts` (di G): +24 righe in aggiunta, un import e il test
+>     `backup ready (admin) - all languages and themes` dopo quello dell'Email.
+>   - Prove statiche:
+>     - `tsc -p tsconfig.e2e.json`: gli stessi 2 errori di base prima e dopo (`onboarding-tour.spec.ts:863`,
+>       `src/lib/types/files.ts:9`), diff dei log vuoto;
+>     - prettier pulito;
+>     - `playwright test --list -g "backup ready"`: 2 test, desktop e mobile, senza server né browser. Con
+>       `--reporter=list`, perché il reporter HTML avrebbe rifatto `playwright-report/`;
+>     - in più, la fixture provata in memoria con Node e una `page` finta contro lo schema Zod vero: 16 controlli
+>       verdi.
+>   - Rivisto da me: il file segue la checklist, e i 5 attesi di `expectGalleryBackupReady` provano solo lo stato
+>     simulato.
+>   - **Fuso orario**: la card mostra l'ora nel fuso del browser, e la galleria non fissa `timezoneId`, come per le date
+>     della pagina File. Il doppio lancio va fatto su due macchine con lo stesso fuso: qui è 11:41 (Europe/Rome), in UTC
+>     sarebbe 09:41.
+
+### B2 — prova su copia: analisi aggiornata alle decisioni 40–43 (2026-10-15, 20:35) — in attesa del via
+
+> **Stato reale** (base `10697e618`, letto sul codice):
+>
+> - `alembic_head_revision()` sta in `services/platform/readiness.py:38`. Con CP2b, `ensure_database_exists()` sta in
+>   `services/platform/database_bootstrap.py`: lancia `alembic -c backend/alembic.ini upgrade head` in un
+>   sottoprocesso, senza `-x`. `alembic/env.py:19-32` accetta `-x sqlalchemy.url=…`.
+> - `run_post_migration_fixes(db_path, data_dir, *, dry_run)`: `db/post_migration/__init__.py:202`.
+> - I totali di controllo di J (CP-15, `compute_control_totals`) non sono ancora in base. B2 li chiama da un punto
+>   d'iniezione, con un sostituto nei test, come concordato.
+> - `User` ha `username`, `is_active`, `is_superuser` e `session_version` (`db/models.py:368-394`).
+> - `validate_test_data_dir` (H, `config/__init__.py:349-404`) non conosce `backups/` né `.restore/`.
+> - La CLI di B1 ha `create` e `inspect`.
+>
+> **Cosa cambia rispetto al §3.3**:
+>
+> 1. **Solo archivi di LibreFolio** (42): senza `manifest.json` l'archivio è rifiutato, con un codice suo. Niente
+>    archivi fatti a mano.
+> 2. **Gli admin del backup** (40): il report elenca per nome gli admin attivi della copia (`is_superuser` e
+>    `is_active`). Se non ce n'è nessuno, la prova finisce con `BACKUP_NO_ADMINISTRATOR`, e la conferma (B3) non è
+>    possibile.
+> 3. **Il limite** (43): `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` in `config/backup.py`. Il default è `0` (senza limite) nel
+>    self-hosted e 500 nel profilo `managed` quando non è impostata; riga in `.env.example`.
+> 4. **La busta `.lfbk`** arriva con B4. In B2 la si riconosce dalla firma e si risponde con un codice suo («archivio
+>    cifrato, non ancora supportato»), non con un generico «archivio non valido».
+> 5. **La prova «revisione più vecchia»**: un archivio di LibreFolio il cui DB sta a una revisione precedente, costruito
+>    nel test con le migrazioni vere fino a quella revisione.
+>
+> **Lotti proposti**:
+>
+> - **B2a, libreria e CLI**:
+>   - `staging.py`: lettura dello zip con l'elenco d'inclusione e i limiti (voci, dimensione, rapporto), mai `..`,
+>     percorsi assoluti, link, nomi doppi;
+>   - `sha256` di ogni file contro il manifest;
+>   - la decisione sulla revisione con `ScriptDirectory`: più nuova o sconosciuta → rifiuto; uguale → diretto; più
+>     vecchia → `alembic -x sqlalchemy.url=… upgrade head` sulla copia, in un sottoprocesso, poi i fix
+>     post-migrazione sulla copia;
+>   - i controlli: `integrity_check` e `foreign_key_check`, righe per tabella prima e dopo;
+>   - gli admin della copia e il report;
+>   - `backup_max_upload_mb()` in `config/backup.py`;
+>   - `dev.py backup restore FILE --dry-run`;
+>   - test: `services backup-staging` (puri, su `tmp_path`) e `utils backup-cli`.
+> - **B2b, API**:
+>   - `PUT /backup/restore/upload`: il corpo grezzo letto a pezzi; 413 su `Content-Length` e durante la lettura, 507
+>     sullo spazio;
+>   - `POST /backup/restore/stage`: un job in background, uno alla volta;
+>   - `GET` e `DELETE /backup/restore/stage/{id}`: il report; annulla e pulisce; scadenza a 24 ore;
+>   - nessuna di queste rotte in `ALLOWED_WHEN_BLOCKED`;
+>   - `api sync`; test `api backup-restore`.
+>
+> **Da decidere o chiedere**:
+>
+> - ad H: `backups` e `.restore` fra i percorsi controllati di `validate_test_data_dir`, prima di B3. Il
+>   `pending.json` di una corsia non deve mai poter toccare la cartella di produzione. Sono 2 righe: le scrive H,
+>   oppure io, dichiarate;
+> - per B3 (40): dove vive l'ora del ripristino. Una riga d'impostazione non chiede migrazioni; una colonna sì. Il
+>   controllo va in `auth.py`, che è di A. Lo porto nell'analisi di B3.
 
 ### B1 — backup dell'istanza, backend e CLI — bozza (2026-10-15, in attesa del commit di B0)
 
