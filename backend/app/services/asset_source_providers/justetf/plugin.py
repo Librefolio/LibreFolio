@@ -14,13 +14,13 @@ from typing import Dict, List, Optional
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.logging_config import get_logger
-from backend.app.schemas.assets.assets import (
-    FAAssetPatchItem,
+from backend.app.schemas.assets.assets import FAAssetPatchItem
+from backend.app.schemas.assets.events import FAAssetEventPoint
+from backend.app.schemas.assets.metadata import (
     FAClassificationParams,
     FAGeographicArea,
     FASectorArea,
 )
-from backend.app.schemas.assets.events import FAAssetEventPoint
 from backend.app.schemas.common import Currency as CurrencyAmount
 from backend.app.schemas.prices import (
     FACurrentValue,

@@ -30,8 +30,8 @@ Late interest (from FALateInterestConfig):
 - interest_type: configurable per-event (default: COMPOUND — penalties grow on accumulated value)
 
 For detailed parameter structure documentation, see:
-- backend.app.schemas.assets.FAScheduledInvestmentSchedule
-- backend.app.schemas.assets.FAInterestRatePeriod
+- backend.app.schemas.assets.scheduled_investment.FAScheduledInvestmentSchedule
+- backend.app.schemas.assets.scheduled_investment.FAInterestRatePeriod
 """
 
 import calendar
@@ -46,14 +46,14 @@ from backend.app.db.models import (
     ProviderInputType,
 )
 from backend.app.logging_config import get_logger
-from backend.app.schemas.assets.assets import (
+from backend.app.schemas.assets.events import FAAssetEventPoint
+from backend.app.schemas.assets.scheduled_investment import (
     DayCountConvention,
     FAInterestRatePeriod,
     FAScheduledInvestmentSchedule,
     InterestType,
     MaturationFrequency,
 )
-from backend.app.schemas.assets.events import FAAssetEventPoint
 from backend.app.schemas.common import Currency
 from backend.app.schemas.prices import (
     FACurrentValue,
