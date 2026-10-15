@@ -22,7 +22,7 @@ from backend.app.schemas.utilities import (
 from backend.app.utils.asset.geo import (
     list_countries as list_countries_util,
 )
-from backend.app.utils.asset.sector import FinancialSector
+from backend.app.utils.asset.sector import SECTOR_EMOJI, FinancialSector
 from backend.app.utils.fx.currency import (
     list_currencies as list_currencies_util,
 )
@@ -68,25 +68,6 @@ async def list_sectors(include_other: bool = Query(True, description="Include 'O
     }
     ```
     """
-    SECTOR_EMOJI: dict[str, str] = {
-        "Industrials": "🏭",
-        "Technology": "💻",
-        "Financials": "🏦",
-        "Consumer Discretionary": "🛍️",
-        "Health Care": "🏥",
-        "Real Estate": "🏠",
-        "Basic Materials": "⛏️",
-        "Energy": "⚡",
-        "Consumer Staples": "🛒",
-        "Telecommunication": "📡",
-        "Utilities": "💡",
-        "Corporate Bonds": "🏢",
-        "Government Bonds": "🏛️",
-        "Other": "📦",
-        "Liquidity": "💰",
-        "Unknown": "❓",
-    }
-
     if include_other:
         sectors = FinancialSector.list_all_with_other()
     else:

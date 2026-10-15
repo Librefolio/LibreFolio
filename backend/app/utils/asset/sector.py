@@ -1,7 +1,7 @@
 """
 Sector normalization utilities.
 
-Provides ENUM-based sector classification and validation for financial assets.
+Provides ENUM-based sector classification and validation for financial assets, and the one map of sector emoji.
 """
 
 from enum import StrEnum
@@ -116,6 +116,30 @@ class FinancialSector(StrEnum):
             List of sector names
         """
         return [sector.value for sector in cls]
+
+
+# The emoji of a sector: the one map behind every view that shows one, the `/utilities/sectors` list and the
+# allocation views of the portfolio engine, which used to keep a copy each and disagreed on four keys. Besides the
+# sectors it names the two buckets the engine adds on its own: the cash (`Liquidity`) and the holdings without a sector
+# (`Unknown`). Values: the designer's round 2 (15/10/2026), the same glyphs in the pie and in the history.
+SECTOR_EMOJI: dict[str, str] = {
+    FinancialSector.INDUSTRIALS: "🏭",
+    FinancialSector.TECHNOLOGY: "💻",
+    FinancialSector.FINANCIALS: "🏦",
+    FinancialSector.CONSUMER_DISCRETIONARY: "🛍️",
+    FinancialSector.HEALTH_CARE: "🏥",
+    FinancialSector.REAL_ESTATE: "🏠",
+    FinancialSector.BASIC_MATERIALS: "⛏️",
+    FinancialSector.ENERGY: "⚡",
+    FinancialSector.CONSUMER_STAPLES: "🛒",
+    FinancialSector.TELECOMMUNICATION: "📡",
+    FinancialSector.UTILITIES: "💡",
+    FinancialSector.CORPORATE_BONDS: "🏢",
+    FinancialSector.GOVERNMENT_BONDS: "🏛️",
+    FinancialSector.OTHER: "📦",
+    "Liquidity": "💰",
+    "Unknown": "❓",
+}
 
 
 def normalize_sector(sector_name: str) -> str:
