@@ -108,7 +108,8 @@ async def send_link(body: EmailLinkRequest, admin: Annotated[User, Depends(requi
 
     The link is built from ``LIBREFOLIO_PUBLIC_URL`` alone. An invitation goes to ``to``, else to the address written
     in it; a password-reset link only to the address of its account. 409 ``EMAIL_UNAVAILABLE``, 409
-    ``EMAIL_LINKS_UNAVAILABLE`` (with the ``problem``), 409 ``EMAIL_LINK_INVALID`` (with the token's ``status``), 422
+    ``EMAIL_LINKS_UNAVAILABLE`` (with the ``problem``), 409 ``EMAIL_LINK_INVALID`` (with the token's ``status``), 409
+    ``EMAIL_ACCOUNT_INACTIVE`` (a reset link of an inactive account), 422
     ``EMAIL_RECIPIENT_REQUIRED``, ``EMAIL_RECIPIENT_NOT_ALLOWED`` or ``EMAIL_RECIPIENT_INVALID``, 429
     ``EMAIL_RATE_LIMITED``, 502 ``EMAIL_DELIVERY_FAILED``. The token is never logged.
     """
@@ -120,6 +121,8 @@ async def send_link(body: EmailLinkRequest, admin: Annotated[User, Depends(requi
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "EMAIL_LINKS_UNAVAILABLE", "problem": exc.code, "message": "Emails cannot carry links: LIBREFOLIO_PUBLIC_URL is not set to an http(s) address"}) from None
     except flows.EmailLinkInvalidError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "EMAIL_LINK_INVALID", "status": exc.code, "message": "The link is not a live link of that kind"}) from None
+    except flows.EmailAccountInactiveError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "EMAIL_ACCOUNT_INACTIVE", "message": "The account is not active: activate it before sending it a reset link"}) from None
     except (flows.EmailRecipientRequiredError, flows.EmailRecipientNotAllowedError) as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail={"error_code": exc.code, "message": "The address to send the link to is missing or not allowed"}) from None
     except EmailRecipientError:
@@ -141,13 +144,16 @@ async def request_password_reset_email(
     """No session needed. The answer never says whether an account matches: 202, the same for everyone, and the work
     (look the account up, create the link, send it) runs after it, in the background.
 
-    409 ``EMAIL_UNAVAILABLE`` or ``EMAIL_LINKS_UNAVAILABLE`` when the instance cannot send such an email, which
-    ``GET /system/instance`` already says; 429 ``EMAIL_RATE_LIMITED`` with ``Retry-After`` past the limits per address
-    and per identifier, or with the hourly budget spent. Neither depends on the accounts.
+    409 ``FORGOT_PASSWORD_DISABLED`` while the feature is held (``flows.FORGOT_PASSWORD_HELD``: until changing an account's
+    email asks for its password); 409 ``EMAIL_UNAVAILABLE`` or ``EMAIL_LINKS_UNAVAILABLE`` when the instance cannot send
+    such an email, which ``GET /system/instance`` already says; 429 ``EMAIL_RATE_LIMITED`` with ``Retry-After`` past the
+    limits per address and per identifier, or with the hourly budget spent. Neither depends on the accounts.
     """
     address = request.client.host if request.client else None
     try:
         await flows.admit_forgotten_password(address, body.identifier)
+    except flows.ForgottenPasswordHeldError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "FORGOT_PASSWORD_DISABLED", "message": "Password reset by email is not available yet: ask an administrator"}) from None
     except EmailUnavailableError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "EMAIL_UNAVAILABLE", "message": "This instance cannot send emails"}) from None
     except EmailLinksUnavailableError:
