@@ -480,10 +480,25 @@ describe('the tree: the colour gates', () => {
         expect(scan.sources, 'the scan reads what the walk lists').toEqual(sources);
     });
 
-    it('measures legacy classes in more than 100 files and literals in more than 20 (positive control)', () => {
-        const measures = [...scan.files.values()];
-        expect(measures.filter((measure) => measure.m1 > 0).length, 'm1: a pattern that matches nothing would pass the ratchet in silence').toBeGreaterThan(100);
-        expect(measures.filter((measure) => measure.m2.length > 0).length, 'm2: the same, for the literals').toBeGreaterThan(20);
+    it('measures each metric while the baseline still records it, with no floor on how much is left (positive control)', () => {
+        // "Nothing rose" is also what a pattern or a filter that suddenly matches nothing would report: the ratchet would
+        // pass in silence. How much legacy colour is left is not the question: it falls wave after wave, down to zero at
+        // the clean-up, so there is no floor here and no ratio to the baseline (one lot legitimately moved 95% of the
+        // literals into lib/theme/ between two tightenings). The clean-up empties the baseline in the same change: while
+        // the baseline still records a metric, a scan that measures none of it is blind, not finished.
+        const recordedTotals = totalsOf(readBaseline().files.values());
+        const scannedTotals = totalsOf(scan.files.values());
+        const metrics = [
+            ['m1', 'legacy colour classes'],
+            ['m2', 'colour literals'],
+        ] as const;
+        const blind = metrics
+            .filter(([metric]) => recordedTotals[metric] > 0 && !(scannedTotals[metric] > 0))
+            .map(
+                ([metric, what]) =>
+                    `${metric}, the ${what}: a scan that measures ${scannedTotals[metric]} while the baseline still records ${recordedTotals[metric]} is a broken pattern or filter of frontend/scripts/theme/theme-roles.mjs, not a finished migration: the clean-up empties the baseline in the same change.`,
+            );
+        expect(blind, 'the scan is blind to a metric the baseline still records').toEqual([]);
     });
 
     it('R1–R4: no total and no file rose above src/themeRoles.baseline.tsv', () => {
