@@ -24,7 +24,17 @@
  *     `AxiosError`) as in an `ApiError` — and `notify` records it (`email.test.sent` with the language,
  *     `email.test.failed` with the failure) without a toast, since the outcome is on screen; a new attempt takes the
  *     last outcome down while it runs;
- *   - the outcome is worded from state: a change of language rewords it, without a new request.
+ *   - the outcome is worded from state: a change of language rewords it, without a new request;
+ *   - the base of the emailed links (lot E3p, developer decision 45), shown and checked from this browser only while
+ *     email is ready and `links.ready` (off or invalid, links ready or not, there is no `email-links` block, and no
+ *     nonce is asked for nor any probe sent): `email-links` (`data-base`, `data-busy` and `aria-busy` true while the
+ *     check runs — the tab's own `data-busy` is not touched by it), `email-links-base` naming the base, and
+ *     `email-links-probe` (`data-outcome`: `checking`, then the outcome) worded by its own key. One check per base, on
+ *     mount, through `probeEmailLinks(base, {pageProtocol: window.location.protocol, issueNonce: issueProbeNonce})`; a
+ *     status read again with the same base — after a test email — is not checked again, a new base is. Each outcome
+ *     landing is recorded (`email.links.checked` with the outcome, no toast); `email-links-recheck` is offered for the
+ *     four warning outcomes only and runs the check again. A check overtaken by a new base, by links gone from the
+ *     status, or by leaving the tab writes nothing and records nothing when it lands.
  *
  * Not pinned here: «an older read answered after a newer one does not overwrite it» (the generation counter of
  * `load()`). Two reads never overlap through the tab's surface: the mount read runs before there is a button to click,
@@ -32,10 +42,12 @@
  * request at a time» pins. The counter guards a state this surface cannot reach.
  *
  * Mocks, all owned here:
- *   - `./emailApi`: `fetchEmailStatus` and `sendTestEmail` are fakes the test answers — with `EmailStatus` already
- *     normalized, its five keys present, as `fetchEmailStatus()` hands it over; deferreds where "in flight" is the
- *     subject. `readTestFailure` stays the real one, and a refusal is built as the client raises it: axios's own
- *     `AxiosError` carrying the response (as in `stores/app/auth.test.ts`), or an `ApiError`;
+ *   - `./emailApi`: `fetchEmailStatus`, `sendTestEmail` and `issueProbeNonce` are fakes the test answers — with
+ *     `EmailStatus` already normalized, its six keys present, as `fetchEmailStatus()` hands it over; deferreds where
+ *     "in flight" is the subject. `readTestFailure` stays the real one, and a refusal is built as the client raises it:
+ *     axios's own `AxiosError` carrying the response (as in `stores/app/auth.test.ts`), or an `ApiError`;
+ *   - `./emailLinks`: `probeEmailLinks` is a fake the test answers, deferred where the running check is the subject; a
+ *     call no test expected rejects, loudly (the check itself is pinned by `emailLinks.test.ts`);
  *   - `$lib/i18n`: `_` is a writable translator owned by this file, answering `[<language>] <key> {<values>}`: an
  *     assertion names the key and the values the tab chose, never a sentence of the catalogue, and setting the store's
  *     translator is a change of language;
@@ -67,6 +79,8 @@ const fake = vi.hoisted(() => {
         translatorFor,
         fetchEmailStatus: vi.fn().mockName('fetchEmailStatus'),
         sendTestEmail: vi.fn().mockName('sendTestEmail'),
+        issueProbeNonce: vi.fn().mockName('issueProbeNonce'),
+        probeEmailLinks: vi.fn().mockName('probeEmailLinks'),
         notify: vi.fn().mockName('notify'),
     };
 });
@@ -75,7 +89,9 @@ vi.mock('./emailApi', async (importOriginal) => ({
     ...(await importOriginal<typeof import('./emailApi')>()),
     fetchEmailStatus: fake.fetchEmailStatus,
     sendTestEmail: fake.sendTestEmail,
+    issueProbeNonce: fake.issueProbeNonce,
 }));
+vi.mock('./emailLinks', () => ({probeEmailLinks: fake.probeEmailLinks}));
 vi.mock('$lib/i18n', async () => {
     const {writable} = await import('svelte/store');
     return {_: writable(fake.translatorFor('en'))};
@@ -89,7 +105,8 @@ vi.mock('$lib/stores/app/language', async () => {
 import EmailSettingsTab from './EmailSettingsTab.svelte';
 import {_} from '$lib/i18n';
 import {ApiError} from '$lib/api';
-import type {EmailCheck, EmailStatus, EmailTestResult} from './emailApi';
+import type {EmailCheck, EmailLinks, EmailStatus, EmailTestResult} from './emailApi';
+import type {LinksOutcome} from './emailLinks';
 
 // --- The translator ------------------------------------------------------------------------------------------------
 
@@ -103,27 +120,38 @@ function say(key: string, values?: Record<string, unknown>, language = 'en'): st
     return fake.translatorFor(language)(key, values ? {values} : undefined);
 }
 
-// --- Fixtures: EmailStatus as fetchEmailStatus() hands it over, normalized, its five keys present --------------------
+// --- Fixtures: EmailStatus as fetchEmailStatus() hands it over, normalized, its six keys present ---------------------
 
 const SMTP_OFF: EmailCheck = {check_id: 'email.smtp', severity: 'ok', i18n_key: 'email.checks.smtp.off', detail: {}};
 const SMTP_OK: EmailCheck = {check_id: 'email.smtp', severity: 'ok', i18n_key: 'email.checks.smtp.ok', detail: {}};
 const ENCRYPTION_OK: EmailCheck = {check_id: 'email.smtp_encryption', severity: 'ok', i18n_key: 'email.checks.smtpEncryption.ok', detail: {}};
 const ENCRYPTION_PLAIN: EmailCheck = {check_id: 'email.smtp_encryption', severity: 'warning', i18n_key: 'email.checks.smtpEncryption.plain', detail: {}};
 
+/** The base of the emailed links, and another one a status read again may bring. */
+const PUBLIC_URL = 'https://folio.example.com:8443/app';
+const OTHER_PUBLIC_URL = 'https://folio.example.org';
+/** `links` while LIBREFOLIO_PUBLIC_URL is unset: emails carry no link, and there is nothing to check — every fixture's default. */
+const LINKS_MISSING: EmailLinks = {ready: false, base: null, problem: 'PUBLIC_URL_MISSING'};
+const LINKS_INVALID: EmailLinks = {ready: false, base: null, problem: 'PUBLIC_URL_INVALID'};
+
+function linksReady(base: string = PUBLIC_URL): EmailLinks {
+    return {ready: true, base, problem: null};
+}
+
 function smtpInvalid(problem: string, variable: string): EmailCheck {
     return {check_id: 'email.smtp', severity: 'error', i18n_key: 'email.checks.smtp.invalid', detail: {problem, variable}};
 }
 
-function offStatus(): EmailStatus {
-    return {state: 'off', problem: null, variable: null, checks: [SMTP_OFF, ENCRYPTION_OK], budget: null};
+function offStatus(links: EmailLinks = LINKS_MISSING): EmailStatus {
+    return {state: 'off', problem: null, variable: null, checks: [SMTP_OFF, ENCRYPTION_OK], budget: null, links};
 }
 
-function invalidStatus(problem: string | null, variable: string | null): EmailStatus {
-    return {state: 'invalid', problem, variable, checks: [smtpInvalid(problem ?? '', variable ?? ''), ENCRYPTION_OK], budget: null};
+function invalidStatus(problem: string | null, variable: string | null, links: EmailLinks = LINKS_MISSING): EmailStatus {
+    return {state: 'invalid', problem, variable, checks: [smtpInvalid(problem ?? '', variable ?? ''), ENCRYPTION_OK], budget: null, links};
 }
 
-function readyStatus(remaining: number, {max = 20, retryAfterSeconds = 0, checks = [SMTP_OK, ENCRYPTION_OK]}: {max?: number; retryAfterSeconds?: number; checks?: EmailCheck[]} = {}): EmailStatus {
-    return {state: 'ready', problem: null, variable: null, checks, budget: {max_per_hour: max, remaining, retry_after_seconds: retryAfterSeconds}};
+function readyStatus(remaining: number, {max = 20, retryAfterSeconds = 0, checks = [SMTP_OK, ENCRYPTION_OK], links = LINKS_MISSING}: {max?: number; retryAfterSeconds?: number; checks?: EmailCheck[]; links?: EmailLinks} = {}): EmailStatus {
+    return {state: 'ready', problem: null, variable: null, checks, budget: {max_per_hour: max, remaining, retry_after_seconds: retryAfterSeconds}, links};
 }
 
 const SENT: EmailTestResult = {language: 'it', message: 'Test email sent'};
@@ -213,6 +241,10 @@ beforeEach(() => {
     fake.fetchEmailStatus.mockReset();
     fake.sendTestEmail.mockReset();
     fake.notify.mockReset();
+    fake.issueProbeNonce.mockReset();
+    fake.probeEmailLinks.mockReset();
+    // A check no test asked for rejects, and its rejection is unhandled: loud, never a silent default answer.
+    fake.probeEmailLinks.mockImplementation(() => Promise.reject(new Error('probeEmailLinks: this test expects no check of the links’ base')));
     translator.set(fake.translatorFor('en'));
 });
 
@@ -624,5 +656,222 @@ describe('EmailSettingsTab — the test email', () => {
         expect(text(screen.getByTestId('email-state-badge')), 'the rest of the tab follows too').toBe(say('email.state.ready', undefined, 'it'));
         expect(fake.sendTestEmail, 'a new wording is not a new attempt').toHaveBeenCalledTimes(1);
         expect(fake.fetchEmailStatus, 'nor a new read').toHaveBeenCalledTimes(2);
+    });
+});
+
+// =====================================================================================================================
+/** The five outcomes of a check of the links' base, and whether each is worth a second look. */
+const LINKS_OUTCOMES: Array<{outcome: LinksOutcome; warns: boolean}> = [
+    {outcome: 'match', warns: false},
+    {outcome: 'otherInstance', warns: true},
+    {outcome: 'unreachable', warns: true},
+    {outcome: 'insecure', warns: true},
+    {outcome: 'invalid', warns: true},
+];
+
+const linksBlock = () => screen.getByTestId('email-links');
+const probeLine = () => screen.getByTestId('email-links-probe');
+
+/** The `email.links.checked` events recorded so far, their details in order. */
+function linksChecked(): unknown[] {
+    return fake.notify.mock.calls.filter(([event]) => event.name === 'email.links.checked').map(([event]) => event.detail);
+}
+
+describe('EmailSettingsTab — the base of the emailed links, checked from this browser (lot E3p)', () => {
+    it.each([
+        {label: 'off', status: () => offStatus()},
+        {label: 'off, with links ready on the server', status: () => offStatus(linksReady())},
+        {label: 'invalid', status: () => invalidStatus('SMTP_PORT_INVALID', 'LIBREFOLIO_SMTP_PORT')},
+        {label: 'invalid, with links ready on the server', status: () => invalidStatus('SMTP_PORT_INVALID', 'LIBREFOLIO_SMTP_PORT', linksReady())},
+        {label: 'ready, links missing', status: () => readyStatus(17)},
+        {label: 'ready, links invalid', status: () => readyStatus(17, {links: LINKS_INVALID})},
+    ])('ETB-01: $label — no base shown and no check: no nonce asked for, no probe sent', async ({status}) => {
+        fake.fetchEmailStatus.mockResolvedValueOnce(status());
+        await mount();
+        flushSync();
+
+        expect(screen.getByTestId('email-state'), 'premise: the state is drawn').toBeInTheDocument();
+        expect(screen.queryByTestId('email-links')).toBeNull();
+        expect(fake.probeEmailLinks).not.toHaveBeenCalled();
+        expect(fake.issueProbeNonce).not.toHaveBeenCalled();
+        expect(linksChecked()).toEqual([]);
+    });
+
+    it('ETB-02: links ready — one check on mount, of the base, with this page’s protocol and this instance’s nonce; the base shown; checking, then the outcome', async () => {
+        const check = deferred<LinksOutcome>();
+        fake.probeEmailLinks.mockReturnValueOnce(check.promise);
+        fake.fetchEmailStatus.mockResolvedValueOnce(readyStatus(17, {links: linksReady()}));
+        await mount();
+        await waitFor(() => expect(probeLine()).toHaveAttribute('data-outcome', 'checking'));
+
+        expect(fake.probeEmailLinks).toHaveBeenCalledTimes(1);
+        const [base, options] = fake.probeEmailLinks.mock.calls[0];
+        expect(base).toBe(PUBLIC_URL);
+        expect(options.pageProtocol, 'the protocol of the page the administrator is on').toBe(window.location.protocol);
+        expect(options.issueNonce, 'the nonce of this instance').toBe(fake.issueProbeNonce);
+        expect(linksBlock()).toHaveAttribute('data-base', PUBLIC_URL);
+        expect(text(screen.getByTestId('email-links-base'))).toBe(say('email.links.base', {base: PUBLIC_URL}));
+        expect(probeLine()).toHaveAttribute('data-outcome', 'checking');
+        expect(text(probeLine())).toBe(say('email.links.probe.checking'));
+        expect(linksBlock()).toHaveAttribute('data-busy', 'true');
+        expect(linksBlock()).toHaveAttribute('aria-busy', 'true');
+        expect(tab(), 'the check is not a request of the tab: its own data-busy is untouched').toHaveAttribute('data-busy', 'false');
+        expect(screen.queryByTestId('email-links-recheck'), 'nothing to check again while it runs').toBeNull();
+        expect(linksChecked(), 'nothing recorded before the outcome').toEqual([]);
+
+        check.resolve('match');
+
+        await waitFor(() => expect(probeLine()).toHaveAttribute('data-outcome', 'match'));
+        expect(text(probeLine())).toBe(say('email.links.probe.match'));
+        expect(linksBlock()).toHaveAttribute('data-busy', 'false');
+        expect(linksBlock()).toHaveAttribute('aria-busy', 'false');
+        expect(linksChecked(), 'the outcome recorded, with no toast').toEqual([{outcome: 'match'}]);
+        expect(fake.probeEmailLinks, 'one check for one base').toHaveBeenCalledTimes(1);
+    });
+
+    it.each(LINKS_OUTCOMES)('ETB-03: the outcome $outcome — worded by its own key, recorded; «check again» offered exactly when it warns ($warns)', async ({outcome, warns}) => {
+        fake.probeEmailLinks.mockResolvedValueOnce(outcome);
+        fake.fetchEmailStatus.mockResolvedValueOnce(readyStatus(17, {links: linksReady()}));
+        await mount();
+
+        await waitFor(() => expect(probeLine()).toHaveAttribute('data-outcome', outcome));
+        expect(text(probeLine())).toBe(say(`email.links.probe.${outcome}`));
+        expect(linksBlock()).toHaveAttribute('data-busy', 'false');
+        expect(screen.queryByTestId('email-links-recheck') !== null, 'a second look for a warning, and only for one').toBe(warns);
+        expect(linksChecked()).toEqual([{outcome}]);
+    });
+
+    it('ETB-04: «check again» runs the check of the same base again: checking while it runs, then its own outcome, recorded; no status read', async () => {
+        const second = deferred<LinksOutcome>();
+        fake.probeEmailLinks.mockResolvedValueOnce('unreachable').mockReturnValueOnce(second.promise);
+        fake.fetchEmailStatus.mockResolvedValueOnce(readyStatus(17, {links: linksReady()}));
+        await mount();
+        await waitFor(() => expect(probeLine()).toHaveAttribute('data-outcome', 'unreachable'));
+
+        await fireEvent.click(screen.getByTestId('email-links-recheck'));
+
+        expect(fake.probeEmailLinks).toHaveBeenCalledTimes(2);
+        expect(fake.probeEmailLinks.mock.calls[1][0], 'the same base').toBe(PUBLIC_URL);
+        expect(probeLine()).toHaveAttribute('data-outcome', 'checking');
+        expect(linksBlock()).toHaveAttribute('data-busy', 'true');
+        expect(screen.queryByTestId('email-links-recheck'), 'no second click while it runs').toBeNull();
+
+        second.resolve('match');
+
+        await waitFor(() => expect(probeLine()).toHaveAttribute('data-outcome', 'match'));
+        expect(linksChecked()).toEqual([{outcome: 'unreachable'}, {outcome: 'match'}]);
+        expect(fake.fetchEmailStatus, 'checking again reads no status').toHaveBeenCalledTimes(1);
+    });
+
+    it('ETB-05: the status read again after a test email, with the same base, is not checked again: its outcome stays', async () => {
+        fake.probeEmailLinks.mockResolvedValueOnce('insecure');
+        fake.fetchEmailStatus.mockResolvedValueOnce(readyStatus(17, {links: linksReady()})).mockResolvedValueOnce(readyStatus(16, {links: linksReady()}));
+        fake.sendTestEmail.mockResolvedValueOnce(SENT);
+        await mount();
+        await waitFor(() => expect(probeLine()).toHaveAttribute('data-outcome', 'insecure'));
+
+        await fireEvent.click(testButton());
+        await waitFor(() => expect(fake.fetchEmailStatus).toHaveBeenCalledTimes(2));
+        await settled();
+        flushSync();
+
+        expect(screen.getByTestId('email-budget'), 'premise: the status read again is shown').toHaveAttribute('data-remaining', '16');
+        expect(fake.probeEmailLinks, 'one check for one base').toHaveBeenCalledTimes(1);
+        expect(probeLine()).toHaveAttribute('data-outcome', 'insecure');
+        expect(linksChecked()).toEqual([{outcome: 'insecure'}]);
+    });
+
+    it('ETB-06: a status read again with another base checks the new one', async () => {
+        fake.probeEmailLinks.mockResolvedValueOnce('match').mockResolvedValueOnce('otherInstance');
+        fake.fetchEmailStatus.mockResolvedValueOnce(readyStatus(17, {links: linksReady()})).mockResolvedValueOnce(readyStatus(16, {links: linksReady(OTHER_PUBLIC_URL)}));
+        fake.sendTestEmail.mockResolvedValueOnce(SENT);
+        await mount();
+        await waitFor(() => expect(probeLine()).toHaveAttribute('data-outcome', 'match'));
+
+        await fireEvent.click(testButton());
+        await waitFor(() => expect(probeLine()).toHaveAttribute('data-outcome', 'otherInstance'));
+
+        expect(fake.probeEmailLinks.mock.calls.map(([base]) => base)).toEqual([PUBLIC_URL, OTHER_PUBLIC_URL]);
+        expect(linksBlock()).toHaveAttribute('data-base', OTHER_PUBLIC_URL);
+        expect(text(screen.getByTestId('email-links-base'))).toBe(say('email.links.base', {base: OTHER_PUBLIC_URL}));
+        expect(linksChecked()).toEqual([{outcome: 'match'}, {outcome: 'otherInstance'}]);
+    });
+
+    it('ETB-07: a check overtaken by a new base writes nothing and records nothing when it lands; the new one does', async () => {
+        const first = deferred<LinksOutcome>();
+        const second = deferred<LinksOutcome>();
+        fake.probeEmailLinks.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+        fake.fetchEmailStatus.mockResolvedValueOnce(readyStatus(17, {links: linksReady()})).mockResolvedValueOnce(readyStatus(16, {links: linksReady(OTHER_PUBLIC_URL)}));
+        fake.sendTestEmail.mockResolvedValueOnce(SENT);
+        await mount();
+        await waitFor(() => expect(probeLine(), 'premise: the first check is running').toHaveAttribute('data-outcome', 'checking'));
+
+        await fireEvent.click(testButton());
+        await waitFor(() => expect(fake.probeEmailLinks).toHaveBeenCalledTimes(2));
+        await settled();
+
+        first.resolve('match');
+        // The tab awaited this promise before the test did: its continuation has run by the time this one resumes.
+        await first.promise;
+        flushSync();
+
+        expect(probeLine(), 'the overtaken answer writes nothing').toHaveAttribute('data-outcome', 'checking');
+        expect(linksBlock()).toHaveAttribute('data-base', OTHER_PUBLIC_URL);
+        expect(linksChecked(), 'nor is it recorded').toEqual([]);
+
+        second.resolve('otherInstance');
+
+        await waitFor(() => expect(probeLine()).toHaveAttribute('data-outcome', 'otherInstance'));
+        expect(linksChecked()).toEqual([{outcome: 'otherInstance'}]);
+    });
+
+    it('ETB-08: links gone from the status read again while a check runs: the block goes, and the answer, when it lands, records nothing', async () => {
+        const first = deferred<LinksOutcome>();
+        fake.probeEmailLinks.mockReturnValueOnce(first.promise);
+        fake.fetchEmailStatus.mockResolvedValueOnce(readyStatus(17, {links: linksReady()})).mockResolvedValueOnce(readyStatus(16));
+        fake.sendTestEmail.mockResolvedValueOnce(SENT);
+        await mount();
+
+        await fireEvent.click(testButton());
+        await waitFor(() => expect(fake.fetchEmailStatus).toHaveBeenCalledTimes(2));
+        await settled();
+        expect(screen.queryByTestId('email-links'), 'no base any more: no block').toBeNull();
+
+        first.resolve('match');
+        await first.promise;
+        flushSync();
+
+        expect(screen.queryByTestId('email-links')).toBeNull();
+        expect(linksChecked()).toEqual([]);
+        expect(fake.probeEmailLinks, 'and nothing checked again').toHaveBeenCalledTimes(1);
+    });
+
+    it('ETB-09: leaving the tab while a check runs: its answer, when it lands, records nothing', async () => {
+        const first = deferred<LinksOutcome>();
+        fake.probeEmailLinks.mockReturnValueOnce(first.promise);
+        fake.fetchEmailStatus.mockResolvedValueOnce(readyStatus(17, {links: linksReady()}));
+        await mount();
+        await waitFor(() => expect(probeLine(), 'premise: the check is running').toHaveAttribute('data-outcome', 'checking'));
+
+        cleanup();
+        first.resolve('match');
+        await first.promise;
+
+        expect(fake.notify).not.toHaveBeenCalled();
+    });
+
+    it('ETB-10: the base and the outcome are worded from state: a change of language rewords them, without a new check', async () => {
+        fake.probeEmailLinks.mockResolvedValueOnce('otherInstance');
+        fake.fetchEmailStatus.mockResolvedValueOnce(readyStatus(17, {links: linksReady()}));
+        await mount();
+        await waitFor(() => expect(probeLine()).toHaveAttribute('data-outcome', 'otherInstance'));
+
+        translator.set(fake.translatorFor('it'));
+        flushSync();
+
+        expect(text(probeLine())).toBe(say('email.links.probe.otherInstance', undefined, 'it'));
+        expect(text(screen.getByTestId('email-links-base'))).toBe(say('email.links.base', {base: PUBLIC_URL}, 'it'));
+        expect(text(screen.getByTestId('email-links-recheck'))).toBe(say('email.links.recheck', undefined, 'it'));
+        expect(fake.probeEmailLinks, 'a new wording is not a new check').toHaveBeenCalledTimes(1);
     });
 });

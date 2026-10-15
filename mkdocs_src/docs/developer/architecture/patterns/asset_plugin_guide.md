@@ -31,7 +31,9 @@ Paste this entire page into an LLM with the data source's API documentation and 
     Write a complete Python AssetSourceProvider implementation. Follow all conventions:
     @register_provider, FACurrentValue, FAHistoricalData, FAPricePoint, direct calls to
     synchronous provider clients (never an internal asyncio.to_thread), test_cases, and
-    test_search_query if applicable. LibreFolio's service layer supplies thread isolation.
+    test_search_query if applicable. An API key or any other secret is a plugin setting
+    (settings_fields, read with self.settings in the operations, never in __init__), never a
+    provider_params field. LibreFolio's service layer supplies thread isolation.
     ```
 
     After scaffolding, implement `get_current_value()` and `get_history_value()`, add test
@@ -91,7 +93,9 @@ Provider contracts are asynchronous, but the service layer treats provider imple
 isolation boundary. Every provider I/O operation is invoked through the canonical
 `assets.core._run_provider_in_thread()` helper. The helper starts a dedicated worker
 thread, creates a new event loop in that thread, runs the provider coroutine to completion, and
-enforces the caller's timeout.
+enforces the caller's timeout. Service code reaches it through `assets.core.call_provider()`, the
+one boundary of every provider call, on an instance from `configured_provider()`: the boundary first
+checks the provider's [settings](#settings), then keeps its secrets masked while the call runs.
 
 Consequently, a provider that wraps a synchronous SDK or HTTP client should call that client
 **directly** inside its `async def` method:
@@ -143,13 +147,15 @@ perform blocking I/O directly on the application's main event loop.
 |--------|---------|-------------|
 | `get_icon` | `None` | Provider icon URL for the UI |
 | `supports_history` | `True` | Set `False` for providers that only support current prices (e.g., web scrapers) |
-| `params_schema` | `[]` | List of field definitions for `provider_params`. Used by frontend to generate dynamic forms. Each field has a `key`, a `type` (`string`, `number`, `currency`, `select` with `options` / `option_labels`, or `ui_component` for a custom editor), `required` (shown with a red `*`), and optionally `default`, `placeholder`, a short `label` (the caption) and a `description` (the tooltip). The caption is the translation `assets.providerParams.<code>.label.<key>`, else `label`, else the raw `key` — declare a `label` so users do not see internal names; the tooltip is `assets.providerParams.<code>.description.<key>`, else `description`. Both translations live in the provider's own fragment: see [Plugin Folder and Translations](#plugin-folder). |
+| `params_schema` | `[]` | List of field definitions for `provider_params`. Used by frontend to generate dynamic forms. Each field has a `key`, a `type` (`string`, `number`, `currency`, `select` with `options` / `option_labels`, or `ui_component` for a custom editor), `required` (shown with a red `*`), and optionally `default`, `placeholder`, a short `label` (the caption) and a `description` (the tooltip). The caption is the translation `assets.providerParams.<code>.label.<key>`, else `label`, else the raw `key` — declare a `label` so users do not see internal names; the tooltip is `assets.providerParams.<code>.description.<key>`, else `description`. Both translations live in the provider's own fragment: see [Plugin Folder and Translations](#plugin-folder). The parameters belong to one asset and are stored in clear with it: never a secret there, see [Settings](#settings). |
 | `get_asset_url(identifier, type, params)` | `None` | Generate URL to the provider's page for this asset (e.g., Yahoo Finance quote page) |
 | `resolvable_url_domains` | `[]` | Domains this provider can turn a page URL back into a search-item for (opt-in). See [Asset Search & Link-Finder](../../backend/assets/search_link_finder.md). |
 | `resolve_url(url)` | `None` | Inverse of `get_asset_url`: open a provider page URL → return one search-item dict, a list of dicts, or `None`. Enables the last-resort external search stack. |
 | `accepted_identifier_types` | `[TICKER, ISIN]` | Input types accepted by this provider (shown in frontend dropdown) |
 | `fetch_asset_metadata(identifier, type, params)` | `None` | Fetch asset metadata (type, sector, identifiers) from the provider |
 | `provider_help_url` | `None` | URL to the provider's documentation page (served by the running instance) |
+| `settings_fields` | `()` | The values the provider needs from the instance or from each user: an API key, a region, a preference. Read with `self.settings` in the operations, never in `__init__`: see [Settings](#settings) |
+| `test_only` | `False` | `True` for a provider that exists for the tests: hidden from the provider list and from the settings catalogue |
 | `shutdown()` | no-op | Called at app teardown to clean up resources (close sessions, stop threads). Override if your provider holds persistent connections. |
 | `generate_static_url(path)` | — | Helper to build `/api/v1/uploads/plugin/asset/{path}` |
 
@@ -317,8 +323,10 @@ class MyProvider(AssetSourceProvider):
     @property
     def params_schema(self) -> list[dict]:
         """Optional: define fields for frontend dynamic form."""
+        # Per-asset parameters, stored in clear with the asset: never a secret here.
+        # An API key is a plugin setting (settings_fields): see Settings below.
         return [
-            {"key": "api_key", "type": "string", "required": True, "description": "API key for authentication"},
+            {"key": "exchange", "type": "string", "required": False, "label": "Exchange", "description": "Exchange to price the asset on"},
         ]
 
     def get_asset_url(self, identifier, identifier_type, provider_params=None) -> str | None:
@@ -381,9 +389,9 @@ registers `yfinance`. Its fragment holds the captions and tooltips of its `param
 today. Add the keys in the four languages, naming the folder with `--into`:
 
 ```bash
-./dev.py i18n add "assets.providerParams.my_provider.label.api_key" --en "API key" --it "Chiave API" --fr "Clé API" --es "Clave API" --into asset_source_providers/my_provider
-./dev.py i18n add "assets.providerParams.my_provider.description.api_key" --en "API key for authentication" --it "…" --fr "…" --es "…" --into asset_source_providers/my_provider
-./dev.py i18n where "assets.providerParams.my_provider.label.api_key"   # the file that holds the key
+./dev.py i18n add "assets.providerParams.my_provider.label.exchange" --en "Exchange" --it "Borsa" --fr "Place de cotation" --es "Bolsa" --into asset_source_providers/my_provider
+./dev.py i18n add "assets.providerParams.my_provider.description.exchange" --en "Exchange to price the asset on" --it "…" --fr "…" --es "…" --into asset_source_providers/my_provider
+./dev.py i18n where "assets.providerParams.my_provider.label.exchange"   # the file that holds the key
 ```
 
 Without `--into`, `add` refuses a new provider's first key, because the keys under
@@ -393,9 +401,51 @@ then keeps every key under the provider's space in its fragment
 
 ---
 
+## 🎛️ Settings {: #settings }
+
+A provider that needs an API key, a region or a user's preference declares it in `settings_fields`.
+The core resolves the values (environment variable, saved value, default), decrypts the secret ones
+and binds them to a new instance before each use; the provider reads them in its operations with
+`self.settings.get("key")` and `self.settings.secret("key")`:
+
+```python
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingScope, SettingType
+
+
+class MyProvider(AssetSourceProvider):
+    settings_fields = (
+        PluginSettingField(key="api_key", type=SettingType.STRING, scope=SettingScope.SYSTEM, secret=True, required=True, label="API key"),
+    )
+
+    async def get_current_value(self, identifier, identifier_type, provider_params=None) -> FACurrentValue:
+        api_key = self.settings.secret("api_key")  # never in __init__
+        ...
+```
+
+- **Never read settings in `__init__`.** The core binds them after the instance is created, so
+  `__init__` sees only the declared defaults and no secret. The same holds for the members the core
+  may call on an instance it did not configure: properties, `params_schema`, `get_asset_url()`,
+  `validate_params()`.
+- **Scopes.** A `system` field holds one value for the instance, saved by an administrator or set by
+  `LIBREFOLIO_PLUGIN_ASSET_<CODE>_<FIELD>`; a secret one may also keep, in `env`, the variable the
+  provider read its key from before it declared settings. A `user` field holds each user's own value,
+  which reaches only `search()`, `resolve_url()` and the probe: prices, history and metadata get the
+  instance's values only. Either kind can be secret.
+- **A secret is a setting, never a provider parameter**: `provider_params` are stored in clear with
+  the asset, shared by its users and returned by the asset API.
+- **A required field without a value** makes `call_provider()` answer `NOT_CONFIGURED` before any
+  I/O. Never return a secret, log it, or put it in a URL you log or in an exception message: masking
+  is only a safety net.
+
+The full contract (types, environment variables, secrets, caching, the API and the security model)
+is in [Plugin Settings](plugin_settings.md).
+
+---
+
 ## 🔗 Related Documentation
 
 - 🏗️ [Asset Architecture](../../backend/assets/architecture.md) — Provider interface, caching, refresh logic
 - 🔌 [Asset Providers](../../backend/assets/system_providers.md) — All providers (Yahoo Finance, JustETF, CSS Scraper, Scheduled Investment)
 - 📦 [Providers Overview](../../backend/assets/system_providers.md) — Summary table of all providers
 - 🔄 [Registry Pattern Overview](registry_pattern.md) — How the plugin system works
+- 🎛️ [Plugin Settings](plugin_settings.md) — Declared settings, secrets and the provider call boundary

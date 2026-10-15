@@ -35,16 +35,19 @@ LIBREFOLIO_PROFILE=managed
 
 Case and spaces around the value do not matter; any other value stops the server at startup.
 
-Today the profile changes two things:
+Today the profile changes three things:
 
 | | `selfhosted` | `managed` |
 | --- | --- | --- |
 | `GET /api/v1/system/instance` answers | `{"profile": "selfhosted"}` | `{"profile": "managed"}` |
 | A `JWT_SECRET` shorter than 32 characters | A warning in the startup log | The server does not start |
+| A plugin setting set by an environment variable | Listed read-only by `GET /api/v1/settings/plugins` | Not listed, and a save to it is refused as if it did not exist |
 
 - The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`,
   without signing in. The web app reads it when it starts.
 - The interface is the same in both profiles.
+- Plugin settings and their variables: see «Plugin Settings» in
+  [Environment Variables](configuration.md).
 
 ### 🔑 A Session Key of 32 Characters or More {: #managed-jwt-secret }
 

@@ -13,9 +13,11 @@ the budget, counted from the signal:
    at exit (after a SIGINT, ``asyncio.run`` waits up to 300 s for the threads of its executor). It logs what it found,
    terminates the children, saves the coverage data when a test run measures it, and calls ``os._exit(1)``.
 
-The watchdog wraps the handlers uvicorn installs, and only in the server's own process, on the main thread: the API
-tests run uvicorn in a thread of the pytest process, which no watchdog may end and whose children no step may
-terminate.
+The watchdog exists only in a process uvicorn serves from its main thread: it wraps uvicorn's own exit handler
+(``Server.handle_exit``), which still runs, and only a signal arms it, never a shutdown without one. Elsewhere nothing is
+installed, so nothing ends the process and no child is terminated: the API tests run uvicorn in a thread of the pytest
+process, and some tests run the lifespan itself in pytest's main thread. The shutdown steps still get a deadline there,
+counted from the start of the shutdown.
 """
 
 from __future__ import annotations
@@ -29,15 +31,13 @@ import threading
 import time
 from collections.abc import Callable
 from types import FrameType
-from typing import TYPE_CHECKING
 
 import psutil
+from uvicorn.server import Server as UvicornServer
 
 from backend.app.config.sleep_wake import DEFAULT_SHUTDOWN_TIMEOUT_SECONDS, SleepWakeConfigError, shutdown_drain_seconds, shutdown_timeout_seconds
 from backend.app.logging_config import get_logger
-
-if TYPE_CHECKING:
-    from backend.app.services.platform.lifecycle import Step
+from backend.app.services.platform import lifecycle
 
 logger = get_logger(__name__)
 
@@ -52,7 +52,6 @@ _reported: set[tuple[str, str]] = set()
 _reported_lock = threading.Lock()
 _state_lock = threading.Lock()
 _watchdog: ShutdownWatchdog | None = None
-_deadline: float | None = None
 
 
 def shutdown_budget_seconds() -> int:
@@ -66,15 +65,6 @@ def shutdown_budget_seconds() -> int:
         if first:
             logger.error("Shutdown budget setting cannot be used: the default applies", variable=exc.variable, code=exc.code, reason=str(exc), budget_seconds=DEFAULT_SHUTDOWN_TIMEOUT_SECONDS)
         return DEFAULT_SHUTDOWN_TIMEOUT_SECONDS
-
-
-def _lifecycle_current_step() -> str | None:
-    """The step the lifecycle is running, for the watchdog's report."""
-    try:
-        from backend.app.services.platform.lifecycle import current_step  # noqa: PLC0415 — until CP2b brings the module
-    except ImportError:
-        return None
-    return current_step()
 
 
 def is_resource_tracker(process: psutil.Process) -> bool:
@@ -156,7 +146,7 @@ class ShutdownWatchdog:
         clock: Callable[[], float] = time.monotonic,
         exit: Callable[[int], object] = os._exit,
         terminate_children: Callable[[float], object] = _kill_every_child,
-        current_step: Callable[[], str | None] = _lifecycle_current_step,
+        current_step: Callable[[], str | None] = lifecycle.current_step,
     ) -> None:
         if budget_seconds <= 0:
             raise ValueError("budget_seconds must be positive")
@@ -223,25 +213,30 @@ def _arming_handler(watchdog: ShutdownWatchdog, previous: Callable[[int, FrameTy
     return handler
 
 
-def install_shutdown_watchdog(*, budget_seconds: int | None = None) -> ShutdownWatchdog | None:
-    """Arm a watchdog at the first SIGTERM or SIGINT, wrapping the handlers in place (uvicorn's), which still run.
+def _is_uvicorn_exit_handler(handler: object) -> bool:
+    """Whether ``handler`` is the exit handler a uvicorn server installs while it serves: ``Server.handle_exit``."""
+    return isinstance(getattr(handler, "__self__", None), UvicornServer) and getattr(handler, "__name__", "") == "handle_exit"
 
-    Nothing with no limit (budget 0), off the main thread (a server in a thread of another process, as in the API
-    tests), or when no handler of the two signals can be wrapped. Returns the watchdog installed, or None.
+
+def install_shutdown_watchdog(*, budget_seconds: int | None = None) -> ShutdownWatchdog | None:
+    """Arm a watchdog at the first SIGTERM or SIGINT of a uvicorn server, wrapping uvicorn's exit handler, which still runs.
+
+    Only in a process uvicorn serves from its main thread: SIGTERM must be handled by uvicorn's ``Server.handle_exit``,
+    and SIGINT is wrapped too when uvicorn handles it. Nothing with no limit (budget 0), off the main thread (a server in
+    a thread of another process, as in the API tests) or under any other handler (a test running the lifespan in pytest's
+    main thread). Returns the watchdog installed, or None.
     """
     global _watchdog
     budget = shutdown_budget_seconds() if budget_seconds is None else budget_seconds
     if budget <= 0 or threading.current_thread() is not threading.main_thread():
         return None
+    if not _is_uvicorn_exit_handler(signal.getsignal(signal.SIGTERM)):
+        return None
     watchdog = ShutdownWatchdog(budget)
-    wrapped = False
     for signum in (signal.SIGTERM, signal.SIGINT):
         previous = signal.getsignal(signum)
-        if callable(previous):
+        if _is_uvicorn_exit_handler(previous):
             signal.signal(signum, _arming_handler(watchdog, previous))
-            wrapped = True
-    if not wrapped:
-        return None
     with _state_lock:
         _watchdog = watchdog
     logger.debug("Shutdown watchdog installed", budget_seconds=budget)
@@ -254,30 +249,27 @@ def current_shutdown_watchdog() -> ShutdownWatchdog | None:
 
 
 def reset_shutdown_budget_state() -> None:
-    """For tests: forget the installed watchdog and the fixed deadline. Signal handlers are left as they are."""
-    global _watchdog, _deadline
+    """For tests: forget the installed watchdog. Signal handlers are left as they are."""
+    global _watchdog
     with _state_lock:
         _watchdog = None
-        _deadline = None
 
 
 def shutdown_deadline(*, clock: Callable[[], float] = time.monotonic) -> float | None:
     """The deadline of the shutdown steps, absolute on the monotonic clock; None with no limit.
 
-    With a watchdog: its deadline less ``CLEANUP_MARGIN_SECONDS``, arming it when the shutdown did not come from a
-    signal. Without one: fixed at the first call, as now plus the budget less the drain, the same for every later call.
+    After a signal, the armed watchdog's deadline less ``CLEANUP_MARGIN_SECONDS``. Otherwise (a shutdown without a
+    signal, or no watchdog in this process) now plus the budget less uvicorn's drain share, counted afresh at each call:
+    the lifespan calls it once per shutdown. It never arms the watchdog, so a process that stops its app without a
+    signal (a test, a server that reached its request limit) is never ended by it.
     """
-    global _deadline
     watchdog = _watchdog
-    if watchdog is not None:
-        return watchdog.arm() - CLEANUP_MARGIN_SECONDS
+    if watchdog is not None and watchdog.deadline is not None:
+        return watchdog.deadline - CLEANUP_MARGIN_SECONDS
     budget = shutdown_budget_seconds()
     if budget == 0:
         return None
-    with _state_lock:
-        if _deadline is None:
-            _deadline = clock() + budget - (shutdown_drain_seconds(budget) or 0)
-        return _deadline
+    return clock() + budget - (shutdown_drain_seconds(budget) or 0)
 
 
 def _terminate_leftover_children() -> None:
@@ -288,8 +280,6 @@ def _terminate_leftover_children() -> None:
         logger.warning("Child processes killed at shutdown: they ignored the request to stop", pids=killed)
 
 
-def child_processes_step() -> Step:
-    """The last shutdown step: terminate the child processes still alive, in the server's own process only."""
-    from backend.app.services.platform.lifecycle import Step  # noqa: PLC0415 — until CP2b brings the module
-
-    return Step("child-processes", _terminate_leftover_children)
+def child_processes_step() -> lifecycle.Step:
+    """The last shutdown step: terminate the child processes still alive, only in a process uvicorn serves (a watchdog)."""
+    return lifecycle.Step("child-processes", _terminate_leftover_children)
