@@ -55,7 +55,7 @@ describe('buildClassificationParams', () => {
 // classification_params subfields on the wire. buildClassificationPatch is the
 // frontend half of that fix — it must diff previous vs. current per subfield
 // (omit unchanged, null only what actually cleared) so the backend's own
-// per-field shallow merge (see backend/app/services/asset_source.py
+// per-field shallow merge (see backend/app/services/assets/crud.py
 // patch_assets_bulk) receives exactly the intended keys.
 describe('buildClassificationPatch', () => {
     const full: ClassificationParams = {
