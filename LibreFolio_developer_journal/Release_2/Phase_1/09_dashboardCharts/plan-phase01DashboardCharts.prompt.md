@@ -42,6 +42,18 @@ quando decido il 31)».
 
 **Autorizzati: Y1 (taglio di `GrowthChart`) e Y2 (taglio di `DataTable`).** Gli altri lotti dopo.
 
+**Seconda autorizzazione (15/10, 18:36)**: parole del developer, alla lettera, inoltrate dal coordinatore, in risposta
+alla domanda sui lotti Y: «Sì, e d'ora in poi decidi tu l'avvio dei lotti di Y». Da allora l'avvio dei lotti lo decide
+il coordinatore.
+- **Ordine**:
+  1. Y8: I-01, I-03, 47-1, O-16; 48-1 solo con l'ok di J, chiesto direttamente;
+  2. Y7: C-38 e C-62, cioè le tabelle sul telefono (decisione 50). Tocca `DataTable`, che è nell'ondata W6: va
+     annunciato al coordinatore prima del codice;
+  3. Y3 e Y4b, dopo l'ingresso di DV;
+  4. Y4a, dopo FE4 e FE5a di X;
+  5. Y9, Y10 (decisione 49) e Y11 (decisione 48), dopo DV.
+- **Regole**: prima i rossi; un checkpoint FROZEN per lotto; le prove pesanti e la galleria si chiedono al coordinatore.
+
 ### 0.3 Decisioni del coordinatore sulle proposte dell'analisi (15/10)
 
 | # | Decisione |
@@ -81,6 +93,26 @@ Nessun annuncio aperto sul file; T lo converte più avanti, nell'ondata W5.
 
 Per Y2: annuncio al coordinatore quando ci arrivo. Il lotto C di R ha portato `DataTable` sui token `--lf-cmp-*`, e la
 E2E del Lab legge il token della sua intestazione.
+
+### 0.5 Decisioni del developer 48–50 (15/10, 18:2x–18:34, inoltrate dal coordinatore)
+
+- **48 · C-85 (Y11): niente badge e niente dati attenuati.**
+  - Quando una pagina aspetta il server (il cambio del periodo o un altro ricaricamento), il pulsante «Aggiorna» della
+    barra in cima diventa grigio e la sua icona gira, come se fosse stato premuto.
+  - Alla lettera: «la regola facciamo che è sempre far girare l'aggiorna nella top bar, che per altro dovrebbe essere
+    l'unico in pagina».
+  - Un pezzo che si ricarica da solo fa girare il pulsante della barra, non uno suo.
+  - I pulsanti «Aggiorna» dentro i pannelli (per esempio `RiskPanelHeader`) si verificano uno per uno: si propone di
+    toglierli, o si dice perché restano.
+  - Il PAC («Calcola») e il wizard d'import tengono i loro indicatori.
+  - Va armonizzato con «Aggiornamento in pausa» di Z1, che è un'etichetta e non il pulsante.
+- **49 · 54-1 (Y10): approvata la proposta di Y.**
+  - La liquidità negativa si disegna sotto lo zero, e l'asse va oltre il 100 % quando serve.
+  - Il tooltip mostra la riga negativa.
+  - Nella torta restano le quote positive, con la nota «liquidità negativa: −X».
+  - Il backend non tocca il totale.
+- **50 · Difetto 5 del PAC (Y7): prima la cura generale delle tabelle sul telefono (C-38).** Il layout del PAC da
+  telefono si decide dopo, se serve, insieme ad altre note del developer.
 
 ## 1. Stato reale (verificato sul codice a `23f6578f3`; identico a `1e9e567f7` nel perimetro)
 
@@ -354,11 +386,36 @@ Fatto quando:
 
 C-38 e C-62 dopo, in Y7, su `th-actions` e `resize-handle`, che restano facili da trovare.
 
-### Y3–Y13 — non autorizzati
+### Y8 — correzioni dei grafici [autorizzato, 15/10 18:36; in corso]
 
-Y3 FE6b; Y4 FE2a e FE2b; Y5 FE7 (dopo FE8a); Y6 FE3 (dopo FE8a); Y7 C-38 e C-62; Y8 I-01, I-03, 47-1, O-16, 48-1;
-Y9 K-15, C-34, C-15, K-13; Y10 54-1; Y11 C-85; Y12 U8 a/b; Y13 FE9–FE11. Dettagli nell'analisi del 15/10 (cartella di
-sessione) e nel §2; si scrivono qui quando partono.
+Ogni voce è verificata a `e424e8740`.
+
+| Voce | Stato verificato | Correzione | Test rosso (file già registrato) |
+|---|---|---|---|
+| I-01 | `aggregateSumSeries` (`charts/timeSeriesAggregation.ts:192-209`) somma anche i punti `missing` e copia `missing` dall'ultimo punto: un ultimo giorno mancante nasconde la somma degli altri. È latente: l'unico chiamante, `growthChartData.aggregateFlowMetric`, non imposta `missing` | sommare solo i punti presenti; il secchio è `missing` solo se lo sono tutti | `charts/__tests__/timeSeriesAggregation.test.ts` |
+| I-03 | il ripiego da `%` ad Abs è un controllo una tantum sulla vista ripristinata (`GrowthChart.svelte:129-139`, `:566-570`). Passando a un periodo o a un broker senza dati in `%`, il pulsante resta premuto e disabilitato (`:1356-1361`) | un `$effect` a ogni caricamento completato: ripiego ad Abs e ritorno al `%` quando i dati tornano, salvo una scelta esplicita di un altro modo nel frattempo | `dashboard/GrowthChart.test.ts` |
+| 47-1 | in compatto l'`interval` delle categorie si calcola su tutti i punti (`charts/responsiveXAxis.ts:273`), e i gestori di `dataZoom` (`CandlestickChart:252`, `LineChart:361`, `PriceChartFull:585`) non lo ricalcolano | `buildResponsiveXAxisPolicy` accetta `visibleCount`; a zoom fermo i tre grafici riapplicano l'`axisLabel` della finestra visibile, letta dall'evento e non con `getOption` a ogni passo | `charts/chartCoreHelpers.test.ts`, sezione `responsiveXAxis` |
+| O-16 | `LotGanttChart.svelte:706-707` concatena la quantità con «shares» o «shares open out of» | chiavi ICU `brokers.lots.tooltip.quantityClosed` e `quantityOpen` nelle 4 lingue, al posto di `shares` e `sharesOpenOutOf`; la riga viene da un aiuto puro in `lotGanttChartHelpers.ts`. Con la privacy accesa la forma è sempre `other`, così non rivela una quantità uguale a 1 | `brokers/lots/lotGanttChartHelpers.test.ts` |
+| 48-1 | il pulsante di `AiExportMenu.svelte:299` ha `gap-2 px-3`; i vicini dei dettagli asset, broker e FX hanno `gap-1.5 px-2.5`. Sulla Dashboard il vicino (`sync-button`, `+page.svelte:965`) ha `gap-2 px-3` | il pulsante del menu e il `sync-button` della Dashboard passano a `gap-1.5 px-2.5`. Ok di J (15/10, ~18:45): «make it yourself in Y8», solo quella riga | — (cosmetico; si vede nella galleria) |
+
+Passi:
+1. Rossi, a cura di `test-author`: file distinti, solo Vitest su file singolo.
+2. Correzioni, nell'ordine I-01, I-03, O-16 (chiavi con la skill `devpy-i18n`), 47-1, 48-1.
+3. Prove leggere:
+   - i rossi diventano verdi;
+   - gate: `moneyRenderSites`, `htmlInterpolation`, `themeRoles.gate`, audit i18n;
+   - svelte-check, knip, `theme-roles --check`.
+4. Con lo slot del coordinatore:
+   - E2E della Dashboard, del dettaglio broker (Gantt) e del dettaglio asset (assi sotto zoom);
+   - galleria filtrata su Dashboard, Brokers, Assets e FX, perché 48-1 cambia le barre.
+5. Documentazione, se cambia un contratto: l'asse sotto zoom in `charts.md`; tabelle della devWiki.
+6. Checkpoint FROZEN.
+
+### Y3–Y13 — da avviare nell'ordine del §0.2
+
+Y3 FE6b; Y4 FE2a e FE2b; Y5 FE7 (dopo FE8a); Y6 FE3 (dopo FE8a); Y7 C-38 e C-62; Y9 K-15, C-34, C-15, K-13; Y10 54-1;
+Y11 C-85; Y12 U8 a/b; Y13 FE9–FE11. I dettagli sono nell'analisi del 15/10 (cartella di sessione) e nel §2; si
+scrivono qui quando partono.
 
 ## 5. Test e specialisti
 
@@ -886,3 +943,155 @@ sessione) e nel §2; si scrivono qui quando partono.
 > **Fuori pista**: i file di DV stanno in due cartelle che si spostano: `AllocationHistoryChart` e `AllocationPanel` in
 > `dashboard` (Y3), `CorrelationHeatmap` in `risk` (Y4b). Per questo il coordinatore propone Y3 e Y4b dopo
 > l'ingresso di DV: nessuno deve unire a mano un file spostato.
+
+### Y8 — avvio e rossi ✅ (2026-10-15, 18:36–19:00 circa)
+
+> **Note implementazione**:
+> - **Base**: `e424e8740`, il merge senza conflitti di `dev_release2` (`bcd680868`: W E1b, J CP-4, E2 e decisioni) sul
+>   mio commit di journal `33620fb7e`.
+> - **Verifica**: le cinque voci sono state verificate sul codice di oggi; righe e correzioni sono in §4 Y8.
+> - **48-1**: ho chiesto l'ok direttamente a J, che ha risposto: «ok for 48-1, make it yourself in Y8: line 299 …
+>   nothing else», senza modifiche aperte né previste sul file.
+> - **Rossi**: affidati a `test-author`, un agente sui cinque file già registrati, solo Vitest su file singolo:
+>   `timeSeriesAggregation.test.ts`, `GrowthChart.test.ts`, `chartCoreHelpers.test.ts`, `LineChart.test.ts`
+>   (facoltativo), `lotGanttChartHelpers.test.ts`.
+>
+> **Fuori pista**: la skill `devpy-i18n` cambia il disegno di O-16.
+> - Regola 6: il `count` di un plurale ICU viene dalle cifre mostrate, mai da `Number(…)`, e un valore mascherato è
+>   plurale.
+> - Quindi c'è un gemello di `formatQuantity`, `quantityPluralCount` (`formatToParts` con le stesse opzioni: parte
+>   intera mostrata, più 0,5 se c'è una frazione), e `count` vale `NaN` quando è mascherato.
+> - Regola 5: i testi ICU devono differire fra le lingue, e i miei differiscono. Lo controlla il gate
+>   `catalogIcuLocale.test.ts`.
+>
+> **Esito dei rossi**: `test-author` li ha confermati tutti rossi sul codice di `e424e8740`, uno per voce, e ha
+> corretto due miei numeri: 365 punti a 800 px danno `interval` 33, e la finestra di prova è di 34 punti. Per
+> la regola 6 il caso che discrimina è 1.0004, non 1.0000001: `Intl.PluralRules` arrotonda a 3 decimali.
+
+### Y8 — passo 2, correzioni ✅ (2026-10-15, 19:00–19:35 circa)
+
+> **Note implementazione**:
+> - **I-01** (`charts/timeSeriesAggregation.ts`): `aggregateSumSeries` somma solo i punti presenti. Il secchio è
+>   `missing`, con valore 0, solo se lo sono tutti i suoi punti; altrimenti la chiave `missing` dell'ultimo punto non
+>   passa. `sourcePointCount` conta i punti presenti. `timeSeriesAggregation.test.ts` 47/47.
+> - **I-03** (`dashboard/GrowthChart.svelte`): `restoredPctUnchecked` diventa `pctFallback`. Un `$effect`, a ogni
+>   caricamento finito, ripiega da `%` ad Abs quando la storia non ha dati in `%`, e torna al `%` quando li ritrova,
+>   salvo una scelta esplicita nel frattempo (`selectMode` azzera il ripiego). Lo storage non cambia.
+>   `GrowthChart.test.ts` 165/165, tooltip 6/6.
+> - **O-16** (`brokers/lots/lotGanttChartHelpers.ts`, `LotGanttChart.svelte`): `quantityPluralCount` e
+>   `lotQuantityLine`. Le chiavi `brokers.lots.tooltip.quantityClosed` e `quantityOpen`, ICU nelle quattro lingue,
+>   sono state aggiunte con `dev.py i18n add`; `shares` e `sharesOpenOutOf` sono state tolte con `i18n remove -f`, e
+>   nessun lettore resta, nemmeno dinamico. `lotGanttChartHelpers.test.ts` 117/117, `catalogIcuLocale.test.ts` 17/17,
+>   `dev.py i18n check` verde (4482 chiavi, strict).
+> - **47-1** (`charts/responsiveXAxis.ts`, `LineChart`, `CandlestickChart`, `PriceChartFull`):
+>   - `visibleCount` entra nella politica; `visiblePointCountFromZoom` legge l'evento o la finestra `{start, end}`;
+>     `categoryAxisLabelPatch` porta sempre `interval: 'auto'`; `ZOOM_LABEL_SETTLE_MS` vale 120.
+>   - `LineChart` e `CandlestickChart` salvano l'ultimo evento di `dataZoom` e, a gesto fermo da 120 ms, uniscono la
+>     patch. Il ridimensionamento usa il conteggio visibile, e `cleanup()` ferma il timer.
+>   - `PriceChartFull` riusa il suo timer di 200 ms: se la risoluzione non cambia, ridistribuisce le etichette; il
+>     render passa il conteggio ricavato da `computeZoomWindow`.
+>   - `LineChart.test.ts` 5/5, con i 2 rossi diventati verdi; `PriceChartFull.test.ts` 36/36;
+>     `priceChartHelpers.test.ts` 148/148.
+> - **48-1**: `gap-2 px-3` → `gap-1.5 px-2.5` in `AiExportMenu.svelte:299` (con l'ok di J) e nel `sync-button` della
+>   Dashboard (`+page.svelte:965`). Nessun test fissa quelle classi.
+> - **Prettier** pulito sui file toccati; `theme-roles --check` pulito.
+>
+> **Fuori pista**:
+> - **Il lampo dopo un ridisegno**: con lo zoom attivo, un render completo di `LineChart` e `CandlestickChart` usava
+>   il passo di tutto l'asse finché, 120 ms dopo, l'evento dello zoom ripristinato lo correggeva. Sul dettaglio asset in
+>   candele, con il ciclo di 30 s, sarebbe stato un lampo ogni 30 s. Ora il render legge lo zoom salvato *prima* della
+>   politica e le passa `visibleCount`. La lettura con `getOption()` è salita di qualche riga: è sempre una per render.
+>   `PriceChartFull` lo faceva già, da `logicalRange`.
+> - **Il patto di adozione in `chartCoreHelpers.test.ts`**: 3 rossi, perché il ramo del ridimensionamento doveva
+>   contenere `axisLabel: policy.axisLabel` e ora unisce `categoryAxisLabelPatch(policy)`. Il cambio è voluto: senza
+>   `interval: 'auto'`, un passo vecchio sopravvive all'unione. Lo ripinna `test-author`, solo per i tre grafici zoomabili
+>   (gli altri cinque restano stretti), con nuovi pin sul cablaggio.
+> - **48-1 esteso al `sync-button`**: sulla Dashboard il vicino del pulsante dell'AI Export è il `sync-button`, con le
+>   stesse `gap-2 px-3`. Allineare solo il primo avrebbe creato uno scarto proprio lì. La pagina è nel mio perimetro;
+>   lo segnalo al checkpoint.
+> - **Prettier** ha riformattato la firma di `lotQuantityLine`, codice mio: in HEAD il file era pulito.
+
+### Y8 — passo 3, test e prove leggere ✅ (2026-10-15, 19:35–20:10 circa)
+
+> **Note implementazione**:
+> - **`test-author`, secondo e terzo giro** (solo `chartCoreHelpers.test.ts`, 277 → 287, tutti verdi):
+>   - il patto di adozione è ripinnato per i tre grafici zoomabili (`ZOOM_RELABEL_CHARTS`): il ramo del
+>     ridimensionamento unisce `categoryAxisLabelPatch(policy)`, e in quei file non resta un `axisLabel:
+>     policy.axisLabel`. Gli altri cinque grafici tengono il pin stretto;
+>   - un `describe` nuovo fissa il cablaggio: evento → `scheduleZoomedAxisLabels` → timer →
+>     `applyZoomedAxisLabels`; il conteggio visibile nel ridimensionamento e nel render; l'ordine «zoom salvato →
+>     politica → `setOption(option, true)` → ripristino», con la stessa condizione per il conteggio e il ripristino;
+>     nessun `getOption()` nelle funzioni dello zoom;
+>   - unità di `categoryAxisLabelPatch`: compatto con passo (34 di 365, `interval` 2), compatto senza passo (4 di
+>     365 a 300 px, `'auto'`), largo (20 di 365, uguaglianza stretta con i valori ripristinati);
+>   - ECharts vero in SSR: dopo un'unione l'`interval` vale 33, poi 2, poi `'auto'`. I `null` restano `null`, che
+>     per ECharts significa il suo valore predefinito. Il controllo negativo: un'unione senza `interval` tiene 33. È la
+>     regola che giustifica la patch;
+>   - stretta anche la fetta `capture` del test di `CandlestickChart`, che dopo lo spostamento abbracciava tutta la
+>     costruzione dell'opzione;
+>   - morso provato su copie in memoria dei file veri: 30 espressioni regolari, ognuna rossa sulla sua mutazione;
+>     i controlli dei file intatti e del pin vecchio si comportano come previsto.
+> - **Vitest, un file alla volta** (`/tmp/libreFolio_y2_vitest.sh`, `nice -n 10`), 17 file:
+>   - `chartCoreHelpers` 287, `LineChart` 5, `PriceChartFull` 36, `priceChartHelpers` 148, `timeSeriesAggregation`
+>     47, `GrowthChart` 165, `GrowthChart.tooltip` 6, `lotGanttChartHelpers` 117, `aiExportUi` 6;
+>   - i gate: `catalogIcuLocale` 17, `moneyRenderSites` 6, `htmlSink` 7, `themeRoles` 36, `themeModeReads` 24,
+>     `themeComponentTokens` 18, `flagFont` 13;
+>   - `htmlInterpolation` 25/26: il rosso non è di Y8 (sotto).
+> - **Statiche**:
+>   - `npm run check` (svelte-check, `nice -n 15`): 0 errori, 0 avvisi;
+>   - `npm run lint:dead` (knip): gli stessi reperti di Y2, con un'esportazione inutilizzata in meno (`ApiError`,
+>     corretta da altri nella base). Le mie esportazioni nuove sono tutte usate;
+>   - Prettier `--check` pulito, `theme-roles --check` pulito, `git diff --check` pulito;
+>   - `dev.py api sync` senza cambi tracciati; `dev.py i18n check` verde (4482 chiavi, strict); `dev.py i18n
+>     audit`: le chiavi dei lotti sono usate, e i 2 «likely unused» sono di W (`events.deleteBlocked`,
+>     `events.deleteNotFound`).
+>
+> **Fuori pista**: `htmlInterpolation.gate.test.ts` › «finds no markup in any translation outside the reviewed
+> sanitized keys» è rosso sulla base, non per Y8.
+> - Il reperto: `email.problems.SMTP_FROM_INVALID` contiene «<» nelle quattro lingue («…such as LibreFolio
+>   <noreply@example.com>»).
+> - La chiave viene da `b33654f22` (E, «feat(email): add admin status and test email», 15/10 15:25), antenato di
+>   `e424e8740` e già in `dev_release2`. Il mio diff i18n tocca solo `brokers/`.
+> - Il gate legge il catalogo, quindi il rosso è deterministico, non instabile. Lo segnalo al coordinatore e non tocco
+>   la chiave: il file è di E.
+
+### Y8 — passo 5, documentazione ✅ (2026-10-15, 19:40–20:05 circa)
+
+> **Note implementazione**:
+> - **`docs-writer`**:
+>   - `user/dashboard/charts.en.md`, riga 11: la frase sul ripiego da `%` ad Abs dice che la scelta resta, e che `%`
+>     torna appena ci sono dati, salvo un'altra scelta nel frattempo (I-03);
+>   - `developer/frontend/components/charts.md`: il punto «Zoom» in «Responsive Date Axis» (47-1), la frase finale
+>     sul passaggio da compatto a largo, e il paragrafo dei sottomodi P&L, che descriveva ancora l'I-03 di prima.
+>     Quest'ultima è una correzione in più: la tengo, perché è esatta e il paragrafo era falso.
+> - **Mie correzioni al testo**:
+>   - «`pctFallback` remembers it» → «marks the fallback»: il ricordo è dello storage;
+>   - «a zoom handler never needs `getOption()`» → «never from `getOption()`»: `updateArrowRotations()` lo legge
+>     ancora a ogni passo (Y-8).
+> - **Traduzioni**: la sola frase cambiata, scritta a mano in it, fr ed es, con il lessico delle pagine sorelle
+>   («período» e «bróker» in spagnolo). Debito prima: nessuno (`translate --dry-run` «up-to-date»).
+>   `translate-stamp`, poi `--dry-run` di nuovo «up-to-date». `translate-validate --hide-localized`: nessuna riga
+>   per `dashboard/charts`; i 282 errori sono di altre pagine.
+> - **devWiki**: `problems/line-chart-axes-lost-the-day` (47-1 chiusa), `problems/toolbar-measurements-differed-by-
+>   the-scrollbar-gutter` (48-1 chiusa), `concepts/echarts-chart-gotchas` (la regola dell'unione), tre righe
+>   dell'indice e una voce del log. `check_source_paths.py`: 5 mancanti (8 occorrenze), come prima, tutti
+>   preesistenti. Grafo non aggiornato: graphify non c'è nel worktree.
+> - **Backlog, sezione Y**: Y-1 chiusa (al checkpoint), Y-8 nuova (`updateArrowRotations()` e `getOption()` a ogni
+>   passo dello zoom).
+> - **`mkdocs build` (strict) e `check-links`** (via del coordinatore, 20:10, con `nice -n 15` e carico sotto 70): build
+>   rc 0, 0 righe WARNING/ERROR, 3044 URL relativi risolti; `check-links` 96 link validi. Nessun file tracciato
+>   cambiato. Tra le due prove il carico è salito a 89, e lo script ha aspettato 3,5 minuti che tornasse sotto 70.
+
+### Y8 — checkpoint 🧊 FROZEN (2026-10-15, 20:18)
+
+> **Note implementazione**:
+> - **CHANGELOG**: tre righe in `[Unreleased]` › «🐛 Fixed», approvate dal coordinatore (20:10): I-03, 47-1, O-16.
+>   La seconda è corretta rispetto alla proposta: il difetto non era «on phones» soltanto. La politica compatta vale
+>   anche sotto i 24 px per punto, quindi un periodo lungo su desktop perdeva le etichette nello stesso modo.
+> - **48-1**: la riga di `AiExportMenu.svelte` è di J, e il suo ok è scritto: «ok for 48-1, make it yourself in Y8:
+>   line 299 … nothing else». Il coordinatore ha approvato anche il `sync-button`.
+> - **Stato**: HEAD `e424e8740`, nessun server, porta 6189 libera, `git diff --check` pulito. Il coordinatore fa il
+>   checkpoint e poi il merge di `dev_release2`, che porta anche la correzione di E per `htmlInterpolation`
+>   (`be7de95b6`).
+> - **Dopo**: le 8 E2E sulla revisione unita, con lo slot 2 dopo X; poi la galleria d'ingresso, chiesta dal
+>   coordinatore al coordinatore dei colori.
