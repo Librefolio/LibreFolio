@@ -88,8 +88,9 @@ for global keys) stay separate services for the same reason.
 
 Admins manage global settings from the **Admin** tab of Settings (`GlobalSettingsTab.svelte`:
 lock-gated, with the scheduler dialogs and `CachePanel`, writing through the bulk-update endpoint).
-Missing rows are seeded at every startup by the lifespan (`_initialize_global_settings()` in
-`main.py`); the same idempotent seeding is available from the CLI:
+Missing rows are seeded at every startup by the `global-settings` step of the lifespan
+(`_initialize_global_settings()` in `backend/app/services/platform/app_lifespan.py`); the same
+idempotent seeding is available from the CLI:
 
 ```bash
 ./dev.py user init-settings        # creates only missing keys (INSERT ... ON CONFLICT DO NOTHING)
@@ -210,12 +211,13 @@ explicit user choice always wins afterwards.
 instance before anyone signs in. The app reads it at startup: the `(app)` layout calls
 `instanceConfig.load()` when it mounts, before the auth check, and works with a self-hosted default
 until the server answers (see [Instance configuration](../frontend/state/app-state.md#instance-config)).
-Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and today it has two fields:
+Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and today it has three fields:
 
 | Field | Values | Source |
 |-------|--------|--------|
 | `profile` | `selfhosted`, an install run by its owner, or `managed`, an instance a hosting provider runs for its customers | `LIBREFOLIO_PROFILE`, a field of `Settings`, so it comes from `.env` or the environment like `PORT`. Default `selfhosted`; case and spaces around the value are ignored, and any other value stops the startup. Admin side: [Configuration](../../admin/configuration.md). |
 | `accounts` | `{registration_mode, registration_locked}` (`AccountsInstanceConfig`, `backend/app/schemas/auth.py`): the registration mode in force, `open`, `invite` or `disabled`, and whether `LIBREFOLIO_REGISTRATION` pins it | `effective_registration_mode()` (workstream A, `registration_service.py`): the variable, otherwise the `registration_mode` row, so the endpoint is `async`, with a database session. No count and no limit. Details: [Registration Modes](access_control.md#registration-modes). |
+| `email` | `{available}` (`EmailInstanceConfig`, `backend/app/schemas/email.py`): whether the instance can send emails now, an SMTP server set and every `LIBREFOLIO_SMTP_*` variable usable; never the configuration itself | `email_available()` (workstream E, `services/email/delivery.py`), run in a worker thread since it may read the password file. The field has a default, `available: false`, so it is optional in the schema. Details: [Email Service](../backend/email.md#instance-email). |
 
 The rule for a workstream that owns part of the public configuration:
 

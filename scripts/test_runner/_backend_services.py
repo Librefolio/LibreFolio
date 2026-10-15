@@ -411,6 +411,16 @@ def services_transaction(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "Transaction service tests", verbose=verbose)
 
 
+def services_transaction_cost_basis_rule(verbose: bool = False, test_names: list = None) -> bool:
+    """Test which transaction rows need a cost basis (read from TX_TYPE_METADATA) and when a batch holds them to it."""
+    print_section("Services: Transaction Cost Basis Rule")
+    print_info("Testing: backend/app/services/transactions/validation.py (_requires_cost_basis) + batch_costs.py (validate_cost_basis)")
+    print_info("Tests: the rule follows TX_TYPE_METADATA; creates without a cost refused on their row; updates held to it when they change type, quantity or cost; notes/tags edits of rows stored without a cost")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_cost_basis_rule.py", test_names)
+    return run_command(cmd, "Transaction cost basis rule tests", verbose=verbose)
+
+
 def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> bool:
     """Test that parsing off-loads to a process pool and degrades safely."""
     print_section("Services: BRIM Parse Pool")
@@ -496,11 +506,21 @@ def services_email_delivery(verbose: bool = False, test_names: list = None) -> b
 def services_email_checks(verbose: bool = False, test_names: list = None) -> bool:
     """Test the configuration checks of the optional e-mail (email.smtp, email.smtp_encryption)."""
     print_section("Services: E-mail Configuration Checks")
-    print_info("Testing: backend/app/services/email/checks.py")
-    print_info("Tests: off/ok/invalid with problem and variable, plain text local or public, EMAIL_CONFIG_CHECKS, no password, host, user or sender in a detail")
+    print_info("Testing: backend/app/services/email/checks.py, their place in backend/app/services/platform/config_audit.py")
+    print_info("Tests: off/ok/invalid with problem and variable, plain text local or public, EMAIL_CONFIG_CHECKS, no password, host, user or sender in a detail; the end of CONFIG_CHECKS, run_config_checks, either module imported first in a fresh interpreter, the startup log")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_checks.py", test_names)
     return run_command(cmd, "E-mail configuration check tests", verbose=verbose)
+
+
+def services_email_flows(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what an action of the application sends: the language of an account's emails, and the test email."""
+    print_section("Services: E-mail Flows")
+    print_info("Testing: backend/app/services/email/flows.py")
+    print_info("Tests: account language (its own, else default_language, else English; no settings row created), the test email to the account's own address in its language, nothing sent when e-mail is off or unusable, configuration read off the event loop")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_flows.py", test_names)
+    return run_command(cmd, "E-mail flow tests", verbose=verbose)
 
 
 def services_provider_cooldown(verbose: bool = False, test_names: list = None) -> bool:
@@ -511,6 +531,16 @@ def services_provider_cooldown(verbose: bool = False, test_names: list = None) -
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_cooldown.py", test_names)
     return run_command(cmd, "Provider cooldown tests", verbose=verbose)
+
+
+def services_shutdown_budget(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the shutdown time budget: the server exits within about 8 s of SIGTERM or SIGINT (decision 35)."""
+    print_section("Services: Shutdown Budget")
+    print_info("Testing: backend/app/services/platform/shutdown_budget.py, backend/app/config/sleep_wake.py, entrypoint.sh, the shutdown grace of the runner and of Playwright")
+    print_info("Tests: LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS and its 3/8 drain, UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN from entrypoint.sh, graces >= budget + 2 s, the watchdog (armed once, fired once, exit 1 on fakes), the SIGTERM/SIGINT wrappers, shutdown deadlines, children terminated then killed")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_shutdown_budget.py", test_names)
+    return run_command(cmd, "Shutdown budget tests", verbose=verbose)
 
 
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
@@ -880,6 +910,30 @@ def services_platform_readiness(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Instance readiness tests", verbose=verbose)
 
 
+def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the app's startup and shutdown steps and their runner, the middleware stack and the static site's routes."""
+    print_section("Services: App Lifecycle")
+    print_info("Testing: backend/app/services/platform/lifecycle.py, app_lifespan.py, middleware.py, static_site.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_app_lifecycle.py", test_names)
+    return run_command(cmd, "App lifecycle tests", verbose=verbose)
+
+
+def services_backup_archive(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance backup archive: layout, consistent database copy, manifest, build and check."""
+    print_section("Services: Instance Backup Archive")
+    print_info("Testing: backend/app/services/platform/instance_backup/paths.py, snapshot.py, manifest.py, archive.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_archive.py", test_names)
+    return run_command(cmd, "Instance backup archive tests", verbose=verbose)
+
+
+def services_backup_jobs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance backup jobs: background and foreground runs, one at a time, state on disk, retention."""
+    print_section("Services: Instance Backup Jobs")
+    print_info("Testing: backend/app/services/platform/instance_backup/jobs.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_jobs.py", test_names)
+    return run_command(cmd, "Instance backup jobs tests", verbose=verbose)
+
+
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
     """Test the credential mask of uvicorn's request lines: the rule, the filter on any record, uvicorn's HTTP and WebSocket records, configure_logging installing it once on each logger."""
     print_section("Services: Credentials in uvicorn's Request Lines")
@@ -1220,6 +1274,13 @@ Note: No backend server required.
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
+    add_test(
+        cat,
+        "transaction-cost-basis-rule",
+        services_transaction_cost_basis_rule,
+        name="Transaction Cost Basis Rule",
+        desc="Which rows need a cost basis, read from TX_TYPE_METADATA; creates refused without one; updates held to it only when they change type, quantity or cost; notes/tags edits of rows stored without a cost commit",
+    )
     add_test(cat, "broker", services_broker, name="Broker Service", desc="CRUD, initial deposits, summaries")
     add_test(cat, "user-profile", services_user_profile, name="User Profile", desc="Username/email update, validation")
     add_test(
@@ -1276,8 +1337,19 @@ Note: No backend server required.
         "email-checks",
         services_email_checks,
         name="E-mail Configuration Checks",
-        desc="email.smtp: off, ok, or error with problem and variable; email.smtp_encryption: ok unless plain text to a non-local host (warning); EMAIL_CONFIG_CHECKS; no password anywhere, no host, user or sender in a detail",
-        # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path.
+        desc="email.smtp: off, ok, or error with problem and variable; email.smtp_encryption: ok unless plain text to a non-local host (warning); EMAIL_CONFIG_CHECKS; no password anywhere, no host, user or sender in a detail; config_audit.CONFIG_CHECKS ends with them, run_config_checks carries their results, either module imports first in a fresh interpreter; the startup audit logs an error, a warning, nothing when off, never the password",
+        # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path; the
+        # startup audit runs in test mode with its data directory in tmp_path, and so do the fresh interpreters of the import order.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-flows",
+        services_email_flows,
+        name="E-mail Flows",
+        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server; LIBREFOLIO_SMTP_* removed then set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
         isolation="pure",
     )
     add_test(
@@ -1289,6 +1361,18 @@ Note: No backend server required.
         # PURE: no DB, no server; environment changed only through monkeypatch, process-local; the module instance
         # replaced by monkeypatch. The once-per-process log is read in a fresh interpreter of its own (sys.executable,
         # run in tmp_path, with a copy of this environment): no DB, no server there either.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "shutdown-budget",
+        services_shutdown_budget,
+        name="Shutdown Budget",
+        desc="config.sleep_wake: LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS (0 = no limit, ASCII digits 2–600, default 8) read at call time, the drain max(1, budget*3//8), uvicorn_drain_env (a value set by hand wins, never raises); entrypoint.sh exports UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN under sh and dash; the runner's and Playwright's plain grace >= budget + 2 s; shutdown_budget: shutdown_budget_seconds never raises and logs once per process, ShutdownWatchdog arms once (re-entrant, one daemon thread) and fires once (ERROR log of step, threads and children, terminate_children(0.5), coverage saved only if measuring, flush, exit 1 even after a failing step), SIGTERM/SIGINT wrappers arm then call uvicorn's handler, shutdown_deadline, terminate_child_processes (terminate, timeout, kill, recursive, keep)",
+        # PURE: no DB, no server, no lane port; environment only through monkeypatch; SIGTERM/SIGINT handlers saved and
+        # restored around each test, never delivered (the wrappers are called directly); os._exit and the default
+        # terminate_children replaced by recorders. Its subprocesses are `sh entrypoint.sh` runs and short-lived python
+        # children of its own (fresh interpreters in tmp_path included), all reaped.
         isolation="pure",
     )
     add_test(
@@ -1456,6 +1540,27 @@ Note: No backend server required.
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
     add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
+    add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
+    add_test(
+        cat,
+        "backup-archive",
+        services_backup_archive,
+        name="Instance Backup Archive",
+        desc="Layout and job ids, private folders never written through a link; VACUUM INTO copy as of one instant beside a WAL writer it never blocks, in rollback mode with nothing beside it; read-only description (integrity, foreign keys, rows, revision); manifest round trip, unknown fields ignored, UTC dates, database first, no entry twice, entry paths, every from_bytes code; an archive of the database and custom-uploads, broker_reports, scenario_catalog only (no logs, secrets, scheduler state, backups, -wal/-shm or post-migration files), the -wal's rows included, links, FIFOs and non-UTF-8 names left out and never followed, 0600, written as .part then renamed, space checked first; a file that fails before its entry starts left out with no descriptor left open, one that fails after it (read or write) stops the build (PartialEntryError); check_archive: missing, mismatched, unexpected and duplicated entries, archive_unreadable, manifest codes, reads bounded by the declared size",
+        # PURE: every data directory, database and archive is built under tmp_path; the concurrent WAL writer is a
+        # thread of this process on its own file. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-jobs",
+        services_backup_jobs,
+        name="Instance Backup Jobs",
+        desc="start_backup to done in the background, job_archive, delete_job; run_backup in the calling thread; busy for both while the run lock is held; a running state with a free lock read as backup_interrupted and written down; a failed build (backup_failed) and no space (backup_no_space) end with the work files removed and the lock free, the final state on disk before the lock is released; one-hour retention of finished, dead and unreadable jobs, never links or other entries, a running job holding the lock kept; job ids never paths; state round trip, unknown keys ignored, 50 left-out entries kept; the process-local lock without fcntl; a full disk or quota during the build (ENOSPC, EDQUOT, SQLITE_FULL, through causes and contexts) ends as backup_no_space, any other failure as backup_failed",
+        # PURE: data directories under tmp_path, every call given its data_dir (jobs.get_data_dir is a guard that fails
+        # the test); every background run ends, joined, inside its test. No lane DB, no server, no network.
+        isolation="pure",
+    )
     add_test(
         cat,
         "logging-access-filter",

@@ -797,6 +797,10 @@ Nota dev: mmm non sono convinto, tutto quello che descrivi è un problema solo s
   pagina di login.
 - Chi lo fa: i file personali e comuni Piattaforma, i file dei broker Import e transazioni, registrazione e impostazioni
   Account e accessi.
+- **Precisazioni approvate il 15/10 sera** (analisi di Piattaforma): un'immagine personale scelta come icona di un
+  oggetto condiviso (asset, broker) diventa comune, con un avviso; i file già caricati non si toccano, lo scopo si legge
+  al volo (immagini comuni, altri tipi personali), senza migrazione; un file personale di un altro utente risponde 404,
+  così non se ne conosce nemmeno l'esistenza. I report dei broker senza broker seguono la regola dei personali.
 
 #### 37. Le regole della password, uguali dappertutto — 🟢 (A-6)
 - **Oggi**: le regole della password (lunghezza, maiuscole, cifre…) sono scritte in quattro posti: l'indicatore di
@@ -1049,6 +1053,65 @@ il costo; il lotto N2 di W permette di correggere le sole note di quelle righe.
   come oggi.
 - **Per chi usa già LibreFolio**: solo chi ha cancellato o cancellerà un broker che riceveva trasferimenti, o chi divide
   una coppia.
+
+**Decisione (15/10)**: approvata la proposta di Numeri e analisi: «si va mantenuto lo stesso principio nel senso
+opposto». È lo stesso principio della 46 visto dall'altra parte: per il broker rimasto, la gamba che resta mantiene lo
+stesso senso di prima. Le unità uscite da A portano con sé il loro costo, quindi la gamba in uscita diventa una
+rettifica in uscita **con il costo** medio con cui le unità partono, calcolato dalla funzione del costo «Auto».
+Nell'esempio: Dashboard e lotti con guadagno 60, come la posizione. Vale per la cancellazione del broker che riceve,
+per le gambe in uscita già spaiate nei database e per «dividi la coppia». Serve la regola nuova nel calcolo FIFO dei
+lotti: un lotto di Numeri e analisi con il test rosso prima; la conversione delle cancellazioni e dei dati già presenti
+la fa Import e transazioni, sopra quella regola.
+
+### Cruscotto e grafici (analisi di Y, 15/10)
+
+#### 48. Un indicatore comune «Aggiornamento…» — 🟢 (C-85, D-Y10)
+- **Oggi**: è una tua richiesta del 14/10: «quando un pacchetto è in volo non si ha chiaro che si sta attendendo la
+  risposta». Ogni pagina che ricarica i dati fa a modo suo, e spesso non si capisce che sta aspettando il server.
+- **Proposta**: un indicatore unico: i dati vecchi restano visibili ma attenuati, con un piccolo badge «Aggiornamento…»
+  con la rotellina, e l'attributo di accessibilità `aria-busy`. Prima su Dashboard, pagina broker, Rischio e lotti.
+  Si armonizza con «Aggiornamento in pausa» dei prezzi dal vivo (Z1).
+- **Alternative**: scheletri grigi al posto dei dati; una barra sottile in cima alla pagina.
+- **Per chi usa già LibreFolio**: vede sempre i dati di prima mentre arrivano i nuovi.
+
+Nota dev: no non mi piace che i dati vengano sporcati o che compare un badge per ora farei che nelle pagine, quando si cambia il periodo temporale il pulsante di aggiorna diventa grigio e l'icona inizia a ruotare, come fosse stata premuta, e questa cosa in tutte le pagine che hanno l'aggiorna, tanto i dati di query sono sempre in cima.
+
+La vera domanda che ti faccio è, ci sono pagine in cui questo non è possibile e se si, in quelle cosa potremmo riusare per evitare di essere invasivi?
+
+**Decisione (15/10)**: respinta la proposta del badge; vale la regola del developer. Quando una pagina aspetta il
+server (cambio del periodo o altro ricaricamento), il pulsante «Aggiorna» della barra in cima alla pagina diventa grigio
+e la sua icona gira, come se fosse stato premuto. I dati restano come sono, senza attenuazione e senza badge. Quel
+pulsante dovrebbe essere l'unico «Aggiorna» della pagina: un pezzo che si ricarica da solo fa girare quello, non uno
+suo. Tutte le pagine con un periodo hanno già il pulsante in cima (Dashboard, broker, asset, cambi); i pulsanti
+«Aggiorna» dentro i pannelli (per esempio quelli del Rischio) si verificano uno per uno nel lotto di Y. Il PAC
+(«Calcola») e il wizard d'import tengono i loro indicatori.
+
+#### 49. La liquidità negativa nel grafico dell'allocazione — 🟡 (54-1, D-Y11)
+- **Oggi**: con un saldo di liquidità negativo, le quote positive sommano più di 100 %. Il grafico dell'allocazione nel
+  tempo ha l'asse fermo a 100 e taglia la cima; tooltip e torta scartano le voci negative, quindi la liquidità negativa
+  non compare da nessuna parte.
+- **Proposta**: mostrarla sotto lo zero. L'asse va oltre il 100 % quando serve e il tooltip ha una riga negativa; nella
+  torta restano le quote positive, con una nota «liquidità negativa: −X».
+- **Alternativa**: Numeri e analisi la toglie dal totale nel backend, e il grafico non la vede.
+- **Per chi usa già LibreFolio**: tocca solo chi ha liquidità negativa.
+nota dev: parliamo del grafico a torta vero? o cosa?
+
+**Decisione (15/10)**: approvata la proposta. Il grafico è soprattutto quello dell'allocazione nel tempo della
+Dashboard: la liquidità negativa si disegna sotto lo zero, l'asse va oltre il 100 % quando serve, il tooltip ha la riga
+negativa. Nella torta restano le quote positive, con la nota «liquidità negativa: −X». Il backend non la toglie dal
+totale: il debito resta visibile.
+
+#### 50. Il PAC sul telefono (difetto 5) — 🟢 (D-Y12)
+- **Oggi**: sul telefono la tabella dei target del PAC non sta nella larghezza: i nomi sono tagliati, gli input Target %
+  escono a destra, «Actions» sta sopra gli input. Le colonne insieme chiedono più di 500 px.
+- **Proposta**: prima la cura generale delle tabelle sul telefono (C-38, la colonna «Azioni» e quella di selezione
+  fisse in `DataTable`); se non basta, un layout da telefono apposta per il PAC.
+- **Per chi usa già LibreFolio**: niente.
+
+nota dev: intanto facciamo la cura generale, ho anche altre note di problemi che avevo preso, se non basta poi ne riparliamo e vedremo.
+
+**Decisione (15/10)**: approvata la cura generale delle tabelle sul telefono (C-38, lotto Y7). Il layout da telefono
+apposta per il PAC si decide dopo, se non basta, insieme alle altre note del developer.
 
 ## 3. Decisioni di coordinamento (già prese; correggibili)
 

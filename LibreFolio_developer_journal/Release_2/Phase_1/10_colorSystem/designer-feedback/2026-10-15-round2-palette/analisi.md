@@ -31,6 +31,12 @@
 | D-T19 | Header verde `#1B4334` anche su desktop, non solo su mobile, con la stessa famiglia di colori della barra laterale (§5) | Developer, 15/10 alle 15:50: «credo che la designer si aspetti che anche in desktop sia verde, non solo in mobile» |
 | D-T20 | Integrazione progressiva: T entra in `dev_release2` dopo la revisione di T-8 sull'anteprima, poi ogni gruppo di lotti delle ondate appena validato | Developer, 15/10 alle 15:55 |
 | D-T21 | L'aspetto di ogni ondata lo approva il developer (contact sheet e diff della galleria); la designer rivede tutto nel giro 3 | Developer, 15/10 alle 15:56: «si principalmente io, se lei è disponibile te lo faccio sapere» |
+| D-T22 | DV approvato con le 12 raccomandazioni: cambiano solo i colori proposti, non quelli scelti dall'utente (punto 6); le emoji dei settori solo dal backend, nessuna copia nel frontend (punto 8) | Developer, 15/10 alle 16:25: «Sì, approva DV così» |
+| D-T23 | Header neutro: `--lf-surface-header` `#EDF0EE` / `#111615`, controlli nell'aspetto di pagina, nessuna lineetta della barra laterale in scuro | Developer, 15/10, dopo l'anteprima di T-8 e il confronto `header-confronto.png` (opzione A) |
+| D-T19 | Superata da D-T23: l'header non è più verde | — |
+| D-T24 | `theme-color` resta verde `#1B4334` nei due temi, anche con l'header neutro | Developer, 15/10 |
+| D-T25 | Tema scuro: `--lf-danger` `#FF7A86` (era `#F84361`), 7,0:1 sulla card; `--lf-danger-solid` e `-hover` invariati | Developer, 15/10 alle 18:18, dai confronti sull'anteprima |
+| D-T26 | Tema scuro: `--lf-success` `#5ED69A` (era `#36D399`), 9,6:1 sulla card; allineati gli stati della barra verde | Developer, 15/10 alle 18:25, fra cinque candidati |
 | — | Codice delle sessioni coordinate: una o due lettere maiuscole, libere ovunque. Scritto in `.github/agents/` | Developer, 15/10: «per le lettere se 1 non basta usiamone 2» |
 
 ## 2. Bordo dei campi (N5): deciso, D-T18
