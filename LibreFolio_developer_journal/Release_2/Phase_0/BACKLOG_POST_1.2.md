@@ -1801,31 +1801,31 @@ plugin.
   - Modifica dal vivo di variabili CSS, colori dei fogli di stile e colori dei grafici.
   - Export JSON + Markdown con file e riga, per l'agente.
 
-  Dettagli: [progetto](55_colorSystem/design-designerLab.md); piano del figlio in `55_colorSystem/L-designerLab/`.
+  Dettagli: [progetto](../Phase_1/10_colorSystem/design-designerLab.md); piano del figlio in `../Phase_1/10_colorSystem/L-designerLab/`.
 - **L-2 · L'inventario Python legge il catalogo JS** — basso; L, 14/10 (decisione 4: una fonte sola, passaggio separato).
   Oggi le due implementazioni danno conteggi identici (verifica riga per riga) e devono restare allineate a mano.
-  Dettagli: [piano di L](55_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 1».
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 1».
 - **L-3 · Campionario dei componenti negli stati principali** — medio; L, 14/10 (decisione 6: dopo la v1).
-  Dettagli: [progetto](55_colorSystem/design-designerLab.md), §11.6.
+  Dettagli: [progetto](../Phase_1/10_colorSystem/design-designerLab.md), §11.6.
 - **L-4 · Salvataggio dell'export sul server di test** — basso; L, 14/10 (decisione 3: solo download nella v1).
-  Serve un endpoint solo in modalità test. Dettagli: [progetto](55_colorSystem/design-designerLab.md), §11.3.
+  Serve un endpoint solo in modalità test. Dettagli: [progetto](../Phase_1/10_colorSystem/design-designerLab.md), §11.3.
 - **L-5 · Contratto `themeRevision` con R** — basso; L, 14/10.
   - Se R-1 sostituisce gli osservatori dei grafici con uno store, il Lab può incrementarlo invece di riapplicare le opzioni.
   - Oggi la ri-applicazione dal vivo copre tutti i grafici.
 
-  Dettagli: [piano di L](55_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Correzioni al progetto» 1.
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Correzioni al progetto» 1.
 - **L-6 · Indice «visto dal vivo» per valore** — basso; L, 14/10.
   - Le schede dell'app non riferiscono al Lab quali valori del catalogo hanno davvero visto, nel CSSOM o in `setOption`.
   - La portata reale di L3 (colori derivati, palette predefinita di ECharts) resta dichiarata ma non misurata.
 
-  Dettagli: [piano di L](55_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Correzioni al progetto» 2.
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Correzioni al progetto» 2.
 - **L-7 · Accettazione dal vivo con la designer** — medio; L, 14/10: è la DoD esterna del passo 4, su
-  `scripts/visual_review/designer_live.sh`. Dettagli: [piano di L](55_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 4».
+  `scripts/visual_review/designer_live.sh`. Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 4».
 - **L-8 · File del componente dalla classe di scope** — basso; L, 14/10 (passo 5b).
   - Il selettore conosce la classe di scope Svelte dell'elemento puntato (`svelte-xxxx`), ma non il file `.svelte` a cui appartiene.
   - Oggi i candidati vengono da test id, regole e usi delle classi. Una mappa classe → file costruita al build, solo in debug, aggiungerebbe il file del componente come candidato.
 
-  Dettagli: [piano di L](55_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 5b».
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 5b».
 - **L-9 · Limiti noti del selettore di elementi** — basso; L, 14/10 (passo 5b).
   - Non si possono puntare gli elementi con `pointer-events: none`.
   - I colori dei grafici calcolati da funzioni (tooltip) restano al piano globale anche dentro una specializzazione.
@@ -1839,11 +1839,18 @@ plugin.
   - L1: oggi gli override stanno su `html`, quindi un sotto-albero `.dark`/`.light` che ridefinisce i ruoli tiene i suoi valori. Da scriverli anche sui selettori del token (`html.dark, .dark`). Oggi nessun sotto-albero lo fa.
   - Il selettore di elementi non ha bisogno di nulla: con `inline` la regola vincitrice legge già `var(--lf-…)`.
 
-  Dettagli: [piano di L](55_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 6».
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 6».
 - **L-11 · Interruttore «mostra i rimasti indietro»** — basso; proposta di T, 14/10.
   - Un contorno di debug, nel layer `lf-designer-lab` e sincronizzato tra le schede, sugli elementi con classi legacy (`-gray-`, `-slate-`, `bg-white`, `libre-`).
   - La lista va presa dal piano di migrazione di T.
   - Va fatto dopo il checkpoint dei passi 5b–6, quando T-1 avrà fissato i ruoli.
+- **L-12 · Il runner può ricostruire in release a metà giro** — medio; L, 14/10, dal rapporto di `test-author` E2E. **Proprietario: chi mantiene il runner** (`scripts/test_runner/_frontend_common.py`).
+  - Il server condiviso (`dev.py server --test`) costruisce il frontend in debug. Poi l'azione chiama `_ensure_frontend_build()` con `debug=False`, che ricostruisce **in release** se un file sotto `frontend/src` è più nuovo della build.
+  - Se un sorgente cambia in quel momento, il server serve una build senza Lab e gli E2E del Lab cadono a metà giro. Il problema riguarda anche chiunque modifichi `src` mentre gira una suite.
+  - Il 14/10 non è successo: ogni giro ha stampato «Frontend build is up to date».
+  - Correzione possibile: allineare `_ensure_frontend_build()` alla modalità del server di test, cioè debug, o farlo saltare quando il server di test è già partito.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 6».
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 

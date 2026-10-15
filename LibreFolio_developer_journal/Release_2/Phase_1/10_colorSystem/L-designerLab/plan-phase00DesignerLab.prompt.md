@@ -3,7 +3,7 @@
 > **Workstream L** del programma colori 55. Piano di dettaglio del figlio, aperto il 14/10/2026.
 > Indietro: progetto del coordinatore [`../design-designerLab.md`](../design-designerLab.md) e piano generale
 > [`../plan-phase00ColorSystemThemeLab.prompt.md`](../plan-phase00ColorSystemThemeLab.prompt.md).
-> Backlog: sezione «L · Designer Lab (55)» di [`../../BACKLOG_POST_1.2.md`](../../BACKLOG_POST_1.2.md).
+> Backlog: sezione «L · Designer Lab (55)» di [`../../../Phase_0/BACKLOG_POST_1.2.md`](../../../Phase_0/BACKLOG_POST_1.2.md).
 
 ## Identità della corsia
 
@@ -801,3 +801,30 @@ La prova avviene con `transition: none` iniettata, per non leggere un valore a m
 >   `frontend/build` resta in release; `dev.py server --test` lo ricostruisce in debug da solo.
 > - **Porta 6152 libera**, provata con `lsof`; nessun sotto-agente al lavoro.
 > - **Delta per il checkpoint:** 26 file tracciati modificati, 28 file nuovi (7.446 righe), `+1.964/−197` sui tracciati.
+
+## ✅ Checkpoint 2 committato (14/10/2026, 22:58)
+
+- **Commit del coordinatore:**
+  - `87ceceede` `feat(frontend): add Designer Lab element picker and tests`: 54 file, padre `150f2716a`;
+  - `bb87b0ab7`, merge di `dev_release2` (`afea11fe2`). Porta solo documenti: lo spostamento del programma colori in `Phase_1/10_colorSystem`, il materiale della designer, i piani della 1.3, `meta.json` del toolkit. Niente in `frontend/`, runner, MkDocs o `.github`;
+  - `93bf8c98a`, questo piano spostato qui.
+
+  **HEAD `93bf8c98a6669072b0d53b68864b3123904ed86c`**, worktree pulito, verificato. Il controllo a campione del coordinatore dà unit del Lab 15 file e 394 test verdi.
+- **Link dopo lo spostamento:**
+  - riga 6 del piano: `../../BACKLOG_POST_1.2.md` → `../../../Phase_0/BACKLOG_POST_1.2.md`;
+  - sezione L del backlog: 9 link da `55_colorSystem/…` → `../Phase_1/10_colorSystem/…`;
+  - verifica con uno script che risolve ogni link relativo: 0 rotti nel piano e nella sezione L.
+
+  Nel backlog restano link verso `55_colorSystem/` in altre sezioni, per esempio la 1857 di R (report 04): non sono miei e li segnalo al coordinatore.
+- **Backlog:** aggiunta **L-12**, il runner che può ricostruire in release a metà giro. Proprietario: chi mantiene il runner; richiesta del coordinatore.
+- **Gallery A/B (N4)**, decisioni del coordinatore:
+  - **ordine (a):** commit fatto. Domani G entra in `dev_release2` **prima** delle gallery di L, perché corregge il prezzo live di Yahoo che sporcava le catture. Il coordinatore aggiorna la base di L con G, poi A e B girano sullo stesso albero, senza cambi di base fra l'una e l'altra;
+  - **fascia oraria:** domani, dopo la misura finale di G, fissata dal coordinatore;
+  - **maschere e `stability.json`:** quelle della misura finale di G, sul `dev_release2` che contiene G; il percorso arriva dal coordinatore;
+  - **integrazione di L:** dopo la gallery A/B.
+- **Dipendenza del test L3 dai colori del grafico della crescita:** la segna il coordinatore nella lista di controllo dell'integrazione di R.
+
+**Stato:** in attesa. Prossime azioni, in ordine:
+1. gallery A/B al via del coordinatore, dopo il suo aggiornamento della base con G;
+2. L-10, quando T-1 è nella base, con la riga JS e la riga Python di `tw_custom_re` nello stesso cambio e la parità prima e dopo;
+3. L-11 al via.
