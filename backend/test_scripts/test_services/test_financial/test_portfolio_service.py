@@ -1485,6 +1485,181 @@ class TestTransactionImpliedDataQuality:
 
 
 # =============================================================================
+# TestTransactionImpliedGraceFromLastQuote — V-11 (decision 30, D-J15)
+# =============================================================================
+
+
+class TestTransactionImpliedGraceFromLastQuote:
+    """V-11: the 14-day grace of TRANSACTION_IMPLIED («valued at cost») counts from the last market quote.
+
+    Developer decision 30 (D-J15, 15/10), «si mi pare ottima!», on the proposal: the two weeks of
+    ``TRANSACTION_IMPLIED_GRACE_DAYS`` count from the asset's LAST MARKET QUOTE on or before the
+    valuation date; an asset that was never quoted counts from its first BUY/SELL, as today.
+
+    Why the anchor moves: ``AssetPriceSeries.resolve`` (``financial_math/price_marks.py``) lets a
+    trade of the day beat yesterday's quote, so an asset quoted every day and bought again on the
+    valuation date is valued at that trade's price, transaction-implied, on that day. Today the
+    grace counts from the first BUY/SELL (``PortfolioService.get_summary``, section «6. Data quality
+    report»), so that asset is reported without a market price as soon as its first purchase is
+    more than 14 days old.
+
+    R1 and R2 are red until the fix, R2 as a declared change; G1, G2 and G3 are guards, green
+    before and after it. Each test owns its user, broker, asset and quotes (flushed, then rolled
+    back by ``session``). The valuation date ``V`` is fixed: the grace is measured from
+    ``date_to``, not from the calendar. Before its verdict each case proves that on ``V`` the asset
+    is valued at a trade price (the engine's transaction-implied state), through its holding row,
+    and where its last market quote is: through the holding row of an earlier day when the asset
+    was already held (R1, G1), otherwise from the quotes the test seeded (R2, G2, G3). So the
+    verdict can only come from the grace. The list is read by asset id, from the
+    TRANSACTION_IMPLIED issue.
+    """
+
+    V = date(2025, 6, 30)
+
+    def _day(self, days_before_v: int) -> date:
+        return self.V - timedelta(days=days_before_v)
+
+    async def _seed_buy(self, session, broker: Broker, asset: Asset, *, days_before_v: int, quantity: str, unit_price: str) -> None:
+        """Fund ``broker`` and BUY ``quantity`` units of ``asset`` at ``unit_price`` EUR, on V − ``days_before_v``."""
+        day = self._day(days_before_v)
+        cost = Decimal(quantity) * Decimal(unit_price)
+        session.add_all(
+            [
+                Transaction(broker_id=broker.id, type=TransactionType.DEPOSIT, date=day, amount=cost, currency="EUR"),
+                Transaction(broker_id=broker.id, asset_id=asset.id, type=TransactionType.BUY, date=day, quantity=Decimal(quantity), amount=-cost, currency="EUR"),
+            ]
+        )
+        await session.flush()
+
+    async def _seed_quotes(self, session, asset: Asset, *, oldest: int, newest: int) -> None:
+        """One EUR market quote (close 100) per day, from V − ``oldest`` to V − ``newest``, both included."""
+        for days_before_v in range(newest, oldest + 1):
+            session.add(PriceHistory(asset_id=asset.id, date=self._day(days_before_v), open=Decimal("100"), high=Decimal("100"), low=Decimal("100"), close=Decimal("100"), volume=Decimal("1"), currency="EUR", source_plugin_key="manual_test"))
+        await session.flush()
+
+    async def _summary(self, session, user: User, date_to: date | None = None):
+        return await PortfolioService(session).get_summary(user_id=user.id, date_to=date_to or self.V)
+
+    @staticmethod
+    def _listed_ids(summary) -> set[int]:
+        """The summary's transaction-implied list: the asset ids of its TRANSACTION_IMPLIED issue (none without the issue)."""
+        issue = next((issue for issue in summary.data_quality.issues if issue.code == IssueCode.TRANSACTION_IMPLIED), None)
+        return set(issue.affected_asset_ids) if issue is not None else set()
+
+    @staticmethod
+    def _valuation(summary, asset_id: int) -> tuple[str | None, date | None]:
+        """(valuation source, reference date) of the asset's one open holding."""
+        rows = [holding for holding in summary.holdings if holding.asset_id == asset_id]
+        assert len(rows) == 1, f"expected exactly one open holding of asset {asset_id}, got {rows}"
+        return rows[0].valuation_source, rows[0].valuation_reference_date
+
+    @staticmethod
+    async def _assert_never_quoted(session, asset: Asset) -> None:
+        quotes = (await session.execute(select(PriceHistory.id).where(PriceHistory.asset_id == asset.id))).all()
+        assert quotes == [], f"precondition: asset {asset.id} must have no market quote, found {len(quotes)}"
+
+    async def _last_quote_date(self, session, asset: Asset) -> date | None:
+        """Date of the asset's last market quote on or before ``V``, from the quotes in the session (None without any)."""
+        days = (await session.execute(select(PriceHistory.date).where(PriceHistory.asset_id == asset.id, PriceHistory.date <= self.V))).scalars().all()
+        return max(days, default=None)
+
+    @pytest.mark.asyncio
+    async def test_r1_quoted_until_the_day_before_and_bought_again_is_not_listed(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """R1 — red until V-11. First BUY on V−30, a market quote every day up to V−1, another BUY on V.
+
+        On V the trade of the day beats the quote of V−1, so the asset is valued at cost on V. Today
+        the grace counts from the first BUY: 30 days > 14, listed. After the fix it counts from the
+        last quote, V−1: 1 day <= 14, not listed.
+        """
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_buy(session, broker, asset, days_before_v=30, quantity="10", unit_price="100")
+        await self._seed_quotes(session, asset, oldest=30, newest=1)
+        await self._seed_buy(session, broker, asset, days_before_v=0, quantity="5", unit_price="102")
+
+        day_before = await self._summary(session, test_user, date_to=self._day(1))
+        summary = await self._summary(session, test_user)
+
+        assert self._valuation(day_before, asset.id) == ("MARKET_PRICE", self._day(1)), "barrier: on V−1 the asset is valued at its quote of that day"
+        assert self._valuation(summary, asset.id) == ("LAST_TRADE_PRICE", self.V), "barrier: on V the trade of the day makes the asset transaction-implied"
+        assert asset.id not in self._listed_ids(summary), f"asset {asset.id} is listed as valued at cost on {self.V}, but its last market quote is from {self._day(1)}: the 14-day grace counts from the last quote (decision 30)"
+
+    @pytest.mark.asyncio
+    async def test_r2_feed_stopped_before_the_first_buy_is_listed_at_once(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """R2 — red until V-11, a DECLARED CHANGE. The asset has market quotes, the last one on V−100,
+        before its first BUY on V−5; on V it is valued at that trade's price, its most recent
+        observation.
+
+        Today the grace counts from the first BUY: 5 days <= 14, not listed. After the fix it counts
+        from the last quote, V−100: 100 days > 14, listed. This is the declared corner of the rule
+        (D-J15: «la grazia parte dall'ultima quotazione di mercato; senza quotazioni dal primo
+        BUY/SELL, come oggi»): an asset that has quotes is measured from its last quote, never from
+        its purchases. The declared change: a stopped feed is reported at once, instead of only 14
+        days after the asset's first purchase.
+
+        The asset is held only from V−5, so no holding row can show its last quote: that one is read
+        from the quotes the test seeded.
+        """
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_quotes(session, asset, oldest=110, newest=100)
+        await self._seed_buy(session, broker, asset, days_before_v=5, quantity="10", unit_price="100")
+        assert await self._last_quote_date(session, asset) == self._day(100), "precondition: the asset's last market quote on or before V is the one of V−100"
+
+        summary = await self._summary(session, test_user)
+
+        assert self._valuation(summary, asset.id) == ("LAST_TRADE_PRICE", self._day(5)), "barrier: on V the trade of V−5, more recent than the last quote, makes the asset transaction-implied"
+        assert asset.id in self._listed_ids(summary), f"asset {asset.id} is not listed as valued at cost on {self.V}, but its last market quote is from {self._day(100)}, 100 days before: the 14-day grace counts from the last quote, not from the first BUY of {self._day(5)} (decision 30)"
+
+    @pytest.mark.asyncio
+    async def test_g1_last_quote_twenty_days_before_is_listed(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """G1 — guard, listed before and after V-11. R1's history, but the quotes stop on V−20.
+
+        Before: 30 days from the first BUY > 14. After: 20 days from the last quote > 14.
+        """
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_buy(session, broker, asset, days_before_v=30, quantity="10", unit_price="100")
+        await self._seed_quotes(session, asset, oldest=30, newest=20)
+        await self._seed_buy(session, broker, asset, days_before_v=0, quantity="5", unit_price="102")
+
+        day_before = await self._summary(session, test_user, date_to=self._day(1))
+        summary = await self._summary(session, test_user)
+
+        assert self._valuation(day_before, asset.id) == ("MARKET_PRICE", self._day(20)), "barrier: on V−1 the last market quote is the one of V−20"
+        assert self._valuation(summary, asset.id) == ("LAST_TRADE_PRICE", self.V), "barrier: on V the trade of the day makes the asset transaction-implied"
+        assert asset.id in self._listed_ids(summary), f"asset {asset.id} is not listed as valued at cost on {self.V}, but its last market quote is from {self._day(20)}, 20 days before"
+
+    @pytest.mark.asyncio
+    async def test_g2_never_quoted_and_bought_ten_days_before_is_not_listed(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """G2 — guard, not listed before and after V-11. Never quoted: the grace counts from the
+        first BUY, on V−10, so 10 days <= 14."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_buy(session, broker, asset, days_before_v=10, quantity="10", unit_price="100")
+        await self._assert_never_quoted(session, asset)
+
+        summary = await self._summary(session, test_user)
+
+        assert self._valuation(summary, asset.id) == ("LAST_TRADE_PRICE", self._day(10)), "barrier: on V the asset is valued at the price of its only trade"
+        assert asset.id not in self._listed_ids(summary), f"asset {asset.id}, never quoted and first bought on {self._day(10)}, is listed as valued at cost within the 14-day grace"
+
+    @pytest.mark.asyncio
+    async def test_g3_never_quoted_and_bought_twenty_days_before_is_listed(self, session, test_user, broker_with_access, test_asset_with_provider):
+        """G3 — guard, listed before and after V-11. Never quoted: the grace counts from the first
+        BUY, on V−20, so 20 days > 14."""
+        broker, _ = broker_with_access
+        asset = test_asset_with_provider
+        await self._seed_buy(session, broker, asset, days_before_v=20, quantity="10", unit_price="100")
+        await self._assert_never_quoted(session, asset)
+
+        summary = await self._summary(session, test_user)
+
+        assert self._valuation(summary, asset.id) == ("LAST_TRADE_PRICE", self._day(20)), "barrier: on V the asset is valued at the price of its only trade"
+        assert asset.id in self._listed_ids(summary), f"asset {asset.id}, never quoted and first bought on {self._day(20)}, is not listed as valued at cost past the 14-day grace"
+
+
+# =============================================================================
 # TestStalePriceDataQuality
 # =============================================================================
 

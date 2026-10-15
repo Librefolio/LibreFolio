@@ -591,8 +591,9 @@ pronto, e il riordino frontend legato ai lotti B e C dei colori (la loro convers
   - run completa con coverage anche sotto carico (4 worker con un'altra corsia attiva,
     C-82);
   - galleria completa (con G, mai insieme a un'altra);
-  - upgrade da un DB della 1.2 con le migrazioni nuove; ripristino di un backup della 1.2
-    con la prova su copia;
+  - upgrade da un DB della 1.2 con le migrazioni nuove (il ripristino di uno zip fatto a mano è escluso dalla
+    decisione 42: dalla 1.2 si passa con l'aggiornamento sul posto); ripristino di un backup della 1.3 con la prova
+    su copia;
   - immagine Docker: avvio con Litestream spento e acceso, `docker stop` entro il limite;
   - revisione di sicurezza delle superfici nuove (agente `security-review`): inviti,
     reset, sola lettura, token di risveglio, backup, segreti dei plugin;

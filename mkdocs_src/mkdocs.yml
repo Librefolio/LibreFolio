@@ -310,6 +310,7 @@ plugins:
             "🐳 Deployment & Exposure": "🐳 Installazione ed esposizione"
             "⚙️ System Configuration": "⚙️ Configurazione di sistema"
             "Environment Variables": "Variabili d'ambiente"
+            "Email": "Email"
             "🧹 Maintenance & Operations": "🧹 Manutenzione e operazioni"
             "Dividend": "Dividendo"
             "Interest": "Interessi"
@@ -554,6 +555,7 @@ plugins:
             "🐳 Deployment & Exposure": "🐳 Installation et exposition"
             "⚙️ System Configuration": "⚙️ Configuration du système"
             "Environment Variables": "Variables d'environnement"
+            "Email": "E-mail"
             "🧹 Maintenance & Operations": "🧹 Maintenance et opérations"
             "Dividend": "Dividende"
             "Interest": "Intérêt"
@@ -798,6 +800,7 @@ plugins:
             "🐳 Deployment & Exposure": "🐳 Instalación y exposición"
             "⚙️ System Configuration": "⚙️ Configuración del sistema"
             "Environment Variables": "Variables de entorno"
+            "Email": "Correo"
             "🧹 Maintenance & Operations": "🧹 Mantenimiento y operaciones"
             "Dividend": "Dividendo"
             "Interest": "Interés"
@@ -962,6 +965,7 @@ nav:
           - Hosting for Others: admin/hosting_providers.md
       - ⚙️ System Configuration:
           - Environment Variables: admin/configuration.md
+          - Email: admin/email.md
           - Global Settings: admin/settings.md
       - 🧹 Maintenance & Operations:
           - CLI Admin Tools: admin/cli_tools.md
