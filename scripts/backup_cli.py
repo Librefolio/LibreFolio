@@ -332,7 +332,7 @@ def _print_stage_report(report) -> None:
             print(f"     - {migration.revision}: {migration.message}")
     if report.post_migration_fixes:
         print(f"   Post-migration fixes applied to the copy: {', '.join(report.post_migration_fixes)}")
-    changed = [f"{name} ({rows.before if rows.before is not None else '—'} → {rows.after if rows.after is not None else '—'})" for name, rows in report.tables.items() if rows.before != rows.after]
+    changed = [f"{name} ({rows.before if rows.before is not None else '—'} → {rows.after if rows.after is not None else '—'})" for name, rows in report.tables.items() if (rows.before or 0) != (rows.after or 0)]
     rows = sum(table.after or 0 for table in report.tables.values())
     print(f"   Rows: {rows} in {sum(1 for table in report.tables.values() if table.after is not None)} tables, {_human(report.database_size)}")
     if changed:

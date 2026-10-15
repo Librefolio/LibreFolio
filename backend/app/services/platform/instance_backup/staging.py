@@ -478,7 +478,9 @@ def _report(
 ) -> StagingReport:
     tables = {name: TableRows(before=before.tables.get(name), after=after.tables.get(name)) for name in sorted(set(before.tables) | set(after.tables))}
     warnings = []
-    if any(rows.before != rows.after for rows in tables.values()):
+    # A table the upgrade creates empty, or drops empty, changes no row: only counts that differ, an absent table
+    # counting as empty, make the warning.
+    if any((rows.before or 0) != (rows.after or 0) for rows in tables.values()):
         warnings.append("rows_changed")
     if after.foreign_key_violations > before.foreign_key_violations:
         warnings.append("foreign_key_violations_added")
