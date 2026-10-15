@@ -2326,6 +2326,27 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     spagnolo, quindi conviene farla prima di G-13, o accettare un riferimento nuovo.
 
   Dettagli: snapshot `g-new3-a/b` in `LibreFolio_visual_review`, `desktop/<lingua>/light/settings/email.png`.
+- **G-16 · Scatto delle esposizioni del PAC (`tools/pac-result-exposures`)** — medio; coordinatore, 15/10 (TD-1: il
+  developer approva dagli scatti le barre «ideale vs reale» sui colori delle categorie, D-T21).
+  - Fatto da test-author, nel perimetro di G. Lo scatto è nel test `PAC allocator result`, fra il piano e la prova: 8
+    scatti per progetto.
+    - `framePacExposures` apre la sezione, che è chiusa di default, e ne verifica l'esito. Aspetta mappe e barre sugli
+      stati pubblicati (`data-state`, `data-chart-ready`) e controlla le righe attese.
+    - Inquadratura su desktop: dal titolo, e lo schermo alto tiene la sezione intera.
+    - Inquadratura su mobile: il corpo finisce in fondo allo schermo, con le barre intere e sopra quanto ci sta delle
+      mappe.
+    - `closePacExposures` la richiude, così gli scatti esistenti restano com'erano.
+  - Contenuto: le due mappe (USA, e la quota non classificata elencata sotto) e le barre per tipo (ETF, STOCK).
+  - **I settori restano piegati in una riga**: «nessuna classificazione dichiarata · 100% non classificato».
+    - Il seed divide Apple in Technology e Services e Microsoft in Technology e Cloud. Ma Services e Cloud non sono
+      settori di `FinancialSector`, quindi la sorgente del planner rifiuta le due suddivisioni intere
+      (`allocation.classification_invalid`).
+    - Per avere le barre dei settori serve un seed con settori validi. È fuori dal perimetro di G e cambia anche altri
+      scatti, per esempio `assets/detail-classification`.
+  - La pagina utente del PAC non lo mostra: non ha un segnaposto (`data-name`), da aggiungere con la documentazione se
+    serve.
+  - Verifica: statica pulita (`tsc` con i soli 2 errori di base, prettier). La run filtrata a 1 worker parte dopo il
+    merge della punta; poi la coppia di G-13 lo include.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
