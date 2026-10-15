@@ -47,7 +47,7 @@
     import {_ as t} from '$lib/i18n';
     import type {RiskCorrelationOutput} from '$lib/risk/riskTypes';
     import {getCountryInfo} from '$lib/stores/reference/countryStore';
-    import {getSectorEmoji} from '$lib/stores/reference/sectorStore';
+    import {ensureSectorsLoaded, getSectorEmoji} from '$lib/stores/reference/sectorStore';
     import {ASSET_TYPE_MENU_ORDER, sectorI18nKey} from '$lib/utils/assetTypes';
     import CorrelationPairsList from './CorrelationPairsList.svelte';
     import {
@@ -74,8 +74,9 @@
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
     import {CORRELATION_COLORS} from '$lib/theme/chartTheme';
-    import {CORRELATION_SCALE} from '$lib/theme/chartPalettes';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {scaleColor} from '$lib/theme/chartShades';
+    import {chartRoles} from '$lib/theme/roleColors';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
     type Ordering = 'similarity' | 'name' | 'type' | 'sector' | 'region';
     type Distribution = Readonly<Record<string, number>>;
@@ -118,6 +119,8 @@
     let wrapper: HTMLDivElement | undefined = $state(undefined);
     let wrapperWidth = $state(0);
     let dark = $state(false);
+    /** Bumped when the chart colours change without a theme switch (a Designer Lab edit, contract C4): the roles are read again. */
+    let colorsVersion = $state(0);
     let chart: echarts.ECharts | null = null;
     const resizeWatcher = createResizeWatcher((entry) => {
         wrapperWidth = Math.floor(entry?.contentRect.width ?? wrapper?.clientWidth ?? 0);
@@ -131,9 +134,6 @@
     const Y_LABEL_MAX = 200;
     const X_LABEL_MAX = 150;
     const X_LABEL_ROTATION = 45;
-    /** Red for −1, neutral for 0, blue for +1. The neutral follows the card, so a zero reads as "nothing" in both themes. */
-    const SCALE_LIGHT = CORRELATION_SCALE.light;
-    const SCALE_DARK = CORRELATION_SCALE.dark;
 
     let lookup = $derived(buildLookup(output.cells));
     let order = $derived.by(() => {
@@ -191,7 +191,19 @@
         }),
     );
     let overflowing = $derived(wrapperWidth > 0 && layout.width > wrapperWidth);
-    let scale = $derived(dark ? SCALE_DARK : SCALE_LIGHT);
+    /**
+     * The roles as the matrix sees them, from its own element through the sRGB bridge: read again at each theme switch
+     * and each chart-colour change (C4), once for each.
+     */
+    let roles = $derived.by(() => {
+        void colorsVersion;
+        return chartRoles(dark, container);
+    });
+    /**
+     * From −1 to +1: the danger role, the secondary surface, the info role (GR5.3 of the designer's round 2). The
+     * neutral is the panel, so a zero reads as "nothing" in both themes.
+     */
+    let scale = $derived([roles.color('--lf-danger'), roles.color('--lf-surface-panel'), roles.color('--lf-info')]);
     /** The legend spans the cells, not the card; it gets a floor so a two-asset matrix still has a readable scale. */
     let legendWidth = $derived(Math.max(280, layout.width - layout.grid.left - layout.grid.right));
     /** `pairKey` of the pair shown in the matrix and in the ranking: one selection for both views. */
@@ -282,10 +294,9 @@
         return `${text.slice(0, low).trimEnd()}…`;
     }
 
-    /** Dark text on pale cells, white on saturated ones: the value must stay legible across the whole scale. */
+    /** The text that reads best on the cell's own colour, the scale's colour at its value: legible across the whole scale. */
     function valueColor(value: number | null): string {
-        if (dark) return CORRELATION_COLORS.cellValue.darkTheme;
-        return value !== null && Math.abs(value) >= 0.6 ? CORRELATION_COLORS.cellValue.lightOnSaturated : CORRELATION_COLORS.cellValue.lightOnPale;
+        return roles.readableText(scaleColor(scale, value ?? 0, -1, 1));
     }
 
     /**
@@ -302,11 +313,20 @@
         };
         readTheme();
         const darkObserver = onThemeClassChange(readTheme);
+        const chartColors = onChartColorsChange(() => {
+            colorsVersion += 1;
+        });
         return () => {
             darkObserver.disconnect();
+            chartColors.disconnect();
             resizeWatcher.disconnect();
             chart?.dispose();
         };
+    });
+
+    // The sector badges carry the sector store's emoji (the backend's one map): load it when there are sectors to show.
+    $effect(() => {
+        if (assetSectors.size > 0) void ensureSectorsLoaded();
     });
 
     $effect(() => {
@@ -321,6 +341,7 @@
         void ordering;
         void layout;
         void dark;
+        void scale;
         // The coefficients are written in the interface locale: a language switch redraws them (M-18).
         void uiLocale();
         if (container) void tick().then(render);

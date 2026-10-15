@@ -1,12 +1,13 @@
 """
 Tests for sector normalization utilities.
 
-Tests the FinancialSector enum, the normalization functions and SECTOR_EMOJI, the one map of sector emoji.
+Tests the FinancialSector enum, the normalization functions, SECTOR_EMOJI (the one map of sector emoji), the allocation
+buckets beside the sectors, and sector_emoji() with its fallback.
 """
 
 import pytest
 
-from backend.app.utils.asset.sector import SECTOR_EMOJI, FinancialSector, normalize_sector, validate_sector
+from backend.app.utils.asset.sector import ALLOCATION_BUCKETS, SECTOR_EMOJI, SECTOR_EMOJI_FALLBACK, FinancialSector, normalize_sector, sector_emoji, validate_sector
 
 # ============================================================
 # FinancialSector Enum Tests
@@ -272,6 +273,8 @@ class TestEdgeCases:
 # ============================================================
 
 # The two buckets the portfolio engine adds on its own, outside FinancialSector: the cash, and the holdings without a sector.
+# Written out rather than read from ALLOCATION_BUCKETS: these are the names DailyStateBuilder writes, which the constant
+# must match.
 ENGINE_BUCKETS = ("Liquidity", "Unknown")
 
 # The designer's table, round 2 (15/10/2026). A design contract: every glyph is pinned on purpose.
@@ -336,6 +339,100 @@ class TestSectorEmojiMap:
             owners.setdefault(glyph.replace("\ufe0f", ""), []).append(str(key))
         shared = {glyph: keys for glyph, keys in owners.items() if len(keys) > 1}
         assert not shared, f"glyphs shared by more than one key: {shared}"
+
+
+# ============================================================
+# ALLOCATION_BUCKETS Tests
+# ============================================================
+
+
+class TestAllocationBuckets:
+    """Tests for ALLOCATION_BUCKETS, the two buckets the portfolio engine adds beside the sectors.
+
+    `/utilities/sectors` lists them apart from the sectors, with their emoji: the frontend reads their glyphs from there
+    and keeps no map of its own.
+    """
+
+    def test_the_buckets_are_liquidity_then_unknown(self):
+        """The cash, then the holdings without a sector: the names DailyStateBuilder writes, in the order the endpoint lists them."""
+        assert ALLOCATION_BUCKETS == ENGINE_BUCKETS
+
+    def test_every_bucket_has_an_emoji(self):
+        """Both buckets are keys of SECTOR_EMOJI, so each has a glyph of its own in the map."""
+        missing = [bucket for bucket in ALLOCATION_BUCKETS if bucket not in SECTOR_EMOJI]
+        assert not missing, f"allocation buckets without an emoji: {missing}"
+
+    def test_no_bucket_is_a_sector(self):
+        """Neither bucket is a FinancialSector value, and the normalization turns either name into Other.
+
+        So no asset is ever classified in a bucket (FASectorArea normalizes every key it is given), and a sector select,
+        fed with the FinancialSector values, never offers one.
+        """
+        sector_values = {sector.value for sector in FinancialSector}
+        both = sorted(sector_values & set(ALLOCATION_BUCKETS))
+        assert not both, f"allocation buckets that are also sectors: {both}"
+        for bucket in ALLOCATION_BUCKETS:
+            assert normalize_sector(bucket) == FinancialSector.OTHER, f"{bucket!r} normalizes to {normalize_sector(bucket)!r}, not Other"
+
+
+# ============================================================
+# sector_emoji() and SECTOR_EMOJI_FALLBACK Tests
+# ============================================================
+
+
+class TestSectorEmojiLookup:
+    """Tests for sector_emoji() and SECTOR_EMOJI_FALLBACK, the one lookup behind `/utilities/sectors` and the engine.
+
+    DV-2 (15/10/2026): one fallback beside the map, the same for the endpoint and the engine. Before it the endpoint fell
+    back to 📊 and the engine to None.
+    """
+
+    def test_the_fallback_is_the_glyph_of_unknown(self):
+        """SECTOR_EMOJI_FALLBACK is ❓, the glyph of the Unknown bucket: a key outside the map reads as unclassified.
+
+        And as no sector: the glyphs of the map are distinct (test_glyphs_are_distinct_non_empty_strings).
+        """
+        assert SECTOR_EMOJI_FALLBACK == "❓"
+        assert SECTOR_EMOJI_FALLBACK == SECTOR_EMOJI["Unknown"]
+
+    def test_a_mapped_key_reads_its_own_glyph(self):
+        """sector_emoji() of a key in the map is the glyph of that key: the fallback never shadows a mapped key."""
+        for key, glyph in SECTOR_EMOJI.items():
+            assert sector_emoji(key) == glyph, f"{key}: sector_emoji reads {sector_emoji(key)!r}, SECTOR_EMOJI says {glyph!r}"
+            # The plain name too: the endpoint and the engine pass names, not enum members.
+            assert sector_emoji(str(key)) == glyph, f"{key}: by plain name sector_emoji reads {sector_emoji(str(key))!r}, SECTOR_EMOJI says {glyph!r}"
+
+    @pytest.mark.parametrize(
+        "key",
+        [
+            pytest.param("Not A Sector", id="made-up-name"),
+            pytest.param("", id="empty-string"),
+        ],
+    )
+    def test_a_name_nobody_knows_reads_the_fallback(self, key):
+        """A name that is neither a sector nor a bucket reads SECTOR_EMOJI_FALLBACK."""
+        assert key not in SECTOR_EMOJI, f"{key!r} is a key of SECTOR_EMOJI: this case no longer reaches the fallback"
+        assert sector_emoji(key) == SECTOR_EMOJI_FALLBACK, f"{key!r}: sector_emoji reads {sector_emoji(key)!r}, the fallback is {SECTOR_EMOJI_FALLBACK!r}"
+
+    @pytest.mark.parametrize(
+        ("key", "sector"),
+        [
+            pytest.param("health care", FinancialSector.HEALTH_CARE, id="case-variant"),
+            pytest.param("Healthcare", FinancialSector.HEALTH_CARE, id="from-string-alias"),
+        ],
+    )
+    def test_a_non_canonical_sector_name_reads_the_fallback(self, key, sector):
+        """A name from_string() takes for a sector, but not the sector's canonical value, reads the fallback.
+
+        The map is case-sensitive and holds no alias. Pinned on purpose: the engine only ever passes canonical
+        FinancialSector values, and the lookup does not normalize for a caller that does not.
+        """
+        # The precondition, verified rather than assumed: from_string() takes the name for the sector...
+        assert FinancialSector.from_string(key) == sector
+        # ...yet the name is not the sector's canonical value, whose glyph is not the fallback.
+        assert key != sector.value
+        assert SECTOR_EMOJI[sector] != SECTOR_EMOJI_FALLBACK
+        assert sector_emoji(key) == SECTOR_EMOJI_FALLBACK, f"{key!r}: sector_emoji reads {sector_emoji(key)!r}, the fallback is {SECTOR_EMOJI_FALLBACK!r} ({sector.value} reads {SECTOR_EMOJI[sector]!r})"
 
 
 if __name__ == "__main__":

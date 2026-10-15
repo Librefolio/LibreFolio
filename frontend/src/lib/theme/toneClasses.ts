@@ -66,14 +66,17 @@ export const SIGN_BAR = {
 
 /** Signed values coloured by polarity rather than by gain or loss. */
 export const POLARITY_TONES = {
-    /** Correlation pairs: red below zero, blue above — the heatmap's polarity, not a verdict. */
+    /**
+     * Correlation pairs: the danger role below zero, the info role above — the heatmap's own polarity, its two ends
+     * (GR5.3), not a verdict.
+     */
     correlationText: {
-        negative: 'text-red-700 dark:text-red-300',
-        positive: 'text-blue-700 dark:text-blue-300',
+        negative: 'text-lf-danger',
+        positive: 'text-lf-info',
     },
     correlationTag: {
-        negative: 'bg-red-50 text-red-800 dark:bg-red-900/40 dark:text-red-200',
-        positive: 'bg-blue-50 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+        negative: 'bg-lf-danger-soft text-lf-danger-on-soft',
+        positive: 'bg-lf-info-soft text-lf-info-on-soft',
     },
     /** Risk contribution bars: a negative contribution red, the rest blue, the same in both themes. */
     riskContributionBar: {

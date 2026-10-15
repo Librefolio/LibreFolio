@@ -30,8 +30,15 @@
  * filtered out" — never "not delivered yet". And each one ends on a positive: the same observer, still alive, called
  * by the next change of the class of `<html>`.
  *
+ * **The chart colours' signal (contract C4 with the Designer Lab, DV).** The Lab changes chart colours without a theme
+ * switch — at every edit, and when it loads a state — and says so with `notifyChartColorsChange()`; a chart listens with
+ * `onChartColorsChange(onChange)` and rebuilds its whole option. Pinned: the signal is the document event
+ * `lf:chart-colors-change`, delivered synchronously, once per notification, to every listener, with no arguments; a
+ * disconnected listener hears no more while the others do; a theme switch is not this signal. Every negative has a
+ * control listener on the same event, so "not called" means "dispatched, and not delivered to it".
+ *
  * Every test restores the attributes of `<html>` and `<body>`, removes what it added to the page, and disconnects every
- * observer it created.
+ * observer and listener it created.
  *
  * Registered in `front_utility_unit` (`scripts/test_runner/_frontend_utility.py`, action `core-unit`).
  *
@@ -39,7 +46,7 @@
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
-import {isDarkTheme, onThemeClassChange} from './themeMode';
+import {isDarkTheme, notifyChartColorsChange, onChartColorsChange, onThemeClassChange} from './themeMode';
 
 const html = document.documentElement;
 const body = document.body;
@@ -66,17 +73,21 @@ let bodyBefore: Attributes;
 let observers: MutationObserver[];
 /** Every element a test adds to the page, removed after it. */
 let added: Element[];
+/** Every chart-colours listener a test creates — the helper's handles and the controls' removals — disconnected after it. */
+let listeners: Array<{disconnect: () => void}>;
 
 beforeEach(() => {
     htmlBefore = attributesOf(html);
     bodyBefore = attributesOf(body);
     observers = [];
     added = [];
+    listeners = [];
 });
 
 afterEach(() => {
     // Disconnect first: the restore below is itself a change of the class of <html>.
     for (const observer of observers) observer.disconnect();
+    for (const listener of listeners) listener.disconnect();
     for (const element of added) element.remove();
     restore(html, htmlBefore);
     restore(body, bodyBefore);
@@ -232,5 +243,96 @@ describe('onThemeClassChange() — one call after every change of the class of <
         await flush();
         expect(deliveries, 'the control was handed both changes, the one made before disconnect() and the one after').toEqual([['html class', 'html class']]);
         expect(onChange, 'disconnected, it does not: the count is still the one from before').toHaveBeenCalledTimes(1);
+    });
+});
+
+// =============================================================================
+// C4 — the chart colours changed without a theme switch (the Designer Lab's signal)
+// =============================================================================
+
+/** The event of contract C4: what the Lab, or anyone, dispatches on `document` when chart colours change. */
+const CHART_COLORS_EVENT = 'lf:chart-colors-change';
+
+/** The helper's listener, kept for the cleanup. */
+function watchChartColors(onChange: () => void): {disconnect: () => void} {
+    const handle = onChartColorsChange(onChange);
+    listeners.push(handle);
+    return handle;
+}
+
+/** A control: a plain listener of the event on `document`, counting what is dispatched there. */
+function chartColorsControl(): {count: () => number} {
+    let count = 0;
+    const listener = () => {
+        count += 1;
+    };
+    document.addEventListener(CHART_COLORS_EVENT, listener);
+    listeners.push({disconnect: () => document.removeEventListener(CHART_COLORS_EVENT, listener)});
+    return {count: () => count};
+}
+
+describe('onChartColorsChange() and notifyChartColorsChange() — contract C4 with the Designer Lab', () => {
+    it('calls back once per notification, synchronously, with no arguments', () => {
+        const onChange = vi.fn();
+        watchChartColors(onChange);
+
+        notifyChartColorsChange();
+        expect(onChange.mock.calls, 'one call, during the notification itself, carrying nothing — not the event').toEqual([[]]);
+        notifyChartColorsChange();
+        expect(onChange).toHaveBeenCalledTimes(2);
+    });
+
+    it(`is the document event ${CHART_COLORS_EVENT}: the notification reaches a plain listener of it, and the event, dispatched by anyone, reaches the helper`, () => {
+        const onChange = vi.fn();
+        watchChartColors(onChange);
+        const control = chartColorsControl();
+
+        notifyChartColorsChange();
+        expect(control.count(), 'the notification is that event, on document').toBe(1);
+
+        document.dispatchEvent(new Event(CHART_COLORS_EVENT));
+        expect(onChange, 'the event itself, dispatched without the helper').toHaveBeenCalledTimes(2);
+    });
+
+    it('calls a disconnected listener no more, while the signal still goes out', () => {
+        const onChange = vi.fn();
+        const handle = watchChartColors(onChange);
+        notifyChartColorsChange();
+        expect(onChange, 'connected, it is called').toHaveBeenCalledTimes(1);
+
+        const control = chartColorsControl();
+        handle.disconnect();
+        notifyChartColorsChange();
+        expect(control.count(), 'the notification after disconnect() was dispatched').toBe(1);
+        expect(onChange, 'disconnected, it is not called: the count is still the one from before').toHaveBeenCalledTimes(1);
+    });
+
+    it('calls every listener, and disconnecting one leaves the other listening', () => {
+        const [first, second] = [vi.fn(), vi.fn()];
+        const firstHandle = watchChartColors(first);
+        watchChartColors(second);
+
+        notifyChartColorsChange();
+        expect([first.mock.calls.length, second.mock.calls.length], 'both are called').toEqual([1, 1]);
+
+        firstHandle.disconnect();
+        notifyChartColorsChange();
+        expect([first.mock.calls.length, second.mock.calls.length], 'only the one still connected').toEqual([1, 2]);
+    });
+
+    it('does not answer a theme switch, nor another event: the theme has its own signal', async () => {
+        const onChange = vi.fn();
+        watchChartColors(onChange);
+        const themeChanges = vi.fn();
+        watchTheme(themeChanges);
+
+        html.classList.toggle('dark');
+        document.dispatchEvent(new Event('lf:something-else'));
+        await flush();
+        expect(themeChanges, 'barrier: the theme switch happened, and was delivered').toHaveBeenCalledTimes(1);
+        expect(onChange).not.toHaveBeenCalled();
+
+        notifyChartColorsChange();
+        expect(onChange, 'the same listener, alive: the next notification reaches it').toHaveBeenCalledTimes(1);
     });
 });
