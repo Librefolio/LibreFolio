@@ -948,7 +948,7 @@ tagli (opzione 1: rinomine e tagli in due elenchi, nessun file insieme rinominat
 > - Il riscrittore ha trovato nomi che `schemas/assets.py` ri-esportava senza definirli (11 importatori fra plugin e test):
 >   ognuno ora punta al modulo che lo definisce. Il grep iniziale non li vedeva.
 
-### Checkpoint CP2b 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+### Checkpoint CP2b ✅ (2026-10-15) — committato dal coordinatore: `870c9956f` (codice) e `84a72c0b2` (journal)
 
 - Base `64a5a3fe7`. Un commit con due elenchi (opzione 1): 1 rinomina pura (`schemas/assets.py` → `schemas/assets/assets.py`,
   99 %) e i tagli (`core`, `price_store`, `api/v1/assets.py`, `schemas/prices.py`); 12 file nuovi, 2 tolti, 113 modificati
@@ -960,3 +960,29 @@ tagli (opzione 1: rinomine e tagli in due elenchi, nessun file insieme rinominat
   `schemas/assets/events.py` e i loro test; le righe che toccano gli eventi nei miei file restano mie (elenco nell'handoff).
 - Messaggi proposti: `refactor(assets): cut asset services, router and event schemas` (due parti nel corpo) e
   `docs(journal): X CP2b log, CP10 key notes, backlog X-R2 and X-R3`.
+
+### Terzo aggiornamento di base: W I1 e A3, validazione della revisione combinata ✅ (2026-10-15)
+
+Il coordinatore ha portato nel mio ramo `dev_release2` a `0ddd296a0` (W I1 `dc7e4e48e`, A3 `90491071d`): merge `eb245b624`,
+senza conflitti (unione automatica su `brim_provider.py` e sul backlog), worktree pulito. Ordine d'ingresso: X prima di J.
+Validazione sulla corsia 6183, confronti con `0ddd296a0` estratto da `git archive` in `/tmp/libreFolio_x_base3_tree`:
+
+- ✅ Riscrittori di CP1, CP2a e CP2b a secco: 0; scansione delle stringhe (bersagli di `patch`, codice in sottoprocesso): 0;
+  grep dei vecchi percorsi nel perimetro della regola: solo X-R1 e X-R2. Nel frontend, fuori perimetro, `asset_source.py`
+  compare in tre commenti (X-R3, ora allargata) e nel `generated.ts` ignorato, che riprende la docstring di X-R2.
+- ✅ `pytest --collect-only`: 13 487 contro 13 477. Le differenze sono le stesse del CP2b: la guardia `config-package` perde 2
+  file e ne conta 12 nuovi, il caso della sonda cambia nome. I test nuovi di W I1 e A3 ci sono da tutte e due le parti.
+- ✅ `api schema`: identico a `0ddd296a0` tranne `info.version`; 113 percorsi e 133 `operationId` nello stesso ordine;
+  `tool-contracts` identico.
+- ✅ Sonda delle rotte: tabella identica (139 rotte effettive) e 46 risoluzioni identiche. La prima volta l'albero estratto
+  aveva 138 rotte: senza la build del frontend `main.py` non monta `/_app` (`frontend_available()`, righe 467-477). Con un
+  `index.html` e una cartella `_app` vuoti nell'albero estratto le tabelle coincidono. È una differenza d'ambiente, non di
+  codice.
+- ✅ `dev.py front build --debug` (svelte-check 0 errori e 0 avvisi) e `dev.py mkdocs build` prima della run, perché A3 ha
+  toccato il frontend; nessun manifesto di dipendenze cambiato.
+- ✅ `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port 6183 --data-dir
+  /tmp/librefolio-r13-x --fresh-run all-backend` (15/10 03:23–03:44, 20 min 59 s): **7/7 verdi**, **13 476 passati, 28
+  saltati, 0 falliti**. I +34 rispetto al CP2b sono i 34 test nuovi di W I1 e A3, gli stessi della raccolta (unità
+  consolidate: `services` +3, `utils` +22, `api` +9); gli altri 20 riepiloghi sono identici. Porta 6183 libera.
+
+> **Fuori pista**: nessuno.
