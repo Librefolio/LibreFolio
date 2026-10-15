@@ -6,7 +6,7 @@ Migrated from:
 - test_utilities/test_distribution_models.py
 - test_utilities/test_geographic_area_integration.py
 
-Schema source: backend/app/schemas/assets.py
+Schema source: backend/app/schemas/assets/assets.py
 
 Tests cover:
 - FAInterestRatePeriod: date ranges, rate validation, compounding/frequency logic
@@ -24,7 +24,7 @@ from decimal import Decimal
 import pytest
 from pydantic import ValidationError
 
-from backend.app.schemas.assets import (
+from backend.app.schemas.assets.assets import (
     DayCountConvention,
     FAAssetCreateItem,
     FAClassificationParams,
@@ -421,7 +421,7 @@ class TestScheduledInvestmentSchedule:
 
     def test_with_asset_events(self):
         """Test schedule with asset events."""
-        from backend.app.schemas.prices import FAAssetEventPoint  # noqa: PLC0415 — test setup — imports after sys.path/db config
+        from backend.app.schemas.assets.events import FAAssetEventPoint  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         schedule = FAScheduledInvestmentSchedule(
             initial_value=Currency(code="EUR", amount=Decimal("10000")),
@@ -454,8 +454,8 @@ class TestFAAssetEventPoint:
 
     def test_valid_event(self):
         """Test creating a valid asset event point."""
+        from backend.app.schemas.assets.events import FAAssetEventPoint  # noqa: PLC0415 — test setup — imports after sys.path/db config
         from backend.app.schemas.common import Currency  # noqa: PLC0415 — test setup — imports after sys.path/db config
-        from backend.app.schemas.prices import FAAssetEventPoint  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         event = FAAssetEventPoint(
             date=date(2025, 7, 1),
@@ -468,8 +468,8 @@ class TestFAAssetEventPoint:
 
     def test_value_requires_currency(self):
         """Test that value requires a Currency object with code."""
+        from backend.app.schemas.assets.events import FAAssetEventPoint  # noqa: PLC0415 — test setup — imports after sys.path/db config
         from backend.app.schemas.common import Currency  # noqa: PLC0415 — test setup — imports after sys.path/db config
-        from backend.app.schemas.prices import FAAssetEventPoint  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         event = FAAssetEventPoint(
             date=date(2025, 7, 1),
@@ -481,8 +481,8 @@ class TestFAAssetEventPoint:
 
     def test_json_roundtrip(self):
         """Test JSON serialization/deserialization roundtrip."""
+        from backend.app.schemas.assets.events import FAAssetEventPoint  # noqa: PLC0415 — test setup — imports after sys.path/db config
         from backend.app.schemas.common import Currency  # noqa: PLC0415 — test setup — imports after sys.path/db config
-        from backend.app.schemas.prices import FAAssetEventPoint  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
         event = FAAssetEventPoint(
             date=date(2025, 7, 1),

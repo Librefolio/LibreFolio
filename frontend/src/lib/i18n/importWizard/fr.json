@@ -42,7 +42,7 @@
     "reparseSingle": "Réanalyser",
     "previewFile": "Aperçu du fichier",
     "txCount": "{n} transactions dans {k} fichiers",
-    "assetsCount": "{n} actifs uniques, {m} à résoudre",
+    "assetsCount": "{n, plural, one {# actif unique} other {# actifs uniques}}, {m} à résoudre",
     "likelyDuplicates": "{n} doublons probables",
     "viewDetail": "Voir Détail",
     "detailTitle": "Détail Analyse — {file}",

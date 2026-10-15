@@ -104,7 +104,7 @@ section «🔁 Import flow & asset identity (post-beta)», line «Instrument uni
 | Picker (D4) | `frontend/src/lib/components/ui/select/AssetSelect.svelte` |
 | Duplicate notice in the wizard | `frontend/src/lib/utils/transactions/importResolutionHelpers.ts` |
 | Candidate search | `backend/app/services/brim_provider.py` |
-| Merge endpoint | `backend/app/api/v1/assets.py` |
+| Merge endpoint | `backend/app/api/v1/assets/crud.py` |
 | Merge service | `backend/app/services/assets/crud.py` |
 | Merge tests | `backend/test_scripts/test_db/test_asset_merge.py` |
 | Plan | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00AssetIdentityAndIdentifiers.prompt.md` |
