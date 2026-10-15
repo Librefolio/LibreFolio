@@ -8,9 +8,15 @@
  *
  * The app tab publishes `window.__lfDesignerLab` (`active`, `picking`, `stats`, `chartColors`) from the client every
  * page of a debug build loads; every wait below reads that state, a computed style or a test id — never the clock.
+ *
+ * Which code writes a colour is not the specs' business: workstreams move colours between rules, tokens and utilities.
+ * The specs read it at run time — from the page, from the facts the picker reports, from the catalogue the Lab lists —
+ * and hold the export to the verifier the Lab ships (`verify-export.mjs`), never to a file name written down here.
  */
 
-import {readFile} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import {readFile, writeFile} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
 import {expect, type BrowserContext, type Locator, type Page} from '../fixtures/playwright';
 import {navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
@@ -26,6 +32,9 @@ export const CROSS_TAB = {timeout: 10_000};
 
 /** The keys the Lab keeps in localStorage: the state, the picker's messages, the browser that has seen the Lab. */
 export const LAB_KEY_PREFIX = 'lf-designer-lab';
+
+/** The picker's channel: the last `start`, `cancel` or `result` message between the Lab and the app tabs (`pick.ts`). */
+export const PICK_KEY = `${LAB_KEY_PREFIX}/pick`;
 
 /** The style and SVG nodes the engines inject while a state is active; an idle client injects none of them. */
 export const LAB_NODE_IDS = ['lf-designer-lab-vars', 'lf-designer-lab-elements', 'lf-designer-lab-layer-order', 'lf-designer-lab-cvd-style', 'lf-designer-lab-cvd-svg'];
@@ -80,6 +89,40 @@ interface LabExport {
     changes: LabExportChange[];
 }
 
+/** A declaration the app tab proved, or tried, for one colour of the picked element: the subset of `PickedDeclaration` the specs read. */
+export interface PickedDeclarationFacts {
+    origin: 'rule' | 'inline' | 'attribute';
+    /** The rule's selector, null for an inline style or an attribute. */
+    selector: string | null;
+    /** The declared text, as written before any Lab change. */
+    value: string;
+    /** The cascade layer (`utilities`, dotted when nested), `''` for an anonymous one, null when unlayered. */
+    layer: string | null;
+    important: boolean;
+    /** Proved to set the computed value: the winner, listed first. */
+    wins: boolean;
+}
+
+/** What the app tab reports about the element picked (`PickedElement`): facts only, before the Lab resolves them. */
+export interface PickedElementFacts {
+    route: string;
+    theme: 'light' | 'dark';
+    testids: string[];
+    properties: {property: string; computed: string; declarations: PickedDeclarationFacts[]}[];
+}
+
+/**
+ * The report of `verify-export.mjs --json` (`lf-designer-lab-verify/1`): the subset the specs read. `catalog_hash_match`
+ * is left out on purpose: a developer editing `src` during a run changes the hash, not what the export lists.
+ */
+export interface VerifyReport {
+    totals: {changes: number; ok: number; missing: number};
+    changes: {id: string; missing: {file: string; line: number; raw?: string}[]}[];
+}
+
+/** The verifier the Lab ships next to its scanner, resolved from this file: Playwright's working directory does not matter. */
+const VERIFY_EXPORT_SCRIPT = fileURLToPath(new URL('../../scripts/designer-lab/verify-export.mjs', import.meta.url));
+
 /** The theme toggle's end state, read back from `<html>`: act only when the app is not already there. */
 export async function chooseTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
     const current = () => page.evaluate(() => (document.documentElement.classList.contains('dark') ? 'dark' : 'light'));
@@ -100,7 +143,7 @@ export function transactionsSubtitle(page: Page): Locator {
     return page.getByTestId('transactions-page-overview-guide-target').locator('p');
 }
 
-/** The header cell of the date column of the transactions table: DataTable colours it in its own `th` rule. */
+/** The header cell of the date column of the transactions table: DataTable styles it, through whichever rule, token or utility its code uses today. */
 export function dateColumnHeader(page: Page): Locator {
     return page.getByTestId('tx-table').getByTestId('dt-header-date');
 }
@@ -240,6 +283,34 @@ export function hexKeyOf(color: string): string | null {
     return /^#[0-9a-f]{6}$/i.test(color.trim()) ? color.trim().toLowerCase() : null;
 }
 
+/** `rgba(100, 116, 139, 0.3)` → `#64748b`: the key of an sRGB colour as the canvas writes it, its alpha set aside; null for any other form. */
+function rgbKeyOf(color: string): string | null {
+    const m = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*[\d.]+)?\)$/.exec(color.trim());
+    return m ? `#${[m[1], m[2], m[3]].map((v) => Number(v).toString(16).padStart(2, '0')).join('')}` : null;
+}
+
+/**
+ * The catalogue key of each colour text with its alpha set aside (`#64748B`, `#64748b80`, `rgb(100 116 139 / 30%)` →
+ * `#64748b`), as the browser of `page` parses it — the CSS parser of reference, not the Lab's: a canvas serialises a
+ * colour it accepts as `#rrggbb` or `rgba(…)`. Null for a text the canvas refuses, or a colour it keeps outside sRGB.
+ */
+export async function opaqueKeysOf(page: Page, colours: string[]): Promise<(string | null)[]> {
+    const serialised = await page.evaluate((list) => {
+        const probe = document.createElement('canvas').getContext('2d');
+        return list.map((colour) => {
+            if (!probe) return null;
+            // Two different starting values: a colour the canvas refuses leaves each in place, a valid one replaces both.
+            probe.fillStyle = '#000000';
+            probe.fillStyle = colour;
+            const first = String(probe.fillStyle);
+            probe.fillStyle = '#ffffff';
+            probe.fillStyle = colour;
+            return first === String(probe.fillStyle) ? first : null;
+        });
+    }, colours);
+    return serialised.map((value) => (value === null ? null : (hexKeyOf(value) ?? rgbKeyOf(value))));
+}
+
 /**
  * The Tailwind palette variable the text-colour class of an element reads (`text-gray-500` → `--color-gray-500`), with
  * that class. Colour classes are the Lab's subject, so here an element is described by them on purpose.
@@ -282,10 +353,52 @@ export function pickedProperty(lab: Page, property: string): Locator {
     return lab.locator(`[data-testid="lab-picked-property"][data-property="${property}"]`);
 }
 
+/**
+ * The facts the app tab reported for the element picked last: the `result` message it wrote in this context's
+ * localStorage (`lf-designer-lab/pick`), as `picker/describe.ts` produced them — before the Lab's `pickView.ts` resolves
+ * anything against its catalogue. A state, not an edge: the message stays there until the next pick message.
+ */
+export async function pickedFacts(page: Page): Promise<PickedElementFacts> {
+    const raw = await page.evaluate((key) => localStorage.getItem(key), PICK_KEY);
+    const message = raw ? (JSON.parse(raw) as {op?: string; element?: PickedElementFacts}) : null;
+    if (message?.op !== 'result' || !message.element) throw new Error(`the app tab must leave its pick result in ${PICK_KEY}, found ${raw === null ? 'nothing' : raw.slice(0, 200)}`);
+    return message.element;
+}
+
 /** Click «JSON» and read the file the Lab downloads. */
 export async function downloadExport(lab: Page): Promise<{text: string; doc: LabExport}> {
     const [download] = await Promise.all([lab.waitForEvent('download'), lab.getByTestId('lab-export-json').click()]);
     expect(download.suggestedFilename()).toBe('designer-lab-changes.json');
     const text = await readFile(await download.path(), 'utf8');
     return {text, doc: JSON.parse(text) as LabExport};
+}
+
+/**
+ * Check an export against the code as it is now, with the verifier the Lab ships: `text` is written to `file` (a path
+ * the test owns, e.g. `testInfo.outputPath(…)`) and `verify-export.mjs <file> --json` runs under the Node that runs the
+ * tests. It rescans the catalogue itself, about two seconds, synchronously: the `timeout` is the only deadline that can
+ * stop it. Exit 0: nothing missing; 1: an occurrence missing, or a specialisation lost; 2: bad input. The status, the
+ * parsed report (null when it printed none) and stderr come back whatever the exit.
+ */
+export async function verifyExport(text: string, file: string): Promise<{status: number | null; report: VerifyReport | null; stderr: string}> {
+    await writeFile(file, text, 'utf8');
+    let status: number | null = 0;
+    let stdout = '';
+    let stderr = '';
+    try {
+        stdout = execFileSync(process.execPath, [VERIFY_EXPORT_SCRIPT, file, '--json'], {encoding: 'utf8', timeout: 30_000, maxBuffer: 16 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe']});
+    } catch (error) {
+        // A non-zero exit throws, with what the process printed attached; a timeout or a failed spawn has no status.
+        const failed = error as {status?: number | null; signal?: string | null; stdout?: string; stderr?: string; message?: string};
+        status = failed.status ?? null;
+        stdout = failed.stdout ?? '';
+        stderr = [failed.stderr, failed.signal ? `killed by ${failed.signal}` : '', status === null ? failed.message : ''].filter(Boolean).join(' · ');
+    }
+    let report: VerifyReport | null = null;
+    try {
+        report = JSON.parse(stdout) as VerifyReport;
+    } catch {
+        report = null;
+    }
+    return {status, report, stderr};
 }
