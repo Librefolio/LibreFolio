@@ -1240,7 +1240,8 @@ Passi:
 >   target currencies for SNB … All connection attempts failed`, già presente nella mia prova a vuoto, dove però l'ECB
 >   veniva prima in ordine alfabetico). Ha tenuto il principio della decisione (solo fornitori statici, nessuna rete) e
 >   ristretto a FED e BOE; la SNB dal vivo è già in `test_external/test_fx_providers.py::test_supported_currencies`.
->   **Scostamento dalla decisione: chiesta la conferma del coordinatore nell'handoff.**
+>   **Scostamento dalla decisione: confermato dal coordinatore il 15/10** («la regola era nessuna rete nei test, e la SNB
+>   dal vivo resta coperta in `test_external`»).
 > - La SNB cade anche nel residuo X-R8: senza filtro il server la interroga finché non riesce una volta nel processo.
 > - Nella stessa spec restano quattro selettori in inglese (`:233`, `:234`, `:250`, `:261`), fuori dal perimetro di W-B13:
 >   registrati come X-R9.
@@ -1252,7 +1253,7 @@ Passi:
    > core-unit` 4 266 (con `fxRoutesStore.test.ts`); `ruff` e `black --check` puliti sui 5 file Python; Prettier pulito sui 5
    > file del frontend; `git diff --check` pulito; porta 6183 libera.
 
-### Checkpoint CP3b 🧊 (2026-10-15) — FROZEN, handoff al coordinatore
+### Checkpoint CP3b ✅ (2026-10-15) — committato dal coordinatore: `cea5ce859` (codice, 12 file) e `cc242dee8` (journal)
 
 - **Base**: HEAD `5d21f2d85`.
 - **Elenchi**: nessuna rinomina, nessun taglio. 14 file modificati, nessuno nuovo:
@@ -1266,3 +1267,22 @@ Passi:
   - journal: il piano e il backlog.
 - **Commit proposti**: `test(fx): keep FX provider tests offline, fix stale module paths` (12 file: tutto tranne il journal)
   e `docs(journal): X CP3b log, backlog W-B9, W-B13, X-R5, X-R7 closed, X-R9` (piano e backlog).
+
+### Settimo aggiornamento di base: W7 — controllo minimo di `7d6710fd0` ✅ (2026-10-15)
+
+Il coordinatore ha fuso `dev_release2` a `58be885a9` (W7: `schemas/transactions/` per tema) nel mio ramo: HEAD `7d6710fd0`
+(genitori `cc242dee8` e `58be885a9`), merge pulito, nessun file in comune. Controllo minimo sulla 6183
+(`/tmp/libreFolio_x_base7.sh`, 05:49–05:53, log `/tmp/libreFolio_x_base7.log`):
+- ✅ Raccolta contro `58be885a9` estratto: 13 981 contro 13 981, nessuna differenza (il CP3 è già in `dev_release2`, e il CP3b
+  cambia i corpi dei test, non i loro nomi).
+- ✅ `front build --debug` (89 s) e `mkdocs build` (36 s, 3 012 URL) prima dei test: W7 tocca un file di `frontend/src` e uno
+  di `mkdocs_src`, e il server li avrebbe ricostruiti dentro il suo limite d'avvio.
+- ✅ `api fx` 21/21; `api fx` senza rete (proxy su `127.0.0.1:9`) 21/21.
+- Worktree pulito dopo le build; porta 6183 libera.
+
+Decisioni del coordinatore (15/10, ~05:49):
+- W-B9 con FED e BOE: confermato.
+- **CP4 (schemi) prima di X-R8**: il riordino viene prima. Durante la finestra della galleria si scrive il codice;
+  `all-backend` dopo l'avviso di fine. W7 ha già messo `schemas/transactions/` per tema: è la forma da seguire.
+- **X-R9 con il FE4**; i test-id in `DataImportModal.svelte` il coordinatore li chiede a W, che ne è il proprietario.
+- La nota su `tx-bulk-operations.spec.ts:428` la scrive il coordinatore nella sezione di W, come W-B15.

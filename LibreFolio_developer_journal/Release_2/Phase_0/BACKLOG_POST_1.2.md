@@ -2192,7 +2192,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   che è un riordino puro (`openapi.json` e test invariati): lotto di solo test CP3b, approvato dal coordinatore il 15/10,
   dopo l'ingresso del CP3 e prima del CP4. **Chiusa nel CP3b il 15/10**: contratto e filtri su FED e BOE, le chiamate senza
   filtro controllano solo i codici; `api fx` senza rete 21/21 (prima 19/21). La SNB è rimasta fuori perché scarica anche
-  lei il suo elenco (scostamento dalla decisione, da confermare dal coordinatore). Dettagli:
+  lei il suo elenco (scostamento dalla decisione, confermato dal coordinatore il 15/10). Dettagli:
   [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a, CP3 e CP3b.
 - ✅ **W-B13 · `fx-csv-import.spec.ts` prende la ✕ della modale d'importazione per testo** — minimo, test; trovato da W
   il 15/10 (K1), assegnato a X dal coordinatore. `frontend/e2e/fx/fx-csv-import.spec.ts:247` e `:276` usano
@@ -2205,7 +2205,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   pulsante con `hasText: 'Import (1)'` (c'è già `data-import-confirm`), `:250` cerca `text=Discard import` e `:261` il
   pulsante `hasText: 'Cancel'`. Per questi ultimi due `DataImportModal.svelte` non ha test-id: il `ConfirmModal` di `:305`
   accetta `testId` ma non lo riceve, e il pulsante Annulla di `:287` non ne ha. Cura: due test-id nel componente (condiviso,
-  toccato da W in K1) e le quattro righe della spec; con il FE4 (frontend dei cambi) o prima, d'accordo col coordinatore.
+  toccato da W in K1) e le quattro righe della spec. Deciso dal coordinatore il 15/10: con il FE4; i due test-id li chiede
+  lui a W, proprietario di `DataImportModal.svelte`.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
 
 ## W · Import e transazioni (fase 01)
