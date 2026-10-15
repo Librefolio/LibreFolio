@@ -24,6 +24,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -572,6 +573,62 @@ class GlobalSetting(SQLModel, table=True):
     description: Optional[str] = Field(default=None)
     updated_at: datetime = Field(default_factory=utcnow)
     updated_by_user_id: Optional[int] = Field(default=None, foreign_key="users.id", nullable=True)
+
+
+class PluginSystemSetting(SQLModel, table=True):
+    """A plugin setting of the whole instance (``scope = system``), written by an administrator.
+
+    One row per field, named by ``family`` (``asset``, ``fx``), ``plugin_code`` and ``field_key``. A plain value is
+    JSON in ``value_json``; a secret is encrypted in ``secret_ciphertext``, with the id of the key that encrypted it in
+    ``key_id`` (``services/plugin_settings/crypto.py``): a row holds exactly one of the two. An environment variable
+    set for the field wins over the row. Rows of fields that no plugin declares any more stay, ignored.
+    """
+
+    __tablename__ = "plugin_system_settings"
+    __table_args__ = (
+        UniqueConstraint("family", "plugin_code", "field_key", name="uq_plugin_system_settings_field"),
+        CheckConstraint("(value_json IS NULL) <> (secret_ciphertext IS NULL)", name="ck_plugin_system_settings_one_value"),
+        CheckConstraint("(secret_ciphertext IS NULL) = (key_id IS NULL)", name="ck_plugin_system_settings_key_id"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    family: str = Field(sa_column=Column(String(16), nullable=False))
+    plugin_code: str = Field(sa_column=Column(String(64), nullable=False))
+    field_key: str = Field(sa_column=Column(String(64), nullable=False))
+    value_json: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    secret_ciphertext: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary, nullable=True))
+    key_id: Optional[str] = Field(default=None, sa_column=Column(String(32), nullable=True))
+    updated_at: datetime = Field(default_factory=utcnow)
+    updated_by_user_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
+    )
+
+
+class PluginUserSetting(SQLModel, table=True):
+    """A plugin setting of one user (``scope = user``): a preference, or a personal secret, written by that user only.
+
+    The same columns as ``PluginSystemSetting``, plus ``user_id``: the rows go with the account. Nobody else reads
+    them through the API, an administrator included. The encryption binds a secret to its row, ``user_id`` included,
+    so a ciphertext copied to another user's row does not decrypt.
+    """
+
+    __tablename__ = "plugin_user_settings"
+    __table_args__ = (
+        UniqueConstraint("user_id", "family", "plugin_code", "field_key", name="uq_plugin_user_settings_field"),
+        CheckConstraint("(value_json IS NULL) <> (secret_ciphertext IS NULL)", name="ck_plugin_user_settings_one_value"),
+        CheckConstraint("(secret_ciphertext IS NULL) = (key_id IS NULL)", name="ck_plugin_user_settings_key_id"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(sa_column=Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False))
+    family: str = Field(sa_column=Column(String(16), nullable=False))
+    plugin_code: str = Field(sa_column=Column(String(64), nullable=False))
+    field_key: str = Field(sa_column=Column(String(64), nullable=False))
+    value_json: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    secret_ciphertext: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary, nullable=True))
+    key_id: Optional[str] = Field(default=None, sa_column=Column(String(32), nullable=True))
+    updated_at: datetime = Field(default_factory=utcnow)
 
 
 # ============================================================================

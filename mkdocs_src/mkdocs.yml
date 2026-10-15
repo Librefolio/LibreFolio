@@ -179,6 +179,7 @@ plugins:
             "🛠️ Admin Manual": "🛠️ Manuale Admin"
             "CLI Admin Tools": "Strumenti CLI di amministrazione"
             Global Settings: Impostazioni Globali
+            "Users & Invitations": "Utenti e inviti"
             Filesystem Structure: Struttura Filesystem
             Advanced Docker: Docker Avanzato
             Host Installation: Installazione su Host
@@ -424,6 +425,7 @@ plugins:
             "🛠️ Admin Manual": "🛠️ Manuel Admin"
             "CLI Admin Tools": "Outils CLI d'administration"
             Global Settings: Paramètres Globaux
+            "Users & Invitations": "Utilisateurs et invitations"
             Filesystem Structure: Structure du Système de Fichiers
             Advanced Docker: Docker Avancé
             Host Installation: Installation sur l'Hôte
@@ -669,6 +671,7 @@ plugins:
             "🛠️ Admin Manual": "🛠️ Manual de Admin"
             "CLI Admin Tools": "Herramientas CLI de administración"
             Global Settings: Configuración Global
+            "Users & Invitations": "Usuarios e invitaciones"
             Filesystem Structure: Estructura del Sistema de Archivos
             Advanced Docker: Docker Avanzado
             Host Installation: Instalación en Host
@@ -967,6 +970,7 @@ nav:
           - Environment Variables: admin/configuration.md
           - Email: admin/email.md
           - Global Settings: admin/settings.md
+          - Users & Invitations: admin/users.md
       - 🧹 Maintenance & Operations:
           - CLI Admin Tools: admin/cli_tools.md
           - Filesystem Structure: admin/filesystem.md
@@ -1107,6 +1111,7 @@ nav:
                   - BRIM Plugin Guide: developer/architecture/patterns/brim_plugin_guide.md
                   - Asset Plugin Guide: developer/architecture/patterns/asset_plugin_guide.md
                   - FX Plugin Guide: developer/architecture/patterns/fx_plugin_guide.md
+                  - Plugin Settings: developer/architecture/patterns/plugin_settings.md
                   - Signal Plugin Guide: developer/architecture/patterns/signal_plugin_guide.md
                   - Tool Plugin Guide: developer/architecture/patterns/tool_plugins.md
               - 🧠 AI Export:

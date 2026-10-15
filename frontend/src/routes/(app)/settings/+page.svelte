@@ -47,6 +47,7 @@
             }))}
             bind:activeTab
             hideLabelOnMobile={true}
+            scrollable
         />
 
         <!-- Tab Content -->
