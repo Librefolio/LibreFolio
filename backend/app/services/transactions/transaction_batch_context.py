@@ -59,6 +59,8 @@ class TransactionBatchContext:
     parsed_promotes: list[tuple[int, TXPromoteBatchItem]] = field(default_factory=list)
     touched_brokers: set[int] = field(default_factory=set)
     existing_by_id: dict[int, Transaction] = field(default_factory=dict)
+    # What decided the cost basis of each preloaded row before the batch touched it (``cost_fields``).
+    stored_cost_fields: dict[int, tuple] = field(default_factory=dict)
     earliest_date_by_broker: dict[int, date] = field(default_factory=dict)
     link_uuid_map: dict[str, list[tuple[int, Transaction]]] = field(default_factory=lambda: defaultdict(list))
     consumed_link_uuids: set[str] = field(default_factory=set)
@@ -86,3 +88,9 @@ class TransactionBatchContext:
             user_id=user_id,
             commit_requested=commit_requested,
         )
+
+
+def cost_fields(transaction: Transaction) -> tuple:
+    """What decides whether a row needs a cost basis, and whether it has one: its type, quantity, cost basis and asset
+    event link — an ADJUSTMENT linked to a SPLIT takes its cost from the split, so unlinking it is a cost change."""
+    return (transaction.type, transaction.quantity, transaction.cost_basis_override, transaction.cost_basis_currency, transaction.asset_event_id)

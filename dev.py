@@ -2558,6 +2558,9 @@ Commands by Category:
   👤  Users
       user                User management (create, list, reset, promote...)
 
+  💾  Backup
+      backup              Instance backup (create, inspect)
+
   📚  Documentation
       mkdocs              MkDocs commands (build, serve, clean, deploy)
 
@@ -2684,6 +2687,13 @@ Examples:
 
     from scripts.user_cli import register_subparser as register_user_parser
     register_user_parser(subparsers)
+
+    # =========================================================================
+    # 💾 Backup Commands - Import from backup_cli
+    # =========================================================================
+
+    from scripts.backup_cli import register_subparser as register_backup_parser
+    register_backup_parser(subparsers)
 
     # =========================================================================
     # 📚 Documentation Commands

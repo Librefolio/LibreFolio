@@ -620,8 +620,19 @@ aliases (`appVars()`), which no stylesheet defines at runtime.
 
 - a text field that accepts any CSS colour, OKLCH sliders (L, C, H), and a warning when the value leaves
   sRGB;
+- a fourth slider, **A**, for the opacity (0–100%). Some roles carry one, written
+  `color-mix(in oklab, <base> p%, transparent)` — the backdrop `--lf-surface-overlay`, `--lf-selected`.
+  Mixing with `transparent` keeps the base colour and gives it opacity p, whatever the interpolation
+  space: the editor reads that form (`colorValue.ts`), and A changes p and keeps the base, so a role in
+  the base (`var(--lf-focus)`) stays referenced; at 100% the value becomes the bare base. On a
+  `var(--x)`, A writes that form; on a literal, it sets the alpha — `oklch(… / a)` for an `oklch()`
+  literal or one outside sRGB, `#rrggbbaa` otherwise. Both swatches sit on a checkerboard, so the opacity
+  shows. L1 previews the value as typed; for a stylesheet or chart colour, L2 and L3 multiply the alpha
+  of each occurrence they change by the value's (`resolveTarget()` resolves the mix);
 - `<input type="color">` as an sRGB shortcut, and **Snap to a variable**, which writes `var(--x)`: a
-  proposal to unify two colours. Its list offers the roles, never their inline aliases;
+  proposal to unify two colours. Its list offers the roles, never their inline aliases. Like the L, C, H
+  sliders, both change the colour and keep the opacity (`withBase()`): a translucent value stays
+  translucent, a mix stays a mix;
 - for values, **Translucent variants too** and, in stylesheets, **Reach in the code**: every occurrence,
   or one occurrence with its selector — preselected on the picked element's rule when the editor is opened
   from the **Element** tab and exactly one catalogue occurrence matches it;
@@ -941,6 +952,10 @@ their alias, so their chips show.
   `color-mix()`, say — gets no `role` ([Colour Roles](#colour-roles)): its chip edits the alias itself, a
   variable that does not exist at runtime, so nothing changes. Edit the roles it mixes. `tokens.css` has
   none today.
+- **Other `color-mix()` values.** The editor reads a mix with `transparent`, the **A** slider's form, but
+  not a mix of two colours, nor one whose two percentages do not add up to 100: for such a value it shows
+  **Unrecognised colour** and no sliders, and keeps **Apply** disabled until a new value — typed, from the
+  sRGB input or snapped to a variable — replaces it.
 - **Class names in comments** count as uses, in the scanner and in the Python inventory alike: the header
   comments of `app.css` and `tokens.css` name role utilities (`bg-lf-card`, `text-lf-muted`…). They show
   among the uses, in the editor's impact, and among the export's occurrences, where an agent finds a
@@ -1084,6 +1099,10 @@ An abridged export (occurrence lists and classes cut):
 | `changes[].note`, `shots` | The designer's note and gallery screen codes, when given |
 | `contrast` | The declared pairs whose ratio changed: `fg`, `bg`, `scope`, `before`, `after` |
 | `variants` | The named variants, as the Lab stores them |
+
+The `to` of a change is recorded as typed, so it may be a `color-mix(…, transparent)`, the translucent
+form of the **A** slider: the schema is unchanged, and [the skill](#skill) applies such a value as
+written, which keeps a `var()` base referenced.
 
 A `css-var` change on a colour role (`--lf-surface-card`, see [Colour Roles](#colour-roles)) takes its
 `impact` from `varImpact()`: `uses` and `files` count the role's utilities and its own `var()` uses, and
@@ -1295,6 +1314,7 @@ workstream allowed to change the appearance.
 | `frontend/src/lib/dev/designer-lab/picker/` | The lazy chunk of the app tabs: `overlay.ts` (picking mode), `describe.ts` (colours and proved declarations), `anchor.ts` (test-id chain, CSS path, component selector) |
 | `frontend/src/lib/dev/designer-lab/cssProps.ts` | The colour properties, their shorthands, what a specialisation may set: shared by the picker and the Lab |
 | `frontend/src/lib/dev/designer-lab/color.js` | Colour parsing, OKLCH and sRGB conversion, gamut, WCAG contrast — shared by Node and the browser |
+| `frontend/src/lib/dev/designer-lab/colorValue.ts` | Values with an opacity (a literal, `var(--x)`, `color-mix(…, transparent)`): reading, resolving, changing the opacity or the colour — shared by the editor and `engine/targets.ts` |
 | `frontend/src/lib/dev/designer-lab/DesignerLab.svelte`, `ColorEditor.svelte`, `ContrastPanel.svelte`, `PickedElement.svelte` | The page; `PickedElement.svelte` is the **Element** tab |
 | `frontend/src/lib/dev/designer-lab/catalogView.ts`, `contrast.ts`, `export.ts`, `pickView.ts` | What the page lists, contrast pairs, export and import, what the Lab makes of a pick: pure functions |
 | `frontend/src/lib/dev/designer-lab/i18n.ts`, `labTheme.ts` | The Lab's dictionary and its own colours |
@@ -1345,7 +1365,8 @@ four-language rule of the UI. Do not add Lab keys to the [app catalogue](i18n.md
   reaching `engine/` and `picker/` only through `import()`; the route files reaching the Lab only through a
   guarded `import()`. It is the static side of the release guard
   ([Import the Lab only inside a branch](#release-builds)).
-- Seams for tests: the pure modules (`color.js`, `store.ts`, `pick.ts`, `cssProps.ts`, `catalogView.ts`
+- Seams for tests: the pure modules (`color.js`, `colorValue.ts` with `parseTransparentMix()`,
+  `resolveValue()`, `withOpacity()` and `withBase()`, `store.ts`, `pick.ts`, `cssProps.ts`, `catalogView.ts`
   with `varImpact()`, `editTarget()` and `isInlineAlias()`, `contrast.ts`, `export.ts` with
   `sanitizeAnchor()`, `pickView.ts`); the DOM helpers of `picker/anchor.ts`, which take the test-id index
   as a parameter and run under jsdom; `elementRule()` and `applyElementRules()` in `engine/anchors.ts`;

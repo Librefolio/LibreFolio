@@ -111,6 +111,24 @@
 - **D-T21, chi approva l'aspetto delle ondate:** il developer, dal contact sheet e dal diff della galleria; la designer
   rivede tutto insieme nel giro 3. Testuale: «si principalmente io, se lei è disponibile te lo faccio sapere».
   Sostituisce la «revisione della designer» a ogni ondata.
+- **D-T22, DV approvato** dal developer il 15/10 alle 16:25: «Sì, approva DV così». Valgono le 12 raccomandazioni, con
+  due precisazioni.
+  - Punto 6: cambiano solo i colori proposti; quelli scelti a mano dall'utente restano.
+  - Punto 8: nessuna copia delle emoji nel frontend. C'è una mappa sola, in `utils/asset/sector.py`, e il frontend la
+    legge dall'endpoint dei settori.
+- **Revisione dell'anteprima di T-8** (developer, 15/10 dalle 17:35):
+  - via «Password Recovery»;
+  - sul telefono, i controlli delle pagine d'accesso scorrono via con la pagina;
+  - l'icona di KeePassXC sull'email va nel backlog di A.
+- **D-T23, header neutro:** `--lf-surface-header` `#EDF0EE` in chiaro e `#111615` in scuro, con i controlli
+  nell'aspetto di pagina; in scuro sparisce anche la lineetta della barra laterale. **Supera D-T19.** Developer, 15/10,
+  dal confronto `header-confronto.png` (opzione A).
+- **D-T24:** `theme-color` resta verde `#1B4334` nei due temi, anche con l'header neutro. Developer, 15/10.
+- **D-T25 e D-T26, rosso e verde del tema scuro.** Developer, 15/10 alle 18:18–18:25, dai confronti sull'anteprima.
+  - `--lf-danger` `#FF7A86` (era `#F84361`): 7,0:1 sulla card.
+  - `--lf-success` `#5ED69A` (era `#36D399`): 9,6:1 sulla card.
+  - Gli stati della barra verde sono allineati; `--lf-danger-solid` e `-hover` restano invariati.
+  - La designer li rivede nel giro 3 (TC-8).
 - **Codici delle sessioni** a una o due lettere, liberi ovunque (developer, 15/10: «per le lettere se 1 non basta
   usiamone 2»). Regola scritta in `.github/agents/release-coordinator.agent.md` e `coordinated-workstream.agent.md`.
 - **Instradamento:**
@@ -126,12 +144,12 @@
 | Codice | Sessione | Cartella del piano | Corsia (porta + dati) | Stato |
 |---|---|---|---|---|
 | — | coordinatore | questo file | 6150 + `/tmp/librefolio-r2-main` | — |
-| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | **integrato** in `dev_release2`: fino a L-9 con `9d57aa4c0`, L-10 (il Lab modifica i ruoli di T) con `87755fe2a`, validato sul fuso il 15/10; prossimo: nel Lab i ruoli di T-8 e i colori di categoria di DV, per il giro 3 |
-| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | **piano della 56 chiuso il 15/10** (DoD con `g-final3`): integrato fino a G-9 (`1470bd693`) e alla chiusura (`243c8c9ff`); G-10 risolta da H (`b4533a949`); G-11 aperta, peso basso; G-13: la nuova coppia di riferimento dopo l'ingresso di T |
-| R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154, chiusa | **chiuso**, integrato in `dev_release2` (`8fd8e494b`, `23f6578f3`, `ed9fb6996`) |
-| — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo: worktree `preview-colori` (T-6 più L, `7a94a1553`); da aggiornare con T-8 |
-| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | T-1 e T-2 **integrati**. Sul ramo: T-3, T-5, T-6 (palette, `078dec1ae`), validazione `c5a8a03a4`, T-7 (header e fascia del logo) `0580c92ab`. Prossimi: merge di base, T-8 con T-4, poi W1 e W2 |
-| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | aperto il 15/10 per GR1–GR5 (D-T17): analisi in sola lettura; codice nell'ordine concordato con Y e J della 1.3 |
+| L | `L - Designer Lab` | `L-designerLab/` | 6152 + `/tmp/librefolio-r2-l` | **integrato** in `dev_release2`: fino a L-9 con `9d57aa4c0`, L-10 (il Lab modifica i ruoli di T) con `87755fe2a`, il banner del Lab in `dev.py` con `a4d1884b4`, il cursore dell'opacità con `c96a62268` (validato sul fuso `47e33997b`). Prossimo, L-16: nel Lab i ruoli di T-8 dopo l'ingresso di T, poi il livello `category` dopo DV |
+| G | `G - Gallery deterministica` | `G-galleryDeterminism/` | 6153 + `/tmp/librefolio-r2-g` | **piano della 56 chiuso il 15/10** (DoD con `g-final3`): integrato fino a G-9 (`1470bd693`) e alla chiusura (`243c8c9ff`); G-10 risolta da H (`b4533a949`); G-11 aperta, peso basso. Rivede in sola lettura gli scatti nuovi della 1.3 (`settings/email` di E2b: OK; `settings/users` di A6b; `settings/backup-ready` di B). G-13: la nuova coppia di riferimento dopo T e le tre schede |
+| R | `R - Fattorizzazione colori` | `R-colorRefactor/` | 6154, chiusa | **chiuso**, integrato in `dev_release2` (`8fd8e494b`, `23f6578f3`, `ed9fb6996`); sessione archiviata il 15/10 su richiesta del developer |
+| — | server per la designer (`scripts/visual_review/designer_live.sh`) | — | 6160 + `/tmp/librefolio-color-review` | attivo: worktree `preview-colori`, ramo `preview-colori-t8b` = `e0c88bbc3` (T-8b), per la revisione del developer (D-T20) |
+| T | `T - token e tema` | `T-tokensTheme/` | 6155 + `/tmp/librefolio-r2-t` | T-1 e T-2 **integrati**. Sul ramo: T-3, T-5, T-6, T-7, T-8 con T-4 (`68c990b35`), T-8b (`312748dcc`, D-T23…D-T26), merge di base `a74185670`, validazione `e0c88bbc3` tutta verde. Entra dopo l'OK del developer sull'anteprima (D-T20). In corso: il margine alto di `AuthPageFrame` sul telefono (OK della 1.3) |
+| DV | `DV - colori dei grafici` | `DV-chartColors/` | 6156 + `/tmp/librefolio-r2-dv` | approvato il 15/10 (D-T22). S1 `8b8571f9a`; checkpoint 2 (S2–S8, DV-2) `c5bca76ae`; merge di base `0182d890d` col golden verificato; DV-6 `fb59c7bec`. Prossimo: un merge di base, poi le prove 1–7 nello slot |
 
 Superfici condivise e relativi proprietari:
 
