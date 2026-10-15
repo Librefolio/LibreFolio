@@ -57,7 +57,7 @@
     }
 </script>
 
-<div bind:this={containerRef} class="relative" data-menu-open={isOpen ? 'true' : 'false'} data-testid="language-selector">
+<div bind:this={containerRef} class="relative" data-language={$currentLanguage} data-menu-open={isOpen ? 'true' : 'false'} data-testid="language-selector">
     <button
         class="flex items-center space-x-1 p-2 rounded-lg hover:bg-white/20 dark:hover:bg-slate-600 transition-all"
         data-testid="language-selector-button"

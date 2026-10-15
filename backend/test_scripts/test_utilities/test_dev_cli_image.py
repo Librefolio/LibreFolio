@@ -83,24 +83,35 @@ The contract:
   administrators, keeps creating an active administrator (**IMG-012c**);
 * **IMG-013**: ``user invite [--admin] [--email E]`` (plan phase01Accounts A5.1, point 6)
   issues a live invitation and prints its link: without ``LIBREFOLIO_PUBLIC_URL`` the path
-  alone (``/invite?token=…``) with a note naming the variable (**IMG-013**); with it, the
-  URL without its trailing slash plus the path (**IMG-013b**). The row holds the hash of the
+  alone (``/invite#token=…``: the token travels in the URL fragment, which a browser never
+  sends, so it stays out of access and proxy logs) with a note naming the variable
+  (**IMG-013**); with it, the URL without its trailing slash plus the path (**IMG-013b**).
+  The row holds the hash of the
   printed token for 7 days, ``--admin`` sets ``grants_admin`` and ``--email`` the e-mail
   (**IMG-013c**). While registration is ``disabled``, by ``LIBREFOLIO_REGISTRATION`` or by
   the ``registration_mode`` row, it prints ``❌``, exits 1 and issues nothing (**IMG-013d**);
-  at ``LIBREFOLIO_MAX_USERS`` it warns and issues anyway (**IMG-013e**);
+  at ``LIBREFOLIO_MAX_USERS`` it warns and issues anyway (**IMG-013e**). An invalid
+  ``LIBREFOLIO_PUBLIC_URL`` is not reported as unset: ``invite`` and ``reset-link`` print the
+  path alone and a note saying the variable "is not valid (" with the reason, and exit 0
+  (**IMG-013f**);
 * **IMG-014**: ``user reset-link <username>`` prints the link of a live reset token of that
-  account, for 30 minutes, built the same way (**IMG-014**); a second link revokes the first
-  (**IMG-014b**); an unknown user is ``❌``, exit 1, and no token (**IMG-014c**);
+  account (``/reset-password#token=…``), for 30 minutes, built the same way (**IMG-014**); a
+  second link revokes the first (**IMG-014b**); an unknown user is ``❌``, exit 1, and no token
+  (**IMG-014c**);
 * **IMG-015**: ``user reset-onboarding <username>`` puts every flow and every step back to
   pending (**IMG-015**), ``--flow F`` only that flow and its steps (**IMG-015b**); an unknown
   user (``❌``, exit 1) or an unknown flow (exit 1, or argparse's 2) resets nothing
   (**IMG-015c**). Pending is read as the app reads it: no row at all, or a pending row with
   neither a completion nor a skip time;
-* **IMG-016**: at ``LIBREFOLIO_MAX_USERS`` the command line warns, a ``⚠️`` line that speaks
-  of the limit, and goes on: ``user create``, ``user create --role user`` and
-  ``user_cli.py create-user`` still create the account, ``✅`` and exit 0 (**IMG-016**);
-  below the limit there is no warning (**IMG-016b**).
+* **IMG-016**: at ``LIBREFOLIO_MAX_USERS`` the command line warns with one line, the same for
+  every command, the action as a phrase — ``⚠️  The instance is at its limit
+  (LIBREFOLIO_MAX_USERS: {used} of {max} places taken): the command line {action} anyway``,
+  the places counted before the action — and goes on: ``user create``,
+  ``user create --role user`` and ``user_cli.py create-user`` still create the account, ``✅``
+  and exit 0 (**IMG-016**); below the limit there is no warning (**IMG-016b**); ``user
+  activate`` of an inactive account at the limit warns, "reactivates the account", and
+  reactivates it (**IMG-016c**); below the limit it is silent (**IMG-016d**), and ``user
+  deactivate`` never warns, not even at the limit (**IMG-016e**).
 
 IMG-002b, IMG-004 and IMG-007 pin decision 1 of plan 35_devCliImage §0.1, IMG-008 its
 decision 4: a group whose sources the image lacks stays listed and answers for itself,
@@ -150,7 +161,7 @@ import yaml
 from backend.app.db.models import AccountTokenPurpose, OnboardingFlow
 from backend.app.services.accounts.auth_service import verify_password
 from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
-from backend.app.services.accounts.token_service import DEFAULT_TTL, hash_token, token_path
+from backend.app.services.accounts.token_service import DEFAULT_TTL, hash_token
 from backend.test_scripts.test_utils import print_info, print_section, print_success
 from scripts.user_cli import validate_password
 
@@ -1234,12 +1245,21 @@ MAX_USERS_VARIABLE = "LIBREFOLIO_MAX_USERS"
 #: Given with a trailing slash on purpose: the printed link is the URL without it, then the path.
 CLI_PUBLIC_URL = "https://librefolio.example.test/base/"
 CLI_PUBLIC_ORIGIN = "https://librefolio.example.test/base"
-INVITE_PAGE = "/invite?token="
-RESET_PAGE = "/reset-password?token="
-#: secrets.token_urlsafe(32): 43 URL-safe characters, which the link's query string leaves as they are.
+#: The token travels in the URL fragment, which a browser never sends: it stays out of access and proxy logs.
+INVITE_PAGE = "/invite#token="
+RESET_PAGE = "/reset-password#token="
+#: secrets.token_urlsafe(32): 43 URL-safe characters, which the link leaves as they are.
 LINK_TOKEN = r"([A-Za-z0-9_-]{43})(?![A-Za-z0-9_-])"
 #: The command line's warning marker (scripts/cli_base.py, print_warning).
 WARNING_MARK = "⚠️"
+#: The command line's one warning at the limit, whatever the command: the action is a phrase (review of A5a).
+LIMIT_WARNING = WARNING_MARK + "  The instance is at its limit (LIBREFOLIO_MAX_USERS: {used} of {max_users} places taken): the command line {action} anyway"
+LIMIT_ACTIONS = ("creates the account", "creates the invitation", "reactivates the account")
+#: Not an http(s) address, each in its own way: the accessor refuses both.
+INVALID_PUBLIC_URLS = [
+    pytest.param("invite", "ftp://example.com", INVITE_PAGE, id="invite, ftp://example.com"),
+    pytest.param("reset-link", "not-a-url", RESET_PAGE, id="reset-link, not-a-url"),
+]
 SEEDED_AT = "2026-10-01 09:00:00.000000"
 INVITE = AccountTokenPurpose.INVITE
 PASSWORD_RESET = AccountTokenPurpose.PASSWORD_RESET
@@ -1270,8 +1290,13 @@ def printed_token(run: Run, page: str) -> str:
 
 
 def absolute_links(run: Run, page: str, token: str) -> set[str]:
-    """Every absolute URL the command printed for this token's page."""
-    return set(re.findall(r"https?://\S*?" + re.escape(page + token), run.output))
+    """Every absolute URL, whatever its scheme, the command printed for this token's page."""
+    return set(re.findall(r"[A-Za-z][A-Za-z0-9+.-]*://\S*?" + re.escape(page + token), run.output))
+
+
+def link_words(run: Run, page: str, token: str) -> set[str]:
+    """Every whitespace-delimited word of the output that carries this token's page: the path alone is exactly ``page + token``."""
+    return {word for word in run.output.split() if page + token in word}
 
 
 def token_row(db_path: Path, token: str) -> dict[str, object] | None:
@@ -1320,7 +1345,7 @@ def set_registration_mode(db_path: Path, mode: str) -> None:
     with closing(sqlite3.connect(db_path)) as conn:
         with conn:
             conn.execute(
-                "INSERT OR REPLACE INTO global_settings (key, value, value_type, description, updated_at) VALUES ('registration_mode', ?, 'string', 'Who may create an account: open, invite or disabled', ?)",
+                "INSERT OR REPLACE INTO global_settings (key, value, value_type, description, updated_at) VALUES ('registration_mode', ?, 'str', 'Who may create an account: open, invite or disabled', ?)",
                 (mode, SEEDED_AT),
             )
 
@@ -1369,9 +1394,26 @@ def completed_user(image: ImageTree, database: Database) -> tuple[str, int]:
     return name, user_id
 
 
-def warned_about_the_limit(run: Run) -> bool:
-    """A warning line (⚠️) that speaks of the limit."""
-    return any(WARNING_MARK in line and "limit" in line.lower() for line in run.output.splitlines())
+def limit_warning(action: str, *, used: int, max_users: int) -> str:
+    """The exact line the command line prints when it goes past the limit, for one action."""
+    assert action in LIMIT_ACTIONS, f"test bug: {action!r} is not one of the warning's actions {LIMIT_ACTIONS}"
+    return LIMIT_WARNING.format(used=used, max_users=max_users, action=action)
+
+
+def silent(run: Run) -> bool:
+    """No warning line at all."""
+    return not any(WARNING_MARK in line for line in run.output.splitlines())
+
+
+def admin_and_member(image: ImageTree, database: Database, *, member_active: bool) -> tuple[str, str]:
+    """An administrator and an ordinary member of their own, created while no limit is set; the member deactivated unless ``member_active``."""
+    admin, member = unique_username(), unique_username()
+    for name, role in ((admin, "admin"), (member, "user")):
+        assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, "--role", role, env=database.env))
+    if not member_active:
+        assert_succeeds(run_dev(image, "user", "deactivate", member, env=database.env))
+    assert account(database.path, member) == {"is_superuser": False, "is_active": member_active}, f"premise: {member} is an ordinary account, active={member_active}"
+    return admin, member
 
 
 class TestInvitationFromTheCommandLine:
@@ -1396,7 +1438,7 @@ class TestInvitationFromTheCommandLine:
 
         assert_succeeds(run)
         token = printed_token(run, INVITE_PAGE)
-        expected = CLI_PUBLIC_ORIGIN + token_path(INVITE, token)
+        expected = CLI_PUBLIC_ORIGIN + INVITE_PAGE + token
         assert absolute_links(run, INVITE_PAGE, token) == {expected}, f"the link must be {expected}, and only that: {run}"
         assert token_violations(token_row(image_db.path, token), INVITE, None) == [], f"the printed token must be a live invitation: {run}"
         print_success(expected.replace(token, "…"))
@@ -1438,9 +1480,30 @@ class TestInvitationFromTheCommandLine:
         run = run_dev(image, "user", "invite", env={**fresh_db.env, MAX_USERS_VARIABLE: "1"})
 
         assert_succeeds(run)
-        assert warned_about_the_limit(run), f"at the limit the command line warns ({WARNING_MARK}, the limit) and goes on: {run}"
+        expected = limit_warning("creates the invitation", used=1, max_users=1)
+        assert expected in run.output.splitlines(), f"at the limit the command line warns with {expected!r} and goes on: {run}"
         assert token_violations(token_row(fresh_db.path, printed_token(run, INVITE_PAGE)), INVITE, None) == [], f"the invitation must be issued anyway: {run}"
         print_success("warned, issued")
+
+    @pytest.mark.parametrize(("command", "value", "page"), INVALID_PUBLIC_URLS)
+    def test_an_invalid_public_url_is_reported_as_invalid_not_as_unset(self, image, image_db, command, value, page):
+        """IMG-013f: an invalid LIBREFOLIO_PUBLIC_URL (not an http(s) address) is not reported as unset: user invite and user reset-link print a note saying the variable «is not valid (» with the accessor's reason, never «is not set», then the path alone, and exit 0."""
+        print_section(f"IMG-013f: user {command} with {PUBLIC_URL_VARIABLE}={value!r}, in the image")
+        argv = ["user", command]
+        if command == "reset-link":
+            name = unique_username()
+            assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, "--role", "user", env=image_db.env))
+            argv.append(name)
+
+        run = run_dev(image, *argv, env={**image_db.env, PUBLIC_URL_VARIABLE: value})
+
+        assert_succeeds(run)
+        notes = [line for line in run.output.splitlines() if "is not valid (" in line and PUBLIC_URL_VARIABLE in line]
+        assert notes, f"an invalid {PUBLIC_URL_VARIABLE} must be reported as not valid, with the reason, on a line naming the variable: {run}"
+        assert "is not set" not in run.output, f"an invalid {PUBLIC_URL_VARIABLE} must not be reported as unset: {run}"
+        token = printed_token(run, page)
+        assert link_words(run, page, token) == {page + token}, f"an invalid {PUBLIC_URL_VARIABLE} gives the path alone, nothing in front of it: {run}"
+        print_success(f"the path alone, and: {notes[0].strip()}")
 
 
 class TestResetLinkFromTheCommandLine:
@@ -1456,7 +1519,7 @@ class TestResetLinkFromTheCommandLine:
 
         assert_succeeds(run)
         token = printed_token(run, RESET_PAGE)
-        expected = set() if public_url is None else {CLI_PUBLIC_ORIGIN + token_path(PASSWORD_RESET, token)}
+        expected = set() if public_url is None else {CLI_PUBLIC_ORIGIN + RESET_PAGE + token}
         assert absolute_links(run, RESET_PAGE, token) == expected, f"the link must be {expected or 'the path alone'}: {run}"
         assert public_url is not None or PUBLIC_URL_VARIABLE in run.output, f"the path alone comes with a note naming {PUBLIC_URL_VARIABLE}: {run}"
         row = token_row(image_db.path, token)
@@ -1549,7 +1612,8 @@ class TestUserLimitFromTheCommandLine:
 
         assert_succeeds(run)
         assert SUCCEEDED in run.output, f"the creation is still reported with {SUCCEEDED}: {run}"
-        assert warned_about_the_limit(run), f"at the limit the command line warns ({WARNING_MARK}, the limit) and goes on: {run}"
+        expected = limit_warning("creates the account", used=1, max_users=1)
+        assert expected in run.output.splitlines(), f"at the limit the command line warns with {expected!r} and goes on: {run}"
         assert usernames(fresh_db.path) == [first, name], f"the account must be created anyway: {usernames(fresh_db.path)}"
         print_success(f"{label}: warned, created")
 
@@ -1564,3 +1628,40 @@ class TestUserLimitFromTheCommandLine:
         assert not any(WARNING_MARK in line for line in run.output.splitlines()), f"below the limit there is nothing to warn about: {run}"
         assert usernames(fresh_db.path) == [name], f"premise: {name} alone in its database"
         print_success("created, no warning")
+
+    def test_activate_at_the_limit_warns_and_reactivates(self, image, fresh_db):
+        """IMG-016c: LIBREFOLIO_MAX_USERS=1, one active account and one inactive (1 of 1 places taken): user activate of the inactive one prints the limit line — the command line reactivates the account anyway —, reactivates it, ✅ and exit 0."""
+        print_section("IMG-016c: user activate at the limit, in the image")
+        _, member = admin_and_member(image, fresh_db, member_active=False)
+
+        run = run_dev(image, "user", "activate", member, env={**fresh_db.env, MAX_USERS_VARIABLE: "1"})
+
+        assert_succeeds(run)
+        expected = limit_warning("reactivates the account", used=1, max_users=1)
+        assert expected in run.output.splitlines(), f"at the limit a reactivation warns with {expected!r} and goes on: {run}"
+        assert SUCCEEDED in run.output and account(fresh_db.path, member) == ORDINARY_ACCOUNT, f"the account must be reactivated anyway: {account(fresh_db.path, member)}; {run}"
+        print_success("warned, reactivated")
+
+    def test_activate_below_the_limit_is_silent(self, image, fresh_db):
+        """IMG-016d: LIBREFOLIO_MAX_USERS=3, one active account and one inactive: user activate reactivates it without any warning."""
+        print_section("IMG-016d: user activate below the limit, in the image")
+        _, member = admin_and_member(image, fresh_db, member_active=False)
+
+        run = run_dev(image, "user", "activate", member, env={**fresh_db.env, MAX_USERS_VARIABLE: "3"})
+
+        assert_succeeds(run)
+        assert silent(run), f"below the limit a reactivation has nothing to warn about: {run}"
+        assert account(fresh_db.path, member) == ORDINARY_ACCOUNT, f"the account must be reactivated: {account(fresh_db.path, member)}"
+        print_success("reactivated, no warning")
+
+    def test_deactivate_at_the_limit_is_silent(self, image, fresh_db):
+        """IMG-016e: LIBREFOLIO_MAX_USERS=2 with two active accounts (2 of 2 places taken): user deactivate deactivates without any warning, as it never warns."""
+        print_section("IMG-016e: user deactivate at the limit, in the image")
+        _, member = admin_and_member(image, fresh_db, member_active=True)
+
+        run = run_dev(image, "user", "deactivate", member, env={**fresh_db.env, MAX_USERS_VARIABLE: "2"})
+
+        assert_succeeds(run)
+        assert silent(run), f"a deactivation frees a place: it never warns: {run}"
+        assert account(fresh_db.path, member) == {"is_superuser": False, "is_active": False}, f"the account must be deactivated: {account(fresh_db.path, member)}"
+        print_success("deactivated, no warning")

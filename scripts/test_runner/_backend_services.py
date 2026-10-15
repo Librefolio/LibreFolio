@@ -1141,8 +1141,9 @@ Note: No backend server required.
         name="Registration",
         desc="registration_mode in the registry, LIBREFOLIO_REGISTRATION/MAX_USERS/PUBLIC_URL/BILLING_URL accessors, effective mode, usage, invitations, register_user rule, limit under a race, bcrypt off the loop",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
-        # server. The variables are set with monkeypatch in this process, and "once per process" in a child Python on a
-        # private file; the race holds two connections to that private file only.
+        # server. The variables are set with monkeypatch in this process, and the once-per-process error log is checked
+        # in this process too (the report cache cleared around each test); the race holds two connections to that
+        # private file only.
         isolation="pure",
     )
     add_test(

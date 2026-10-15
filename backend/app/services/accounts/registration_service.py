@@ -63,10 +63,16 @@ class UserUsage:
         return self.max_users is not None and self.used >= self.max_users
 
 
+#: What an invalid account setting costs until it is fixed, as the error log says it.
+_CLOSED = "registration stays closed until it is fixed"
+_BARE_PATH = "links show the bare path until it is fixed"
+_NO_BILLING = "the billing link stays hidden until it is fixed"
+
+
 @functools.cache
-def _report_invalid(problem: str) -> None:
-    """Log an invalid account setting once per process: the instance runs closed until it is fixed."""
-    logger.error("Invalid account configuration: registration stays closed until it is fixed", problem=problem)
+def _report_invalid(problem: str, consequence: str) -> None:
+    """Log an invalid account setting once per process, with what it costs until it is fixed."""
+    logger.error("Invalid account configuration", problem=problem, consequence=consequence)
 
 
 async def effective_registration_mode(session: AsyncSession) -> RegistrationModeState:
@@ -74,13 +80,13 @@ async def effective_registration_mode(session: AsyncSession) -> RegistrationMode
     try:
         pinned = registration_mode_override()
     except ValueError as exc:
-        _report_invalid(str(exc))
+        _report_invalid(str(exc), _CLOSED)
         return RegistrationModeState(mode="disabled", locked=True)
     if pinned is not None:
         return RegistrationModeState(mode=cast(RegistrationMode, pinned), locked=True)
     stored = await get_setting_value(session, SETTINGS_REGISTRY.global_.REGISTRATION_MODE.key, "open")
     if stored not in REGISTRATION_MODES:
-        _report_invalid(f"registration_mode={stored!r}: expected one of {', '.join(REGISTRATION_MODES)}")
+        _report_invalid(f"registration_mode={stored!r}: expected one of {', '.join(REGISTRATION_MODES)}", _CLOSED)
         return RegistrationModeState(mode="disabled", locked=False)
     return RegistrationModeState(mode=cast(RegistrationMode, stored), locked=False)
 
@@ -90,7 +96,7 @@ def _max_users() -> Optional[int]:
     try:
         return configured_max_users()
     except ValueError as exc:
-        _report_invalid(str(exc))
+        _report_invalid(str(exc), _CLOSED)
         return 0
 
 
@@ -99,7 +105,7 @@ def public_link(path: str) -> Optional[str]:
     try:
         base = public_url()
     except ValueError as exc:
-        _report_invalid(str(exc))
+        _report_invalid(str(exc), _BARE_PATH)
         return None
     return f"{base}{path}" if base else None
 
@@ -109,7 +115,7 @@ def billing_link() -> Optional[str]:
     try:
         return billing_url()
     except ValueError as exc:
-        _report_invalid(str(exc))
+        _report_invalid(str(exc), _NO_BILLING)
         return None
 
 
@@ -174,21 +180,24 @@ async def revoke_invite(session: AsyncSession, invite_id: int, *, now: Optional[
 async def _admission(session: AsyncSession, invite_token: Optional[str], now: datetime) -> tuple[bool, bool, bool]:
     """Whether the new account is the instance's first, comes with an invitation, and is an administrator.
 
+    The first account of an empty instance is an administrator whatever the mode. An invitation given with any
+    registration, the first included, must be valid and is spent by it: its link cannot open a second account.
+
     Raises ``RegistrationError`` when the mode or the invitation refuses it.
     """
-    if await user_service.count_users(session) == 0:
-        return True, False, True
-    mode = (await effective_registration_mode(session)).mode
-    if mode == "disabled":
-        raise RegistrationError("REGISTRATION_DISABLED", "New user registration is disabled")
-    if not invite_token:
-        if mode == "invite":
+    first = await user_service.count_users(session) == 0
+    if not first:
+        mode = (await effective_registration_mode(session)).mode
+        if mode == "disabled":
+            raise RegistrationError("REGISTRATION_DISABLED", "New user registration is disabled")
+        if not invite_token and mode == "invite":
             raise RegistrationError("INVITE_REQUIRED", "Registration requires an invitation")
-        return False, False, False
+    if not invite_token:
+        return first, False, first
     inspection = await token_service.inspect_token(session, invite_token, AccountTokenPurpose.INVITE, now=now)
     if inspection.status != token_service.TokenStatus.VALID or inspection.record is None:
         raise RegistrationError("INVITE_INVALID", "This invitation is not valid")
-    return False, True, inspection.record.grants_admin
+    return first, True, first or inspection.record.grants_admin
 
 
 async def register_user(
