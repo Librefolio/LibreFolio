@@ -24,9 +24,10 @@ The full table, with the light and dark values, is in `tokens.css`.
 
 | Meaning | Utility |
 |---|---|
-| Background behind the app shell (header, pages) | `bg-lf-app` (today the same colour as `page`) |
+| Background behind the app shell (pages) | `bg-lf-app` (today the same colour as `page`) |
+| The app header (D-T23): a step darker than the page in light, lighter in dark | `bg-lf-header text-lf-primary border-b border-lf-subtle`; its controls in their page look (`text-lf-secondary hover:bg-lf-hover`, focus `focus-visible:outline-lf-focus`) |
 | Background of a standalone page (login, error) | `bg-lf-page` |
-| The green bars, sidebar and header (D-T17, D-T19): one family in both themes | `bg-lf-bar text-lf-bar-text`, edge `border-lf-bar-edge` (none in light), dividers `border-lf-bar-line`, quiet text `text-lf-bar-muted`, `hover:bg-lf-bar-hover`; active item `bg-lf-bar-active text-lf-on-bar-active border-l-4 border-lf-bar-indicator`; logout `bg-lf-bar-logout hover:bg-lf-bar-logout-hover`; focus `focus-visible:outline-lf-bar-focus`; states on the bar `text-lf-bar-success`, `-warning`, `-danger`; donation `text-lf-bar-donate`. A control also used on a page takes an `onBar` prop |
+| The green sidebar (D-T17): one family in both themes | `bg-lf-bar text-lf-bar-text`, no edge (D-T23), dividers `border-lf-bar-line`, quiet text `text-lf-bar-muted`, `hover:bg-lf-bar-hover`; active item `bg-lf-bar-active text-lf-on-bar-active border-l-4 border-lf-bar-indicator`; logout `bg-lf-bar-logout hover:bg-lf-bar-logout-hover`; focus `focus-visible:outline-lf-bar-focus`; states on the bar `text-lf-bar-success`, `-warning`, `-danger` |
 | Card, modal, menu, dropdown | `bg-lf-card`; one that floats (modal, menu, dropdown, the login card) adds `border-lf-raised` and `shadow-lf-shadow` (N3, Q8); a card of a page `shadow-lf-shadow-card` |
 | Secondary surface: panels, table heads, boxes inside a card | `bg-lf-panel` |
 | Inside of an input | `bg-lf-field` |
@@ -42,7 +43,7 @@ The full table, with the light and dark values, is in `tokens.css`.
 | Link, active item | `text-lf-link` |
 | Border, divider | `border-lf-subtle`, `divide-lf-subtle` |
 | Border of an input | `border-lf-input`, under the mouse `hover:border-lf-input-hover` (D-T18; focus wins over it) |
-| Focus | `focus:ring-lf-focus`, `focus:border-lf-focus`, `focus-visible:outline-lf-focus`; on the green bars `focus-visible:outline-lf-bar-focus` |
+| Focus | `focus:ring-lf-focus`, `focus:border-lf-focus`, `focus-visible:outline-lf-focus`; on the green sidebar `focus-visible:outline-lf-bar-focus` |
 | Brand surface: the login card header | `bg-lf-brand` with `text-lf-on-brand` (`/70` for secondary text, `border-lf-on-brand/20`, `bg-lf-on-brand/10` for hovers) |
 | Primary button | `bg-lf-action hover:bg-lf-action-hover text-lf-on-action` |
 | Selected item | `bg-lf-selected` |
@@ -56,7 +57,7 @@ The full table, with the light and dark values, is in `tokens.css`.
 | Highlighted result, `<mark>` (Q7) | `bg-lf-mark text-lf-on-mark border-lf-mark-line` |
 | Guided tour glow (Q9) | `var(--lf-tour-glow)`, backdrop `bg-lf-overlay` |
 | Signed figures | `text-lf-gain`, `text-lf-loss` |
-| Donation link («Offrimi un caffè») | `text-lf-donate hover:text-lf-donate-hover` (on the green header `text-lf-bar-donate`) |
+| Donation link («Offrimi un caffè») | `text-lf-donate hover:text-lf-donate-hover` |
 
 Opacity works on every role: `bg-lf-card/90`, `border-lf-on-brand/20`.
 

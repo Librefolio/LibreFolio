@@ -9,9 +9,6 @@
     import {_} from '$lib/i18n';
     import {applyTheme, getCurrentResolvedTheme, getStoredThemePreference, initThemeListener} from '$lib/stores/app/themeStore';
 
-    /** On a green bar (the app header, D-T19): the bar's text, hover and focus ring */
-    export let onBar = false;
-
     let theme: 'light' | 'dark' = 'light';
     let mounted = false;
 
@@ -45,7 +42,7 @@
 
 <button
     aria-label={theme === 'light' ? $_('header.theme.switchToDark') : $_('header.theme.switchToLight')}
-    class={onBar ? 'p-2 rounded-lg transition-colors duration-200 text-lf-bar-text hover:bg-lf-bar-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-bar-focus' : 'p-2 rounded-lg transition-colors duration-200 text-lf-secondary hover:bg-lf-hover'}
+    class="p-2 rounded-lg transition-colors duration-200 text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
     data-testid="theme-toggle"
     on:click={toggleTheme}
     title={theme === 'light' ? $_('header.theme.dark') : $_('header.theme.light')}

@@ -18,7 +18,6 @@
             </div>
             <span class="text-2xl font-bold tracking-wide">LibreFolio</span>
         </div>
-        <span class="text-lf-on-brand/80 text-sm">{$_('auth.passwordRecovery')}</span>
     </div>
 
     <!-- Body Section -->

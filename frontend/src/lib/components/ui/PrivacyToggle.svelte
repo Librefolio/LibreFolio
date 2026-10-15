@@ -10,13 +10,6 @@
     import {_} from '$lib/i18n';
     import {isPrivacyEnabled, togglePrivacy} from '$lib/stores/app/privacyStore.svelte';
 
-    interface Props {
-        /** On a green bar (the app header, D-T19): the bar's text, hover and focus ring */
-        onBar?: boolean;
-    }
-
-    let {onBar = false}: Props = $props();
-
     const hidden = $derived(isPrivacyEnabled());
     const label = $derived(hidden ? $_('header.privacy.show') : $_('header.privacy.hide'));
 </script>
@@ -24,7 +17,7 @@
 <button
     aria-label={label}
     aria-pressed={hidden}
-    class={onBar ? 'p-2 rounded-lg transition-colors duration-200 text-lf-bar-text hover:bg-lf-bar-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-bar-focus' : 'p-2 rounded-lg transition-colors duration-200 text-lf-secondary hover:bg-lf-hover'}
+    class="p-2 rounded-lg transition-colors duration-200 text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus"
     data-testid="privacy-toggle"
     onclick={togglePrivacy}
     title={label}

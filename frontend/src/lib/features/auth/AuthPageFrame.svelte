@@ -20,8 +20,9 @@
 </script>
 
 <div class="min-h-screen flex items-center justify-center p-4" data-testid={testId}>
-    <!-- Language & Theme Selector (top right) -->
-    <div class="fixed right-4 z-50 flex items-center space-x-2 safe-top-offset">
+    <!-- Language & Theme Selector (top right): fixed on desktop; on a phone it scrolls away with the page, so it never
+         sits over the card (absolute, below the shell's lg breakpoint) -->
+    <div class="absolute lg:fixed right-4 z-50 flex items-center space-x-2 safe-top-offset" data-testid="auth-page-controls">
         <a href="https://www.buymeacoffee.com/librefolio" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-lf-hover transition-colors text-lf-donate" title={$_('help.buyMeACoffee')}>
             <span class="hidden sm:inline text-sm font-medium leading-5">{$_('help.buyMeACoffee')}</span>
             <Coffee size={20} class="flex-shrink-0" />
