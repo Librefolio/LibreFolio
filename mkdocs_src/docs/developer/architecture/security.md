@@ -635,6 +635,22 @@ HTTP client uses a 5 s timeout and does not follow redirects. The frontend keeps
 fail-closed as well (`frontend/src/lib/features/update-check/updateCheck.ts`): an error is
 never shown as "up to date".
 
+## 📜 Request Logs {: #request-logs }
+
+uvicorn writes one line per request, with its path and query string: HTTP requests on the `uvicorn.access` logger,
+WebSocket handshakes on `uvicorn.error`. A credential in a query string would reach that line in clear, so
+`configure_logging()` (`backend/app/logging_config.py`) adds a filter to both loggers. It replaces with `***` the value
+of every credential-like query parameter: one named exactly `code`, or whose name holds `token`, `secret`, `password`,
+`passwd`, `api_key`/`apikey`/`api-key` or `signature`, in any case, judged on the name percent-decoded as the app reads
+it. The filter masks every string argument of the record where it stands, so the line keeps its shape, and the log
+stays on everywhere. A value is not decoded: a URL encoded inside another parameter's value is not read.
+
+The links the app writes carry their tokens in the URL fragment, which the browser never sends, and the app's
+redirects (`?redirect=`, `?returnTo=`) carry a path and query, never a fragment: the filter covers a token typed by
+hand into a query string. `mask_query_credentials()` holds the rule. One mode is outside it: uvicorn's own
+`--log-level trace`, which LibreFolio never passes, logs every ASGI message on `uvicorn.asgi`, headers included. It is
+a debugging mode, not meant for a server with real users.
+
 ## 🌐 HTTPS & Deployment Architecture
 
 **LibreFolio does not handle HTTPS directly.**
