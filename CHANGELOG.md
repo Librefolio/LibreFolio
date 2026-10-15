@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Settings › Email checks, from the administrator's browser, that `LIBREFOLIO_PUBLIC_URL` reaches this very instance, and warns, for this device only, when another server answers there or nothing does; the startup warning about `LIBREFOLIO_PUBLIC_URL` now lists every rule the address must follow.
 - `GET /api/v1/brokers/import/files`: each file carries `can_delete`, true when the caller may delete it.
 - Test configuration shows until when a provider is paused after too many requests. API: live prices, asset refresh and FX sync results carry `error_code="RATE_LIMITED"` and `retry_after`.
+- **Scheduled wake-up**: `POST /api/v1/system/wake-sync` runs the price and exchange-rate updates that are due, for a hosting panel or a cron; off until `LIBREFOLIO_WAKE_TOKEN` is set. Documented in the new admin page "Sleep and Wake".
 
 ### 🔄 Changed
 
