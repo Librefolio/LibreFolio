@@ -19,7 +19,9 @@
     let {testId, children}: Props = $props();
 </script>
 
-<div class="min-h-screen flex items-center justify-center p-4" data-testid={testId}>
+<!-- Below lg the page keeps the top clear for the row of controls (4rem: their safe-top-offset, 1rem plus the safe-area
+     inset, and their height), so a card too tall to centre starts below them instead of beneath them -->
+<div class="min-h-screen flex items-center justify-center p-4 pt-[calc(4rem_+_env(safe-area-inset-top,0px))] lg:pt-4" data-testid={testId}>
     <!-- Language & Theme Selector (top right): fixed on desktop; on a phone it scrolls away with the page, so it never
          sits over the card (absolute, below the shell's lg breakpoint) -->
     <div class="absolute lg:fixed right-4 z-50 flex items-center space-x-2 safe-top-offset" data-testid="auth-page-controls">
