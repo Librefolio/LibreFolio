@@ -1,9 +1,10 @@
 /**
- * The email administration API (workstream E, lot E2): the state of the instance's email and the test email.
+ * The email administration API (workstream E, lots E2 and E3): the state of the instance's email, the test email, and
+ * the nonce of the check of the emailed links' base.
  *
  * Thin wrappers over the generated client, so that the Email tab and its tests share one seam. The SMTP configuration
  * never reaches the browser: `GET /email/status` answers with the state, the problem and the variable at fault, the
- * configuration checks and the hourly budget only.
+ * configuration checks, the hourly budget and the links' base only.
  */
 import {isAxiosError} from 'axios';
 import type {z} from 'zod';
@@ -27,6 +28,18 @@ export interface EmailStatus {
     checks: EmailCheck[];
     /** `ready` only: the hourly budget. */
     budget: EmailBudget | null;
+    /** Whether emails can carry links (`LIBREFOLIO_PUBLIC_URL`). */
+    links: EmailLinks;
+}
+
+/** Whether emails can carry links: every one starts with `base`, `LIBREFOLIO_PUBLIC_URL` (developer decision 45). */
+export interface EmailLinks {
+    /** True only with a `base`. */
+    ready: boolean;
+    /** The base of every emailed link; null when not ready. */
+    base: string | null;
+    /** Why no link can be emailed: `PUBLIC_URL_MISSING` or `PUBLIC_URL_INVALID`. */
+    problem: string | null;
 }
 
 function textOrNull(value: unknown): string | null {
@@ -37,6 +50,14 @@ function budgetOrNull(value: unknown): EmailBudget | null {
     return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as EmailBudget) : null;
 }
 
+/** `links` as the tab trusts it: ready only with a base, never a base when not ready; not ready when absent. */
+function linksOf(value: unknown): EmailLinks {
+    const fields = typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+    const base = textOrNull(fields.base);
+    const ready = fields.ready === true && base !== null;
+    return {ready, base: ready ? base : null, problem: textOrNull(fields.problem)};
+}
+
 export async function fetchEmailStatus(): Promise<EmailStatus> {
     const answer = await zodiosApi.get_email_status_api_v1_email_status_get();
     return {
@@ -45,7 +66,14 @@ export async function fetchEmailStatus(): Promise<EmailStatus> {
         variable: textOrNull(answer.variable),
         checks: answer.checks ?? [],
         budget: budgetOrNull(answer.budget),
+        links: linksOf(answer.links),
     };
+}
+
+/** A nonce of this instance for the address check (`POST /users/address-probe`, administrators only). */
+export async function issueProbeNonce(): Promise<string> {
+    const issued = await zodiosApi.issue_address_probe_api_v1_users_address_probe_post(undefined);
+    return issued.nonce;
 }
 
 export function sendTestEmail(): Promise<EmailTestResult> {

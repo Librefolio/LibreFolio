@@ -11711,7 +11711,7 @@
           "amount": "1958.646314322439017345214541",
           "code": "EUR"
         },
-        "mwrr_annualized": "-0.000000",
+        "mwrr_annualized": "0.000000",
         "mwrr_cumulative": "0.000000",
         "nav_value": {
           "amount": "13715.82231432243901734521454",
@@ -11909,8 +11909,8 @@
           "amount": "1958.646314322439017345214541",
           "code": "EUR"
         },
-        "mwrr_annualized": "0.000100",
-        "mwrr_cumulative": "0.000001",
+        "mwrr_annualized": "-0.736334",
+        "mwrr_cumulative": "-0.014503",
         "nav_value": {
           "amount": "13515.82231432243901734521454",
           "code": "EUR"
@@ -11975,8 +11975,8 @@
           "amount": "1698.246314322439017345214541",
           "code": "EUR"
         },
-        "mwrr_annualized": "0.000200",
-        "mwrr_cumulative": "0.000003",
+        "mwrr_annualized": "-0.656175",
+        "mwrr_cumulative": "-0.014519",
         "nav_value": {
           "amount": "13515.82231432243901734521454",
           "code": "EUR"
@@ -13012,7 +13012,7 @@
             "amount": "1958.646314322439017345214541",
             "code": "EUR"
           },
-          "mwrr_annualized": "-0.000000",
+          "mwrr_annualized": "0.000000",
           "mwrr_cumulative": "0.000000",
           "nav_value": {
             "amount": "13715.82231432243901734521454",
@@ -13210,8 +13210,8 @@
             "amount": "1958.646314322439017345214541",
             "code": "EUR"
           },
-          "mwrr_annualized": "0.000100",
-          "mwrr_cumulative": "0.000001",
+          "mwrr_annualized": "-0.736334",
+          "mwrr_cumulative": "-0.014503",
           "nav_value": {
             "amount": "13515.82231432243901734521454",
             "code": "EUR"
@@ -13276,8 +13276,8 @@
             "amount": "1698.246314322439017345214541",
             "code": "EUR"
           },
-          "mwrr_annualized": "0.000200",
-          "mwrr_cumulative": "0.000003",
+          "mwrr_annualized": "-0.656175",
+          "mwrr_cumulative": "-0.014519",
           "nav_value": {
             "amount": "13515.82231432243901734521454",
             "code": "EUR"

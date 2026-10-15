@@ -36,8 +36,8 @@ any other check, and ``GET /email/status`` shows them. Lot E3 adds the third, ``
    invalid: nothing to say, whatever the variable — or when links are ready; with usable email, ``info`` /
    ``email.checks.links.missing`` for ``LIBREFOLIO_PUBLIC_URL`` unset or blank and ``warning`` /
    ``email.checks.links.invalid`` for a value that is not an http(s) address, or one no link can start from (no host,
-   a space inside, a query, a fragment) — each with a summary for the log that names the variable, never its value.
-   Never a detail.
+   a user name or a password, a ``?`` or a ``#`` even with nothing after it, a space inside, a bad port) — each with a
+   summary for the log that names the variable, never its value. Never a detail.
 
 Pure: no database, no server, no network. An autouse fixture removes every inherited ``LIBREFOLIO_SMTP_*`` and
 ``LIBREFOLIO_PUBLIC_URL`` (C-96 removes them from the lanes; a developer's shell may still carry them); each test sets
@@ -618,11 +618,14 @@ def test_the_startup_audit_says_when_email_works_without_its_links(platform: Pat
         pytest.param(BASE, "https://folio.zq-space.example.com/my folio", "warning", "email.checks.links.invalid", id="email-usable-links-a-space-inside"),
         pytest.param(BASE, "https://folio.zq-query.example.com/app?lang=it", "warning", "email.checks.links.invalid", id="email-usable-links-a-query"),
         pytest.param(BASE, "https://folio.zq-fragment.example.com/app#top", "warning", "email.checks.links.invalid", id="email-usable-links-a-fragment"),
+        pytest.param(BASE, "https://folio.zq-qmark.example.com/app?", "warning", "email.checks.links.invalid", id="email-usable-links-an-empty-query"),
+        pytest.param(BASE, "https://zq-user:zq-secret@folio.example.com/app", "warning", "email.checks.links.invalid", id="email-usable-links-credentials"),
+        pytest.param(BASE, "https://folio.zq-port.example.com:99999/app", "warning", "email.checks.links.invalid", id="email-usable-links-a-port-out-of-range"),
         pytest.param({}, "https://folio.zq-space.example.com/my folio", "ok", "email.checks.links.ok", id="email-off-links-a-space-inside"),
     ],
 )
 def test_the_links_check_in_each_state(monkeypatch: pytest.MonkeyPatch, variables: dict, public_url: str | None, severity: str, key: str) -> None:
-    """EMK-016 — contract 8: ``check_email_links`` is ``ok`` when email is not usable — off or invalid —, whatever ``LIBREFOLIO_PUBLIC_URL`` says, and when links are ready; with usable email, ``info`` / ``missing`` for the variable unset or blank, ``warning`` / ``invalid`` for a value that is not http(s) or an http(s) address no link can start from (the scheme alone, a space inside, a query, a fragment). Never a detail; a summary for the log when it speaks, naming the variable and never its value nor the SMTP host."""
+    """EMK-016 — contract 8: ``check_email_links`` is ``ok`` when email is not usable — off or invalid —, whatever ``LIBREFOLIO_PUBLIC_URL`` says, and when links are ready; with usable email, ``info`` / ``missing`` for the variable unset or blank, ``warning`` / ``invalid`` for a value that is not http(s) or an http(s) address no link can start from (the scheme alone, a space inside, a query or a fragment — even an empty one —, credentials, a port out of range). Never a detail; a summary for the log when it speaks, naming the variable and never its value nor the SMTP host."""
     print_section(f"EMK-016: email {sorted(variables) or 'off'}, LIBREFOLIO_PUBLIC_URL={public_url!r}")
     _configure(monkeypatch, variables)
     if public_url is not None:

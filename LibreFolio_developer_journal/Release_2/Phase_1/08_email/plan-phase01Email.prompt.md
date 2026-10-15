@@ -1018,3 +1018,84 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 > `email-delivery` 104 ✅, `email-messages` 267 ✅, `--no-shared-server api email` 160 ✅, `api system` 117 ✅ (server
 > di corsia, spento a fine run), `check-orphans` ✅ (325 file backend, 428 unit, 128 E2E raggiungibili). Porta 6188
 > libera.
+>
+> **Entrato** in `dev_release2` = `8f908623b` (E3 + E3s); CHANGELOG `1d74e212e`. Ramo portato avanti a `1d74e212e`.
+
+### E3 — la sonda nella scheda Email (lotto E3p)
+
+Via del coordinatore alle 21:31, con la decisione 45 e il contratto della sonda concordato con A (A6b in base da
+`1d74e212e`).
+
+#### E3.6 — Disegno ✅ (2026-10-15)
+> - **Quando**: solo con l'email `ready` e `links.ready`, sulla base di `/email/status.links.base` (la stessa delle
+>   email). Una volta per base: la rilettura dello stato dopo l'email di prova non rilancia la sonda; «Verifica di
+>   nuovo» la rilancia; una risposta superata (contatore di generazione, come A) si scarta.
+> - **Come**: `emailLinks.probeEmailLinks(base, {pageProtocol, issueNonce})`, TS puro sopra l'helper di A
+>   (`settings/users/addressProbe.ts`: `normalizeBase`, `checkAddress`), nessuna copia. Il nonce da
+>   `emailApi.issueProbeNonce()` (`POST /users/address-probe`, solo admin). Esiti: `normalizeBase` → `null`:
+>   `invalid`; pagina `https:` e base `http:`: `insecure`, prima di ogni richiesta (il browser la bloccherebbe:
+>   contenuto misto); poi `match` → `match`, `mismatch` → `otherInstance`, `unverifiable` → `unreachable`.
+> - **Dove**: un riquadro «link nelle email» nella scheda, dopo gli avvisi di configurazione: la base, poi l'esito.
+>   `checking` e `match` su una riga tenue o di successo; gli altri come avviso (classi `NOTICE_CLASSES.warning`), con
+>   il testo che dice che la verifica vale solo per questo dispositivo e può dipendere da DNS o rete, e il pulsante
+>   «Verifica di nuovo».
+> - **Testo di `email.links` più ampio**: il log e `email.checks.links.invalid` dicono «non si può usare per i link»
+>   e le regole intere (http(s), un host, niente utente, password, `?` o `#`), non solo «non è http(s)». Doc: le due
+>   righe di `admin/configuration.en.md`, le pagine email.
+> - **Fuori**: la galleria (lo stato servito non ha `links`, lo scatto non cambia); un E2E nuovo (la sonda di A ha già
+>   il suo contro il backend vero; qui bastano Vitest e il test del componente).
+> - **Prove**: `services email-checks`, `config-audit`; Vitest dei file email con il binario bloccato; `i18n build` +
+>   `check`; `front check`; `prettier --check`; poi `front-utility core-unit` nello slot pesante (cataloghi).
+
+#### E3.7 — Codice della sonda e testo di `email.links` ✅ (2026-10-15)
+> **Note implementazione**:
+> - `features/email/emailLinks.ts` (nuovo, TS puro): `probeEmailLinks()` sopra `normalizeBase`/`checkAddress` di A;
+>   `invalid` e `insecure` prima di ogni richiesta; si sonda la base normalizzata.
+> - `emailApi.ts`: `EmailStatus.links` ristretto da `linksOf()` (pronto solo con una base); `issueProbeNonce()`.
+> - `emailText.ts`: `LINKS_PROBE_KEYS`, `LINKS_PROBE_CLASSES` (solo ruoli), `linksProbeWarns()`.
+> - `EmailSettingsTab.svelte`: `linksBase` solo con `ready` + `links.ready`; un `$effect` che sonda una volta per
+>   base, il cui cleanup alza la generazione (base cambiata, uscita dalla scheda); «Verifica di nuovo» per i quattro
+>   esiti d'avviso; `notify('email.links.checked')`; `data-busy` della scheda invariato, il riquadro ha il suo.
+> - Cataloghi `i18n/email/` × 4: `email.links.{base,probe.*,recheck}` (8 chiavi), `email.checks.links.invalid`
+>   riscritto con le regole intere; niente `<`/`>`, nessun apostrofo davanti a una graffa.
+> - Backend: testo del `warning` di `email.links` (log), messaggio della 409 `EMAIL_LINKS_UNAVAILABLE`, descrizione
+>   di `EmailLinksRead.ready`, docstring di `EmailLinksUnavailableError`.
+> - Prove leggere: `prettier --check` sui file toccati ✅; `i18n build` + `check` stretto ✅ (4 634 chiavi × 4, 93
+>   sorgenti); `ruff`/`black` ✅; `front check`: 11 errori, tutti nei fixture dei test (`EmailStatus` vuole `links`),
+>   girati a test-author; il codice di produzione passa.
+> - Test a test-author (Vitest `emailLinks.test.ts` nuovo in core-unit, `emailApi`, `emailText`, la scheda; EMK/EMA
+>   se toccati); doc a docs-writer (`admin/email.en.md`, `developer/backend/email.md`, la riga di
+>   `admin/configuration.en.md`).
+
+#### E3.8 — Test, doc e prove ✅ (2026-10-15)
+> **Note implementazione**:
+> - test-author: `emailLinks.test.ts` nuovo (ELK-01…09, 34 test, ambiente node, registrato in core-unit in
+>   `_frontend_utility.py`, una riga); `emailApi.test.ts` EAP-01…07; `emailText.test.ts` ETX-01…06;
+>   `EmailSettingsTab.test.ts` ETB-01…10 per i link; `test_email_checks.py` 3 casi `invalid` in più (`?` vuoto,
+>   credenziali, porta 99999). Nessun test asseriva i testi vecchi alla lettera. Limite dichiarato: in jsdom la pagina
+>   è sempre `http:`, quindi il caso https è fissato in ELK-02, non nel test della scheda.
+> - docs-writer: `admin/email.en.md` nuova sottosezione `#links-check` (esiti, riquadro «solo questo dispositivo»,
+>   quando gira), «To check it» senza più «LibreFolio non controlla»; `developer/backend/email.md` (check, 409, la
+>   scheda, «Coming Next»); `admin/configuration.en.md` riga `warning` di `email.links` (+1 −1). Tabella Testing
+>   aggiornata da me.
+> - Prove, una alla volta con `nice -n 10`, carico sotto 70:
+>
+> | Comando | Esito |
+> |---|---|
+> | `vitest run src/lib/features/email/` (binario bloccato) | 4 file, 300 ✅ |
+> | `services email-checks` | 87 ✅ |
+> | `--no-shared-server api email` | 160 ✅ |
+> | `dev.py front check` | 0 errori, 0 avvisi |
+> | `services config-audit` | 90 ✅ |
+> | `check-orphans` | ✅ (429 unit registrati) |
+> | `i18n build` + `check` stretto | ✅ 4 634 chiavi × 4 |
+> | `dev.py mkdocs build` stretto / `check-links` | uscita 0, nessun WARNING/ERROR / 96 link validi |
+>
+> - `prettier --check`, `ruff`, `black`, `git diff --check` puliti; porta 6188 libera.
+> - `front-utility core-unit` intero nello slot pesante (via del coordinatore, dopo la run di A, 22:09): 158 file,
+>   5 248 test ✅ (log `/tmp/libreFolio_e3p_core_unit.log`), gate di markup, ICU e lingua compresi.
+
+### Checkpoint E3p 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+> **Base**: HEAD `1d74e212e`. Delta: 20 file tracciati modificati, 2 nuovi (`features/email/emailLinks.ts`,
+> `emailLinks.test.ts`). Righe condivise: `_frontend_utility.py` (una riga), `admin/configuration.en.md` (+1 −1);
+> `addressProbe.ts` di A riusato senza modifiche. Resta di E3: l'email d'attivazione dell'admin iniziale, dopo A7.

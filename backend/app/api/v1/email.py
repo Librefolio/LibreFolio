@@ -118,7 +118,7 @@ async def send_link(body: EmailLinkRequest, admin: Annotated[User, Depends(requi
     except EmailUnavailableError as exc:
         _unavailable(exc)
     except EmailLinksUnavailableError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "EMAIL_LINKS_UNAVAILABLE", "problem": exc.code, "message": "Emails cannot carry links: LIBREFOLIO_PUBLIC_URL is not set to an http(s) address"}) from None
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "EMAIL_LINKS_UNAVAILABLE", "problem": exc.code, "message": "Emails cannot carry links: LIBREFOLIO_PUBLIC_URL is not set, or cannot start a link"}) from None
     except flows.EmailLinkInvalidError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "EMAIL_LINK_INVALID", "status": exc.code, "message": "The link is not a live link of that kind"}) from None
     except flows.EmailAccountInactiveError:

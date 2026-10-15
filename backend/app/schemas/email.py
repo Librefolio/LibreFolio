@@ -32,7 +32,7 @@ class EmailBudgetRead(StrictModel):
 class EmailLinksRead(StrictModel):
     """Whether emails can carry links: they are built only from LIBREFOLIO_PUBLIC_URL (developer decision 45)."""
 
-    ready: bool = Field(default=False, description="LIBREFOLIO_PUBLIC_URL is set to an http(s) address")
+    ready: bool = Field(default=False, description="LIBREFOLIO_PUBLIC_URL is set to an address a link can start from: http(s), a host, no credentials, no ? or #")
     base: Optional[str] = Field(None, description="LIBREFOLIO_PUBLIC_URL, the base of every emailed link: the browser checks that it reaches this instance")
     problem: Optional[Literal["PUBLIC_URL_MISSING", "PUBLIC_URL_INVALID"]] = Field(None, description="Why no link can be emailed")
 
