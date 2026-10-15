@@ -629,6 +629,16 @@ def api_portfolio_wac(verbose: bool = False, test_names: list[str] | None = None
     return run_command(cmd, "Portfolio WAC API tests", verbose=verbose)
 
 
+def api_email(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the email administration API tests: GET /email/status and POST /email/test, in-process."""
+    print_section("Email Administration API Tests")
+    print_info("Testing GET /email/status and POST /email/test: admin only, state/checks/budget without the SMTP configuration, the test email in the admin's language, 409/429/502/422")
+    print_info("In-process: the real auth and email routers on a private SQLite, SMTP variables by monkeypatch, a fake SMTP server on 127.0.0.1; the lane's backend is never called")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_email_api.py", test_names)
+    return run_command(cmd, "Email administration API tests", verbose=verbose)
+
+
 def _api_setup() -> bool:
     """Reseed the fixture data the API units assert against.
 
@@ -787,6 +797,16 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
     add_test(api, "portfolio", api_portfolio, name="Portfolio API", desc="Summary, history, asset-history, FIFO lots endpoints")
     add_test(api, "portfolio-wac", api_portfolio_wac, name="Portfolio WAC API", desc="POST /portfolio/wac endpoint (A1-A8)")
+    add_test(
+        api,
+        "email",
+        api_email,
+        name="Email Administration API",
+        desc="GET /email/status (admin: off/ready/invalid, checks, hourly budget, never the SMTP configuration) and POST /email/test (to the admin's own address in their language; 409 off or unusable, 429 with Retry-After, 502 with the SMTP code, 422 not one address; no secret in an answer)",
+        # PURE: the real auth and email routers run in-process on a private SQLite file under tmp_path, the SMTP variables are
+        # set with monkeypatch in this process and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
+        isolation="pure",
+    )
     add_test(
         api,
         "http-compression",

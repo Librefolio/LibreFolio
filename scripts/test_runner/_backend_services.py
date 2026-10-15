@@ -493,6 +493,16 @@ def services_email_checks(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "E-mail configuration check tests", verbose=verbose)
 
 
+def services_email_flows(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what an action of the application sends: the language of an account's emails, and the test email."""
+    print_section("Services: E-mail Flows")
+    print_info("Testing: backend/app/services/email/flows.py")
+    print_info("Tests: account language (its own, else default_language, else English; no settings row created), the test email to the account's own address in its language, nothing sent when e-mail is off or unusable, configuration read off the event loop")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_flows.py", test_names)
+    return run_command(cmd, "E-mail flow tests", verbose=verbose)
+
+
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
     """Test session revocation through the session version (the sv claim of the session cookie)."""
     print_section("Services: Session Version")
@@ -1198,6 +1208,16 @@ Note: No backend server required.
         name="E-mail Configuration Checks",
         desc="email.smtp: off, ok, or error with problem and variable; email.smtp_encryption: ok unless plain text to a non-local host (warning); EMAIL_CONFIG_CHECKS; no password anywhere, no host, user or sender in a detail",
         # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-flows",
+        services_email_flows,
+        name="E-mail Flows",
+        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server; LIBREFOLIO_SMTP_* removed then set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
         isolation="pure",
     )
     add_test(

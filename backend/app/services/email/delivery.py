@@ -133,9 +133,10 @@ def email_config_state() -> EmailConfigState:  # noqa: PLR0911 — one return pe
     return EmailConfigState(configured=True, server=server, sender=sender, reply_to=reply_to, max_per_hour=max_per_hour)
 
 
-def budget_status() -> RateDecision:
-    """What the hourly budget of the instance allows now, without spending it."""
-    return INSTANCE_BUDGET.peek(limit=email_config_state().max_per_hour)
+def budget_status(max_per_hour: int | None = None) -> RateDecision:
+    """What the hourly budget of the instance allows now, without spending it: against ``max_per_hour`` when given (a
+    state already read), else against the configured limit."""
+    return INSTANCE_BUDGET.peek(limit=max_per_hour if max_per_hour is not None else email_config_state().max_per_hour)
 
 
 def _redacted(detail: str, *, password: str | None, recipient: str) -> str:
@@ -150,10 +151,12 @@ def _redacted(detail: str, *, password: str | None, recipient: str) -> str:
 async def send_email(content: EmailContent, *, to: str, user_id: int | None = None) -> None:
     """Send ``content`` to ``to``: one unit of the hourly budget per attempt, SMTP in a worker thread.
 
-    Raises ``EmailUnavailableError`` (nothing spent), ``ValueError`` for an address that is not one address (nothing
-    spent), ``EmailRateLimitedError`` (budget spent: nothing sent) and ``EmailDeliveryError`` (the server refused).
+    Raises ``EmailUnavailableError`` (nothing spent), ``EmailRecipientError`` (a ``ValueError``) for an address that is
+    not one address (nothing spent), ``EmailRateLimitedError`` (budget spent: nothing sent) and ``EmailDeliveryError``
+    (the server refused).
     """
-    state = email_config_state()
+    # The configuration may come from a password file: read off the event loop.
+    state = await asyncio.to_thread(email_config_state)
     if not state.usable or state.server is None or state.sender is None:
         raise EmailUnavailableError(state.problem or "EMAIL_NOT_CONFIGURED")
     message = compose_message(content, to=to, sender=state.sender, reply_to=state.reply_to)
