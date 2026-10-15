@@ -57,6 +57,11 @@ quando decido il 31)».
 | D-Y9 | 48-1 con l'ok di J, più avanti; i due `title` di C-15 vanno a W |
 | — | K-12, K-14 e I-02 restano fuori |
 | — | C-85, 54-1 e difetto 5 del PAC: al developer, nel file delle decisioni (lotti dopo Y2) |
+| D-Y13 | (15/10, 18:19, analisi di Y3 e Y4) Feature a radice piatta:<br>• dashboard e rischio piatte, il rischio tiene `levels/`;<br>• dei segnali, `lib/charts/signals` sale alla radice e la UI va in `components/`;<br>• l'`index.ts` dei segnali, che esiste già, diventa il file pubblico `$lib/features/signals`;<br>• nessun barile nuovo |
+| D-Y14 | `ChartSettingsModal` e `MeasurePanel` vanno in `features/signals`: sono UI dei segnali usata solo dalle pagine. Costo: l'eccezione di `theme-roles.mjs:72`, cioè del programma colori |
+| D-Y15 | Resta un'inversione: le primitive di `components/charts` e `chartSettingsStore` importano dai segnali (`type RenderedSignal`, `signalLabelToHtml` e due aiuti dello schema). Va accettata fino a FE9 (backlog Y-7) |
+| D-Y16 | `chartCoreHelpers.test.ts` cambia solo i percorsi |
+| — | Ordine proposto dal coordinatore al developer, in attesa del suo via:<br>• Y3 dopo l'ingresso di DV (DV ha già cambiato `AllocationHistoryChart` e `AllocationPieChart`);<br>• Y4b dopo DV;<br>• Y4a dopo FE4 e FE5a di X;<br>• intanto Y8 (I-01, I-03, 47-1, O-16; 48-1 con l'ok di J) e Y7 (C-38, C-62).<br>Le dichiarazioni ai colori (scanner del Lab, `theme-roles.mjs:72`, tabella vecchio → nuovo) vanno al coordinatore al checkpoint di ogni lotto |
 
 ### 0.4 Condizioni del coordinatore per il taglio di `GrowthChart` (15/10, dopo l'ok del coordinatore colori)
 
@@ -839,3 +844,45 @@ sessione) e nel §2; si scrivono qui quando partono.
 >
 > Il coordinatore ha aggiunto Y-6 per Y10 (`AllocationPanel.svelte:65` passa `emoji` alla torta, che dopo DV non lo
 > legge più): è nel backlog e in §2.
+
+### Y3 e Y4 — analisi ✅ (2026-10-15, 18:10–18:20, sola lettura)
+
+> **Note implementazione**: analisi breve mandata al coordinatore. Base `c747a74c3`, letta dal worktree portato a
+> `695e6ad12`, stesso codice. Script e dati nella cartella di sessione: `libreFolio_y34_graph.py` (grafo degli import)
+> e `libreFolio_y34_literals.py` (percorsi fuori dagli import).
+>
+> | Lotto | Da → a | File | Import esterni |
+> |---|---|---:|---:|
+> | Y3 · FE6b | `components/dashboard/**`, `dashboardViewStore(.test).ts`, `dateRangeController.svelte.ts` → `features/dashboard/` | 35 | 5 |
+> | Y4a · FE2a | `lib/charts/**`, `signalCatalogStore(+test)`, la UI dei segnali più `ChartSettingsModal` e `MeasurePanel` → `features/signals/` | ~55 | 30, 8 dei quali di X |
+> | Y4b · FE2b | `components/risk/**`, `lib/risk`, `stores/risk` → `features/risk/` | 101 | 5 |
+>
+> Nessuna collisione di nomi.
+> - **Accoppiamenti per percorso**:
+>   - stringhe `vi.mock`: 2 in `AboutTab.test` e 10 nei test di rischio;
+>   - gate: `themeModeReads:500-502,1118`, `moneyRenderSites`, `htmlSink` (`SignalOptionContent`), `catalogIcuLocale`,
+>     il registro di `warningTranslatorSites`; poi `allocationTypeEmoji.test` (`readFileSync`);
+>   - backend: `test_risk_schemas.py:1475-1477`;
+>   - runner, righe esatte:
+>
+>     | File | Proprietario | Y3 | Y4a | Y4b |
+>     |---|---|---|---|---|
+>     | `_frontend_utility.py` | programma colori | 302–309 | 41–42, 81, 164–172, 270–272 | 84–92, 275–281 |
+>     | `_frontend_asset.py` | X | 34–36, 66 | 23–25, 29 | — |
+>     | `_frontend_ai_export.py` | J | — | 24–31 | — |
+>     | `_frontend_portfolio.py` | Y | — | — | 163–295 |
+>     | `coverage_js.py` | — | — | 187, 238 | 184 |
+>
+>   - istruzioni: l'`applyTo` di `frontend-signals`;
+>   - documentazione: MkDocs 1, 3 e 5 pagine; devWiki circa 20, 21 e 27 tabelle.
+> - **Colori**:
+>   - R4 accoppia senza ambiguità i 53 record dei file spostati, quindi `--check` passa senza toccare il baseline;
+>   - lo scanner del Lab, `CHART_PATH_RE` a `frontend/scripts/designer-lab/scan-colors.mjs:193`, deve imparare
+>     `features/(dashboard|risk|signals)` nello stesso commit;
+>   - `theme-roles.mjs:72` cambia per D-Y14.
+> - **Decisioni**: D-Y13…D-Y16 approvate dal coordinatore (§0.3). L'ordine e i lotti Y7 e Y8 aspettano il via del
+>   developer, che il coordinatore gli ha chiesto insieme alle decisioni 48–50 (C-85, 54-1, difetto 5 del PAC).
+>
+> **Fuori pista**: i file di DV stanno in due cartelle che si spostano: `AllocationHistoryChart` e `AllocationPanel` in
+> `dashboard` (Y3), `CorrelationHeatmap` in `risk` (Y4b). Per questo il coordinatore propone Y3 e Y4b dopo
+> l'ingresso di DV: nessuno deve unire a mano un file spostato.

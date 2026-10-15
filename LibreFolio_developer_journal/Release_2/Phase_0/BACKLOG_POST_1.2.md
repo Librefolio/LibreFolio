@@ -3205,3 +3205,13 @@ da Y il 15/10.
   15/10. `dashboard/AllocationPanel.svelte:65` (`toAllocEntries`) mette `emoji` in ogni voce, e il tipo `AllocEntry`
   (`:23`) lo dichiara: dopo l'ingresso di DV la torta non lo legge più, quindi è un dato morto. Da togliere in Y10,
   dopo DV. Dettagli: piano di Y, §2.
+- **Y-7 · Dopo Y4a le primitive dei grafici importeranno dalla feature dei segnali** — medio-basso; Y (analisi di Y3 e
+  Y4), approvata come residuo dal coordinatore, 15/10 (D-Y15).
+  - Con `lib/charts` in `features/signals`, restano fuori i generici: `LineChart`, `CandlestickChart`,
+    `PriceChartCompact`, `PriceChartFull`, `chartCoreHelpers`, `lineChartHelpers`, `priceChartHelpers`,
+    `timeSeriesAggregation` di `components/charts`, e `stores/chartSettingsStore`.
+  - Questi importano da `$lib/features/signals`: quasi solo `type RenderedSignal`, più `signalLabelToHtml` e, in
+    `priceChartHelpers`, `backendSignalSchemas` e `getBackendSignalProblem`.
+  - È un'inversione di livello: la UI generica dipende da una feature.
+  - Da chiudere in FE9, spostando il contratto fra grafico e segnale in `components/charts` o in un modulo neutro.
+  - Dettagli: piano di Y, §0.3 e §7 «Y3 e Y4 — analisi».
