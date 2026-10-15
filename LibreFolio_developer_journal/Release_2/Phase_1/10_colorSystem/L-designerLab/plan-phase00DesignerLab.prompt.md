@@ -1407,3 +1407,22 @@ Con la parte statica delle 18:29–18:32 (unit 548, check 0/0, gate 168, `theme-
 > - `setSlider` verifica il valore dopo l'evento.
 >
 > **Backlog:** nuova voce **L-16**, «Giro 3 della designer nel Lab»: ruoli di T-8 dopo l'ingresso di T, livello `category` dopo DV. L-15 annota la decisione D3.
+
+**✅ Passo 7 — validazione del fuso `47e33997b` (15/10, 19:25–19:35).** Commit del coordinatore `7af0922c0`, «feat(designer-lab): add opacity slider to editor»: 14 file, gli stessi del mio delta. Merge pulito di `dev_release2` (`7c39f0666`), che si è fuso da solo solo nel backlog.
+- Il target porta 199 file: 53 in `frontend/src`, 9 di API (email, utenti, backup). Nessuno è una superficie del Lab.
+- Comando: `/tmp/libreFolio_alpha_merged.sh`, nella corsia 6152, nell'ordine del coordinatore. Log in `/tmp/libreFolio_alpha/val-merged/` e negli artefatti (`alpha-val-merged/`).
+
+| Passo | Esito |
+|---|---|
+| `api sync` | exit 0, albero pulito |
+| `front-designer-lab all`, 1 worker | exit 0: **15/15 E2E** in 52,2 s + **548** unit; 5 azioni ✓; la build di debug ricostruita una volta, prima del giro |
+| gate | **168/168** |
+| `npm run check` | **0 errori, 0 warning** |
+| `theme-roles --check` | pulito |
+| Prettier (Lab) | pulito |
+| scanner + inventario + parità | **identica**. `custom` 1050, salito per il codice fuso: 37 voci `lf` tutte con ruolo, 286 usi in 21 file; 45 alias, tutti `inline`. Hex 1291, fn 238, 1161 file |
+| `check-orphans` | 127 e2e, 421 unit raggiungibili |
+| build di release, per ultima | exit 0: marcatore 0, catalogo 0, indice 0, `parseTransparentMix` 0 |
+| porta | 6152 libera. Resta la **build di release**: la rifà in debug il primo `server --test` della corsia |
+
+> **Note implementazione:** i ruoli con mix trasparente nel catalogo fuso sono `--lf-selected` e `--lf-surface-overlay`; le ombre di T arriveranno con T-8. Il test E2E del mix li trova a runtime, senza nominarli.
