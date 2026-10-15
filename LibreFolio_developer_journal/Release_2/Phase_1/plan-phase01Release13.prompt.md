@@ -1021,3 +1021,21 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > invia davvero il cambio password e prova il secondo dispositivo. **Senza nuovo controllo di A** dopo J G-8, X CP4 e
 > W K2a: nessun test nuovo conia token (quelli dei Tool sostituiscono `get_current_user`); `models.py`,
 > `TODO_FUTURI.md` e il backlog si fondono da soli; controlli statici puliti. CHANGELOG con due righe in «🔄 Changed».
+
+### X J-5, il loop chiuso nel thread dei fornitori, integrato ✅ (2026-10-15, 07:20)
+
+> **Note implementazione**: `743fca514`, merge di `cb0bac88d` su `ee5d81a6f` (J-5 `7794e2fb0`). Una riga in
+> `services/assets/core.py`: `asyncio.set_event_loop(None)` prima di `loop.close()`, come `asyncio.Runner.close()`;
+> un test di test-author, rosso prima e verde dopo. Validazione di X: `all-backend` 14 003 passed, 29 skipped,
+> 0 failed sulla base `786f3e216` (lo skip in più è lo scraper CSS di Borsa Italiana a mercato chiuso). Senza nuovo
+> controllo di X: con W K2a e A4b condivide solo il backlog; controlli statici puliti. Niente CHANGELOG: non si
+> vede da fuori. Poi X-R8 (cache di 24 ore degli elenchi delle valute dei fornitori).
+
+### B, Backup e Docker, avviata in sola analisi (2026-10-15, 07:10)
+
+> **Note implementazione**: sessione `5618ecee`, worktree `e-alfy-miniature-telegram`, corsia 6187 +
+> `/tmp/librefolio-r13-b`, base `ee5d81a6f` (fast-forward da `origin/dev_release2`, file dell'agente presente).
+> Condizione del §4 soddisfatta: segreti e configurazione di H sono in `dev_release2` dal CP3. Nodi affidati
+> all'analisi: i segreti nello zip (specifica F01, D-X2, note di H-3), dove vive il backup dell'istanza rispetto agli
+> export per asset di `backup.py`, l'aggancio all'avvio dopo il CP2b di H, le decisioni 6–9 del §10, come si prova
+> lo scambio all'avvio. E parte dopo il checkpoint A5a (inviti), Y dopo il lotto B dei colori.
