@@ -160,3 +160,4 @@ Sono tutti locali: la push la fa il developer.
 | 71 | 16/10 00:55 | X: CP11a (impostazioni dei plugin, backend: `configured` nel catalogo, `providers_not_configured` e `error_code` nello stream di ricerca, preferenze justETF/Borsa D-X14, `PROVIDER_ERROR` mascherato; CHANGELOG con CP11b) | `a6453571d` |
 | 72 | 16/10 01:38 | W: lotto di doc (A-14 regola dell'ultimo OWNER, W-B10 rotte di accesso, W-B33; tolte due chiavi i18n inutilizzate di W-B27) | `6fa3f8936` |
 | 73 | 16/10 01:44 | Z: Z3 (`run_due_jobs` con lock e `busy("scheduler")`, recupero al ritorno, slot perso fino a 7 giorni, istanza bloccata senza job; Z-6 chiusa) | `c0dbc98a0` |
+| 74 | 16/10 01:46 | J: CP-15 (totali di controllo del registro per il backup: `financial_math/ledger_totals.py`, versione 1, somme esatte; nessun chiamante ancora) | `fd41a0996` |
