@@ -212,8 +212,10 @@ match no synonym are ignored, and when two headers map to the same field the lef
 The same map drives detection: `can_parse` — through `cannot_parse_reason` — accepts a `.csv`
 only when both `date` and `type` are mapped, so the wizard offers the plugin only for such files.
 If the user forces it on another file, `parse_file` refuses it with
-`Plugin 'broker_generic_csv' cannot parse file '<name>': required column 'date' not found in the CSV header`
-(HTTP 400), and the file moves to failed.
+`Plugin 'Generic CSV' cannot parse file '<file name>': required column 'date' not found in the CSV header`
+(HTTP 400), and the file moves to failed. Each refusal also has a code the import wizard
+translates — `csv_only`, `file_unreadable`, `no_header_row`, `missing_columns` (see
+[Saying why with a code](../../architecture/patterns/brim_plugin_guide.md#cannot-parse-detail)).
 
 ### 2️⃣ Row Parsing (`_parse_row`)
 

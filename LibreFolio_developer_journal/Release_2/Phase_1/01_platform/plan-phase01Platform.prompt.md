@@ -155,26 +155,29 @@ backend/app/
 
 ### 3.5 Prontezza e versione (F08), C-84, R2
 
-- **Endpoint**:
-  - `GET /system/ready`: 200 se il DB risponde e la revisione è uguale alla head (calcolata una volta e messa in
-    cache); altrimenti 503 con i motivi;
-  - `GET /system/version`: `get_version_info()`.
+> Riscritto all'avvio di CP5 (15/10), con le decisioni del developer: D6 sì, D9 rimandata, D14 modificata.
+
+- **`GET /system/ready`**, pubblico (healthcheck di Docker, Uptime Kuma, il pannello):
+  - 200 se il DB risponde e la sua revisione Alembic è la head; altrimenti 503;
+  - il corpo dà lo stato e un codice per controllo: `database` `ok` o `unreachable`; `migrations` `ok`, `mismatch` o
+    `unknown`. Mai un messaggio d'errore, un percorso o un identificativo di revisione;
+  - la head si legge dagli script una volta per processo e resta in cache; un errore di lettura non resta in cache;
+  - il servizio è `services/platform/readiness.py`, la rotta `api/v1/system/ready.py`;
+  - `main.py` non cambia: la sua `_alembic_head_revision` diventa una chiamata al servizio in CP2b, con il taglio.
+- **`GET /system/info`** (D14 modificata):
+  - senza una sessione valida risponde solo `app_version` (`SystemInfoPublicResponse`);
+  - con la sessione, tutto come oggi (`SystemInfoResponse`, invariato);
+  - la sessione si verifica con `get_current_user` di A, senza copiarne la logica: il suo 401 vuol dire anonimo;
+  - l'endpoint diventa un `def`: legge il Pipfile, `package.json` e i metadati dei pacchetti, I/O sincrono.
 - **R2**:
-  - `get_git_version()`: se esiste `.git` (file o cartella) vince `git describe`; `VERSION` vale solo senza `.git` o se
-    `git describe` fallisce; altrimenti `unknown`;
-  - `dev.py` e la CI continuano a scrivere `VERSION` per l'immagine, che non ha `.git`;
-  - `test_version.py:96` va riscritto.
-- **C-84** (D6):
-  - proposta: `0.0.0` con un commento in `pyproject.toml`; `0.0.0` in `package.json` e nelle due righe radice di
-    `package-lock.json`;
-  - alternativa: allinearle a ogni rilascio.
-- **Facoltativo**: `/metrics` in formato Prometheus scritto a mano, nessuna dipendenza.
-  - Spento di default (`LIBREFOLIO_METRICS_ENABLED=0`); token facoltativo con `_FILE`.
-  - Contenuto: richieste per classe di stato, job dello scheduler (da `scheduler_state.json`), ultimo aggiornamento
-    dei prezzi, dimensione del DB.
-- **`/system/info`** oggi è pubblico ed espone le versioni delle dipendenze e dell'OS. Proposta D14: dietro login. Lo
-  usano solo pagine con sessione (Informazioni, changelog, layout dell'admin); la versione resta pubblica su
-  `/system/version`. Va adattato `test_system_api`.
+  - con `.git` (cartella o file) vince `git describe`;
+  - `VERSION` vale solo senza `.git`, o se `git describe` fallisce; altrimenti `unknown`;
+  - `dev.py` e la CI continuano a scrivere `VERSION` per l'immagine, che non ha `.git`.
+- **C-84** (D6): `0.0.0` con un commento in `pyproject.toml`; `0.0.0` in `frontend/package.json` e nelle due righe
+  radice di `package-lock.json`. Nessuno legge questi numeri.
+- **Fuori**: `/system/version` (D14) e `/metrics` (D9).
+- **Divisione**: CP5a, il backend, che può entrare a qualunque ora; CP5b, il frontend (`package.json`, il lock e
+  `AboutTab`, che deve riconoscere la risposta minima), dopo la finestra della galleria.
 
 ### 3.6 Profilo gestito e sola lettura (F05, parte H)
 
@@ -234,7 +237,7 @@ Il lotto si divide in due:
 | CP2 | **Taglio di `main.py`**: lifecycle, database_bootstrap, middleware, static_site. Configurazione unica (pacchetto `config/`, D2) con le letture spostate e la guardia su `os.environ`. Patch dei test su `lifecycle` con `raising=True` | A, Z, B, X (agganci senza toccare `main.py`, sezioni di config) | il commit del coordinatore su `main.py` + aggiornamento di base |
 | CP3 | **Segreti (F03)**: sorgente `_FILE`, `JWT_SECRET_FILE` (e `dev.py`), `instance_key`, `config_audit` nei log, `.env.example` completo e a sezioni con la guardia «ogni variabile è in `.env.example`», doc admin (configuration, filesystem) | B, X (chiave), E | CP2 |
 | CP4 | **Config pubblica e avvisi**: due endpoint, `features/instance/`, layout, interceptor, i18n, Vitest, `api sync` | A (login, link), Z, X | CP3; `npm ci` approvato |
-| CP5 | **Prontezza e versione (F08)**, C-84, R2, `/system/info` dietro login (D14); `/metrics` se D9 | pannello di controllo | CP2 |
+| CP5 | **Prontezza e versione (F08)**: `/system/ready`, `/system/info` minimo senza sessione (D14 modificata), R2, C-84. CP5a backend, CP5b frontend | pannello di controllo | CP2a |
 | CP6 | **Profilo e sola lettura**: `PROFILE_DEFAULTS`, middleware, allow-list e guardia, avviso e toast, pagina admin «profilo gestito per gli hoster» | A e X (default del profilo) | CP4 |
 | CP7a | **Lotto Docker**: P-4, M-25, C-37, N-8, 32-3, istruzioni per C-26. Poi i file Docker passano a B | B (Litestream) | Docker acceso; anticipabile subito dopo CP3 |
 | CP7b | **Lotto HTTP**: cache di `/_app` (F28), default di 60 s nel profilo gestito (F27), header con CSP in sola segnalazione (F15) | — | CP6 |
@@ -284,8 +287,10 @@ gli statici, la doc, il piano aggiornato e infine FROZEN.
   doc `admin/configuration.en.md`, `admin/filesystem.en.md`, `developer/architecture/security.md`.
 - **CP4**: `system.py`, `schemas/` (instance), `frontend/src/lib/features/instance/**`, `routes/(app)/+layout.svelte`
   e i suoi due test, `lib/api/zodios-client.ts` (aggancio), `lib/i18n/instance/**`.
-- **CP5**: `system.py`, `database_bootstrap.py`, `utils/runtime/version.py`, `test_version.py`, `pyproject.toml`,
-  `frontend/package.json` e `package-lock.json` (radice).
+- **CP5**:
+  - CP5a: `api/v1/system/{__init__,info,ready}.py`, `services/platform/readiness.py`, `schemas/system.py`,
+    `utils/runtime/version.py`, `pyproject.toml`, un commento di `dev.py`; i test di versione e di sistema; la doc;
+  - CP5b: `frontend/package.json`, le due righe radice di `package-lock.json`, `AboutTab.svelte`.
 - **CP6**: `read_only.py`, `middleware.py`, `config.py`, `features/instance/**`; doc admin (pagina nuova) e sviluppatori.
 - **CP7a e CP7b**: `Dockerfile`, `docker-compose*.yml`, `entrypoint.sh` (se serve), `dev.py` (docker build ed exec),
   `scripts/cli_base.py` (solo se serve per N-8), `static_site.py`, `security_headers.py`; test
@@ -1212,3 +1217,224 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 > - **Backlog**: H-1 registra le due menzioni in prosa di `system.py` nella devWiki.
 
 ### Checkpoint CP4 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+
+> Handoff inviato. Il coordinatore ha committato CP4 in 5 commit: R `c43ea0460` (`R100`), C `27a29af09`, CP4a
+> `42af16d54`, CP4b `2069c75cd`, journal `bf085ddb8`. Le patch sono identiche alle copie di sessione. Il suo controllo
+> sull'AST del taglio: 16 definizioni su 16 identiche, più i sotto-router.
+>
+> **Correzione**: nel messaggio di handoff le code delle due impronte erano scambiate. Quelle giuste sono R
+> `1107ea92…dfc52a776` e C `aed0e05e…6e2ad22f`.
+
+### Aggiornamento di base con J CP-1, W4 e A4 ✅ (2026-10-15, notte)
+
+> `2f5ce4c36`, merge del coordinatore di `dev_release2` a `be2ad6573`: J CP-1, W4 (BRIM in `services/brim/`), A4 (la
+> migrazione 005). Unione automatica, albero uguale alla simulazione.
+>
+> **Validazione completa** sulla 6181, perché CP4 cambia il layout di ogni pagina:
+>
+> - galleria: senza avvisi `InstanceNotices` non disegna nessun nodo. L'`{#if}` avvolge l'unica `<section>`, il test
+>   del componente lo verifica (`container.querySelector('*')` nullo) e `<main>` non ha `space-y`. Nessun codice di
+>   produzione mostra un avviso;
+> - `front build --debug` rc 0, svelte-check pulito; `i18n check` stretto (4385 chiavi, 18 sottosistemi);
+>   `theme-roles.mjs --check` pulito; `mkdocs build` senza avvisi;
+> - Vitest: `core-unit` 4290, `component-unit` 3209, `onboarding-component-unit` 441;
+> - E2E, 181 passati:
+>   - `front-utility auth` 29, `app-start-auth` 3, `settings` 45, `onboarding-guides` 24;
+>   - gli spec che contano le richieste: `front-asset asset-detail` 33, `front-broker broker-recovery` 5,
+>     `front-portfolio risk` 38, `front-utility files-pdf-offline` 1, `front-transaction tx-bulk-import-handoff` 3;
+> - `api schema` contro `be2ad6573`: solo `+/api/v1/system/instance` e `+InstanceConfigResponse`; Tool contracts
+>   identici;
+> - `all-backend`: 7/7 in 13 min 49 s, **12 343 passed, 3 skipped, 0 failed**, cioè 126 in più, da J, W4 e A4.
+
+### Aggiornamento di base con X CP3, W7, X CP3b e J C-93 ✅ (2026-10-15, alba)
+
+> `1b3eb54c7`, merge del coordinatore di `dev_release2` a `a628147a0`, senza conflitti. Controllo leggero sulla 6181:
+>
+> - `services config-package` 584, cioè 498 moduli più 86 casi fissi:
+>   - il merge toglie 3 moduli (`api/v1/fx.py`, `schemas/transactions.py`, `services/fx/fx.py`) e ne aggiunge 13
+>     (`api/v1/fx/` 3, `schemas/transactions/` 6, `services/fx/` 4);
+>   - nessuno dei 13 legge l'ambiente;
+> - `api system` 94;
+> - raccolta dei test contro `a628147a0` estratto: +23/−1, tutti di CP4;
+> - `api schema`: solo le aggiunte di CP4;
+> - `front build --debug` e `mkdocs build` puliti; `core-unit` 4290.
+
+### Integrazione di CP4 ✅ (2026-10-15, alba)
+
+> `dev_release2` avanzato in fast-forward a `1b3eb54c7`. Sopra c'è il record del coordinatore `6d67fdaac`, con la riga
+> di `/system/instance` nel CHANGELOG.
+
+### CP5 — prontezza e versione (F08) (2026-10-15, alba) — in corso
+
+> **Via** del coordinatore (2026-10-15, 06:08): prontezza, `/system/info` minimo senza login (D14 modificata), R2,
+> C-84.
+>
+> - Un lotto che tocca il frontend entra solo dopo la finestra della galleria.
+> - Dalle ~08:45 solo lavoro leggero.
+> - `/system/instance` resta pubblico: il coordinatore ricorda ad A che i suoi campi devono restare innocui per un
+>   anonimo.
+>
+> **Disegno**: §3.5, riscritto all'avvio. CP5a, il backend; CP5b, il frontend.
+
+#### CP5a passo 1 — il codice ✅ (2026-10-15, alba)
+
+> **Note implementazione**:
+>
+> - **`GET /system/ready`**:
+>   - servizio `services/platform/readiness.py`: `check_readiness(session)`. `SELECT 1` dice se il DB risponde.
+>     `alembic_version` deve avere una riga sola, uguale alla head;
+>   - la head la legge `_read_alembic_head()`, in cache per processo. `alembic_head_revision()` rende None su un
+>     errore, che non resta in cache;
+>   - i dettagli vanno nel log una volta per cambio di stato;
+>   - rotta `api/v1/system/ready.py`, registrata per ultima nel pacchetto: 200, oppure 503 con lo stesso corpo;
+>   - schemi `ReadinessChecks` e `ReadinessResponse`.
+> - **`GET /system/info`**:
+>   - la dipendenza `signed_in_user` chiama `get_current_user` e trasforma il suo 401 in None; ogni altro errore
+>     passa;
+>   - l'endpoint ora è un `def` e risponde `SystemInfoPublicResponse` (solo `app_version`) o `SystemInfoResponse`;
+>   - `response_model` è l'unione, con lo schema completo per primo. L'ordine conta: il client generato prova lo
+>     `z.union` in ordine, e i suoi oggetti degli schemi `StrictModel` tolgono le chiavi sconosciute. Con lo schema
+>     pubblico per primo, una risposta completa arriverebbe ad `AboutTab` con la sola versione. Lo fissa
+>     `test_openapi_documents_the_full_answer_first`.
+> - **R2**: `version.py` ha `_git_describe()` e `_version_file()`; `get_git_version()` guarda `.git` con
+>   `os.path.lexists`.
+> - **C-84**: `pyproject.toml` a `0.0.0`, con un commento.
+> - **`dev.py`**: solo il commento sopra la scrittura di `VERSION`, che diceva il contrario di R2.
+> - **Istruzioni**: `readiness` nella mappa di `backend.instructions.md`.
+> - **Prova in processo** (TestClient su un DB temporaneo, poi cancellato):
+>   - `/ready` 200 `ok`/`ok`;
+>   - `/info` senza sessione e con un cookie falso: solo `app_version`;
+>   - la versione viene da `git describe`.
+> - **`api schema`** contro `6d67fdaac`:
+>   - `+/api/v1/system/ready`;
+>   - `/api/v1/system/info` cambiato: risposta `anyOf` e descrizione;
+>   - `+ReadinessChecks`, `+ReadinessResponse`, `+SystemInfoPublicResponse`;
+>   - `SystemInfoResponse` cambia solo nella descrizione;
+>   - Tool contracts identici; hash openapi `cad4535d814b6741`, misurato dopo che la nota sul `def` è passata dalla
+>     docstring a un commento.
+> - Ruff e black puliti sui file toccati. Gli errori di ruff in `dev.py` c'erano già: lì cambia solo un commento.
+>
+> **Fuori pista**: la factory di sessione rende l'`AsyncSession` di SQLAlchemy, non quella di SQLModel. Quindi
+> `execute` con dei `select` Core: `literal(1)` e una `table("alembic_version")` leggera.
+>
+> **Fuori pista** (trovato da docs-writer): nel job di rilascio il checkout ha `.git`. Con R2 da solo, i server della
+> galleria avrebbero letto `git describe` invece del `VERSION` congelato: gli scatti di Informazioni potevano dire
+> `-dirty` se un passo precedente scrive un file tracciato.
+>
+> - Cura: `get_git_version()` legge per prima `LF_APP_VERSION`, la stessa variabile di `frontend/vite.config.ts`, che
+>   la CI esporta da `VERSION` subito dopo averlo scritto.
+> - La lettura sta in `config/platform.py` (`frozen_app_version()`, vuota = assente). Si importa dentro la funzione,
+>   perché `backend.app.config` importa `version.py`.
+> - `.env.example` ha una sezione «App Version» con `# LF_APP_VERSION=` commentata: «lasciala vuota».
+> - Senza la variabile, cioè per ogni installazione, l'ordine è quello di R2.
+>
+> **Per gli altri e per i miei CP**:
+>
+> - Z (F26): `/system/ready`, `/system/health` e `/system/info` senza sessione non sono attività dell'utente;
+> - CP6: nell'elenco corto dei permessi del blocco ci vanno `/system/ready`, `/system/health`, `/system/info` e
+>   `/system/instance`;
+> - CP7a: proporre `/system/ready` per l'healthcheck del `Dockerfile` e dei compose.
+
+#### CP5a passo 2 — test e doc ✅ (2026-10-15, alba)
+
+> **Note implementazione**:
+>
+> - **Test** (test-author), sulla corsia 6181, uno alla volta:
+>   - `test_version.py` riscritto, da 13 a 51 test:
+>     - `LF_APP_VERSION` vince; vuota o di soli spazi non conta;
+>     - `.git` cartella, file o link; `git describe` vince su un `VERSION` diverso;
+>     - sette modi in cui git fallisce, che ripiegano su `VERSION`;
+>     - senza `.git` git non parte. Una prova vera lo verifica: con un repository padre con tag, la risposta è
+>       `unknown`;
+>     - `VERSION` vuoto o cartella non conta;
+>   - nuovo `test_platform_readiness.py`, 13 test, registrato come `services platform-readiness`:
+>     - SQLite vero sotto `tmp_path`; pronto, `mismatch`, `unknown` (senza tabella, vuota, due righe),
+>       `unreachable`;
+>     - la head si legge una volta e un errore non resta;
+>     - nessun dettaglio nella risposta; il log una volta per cambio di stato;
+>   - `test_system_api.py`, 116 test:
+>     - `/system/info` dal vivo senza cookie, con un cookie falso e con una sessione vera;
+>     - `signed_in_user`: i quattro 401 danno None, ogni altro errore passa;
+>     - l'`anyOf` con lo schema completo per primo;
+>     - `/system/ready` pubblico, dal vivo e in processo (200 e 503); l'ordine delle rotte;
+>   - `test_config_package.py`: 4 casi per `frozen_app_version()`;
+>   - verdi: `utils version` 51, `services platform-readiness` 13, `api system` 116, `services config-package` 590,
+>     `services config-env-example` 36; `check-orphans` pulito.
+> - **Doc** (docs-writer):
+>   - `security.md` (sezione «System Information and Readiness», tabella degli endpoint pubblici);
+>   - `api/index.md`, `api/curl-testing.md`;
+>   - `release-pipeline.md` (l'ordine delle sorgenti della versione, con `LF_APP_VERSION`);
+>   - `brim_plugin_guide.md` (una frase sulla versione);
+>   - `admin/docker_advanced.en.md` e `admin/service_exposure.en.md` (un riquadro su `/api/v1/system/ready`);
+>   - `mkdocs build` stretto e `check-links` (95) passano.
+>   - Debito di traduzione: solo i due riquadri delle pagine admin, 33 errori e 102 avvisi in IT, FR ed ES. Non
+>     timbrato, perché è contenuto nuovo.
+> - **Ritocchi miei dopo i rapporti**:
+>   - la docstring del modulo `version.py`;
+>   - la descrizione di `utils version` nel catalogo;
+>   - la nota in `signed_in_user`: un override di `get_current_user` non arriva a questa rotta;
+>   - il commento del passo «Freeze the app version for the frontend builds» in `release.yml`: anche il backend
+>     legge `LF_APP_VERSION`. Il nome del passo non cambia.
+>
+> **Fuori pista**: test-author ha dovuto copiare `backend/app/config/` nell'albero minimo del test sul layout
+> dell'immagine. L'import pigro della configurazione lo richiede; l'immagine vera copia tutto `backend/`.
+
+#### CP5a passo 3 — i verdi ✅ (2026-10-15, alba)
+
+> **Note implementazione**:
+>
+> - **Build**:
+>   - `front build --debug` rc 0, svelte-check 0 errori e 0 avvisi. Il client generato ha
+>     `z.union([SystemInfoResponse, SystemInfoPublicResponse])`;
+>   - `mkdocs build` rc 0, nessun avviso, 3012 URL relativi; `check-links` 95 validi.
+> - **`all-backend`** (`-q --fresh-run --workers 2`, corsia 6181): 7/7 in 12 min 11 s, **12 436 passed, 3 skipped,
+>   0 failed**.
+>   - Sono 93 in più rispetto a `2f5ce4c36` (12 343). 79 vengono da CP5a: `utils version` +38,
+>     `services platform-readiness` +13, `api system` +22, `services config-package` +6. Altri 14 vengono
+>     dall'aggiornamento di base `1b3eb54c7`.
+> - **`api schema`** contro `6d67fdaac`:
+>   - `+/api/v1/system/ready`; `/api/v1/system/info` cambiato (risposta `anyOf` e descrizione);
+>   - `+ReadinessChecks`, `+ReadinessResponse`, `+SystemInfoPublicResponse`; `SystemInfoResponse` cambia solo nella
+>     descrizione;
+>   - Tool contracts identici. Hash openapi `cad4535d814b6741`.
+> - **Statici**: ruff e black puliti sui file toccati; il YAML di `release.yml` si legge; `git diff --check` pulito;
+>   porta 6181 libera.
+> - **Vitest**, perché cambia il client generato: `core-unit` 4290, `component-unit` 3209, invariati.
+> - **Backlog**: H-5, il debito di traduzione delle pagine admin.
+
+### Checkpoint CP5a 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+
+> Handoff inviato. Il coordinatore ha committato CP5a in tre commit: `e8ceda504` (`feat(system)`, 15 file),
+> `6e78b8c96` (`fix(version)`, 11 file) e `2d6d0488d` (journal, 2 file). Poi ha aggiornato la base: `cf6f08856`, merge
+> pulito di `dev_release2` a `ee5d81a6f` (G-8, X CP4, W K2a, A4b e i suoi record).
+>
+> **Nota**: il blocco «Per gli altri e per i miei CP» del passo 1 era finito qui, sotto questo titolo. L'ho riportato
+> nel passo 1.
+
+### Correzione prima dell'ingresso: la head fuori dal ciclo di eventi ✅ (2026-10-15, alba)
+
+> **Richiesta** del coordinatore: in `readiness.py`, `_run_checks` chiamava `alembic_head_revision()` dentro la rotta
+> `async`. Il primo calcolo legge `alembic.ini` e importa le migrazioni in modo sincrono, e se fallisce lo rifà a ogni
+> sonda.
+>
+> **Note implementazione**:
+>
+> - `head = await asyncio.to_thread(alembic_head_revision)`. Il nome si risolve alla chiamata, quindi le sostituzioni
+>   dei test valgono ancora. La docstring del modulo dice perché.
+> - Test (test-author), `test_the_head_is_read_off_the_event_loop`:
+>   - un registratore prende il posto di `alembic_head_revision`, nota il thread e verifica che lì non giri un ciclo;
+>   - prima, il test controlla che la stessa sonda veda il ciclo dal test stesso;
+>   - `services platform-readiness` 14.
+> - A4b (`get_current_user`) aggiunge solo un 401, per una versione di sessione superata. Per `signed_in_user` vale
+>   come gli altri: una sessione revocata riceve la sola versione.
+> - **Controllo leggero della revisione combinata** (corsia 6181, una invocazione alla volta):
+>   - `front build --debug` rc 0, svelte-check 0/0; `mkdocs build` stretto senza avvisi; `check-links` 95;
+>   - `services platform-readiness` 14, `api system` 116, `api auth` 60, `api session-revocation` 3,
+>     `utils version` 51, `services config-env-example` 36;
+>   - `services config-package` 592: i 2 casi in più sono i moduli nuovi di X CP4 (`schemas/assets/metadata.py`,
+>     `schemas/assets/scheduled_investment.py`), che non leggono l'ambiente;
+>   - `check-orphans` pulito;
+>   - `api schema` contro `ee5d81a6f`: solo le aggiunte di CP5a; Tool contracts identici;
+>   - porta 6181 libera; `git diff --check` pulito.
+
+### Checkpoint della correzione 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore

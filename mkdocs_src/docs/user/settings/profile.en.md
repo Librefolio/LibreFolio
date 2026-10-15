@@ -44,7 +44,7 @@ The **Change Password** button (always available, no unlock needed) opens a moda
 2. A **new password** that satisfies all the rules: minimum 8 characters, at least one uppercase letter, one lowercase letter, one number, and one special character — and it must differ from the current one
 3. **Confirmation** of the new password
 
-After confirmation, your session remains active — you do not need to log in again.
+After confirmation, your session remains active — you do not need to log in again. Every other device signed in to your account is signed out.
 
 ### 🗑️ Delete Account
 

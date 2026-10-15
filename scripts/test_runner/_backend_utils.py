@@ -385,7 +385,7 @@ Tests for utility modules and helper functions:
     add_test(cat, "datetime", utils_datetime, name="Datetime Utils", desc="Timezone-aware datetime helpers")
     add_test(cat, "day-count", utils_day_count, name="Day Count Conventions", desc="ACT/365, ACT/360, ACT/ACT, 30/360")
     add_test(cat, "geo-utils", utils_geo_utils, name="Geographic Utils", desc="ISO-3166-A3 normalization, weights")
-    add_test(cat, "version", utils_version, name="Version Utils", desc="get_git_version, get_version_info")
+    add_test(cat, "version", utils_version, name="Version Utils", desc="get_git_version: LF_APP_VERSION when set, else git describe in a checkout, else VERSION, else unknown; get_version_info")
     add_test(
         cat,
         "coverage-js-adapter",
