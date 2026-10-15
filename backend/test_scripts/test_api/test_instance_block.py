@@ -54,8 +54,9 @@ from starlette.routing import Mount, Route, WebSocketRoute
 from backend.app.api.v1.auth import SESSION_COOKIE_NAME
 from backend.app.api.v1.instance_block import ALLOWED_WHEN_BLOCKED, refuse_when_blocked
 from backend.app.config import API_V1_PREFIX, TEST_LANE_HEADER, get_settings, is_test_mode
+from backend.app.config.platform import instance_blocked
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.system import InstanceBlockResponse, SystemInfoResponse
+from backend.app.schemas.system import InstanceBlockResponse, SystemInfoPublicResponse, SystemInfoResponse
 from backend.app.services.accounts import user_service
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success
@@ -377,56 +378,80 @@ async def test_an_invalid_body_gets_423_not_422(app, monkeypatch, account, path,
 # (a) Blocked: the allowed routes answer as usual
 # =============================================================================
 
+#: Allowed routes whose answers other workstreams own and extend (A, X, B, Z put their public flags in /system/instance):
+#: blocked, each answers as the same request does on the instance not blocked, whatever fields are added.
+AS_USUAL = ["/auth/me", "/system/info", "/system/ready", "/system/instance"]
+
+
+def _answer(response: httpx.Response) -> tuple[int, object]:
+    """Status and JSON body: what «as usual» compares."""
+    return response.status_code, response.json()
+
+
+async def _usual_then_blocked(app: FastAPI, monkeypatch: pytest.MonkeyPatch, paths: list[str], *, session: dict[str, str] | None = None) -> tuple[dict[str, httpx.Response], dict[str, httpx.Response]]:
+    """GET each path from the same session, or the same anonymity, with the block off for these requests only, then
+    blocked: ``(usual, blocked)``, by path. The block the test set is on again for the second requests, and stays on."""
+    assert instance_blocked(), "Precondition: the test blocks the instance first"
+    with monkeypatch.context() as unblocked:
+        _unblock(unblocked)
+        assert not instance_blocked(), "Barrier: the usual requests run on the instance not blocked"
+        usual = {path: await _request(app, "GET", path, session=session) for path in paths}
+    assert instance_blocked(), "Barrier: the block is on again for the blocked requests, and for the rest of the test"
+    blocked = {path: await _request(app, "GET", path, session=session) for path in paths}
+    return usual, blocked
+
 
 @pytest.mark.asyncio
 async def test_each_allowed_route_answers_a_signed_in_user(app, monkeypatch, account):
-    """(a) The routes of the block page, the probes and the version answer a signed-in user as they always do."""
+    """(a) The routes of the block page, the probes and the version answer a signed-in user as they always do: each the
+    same status and body as the same request, with the same session, on the instance not blocked. The block page differs
+    in its own two fields only, which report the block; the public configuration shows the managed profile."""
     print_section("Instance block: the allowed routes, signed in")
     lane_token = f"lane-{uuid4().hex}"
     monkeypatch.setenv("LIBREFOLIO_PROFILE", "managed")
     monkeypatch.setenv("LIBREFOLIO_TEST_LANE_ID", lane_token)
     _block(monkeypatch)
 
-    me = await _request(app, "GET", "/auth/me", session=account.session)
-    block = await _request(app, "GET", "/system/block", session=account.session)
-    info = await _request(app, "GET", "/system/info", session=account.session)
+    usual, blocked = await _usual_then_blocked(app, monkeypatch, [*AS_USUAL, "/system/block"], session=account.session)
     health = await _request(app, "GET", "/system/health", session=account.session)
     lane = await _request(app, "GET", f"/system/test-lane-health?token={lane_token}", session=account.session)
-    ready = await _request(app, "GET", "/system/ready", session=account.session)
-    instance = await _request(app, "GET", "/system/instance", session=account.session)
 
-    assert me.status_code == 200 and me.json()["user"]["username"] == account.username, f"GET /auth/me: {me.status_code} {me.text}"
-    assert (block.status_code, block.json()) == (200, {"blocked": True, "deletion_date": DELETION_DATE}), f"GET /system/block: {block.status_code} {block.text}"
-    assert info.status_code == 200 and set(info.json()) == set(SystemInfoResponse.model_fields), f"GET /system/info must answer in full to a session: {info.status_code} {info.text}"
-    SystemInfoResponse.model_validate(info.json())
+    me, info, block = usual["/auth/me"], usual["/system/info"], usual["/system/block"]
+    assert me.status_code == 200 and me.json()["user"]["username"] == account.username, f"Barrier: GET /auth/me answers this session when not blocked: {me.status_code} {me.text}"
+    assert info.status_code == 200 and set(info.json()) == set(SystemInfoResponse.model_fields), f"Barrier: GET /system/info answers in full to a session when not blocked: {info.status_code} {info.text}"
+    assert block.status_code == 200 and block.json()["blocked"] is False, f"Barrier: GET /system/block reports no block for the usual requests: {block.status_code} {block.text}"
+    for path in AS_USUAL:
+        assert usual[path].status_code == 200, f"Barrier: GET {path} answers this session when not blocked: {usual[path].status_code} {usual[path].text}"
+        assert _answer(blocked[path]) == _answer(usual[path]), f"GET {path} must answer as when not blocked: {usual[path].status_code} {usual[path].text}, blocked {blocked[path].status_code} {blocked[path].text}"
+    blocked_page, instance = blocked["/system/block"], blocked["/system/instance"]
+    assert _answer(blocked_page) == (200, {**block.json(), "blocked": True, "deletion_date": DELETION_DATE}), f"GET /system/block reports the block and its date, the rest as when not blocked: {blocked_page.status_code} {blocked_page.text}"
+    assert instance.json()["profile"] == "managed", f"GET /system/instance shows the managed profile: {instance.status_code} {instance.text}"
     assert (health.status_code, health.json()) == (200, {"status": "ok"}), f"GET /system/health: {health.status_code} {health.text}"
     assert (lane.status_code, lane.json(), lane.headers.get(TEST_LANE_HEADER)) == (200, {"status": "ok"}, lane_token), f"GET /system/test-lane-health with the lane's token: {lane.status_code} {lane.text}"
-    assert (ready.status_code, ready.json()) == (200, {"status": "ready", "checks": {"database": "ok", "migrations": "ok"}}), f"GET /system/ready on the lane's migrated database: {ready.status_code} {ready.text}"
-    assert (instance.status_code, instance.json()) == (200, {"profile": "managed"}), f"GET /system/instance: {instance.status_code} {instance.text}"
-    print_success("me, block, info, health, test-lane-health, ready, instance: as usual")
+    print_success("me, info, ready, instance: as when not blocked; block: blocked, with its date; health, test-lane-health: ok")
 
 
 @pytest.mark.asyncio
 async def test_the_allowed_routes_answer_anonymous_callers_as_usual(app, monkeypatch):
-    """(a) Allowed is not public: the probes and the version answer anyone, the block page and /auth/me still want a session."""
+    """(a) Allowed is not public: blocked, each allowed route answers a caller without a session as the same request
+    does on the instance not blocked, the same status and body. The probes and the version answer anyone, the block
+    page and /auth/me still want a session."""
     _block(monkeypatch)
 
+    usual, blocked = await _usual_then_blocked(app, monkeypatch, [*AS_USUAL, "/system/block"])
     health = await _request(app, "GET", "/system/health")
-    ready = await _request(app, "GET", "/system/ready")
-    instance = await _request(app, "GET", "/system/instance")
-    info = await _request(app, "GET", "/system/info")
     lane = await _request(app, "GET", f"/system/test-lane-health?token=not-the-lane-{uuid4().hex}")
-    block = await _request(app, "GET", "/system/block")
-    me = await _request(app, "GET", "/auth/me")
 
+    statuses = {path: response.status_code for path, response in usual.items()}
+    expected = {"/auth/me": 401, "/system/info": 200, "/system/ready": 200, "/system/instance": 200, "/system/block": 401}
+    assert statuses == expected, f"Barrier: without a session and not blocked, the probes and the version answer, the block page and /auth/me want a session: {statuses}"
+    info = usual["/system/info"]
+    assert set(info.json()) == set(SystemInfoPublicResponse.model_fields), f"Barrier: GET /system/info answers the public part only without a session: {info.text}"
+    for path, response in usual.items():
+        assert _answer(blocked[path]) == _answer(response), f"GET {path} without a session must answer as when not blocked: {response.status_code} {response.text}, blocked {blocked[path].status_code} {blocked[path].text}"
     assert (health.status_code, health.json()) == (200, {"status": "ok"}), f"GET /system/health: {health.status_code} {health.text}"
-    assert ready.status_code == 200 and ready.json()["status"] == "ready", f"GET /system/ready: {ready.status_code} {ready.text}"
-    assert instance.status_code == 200 and set(instance.json()) == {"profile"}, f"GET /system/instance: {instance.status_code} {instance.text}"
-    assert info.status_code == 200 and set(info.json()) == {"app_version"}, f"GET /system/info answers the app version only without a session: {info.status_code} {info.text}"
     assert lane.status_code == 404, f"GET /system/test-lane-health with another token answers its own 404: {lane.status_code} {lane.text}"
-    assert (block.status_code, block.json()) == (401, {"detail": "Not authenticated"}), f"GET /system/block needs a session: {block.status_code} {block.text}"
-    assert (me.status_code, me.json()) == (401, {"detail": "Not authenticated"}), f"GET /auth/me needs a session: {me.status_code} {me.text}"
-    print_success("health, ready, instance, info (version): open; block and me: 401")
+    print_success("ready, instance, info (public part): open; block and me: 401; each as when not blocked")
 
 
 @pytest.mark.asyncio
