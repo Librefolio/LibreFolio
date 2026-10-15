@@ -356,7 +356,9 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   conteggio va scritto relativo, mai assoluto. Dettagli: [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md).
 - **C-84 · Le versioni scritte a mano nei file del progetto** — minimo; coordinatore, 14/10. `pyproject.toml` e
   `frontend/package.json` dicono ancora 1.1.0, fissate il 05/08; nessuno le legge, perché la versione dell'app viene da
-  `git describe`. Da allineare a ogni rilascio, o da togliere.
+  `git describe`. Da allineare a ogni rilascio, o da togliere. **Metà chiusa da H il 15/10** (decisione 14):
+  `pyproject.toml` a `0.0.0`, con un commento (`6e78b8c96`, in `dev_release2` con `9deb0ea08`); `frontend/package.json`
+  e le due righe radice del lock con il CP5b di H, dopo la finestra della galleria.
 - **C-85 · Mostrare che si sta aspettando il server, nelle richieste importanti** — medio; developer, 14/10, dalla
   verifica sul server della build `v1.1.0-1674-g797a7e432` (voce 7). Le sue parole: «quando un pacchetto è in volo non si
   ha chiaro che si sta attendendo la risposta, dobbiamo aggiungere nel backlog un task che si occupa di rendere palese
@@ -1758,8 +1760,11 @@ sulle tabelle del 21/09, «Il residuo vero» compreso. Correzione della ricogniz
   sorgente invece di eseguire le funzioni. Dettagli: idem.
 - **P4-10 · I sei siti di Risk fuori dal canale di mascheramento** — basso, da riverificare dopo il Round 2 della
   privacy. Dettagli: idem.
-- **R2 · `VERSION` stantio** — medio; manca la decisione: leggerlo solo senza `.git/`, o cancellarlo dopo la build.
-  Dettagli: idem, e [08](09_feedbackJobs/08_review_visiva_20260922.md) R2.
+- ✅ **R2 · `VERSION` stantio** — medio; manca la decisione: leggerlo solo senza `.git/`, o cancellarlo dopo la build.
+  Dettagli: idem, e [08](09_feedbackJobs/08_review_visiva_20260922.md) R2. **Chiusa da H il 15/10** (piano 1.3, §10
+  n. 12): con `.git` vince `git describe`; `VERSION` vale solo senza `.git` o quando git fallisce; prima di tutto
+  `LF_APP_VERSION`, che la pipeline di rilascio esporta già per la build del frontend (`6e78b8c96`, in `dev_release2`
+  con `9deb0ea08`).
 - **§2.4 · Il guardiano del catalogo finto** — basso; debito dichiarato, non verificato nel codice. Dettagli: idem, e
   [09](09_feedbackJobs/09_reperti_analisi_statica_20260922.md) §2.4.
 - **SP15 · `SensitiveValue`** — peso da stimare; sospeso dal 21/09 perché non c'era nessun consumatore misurato, e non
@@ -2068,6 +2073,13 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - È fail-closed, ma senza un messaggio chiaro: andrebbe trasformato in `ValueError` col percorso.
 
   Dettagli: piano H, §14 «CP3 passo 2», «Fuori pista».
+- **H-5 · Debito di traduzione delle pagine admin toccate da H** — basso; H, 15/10.
+  - `translate-validate --hide-localized` conta 102 errori nel repository. 33 vengono da CP5a: un riquadro su
+    `/api/v1/system/ready` in `docker_advanced` e in `service_exposure`, in IT, FR ed ES.
+  - Gli altri 69 c'erano già, in `configuration`, `filesystem` e `index`; ci sono anche le righe di CP3 e CP4.
+  - Si chiude con la traduzione, che parte solo su richiesta esplicita del developer.
+
+  Dettagli: piano H, §14 «CP5a passo 2».
 
 ## A · Account e accessi (fase 01)
 
@@ -2114,11 +2126,11 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
       declassa né si disattiva;
     - dice che un account disattivato riceve un 401, ma riceve un 403 `ACCOUNT_DISABLED`, e solo con la password
       giusta.
-    - Si allinea con A6, che riscrive le regole dell'admin.
+    - ✅ **Chiuse il 15/10** con A4b: `docs-writer` le ha corrette insieme alle righe sulle sessioni.
   - `frontend/components/features/settings.md`: il titolo «GlobalSettingsTab (Admin only)», ma la scheda la vedono
     tutti. Si sistema in A6, con le schede Utenti e Sicurezza (attenzione all'ancora).
   - `frontend/state/app-state.md:11`: dice che lo store dell'autenticazione gestisce token JWT, ma usa il cookie
-    HttpOnly. Si sistema in A4 (sessioni).
+    HttpOnly. ✅ **Chiusa il 15/10** con A4b.
   - La prop `icon` di `PasswordInput`, aggiunta da T, manca in `core-ui/atoms.md` e `features/auth.md`. È di T:
     segnalata al coordinatore.
   - Trovata in A4 (15/10): `architecture/patterns/alembic.md` presenta il batch come modo normale di cambiare una
@@ -2126,7 +2138,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `foreign_keys=ON`, il batch ricostruisce la tabella e cancella a cascata le righe delle tabelle figlie: è il
     motivo per cui la 004 e la 005 lo evitano. Il nome della tabella è anche sbagliato: è `transactions`. La pagina è
     di tutti: segnalata al coordinatore.
-  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A3.5» e «A4.5».
+  - Trovata in A4b (15/10): `architecture/users_and_brokers.md`, «👤 User Roles», dice che un admin gestisce gli
+    utenti «via CLI or API». L'API non esiste ancora: la porta A5. Si verifica allora.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A3.5», «A4.5» e «A4b.4».
 - **A-8 · Richiama TC-6** della sezione «T (colori)»: alla prima visita con il browser in `it-IT`, il selettore della
   lingua mostra l'inglese — basso; programma colori (15/10).
   - Probabile causa: `lib/stores/app/language.ts`, `init()`.
@@ -2233,12 +2247,16 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   lui a W, proprietario di `DataImportModal.svelte`.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
 
-- **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — basso, robustezza; trovata da J il
+- ✅ **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — basso, robustezza; trovata da J il
   15/10 (C-93), assegnata a X dal coordinatore. `services/assets/core.py:114-119` (`_sync_runner`, dentro
   `asyncio.to_thread`) imposta un loop nuovo, lo chiude e non lo toglie: chi poi, nello stesso thread, chiama
   `asyncio.get_event_loop()` riceve un loop chiuso. È il contesto in cui una connessione aiosqlite raccolta dal GC
   muore con «Event loop is closed». Cura di una riga: `asyncio.set_event_loop(None)` nel `finally`, oppure
-  `asyncio.Runner`; un lotto piccolo con un test, dopo il CP4. Dettagli: piano J, §10 «C-93», «Triage».
+  `asyncio.Runner`; un lotto piccolo con un test, dopo il CP4. Dettagli: piano J, §10 «C-93», «Triage». **Chiusa da X il
+  15/10**: `asyncio.set_event_loop(None)` nel `finally` di `_sync_runner`, prima di `loop.close()`, come
+  `asyncio.Runner.close()`; test `test_provider_core_cache.py::TestRunProviderInThread::test_worker_thread_does_not_keep_closed_event_loop`,
+  rosso prima della riga e verde dopo (`7794e2fb0`, in `dev_release2` con `743fca514`). Dettagli:
+  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», J-5.
 
 ## W · Import e transazioni (fase 01)
 
@@ -2346,7 +2364,8 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   `problems/i18n-audit-false-dead-and-false-used.md:48`. Da rinfrescare in un passaggio di `wiki-lint`. Dettagli: piano
   J, §10 «A — rinomina», «Restano di proposito».
 - ↪ **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — spostata nella sezione X dal
-  coordinatore il 15/10 (file di X), come lotto piccolo con un test dopo il CP4.
+  coordinatore il 15/10 (file di X), come lotto piccolo con un test dopo il CP4. ✅ Chiusa da X il 15/10
+  (`743fca514`).
 - **J-6 · Nessuna guardia di suite per le connessioni aiosqlite lasciate aperte** — basso, facoltativa; J, 15/10
   (C-93). Oggi le connessioni aperte dopo un test sono 0 in tutta la suite, ma lo garantisce solo la guardia del file
   d'integrazione dell'AI Export. Una fixture autouse nel `conftest.py` condiviso potrebbe far fallire ogni test che
@@ -2360,7 +2379,8 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 
 ## B · Backup e Docker (fase 01)
 
-Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md). Sessione non ancora avviata.
+Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md). Sessione avviata il 15/10 alle
+07:10, solo analisi, sulla base `ee5d81a6f`.
 
 ## E · Email (fase 01)
 

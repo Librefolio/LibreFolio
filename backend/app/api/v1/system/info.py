@@ -1,4 +1,7 @@
-"""System information (``GET /system/info``): app, Python and OS versions, deployment mode, dependency versions."""
+"""System information (``GET /system/info``): app, Python and OS versions, deployment mode, dependency versions.
+
+Without a valid session the answer is the app version only; with one, everything.
+"""
 
 import json
 import platform
@@ -6,12 +9,17 @@ import re
 import sys
 from importlib.metadata import version as pkg_version
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api.v1.auth import get_current_user
 from backend.app.config import PROJECT_ROOT
+from backend.app.db.models import User
+from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.schemas.system import DependencyInfo, SystemInfoResponse
+from backend.app.schemas.system import DependencyInfo, SystemInfoPublicResponse, SystemInfoResponse
 from backend.app.utils.runtime.version import get_git_version
 
 info_router = APIRouter()
@@ -147,13 +155,32 @@ def get_deployment_mode() -> str:
     return "docker" if Path("/.dockerenv").exists() else "local"
 
 
-@info_router.get("/info", response_model=SystemInfoResponse)
-async def get_system_info() -> SystemInfoResponse:
+async def signed_in_user(request: Request, session: Annotated[AsyncSession, Depends(get_session_generator)]) -> User | None:
+    """The user of a valid session, or None: the checks of ``get_current_user``, whose 401 here means anonymous.
+
+    Called directly, not through ``Depends``, so that its 401 can be caught: an override of ``get_current_user`` in
+    ``app.dependency_overrides`` does not reach this route.
+    """
+    try:
+        return await get_current_user(request, session)
+    except HTTPException as exc:
+        if exc.status_code != status.HTTP_401_UNAUTHORIZED:
+            raise
+        return None
+
+
+# The full answer first: the generated client keeps the first schema of the union that parses, and drops unknown keys.
+@info_router.get("/info", response_model=SystemInfoResponse | SystemInfoPublicResponse)
+# A def, not async: the Pipfile, package.json and the package metadata are read synchronously, in the threadpool.
+def get_system_info(user: Annotated[User | None, Depends(signed_in_user)]) -> SystemInfoResponse | SystemInfoPublicResponse:
     """
     Get system information including versions and dependencies.
 
-    Returns app version, Python version, OS details, and dependency versions.
+    Without a valid session: the app version only. With one: app version, Python version, OS details, deployment mode
+    and dependency versions.
     """
+    if user is None:
+        return SystemInfoPublicResponse(app_version=get_git_version())
     return SystemInfoResponse(
         app_version=get_git_version(),
         python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",

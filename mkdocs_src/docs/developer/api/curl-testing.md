@@ -72,7 +72,19 @@ curl -s http://localhost:6040/api/v1/auth/me \
 ```bash
 curl http://localhost:6040/api/v1/system/health
 # Returns: {"status":"ok"}
+
+# Readiness: does the database answer, is its schema at the head revision? (-i shows the status code)
+curl -i http://localhost:6040/api/v1/system/ready
+# 200: {"status":"ready","checks":{"database":"ok","migrations":"ok"}}
+# 503: {"status":"not_ready","checks":{"database":"ok","migrations":"mismatch"}}
+
+# System info: the app version only without the cookie, everything with it
+curl http://localhost:6040/api/v1/system/info
+# Returns: {"app_version":"v1.2.0"}
+curl -b /tmp/cookies.txt http://localhost:6040/api/v1/system/info
 ```
+
+The codes of `/system/ready` are listed in [System Information and Readiness](../architecture/security.md#system-info-and-readiness).
 
 ### 👤 User Management
 
