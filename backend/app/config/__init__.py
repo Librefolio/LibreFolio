@@ -8,7 +8,8 @@ Data Directory Structure:
     │   ├── sqlite/app.db
     │   ├── custom-uploads/
     │   ├── broker_reports/{uploaded,parsed,failed}/
-    │   └── logs/
+    │   ├── logs/
+    │   └── secrets/instance.key # generated on first use (services/platform/instance_key.py)
     └── test/                    # Test data (isolated)
         ├── sqlite/app.db
         ├── custom-uploads/
@@ -28,6 +29,9 @@ Environment Variables (see .env):
     RISK_OPTIMIZATION_WORKERS: Spawned optimization workers (default: 1)
     RISK_SIMULATION_IDLE_TIMEOUT_SECONDS: Simulation worker idle reap (default: 600)
     RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS: Optimization worker idle reap (default: 600)
+
+Secrets (JWT_SECRET, LIBREFOLIO_INSTANCE_KEY, ...) also accept NAME_FILE, the path of a file holding the value: see
+env_secret(). Every variable the code reads is listed in .env.example.
 """
 
 import os
@@ -54,9 +58,9 @@ DEFAULT_TEST_DATA_DIR = PROJECT_ROOT / "backend" / "data" / "test"
 PRODUCTION_DATA_MARKER = ".librefolio-production-data"
 TEST_LANE_HEADER = "X-LibreFolio-Test-Lane"
 
-#: The secrets that make an instance trust a session. A test runtime never inherits them (``configure_test_runtime`` in
-#: ``scripts/cli_base.py``): a test lane signs with secrets of its own.
-INSTANCE_TRUST_SECRETS = ("JWT_SECRET",)
+#: The secrets that make an instance trust a session or decrypt its data, in every form. A test runtime never inherits
+#: them (``configure_test_runtime`` in ``scripts/cli_base.py``): a test lane signs and derives with secrets of its own.
+INSTANCE_TRUST_SECRETS = ("JWT_SECRET", "JWT_SECRET_FILE", "LIBREFOLIO_INSTANCE_KEY", "LIBREFOLIO_INSTANCE_KEY_FILE")
 
 
 # =============================================================================
@@ -87,6 +91,96 @@ def is_test_mode() -> bool:
     Checks env var directly to support dynamic switching.
     """
     return os.environ.get("LIBREFOLIO_TEST_MODE", "").lower() in ("1", "true", "yes")
+
+
+# =============================================================================
+# Secrets: NAME, or the file named by NAME_FILE
+# =============================================================================
+
+SECRET_FILE_SUFFIX = "_FILE"
+SECRET_FILE_MAX_BYTES = 64 * 1024
+
+
+class SecretFileError(RuntimeError):
+    """A secret file cannot give its secret: missing, unreadable, empty or blank, not UTF-8 text or larger than 64 KiB."""
+
+
+def env_secret(name: str) -> str | None:
+    """The secret ``name``, from the process environment only, never from ``.env``: ``NAME``, or else ``NAME_FILE``.
+
+    - ``NAME``, when not blank, is the secret as written, spaces included. It wins over ``NAME_FILE``: the configuration
+      audit warns when both are set.
+    - Otherwise ``NAME_FILE``, when not blank, is the path of a file holding the secret, as Docker and Kubernetes mount
+      their secrets. The secret is the file's text without a leading UTF-8 byte order mark and without its trailing
+      line breaks. A relative path starts from the project folder.
+    - Otherwise there is no secret: ``None``. An empty or blank value counts as unset: a stray space is never used as
+      a key.
+
+    A ``NAME_FILE`` that cannot give its secret raises ``SecretFileError``, which names the variable and the path,
+    never the content.
+    """
+    value = os.environ.get(name, "")
+    if value.strip():
+        return value
+    file_name = os.environ.get(name + SECRET_FILE_SUFFIX, "")
+    if not file_name.strip():
+        return None
+    return read_secret_file(_secret_file_path(file_name), name + SECRET_FILE_SUFFIX)
+
+
+def env_secret_origin(name: str) -> str | None:
+    """Where ``env_secret(name)`` takes the secret from, for messages: ``NAME``, ``NAME_FILE (<path>)``, or ``None``."""
+    if os.environ.get(name, "").strip():
+        return name
+    file_name = os.environ.get(name + SECRET_FILE_SUFFIX, "")
+    if file_name.strip():
+        return f"{name}{SECRET_FILE_SUFFIX} ({_secret_file_path(file_name)})"
+    return None
+
+
+def _secret_file_path(file_name: str) -> Path:
+    path = Path(file_name).expanduser()
+    return path if path.is_absolute() else PROJECT_ROOT / path
+
+
+def read_secret_file(path: Path, label: str) -> str:
+    """The secret held by ``path``, without a leading UTF-8 byte order mark and its trailing line breaks.
+
+    ``label`` names the source in the errors. A file that holds nothing but spaces and line breaks is an error, like an
+    empty one.
+    """
+    try:
+        with path.open("rb") as handle:
+            raw = handle.read(SECRET_FILE_MAX_BYTES + 1)
+    except FileNotFoundError:
+        raise SecretFileError(f"{label}: {path} does not exist") from None
+    except OSError as exc:
+        raise SecretFileError(f"{label}: {path} cannot be read ({exc.strerror or type(exc).__name__})") from None
+    if len(raw) > SECRET_FILE_MAX_BYTES:
+        raise SecretFileError(f"{label}: {path} is larger than {SECRET_FILE_MAX_BYTES} bytes, too large for a secret")
+    try:
+        secret = raw.decode("utf-8-sig").rstrip("\r\n")
+    except UnicodeDecodeError:
+        raise SecretFileError(f"{label}: {path} is not UTF-8 text") from None
+    if not secret.strip():
+        raise SecretFileError(f"{label}: {path} is empty or blank")
+    return secret
+
+
+def secrets_set_twice() -> list[str]:
+    """The secrets set both as ``NAME`` and as ``NAME_FILE``, neither blank, sorted: ``NAME`` wins and the file is ignored.
+
+    A secret of LibreFolio is ``JWT_SECRET`` or a ``LIBREFOLIO_*`` variable: a new secret takes that prefix, so it is
+    covered here without a list to keep up to date.
+    """
+    names = []
+    for variable, value in os.environ.items():
+        if not value.strip() or not variable.endswith(SECRET_FILE_SUFFIX):
+            continue
+        name = variable.removesuffix(SECRET_FILE_SUFFIX)
+        if (name == "JWT_SECRET" or name.startswith("LIBREFOLIO_")) and os.environ.get(name, "").strip():
+            names.append(name)
+    return sorted(names)
 
 
 # =============================================================================
@@ -256,6 +350,7 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
         Path("broker_reports"),
         Path("logs"),
         Path("scenario_catalog"),
+        Path("secrets"),
     ):
         managed_root = candidate / relative
         if not managed_root.is_dir():
@@ -278,6 +373,8 @@ def validate_test_data_dir(  # noqa: C901 — ordered safety boundary: identity,
         Path("logs"),
         Path("scheduler_state.json"),
         Path("scenario_catalog"),
+        Path("secrets"),
+        Path("secrets/instance.key"),
     )
     for relative in managed_paths:
         test_target = (candidate / relative).resolve()

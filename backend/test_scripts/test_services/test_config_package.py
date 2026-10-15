@@ -319,6 +319,7 @@ def test_scheduler_disabled_by_any_non_empty_value(monkeypatch, value, expected)
 )
 def test_configured_jwt_secret_treats_an_empty_or_blank_value_as_none(monkeypatch, value, expected):
     """(c) ``JWT_SECRET``: unset, empty or blank is no secret; anything else is the secret as written, spaces included."""
+    monkeypatch.delenv("JWT_SECRET_FILE", raising=False)  # its file would stand in for an unset or empty JWT_SECRET
     _set_variable(monkeypatch, "JWT_SECRET", value)
     assert configured_jwt_secret() == expected
     print_success(f"JWT_SECRET={value!r}: configured_jwt_secret() == {expected!r}")

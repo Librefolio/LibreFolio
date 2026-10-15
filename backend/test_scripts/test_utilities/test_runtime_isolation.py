@@ -399,7 +399,7 @@ class TestDataDirResolution:
 
         assert not production_dir.exists() and not candidate.exists()
 
-    @pytest.mark.parametrize("managed_relative", ["sqlite", "sqlite/app.db"])
+    @pytest.mark.parametrize("managed_relative", ["sqlite", "sqlite/app.db", "secrets", "secrets/instance.key"])
     def test_managed_symlink_escaping_into_another_root_is_rejected_before_mutation(self, runtime_env, tmp_path, managed_relative):
         # Both roots are synthetic: the only thing under test is whether the guard
         # resolves symlinks instead of comparing unresolved path strings.
@@ -864,7 +864,14 @@ def test_db_create_clean_rejects_a_production_test_dir_before_any_mutation(runti
 
 
 class TestRunnerDbCreateSafety:
-    @pytest.mark.parametrize(("marked_relative", "managed_root"), [pytest.param("custom-uploads/provider-cache/nested-production-root", "custom-uploads", id="custom-uploads"), pytest.param("broker_reports/uploaded/broker_7/nested-production-root", "broker_reports", id="broker-reports")])
+    @pytest.mark.parametrize(
+        ("marked_relative", "managed_root"),
+        [
+            pytest.param("custom-uploads/provider-cache/nested-production-root", "custom-uploads", id="custom-uploads"),
+            pytest.param("broker_reports/uploaded/broker_7/nested-production-root", "broker_reports", id="broker-reports"),
+            pytest.param("secrets/nested-production-root", "secrets", id="secrets"),
+        ],
+    )
     def test_nested_production_marker_is_rejected_before_destructive_mutation(self, runtime_env, monkeypatch, tmp_path, marked_relative, managed_root):
         production_root, test_root = tmp_path / "synthetic-production-data", tmp_path / "synthetic-test-data"
         production_root.mkdir()
