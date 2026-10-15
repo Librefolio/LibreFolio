@@ -246,6 +246,17 @@ class Settings(BaseSettings):
         extra="ignore",  # Ignore env vars not defined as fields (e.g. LIBREFOLIO_DATA_DIR)
     )
 
+    @classmethod
+    def settings_customise_sources(cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings):
+        """In test mode the instance's ``.env`` is not read: a test lane sees only what its runner exported.
+
+        ``scripts/cli_base.configure_test_runtime`` drops the instance's settings from the lane's environment; without
+        this, ``Settings`` would read them back from ``.env`` (its ``env_file``).
+        """
+        if is_test_mode():
+            return init_settings, env_settings, file_secret_settings
+        return init_settings, env_settings, dotenv_settings, file_secret_settings
+
 
 # =============================================================================
 # Data directory resolution
