@@ -2287,3 +2287,46 @@ per Z, che non chiama il confine. Per i cambi il confine è `_fetch_provider` di
 - **X-R13, per il FE5c** (dal programma colori, DV-3): con DV `AllocationEntry` perde `emoji`, ma il `map` dei settori
   in `routes/(app)/assets/[id]/+page.svelte:3496` (su `dev_release2`) lo calcola ancora: da togliere col taglio della
   pagina. Voce nel backlog, sezione X.
+
+### Checkpoint CP10 ✅ (2026-10-15) — committato dal coordinatore: `efa135c75` (codice) e `6f8b81e32` (journal)
+
+### Decimo aggiornamento di base: `dev_release2` (`6102d5097`) nel ramo X ✅ (2026-10-15) — merge `f2a766f45`
+
+Dentro: CP2b di H (`main.py` diviso in `services/platform/`), E2 (`router.py` email), B e B8 (backup), W, J CP-4, Z6b
+parte 1, Y2. Merge aperto dal coordinatore e committato da lui (`f2a766f45`, genitori `6f8b81e32` e `6102d5097`).
+
+- **Conflitto**: uno solo, quello previsto, in `developer/architecture/settings.md`. Risolto tenendo la lista del target
+  (`LF_APP_VERSION`, `LIBREFOLIO_BLOCKED`, `LIBREFOLIO_DELETION_DATE`) e aggiungendo le variabili delle impostazioni
+  dei plugin (`LIBREFOLIO_PLUGIN_*` e gli alias dei segreti, anche come `_FILE`). Le altre due aggiunte del CP10 nel
+  file sono passate da sole. `git add` del solo file.
+- **Controlli di significato**:
+  - `router.py`: le due include, `plugin_settings` dopo `settings` ed `email`;
+  - `logging_config.py`: intatto, con il filtro sui due handler e il processore dopo `format_exc_info`; il CP2b non lo
+    tocca, e `main.py` chiama ancora `configure_logging`;
+  - Alembic: una sola 007 sopra la 006;
+  - B8 legge `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, anche come `_FILE`. Né `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` né le
+    variabili nuove di Z (`LIBREFOLIO_PROVIDER_COOLDOWN_*`, `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`) stanno nello spazio
+    `LIBREFOLIO_PLUGIN_`, e nessuna è un alias: i claim non c'entrano. Lo conferma la guardia.
+- **Prove sulla revisione combinata**, una alla volta con `nice -n 10`, tutte verdi:
+  - db `migration-007` 29, `post-migration` 41;
+  - services: contract 190, crypto 30, runtime 80, service 54, guards 25, `secret-masking` 48, `config-package` 679,
+    `config-env-example` 36.
+  Poi la pausa delle prove chiesta dal coordinatore (galleria di DV, macchina a 89): fermata la sequenza dopo l'unità in
+  corso, senza toccarla (`kill` del solo script).
+  **⚠️ Fuori pista (ambiente, ordine delle mie prove)**: api `plugin-settings` è uscita 11 rossi su 11 in 11 s. Ogni
+  `services <unità>` lanciata da sola esegue prima `_services_setup()`, che ricrea vuoto il DB della corsia (il file
+  è nato alle 20:39:56, durante `config-env-example`). Il setup delle API (`_api_setup` → `db populate`) gira solo
+  con `api all`. La prova ha trovato 0 utenti, e la sua precondizione lo ha detto: «the api setup (db populate) did
+  not run on this lane». Non c'entrano né il merge, né `main.py`, né `router.py`: le rotte rispondono.
+  Rimedio, dopo la pausa: `test db populate --force` sulla corsia (il setup stesso delle API), poi api
+  `plugin-settings`, `fx`, `assets-provider`, `check-orphans`, `api sync`. La nota per T (una `api <unità>` dopo una
+  `services <unità>` trova il DB vuoto) è passata al coordinatore.
+- **Dopo la ripresa** (20:54), con il via del coordinatore, una alla volta con `nice -n 10`, aspettando un carico ≤ 70:
+  - `test db --force populate` sulla corsia: il setup stesso delle API, PASSED;
+  - api `plugin-settings` 11 su 11 (stesse 11 prove, ora verdi), `fx` 21, `assets-provider` 24;
+  - `check-orphans`: ogni prova registrata raggiungibile da `all` (backend 323, frontend e2e 127, Vitest 421);
+  - `api sync`: nessun file tracciato cambiato.
+  Porta 6183 libera; i tre processi Python rimasti sono di altre corsie (6182 A, 6184 W, 6186 Z).
+  **⚠️ Fuori pista**: l'avviso della seconda pausa (dalle 21:00) mi è arrivato dopo. `api assets-provider` era già in
+  corso e ha finito alle 21:01:11. Dopo, lo script ha lanciato da solo due passi leggeri, `check-orphans` (7 s, una
+  scansione dei file) e `api sync` (24 s), finiti alle 21:01:42. Da allora niente in esecuzione.
