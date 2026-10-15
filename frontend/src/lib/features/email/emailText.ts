@@ -1,0 +1,84 @@
+/**
+ * The words and colours of the Email tab: every code the API sends maps to a whole i18n key, and every state to whole
+ * role classes, so that the i18n audit and the colour gates see each one (theme-roles skill, rule 6).
+ */
+import type {EmailStatus, EmailTestFailure} from './emailApi';
+
+type Translate = (key: string, options?: {values?: Record<string, string | number>}) => string;
+
+export const STATE_LABEL_KEYS: Record<EmailStatus['state'], string> = {
+    off: 'email.state.off',
+    ready: 'email.state.ready',
+    invalid: 'email.state.invalid',
+};
+
+export const STATE_BADGE_CLASSES: Record<EmailStatus['state'], string> = {
+    off: 'inline-flex items-center gap-1 rounded-full bg-lf-neutral px-2.5 py-0.5 text-xs font-semibold text-lf-secondary',
+    ready: 'inline-flex items-center gap-1 rounded-full bg-lf-success-soft px-2.5 py-0.5 text-xs font-semibold text-lf-success-on-soft',
+    invalid: 'inline-flex items-center gap-1 rounded-full bg-lf-danger-soft px-2.5 py-0.5 text-xs font-semibold text-lf-danger-on-soft',
+};
+
+/** A check worth a line in the tab: anything but `ok`. */
+export const NOTICE_CLASSES: Record<'info' | 'warning' | 'error', string> = {
+    info: 'rounded-lg border border-lf-info-line bg-lf-info-soft px-4 py-3 text-sm text-lf-info-on-soft',
+    warning: 'rounded-lg border border-lf-warning-line bg-lf-warning-soft px-4 py-3 text-sm text-lf-warning-on-soft',
+    error: 'rounded-lg border border-lf-danger-line bg-lf-danger-soft px-4 py-3 text-sm text-lf-danger-on-soft',
+};
+
+export const OUTCOME_CLASSES: Record<'sent' | 'failed', string> = {
+    sent: 'rounded-lg border border-lf-success-line bg-lf-success-soft px-4 py-3 text-sm text-lf-success-on-soft',
+    failed: 'rounded-lg border border-lf-danger-line bg-lf-danger-soft px-4 py-3 text-sm text-lf-danger-on-soft',
+};
+
+const PROBLEM_KEYS: Record<string, string> = {
+    SMTP_HOST_INVALID: 'email.problems.SMTP_HOST_INVALID',
+    SMTP_TLS_INVALID: 'email.problems.SMTP_TLS_INVALID',
+    SMTP_PORT_INVALID: 'email.problems.SMTP_PORT_INVALID',
+    SMTP_FROM_MISSING: 'email.problems.SMTP_FROM_MISSING',
+    SMTP_FROM_INVALID: 'email.problems.SMTP_FROM_INVALID',
+    SMTP_REPLY_TO_INVALID: 'email.problems.SMTP_REPLY_TO_INVALID',
+    SMTP_MAX_PER_HOUR_INVALID: 'email.problems.SMTP_MAX_PER_HOUR_INVALID',
+    SMTP_PASSWORD_UNREADABLE: 'email.problems.SMTP_PASSWORD_UNREADABLE',
+    SMTP_CREDENTIALS_INCOMPLETE: 'email.problems.SMTP_CREDENTIALS_INCOMPLETE',
+};
+
+const SMTP_ERROR_KEYS: Record<string, string> = {
+    CONNECTION_FAILED: 'email.smtpErrors.CONNECTION_FAILED',
+    TLS_FAILED: 'email.smtpErrors.TLS_FAILED',
+    AUTH_FAILED: 'email.smtpErrors.AUTH_FAILED',
+    SENDER_REFUSED: 'email.smtpErrors.SENDER_REFUSED',
+    RECIPIENT_REFUSED: 'email.smtpErrors.RECIPIENT_REFUSED',
+    TIMEOUT: 'email.smtpErrors.TIMEOUT',
+    SEND_FAILED: 'email.smtpErrors.SEND_FAILED',
+};
+
+/** The key of ``code`` in ``keys``: only its own entries, so a code such as ``constructor`` finds nothing. */
+function ownKey(keys: Record<string, string>, code: string | null | undefined): string | undefined {
+    return code && Object.hasOwn(keys, code) ? keys[code] : undefined;
+}
+
+/** The i18n key that explains a configuration problem; its `{variable}` names the variable at fault. */
+export function problemKey(problem: string | null | undefined): string {
+    return ownKey(PROBLEM_KEYS, problem) ?? 'email.problems.unknown';
+}
+
+/** Whole minutes, at least one: how long until an email fits again. */
+export function minutesUntil(seconds: number | null | undefined): number {
+    return Math.max(1, Math.ceil((seconds ?? 60) / 60));
+}
+
+/** What to tell the administrator when the test email failed. */
+export function testFailureMessage(translate: Translate, failure: EmailTestFailure): string {
+    switch (failure.errorCode) {
+        case 'EMAIL_UNAVAILABLE':
+            return translate('email.test.errors.EMAIL_UNAVAILABLE');
+        case 'EMAIL_RATE_LIMITED':
+            return translate('email.test.errors.EMAIL_RATE_LIMITED', {values: {minutes: minutesUntil(failure.retryAfter)}});
+        case 'EMAIL_RECIPIENT_INVALID':
+            return translate('email.test.errors.EMAIL_RECIPIENT_INVALID');
+        case 'EMAIL_DELIVERY_FAILED':
+            return translate(ownKey(SMTP_ERROR_KEYS, failure.smtpCode) ?? 'email.smtpErrors.SEND_FAILED');
+        default:
+            return translate('email.test.errors.generic');
+    }
+}

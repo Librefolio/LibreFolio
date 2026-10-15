@@ -1,8 +1,9 @@
 """Configuration checks: the settings that leave an instance weaker than it should be.
 
 Owner: workstream H (platform). Each check reads the configuration and returns its state as a ``ConfigCheck``: an id,
-a severity, the i18n key of its message for the admin interface (``instance.checks.*``, written whole so the i18n audit
-sees it), the parameters of that message and an English summary for the log. A check changes nothing, never raises and never puts a secret value in its result.
+a severity, the i18n key of its message for the admin interface (``instance.checks.*``, or ``email.checks.*`` for the
+checks of workstream E, written whole so the i18n audit sees it), the parameters of that message and an English summary
+for the log. A check changes nothing, never raises and never puts a secret value in its result.
 
 At startup, ``log_configuration_audit()`` first stops on a configured secret that cannot be used, then logs every check
 that is not ``ok``. The «Security» tab of the admin settings will evaluate the same checks on demand.
@@ -17,6 +18,7 @@ from typing import Literal
 from backend.app.config import SecretFileError, get_settings, secrets_set_twice
 from backend.app.config.platform import configured_jwt_secret, configured_jwt_secret_origin, instance_blocked, instance_deletion_date
 from backend.app.logging_config import get_logger
+from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS
 from backend.app.services.platform.instance_key import InstanceKeyError, instance_key_status
 
 logger = get_logger(__name__)
@@ -138,6 +140,8 @@ CONFIG_CHECKS: tuple[Callable[[], ConfigCheck], ...] = (
     check_instance_key,
     check_session_cookie,
     check_log_level,
+    # Workstream E: the SMTP configuration and its encryption (services/email/checks.py)
+    *EMAIL_CONFIG_CHECKS,
 )
 
 
