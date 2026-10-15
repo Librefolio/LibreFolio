@@ -1197,3 +1197,65 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 >   1. `feat(accounts): tab registry, O-15, K-17, L12`;
 >   2. `docs(journal): A3 progress, A and 38 backlog`.
 > - **Ingresso in `dev_release2`**: prima delle 08:45 o dopo la finestra della galleria.
+>
+> **Esito**: il coordinatore ha committato `755eaa27d` (`feat(accounts): tab registry, O-15, K-17, L12`: 4 file
+> aggiunti, 30 modificati) e `a8eefdb44` (journal; le chiusure nel README del 38 vanno bene). Poi ha aggiornato la
+> base con il merge `35f1e0a16` di `dev_release2` a `75a20ce29`: unione automatica di backlog, `access_control.md` e
+> `_backend_utils.py`, albero uguale alla simulazione, worktree pulito. Il merge porta W1 e W2 (`transactions/`,
+> `brokers/`), H CP2a (pacchetto `config/` e guardia su `os.environ`), X CP1 e CP2a (registri per famiglia,
+> `services/assets/`).
+>
+> Indicazioni del coordinatore (15/10, ~02:24):
+> - **CHANGELOG**: lo aggiorna lui all'ingresso, con le tre righe proposte.
+> - **T-B4 → TC-4**: il coordinatore colori rinomina la sua sezione col prefisso `TC-` il 15/10, con T-3. Poi
+>   aggiorno il richiamo in A-6 e in questo piano.
+> - **Lotti successivi**, un checkpoint FROZEN ciascuno:
+>   - A4: migrazione 005 e token; la parte delle sessioni (`sv`) dopo il CP3 di H, che fa i segreti;
+>   - A5: inviti, limite, API admin, link di reset. Le regole uniche della password aspettano la decisione 37 del
+>     developer;
+>   - A6: scheda Utenti, con l'eliminazione degli utenti;
+>   - A8: limite dei tentativi e scheda «Sicurezza».
+> - **Contratto della scheda «Sicurezza»** (A8), alla lettera: «un registro aperto di controlli che altre sessioni
+>   possono usare. Un controllo è id, gravità, chiave i18n e dettaglio, valutato a richiesta da un endpoint solo per
+>   admin. H ci registrerà i suoi avvisi di configurazione: segreto JWT corto, `NOME` e `NOME_FILE` insieme, permessi
+>   larghi sulla chiave d'istanza, cookie `never`. Tienilo semplice, ma usabile da un'altra sessione.»
+> - H ha preparato `backend/app/config/accounts.py` per A, con `donation_popup_disabled()`: le variabili nuove di A
+>   vanno lì. La catena delle migrazioni arriva alla 004: la 005 resta di A.
+
+#### A3.8 — Validazione completa della revisione combinata `35f1e0a16` ✅ (2026-10-15)
+> Richiesta del coordinatore: build, `front check`, core-unit, component-unit, cancello dei colori;
+> `utils dev-cli-image` e `services config-package` («`user_cli.py` non deve leggere `os.environ` fuori da
+> `config/`»); `all-backend`; E2E `auth`, `settings`, `app-start-auth`, `onboarding-guides`.
+>
+> **Note implementazione**:
+> - Il guardiano di `config-package` scandisce solo `backend/app/`, quindi `scripts/user_cli.py` resta fuori dal suo
+>   perimetro. L'ho controllato a mano, con il rilevatore del test
+>   (`test_config_package._environment_accesses`): `reads=[]`, `writes=[]`.
+>   - `user_cli.py` cambia il modo di test solo con `set_test_mode()`, che il pacchetto `config` esporta ancora.
+>   - Le letture dell'ambiente in `scripts/test_runner/_frontend_common.py` c'erano già, e la regola vale per
+>     `backend/app/`.
+> - **Esito** (`bash /tmp/libreFolio_a3c_validate.sh`, corsia 6182, dalle 02:24 alle 02:57, tutto exit 0):
+>   - `dev.py front build --debug` e `front check`: svelte-check «0 errors and 0 warnings».
+>   - `dev.py mkdocs build`: exit 0, per tenere l'avvio del server dentro i 300 s.
+>   - Vitest:
+>     - `core-unit`: 131 file, **4 261** test;
+>     - `component-unit`: 119 file, **3 192** test;
+>     - `user-unit`: 2 file, **78** test.
+>
+>     Sono gli stessi numeri di A3.7: il merge non tocca i test frontend.
+>   - Cancello dei colori: `--check` «clean»; `--report` «Ratchet: 0 violations, 0 files dropped, 22 moves
+>     recognized. Grammar: 0 violations».
+>   - `check-orphans`: 366 unitari, 118 E2E e 264 file backend registrati e raggiungibili da `all`.
+>   - `utils dev-cli-image`: **39** passati. `services config-package`: **472** passati.
+>   - **`all-backend`**: uscita 0, **7/7 categorie verdi**, 20 min (02:30 → 02:51).
+>     - 23 righe di riepilogo pytest: **13 440 passati, 28 saltati, 0 falliti**.
+>     - In A1.9 erano 12 965: la differenza viene dai lotti entrati con il merge (fra cui `config-package`, 472) e
+>       dagli 8 test IMG-011 e IMG-012.
+>   - E2E sul backend riordinato da W, H e X:
+>     - `front-utility auth`: 29;
+>     - `front-utility settings`: 45;
+>     - `front-utility app-start-auth`: 3;
+>     - `front-utility onboarding-guides`: 24.
+>   - In ogni run E2E `_ensure_test_users` stampa «Test users ready», senza errori. Nella base della corsia c'è un
+>     solo 👑, `e2e_test_admin`.
+>   - Porta 6182 libera. Worktree: cambia solo questo piano.
