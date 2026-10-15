@@ -6,6 +6,12 @@
 > Piano generale: [`../plan-phase00ColorSystemThemeLab.prompt.md`](../plan-phase00ColorSystemThemeLab.prompt.md), riga R del §5.
 > Fonti: [`../analysis/`](../analysis/00_SINTESI.md) (report 01–04). Backlog: sezione «R» di
 > [`../../../Phase_0/BACKLOG_POST_1.2.md`](../../../Phase_0/BACKLOG_POST_1.2.md).
+>
+> **Stato finale (15/10/2026): ✅ chiuso.**
+> - Lotti A–D in `dev_release2` da `8fd8e494b` (merge del target nel ramo R, poi avanzamento veloce del target), più
+>   `23f6578f3` (`fix(pwa)`, il timbro del service worker).
+> - Cancello gallery unico A+B+C+D superato.
+> - W10 chiuso: vedi «W10 — chiusura» e il §7.
 
 ## ⏸️ Pausa del 14/10 (richiesta del developer, inoltrata dal coordinatore) — ▶️ ripresa alle 19:15
 
@@ -185,7 +191,7 @@ Regole:
 > **Note implementazione**: in `NOTICE` del PAC l'ordine delle classi cambia (layout prima dei colori): stesso insieme di
 > classi, nessun test fissa l'ordine. `AssetChip` ricompone `border`/`border-dashed` con il tono: stringhe identiche.
 
-### Cancello A — gallery dopo il merge di G (coordinatore avvisato prima)
+### Cancello A — gallery dopo il merge di G (coordinatore avvisato prima) ✅ (15/10/2026, cancello unico A+B+C+D)
 
 > **Stato del lotto A (W0–W2), 14/10:** codice e prove di codice completi. `svelte-check` 0 errori e 0 avvisi; Vitest
 > completi **363 file / 11.217 test verdi** (baseline 11.193, più 29 nuovi, meno 5 spostati); Prettier pulito sui file
@@ -288,7 +294,7 @@ Regole:
 > l'ha visto subito (colori «guadagnati»). Riparato verificando che le due copie fossero identiche (import in testa più
 > una copia; diff finale +6/−3 righe) e corretto lo script. `conserve.py` ora mette tra parentesi anche il ternario
 > annidato nel ramo «allora», come fa Prettier: così le parentesi non generano più differenze di testo.
-### Cancello B — gallery dopo il merge di G (coordinatore avvisato prima)
+### Cancello B — gallery dopo il merge di G (coordinatore avvisato prima) ✅ (15/10/2026, cancello unico A+B+C+D)
 
 > **Stato del lotto B (W3–W5), 14/10:** codice e prove di codice completi.
 > - 229 siti in 33 file; nel perimetro grafici restano solo commenti, due eccezioni motivate (il generatore `lotColor`
@@ -426,7 +432,7 @@ si può rilanciare.
 >     `fx/FxDataEditorSection.svelte:129`: cartelle della 1.3, fuori perimetro, voce R-6 del backlog, decisione del
 >     coordinatore al checkpoint B.
 
-### Cancello C
+### Cancello C ✅ (15/10/2026, cancello unico A+B+C+D)
 
 > **Stato del lotto C (W6–W7), 14/10:** codice e prove di codice completi.
 > - 16 componenti e 908 dichiarazioni → 604 token `--lf-cmp-*` in 4 file centrali.
@@ -476,7 +482,7 @@ si può rilanciare.
 > >     accanto a `themeColorMeta`, verde nei risultati delle 22:26);
 > >   - `check-orphans`: 365 file unitari raggiungibili;
 > >   - `git diff --check` pulito; porta 6154 libera.
-### W8 — osservatori (D4) · W9 — P8 fuori elenco (D5) · W10 — cricchetto (D7), inventario, backlog, wiki, handoff
+### W8 — osservatori (D4) · W9 — P8 fuori elenco (D5) · W10 — cricchetto (D7), inventario, backlog, wiki, handoff ✅ (15/10/2026)
 
 > **Preparazione offline (14/10, durante la finestra di quiete).** Niente scritto nel worktree: gli script stanno
 > nella sessione e si applicano dopo il commit del lotto C.
@@ -671,6 +677,119 @@ si può rilanciare.
 > - prima di quel cancello il coordinatore aggiorna la base con G;
 > - W10 (chiusura) dopo il cancello; fino ad allora niente lavoro nuovo sul codice.
 
+#### Merge della base con T-2 ✅ (15/10/2026, validato alle 10:25)
+
+> **Note implementazione**: il coordinatore ha aperto il merge di `dev_release2` (`2338aaf79`) dentro `2c8508efb`.
+> Contenuto: T-2, gli spostamenti A2 di auth, settings e support in `lib/features/`, l'endpoint `/system/instance` di H.
+> R l'ha risolto e validato senza committare; il coordinatore l'ha chiuso in **`87b7c34b8`** (genitori `2c8508efb` e
+> `2338aaf79`).
+> - **Unico conflitto: `frontend/src/themeRoles.baseline.tsv`**, in fondo al file. È la stretta di T-2
+>   (`routes/+error.svelte` a 0, `routes/+page.svelte` da 5 a 1) accanto alla riga `~accept` di D3.
+>   - `theme-roles.mjs --resolve` ha di nuovo tolto `#166534` dal record di `themeStore.ts`. `mergeBaselines` dà a una
+>     riga presente sui due lati solo i colori che entrambi hanno, senza guardare la base né l'`~accept`. Previsto con
+>     una prova a secco (`resolveConflict` + `compareWithBaseline`, senza scrivere) e segnalato prima di agire.
+>   - Su autorizzazione del coordinatore (09:07), lo stesso `--accept` di D3: il record torna `0 #166534 #1a4031`, con
+>     una sola riga `~accept`. Rispetto al target cambiano solo queste due righe, rispetto al lato R solo la stretta di
+>     T-2. Stage della sola baseline.
+>   - La correzione di `mergeBaselines` va a T: voce **R-8** del backlog.
+> - **Fusi da soli, controllati:** il runner aggiunge al target solo le 6 righe di R, e i 668 percorsi registrati
+>   esistono; nel backlog la sezione R è quella del lato R, il resto è il target alla lettera.
+> - Nessun file di R rinominato dai 79 spostamenti; nessun manifest di dipendenze cambiato.
+>
+> Evidenze sulla revisione combinata (corsia 6154, dopo il via delle 10:15):
+> - `theme-roles.mjs --check` pulito (81 file sotto il loro record: stringe T);
+> - `core-unit`: **140 file e 4.380 test verdi**; i 6 file colore di R e i 2 gate di T verdi nei risultati;
+> - `front check`: al primo giro 2 errori in `features/instance`, perché il client API generato era più vecchio di
+>   `/system/instance`; `front build` sincronizza l'API, e il secondo giro dà **0 errori e 0 avvisi**;
+> - **nuovo CSS di riferimento** = la build del merge (23 file, sessione `merge3-css`). Rispetto a quella del 14/10
+>   cambiano solo i chunk `0` e `2`, uguali tra target e merge: vengono dal target;
+> - **prova combinata**: target costruito in una copia `/tmp`, poi cancellata. `r3_css_compare.py` **OK**: 11 file
+>   identici regola per regola e 12 byte per byte, con i 728 token sostituiti; `r3_reach.py`: 36 entry OK;
+> - `check-orphans` pulito: 376 unitari, 118 E2E, 277 backend.
+
+#### Cancello unico A+B+C+D ✅ (15/10/2026)
+
+> **Gallery** catturata dal coordinatore, tolleranza 0, maschere del rumore r1↔r2 della misura di G:
+> - riferimento `g-final3-r1` sul target `2338aaf79` (09:14);
+> - candidata `g-final3-candR` su `87b7c34b8`, nella corsia 6154 (10:29).
+>
+> Risultato:
+> - **2.370 immagini identiche e 454 cambiate**. Solo 9 superano il rumore del proprio scatto: 8 `files/static-grid`
+>   (orario di caricamento e miniatura del DB della corsia: contenuto) e 1 `detail-signals` (max Δ5 su 255).
+> - **Revisione di R delle 15 immagini cambiate in scatti stabili**, quelle che il report indica come «probabilmente
+>   reali»:
+>   - `brokers/import-modal` (4, max Δ211 in un riquadro di 17×11 px): è l'ora nella colonna «Uploaded»
+>     (`Oct 15, 2026, 0…` alle 09:14, `…1…` alle 10:29). Contenuto;
+>   - `risk/whatif-simulation` (1, Δ15): lo stato transitorio della «×» di chiusura del riquadro, che R non tocca;
+>   - le altre 10, con Δ ≤ 3: antialiasing.
+> - Con la regola «conta lo stile», nessuna differenza di stile o di colore. **Cancello superato** (coordinatore,
+>   15/10).
+> - Evidenze: `LibreFolio_visual_review/diffs/g-final3__r1__vs__candR/` (`report.md`, `summary.json`, `composites/`).
+
+#### Ingresso in `dev_release2` ✅ (15/10/2026, 11:21)
+
+> - `8fd8e494b`: merge del target (`6ed99c694`) nel ramo R, poi avanzamento veloce di `dev_release2`.
+> - `23f6578f3` `fix(pwa): restamp the service worker`: `dev_release2` è a `23f6578f3`.
+>
+> **⚠️ Fuori pista** (lotto A, W0):
+> - La correzione D3 ha cambiato `static/offline.html` senza aggiornare il timbro di `static/sw.js`, cioè l'MD5 di
+>   `offline.html`.
+> - Il timbro lo scrive `stamp_service_worker()` di `dev.py`, dentro `copy_docs_assets()`. Lo chiamano la build della
+>   documentazione (`mkdocs build/serve/deploy`), le risorse di Docker e `auto_build_mkdocs()` all'avvio del server di
+>   test, non `front build`. Per questo le build di R non sporcavano il worktree, e la run della candidata sì.
+> - La guardia esiste (`backend/test_scripts/test_utilities/test_pwa_assets.py`), ma è un test backend, fuori dai
+>   selettori frontend di R. Corretto dal coordinatore all'ingresso.
+> - Lezione: chi tocca `offline.html` ritimbra e committa `sw.js` nella stessa modifica, e lancia `test_pwa_assets`.
+>   È nella pagina wiki `features/F-098`.
+
+#### W10 — chiusura ✅ (15/10/2026)
+
+> **Note implementazione**: solo documenti. Nessun comando pesante: la finestra delle candidate di L e T era ancora
+> aperta. Solo l'inventario statico.
+> - **Elenco delle eccezioni** (consegnato a T il 14/10, verificato sul codice di `23f6578f3`).
+>   `LITERAL_EXCEPTIONS` di `frontend/scripts/theme/theme-roles.mjs` contiene tutte le eccezioni di R, con i percorsi
+>   aggiornati dopo gli spostamenti:
+>   - `lotColor`, l'`hsl()` generato dall'id del lotto (`brokers/lots/lotComparisonChartHelpers.ts`);
+>   - i generatori `hsl()`/`hsla()` di `lib/utils/colors.ts`;
+>   - il `#000` del segnale dimostrativo, mai disegnato (`charts/ChartSettingsModal.svelte`);
+>   - il `#a855f7` della linea di anteprima (`assets/AssetDataEditorSection.svelte`, `fx/FxDataEditorSection.svelte`;
+>     R-6).
+>
+>   Non servono eccezioni per: `hslToHex` di `MeasurePanel` (nessun letterale); i due
+>   `rgba(var(--lf-cmp-datatable-row-stale-rgb…), …)` di `DataTable` (costruiti su token: per T non sono letterali); i
+>   commenti (M2 li ignora). I marchi dei social di `supportLinks.ts` sono un'eccezione di T, ora in
+>   `lib/features/support/`.
+> - **Gate D4**: anticipato in W8 (`themeModeReads`). Sul codice di `23f6578f3`, fuori da `themeMode.ts`, non resta
+>   nessuna lettura della classe `dark` né alcun osservatore della classe di `<html>`.
+> - **Inventario finale** (`scripts/visual_review/color_inventory.py`, codice di prodotto, `23f6578f3`). Letterali fuori
+>   da `lib/theme/**` e da `app.css`:
+>
+>   | | base `b631308` | lotto C | lotto D | finale |
+>   |---|---:|---:|---:|---:|
+>   | hex | 1.554 | 229 | 88 | **85** |
+>   | funzioni colore | 198 | 72 | 50 | **50** |
+>
+>   Restano 34 file. Sono fuori dal perimetro di R (`TransactionsTable`, `ChangelogModal`, `AnimatedBackground`,
+>   `LoadingSpinner`, `Tooltip`…) oppure eccezioni dichiarate; li sorveglia il cricchetto M2 di T.
+> - **Backlog**, sezione R:
+>   - R-1…R-4 chiuse ✅, con data e commit;
+>   - link riallineati a `../Phase_1/10_colorSystem/…`;
+>   - nuova **R-8** per T (`mergeBaselines`);
+>   - restano aperte R-5, R-6 e R-7.
+> - **Wiki**: proposte nel worktree, che il coordinatore committa dopo la revisione.
+>   - Pagine nuove:
+>     - `wiki/decisions/colour-factorisation-at-pixel-parity.md`;
+>     - `wiki/problems/esbuild-colour-minify-skips-custom-properties.md`;
+>     - `wiki/problems/colour-ratchet-resolve-drops-an-accept.md`.
+>   - Pagine aggiornate:
+>     - `wiki/features/F-007.md`, corretta la deriva: i grafici seguono il tema con `onThemeClassChange()`, non con
+>       «store reattivi»;
+>     - `wiki/features/F-098.md`, il timbro di `sw.js`;
+>     - `wiki/problems/front-check-does-not-check-what-you-think.md`, il client generato invecchiato da un merge.
+>   - Aggiornati anche `index.md` e `log.md`; `check_source_paths.py` pulito.
+>   - Grafo non aggiornato: graphify non è disponibile in questo worktree (P-6).
+> - **Handoff finale** al coordinatore.
+
 ## 5. Test da adattare (`test-author`)
 
 - ✅ Lettori di palette dai sorgenti (W4): `colors`, `allocationHierarchy`, `allocationRings`, `AllocationHistoryChart`
@@ -679,6 +798,12 @@ si può rilanciare.
   `DEFAULT_SIGNAL_COLORS` resta il nome pubblico.
 - ✅ Oracolo rimasto verde senza modifiche: `chartCoreHelpers.test.ts` (testo `cc('…')` di Growth), test degli helper e
   dei lotti, test con classi (`AssetTable`, `RiskMetricCard`, `KpiDivergingFlowBar`, `TransactionFormModal`).
+- ✅ Test e gate nuovi di R, tutti scritti da `test-author` e registrati in `core-unit`, salvo `palettes` in
+  `allocation-unit`:
+  - W0: `lib/theme/colorAlpha.test.ts`; `src/themeColorMeta.gate.test.ts` (D3, passa a T con T-4);
+  - W4: `lib/theme/chartTheme.test.ts`; `src/__tests__/palettes.ts`/`.test.ts`, al posto di `sourcePalettes`;
+  - W6–W7: `src/themeComponentTokens.gate.test.ts` (R-3, 18 test), che non legge il Designer Lab né i test;
+  - W8: `lib/theme/themeMode.test.ts` (19 test) e `src/themeModeReads.gate.test.ts` (gate D4, 24 test).
 
 ## 6. Conflitti e rischi
 
@@ -689,5 +814,33 @@ si può rilanciare.
 - **Rischi per i pixel:** refusi nei valori; classi non più letterali; cascata in R-3; caricamento del CSS importato; HTML
   dei tooltip; tempi di ridisegno in W8; punti ciechi della gallery (hover, tooltip). Divergenze da non «aggiustare»:
   SemiDonut solo chiaro, Δ dei tooltip uguali nei due temi, scala del treemap invertita.
+- **Esito (15/10):** nessuno dei rischi per i pixel si è verificato; il cancello unico A+B+C+D è superato.
+- **T** (aperto il 14/10):
+  - conflitti solo testuali: righe aggiuntive nel runner e la baseline del cricchetto `themeRoles.baseline.tsv`;
+  - la correzione D3 è stata accettata con `--accept` due volte, autorizzata dal coordinatore. La prima perché la
+    baseline di T era stata registrata prima di R; la seconda perché `--resolve` l'aveva tolta (R-8).
+- **1.3** (A2, spostamenti in `lib/features/`): nessun file di R rinominato; i percorsi delle eccezioni li ha
+  aggiornati T.
+- **Service worker:** chi cambia `static/offline.html` ritimbra e committa `static/sw.js` (lezione del lotto A, vedi
+  «Ingresso in `dev_release2`»).
 
 ## 7. Registro di esecuzione
+
+Il ramo R in prima linea, dalla base `b631308`.
+
+| Data | Commit | Cosa |
+|---|---|---|
+| 14/10 18:05 | `d80b9e0cd` | Lotto A (W0–W2): `refactor(theme): central alpha and tone classes` |
+| 14/10 18:06 | `b1fcc3c48` | Merge della base (`c942889e1`) |
+| 14/10 20:07 | `75c45d923` | Lotto B (W3–W5): `refactor(theme): chart colours in lib/theme` |
+| 14/10 20:07 | `f53d979ef` | Merge della base (`e6d293e41`) |
+| 14/10 22:29 | `0b660632f` | Lotto C (W6–W7): `refactor(theme): component style colours in lib/theme` |
+| 14/10 22:29 | `85e61abe8` | Merge della base (`aa2adbbf5`) |
+| 14/10 22:29 | `74e94dee6` | Piano spostato in `Phase_1/10_colorSystem` |
+| 14/10 23:17 | `98731240d` | Lotto D (W8–W9): `refactor(theme): one theme reader, last P8 styles` |
+| 14/10 23:35 | `418ea8042` | Merge della base con T-1 (`6ab653dd4`) |
+| 15/10 08:45 | `2c8508efb` | Registro del merge con T-1 |
+| 15/10 10:26 | `87b7c34b8` | Merge della base con T-2 (`2338aaf79`) |
+| 15/10 11:21 | `8fd8e494b` | Merge del target (`6ed99c694`), poi avanzamento veloce di `dev_release2` |
+| 15/10 11:21 | `23f6578f3` | `fix(pwa): restamp the service worker` (vedi «Ingresso in `dev_release2`») |
+| 15/10 | — | W10: piano, backlog, wiki (da committare a cura del coordinatore) |
