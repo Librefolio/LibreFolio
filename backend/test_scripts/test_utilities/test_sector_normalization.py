@@ -1,12 +1,12 @@
 """
 Tests for sector normalization utilities.
 
-Tests the FinancialSector enum and normalization functions.
+Tests the FinancialSector enum, the normalization functions and SECTOR_EMOJI, the one map of sector emoji.
 """
 
 import pytest
 
-from backend.app.utils.asset.sector import FinancialSector, normalize_sector, validate_sector
+from backend.app.utils.asset.sector import SECTOR_EMOJI, FinancialSector, normalize_sector, validate_sector
 
 # ============================================================
 # FinancialSector Enum Tests
@@ -265,6 +265,77 @@ class TestEdgeCases:
         assert data[FinancialSector.TECHNOLOGY] == 0.5
         # Also works with string lookup since it's a str enum
         assert data["Technology"] == 0.5
+
+
+# ============================================================
+# SECTOR_EMOJI Map Tests
+# ============================================================
+
+# The two buckets the portfolio engine adds on its own, outside FinancialSector: the cash, and the holdings without a sector.
+ENGINE_BUCKETS = ("Liquidity", "Unknown")
+
+# The designer's table, round 2 (15/10/2026). A design contract: every glyph is pinned on purpose.
+DESIGNER_SECTOR_EMOJI = {
+    "Industrials": "🏭",
+    "Technology": "💻",
+    "Financials": "🏦",
+    "Consumer Discretionary": "🛍️",
+    "Health Care": "🏥",
+    "Real Estate": "🏠",
+    "Basic Materials": "⛏️",
+    "Energy": "⚡",
+    "Consumer Staples": "🛒",
+    "Telecommunication": "📡",
+    "Utilities": "💡",
+    "Corporate Bonds": "🏢",
+    "Government Bonds": "🏛️",
+    "Other": "📦",
+    "Liquidity": "💰",
+    "Unknown": "❓",
+}
+
+
+class TestSectorEmojiMap:
+    """Tests for SECTOR_EMOJI, the one map of sector emoji.
+
+    `/utilities/sectors` (behind the allocation history) and the allocation view of the portfolio engine
+    (behind the dashboard pie) both read it. They used to keep a copy each, and the copies disagreed on
+    four keys: one sector, two glyphs, depending on the chart.
+    """
+
+    def test_keys_are_every_sector_plus_the_engine_buckets(self):
+        """Every FinancialSector value has an emoji, and so do Liquidity and Unknown: nothing else is in the map."""
+        expected_keys = {sector.value for sector in FinancialSector} | set(ENGINE_BUCKETS)
+        assert {str(key) for key in SECTOR_EMOJI} == expected_keys
+        # Derived from the enum, never a literal: one key per sector, plus the two buckets.
+        assert len(SECTOR_EMOJI) == len(FinancialSector) + len(ENGINE_BUCKETS)
+
+    def test_glyphs_are_the_designer_table(self):
+        """Each key reads exactly the glyph of the designer's table."""
+        # str() turns the FinancialSector keys into their plain names, so a failure diffs readable keys.
+        assert {str(key): glyph for key, glyph in SECTOR_EMOJI.items()} == DESIGNER_SECTOR_EMOJI
+
+    def test_plain_string_and_enum_member_read_the_same_glyph(self):
+        """A plain-string lookup, the one the API and the engine do with names, reads the glyph of the enum member."""
+        for sector in FinancialSector:
+            name = sector.value
+            assert type(name) is str, f"{name!r} is not a plain str: the lookup below would not test what it says"
+            assert SECTOR_EMOJI.get(name) == SECTOR_EMOJI[sector], f"{name}: the plain string reads {SECTOR_EMOJI.get(name)!r}, the member {SECTOR_EMOJI[sector]!r}"
+
+    def test_glyphs_are_distinct_non_empty_strings(self):
+        """Every glyph is a non-empty string, and no two keys share one.
+
+        Two keys with one glyph are two pie slices nobody can tell apart: the engine's old copy gave 🏢 to both
+        Real Estate and Corporate Bonds.
+        """
+        owners: dict[str, list[str]] = {}
+        for key, glyph in SECTOR_EMOJI.items():
+            assert isinstance(glyph, str), f"{key}: {glyph!r} is not a string"
+            assert glyph.strip(), f"{key}: the glyph is empty"
+            # Compared without U+FE0F, the emoji presentation selector: it changes the string, not the symbol.
+            owners.setdefault(glyph.replace("\ufe0f", ""), []).append(str(key))
+        shared = {glyph: keys for glyph, keys in owners.items() if len(keys) > 1}
+        assert not shared, f"glyphs shared by more than one key: {shared}"
 
 
 if __name__ == "__main__":

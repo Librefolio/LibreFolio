@@ -2327,8 +2327,24 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > lettere: «D» e «V» erano già usate (developer, 15/10).
 >
 > Valori e controlli: [giro 2 della designer](../Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/README.md)
-> e la sua [analisi](../Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/analisi.md), §4–§6. Il piano
-> arriverà in `../Phase_1/10_colorSystem/DV-chartColors/`. Gli ID di questa sezione sono `DV-n`.
+> e la sua [analisi](../Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/analisi.md), §4–§6. Il piano:
+> [`plan-phase00ChartColors.prompt.md`](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md).
+> Gli ID di questa sezione sono `DV-n`.
+
+- **DV-1 · La rigenerazione documentata del golden di `native_cash_guard` non arriva al test** — minimo; DV, 15/10 (S1).
+  - Il comando del docstring, `LIBREFOLIO_REGEN_NATIVE_CASH_GUARD=1 ./dev.py test services roi-fifo-utils
+    native_cash_guard`, non funziona: la corsia di test scarta ogni `LIBREFOLIO_*` che non sia `LIBREFOLIO_TEST_*`
+    (`scripts/cli_base.py`, `_test_lane_drops`). Il test confronta, invece di riscrivere.
+  - In S1 il golden è stato aggiornato sulle 4 righe del diff del test (💵 → 💰), poi verificato verde byte per byte.
+  - Rimedio: rinominare la variabile in `LIBREFOLIO_TEST_…`, oppure aggiungerla a `TEST_LANE_KEEPS`. Fuori dal perimetro
+    di DV.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S1».
+- **DV-2 · Un settore senza emoji: l'endpoint ripiega su 📊, la vista dell'allocazione su `None`** — minimo; DV, 15/10
+  (`test-author`, S1).
+  - `/utilities/sectors` elenca solo valori di `FinancialSector`, quindi oggi il ripiego non scatta. Il motore invece
+    riceve qualunque nome dalla distribuzione di un asset.
+  - Il contratto (un'emoji neutra o nessuna) si decide con il passo delle emoji nel frontend (decisione 8 del piano).
+    Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S1».
 
 ---
 

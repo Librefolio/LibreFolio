@@ -20,26 +20,7 @@ from backend.app.services.financial_math.average_cost import (
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, DailyPortfolioState
 from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot
-
-# Emoji mapping for sector allocation keys (backend-canonical, language-independent)
-SECTOR_EMOJIS: dict[str, str] = {
-    "Technology": "💻",
-    "Financials": "🏦",
-    "Consumer Discretionary": "🛍️",
-    "Health Care": "💊",
-    "Industrials": "🏭",
-    "Basic Materials": "⛏️",
-    "Energy": "⚡",
-    "Consumer Staples": "🛒",
-    "Telecommunication": "📡",
-    "Real Estate": "🏢",
-    "Utilities": "🔌",
-    "Corporate Bonds": "🏢",
-    "Government Bonds": "🏛️",
-    "Other": "📦",
-    "Unknown": "❓",
-    "Liquidity": "💵",
-}
+from backend.app.utils.asset.sector import SECTOR_EMOJI
 
 
 def build_cost_positions(
@@ -235,7 +216,7 @@ class DerivedViewsBuilder:
                     "name": name,
                     "value": (amt / total * 100).quantize(Decimal("0.01")),
                     "amount": amt,
-                    "emoji": SECTOR_EMOJIS.get(name) if use_sector_emoji else None,
+                    "emoji": SECTOR_EMOJI.get(name) if use_sector_emoji else None,
                 }
                 for name, amt in sorted(d.items(), key=lambda x: -x[1])
             ]
