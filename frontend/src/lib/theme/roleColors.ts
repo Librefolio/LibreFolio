@@ -30,12 +30,12 @@ export type ChartRole = '--lf-surface-card' | '--lf-surface-panel' | '--lf-text-
 
 /** tokens.css, resolved per theme: what a role reads where the stylesheet is not loaded. Kept equal by the parity gate. */
 const STAND_INS: Readonly<Record<ChartRole, ThemePair>> = {
-    '--lf-surface-card': {light: '#fbf8f1', dark: '#171f1c'},
-    '--lf-surface-panel': {light: '#eee9de', dark: '#1e2824'},
-    '--lf-text-primary': {light: '#292d27', dark: '#eae6df'},
-    '--lf-text-on-inverse': {light: '#fbf8f1', dark: '#171f1c'},
-    '--lf-danger': {light: '#b42332', dark: '#f25f5c'},
-    '--lf-info': {light: '#145dee', dark: '#5899fa'},
+    '--lf-surface-card': {light: '#fafbfa', dark: '#151b19'},
+    '--lf-surface-panel': {light: '#e8ece9', dark: '#1b2421'},
+    '--lf-text-primary': {light: '#1c2420', dark: '#edf2f0'},
+    '--lf-text-on-inverse': {light: '#fafbfa', dark: '#151b19'},
+    '--lf-danger': {light: '#c82838', dark: '#ff7a86'},
+    '--lf-info': {light: '#155eef', dark: '#3f86fa'},
 };
 
 /** How a role is read for an element, for tests: by default its computed style. `''` when it has no value. */
