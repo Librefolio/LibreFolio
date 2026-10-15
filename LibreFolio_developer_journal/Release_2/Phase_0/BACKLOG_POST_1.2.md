@@ -2552,15 +2552,17 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 - **C-49 (sezione C) · presa in carico da Z** — prove senza codice in Z6a (autorizzate il 15/10), cura in Z6b con il
   punto 35 delle decisioni. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione
   «Z6a — prove su C-49, senza codice di prodotto».
-- **Z-1 · Il ciclo del grafico del dettaglio asset gira anche su un intervallo passato** — basso, da verificare; Z,
-  14/10. Il poll di 60 s (`routes/(app)/assets/[id]/+page.svelte:1977-2083`) non ha la guardia `isHeadToday`, e
-  `mergeChartPointsIncremental` (`:2553`) non taglia sull'intervallo: una scrittura al minuto inutile e forse il punto di
-  oggi in un grafico del passato. Cura proposta in Z1 (D3), dopo un rosso. Dettagli:
-  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «1. Stato reale».
-- **Z-2 · Due cicli sullo stesso endpoint nel dettaglio asset** — basso; Z, 14/10. Il riepilogo (30 s) e il grafico
-  (60 s) chiamano entrambi `POST /assets/prices/current`, che scrive l'OHLC di oggi: tre scritture al minuto. Fusione
-  proposta per il taglio della pagina (FE5, X). Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
-  sezione «1. Stato reale».
+- ✅ **Z-1 · Il ciclo del grafico del dettaglio asset gira anche su un intervallo passato** — chiusa da Z1 il 15/10
+  (checkpoint Z1): il ciclo unico del dettaglio ha la guardia `isHeadToday`; il test E2E `front-asset live-pause` (f)
+  prova che un intervallo passato non chiede nulla (rosso prima: richieste a +2,1 e +57,1 s). Era: basso, da
+  verificare; Z, 14/10. Il poll di 60 s (`routes/(app)/assets/[id]/+page.svelte:1977-2083`) non aveva la guardia
+  `isHeadToday`, e `mergeChartPointsIncremental` non taglia sull'intervallo. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Passi di Z1».
+- ✅ **Z-2 · Due cicli sullo stesso endpoint nel dettaglio asset** — chiusa da Z1 il 15/10 (checkpoint Z1), per la
+  decisione 31: un ciclo solo ogni 30 s, una richiesta per giro che alimenta il riepilogo e la testa del grafico; la
+  fusione è coordinata con X (FE5c) dal coordinatore. Era: basso; Z, 14/10, tre scritture di `POST
+  /assets/prices/current` al minuto. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
+  sezione «Passi di Z1».
 - **Z-3 · `isHeadToday` confronta con la data UTC** — basso, da verificare; Z, 14/10. Le due pagine degli asset usano
   `new Date().toISOString().slice(0, 10)`: tra mezzanotte locale e mezzanotte UTC il «fino a oggi» sbaglia giorno
   (classe `utc-today-vs-user-calendar` della devWiki). Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
@@ -2574,6 +2576,17 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 - **Z-6 · Il docstring dello scheduler dice che l'elezione del leader gira in un thread** — minimo; Z, 14/10.
   `services/platform/scheduler/scheduler.py:108` chiama `am_i_leader()` (psutil) sul loop. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «2. Già fatto o contraddetto».
+- **Z-7 · Calendario dei risvegli: prossima esecuzione per job, `next_wake_at` e jitter** — medio; developer, 15/10
+  (decisione 33: «il next_wakeup per ora non serve [...] è una cosa per il futuro quando servirà»). Quando il pannello
+  del cloud terrà un calendario: la prossima esecuzione di ogni job (con l'ora legale), `next_wake_at` nella risposta di
+  `wake-sync` e in un GET con lo stesso token, il jitter per istanza. La risposta di `wake-sync` nasce estendibile per
+  questo. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «4. Decisioni».
+- **Z-8 · Il dettaglio di un asset senza fornitore chiede il prezzo dal vivo ogni 30 s** — basso; Z, 15/10 (Z1). Il
+  ciclo unico ha mantenuto la guardia del vecchio ciclo del riepilogo, che non guardava il fornitore: per un asset
+  manuale `POST /assets/prices/current` restituisce il valore salvato, e il frontend lo conta come una scrittura del
+  portafoglio (`portfolioMutation.ts`). La testa del grafico invece salta senza fornitore. Cura possibile: non avviare il
+  ciclo senza un fornitore assegnato. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
+  sezione «Passi di Z1».
 
 ## B · Backup e Docker (fase 01)
 
