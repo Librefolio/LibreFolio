@@ -15,7 +15,8 @@ A BRIM plugin teaches LibreFolio to read **one specific broker's export file** a
 its rows into standard transactions the user can review and import. It lives in
 `backend/app/services/brim_providers/broker_<name>/` (one folder per broker: `plugin.py` holds
 the code, `i18n/` its name and description), extends `BRIMProvider`, and is auto-discovered via
-`@register_provider(BRIMProviderRegistry)`.
+`@register_provider(BRIMProviderRegistry)`. Both come from the BRIM runtime, `backend/app/services/brim/`:
+the contract from `brim_provider.py`, the registry from `registry.py`.
 
 Think of it as a **faithful transcriber**: it copies what the broker reported into
 LibreFolio's transaction shape. It is **not** a calculator, a pricing engine, or an FX

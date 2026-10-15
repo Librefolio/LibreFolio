@@ -2,7 +2,7 @@
 
 How to create a new **Broker Report Import Manager** plugin to support a new broker's CSV/Excel export format.
 
-**Base class**: `BRIMProvider` (in `backend/app/services/brim_provider.py`)
+**Base class**: `BRIMProvider` (in `backend/app/services/brim/brim_provider.py`)
 **Plugin folder**: `backend/app/services/brim_providers/<code>/` — the code in `plugin.py`, beside an `__init__.py` holding only its docstring (see [Auto-Discovery](#auto-discovery))
 **Registry**: `BRIMProviderRegistry`
 
@@ -388,7 +388,7 @@ Defined on `BRIMProvider` — call these instead of re-implementing:
 
 from pathlib import Path
 from backend.app.services.brim.registry import BRIMProviderRegistry
-from backend.app.services.brim_provider import BRIMProvider
+from backend.app.services.brim.brim_provider import BRIMProvider
 from backend.app.services.provider_registry import register_provider
 from backend.app.schemas.brim import BRIMExtractedAssetInfo, BRIMParseOutput
 from backend.app.schemas.transactions import TXCreateItem
@@ -505,7 +505,7 @@ from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMAssetNotice, BRIMEx
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
 from backend.app.services.brim.registry import BRIMProviderRegistry
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
@@ -1064,8 +1064,8 @@ other.
 
 Every default of the contract keeps a plugin single-file, so the existing plugins do not change.
 The reference implementation is `backend/app/services/brim_providers/broker_danske_bank/plugin.py`; the
-framework lives in `backend/app/services/brim_report_sets.py` (members, preview, combine, history
-start) and `backend/app/services/brim_gap_fix.py` (the corrections), the schemas in
+framework lives in `backend/app/services/brim/brim_report_sets.py` (members, preview, combine, history
+start) and `backend/app/services/brim/brim_gap_fix.py` (the corrections), the schemas in
 `backend/app/schemas/brim.py`, and the wizard side in
 [Import Wizard → Report sets](../../frontend/components/features/import-wizard.md#report-sets).
 
@@ -1582,21 +1582,13 @@ Then, reusing `<slug>` everywhere:
     </a>
     ```
 
-3. **Capacity table** — add one row per language in the `??? info "📊 Importer Capabilities"`
-   table of those same index files, **4-space indented** so it stays inside the admonition.
-   Columns are `Broker | Status | Format | Buy/Sell | Dividends | Deposits/Cash | Fees/Taxes | Notes`
-   (use ✅ / ❌ per capability):
-
-    ```markdown
-    | <img src="<favicon-url>" width="16" height="16" style="vertical-align: middle; margin-right: 4px;"> **<Display>** | 🧪 Beta | CSV | ✅ | ✅ | ❌ | ✅ | <short note> |
-    ```
-4. **Nav** — add `- <Display>: user/transactions/import/<slug>.md` in `mkdocs_src/mkdocs.yml`
+3. **Nav** — add `- <Display>: user/transactions/import/<slug>.md` in `mkdocs_src/mkdocs.yml`
    under the right `📥 Import from Broker` subgroup, and add any new group/leaf title to the
    `nav_translations` of each non-English locale.
-5. **Validate** — `./dev.py mkdocs build` must report **no** `unrecognized relative link` /
+4. **Validate** — `./dev.py mkdocs build` must report **no** `unrecognized relative link` /
    `no such anchor`. Internal links use the `.md` form (`how-to.md`,
    `../../../community/contribute.md`), never trailing-slash paths.
-6. **Developer providers overview** — add one row for the broker to
+5. **Developer providers overview** — add one row for the broker to
    [Providers List](../../backend/brim/providers_list.md) (favicon, code, formats, status,
    notes) so the developer-side catalogue stays in sync.
 
