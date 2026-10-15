@@ -12,12 +12,12 @@ Usage:
     from backend.app.services.accounts.global_settings_service import (
         get_session_ttl_hours,
         get_max_upload_mb,
-        is_registration_enabled,
     )
 
     ttl = await get_session_ttl_hours(session)
     max_mb = await get_max_upload_mb(session)
-    can_register = await is_registration_enabled(session)
+
+Who may register is decided by services/accounts/registration_service.py.
 """
 
 import json
@@ -93,13 +93,3 @@ async def get_max_upload_mb(session: AsyncSession) -> int:
     """
     value = await get_setting_value(session, SETTINGS_REGISTRY.global_.MAX_FILE_UPLOAD_MB.key, 10)
     return int(value) if value else 10
-
-
-async def is_registration_enabled(session: AsyncSession) -> bool:
-    """
-    Check if new user registration is enabled.
-
-    Default: True
-    """
-    value = await get_setting_value(session, SETTINGS_REGISTRY.global_.ENABLE_REGISTRATION.key, True)
-    return bool(value)

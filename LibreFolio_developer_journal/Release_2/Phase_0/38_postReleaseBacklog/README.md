@@ -205,11 +205,13 @@ Origine: [25_taxonomySelect](../../phases/25_taxonomySelect/README.md), archivia
 dallo [step 23](../../phases/25_taxonomySelect/plan-phase00TaxonomySelectStep23BulkCloneAndDiscardGuard.prompt.md),
 K-5…K-26 dalla verifica d'archivio di K su `586a4f0ea`; i percorsi senza prefisso sono sotto `frontend/src`.
 
-- **K-1 · Riparazione delle coppie di tipi non di coppia** — basso, solo se servisse. Il Bulk mostrava due cloni
+- ✅ **K-1 · Riparazione delle coppie di tipi non di coppia** — basso, solo se servisse. Il Bulk mostrava due cloni
   dello stesso tipo come una coppia, ma il payload scarta il `link_uuid` dei tipi non di coppia
   (`txPayloadHelpers.ts:256`), e la copia del DB del developer ha 0 coppie sbagliate. Un'altra installazione potrebbe
   averne, e lo Split non le ripara (`TYPE_CANNOT_SPLIT`): servirebbe una riparazione dedicata, con la query di
   rilevamento scritta nel piano.
+  - ✅ **Chiusa il 15/10 senza codice** (decisione 24 del developer: «si sono daccordo, niente codice, parliamo
+    comunque di un caso limite»). La query di rilevamento resta nel piano di W (04, §12).
 - **K-2 · Nel percorso lento, form o wizard aperti da soli si riaprono** — basso. Se l'utente chiude il form o il
   wizard prima che il caricamento finisca, il Bulk lo riapre a caricamento finito; i test B6 aspettano la fine.
 - **K-3 · Il crash di *Reset all* su una coppia con un capo inaccessibile** — basso, oggi non raggiungibile dalla UI.

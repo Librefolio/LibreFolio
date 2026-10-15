@@ -11,7 +11,7 @@
 > - **Approvate** (coordinamento, 14/10): D-P1, D-X1, D-X3, D-X5, D-X6, D-X7, D-X8, D-X11, D-X12, D-X13, D-X14, D-X15.
 >   D-X9 è **superata da C3** (schemi in pacchetti per dominio; gli eventi in `schemas/assets/events.py` o dove li colloca X
 >   nel pacchetto). D-X10: oltre al confronto di `openapi.json`, la verifica della corrispondenza dei percorsi (C2).
->   **Ancora al developer**: D-X2 e D-X4 (non servono al CP1; nel documento delle decisioni sono le voci 18 e 19).
+>   **Ancora al developer**: D-X2 (voce 18, assorbita dalla voce 39, non ancora decisa). **D-X4 decisa il 15/10** (voce 19): §4.3.
 > - **Regole comuni**: piano generale, §6 (Git, «Forma comune del riordino» C1–C7, superfici condivise, regole di ogni lotto
 >   di riordino, «Taglio dichiarato», nuove schermate) e §7 (programma colori, regola «chi parte prima»).
 > - **Primo treno**: H CP1 → X CP1 → A A1; il CP1 di X entra dopo quello di H, con gli import riallineati all'aggiornamento
@@ -199,25 +199,75 @@ riga d'import in `main.py` o nel suo successore, da riallineare all'aggiornament
 
 ### 4.3 Elenchi dei fornitori permessi (F05, parte X)
 
-- `LIBREFOLIO_ASSET_PROVIDERS_ALLOWED`, `LIBREFOLIO_FX_PROVIDERS_ALLOWED` (+ `_FILE` non serve: non sono segreti), letti con
-  un accessore in `backend/app/config/<sezione>.py` (regola di H, sotto §6) e scritti in `.env.example`. **Non impostate = tutti permessi** (self-hosted invariato). Profilo gestito (interruttore di
-  H) e non impostate = solo i fornitori **non scraper** (D-X4). `MANUAL` sempre permesso; i fornitori di test esclusi.
+**D-X4, decisa dal developer il 15/10** (voce 19), alla lettera: «si al togliere il search, ma almeno all'inizio lasciamo che
+se un utente proprio vuole può setupparlo manualmente uno di questi provider, poi capiremo se legalmente è un azzardo o una
+zona grigia, essendo in fondo la sua macchina e offrendo noi i premium, diciamo che servirebbe più da tappa buchi per quei
+titoli di super nicchia». In chat, sulla proposta di un avviso del coordinatore: «19 ok come proponi». Per questo lotto, dal
+coordinatore:
+- senza un elenco del pannello, le fonti scraper (Yahoo, justETF, Borsa Italiana, lo scraper CSS) non compaiono nella ricerca;
+- l'utente può comunque assegnarne una a mano a un singolo asset, dalla configurazione della fonte;
+- lì compare una riga d'avviso, del tipo «fonte non ufficiale, a tuo rischio»;
+- i cambi delle banche centrali restano tutti; nel self-hosted non cambia niente.
+
+Prima della decisione il profilo gestito senza elenchi toglieva gli scraper del tutto; ora li toglie solo dalla ricerca. Il
+permesso e la ricerca diventano quindi due livelli, con un punto unico ciascuno nel registro della famiglia.
+
+- **Permesso**, `is_allowed(code)`: `LIBREFOLIO_ASSET_PROVIDERS_ALLOWED` e `LIBREFOLIO_FX_PROVIDERS_ALLOWED` (senza `_FILE`:
+  non sono segreti), lette con un accessore in `backend/app/config/plugins.py` (regola di H, sotto §6) e scritte in
+  `.env.example`. **Non impostate = tutti permessi, in tutti e due i profili**: il self-hosted non cambia, e nel profilo
+  gestito gli scraper restano assegnabili a mano. Impostate = solo gli elencati. `MANUAL` sempre permesso; i fornitori di test
+  esclusi. È la leva per «poi capiremo se legalmente è un azzardo»: se la risposta è no, l'operatore elenca solo le fonti
+  ufficiali e l'uso a mano si chiude senza codice nuovo; gli asset già legati seguono D-X5 (sotto).
+- **Ricerca**, `is_searchable(code)`, solo per gli asset: vi partecipa un fornitore permesso che dichiara la ricerca, tranne
+  gli scraper nel profilo gestito. **Lettura mia, confermata dal coordinatore il 15/10**: nel profilo gestito gli scraper restano fuori
+  dalla ricerca anche con un elenco del pannello, perché l'elenco decide il permesso e mai la ricerca. Un pannello che elenca
+  le fonti incluse in un piano (un diritto, non una scelta legale) non deve rimettere in ricerca gli scraper come effetto
+  collaterale; e così si può tenere uno scraper solo a mano e chiuderne un altro. L'altra lettura (un elenco del pannello vale
+  anche per la ricerca) è una riga nel registro.
+
+  | Profilo | `…_ALLOWED` | Permessi: a mano, probe, sync | In ricerca |
+  |---|---|---|---|
+  | self-hosted | non impostata | tutti | tutti quelli con la ricerca, come oggi |
+  | self-hosted | impostata | gli elencati | gli elencati con la ricerca |
+  | gestito | non impostata | tutti | i non scraper con la ricerca: oggi nessuno, fino a F06 |
+  | gestito | impostata | gli elencati | gli elencati non scraper con la ricerca |
+
 - Ogni fornitore dichiara `is_scraper` (asset: yfinance, justETF, Borsa Italiana, CSS scraper = sì; scheduled_investment = no;
   FX: banche centrali = no). Default **prudente**: un fornitore che non lo dichiara conta come scraper, così un plugin di terzi
-  montato non entra da solo in un'istanza gestita. È un attributo distinto dal `tier` di F21: «community» non vuol dire
-  scraper (una futura API ufficiale gratuita, come OpenFIGI, sarebbe community ma non scraper). Facoltativo: un flag
-  dichiarato «solo test» sostituisce i nomi scritti a mano (`api/v1/assets.py:419`, `api/v1/fx.py:129`).
-- Nel profilo gestito senza elenchi espliciti la ricerca degli asset resta senza fornitori finché non arriva il fornitore a
-  pagamento (F06) o l'operatore ne permette qualcuno: è la specifica («scraper disattivati di default»), da sapere.
-- Un punto unico per famiglia (`registry.is_allowed(code)`), controllato a: elenco, ricerca, probe, assegnazione, sync, prezzo
-  corrente, metadati. **Asset già legati a un fornitore non permesso** (D-X5): l'assegnazione resta nel DB; sync e prezzo
-  corrente lo saltano con esito per voce `PROVIDER_NOT_ALLOWED` (niente 500, niente spam nello scheduler); le letture delle
-  assegnazioni espongono `provider_allowed: false`; la UI mostra un avviso con «Cambia fonte» o prezzi manuali; mai
-  cancellazioni né riassegnazioni automatiche. FX: il fornitore non permesso esce dalla catena di ripiego della coppia,
-  l'esito della gamba lo dice; nessuna modifica alle rotte salvate (l'ambiente può tornare indietro).
+  montato non entra da solo nella ricerca di un'istanza gestita, e porta l'avviso. È un attributo distinto dal `tier` di F21
+  («community» non vuol dire scraper: una futura API ufficiale gratuita, come OpenFIGI, sarebbe community ma non scraper) e
+  dal `kind` di oggi (`FAProviderKind.ONLINE_SCRAPER` vuol dire «dati presi da fuori», e varrebbe anche per un'API ufficiale).
+  Facoltativo: un flag dichiarato «solo test» sostituisce i nomi scritti a mano (`api/v1/assets/providers.py:62`, `mockprov`;
+  `api/v1/fx/providers.py:80`, `_HIDDEN_FX_PROVIDERS`).
+- **La riga d'avviso**: `FAProviderInfo` (`schemas/provider.py`) espone `searchable` e `notice` (`"unofficial_source"` |
+  `null`), calcolati nel backend: `notice` vale `"unofficial_source"` per uno scraper permesso ma fuori dalla ricerca, cioè
+  offerto solo a mano. La configurazione della fonte (`ProviderAssignmentSection`, in `AssetModalProvider`, alla creazione e
+  alla modifica) mostra la riga quando il fornitore scelto ha il `notice`: una chiave nuova nelle 4 lingue, ruoli `lf-*`, lo
+  stesso componente d'avviso per asset di F21 (§4.6) con un messaggio suo; UI dopo il lotto A, come C-90. Nel self-hosted
+  senza elenchi nessuno scraper è fuori dalla ricerca, quindi la riga non compare mai. FX: oggi nessuno scraper e nessuna
+  ricerca, quindi nessun secondo livello.
+- **Dove si controlla**. `is_searchable`: l'elenco dei fornitori di ricerca, `GET /api/v1/assets/provider/search` e
+  `/search/stream`, compresa la risoluzione di un URL incollato, che è un ingresso della ricerca (`services/assets/search.py:104`,
+  `resolve_url`). Il filtro sta nel backend: una richiesta che nomina uno scraper in `providers=` non lo interroga.
+  `is_allowed`: l'elenco per la configurazione, `POST /api/v1/assets/provider/probe`, l'assegnazione, il sync, il prezzo
+  corrente e i metadati. Una fonte solo a mano fa quindi tutto tranne comparire nella ricerca: probe, «Chiedi al fornitore»,
+  sync dello scheduler.
+- **Asset già legati a un fornitore non permesso** (D-X5): l'assegnazione resta nel DB; sync e prezzo corrente lo saltano con
+  esito per voce `PROVIDER_NOT_ALLOWED` (niente 500, niente spam nello scheduler); le letture delle assegnazioni espongono
+  `provider_allowed: false`; la UI mostra un avviso con «Cambia fonte» o prezzi manuali; mai cancellazioni né riassegnazioni
+  automatiche. FX: il fornitore non permesso esce dalla catena di ripiego della coppia, l'esito della gamba lo dice; nessuna
+  modifica alle rotte salvate (l'ambiente può tornare indietro). Una fonte soltanto fuori dalla ricerca non è «non
+  permessa»: nessun esito e nessun avviso di D-X5.
+- Nel profilo gestito senza elenchi la ricerca degli asset resta senza fornitori finché non arriva il fornitore a pagamento
+  (F06), o finché l'operatore non permette una fonte non scraper: è la specifica («scraper disattivati di default»). L'utente
+  crea l'asset a mano e, se vuole, gli configura una fonte scraper con l'avviso; la ricerca vuota lo dice e porta lì (con F21,
+  «Non lo trovi?»).
 - Facoltativo, se H offre l'area avvisi: «N asset usano fonti non permesse su questa istanza» per l'admin.
 - Dal giro di sicurezza di H (coordinatore, 14/10), nello stesso lotto: il `css_scraper` segue i redirect su URL scelti
-  dall'utente; vanno bloccati loopback, reti private, link-local e metadati del cloud, anche dopo un redirect.
+  dall'utente (`css_scraper/plugin.py:192`, `follow_redirects=True`); vanno bloccati loopback, reti private, link-local e
+  metadati del cloud, anche dopo un redirect. **Con D-X4 è una precondizione**: nel profilo gestito ogni utente può configurare
+  a mano lo scraper CSS con un URL suo, e la probe lo fa partire subito; il profilo gestito con le fonti a mano non esce senza
+  questo blocco.
 
 ### 4.4 Impostazioni dei plugin
 
@@ -242,7 +292,7 @@ dall'ambiente **non compaiono** né nella UI né nelle API.
 `updated_by_user_id`); CHECK su scope/utente e «esattamente uno fra valore e cifrato»; indici unici **parziali** (uno per
 `system`, uno per `user`), perché in SQLite i NULL non collidono in un UNIQUE; gli indici parziali vanno dichiarati anche nel
 modello (`sqlite_where`), altrimenti il confronto modello/DB di `db_schema_validate.py` li vede come differenza. Righe di campi
-non più dichiarati: ignorate. Id della revisione `006_plugin_settings` (19 caratteri, sotto il limite di 32).
+non più dichiarati: ignorate. Id della revisione `007_plugin_settings` (19 caratteri, sotto il limite di 32).
 
 **Cifratura** (`crypto.py`, D-X1): `cryptography`, AES-256-GCM; sottochiave HKDF-SHA256 dalla chiave d'istanza di H con
 `derive_key(purpose="plugins.settings.v1", length=32)` di H (`services/platform/instance_key.py`); **AAD = contesto** (`famiglia|plugin|campo|scope|user_id`), così un cifrato spostato su
@@ -343,6 +393,73 @@ in più (D-X2) gli zip di backup scaricabili dalla UI contengono la chiave d'ist
   coordinatore al developer. Effetto per me: nessuna isolazione crittografica fra istanze che condividono la chiave; l'AAD
   con il contesto della riga resta l'unica separazione.
 
+#### Ripristino di un backup: il contratto con B (aggiunta del 15/10, solo disegno)
+
+Richiesta dell'analisi di B, girata dal coordinatore il 15/10. Contesto: la decisione 39, che assorbe la 18, ancora al developer. La chiave
+d'istanza entra in un backup solo con password e solo se generata; al ripristino l'istanza tiene la sua chiave e i segreti si
+ricifrano, altrimenti restano «impostati ma illeggibili, reinseriscili» (misura 4). Il disegno regge entrambi gli esiti. Il
+CP10 resta fermo fino alla decisione 39 (la 19 è decisa il 15/10, §4.3) e alla finestra di `cryptography`.
+
+**Due funzioni sincrone** in `plugin_settings/crypto.py`, su una `sqlite3.Connection` della copia. Non usano il motore
+dell'app e non leggono la configurazione: ricevono le sottochiavi.
+
+- `rekey_plugin_secrets(conn, old_subkey, new_subkey) -> RekeyReport`. Per ogni riga con `secret_ciphertext`:
+  - con il `key_id` della nuova sottochiave è già corrente e non si tocca. Due giri danno lo stesso stato, e con la stessa
+    chiave sulle due istanze non c'è nessuna scrittura;
+  - con il `key_id` della vecchia, se la decifratura riesce (AES-GCM, AAD = `famiglia|plugin|campo|scope|user_id` della
+    riga), si ricifra con la nuova: nonce nuovo da 96 bit, `key_id` nuovo;
+  - altrimenti (un altro `key_id`, un tag non valido, un contesto cambiato) resta com'è e si conta illeggibile: mai
+    cancellata, mai un valore sbagliato.
+
+  `RekeyReport(rekeyed, already_current, unreadable_system, unreadable_user)`: solo conteggi, mai nomi né valori.
+- `count_unreadable_secrets(conn, subkey) -> UnreadableSecrets(system, user)`, con `total`. Sola lettura. È illeggibile una
+  riga con un `key_id` diverso, o quella con il `key_id` giusto che non si decifra (copia corrotta).
+
+Regole comuni:
+- **Transazione**: tutto dentro un `SAVEPOINT`. Da sola è atomica; se B ha una transazione aperta, ne diventa parte. Non fa
+  mai il `COMMIT` del lavoro di B. Un errore strutturale annulla il savepoint e risale; una riga illeggibile non è un errore.
+- **Ordine**: si chiamano dopo l'aggiornamento della copia alla revisione di testa. Su una copia senza `plugin_settings`
+  (un backup di prima della 007) rendono zeri.
+- **Sincrone**: dall'app si chiamano in `asyncio.to_thread` (regola dell'I/O asincrono). Il chiaro vive solo in memoria
+  durante la chiamata, mai nei log né nei rapporti.
+- **Sottochiavi**: B non conosce il `purpose`. `settings_subkey(instance_key: str | None = None)` rende la sottochiave
+  corrente, oppure quella di una chiave data (la chiave dello zip). Da H serve un solo pezzo: `derive_key_from(instance_key,
+  purpose, length=32)`, la stessa derivazione di `derive_key` da una chiave esplicita, con lo stesso controllo di lunghezza;
+  `derive_key` la userebbe con la chiave corrente.
+- **Privacy**: il conteggio è diviso per scope, perché l'admin non deve sapere nemmeno se esistono impostazioni personali
+  (§4.4). Il rapporto di ripristino mostra all'admin il numero dei segreti di sistema, e per quelli personali una frase
+  generica; ogni utente vede i propri «illeggibili, reinseriscili» nella sua scheda.
+- **Utenti**: l'AAD lega il cifrato al `user_id`. Un ripristino completo conserva gli id; uno che rinumerasse gli utenti
+  renderebbe illeggibili i segreti personali, per costruzione.
+
+**Il flusso di B**:
+1. Con la chiave nello zip: `rekey_plugin_secrets(copia, settings_subkey(chiave_dello_zip), settings_subkey())`. Se la
+   chiave dello zip non è quella che ha cifrato il DB, lo dice il rapporto (0 ricifrati, N illeggibili).
+2. Senza la chiave: `count_unreadable_secrets(copia, settings_subkey())`, per il rapporto. Le righe restano; chi le
+   reinserisce le sovrascrive con la chiave corrente.
+3. In entrambi i casi B non scrive altro per le impostazioni dei plugin: lo stato sta tutto nei `key_id` delle righe.
+
+**Il valore di controllo H-3**: d'accordo con B sul posto, «con i cifrati, nella 007», nella forma più semplice. È il
+`key_id` di ogni riga: un'impronta con chiave della sottochiave, `HMAC-SHA256(sottochiave, "LibreFolio plugin settings key
+id v1")` troncato a 16 byte, in esadecimale. Non rivela né la sottochiave né la chiave d'istanza. Nessuna tabella e nessuna
+riga a parte, perché:
+- i `key_id` dicono riga per riga quale chiave serve, e il rilevamento all'avvio è un conteggio delle righe con un `key_id`
+  diverso da quello corrente, senza decifrare;
+- senza segreti non c'è niente da perdere, e niente da segnalare;
+- al ripristino B non deve aggiornare nessun valore.
+
+Il controllo all'avvio è di H: un controllo con il DB, nel log e nella scheda Sicurezza come i `ConfigCheck` di
+`config_audit.py`, che oggi leggono solo la configurazione. Chiama `plugin_secrets_key_status(session) -> UnreadableSecrets`
+(la stessa regola, con un adattatore asincrono) e mostra all'admin solo il conteggio di sistema. Rischio residuo, dichiarato:
+con un `key_id` chi ha il DB può provare una chiave candidata, come può già con il tag di ogni cifrato. Con una chiave casuale
+da 256 bit non conta, ed è il motivo della regola «mai una passphrase» (nota di H).
+Un valore di controllo dell'istanza (una tabella di una riga, in una migrazione di H) servirà se un secondo uso della chiave
+d'istanza salverà dati nel DB. Nella 1.3 i segreti dei plugin sono l'unico dato cifrato con quella chiave.
+
+**Prove (nel CP10)**: sottochiavi fisse dei test, mai chiavi vere (misura 8); `sqlite3` in memoria con lo schema della 007;
+ricifratura, idempotenza, `key_id` misti, tag alterato, riga spostata (AAD), tabella assente, savepoint dentro una
+transazione di B che poi annulla.
+
 ### 4.6 Ordine dei fornitori nella ricerca (F21) e C-90
 
 - Ogni fornitore asset dichiara `tier` (`premium` | `community`, default `community`) e `search_priority` (intero, più basso =
@@ -373,8 +490,8 @@ SvelteKit sulla pagina lista per i filtri); C-66 (avviso nel dialogo di sync qua
 | CP3 — PL4 cambi | `fx.py` → `fx/{registry,base,sync,conversion,storage}.py`; `api/v1/fx.py` → `api/v1/fx/{router,providers,currencies}.py`; 6 plugin FX; 17 importatori app | 11 test di servizio, patch di `test_fx_sync_service.py`; `test_fx_api_unit.py`, `test_fx_signals_api.py`, `test_fx_compress_errors.py`, `test_fx_route_schemas.py` (patch sui nuovi sotto-moduli) | `fx_plugin_guide.md`, `backend/fx/{architecture,configuration}.md`, `financial_math.md`; `backend-providers-fx` (`applyTo`, nome della base), mappa di `backend.instructions.md` |
 | PL7 | `api/v1/signals.py` + estrazione dei pezzi segnali da `prices/query` e `currencies/convert` | `api signal-*` | `backend-signals` (sezione API) |
 | Schemi | `schemas/{assets,prices,provider,refresh,fx}.py` (D-X9) | importatori | `backend-schemas.instructions.md` |
-| F05 | `assets/registry.py`, `fx/registry.py`, choke point nei servizi, schemi `provider_allowed` | nuovi pytest | sezione X di `.env.example`; testo per `admin/configuration` (H) |
-| Impostazioni | `plugin_settings/*`, `db/models.py` (un modello), `alembic/versions/006_plugin_settings.py`, `api/v1/plugin_settings.py`, `schemas/plugin_settings.py`, basi di famiglia, justETF/Borsa; frontend `lib/features/plugin-settings/*`, una riga nel registro schede di A, «Configura» | pytest servizi/API/migrazione/sicurezza; Vitest; E2E; galleria | pagina dev `patterns/plugin_settings.md`; admin (sicurezza e variabili); utente `user/settings/plugins.md`, pagine dei fornitori |
+| F05 | `assets/registry.py` (`is_allowed`, `is_searchable`), `fx/registry.py`, choke point nei servizi e nella ricerca, `config/plugins.py`, schemi `provider_allowed`, `searchable`, `notice` (`schemas/provider.py`); `ProviderAssignmentSection` (la riga d'avviso, dopo il lotto A); `css_scraper` (blocco SSRF) | nuovi pytest, Vitest della riga | sezione X di `.env.example`; testo per `admin/configuration` (H); la riga d'avviso nelle 4 lingue |
+| Impostazioni | `plugin_settings/*`, `db/models.py` (un modello), `alembic/versions/007_plugin_settings.py`, `api/v1/plugin_settings.py`, `schemas/plugin_settings.py`, basi di famiglia, justETF/Borsa; frontend `lib/features/plugin-settings/*`, una riga nel registro schede di A, «Configura» | pytest servizi/API/migrazione/sicurezza; Vitest; E2E; galleria | pagina dev `patterns/plugin_settings.md`; admin (sicurezza e variabili); utente `user/settings/plugins.md`, pagine dei fornitori |
 | F21 + C-90 | `assets/registry.py`, `assets/search.py`, `FAProviderInfo`; `features/assets/` ricerca e pannello | pytest, Vitest, E2E | `search_link_finder.md`, `user/assets/create-edit.en.md` |
 
 Runner (condiviso, solo le mie voci): `services plugin-settings`, `api plugin-settings`, `services provider-policy`, guardie dei
@@ -407,9 +524,9 @@ config-package` e `services config-env-example`), valide per ogni mia variabile 
 | # | Domanda | Raccomandazione |
 |---|---|---|
 | D-X1 | Cifratura | AES-256-GCM con AAD di contesto e sottochiave HKDF (`cryptography`); Fernet come alternativa più semplice ma senza AAD |
-| D-X2 | Segreti personali e backup (§10 n. 5) | ammessi, scrittura sola dal proprietario; zip della UI con la chiave d'istanza solo se protetto da password, altrimenti senza chiave e segreti da reinserire (con B) |
+| D-X2 | Segreti personali e backup (§10 n. 5) | ammessi, scrittura sola dal proprietario; zip della UI con la chiave d'istanza solo se protetto da password, altrimenti senza chiave e segreti da reinserire (con B); voce 18, assorbita dalla 39, ancora al developer (15/10) |
 | D-X3 | F21 senza fornitori premium attivi | lista come oggi: gruppi e avviso solo se almeno un premium è permesso |
-| D-X4 | Default degli elenchi nel profilo gestito | solo fornitori non scraper (flag dichiarato); `MANUAL` sempre |
+| D-X4 | Default degli elenchi nel profilo gestito | **decisa dal developer il 15/10** (voce 19): gli scraper fuori dalla ricerca, assegnabili a mano con la riga «fonte non ufficiale»; permesso e ricerca su due livelli; cambi delle banche centrali tutti; self-hosted invariato (§4.3). Proposta di prima: solo fornitori non scraper |
 | D-X5 | Asset legati a un fornitore non più permesso | assegnazione intatta, sync saltato con esito chiaro, avviso e «Cambia fonte» |
 | D-X6 | Nome delle variabili per campo | `LIBREFOLIO_PLUGIN_<FAMIGLIA>_<CODICE>_<CAMPO>` (+ `_FILE`) più alias dichiarato; letti solo in `backend/app/config/` con `env_secret()`, ogni variabile in `.env.example` (regola di H, sotto) |
 | D-X7 | K-16 | `etc/etn` → `ETF_COMMODITY` |
@@ -446,7 +563,7 @@ config-package` e `services config-env-example`), valide per ogni mia variabile 
 | Schemi | medio (molti import) | churn | D-X9 |
 | FE4 / FE5a | basso / medio | `vi.mock` sui vecchi percorsi | nessun barile per i moduli mockati; Vitest + `svelte-check` + build + E2E |
 | FE5b/c | alto | regressioni di comportamento in due file enormi | commit piccoli, test esistenti come oracolo, `data-testid` invariati |
-| F05 | medio | scheduler rumoroso, UX degli asset orfani | esiti per voce, test dello scheduler, avviso |
+| F05 | medio | scheduler rumoroso, UX degli asset orfani; con D-X4, lo scraper CSS configurato a mano da ogni utente del profilo gestito (SSRF) | esiti per voce, test dello scheduler, avviso; blocco degli indirizzi interni anche dopo i redirect, precondizione del profilo gestito |
 | Impostazioni | alto | fughe di segreti, migrazione, permessi | analisi §4.5, test di sicurezza, `security-review` |
 | F21 | medio | regressione UX self-hosted | D-X3, Vitest dei gruppi, E2E |
 
@@ -509,8 +626,10 @@ graph TD
    Poi, in un mio lotto, **X-R8** (la cache dell'elenco delle valute dei fornitori, proposta del coordinatore).
 6. **CP4 — schemi** (C3: pacchetti per dominio, al posto di D-X9), quando W e J sono fermi su quei file.
 7. **CP5 — PL7**, dopo PL1 di J.
-8. **CP6 — F05**: elenchi, `is_scraper`, punto unico, esiti `PROVIDER_NOT_ALLOWED`, `provider_allowed`, sezione `.env.example`;
-   avviso minimo nella UI (asset e cambi). K-16 e O-9 (backend, piccoli) viaggiano qui o in un treno qualunque.
+8. **CP6 — F05**: elenchi, `is_scraper`, i due livelli di D-X4 (permesso e ricerca, un punto unico ciascuno), esiti
+   `PROVIDER_NOT_ALLOWED`, `provider_allowed`, `searchable` e `notice`, sezione `.env.example`; il blocco SSRF dello scraper
+   CSS (precondizione); avviso minimo nella UI (asset e cambi) e la riga «fonte non ufficiale» nella configurazione della
+   fonte (dopo il lotto A). K-16 e O-9 (backend, piccoli) viaggiano qui o in un treno qualunque.
 9. **CP7 — FE4**; **CP8 — FE5a** con O-8, O-20, K-20, K-19; **CP9 — FE5b/c**.
 10. **CP10 — impostazioni backend**: contratto e validazione, modello e migrazione 007 (upgrade/downgrade su un DB 1.2 popolato),
     cifratura, archivio, risoluzione, redazione, API, consegna asset/FX, test di sicurezza.
@@ -526,7 +645,10 @@ graph TD
   stessi conteggi della base (+ test nuovi); `ruff`/`black` puliti; `--dead-code` senza reperti nuovi; `openapi.json`
   identico (o D-X10 per PL7); `mkdocs build` e `check-links` verdi; `check_source_paths.py` non peggiora; rinomine ≥ 95 %.
 - Frontend: `svelte-check`, Vitest, `front build`, E2E di asset e cambi verdi; `data-testid` e chiavi invariati.
-- F05: default invariato nel self-hosted provato da test; profilo gestito provato; asset orfani gestiti.
+- F05: default invariato nel self-hosted provato da test (nessuna fonte fuori dalla ricerca, nessuna riga d'avviso);
+  profilo gestito provato con D-X4: scraper fuori dalla ricerca (anche nominati in `providers=` o con un URL incollato),
+  assegnabili a mano con il `notice`, probe e sync che funzionano, cambi delle banche centrali tutti; asset orfani gestiti;
+  SSRF dello scraper CSS bloccato, anche dopo i redirect.
 - Impostazioni: §4.5 nel piano prima del codice; contratto in 4 famiglie; 007 testata su un DB 1.2; nessun segreto in risposte,
   log, errori, AI Export (test); permessi provati (utente/utente, admin/personale, non-admin/sistema); env vince e blocca;
   invisibilità nel profilo gestito; chiave persa o cambiata gestita; 4 lingue; doc; `security-review` senza HIGH/CRITICAL aperti.
@@ -557,8 +679,12 @@ mai riavviando il server della corsia. Il risolutore legge l'ambiente a ogni chi
 - **CP3 (PL4 + router dei cambi)**: `services fx-conversion`, `fx-core`, `fx-sync-service`, `financial-math`, `roi-fifo-utils`,
   `portfolio-engine`, `lots-analysis-pure`, `ai-export-pure`; `api fx`, `fx-unit`, `fx-sync`, `fx-signals`,
   `fx-compress-errors`, `signal-catalogs`, `signal-request-validation`; `schemas fx-routes`; `all-backend`; hash di `api schema`.
-- **F05**: `services provider-policy` (nuovo, in processo), `scheduler-jobs`, `asset-source-refresh`, `fx-sync-service`;
-  `api assets-provider`, `fx-sync` (comportamento di default, invariato).
+- **F05**: `services provider-policy` (nuovo, in processo: la tabella di §4.3, profilo × elenco × `is_scraper` → permesso,
+  ricerca, `notice`, compreso il fornitore senza dichiarazione), `scheduler-jobs`, `asset-source-refresh`, `fx-sync-service`;
+  `api assets-provider` (default invariato; profilo gestito in processo: la ricerca, anche in streaming, con `providers=` e
+  con un URL, non interroga gli scraper, la probe e l'assegnazione sì), `fx-sync` (comportamento di default, invariato); il
+  blocco SSRF senza rete (risolutore finto, redirect verso un indirizzo interno); Vitest della riga d'avviso in
+  `ProviderAssignmentSection.test.ts`.
 - **Impostazioni**: `services plugin-settings` (nuovo: dichiarazioni, cifratura, AAD, risoluzione, redazione, blocco da ambiente
   in processo), `api plugin-settings` (nuovo: permessi, scrittura sola, esiti per campo; profilo gestito in processo),
   `db post-migration` + test della 007 (upgrade/downgrade su un DB 1.2 popolato, `db validate`), `api account-deletion`,
@@ -1544,3 +1670,307 @@ Note del coordinatore: X-R10 riceve una quinta voce (la docstring di `create_rou
 rimando. Il CHANGELOG di X-R8 lo scrive lui all'ingresso. Prossimo: il disegno di FE5b (taglio di `AssetModal.svelte`) in
 sola lettura, mentre chiede il via al coordinatore colori; non FE5a (dopo il lotto A) né FE5c (dopo il lotto di Z sul
 polling); taglio dichiarato con `theme-roles.mjs --split` nello stesso commit, poi `--check`; prove dopo la finestra.
+
+### X-R8 in `dev_release2` ✅ (2026-10-15)
+
+Journal `849c98dda`; merge `173ba19e2` alle 08:18, record `380a3e768` (la riga nel CHANGELOG, «🔄 Changed», e lo SHA
+accanto a X-R8 nel backlog). Il mio ramo è avanzato a `380a3e768`. La docstring di X-R1 si corregge col CP6, insieme a
+X-R2, dichiarando il cambio delle descrizioni in `openapi.json`.
+
+### FE5b — il taglio di `AssetModal.svelte` ⏳ (2026-10-15)
+
+Via del coordinatore e del coordinatore colori alle ~08:30. Record da ripartire con `--split`: `AssetModal` m1 **214**, m2
+vuoto; i pezzi non portano letterali e le classi nuove vanno sui ruoli `lf-*` (T converte i pezzi nella sua ondata W4: chi
+parte prima sono io). Durante la finestra della galleria (fino alle ~12:30) solo codice; le prove dopo l'avviso di fine.
+Non FE5a (lo spostamento in `lib/features/assets/`, dopo il lotto A) né FE5c (la pagina dell'asset, dopo il lotto di Z).
+Base: HEAD `380a3e768`. Inventario delle dipendenze (agente explore, sola lettura): `files/fe5b-inventory.md` della
+cartella di sessione.
+
+**Il punto critico.** Le quattro cuciture della logica (identificativi, confronto dei metadati, salvataggio,
+applicazione del risultato di ricerca) condividono stato mutabile: `identifierRows`, `manualFieldRevisions`, il confronto
+trattenuto (`heldComparison`, `selectionQuestions`, variabili non reattive), `providerProbe`; e lanciano compiti
+asincroni in un ordine preciso (sonda, confronto, riuso). Il markup invece si divide con pochi props. Le prove arrivano
+solo dopo la finestra: conviene tagliare prima ciò che è quasi solo markup.
+
+**Due passi** (due checkpoint):
+- **FE5b-1, ora: i pezzi del markup e la cucitura degli identificativi** (taglio dichiarato con `--split`):
+  - `AssetModalImportNotices.svelte` (avvisi d'importazione, 1707–1726): `groups`;
+  - `AssetModalDetails.svelte` (icona, nome, tipo, quantità di base, valuta, URL, descrizione, 1760–1954): bindable
+    `displayName`, `assetType`, `quoteBaseQuantity`, `providerUserUrl`, `shortDescription`; in sola lettura `currency`,
+    `iconUrl`, `hasProvider`, `askingProvider`, `duplicateAssetName`, gli errori della quantità di base; callback per la
+    valuta scelta, il campo toccato a mano, «Chiedi al fornitore», l'icona, la descrizione;
+  - `AssetModalIdentifiers.svelte` (tabella degli identificativi, etichette «altri», cancellazione multipla con la sua
+    conferma, 1988–2066 e 2487–2499, con colonne, azioni e operazioni sulle righe, 533–596): bindable `rows`; in sola
+    lettura `hasProvider`, `askingProvider`, `zIndex`; callback `onmanualedit`, `onaskprovider`. `storageKey` invariato;
+  - `AssetModalProvider.svelte` (intestazione richiudibile, stato, «nessun fornitore», `ProviderAssignmentSection`,
+    2085–2157): bindable `expanded`, `noProvider` e i quattro campi del fornitore; in sola lettura `providerUrl`,
+    `probeState`, `testStatus`, `saving`; callback `onreconcile`;
+  - `AssetModalFooter.svelte` (interruttori attivo/benchmark, Annulla, Salva, 2177–2254): bindable `active`,
+    `isBenchmark`; callback `oncancel`, `onsave`;
+  - `AssetModalSelectionPrompts.svelte` (scelta dell'identificativo primario, la sua conferma d'abbandono, riuso
+    dell'asset esistente, 2277–2372): i flag restano nel padre (il `$derived` `selectionPromptOpen` e l'effetto che
+    rilascia il confronto trattenuto devono vederli), il figlio riceve stato e callback;
+  - resta nel padre: stato, derivati, effetti, popolamento, nome doppio, ricerca, confronto, salvataggio, chiusura; la
+    cornice, l'intestazione, la ricerca online (col suo `{#key}`), il contenitore «Altre informazioni» con le due
+    distribuzioni, i due avvisi, le conferme rimaste (salvataggio senza prova, cambio d'identificativo, abbandono,
+    rigenerazione, cambio di fornitore parametrico, confronto, valuta, icona).
+  `data-testid`, chiavi i18n, ancore della guida e attributi `data-*` (`data-busy`, `data-snapshot-ready`, `data-dirty`,
+  `data-expanded`) invariati; markup spostato tale e quale (nessuna classe nuova, quindi nessun ruolo da scegliere).
+  X-R3 (i due commenti di `AssetModal` su `asset_source.py`) si corregge qui.
+- **FE5b-2, dopo: le cuciture della logica in moduli `.ts` puri**, con i loro test (test-author): il nucleo del confronto
+  dei metadati (`compareMetadata`, conservando l'ordine degli auto-riempimenti), i payload di creazione e di modifica, la
+  patch dal risultato di ricerca; l'orchestrazione (rete, biglietti della sonda, modali di conferma) resta nel padre. Nessun
+  `--split` (nessuna classe si sposta).
+
+Passi di FE5b-1:
+1. ✅ I sei pezzi, uno alla volta, leggendo ogni sezione; X-R3.
+   > **Note implementazione**: `/tmp/libreFolio_x_fe5b_cut.py` sposta un blocco di markup tale e quale (trovato per
+   > contenuto, non per numero di riga), toglie il rientro e mette l'uso del pezzo al suo posto; poi le sole rinomine dei
+   > nomi del padre nel pezzo, con un controllo che non ne resti nessuno. `AssetModal.svelte` da 2 510 a **1 932** righe;
+   > i pezzi: `AssetModalDetails` 257, `AssetModalIdentifiers` 197, `AssetModalSelectionPrompts` 156,
+   > `AssetModalFooter` 101, `AssetModalProvider` 96, `AssetModalImportNotices` 35. Scelte:
+   > - **La conferma della cancellazione multipla resta nel padre.** `ModalBase` si monta sul posto (nessun portale: lo
+   >   sfondo è `position: fixed` dentro chi lo monta), e dentro il pezzo finirebbe nel fieldset e nella scatola che
+   >   scorre. Quindi la selezione è `bind:selectedIds` e il pezzo chiede la cancellazione con `onbulkdelete`.
+   > - **I flag delle domande dopo la scelta di un risultato restano nel padre**, perché il derivato
+   >   `selectionPromptOpen` e l'effetto che rilascia il confronto trattenuto devono vederli; nel pezzo vanno insieme le
+   >   quattro modali contigue (scelta del primario, la sua conferma d'abbandono, cambio d'identificativo, riuso), così
+   >   l'ordine nel DOM non cambia.
+   > - Nel pezzo dei dettagli va `truncateQuoteBaseQuantity` (usata solo lì); le operazioni sulle righe degli
+   >   identificativi, le colonne e le azioni vanno in `AssetModalIdentifiers`; `getIdentifierByType` e la cancellazione
+   >   confermata restano nel padre (le usano il confronto e la modale). I campi toccati a mano arrivano al padre con il
+   >   loro nome (`identifier_<tipo>`, `display_name`, …), come prima.
+   > - Le scritture su un `$bindable` arrivano al padre in modo sincrono: quando il pezzo del fornitore chiama
+   >   `onreconcile()` dopo aver cambiato «nessun fornitore», il padre vede già il valore nuovo, come prima.
+   > - 19 import tolti dal padre (icone e componenti passati ai pezzi), controllati uno a uno.
+   > X-R3: i due commenti di `AssetModal` puntano a `services/assets/provider_management.py`, quello di
+   > `assetPayload.test.ts:58` a `services/assets/crud.py`. `.github/agents/test-author.agent.md:289` citava
+   > `AssetModal.svelte:595` (già sbagliata a HEAD: la riga era la 667): ora cita la funzione, `populateFromEditData`.
+2. ✅ `theme-roles.mjs --split` e `--check`; Prettier sui file toccati.
+   > **Note implementazione**: Prettier ha solo raccolto su una riga l'uso di `AssetModalIdentifiers` (il padre era pulito a
+   > HEAD). `node frontend/scripts/theme/theme-roles.mjs --split lib/components/assets/AssetModal.svelte:<le sette parti>`:
+   > 26 + 79 + 29 + 12 + 10 + 20 + 38 = **214**, come il record, m2 vuoto, più la riga `~split`; `--check`: «Colour gates:
+   > clean».
+3. ⏳ Dopo la finestra: `front build --debug` (svelte-check), vitest di `AssetModal` (`AssetModal.test.ts`,
+   `AssetModal.providerLifecycle.test.ts`), E2E degli asset e dei flussi che aprono la modale; journal e handoff.
+   > **Note implementazione** (prima della finestra, 08:33–08:35): `npm run check` (svelte-check) **0 errori, 0 avvisi**;
+   > vitest `AssetModal.test.ts`, `AssetModal.providerLifecycle.test.ts`, `assetPayload.test.ts`,
+   > `assetIdentifiers.test.ts`: 4 file, **116/116**. Restano gli E2E dopo la finestra: `front-asset` (asset-modal,
+   > asset-classification, asset-mobile-layout, asset-detail), i flussi d'importazione che aprono la modale
+   > (tx-import-resolution, tx-import-asset-inspector, tx-import-ca-contract), `utilities`, `onboarding-guides`.
+
+**FE5b-1 committato sul mio ramo, non integrato** (15/10, 08:38): `37532d558` (codice, 10 file; il coordinatore ha rifatto
+`--check`) e `448d8dd33` (journal). Gli E2E dopo la finestra, poi l'ingresso con l'avviso (prima R, poi L).
+
+### FE5b-2 — le cuciture della logica di `AssetModal` in moduli `.ts` puri ✅ (2026-10-15; E2E dopo la finestra)
+
+Sopra `448d8dd33`, durante la finestra della galleria: codice, e solo prove leggere (svelte-check, singoli file vitest).
+
+**La condizione che rende sicuro estrarre il confronto dei metadati** (verificata leggendo il codice): ogni confronto legge
+solo il proprio campo, e lo scrive solo il proprio passo (`setFieldValue` scrive il campo, più `quoteBaseQuantity` per il tipo
+e `descriptionFromPrefill` per la descrizione, che non sono confrontati); le righe OTHER le legge solo il loro passo.
+Quindi una funzione pura su una fotografia presa prima del confronto decide esattamente le stesse cose, e il padre applica
+le azioni nell'ordine. `autoFilledFields` è solo scritto, mai letto (12 assegnazioni, 0 letture): resta com'è, per non
+cambiare nulla. La nota «COVERAGE NOTE» sopra il confronto, che sconsigliava l'estrazione perché avrebbe lasciato nel
+componente il ramo di rete, decade: la rete resta nel padre e la decisione diventa provabile senza rete.
+
+Passi:
+1. ✅ (2026-10-15) `assetIdentifiers.ts`: `identifierValue`, `withIdentifier`, `mergeOtherIdentifierValues`, `withElectedPrimary`
+   (le operazioni sulle righe di `getIdentifierByType`, `setIdentifierByType`, `mergeOtherIdentifiers`,
+   `confirmIdentifierPrimary`).
+   > **Note implementazione**: le quattro funzioni sono pure e rendono righe nuove; il padre delega e assegna
+   > (`mergeOtherIdentifiers` assegna solo se `added > 0`, come prima).
+2. ✅ (2026-10-15) `assetSearchSelection.ts` (nuovo): il tipo, la decisione sull'identificativo (conflitto → scelta, aggiorna,
+   aggiungi) e i parametri del fornitore di un risultato di ricerca; `applySearchResult` tiene gli effetti.
+   > **Note implementazione**: `searchResultAssetType`, `searchResultIdentifier` (esito `none | conflict | rows`),
+   > `searchResultProviderParams`. Gli effetti di `applySearchResult` restano nello stesso ordine (scelta del primario e
+   > domanda, campi del fornitore, azzeramenti, compiti asincroni). `generateUUID` e `ASSET_TYPES` escono dal padre.
+3. ✅ (2026-10-15) `assetMetadataComparison.ts` (nuovo): `compareMetadata(patchData, fotografia, scope, manuallyChanged, etichette)`
+   → azioni ordinate, differenze, campi mancanti; `fetchAndCompareMetadata` tiene rete, biglietti, avvisi, apertura.
+   > **Note implementazione**: confrontato riga per riga con l'originale (`git show HEAD:…`, righe 953–1077). Il padre
+   > costruisce la fotografia (`comparisonSnapshot()`) e applica le azioni (`applyComparisonAction()`); ogni azione
+   > porta il suo `field`, che finisce in `autoFilledFields` come prima (`mergeOther` solo se aggiunge righe). La
+   > «COVERAGE NOTE» è tolta. Tolti anche un commento orfano precedente a FE5b («Helper: field name like
+   > 'identifier_ticker'…», sopra `setIdentifierByType`), e la JSDoc di `setFieldValue` è tornata sopra la sua funzione.
+   > **⚠️ Fuori pista**: nella prima stesura l'azione `mergeDescription` non portava `field`, e `autoFilledFields` avrebbe
+   > ricevuto `undefined` al posto di `short_description`. Visto rileggendo, prima di ogni prova: ora ogni azione ha il
+   > suo `field`.
+4. ✅ (2026-10-15) `assetPayload.ts`: gli elementi di creazione, di modifica e di assegnazione del fornitore; `saveCreate` e `saveEdit`
+   tengono conferme, 409, cache, sync.
+   > **Note implementazione**: `AssetFormFields`, `buildCreateItem`, `buildPatchItem`, `ProviderAssignment`,
+   > `buildProviderAssignItem`; nel padre `formFields()` e `providerAssignment()`. Il `naLog` della creazione legge
+   > `createItem.quote_base_quantity`. Unico spostamento di tempo: in `saveEdit` la base di quotazione si normalizza dopo
+   > `await ensureAssetProvidersCached()` invece che prima. È equivalente: `handleSave` esce se `!isValid`, che vuole un
+   > intero finito ≥ 1, quindi l'unico scrittore raggiungibile (`truncateQuoteBaseQuantity`, sul blur) non scrive; e
+   > `doSave` mette `saving = true` prima di `saveEdit`, che disabilita il fieldset. Dal padre escono 8 import
+   > (`ASSET_TYPES`, `isFamilyOnlyProposal`, `generateUUID`, `identifierRowsToColumns`, `normalizeQuoteBaseQuantity`,
+   > `normalizeDistribution`, `sameDistribution`, `buildClassificationPatch`). `AssetModal.svelte`: 1 932 → 1 779 righe.
+   > Prove leggere: `npm run check` 0 errori / 0 avvisi; vitest su `AssetModal`, `AssetModal.providerLifecycle`,
+   > `assetPayload`, `assetIdentifiers`: 116/116, come prima (i due file del componente percorrono confronto, ricerca e
+   > salvataggi). Prettier: nessun cambio.
+5. ✅ (2026-10-15) Prove leggere (svelte-check, vitest dei moduli e di `AssetModal`); test nuovi (test-author); journal e handoff.
+   > **Note implementazione**: test-author ha scritto 130 test unitari: `assetIdentifiers.test.ts` +24 (45),
+   > `assetPayload.test.ts` +17 (39), `assetSearchSelection.test.ts` nuovo (28), `assetMetadataComparison.test.ts` nuovo
+   > (61, ogni ramo: ambito, tre esiti per campo, famiglia del tipo, maiuscole, valuta non scelta, OTHER, descrizione da
+   > prefill, distribuzioni nelle due forme, ordine delle azioni e delle righe, ingressi congelati). I due file nuovi
+   > sono registrati in `scripts/test_runner/_frontend_utility.py` (`front_utility_unit`, cioè `front-utility core-unit`),
+   > due righe aggiunte accanto ad `assetPayload.test.ts`. Prove finali: `npm run check` 0/0; vitest sui sei file degli
+   > asset 246/246 (116 + 130); `theme-roles.mjs --check` pulito (nessuna classe spostata, niente `--split`);
+   > `dev.py test --test-port 6183 --data-dir /tmp/librefolio-r13-x check-orphans`: 372 file unitari, tutti raggiungibili;
+   > ruff e black puliti su `_frontend_utility.py`; Prettier pulito. Porta 6183 libera.
+   > **⚠️ Fuori pista**: (a) svelte-check ha trovato 7 errori di tipo in `assetPayload.test.ts:238`: il tipo dedotto di
+   > `buildCreateItem` perde la firma d'indice delle colonne degli identificativi (come il letterale di prima). Corretto
+   > dal secondo test-author solo nel test, con una vista `Record<string, unknown>`; sorgente invariata. (b) Una
+   > differenza vera, vista da test-author: con una risposta malformata (un peso di distribuzione non numerico)
+   > l'originale aveva già scritto i campi confrontati prima del settore e poi mostrava l'errore; ora `compareMetadata`
+   > lancia prima di ogni scrittura, quindi il modulo resta intatto e l'avviso d'errore è lo stesso. Tenuta (un errore
+   > atomico invece che a metà), dichiarata nella JSDoc del modulo e nell'handoff. Il backend valida i pesi, quindi
+   > serve una risposta malformata. (c) Stranezze preesistenti copiate fedelmente: nuova voce **X-R11** del backlog (la
+   > più visibile: l'etichetta `'Description'` del dialogo di confronto non è tradotta).
+   > E2E di FE5b (1 e 2 insieme) dopo l'avviso di fine finestra: `front build --debug`, poi `front-asset` (asset-modal,
+   > asset-classification, asset-mobile-layout, asset-detail), i flussi d'importazione che aprono la modale
+   > (tx-import-resolution, tx-import-asset-inspector, tx-import-ca-contract), `utilities`, `onboarding-guides`.
+
+FE5b-2 committato sul mio ramo, non integrato: `fc6220d28` (refactor, 10 file, con le due differenze dichiarate nel corpo)
+e `a50ec87d6` (journal). Il coordinatore: X-R11 nella sua prima voce, in un commit a parte sopra FE5b-2, che entra con
+FE5b; la riga 🐛 del CHANGELOG la scrive lui. Gli E2E dopo la finestra valgono per FE5b-1, FE5b-2 e X-R11a insieme.
+
+### X-R11a — la riga della descrizione nel dialogo di confronto, tradotta ✅ (2026-10-15; E2E dopo la finestra)
+
+Sopra `a50ec87d6`. Ogni riga del dialogo di confronto prende l'etichetta da `ComparisonLabels`, tradotta dal padre, salvo
+quella della descrizione, che usava il letterale `'Description'`: in italiano e in spagnolo restava in inglese
+(`ProviderComparisonModal` mostra `item.label` com'è). Preesistente, copiata fedelmente nel FE5b-2.
+
+1. ✅ (2026-10-15) Test prima, rosso. test-author: in `assetMetadataComparison.test.ts` l'etichetta `description: 'Desc'`
+   nelle `LABELS` dei test (diversa da `'Description'` di proposito: in inglese `common.description` e il letterale
+   coincidono, e solo un valore diverso li distingue); le tre attese che fissavano il letterale ora leggono
+   `LABELS.description`, e il titolo del test che diceva «under the literal label» porta `(X-R11)`.
+   Contro il sorgente non corretto: 3 rossi su 61, esattamente i tre test che leggono l'etichetta della descrizione,
+   ognuno solo su `"Desc"` contro `"Description"`.
+   > **Note implementazione**: niente test di componente: i test di `AssetModal` girano col catalogo inglese, dove le due
+   > etichette coincidono. Il padre non può dimenticare l'etichetta: il campo è obbligatorio nel tipo, e svelte-check lo
+   > controlla.
+2. ✅ (2026-10-15) La cura, tre righe: `ComparisonLabels` riceve `description: string` (obbligatorio);
+   `compareMetadata` usa `labels.description`; `AssetModal.svelte` passa `$t('common.description')`, chiave che c'è già
+   nei quattro cataloghi (Description, Descrizione, Description, Descripción) e che la sezione dei dettagli usa già.
+   Nessun catalogo toccato.
+   > **Note implementazione**: prove leggere: vitest sui sei file degli asset 246/246 (i 3 rossi ora verdi);
+   > `npm run check` 0/0; Prettier pulito. Nessuna classe toccata. Osservazione di test-author, fuori dalla voce: anche
+   > `name`, `type`, `currency` e `sector` nelle `LABELS` dei test coincidono con le parole inglesi, quindi un letterale
+   > futuro su quelle righe non si vedrebbe; oggi il sorgente passa `labels.*` per tutte.
+
+X-R11a committato sul mio ramo, non integrato: `ac89cea72` (fix) e `4b3455a9b` (journal). La riga 🐛 del CHANGELOG la scrive
+il coordinatore all'ingresso.
+
+### X-R1 + X-R2 — i vecchi percorsi nelle descrizioni di `openapi.json` ✅ (2026-10-15)
+
+Sopra `4b3455a9b`, chiesto dal coordinatore durante la finestra della galleria (lavoro leggero); entra con FE5b.
+
+1. ✅ (2026-10-15) Le docstring:
+   - `create_routes_bulk` (`api/v1/fx/providers.py`): `normalize_rate_for_storage` sta in `services/fx/storage.py`, non in
+     `services/fx.py` (X-R1, e la quinta voce di X-R10, che è la stessa riga);
+   - `BackwardFillInfo` (`schemas/common.py`): «FX (fx.py)» e «Asset pricing (asset_source.py)» diventano
+     `services/fx/conversion.py` (dove si calcola il riempimento all'indietro dei cambi) e `services/assets/price_query.py`
+     (dove lo calcolano i prezzi, con `AssetBackwardFillInfo`);
+   - `IdentifierType` (`db/models.py`): `schemas/assets/assets.py`, `services/assets/crud.py`, `services/brim/brim_provider.py`.
+     Verificato che le classi e le funzioni nominate esistono ancora lì (`FAAssetCreateItem`, `FAAssetPatchItem`,
+     `FAinfoResponse`, `FAAinfoFiltersRequest`; `list_assets`, `create_assets_bulk`; `search_asset_candidates`; il test
+     `test_identifier_columns_match_enum`).
+   > **⚠️ Fuori pista**: nella stessa docstring di `IdentifierType` il passo 1 diceva di aggiungere la colonna in
+   > `001_initial.py`. Contraddice la regola delle migrazioni incrementali (la tabella `assets` è già rilasciata: una colonna
+   > nuova vuole una migrazione nuova, come fu `002_identifier_other_json_list.py`), e un agente che seguisse la docstring
+   > romperebbe i DB installati. Corretta nello stesso commit, una riga: «a new incremental Alembic migration (./dev.py db
+   > migrate "..."), never 001_initial.py: the assets table has already shipped». Dichiarata nell'handoff.
+2. ✅ (2026-10-15) Prova: `dev.py api schema` prima della modifica (HEAD pulito) e dopo, con un confronto strutturato dei due
+   `openapi.json` (`/tmp/libreFolio_x_xr1_schema_diff.py`): **4 percorsi diversi, nessuno fuori dalle descrizioni**:
+   `components/schemas/BackwardFillInfo/description`, `components/schemas/IdentifierType/description`,
+   `paths//api/v1/fx/providers/routes/post/description` e `info/version` (il suffisso `-dirty`). `tool-contracts.openapi.json`
+   identico (`202402e5…`, lo stesso hash dal CP1). ruff e black puliti sui 3 file; nessun test cita quei testi; il grep dei
+   vecchi percorsi in `backend/app` trova solo `brim_providers/__init__.py:10`, che nomina il file `brim_provider.py` senza
+   percorso (il file esiste ancora, in `services/brim/`) e non finisce in `openapi.json`: lasciato.
+
+### CP10 — aggiunta al disegno per il ripristino dei backup (B) ✅ (2026-10-15, solo disegno)
+
+Chiesta dal coordinatore il 15/10 per l'analisi di B. Scritta in §4.5, «Ripristino di un backup: il contratto con B»:
+`rekey_plugin_secrets` e `count_unreadable_secrets` su una `sqlite3.Connection` della copia, e il valore di controllo H-3 = il
+`key_id` di ogni riga nella 007, senza tabelle a parte. Da H servono `derive_key_from(instance_key, purpose, length)` e il
+controllo all'avvio con il DB. Corrette anche due righe rimaste a `006_plugin_settings` (§4.4 e §5): la migrazione è la 007.
+
+### D-X4 decisa dal developer: il piano del profilo gestito ✅ (2026-10-15)
+
+Girata dal coordinatore alle 12:44, senza richiesta di risposta. Scritta in §4.3, con le conseguenze in §5, §6 (D-X4; e D-X2,
+voce 18, assorbita dalla 39 e ancora al developer), §8, §9 (CP6), §10, §11 e nella nota del CP10, fermo fino alla 39.
+Il disegno: permesso e ricerca su due livelli. Nel profilo gestito gli scraper escono solo dalla ricerca e restano assegnabili
+a mano, con un `notice` calcolato nel backend e la riga d'avviso nella configurazione della fonte. L'elenco del pannello
+decide il permesso: è la leva per chiudere l'uso a mano senza codice, se il dubbio legale lo chiede. Il blocco SSRF dello
+scraper CSS diventa una precondizione del profilo gestito. Corretti anche due riferimenti di §4.3 rimasti alle righe dei
+router di prima del CP2b e del CP3.
+> **⚠️ Fuori pista**: la frase del coordinatore «senza un elenco del pannello, le fonti scraper non compaiono nella ricerca» si
+> può leggere come «un elenco del pannello le rimette in ricerca». Ho scritto l'altra lettura (l'elenco vale per il permesso,
+> mai per la ricerca): è più vicina alle parole del developer («si al togliere il search») e regge un elenco di diritti per
+> piano. Segnalata al coordinatore, che può chiedere l'altra (una riga nel registro). **Confermata** dal coordinatore alle
+> 12:53, con le altre tre scelte (permesso di default in tutti e due i profili, `notice` dal backend, URL incollato come
+> ricerca, SSRF come precondizione); ad H non era stato girato niente, quindi niente da riallineare. Piano committato in
+> `d9b79bb8c`. «Il via te lo do con l'avviso di fine finestra» (coordinatore); il CP6 dipende ancora dal profilo gestito di
+> H (§9).
+
+### Nono aggiornamento di base: R, L, G, la 1.2.1 — merge di `13705dd05` in `d9b79bb8c` ✅ (2026-10-15) — merge `2fb577588`
+
+Finestra della galleria chiusa alle 13:01; da ora al massimo 2 suite pesanti sulla macchina, assegnate dal coordinatore (a
+me il secondo slot), il resto con `nice -n 10`. Merge aperto dal coordinatore nel mio worktree: `MERGE_HEAD` `13705dd05`,
+base comune `380a3e768`, un solo conflitto, `frontend/src/themeRoles.baseline.tsv`. La mia modifica non committata del
+piano 03 resta fuori dallo stage (la committa lui a parte).
+
+1. ✅ Il baseline, prima di scrivere: prova a secco di `--resolve` (`resolveConflict()` e `compareWithBaseline(scanTree(),
+   …)`, come consiglia la pagina della devWiki `problems/colour-ratchet-resolve-drops-an-accept.md` che il merge porta).
+   Previsione: una violazione, `R2 m2 lib/stores/app/themeStore.ts: colour literals beyond its record: #166534`. Le tre
+   versioni della riga: base e mio lato `0 #156534 #1a4031` (il mio ramo non ha mai toccato il file), `dev_release2`
+   `0 #166534 #1a4031` (l'`~accept` D3 di R del 14/10, decisione del developer). `mergeBaselines` tiene solo i valori comuni
+   ai due lati e non guarda la base: è R-8. Le 81 «drops» sono solo margine da stringere (`--update`, di T); le 22 «moves»
+   (`lib/components/{auth,settings,support}` → `lib/features/…`) il cancello le riconosce da solo.
+2. ✅ `--resolve` scritto (identico alla prova a secco, nessun marcatore); `--check` rosso come previsto; **non in stage**.
+   Prova a secco della cura della pagina, cioè ripetere l'`--accept` di R con la stessa ragione: la riga torna
+   `0 #166534 #1a4031`, identica a `dev_release2` e a quello che misura l'albero; un solo `~accept`; 0 violazioni. Il baseline
+   finale differirebbe da `dev_release2` solo per il mio split di FE5b-1 (8 righe) e dal mio lato solo per la riga accettata
+   di R e la sua dichiarazione: è il risultato di un vero merge a tre vie. `--accept` allarga un record, quindi vuole l'OK
+   del coordinatore colori: chiesto al coordinatore alle 13:07; il baseline non si tocca fino alla risposta.
+3. ✅ Gli altri file cambiati dai due lati: `scripts/test_runner/_frontend_utility.py` (i 6 test di R e i miei 2, il file si
+   analizza) e il backlog (nessun doppione nuovo: G-8, J-5, T-B4, W-B13, W-B9 compaiono due volte già nella base e nei due
+   lati).
+4. ✅ Prove leggere sull'albero fuso, prima della pausa delle dipendenze (13:10, `cryptography` nell'ambiente condiviso:
+   niente Python fino all'avviso): `dev.py api sync` verde (solo file ignorati; hash dei tool-contracts `202402e5…`
+   invariato); `npm run check` 0/0. Durante la pausa, solo Node: vitest dei sei file degli asset 246/246; vitest delle unità
+   del Designer Lab (i 15 file di `front-designer-lab unit`) 394/394.
+5. ✅ OK del coordinatore colori alle 13:12 («è la stessa D3 già autorizzata dal developer, con la stessa ragione»); la
+   correzione di `--resolve` è passata nel backlog di T come TC-7. `--accept lib/stores/app/themeStore.ts` con la ragione D3:
+   file identico alla prova a secco, un solo `~accept`; `--check` pulito (81 «drops», margine per l'`--update` di T); `git
+   add` del solo baseline; nessuna voce in conflitto rimasta. Il baseline in stage: contro `dev_release2` +8 −1 (il mio split
+   di FE5b-1), contro il mio HEAD +2 −1 (la riga di R e il suo `~accept`). «staged» al coordinatore, che fa il commit del
+   merge.
+   Commit del merge del coordinatore: `2fb577588` (genitori `d9b79bb8c` e `13705dd05`), verificato: il baseline committato è
+   byte per byte quello controllato, nessun merge aperto, il piano 03 fuori.
+6. ✅ Sulla revisione combinata `2fb577588`, dopo la fine della pausa (13:36: `cryptography 50.0.2` nell'ambiente condiviso,
+   `dc9a5d232` su `dev_release2`; regole sul carico più strette: per H, X, A ed E le prove leggere e medie sono libere, una alla
+   volta per corsia con `nice -n 10`; a me lo slot pesante 2, per `front-asset`). Medie, tutte verdi:
+   - `dev.py front build --debug` (13:37–13:41);
+   - `dev.py mkdocs build`, stretto, 94 s;
+   - `front-utility core-unit`: 142 file, 4 510 test (comprese le guardie dei colori sul baseline fuso);
+   - `check-orphans`: 121 spec E2E, 393 file unitari, 281 file del backend, tutti raggiungibili da un `all`.
+   Poi la prova pesante e le spec singole, tutte con `--workers 2` e `nice -n 10`, una alla volta:
+   - `front-asset all` (13:45–14:00): 21 file unitari (1 001 test) e 144 E2E verdi, comprese tutte le spec del lotto
+     (asset-modal, asset-classification, asset-mobile-layout, asset-detail, asset-data-editor); **2 rossi in
+     `asset-browse`**: AB-001 (`locator.fill` sulla ricerca della lista, 60 s scaduti) e AB-002 (dopo la ricerca la griglia
+     tiene 22 schede invece delle 3 del test);
+   - triage con la skill `test-triage`, verdetto **ambiente**: alle 13:54 il carico della macchina era 110–139 su 10 core
+     (coordinatore). Nella run pesante i test verdi di `asset-browse` duravano 34–46 s e i due rossi 78–97 s; in AB-002
+     Playwright ha interrogato il conteggio solo 4 volte in 15 s (runner affamato, non solo la pagina). Escluse le altre
+     ipotesi: prodotto (`searchText` lo scrivono solo l'input con 300 ms di debounce e «pulisci filtri», nessun ripristino
+     asincrono), test (attende presenza, valore e conteggio delle sue schede, con un token unico), stato condiviso (token
+     diversi, contesti separati). Conferma: la spec da sola, alle 14:02 con carico 39–49, **8/8 in 33,5 s** (6–9 s per test);
+   - `front-transaction` `tx-import-resolution` 15/15, `tx-import-asset-inspector` 5/5, `tx-ca-contract` 12/12;
+   - `front-utility` `utilities` 16/16, `onboarding-guides` 24/24;
+   - `front-designer-lab` `live` 7/7, `picker` 3/3, `neutral` 1/1.
+   Porta 6183 libera alle 14:15. `all-backend` non eseguita (non richiesta; dal mio lato, dopo l'ultima, solo le docstring
+   di X-R1/R2).
+   > **⚠️ Fuori pista**: un rosso da carico. Proposta al coordinatore, fuori dal mio perimetro: il runner potrebbe stampare
+   > il carico a inizio e fine run, così una run satura si vede nel log e non solo dai tempi.
