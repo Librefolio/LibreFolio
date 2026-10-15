@@ -100,13 +100,19 @@
 
 <!-- Sidebar -->
 <nav
-    class="fixed left-0 top-0 h-screen bg-lf-sidebar text-lf-primary border-r border-lf-subtle flex flex-col z-50 transform transition-all duration-300 ease-in-out overflow-hidden safe-top
+    class="fixed left-0 top-0 h-screen bg-lf-bar text-lf-bar-text border-r border-lf-bar-edge flex flex-col z-50 transform transition-all duration-300 ease-in-out overflow-hidden safe-top
 		{collapsed ? 'w-16' : 'w-64'}
 		{isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0"
 >
-    <!-- Logo Header: the green of the login card header (developer, 15/10); the rest of the sidebar stays neutral (D-T15) -->
-    <div class="p-4 flex items-center bg-lf-brand text-lf-on-brand {collapsed ? 'justify-center' : 'justify-between'}" data-testid="sidebar-brand">
-        <button class="flex items-center space-x-3 cursor-pointer" on:click={toggleCollapsed} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} data-testid="sidebar-collapse-toggle" use:guideAnchor={'nav.toggle.desktop'}>
+    <!-- Logo Header: one with the green sidebar (D-T17); the logo keeps its white tile (N1) -->
+    <div class="p-4 flex items-center text-lf-on-brand {collapsed ? 'justify-center' : 'justify-between'}" data-testid="sidebar-brand">
+        <button
+            class="flex items-center space-x-3 cursor-pointer rounded-lg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus"
+            on:click={toggleCollapsed}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            data-testid="sidebar-collapse-toggle"
+            use:guideAnchor={'nav.toggle.desktop'}
+        >
             <div class="w-8 h-8 flex-shrink-0 rounded-lg flex items-center justify-center p-1 bg-lf-logo">
                 <img alt="LibreFolio" class="max-w-full max-h-full object-contain" src="/logo.png" />
             </div>
@@ -116,7 +122,7 @@
         </button>
         <!-- Mobile close button -->
         {#if !collapsed}
-            <button class="lg:hidden p-2 hover:bg-lf-on-brand/10 rounded-lg" on:click={closeSidebar}>
+            <button class="lg:hidden p-2 hover:bg-lf-bar-hover rounded-lg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus" on:click={closeSidebar}>
                 <X size={20} />
             </button>
         {/if}
@@ -136,9 +142,9 @@
                             closeSidebar();
                             resetNavDepth();
                         }}
-                        class="flex items-center px-4 py-3 transition-all relative group
+                        class="flex items-center px-4 py-3 transition-all relative group focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus
 						{collapsed ? 'justify-center' : 'space-x-3'}
-						{activeHref === item.href ? 'bg-lf-panel text-lf-link border-r-4 border-lf-focus' : 'text-lf-secondary hover:bg-lf-hover hover:text-lf-primary'}"
+						{activeHref === item.href ? 'bg-lf-bar-active text-lf-on-bar-active border-l-4 border-lf-bar-indicator' : 'text-lf-bar-text hover:bg-lf-bar-hover'}"
                         title={collapsed ? $_(item.labelKey) : ''}
                     >
                         <svelte:component this={item.icon} size={20} class="flex-shrink-0" />
@@ -156,7 +162,7 @@
         </ul>
 
         <!-- Divider -->
-        <div class="my-3 mx-4 border-t border-lf-subtle"></div>
+        <div class="my-3 mx-4 border-t border-lf-bar-line"></div>
 
         <!-- Market Data Group -->
         <ul>
@@ -170,9 +176,9 @@
                             closeSidebar();
                             resetNavDepth();
                         }}
-                        class="flex items-center px-4 py-3 transition-all relative group
+                        class="flex items-center px-4 py-3 transition-all relative group focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus
 						{collapsed ? 'justify-center' : 'space-x-3'}
-						{activeHref === item.href ? 'bg-lf-panel text-lf-link border-r-4 border-lf-focus' : 'text-lf-secondary hover:bg-lf-hover hover:text-lf-primary'}"
+						{activeHref === item.href ? 'bg-lf-bar-active text-lf-on-bar-active border-l-4 border-lf-bar-indicator' : 'text-lf-bar-text hover:bg-lf-bar-hover'}"
                         title={collapsed ? $_(item.labelKey) : ''}
                     >
                         <svelte:component this={item.icon} size={20} class="flex-shrink-0" />
@@ -190,7 +196,7 @@
         </ul>
 
         <!-- Divider -->
-        <div class="my-3 mx-4 border-t border-lf-subtle"></div>
+        <div class="my-3 mx-4 border-t border-lf-bar-line"></div>
 
         <!-- Files & Settings Group -->
         <ul>
@@ -204,9 +210,9 @@
                             closeSidebar();
                             resetNavDepth();
                         }}
-                        class="flex items-center px-4 py-3 transition-all relative group
+                        class="flex items-center px-4 py-3 transition-all relative group focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus
 						{collapsed ? 'justify-center' : 'space-x-3'}
-						{activeHref === item.href ? 'bg-lf-panel text-lf-link border-r-4 border-lf-focus' : 'text-lf-secondary hover:bg-lf-hover hover:text-lf-primary'}"
+						{activeHref === item.href ? 'bg-lf-bar-active text-lf-on-bar-active border-l-4 border-lf-bar-indicator' : 'text-lf-bar-text hover:bg-lf-bar-hover'}"
                         title={collapsed ? $_(item.labelKey) : ''}
                     >
                         <svelte:component this={item.icon} size={20} class="flex-shrink-0" />
@@ -225,10 +231,10 @@
     </div>
 
     <!-- Bottom Section -->
-    <div class="border-t border-lf-subtle {collapsed ? 'p-2' : 'p-4'} space-y-2">
+    <div class="border-t border-lf-bar-line {collapsed ? 'p-2' : 'p-4'} space-y-2">
         <!-- User Avatar & Info -->
         <a
-            class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-lf-hover transition-colors
+            class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-lf-bar-hover transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus
                 {collapsed ? 'justify-center' : ''}"
             data-testid="sidebar-user-avatar"
             href="/settings"
@@ -236,18 +242,18 @@
             title={collapsed ? $auth.user?.username || $_('settings.userPreferences') : ''}
         >
             {#if avatarUrl}
-                <img src={avatarUrl} alt="Avatar" class="w-8 h-8 rounded-full object-cover border border-lf-subtle flex-shrink-0" />
+                <img src={avatarUrl} alt="Avatar" class="w-8 h-8 rounded-full object-cover border border-lf-bar-line flex-shrink-0" />
             {:else}
-                <div class="w-8 h-8 rounded-full bg-lf-panel flex items-center justify-center flex-shrink-0">
-                    <User size={16} class="text-lf-muted" />
+                <div class="w-8 h-8 rounded-full bg-lf-bar-active flex items-center justify-center flex-shrink-0">
+                    <User size={16} class="text-lf-bar-text" />
                 </div>
             {/if}
             {#if !collapsed}
                 <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-lf-primary truncate">
+                    <div class="text-sm font-medium text-lf-on-bar-active truncate">
                         {$auth.user?.username || $_('common.user')}
                     </div>
-                    <div class="text-xs text-lf-muted truncate">
+                    <div class="text-xs text-lf-bar-muted truncate">
                         {$auth.user?.email || ''}
                     </div>
                 </div>
@@ -257,7 +263,7 @@
         <!-- Logout Button -->
         <button
             class="w-full flex items-center justify-center px-4 py-2
-				bg-lf-panel hover:bg-lf-neutral rounded-lg transition-all text-sm
+				bg-lf-bar-logout hover:bg-lf-bar-logout-hover rounded-lg transition-all text-sm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus
 				{collapsed ? '' : 'space-x-2'}"
             data-testid="logout-button"
             on:click={handleLogout}
@@ -274,7 +280,13 @@
 
         <!-- Version — click opens the bundled changelog (F12) -->
         {#if !collapsed}
-            <button type="button" class="w-full text-center text-lf-muted hover:text-lf-primary text-xs pt-2 transition-colors cursor-pointer" title="LibreFolio {APP_VERSION} — {$_('changelog.title')}" on:click={() => (changelogOpen = true)} data-testid="sidebar-version">
+            <button
+                type="button"
+                class="w-full text-center text-lf-bar-muted hover:text-lf-bar-text text-xs pt-2 transition-colors cursor-pointer rounded focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus"
+                title="LibreFolio {APP_VERSION} — {$_('changelog.title')}"
+                on:click={() => (changelogOpen = true)}
+                data-testid="sidebar-version"
+            >
                 {APP_VERSION}
             </button>
         {/if}

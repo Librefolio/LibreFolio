@@ -6,9 +6,11 @@
 
     interface Props {
         onOpenChange?: (open: boolean) => void;
+        /** On a green bar (the app header, D-T19): the bar's text, hover and focus ring; the menu stays on the card */
+        onBar?: boolean;
     }
 
-    let {onOpenChange = () => {}}: Props = $props();
+    let {onOpenChange = () => {}, onBar = false}: Props = $props();
 
     let isOpen = $state(false);
     let menuRef: HTMLDivElement | null = $state(null);
@@ -92,13 +94,24 @@
 </script>
 
 <div bind:this={menuRef} class="relative" data-menu-open={isOpen ? 'true' : 'false'} data-testid="help-menu">
-    <button type="button" class="flex items-center space-x-1 p-2 rounded-lg hover:bg-lf-hover transition-colors text-lf-secondary" aria-haspopup="menu" aria-expanded={isOpen} aria-controls="help-menu-panel" onclick={toggleMenu} title={$_('help.helpAndSupport')} data-testid="help-menu-button">
+    <button
+        type="button"
+        class={onBar
+            ? 'flex items-center space-x-1 p-2 rounded-lg hover:bg-lf-bar-hover transition-colors text-lf-bar-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-bar-focus'
+            : 'flex items-center space-x-1 p-2 rounded-lg hover:bg-lf-hover transition-colors text-lf-secondary'}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        aria-controls="help-menu-panel"
+        onclick={toggleMenu}
+        title={$_('help.helpAndSupport')}
+        data-testid="help-menu-button"
+    >
         <HelpCircle size={20} />
         <ChevronDown class="transition-transform {isOpen ? 'rotate-180' : ''}" size={14} />
     </button>
 
     {#if isOpen}
-        <div id="help-menu-panel" class="absolute right-0 mt-2 w-56 bg-lf-card rounded-lg shadow-lg border border-lf-subtle py-1 z-50" role="menu" data-menu-open="true" data-testid="help-menu-panel">
+        <div id="help-menu-panel" class="absolute right-0 mt-2 w-56 bg-lf-card rounded-lg shadow-lg shadow-lf-shadow border border-lf-raised py-1 z-50" role="menu" data-menu-open="true" data-testid="help-menu-panel">
             {#if !isStandalone}
                 <button onclick={handleInstall} class="w-full flex items-center space-x-3 px-4 py-2.5 text-sm text-lf-primary hover:bg-lf-hover transition-colors" type="button" role="menuitem">
                     <Download size={18} class="text-lf-link" />
