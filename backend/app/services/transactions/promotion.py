@@ -14,14 +14,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Transaction, TransactionType, UserRole
-from backend.app.schemas.transactions.transactions import (
-    TX_TYPE_METADATA,
-    PairFieldConstraint,
-    TXPromoteSuggestCandidate,
-    TXPromoteSuggestResponse,
-    TXTransferPromoteRequest,
-    TXTransferPromoteResponse,
-)
+from backend.app.schemas.transactions.promotion import TXPromoteSuggestCandidate, TXPromoteSuggestResponse, TXTransferPromoteRequest, TXTransferPromoteResponse
+from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA, PairFieldConstraint
 
 
 @dataclass(frozen=True)

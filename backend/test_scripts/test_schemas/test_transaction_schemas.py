@@ -15,14 +15,8 @@ from pydantic import ValidationError
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions.transactions import (
-    TXCreateItem,
-    TXPromoteBatchItem,
-    TXSplitBatchItem,
-    TXUpdateItem,
-    tags_to_csv,
-    validate_tags_list,
-)
+from backend.app.schemas.transactions.batch import TXPromoteBatchItem, TXSplitBatchItem
+from backend.app.schemas.transactions.transactions import TXCreateItem, TXUpdateItem, tags_to_csv, validate_tags_list
 
 # ============================================================================
 # 1.1 LINK UUID REQUIREMENTS
@@ -737,7 +731,8 @@ class TestAssetEventLink:
 
     def test_tx_type_metadata_event_compatible_flags(self):
         """Only DIVIDEND, INTEREST, ADJUSTMENT expose event_compatible=True."""
-        from backend.app.schemas.transactions.transactions import EVENT_COMPATIBLE_TYPES, TX_TYPE_METADATA  # noqa: PLC0415
+        from backend.app.schemas.transactions.transactions import EVENT_COMPATIBLE_TYPES  # noqa: PLC0415
+        from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA  # noqa: PLC0415
 
         expected_true = {TransactionType.DIVIDEND, TransactionType.INTEREST, TransactionType.ADJUSTMENT}
         assert EVENT_COMPATIBLE_TYPES == expected_true

@@ -10,15 +10,8 @@ from typing import TYPE_CHECKING
 
 from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.common import Currency
-from backend.app.schemas.transactions.transactions import (
-    TXBatchResultItem,
-    TXUpdateItem,
-    TXValidationCode,
-    TXValidationIssue,
-    get_swap_group,
-    tags_to_csv,
-    validate_transaction_business_rules,
-)
+from backend.app.schemas.transactions.batch import TXBatchResultItem, TXValidationCode, TXValidationIssue
+from backend.app.schemas.transactions.transactions import TXUpdateItem, get_swap_group, tags_to_csv, validate_transaction_business_rules
 from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext
 from backend.app.utils.datetime_utils import utcnow
 

@@ -8,10 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from backend.app.db.models import Transaction
-from backend.app.schemas.transactions.transactions import (
-    TXValidationCode,
-    TXValidationIssue,
-)
+from backend.app.schemas.transactions.batch import TXValidationCode, TXValidationIssue
 from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext
 
 if TYPE_CHECKING:

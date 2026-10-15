@@ -9,12 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import AssetEvent, AssetEventType, TransactionType
-from backend.app.schemas.transactions.transactions import (
-    EVENT_COMPATIBLE_TYPES,
-    TXEventSuggestCandidate,
-    TXEventSuggestRequestItem,
-    TXEventSuggestResultItem,
-)
+from backend.app.schemas.transactions.event_suggest import TXEventSuggestCandidate, TXEventSuggestRequestItem, TXEventSuggestResultItem
+from backend.app.schemas.transactions.transactions import EVENT_COMPATIBLE_TYPES
 
 
 class TransactionEventSuggestionsMixin:
