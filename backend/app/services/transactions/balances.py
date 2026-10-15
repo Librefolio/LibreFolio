@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Broker, Transaction
-from backend.app.schemas.transactions import TXValidationCode
+from backend.app.schemas.transactions.batch import TXValidationCode
 from backend.app.services.transactions.transaction_batch_context import BalanceValidationError
 
 
