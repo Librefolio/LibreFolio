@@ -24,13 +24,13 @@
 |---|---|---|
 | A | Analisi d'implementazione (sola lettura), inviata al coordinatore | ✅ 14/10 |
 | A2 | Riverifica dell'analisi sul codice di `1e9e567f7`, questo piano, la mia sezione del backlog | ✅ 15/10 |
-| Z6a | C-49: prove senza codice di prodotto (`npm ci` dal lock, `front build --debug`, tre gate nella mia corsia) | ⏳ passo 1 ✅ (15/10); 9 cicli di vita puliti su spec singole; dal 15/10 l'avviso si cerca nelle run di categoria del coordinatore; lettura del codice nel disegno di Z6b |
-| Z1 | Pausa degli aggiornamenti nel frontend (F26) | ✅ 15/10: commit `74d028ec6` (journal `a6199d0e7`); merge di base `4618a2116` con i cancelli d'ingresso verdi; FROZEN di ingresso al coordinatore |
-| Z2 | Attività dell'utente e sospensione su Fly (F26, backend) | ⏸ attende gli agganci di H (punto 32 deciso il 15/10) |
-| Z3 | Scheduler: recupero immediato al risveglio e lock condiviso con `wake-sync` (`next_wake_at` e jitter nel backlog, punto 33) | ⏸ attende lo scheduler spostato da H |
-| Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ⏸ attende gli agganci di H |
+| Z6a | C-49: prove senza codice di prodotto (`npm ci` dal lock, `front build --debug`, tre gate nella mia corsia) | ✅ chiuso: le prove hanno portato alla cura di Z6b, che chiude C-49 |
+| Z1 | Pausa degli aggiornamenti nel frontend (F26) | ✅ 15/10: commit `74d028ec6` (journal `a6199d0e7`), entrato in `9d2074b2b`; lotto del flash (solo test) entrato in `93292909d` |
+| Z2 | Attività dell'utente e sospensione su Fly (F26, backend) | **Z2a ✅ entrato** (treno 65, merge `8b2d4782d`): attività e richieste in volo; **Z2b** ⏳ (monitor d'inattività e sospensione su Fly) dopo Z4 |
+| Z3 | Scheduler: recupero immediato al ritorno e lock condiviso con `wake-sync` (`next_wake_at` e jitter nel backlog, punto 33) | ✅ 15/10 checkpoint FROZEN (sezione «Z3 — scheduler»; decisioni D-Z3-1…4 «da rivedere»); ⏳ `mkdocs build` e `check-links` dopo la finestra tranquilla |
+| Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ⏳ prossimo, al via del coordinatore; D-W1…D-W3 decise il 15/10 |
 | Z5 | «Aggiornamento prezzi…» | ⏸ attende l'area avvisi e la configurazione pubblica di H |
-| Z6b | C-49: la cura | autorizzato il 15/10; **parte 1 ✅ entrata** (`000090aaf`: variabile, drenaggio da `entrypoint.sh` e `dev.py server`, grazie a 10 s); **parte 2 ✅ 15/10** (cablaggio in `app_lifespan.py` dopo CP2b, watchdog solo sotto il gestore di uvicorn e armato solo da un segnale, test di processo 7/7, ciclo vero con watchdog installato, doc EN) — checkpoint FROZEN; sezione «Z6b — spegnimento con un tempo massimo» |
+| Z6b | C-49: la cura | ✅ entrato tutto in `967094d81` (parte 1 `000090aaf`, parte 2 `fb3f98a0c`; CHANGELOG `4294ba12a`); C-49 chiusa; sezione «Z6b — spegnimento con un tempo massimo» |
 | Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | 📝 disegnato il 15/10 (sezione «Z7 — disegno»), decisioni D-Z7 prese dal coordinatore; **Z7a ✅ 15/10** (primitiva, configurazione, servizio, test verdi; sezione «Z7a»); poi X con il contratto `RATE_LIMITED` (X1–X8), poi Z7b scheduler e Z7c frontend |
 
 Checkpoint FROZEN a fine Z6a; poi un checkpoint per lotto.
@@ -1514,3 +1514,104 @@ tool.
    - Backlog: chiusa la riga di C-49 nella mia sezione (✅, commit di Z6b); la riga della sezione C resta al
      coordinatore.
 5. ✅ 15/10 — Checkpoint FROZEN inviato al coordinatore.
+
+### Z3 — scheduler: recupero al ritorno e lock condiviso
+
+> **Via** (coordinatore, 15/10 ~23:15, su delega del developer): «Z3 approvato con le tue quattro proposte. Sono
+> decisioni notturne, quindi annotale nel piano come «da rivedere».» Base: `3ed5315f5` (Z2a più `dev_release2`).
+>
+> **Decisioni, da rivedere** (prese di notte dal coordinatore su delega):
+> - **D-Z3-1**: se c'è già stato un giro, è dovuto anche uno slot di un giorno configurato caduto tra l'ultimo giro e
+>   adesso, guardando indietro al più 7 giorni; senza un giro precedente non cambia niente.
+> - **D-Z3-2**: «return» e «wake» aspettano 2 s prima di leggere l'ora (costante): dopo un resume di Fly l'orologio di
+>   parete resta indietro per qualche centinaio di ms; «tick» e «startup» no.
+> - **D-Z3-3**: i job girano solo nel worker leader, come oggi; un altro worker risponde `not_leader`. Documentato;
+>   il lock tra processi va nel backlog (Z-11).
+> - **D-Z3-4**: su un'istanza bloccata (`LIBREFOLIO_BLOCKED`) non gira nessun job, per ogni ragione, giro del loop
+>   compreso; esito `blocked`. Un test: sbloccata, il primo giro recupera lo slot perso (D-Z3-1). La doc admin dice che
+>   un'istanza bloccata non aggiorna i prezzi.
+
+**Stato reale** (15/10). `scheduler_loop` aspetta 5 s, poi fa un giro ogni 60 s (12 sleep da 5 s); solo nel leader legge
+impostazioni e stato e lancia i job dovuti in sequenza. `due_history_sync` guarda solo gli slot di oggi. Un'eccezione fa
+perdere tutto il giro, anche il secondo job. `am_i_leader()`, `load_state` e `save_state` girano sul loop (Z-6). Non c'è
+un lock né un «esegui il dovuto adesso». Docker usa un worker. Dopo un resume di Fly l'orologio di parete è corretto
+entro qualche centinaio di ms, «your app server may serve a whole request before it knows the new time» (forum di Fly,
+«Better paradox prevention»); il monotonic non conta durante la sospensione.
+
+**Contratto** (`backend/app/services/platform/scheduler/scheduler.py`).
+- `RunReason`: `"startup"`, `"tick"`, `"return"`, `"wake"`. `JobOutcome(name, status, started_at, duration_s, items_ok,
+  items_err, error)`, `status` in `ok|partial|error|not_due`, `error` la sola classe dell'eccezione. `RunReport(reason,
+  status, started_at, finished_at, jobs)`, con `status` in `ok|partial|error|disabled|not_leader|blocked`: `ok` anche se
+  nessun job era dovuto, `error` se ogni job eseguito è fallito, `partial` negli altri casi misti.
+- `run_due_jobs(reason)`: dentro `current_activity().busy("scheduler")` dall'inizio alla fine; con «return» e «wake»
+  prima `CLOCK_SETTLE_SECONDS` (2 s); poi un `asyncio.Lock` per event loop, un giro alla volta. Sotto il lock: scheduler
+  spento (`LIBREFOLIO_NO_SCHEDULER`) → `disabled`; istanza bloccata → `blocked`; non leader (`to_thread`) →
+  `not_leader`; impostazione spenta → `disabled`; altrimenti lo stato (`to_thread`), un `now` letto una volta, e i job
+  nell'ordine `current_price`, `history_sync`: quelli non dovuti `not_due`, gli altri eseguiti ciascuno nel suo try, con
+  lo stato salvato (`to_thread`) dopo ciascuno; un'eccezione è un esito `error`, registrata nel log, e il job seguente
+  gira lo stesso. Una cancellazione passa.
+- `scheduler_loop(shutdown_event)`, stessa firma: registra la funzione di ritorno `scheduler-catch-up` (≥ 60 s di
+  silenzio), che dà la spinta con `call_soon_threadsafe`; aspetta 5 s (o una spinta, o lo spegnimento) e fa il giro
+  `startup`; poi aspetta 60 s, una spinta o lo spegnimento, e fa `tick` o `return`. La spinta si azzera all'inizio di
+  ogni giro. Un giro che solleva è registrato e il loop continua. All'uscita toglie la funzione di ritorno.
+- `due_history_sync`: con un ultimo giro leggibile, dovuto se lo slot più recente di un giorno configurato (oggi e i 7
+  giorni prima, nel fuso dello scheduler) è passato e cade dopo l'ultimo giro; senza, la regola di oggi. Il giorno
+  della settimana viene da `weekday()`, non da `strftime`.
+- `sleep_wake/activity.py`: `remove_return_listener(name)`.
+- Nessun file di H: il passo di spegnimento attende già il task del loop, o lo cancella alla scadenza.
+
+**Passi.**
+1. ✅ 15/10 — Rossi di test-author: `test_scheduler_catchup.py` (`services scheduler-catchup`, PURE), nuovi casi in
+   `test_scheduler_due.py` e in `test_sleep_wake_activity.py`.
+   > **Note implementazione**: SCU-001…032 (73 casi, contratto (a)…(n)); SD-014…022 (+10 casi, i 15 di prima
+   > invariati); SWA-038…040 (+5). Un `World` finto sostituisce i collaboratori sul modulo e registra la sequenza delle
+   > chiamate. Rossi: `scheduler-catchup` 73 (nomi mancanti), `scheduler-due` 6 (i casi dello slot perso che attendono
+   > True, e la costante), `sleep-wake-activity` 5 (`remove_return_listener`); `scheduler-loop` 5/5 verde;
+   > `check-orphans` pulito (329). Scelte di test-author: le due esecuzioni concorrenti si provano con l'ordine
+   > «attesa dell'orologio → lock → interruttori»; una lettura delle impostazioni che solleva può uscire da
+   > `run_due_jobs` o essere riportata, purché il busy sparisca e il lock resti libero; SCU-029 gira in modalità debug
+   > di asyncio, così un `nudge.set()` non thread-safe solleva; SCU-004 ha gli unici limiti di tempo (1 s e 0,05 s);
+   > il giorno della settimana da `weekday()` non è provato (servirebbe cambiare la locale).
+2. ✅ 15/10 — Codice: `scheduler/scheduler.py` riscritto attorno a `run_due_jobs(reason)`, `JobOutcome`, `RunReport`,
+   `utc_now`, `settle_clock`, le costanti e il nuovo `due_history_sync`; `Activity.remove_return_listener`.
+   > **Note implementazione**: i job sono una tupla `JOBS` di (nome, dovuto, esecuzione, stato) che legge le funzioni
+   > del modulo al momento della chiamata; un lock `asyncio.Lock` per event loop (`_run_lock`, legato al loop che lo
+   > crea); l'attesa del ciclo è un solo `asyncio.wait` su spegnimento e spinta, con timeout. `due_history_sync` cerca
+   > lo slot più recente nei giorni configurati da oggi a 7 giorni prima, con `datetime.combine` nel fuso dello
+   > scheduler: un orario che non esiste per l'ora legale non solleva. Con l'ultimo giro mancante o illeggibile vale
+   > la regola di prima, e la nuova regola contiene la vecchia: ciò che era dovuto lo resta.
+3. ✅ 15/10 ~23:35 — Verdi, uno alla volta con `nice`: `services scheduler-catchup` 73/73 al primo colpo,
+   `scheduler-due` 25/25, `sleep-wake-activity` 94/94, `scheduler-loop` 5/5, `scheduler-state` 6/6,
+   `scheduler-settings` 14/14, `scheduler-leader` 8/8, `app-lifecycle` 42/42; `db post-migration` 41/41 e
+   `test_market_calendar.py` 37/37 (sostituiscono `scheduler_loop` nel lifespan); `api system` 117/117 (il server di
+   prova gira con `--no-scheduler`: «loop not started» nel log di questo giro), porta libera. Ruff e black puliti.
+   - Prova di cablaggio fuori dal runner, sulla mia corsia: `run_due_jobs("tick")` con leader, impostazioni (DB della
+     corsia) e stato (file della corsia) veri, i due job finti per non chiamare la rete; primo giro `ok` con i due job
+     e «scheduler» occupato durante i job, secondo giro tutto `not_due`; leader, lettura e salvataggio fuori dal loop;
+     dopo, niente di occupato. Il file di stato ripristinato (stesso md5).
+   > **⚠️ Fuori pista**: il primo lancio della prova non trovava `backend` (script in `/tmp` senza `PYTHONPATH`), il
+   > secondo si è fermato sulla mia guardia del percorso (`/tmp` è `/private/tmp` su macOS): nessun file toccato in
+   > nessuno dei due, md5 verificato.
+   - Z-6 chiusa: `am_i_leader` ora gira davvero in un thread, e la docstring nuova lo dice.
+   - Per Z2b: `backup_in_progress(*, data_dir=None)` di B è nel commit `22c116679` del ramo di B; entra in
+     `dev_release2` col prossimo ingresso di B, dopo l'`all-backend` delle 01:15.
+4. ✅ 15/10 ~23:55 — Doc (docs-writer, solo inglese; build e link dopo la finestra tranquilla delle 00:00–01:15).
+   - `developer/backend/scheduler.md`: le quattro ragioni, la spinta al ritorno, il lock, il busy, l'attesa di 2 s,
+     l'ordine dei controlli, il rapporto del giro, lo slot perso con l'esempio sabato/domenica, `not_leader` e Z-11;
+     diagramma mermaid ridisegnato (da guardare a occhio: il build non lo valida). Due ancore automatiche sostituite
+     da ancore esplicite (`#leader-election`, `#history-sync`): nessuna pagina le usava.
+   - `admin/hosting_providers.en.md`: un'istanza bloccata non aggiorna prezzi e cambi; allo sblocco il primo giro
+     recupera lo storico saltato, entro l'orizzonte di recupero; tolta la frase «i job continuano a girare».
+   - `admin/settings.*.md`: una frase sullo slot perso, scritta da me in IT/FR/ES. **Non timbrata**: la cache di
+     Aphra ha `07bbf1f8`, la pagina EN a HEAD `6496301e`. La pagina aveva già un debito di traduzione (due commit di A
+     del 15/10, `2b0715532` e `38cb2c513`; l'IT è dell'11/10): un timbro l'avrebbe nascosto.
+   - Quattro frasi diventate false per colpa dei miei lotti, corrette (pagine solo inglesi):
+     `developer/architecture/security.md` (lo scheduler su un'istanza bloccata, Z3), `overview.md` (cosa restituisce
+     `shutdown_deadline()`, Z6b; la pila `activity`, `gzip`, `cors`, Z2a; e, per coerenza, `shutdown-watchdog` primo
+     passo e `child-processes` ultimo, Z6b), `settings.md` (`config/sleep_wake.py` e `config/backup.py` esistono).
+   > **⚠️ Fuori pista**: il collegamento a `admin/configuration.md#shutdown` non si mette: l'ancora esiste solo
+   > nella pagina EN (la sezione di Z6b non è ancora tradotta), e il build rigoroso controlla le ancore anche nei
+   > siti IT/FR/ES. Il testo nomina la sezione; il frammento si aggiunge con la traduzione.
+   - Restano fuori: l'elenco delle variabili in `settings.md:23–30` (incompleto, non falso) e la frase «GZip
+     outermost, CORS inside it» della docstring di `middleware.py`, di H.
+5. ✅ 15/10 ~23:58 — Checkpoint FROZEN inviato; `mkdocs build` e `check-links` dopo «galleria finita». ⏳ build
