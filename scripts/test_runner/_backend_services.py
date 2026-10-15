@@ -453,6 +453,16 @@ def services_account_tokens(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Account token service tests", verbose=verbose)
 
 
+def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
+    """Test session revocation through the session version (the sv claim of the session cookie)."""
+    print_section("Services: Session Version")
+    print_info("Testing: auth_service.py (SessionClaims, sv), api/v1/auth.py (get_current_user), user_service.py (end_sessions, reset/active/admin)")
+    print_info("Tests: claims round trip, cookies without sv at version 0, untrusted tokens never raise, another version refused, raised by one only by reset/deactivate/demote, bcrypt off the loop")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_session_version.py", test_names)
+    return run_command(cmd, "Session version tests", verbose=verbose)
+
+
 def services_edge_cases(verbose: bool = False, test_names: list = None) -> bool:
     """Test edge cases and regression scenarios for transactions."""
     print_section("Services: Transaction Edge Cases")
@@ -1093,6 +1103,16 @@ Note: No backend server required.
         desc="issue/inspect/consume/revoke: hash only, one purpose, expiry at expires_at, single use under concurrency, the caller commits, no plaintext in logs",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server. The concurrency test races two connections on that private file only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "session-version",
+        services_session_version,
+        name="Session Version",
+        desc="sv claim: SessionClaims round trip, no sv = version 0, untrusted tokens are None, get_current_user refuses another version, end_sessions, +1 by reset/deactivate/demote only, refusals change nothing",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server. The JWT secret and hash_password are replaced with monkeypatch, in this process only.
         isolation="pure",
     )
     add_test(cat, "edge-cases", services_edge_cases, name="Transaction Edge Cases", desc="Decimal precision, currency validation, date edge cases")

@@ -941,7 +941,7 @@
     "last_translated": "2026-10-10T00:03:32.770989+00:00"
   },
   "admin/cli_tools.en.md": {
-    "md5": "df53c7471f3ce2219f49263c8cf4f467",
+    "md5": "36e0f26441836ffc03994fcbc94ab3a6",
     "langs_done": [
       "es",
       "fr",
@@ -961,7 +961,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 241.3,
-        "stamped_at": "2026-10-14T23:24:45.042479+00:00",
+        "stamped_at": "2026-10-15T03:19:58.227025+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -974,7 +974,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 260.5,
-        "stamped_at": "2026-10-14T23:24:45.042479+00:00",
+        "stamped_at": "2026-10-15T03:19:58.227025+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -987,7 +987,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 199.9,
-        "stamped_at": "2026-10-14T23:24:45.042479+00:00",
+        "stamped_at": "2026-10-15T03:19:58.227025+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -8852,7 +8852,7 @@
     }
   },
   "user/settings/profile.en.md": {
-    "md5": "ee81e8e4a121b7c837aca32908b6312f",
+    "md5": "b0cde443d618717f39490115def47995",
     "langs_done": [
       "es",
       "fr",
@@ -8874,7 +8874,7 @@
         "elapsed_s": 810.3,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=25, translated=26 (Δ+1)\n  L17: src=1 trn=2\n    EN: Hover your avatar (while unlocked) and click the 📷 camera overlay to open the image picker: choose an existing image fro\n    TR: Passa il mouse sull'avatar (mentre la scheda è sbloccata) e fai clic sull'overlay della fotocamera 📷 per aprire il selet\n\nSOURCE_OUTLINE (for reference):\n  # 👤 Profile\n    ## 🔒 Edit Lock\n    ## 🖼️ Avatar\n    ## ✏️ Username, Email, Account Created\n    ## 🔐 Security\n      ### 🔑 Change Password\n      ### 🗑️ Delete Account\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-10T08:18:48.806263+00:00",
+        "stamped_at": "2026-10-15T03:20:01.011150+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -8887,7 +8887,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 649.1,
-        "stamped_at": "2026-10-10T08:18:48.806263+00:00",
+        "stamped_at": "2026-10-15T03:20:01.011150+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -8900,7 +8900,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 794.5,
-        "stamped_at": "2026-10-10T08:18:48.806263+00:00",
+        "stamped_at": "2026-10-15T03:20:01.011150+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -9422,7 +9422,7 @@
     }
   },
   "user/connection-security.en.md": {
-    "md5": "95e2f75069a6b18cd309088ec6762d57",
+    "md5": "ed3e331cb5c32ba2864c40db44850341",
     "langs_done": [
       "es",
       "fr",
@@ -9442,7 +9442,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 188.6,
-        "stamped_at": "2026-10-12T13:17:57.454941+00:00",
+        "stamped_at": "2026-10-15T03:20:03.517742+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -9455,7 +9455,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 281.6,
-        "stamped_at": "2026-10-12T13:17:57.454941+00:00",
+        "stamped_at": "2026-10-15T03:20:03.517742+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -9468,7 +9468,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 224.4,
-        "stamped_at": "2026-10-12T13:17:57.454941+00:00",
+        "stamped_at": "2026-10-15T03:20:03.517742+00:00",
         "stamped_by": "translate-stamp"
       }
     }
