@@ -85,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PAC Allocator: a plan no longer fails when the solver reports a bound of minus zero.
 - PAC Allocator: a negative amount to use, declared liquidity or contribution, and an order step of zero or less, are reported on their own field before the request is sent.
 - PAC Allocator: the help texts of "Value after the plan" and "Ideal value" describe a PAC, which starts from zero.
+- Deleting your account: a technical failure now answers "nothing was deleted" instead of a generic server error, and a problem removing report files after the deletion no longer reports the deletion as failed.
 
 ### ⚠️ Breaking changes
 
