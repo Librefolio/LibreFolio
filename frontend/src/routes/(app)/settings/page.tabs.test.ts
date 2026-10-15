@@ -99,6 +99,7 @@ vi.mock('$lib/features/settings/tabs/ProfileTab.svelte', () => ({default: mocks.
 vi.mock('$lib/features/settings/tabs/PreferencesTab.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/settings/tabs/AboutTab.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/settings/tabs/GlobalSettingsTab.svelte', () => ({default: mocks.noopComponent}));
+vi.mock('$lib/features/settings/tabs/UsersTab.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/email/EmailSettingsTab.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/backup/BackupTab.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$app/stores', () => ({page: {subscribe: mocks.page.subscribe}}));
