@@ -214,7 +214,8 @@ type Owned = {
     today: string;
     brokerIds: number[];
     assetIds: number[];
-    eventIds: number[];
+    /** Each owned event with its asset: the events delete is scoped by asset (decision 21, I-12a). */
+    events: Array<{id: number; assetId: number}>;
 };
 type Broker = {id: number; name: string};
 type Brokers = {a: Broker; b: Broker};
@@ -284,7 +285,7 @@ async function ownSplitEvent(page: Page, owned: Owned, asset: Asset, date: strin
     const queried = await jsonFrom<{items: Array<{asset_id: number; events: Array<{id: number; type: string; notes?: string | null}>}>}>(await page.request.post(`${API}/assets/events/query`, {data: [{asset_id: asset.id, date_range: {start: date, end: date}}]}), 'read the owned SPLIT event back');
     const event = queried.items.find((item) => item.asset_id === asset.id)?.events.find((candidate) => candidate.type === 'SPLIT' && candidate.notes === notes);
     if (!event) throw new Error(`The owned SPLIT event was not found: ${JSON.stringify(queried)}`);
-    owned.eventIds.push(event.id);
+    owned.events.push({id: event.id, assetId: asset.id});
     return event.id;
 }
 
@@ -348,10 +349,10 @@ async function cleanupOwned(page: Page, owned: Owned): Promise<void> {
             for (const id of owned.brokerIds) expect(result.results.find((item) => item.id === id)?.success, `broker ${id} deleted`).toBe(true);
         });
     }
-    for (const eventId of owned.eventIds) {
-        await attempt(`event ${eventId}`, async () => {
-            const result = await jsonFrom<{results: Array<{event_id: number; status: string}>}>(await page.request.delete(`${API}/assets/events?ids=${eventId}`), 'delete the owned event');
-            expect(result.results.find((item) => item.event_id === eventId)?.status).toBe('deleted');
+    for (const ownedEvent of owned.events) {
+        await attempt(`event ${ownedEvent.id}`, async () => {
+            const result = await jsonFrom<{results: Array<{event_id: number; status: string}>}>(await page.request.delete(`${API}/assets/events?asset_id=${ownedEvent.assetId}&ids=${ownedEvent.id}`), 'delete the owned event');
+            expect(result.results.find((item) => item.event_id === ownedEvent.id)?.status).toBe('deleted');
         });
     }
     for (const assetId of owned.assetIds) {
@@ -369,7 +370,7 @@ const test = base.extend<{owned: Owned}>({
         if (!baseURL || new URL(baseURL).port !== TEST_PORT || !['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)) {
             throw new Error(`These checks write owned rows and may only run against the local test backend on port ${TEST_PORT}`);
         }
-        const owned: Owned = {suffix: `pcb${testInfo.workerIndex}-${uniqueSuffix()}`, today: '', brokerIds: [], assetIds: [], eventIds: []};
+        const owned: Owned = {suffix: `pcb${testInfo.workerIndex}-${uniqueSuffix()}`, today: '', brokerIds: [], assetIds: [], events: []};
         try {
             await login(page, TEST_USER);
             owned.today = await browserToday(page);

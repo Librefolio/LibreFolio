@@ -436,9 +436,12 @@ class _PlannerV2Normalizer:
         selected = self.money(item.selected, field_path("cash", "cash", item.cash_id, "selected"))
         if item.available.currency != item.selected.currency:
             self.issue("allocation.currency_mismatch", field_path("cash", "cash", item.cash_id, "selected"))
-        if available < ExactRatio(0) or selected < ExactRatio(0):
-            self.issue("allocation.negative_cash_unsupported", field_path("cash", "cash", item.cash_id, "available"))
-        elif selected > available:
+        negative = False
+        for amount, field in ((available, "available"), (selected, "selected")):
+            if amount < ExactRatio(0):
+                self.issue("allocation.negative_cash_unsupported", field_path("cash", "cash", item.cash_id, field))
+                negative = True
+        if not negative and selected > available:
             self.issue("allocation.cash_selection_invalid", field_path("cash", "cash", item.cash_id, "selected"))
 
     def validate_contribution(self, item) -> None:

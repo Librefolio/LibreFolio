@@ -12,8 +12,10 @@ The decided contract (developer decisions D6 and «una sola funzione condivisa»
   transactions (F4);
 - ``user_service.delete_user`` applies it to every broker of the account, deletes the user and
   commits; the endpoint removes the BRIM files of the deleted brokers after the commit;
-- a transfer between a broker that goes and one that stays keeps its surviving half, unlinked
-  (``related_transaction_id`` NULL), its ``cost_basis_override`` untouched;
+- a transfer from a broker that goes to one that stays leaves its incoming half as the ADJUSTMENT
+  a split of the pair leaves (V-3, D-J4; the giving half of a transfer whose receiver goes stays a
+  TRANSFER, unlinked, until point 47), unlinked (``related_transaction_id`` NULL), its
+  ``cost_basis_override`` untouched;
 - the sole administrator is still refused (400): a product rule, not a technical error. Since plan
   34 step 2 (§3.2) «sole» means the last ACTIVE administrator: login refuses an inactive account,
   so the guard counts the other active administrators (``user_service.count_active_superusers``).
@@ -372,12 +374,13 @@ async def _file_violations(client_b: httpx.AsyncClient, s: _Scenario) -> list[st
 
 
 async def _transfer_violations(client_b: httpx.AsyncClient, s: _Scenario) -> list[str]:
-    """The incoming leg in Y survives its partner: unlinked by delete_by_broker, its cost basis untouched (D6)."""
+    """The incoming leg in Y survives its partner as the ADJUSTMENT a split of the pair leaves (V-3, D-J4): unlinked by delete_by_broker, its cost basis untouched (D6)."""
     violations: list[str] = []
     leg = (await _read_transactions(client_b, [s.y_leg])).get(s.y_leg)
     _expect(violations, leg is not None, f"[guard] the incoming TRANSFER leg {s.y_leg} must survive in Y, which B still owns")
     if leg is None:
         return violations
+    _expect(violations, leg["type"] == "ADJUSTMENT", f"[new] the surviving leg must become the ADJUSTMENT a split of the pair leaves (V-3, D-J4), not stay an unpaired TRANSFER: type={leg['type']}")
     _expect(violations, leg["related_transaction_id"] is None, f"[new] the surviving leg must be unlinked: related_transaction_id={leg['related_transaction_id']} (X's leg was {s.x_leg})")
     _expect(violations, leg["partner_broker_id"] is None, f"[new] the surviving leg must lose its partner broker: partner_broker_id={leg['partner_broker_id']} (X was {s.x})")
     _expect(violations, _cost_basis(leg) == TRANSFER_COST_BASIS, f"[guard] cost_basis_override must stay {TRANSFER_COST_BASIS}: {leg['cost_basis_override']}")
@@ -683,7 +686,7 @@ class TestAccountDeletion:
 
     @pytest.mark.asyncio
     async def test_account_deletion_applies_the_last_owner_rule_to_every_broker(self, test_server):
-        """ACCDEL-001 — NEW, red today: one account deletion, four brokers, four outcomes of the same rule.
+        """ACCDEL-001 — NEW, red until delete_by_broker converts the surviving leg (V-3, D-J4): one account deletion, four brokers, four outcomes of the same rule.
 
         A and B are this test's own users:
         - X: A the only OWNER; a DEPOSIT, the outgoing leg of an asset TRANSFER to Y, a BRIM file;
@@ -693,12 +696,15 @@ class TestAccountDeletion:
 
         After DELETE /auth/users/me as A, seen by B and in the test database:
         - [new] X and Z are gone: rows, transactions, reads and access lists (404), listings, files (404);
-        - [new] the incoming leg in Y is unlinked: related_transaction_id and partner_broker_id null;
+        - [new] the incoming leg in Y becomes the ADJUSTMENT a split of the pair leaves (V-3, D-J4),
+          unlinked: related_transaction_id and partner_broker_id null;
         - [guard] that leg keeps its broker, quantity and cost_basis_override;
         - [guard] Y and W survive with B as their only OWNER; A keeps no access row and no user row.
 
-        Today the endpoint deletes the user row only: the final assertion lists the [new] lines and
-        no [guard] line. A [guard] line after the fix is a regression.
+        The account deletion itself is in place (plan 34); what is still red is the conversion of
+        the surviving leg (V-3, D-J4): delete_by_broker unlinks it but leaves it a TRANSFER, so the
+        final assertion lists the [new] line on its type and no other. Any other line is a
+        regression, a [guard] line above all; after the conversion, so is that one.
         """
         print_section("ACCDEL-001: account deletion applies the last-owner rule to every broker")
         engine = _test_db_engine()
@@ -721,7 +727,7 @@ class TestAccountDeletion:
                 cleanup_errors = await _cleanup(owned, engine)
                 assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"
 
-        print_success("✓ X and Z went with their transactions and files; Y and W stayed with B; the surviving leg is unlinked with its cost basis")
+        print_success("✓ X and Z went with their transactions and files; Y and W stayed with B; the surviving leg is the unlinked ADJUSTMENT a split leaves, with its cost basis")
 
     @pytest.mark.asyncio
     async def test_sole_administrator_is_still_refused(self, private_instance: _PrivateInstance):

@@ -64,7 +64,7 @@ Backend BRIM plugins emit `field_todos` inside `BRIMParseResponse` for each row 
 | Role | Path |
 |------|------|
 | Import Wizard Modal | `frontend/src/lib/components/transactions/modals/ImportWizardModal.svelte` |
-| Bulk editor (banners, save gate) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
+| Bulk editor (save gate; the banners in `frontend/src/lib/components/transactions/bulk/TxBulkBanners.svelte`) | `frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte` |
 | Todo wording resolver | `frontend/src/lib/utils/transactions/resolveBrimNotice.ts` |
 | Parse merge (`field_todos` → `ImportTodo`) | `frontend/src/lib/utils/transactions/importMerge.ts` |
 | Todo clearing | `frontend/src/lib/utils/transactions/bulkTodos.ts` |

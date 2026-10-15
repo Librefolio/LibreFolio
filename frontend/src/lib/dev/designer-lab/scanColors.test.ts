@@ -12,6 +12,7 @@ import {existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync} from 'node:fs
 import {tmpdir} from 'node:os';
 import {dirname, join} from 'node:path';
 import {CATALOG_SCHEMA, FRONTEND_DIR, isTestPath, LAB_DIRS, listSourceFiles, scanColors, scanSource, scriptTestidValues, STATIC_SOURCES, testidValues} from '../../../../scripts/designer-lab/scan-colors.mjs';
+import {isInlineAlias} from './catalogView';
 import type {CatalogLiteral, ColorCatalog, TestidVia, ThemeContext, Zone} from './types';
 
 type Literal = Omit<CatalogLiteral, 'id' | 'file'>;
@@ -752,6 +753,118 @@ describe('scanColors — variable scopes, class uses and test ids of a synthetic
     });
 });
 
+describe('scanColors — the colour roles of a synthetic tree: aliases of `@theme inline` and the role they stand for', () => {
+    let catalog: ColorCatalog;
+    const file = (rel: string) => {
+        const at = catalog.files.indexOf(rel);
+        expect(at, rel).toBeGreaterThanOrEqual(0);
+        return at;
+    };
+    const defsOf = (name: string) => {
+        const v = catalog.css_vars.find((x) => x.name === name);
+        expect(v, name).toBeDefined();
+        return v?.defs ?? [];
+    };
+
+    beforeAll(() => {
+        const root = makeTree({
+            'src/lib/theme/tokens.css': [
+                ':root,',
+                'html.light {',
+                '    --lf-surface-card: #f5f5f4;',
+                '    --lf-chart-1: #3d5a80;',
+                '}',
+                'html.dark,',
+                '.dark {',
+                '    --lf-surface-card: #1c1917;',
+                '}',
+                '@theme inline {',
+                '    --color-lf-card: var(--lf-surface-card);',
+                '    --color-lf-mixed: color-mix(in oklab, var(--lf-surface-card) 50%, white);',
+                '    --color-lf-both: var(--lf-surface-card);',
+                '    --color-lf-split: var(--lf-surface-card);',
+                '    --color-lf-twice: var(--lf-surface-card);',
+                '    --color-lf-chart-1: var(--lf-chart-1);',
+                '}',
+                '@theme {',
+                '    --color-libre-green: #1a4031;',
+                '}',
+            ],
+            // A second stylesheet: `--color-lf-both` defined again as a plain variable, `--color-lf-split` aliased to
+            // another variable, `--color-lf-twice` aliased again to the same one (spaces inside `var()` included).
+            'src/app.css': [':root {', '    --color-lf-both: #123456;', '}', '@theme inline {', '    --color-lf-split: var(--lf-other);', '    --color-lf-twice: var( --lf-surface-card );', '}'],
+            // `bg-lf-ghost` names an alias no stylesheet defines; `bg-lf-chart-1/40` a numbered role.
+            'src/lib/components/Card.svelte': ['<div class="bg-lf-card hover:border-lf-card/50 text-lf-mixed bg-libre-green text-gray-500"></div>', '<p class="ring-lf-both text-lf-split fill-lf-twice bg-lf-ghost"></p>', '<span class="bg-lf-chart-1/40"></span>'],
+        });
+        catalog = catalogOf({root});
+    });
+
+    it('counts a role utility as a custom class, a variant, an opacity and a digit in its name included, under the alias variable it names', () => {
+        // custom: bg-lf-card, hover:border-lf-card/50, text-lf-mixed, bg-libre-green, ring-lf-both, text-lf-split,
+        // fill-lf-twice, bg-lf-ghost, bg-lf-chart-1/40; tw: text-gray-500.
+        expect(catalog.meta.parity).toMatchObject({tw: 1, custom: 9});
+        const card = file('src/lib/components/Card.svelte');
+        expect(catalog.palette.find((p) => p.var === '--color-lf-card')).toEqual({
+            var: '--color-lf-card',
+            uses: 2,
+            dark: 0,
+            classes: {'bg-lf-card': 1, 'hover:border-lf-card/50': 1},
+            files: {[card]: 2},
+            occ: [
+                [card, 1, 0],
+                [card, 1, 1],
+            ],
+            role: '--lf-surface-card',
+        });
+        expect(catalog.palette.find((p) => p.var === '--color-lf-chart-1')).toEqual({var: '--color-lf-chart-1', uses: 1, dark: 0, classes: {'bg-lf-chart-1/40': 1}, files: {[card]: 1}, occ: [[card, 3, 0]], role: '--lf-chart-1'});
+    });
+
+    it('marks a definition of `@theme inline` as inline, with the variable it names when its value is only `var()`', () => {
+        expect(defsOf('--color-lf-card')).toEqual([expect.objectContaining({value: 'var(--lf-surface-card)', inline: true, alias_of: '--lf-surface-card'})]);
+        expect(defsOf('--color-lf-chart-1')).toEqual([expect.objectContaining({value: 'var(--lf-chart-1)', inline: true, alias_of: '--lf-chart-1'})]);
+        expect(defsOf('--color-lf-mixed')).toEqual([expect.objectContaining({value: 'color-mix(in oklab, var(--lf-surface-card) 50%, white)', inline: true, alias_of: null})]);
+        expect(defsOf('--color-lf-split').map((d) => [catalog.files[d.file], d.inline, d.alias_of])).toEqual([
+            ['src/app.css', true, '--lf-other'],
+            ['src/lib/theme/tokens.css', true, '--lf-surface-card'],
+        ]);
+        expect(defsOf('--color-lf-twice').map((d) => d.alias_of)).toEqual(['--lf-surface-card', '--lf-surface-card']);
+    });
+
+    it('writes neither field for any other definition, a plain `@theme` included', () => {
+        const fields = (name: string) => defsOf(name).map((d) => ['inline', 'alias_of'].filter((k) => k in d));
+        expect(fields('--color-libre-green')).toEqual([[]]);
+        expect(fields('--lf-surface-card')).toEqual([[], []]);
+        // The same variable, defined in `:root` and in `@theme inline`: only the inline definition carries them.
+        expect(defsOf('--color-lf-both').map((d) => [d.value, ['inline', 'alias_of'].filter((k) => k in d)])).toEqual([
+            ['#123456', []],
+            ['var(--lf-surface-card)', ['inline', 'alias_of']],
+        ]);
+    });
+
+    it('gives a palette entry a role only when every definition of its variable is an inline alias of one same variable', () => {
+        expect(Object.fromEntries(catalog.palette.map((p) => [p.var, p.role ?? null]))).toEqual({
+            '--color-gray-500': null,
+            // Also defined in `:root`: a stylesheet defines the variable at runtime.
+            '--color-lf-both': null,
+            '--color-lf-card': '--lf-surface-card',
+            // A digit in the role's name.
+            '--color-lf-chart-1': '--lf-chart-1',
+            // No definition at all.
+            '--color-lf-ghost': null,
+            // An expression, not a plain alias.
+            '--color-lf-mixed': null,
+            // Two aliases naming two variables.
+            '--color-lf-split': null,
+            // Two aliases naming the same variable, in two files.
+            '--color-lf-twice': '--lf-surface-card',
+            // A plain `@theme` variable.
+            '--color-libre-green': null,
+        });
+        // An entry without a role carries no `role` key.
+        expect(catalog.palette.filter((p) => !p.role && 'role' in p).map((p) => p.var)).toEqual([]);
+    });
+});
+
 describe('scanColors — the real tree, invariants only', () => {
     let first: ColorCatalog;
     let second: ColorCatalog;
@@ -811,5 +924,22 @@ describe('scanColors — the real tree, invariants only', () => {
             if (!fileOk(f) || line < 1 || !VIAS.includes(via) || (i > 0 && prefix.length > first.testid_prefixes[i - 1][0].length)) bad.push(`testid prefix ${prefix}`);
         });
         expect(bad).toEqual([]);
+    });
+
+    it('gives every `--color-lf-*` entry a stylesheet defines a role defined for the whole page, and leaves the others to the theme-roles gate', () => {
+        const lf = first.palette.filter((p) => p.var.startsWith('--color-lf-'));
+        // A role class whose alias no stylesheet defines (a name written in a comment, a utility that does not exist) is
+        // not checked here: the theme-roles gate of workstream T owns the validity of the role classes.
+        const defined = new Set(first.css_vars.filter((v) => v.defs.length).map((v) => v.name));
+        const aliases = lf.filter((p) => defined.has(p.var));
+        expect(aliases.filter((p) => p.role).length, 'the scanner sees the role utilities (bg-lf-…)').toBeGreaterThan(0);
+        expect(aliases.filter((p) => !p.role).map((p) => p.var)).toEqual([]);
+        // The role is the variable the Lab overrides on <html>: some definition of it covers the whole page.
+        const pageWide = new Set(first.css_vars.filter((v) => v.defs.some((d) => d.scope === 'root')).map((v) => v.name));
+        expect(aliases.filter((p) => p.role && !pageWide.has(p.role)).map((p) => `${p.var} → ${p.role}`)).toEqual([]);
+        // An alias exists only in `@theme inline`: no stylesheet defines it at runtime.
+        expect(first.css_vars.filter((v) => v.name.startsWith('--color-lf-') && v.defs.length && !isInlineAlias(v)).map((v) => v.name)).toEqual([]);
+        // Every use of a role utility, defined or not, is a custom class of the inventory.
+        expect(lf.reduce((n, p) => n + p.uses, 0)).toBeLessThanOrEqual(first.meta.parity.custom);
     });
 });
