@@ -17,7 +17,8 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
   [Pagination](#pagination).
 - **Selection**: Row selection with checkboxes, "Select All" on the current page, and a
   "show selected only" filter in the checkbox header.
-- **Column Management**: Resize columns in the table; show/hide and drag-to-reorder through
+- **Column Management**: Resize columns by dragging a header cell's right edge, with a mouse, a
+  finger or a pen — see [Column resize](#column-resize); show/hide and drag-to-reorder through
   `ColumnVisibilityToggle`, which the caller places in its own toolbar and hands the table instance
   (`tableRef`, plus `additionalTableRefs` to drive several tables at once); it works through the
   [public methods](#public-methods).
@@ -28,8 +29,10 @@ The `DataTable` is a powerful, generic table component built with Svelte 5 Runes
 - **Actions**: Per-row actions behind a **⋮** button in the actions column, and bulk actions on the
   selected rows. Actions with `requireConfirm` go through a [ConfirmModal](modals.md#confirmmodal).
 - **Context Menu**: Right-click on a row opens the same menu as **⋮**, built from `rowActions`.
-- **Sticky Columns**: The header, the selection column and pinned columns stick; the actions column
-  sticks by default — see [Sticky columns](#sticky-columns).
+- **Sticky Columns**: The header row sticks inside the table's scroll area; the selection column,
+  pinned columns and, by default, the actions column stick to their edge while the table scrolls
+  sideways — on phones the selection and actions columns scroll with it. See
+  [Sticky columns](#sticky-columns).
 
 ## 💻 Usage
 
@@ -113,7 +116,7 @@ The source of truth is the `Props` interface of `lib/components/table/DataTable.
 | `fullData` | `T[]` | — | Full dataset for the filter boundaries (min/max, currencies) when `data` is a pre-paginated slice. |
 | `isLoading` | `boolean` | `false` | Shows a loading row (`dt-loading`). |
 | `emptyMessage` | `string` | `common.noData` | Text of the empty table. |
-| `tableLayout` | `'fixed' \| 'auto'` | `'fixed'` | `auto` lets columns grow to fill the space. |
+| `tableLayout` | `'fixed' \| 'auto'` | `'fixed'` | `fixed` sizes the columns from their header cells' widths; `auto` from their content as well, so a width becomes a preference — see [Column resize](#column-resize). |
 
 **Selection**
 
@@ -144,7 +147,7 @@ The source of truth is the `Props` interface of `lib/components/table/DataTable.
 | `bulkActions` | `BulkAction<T>[]` | `[]` | Actions on the selected rows. |
 | `actionsColumnWidth` | `string` | `'64px'` | Width of the actions column. |
 | `actionsLabel` | `string` | `table.actions` | Header and ⋮ label of the actions column. |
-| `stickyActions` | `boolean` | `true` | Whether the actions column sticks to the right edge — see [Sticky columns](#sticky-columns). |
+| `stickyActions` | `boolean` | `true` | Whether the actions column sticks to the right edge, above 768 px — see [Sticky columns](#sticky-columns). |
 | `enableContextMenu` | `boolean` | `true` | Right-click menu on rows. |
 
 **Columns, sorting, filters**
@@ -157,9 +160,9 @@ The source of truth is the `Props` interface of `lib/components/table/DataTable.
 | `enableColumnFilters` | `boolean` | `true` | Column filters. |
 | `initialFilters` | `Record<string, FilterValue>` | — | Filters applied at mount (from the URL). |
 | `onFiltersChange` | `(filters) => void` | — | Filters changed (for URL sync). |
-| `enableColumnResize` | `boolean` | `true` | Column resizing. |
-| `onColumnResize` | `(columnId: string, width: number) => void` | — | A column was resized (to mirror widths across tables). |
-| `stickyHeader` | `boolean` | `true` | Whether the header sticks to the top of the scroll viewport. |
+| `enableColumnResize` | `boolean` | `true` | Resize handles on the data columns (a column opts out with `resizable: false`) — see [Column resize](#column-resize). |
+| `onColumnResize` | `(columnId: string, width: number) => void` | — | Called at the end of a resize with the width written for the column, to mirror it on other tables through `setColumnWidth`. |
+| `stickyHeader` | `boolean` | `true` | Whether the header row sticks to the top of the table's own scroll area — not the page; see [Sticky columns](#sticky-columns). |
 | `footerCells` | `FooterCells<T>` | — | Aggregate footer, computed on the selected rows, or on the filtered rows when nothing is selected. |
 
 **Pagination**
@@ -176,13 +179,86 @@ The source of truth is the `Props` interface of `lib/components/table/DataTable.
 
 ## 📌 Sticky columns {: #sticky-columns }
 
-- The **header** sticks to the top of the vertical scroll viewport (`stickyHeader`, default on).
-- The **selection** column and the columns with `pinned: 'left' | 'right'` stick to their edge
-  while the table scrolls horizontally.
-- The **actions** column sticks to the right edge by default. With `stickyActions={false}` it
-  scrolls with the table, and its header stays at the end of the table, aligned with its cells.
-  The transactions table, the bulk editor and the import wizard tables turn it off.
-- At 768 px and below, the actions column never sticks.
+- The **header** row sticks to the top of the table's own scroll area, `div.table-wrapper`
+  (`data-testid="dt-scroll"`), never to the page (`stickyHeader`, default on). The wrapper's
+  `overflow-x: auto` makes its `overflow-y` compute to `auto` too, so the wrapper is the scroll
+  container its sticky cells stick within: the header sticks only when the wrapper itself scrolls
+  vertically, which needs a bounded height on it. When the page scrolls, the header leaves with the
+  table.
+- The **selection** column (`th-select`/`td-select`, `left: 0`) and the columns with
+  `pinned: 'left' | 'right'` stick to their edge while the table scrolls horizontally.
+- The **actions** column (`th-actions`/`td-actions`, `right: 0`) sticks to the right edge by
+  default. With `stickyActions={false}` it scrolls with the table, and its header stays at the end
+  of the table, aligned with its cells. The transactions table, the bulk editor and the import
+  wizard tables turn it off.
+- At **768 px and below** (the `@media (max-width: 768px)` block of `DataTable.svelte`), the
+  selection and actions columns scroll with the table — header, body and footer cells alike
+  (decision D-Y17). The body and footer cells become `position: static`; the header cells drop only
+  their horizontal pin (`left: auto; right: auto`) and keep `position: sticky` — and, with
+  `stickyHeader`, `top: 0` — so the header row still sticks inside its scroll area. Data columns
+  with `pinned` keep their pin at every width.
+
+The header and body cells of the two columns carry test ids: `dt-select-header` and
+`dt-select-cell-{rowId}`, `dt-actions-header` and `dt-actions-cell-{rowId}` (the footer cells have
+none). `frontend/e2e/layout/datatable-mobile.spec.ts`, run by
+`./dev.py test front-utility datatable-mobile`, checks the phone layout at 390 px on the
+transactions table (`stickyActions={false}`) and on the Files static list (sticky actions), and
+guards the header row's stickiness inside a scroll area it bounds to the header and two rows.
+
+!!! note "Undoing a pin takes a more specific selector"
+
+    `thead.sticky-header th` (0,1,2), the rule that makes the header cells sticky, outranks a bare
+    `.th-actions` (0,1,0): a plain `.th-actions { position: static }` leaves the **Actions** header
+    pinned at the right edge while its **⋮** cells scroll away. Each phone override is one class
+    more specific than the pin it undoes — `.datatable .th-select` against `.th-select`,
+    `.datatable .th-actions.th-fixed` against `.th-actions.th-fixed`, `.datatable .td-select` and
+    `.datatable .td-actions` against `.td-fixed` — and the header cells change only `left` and
+    `right`, never `position`. These are the specificities of the source selectors: Svelte's
+    scoping class adds the same to every rule.
+
+## 📏 Column resize {: #column-resize }
+
+A data column's header cell ends in a resize handle: `span.resize-handle` in
+`DataTableColumnHeader.svelte`, the cell's last 6 px, with `cursor: col-resize`, transparent until
+the cell is hovered. It is there when `enableColumnResize` is on and the column is not
+`resizable: false`; the selection and actions columns have none. The drag runs in
+`DataTable.svelte` (decision D-Y18):
+
+- **Any pointer.** The handle answers Pointer Events: `startResize`, its `onpointerdown`, captures
+  the pointer, and `pointermove`, `pointerup` and `pointercancel` listeners on `document` follow
+  it, so a mouse, a finger or a pen resizes the column. Only the primary mouse button starts a
+  drag, and the moves and releases of other pointers are ignored. `touch-action: none` on the
+  handle keeps a finger drag from panning the table. The listeners are removed when the drag ends,
+  or when the table unmounts mid-drag.
+- **The drawn width follows the pointer.** The drag starts from the width the column is drawn at
+  (the header cell's `getBoundingClientRect().width`), not the configured one, and aims at that
+  width plus the pointer's travel, clamped to the column's `minWidth` (default 50) and `maxWidth`
+  (default 600). A table that shares its spare width among its columns — `tableLayout="auto"`, or a
+  fixed table narrower than its box — draws a column wider than the width it is given, so
+  `fitDrawnWidth()` writes a width (and the same `min-width`) on the header cell, measures the cell
+  and corrects the width — first assuming the drawn width is proportional to the given one, then
+  by a few secant steps — until the drawn width matches the target. On a fixed table wider than its
+  box the first guess is exact.
+- **A resized column keeps its width.** A column whose width differs from its default
+  (`width ?? 150`) — resized, restored from `localStorage` or set through `setColumnWidth` — also
+  gets that width as its header cell's `min-width` (`columnMinWidth()`), so an auto-layout table
+  keeps it, for example on a narrow screen where `auto` would otherwise draw every column at its
+  minimum. The other columns keep `minWidth || 60`; `resetColumnLayout()` restores the default
+  widths, and with them those minimums.
+- **End of the drag.** On `pointerup` or `pointercancel` the widths are saved to `localStorage`,
+  and `onColumnResize(columnId, width)` receives the width written: on a table with spare width it
+  is smaller than the drawn one. It is the value `setColumnWidth` takes on the tables that mirror
+  the resize.
+
+E2E specs find the handle by what it is to the pointer — the element under the header cell's right
+edge whose computed cursor is `col-resize` — never by its class (`datatable-resize.spec.ts`,
+`risk-lab.spec.ts`, `risk-analysis.spec.ts`): keep that cursor on the handle.
+`frontend/e2e/layout/datatable-resize.spec.ts`, run by
+`./dev.py test front-utility datatable-resize`, drags it with a mouse on the Files static list
+(`tableLayout="auto"`) at 1280 px and at 390 px, where the table is wider than its box and the
+table's scroll width must grow with the column (a resized column keeps its width); on the
+transactions table (fixed, the control); and with a finger at 390 px on the transactions table, to
+test the input path alone: every drag must change the drawn width by its own length, within 4 px.
 
 ## 📄 Pagination {: #pagination }
 
@@ -230,12 +306,12 @@ The main fields; `lib/components/table/types.ts` has the full interface.
 | `type` | `'text' \| 'number' \| 'date' \| 'enum' \| 'multi-enum' \| 'size' \| 'currency-stack' \| 'custom'` | Drives the filter UI and the sort. |
 | `getValue` | `(row: T) => unknown` | Raw value for sorting and filtering, when it differs from the rendered cell. |
 | `sortable`, `filterable`, `resizable` | `boolean` | Default `true`. |
-| `width`, `minWidth`, `maxWidth` | `number` | Pixels. |
+| `width`, `minWidth`, `maxWidth` | `number` | Pixels. `width` defaults to 150. A resize stays within `minWidth` (default 50) and `maxWidth` (default 600); the header cell's `min-width` is `minWidth` (default 60) until the column's width differs from its default — see [Column resize](#column-resize). |
 | `enumOptions` | `EnumOption[]` | `{value, label, iconUrl?, dotColor?, searchText?}` for `enum` columns. |
 | `getMultiValue` | `(row: T) => string[]` | Values of a `multi-enum` row (e.g. tags). |
 | `getCurrencyValue`, `currencyOptions` | — | `currency-stack` columns: `{code, amount}` of a row, and the currencies on offer. |
 | `hiddenByDefault` | `boolean` | Hidden until the user shows it. |
-| `pinned` | `'left' \| 'right'` | Sticky column. |
+| `pinned` | `'left' \| 'right'` | Sticks to that edge while the table scrolls sideways, at every width — see [Sticky columns](#sticky-columns). |
 | `align` | `'left' \| 'center' \| 'right'` | Cell and header alignment. |
 | `headerTooltip`, `headerTooltipUrl` | `string \| () => string` | `headerTooltip` alone puts a tooltip on the header label. With `headerTooltipUrl` as well, an info icon appears that opens the documentation page in a new tab. |
 | `headerTooltipLinkMode` | `'direct' \| 'gesture'` | How the info icon opens the page: a plain link (`'direct'`, the default), or a button that opens it on double click, Shift+Enter or long press (`'gesture'`). |

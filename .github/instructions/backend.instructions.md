@@ -69,6 +69,7 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 |---|---|
 | Average purchase cost (WAC), cost-basis steps and conversions | `services/financial_math/average_cost.py` |
 | Cash per broker and currency, its daily value, FX results on cash | `services/financial_math/native_cash.py` |
+| Control totals of the ledger (backup manifest, restore check) | `services/financial_math/ledger_totals.py` |
 | Daily portfolio state: NAV, capital baseline, P&L, per-broker contributions | `services/financial_math/portfolio/` (`daily_state.py`, run by `engine.py`) |
 | A period's boundary states, P&L and identity | `services/financial_math/portfolio/period.py` |
 | FIFO lots and realized gains | `services/financial_math/fifo/` |

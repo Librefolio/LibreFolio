@@ -21,7 +21,12 @@ Modules under test: ``services/plugin_settings/resolver.py`` and ``runtime.py``,
    ``LIBREFOLIO_INSTANCE_KEY_FILE`` that is gone) raises nothing: every stored secret is ``unreadable`` for the catalogue
    and for a call, one error is logged per process, no key file is made in its place, the environment's secrets still
    reach the calls, and the fingerprint is a SHA-256 of the plain values and the sorted secret names, never a value. ``build_bound_settings`` binds the plain values,
-   the secrets, the required fields left without a usable value, and that fingerprint.
+   the secrets, the required fields left without a usable value, and that fingerprint. ``missing_field_keys`` is the one
+   rule of «not configured», for a call (``build_bound_settings``) and for the catalogue (``configured``): a field is
+   missing when it is required without a usable value — a secret resolved for the catalogue carries no value and is
+   usable when it is set and readable — or when its variable is invalid, required or not; a default, the one standing
+   in for a refused row included, is usable. The same rows give a call and the catalogue the same missing fields, a
+   blob the current key cannot decrypt under the current key id aside: the catalogue never decrypts.
 4. **Delivery** (``configure_instance``): a plugin without fields comes back untouched, with no database access, and so
    does an object that declares none — a test double without the mixin or a ``settings_fields`` attribute, also when
    ``configured_provider`` / ``configured_fx_provider`` hand it out; a
@@ -34,13 +39,20 @@ Modules under test: ``services/plugin_settings/resolver.py`` and ``runtime.py``,
    **before** ``fn`` is called; during the call the secrets are in flight, in the provider's thread too; an error the
    plugin raises reaches the caller masked in place — the very object, its type and its chain —, unless it still shows
    a secret after masking (a ``__str__`` over ``__slots__``, a group's own message): an ``Exception`` is then replaced by
-   ``AssetSourceError`` ``PROVIDER_ERROR`` / ``FXServiceError`` carrying its masked description and no ``__cause__`` or
-   ``__context__``, while a ``BaseException`` that is no ``Exception`` (a cancellation) is never replaced; an object
-   that is not a plugin goes through unchecked.
+   ``AssetSourceError`` ``PROVIDER_ERROR`` / ``FXServiceError`` carrying its masked description (the asset error in its
+   message and in ``details["detail"]``, decision N6) and no ``__cause__`` or ``__context__``, while a ``BaseException``
+   that is no ``Exception`` (a cancellation) is never replaced; an object that is not a plugin goes through unchecked.
+6. **Search** (``AssetSearchService``): the plain search lists the providers refused with ``NOT_CONFIGURED`` in
+   ``providers_not_configured``, in the order of the query, each in ``providers_with_errors`` too, and never calls them;
+   a provider failing with another code is an error only, one answering is in neither list. The SSE ``provider_error``
+   event of a provider not configured carries ``error_code: NOT_CONFIGURED`` beside its message and nothing else, and
+   the refusal is logged at INFO, never as a warning. These providers are lab plugins the asset registry hands out for
+   codes of their own, configured for real through the private engine: a required field without a value.
 
 Pure: the rows live in a private SQLite file under ``tmp_path`` (``create_all``), reached through a private engine put
 in place of ``runtime.get_async_engine``; the instance key is a test key set with ``monkeypatch`` and the data
-directory points into ``tmp_path``; every variable a test sets goes through ``monkeypatch``.
+directory points into ``tmp_path``; every variable a test sets goes through ``monkeypatch``; a search asks a query of
+its own, so the process's search caches answer for no other test.
 """
 
 from __future__ import annotations
@@ -67,6 +79,7 @@ from backend.app.services.asset_source_providers.mockprov.plugin import SETTINGS
 from backend.app.services.assets import core as asset_core
 from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.assets.search import AssetSearchService
 from backend.app.services.fx import runtime as fx_runtime
 from backend.app.services.fx.base import FXNotConfiguredError, FXServiceError
 from backend.app.services.fx.registry import FXProviderRegistry
@@ -75,7 +88,7 @@ from backend.app.services.plugin_settings import resolver, runtime
 from backend.app.services.plugin_settings.contract import BoundSettings, PluginSettingsMixin
 from backend.app.services.plugin_settings.crypto import encrypt_secret, fingerprint_subkey, key_id_of, secret_aad, settings_subkey
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType, env_name, env_variables
-from backend.app.services.plugin_settings.resolver import FieldState, StoredValue, build_bound_settings, resolve_plugin_fields, settings_fingerprint
+from backend.app.services.plugin_settings.resolver import FieldState, StoredValue, build_bound_settings, missing_field_keys, resolve_plugin_fields, settings_fingerprint
 from backend.app.utils.runtime.secret_masking import MASK, active_secrets, exception_renders_secret, mask_text, masked_description
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -98,6 +111,20 @@ LAB_FIELDS = (
 )
 DERIVED_REGION = "LIBREFOLIO_PLUGIN_ASSET_LAB_REGION"
 DERIVED_API_KEY, ALIAS_API_KEY = "LIBREFOLIO_PLUGIN_ASSET_LAB_API_KEY", "LIBREFOLIO_LAB_API_KEY"
+
+#: The lab plugin's fields for the rule of «not configured»: a required field of each kind — a secret, a text, a select
+#: with a default, a user's secret — and an optional number. The same keys as LAB_FIELDS, so the same variables.
+RULE_FIELDS = (
+    PluginSettingField(key="api_key", type=STRING, scope=SYSTEM, label="API key", secret=True, required=True, env="LIBREFOLIO_LAB_API_KEY"),
+    PluginSettingField(key="endpoint", type=STRING, scope=SYSTEM, label="Endpoint", required=True),
+    PluginSettingField(key="region", type=SELECT, scope=SYSTEM, label="Region", required=True, default="eu", options=tuple(SettingOption(value, value.upper()) for value in REGIONS)),
+    PluginSettingField(key="tolerance", type=NUMBER, scope=SYSTEM, label="Tolerance", default=0.5, minimum=0, maximum=10),
+    PluginSettingField(key="token", type=STRING, scope=USER, label="Token", secret=True, required=True),
+)
+
+#: The searchable lab plugins: two never configured (a required field without a value), one failing on its own.
+UNCONFIGURED_FIRST, UNCONFIGURED_SECOND, FAILING = "lab_unconfigured_b", "lab_unconfigured_a", "lab_failing"
+SEARCH_LAB_FIELDS = (PluginSettingField(key="endpoint", type=STRING, scope=SYSTEM, label="Endpoint", required=True),)
 
 
 class _LabPlugin(PluginSettingsMixin):
@@ -127,6 +154,34 @@ class _SuiteDouble:
 
     A plain class: no settings mixin, no ``settings_fields`` attribute at all, not even a ``provider_code``.
     """
+
+
+class _UnconfiguredSearch(MockProvider):
+    """A searchable asset plugin of the tests — mockprov's search — whose one field is required and never set."""
+
+    settings_fields = SEARCH_LAB_FIELDS
+    lab_code = UNCONFIGURED_FIRST
+
+    @property
+    def provider_code(self) -> str:
+        return self.lab_code
+
+
+class _UnconfiguredSearchToo(_UnconfiguredSearch):
+    lab_code = UNCONFIGURED_SECOND
+
+
+class _FailingSearch(MockProvider):
+    """A searchable asset plugin of the tests, without settings, whose search fails with an error code of its own."""
+
+    settings_fields = ()
+
+    @property
+    def provider_code(self) -> str:
+        return FAILING
+
+    async def search(self, query: str) -> list[dict]:
+        raise AssetSourceError(f"the search backend is down for {query!r} (testing)", "SEARCH_ERROR")
 
 
 class _SlotsLeak(Exception):
@@ -190,13 +245,14 @@ def _marker(prefix: str = "lfsecret") -> str:
 
 @pytest.fixture(autouse=True)
 def isolated_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
-    """The test key A as the instance key, a data directory of this test, and no ambient variable of the lab, mockprov or MOCKFX fields."""
+    """The test key A as the instance key, a data directory of this test, and no ambient variable of the lab, the searchable labs, mockprov or MOCKFX fields."""
     data_dir = tmp_path / "data"
     monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")
     monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(data_dir))
     monkeypatch.delenv("LIBREFOLIO_INSTANCE_KEY_FILE", raising=False)
     monkeypatch.setenv("LIBREFOLIO_INSTANCE_KEY", KEY_A)
-    declared = [("asset", "lab", field) for field in LAB_FIELDS] + [("asset", "mockprov", field) for field in MockProvider.settings_fields] + [("fx", "MOCKFX", field) for field in MockFXProvider.settings_fields]
+    declared = [("asset", "lab", field) for field in (*LAB_FIELDS, *RULE_FIELDS)] + [("asset", "mockprov", field) for field in MockProvider.settings_fields] + [("fx", "MOCKFX", field) for field in MockFXProvider.settings_fields]
+    declared += [("asset", code, field) for code in (UNCONFIGURED_FIRST, UNCONFIGURED_SECOND) for field in SEARCH_LAB_FIELDS]
     for family, code, field in declared:
         for name in {*env_variables(family, code, field), env_name(family, code, field.key)}:
             monkeypatch.delenv(name, raising=False)
@@ -619,6 +675,97 @@ def test_an_invalid_variable_is_logged_once_with_a_reason_and_never_its_value(mo
     assert warnings[DERIVED_REGION]["field"] == "region" and DERIVED_REGION + "_FILE" in warnings[DERIVED_REGION]["reason"]
     assert number not in repr(logs) and short_secret not in repr(logs)
     print_success("three variables, three warnings, no value")
+
+
+# -----------------------------------------------------------------------------
+# The rule of «not configured»: missing_field_keys, for a call and for the catalogue
+# -----------------------------------------------------------------------------
+
+#: How a row of ``_rule_rows`` changes: dropped, a secret written under another key, a secret moved from another user.
+NO_ROW, UNDER_ANOTHER_KEY, FROM_ANOTHER_USER = "no row", "under another key", "from another user"
+
+
+def _rule_field(key: str) -> PluginSettingField:
+    return next(field for field in RULE_FIELDS if field.key == key)
+
+
+def _rule_rows(system_changes: dict[str, object], user_changes: dict[str, object]) -> tuple[dict[str, StoredValue], dict[str, StoredValue]]:
+    """Rows that configure RULE_FIELDS for user 1, then the changes: ``NO_ROW`` drops a row, ``UNDER_ANOTHER_KEY`` and
+    ``FROM_ANOTHER_USER`` write the secret so that this key cannot read it, any other value is a plain row."""
+    system = {"api_key": _secret_row(_marker(), "api_key"), "endpoint": _plain("https://api.example"), "region": _plain("us")}
+    user = {"token": _secret_row(_marker(), "token", "user", 1)}
+    for rows, changes, scope in ((system, system_changes, "system"), (user, user_changes, "user")):
+        owner = 1 if scope == "user" else None
+        for key, change in changes.items():
+            if change == NO_ROW:
+                rows.pop(key, None)
+            elif change == UNDER_ANOTHER_KEY:
+                rows[key] = _secret_row(_marker(), key, scope, owner, subkey=FOREIGN_SUBKEY)
+            elif change == FROM_ANOTHER_USER:
+                rows[key] = _secret_row(_marker(), key, scope, 2)
+            else:
+                rows[key] = _plain(change)
+    return system, user
+
+
+@pytest.mark.parametrize(
+    ("variables", "system_changes", "user_changes", "missing"),
+    [
+        pytest.param({}, {}, {}, (), id="every-required-field-set-by-a-row"),
+        pytest.param({}, dict.fromkeys(("api_key", "endpoint", "region"), NO_ROW), {"token": NO_ROW}, ("api_key", "endpoint", "token"), id="nothing-set-the-select-on-its-default"),
+        pytest.param({ALIAS_API_KEY: "lf-a-secret-from-the-alias"}, {"api_key": NO_ROW}, {}, (), id="a-required-secret-set-by-a-variable"),
+        pytest.param({}, {"api_key": UNDER_ANOTHER_KEY}, {}, ("api_key",), id="a-required-secret-another-key-wrote"),
+        pytest.param({}, {}, {"token": UNDER_ANOTHER_KEY}, ("token",), id="a-required-user-secret-another-key-wrote"),
+        pytest.param({}, {"endpoint": NO_ROW}, {}, ("endpoint",), id="a-required-field-with-nothing"),
+        pytest.param({}, {"endpoint": ""}, {}, ("endpoint",), id="a-required-field-whose-row-is-refused-without-a-default"),
+        pytest.param({}, {"region": NO_ROW}, {}, (), id="a-required-select-on-its-default"),
+        pytest.param({}, {"region": "xx"}, {}, (), id="a-required-select-whose-row-is-refused-falls-back-to-its-default"),
+        pytest.param({"LIBREFOLIO_PLUGIN_ASSET_LAB_TOLERANCE": "abc"}, {}, {}, ("tolerance",), id="an-optional-field-whose-variable-is-invalid"),
+        pytest.param({"LIBREFOLIO_PLUGIN_ASSET_LAB_ENDPOINT": "has\ta tab"}, {}, {}, ("endpoint",), id="a-required-field-whose-variable-is-invalid-beside-a-valid-row"),
+        pytest.param({DERIVED_API_KEY: "short"}, {}, {}, ("api_key",), id="a-required-secret-whose-variable-is-invalid-beside-a-readable-row"),
+    ],
+)
+def test_missing_field_keys_gives_a_call_and_the_catalogue_the_same_missing_fields(variables, system_changes, user_changes, missing, monkeypatch: pytest.MonkeyPatch):
+    """3: the same rows and variables, resolved for the catalogue (``decrypt=False``: a secret has no value, judged by
+    its key id) and bound for a call (``decrypt=True``): the same missing fields, in declaration order."""
+    for variable, value in variables.items():
+        monkeypatch.setenv(variable, value)
+    system, user = _rule_rows(system_changes, user_changes)
+
+    for_the_catalogue = resolve_plugin_fields("asset", "lab", RULE_FIELDS, system, user, user_id=1, decrypt=False)
+    for_a_call = build_bound_settings("asset", "lab", RULE_FIELDS, system, user, user_id=1)
+
+    secrets = {state.field.key: state for state in for_the_catalogue if state.field.secret}
+    assert all(state.value is None for state in secrets.values()), "barrier: the catalogue resolves no secret's value"
+    assert missing_field_keys(for_the_catalogue) == missing
+    assert for_a_call.missing == missing
+
+
+def test_missing_field_keys_reads_a_secret_without_its_value_by_its_state():
+    """3, the rule on states made by hand: a secret set and readable is usable without its value, one unreadable or unset
+    is missing when required; only a secret is usable without a value; an invalid variable is missing even when the
+    field is optional; the missing keys come in the order of the states."""
+    api_key, endpoint, region, tolerance = (_rule_field(key) for key in ("api_key", "endpoint", "region", "tolerance"))
+
+    assert missing_field_keys([FieldState(api_key, "db", is_set=True), FieldState(api_key, "env", is_set=True, locked=True, env_variable=ALIAS_API_KEY)]) == ()
+    assert missing_field_keys([FieldState(api_key, "db", is_set=True, problem="unreadable")]) == ("api_key",)
+    assert missing_field_keys([FieldState(api_key, "none")]) == ("api_key",)
+    assert missing_field_keys([FieldState(endpoint, "db", is_set=True)]) == ("endpoint",), "a plain field without a value is missing, set or not"
+    assert missing_field_keys([FieldState(region, "default", value="eu", problem="invalid_stored"), FieldState(tolerance, "default", value=0.5)]) == ()
+    assert missing_field_keys([FieldState(tolerance, "env", is_set=True, locked=True, env_variable="LIBREFOLIO_PLUGIN_ASSET_LAB_TOLERANCE", problem="invalid_env")]) == ("tolerance",)
+    assert missing_field_keys([FieldState(tolerance, "env", is_set=True, locked=True, problem="invalid_env"), FieldState(api_key, "none"), FieldState(endpoint, "none")]) == ("tolerance", "api_key", "endpoint")
+
+
+def test_the_catalogue_cannot_see_a_blob_its_key_id_vouches_for_but_a_call_cannot_decrypt():
+    """3, the one divergence, by design: the catalogue never decrypts, so a secret moved from another user — under the
+    current key id — counts as usable there, while a call finds it unreadable and the plugin not configured."""
+    system, user = _rule_rows({}, {"token": FROM_ANOTHER_USER})
+
+    for_the_catalogue = resolve_plugin_fields("asset", "lab", RULE_FIELDS, system, user, user_id=1, decrypt=False)
+    for_a_call = build_bound_settings("asset", "lab", RULE_FIELDS, system, user, user_id=1)
+
+    assert missing_field_keys(for_the_catalogue) == ()
+    assert for_a_call.missing == ("token",)
 
 
 # -----------------------------------------------------------------------------
@@ -1133,10 +1280,14 @@ async def test_an_asset_error_that_still_shows_a_secret_is_replaced_by_provider_
     with pytest.raises(AssetSourceError) as raised:
         await asset_core.call_provider(_bound_lab(api_key=secret), lambda: body(), timeout=5)
 
-    assert type(raised.value) is AssetSourceError and raised.value.error_code == "PROVIDER_ERROR" and raised.value.details == {}
-    assert "lab" in raised.value.message, "the replacement names the provider"
-    _assert_replaced(raised.value, secret, _SlotsLeak(secret))
-    print_success(f"replaced: {raised.value}")
+    replacement = raised.value
+    assert type(replacement) is AssetSourceError and replacement.error_code == "PROVIDER_ERROR"
+    assert replacement.message.startswith("Provider lab failed: "), "the replacement names the provider"
+    assert replacement.details == {"detail": replacement.message.removeprefix("Provider lab failed: ")}, "N6: the masked description, for the localized message"
+    assert replacement.details["detail"] == masked_description(_SlotsLeak(secret), frozenset({secret}))
+    assert secret not in json.dumps(replacement.details)
+    _assert_replaced(replacement, secret, _SlotsLeak(secret))
+    print_success(f"replaced: {replacement}, details {replacement.details}")
 
 
 @pytest.mark.asyncio
@@ -1168,6 +1319,7 @@ async def test_an_exception_group_whose_own_message_shows_a_secret_is_replaced()
         await asset_core.call_provider(_bound_lab(api_key=secret), lambda: body(), timeout=5)
 
     assert raised.value.error_code == "PROVIDER_ERROR"
+    assert raised.value.details == {"detail": raised.value.message.removeprefix("Provider lab failed: ")} and secret not in json.dumps(raised.value.details)
     _assert_replaced(raised.value, secret, group())
 
 
@@ -1226,3 +1378,90 @@ async def test_a_cancellation_is_never_replaced_at_the_fx_boundary():
 
     assert raised.value is raised_by_the_plugin[0]
     assert exception_renders_secret(raised.value, frozenset({secret}))
+
+
+# =============================================================================
+# 6. SEARCH: THE PROVIDERS NOT CONFIGURED
+# =============================================================================
+
+
+def _hand_out_new(monkeypatch: pytest.MonkeyPatch, registry: type, classes: dict[str, type]) -> None:
+    """``registry`` hands out a new instance of ``classes[code]`` for those codes, and its own plugins otherwise."""
+    original = registry.get_provider_instance
+
+    def get_provider_instance(_cls, code, **kwargs):
+        plugin_class = classes.get(code)
+        return plugin_class() if plugin_class is not None else original(code, **kwargs)
+
+    monkeypatch.setattr(registry, "get_provider_instance", classmethod(get_provider_instance))
+
+
+def _searches_of(monkeypatch: pytest.MonkeyPatch, plugin_class: type) -> list[str]:
+    """The queries ``plugin_class.search`` (and its subclasses') is asked, still answering them."""
+    asked: list[str] = []
+    original = plugin_class.search
+
+    async def counted(self, query: str) -> list[dict]:
+        asked.append(query)
+        return await original(self, query)
+
+    monkeypatch.setattr(plugin_class, "search", counted)
+    return asked
+
+
+async def _sse(stream) -> list[dict]:
+    """The events of an SSE stream, decoded."""
+    events = []
+    async for chunk in stream:
+        assert chunk.startswith("data: ") and chunk.endswith("\n\n"), chunk
+        events.append(json.loads(chunk[len("data: ") :]))
+    return events
+
+
+def _query(prefix: str) -> str:
+    """A query of this test alone: no search cache of the process answers it."""
+    return f"{prefix}-{uuid.uuid4().hex[:12]}"
+
+
+@pytest.mark.asyncio
+async def test_the_search_lists_the_providers_not_configured_in_the_order_asked(monkeypatch: pytest.MonkeyPatch, through_private_engine: list[int]):
+    """6: two providers not configured, one failing with ``SEARCH_ERROR``, mockprov answering: the two in
+    ``providers_not_configured`` in the order asked, and never called; the failing one an error only; mockprov in neither."""
+    print_section("6: providers_not_configured")
+    _hand_out_new(monkeypatch, AssetProviderRegistry, {UNCONFIGURED_FIRST: _UnconfiguredSearch, UNCONFIGURED_SECOND: _UnconfiguredSearchToo, FAILING: _FailingSearch})
+    asked = _searches_of(monkeypatch, _UnconfiguredSearch)
+    order = [UNCONFIGURED_FIRST, FAILING, "mockprov", UNCONFIGURED_SECOND]
+
+    response = await AssetSearchService.search(_query("lab-search"), provider_codes=order)
+
+    assert response.providers_queried == order
+    assert response.providers_with_errors == [UNCONFIGURED_FIRST, FAILING, UNCONFIGURED_SECOND]
+    assert response.providers_not_configured == [UNCONFIGURED_FIRST, UNCONFIGURED_SECOND]
+    assert {item.provider_code for item in response.results} == {"mockprov"}, "barrier: the configured provider answered"
+    assert asked == [], "a provider not configured is never called"
+    assert len(through_private_engine) == 3, "barrier: the two labs and mockprov were configured for real, through the private engine"
+    print_success(f"not configured {response.providers_not_configured}, with errors {response.providers_with_errors}")
+
+
+@pytest.mark.asyncio
+async def test_the_search_stream_reports_a_provider_not_configured_with_its_code_at_info(monkeypatch: pytest.MonkeyPatch, through_private_engine: list[int]):
+    """6: the ``provider_error`` event carries ``error_code: NOT_CONFIGURED`` beside the message, and nothing else; the
+    refusal is one INFO line naming the missing field: no warning, no error, no traceback; the provider is never called."""
+    print_section("6: the SSE provider_error of a provider not configured")
+    _hand_out_new(monkeypatch, AssetProviderRegistry, {UNCONFIGURED_SECOND: _UnconfiguredSearchToo})
+    asked = _searches_of(monkeypatch, _UnconfiguredSearch)
+
+    with capture_logs() as logs:
+        events = await _sse(AssetSearchService.search_stream(_query("lab-stream"), provider_codes=[UNCONFIGURED_SECOND]))
+
+    (error,) = [event for event in events if event["event"] == "provider_error"]
+    (done,) = [event for event in events if event["event"] == "done"]
+    assert error.keys() == {"event", "provider_code", "error", "error_code"}
+    assert (error["provider_code"], error["error_code"]) == (UNCONFIGURED_SECOND, "NOT_CONFIGURED")
+    assert error["error"], "the raw message stays"
+    assert (done["providers_queried"], done["providers_with_errors"], done["total_results"]) == ([UNCONFIGURED_SECOND], [UNCONFIGURED_SECOND], 0)
+    stream_lines = [(entry["event"], entry["log_level"], entry.get("provider"), entry.get("missing")) for entry in logs if str(entry["event"]).startswith("Search stream")]
+    assert stream_lines == [("Search stream: provider not configured", "info", UNCONFIGURED_SECOND, ["endpoint"])]
+    assert [entry for entry in logs if entry["log_level"] in ("warning", "error", "critical") or entry.get("exc_info")] == []
+    assert asked == []
+    print_success(f"provider_error {error['error_code']}, logged at INFO")

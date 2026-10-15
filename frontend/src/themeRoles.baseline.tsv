@@ -66,7 +66,7 @@ lib/components/dashboard/ExposureTable.svelte	2
 lib/components/dashboard/ExposureTreemap.svelte	10
 lib/components/dashboard/GrowthChart.svelte	86
 lib/components/dashboard/KpiCard.svelte	14
-lib/components/dashboard/KpiSection.svelte	70
+lib/components/dashboard/KpiSection.svelte	50
 lib/components/dashboard/OtherPeriodEffectsTable.svelte	28
 lib/components/dashboard/PerformanceChart.svelte	4
 lib/components/dashboard/PositionsPanel.svelte	46
@@ -270,7 +270,7 @@ lib/features/tools/pac-allocator/planner/ui.ts	118
 lib/features/update-check/AskAdminModal.svelte	27
 lib/features/update-check/UpdateAvailableModal.svelte	25	#334155×2	#e2e8f0×2
 lib/stores/app/themeStore.ts	0	#1b4334×2
-lib/theme/toneClasses.ts	202
+lib/theme/toneClasses.ts	176
 lib/utils/assetTypes.ts	80
 lib/utils/broker/brokerRoleHelpers.ts	4
 lib/utils/currency/fxConversionHelper.ts	6

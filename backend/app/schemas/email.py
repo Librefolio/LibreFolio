@@ -92,3 +92,28 @@ class PasswordResetEmailAccepted(StrictModel):
     """The same answer whether or not an account matches: if one does, its owner gets an email."""
 
     message: str = "If an active account matches, its owner gets an email with a link to choose a new password"
+
+
+class EmailVerificationConfirmRequest(StrictModel):
+    """POST /email/verification/confirm: the token of an email-verification link, from its fragment."""
+
+    token: str = Field(..., min_length=1, max_length=256, description="The token of the link, read from #token= in the address")
+
+
+class EmailVerificationConfirmResponse(StrictModel):
+    """The account of the link is active and its address verified: its owner can sign in."""
+
+    username: str = Field(..., description="The username of the account, to fill in the sign-in form")
+
+
+class EmailVerificationResendRequest(StrictModel):
+    """POST /email/verification/resend: the verification link again, with the credentials of the sign-in."""
+
+    username: str = Field(..., min_length=1, max_length=254, description="The username or the email address, as at sign-in")
+    password: str = Field(..., min_length=1, max_length=1024, description="The password of the account")
+
+
+class EmailVerificationResendResponse(StrictModel):
+    """A new verification link went to the address of the account; the older ones no longer work."""
+
+    language: str = Field(..., description="The language of the email")
