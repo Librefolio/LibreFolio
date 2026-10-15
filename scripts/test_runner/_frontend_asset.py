@@ -140,6 +140,15 @@ def front_asset_event_delete(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("assets/asset-event-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_asset_event_editor_save(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the Events tab save-order and row-currency E2E tests (release 1.3, W E1b)."""
+    print_section("Frontend Asset Event Editor Save Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("assets/asset-event-editor-save.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_asset_name_xss(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the stored-XSS E2E tests for asset names and icon URLs (K step 13, item 0)."""
     print_section("Frontend Asset Name XSS Tests")
@@ -219,6 +228,14 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "asset-data-editor", front_asset_data_editor, name="Asset Data Editor", desc="Prices/Events tabs, CSV import", tests="assets/asset-data-editor.spec.ts")
     add_test(cat, "asset-classification", front_asset_classification, name="Asset Classification", desc="Distribution editors round-trip (geo, sector)", tests="assets/asset-classification.spec.ts")
     add_test(cat, "asset-event-delete", front_asset_event_delete, name="Asset Event Delete", desc="Delete asset events flow", tests="assets/asset-event-delete.spec.ts")
+    add_test(
+        cat,
+        "asset-event-editor-save",
+        front_asset_event_editor_save,
+        name="Asset Event Editor Save",
+        desc="Release 1.3 (W E1b), each test on an asset of its own: one save deletes an event and retypes another onto its key — deletions go first and both are kept (I-10); a CSV line in another currency is sent with its own code and refused, nothing of the save kept (I-11c, decision 22); a refused save is an error toast and keeps nothing (guard)",
+        tests="assets/asset-event-editor-save.spec.ts",
+    )
     add_test(cat, "asset-name-xss", front_asset_name_xss, name="Asset Name XSS", desc="A stored asset name and icon URL carrying markup stay text in the table and card views of /assets, and run nothing (K step 13, item 0)", tests="assets/asset-name-xss.spec.ts")
     add_test(
         cat,

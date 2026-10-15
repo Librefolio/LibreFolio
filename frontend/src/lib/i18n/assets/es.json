@@ -379,7 +379,27 @@
     "deleteSuccess": "{n} evento(s) eliminado(s)",
     "deleteNotFound": "Evento(s) no encontrado(s): {ids}",
     "deleteBlocked": "No se puede eliminar: {n} evento(s) aún en uso por transacciones ({accessible} visibles para ti, {hidden} en carteras de otros usuarios)",
-    "fxBannerContext": "para eventos dividendo/efectivo"
+    "fxBannerContext": "para eventos dividendo/efectivo",
+    "exists": {
+      "title": "Este evento ya existe",
+      "hint": "El activo ya tiene un evento de este tipo en esta fecha: úsalo o modifícalo. No se ha guardado nada.",
+      "use": "Usar este",
+      "edit": "Editar este",
+      "fromProvider": "Del proveedor de datos",
+      "manual": "Introducido a mano",
+      "linked": "{n, plural, =0 {no vinculado a transacciones} one {vinculado a # transacción} other {vinculado a # transacciones}}",
+      "providerNotEditable": "El proveedor de datos actualiza sus propios eventos: este no se edita aquí."
+    },
+    "saveError": {
+      "currencyMismatch": "No se ha guardado nada: el evento del {date} ({type}) está en {currency}, pero el activo está en {expected}. Convierte su importe o quita la fila{more, plural, =0 {} one { (y # más)} other { (y # más)}}.",
+      "keyConflict": "No se ha guardado nada: dos eventos manuales de tipo {type} caerían el {date}. Cambia la fecha o el tipo de uno de ellos.",
+      "notEditable": "No se ha guardado nada: uno de los eventos ya no existe o no se puede editar aquí. Vuelve a cargar los datos e inténtalo de nuevo.",
+      "assetNotFound": "No se ha guardado nada: el activo ya no existe. Vuelve a cargar la página.",
+      "unknownType": "No se ha guardado nada: «{value}» (fila del {date}) no es un tipo de evento. Usa DIVIDEND, INTEREST, PRICE_ADJUSTMENT, SPLIT o MATURITY_SETTLEMENT.",
+      "generic": "No se ha guardado nada: {message}",
+      "inUse": "No se ha guardado nada: el evento {type} del {date} está vinculado a {n, plural, one {# transacción} other {# transacciones}} y no se puede eliminar. Quita primero el vínculo en las transacciones{more, plural, =0 {} one { (y # evento más)} other { (y # eventos más)}}.",
+      "notDeletable": "No se ha guardado nada: uno de los eventos que se van a eliminar ya no existe o no se puede eliminar aquí. Vuelve a cargar los datos e inténtalo de nuevo."
+    }
   },
   "providerErrors": {
     "NO_DATA": "No hay datos disponibles para este instrumento en el proveedor.",
