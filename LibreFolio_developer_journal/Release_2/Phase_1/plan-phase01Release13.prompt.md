@@ -915,3 +915,15 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > sopra J CP-1 e il lotto di H, controllo leggero (guardia 567, raccolta identica file per file, API identica) e i
 > tre controlli statici del coordinatore puliti. Il taglio (CP7), W3 e W5–W6 aspettano un commit del coordinatore su
 > `brokers.py` e `uploads.py`; intanto W7 e K2.
+
+### A4, migrazione 005 e token monouso, integrato ✅ (2026-10-15, 05:20)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `e476d2ed4` (A4 `75a8af5a7`, base aggiornata con H CP3,
+> X CP2b, W K1, il lotto di H, J CP-1 e W4 in `3ebf4c043`). Migrazione 005 (`005_accounts_invites`, dopo la 004):
+> tabella `account_tokens` (solo lo SHA-256, uno scopo per token, scadenza, consumo e revoca) e tre colonne di `users`
+> (`session_version`, `email_verified_at` a `NULL` senza riempimento, `last_seen_version`), con `ALTER TABLE` semplice:
+> un batch ricostruirebbe `users` e con `foreign_keys=ON` cancellerebbe a cascata. `token_service` con consumo atomico.
+> Validazione di A sulla revisione combinata: `all-backend` 13 960 passed, 28 skipped, 0 failed; `db migration-005`
+> 25, `account-tokens` 64, `config-package` 568. Prima del commit il coordinatore ha corretto un'attribuzione: la
+> scelta su `email_verified_at` è sua, non del developer. Nessuna riga nel CHANGELOG: non c'è ancora niente di
+> visibile. Poi A4b, la versione di sessione `sv` (D-A17).
