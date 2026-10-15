@@ -99,18 +99,20 @@ every device, at its next request. There is still no session store: the check co
 row that `get_current_user()` already loads on every request.
 
 `user_service.end_sessions(user)` (`backend/app/services/accounts/user_service.py`) raises the version by one and does
-not commit: the caller commits it with the change that asks for it. Four changes call it:
+not commit: the caller commits it with the change that asks for it. Five changes call it:
 
 | Change | Entry point | Sessions ended |
 |--------|-------------|----------------|
 | Password change | `POST /api/v1/auth/change-password` (`PasswordChangeModal`, Profile tab) | Every other session of the account: the same response sets a new cookie at the new version, so the device that made the change stays signed in |
-| Password reset | `./dev.py user reset` → `user_service.reset_password()` | All of them |
-| Deactivation | `./dev.py user deactivate` → `user_service.set_user_active(…, False)` | All of them: a later `user activate` does not bring them back |
-| Demotion | `./dev.py user demote` → `user_service.set_user_admin(…, False)` | All of them |
+| Password reset | `./dev.py user reset` → `user_service.reset_password()`; a [reset link](access_control.md#reset-links) spent by `POST /api/v1/auth/password-reset` → `user_service.complete_password_reset()` | All of them |
+| Deactivation | `./dev.py user deactivate` → `user_service.set_user_active(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_active: false` → `user_service.update_user_status()` | All of them: a later activation does not bring them back |
+| Demotion | `./dev.py user demote` → `user_service.set_user_admin(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_superuser: false` → `user_service.update_user_status()` | All of them |
+| Sign-out by an administrator | `POST /api/v1/users/{user_id}/sessions/revoke` | All of them |
 
 Activation, promotion, logout and every refused operation leave the version alone: a wrong current password, or a new
 password equal to it, on `change-password`; an unknown user; the last active administrator; *already an admin* or
-*not an admin*.
+*not an admin*; a reset link that is not valid. So do issuing a reset link, which ends nothing until it is spent, and a
+`PATCH` whose values equal the current ones.
 
 - **The token.** `create_jwt_token(user_id, ttl_hours, session_version)`
   (`backend/app/services/accounts/auth_service.py`) writes `sub` (the user id, as a string), `sv`, `iat` and `exp`.
@@ -135,9 +137,10 @@ password equal to it, on `change-password`; an unknown user; the last active adm
     where the new cookie signs it straight back in. The race is benign, and the code does not try to close it.
 
 Tests: `./dev.py test services session-version` (`backend/test_scripts/test_services/test_session_version.py`: the
-token, the check, the four callers and the refusals, in-process) and `./dev.py test api session-revocation`
+token, the check, the command-line callers and the refusals, in-process), `./dev.py test api session-revocation`
 (`backend/test_scripts/test_api/test_session_revocation_api.py`: the password change over HTTP, with two devices and a
-second account).
+second account), and, for the administrator API and the reset links, `./dev.py test api users-admin` and
+`./dev.py test api registration`.
 
 ### 💻 Using curl
 
@@ -323,12 +326,14 @@ All endpoints that access or modify user data require a valid session cookie (`D
 |----------|--------|---------|
 | `/auth/login` | POST | User login |
 | `/auth/logout` | POST | Clear session cookie |
-| `/auth/register` | POST | New user registration |
+| `/auth/register` | POST | New user registration, under the [registration mode](access_control.md#registration-modes) and the [user limit](access_control.md#user-limit) |
+| `/auth/tokens/inspect` | POST | The status of an invitation or password-reset link, for whoever holds its token: see [Links in use](#account-token-links) |
+| `/auth/password-reset` | POST | Spend a password-reset link: a new password, and every session of the account ended |
 | `/system/health` | GET | Health check: the server answers |
 | `/system/info` | GET | System information, the app version only without a valid session (`SystemInfoPublicResponse`) and everything with one (`SystemInfoResponse`): see [System information and readiness](#system-info-and-readiness) |
 | `/system/instance` | GET | Public instance configuration, needed before sign-in: see [Public instance configuration](settings.md#public-instance-configuration) |
 | `/system/ready` | GET | Readiness for health checks and orchestrators (`200` when the database answers and its schema is at the head revision of the migrations, `503` otherwise): see [System information and readiness](#system-info-and-readiness) |
-| `/settings/global`, `/settings/global/{key}` | GET | Global settings, read only: changing them needs an administrator |
+| `/settings/global`, `/settings/global/{key}` | GET | The global settings, read-only (writes need an administrator): see [Settings System](settings.md) |
 | `/utilities/*` | GET | Reference data (countries, currencies, sectors) |
 | `/ai-export/catalog` | GET | Static AI Export catalogue (no user data) |
 
@@ -371,7 +376,7 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (including onboarding progress), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie.
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and every write of the global settings), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
 
 !!! info "📁 Files are protected too"
 
@@ -462,8 +467,8 @@ HTTP, so its jobs keep running.
 Invitations, password-reset links, email verification and the setup link of the initial administrator all hand
 someone a secret inside a URL. `backend/app/services/accounts/token_service.py` is the building block of these
 single-use links in the accounts domain: it issues, checks, spends and revokes their tokens, with the same
-guarantees for all four. No API endpoint calls it today, and the web interface has no page at the paths of its
-links.
+guarantees for all four. Invitations and password-reset links use it today ([Links in use](#account-token-links));
+email verification and the setup link have no caller yet.
 
 ### 🎲 Generation and Storage
 
@@ -485,14 +490,15 @@ never an invitation.
 
 | Purpose | Default lifetime (`DEFAULT_TTL`) | `user_id` | `grants_admin` | Link (`token_path()`) |
 |---------|----------------------------------|-----------|----------------|-----------------------|
-| `invite` | 7 days | Refused: the account does not exist yet | Allowed | `/invite?token=…` |
-| `password_reset` | 30 minutes | Required | Refused | `/reset-password?token=…` |
-| `email_verification` | 24 hours | Required | Refused | `/verify-email?token=…` |
-| `admin_setup` | 72 hours | Required | Refused | `/setup?token=…` |
+| `invite` | 7 days | Refused: the account does not exist yet | Allowed | `/invite#token=…` |
+| `password_reset` | 30 minutes | Required | Refused | `/reset-password#token=…` |
+| `email_verification` | 24 hours | Required | Refused | `/verify-email#token=…` |
+| `admin_setup` | 72 hours | Required | Refused | `/setup#token=…` |
 
 `expires_at` is `created_at` plus the lifetime; a `ttl` argument replaces the default. `issue_token()` raises
 `ValueError` on a refused or missing `user_id`, on a refused `grants_admin` and on a lifetime that is not
-positive, before writing anything. `token_path(purpose, token)` returns the link as a path with its query string.
+positive, before writing anything. `token_path(purpose, token)` returns the link as a path with the token in the
+fragment, never in the query string: see [Links in Use](#account-token-links) for why.
 
 ### 🚦 Checking and Spending a Token
 
@@ -538,6 +544,40 @@ Without a `token_id` or a `user_id` it raises `ValueError` rather than revoke ev
 contract, including two sessions consuming one token at once and a search of the logs and of every database
 column for the plaintext. The table — columns, constraints, foreign-key actions — is described in
 [`ACCOUNT_TOKEN`](database/users_access.md#account-token).
+
+### 🔗 Links in Use: Invitations and Password Resets {: #account-token-links }
+
+Two purposes have callers: invitations and password-reset links. Their rules — who may register, the
+user limit, what each endpoint answers — are in
+[Registration, Invitations and the Admin API](access_control.md#registration). What protects their
+tokens:
+
+- **Only an administrator, or a shell on the server, issues a link.** `POST /api/v1/users/invites` and
+  `POST /api/v1/users/{user_id}/password-reset-link` require an administrator; `./dev.py user invite` and
+  `./dev.py user reset-link` run on the server. The token is in that response, or printed by that command,
+  once. A lost link is replaced with a new one.
+- **Only the newest reset link of an account works.** Issuing one revokes the account's live reset links, and
+  spending one revokes any other.
+- **Spending is atomic with its effect.** An invitation is consumed in the transaction that creates its account;
+  a reset link in the commit that sets the new password, raises the session version and revokes the other links.
+  If the account cannot be created, the invitation stays unspent.
+- **Inspecting tells a guesser nothing.** `POST /api/v1/auth/tokens/inspect` is public and writes nothing. Only a
+  valid token gets details: the expiry, plus the role and email of an invitation or the username of a reset link.
+  Any other token gets its status alone, and a token presented for the other purpose is `unknown`.
+- **Anonymous answers say nothing about the users.** The `409` `USER_LIMIT_REACHED` of `POST /auth/register`
+  carries no count and no billing link; only the administrator's routes add `limit`, `used` and `billing_url`.
+  `GET /system/instance` publishes only the registration mode and whether a variable locks it.
+- **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…` and
+  `/reset-password#token=…`. A browser never sends the fragment to the server, so the token is not in the request
+  for the page: it stays out of the server's access log and out of the logs of every proxy on the way. A browser
+  never puts the fragment in a `Referer` either. A token in the query string would be in all those logs. The page
+  reads it with JavaScript (`location.hash`); a `token` in the query string is not read at all.
+- **The link pages hide and keep the token.** `/invite` and `/reset-password` read the token when they mount,
+  then put the bare path in the address bar (`replaceState`), so the token stays out of the history and of a
+  bookmark; they keep it in memory only. They also listen to `hashchange`: a link pasted into a tab already on
+  the page changes only the fragment and loads nothing, so the page reads the new token there. Both declare
+  `<meta name="referrer" content="no-referrer">`: a link followed from them sends no `Referer` at all. Their
+  components are in [Authentication Components](../frontend/components/features/auth.md#link-pages).
 
 ## 🧼 Output Escaping
 

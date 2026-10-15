@@ -225,7 +225,7 @@ Wanting the resource to yourself is allowed. Wanting it silently is not.
 
 ```python
 add_test(api, "auth", api_auth, name="Auth API", desc="Register, login, logout, me",
-    exclusive_because="rewrites global_settings.enable_registration, one row shared by "
+    exclusive_because="rewrites global_settings.registration_mode, one row shared by "
                       "every user: a concurrent unit would register against whatever "
                       "value this one left behind")
 ```
