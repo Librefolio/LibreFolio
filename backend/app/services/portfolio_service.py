@@ -102,7 +102,7 @@ from backend.app.services.financial_math.yield_on_cost import (
     calculate_yield_on_cost_for_positions,
     compute_yield_on_cost_dependency_identity,
 )
-from backend.app.services.fx.fx import convert_bulk
+from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.utils.runtime.cache import get_ttl_cache
 

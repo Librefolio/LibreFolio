@@ -36,7 +36,7 @@ The technical indicators (`services/signal_plugins/`, `services/signal_runtime.p
 [risk engine](risk/architecture.md) (`services/risk/`) and the PAC allocator
 (`services/pac_allocator/`) stay where they are, but take the common math — returns,
 annualization, conversions, average cost, valuation — from the layer. FX conversion itself stays
-in the FX service: `convert_bulk()` in `services/fx/fx.py` is the primitive the calculations call.
+in the FX service: `convert_bulk()` in `services/fx/conversion.py` is the primitive the calculations call.
 
 ---
 
@@ -117,7 +117,7 @@ flowchart LR
         Math["the calculations"]
     end
     subgraph Infra["Infrastructure"]
-        FX["fx.convert_bulk()"]
+        FX["fx.conversion.convert_bulk()"]
         Settings["settings_service<br/>base currency"]
         Thresholds["data_quality_thresholds"]
         Cache["utils/runtime/cache<br/>TTL cache"]
@@ -134,7 +134,7 @@ flowchart LR
 
 1. **A calculation owns its whole problem.** It takes the plain data of the problem —
    movements, currencies, dates — and calls the infrastructure it needs to complete it:
-   `fx.convert_bulk()` for conversions, the base currency from `settings_service`, the
+   `fx.conversion.convert_bulk()` for conversions, the base currency from `settings_service`, the
    thresholds of `data_quality_thresholds`, the cache. Its caller does not prepare values for
    it: `compute_average_costs()` receives the amounts actually paid and converts each
    acquisition itself, at its own date, in one batched call. A calculation reads its own data
@@ -208,7 +208,7 @@ flowchart LR
         async def fake_convert_bulk(_session, conversions, raise_on_error=False):
             return [None] * len(conversions), []
 
-        # Replaced where conversions.py reads it, not in backend.app.services.fx.fx
+        # Replaced where conversions.py reads it, not in backend.app.services.fx.conversion
         monkeypatch.setattr(conversions_module, "convert_bulk", fake_convert_bulk)
         resolver = FxRateResolver("EUR")
         resolver.need("USD", date(2024, 1, 10))

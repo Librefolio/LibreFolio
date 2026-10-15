@@ -56,7 +56,7 @@ Saving a new pair does not sync it on the server: the frontend does it right aft
 `POST /api/v1/fx/currencies/sync` with `start: "min"` and `end` = today when the new pair has a
 non-`MANUAL` provider. `"min"` is the backend's sentinel for "everything the provider publishes": the
 request's `start` is a `SyncStartDate` (`date | Literal["min"]`, `backend/app/schemas/refresh.py`), and
-the sync passes it to the providers as an `FXProviderStartDate` (`backend/app/services/fx/fx.py`). Asking
+the sync passes it to the providers as an `FXProviderStartDate` (`backend/app/services/fx/base.py`). Asking
 for the whole history, rather than the period of the page that opened the dialog, gives older
 transactions a rate too. A full history can outlast the client's default timeout, so this request waits
 up to 120 s (`FX_SYNC_TIMEOUT_MS`), like the Dashboard's rate sync. The sync windows (`FxSyncModal`,
@@ -82,7 +82,7 @@ pair name to its detail page (`fxPairHtml(…, {linkToDetail: true})`).
 
 ## 🔄 Conversion Logic
 
-`convert_bulk()` (`backend/app/services/fx/fx.py`) is the shared conversion function:
+`convert_bulk()` (`backend/app/services/fx/conversion.py`) is the shared conversion function:
 `POST /api/v1/fx/currencies/convert`, the portfolio engine and service, lots analysis, Yield on Cost,
 asset price queries, risk eligibility and AI Export components call it with a list of
 `(Currency, to_currency, date)` items. For each item:
