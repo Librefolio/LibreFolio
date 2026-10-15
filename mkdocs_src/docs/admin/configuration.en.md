@@ -37,7 +37,9 @@ the same sample as `.env`.
 | `JWT_SECRET` | _not set_ | Key that signs login sessions. Not set, empty or only spaces: a new key at every start, so everyone logs in again after a restart. `JWT_SECRET_FILE` reads it from a file instead: see [Secrets](#secrets). See [Keep users signed in](index.md#session-persistence). |
 | `SESSION_COOKIE_SECURE` | `auto` | When the login session cookie is sent over HTTPS only: `auto` (if the browser uses HTTPS), `always` or `never`. See [HTTPS and reverse proxies](#session-cookie-secure). |
 | `PREVIEW_CACHE_MAX_MB` | `50` | Memory, in MB, of the image-preview cache in each server process. |
-| `LIBREFOLIO_PROFILE` | `selfhosted` | Leave it unset. `managed` is reserved for hosting providers that run LibreFolio for their customers. Case and spaces around the value do not matter; any other value stops the server at startup. The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`. |
+| `LIBREFOLIO_PROFILE` | `selfhosted` | Leave it unset. `managed` is reserved for hosting providers that run LibreFolio for their customers: there, a `JWT_SECRET` shorter than 32 characters stops the server at startup. Case and spaces around the value do not matter; any other value stops the server at startup. The profile is public: anyone who can reach the server can read it at `/api/v1/system/instance`. See [Hosting for Others](hosting_providers.md#managed-profile). |
+| `LIBREFOLIO_BLOCKED` | _not set_ | Leave it unset. A hosting provider sets it to block the instance: users can still sign in and out, and see a block page instead of the app. `1`, `true`, `yes` or `on` block; `0`, `false`, `no` or `off` do not, in any case; any other value stops the server at startup. Read from the environment only, in every profile. See [Hosting for Others](hosting_providers.md#instance-block). |
+| `LIBREFOLIO_DELETION_DATE` | _not set_ | Leave it unset. The day the hosting provider will delete a blocked instance and its data, as an ISO date such as `2026-11-14`, shown on the block page. Any other value stops the server at startup. Read from the environment only. See [Hosting for Others](hosting_providers.md#deletion-date). |
 
 Older `.env` files may still contain `PORTFOLIO_BASE_CURRENCY`: LibreFolio ignores it, and new
 users start from the **Default Currency** in [Global Settings](settings.md).
@@ -208,7 +210,7 @@ each finding is one line of the log, at its level, with the name of the check in
 | Level | The log says | What to do |
 | --- | --- | --- |
 | ℹ️ `info` | `JWT_SECRET is not set: every start makes a new session signing key, …` | Nothing, if signing everyone out at every restart is fine. Otherwise see [Keep users signed in](index.md#session-persistence). |
-| ⚠️ `warning` | `The session signing key from JWT_SECRET is … characters long: use at least 32 random characters` (or `from JWT_SECRET_FILE (<path>)`) | Generate a longer key, as in [Keep users signed in](index.md#session-persistence), and put it where the line says. |
+| ⚠️ `warning` | `The session signing key from JWT_SECRET is … characters long: use at least 32 random characters` (or `from JWT_SECRET_FILE (<path>)`) | Generate a longer key, as in [Keep users signed in](index.md#session-persistence), and put it where the line says. In the `managed` profile the server does not start instead: see below. |
 | ⚠️ `warning` | `Set both directly and through a *_FILE variable: …` | For each secret listed, keep only one of the two: the variable itself wins, the file is ignored. |
 | ❌ `error` | `The instance key cannot be used: …`, ending with `cannot be reached (Permission denied)` or `cannot be read (…)` | The `secrets/` folder or `instance.key` belongs to another user, or its permissions keep LibreFolio out. Give both back to the user that runs LibreFolio (`chown`), then `chmod 700` on the folder and `chmod 600` on the file. Never replace the key with a new one. The server starts anyway. |
 | ❌ `error` | `The instance key cannot be used: …`, ending with another reason, such as `is empty or blank` | `instance.key` is damaged: restore it from a backup, never replace it with a new key. The server starts anyway. |
@@ -218,10 +220,16 @@ each finding is one line of the log, at its level, with the name of the check in
 
 A secret you configured that cannot be used stops the start instead: a `JWT_SECRET_FILE` or a
 `LIBREFOLIO_INSTANCE_KEY_FILE` that cannot give its secret (see [Secrets in Files](#secret-files)),
-or an instance key of your own shorter than 32 characters. The error is in the server's console
+or an instance key of your own shorter than 32 characters. In the `managed` profile, a `JWT_SECRET`
+shorter than 32 characters stops it too. The error is in the server's console
 output (`docker compose logs librefolio` with Docker): it names the variable, and the file when there
 is one, never the secret. Fix it, then start
 again.
+
+A `LIBREFOLIO_BLOCKED` or `LIBREFOLIO_DELETION_DATE` value that LibreFolio cannot read also stops the
+start, and a blocked instance logs a warning at every start,
+`Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): …`: see
+[Hosting for Others](hosting_providers.md#block-variables).
 
 ---
 
