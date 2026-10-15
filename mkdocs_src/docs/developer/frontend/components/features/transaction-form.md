@@ -225,14 +225,19 @@ SELL do not show it.
   (`_auto_mode_indices()`); split-linked adjustments and missing FX are covered in
   [WAC & Cost Basis](../../../backend/transactions/wac.md).
 - In Manual mode, a `TRANSFER` or `ADJUSTMENT` with a positive quantity and no
-  `cost_basis_override` (`TransactionService._requires_cost_basis()`) gets a `costBasisRequired`
-  issue (`validate_cost_basis()`, which skips only the creates that a promote consumes in the same
-  batch). Like any issue, it makes the batch `committed=False`, and `POST /transactions/commit`
-  rolls the whole batch back: the row is not saved. A free acquisition is entered as `0`.
+  `cost_basis_override` gets a `costBasisRequired` issue (`validate_cost_basis()`) when it is
+  created, and when an update changes its type, quantity, cost basis or its asset event link.
+  `TransactionService._requires_cost_basis()` reads which rows need one from `TX_TYPE_METADATA`,
+  the table `GET /transactions/types` serves (`cost_basis_required()` in
+  `backend/app/schemas/transactions/type_metadata.py`). Like any issue, it makes the batch
+  `committed=False`, and `POST /transactions/commit` rolls the whole batch back: the row is not
+  saved. A free acquisition is entered as `0`.
 - Known mismatch: for an `ADJUSTMENT` with a positive quantity, not in Auto mode and with an empty
   manual field, the form shows `transactions.costBasisOverride.warningAdjustment`
-  (`tx-form-cost-basis-warning`), which says the lot will be created with zero cost. The backend
-  does not create it: it rejects that row with `costBasisRequired`.
+  (`tx-form-cost-basis-warning`), which says the transaction cannot be saved without a cost basis.
+  That holds for a create, not for an update that leaves the type, quantity, cost basis and asset
+  event link alone: editing only the notes, tags or date of an older row stored without a cost
+  basis gets no `costBasisRequired`, and the row stays without one.
 - For validation, `upgradeAutoToDetail()` turns `'auto'` into `'auto-detail'`, so the response's
   `wac_results` carries the WAC with its qualifying transactions. Standalone, the form keeps that
   result in `formWacResult`; inside the bulk workspace it first reads the workspace's own result
