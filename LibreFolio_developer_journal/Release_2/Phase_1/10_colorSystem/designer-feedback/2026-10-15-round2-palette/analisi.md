@@ -12,8 +12,8 @@
 - **15 coppie sotto soglia sui valori proposti.**
   - 14 si chiudono con la politica D-T6, come nel giro 1: correzione minima, commentata in `tokens.css` accanto al
     valore della designer.
-  - Una no: il bordo dei campi (N5). La designer chiede di togliere proprio la correzione D-T6, e decide il developer
-    (§2).
+  - Una no: il bordo dei campi (N5). La designer chiede di togliere proprio la correzione D-T6. Il developer ha deciso
+    alle 15:50 di tenere il 3:1, con l'hover nuovo (D-T18, §2).
 - **Colori dei grafici:** due coppie quasi uguali e cinque vicine (§4). Vanno alla designer nel giro 3; intanto si
   applicano i suoi valori.
 - **Instradamento (§6):**
@@ -27,10 +27,13 @@
 |---|---|---|
 | D-T17 | Giro 2 della designer approvato per intero: barra laterale verde, stati, N1–N6, Q2–Q13, GR1–GR5, tabelle dei tipi e dei settori | Developer, 15/10 alle 15:03: «archiviali opportunamente e poi dai mandato ai vari sotto agenti di realizzare quanto pianificato» |
 | D-T15 | Superata da D-T17 (N1): la barra laterale non è più neutra | — |
-| D-T18 | Bordo dei campi (N5): **aperta**, vedi §2 | Developer e designer stanno confrontando le versioni |
+| D-T18 | Bordo dei campi (N5): resta la correzione 3:1 di D-T6, `#7E8984` / `#606F6A`; hover nuovo = testo attenuato, `#616D67` / `#7F8C87`; focus invariato (§2) | Developer, 15/10 alle 15:50, dopo il confronto con la designer: «ci sembrano molto simili, quindi meglio mantenere la regola WCAG, usa Attuale 3:1 ovunque + hover proposto sia per chiaro che per scuro» |
+| D-T19 | Header verde `#1B4334` anche su desktop, non solo su mobile, con la stessa famiglia di colori della barra laterale (§5) | Developer, 15/10 alle 15:50: «credo che la designer si aspetti che anche in desktop sia verde, non solo in mobile» |
+| D-T20 | Integrazione progressiva: T entra in `dev_release2` dopo la revisione di T-8 sull'anteprima, poi ogni gruppo di lotti delle ondate appena validato | Developer, 15/10 alle 15:55 |
+| D-T21 | L'aspetto di ogni ondata lo approva il developer (contact sheet e diff della galleria); la designer rivede tutto nel giro 3 | Developer, 15/10 alle 15:56: «si principalmente io, se lei è disponibile te lo faccio sapere» |
 | — | Codice delle sessioni coordinate: una o due lettere maiuscole, libere ovunque. Scritto in `.github/agents/` | Developer, 15/10: «per le lettere se 1 non basta usiamone 2» |
 
-## 2. Bordo dei campi (N5): aperto
+## 2. Bordo dei campi (N5): deciso, D-T18
 
 Oggi i campi non hanno uno stato al passaggio del mouse: il bordo resta quello a riposo, finché il clic non lo porta al
 verde del focus. Per questo, confrontando le versioni, l'hover sembrava uguale.
@@ -51,7 +54,8 @@ stanno dei campi). La soglia WCAG 1.4.11 per riconoscere un componente è 3:1.
 - **La via di mezzo** passa su campo e card, non sulla superficie secondaria.
 - **Pagina di prova** con i campi veri, in chiaro e in scuro:
   [`materiale-inviato/bordi-dei-campi.html`](materiale-inviato/bordi-dei-campi.html).
-- **Finché il developer non sceglie,** T lascia i valori attuali e prepara solo il ruolo dell'hover, che oggi non esiste.
+- **Scelta del developer (D-T18), 15/10 alle 15:50:** la terza riga, «Attuale, 3:1 ovunque, più hover proposto», nei due
+  temi. T aggiunge il ruolo `--lf-border-input-hover` in T-8; i campi lo prendono con le ondate (W1-d, `ui/input`).
 
 ## 3. Contrasto: le coppie sotto soglia
 
@@ -62,8 +66,8 @@ stanno dei campi). La soglia WCAG 1.4.11 per riconoscere un componente è 3:1.
 | Info chiaro sul suo fondo tenue | `#155EEF` su `#DBEAFE` | 4,44 | 4,5 | T-8, D-T6 |
 | Pulsante rosso pieno in scuro, testo bianco | `#FFFFFF` su `#F84361` | 3,52 | 4,5 | T-8: riempimento più scuro solo per i pulsanti pieni (ruolo dedicato); il testo resta bianco, come chiede Q3 |
 | Lo stesso, al passaggio del mouse | `#FFFFFF` su `#E12D4B` | 4,49 | 4,5 | come sopra |
-| Bordo dei campi della designer, chiaro, su campo e su card | `#94A09B` | 2,71 · 2,61 | 3 | aperta, §2 |
-| Bordo dei campi della designer, scuro, su campo e su card | `#43524D` | 2,26 · 2,12 | 3 | aperta, §2 |
+| Bordo dei campi della designer, chiaro, su campo e su card | `#94A09B` | 2,71 · 2,61 | 3 | resta `#7E8984` (D-T18, §2) |
+| Bordo dei campi della designer, scuro, su campo e su card | `#43524D` | 2,26 · 2,12 | 3 | resta `#606F6A` (D-T18, §2) |
 | Interruttore spento, chiaro: traccia su card, pallino su traccia | `#CBD4D0`, `#FFFFFF` | 1,46 · 1,51 | 3 | T-8: il pallino prende un bordo `--lf-border-input`. Il componente si riconosce a 3:1 e i colori della designer restano |
 | Interruttore spento, scuro: traccia su card | `#2C3834` su `#151B19` | 1,43 | 3 | il pallino `#9BA8A2` sulla traccia dà già 4,94 |
 | Interruttore acceso, scuro: pallino `#EDF2F0` | su `#429E79` | 2,90 | 3 | T-8: l'altra opzione della designer, `#FFFFFF` (3,29) |
@@ -103,12 +107,12 @@ Il bordo delle card in rilievo in scuro (`#2E3B36`) dà 1,62 sulla pagina: è de
 
 ## 5. Interpretazioni del coordinatore
 
-- **N2, header mobile.** La designer scrive che barra laterale e header mobile sono verdi, ma oggi l'header mobile è
-  neutro.
-  - Per la continuità con la barra del telefono che lei chiede, sotto il breakpoint mobile l'header diventa verde
-    `#1B4334`, con i colori di testo della barra laterale.
-  - Su desktop resta neutro.
-  - Da confermare nella revisione di T-8.
+- **N2 e l'header (D-T19).** La designer scrive che barra laterale e header mobile sono verdi, ma oggi l'header è neutro.
+  - La mia prima lettura era verde solo sotto il breakpoint mobile. Il developer l'ha corretta alle 15:50: l'header è
+    verde anche su desktop, con la famiglia di colori della barra laterale.
+  - Sul verde `#1B4334` non vanno il focus del tema chiaro (`#236B4D`, 1,73), le icone di oggi (`#4A5550`, 1,43) e il
+    «caffè» chiaro (`#9A5B00`, 2,04). Servono un anello di focus dedicato alle due barre e i colori luminosi del tema
+    scuro, come per gli stati.
 - **N5, hover in chiaro:** la designer lo dà solo in scuro (§2).
 - **Q2, interruttore:** acceso in scuro con il pallino `#FFFFFF`; spento con il bordo sul pallino (§3).
 - **Q3, rosso pieno in scuro:** §3.
@@ -132,12 +136,12 @@ Il bordo delle card in rilievo in scuro (`#2E3B36`) dà 1,62 sulla pagina: è de
 | Cosa | Chi | Quando |
 |---|---|---|
 | Ruoli e valori: barra verde (A), stati (B), N3, N6, Q2, Q3, Q6, Q7, Q8, Q9, Q10, Q11, Q13; correzioni D-T6 (§3) | T-8 | subito |
-| Componenti di T: `Sidebar` tutta verde, stato della connessione sulla barra verde, header mobile verde (§5), `AnimatedBackground` (N6), terminale di `ForgotPasswordCard` (Q6; il contenuto è di A9) | T-8 | subito |
+| Componenti di T: `Sidebar` tutta verde, stato della connessione sulla barra verde, header verde su desktop e mobile (D-T19, §5), `AnimatedBackground` (N6), terminale di `ForgotPasswordCard` (Q6; il contenuto è di A9) | T-8 | subito |
 | `theme-color` `#1B4334` nei due temi (N2), manifest, `offline.html` | T-4, sbloccato da N2 | con T-8 |
 | Applicazione nei componenti degli altri: stato «modificato» (Q4), pallino dello scheduler (Q5), codice nel testo (Q6), `<mark>` (Q7), tour (Q9), avviso nei tooltip (Q10), AI Export (Q11), icone di «Informazioni» (Q12), card scure di Profilo e Allocazione | ondate W1–W6, fatte da T con i sotto-agenti | W2 per impostazioni, onboarding, AI Export e «Informazioni»; W5 per Allocazione e grafici |
 | GR1–GR5: colori fissi per tipo e per settore, tavolozze per tema, emoji dei settori | DV, figlio nuovo | analisi subito; codice nell'ordine concordato con Y e J della 1.3 |
 | Nuovi ruoli e colori di categoria nel Designer Lab, per il giro 3 | L | dopo T-8 e DV |
-| Bordo dei campi | developer | §2 |
+| Bordo dei campi: ruolo dell'hover | T-8, poi le ondate | deciso, D-T18 |
 
 ## 7. Stato delle ondate al 15/10
 
@@ -160,3 +164,5 @@ Misurato con `node frontend/scripts/theme/theme-roles.mjs --report`.
 - **Il ritmo:** i lotti si scrivono in parallelo, ma le prove pesanti passano dal nostro unico slot. T propone come
   raggrupparle.
 - **Rilasci:** nessun rilascio della 1.3 con W1–W4 a metà (decisione del 14/10).
+- **Ingressi e approvazione** (D-T20, D-T21): T entra dopo la revisione di T-8, poi le ondate a gruppi appena
+  validate; l'aspetto lo approva il developer, la designer rivede tutto nel giro 3.

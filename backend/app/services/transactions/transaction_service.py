@@ -26,20 +26,21 @@ from typing import List, Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Transaction
+from backend.app.db.models import Transaction, TransactionType
 from backend.app.schemas.transactions.batch import TXBatchResponse
 from backend.app.services.transactions.access import TransactionAccessMixin
 from backend.app.services.transactions.auto_cost import TransactionAutoCostMixin
 from backend.app.services.transactions.balances import TransactionBalancesMixin
 from backend.app.services.transactions.batch_costs import compute_wac_and_fx_issues, validate_cost_basis
 from backend.app.services.transactions.batch_creates import apply_creates, apply_promotes, resolve_create_links
-from backend.app.services.transactions.batch_edits import apply_deletes, apply_splits, apply_updates, validate_updated_pairs
+from backend.app.services.transactions.batch_edits import apply_deletes, apply_splits, apply_updates, make_standalone, pair_sides, validate_updated_pairs
 from backend.app.services.transactions.event_suggestions import TransactionEventSuggestionsMixin
 from backend.app.services.transactions.promotion import TransactionPromotionMixin
 from backend.app.services.transactions.queries import TransactionQueryMixin
 from backend.app.services.transactions.transaction_batch_context import TransactionBatchContext
 from backend.app.services.transactions.transaction_batch_stages import finalize_response, parse_inputs, preload_and_authorize, validate_balances
 from backend.app.services.transactions.validation import TransactionValidationMixin
+from backend.app.utils.datetime_utils import utcnow
 
 
 class TransactionService(TransactionAccessMixin, TransactionValidationMixin, TransactionQueryMixin, TransactionBalancesMixin, TransactionEventSuggestionsMixin, TransactionPromotionMixin, TransactionAutoCostMixin):
@@ -61,16 +62,42 @@ class TransactionService(TransactionAccessMixin, TransactionValidationMixin, Tra
         """
         Delete all transactions for a broker (internal helper for BrokerService).
 
+        A pair with another broker loses one half here. The other half must not stay a TRANSFER or CASH_TRANSFER
+        without its partner, which the lots and the Dashboard cannot read (V-3): it becomes the standalone row a
+        split of the pair leaves. A received TRANSFER becomes an ADJUSTMENT, with its sender's Auto cost (computed
+        here, while the sender's rows exist) when it has no cost basis; a CASH_TRANSFER or FX_CONVERSION becomes a
+        WITHDRAWAL or DEPOSIT by its sign. The giving leg of a TRANSFER only loses its link, for now: an
+        ADJUSTMENT-out without a cost would read the units it moved as destroyed, and its conversion waits for a
+        decision.
+
         Skips access control and balance validation — caller is expected to have
         already verified OWNER permissions on the broker.
         """
         stmt = select(Transaction).where(Transaction.broker_id == broker_id)
         result = await self.session.execute(stmt)
         txs = result.scalars().all()
-        tx_ids = [tx.id for tx in txs if tx.id is not None]
+        by_id = {tx.id: tx for tx in txs if tx.id is not None}
+        tx_ids = list(by_id)
 
         if tx_ids:
-            await self.session.execute(update(Transaction).where(Transaction.related_transaction_id.in_(tx_ids)).values(related_transaction_id=None))
+            survivors = (await self.session.execute(select(Transaction).where(Transaction.broker_id != broker_id, Transaction.related_transaction_id.in_(tx_ids)).order_by(Transaction.id))).scalars().all()
+            # A receiving leg without a cost basis (older data: one is required since) keeps the cost its units had
+            # when they left: the Auto cost, computed while the sender's rows are still there. Every cost is computed
+            # before any row changes, so a computation that fails leaves every row as it was.
+            auto_costs = [(survivor, await self._auto_cost(survivor, await self._auto_cost_source(survivor))) for survivor in survivors if survivor.type == TransactionType.TRANSFER and survivor.quantity > 0 and survivor.cost_basis_override is None]
+            for survivor, wac_result in auto_costs:
+                self._write_auto_cost(survivor, wac_result)
+            # The broker's own pairs go whole: unlink them before their rows go.
+            await self.session.execute(update(Transaction).where(Transaction.broker_id == broker_id, Transaction.related_transaction_id.in_(tx_ids)).values(related_transaction_id=None))
+            for survivor in survivors:
+                split_types = self.SPLIT_TYPE_MAP.get(survivor.type)
+                gives = split_types is not None and pair_sides(survivor, by_id[survivor.related_transaction_id])[0] is survivor
+                if split_types is None or (survivor.type == TransactionType.TRANSFER and gives):
+                    # Only the link goes: a link no split knows (an ADJUSTMENT may carry one), or a TRANSFER's giving leg.
+                    survivor.related_transaction_id = None
+                    survivor.updated_at = utcnow()
+                    continue
+                make_standalone(survivor, split_types[0] if gives else split_types[1])
 
         count = 0
         for tx in txs:

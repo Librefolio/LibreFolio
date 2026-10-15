@@ -557,9 +557,9 @@ fermati all'handoff, porta verificata libera.
   | Taglio | Sessione | File | Fuori dai lotti di R | Annuncio aperto |
   |---|---|---|---|---|
   | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | ~~X, FE5b (`AssetModal`), dal 15/10 alle 08:20~~ **chiuso: entrato in `dev_release2` il 15/10 alle 14:22 (`ec0dc7ebd`)**. La pagina (FE5c) dopo il lotto di Z sul polling |
-  | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | **W, dal 15/10 alle 07:55** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
-  | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | **Y, FE6a (taglio sul posto in moduli `.ts` puri), dal 15/10 alle 12:47** (via libera del coordinatore colori: nessun annuncio loro; T lo converte in W5; restano `data-testid="growth-chart"` e la forma dell'opzione ECharts, letta dalla E2E del Lab) |
-  | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | nessuno |
+  | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | ~~W, dal 15/10 alle 07:55~~ **chiuso: entrato il 15/10 alle 16:19 (`14d58cc61`)** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
+  | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | ~~Y, FE6a, dal 15/10 alle 12:47~~ **chiuso: entrato il 15/10 alle 15:12 (`badec1465`)** (via libera del coordinatore colori: nessun annuncio loro; T lo converte in W5; restano `data-testid="growth-chart"` e la forma dell'opzione ECharts, letta dalla E2E del Lab) |
+  | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | **Y, Y2 (due figli: `DataTableColumnHeader`, `DataTableCellContent`), dal 15/10 alle 15:24** (via libera del coordinatore colori; le 4 classi di `editable-checkbox` passano al figlio con il record ereditato) |
 
 ## 8. Traguardi, in ordine di dipendenza
 
@@ -1248,3 +1248,38 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >
 > **⚠️ Fuori pista**: `--resolve` del cricchetto dei colori perde un `~accept` presente da un solo lato (R-8); ripetuto
 > l'`--accept` D3 di `themeStore.ts` nei merge di X e W, con l'ok del coordinatore colori (TC-7 di T per la cura).
+
+### Treni 36–38 e decisioni 18–37 (2026-10-15, 15:00–15:55)
+
+> **Note implementazione**: entrati Y1 (`badec1465`, galleria filtrata contro `g-final3-r1` senza differenze dal
+> taglio, 96/96 scatti del grafico di crescita), A5 (`8bcb23502`, validato da A sulla revisione combinata con CP6 e E1)
+> e i quattro lotti di H (`744f5a0ee`: CP7a, C-96, filtro del log d'accesso, G-10, più la riparazione di
+> `test_instance_block.py`, rosso in `dev_release2` per un conflitto semantico CP6 × A5a). Prova Docker parziale: il
+> build si ferma a `pip install` per il proxy TLS della rete (H-11); `tzdata-legacy` e i compose verificati a parte; la
+> prova a runtime dell'immagine resta al developer, fuori dalla VPN, con gli script di H. Decisioni 18–35 scritte nel
+> file (`8fc44558c`); 37 girata ad A (lotto A6c); 36 in discussione (file comuni e personali, registrazione «su invito»
+> di default). Avviati A6 (scheda Utenti; verifica dell'indirizzo con un nonce firmato al posto del CORS su
+> `/system/instance`) e Y2 (`DataTable`). Checkpoint committati: E2a (`c1d1c3c2d`), Z1 (`a6199d0e7`, base aggiornata
+> `4618a2116`).
+
+### Treni 39–40, punto 46 (2026-10-15, 16:00–16:20)
+
+> **Note implementazione**: entrati Z1 (`9d2074b2b`) e W (`14d58cc61`: FE8a, N1, N1b-2/3, E1a, E1c). Punto 46
+> deciso dal developer: la correzione `orphan_pair_halves` entra; una metà senza costo resta «costo mancante». Verificato
+> poi sul codice che una metà ricevuta senza costo nasce solo da chiamate dirette all'API (il modulo e il Bulk, import
+> compresi, richiedono la modalità di costo: `cost_basis_pair` del TRANSFER ricevuto = `required_qty_pos`) o da dati
+> precedenti alla 1.0; il developer: «una protezione in caso di chiamate dirette dalle api, ma non certo metterci a fare
+> bonifiche» → lotto N2 di W. E1b: `delete_ids` nella richiesta di upsert, salvataggio atomico (decisione 22).
+>
+> **⚠️ Fuori pista**: al developer avevo detto che gli import creano trasferimenti senza costo; era sbagliato (avevo
+> letto i plugin, non il Bulk che li completa). Corretto in chat e ritirata la voce di backlog a W.
+>
+> **⚠️ Fuori pista (2)**: anche «nasce solo da chiamate dirette all'API» era sbagliato. L'analisi N2 di W (16:25) mostra
+> che il backend la regola la controlla già: `validate_cost_basis` (`batch_costs.py`) gira dopo il WAC su ogni percorso
+> di `execute_batch` (validate, commit, `promote-transfer`) e una creazione senza costo dà `costBasisRequired`, con il
+> batch non committato. Le righe senza costo nascono dai dati vecchi, dalle due conversioni di N1, dall'Auto senza
+> media (P-1) e dalle ADJUSTMENT di uno SPLIT. Il controllo sulle modifiche è invece più stretto del deciso: rifiuta
+> anche la modifica delle sole note di una riga senza costo, che con N1b-2 esistono. **N2 ridefinito**: la regola letta
+> da `TX_TYPE_METADATA` (`cost_basis_required(type, quantity)`), e il controllo sulle modifiche solo quando cambiano
+> tipo, quantità (segno compreso) o costo, confrontando i valori con la riga salvata. Auto senza media e split restano
+> fuori. Parte dopo E1b.

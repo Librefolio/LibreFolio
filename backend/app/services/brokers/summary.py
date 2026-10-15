@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date as date_type
 from decimal import Decimal
 from typing import List, Literal, Optional, Union
 
@@ -42,7 +43,7 @@ class BrokerSummaryMixin:
     # READ OPERATIONS
     # =========================================================================
 
-    async def get_summary(self, broker_id: int, user_id: int, as_user_id: Union[int, Literal["all"], None] = None) -> Optional[BRSummary]:  # noqa: C901 — sequential fetch/assemble with guard returns + per-holding loop
+    async def get_summary(self, broker_id: int, user_id: int, as_user_id: Union[int, Literal["all"], None] = None, as_of: Optional[date_type] = None) -> Optional[BRSummary]:  # noqa: C901 — sequential fetch/assemble with guard returns + per-holding loop
         """
         Get broker with full summary including balances and holdings.
 
@@ -50,6 +51,8 @@ class BrokerSummaryMixin:
             broker_id: Broker ID
             user_id: Current user ID (always required)
             as_user_id: For superuser - impersonate (int) or "all" for no check
+            as_of: The day the summary describes, the user's today; ``date.today()`` when omitted.
+                A transaction dated later counts in none of the figures: cash, holdings, average cost.
 
         Returns:
             BRSummary with cash_balances and holdings, or None if not found
@@ -67,15 +70,18 @@ class BrokerSummaryMixin:
             if not has_access:
                 return None
 
+        # The summary is the broker on the user's day: a transaction dated later counts in none of its figures.
+        as_of = as_of or date_type.today()
+
         # Get cash balances. Currencies with a net-zero balance are still
         # included (as long as they have transaction history) — a currency
         # deposited and then fully invested should stay visible at 0, not
         # disappear entirely.
-        cash_dict = await self.tx_service.get_cash_balances(broker_id)
+        cash_dict = await self.tx_service.get_cash_balances(broker_id, as_of=as_of)
         cash_balances = [Currency(code=code, amount=amount) for code, amount in cash_dict.items()]
 
         # Get asset holdings
-        holdings_dict = await self.tx_service.get_asset_holdings(broker_id)
+        holdings_dict = await self.tx_service.get_asset_holdings(broker_id, as_of=as_of)
         holdings: List[BRAssetHolding] = []
 
         # Batch-fetch latest prices for all held assets in one query instead of
@@ -83,7 +89,7 @@ class BrokerSummaryMixin:
         held_asset_ids = [asset_id for asset_id, quantity in holdings_dict.items() if quantity != Decimal("0")]
         latest_prices = await self._get_latest_prices_batch(held_asset_ids)
         # Average cost of each holding, in its asset currency (see _holding_average_costs)
-        average_costs = await self._holding_average_costs(broker_id, held_asset_ids)
+        average_costs = await self._holding_average_costs(broker_id, held_asset_ids, as_of=as_of)
         missing_pairs: dict[str, set] = {}
         for average_cost in average_costs.values():
             for missing in average_cost.missing:
@@ -197,8 +203,8 @@ class BrokerSummaryMixin:
             user_share_percentage=user_share_value,
         )
 
-    async def _holding_average_costs(self, broker_id: int, asset_ids: List[int]) -> dict[int, AverageCost]:
-        """Average cost of each held asset at this broker, in the asset's own currency.
+    async def _holding_average_costs(self, broker_id: int, asset_ids: List[int], as_of: Optional[date_type] = None) -> dict[int, AverageCost]:
+        """Average cost of each held asset at this broker on ``as_of``, in the asset's own currency.
 
         One financial_math.average_cost call per asset currency; a purchase paid in another
         currency is converted at its date, and a missing rate is reported, never counted as zero.
@@ -207,7 +213,10 @@ class BrokerSummaryMixin:
             return {}
         assets = (await self.session.execute(select(Asset).where(Asset.id.in_(asset_ids)))).scalars().all()
         currency_by_asset = {asset.id: asset.currency for asset in assets if asset.currency}
-        rows = (await self.session.execute(select(Transaction).where(Transaction.broker_id == broker_id, Transaction.asset_id.in_(list(currency_by_asset)), Transaction.quantity.is_not(None), Transaction.quantity != 0).order_by(Transaction.date, Transaction.id))).scalars().all()
+        stmt = select(Transaction).where(Transaction.broker_id == broker_id, Transaction.asset_id.in_(list(currency_by_asset)), Transaction.quantity.is_not(None), Transaction.quantity != 0)
+        if as_of is not None:
+            stmt = stmt.where(Transaction.date <= as_of)
+        rows = (await self.session.execute(stmt.order_by(Transaction.date, Transaction.id))).scalars().all()
         split_candidate_ids = [row.id for row in rows if row.asset_event_id is not None]
         split_linked_ids: set[int] = set()
         if split_candidate_ids:
