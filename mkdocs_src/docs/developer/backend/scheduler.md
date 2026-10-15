@@ -9,33 +9,16 @@ LibreFolio embeds an automatic background daemon to fetch current prices, histor
 The scheduler runs as an independent `asyncio.Task` inside the FastAPI lifespan. Every run goes through one function, `run_due_jobs(reason)`, which checks whether the configured sync jobs are due and runs those that are: at startup, at each 60-second tick, when a user comes back after a silence, and on a wake-up, through the scheduled wake-up route, coming next.
 
 ```mermaid
----
-config:
-  layout: elk
----
-graph LR
+graph TD
     Start["🚀 Server Lifespan Startup"] --> FirstWait["⏳ Wait 5s or a nudge"]
     FirstWait -->|startup| Run["⚙️ run_due_jobs(reason)"]
     User["👤 User request after 60s of silence"] -.->|nudge| Wait
     Wake["⏰ Scheduled wake-up route, coming next"] -.->|wake| Run
-
-    Run --> Settle{"⏲️ return or wake?"}
-    Settle -->|"Yes: wait 2s"| Lock["🔒 Run lock"]
-    Settle -->|No| Lock
-    Lock --> Checks{"🚦 On, not blocked, leader, enabled?"}
-
+    Run -->|"return, wake: wait 2s first"| Lock["🔒 Run lock"]
+    Lock --> Checks{"🚦 May it run?"}
     Checks -->|"No: disabled, blocked or not_leader"| Report["📋 RunReport"]
-    Checks -->|Yes| CheckCurrent{"⏱️ Current price due?"}
-
-    CheckCurrent -->|Yes| RunCurrent["⚡ run_current_price_refresh()"]
-    CheckCurrent -->|No| CheckHistory{"📅 History sync due?"}
-
-    RunCurrent --> CheckHistory
-
-    CheckHistory -->|Yes| RunHistory["⚡ run_history_sync()"]
-    CheckHistory -->|No| Report
-
-    RunHistory --> Report
+    Checks -->|Yes| Jobs["⚡ Each due job in turn: current price, then history sync"]
+    Jobs --> Report
     Report -->|"startup, tick, return"| Wait["💤 Wait 60s, a nudge or the shutdown"]
     Wait -->|"60s: tick"| Run
     Wait -->|"nudge: return"| Run
