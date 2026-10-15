@@ -52,8 +52,8 @@ PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 
 PRIORITY_MAP = {
     # HIGH — core business logic
-    "backend/app/services/asset_source.py": "HIGH",
-    "backend/app/services/fx.py": "HIGH",
+    "backend/app/services/assets/": "HIGH",
+    "backend/app/services/fx/fx.py": "HIGH",
     "backend/app/services/brokers/": "HIGH",
     "backend/app/services/accounts/user_service.py": "HIGH",
     "backend/app/services/transactions/": "HIGH",
@@ -175,7 +175,7 @@ def classify_category(filepath: str, func_name: str, stmts: int) -> str:  # noqa
 
     # Core services
     if any(svc in filepath for svc in [
-        "asset_source.py", "services/fx.py", "services/brokers/",
+        "services/assets/", "services/fx/fx.py", "services/brokers/",
         "services/transactions/", "user_service.py",
         "brim_provider.py", "settings_service.py",
     ]):

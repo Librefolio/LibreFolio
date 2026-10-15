@@ -64,23 +64,21 @@ from backend.app.schemas.provider import (
     ProbeOperation,
 )
 from backend.app.schemas.refresh import FARefreshItem, FXSyncPairRequest, SyncStatus
-from backend.app.services.asset_source import (
-    AssetCRUDService,
-    AssetSearchService,
-    AssetSourceManager,
-    AssetSourceProvider,
-)
 from backend.app.services.asset_source_providers.borsa_italiana import plugin as borsa_provider_module
 from backend.app.services.asset_source_providers.scheduled_investment.plugin import (
     calculate_day_count_fraction,
 )
 from backend.app.services.asset_source_providers.yahoo_finance import plugin as yahoo_provider_module
-from backend.app.services.asset_sources import core as asset_source_core
-from backend.app.services.asset_sources import price_query as price_query_module
-from backend.app.services.asset_sources import price_store as price_store_module
-from backend.app.services.asset_sources import refresh as refresh_module
-from backend.app.services.asset_sources import search as search_module
-from backend.app.services.asset_sources.provider_management import AssetProviderRegistry
+from backend.app.services.assets import core as asset_source_core
+from backend.app.services.assets import price_query as price_query_module
+from backend.app.services.assets import price_store as price_store_module
+from backend.app.services.assets import refresh as refresh_module
+from backend.app.services.assets import search as search_module
+from backend.app.services.assets.core import AssetSourceProvider
+from backend.app.services.assets.crud import AssetCRUDService
+from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.assets.provider_management import AssetProviderRegistry
+from backend.app.services.assets.search import AssetSearchService
 from backend.app.services.fx_providers.mockfx.plugin import MOCKFX_FIXED_RATE, MockFXProvider
 from backend.test_scripts.test_utils import (
     print_info,

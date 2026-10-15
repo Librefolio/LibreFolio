@@ -5,7 +5,6 @@ Provides system information, version data, and runtime details.
 """
 
 import json
-import os
 import platform
 import re
 import secrets
@@ -19,11 +18,15 @@ from fastapi.responses import JSONResponse
 
 from backend.app.api.v1.auth import get_current_user, session_cookie_secure
 from backend.app.config import PROJECT_ROOT, TEST_LANE_HEADER, is_test_mode
+from backend.app.config.platform import owning_test_lane_id
 from backend.app.db.models import User
 from backend.app.logging_config import get_logger
 from backend.app.schemas.system import ConnectionSecurityResponse, ContainerImageStatusResponse, DependencyInfo, HealthCheckResponse, PluginDiagnosticsResponse, PluginDiscoveryFailureInfo, SystemInfoResponse
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.platform.container_registry import probe_container_image
-from backend.app.services.provider_registry import AssetProviderRegistry, BRIMProviderRegistry, FXProviderRegistry, SignalPluginRegistry
+from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.utils.runtime.network import classify_ip, client_address
 from backend.app.utils.runtime.version import get_git_version
 
@@ -257,7 +260,7 @@ def test_lane_health(
     token: Annotated[str, Query(min_length=16, max_length=128)],
 ) -> JSONResponse:
     """Confirm readiness only for the test process tree that owns this server."""
-    expected = os.environ.get("LIBREFOLIO_TEST_LANE_ID")
+    expected = owning_test_lane_id()
     if not is_test_mode() or not expected or not secrets.compare_digest(token, expected):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
     return JSONResponse(

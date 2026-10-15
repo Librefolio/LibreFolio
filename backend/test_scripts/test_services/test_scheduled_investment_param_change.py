@@ -5,8 +5,7 @@ Covers Phase 7 Part 3 Blocco G.13 — regression protection for the
 symmetric wipe introduced by #R6-4 (2026-04-24) inside
 ``AssetSourceManager.bulk_assign_providers``.
 
-Contract under test (``backend/app/services/asset_source.py`` L844 +
-L869-946):
+Contract under test (``backend/app/services/assets/provider_management.py``):
 
 When a ``PARAMETRIC_GENERATION`` provider (currently only
 ``scheduled_investment``) already has an assignment and the caller
@@ -64,8 +63,8 @@ from backend.app.db.models import (  # noqa: E402
 )
 from backend.app.db.session import get_async_engine  # noqa: E402
 from backend.app.schemas.provider import FAProviderAssignmentItem  # noqa: E402
-from backend.app.services.asset_source import AssetSourceManager  # noqa: E402
-from backend.app.services.provider_registry import AssetProviderRegistry  # noqa: E402
+from backend.app.services.assets.manager import AssetSourceManager  # noqa: E402
+from backend.app.services.assets.registry import AssetProviderRegistry  # noqa: E402
 
 # ============================================================================
 # Fixtures & helpers

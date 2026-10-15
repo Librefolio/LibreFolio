@@ -40,7 +40,7 @@ from enum import StrEnum
 from typing import Any, Literal
 
 from backend.app.schemas.common import Currency
-from backend.app.services.fx import convert_bulk
+from backend.app.services.fx.fx import convert_bulk
 
 _ZERO = Decimal("0")
 _ONE = Decimal("1")

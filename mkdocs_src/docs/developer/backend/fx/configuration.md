@@ -214,7 +214,7 @@ This ensures resilience to individual provider outages and supports currency pai
 
 ### 📅 Chain Dates, Writes and Counters
 
-- **Strict date matching.** `compute_chain_rate()` (`backend/app/services/fx.py`) produces a chain
+- **Strict date matching.** `compute_chain_rate()` (`backend/app/services/fx/fx.py`) produces a chain
   rate for a date only when every leg has a rate on that exact date; a missing leg skips the date.
   A chain through a sparse series therefore has rates only on the dates that series publishes.
 - **Upsert, the provider wins.** Rates are written with

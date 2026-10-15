@@ -49,5 +49,5 @@ transaction-starting statement.
 
 | Role | Path |
 |------|------|
-| Implementation | `backend/app/services/asset_source.py` |
+| Implementation | `backend/app/services/assets/crud.py` |
 | Regression test | `backend/test_scripts/test_services/test_asset_source.py` |
