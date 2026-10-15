@@ -31,13 +31,13 @@ from backend.app.schemas import (
     FAUpsert,
     SyncStatus,
 )
-from backend.app.services.asset_sources import core
-from backend.app.services.asset_sources.core import (
+from backend.app.services.assets import core
+from backend.app.services.assets.core import (
     AssetHistoryStartDate,
     AssetSourceProvider,
 )
-from backend.app.services.asset_sources.price_store import PriceStoreOperations
-from backend.app.services.provider_registry import AssetProviderRegistry
+from backend.app.services.assets.price_store import PriceStoreOperations
+from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)

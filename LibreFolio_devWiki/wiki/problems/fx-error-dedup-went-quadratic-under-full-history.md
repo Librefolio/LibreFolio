@@ -48,5 +48,5 @@ The plan records the in-process reproduction, before and after: from never finis
 
 | Role | Path |
 |------|------|
-| Dedup and cap | `backend/app/services/asset_sources/price_query.py` (`get_prices_bulk`) |
+| Dedup and cap | `backend/app/services/assets/price_query.py` (`get_prices_bulk`) |
 | Plan (E1 detour) | `LibreFolio_developer_journal/Release_2/phases/06_betaTestingReportAndFixing/plan-phase00EngineAccountingAndSignals.prompt.md` |

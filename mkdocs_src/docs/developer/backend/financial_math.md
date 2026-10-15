@@ -36,7 +36,7 @@ The technical indicators (`services/signal_plugins/`, `services/signal_runtime.p
 [risk engine](risk/architecture.md) (`services/risk/`) and the PAC allocator
 (`services/pac_allocator/`) stay where they are, but take the common math — returns,
 annualization, conversions, average cost, valuation — from the layer. FX conversion itself stays
-in the FX service: `convert_bulk()` in `services/fx.py` is the primitive the calculations call.
+in the FX service: `convert_bulk()` in `services/fx/fx.py` is the primitive the calculations call.
 
 ---
 
@@ -208,7 +208,7 @@ flowchart LR
         async def fake_convert_bulk(_session, conversions, raise_on_error=False):
             return [None] * len(conversions), []
 
-        # Replaced where conversions.py reads it, not in backend.app.services.fx
+        # Replaced where conversions.py reads it, not in backend.app.services.fx.fx
         monkeypatch.setattr(conversions_module, "convert_bulk", fake_convert_bulk)
         resolver = FxRateResolver("EUR")
         resolver.need("USD", date(2024, 1, 10))

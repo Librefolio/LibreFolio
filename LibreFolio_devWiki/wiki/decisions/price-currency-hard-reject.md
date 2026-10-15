@@ -100,7 +100,7 @@ This is an intentional asymmetry with `price_history.currency`.
 
 | Role | Path |
 |------|------|
-| Asset source (upsert_prices_bulk) | `backend/app/services/asset_source.py` |
+| Asset source (upsert_prices_bulk) | `backend/app/services/assets/price_store.py` |
 | Asset API (currency change 409) | `backend/app/api/v1/assets.py` |
 | DB model (price_history.currency) | `backend/app/db/models.py` |
 | Asset detail page (requiredFxPairs) | `frontend/src/routes/(app)/assets/[id]/+page.svelte` |

@@ -47,7 +47,7 @@ Paths below are relative to the repository root.
 | `backend/app/api/v1/router.py` | Inclusion of the Tool router in the API v1 router. |
 | `backend/app/api/v1/auth.py` | `get_current_user`, the authentication dependency used by all Tool routes. |
 | `backend/app/main.py` | API prefix mounting, off-event-loop catalogue initialization, and executor shutdown in the lifespan's `finally` block. |
-| `backend/app/services/provider_registry.py` | Shared discovery and `register_plugin`; existing domain base-class aliases are imported lazily. |
+| `backend/app/services/provider_registry.py` | Shared discovery and `register_plugin`. |
 | `frontend/scripts/generate-tools-client.mjs` | Strict codec generation and the generated code/version-to-codec map. |
 | `frontend/src/lib/api/tool-contract-map.generated.ts` | Generated service identities, schema fingerprints, UI versions, and codecs. |
 | `frontend/src/lib/features/tools/contracts.ts` | Runtime catalogue validation, compiled-contract compatibility, and typed execution preparation. |
@@ -125,7 +125,7 @@ Discovery is transactional:
 4. Claims from failed imports cannot become usable partial registrations. Unrelated healthy definitions remain available.
 5. Publication creates a code-sorted, read-only service-definition mapping and a tuple of sanitized failures. New registration claims are closed after publication.
 
-Each expanded definition retains both the packaged class and its `ToolService`. Definition validation checks a concrete `ToolPlugin` class, synchronous computation, the zero-argument constructor signature, real adapters, schema validity, operation agreement, and the service's complete descriptor metadata. One invalid service is quarantined without hiding a healthy sibling service. The shared registry keeps its existing domain base-class aliases lazy; importing the registry is not permission for a Tool to import or use provider services.
+Each expanded definition retains both the packaged class and its `ToolService`. Definition validation checks a concrete `ToolPlugin` class, synchronous computation, the zero-argument constructor signature, real adapters, schema validity, operation agreement, and the service's complete descriptor metadata. One invalid service is quarantined without hiding a healthy sibling service. The shared registry module imports no domain base class; importing it is not permission for a Tool to import or use provider services.
 
 The schema fingerprint is SHA-256 over canonical JSON containing `input_schema`, `output_schema`, and sorted operation names. It is generated from the schemas, not supplied by a plugin author. Input schemas use Pydantic's **validation** mode; output schemas use **serialization** mode. Both include the Draft 2020-12 `$schema` declaration.
 
