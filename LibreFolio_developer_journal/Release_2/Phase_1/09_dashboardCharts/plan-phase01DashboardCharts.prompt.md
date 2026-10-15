@@ -389,7 +389,7 @@ Fatto quando:
 
 C-38 e C-62 dopo, in Y7, su `th-actions` e `resize-handle`, che restano facili da trovare.
 
-### Y8 — correzioni dei grafici [autorizzato, 15/10 18:36; in corso]
+### Y8 — correzioni dei grafici [autorizzato, 15/10 18:36; entrato in `dev_release2` il 15/10, `160562b56`]
 
 Ogni voce è verificata a `e424e8740`.
 
@@ -413,6 +413,41 @@ Passi:
    - galleria filtrata su Dashboard, Brokers, Assets e FX, perché 48-1 cambia le barre.
 5. Documentazione, se cambia un contratto: l'asse sotto zoom in `charts.md`; tabelle della devWiki.
 6. Checkpoint FROZEN.
+
+### Y7 — tabelle sul telefono e ridimensionamento [via del coordinatore e dei colori, 15/10 20:52–21:22; in corso]
+
+Base: `f98c20f1b` (`dev_release2` dopo l'ingresso di Y8). Decisioni D-Y17 e D-Y18 in §0.3. Verificato sul codice dopo
+il taglio di Y2.
+
+| Voce | Stato verificato | Correzione | Prova |
+|---|---|---|---|
+| C-38, difetto 2 del PAC | sotto i 768 px la regola mobile (`table/DataTable.svelte:1693-1699`) sblocca le celle `.td-actions`, ma non l'intestazione: `thead.sticky-header th` (0,1,2, `:1280-1285`) batte `.th-actions` (0,1,0). «Azioni» resta fissata a destra (`:1324-1326`), mentre i ⋮ scorrono via | D-Y17: sotto i 768 px l'intestazione delle azioni scorre con la colonna, con un selettore abbastanza specifico, e resta fissa in alto | E2E da telefono: dopo uno scorrimento orizzontale, l'intestazione «Azioni» e i ⋮ hanno la stessa x |
+| D-Y17, selezione | la colonna di selezione (`.th-select`, `.td-select`, `left: 0`, `:1314`, `:1548`) resta fissata a sinistra a ogni larghezza, e copre l'inizio della prima colonna di dati (difetto 5: «APL Apple Inc.») | sotto i 768 px scorre anche lei, intestazione e corpo insieme | la stessa E2E: dopo lo scorrimento la selezione non copre la prima colonna |
+| C-62 | la larghezza trascinata va solo nello `width` inline del `th` (`:983`). Con `tableLayout="auto"`, 11 tabelle, è un suggerimento. Le maniglie (`DataTableColumnHeader.svelte:175`, gestori in `DataTable.svelte:688-719`) ascoltano solo il mouse | D-Y18: se il rosso c'è, la larghezza trascinata diventa anche il `min-width` del `th`, e le maniglie passano ai Pointer Events con la cattura del puntatore. Se non c'è, C-62 si chiude con il test come guardia. La cura comprende anche (coordinatore, 22:10) `touch-action: none` sulla maniglia e la larghezza **disegnata** come punto di partenza del trascinamento, al posto di quella configurata | E2E su desktop: un trascinamento su una tabella `layout-auto` cambia la larghezza della colonna del suo delta |
+| Wiki | `problems/datatable-column-resize-noop` dà come prima causa «`onColumnResize` non letto dal genitore»: è sbagliata, perché la larghezza vive dentro la tabella | si corregge con l'esito del rosso | — |
+
+Fuori: il layout del PAC da telefono (le larghezze di `TargetsStep`), per la decisione 50.
+
+Vincoli:
+- **colori**: `theme-roles --check` pulito nell'handoff, e la riga `~split` di `DataTable` non cambia (condizione del
+  coordinatore dei colori, 20:53). Nessun colore nuovo; `app.css` non si tocca;
+- **runner**: la registrazione di una spec nuova in un file del runner di altri chiede il via del coordinatore con le
+  righe esatte (D-Y6);
+- **prove pesanti**: le E2E di Y7 si chiedono al coordinatore, con lo slot.
+
+Passi:
+1. Rossi, a cura di `test-author`: E2E da telefono (C-38 e la selezione) ed E2E di trascinamento su una tabella auto
+   (C-62). Si scrivono senza lanciarli; poi chiedo lo slot e li lancio sul codice di oggi, per vederli rossi.
+2. Correzioni in `DataTable.svelte` (la regola mobile; i gestori del ridimensionamento) e in
+   `DataTableColumnHeader.svelte` (la maniglia), solo se il rosso di C-62 c'è.
+3. Prove leggere: Vitest della tabella, i gate (`htmlSink`, `themeRoles`, `themeComponentTokens`), svelte-check,
+   `theme-roles --check`, Prettier.
+4. Con lo slot: i rossi verdi; le E2E che usano la maniglia (`risk-lab`, `risk-analysis`); quelle delle tabelle
+   (`transactions-table`, `asset-list`, `fx-bulk`, `designer-lab picker`).
+5. Documentazione: `developer/frontend/core-ui/data-table.md`; devWiki `problems/datatable-actions-column-on-mobile` e
+   `problems/datatable-column-resize-noop`.
+6. Checkpoint FROZEN, con il filtro regex della galleria mobile d'ingresso, che si fa nello slot dei colori dopo G-13
+   ed è confrontata con il riferimento di G-13.
 
 ### Y3–Y13 — da avviare nell'ordine del §0.2
 
@@ -1174,11 +1209,14 @@ scrivono qui quando partono.
 > - **Dove si decide la direzione**: solo in `applyLiveSummary` (`routes/(app)/assets/[id]/+page.svelte`). Torna
 >   `neutral` solo con il timer di 1,3 s o nel `$effect` del poller. Y8 non tocca la pagina, `AssetPriceSummary` né
 >   il poller. Senza zoom, il suo codice su quella pagina dà opzioni dell'asse identiche a prima.
-> - **Da soli passano**: con `--workers 1` sono 4/4 (09). Nella spec intera a `--workers 2` falliscono. È l'ipotesi
->   §3 della skill: stato condiviso con un vicino, o carico. Non è un rosso deterministico, e non è di Y8.
-> - **Il ciclo vivo** della pagina l'ha riscritto oggi `74d028ec6` di Z (15:46). Il coordinatore ha chiesto a Z di
->   lanciare i test sul suo ramo. Decisione del coordinatore: Y8 entra lo stesso, con i 3 test nell'handoff come rosso
->   non suo.
+> - **Da soli passano**: con `--workers 1` sono 4/4 (09). Nella spec intera a `--workers 2` falliscono.
+> - **Verdetto: «assunzione»** (tabella §8 della skill), riprodotto da Z (coordinatore, 21:22). Il test cambia il mock
+>   a 105 senza aspettare che il primo poll abbia letto 100. Dopo `74d028ec6` di Z, che ha riscritto il ciclo vivo
+>   alle 15:46, ogni poll parte da un timer. Sotto carico il primo poll scatta dopo il cambio del mock: legge 105 senza
+>   un valore precedente, e la prima lettura dal vivo è `neutral` per costruzione. Il prodotto è corretto.
+> - **Correzione**: Z, in un lotto piccolo di soli test. La spec aspetterà `100.00` prima di cambiare il prezzo.
+> - **Per Y8**: i 3 rossi sono preesistenti, con la causa qui sopra. Y8 entra lo stesso (decisione del coordinatore).
+>   La mia ipotesi del triage («il primo poll non registra 100 prima del tick») era questa.
 > - Porta 6189 libera dopo ogni spec. Nessun file tracciato toccato dalle prove.
 
 ### Y7 — preanalisi e annuncio ⏳ (2026-10-15, 20:50–21:00 circa, sola lettura)
@@ -1207,3 +1245,217 @@ scrivono qui quando partono.
 >   - Il layout del PAC da telefono resta fuori da Y7, come vuole la decisione 50.
 > - **Codice**: solo dopo le E2E di Y8, che costruiscono il frontend da questo worktree, e dopo il via del
 >   coordinatore.
+
+### Y8 — ingresso ✅ (2026-10-15, ~21:25)
+
+> **Note implementazione**: Y8 è entrato in `dev_release2` = `160562b56`, con i registri in `f98c20f1b`. Le righe del
+> CHANGELOG c'erano già dal commit di Y8. Il coordinatore ha portato il worktree a `f98c20f1b` con un avanzamento
+> veloce; restava fuori solo la mia modifica al piano, con il verdetto di Z sui 3 rossi. La galleria d'ingresso di Y8
+> resta dentro G-13: G manderà gli scatti di Dashboard, Brokers, Assets e FX da rivedere.
+
+### Y7 — avvio e rossi ⏳ (2026-10-15, 21:25–)
+
+> **Note implementazione**:
+> - **Via**: coordinatore 20:52 (D-Y17, D-Y18) e 21:25 («prima i rossi, con test-author»); colori 20:53.
+>   - Le condizioni dei colori: `theme-roles --check` pulito nell'handoff, e la riga `~split` di `DataTable` invariata.
+>   - La galleria d'ingresso è solo mobile, nel loro slot dopo G-13, e confrontata con il riferimento di G-13.
+>   - G-13 aspetta l'ingresso di T: se slitta a domani, slitta anche questa galleria.
+> - **Base**: `f98c20f1b`. Lo slot pesante si richiede per le E2E di Y7.
+> - **Rossi**: `test-author` in background. Scrive due spec nuove in `frontend/e2e/layout/`, senza lanciarle:
+>   - telefono, D-Y17: la tabella delle transazioni a 390 px;
+>   - ridimensionamento su una tabella `layout-auto`, D-Y18.
+>   Le righe del runner (`_frontend_utility.py`, del programma colori) le propone a me: vanno al coordinatore per il
+>   via (D-Y6).
+> - **Filtro della galleria mobile** (`-f`, arriva a Playwright come `-g`, sui titoli di `gallery.spec.ts`), preparato
+>   per il checkpoint:
+>   `PAC allocator steps|transaction list|dashboard transactions tab|(dashboard|broker) (positions tab|fifo lots panel)|Asset list table|FX list table|static resources tab|broker reports tab`
+>   - copre PAC targets e review, le transazioni (pagina e scheda della Dashboard), le posizioni e i lotti (Dashboard e
+>     broker), gli asset e i cambi in tabella, i file;
+>   - altre tabelle con la colonna delle azioni, da aggiungere se il coordinatore dei colori vuole coprirle tutte:
+>     `PAC allocator result|report set|import wizard step|import bulk staging|data editor|dashboard risk diversification`.
+> - **Spec scritte** da `test-author`, nessuna lanciata. `prettier` è pulito, e `playwright test --list` dà 8 test in 2
+>   file sul progetto desktop.
+>   - `frontend/e2e/layout/datatable-mobile.spec.ts` (D-Y17), a 390×844, sola lettura su dati di popolamento. Due
+>     ospiti: Transazioni e la lista dei file statici. Su ognuno tre test: le azioni scorrono con la tabella; la
+>     selezione esce con la tabella; la guardia sull'intestazione fissa in alto, in un'area di scorrimento limitata.
+>   - `frontend/e2e/layout/datatable-resize.spec.ts` (D-Y18), a 1280×720. Due trascinamenti, +80 e −40 px (±4), sulla
+>     colonna «File name» dei file statici (`tableLayout="auto"`). Il controllo: gli stessi trascinamenti sulla
+>     colonna Date delle transazioni (layout fisso).
+> - **Tre scoperte di `test-author`**, verificate sul codice:
+>   - `TransactionsTable` passa `stickyActions={false}` (`:1010`): lì l'intestazione «Azioni» è già giusta, e il test
+>     delle azioni è verde. Il rosso di C-38 sta sui file: `FilesTable` ha le azioni fisse di default e la selezione
+>     multipla, ed è lo stesso caso del difetto 2 del PAC;
+>   - un'intestazione fissa a livello di pagina oggi non esiste. `overflow-x: auto` del contenitore rende anche
+>     `overflow-y` `auto`, quindi l'intestazione resta ferma solo dentro il contenitore. D-Y17 vuol dire tenere questo
+>     comportamento, ed è ciò che la guardia controlla;
+>   - `startResize` parte dalla larghezza configurata (250), non da quella disegnata. Sulla tabella auto la stima è
+>     che la colonna si muova di circa due terzi del trascinamento.
+> - **Preparazione** (nessun cambio di comportamento): 5 `data-testid` in `table/DataTable.svelte`:
+>   - `dt-scroll` sul contenitore;
+>   - `dt-select-header` e `dt-actions-header` sulle intestazioni;
+>   - `dt-select-cell-{rowId}` e `dt-actions-cell-{rowId}` sulle celle.
+>   Nessuno usa i prefissi che altre spec enumerano. Dopo l'aggiunta: i 6 file Vitest della tabella verdi (241 test),
+>   `htmlSink` 7, `themeRoles` 36, `themeComponentTokens` 18; `theme-roles --check` pulito; Prettier pulito.
+> - **In corso**: `test-author` aggiunge il rosso del trascinamento col dito (CDP `Input.dispatchTouchEvent`), perché
+>   D-Y18 porta le maniglie ai Pointer Events.
+> - **Poi**: le righe del runner in `_frontend_utility.py` al coordinatore, che dà il via (D-Y6); lo slot; i rossi
+>   lanciati sul codice di oggi.
+> - **Rosso del dito** (secondo giro di `test-author`): `datatable-resize.spec.ts:297`, «with a finger, on a phone».
+>   - A 390×844, con `isMobile` e `hasTouch`, un trascinamento di +60 px dalla maniglia della colonna Date delle
+>     transazioni (CDP `Input.dispatchTouchEvent`), con tolleranza ±4.
+>   - È su una tabella fissa perché a 390 px la tabella auto dei file disegna ogni colonna al minimo, e nessun
+>     trascinamento la sposta: il test è sul percorso dell'input, non sul layout.
+>   - Rosso oggi: la maniglia ascolta solo `mousedown`, e un dito che scorre non lo manda.
+>   - Per la correzione serve `touch-action: none` sulla maniglia.
+> - **Totale**: 9 test sul progetto desktop, 6 della spec del telefono e 3 di quella del ridimensionamento.
+> - **Righe del runner proposte al coordinatore** (`scripts/test_runner/_frontend_utility.py`, D-Y6):
+>   - le funzioni vanno dopo `front_docs_offline_math`, sul modello dei vicini: `front_datatable_mobile` e
+>     `front_datatable_resize`, con `_ensure_frontend_build`, `_ensure_db_populated` e `_ensure_test_users`, poi
+>     `_run_playwright("layout/<spec>")`;
+>   - gli `add_test` vanno dopo quello di `docs-offline-math`:
+>     - `"datatable-mobile"`, «DataTable Mobile Pinned Columns». Desc: «At 390 px, read-only on seeded data, on
+>       Transactions (stickyActions false) and the Files static list (sticky actions): scrolled half an actions cell
+>       short of the far right, the actions header sits over its row's actions cell and both end with the table; the
+>       selection header and cell have scrolled out past the scroll area's left edge; and, the scroll area bounded to
+>       the header and two rows and scrolled down, every header cell stays on its top while the body passes under
+>       (Y7, D-Y17; needs the dt-scroll / dt-select-* / dt-actions-* test ids)»;
+>     - `"datatable-resize"`, «DataTable Column Resize». Desc: «Read-only on seeded data. At 1280 px, on the Files
+>       static list (tableLayout auto): a mouse drag of the File name column's resize handle (found by cursor:
+>       col-resize under the title cell's right edge, pressed at its centre) by +80 px then -40 px changes the title
+>       cell's drawn width by as much, ±4 px; control: the same drags on the Transactions Date column (fixed layout,
+>       table wider than its dt-scroll area). At 390 x 844 with isMobile and hasTouch: a finger drag of +60 px from
+>       the Date handle's centre (Chromium CDP Input.dispatchTouchEvent: touchStart, touchMove in 6 steps, touchEnd)
+>       changes its drawn width by 60 ±4 px; on the fixed table, because at 390 px the auto-layout Files table is wider
+>       than its box and draws every column at its minimum, which no drag moves (Y7, C-62, D-Y18)»;
+>     - entrambi con `prereq="Populated DB + test users"` e `tests=` sulla propria spec.
+> - **Richiesti al coordinatore** (21:5x): il via sulle righe e uno slot per i rossi.
+> - **Via del coordinatore** (22:10):
+>   - le righe del runner, come descritte e solo in aggiunta; le dichiara lui ai colori;
+>   - le tre scoperte nel piano;
+>   - `touch-action: none` e la larghezza disegnata come punto di partenza entrano nella cura;
+>   - lo slot: dopo i due `core-unit` di A ed E, `datatable-mobile` poi `datatable-resize`, una alla volta, con
+>     `nice -n 10` e il carico sotto 70.
+> - **Registrazione fatta** in `scripts/test_runner/_frontend_utility.py`: le funzioni `front_datatable_mobile` e
+>   `front_datatable_resize` dopo `front_docs_offline_math`, e i due `add_test` dopo `docs-offline-math`.
+>   - `git diff --numstat` dà 42 righe aggiunte e 0 tolte; `py_compile`, `ruff check` e `ruff format --check` sono
+>     puliti;
+>   - il registro `front-utility` contiene `datatable-mobile` e `datatable-resize`, con la propria spec e
+>     `in_all` vero.
+> - **Rossi visti** sul codice di oggi (`f98c20f1b` più i `data-testid`), nello slot 2 dalle 22:20, `--workers 2`,
+>   `nice -n 10`. Il log è nella cartella di sessione, `files/y7_red_01_datatable-mobile.log`.
+>   - `front-utility datatable-mobile`: 3 rossi e 3 verdi, come atteso:
+>     - ✘ Transazioni, la selezione esce con la tabella (`:323`);
+>     - ✘ file statici, le azioni scorrono con la tabella (`:311`);
+>     - ✘ file statici, la selezione esce con la tabella (`:323`);
+>     - ✔ Transazioni, le azioni (`stickyActions={false}`), e le due guardie sull'intestazione fissa.
+>
+> **Fuori pista**: alle 22:28 il coordinatore ha fermato le prove pesanti per 10 minuti, per una galleria di T.
+> - Il mio script aspettava che il carico scendesse sotto 70, e ha lanciato `datatable-resize` alle 22:28:32, 4 secondi
+>   dopo il messaggio.
+> - L'ho fermata dopo 2 secondi, ancora nella preparazione, con un SIGINT al solo runner, e ho fermato il ciclo. Nessun
+>   processo rimasto, porta libera.
+> - La cura resta ferma finché non vedo i rossi di `datatable-resize` sul codice di oggi.
+> - **Cambio di piano dei colori** (coordinatore, 22:29): T (la palette) e DV (i colori dei grafici) entrano insieme,
+>   dopo un'unica revisione del developer. Y3, Y4b, Y9 e Y10 aspettano quell'ingresso, e lo segnala il coordinatore;
+>   il quando dipende dal developer. Y7 non ne dipende e va avanti.
+> - **Regola dei test**, valida dall'ingresso di T e DV (coordinatore, 22:29): con T-7 l'header dell'app si blocca solo
+>   con il focus da tastiera (`:focus-visible`).
+>   - Un test che vuole l'header fermo usa l'aiuto `focusHeaderControlByKeyboard` (`e2e/fixtures/`, arriva con T), non
+>     `toggle.focus()`.
+>   - Le due spec di Y7 non ne dipendono: nessun `.focus()` e nessun header dell'app. Riguarda l'intestazione della
+>     pagina, non quella delle tabelle.
+> - **Rossi di `datatable-resize`** (22:32, ripresa): 2 rossi e 1 verde.
+>   - ✘ mouse sulla tabella auto dei file: +80 px → +57,0 (279,6 → 336,5); −40 → −27,2;
+>   - ✘ dito, +60 px sulla Date delle transazioni a 390 px → +0,0 (110,0 → 110,0);
+>   - ✔ il controllo a layout fisso.
+
+### Y7 — passo 2, la cura ✅ (2026-10-15, 22:35–22:44)
+
+> **Note implementazione** (`table/DataTable.svelte`, `table/DataTableColumnHeader.svelte`):
+> - **D-Y17**, la regola mobile (`@media (max-width: 768px)`):
+>   - `.datatable .td-select`, `.datatable .td-actions` → `position: static`;
+>   - `.datatable .th-select`, `.datatable .th-actions.th-fixed` → `left: auto; right: auto`. L'intestazione tiene
+>     `position: sticky; top: 0`.
+>   Ogni selettore è di una classe più specifico del vincolo che toglie. Le celle del piede sono coperte dalle stesse
+>   classi.
+> - **D-Y18**, il ridimensionamento:
+>   - la maniglia risponde a `onpointerdown`, con la cattura del puntatore, e il documento ascolta `pointermove`,
+>     `pointerup` e `pointercancel`. Solo il tasto principale del mouse avvia il trascinamento;
+>   - `touch-action: none` sulla maniglia;
+>   - si parte dalla larghezza **disegnata** del `th`;
+>   - `fitDrawnWidth()` scrive la larghezza sul `th`, la misura e la corregge finché quella disegnata non coincide con
+>     il dito: prima scala di disegnata/data, poi fino a quattro passi secanti. Su una tabella fissa più larga del suo
+>     box la prima stima è esatta;
+>   - `columnMinWidth()` dà il `min-width` = la larghezza della colonna solo se l'utente l'ha ridimensionata, cioè se
+>     differisce da quella predefinita; le altre tengono `minWidth || 60`;
+>   - `onDestroy(endResize)` toglie gli ascoltatori se la tabella sparisce durante un trascinamento.
+> - **Prove leggere**: Prettier pulito; i 6 file Vitest della tabella verdi (241); `htmlSink`, `themeRoles`,
+>   `themeComponentTokens` verdi; `theme-roles --check` pulito, con la riga `~split` invariata; svelte-check 0/0.
+>
+> **Fuori pista**, due scostamenti dal disegno approvato (D-Y18):
+> - **Il solo `min-width` non bastava.** Una tabella con spazio in avanzo, cioè auto o fissa più stretta del suo box,
+>   divide l'avanzo in proporzione alle larghezze date. Allora un restringimento di 40 px avrebbe disegnato circa −30,
+>   perché l'avanzo torna anche alla colonna trascinata. La larghezza scritta si corregge quindi sulla misura. Lo
+>   scopo approvato resta: la colonna segue il trascinamento.
+> - **Il `min-width` vale solo per le colonne ridimensionate.** `columnWidths` contiene sempre le larghezze
+>   predefinite di tutte le colonne (`defaultColumnWidths`, caricate e reimpostate con quelle). Un «`min-width` = width»
+>   per tutte avrebbe cambiato ogni tabella. Così le tabelle mai ridimensionate, e la galleria, restano identiche.
+> - **Prettier** voleva spezzare l'attributo `style` dentro un'espressione: la logica è passata nell'aiuto
+>   `columnMinWidth()`, e la riga è lunga come prima.
+
+### Y7 — passo 4, E2E dopo la cura ✅ (2026-10-15, 22:44–23:28)
+
+> **Note implementazione**: nello slot 2, `--workers 2`, `nice -n 10`, una spec alla volta, carico sotto 70:
+> - 01 `front-utility datatable-mobile` 6/6; 02 `front-utility datatable-resize` 3/3; 03 `front-portfolio risk-lab`
+>   44/44, che trascina la maniglia sulla tabella L1°;
+> - 04 `front-portfolio risk` 38/38, anche questa con la maniglia; 05 `front-transaction transactions-table` 25/25.
+>
+> **Fuori pista**: alle ~22:53 il coordinatore ha annunciato una finestra tranquilla. Ho fermato il ciclo dopo
+> `risk-lab`, uccidendo solo il bash del ciclo e lasciando finire la spec. Poi la finestra si è spostata a 00:00–01:15,
+> per le schermate datate 16/10, e ho ripreso con 04–09.
+> - **Seconda parte**, 22:57–23:12: 06 `front-designer-lab picker` 4/4; 07 `front-utility files` 28/28; 08
+>   `front-asset asset-list` 28/28; 09 `front-fx fx-bulk` 7/7. Porta libera dopo ogni spec.
+> - **Un test in più** (terzo giro di `test-author`). Su richiesta di `docs-writer`, che aveva notato i testi superati:
+>   - i commenti delle due spec ora descrivono il contratto, con un paragrafo «Was (C-38 / C-62)» per il difetto, e
+>     nessuna frase al presente sul codice che non c'è più;
+>   - il test del dito ora guarda il solo percorso dell'input, sulla tabella fissa;
+>   - nuovo test `datatable-resize.spec.ts:330`, «on a narrow screen»: a 390 px, sulla tabella auto dei file più
+>     larga del suo box, +60 px allargano la colonna di 60 ± 4. Lo `scrollWidth` della tabella cresce allo stesso
+>     modo, cioè le altre colonne non vengono schiacciate. Prima della cura era impossibile: lì la colonna restava
+>     larga quanto il titolo.
+> - **10 `front-utility datatable-resize` (23:26)**: 4/4.
+
+### Y7 — passo 5, documentazione ✅ (2026-10-15, 23:00–23:30)
+
+> **Note implementazione**:
+> - **`docs-writer`**, `mkdocs_src/docs/developer/frontend/components/core-ui/data-table.md` (il percorso giusto ha
+>   `components/`), +92/−17 righe:
+>   - Features, Props (`tableLayout`, `stickyActions`, `enableColumnResize`, `onColumnResize`, `stickyHeader`) e
+>     ColumnDef (`width`, `minWidth`, `maxWidth`, `pinned`);
+>   - «Sticky columns» riscritta: l'intestazione resta fissa dentro `dt-scroll`, mai sulla pagina; la regola del
+>     telefono; i test id; la nota sulla specificità;
+>   - una sezione nuova, «Column resize» `{: #column-resize }`;
+>   - corrette due frasi vecchie: «sticks to the top of the vertical scroll viewport» e «at 768 px and below the
+>     actions column never sticks».
+>   Nessuna pagina utente lo contraddice; `user/assets/index.en.md:54` resta vera.
+> - **Mia aggiunta**: il paragrafo finale di «Column resize» nomina il test sullo schermo stretto.
+> - **Runner**: la `desc` di `datatable-resize` dice ora il contratto e il nuovo test, al posto di «which no drag
+>   moves». È la stessa riga aggiunta da me: 42 righe aggiunte e 0 tolte, `ruff` pulito.
+> - **`mkdocs build`** strict: rc 0, 0 righe WARNING/ERROR, 3060 URL. **`check-links`**: 96 validi.
+> - **devWiki**:
+>   - `problems/datatable-actions-column-on-mobile`: risolta, con la causa confermata e la cura;
+>   - `problems/datatable-column-resize-noop`: risolta; la causa sbagliata sostituita da quella misurata, con la cura
+>     e la prevenzione;
+>   - due righe dell'indice e una voce del log;
+>   - `check_source_paths.py` dà 5 mancanti, preesistenti.
+> - **Backlog, sezione Y**: Y-9 (il layout del PAC da telefono, da rivedere sugli scatti mobile, per la decisione 50) e
+>   Y-10 (la maniglia invisibile su un telefono).
+
+### Y7 — checkpoint 🧊 FROZEN (2026-10-15, 23:35)
+
+> **Note implementazione**:
+> - **Stato**: HEAD `f98c20f1b`, nessun server, porta 6189 libera; slot 2 da liberare con l'handoff.
+> - **Controlli puliti**: `theme-roles --check` (la riga `~split` di `DataTable` non cambia), Prettier,
+>   `git diff --check`.
+> - **Nel messaggio al coordinatore**: le righe del CHANGELOG (non scritte nel file, per la sua regola) e il filtro
+>   della galleria mobile.
