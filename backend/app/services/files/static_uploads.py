@@ -15,6 +15,14 @@ Storage structure:
     ├── {uuid}.{ext}     # Actual file
     └── {uuid}.json      # Metadata sidecar
 
+Scope (decision 36): a file is ``common`` (every signed-in user sees it: icons, logos, asset photos, avatars) or
+``personal`` (only its uploader and the admins). The sidecar stores it; a sidecar written before decision 36 has none,
+and ``effective_scope()`` applies the inheritance rule. ``can_view_upload()`` and ``can_manage_upload()`` hold the
+access rule the API applies.
+
+Several workers may serve the same folder (``dev.py server --workers N``): a worker caches a sidecar only while the file
+on disk is unchanged, and a sidecar is replaced atomically, so a scope changed by one worker holds at once in the others.
+
 Usage:
     from backend.app.services.files.static_uploads import (
         save_upload,
@@ -26,8 +34,11 @@ Usage:
     )
 """
 
+import contextlib
 import json
 import mimetypes
+import os
+import tempfile
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -43,14 +54,18 @@ except ImportError:
     MAGIC_AVAILABLE = False
 
 from backend.app.config import get_data_dir
-from backend.app.schemas.uploads import UploadFileInfo
+from backend.app.schemas.uploads import UploadFileInfo, UploadScope
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 logger = structlog.get_logger(__name__)
 
-# Cache for upload metadata JSON sidecar reads — TTL 1h, avoids repeated disk I/O
+# Cache for upload metadata JSON sidecar reads — TTL 1h, avoids repeated disk I/O.
+# Each entry keeps the sidecar's stat stamp: an entry whose file changed on disk is read again.
 _upload_meta_cache = get_ttl_cache("upload_metadata", maxsize=500, ttl=3600)
+
+#: The uploader id of the files the application seeds itself (default avatars).
+SYSTEM_USER_ID = 0
 
 
 def get_uploads_dir() -> Path:
@@ -139,28 +154,75 @@ def _get_file_url(file_id: str) -> str:
 
 
 def _load_metadata(file_id: str) -> Optional[dict]:
-    """Load metadata from JSON sidecar (cached via TTL cache)."""
-    cached, ok = _upload_meta_cache.get(file_id)
-    if ok:
-        return cached
+    """Load metadata from its JSON sidecar, cached (TTL) while the sidecar on disk is the one read.
 
+    The stamp of the sidecar (inode, mtime, size) is checked at every read: a sidecar replaced or deleted by another
+    worker is never answered from this worker's cache.
+    """
     meta_path = get_uploads_dir() / f"{file_id}.json"
-    if not meta_path.exists():
+    try:
+        stat = meta_path.stat()
+    except (OSError, ValueError):
+        # ValueError: an id the filesystem cannot name (an embedded NUL byte): no such file
+        _upload_meta_cache.delete(file_id)
         return None
+    stamp = (stat.st_ino, stat.st_mtime_ns, stat.st_size)
+
+    cached, ok = _upload_meta_cache.get(file_id)
+    if ok and cached[0] == stamp:
+        return cached[1]
     try:
         data = json.loads(meta_path.read_text())
-        _upload_meta_cache.set(file_id, data)
-        return data
     except (OSError, json.JSONDecodeError) as e:
         logger.warning("Failed to load metadata", file_id=file_id, error=str(e))
         return None
+    _upload_meta_cache.set(file_id, (stamp, data))
+    return data
 
 
 def _save_metadata(file_id: str, metadata: dict) -> None:
-    """Save metadata to JSON sidecar and update cache."""
+    """Write a sidecar atomically: a temporary file in the same folder, then ``os.replace``; no reader sees half a file."""
     meta_path = get_uploads_dir() / f"{file_id}.json"
-    meta_path.write_text(json.dumps(metadata, indent=2, default=str))
-    _upload_meta_cache.set(file_id, metadata)
+    fd, tmp_name = tempfile.mkstemp(prefix=f".{file_id}.", suffix=".tmp", dir=meta_path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as tmp_file:
+            tmp_file.write(json.dumps(metadata, indent=2, default=str))
+            tmp_file.flush()
+            # Stamped before the rename, which keeps inode, mtime and size: a file another worker puts there later
+            # never matches this stamp
+            stat = os.fstat(tmp_file.fileno())
+        os.replace(tmp_name, meta_path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.unlink(tmp_name)
+        raise
+    _upload_meta_cache.set(file_id, ((stat.st_ino, stat.st_mtime_ns, stat.st_size), metadata))
+
+
+def effective_scope(metadata: dict) -> UploadScope:
+    """The scope of a file: the one its sidecar stores, else the inheritance rule of decision 36.
+
+    Inheritance, for the files uploaded before scopes existed: the application's own files (uploader ``SYSTEM_USER_ID``)
+    and images are common, any other file is personal.
+    """
+    stored = metadata.get("scope")
+    if stored in (UploadScope.COMMON.value, UploadScope.PERSONAL.value):
+        return UploadScope(stored)
+    if metadata.get("uploaded_by_user_id") == SYSTEM_USER_ID:
+        return UploadScope.COMMON
+    if str(metadata.get("mime_type") or "").startswith("image/"):
+        return UploadScope.COMMON
+    return UploadScope.PERSONAL
+
+
+def can_view_upload(info: UploadFileInfo, user_id: int, is_admin: bool) -> bool:
+    """Whether a user may list, preview and download a file: a common file, its uploader, an admin."""
+    return is_admin or info.scope == UploadScope.COMMON or info.uploaded_by_user_id == user_id
+
+
+def can_manage_upload(info: UploadFileInfo, user_id: int, is_admin: bool) -> bool:
+    """Whether a user may delete a file and change its scope: its uploader or an admin."""
+    return is_admin or info.uploaded_by_user_id == user_id
 
 
 def _metadata_to_info(metadata: dict) -> UploadFileInfo:
@@ -172,6 +234,7 @@ def _metadata_to_info(metadata: dict) -> UploadFileInfo:
         size_bytes=metadata["size_bytes"],
         uploaded_at=datetime.fromisoformat(metadata["uploaded_at"]),
         uploaded_by_user_id=metadata["uploaded_by_user_id"],
+        scope=effective_scope(metadata),
         description=metadata.get("description"),
         url=_get_file_url(metadata["id"]),
     )
@@ -275,6 +338,7 @@ def save_upload(
     user_id: int,
     description: Optional[str] = None,
     mime_type: Optional[str] = None,
+    scope: Optional[UploadScope] = None,
 ) -> UploadFileInfo:
     """
     Save an uploaded file.
@@ -287,6 +351,7 @@ def save_upload(
         user_id: ID of uploading user
         description: Optional description
         mime_type: Optional MIME type (validated and may be corrected)
+        scope: Who sees the file; without it, the inheritance rule decides (``effective_scope``), and the result is stored
 
     Returns:
         UploadFileInfo with file details
@@ -319,6 +384,7 @@ def save_upload(
         "uploaded_by_user_id": user_id,
         "description": description,
     }
+    metadata["scope"] = UploadScope(scope).value if scope is not None else effective_scope(metadata).value
     _save_metadata(file_id, metadata)
 
     logger.info(
@@ -327,6 +393,7 @@ def save_upload(
         original_name=original_filename,
         size_bytes=len(content),
         user_id=user_id,
+        scope=metadata["scope"],
     )
 
     return _metadata_to_info(metadata)
@@ -427,6 +494,27 @@ def get_upload_mime_type(file_id: str) -> Optional[str]:
     if not metadata:
         return None
     return metadata.get("mime_type", "application/octet-stream")
+
+
+def set_upload_scope(file_id: str, scope: UploadScope) -> Optional[UploadFileInfo]:
+    """Store a file's scope; its updated info, or None when the file does not exist. Access is the caller's check."""
+    metadata = _load_metadata(file_id)
+    if not metadata:
+        return None
+    content_path = get_uploads_dir() / f"{file_id}{metadata.get('extension', '')}"
+    if not content_path.exists():
+        return None
+
+    updated = {**metadata, "scope": UploadScope(scope).value}
+    _save_metadata(file_id, updated)
+    if not content_path.exists():
+        # A delete ran in between and removed the file: do not leave the sidecar just written behind
+        with contextlib.suppress(OSError):
+            (get_uploads_dir() / f"{file_id}.json").unlink()
+        _upload_meta_cache.delete(file_id)
+        return None
+    logger.info("Upload scope changed", file_id=file_id, scope=updated["scope"])
+    return _metadata_to_info(updated)
 
 
 def delete_upload(file_id: str) -> bool:
