@@ -958,3 +958,15 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > W-B13, X-R5 (percorsi vecchi in commenti e docstring, compresi una riga di A e 2 di `TODO_FUTURI.md`) e X-R7.
 > Validazione di X: `api fx` 21/21 anche senza rete; raccolta identica sopra W7. W-B15 (un selettore per testo in una
 > spec di W) nella sezione di W; X-R9 con il FE4.
+
+### J C-93, connessioni aiosqlite lasciate aperte, integrato ✅ (2026-10-15, 06:05)
+
+> **Note implementazione**: `c412f8dad`, merge di `3a03a1b2c` su `c81670354`. Causa trovata con la skill
+> `test-triage`: 7 test dell'AI Export lasciavano aperte connessioni aiosqlite, e un GC in un thread con un loop corrente
+> chiuso ne uccideva il thread di lavoro; pytest attribuiva l'avviso al test in corso, estraneo. Curato nei test.
+> Validazione di J sulla revisione con A4, X CP3 e W7: `services ai-export` 1 025, raccolta +4; prima `all-backend
+> --workers 2` con la sonda: 0 connessioni aperte. **Senza nuovo controllo di J** dopo X CP3b: nessun file in comune
+> salvo il backlog, test da entrambe le parti, controlli statici del coordinatore puliti.
+>
+> J-5 (un loop chiuso lasciato come corrente in `services/assets/core.py`) passa a X, dopo il CP4; J-6 (una guardia
+> di suite per le connessioni aperte) a J, dopo G-8.
