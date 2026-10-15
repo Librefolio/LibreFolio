@@ -2044,3 +2044,309 @@ Ogni lotto di riordino porta due commit: prima la rinomina, poi gli eventuali ca
 > - **Commit proposti**:
 >   1. `feat(accounts): invites, registration, admin API`;
 >   2. `docs(journal): A5a progress, A backlog`.
+>
+> **Esito**: il coordinatore ha committato `7da2cd9a2` (`feat(accounts): invites, registration, admin API`, 35 file) e
+> `2d4708578` (journal e backlog). Poi ha aperto il merge di `dev_release2` a `380a3e768` nel mio worktree, senza
+> commit, con l'unico conflitto previsto da risolvere a me.
+
+#### A5.7 — Risoluzione del merge di `dev_release2` (`380a3e768`) ✅ (2026-10-15)
+> **Note implementazione**: HEAD `2d4708578`, MERGE_HEAD `380a3e768`, conflitto solo in `test_system_api.py`.
+> - **Risoluzione** (`/tmp/libreFolio_a5a_resolve_system.py`): prima le mie 5 righe (`{profile, accounts}`), poi le
+>   214 righe di H CP5a (`/system/info` per anonimi e per utenti), cioè le sue 215 senza la vecchia asserzione
+>   `{"profile": profile}`. Lo script si ferma se i marcatori non sono esattamente uno per tipo, o se la vecchia
+>   asserzione non apre il lato di H.
+> - **Commenti superati**: erano 4, non 3. I tre già noti erano corretti nel commit di A5a. Il quarto è la docstring
+>   in cima (`Covers: … /system/instance … {profile}`), ora `{profile, accounts}`. Rispetto a `380a3e768` il file ha
+>   17 righe aggiunte e 7 tolte, tutte mie.
+> - **File fusi da Git, controllati a mano**:
+>   - ruff e black puliti (`schemas/system.py`, `conftest.py`, `_backend_api.py`, `_backend_services.py`);
+>   - azioni del runner contate con l'AST: 65 e 94, nessun doppione nuovo. Il doppione `all` di `_backend_api.py`
+>     c'è già su entrambi i lati, a `2ee39823b` come a `380a3e768`.
+> - **Controlli senza server** (finestra della galleria; `/tmp/libreFolio_a5a_merge_checks.sh`):
+>   - `check-orphans` ✅, 281 file backend;
+>   - `services registration` 122 ✅, con la guardia J-6 attiva: 0 segnalazioni;
+>   - `db migration-006` 36 ✅;
+>   - `services config-package` 594 ✅;
+>   - `services config-env-example` 36 ✅;
+>   - porta 6182 libera.
+> - Poi `git add` del solo file risolto. Il coordinatore ha committato il merge: `8e049474e`, genitori `2d4708578` e
+>   `380a3e768`.
+> - **⚠️ Fuori pista**: il coordinatore aveva letto in `registration_service.py` le due funzioni di reset per E. Sono in
+>   `user_service.py` (righe 233 e 247 di `7da2cd9a2`); lui ha corretto il messaggio per E.
+
+### A5b — frontend di A5 (UI della registrazione, pagine dei link), doc di A5a e A5b, A-9 — in corso
+
+#### A5b.0 — Via, base e regole della finestra ✅ (2026-10-15)
+> - **Base**: HEAD `8e049474e`, il merge di `dev_release2` a `380a3e768` sopra A5a. Worktree pulito.
+> - **Regole del coordinatore per oggi**:
+>   - nella finestra della galleria, dalle 08:45 fino all'avviso di fine (verso le 12:30): solo codice e Vitest su
+>     singoli file, uno alla volta (carico della macchina 19–22);
+>   - `front check`, build, `mkdocs build`, E2E e `all-backend` solo dopo l'avviso;
+>   - A5a e A5b entrano insieme dopo la finestra, dopo i lotti R e L dei colori.
+> - **A-9 approvata**: la corsia dei test toglie le quattro variabili degli account, come fa con i segreti di H.
+> - **`api sync`** (`/tmp/libreFolio_a5b_api_sync.log`): client rigenerato, non tracciato. Ora ha `AccountsInstanceConfig`
+>   e gli alias `inspect_link_token_…`, `reset_password_with_link_…` e `register_…`.
+> - **Già rotto da A5a da solo**, e il motivo per cui A5a e A5b entrano insieme:
+>   - `RegisterCard` capisce solo i `detail` di tipo stringa: con A5a il 403 «registrazione chiusa» diventa
+>     `{error_code, message}`, e la card mostrerebbe l'errore generico;
+>   - `LoginCard` legge `enable_registration` dallo store, e la chiave non esiste più;
+>   - il tipo `InstanceConfig` del frontend ora vuole `accounts`.
+
+#### A5b.1 — Contratto ✅ (2026-10-15)
+> **Moduli nuovi**, in `frontend/src/lib/features/auth/`, Svelte 5, solo classi di ruolo `lf-*` (regola T-1):
+> - **`authFlash.ts`**: `setAuthFlash(message)` e `takeAuthFlash()`, che restituisce il messaggio una volta e lo
+>   cancella (`''` se non c'è). Così una pagina dei link passa al login il messaggio di riuscita.
+> - **`linkToken.ts`**:
+>   - `takeLinkToken(url, replace)`: legge `token` (vuoto vale come assente) e chiama `replace(url.pathname)` per
+>     toglierlo dalla barra degli indirizzi;
+>   - `inspectLinkToken(token, purpose)`: chiama `POST /auth/tokens/inspect`.
+> - **`registrationErrors.ts`**: `describeRegistrationError(error)` restituisce `{key}` oppure `{raw}`.
+>   - `REGISTRATION_DISABLED` → `auth.registrationDisabled`;
+>   - `INVITE_REQUIRED` → `auth.registrationInviteOnly`;
+>   - `INVITE_INVALID` → `auth.link.unknown`;
+>   - `USER_LIMIT_REACHED` → `auth.userLimitReached`, senza conteggi;
+>   - le stringhe e gli array Pydantic come oggi: nome o email già presi, email non valida…
+> - **`AuthPageFrame.svelte`**: la barra in alto della pagina d'accesso (caffè, tema, lingua, aiuto) e il contenitore
+>   centrato, con `testId`. La usano il login e le due pagine dei link: lo stesso DOM di oggi.
+> - **`AuthCard.svelte`**: la testata del marchio e il corpo delle card, per le due card nuove (`testId`).
+> - **`LinkStatusCard.svelte`**: `data-testid="link-status"`, `data-status` tra `checking`, `expired`, `consumed`,
+>   `revoked`, `unknown`, `missing`, `closed` ed `error`.
+>   - Pulsanti: `link-status-goto-login` (vai a `/`); `link-status-retry` solo con `error`.
+>   - Messaggi: `auth.link.<status>`, più `auth.link.askAdmin`. Per `closed` usa `auth.registrationDisabled`.
+> - **`ResetPasswordCard.svelte`**: props `token`, `username`, `ondone`, `oninvalid`.
+>   - testid: `reset-password-modal`, `reset-password-account`, `reset-password-new`, `reset-password-confirm`,
+>     `reset-password-submit`, `reset-password-error`.
+>   - Le regole sono quelle dell'app, lette da `PasswordStrength` con `bind:valid`, una prop nuova: **nessuna quinta
+>     copia** (A-6). L'API resta a 8 caratteri finché non arriva la decisione 37.
+>   - Un 400 `TOKEN_INVALID` chiama `oninvalid`.
+>
+> **Rotte nuove** (servite dal fallback `200.html`, senza prerender):
+> - `routes/invite/+page.svelte` (`invite-page`):
+>   - legge il token e lo toglie dalla barra (`replaceState` di `$app/navigation`, con ripiego su `history`);
+>   - ispeziona il token e intanto carica `instanceConfig`;
+>   - token valido e registrazione non `disabled` → `RegisterCard` in modalità invito; altrimenti `LinkStatusCard`;
+>   - registrazione riuscita → messaggio flash e `goto('/')`.
+> - `routes/reset-password/+page.svelte` (`reset-password-page`): stesso schema, con `ResetPasswordCard`.
+> - Entrambe hanno `<meta name="referrer" content="no-referrer">`. Il `<title>` resta vietato dalla guardia.
+>
+> **File che cambiano**:
+> - `RegisterCard.svelte`:
+>   - props `inviteToken`, `initialEmail` (email precompilata e **modificabile**: D-A16 respinta) e `grantsAdmin`;
+>   - avvisi `register-invite-notice` e `register-invite-admin-notice`;
+>   - `invite_token` va nel corpo solo con un invito;
+>   - errori da `describeRegistrationError`.
+> - `LoginCard.svelte`:
+>   - «Registrati qui» solo se `instanceConfig.config.accounts.registration_mode === 'open'`, con `instanceConfig.load()`
+>     al montaggio e non più `globalSettings.load()`. Senza risposta valgono i default, quindi il link resta;
+>   - il messaggio di riuscita prende il testid `login-success`;
+>   - restano i testid di `theme-roles`.
+> - `routes/+page.svelte`: usa `AuthPageFrame` (testid `login-page` sullo stesso elemento), e `successMessage` parte da
+>   `takeAuthFlash()`.
+> - `PasswordStrength.svelte`: `export let valid = false`, che rispecchia `allRulesPassed`. È la sola modifica
+>   funzionale, nessuna classe.
+> - `GlobalSettingsTab.svelte`:
+>   - il default `registration_mode: 'open'`; nella categoria security, `registration_mode` al posto di
+>     `enable_registration`;
+>   - `SettingSelect` con le opzioni `open`, `invite` e `disabled` (`settings.registrationModes.*`);
+>   - con `accounts.registration_locked` il controllo si blocca, mostra il modo effettivo di `/system/instance`, ha il
+>     suggerimento `settings.lockedByEnv` e `data-locked="true"` sul contenitore `global-setting-registration_mode`, e
+>     «Ripristina tutto» lo salta;
+>   - il 409 `SETTING_LOCKED_BY_ENV` diventa `settings.lockedByEnv`;
+>   - dopo un salvataggio di `registration_mode`, `instanceConfig.load({force: true})`.
+> - `stores/app/globalSettings.ts`: via `enable_registration`. Nessuno lo legge più; la chiave nuova arriva come le
+>   altre stringhe.
+> - `features/instance/instanceConfig.svelte.ts` di H: `DEFAULT_INSTANCE_CONFIG` aggiunge
+>   `accounts: {registration_mode: 'open', registration_locked: false}`. È l'aggancio previsto, da segnalare.
+> - **i18n** (4 lingue):
+>   - settings: `globalSettingNames.registration_mode`, `globalSettingDescriptions.registration_mode`,
+>     `registrationModes.{open,invite,disabled}`, `lockedByEnv`; via le due chiavi `enable_registration`;
+>   - auth: `registrationInviteOnly`, `userLimitReached`, `invite.{notice,adminNotice}`,
+>     `link.{expired,consumed,revoked,unknown,missing,checkFailed,askAdmin}`,
+>     `resetPassword.{title,account,submit,done,failed}`.
+>
+> **A-9**:
+> - `config/accounts.py`: `ACCOUNT_POLICY_VARIABLES` = `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`,
+>   `LIBREFOLIO_PUBLIC_URL`, `LIBREFOLIO_BILLING_URL`;
+> - `scripts/cli_base.py:configure_test_runtime()` le toglie dopo `_load_project_dotenv()`, accanto a
+>   `INSTANCE_TRUST_SECRETS`;
+> - test in `test_runtime_isolation.py`, sul modello di `TestTestLaneSecrets`.
+>
+> **⚠️ Fuori pista — A-9 tolta da A5b** (coordinatore, 15/10 ~09:20). E ha trovato che il problema è più largo: ogni
+> `LIBREFOLIO_*` del `.env` arriva alle corsie dei test, comprese le future variabili SMTP. La cura generale la
+> scrive H come C-96, e copre anche le quattro variabili degli account.
+> - Nel worktree non c'era ancora niente di A-9: né codice né test. La bozza di `config/accounts.py` e
+>   `cli_base.py` stava solo in `/tmp`, ed è uscita dallo script di applicazione.
+> - Il test-author degli E2E l'ho fermato prima che toccasse `test_runtime_isolation.py`.
+> - Nel backlog A-9 rimanda a C-96.
+>
+> **Fuori da A5b**: `ForgotPasswordCard`. I comandi hanno classi di palette, che sono di T, e il link di reset dalla
+> UI arriva con A6.
+> **E2E**: nessuno cambia il modo di registrazione della corsia; il blocco da variabile si prova con Vitest.
+
+#### A5b.2 — Test rossi (`test-author`: T1 Vitest, T2 E2E; R1 e R2 per le correzioni di A5a) ✅ (2026-10-15)
+> **Note implementazione**:
+> - **T1, Vitest**: 16 file, red-first, ciascuno lanciato da solo, uno alla volta.
+>   - **Nuovi**: `authFlash` (5), `linkToken` (10), `registrationErrors` (26), `AuthCard` (3), `AuthPageFrame` (2),
+>     `LinkStatusCard` (38), `ResetPasswordCard` (20), `routes/page.authFlash` (2), `routes/invite/page` (21),
+>     `routes/reset-password/page` (18).
+>   - **Aggiornati**: `PasswordStrength` (13), `RegisterCard` (76), `LoginCard` (27), `GlobalSettingsTab` (98),
+>     `stores/app/settings` (11), `instanceConfig` di H (11; solo la costante `SELFHOSTED` e `MANAGED`).
+>   - Tutti rossi per la ragione giusta: modulo o pagina assenti, oppure il comportamento.
+>   - Registrati in `_frontend_utility.py`: 10 righe di percorso.
+> - **T2, E2E**, nessuna run (finestra):
+>   - `auth.spec.ts`: il blocco «Register link and the registration setting» ora serve `GET /system/instance` reale
+>     con il solo `registration_mode` cambiato. Tre test: `disabled` e `invite` nascondono il link, il controllo
+>     positivo con `open`;
+>   - nuovi `auth-links.spec.ts` (9 test) e `fixtures/instance-config.ts`;
+>   - `layout/theme-roles.spec.ts`, file del programma colori: solo il commento e il testo di un messaggio
+>     d'errore;
+>   - la registrazione dell'azione `front-utility auth-links` l'ho applicata io in `_frontend_utility.py`.
+> - **R1 e R2**, correzioni di A5a trovate in revisione (§A5b.3), red-first, nessuna run: le ho lanciate io, una alla
+>   volta.
+>
+>   | Voce | Rossi prima dell'implementazione | Dopo |
+>   |---|---|---|
+>   | `services account-tokens` | 5 su 65 | 65 ✅ |
+>   | `db migration-006` | 27 su 37 | 37 ✅ |
+>   | `services registration` | 14 su 135 | 135 ✅ |
+>   | `utils dev-cli-image`, solo le classi Invitation, ResetLink e UserLimit | 13 su 22 | 22 ✅ |
+>
+> - **⚠️ Fuori pista**:
+>   - A-9 tolta da A5b (vedi sopra): T2 non l'aveva iniziata.
+>   - **`ResetPasswordCard`, 1 rosso dopo l'implementazione**. Il test usa un traduttore identità, quindi un nome
+>     interpolato nel messaggio ICU non si vede. Ora il nome è un elemento a sé, e `auth.resetPassword.account` è
+>     solo l'etichetta («Account:», «Compte :»…). È anche più solido con nomi che contengono caratteri speciali.
+
+#### A5b.3 — Implementazione ✅ (2026-10-15)
+> **Note implementazione**:
+> - Bozze in `/tmp/libreFolio_a5b/`, provate prima su una copia di HEAD (`git archive`): ancore, Prettier, parse di
+>   Svelte, ruff e black. Poi applicate con `apply_a5b.py` (frontend) e `apply_a5b_backend.py`.
+> - **Frontend**: tutto il contratto A5b.1, più:
+>   - `addressBar.ts`: `replaceState` di SvelteKit, con ripiego su `history` se il router non è ancora partito;
+>   - `hashchange` sulle due pagine dei link.
+> - **i18n** (`/tmp/libreFolio_a5b/i18n.sh`, un processo alla volta): 22 chiavi nuove in 4 lingue, via le due di
+>   `enable_registration`. `dev.py i18n check` è rigoroso e pulito: 4 412 chiavi.
+> - **⚠️ Fuori pista — correzioni di A5a**, dalla revisione delle doc di `docs-writer`:
+>   1. **Il token passa nel frammento**: `/invite#token=…`, non più `?token=`.
+>      - Il motivo: il `CMD` del Docker avvia uvicorn con il log d'accesso acceso, e `logging_config` non zittisce
+>        `uvicorn.access`. Ogni apertura di un link avrebbe scritto il token in chiaro nel log, e così il log di un
+>        proxy davanti. Il browser non manda mai il frammento al server.
+>      - Cambia una riga in `token_service.token_path`, più le descrizioni di `path` in `schemas/users.py`.
+>      - Avvisato il coordinatore, per E e per H.
+>   2. **`_report_invalid(problem, consequence)`**: un URL non valido non scrive più «registration stays closed».
+>   3. **CLI**:
+>      - un `LIBREFOLIO_PUBLIC_URL` non valido si distingue da uno non impostato;
+>      - `user activate` avvisa al limite, con un aiuto unico `_warn_if_full(usage, action)`. Le righe di `create` e
+>        `invite` restano identiche.
+>   4. **`value_type` `str`** per `registration_mode`, come gli altri testi (il registro e la 006, non ancora
+>      rilasciata).
+>      - Valutato prima di cambiarlo: nessun codice confronta con `"str"`, quindi era solo un'incoerenza.
+>      - Cambiarlo dopo il rilascio avrebbe chiesto una migrazione.
+>   5. Commenti del runner (`services registration`) e il seed `'string'` di `test_dev_cli_image.py:1348`.
+
+> **Conferma del coordinatore** (15/10, ~10:10), alla lettera: «Confermate tutte e due. 1. **Il token nel frammento**
+> (`#token=`): giusto. Lo dico a H, per il log di accesso, e a E, quando partirà il suo lotto. […] 2. **Le altre
+> correzioni di A5a**, comprese la 006 con `value_type` `str` e i log più veri: vanno bene in A5b. La 006 non è
+> uscita.»
+> - Nota per dopo A5, da W e J: la conferma della cancellazione dell'account può dichiarare che le metà dei
+>   trasferimenti verso broker condivisi diventano righe a sé (V-3). La aggiunge il coordinatore nella sezione A del
+>   backlog, insieme all'estrazione del dialogo da `ProfileTab` per la pagina di blocco di H.
+
+#### A5b.4 — Test verdi nella finestra (Vitest su singoli file, backend senza server) ✅ (2026-10-15)
+> **Note implementazione**: `/tmp/libreFolio_a5b_vitest.sh` e `/tmp/libreFolio_a5b_backend_runs.sh`, uno alla volta.
+> - **Vitest**, tutti verdi:
+>   - i 16 file di T1, compresi i 4 test di `hashchange`;
+>   - in più: `layout.gate` 3, `layout.authGate` 11, `PasswordChangeModal` 45, `SettingControls` 85,
+>     `documentTitle.guard` 5, `catalogIcuLocale` 17.
+> - `node frontend/scripts/theme/theme-roles.mjs --check`: pulito.
+> - Prettier pulito sui file toccati.
+> - **Backend**:
+>   - `config-package` 594, `config-env-example` 36, `global-settings` 19, `db validate` 17, `post-migration` 37;
+>   - più le quattro voci della tabella di A5b.2;
+>   - ruff e black puliti; `git diff --check` pulito; porta 6182 libera.
+> - **Dopo la finestra**:
+>   - `front check`, `front build --debug`, `mkdocs build`, `check-links`;
+>   - `api registration`, `api users-admin`, `api settings`, `api auth`, `api system`;
+>   - `utils dev-cli-image` completo, `all-backend`;
+>   - E2E `auth`, `auth-links`, `settings`, `theme-roles`;
+>   - `core-unit`, `component-unit`; `lint --dead-code` (vulture e knip); `check-orphans`.
+
+#### A5b.5 — Doc (`docs-writer`, due passate) e ultime correzioni dalla revisione ✅ (2026-10-15)
+> **Note implementazione**:
+> - **`docs-writer`, prima passata** (A5a, 13 pagine EN): sviluppatore (`access_control`, `security`, `settings`,
+>   `database/{users_access,index}`, `users_and_brokers`, `runner_architecture`, `frontend/onboarding`), admin
+>   (`configuration`, `cli_tools`, `settings`, `service_exposure`), `community/faq`. Nessuna build: finestra.
+> - **Seconda passata** (A5b e correzioni, 18 pagine EN):
+>   - `?token=` diventato `#token=`, con il motivo scritto una volta in `security.md` «Links in Use»;
+>   - frontend: `features/auth.md` (sezione «🔗 Account Link Pages»), `features/settings.md`, `state/app-state.md`,
+>     `pages/index.md`, `components/index.md`, `test-walkthrough/front-utility.md`;
+>   - utente: `user/getting-started` («✉️ If You Received an Invitation Link», «🔑 If an Administrator Sent You a
+>     Password-Reset Link»), `community/faq`;
+>   - admin `settings`: l'avviso per un'istanza nuova con la registrazione bloccata su `invite` o `disabled` (il primo
+>     admin da `dev.py user create` fino ad A7).
+> - **⚠️ Fuori pista — due difetti trovati dalla revisione delle doc**, corretti red-first:
+>   1. **Il primo account non spendeva il suo invito.** Su un'istanza vuota `_admission` rispondeva prima di guardare il
+>      token, quindi lo stesso link poteva aprire un secondo account, con il suo ruolo, per 7 giorni.
+>      - Ora un invito dato con qualunque registrazione, la prima compresa, dev'essere valido e viene speso.
+>      - Il primo account resta amministratore, qualunque siano la modalità e il ruolo dell'invito.
+>      - R1 ha scritto 8 casi di servizio e 1 di API. `services registration`: 8 rossi, poi 146 ✅. Il caso API gira
+>        dopo la finestra.
+>   2. **`ResetPasswordCard` non diceva ai gestori di password a quale account va la password nuova.** Ora ha il campo
+>      `autocomplete="username"` nascosto, come `PasswordChangeModal`. T1 ha scritto 4 test: 1 rosso, poi 24 ✅.
+> - **Debito di traduzione** (IT, FR ed ES in ritardo), sei pagine da tradurre insieme perché si linkano per ancore
+>   esplicite: `admin/{configuration,cli_tools,settings,service_exposure}`, `community/faq`, `user/getting-started`.
+>   - Senza traduzioni il build strict resta sano: le pagine IT, FR ed ES vecchie non puntano alle ancore nuove.
+>   - Proposta al coordinatore: tradurle una volta sola alla fine di A (A10), perché A6–A9 toccheranno di nuovo le
+>     stesse pagine.
+> - **Segnalazioni fuori dal mio perimetro**:
+>   - di T: `features/auth.md` descrive ancora la barra di robustezza a cinque colori (D-T13 l'ha fatta a tre), e
+>     `core-ui/atoms.md` non ha la prop `icon` di `PasswordInput`;
+>   - `host_installation.en.md:112`, `user/installation.en.md:135` e `docker_advanced.en.md:280` descrivono il primo
+>     avvio di default, che non cambia, senza l'avviso per la modalità bloccata. L'avviso sta in `admin/settings`.
+> - **devWiki** (`wiki-file`):
+>   - nuova [[decisions/link-tokens-in-the-url-fragment]];
+>   - aggiornate `domains/auth.md` (modalità, inviti, API admin, limite, K-5 fino ad A7, i lotti seguenti) e
+>     `features/F-001.md`;
+>   - `check_source_paths.py`: nessun percorso mancante nelle mie pagine; i 5 che segnala sono vecchi;
+>   - grafo non aggiornato (P-6).
+
+#### A5b.6 — TC-6 (A-8): il selettore della lingua alla prima visita ✅ (2026-10-15)
+> **Note implementazione**: A5b tocca la pagina d'accesso, che è il lotto suggerito dal coordinatore per TC-6.
+> - **Causa**: senza preferenza salvata, `currentLanguage.init()` leggeva `locale` di svelte-i18n una volta sola e si
+>   disiscriveva. Ma svelte-i18n passa a `it` solo dopo aver caricato il dizionario, quindi al montaggio leggeva ancora
+>   `en`, e il selettore restava su 🇬🇧 mentre la pagina era in italiano.
+> - **Correzione stretta** (`stores/app/language.ts`):
+>   - senza preferenza salvata il negozio segue `locale`, con un solo abbonamento anche se `init()` gira due volte;
+>   - smette di seguirlo appena si sceglie una lingua dal negozio (`set`, `cycle`);
+>   - con una preferenza salvata non lo segue.
+>   - L'anteprima della lingua nella Welcome non è toccata: `persistedLanguage` viene dalle impostazioni dell'utente,
+>     non dal negozio.
+> - `LanguageSelector.svelte` pubblica `data-language`, una presa stabile per l'E2E.
+> - **Test**:
+>   - T1 ha scritto `language.test.ts` (7). La prima run è fallita per un'infrastruttura assente (`localStorage` di
+>     jsdom nascosto da Node 26) e T1 l'ha sostituito con uno stub. Poi 6 rossi per la ragione giusta e 7 ✅;
+>   - T2 ha scritto l'E2E `it-IT` e `fr-FR` in `auth.spec.ts`, che gira dopo la finestra;
+>   - vicini verdi: `settings` 11, `PreferencesTab` 58, `WelcomeForm` 14, `uiLocale` 31, `AuthPageFrame` 2, `Header` 28.
+> - Backlog A-8 chiusa (✅, commit all'ingresso di A5).
+
+### Checkpoint A5b («prima delle prove») 🧊 (2026-10-15, 10:40) — FROZEN, in attesa del commit del coordinatore
+> **Decisioni del coordinatore** (15/10, ~10:30):
+> - validazione completa una sola volta, dopo il suo aggiornamento di base con R e L; se dopo entra un altro lotto,
+>   basta un controllo leggero;
+> - prima, l'handoff FROZEN di A5b, che lui committa sul mio ramo come checkpoint «prima delle prove», così
+>   l'aggiornamento di base si fonde su lavoro committato;
+> - le traduzioni: tutte insieme dopo A6–A9, solo su richiesta esplicita del developer. Registrate come A-10.
+>
+> **Stato**:
+> - **Base**: HEAD `8e049474e`; `dev_release2` locale a `6ed99c694` (due commit di journal, che toccano il backlog in
+>   righe lontane dalla sezione A).
+> - **Delta**, non in stage: 24 file nuovi e 65 modificati.
+> - **Esclusi**:
+>   - gli artefatti ignorati: client API generato, `openapi.json`, il catalogo i18n generato, `.testLog`, le cache;
+>   - un vecchio `backend/data/prod/logs/librefolio.log` del worktree, ignorato;
+>   - le bozze in `/tmp`.
+> - **Prove**: quelle di A5b.2–A5b.6, tutte dentro le regole della finestra.
+> - **Da fare dopo l'aggiornamento di base**: lo script `/tmp/libreFolio_a5full.sh`.
+> - **Commit proposti**:
+>   1. `feat(accounts): invite and reset link pages`: codice, test, runner, doc EN, devWiki;
+>   2. `docs(journal): A5b progress, A backlog`: piano e backlog.
