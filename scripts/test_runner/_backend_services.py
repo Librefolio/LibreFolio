@@ -496,11 +496,21 @@ def services_email_delivery(verbose: bool = False, test_names: list = None) -> b
 def services_email_checks(verbose: bool = False, test_names: list = None) -> bool:
     """Test the configuration checks of the optional e-mail (email.smtp, email.smtp_encryption)."""
     print_section("Services: E-mail Configuration Checks")
-    print_info("Testing: backend/app/services/email/checks.py")
-    print_info("Tests: off/ok/invalid with problem and variable, plain text local or public, EMAIL_CONFIG_CHECKS, no password, host, user or sender in a detail")
+    print_info("Testing: backend/app/services/email/checks.py, their place in backend/app/services/platform/config_audit.py")
+    print_info("Tests: off/ok/invalid with problem and variable, plain text local or public, EMAIL_CONFIG_CHECKS, no password, host, user or sender in a detail; the end of CONFIG_CHECKS, run_config_checks, either module imported first in a fresh interpreter, the startup log")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_checks.py", test_names)
     return run_command(cmd, "E-mail configuration check tests", verbose=verbose)
+
+
+def services_email_flows(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what an action of the application sends: the language of an account's emails, and the test email."""
+    print_section("Services: E-mail Flows")
+    print_info("Testing: backend/app/services/email/flows.py")
+    print_info("Tests: account language (its own, else default_language, else English; no settings row created), the test email to the account's own address in its language, nothing sent when e-mail is off or unusable, configuration read off the event loop")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_flows.py", test_names)
+    return run_command(cmd, "E-mail flow tests", verbose=verbose)
 
 
 def services_provider_cooldown(verbose: bool = False, test_names: list = None) -> bool:
@@ -1286,8 +1296,19 @@ Note: No backend server required.
         "email-checks",
         services_email_checks,
         name="E-mail Configuration Checks",
-        desc="email.smtp: off, ok, or error with problem and variable; email.smtp_encryption: ok unless plain text to a non-local host (warning); EMAIL_CONFIG_CHECKS; no password anywhere, no host, user or sender in a detail",
-        # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path.
+        desc="email.smtp: off, ok, or error with problem and variable; email.smtp_encryption: ok unless plain text to a non-local host (warning); EMAIL_CONFIG_CHECKS; no password anywhere, no host, user or sender in a detail; config_audit.CONFIG_CHECKS ends with them, run_config_checks carries their results, either module imports first in a fresh interpreter; the startup audit logs an error, a warning, nothing when off, never the password",
+        # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path; the
+        # startup audit runs in test mode with its data directory in tmp_path, and so do the fresh interpreters of the import order.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-flows",
+        services_email_flows,
+        name="E-mail Flows",
+        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server; LIBREFOLIO_SMTP_* removed then set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
         isolation="pure",
     )
     add_test(
