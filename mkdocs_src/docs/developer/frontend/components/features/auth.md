@@ -37,14 +37,17 @@ The `LoginCard` handles user authentication via username/email and password.
     - `LoginCard` always draws `$_(key)`, so the message follows a language change on screen. The
       transport's own text (axios's *Network Error*, *Request failed with status code 500*) never
       reaches the user: it is English whatever the language.
-- **Register link**: `goto-register` (**Register here**) is shown only while
-  `instanceConfig.config.accounts.registration_mode === 'open'`: the mode in force that
-  `GET /api/v1/system/instance` publishes, `LIBREFOLIO_REGISTRATION` included
+- **Register link**: `goto-register` (**Register here**) is shown while
+  `instanceConfig.config.accounts.registration_mode === 'open'`, or while
+  `instanceConfig.config.accounts.first_account_open === true`: the instance has no account yet, and
+  its first account can be created in any mode (it becomes the administrator). Both come from
+  `GET /api/v1/system/instance`, the mode in force with `LIBREFOLIO_REGISTRATION` included
   ([Instance configuration](../../state/app-state.md#instance-config)). `LoginCard` calls
-  `instanceConfig.load()` on mount, not forced, so it shares the page load's request; it no longer
-  loads the global settings. Until the server answers, and if it never does, the configuration is
-  `DEFAULT_INSTANCE_CONFIG`, whose mode is `open`: the link is shown, and goes as soon as the answer
-  says `invite` or `disabled`, without a remount.
+  `instanceConfig.load()` on mount, not forced, so it shares the page load's request; it does not
+  load the global settings, which need a session. Until the server answers, and if it never does, the
+  configuration is `DEFAULT_INSTANCE_CONFIG`, whose mode is `open`: the link is shown, and goes as
+  soon as the answer says `invite` or `disabled` with `first_account_open` false, or absent (an
+  answer from before the flag), without a remount.
 - **Props**: `redirectTo` (default `/dashboard`), `successMessage` — drawn in `login-success`: the
   confirmation of a registration, or the message a [link page](#link-pages) left with
   `setAuthFlash()`, which the login page (`routes/+page.svelte`) reads once with `takeAuthFlash()` —,

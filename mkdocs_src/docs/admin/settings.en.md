@@ -1,7 +1,7 @@
 # ⚙️ Global Settings
 
 Global settings apply to the whole instance and to every user. They are stored in the database:
-everyone can read them, only administrators can change them.
+every signed-in user can read them, only administrators can change them.
 
 ---
 
@@ -47,7 +47,7 @@ Only administrators (superusers) have the lock; everyone else gets a read-only v
 | Category | Setting | Default | What it does — when to change it |
 |---|---|---|---|
 | ⏳ Session | **Session Duration** | 24 hours | How long users stay signed in. Shorten it on shared devices; a new value applies from each user's next login. |
-| 🛡️ Security | **Registration** | Open | Who can create an account: **Open**, **By invitation** or **Closed** (see [Who Can Sign Up](#registration)). Once everyone has an account, choose **By invitation** or **Closed**, above all if the instance is reachable from the internet. |
+| 🛡️ Security | **Registration** | By invitation | Who can create an account: **Open**, **By invitation** or **Closed** (see [Who Can Sign Up](#registration)). An instance upgraded from an earlier version keeps the mode it had. **Open** lets in anyone who reaches the login page: avoid it if the instance is reachable from the internet. |
 | 🛡️ Security | **Require Email Verification** | Off | Not active yet: sending emails is a planned feature, so the switch is read-only and marked **Coming soon**. |
 | 🔄 Update Job | **Scheduler Enabled** | On | Turns the automatic price and exchange-rate updates on or off: see [Market Data Scheduler](#market-data-scheduler). |
 | 🧠 Memory | **Max File Upload Size** | 10 MB | The largest file users can upload, broker reports included. Raise it if a large export is refused. |
@@ -67,12 +67,17 @@ The **Registration** setting decides who can create an account:
 
 | Mode | Who can create an account |
 |---|---|
-| 🌐 **Open** (default) | Anyone who reaches the login page, with **Register here**. |
-| ✉️ **By invitation** | Only people with an invitation link. You create one link per person from the [Users](users.md#invitations) tab, or from the [command line](cli_tools.md#invite), and send it to them. The login page shows no **Register here**. |
+| 🌐 **Open** | Anyone who reaches the login page, with **Register here**. |
+| ✉️ **By invitation** (default) | Only people with an invitation link. You create one link per person from the [Users](users.md#invitations) tab, or from the [command line](cli_tools.md#invite), and send it to them. The login page shows no **Register here**. |
 | 🔒 **Closed** | Nobody, not even with an invitation link. The login page shows no **Register here**. |
 
-- 👑 The first account of a new instance can always be created, whatever the mode: it becomes the
+- 👑 The first account of a new instance can always be created, whatever the mode: until it
+  exists, the login page shows **Register here**, and the account it creates becomes the
   administrator.
+- 🆕 A new instance starts **By invitation**. An instance upgraded from an earlier version keeps
+  the mode it had: one that was **Open**, the earlier default, stays **Open** until you change it
+  (**Reset to Default** proposes **By invitation**). Once everyone has an account, choose
+  **By invitation** or **Closed**.
 - ✉️ An invitation link works once, for 7 days, and can make the new account an administrator. With
   **Open**, nobody needs one, but a link still gives its role.
 - 💻 Whatever the mode, the [command line](cli_tools.md) can still create accounts with
@@ -85,22 +90,22 @@ The **Registration** setting decides who can create an account:
 - ⬆️ This setting replaces the **Enable Registration** switch of earlier versions, and the upgrade
   keeps your choice: a switch that was on becomes **Open**, a switch that was off becomes **Closed**.
 
-!!! warning "🆕 A new instance where the server's configuration sets `invite` or `disabled`"
+!!! warning "🆕 A new instance: create your account first"
 
-    The login page shows **Register here** only while the mode is **Open**. On a new instance whose
-    `LIBREFOLIO_REGISTRATION` is `invite` or `disabled`, the first account cannot be created from
-    the login page, so create the first administrator from the [command line](cli_tools.md)
-    instead:
+    Until the first account exists, anyone who reaches the login page can create it with
+    **Register here**, whatever the mode, `LIBREFOLIO_REGISTRATION` included, and that account
+    becomes the administrator. Register as soon as the server is up, before you make it reachable
+    from the internet. From the second account on, the mode applies: with **By invitation**, the
+    default, the login page no longer shows **Register here**.
+
+    You can also create the first administrator from the [command line](cli_tools.md), without the
+    browser:
 
     ```bash
     pipenv run ./dev.py user create <username> <email> <password>
     ```
 
     With Docker: `docker compose exec librefolio python dev.py user create <username> <email> <password>`.
-    With `invite`, an [invitation link](cli_tools.md#invite) works too: run `user invite` and open
-    the link it prints, then choose your password in the browser. The first account is an
-    administrator whatever the invitation says, and the link is used up.
-    A setup link for this first account is planned for a later version.
 
 ---
 

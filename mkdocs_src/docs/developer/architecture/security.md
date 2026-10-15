@@ -355,14 +355,32 @@ All endpoints that access or modify user data require a valid session cookie (`D
 | `/auth/address-probe` | GET | Whether this instance issued a nonce: `{match}` and nothing else, readable from any origin; see [Address Probe](#address-probe) |
 | `/system/health` | GET | Health check: the server answers |
 | `/system/info` | GET | System information, the app version only without a valid session (`SystemInfoPublicResponse`) and everything with one (`SystemInfoResponse`): see [System information and readiness](#system-info-and-readiness) |
-| `/system/instance` | GET | Public instance configuration, needed before sign-in: see [Public instance configuration](settings.md#public-instance-configuration) |
+| `/system/instance` | GET | Public instance configuration, needed before sign-in: see [Public instance configuration](settings.md#public-instance-configuration), and [The First-Account Flag](#first-account-open) for the one fact about the users it tells |
 | `/system/ready` | GET | Readiness for health checks and orchestrators (`200` when the database answers and its schema is at the head revision of the migrations, `503` otherwise): see [System information and readiness](#system-info-and-readiness) |
-| `/settings/global`, `/settings/global/{key}` | GET | The global settings, read-only (writes need an administrator): see [Settings System](settings.md) |
 | `/utilities/*` | GET | Reference data (countries, currencies, sectors) |
 | `/ai-export/catalog` | GET | Static AI Export catalogue (no user data) |
 
 On an instance blocked by its hosting provider, the public endpoints outside its short list answer
 `401`: see [Instance Block](#instance-block).
+
+### 🆕 The First-Account Flag {: #first-account-open }
+
+`GET /system/instance` tells anyone one fact about the users: `accounts.first_account_open`, true
+while the `users` table is empty, an inactive account counted (`first_account_open(session)` in
+`backend/app/services/accounts/registration_service.py`). The login page needs it: the first account
+of an empty instance can be created in any [registration mode](access_control.md#registration-modes)
+and becomes the administrator, so the page offers **Register here** while the flag is true, even on
+an instance that registers by invitation, the default of a new install. Publishing it is accepted
+(coordinator decision, 15/10/2026):
+
+- **It tells nothing a registration attempt would not.** An empty instance takes the first
+  `POST /auth/register` it gets, whatever the mode: anyone can learn that it is empty by trying.
+- **The window is short.** The flag turns false with the first registration, normally minutes after
+  the install; the administrator manual asks to register before exposing the instance
+  ([Global Settings](../../admin/settings.md), section «Who Can Sign Up»).
+- **A managed instance will not show it.** With lot A7 (F02, not delivered yet), the first account of
+  a managed instance will be the administrator created from the environment, so the flag will be
+  false from the start. Until then a managed instance starts empty, like any other.
 
 ### 🩺 System Information and Readiness {: #system-info-and-readiness }
 
@@ -400,7 +418,7 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and every write of the global settings), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
 
 !!! info "📁 Files are protected too"
 
@@ -456,7 +474,7 @@ valid session gets these answers:
 | Routes | Not blocked | Blocked |
 |--------|-------------|---------|
 | Protected routes outside the list | `401` | The same `401` |
-| Public routes outside the list: `POST /auth/register`, `GET /auth/address-probe`, `GET /utilities/*`, `GET /settings/global`, `GET /settings/global/{key}`, `GET /ai-export/catalog` | Their usual answer | `401` |
+| Public routes outside the list: `POST /auth/register`, `GET /auth/address-probe`, `GET /utilities/*`, `GET /ai-export/catalog` | Their usual answer | `401` |
 | The routes of the list | Their usual answer | The same answer |
 
 - The protected routes and the routes of the list do not reveal the block: `/system/instance`,
@@ -599,9 +617,10 @@ tokens:
 - **Inspecting tells a guesser nothing.** `POST /api/v1/auth/tokens/inspect` is public and writes nothing. Only a
   valid token gets details: the expiry, plus the role and email of an invitation or the username of a reset link.
   Any other token gets its status alone, and a token presented for the other purpose is `unknown`.
-- **Anonymous answers say nothing about the users.** The `409` `USER_LIMIT_REACHED` of `POST /auth/register`
-  carries no count and no billing link; only the administrator's routes add `limit`, `used` and `billing_url`.
-  About accounts, `GET /system/instance` publishes only the registration mode and whether a variable locks it.
+- **Anonymous answers say nothing about the users but whether there is one.** The `409` `USER_LIMIT_REACHED` of
+  `POST /auth/register` carries no count and no billing link; only the administrator's routes add `limit`, `used`
+  and `billing_url`. About accounts, `GET /system/instance` publishes only the registration mode, whether a variable
+  locks it, and whether the instance has no account yet ([The First-Account Flag](#first-account-open)).
 - **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…` and
   `/reset-password#token=…`. A browser never sends the fragment to the server, so the token is not in the request
   for the page: it stays out of the server's access log and out of the logs of every proxy on the way. A browser

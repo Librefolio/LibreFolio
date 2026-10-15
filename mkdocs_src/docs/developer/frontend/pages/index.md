@@ -64,7 +64,8 @@ frontend/src/routes/
 - Public access
 - **LoginCard** / **RegisterCard** / **ForgotPasswordCard** (card-style, not modals), inside
   `AuthPageFrame`
-- **Register here** only while the instance accepts anyone (`registration_mode` `open`)
+- **Register here** only while the instance accepts anyone (`registration_mode` `open`), or while it
+  has no account yet (`first_account_open`: the first account can be created in any mode)
 - Animated background with waves and chart lines
 - Redirect to dashboard after login
 - User preferences (language, theme) applied on login

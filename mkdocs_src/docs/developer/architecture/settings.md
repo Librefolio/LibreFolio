@@ -80,6 +80,7 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
 | | User Settings | Global Settings |
 |---|---|---|
 | Storage | **Typed columns** on the per-user `UserSettings` row | **Key-value rows** in the `GlobalSetting` table |
+| Who reads | The user themselves (`GET /api/v1/settings/user`) | Any signed-in user (`GET /api/v1/settings/global`, `GET /api/v1/settings/global/{key}`): `401` without a session. The login page reads none of them: what it needs before sign-in is in [`GET /system/instance`](#public-instance-configuration) |
 | Who writes | The user themselves (`PUT /api/v1/settings/user`) | Admins only (**Admin** tab of Settings, or `PATCH /api/v1/settings/global/bulk`) |
 | Examples | `language`, `base_currency`, `theme`, `avatar_url` | `session_ttl_hours`, `registration_mode`, `scheduler_*`, `default_currency` … |
 
@@ -151,7 +152,7 @@ The global keys declared today, and where the **Admin** tab shows them
 | Key | Type | Default | In the Admin tab |
 |-----|------|---------|------------------|
 | `session_ttl_hours` | int | `24` | Session → **Session Duration** |
-| `registration_mode` | str | `open` | Security → **Registration**: `open`, `invite` or `disabled` (`SettingConstraint(choices=…)`). Read-only while `LIBREFOLIO_REGISTRATION` is set: see [Registration Modes](access_control.md#registration-modes) |
+| `registration_mode` | str | `invite` | Security → **Registration**: `open`, `invite` or `disabled` (`SettingConstraint(choices=…)`). `invite` since decision 36: a new install seeds it, an existing row is kept, and an install with accounts but no row gets `open` from migration `008_registration_invite_default`. Read-only while `LIBREFOLIO_REGISTRATION` is set: see [Registration Modes](access_control.md#registration-modes) |
 | `require_email_verification` | bool | `false` | Security → **Require Email Verification** — read-only placeholder (`PLACEHOLDER_KEYS`) |
 | `max_file_upload_mb` | int | `10` | Memory → **Max File Upload Size** |
 | `scheduler_enabled` | bool | `true` | Update Job → **Scheduler Enabled** (label from `settings.globalSettingNames.scheduler_enabled`) |
@@ -219,7 +220,7 @@ Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and 
 | Field | Values | Source |
 |-------|--------|--------|
 | `profile` | `selfhosted`, an install run by its owner, or `managed`, an instance a hosting provider runs for its customers | `LIBREFOLIO_PROFILE`, a field of `Settings`, so it comes from `.env` or the environment like `PORT`. Default `selfhosted`; case and spaces around the value are ignored, and any other value stops the startup. Admin side: [Configuration](../../admin/configuration.md). |
-| `accounts` | `{registration_mode, registration_locked}` (`AccountsInstanceConfig`, `backend/app/schemas/auth.py`): the registration mode in force, `open`, `invite` or `disabled`, and whether `LIBREFOLIO_REGISTRATION` pins it | `effective_registration_mode()` (workstream A, `registration_service.py`): the variable, otherwise the `registration_mode` row, so the endpoint is `async`, with a database session. No count and no limit. Details: [Registration Modes](access_control.md#registration-modes). |
+| `accounts` | `{registration_mode, registration_locked, first_account_open}` (`AccountsInstanceConfig`, `backend/app/schemas/auth.py`): the registration mode in force, `open`, `invite` or `disabled`; whether `LIBREFOLIO_REGISTRATION` pins it; and whether the instance has no account yet, so that the next registration creates the first account, an administrator, whatever the mode | `effective_registration_mode()` (workstream A, `registration_service.py`): the variable, otherwise the `registration_mode` row, so the endpoint is `async`, with a database session. `first_account_open()`, in the same module: true while the `users` table is empty, an inactive account counted; optional in the schema, default `false`. No count and no limit. Details: [Registration Modes](access_control.md#registration-modes); why the flag may be public: [The First-Account Flag](security.md#first-account-open). |
 | `email` | `{available, links}` (`EmailInstanceConfig`, `backend/app/schemas/email.py`): `available`, whether the instance can send emails now, an SMTP server set and every `LIBREFOLIO_SMTP_*` variable usable; `links`, whether emails with a link can go out too, `LIBREFOLIO_PUBLIC_URL` set to an http(s) address; never the configuration itself | `email_instance_config()` (workstream E, `services/email/links.py`), run in a worker thread since it may read the password file. Both booleans default to `false`, so the field is optional in the schema. Details: [Email Service](../backend/email.md#instance-email). |
 
 The rule for a workstream that owns part of the public configuration:
