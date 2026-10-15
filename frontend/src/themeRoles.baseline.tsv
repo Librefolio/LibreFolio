@@ -12,7 +12,13 @@ lib/components/assets/AssetCurrencyChangeModal.svelte	79
 lib/components/assets/AssetDataEditorSection.svelte	17
 lib/components/assets/AssetIcon.svelte	4
 lib/components/assets/AssetMergeModal.svelte	68
-lib/components/assets/AssetModal.svelte	214
+lib/components/assets/AssetModal.svelte	26
+lib/components/assets/AssetModalDetails.svelte	79
+lib/components/assets/AssetModalFooter.svelte	29
+lib/components/assets/AssetModalIdentifiers.svelte	12
+lib/components/assets/AssetModalImportNotices.svelte	10
+lib/components/assets/AssetModalProvider.svelte	20
+lib/components/assets/AssetModalSelectionPrompts.svelte	38
 lib/components/assets/AssetPriceSummary.svelte	19
 lib/components/assets/AssetSearchAutocomplete.svelte	57
 lib/components/assets/AssetTable.svelte	33	#fef3c7	#fffbeb	rgb(120 53 15/0.24)	rgb(120 53 15/0.36)
@@ -79,7 +85,7 @@ lib/components/dashboard/AllocationPanel.svelte	42
 lib/components/dashboard/ContributionTable.svelte	24
 lib/components/dashboard/ExposureTable.svelte	12
 lib/components/dashboard/ExposureTreemap.svelte	10	#16a34a	#334155×2	#475569	#4ade80	#6b7280	#cbd5e1	#dc2626	#e2e8f0×2	#f87171	#ffffff	rgba(0,0,0,0.5)	rgba(248,250,252,0.8)	rgba(30,41,59,0.8)
-lib/components/dashboard/GrowthChart.svelte	86	#0891b2	#0d9488	#10b981	#16a34a×3	#1a4031×2	#1e293b×2	#22d3ee	#2563eb×2	#2dd4bf	#34d399	#3b82f6	#4ade80×5	#60a5fa×3	#64748b×2	#65a30d	#6b7280	#6b8e6b	#7c3aed×2	#94a3b8	#9ca3af×2	#9caf9c×2	#a3e635	#a78bfa×2	#b08d00	#cbd5e1	#d97706	#db2777	#dc2626×3	#e2e8f0	#ea580c	#f1f5f9	#f472b6	#f87171×3	#facc15	#fb923c	#fbbf24
+lib/components/dashboard/GrowthChart.svelte	86
 lib/components/dashboard/KpiCard.svelte	22
 lib/components/dashboard/KpiSection.svelte	104	rgba(22,163,74,${alpha})	rgba(220,38,38,${alpha})
 lib/components/dashboard/OtherPeriodEffectsTable.svelte	34	rgb(229 231 235/0.7)	rgb(255 255 255/0.5)	rgb(30 41 59)	rgb(30 41 59/0.4)
@@ -314,3 +320,5 @@ routes/(app)/transactions/+page.svelte	37
 routes/(app)/welcome/+page.svelte	4
 routes/+page.svelte	1
 ~accept	lib/stores/app/themeStore.ts	D3 (developer, 14/10): theme-color meta dark #156534 -> #166534, the sidebar green; pair checked by themeColorMeta
+~split	lib/components/assets/AssetModal.svelte	lib/components/assets/AssetModal.svelte,lib/components/assets/AssetModalImportNotices.svelte,lib/components/assets/AssetModalDetails.svelte,lib/components/assets/AssetModalIdentifiers.svelte,lib/components/assets/AssetModalProvider.svelte,lib/components/assets/AssetModalFooter.svelte,lib/components/assets/AssetModalSelectionPrompts.svelte	214
+~split	lib/components/dashboard/GrowthChart.svelte	lib/components/dashboard/GrowthChart.svelte,lib/components/dashboard/growthChartData.ts,lib/components/dashboard/growthChartSeries.ts,lib/components/dashboard/growthChartTooltip.ts	86	#0891b2	#0d9488	#10b981	#16a34a×3	#1a4031×2	#1e293b×2	#22d3ee	#2563eb×2	#2dd4bf	#34d399	#3b82f6	#4ade80×5	#60a5fa×3	#64748b×2	#65a30d	#6b7280	#6b8e6b	#7c3aed×2	#94a3b8	#9ca3af×2	#9caf9c×2	#a3e635	#a78bfa×2	#b08d00	#cbd5e1	#d97706	#db2777	#dc2626×3	#e2e8f0	#ea580c	#f1f5f9	#f472b6	#f87171×3	#facc15	#fb923c	#fbbf24

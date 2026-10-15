@@ -99,18 +99,20 @@ every device, at its next request. There is still no session store: the check co
 row that `get_current_user()` already loads on every request.
 
 `user_service.end_sessions(user)` (`backend/app/services/accounts/user_service.py`) raises the version by one and does
-not commit: the caller commits it with the change that asks for it. Four changes call it:
+not commit: the caller commits it with the change that asks for it. Five changes call it:
 
 | Change | Entry point | Sessions ended |
 |--------|-------------|----------------|
 | Password change | `POST /api/v1/auth/change-password` (`PasswordChangeModal`, Profile tab) | Every other session of the account: the same response sets a new cookie at the new version, so the device that made the change stays signed in |
-| Password reset | `./dev.py user reset` → `user_service.reset_password()` | All of them |
-| Deactivation | `./dev.py user deactivate` → `user_service.set_user_active(…, False)` | All of them: a later `user activate` does not bring them back |
-| Demotion | `./dev.py user demote` → `user_service.set_user_admin(…, False)` | All of them |
+| Password reset | `./dev.py user reset` → `user_service.reset_password()`; a [reset link](access_control.md#reset-links) spent by `POST /api/v1/auth/password-reset` → `user_service.complete_password_reset()` | All of them |
+| Deactivation | `./dev.py user deactivate` → `user_service.set_user_active(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_active: false` → `user_service.update_user_status()` | All of them: a later activation does not bring them back |
+| Demotion | `./dev.py user demote` → `user_service.set_user_admin(…, False)`; `PATCH /api/v1/users/{user_id}` with `is_superuser: false` → `user_service.update_user_status()` | All of them |
+| Sign-out by an administrator | `POST /api/v1/users/{user_id}/sessions/revoke` | All of them |
 
 Activation, promotion, logout and every refused operation leave the version alone: a wrong current password, or a new
 password equal to it, on `change-password`; an unknown user; the last active administrator; *already an admin* or
-*not an admin*.
+*not an admin*; a reset link that is not valid. So do issuing a reset link, which ends nothing until it is spent, and a
+`PATCH` whose values equal the current ones.
 
 - **The token.** `create_jwt_token(user_id, ttl_hours, session_version)`
   (`backend/app/services/accounts/auth_service.py`) writes `sub` (the user id, as a string), `sv`, `iat` and `exp`.
@@ -135,9 +137,10 @@ password equal to it, on `change-password`; an unknown user; the last active adm
     where the new cookie signs it straight back in. The race is benign, and the code does not try to close it.
 
 Tests: `./dev.py test services session-version` (`backend/test_scripts/test_services/test_session_version.py`: the
-token, the check, the four callers and the refusals, in-process) and `./dev.py test api session-revocation`
+token, the check, the command-line callers and the refusals, in-process), `./dev.py test api session-revocation`
 (`backend/test_scripts/test_api/test_session_revocation_api.py`: the password change over HTTP, with two devices and a
-second account).
+second account), and, for the administrator API and the reset links, `./dev.py test api users-admin` and
+`./dev.py test api registration`.
 
 ### 💻 Using curl
 
@@ -163,8 +166,8 @@ curl -b cookies.txt -X POST \
 
 ### 📄 Secrets from Files {: #secrets-from-files }
 
-Every secret of LibreFolio, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY` and
-`LIBREFOLIO_WEB_LINK_FINDER_API_KEY` today, is read by `env_secret(name)` in
+Every secret of LibreFolio, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY`,
+`LIBREFOLIO_WEB_LINK_FINDER_API_KEY` and `LIBREFOLIO_SMTP_PASSWORD` today, is read by `env_secret(name)` in
 `backend/app/config/__init__.py`:
 
 1. `NAME`, when not blank, is the secret as written, spaces included;
@@ -192,6 +195,9 @@ The caller decides what a `SecretFileError` means. A broken `JWT_SECRET_FILE` or
 does not: `web_link_finder_api_key()` in `backend/app/config/plugins.py` reads it only when a search
 builds the `apikey` engine, and `_build_engine()` in `backend/app/services/assets/web_link_finder.py`
 then logs `web_link_finder: <error>; disabling` and returns no engine, so that search finds no links.
+Nor does a broken `LIBREFOLIO_SMTP_PASSWORD_FILE`: email is optional, so `email_config_state()` turns
+it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged and, from a later lot,
+shown to administrators ([Email Service](../backend/email.md#config-state)).
 
 When `NAME` and `NAME_FILE` are both set, neither blank, `NAME` wins. `secrets_set_twice()` lists those
 names for the [configuration checks](#configuration-checks). It covers `JWT_SECRET` and every
@@ -282,7 +288,7 @@ A check changes nothing, never raises and never puts a secret value in its resul
 | `check_id` | Not `ok` when | Severity |
 |------------|---------------|----------|
 | `platform.jwt_secret` | Neither `JWT_SECRET` nor `JWT_SECRET_FILE` is set, blank counting as not set: one key per start, the default | `info` |
-| `platform.jwt_secret` | The secret is shorter than 32 characters (`JWT_SECRET_MIN_LENGTH`); the summary names its origin (`configured_jwt_secret_origin()`): `The session signing key from JWT_SECRET is … characters long: …`, or `from JWT_SECRET_FILE (<path>)` | `warning` |
+| `platform.jwt_secret` | The secret is shorter than 32 characters (`JWT_SECRET_MIN_LENGTH`); the summary names its origin (`configured_jwt_secret_origin()`): `The session signing key from JWT_SECRET is … characters long: …`, or `from JWT_SECRET_FILE (<path>)` | `warning`; `error` with `LIBREFOLIO_PROFILE=managed`, where `log_configuration_audit()` stops the startup first |
 | `platform.jwt_secret` | `JWT_SECRET_FILE` cannot give its secret | `error` |
 | `platform.secrets_set_twice` | A secret is set both as `NAME` and as `NAME_FILE`, neither blank (`secrets_set_twice()`) | `warning` |
 | `platform.instance_key` | `instance_key_status()` reports a `problem`: the key cannot be used, including a generated key file out of reach (`cannot be reached (Permission denied)`) | `error` |
@@ -294,10 +300,16 @@ At startup, the lifespan of `backend/app/main.py` runs `log_configuration_audit(
 (`asyncio.to_thread`), right after the `Starting LibreFolio` line:
 
 1. `configured_jwt_secret()`: an unreadable `JWT_SECRET_FILE` raises `SecretFileError`. In practice
-   the import of `auth_service.py` has already failed on it.
-2. `instance_key_status()`: a configured key (`source == "configured"`) with a problem raises
+   the import of `auth_service.py` has already failed on it. With `LIBREFOLIO_PROFILE=managed`, a
+   configured secret shorter than `JWT_SECRET_MIN_LENGTH` raises `WeakSecretError`; in the
+   self-hosted profile it stays the `warning` of the table above.
+2. `instance_blocked()` and `instance_deletion_date()` (`backend/app/config/platform.py`): a value
+   they cannot read raises `ValueError`. On a blocked instance, a warning
+   `Instance blocked by its hosting provider (LIBREFOLIO_BLOCKED): …`, with `deletion_date`, goes to
+   the log: see [Instance Block](#instance-block).
+3. `instance_key_status()`: a configured key (`source == "configured"`) with a problem raises
    `InstanceKeyError`. The administrator chose that source, so the server does not start without it.
-3. Every check that is not `ok` is logged at its severity, with the `summary` as the event and `check`
+4. Every check that is not `ok` is logged at its severity, with the `summary` as the event and `check`
    and `detail` as fields. A generated key file gone bad or out of reach is logged as an error, and the
    start goes on.
 
@@ -314,13 +326,19 @@ All endpoints that access or modify user data require a valid session cookie (`D
 |----------|--------|---------|
 | `/auth/login` | POST | User login |
 | `/auth/logout` | POST | Clear session cookie |
-| `/auth/register` | POST | New user registration |
+| `/auth/register` | POST | New user registration, under the [registration mode](access_control.md#registration-modes) and the [user limit](access_control.md#user-limit) |
+| `/auth/tokens/inspect` | POST | The status of an invitation or password-reset link, for whoever holds its token: see [Links in use](#account-token-links) |
+| `/auth/password-reset` | POST | Spend a password-reset link: a new password, and every session of the account ended |
 | `/system/health` | GET | Health check: the server answers |
 | `/system/info` | GET | System information, the app version only without a valid session (`SystemInfoPublicResponse`) and everything with one (`SystemInfoResponse`): see [System information and readiness](#system-info-and-readiness) |
 | `/system/instance` | GET | Public instance configuration, needed before sign-in: see [Public instance configuration](settings.md#public-instance-configuration) |
 | `/system/ready` | GET | Readiness for health checks and orchestrators (`200` when the database answers and its schema is at the head revision of the migrations, `503` otherwise): see [System information and readiness](#system-info-and-readiness) |
+| `/settings/global`, `/settings/global/{key}` | GET | The global settings, read-only (writes need an administrator): see [Settings System](settings.md) |
 | `/utilities/*` | GET | Reference data (countries, currencies, sectors) |
 | `/ai-export/catalog` | GET | Static AI Export catalogue (no user data) |
+
+On an instance blocked by its hosting provider, the public endpoints outside its short list answer
+`401`: see [Instance Block](#instance-block).
 
 ### 🩺 System Information and Readiness {: #system-info-and-readiness }
 
@@ -358,7 +376,7 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (including onboarding progress), System diagnostics (`/system/plugin-diagnostics`), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie.
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and every write of the global settings), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
 
 !!! info "📁 Files are protected too"
 
@@ -366,13 +384,91 @@ All other endpoints — including Auth (profile, password), Settings (including 
 
 For a complete endpoint reference, see the [API Overview](../api/overview.md).
 
+### 🚧 Instance Block {: #instance-block }
+
+A hosting provider blocks an instance with `LIBREFOLIO_BLOCKED`; the administrator's side is
+[Hosting for Others](../../admin/hosting_providers.md#instance-block). `backend/app/config/platform.py`
+reads both variables from the process environment, never through `Settings`, and they work in every
+profile:
+
+- `instance_blocked()`: `1`, `true`, `yes` and `on` block, `0`, `false`, `no` and `off` do not, in any
+  case; unset or blank is not blocked; any other value raises `ValueError`.
+- `instance_deletion_date()`: `LIBREFOLIO_DELETION_DATE`, an optional ISO date shown on the block
+  page; any other value raises `ValueError`.
+
+`log_configuration_audit()` reads both at startup, so a value they cannot read stops the server (see
+[Configuration Checks](#configuration-checks)).
+
+**The guard.** `refuse_when_blocked` (`backend/app/api/v1/instance_block.py`) is a dependency of the
+`/api/v1` router, `APIRouter(dependencies=[Depends(refuse_when_blocked)])` in
+`backend/app/api/v1/router.py`, so it covers every API route (`APIRoute`) under it, today's and
+tomorrow's. FastAPI gives no router dependency to a plain `Route`, a `WebSocketRoute` or a `Mount`, so
+none of them belongs under `/api/v1`. FastAPI hands
+a dependency the endpoint function of the matched route (`request.scope["endpoint"]`), not its full
+path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint functions:
+
+| Endpoints | Functions | For |
+|-----------|-----------|-----|
+| `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | `auth.login`, `auth.logout`, `auth.get_me` | Signing in and out, and who is signed in |
+| `DELETE /auth/users/me` | `auth.delete_own_account` | Deleting one's own account; the block page has no button for it yet |
+| `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
+| `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
+| `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
+
+**The refusal.** On a blocked instance, an endpoint outside the list first runs `get_current_user()`
+with the request's own database session (FastAPI caches the dependency), then refuses:
+
+- **without a valid session**: the `401` of `get_current_user()`;
+- **with a valid session**: `423 Locked`, with the code `INSTANCE_BLOCKED_CODE`:
+
+    ```json
+    {"detail": {"code": "instance_blocked", "message": "This instance is blocked by its hosting provider"}}
+    ```
+
+**What a caller without a session can tell.** Only signed-in users get the `423`. A caller without a
+valid session gets these answers:
+
+| Routes | Not blocked | Blocked |
+|--------|-------------|---------|
+| Protected routes outside the list | `401` | The same `401` |
+| Public routes outside the list: `POST /auth/register`, `GET /utilities/*`, `GET /settings/global`, `GET /settings/global/{key}`, `GET /ai-export/catalog` | Their usual answer | `401` |
+| The routes of the list | Their usual answer | The same answer |
+
+- The protected routes and the routes of the list do not reveal the block: `/system/instance`,
+  `/system/info` and `/system/ready` answer as on any other instance.
+- The public routes outside the list answer `401` only while the instance is blocked. From them, a
+  caller without a session can tell that the instance is blocked, and nothing more: they return no
+  data.
+
+On an instance that is not blocked, the guard returns at once and leaves the session unused. On a
+blocked one it runs before the route's own dependencies and before the body is validated: a signed-in
+caller of a refused route gets the `423` even with an invalid body, never a `422`.
+
+**`GET /system/block`** (`backend/app/api/v1/system/block.py`) is for signed-in users only, and allowed
+on a blocked instance. It returns `InstanceBlockResponse` (`backend/app/schemas/system.py`): `blocked`,
+and `deletion_date`, `null` without a date. A workstream that owns part of the block page adds one
+field there and fills it in `block.py` with one call to its service.
+
+**Changing the list.** The list is short on purpose. The full backup for the administrator and the
+scheduled wake-up join it, one line each, when their routes exist; any other addition goes through the
+developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
+pins the list by name and by route, checks that every API route under `/api/v1` resolves
+`refuse_when_blocked` first, and that the only other routes under `/api/v1` are FastAPI's
+documentation, so an addition, or a route the guard does not reach, shows in review.
+
+**Outside the guard.** Routes outside the `/api/v1` router, such as the built web app, `/mkdocs` and
+FastAPI's own documentation (`/api/v1/docs`, `/api/v1/redoc`, `/api/v1/openapi.json`), are not
+covered: the browser still loads the app, which turns the first `423` into the block page (see
+[Instance block](../frontend/state/app-state.md#instance-block)). The scheduler does not go through
+HTTP, so its jobs keep running.
+
 ## 🎟️ Single-use Account Tokens {: #account-tokens }
 
 Invitations, password-reset links, email verification and the setup link of the initial administrator all hand
 someone a secret inside a URL. `backend/app/services/accounts/token_service.py` is the building block of these
 single-use links in the accounts domain: it issues, checks, spends and revokes their tokens, with the same
-guarantees for all four. No API endpoint calls it today, and the web interface has no page at the paths of its
-links.
+guarantees for all four. Invitations and password-reset links use it today ([Links in use](#account-token-links));
+email verification and the setup link have no caller yet.
 
 ### 🎲 Generation and Storage
 
@@ -394,14 +490,15 @@ never an invitation.
 
 | Purpose | Default lifetime (`DEFAULT_TTL`) | `user_id` | `grants_admin` | Link (`token_path()`) |
 |---------|----------------------------------|-----------|----------------|-----------------------|
-| `invite` | 7 days | Refused: the account does not exist yet | Allowed | `/invite?token=…` |
-| `password_reset` | 30 minutes | Required | Refused | `/reset-password?token=…` |
-| `email_verification` | 24 hours | Required | Refused | `/verify-email?token=…` |
-| `admin_setup` | 72 hours | Required | Refused | `/setup?token=…` |
+| `invite` | 7 days | Refused: the account does not exist yet | Allowed | `/invite#token=…` |
+| `password_reset` | 30 minutes | Required | Refused | `/reset-password#token=…` |
+| `email_verification` | 24 hours | Required | Refused | `/verify-email#token=…` |
+| `admin_setup` | 72 hours | Required | Refused | `/setup#token=…` |
 
 `expires_at` is `created_at` plus the lifetime; a `ttl` argument replaces the default. `issue_token()` raises
 `ValueError` on a refused or missing `user_id`, on a refused `grants_admin` and on a lifetime that is not
-positive, before writing anything. `token_path(purpose, token)` returns the link as a path with its query string.
+positive, before writing anything. `token_path(purpose, token)` returns the link as a path with the token in the
+fragment, never in the query string: see [Links in Use](#account-token-links) for why.
 
 ### 🚦 Checking and Spending a Token
 
@@ -447,6 +544,40 @@ Without a `token_id` or a `user_id` it raises `ValueError` rather than revoke ev
 contract, including two sessions consuming one token at once and a search of the logs and of every database
 column for the plaintext. The table — columns, constraints, foreign-key actions — is described in
 [`ACCOUNT_TOKEN`](database/users_access.md#account-token).
+
+### 🔗 Links in Use: Invitations and Password Resets {: #account-token-links }
+
+Two purposes have callers: invitations and password-reset links. Their rules — who may register, the
+user limit, what each endpoint answers — are in
+[Registration, Invitations and the Admin API](access_control.md#registration). What protects their
+tokens:
+
+- **Only an administrator, or a shell on the server, issues a link.** `POST /api/v1/users/invites` and
+  `POST /api/v1/users/{user_id}/password-reset-link` require an administrator; `./dev.py user invite` and
+  `./dev.py user reset-link` run on the server. The token is in that response, or printed by that command,
+  once. A lost link is replaced with a new one.
+- **Only the newest reset link of an account works.** Issuing one revokes the account's live reset links, and
+  spending one revokes any other.
+- **Spending is atomic with its effect.** An invitation is consumed in the transaction that creates its account;
+  a reset link in the commit that sets the new password, raises the session version and revokes the other links.
+  If the account cannot be created, the invitation stays unspent.
+- **Inspecting tells a guesser nothing.** `POST /api/v1/auth/tokens/inspect` is public and writes nothing. Only a
+  valid token gets details: the expiry, plus the role and email of an invitation or the username of a reset link.
+  Any other token gets its status alone, and a token presented for the other purpose is `unknown`.
+- **Anonymous answers say nothing about the users.** The `409` `USER_LIMIT_REACHED` of `POST /auth/register`
+  carries no count and no billing link; only the administrator's routes add `limit`, `used` and `billing_url`.
+  `GET /system/instance` publishes only the registration mode and whether a variable locks it.
+- **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…` and
+  `/reset-password#token=…`. A browser never sends the fragment to the server, so the token is not in the request
+  for the page: it stays out of the server's access log and out of the logs of every proxy on the way. A browser
+  never puts the fragment in a `Referer` either. A token in the query string would be in all those logs. The page
+  reads it with JavaScript (`location.hash`); a `token` in the query string is not read at all.
+- **The link pages hide and keep the token.** `/invite` and `/reset-password` read the token when they mount,
+  then put the bare path in the address bar (`replaceState`), so the token stays out of the history and of a
+  bookmark; they keep it in memory only. They also listen to `hashchange`: a link pasted into a tab already on
+  the page changes only the fragment and loads nothing, so the page reads the new token there. Both declare
+  `<meta name="referrer" content="no-referrer">`: a link followed from them sends no `Referer` at all. Their
+  components are in [Authentication Components](../frontend/components/features/auth.md#link-pages).
 
 ## 🧼 Output Escaping
 

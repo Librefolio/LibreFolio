@@ -11,6 +11,7 @@ secret counts as unset.
 """
 
 import os
+from datetime import date
 
 from backend.app.config import env_secret, env_secret_origin
 
@@ -65,3 +66,37 @@ def frozen_app_version() -> str | None:
     blank, as for every install.
     """
     return os.environ.get("LF_APP_VERSION", "").strip() or None
+
+
+_BLOCKED_TRUE = frozenset({"1", "true", "yes", "on"})
+_BLOCKED_FALSE = frozenset({"0", "false", "no", "off"})
+
+
+def instance_blocked() -> bool:
+    """``LIBREFOLIO_BLOCKED``: a hosting provider blocks the instance, and only a few API routes answer.
+
+    ``api/v1/instance_block.py`` holds those routes. Unset or blank: not blocked, as for every install. ``1``, ``true``,
+    ``yes`` or ``on`` block, ``0``, ``false``, ``no`` or ``off`` do not, in any case; any other value raises
+    ``ValueError``, and the startup checks stop the server on it, so that a typo never leaves the choice to chance.
+    """
+    value = os.environ.get("LIBREFOLIO_BLOCKED", "").strip().lower()
+    if not value or value in _BLOCKED_FALSE:
+        return False
+    if value in _BLOCKED_TRUE:
+        return True
+    raise ValueError("LIBREFOLIO_BLOCKED must be one of 1/0, true/false, yes/no, on/off, or unset")
+
+
+def instance_deletion_date() -> date | None:
+    """``LIBREFOLIO_DELETION_DATE``: the day the hosting provider will delete a blocked instance and its data.
+
+    An ISO date (``2026-11-14``), shown on the block page. Unset or blank: no date. Any other value raises
+    ``ValueError``, and the startup checks stop the server on it.
+    """
+    value = os.environ.get("LIBREFOLIO_DELETION_DATE", "").strip()
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"LIBREFOLIO_DELETION_DATE must be an ISO date such as 2026-11-14, not {value!r}") from exc

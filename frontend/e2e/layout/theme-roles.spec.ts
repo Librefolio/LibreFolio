@@ -47,9 +47,9 @@
  *   - any page but `/`, and a signed-in session: the shell's pilot (T-3) brings its own cases.
  *
  * Nothing is written server-side: the visitor never signs in and never registers. The registration link needs
- * `enable_registration`, true by default and closed by no E2E spec (auth.spec.ts stubs it on its own pages only). The
- * runner's desktop AND mobile projects run every case. Registered in scripts/test_runner/_frontend_utility.py, action
- * `theme-roles` of front-utility.
+ * `registration_mode` 'open': open by default, read by the login card from GET /api/v1/system/instance, and changed by no
+ * E2E spec (auth.spec.ts stubs that read on its own pages only). The runner's desktop AND mobile projects run every case.
+ * Registered in scripts/test_runner/_frontend_utility.py, action `theme-roles` of front-utility.
  */
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 
@@ -165,7 +165,7 @@ test.describe('Colour roles on the sign-in page — every element draws its role
 
             test('the register card: a password meeting every rule, the requirements box on success-soft', async ({page}) => {
                 const gotoRegister = page.getByTestId('goto-register');
-                await expect(gotoRegister, 'the login card must offer registration: enable_registration is true by default and no E2E spec closes it').toBeVisible();
+                await expect(gotoRegister, 'the login card must offer registration: registration_mode is open by default, read from GET /api/v1/system/instance, and no E2E spec changes it').toBeVisible();
                 await gotoRegister.click();
                 await expect(page.getByTestId('register-modal')).toBeVisible();
 
