@@ -81,6 +81,16 @@ The contract:
   breaks the rules, or a username already taken, it prints ``❌``, exits 1 and creates or
   changes nobody (**IMG-012b**); ``create-superuser``, which still creates the E2E
   administrators, keeps creating an active administrator (**IMG-012c**).
+* **IMG-013**: ``dev.py --help`` lists ``backup`` among the commands it registered (its
+  epilog names it in prose too, which does not count); **IMG-013b**: ``dev.py backup
+  --help`` exits 0 with the usage of the group;
+* **IMG-014**: on the image's database, ``backup create`` exits 0 and writes exactly one
+  ``librefolio-backup-*.zip`` into ``backups/`` of the image's data directory, where
+  ``docker compose exec librefolio python dev.py backup create`` leaves it, with no job
+  folder left in ``backups/.jobs/``; the archive holds that database (a user this test
+  created there, and its Alembic revision in the manifest), which no exit code can prove;
+  ``backup inspect`` of the archive exits 0. **IMG-014b**: ``backup inspect`` of a file
+  that does not exist prints ``❌`` and exits 1.
 
 IMG-002b, IMG-004 and IMG-007 pin decision 1 of plan 35_devCliImage §0.1, IMG-008 its
 decision 4: a group whose sources the image lacks stays listed and answers for itself,
@@ -90,16 +100,17 @@ backlog 38, item L12 (plan A3 of workstream A): ``user create`` mapped to ``crea
 and so did the runner's ``_ensure_test_users`` and ``e2e/global-setup.ts`` for every E2E
 user, so on an empty database the users meant to be ordinary were administrators; a
 populated database hid it, because ``populate_mock_data.py`` creates them first with the
-right role. The messages are English CLI output, not UI text, so the fragments above are the
-contract: "not available in this installation", "last active administrator" and "invalid
-choice" (case aside), the missing directory, the option argparse names, ``❌`` and ``✅``,
-nothing more. Roles are read from the database itself: no exit code tells an administrator
-from an ordinary user.
+right role. IMG-013 and IMG-014 pin lot B1 of workstream B (plan 07_backupDocker §3.10): the
+``backup`` group works in the image, as ``docker compose exec`` runs it. The messages are
+English CLI output, not UI text, so the fragments above are the contract: "not available in
+this installation", "last active administrator" and "invalid choice" (case aside), the
+missing directory, the option argparse names, ``❌`` and ``✅``, nothing more. Roles are read
+from the database itself: no exit code tells an administrator from an ordinary user.
 
 "Without a traceback" means none of ``Traceback (most recent call last)``,
 ``ModuleNotFoundError`` and ``No module named`` in the combined output.
 
-PURE for the runner: the tree, its databases and its environment are private to
+PURE for the runner: the tree, its databases, its backups and its environment are private to
 ``tmp_path``; the lane's database and server are never touched, nothing goes over the
 network, nothing is written in the repository. IMG-010 loads the repository's ``dev.py``
 into this process under a private name, and undoes the ``sys.path`` entries and the change
@@ -117,6 +128,7 @@ import sqlite3
 import subprocess
 import sys
 import uuid
+import zipfile
 from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import dataclass
@@ -208,6 +220,18 @@ WEAK_PASSWORD = "weakpassword"
 DEVPY_MODULE = "_test_dev_cli_image_devpy"
 #: Characters; ``secrets.token_urlsafe(64)``, what dev.py hands out, is 86 of them.
 MIN_SECRET_LENGTH = 32
+
+#: Lot B1 of workstream B (plan 07_backupDocker §3.10): ``dev.py backup``, as ``docker compose
+#: exec librefolio python dev.py backup …`` runs it in the image. Without ``--output`` an
+#: archive goes into ``backups/`` of the data directory; while it is built, the backup keeps
+#: its state and work files in a job folder of ``backups/.jobs/``, which the command removes
+#: once the archive is in place.
+BACKUPS = "backups"
+BACKUP_JOBS = ".jobs"
+BACKUP_ARCHIVES = "librefolio-backup-*.zip"
+#: An archive's database entry, and its manifest.
+ARCHIVED_DATABASE = "sqlite/app.db"
+ARCHIVE_MANIFEST = "manifest.json"
 
 
 # ---------------------------------------------------------------------------
@@ -622,6 +646,19 @@ def user_row(listed: Run, username: str) -> str:
     rows = [line for line in listed.output.splitlines() if username in line.split()]
     assert len(rows) == 1, f"user list must show {username} exactly once: {listed}"
     return rows[0]
+
+
+def job_folders(backups: Path) -> set[Path]:
+    """The folders in ``backups/.jobs/``: a backup's job folder while it is built, none once its command has ended."""
+    jobs = backups / BACKUP_JOBS
+    return {path for path in jobs.iterdir() if path.is_dir()} if jobs.is_dir() else set()
+
+
+def alembic_revision(db_path: Path) -> str | None:
+    """The revision ``alembic_version`` records, read from the database itself; None unless it records exactly one."""
+    with closing(sqlite3.connect(db_path)) as conn:
+        rows = conn.execute("SELECT version_num FROM alembic_version").fetchall()
+    return rows[0][0] if len(rows) == 1 else None
 
 
 @pytest.fixture(scope="module")
@@ -1197,3 +1234,79 @@ class TestAccountRole:
         assert SUCCEEDED in run.output, f"expected the creation to be reported with {SUCCEEDED}: {run}"
         assert account(image_db.path, name) == ADMIN_ACCOUNT, f"create-superuser must make an active administrator: {account(image_db.path, name)}; {run}"
         print_success(f"{name}: an active administrator, {SUCCEEDED}, exit 0")
+
+
+# ---------------------------------------------------------------------------
+# IMG-013..IMG-014: the instance backup, from the image's command line (B1)
+# ---------------------------------------------------------------------------
+
+
+class TestBackup:
+    """``dev.py backup`` in the image (lot B1 of workstream B, plan 07_backupDocker §3.10).
+
+    What an administrator runs on a Docker install, ``docker compose exec librefolio python
+    dev.py backup create``: the archive goes where the image keeps its data, and ``inspect``
+    checks an archive against its manifest.
+    """
+
+    def test_top_level_help_lists_backup(self, top_help):
+        """IMG-013: dev.py --help lists backup among the commands it registered."""
+        print_section("IMG-013: dev.py --help lists backup, in the image")
+
+        assert_succeeds(top_help)
+        listed = command_entries(top_help.output)
+
+        assert "backup" in listed, f"backup must be among the registered commands, listed: {sorted(listed)}; {top_help}"
+        print_success(f"backup: {listed['backup']}")
+
+    def test_group_help(self, image):
+        """IMG-013b: dev.py backup --help exits 0 with the usage of the backup group."""
+        print_section("IMG-013b: dev.py backup --help in the image")
+
+        run = run_dev(image, "backup", "--help")
+
+        assert_succeeds(run)
+        assert re.search(r"^usage: dev\.py backup\b", run.output, re.M), f"not the help of the backup group: {run}"
+        print_success("dev.py backup --help: exit 0")
+
+    def test_create_then_inspect(self, image, image_db, tmp_path):
+        """IMG-014: backup create on the image's database exits 0, writes exactly one archive into backups/ of its data directory, leaves no job folder, and the archive holds that database; backup inspect of it exits 0."""
+        print_section("IMG-014: backup create, then backup inspect, on the image's database")
+        backups = image.data_dir / BACKUPS
+        archives_before, folders_before = set(backups.glob(BACKUP_ARCHIVES)), job_folders(backups)
+        name = unique_username()
+        assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, env=image_db.env))
+
+        created = run_dev(image, "backup", "create", env=image_db.env)
+
+        assert_succeeds(created)
+        written = set(backups.glob(BACKUP_ARCHIVES)) - archives_before
+        assert len(written) == 1, f"backup create must write exactly one {BACKUP_ARCHIVES} into {backups}, it wrote {sorted(path.name for path in written)}: {created}"
+        (archive,) = written
+        left = job_folders(backups) - folders_before
+        assert not left, f"backup create must remove its job folder from {backups / BACKUP_JOBS}, left: {sorted(path.name for path in left)}; {created}"
+        archived_db = tmp_path / "archived-app.db"
+        with zipfile.ZipFile(archive) as zf:
+            manifest = json.loads(zf.read(ARCHIVE_MANIFEST))
+            with zf.open(ARCHIVED_DATABASE) as source, archived_db.open("wb") as target:
+                shutil.copyfileobj(source, target)
+        assert name in usernames(archived_db), f"the archive must hold the image's database, with the user {name} this test created there: {archive}"
+        assert manifest["alembic_revision"] == alembic_revision(image_db.path), f"the manifest must give the revision of the image's database, {alembic_revision(image_db.path)!r}: {manifest['alembic_revision']!r}"
+
+        inspected = run_dev(image, "backup", "inspect", str(archive), env=image_db.env)
+
+        assert_succeeds(inspected)
+        print_success(f"{archive.name}: in {BACKUPS}/, no job folder left, {name} inside, inspect exit 0")
+
+    def test_inspect_of_a_missing_file_exits_1(self, image):
+        """IMG-014b: backup inspect of a file that does not exist reports it with ❌ and exits 1."""
+        print_section("IMG-014b: backup inspect of a missing file, in the image")
+        missing = image.root / f"{unique_username()}.zip"
+        assert not missing.exists(), f"premise: {missing} must not exist"
+
+        run = run_dev(image, "backup", "inspect", str(missing))
+
+        assert_no_crash(run)
+        assert FAILED in run.output, f"expected the missing file to be reported with {FAILED}: {run}"
+        assert run.returncode == 1, f"backup inspect of a missing file must exit 1: {run}"
+        print_success(f"backup inspect {missing.name}: {FAILED}, exit 1")

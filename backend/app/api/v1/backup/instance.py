@@ -1,167 +1,103 @@
 """
-Full-instance export and restore (``/backup/export``, ``/backup/restore``, ``/backup/formats``, ``/backup/status``).
+Backup of the whole instance (``/backup/instance``): an archive of the data directory, built in the background.
 
-Still placeholders: export and restore answer 501. ``backup_router`` (``__init__.py``) gives these routes the
-``/backup`` prefix and the ``Backup & Export`` tag, before the per-series exports of ``exports.py``.
+The archive holds the database (a consistent copy), the uploaded files, the broker reports and the risk scenarios, with
+a manifest: unpacked into an empty data directory it is the instance again. It holds every user's data, so every route
+here is for administrators only. ``POST /backup/instance`` starts a job and answers at once; the client polls the job,
+then downloads its archive, which the server keeps for an hour (or until ``DELETE``). One backup runs at a time.
+
+``backup_router`` (``__init__.py``) gives these routes the ``/backup`` prefix and the ``Backup & Export`` tag, before the
+per-series exports of ``exports.py``. Errors carry a stable ``code`` in ``detail``.
 """
 
-from enum import StrEnum
-from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.responses import FileResponse
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-
-from backend.app.api.v1.auth import get_current_user
+from backend.app.api.v1.settings import require_admin
 from backend.app.db.models import User
+from backend.app.schemas.backup import InstanceBackupJob
+from backend.app.services.platform.instance_backup import jobs
 
 instance_router = APIRouter()
 
-
-# =============================================================================
-# SCHEMAS — full-portfolio placeholders (kept as-is)
-# =============================================================================
+_NOT_FOUND = {"description": "No backup job has this id, or its archive is gone (code `backup_job_not_found`)"}
 
 
-class ExportFormat(StrEnum):
-    """Supported export formats."""
-
-    JSON = "json"
-    CSV = "csv"
-    SQLITE = "sqlite"  # Full database backup
+def _error(status_code: int, code: str, message: str) -> HTTPException:
+    return HTTPException(status_code=status_code, detail={"code": code, "message": message})
 
 
-class ExportScope(StrEnum):
-    """What to include in export."""
-
-    ALL = "all"
-    TRANSACTIONS = "transactions"
-    ASSETS = "assets"
-    BROKERS = "brokers"
-    SETTINGS = "settings"
-
-
-class ExportRequest(BaseModel):
-    """Request for data export."""
-
-    format: ExportFormat = ExportFormat.JSON
-    scope: List[ExportScope] = [ExportScope.ALL]
-    include_price_history: bool = False  # Can be large
-    broker_ids: Optional[List[int]] = None  # Filter by broker (None = all)
+def _job_response(job: jobs.BackupJob) -> InstanceBackupJob:
+    return InstanceBackupJob(
+        job_id=job.job_id,
+        status=job.status,
+        phase=job.phase,
+        done_bytes=job.done_bytes,
+        total_bytes=job.total_bytes,
+        created_at=job.created_at,
+        finished_at=job.finished_at,
+        file_name=job.file_name,
+        file_size=job.file_size,
+        warnings=list(job.warnings),
+        error_code=job.error_code,
+    )
 
 
-class ExportResponse(BaseModel):
-    """Response with export file info."""
-
-    download_url: str
-    filename: str
-    size_bytes: int
-    expires_at: str  # ISO datetime
-
-
-class RestoreRequest(BaseModel):
-    """Request to restore from backup."""
-
-    file_id: str  # UUID of uploaded backup file
-    overwrite_existing: bool = False  # If true, replaces existing data
-
-
-class RestoreResponse(BaseModel):
-    """Response from restore operation."""
-
-    success: bool
-    restored_count: dict  # e.g., {"brokers": 2, "assets": 50, "transactions": 1000}
-    warnings: List[str] = []
+@instance_router.post(
+    "/instance",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=InstanceBackupJob,
+    responses={409: {"description": "Another backup is running (code `backup_busy`)"}},
+)
+def start_instance_backup(_admin: User = Depends(require_admin)) -> InstanceBackupJob:
+    """Start a backup of the whole instance in the background, and return the job to poll. Administrators only."""
+    try:
+        job = jobs.start_backup(origin="ui")
+    except jobs.BackupBusyError:
+        raise _error(status.HTTP_409_CONFLICT, "backup_busy", "Another backup is running") from None
+    return _job_response(job)
 
 
-# =============================================================================
-# ENDPOINTS
-# =============================================================================
+@instance_router.get("/instance/jobs/{job_id}", response_model=InstanceBackupJob, responses={404: _NOT_FOUND})
+def get_instance_backup_job(job_id: str, _admin: User = Depends(require_admin)) -> InstanceBackupJob:
+    """The state of a backup job: its phase and progress while it runs, its archive or its error once it ends."""
+    try:
+        return _job_response(jobs.get_job(job_id))
+    except jobs.BackupJobNotFoundError:
+        raise _error(status.HTTP_404_NOT_FOUND, "backup_job_not_found", "No such backup job") from None
 
 
-@instance_router.post("/export", response_model=ExportResponse)
-async def export_data(request: ExportRequest, _current_user: User = Depends(get_current_user)):
-    """
-    Export portfolio data to file.
-
-    **Supported Formats:**
-    - `json`: Human-readable JSON file
-    - `csv`: Multiple CSV files in ZIP archive
-    - `sqlite`: Full SQLite database file
-
-    **Scope Options:**
-    - `all`: Export everything
-    - `transactions`: Only transactions
-    - `assets`: Only assets and metadata
-    - `brokers`: Only broker definitions
-    - `settings`: Only user settings
-
-    **Note:** This endpoint is not yet implemented.
-    """
-    raise HTTPException(status_code=501, detail="Export functionality is not yet implemented. Coming soon!")
+@instance_router.get(
+    "/instance/jobs/{job_id}/file",
+    response_class=FileResponse,
+    responses={
+        200: {"content": {"application/zip": {}}, "description": "The backup archive"},
+        404: _NOT_FOUND,
+        409: {"description": "The job has not produced an archive: still running, or failed (code `backup_job_not_ready`)"},
+    },
+)
+def download_instance_backup(job_id: str, _admin: User = Depends(require_admin)) -> FileResponse:
+    """Download the archive of a finished backup job. It holds every user's data: keep it private."""
+    try:
+        path, name = jobs.job_archive(job_id)
+    except jobs.BackupJobNotFoundError:
+        raise _error(status.HTTP_404_NOT_FOUND, "backup_job_not_found", "No such backup archive") from None
+    except jobs.BackupJobStateError:
+        raise _error(status.HTTP_409_CONFLICT, "backup_job_not_ready", "The backup has no archive yet") from None
+    return FileResponse(path, media_type="application/zip", filename=name, headers={"Cache-Control": "no-store"})
 
 
-@instance_router.post("/restore", response_model=RestoreResponse)
-async def restore_data(request: RestoreRequest, _current_user: User = Depends(get_current_user)):
-    """
-    Restore portfolio data from backup file.
-
-    **Important:**
-    - If `overwrite_existing=False` (default), only imports new data
-    - If `overwrite_existing=True`, replaces all existing data
-
-    **Supported Formats:**
-    - JSON export files created by `/export`
-    - SQLite database files
-
-    **Note:** This endpoint is not yet implemented.
-    """
-    raise HTTPException(status_code=501, detail="Restore functionality is not yet implemented. Coming soon!")
-
-
-@instance_router.get("/formats")
-async def list_export_formats(_current_user: User = Depends(get_current_user)):
-    """
-    List available export formats.
-
-    Returns information about each supported format.
-    """
-    return {
-        "formats": [
-            {
-                "code": "json",
-                "name": "JSON Export",
-                "description": "Human-readable JSON file with all data",
-                "extension": ".json",
-                "available": False,  # Not yet implemented
-            },
-            {
-                "code": "csv",
-                "name": "CSV Archive",
-                "description": "ZIP file containing CSV files for each table",
-                "extension": ".zip",
-                "available": False,
-            },
-            {
-                "code": "sqlite",
-                "name": "SQLite Database",
-                "description": "Full database backup as SQLite file",
-                "extension": ".db",
-                "available": False,
-            },
-        ]
-    }
-
-
-@instance_router.get("/status")
-async def backup_status(_current_user: User = Depends(get_current_user)):
-    """
-    Get backup/export system status.
-
-    Returns current implementation status.
-    """
-    return {
-        "status": "placeholder",
-        "message": "Backup/Export functionality is planned for a future release",
-        "implemented_endpoints": ["/backup/formats", "/backup/status"],
-        "planned_endpoints": ["/backup/export", "/backup/restore"],
-    }
+@instance_router.delete(
+    "/instance/jobs/{job_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={404: _NOT_FOUND, 409: {"description": "The job is still running (code `backup_job_running`)"}},
+)
+def delete_instance_backup_job(job_id: str, _admin: User = Depends(require_admin)) -> Response:
+    """Remove a finished backup job and its archive from the server before the hour it would keep them."""
+    try:
+        jobs.delete_job(job_id)
+    except jobs.BackupJobNotFoundError:
+        raise _error(status.HTTP_404_NOT_FOUND, "backup_job_not_found", "No such backup job") from None
+    except jobs.BackupJobStateError:
+        raise _error(status.HTTP_409_CONFLICT, "backup_job_running", "The backup is still running") from None
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
