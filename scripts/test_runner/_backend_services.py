@@ -442,6 +442,16 @@ def services_user_profile(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "User profile service tests", verbose=verbose)
 
 
+def services_account_tokens(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the single-use account tokens: invites, password resets, e-mail verification, admin setup."""
+    print_section("Services: Account Tokens")
+    print_info("Testing: backend/app/services/accounts/token_service.py")
+    print_info("Tests: hash-only storage, one purpose per token, expiry boundary, atomic single use, revocation, caller-owned transaction, no plaintext in logs")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_tokens.py", test_names)
+    return run_command(cmd, "Account token service tests", verbose=verbose)
+
+
 def services_edge_cases(verbose: bool = False, test_names: list = None) -> bool:
     """Test edge cases and regression scenarios for transactions."""
     print_section("Services: Transaction Edge Cases")
@@ -1042,6 +1052,16 @@ Note: No backend server required.
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
     add_test(cat, "broker", services_broker, name="Broker Service", desc="CRUD, initial deposits, summaries")
     add_test(cat, "user-profile", services_user_profile, name="User Profile", desc="Username/email update, validation")
+    add_test(
+        cat,
+        "account-tokens",
+        services_account_tokens,
+        name="Account Tokens",
+        desc="issue/inspect/consume/revoke: hash only, one purpose, expiry at expires_at, single use under concurrency, the caller commits, no plaintext in logs",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server. The concurrency test races two connections on that private file only.
+        isolation="pure",
+    )
     add_test(cat, "edge-cases", services_edge_cases, name="Transaction Edge Cases", desc="Decimal precision, currency validation, date edge cases")
     add_test(
         cat,

@@ -530,25 +530,35 @@ def onboarding_migration_db(tmp_path):
     return db_path, cfg
 
 
-def test_onboarding_migration_chain_has_exactly_one_head_at_004(tmp_path):
-    """The migration chain is linear and ends at a single head, 004_release_1_2_0_schema.
+def test_migration_chain_has_exactly_one_head_and_004_keeps_its_parent(tmp_path):
+    """The migration chain ends at exactly one head, and 004_release_1_2_0_schema still sits on 5b1333fa6b07.
 
     The single-head assertion is the point of this test. The chain once forked
     into two sibling 003 revisions and needed an empty merge node to become
     upgradable again; a fork is cheap to see here and expensive to see on an
-    install, where Alembic simply refuses to upgrade.
+    install, where Alembic simply refuses to upgrade — and where the startup
+    check (`main.py:_alembic_head_revision`, `get_current_head()`) raises on
+    two heads, swallows it, and lets the server boot without migrating.
+
+    Which revision is the head is deliberately not pinned. This test used to
+    assert that the head *was* 004, so it turned red the moment the next
+    migration landed (005_accounts_invites in 1.3, then 006 and 007): red for a
+    change that is correct, which teaches nothing. What the next migration
+    cannot legitimately change is pinned instead: one head, and 004 — a
+    released revision, stamped in users' `alembic_version` — still in the
+    chain on its released parent. With one head, every revision is one of its
+    ancestors, so 004 stays on the upgrade path of every install.
     """
     from alembic.script import ScriptDirectory  # noqa: PLC0415 — test-only migration inspection
 
     cfg = _onboarding_migration_config(tmp_path / "onboarding_revision_contract.db")
     scripts = ScriptDirectory.from_config(cfg)
     heads = scripts.get_heads()
-    revision = scripts.get_revision(_ONBOARDING_REVISION)
+    revisions = {script.revision: script for script in scripts.walk_revisions()}
 
     assert len(heads) == 1, f"Migration chain must not fork; found {len(heads)} heads: {heads}"
-    assert heads[0] == _ONBOARDING_REVISION, f"Expected head {_ONBOARDING_REVISION}, got {heads[0]}"
-    assert revision is not None
-    assert revision.down_revision == _PRE_ONBOARDING_REVISION
+    assert _ONBOARDING_REVISION in revisions, f"{_ONBOARDING_REVISION} shipped in v1.2.0 and must stay in the chain; found {sorted(revisions)}"
+    assert revisions[_ONBOARDING_REVISION].down_revision == _PRE_ONBOARDING_REVISION
 
 
 def test_onboarding_migration_backfills_existing_users_by_flow_and_step_policy(onboarding_migration_db):
