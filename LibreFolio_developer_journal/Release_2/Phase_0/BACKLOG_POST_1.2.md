@@ -2491,6 +2491,36 @@ Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.p
 - ✅ **B-3 · La docstring di `backup_asset_prices` cita `backup_service.PRICE_COLUMNS`, ed è nell'OpenAPI** — minimo, doc;
   B, 15/10 (B0). **Chiusa il 15/10 con B1**, che cambia comunque l'API. `backend/app/api/v1/backup/exports.py:71`: il modulo ora è `series_export.py`. Un lotto di riordino
   lascia lo schema identico, quindi la correggo in B1, che cambia comunque l'API. Dettagli: piano 07, §13, B0 passo 2.
+- **B-4 · I comandi dell'immagine elencati senza `backup`** — minimo, doc; B, 15/10 (B6a, segnalato da docs-writer).
+  `docker_advanced.en.md#docker-exec` («In the image, `user`, `db` and `info` work»), il commento in testa a
+  `docker-compose.yml` e `admin/index.en.md:21` («user management, database upgrades») non dicono che anche
+  `dev.py backup` funziona nell'immagine. I file Docker sono di H fino al CP7a. **Passata ad H dal coordinatore** (15/10,
+  14:37). Dettagli: piano 07, §13, B6a.
+- **B-5 · `filesystem.en.md` «💾 Backup» non conosce `dev.py backup`** — piccolo, doc; B, 15/10 (B6a). Il file è di H
+  (CP3). Mancano:
+  - un rimando a `cli_tools.md#backup`, l'unico modo di fare un backup coerente a server acceso senza `sqlite3`;
+  - la nota che la copia della cartella dati prende anche `backups/`, con gli archivi;
+  - `backups/` nell'albero della cartella;
+  - un'ancora esplicita `{: #what-to-back-up }` sul titolo «✅ What to Back Up», nelle 4 lingue: i titoli tradotti hanno
+    slug diversi, quindi la pagina della CLI ora punta a `filesystem.md#backup`.
+
+  Testo proposto da docs-writer nel piano 07, §13, B6a. **Passata ad H dal coordinatore** (15/10, 14:37).
+- **B-6 · Il polling della scheda Backup ha il suo ciclo** — minimo; B, 15/10 (B5a). `BackupJobController` legge il
+  job con un suo `setTimeout`, perché nella base non c'è ancora l'aiuto comune di Z (F26, «un solo aiuto di polling per
+  tutti i cicli»). Quando entra, il controller lo usa. Il ciclo è breve e solo durante un backup avviato dall'admin.
+  Dettagli: piano 07, §13, B5a.
+- **B-7 · Debito di traduzione di `cli_tools.{it,fr,es}.md`** — piccolo, doc; B, 15/10 (B6a). Mancano la sezione
+  «💾 Back Up the Instance» (5 sottosezioni), una frase dell'introduzione e il punto Docker del suggerimento. La pagina
+  inglese non è timbrata: la traduzione passa dalla pipeline Aphra, su richiesta del developer.
+- **B-8 · Un backup avviato dalla UI la cui risposta si perde resta invisibile alla scheda** — minimo; B, 15/10 (B5a,
+  segnalato da test-author). Se la risposta di `POST /backup/instance` si perde (rete, timeout), il job gira sul server
+  ma la scheda non conosce il suo id. Nessuna rotta elenca il job in corso, e il rifiuto `backup_busy` non lo porta.
+  - Effetto: «busy» finché quel job finisce; il suo archivio scade dopo un'ora senza essere offerto; lo spazio su disco
+    resta occupato per quell'ora.
+  - Cura possibile: l'id (e l'origine) del job in corso nel dettaglio di `backup_busy`, così la scheda lo segue. Con
+    un'attenzione: un job della CLI si sposta fuori da `.jobs/` alla fine.
+
+  Dettagli: piano 07, §13, B5a, terza tornata.
 
 ## E · Email (fase 01)
 
