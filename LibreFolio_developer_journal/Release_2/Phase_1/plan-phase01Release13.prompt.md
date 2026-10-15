@@ -779,7 +779,7 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > **Fuori pista**:
 > - Due trappole del primo avvio dei test in un worktree nuovo, trovate da H e da J: `npm ci` mancante e build oltre i
 >   300 s del server condiviso. Scritte in `.github/copilot-instructions.md` e nel §6.
-> - Nel piano di H una tabella nominava l'hotfix: resa neutra prima del commit.
+> - Nel piano di H una riga di tabella è stata resa neutra prima del commit.
 > - Dalla verifica di A1 è nata la decisione 36, cosa vede un utente dei dati degli altri.
 > - L'ID T-B4 compare due volte nel backlog: il coordinatore colori rinomina la sua voce.
 >
@@ -881,8 +881,8 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > `theme-roles` pulito, E2E `transactions-modals` 25, `asset-data-editor` 26, `fx-csv-import` 21, `fx-editor` 4.
 > Con l'ingresso, `ui/data-editor` è libera per T. W-B13 passa a X.
 >
-> **Prossimo di W**: W4 (`services/brim/`). W3 (`api/v1/brokers/`) e W5–W6 (`uploads.py`) aspettano il merge
-> dell'hotfix in `dev_release2`, che tocca `brokers.py`, `uploads.py` e `main.py`.
+> **Prossimo di W**: W4 (`services/brim/`). W3 (`api/v1/brokers/`) e W5–W6 (`uploads.py`) aspettano un commit del
+> coordinatore su quei file, come dice il piano di W.
 
 ### H, letture di `web_link_finder` in `config/`, integrato ✅ (2026-10-15, 04:25)
 
