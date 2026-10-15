@@ -1200,3 +1200,25 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
    > fino a K2b.
 
    ✅ **K2a completato** (06:36) — 🧊 FROZEN in attesa del checkpoint del coordinatore.
+
+   > **Note implementazione (coordinatore, 15/10 ~06:38)**: K2a committato come `0eac8e1b6` (`fix(brim): coded
+   > DEGIRO/Generic CSV refusals`, 18 file) e `4cb9fa5bf` (journal). Aggiornamento di base: merge `388a20f65` di
+   > `dev_release2` a `786f3e216` (J C-93, H CP4 col router di sistema e l'area degli avvisi nel layout, J G-8, X CP4
+   > con gli schemi degli asset per tema); `backend-schemas.instructions.md` fuso da solo, con `assets/` e
+   > `transactions/`. X-R9 e W-B15 nel lotto E1; le altre righe superate di quel file restano al coordinatore, per una
+   > passata unica a fine riordino.
+
+### Controllo leggero di `388a20f65` (K2a + J C-93, H CP4, J G-8, X CP4) ✅ (2026-10-15) — 🧊 FROZEN
+
+1. ✅ **Base** (06:38): HEAD `388a20f65` (genitori `4cb9fa5bf`, `786f3e216`), pulito, porta libera. Il merge non tocca
+   nessun file di K2a salvo `backend-schemas.instructions.md`, con i due pacchetti presenti.
+2. ✅ **Frontend**: `front build --debug` (06:38–06:40) con svelte-check 0 errori, 0 avvisi; `i18n check` stretto
+   (4 392 chiavi, 18 sottosistemi); Vitest `tx-unit` 22 file, 903 passed; `core-unit` 134 file, 4 290 passed (le 2
+   file in più sono i test di `features/instance/` di H CP4, registrati in `_frontend_utility.py`).
+3. ✅ **E2E** col layout nuovo di H: `tx-import-broker-mismatch` 5 passed, `tx-import-degiro` 4 passed (06:41–06:43).
+4. ✅ **Contro `786f3e216`** (albero `git archive` in `/tmp/libreFolio_w_ref_786f/`): `api schema` con OpenAPI e
+   contratti dei Tool identici; `pytest --collect-only` 14 014 → 14 071 (+57: `test_brim_degiro.py` +28,
+   `test_brim_providers.py` +27, `test_brim_provider_base.py` +2), identico sugli altri 269 file.
+5. ✅ **Selettori di K2a** sul fuso (06:44–06:45): `services brim-parse-race` 42, `brim-provider-base` 39;
+   `external brim-providers` 733 (1 skipped), `brim-degiro` 197; `api brim TestParseRefusalReason
+   TestPluginCheckEndpoint` 9. `git diff --check` pulito; porta 6184 libera.
