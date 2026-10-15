@@ -76,7 +76,8 @@ from backend.app.services.ai_export.components.technical_context import FX_TECHN
 from backend.app.services.ai_export.components.technical_shared import FxRateHistoryError, load_fx_rate_series
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import BuildContext, RequiredComponentBuildError, ResourceLoadError, build_bucket_plan_for_scope
-from backend.app.services.fx import RateNotFoundError, convert_bulk
+from backend.app.services.fx.base import RateNotFoundError
+from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.portfolio_service import PortfolioService, _portfolio_l2_cache, _wac_cache
 from backend.app.utils.datetime_utils import utcnow
 

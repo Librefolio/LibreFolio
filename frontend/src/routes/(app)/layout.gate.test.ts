@@ -110,6 +110,7 @@ vi.mock('$lib/stores/app/donationPopupStore.svelte', () => ({donationPopup: {for
 vi.mock('$lib/features/update-check/updateCheckStore.svelte', () => ({updateAvailable: {show: vi.fn()}}));
 vi.mock('$lib/features/update-check/updateCheck', () => ({checkForNewerRelease: vi.fn(() => Promise.resolve(null))}));
 vi.mock('$lib/api', () => ({zodiosApi: {get_system_info_api_v1_system_info_get: vi.fn(() => new Promise(() => {}))}}));
+vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({instanceConfig: {load: vi.fn(() => new Promise<void>(() => {}))}}));
 vi.mock('$lib/components/layout/Sidebar.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/components/layout/Header.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/components/ui/feedback/ToastContainer.svelte', () => ({default: mocks.noopComponent}));
@@ -117,6 +118,7 @@ vi.mock('$lib/features/onboarding/components/OnboardingBootstrapBlock.svelte', (
 vi.mock('$lib/features/onboarding/components/OnboardingBootstrapBanner.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/onboarding/components/OnboardingOverlayHost.svelte', () => ({default: mocks.noopComponent}));
 vi.mock('$lib/features/onboarding/components/DeferredAppPopups.svelte', () => ({default: mocks.noopComponent}));
+vi.mock('$lib/features/instance/components/InstanceNotices.svelte', () => ({default: mocks.noopComponent}));
 
 import {cleanup, render, screen, within} from '$test/component';
 import {assertEffectsRun} from '$test/runes.svelte';

@@ -63,7 +63,7 @@ history uses `NO_DATA`, and malformed or unexpected Yahoo responses use `FETCH_E
 
     Yahoo's yfinance calls remain synchronous and direct. The provider does not call
     `asyncio.to_thread()`; the asset-source service invokes the whole provider coroutine through
-    `asset_sources.core._run_provider_in_thread()` in a dedicated thread with a new event loop.
+    `assets.core._run_provider_in_thread()` in a dedicated thread with a new event loop.
 
 ### 🔎 Search (`search`)
 
@@ -92,7 +92,7 @@ During sync, the provider generates:
 - **`SPLIT` events** from `ticker.splits` — split date + ratio value (e.g., `4.0` for a 4:1 split).
 
 Event acquisition and parsing are best-effort and independent. Events that are returned are
-persisted by `asset_sources/price_store.py::_upsert_asset_events()`, keyed by
+persisted by `assets/event_store.py::_upsert_asset_events()`, keyed by
 `provider_assignment_id`.
 
 ---
@@ -107,7 +107,7 @@ persisted by `asset_sources/price_store.py::_upsert_asset_events()`, keyed by
 | **Yahoo currency lookup** | `symbol` | 24 hours | 2000 | Cache the provider's `fast_info` currency sub-operation used by `search()`. |
 
 All are in-memory, per-process TTL caches created with `get_ttl_cache()`. The shared result caches
-are owned by `asset_sources/core.py`; Yahoo owns only its currency sub-operation cache.
+are owned by `assets/core.py`; Yahoo owns only its currency sub-operation cache.
 
 !!! info "No provider-level history cache"
 

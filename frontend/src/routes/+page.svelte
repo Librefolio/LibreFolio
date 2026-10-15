@@ -3,9 +3,9 @@
     import {browser} from '$app/environment';
     import {goto} from '$app/navigation';
     import AnimatedBackground from '$lib/components/ui/AnimatedBackground.svelte';
-    import LoginCard from '$lib/components/auth/LoginCard.svelte';
-    import RegisterCard from '$lib/components/auth/RegisterCard.svelte';
-    import ForgotPasswordCard from '$lib/components/auth/ForgotPasswordCard.svelte';
+    import LoginCard from '$lib/features/auth/LoginCard.svelte';
+    import RegisterCard from '$lib/features/auth/RegisterCard.svelte';
+    import ForgotPasswordCard from '$lib/features/auth/ForgotPasswordCard.svelte';
     import LanguageSelector from '$lib/components/layout/LanguageSelector.svelte';
     import HelpMenu from '$lib/components/layout/HelpMenu.svelte';
     import ThemeToggle from '$lib/components/ui/ThemeToggle.svelte';

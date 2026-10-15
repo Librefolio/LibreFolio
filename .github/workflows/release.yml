@@ -137,7 +137,8 @@ jobs:
         # webServer's debug rebuild, the production rebuild for the images — each after
         # steps that may write tracked files, so `git describe --dirty` there read
         # "-dirty" (the 1.1 screenshots, the nightlies). LF_APP_VERSION, frozen from
-        # VERSION here, takes precedence over git describe in vite.config.ts.
+        # VERSION here, takes precedence over git describe in vite.config.ts, and in the
+        # backend's get_git_version() too: the gallery's servers report the same version.
         run: echo "LF_APP_VERSION=$(cat VERSION)" >> "$GITHUB_ENV"
 
       - name: "[INFO] Environment summary before install"

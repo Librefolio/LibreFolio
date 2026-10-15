@@ -4,28 +4,30 @@ This section explains the authentication model, user roles, and how data is segr
 
 ## 🔐 Authentication Model (Stateless JWT Cookie)
 
-LibreFolio authenticates with a **signed JWT** kept in an HTTP-only cookie. The server stores no
-session state, neither in memory nor in the database.
+LibreFolio authenticates with a **signed JWT** kept in an HTTP-only cookie. The server keeps no
+record of sessions, neither in memory nor in the database: its one piece of session state is a
+counter per account, `users.session_version`, that ends all of the account's sessions at once
+([Session Revocation](security.md#session-revocation)).
 
 ### 🔄 How it Works
 
 1. **Login**: The user sends their `username` (or e-mail) and `password` to the `/api/v1/auth/login` endpoint.
 2. **Token Creation**:
     - The server verifies the credentials (using `bcrypt` hashing).
-    - If valid, it signs a JWT with `JWT_SECRET` (HS256) carrying the user ID (`sub`), the issue time (`iat`) and the expiry (`exp`): `create_jwt_token()` in `backend/app/services/auth_service.py`.
+    - If valid, it signs a JWT with `JWT_SECRET` (HS256) carrying the user ID (`sub`), the account's session version (`sv`), the issue time (`iat`) and the expiry (`exp`): `create_jwt_token()` in `backend/app/services/accounts/auth_service.py`.
 3. **Cookie Issuance**: The server responds with a `Set-Cookie` header for the `session` cookie, which holds the JWT; its `max_age` matches the token's lifetime.
     - **`HttpOnly`**: The cookie cannot be accessed by JavaScript (prevents XSS token theft).
     - **`SameSite=Lax`**: Provides protection against CSRF attacks.
-    - **`Secure`**: decided by `session_cookie_secure()` in `backend/app/api/v1/auth.py` from `SESSION_COOKIE_SECURE`. `auto`, the default, sets it on HTTPS, seen directly or as the first `X-Forwarded-Proto` value of a reverse proxy; `always` and `never` force it. Login, logout and account deletion use the same rule. See [Configuration](../../admin/configuration.md).
+    - **`Secure`**: decided by `session_cookie_secure()` in `backend/app/api/v1/auth.py` from `SESSION_COOKIE_SECURE`. `auto`, the default, sets it on HTTPS, seen directly or as the first `X-Forwarded-Proto` value of a reverse proxy; `always` and `never` force it. Login, password change, logout and account deletion use the same rule. See [Configuration](../../admin/configuration.md).
 4. **Authenticated Requests**: The browser automatically includes the session cookie in subsequent requests.
-5. **Validation**: On every request, `get_current_user()` verifies the token's signature and expiry, then loads the user from the database: a missing or deactivated user gets `401` even with a valid token.
+5. **Validation**: On every request, `get_current_user()` verifies the token's signature and expiry, then loads the user from the database: a missing or deactivated user gets `401` even with a valid token, and so does a token whose `sv` is not the account's current `session_version`.
 
 ### 💾 Session State, Restarts & TTL
 
-- 🧠 **Stateless**: Nothing is stored server-side, so any uvicorn worker can validate any token, provided all workers share the same `JWT_SECRET`.
-- 🔑 **Restarts**: Sessions survive a restart only if `JWT_SECRET` is set to a fixed value. Without it, every start generates a new random key, existing tokens no longer verify, and everyone is signed out. See [JWT Secret](security.md#jwt-secret) for how the key is resolved.
-- ⏱️ **TTL (Time To Live)**: The session duration is configurable via the `session_ttl_hours` Global Setting (default: 24 hours), read at login. There is no refresh: after expiry the user logs in again.
-- 🚪 **Revocation**: Logout only deletes the cookie, and a password change leaves existing tokens valid until they expire. Deactivating or deleting the user cuts access at the next request; changing `JWT_SECRET` signs everyone out.
+- 🧠 **Stateless**: No session is stored server-side — the version check reads `users.session_version` from the user row every request loads anyway — so any uvicorn worker can validate any token, provided all workers share the same `JWT_SECRET`.
+- 🔑 **Restarts**: Sessions survive a restart only if `JWT_SECRET`, or the file named by `JWT_SECRET_FILE`, holds a fixed value. Without it, every start generates a new random key, existing tokens no longer verify, and everyone is signed out. See [JWT Secret](security.md#jwt-secret) for how the key is resolved.
+- ⏱️ **TTL (Time To Live)**: The session duration is configurable via the `session_ttl_hours` Global Setting (default: 24 hours), read whenever a session cookie is issued: at login, and when a password change re-issues it. There is no refresh: after expiry the user logs in again.
+- 🚪 **Revocation**: Logout only deletes the cookie. A password change or reset (`./dev.py user reset`), a deactivation or a demotion raises the account's `session_version`: every session issued before it gets `401` at its next request, and a later reactivation does not bring them back. The password change also sends a new cookie to the device that made it, which stays signed in. Deleting the user cuts access at the next request; changing `JWT_SECRET` signs everyone out. See [Session Revocation](security.md#session-revocation).
 
 ## 👤 User Roles
 

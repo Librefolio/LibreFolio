@@ -2,13 +2,13 @@
 
 *Status: Implemented (Feb 2026)*
 
-The **App & UI State** category contains stores responsible for the global user experience. These stores manage authentication, global preferences, localization, and shell navigation.
+The **App & UI State** category contains stores responsible for the global user experience. These stores manage authentication, global preferences, localization, shell navigation, and the public configuration and notices of the instance.
 
 ## 🗂️ Stores
 
 | Store | File | Purpose |
 |:------|:-----|:--------|
-| **Auth** | `app/auth.ts` | Manages login status, JWT tokens, and the current user object. |
+| **Auth** | `app/auth.ts` | Holds the session state — the current user (`null` when signed out) and the loading, error and initialized flags — through `login()`, `logout()` and `checkAuth()` (`GET /auth/me`). The session itself is the HttpOnly `session` cookie the backend sets: the frontend never sees the token. |
 | **Settings** | `app/settings.ts` | User-specific preferences (language, theme, base currency, avatar). Syncs with the backend. |
 | **Global Settings** | `app/globalSettings.ts` | Application-wide settings (admin-only writes), like max upload sizes. |
 | **Language** | `app/language.ts` | The interface language. `currentLanguage.set()` also sets the `svelte-i18n` locale and saves the choice in this browser (`librefolio-locale`), which the next load starts from. Nothing listens to the Settings store: the language is set explicitly — by the auth store at login, from the user's settings in the login response, and by the UI: the Preferences tab and the Welcome page after their write, or the header selector (this browser only). |
@@ -17,6 +17,8 @@ The **App & UI State** category contains stores responsible for the global user 
 | **Privacy** | `app/privacyStore.svelte.ts` | Device-local "hide amounts" flag, read inside the currency formatters. See [Privacy masking](#privacy-masking). |
 | **Navigation** | `app/navigationStore.ts` | Controls the sidebar state (open/closed) and active page tracking. |
 | **Toasts** | `app/toastStore.svelte.ts` | Svelte 5 Rune-based store for displaying global notification messages. |
+| **Instance configuration** | `$lib/features/instance/instanceConfig.svelte.ts` | The public configuration of the instance (`GET /api/v1/system/instance`), read once per page load, before the sign-in. See [Instance configuration](#instance-config). |
+| **Instance notices** | `$lib/features/instance/instanceNotices.svelte.ts` | The messages about the instance that features register, shown above every page of the app shell. See [Instance notices](#instance-notices). |
 | **Chart Settings** | `chartSettingsStore.svelte.ts` | Chart preferences of the FX and Assets pages: line colouring, area fill, grid lines, stale-data gradient, axis scales, the asset Calendar Return window and overlay signals. Kept per user in `localStorage` (`lf_{userId}_chartSettingsStore`), never on the server, in two separate scopes, `fx` and `assets`: each has its own global settings plus per-item overrides (pair slug, `asset-{id}`), and applying a scope's global settings clears that scope's per-item overrides. The chart period is not stored here: it lives in `sessionStorage` (Date Range, below). |
 | **Date Range** | `dateRangeStore.svelte.ts` | The date range (start, end) shared by the Dashboard (through `dateRangeController.svelte.ts`), the broker detail page, and the Assets and FX pages, list and detail. It lives in `sessionStorage` (`librefolio_dateRange`), so it belongs to the browser tab and survives a reload; on a full page load, `start` and `end` in the URL win, and it falls back to the last three months when the account changes. |
 
@@ -72,6 +74,88 @@ graph TD
 3. **Language and theme**: nothing listens to the settings store; they are set explicitly — by the auth store at login, from the same response (`currentLanguage.set()`, `applyTheme()`); by the Preferences tab after its write; by the Welcome page after **Continue** (the language only: Welcome leaves the theme alone); and, for this browser only, by the header buttons (item 4).
 4. **Write first**: no settings screen updates the store before the server answers. The Preferences tab sends `PUT /api/v1/settings/user` (one field per request) and, only once it succeeds, applies the language or theme and calls `userSettings.setDirect()`; a failed write leaves the store as it was and shows an error toast. The Profile tab (avatar) and the Welcome page also write first; Welcome only previews a new language (the svelte-i18n `locale`) until **Continue** saves it. `setDirect()` itself never calls the API: it sets the store and its per-user `localStorage` cache (`lf_{userId}_user_settings`). The header's theme and language buttons change only this browser (`librefolio-theme`, `librefolio-locale`) and save nothing to the account.
 5. **After a reload**: language and theme come from this browser's `librefolio-locale` and `librefolio-theme`, so a change made on another device shows here only at the next login.
+
+## 🏢 Instance configuration {: #instance-config }
+
+`instanceConfig` (`lib/features/instance/instanceConfig.svelte.ts`, Svelte 5 runes) holds the public
+configuration of the instance: the answer of `GET /api/v1/system/instance`, the same for whoever asks
+and readable without a session (backend side:
+[Public instance configuration](../../architecture/settings.md#public-instance-configuration)).
+
+- **When**: the `(app)` layout calls `void instanceConfig.load()` at the top of its `onMount`, before
+  the auth check, and does not wait for it. A page outside the layout, such as the login page, may call
+  it too.
+- **One request per page load**: concurrent and later calls share the same request;
+  `load({force: true})` asks again, and `fetchConfig` replaces the API call (tests).
+- **Never blocking**: `config` is always the configuration in force: `DEFAULT_INSTANCE_CONFIG`, a
+  self-hosted instance, until the server answers, then its last answer. A failed request changes
+  nothing but `failed`, and the next `load()` retries. Only the latest request writes its answer (a
+  generation counter), so a forced reload outruns an older request.
+- **Getters**: `config`; `loaded`, true once the server answered on this page load; `failed`, true when
+  the last request failed.
+- **Type**: `InstanceConfig` is `z.infer<typeof schemas.InstanceConfigResponse>` from the generated
+  client, so a field added to the backend response appears after `./dev.py api sync`.
+
+```ts
+import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
+
+await instanceConfig.load();
+instanceConfig.config.profile; // 'selfhosted' | 'managed'
+```
+
+## 📢 Instance notices {: #instance-notices }
+
+`instanceNotices` (`lib/features/instance/instanceNotices.svelte.ts`) is the registry of the messages
+about the instance shown above every page of the app shell. **A feature registers its notice; nobody
+edits the layout to add one.** `InstanceNotices.svelte` (`lib/features/instance/components/`) shows the
+registry: `routes/(app)/+layout.svelte` renders it once, inside the shell's `<main>`, after the
+onboarding banner and before the page. The Welcome page, which has no shell, shows no notice.
+
+| Field of a notice | Meaning |
+|-------------------|---------|
+| `id` | Stable and unique; it starts with the owner's area, such as `assets.disallowedProviders` |
+| `severity` | `info`, `warning` or `danger` |
+| `messageKey`, `params` | The i18n key of the message, and its ICU parameters |
+| `dismissible` | The user may close it, until the next page load |
+| `action` | An optional link after the message: `{labelKey, href}`, with `href` a path inside the app |
+
+- `show(notice)` adds a notice, or replaces the one with the same `id` in place.
+- `hide(id)` removes it. A notice hidden and shown again is visible again, even if the user had closed
+  it.
+- `dismiss(id)` is the user closing a `dismissible` notice: it stays closed until the next page load.
+- `clear()` removes every notice. It also runs when the signed-in account changes, signing out included
+  (`registerClientSessionReset('instanceNotices', clear)`).
+- `list` holds the notices to show: not closed by the user, `danger` first, then `warning`, then
+  `info`, and within a severity in the order they were first shown.
+
+The feature that registers a notice decides who sees it, since it knows the user and their role, and
+hides it when the condition is gone. For example (the `assets` keys are illustrative):
+
+```ts
+import {instanceNotices} from '$lib/features/instance/instanceNotices.svelte';
+
+instanceNotices.show({
+    id: 'assets.disallowedProviders',
+    severity: 'warning',
+    messageKey: 'assets.notices.disallowed',
+    params: {count: 3},
+    dismissible: true,
+    action: {labelKey: 'assets.notices.review', href: '/assets'},
+});
+
+instanceNotices.hide('assets.disallowedProviders');
+```
+
+How `InstanceNotices.svelte` renders them:
+
+- Without notices it renders nothing. Otherwise a `<section data-testid="instance-notices">`, labelled
+  by `instance.notices.label`, holds one `instance-notice` per notice, with `data-notice-id` and
+  `data-severity`: `role="alert"` for `danger`, `role="status"` otherwise. The link is
+  `instance-notice-action`, the close button `instance-notice-dismiss`, labelled by `common.close`.
+- Colours are colour roles only (`frontend/src/lib/theme/tokens.css`). For each severity X (`info`,
+  `warning`, `danger`), the notice is `bg-lf-X-soft border-lf-X-line text-lf-X-on-soft` and its icon
+  `text-lf-X`. The classes are written whole in `NOTICE_CLASSES` and `ICON_CLASSES`, so the colour
+  gates see every class.
 
 ## 🙈 Privacy masking {: #privacy-masking }
 
@@ -273,7 +357,7 @@ results the backend computed from the user's own scenario, so it renders through
 
 The PAC allocator renders through `lib/features/tools/pac-allocator/planner/format.ts`, its only privacy
 adapter: every amount, quantity, price, rate and percentage the planner shows goes through it.
-An `exact_ratio` number — the `ExactRatio` branch of `backend/app/schemas/pac_allocator.py`, whose
+An `exact_ratio` number — the `ExactRatio` branch of `backend/app/schemas/pac_allocator/exact.py`, whose
 authoritative value is its reduced `numerator` and `denominator` — is shown through the backend's
 `display_decimal`, a projection the schema marks `non_authoritative`, with `≈` in front unless that
 projection equals the ratio; an amount is rounded exactly from the ratio to its currency's minor unit

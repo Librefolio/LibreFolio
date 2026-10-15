@@ -126,7 +126,7 @@ When `results` is not empty, the body lists one row per item — ✅ or ❌, the
 
 A modal or panel holding unsaved edits asks before throwing them away: it opens a `ConfirmModal` with
 `warning` (amber), and `confirmText` set to *Discard*. The global settings tab
-(`lib/components/settings/tabs/GlobalSettingsTab.svelte`) is the reference: locking the panel with
+(`lib/features/settings/tabs/GlobalSettingsTab.svelte`) is the reference: locking the panel with
 pending edits opens the confirmation.
 
 - **Confirm** discards the draft and completes the action (closes the parent, locks the panel).

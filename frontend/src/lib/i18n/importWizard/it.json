@@ -42,7 +42,7 @@
     "reparseSingle": "Rianalizza",
     "previewFile": "Anteprima file",
     "txCount": "{n} transazioni in {k} file",
-    "assetsCount": "{n} asset unici, {m} da risolvere",
+    "assetsCount": "{n, plural, one {# asset unico} other {# asset unici}}, {m} da risolvere",
     "likelyDuplicates": "{n} probabili duplicati",
     "viewDetail": "Vedi Dettaglio",
     "detailTitle": "Dettaglio Analisi — {file}",
@@ -504,7 +504,14 @@
       "scalable_deposit_file": "Questo è l’export del conto deposito di Scalable: va letto con il plugin {plugin_name}.",
       "scalable_broker_file": "Questo è l’export del conto broker di Scalable: va letto con il plugin {plugin_name}.",
       "scalable_prime_file": "Questo è l’export di Scalable del conto broker: va letto con il plugin {plugin_name}.",
-      "scalable_mixed_file": "Il file mescola il conto broker e il conto deposito: esporta i due conti separatamente."
+      "scalable_mixed_file": "Il file mescola il conto broker e il conto deposito: esporta i due conti separatamente.",
+      "csv_only": "Il plugin {plugin_name} legge solo file .csv.",
+      "file_unreadable": "Impossibile leggere il file.",
+      "no_header_row": "Il file non ha una riga d'intestazione.",
+      "missing_columns": "{count, plural, one {Colonna obbligatoria {columns} non trovata nell'intestazione del CSV.} other {Colonne obbligatorie {columns} non trovate nell'intestazione del CSV.}}",
+      "no_movement_rows": "Il file non ha righe di movimenti.",
+      "degiro_csv_only": "Si legge solo l'esportazione CSV: scarica l'Estratto conto in formato CSV.",
+      "degiro_not_account_statement": "Questo non è un Estratto conto DEGIRO: servono 12 colonne, con l'ISIN in quinta posizione, le colonne degli importi senza nome in nona e undicesima, e le date nel formato GG-MM-AAAA."
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "In queste righe manca, o non si legge, una data, un importo, una valuta, le quote o il titolo.",

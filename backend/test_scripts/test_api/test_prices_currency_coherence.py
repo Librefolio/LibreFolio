@@ -15,7 +15,7 @@ Contract under test — ``POST /api/v1/assets/prices`` (bulk upsert):
 - Behaviour is atomic per-asset: a single bad point blocks all points
   of the same ``FAUpsert`` item — DB must show zero rows inserted.
 
-See ``backend/app/services/asset_source.py::bulk_upsert_prices`` L1336+
+See ``backend/app/services/assets/price_store.py::bulk_upsert_prices``
 ("I.2 — Currency coherence validation").
 
 Plan: ``plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md`` §G.5.
@@ -30,7 +30,7 @@ import httpx
 import pytest
 
 from backend.app.config import get_settings
-from backend.app.schemas.assets import FAAssetCreateItem, FABulkAssetCreateResponse
+from backend.app.schemas.assets.assets import FAAssetCreateItem, FABulkAssetCreateResponse
 from backend.app.schemas.prices import FAPricePoint, FAUpsert
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success, unique_id

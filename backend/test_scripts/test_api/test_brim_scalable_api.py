@@ -16,8 +16,8 @@ Only the rows without an instrument are saved, so no asset needs resolving. What
 tested in test_external/test_brim_scalable.py. Each test logs in a user of its own, creates its brokers and files, and
 deletes them.
 
-Reference: backend/app/services/brim_provider.py (detect_tx_duplicates), backend/app/services/brim_providers/_scalable.py,
-backend/app/services/transaction_service.py (promote_suggest_bulk)
+Reference: backend/app/services/brim/brim_provider.py (detect_tx_duplicates), backend/app/services/brim_providers/_scalable.py,
+backend/app/services/transactions/transaction_service.py (promote_suggest_bulk)
 """
 
 import io

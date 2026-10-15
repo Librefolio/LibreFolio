@@ -234,24 +234,26 @@ The backend and the app each compute their version with `git describe --tags --a
 
 | Version | Shown in | Frozen by | Read by |
 |---------|----------|-----------|---------|
-| Backend | `GET /api/v1/system/info` (`app_version`), Settings → About | «Generate VERSION file for Docker», which writes `VERSION` with `get_git_version()` (`backend/app/utils/runtime/version.py`) | `get_git_version()`, which prefers a non-empty `VERSION` to `git describe`. The image has no `.git/`, so the `Dockerfile` copies `VERSION` |
+| Backend | `GET /api/v1/system/info` (`app_version`, the one field it also answers without a session), Settings → About | «Generate VERSION file for Docker», which writes `VERSION` with `get_git_version()` (`backend/app/utils/runtime/version.py`); the next step exports it as `LF_APP_VERSION` | `get_git_version()`, once per process, takes the first source that gives a version: `LF_APP_VERSION` when it is set and not blank (`frozen_app_version()`, `backend/app/config/platform.py`); `git describe` where the project root has `.git` (a folder, or a file in a worktree or a submodule); a `VERSION` file that is not blank; otherwise `unknown`. The job's servers read `LF_APP_VERSION`. The image has no `.git/` and does not set the variable, so the `Dockerfile` copies `VERSION` |
 | App | The sidebar, and the changelog modal it opens (`APP_VERSION`, `frontend/src/lib/version.ts`) | «Freeze the app version for the frontend builds», which runs `echo "LF_APP_VERSION=$(cat VERSION)" >> "$GITHUB_ENV"` | `getAppVersion()` in `frontend/vite.config.ts`, at every frontend build: `LF_APP_VERSION` when it is set and not blank, `git describe` otherwise |
 
-`VERSION` alone freezes only the backend's version. Vite compiles the app's version into the bundle, and the job builds the frontend three times, each after steps that may write tracked files: the first `dev.py front build`, the gallery webServer's debug rebuild, and the production rebuild for the images. Before `LF_APP_VERSION`, the published 1.1 gallery showed `v1.1.0-dirty` in the sidebar, and the nightly of 2026-10-12 `v1.1.0-1390-g85170bc1f-dirty`. Written to `$GITHUB_ENV`, `LF_APP_VERSION` reaches every later step of the job, the same job for nightlies, manual runs and releases:
+Both read `LF_APP_VERSION` first, so in the job the backend reports the same frozen version as the frontend builds. Without the variable, as in every local checkout and every install, `git describe` decides wherever there is `.git`: a `VERSION` file left over by an earlier `./dev.py docker build` cannot hide newer commits. `.env.example` lists `LF_APP_VERSION` commented out, under «App Version»: leave it unset. The `version` of `pyproject.toml`, `0.0.0`, is not the app's version: nothing reads it.
 
-- **The gallery.** `dev.py mkdocs gallery` passes its environment to Playwright, which passes its own to its webServer, `dev.py server --test`: the debug rebuild, and so every screenshot, carries the frozen version.
-- **The images.** The `Dockerfile` builds no frontend: both variants copy the production `frontend/build/` that the job built with `LF_APP_VERSION` set.
+`VERSION` alone freezes only the backend's version in the images. Vite compiles the app's version into the bundle, and the job builds the frontend three times, each after steps that may write tracked files: the first `dev.py front build`, the gallery webServer's debug rebuild, and the production rebuild for the images. The gallery's server starts its backend after such steps too. Before `LF_APP_VERSION`, the published 1.1 gallery showed `v1.1.0-dirty` in the sidebar, and the nightly of 2026-10-12 `v1.1.0-1390-g85170bc1f-dirty`. Written to `$GITHUB_ENV`, `LF_APP_VERSION` reaches every later step of the job, the same job for nightlies, manual runs and releases:
 
-Locally `LF_APP_VERSION` is unset, and every build reads `git describe` as before. Set on a command, it gives that command's frontend builds a chosen version, for example to rehearse a release gallery the way the job builds it:
+- **The gallery.** `dev.py mkdocs gallery` passes its environment to Playwright, which passes its own to its webServer, `dev.py server --test`: its debug rebuild (the sidebar of every screenshot) and its backend (Settings → About) both carry the frozen version.
+- **The images.** The `Dockerfile` builds no frontend: both variants copy the production `frontend/build/` that the job built with `LF_APP_VERSION` set, and `VERSION` for the backend.
+
+Locally `LF_APP_VERSION` is unset, and every build and server reads `git describe`. Set on a command, it gives the frontend builds and the servers of that command a chosen version, for example to rehearse a release gallery the way the job builds it:
 
 ```bash
 LF_APP_VERSION=v1.2.0 ./dev.py front build       # production build, as in the job
 LF_APP_VERSION=v1.2.0 ./dev.py mkdocs gallery    # its server rebuilds in debug mode, with the same version
 ```
 
-- **It reaches only the builds the command runs.** The gallery's server rebuilds `frontend/build/` only when it is missing, older than its sources, or not a debug build, hence the production build first: a debug build already up to date would be reused, with the version it carries.
-- **It changes only the app's version.** Settings → About still shows the backend's, from `get_git_version()`.
-- **It leaves no file behind**, only the version compiled into `frontend/build/` until its next build. A `VERSION` file would stay: `get_git_version()` keeps preferring it until it is deleted, and the app's version never reads it.
+- **It reaches only the builds and servers the command starts.** The gallery's server rebuilds `frontend/build/` only when it is missing, older than its sources, or not a debug build, hence the production build first: a debug build already up to date would be reused, with the version it carries.
+- **It changes the backend's version too.** `get_git_version()` reads it first, so the server the gallery starts shows it in Settings → About, like the sidebar.
+- **It leaves no file behind**, only the version compiled into `frontend/build/` until its next build. A `VERSION` file would change neither version: in a checkout `get_git_version()` reads it only when `git describe` fails, and the app's version never reads it. `./dev.py docker build` is different: it writes `get_git_version()`, and so the variable, into `VERSION` and the image tags.
 
 #### Checkout checks {: #checkout-checks }
 

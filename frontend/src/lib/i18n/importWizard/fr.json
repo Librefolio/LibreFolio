@@ -42,7 +42,7 @@
     "reparseSingle": "Réanalyser",
     "previewFile": "Aperçu du fichier",
     "txCount": "{n} transactions dans {k} fichiers",
-    "assetsCount": "{n} actifs uniques, {m} à résoudre",
+    "assetsCount": "{n, plural, one {# actif unique} other {# actifs uniques}}, {m} à résoudre",
     "likelyDuplicates": "{n} doublons probables",
     "viewDetail": "Voir Détail",
     "detailTitle": "Détail Analyse — {file}",
@@ -504,7 +504,14 @@
       "scalable_deposit_file": "C’est l’export du compte rémunéré Scalable : lisez-le avec le plugin {plugin_name}.",
       "scalable_broker_file": "C’est l’export du compte-titres Scalable : lisez-le avec le plugin {plugin_name}.",
       "scalable_prime_file": "C’est l’export de Scalable pour le compte-titres : lisez-le avec le plugin {plugin_name}.",
-      "scalable_mixed_file": "Le fichier mélange le compte-titres et le compte rémunéré : exportez les deux comptes séparément."
+      "scalable_mixed_file": "Le fichier mélange le compte-titres et le compte rémunéré : exportez les deux comptes séparément.",
+      "csv_only": "Le plugin {plugin_name} ne lit que les fichiers .csv.",
+      "file_unreadable": "Le fichier n'a pas pu être lu.",
+      "no_header_row": "Le fichier n'a pas de ligne d'en-tête.",
+      "missing_columns": "{count, plural, one {Colonne obligatoire {columns} introuvable dans l'en-tête du CSV.} other {Colonnes obligatoires {columns} introuvables dans l'en-tête du CSV.}}",
+      "no_movement_rows": "Le fichier ne contient aucune ligne de mouvement.",
+      "degiro_csv_only": "Seul l'export CSV est lu : téléchargez le Relevé de compte au format CSV.",
+      "degiro_not_account_statement": "Ce n'est pas un Relevé de compte DEGIRO : il faut 12 colonnes, avec l'ISIN en cinquième position, des colonnes de montant sans nom en neuvième et onzième position, et des dates au format JJ-MM-AAAA."
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "Sur ces lignes, une date, un montant, une devise, les parts ou le titre manque ou est illisible.",

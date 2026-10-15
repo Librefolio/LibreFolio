@@ -13,7 +13,7 @@ placeholder builders for these without touching any `component_id`/`domains`/
   `ASSET_PRICE_RESULTS_RESOURCE` cache entry across all three components.
 - FX builders load the daily base->quote rate series once
   (`technical_shared.load_fx_rate_series`, routed through the existing
-  `backend.app.services.fx.convert_bulk` service - no invented economics) and
+  `backend.app.services.fx.conversion.convert_bulk` service - no invented economics) and
   the curated signal bundle computed over it once
   (`technical_shared.load_fx_technical_bundle`), reused across all four
   components.

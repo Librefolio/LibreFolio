@@ -8,7 +8,8 @@ applyTo: "backend/app/services/risk/**,backend/app/services/risk_plugins/**,back
 
 - **Analytics**: one folder per analytic, `services/risk_plugins/<code>/` (`__init__.py` with the docstring only,
   `plugin.py` with the code, `i18n/` with its `risk.analytics.<id>.*` texts), extending `RiskAnalytic`
-  (`services/risk/base.py`) and registered with `@register_plugin(RiskAnalyticRegistry)` (`services/provider_registry.py`).
+  (`services/risk/base.py`) and registered with `@register_plugin(RiskAnalyticRegistry)` (`services/risk/registry.py`; the decorator is in
+  `services/provider_registry.py`).
   Import and patch from `….risk_plugins.<code>.plugin`. The `risk.warnings.*` vocabulary stays in the `risk` subsystem of
   the catalogue (`frontend/src/lib/i18n/risk/`), shared by every analytic.
 - **Runtime**: `risk/service.py` resolves the scope, prepares the series, applies eligibility and the observation gate,

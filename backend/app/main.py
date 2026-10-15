@@ -5,7 +5,6 @@ Main entry point for the backend API.
 
 import asyncio
 import contextlib
-import os
 import sqlite3
 import subprocess
 import sys
@@ -40,24 +39,23 @@ from backend.app.config import (
 from backend.app.db.post_migration import configured_sqlite_path, run_post_migration_fixes
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import configure_logging, get_logger
-from backend.app.services.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
-from backend.app.services.market_calendar import shutdown_market_holidays, start_market_holiday_prewarm
-from backend.app.services.provider_registry import (
-    AssetProviderRegistry,
-    BRIMProviderRegistry,
-    FXProviderRegistry,
-    SignalPluginRegistry,
-)
+from backend.app.services.accounts.settings_service import initialize_global_settings
+from backend.app.services.assets.market_calendar import shutdown_market_holidays, start_market_holiday_prewarm
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.brim.brim_parse_pool import shutdown_pool as shutdown_brim_parse_pool
+from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.files.static_uploads import seed_default_avatars
+from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.platform.config_audit import log_configuration_audit
+from backend.app.services.platform.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
 )
 from backend.app.services.risk.scenario_catalog import (
     initialize_risk_scenario_catalog,
 )
-from backend.app.services.scheduler import get_shutdown_event, scheduler_loop
-from backend.app.services.settings_service import initialize_global_settings
 from backend.app.services.signal_runtime import validate_signal_runtime
-from backend.app.services.static_uploads import seed_default_avatars
+from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.services.tools.executor import shutdown_tool_executor
 from backend.app.services.tools.registry import ToolPluginRegistry
 from backend.app.utils.runtime.cache import close_all_caches
@@ -67,7 +65,7 @@ from backend.app.utils.runtime.version import get_git_version
 # NOTE: Do NOT check sys.argv here - it causes issues when this module is imported
 # by other scripts (like test_runner). The --test flag is handled by dev.py which
 # sets LIBREFOLIO_TEST_MODE env var before starting uvicorn.
-if os.environ.get("LIBREFOLIO_TEST_MODE", "").lower() in ("1", "true", "yes"):
+if is_test_mode():
     set_test_mode(True)
     print("[LibreFolio] 🧪 Test mode enabled (LIBREFOLIO_TEST_MODE env var)")
 
@@ -254,6 +252,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
         database_url=settings.DATABASE_URL.split("///")[-1],  # Hide full path in logs
         test_mode=is_test_mode(),
     )
+    # A configured secret that cannot be read stops the start; settings that weaken the instance are logged
+    await asyncio.to_thread(log_configuration_audit)
 
     signal_runtime = validate_signal_runtime()
     SignalPluginRegistry.auto_discover()

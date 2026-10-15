@@ -2030,9 +2030,10 @@ class TestReportSetExclusions:
 # column, so a parse forced on such a file stops at the guard of ``parse_file``. The developer's
 # decision, verbatim: «Correggi dentro G con il metodo opzionale (Consigliato)» — the plugin says
 # why (``cannot_parse_reason``) and the guard appends it: still a 400, the file still goes to
-# ``failed`` with the same message, which now names the missing column. The name between the
-# quotes is the stored one, ``{file_id}{ext}``, which G.5 does not change: not asserted. The
-# rules of the message are tested at service level, in test_services/test_brim_parse_race.py.
+# ``failed`` with the same message, which now names the missing column. Since workstream W, lot
+# K2a (backlog L6), the message names the plugin by its ``provider_name`` and the file by the name
+# it was uploaded with, never by the plugin code nor by the stored ``{file_id}{ext}``: asserted
+# whole. The rules of the message are tested at service level, in test_services/test_brim_parse_race.py.
 # The test deletes the file and the broker it created.
 
 GENERIC_CSV_CODE = "broker_generic_csv"
@@ -2046,30 +2047,32 @@ class TestParseRefusalReason:
     @pytest.mark.asyncio
     async def test_forcing_the_generic_csv_on_a_csv_without_date_names_the_missing_column(self, test_server):
         """RS-G05: ``plugin_code="broker_generic_csv"`` on an uploaded CSV with ``type`` and no date column: 400, ``detail`` is
-        "Plugin 'broker_generic_csv' cannot parse file '…': required column 'date' not found in the CSV header", and the
-        file is ``failed`` with that message."""
+        "Plugin 'Generic CSV' cannot parse file '<the name it was uploaded with>': required column 'date' not found in the CSV header",
+        and the file is ``failed`` with that message. The plugin by its name and the file by its uploaded name since lot K2a (L6)."""
         print_section("RS-G05: the forced generic CSV names the missing column")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             broker_id = await create_test_broker(client)
             file_ids = []
             try:
-                upload = await _upload_csv(client, broker_id, CSV_WITHOUT_DATE, f"no_date_{uuid.uuid4().hex[:8]}.csv")
+                filename = f"no_date_{uuid.uuid4().hex[:8]}.csv"
+                upload = await _upload_csv(client, broker_id, CSV_WITHOUT_DATE, filename)
                 assert upload.status_code == 200, upload.text
                 file_id = upload.json()["file_id"]
                 file_ids.append(file_id)
+                assert upload.json()["filename"] == filename, f"premise: the upload keeps the name the user gave: {upload.json()}"
                 assert GENERIC_CSV_CODE not in upload.json()["compatible_plugins"], f"premise: the generic CSV does not offer itself for a CSV without a date column, so the parse forces it: {upload.json()}"
 
                 response = await client.post(f"{API_BASE}/brokers/import/files/{file_id}/parse", json={"plugin_code": GENERIC_CSV_CODE, "broker_id": broker_id}, timeout=TIMEOUT)
 
                 assert response.status_code == 400, response.text
                 detail = _detail_text(response)
-                assert detail.startswith(f"Plugin '{GENERIC_CSV_CODE}' cannot parse file '"), detail
                 info = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
                 assert info.status_code == 200, info.text
                 assert (info.json()["status"], info.json()["error_message"]) == ("failed", detail), "the refused file goes to failed, with the message the user reads"
                 assert detail.endswith("': required column 'date' not found in the CSV header"), f"the refusal does not say which column is missing: {detail!r}"
-                print_success("✓ the forced generic CSV names the missing column, and the file is failed")
+                assert detail == f"Plugin 'Generic CSV' cannot parse file '{filename}': required column 'date' not found in the CSV header", f"the refusal does not name the plugin and the file as the user knows them (K2a, L6): {detail!r}"
+                print_success("✓ the forced generic CSV names the missing column, the plugin and the file as the user knows them, and the file is failed")
             finally:
                 await _delete_files(client, file_ids)
                 await _delete_created(client, broker_ids=[broker_id])
@@ -2542,9 +2545,12 @@ class TestDegiroConversionsThroughTheBatch:
 # broker's default plugin. Access as for ``GET /files/{file_id}``: any role on the file's broker (VIEWER+), 403 without one.
 # 404 for an unknown file or plugin, 422 without ``plugin_code``. Nothing is parsed: the file stays ``uploaded``.
 # The overnight account's sample uploaded to a broker is the case the endpoint was made for: the broker plugin refuses it
-# and names the plugin that reads it. Only RS-PC01 and RS-PC02 need the Scalable plugins; the others ask the generic CSV.
-# What the plugins answer, file by file, is in test_external/test_brim_scalable.py; the default refusal of every plugin,
-# in test_external/test_brim_providers.py (category 4d). Each test deletes the files and the broker it created.
+# and names the plugin that reads it. Only RS-PC01 and RS-PC02 need the Scalable plugins; the others ask the generic CSV,
+# which refuses with a code of its own since workstream W, lot K2a (backlog C-70, part a). No real plugin refuses without
+# a code any more, and an API test cannot plant a stand-in in the server, so the default refusal without a code is covered
+# in test_external/test_brim_providers.py (category 4d) and in the frontend's defaultPluginCheck.test.ts. What the plugins
+# answer, file by file, is in test_external/test_brim_scalable.py, test_brim_providers.py (category 4e) and
+# test_brim_degiro.py (A2). Each test deletes the files and the broker it created.
 
 SCALABLE_DEPOSIT_SAMPLE = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports" / "scalable-deposit-export.csv"
 SCALABLE_BROKER_CODE = "broker_scalable"
@@ -2552,8 +2558,9 @@ SCALABLE_DEPOSIT_CODE = "broker_scalable_deposit"
 # What the broker plugin owes about the overnight account's export, but the English sentence: its code and its context.
 SCALABLE_DEPOSIT_REFUSAL = {"code": "scalable_deposit_file", "context": {"plugin_code": SCALABLE_DEPOSIT_CODE, "plugin_name": "Scalable Capital overnight account"}}
 UNKNOWN_PLUGIN_CODE = "broker_does_not_exist"
-# The generic CSV's own reason about CSV_WITHOUT_DATE (category 12), wrapped by the default cannot_parse_detail.
-GENERIC_REFUSAL = {"code": None, "message": "required column 'date' not found in the CSV header", "context": {}}
+# The generic CSV's refusal of CSV_WITHOUT_DATE (category 12): since K2a (backlog C-70, part a) the code the wizard translates and its
+# context, the count an integer for the plural; the English sentence, the message, is unchanged.
+GENERIC_REFUSAL = {"code": "missing_columns", "message": "required column 'date' not found in the CSV header", "context": {"columns": "date", "count": 1}}
 
 
 async def _plugin_check(client: httpx.AsyncClient, file_id: str, **params: str) -> httpx.Response:
@@ -2647,9 +2654,10 @@ class TestPluginCheckEndpoint:
                 await _delete_created(client, broker_ids=[broker_id])
 
     @pytest.mark.asyncio
-    async def test_a_refusal_without_a_code_is_the_plugin_s_reason(self, test_server):
-        """RS-PC03: the CSV without a date column of RS-G05 asked to ``broker_generic_csv``, which overrides only ``cannot_parse_reason``: ``can_parse``
-        false, refusal ``{code: null, message: <the reason>, context: {}}``."""
+    async def test_the_generic_csv_refuses_a_csv_without_date_with_its_code_and_context(self, test_server):
+        """RS-PC03: the CSV without a date column of RS-G05 asked to ``broker_generic_csv``: ``can_parse`` false, refusal ``{code: "missing_columns",
+        message: <its English reason, unchanged>, context: {"columns": "date", "count": 1}}``, the code the import wizard translates (K2a, backlog
+        C-70 part a); the file stays ``uploaded``."""
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             broker_id = await create_test_broker(client)
@@ -2659,8 +2667,9 @@ class TestPluginCheckEndpoint:
 
                 check = _check_of(await _plugin_check(client, file_id, plugin_code=GENERIC_CSV_CODE))
 
-                assert check == (GENERIC_CSV_CODE, False, GENERIC_REFUSAL), check
+                assert check[:2] == (GENERIC_CSV_CODE, False), check
                 await _assert_still_uploaded(client, file_id)
+                assert check[2] == GENERIC_REFUSAL, f"the generic CSV's refusal through the endpoint, with the code the wizard translates and its context: {check[2]}"
             finally:
                 await _delete_files(client, file_ids)
                 await _delete_created(client, broker_ids=[broker_id])
@@ -2739,8 +2748,10 @@ class TestPluginCheckEndpoint:
                 as_viewer = await _plugin_check(viewer, file_id, plugin_code=GENERIC_CSV_CODE)
                 as_stranger = await _plugin_check(stranger, file_id, plugin_code=GENERIC_CSV_CODE)
 
-                assert _check_of(as_owner) == (GENERIC_CSV_CODE, False, GENERIC_REFUSAL), "presence barrier: the owner gets the plugin's answer"
-                assert _check_of(as_viewer) == _check_of(as_owner), "a VIEWER of the broker gets the owner's answer"
+                owner_answer = _check_of(as_owner)
+                # Access is the subject, not the code: the barrier reads the reason, the same before and after K2a; RS-PC03 pins the whole refusal.
+                assert (*owner_answer[:2], (owner_answer[2] or {}).get("message")) == (GENERIC_CSV_CODE, False, GENERIC_REFUSAL["message"]), f"presence barrier: the owner gets the plugin's answer: {owner_answer}"
+                assert _check_of(as_viewer) == owner_answer, "a VIEWER of the broker gets the owner's answer"
                 assert as_stranger.status_code == 403, f"a user without access: {as_stranger.status_code} {as_stranger.text}"
                 await _assert_still_uploaded(owner, file_id)
                 print_success("✓ a VIEWER may ask, a user without access may not")

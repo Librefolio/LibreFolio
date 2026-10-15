@@ -107,6 +107,6 @@ Updated: [[features/registry]], [[domains/layout-settings]], [[features/F-004]],
 | Round 7 | `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/plan-phase00OnboardingRound7-AnchorStall.prompt.md` |
 | Round 8 | `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/plan-phase00OnboardingRound8-PostReview.prompt.md` |
 | Review dossier | `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/onboarding-review-dossier.md` |
-| Registry | `backend/app/services/onboarding_service.py` |
+| Registry | `backend/app/services/accounts/onboarding_service.py` |
 | Engine | `frontend/src/lib/features/onboarding/onboardingGuide.svelte.ts` |
 | Developer doc | `mkdocs_src/docs/developer/frontend/onboarding.md` |

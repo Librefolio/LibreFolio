@@ -22,8 +22,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import traceback
 
 from backend.app.schemas.prices import FACurrentValue
-from backend.app.services.asset_source import AssetSourceError
-from backend.app.services.provider_registry import AssetProviderRegistry
+from backend.app.services.assets.base import AssetSourceError
+from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import (
     print_error,
     print_info,

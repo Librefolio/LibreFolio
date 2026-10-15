@@ -41,6 +41,6 @@ without changing any contract; it closed backlog items P4-1, P4-4 and S6 6.4.
 | Role | Path |
 |------|------|
 | Plan | `LibreFolio_developer_journal/Release_2/phases/22_assetPricingRefactor/plan-phase00AssetPricingRefactor.prompt.md` |
-| Facade | `backend/app/services/asset_source.py` |
-| Package | `backend/app/services/asset_sources/core.py` |
+| Facade (removed in 1.3: names imported from their modules) | `backend/app/services/assets/` |
+| Package | `backend/app/services/assets/core.py` |
 | Developer doc | `mkdocs_src/docs/developer/backend/assets/architecture.md` |

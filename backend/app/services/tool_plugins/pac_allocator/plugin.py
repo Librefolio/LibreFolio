@@ -44,7 +44,8 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from backend.app.logging_config import get_logger
-from backend.app.schemas.pac_allocator import PacPlannerRequest, PacPlannerResult
+from backend.app.schemas.pac_allocator.request import PacPlannerRequest
+from backend.app.schemas.pac_allocator.results import PacPlannerResult
 from backend.app.schemas.tools import (
     ToolDocumentation,
     ToolOperationPolicy,

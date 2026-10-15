@@ -163,9 +163,14 @@ def _ensure_shared_jwt_secret(env: dict) -> None:
     An empty or blank value counts as none: ``JWT_SECRET=`` in .env reaches the environment as ''
     through pipenv, and each worker would then make its own secret (auth_service), logging users
     out whenever a request lands on another worker.
+
+    With ``JWT_SECRET_FILE`` set, every worker reads the secret from that file: nothing is generated.
+    A blank ``JWT_SECRET`` beside it is left alone, because the server ignores a blank secret
+    (``env_secret``) and the file wins.
     """
-    if not env.get("JWT_SECRET", "").strip():
-        env["JWT_SECRET"] = secrets.token_urlsafe(64)
+    if env.get("JWT_SECRET", "").strip() or env.get("JWT_SECRET_FILE", "").strip():
+        return
+    env["JWT_SECRET"] = secrets.token_urlsafe(64)
 
 
 def cmd_server(args):
@@ -1629,10 +1634,10 @@ def _docker_ensure_assets_built():
     # into a plain file that gets COPYed into the image.
     from backend.app.utils.runtime.version import get_git_version
 
-    # get_git_version() prefers an existing VERSION file over `git describe` (so
-    # it works with no .git/ inside the container). Remove any stale VERSION file
-    # from a previous build first, so this recomputes a true fresh value instead
-    # of just re-reading what's already there.
+    # get_git_version() reads VERSION only where there is no .git/ (inside the
+    # container) or when `git describe` fails. Remove any VERSION file from a
+    # previous build first, so a checkout where git cannot answer writes
+    # "unknown" instead of copying the old value forward.
     version_file = PROJECT_ROOT / "VERSION"
     version_file.unlink(missing_ok=True)
     get_git_version.cache_clear()

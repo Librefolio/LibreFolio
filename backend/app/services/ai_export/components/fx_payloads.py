@@ -36,7 +36,7 @@ class FxRateDirection(StrEnum):
     the reverse of the requested pair (so the service divides instead of
     multiplying). There is deliberately no TRIANGULATED member: no backend
     service currently resolves a pair through a third currency at read time
-    (`backend.app.services.fx.convert_bulk` only ever looks up a direct or
+    (`backend.app.services.fx.conversion.convert_bulk` only ever looks up a direct or
     inverse stored row and raises `RateNotFoundError` otherwise), so this
     runtime never fabricates that route.
     """
@@ -202,7 +202,7 @@ class FxExposureConversionBasis(StrEnum):
     - IDENTITY: `linked_currency == target_currency`; no conversion applies,
       `native_amount == target_amount` by construction.
     - RESOLVED_RATE: a real FX rate resolved independently via
-      `backend.app.services.fx.convert_bulk` reconciles (within an explicit
+      `backend.app.services.fx.conversion.convert_bulk` reconciles (within an explicit
       tolerance) with the implied rate `target_amount / native_amount`; that
       resolved rate's `direction` is carried as provenance.
     - ENGINE_VALUATION: `target_amount` comes directly from the portfolio

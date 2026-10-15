@@ -41,6 +41,6 @@ None.
 | Role | Path |
 |------|------|
 | Plan | `LibreFolio_developer_journal/Release_2/phases/23_transactionBatchRefactor/plan-phase00TransactionBatchRefactor.prompt.md` |
-| Stages | `backend/app/services/transaction_batch_stages.py` |
-| Context | `backend/app/services/transaction_batch_context.py` |
+| Stages | `backend/app/services/transactions/transaction_batch_stages.py` |
+| Context | `backend/app/services/transactions/transaction_batch_context.py` |
 | Developer doc | `mkdocs_src/docs/developer/backend/transactions/service.md` |

@@ -63,29 +63,25 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from backend.app.schemas.pac_allocator import (
-    DeploymentUnavailable,
-    InfeasibilityProvenProof,
-    NotProvenProof,
-    OptimalProvenProof,
-    PacIncumbentSolution,
-    PacNoOpSolution,
+from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, NotProvenProof, OptimalProvenProof, SolverStatusWitness
+from backend.app.schemas.pac_allocator.issues import PlannerIssue
+from backend.app.schemas.pac_allocator.request import PacPlannerRequest
+from backend.app.schemas.pac_allocator.results import (
     PacPlannerInvalidResult,
     PacPlannerNeedsInputResult,
     PacPlannerReadyIncumbentResult,
     PacPlannerReadyInfeasibleResult,
     PacPlannerReadyNoIncumbentResult,
     PacPlannerReadyNoOpResult,
-    PacPlannerRequest,
     PacPlannerResult,
     PacPlannerUnsupportedResult,
-    PlannerIssue,
     PlannerResultSnapshot,
-    SolverStatusWitness,
 )
+from backend.app.schemas.pac_allocator.solutions import DeploymentUnavailable, PacIncumbentSolution, PacNoOpSolution
 from backend.app.services.pac_allocator import planner_report as report
 from backend.app.services.pac_allocator.compiler import compile_policy_program
-from backend.app.services.pac_allocator.evaluator import ExactEvaluatorError, build_exact_policy_view, evaluate_exact_candidate, rounding_top_ups
+from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate, rounding_top_ups
 from backend.app.services.pac_allocator.models import (
     CandidateActionVector,
     CandidateDecision,

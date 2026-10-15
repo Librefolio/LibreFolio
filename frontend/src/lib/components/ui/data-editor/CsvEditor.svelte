@@ -39,6 +39,12 @@
         parse?: (raw: string) => unknown | null;
         /** Optional validation after parsing. Return an error message when invalid. */
         validate?: (value: unknown) => string | null;
+        /**
+         * Part of a line's identity together with its date (or identity column): two lines are
+         * duplicates only when their date and every `matchKey` value are equal. The events import
+         * marks `type`, since one date holds a DIVIDEND and a SPLIT.
+         */
+        matchKey?: boolean;
     }
 
     export interface CsvIdentityDef {
@@ -413,11 +419,14 @@
             };
         });
 
-        // Duplicate date detection
+        // Duplicate detection: a line is keyed by its date (or identity) and its matchKey values
+        const matchColumns = columns.filter((c) => c.matchKey);
+        const duplicateLabel = [identityLabel, ...matchColumns.map((c) => c.label)].join(' · ');
+        const duplicateKey = (parsed: ParsedRow): string => [parsed.kind === 'dated' ? parsed.date : parsed.identity, ...matchColumns.map((c) => String(parsed.values[c.key] ?? ''))].join(' · ');
         const identityCount = new Map<string, number[]>();
         for (const v of result) {
             if (v.parsed) {
-                const key = v.parsed.kind === 'dated' ? v.parsed.date : v.parsed.identity;
+                const key = duplicateKey(v.parsed);
                 const indices = identityCount.get(key) ?? [];
                 indices.push(v.lineNumber);
                 identityCount.set(key, indices);
@@ -426,10 +435,9 @@
         for (const [key, indices] of identityCount) {
             if (indices.length > 1) {
                 for (const v of result) {
-                    const parsedKey = v.parsed?.kind === 'dated' ? v.parsed.date : v.parsed?.identity;
-                    if (v.parsed && parsedKey === key) {
+                    if (v.parsed && duplicateKey(v.parsed) === key) {
                         v.duplicate = true;
-                        v.error = $t('csvImport.errors.duplicate', {values: {label: identityLabel, key}});
+                        v.error = $t('csvImport.errors.duplicate', {values: {label: duplicateLabel, key}});
                     }
                 }
             }

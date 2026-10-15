@@ -42,7 +42,7 @@ The decorator is co-located with the class — you cannot create a provider with
 | Role | Path |
 |------|------|
 | Provider registry | `backend/app/services/provider_registry.py` |
-| FX abstract base | `backend/app/services/fx.py` |
-| Asset abstract base | `backend/app/services/asset_source.py` |
-| BRIM abstract base | `backend/app/services/brim_provider.py` |
+| FX abstract base | `backend/app/services/fx/base.py` |
+| Asset abstract base | `backend/app/services/assets/base.py` |
+| BRIM abstract base | `backend/app/services/brim/brim_provider.py` |
 | mkdocs | `mkdocs_src/docs/developer/architecture/patterns/registry_pattern.md` |

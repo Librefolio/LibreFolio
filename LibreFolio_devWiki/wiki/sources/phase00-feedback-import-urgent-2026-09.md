@@ -66,6 +66,6 @@ The backlog these jobs came from, and where its other areas went: [[sources/phas
 | Round 4 — social boundaries | `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgentRound4-SocialBoundaries.prompt.md` |
 | Round 5 — GHCR auth | `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/plan-phase00FeedbackImportUrgentRound5-GHCRAuth.prompt.md` |
 | Integration manifest | `LibreFolio_developer_journal/Release_2/phases/14_feedbackImportUrgent/manifest-integrazione-E.md` |
-| Asset PATCH | `backend/app/services/asset_sources/crud.py` |
+| Asset PATCH | `backend/app/services/assets/crud.py` |
 | Broker 409 | `backend/app/api/v1/brokers.py` |
-| Share feature | `frontend/src/lib/components/support/SocialShareModal.svelte` |
+| Share feature | `frontend/src/lib/features/support/SocialShareModal.svelte` |

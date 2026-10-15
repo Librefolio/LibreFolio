@@ -92,11 +92,11 @@ and asserts the local hour does not move.
 
 | Role | Path |
 |------|------|
-| Decision logic | `backend/app/services/scheduler/scheduler.py` — `due_history_sync` |
-| Settings parsing | `backend/app/services/scheduler/settings.py` |
+| Decision logic | `backend/app/services/platform/scheduler/scheduler.py` — `due_history_sync` |
+| Settings parsing | `backend/app/services/platform/scheduler/settings.py` |
 | Key descriptions | `backend/app/schemas/settings.py` (~114-133) |
 | Migration (revision `5b1333fa6b07`, file renamed in the 2026-09-22 consolidation) | `backend/alembic/versions/003_scheduler_timezone.py` |
-| Modal | `frontend/src/lib/components/settings/SchedulerConfigModal.svelte` |
+| Modal | `frontend/src/lib/features/settings/SchedulerConfigModal.svelte` |
 | Tests | `backend/test_scripts/test_services/test_scheduler_due.py`, `test_scheduler_settings.py` |
 
 ## See also
