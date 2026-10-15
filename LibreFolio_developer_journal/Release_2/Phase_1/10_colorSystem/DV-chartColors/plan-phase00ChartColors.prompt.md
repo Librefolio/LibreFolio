@@ -490,6 +490,18 @@ Dopo Y4, Y8 e FE5c di X (decisione 6). Migrano solo i default salvati (decisione
   conflitto. In comune ci sono solo il backlog e `_frontend_utility.py`, in blocchi separati.
 - **Delta da committare:** `CorrelationHeatmap.test.ts`, una riga (l'argomento di tipo), e il piano.
 
+**Controllo leggero sul fuso `31d2b15d8`** (genitori `4321da3e6` e `ab2ddf86e`; via del coordinatore il 15/10 alle
+21:08, dopo la galleria di G). Uno alla volta, nella corsia 6156, con la 1.3 ripartita (load all'inizio 60 / 71 / 67):
+tutto verde.
+- `api sync`: rc 0, nessun file tracciato cambiato.
+- `front check`: 0 errori, 0 avvisi.
+- `front-portfolio allocation-unit`: 173 test.
+- I file di `lib/theme/`, uno per volta: `chartCategories` 85, `chartShades` 25, `contrast` 14, `roleColors` 24,
+  `roleColors.dom` 11, `themeMode` 24, `chartTheme` 5, `colorAlpha` 24. Poi `sectorStore` 9.
+- `api utilities`: 9. `utils sector-normalization`: 73.
+- Script `/tmp/libreFolio_dv_light_final.sh`, riepilogo in `/tmp/libreFolio_dv_light_final.summary`. Porta 6156
+  libera alla fine. L'ingresso aspetta l'OK del developer sull'aspetto (D-T21).
+
 **Riprova sull'insieme, prima del checkpoint (15/10):** un file per volta, senza corsia né server.
 - Comando: `/tmp/libreFolio_dv_vitest_batch.sh`, cioè `node_modules/.bin/vitest run <file>` con
   `PYTHON=$(PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv --py)`. Riepilogo in
