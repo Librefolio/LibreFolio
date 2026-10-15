@@ -2217,12 +2217,15 @@ test.describe('Gallery Screenshots', () => {
                 await expect(usersTab.getByTestId('users-invite-row'), 'the Users tab does not show the fixed invitations').toHaveCount(inviteRows.length, {timeout: 5_000});
                 await freezeAnimations(page);
                 // One account open, so the picture shows its actions. Every load draws the rows closed (UserRow, `expanded`).
-                const toggle = usersTab.locator('[data-testid="users-row"][data-username="marco"]').getByTestId('users-row-toggle');
+                const marcoRow = usersTab.locator('[data-testid="users-row"][data-username="marco"]');
+                const toggle = marcoRow.getByTestId('users-row-toggle');
                 await expect(toggle, "marco's row starts closed").toHaveAttribute('aria-expanded', 'false', {timeout: 5_000});
                 await toggle.click();
                 await expect(toggle, "marco's actions are open").toHaveAttribute('aria-expanded', 'true', {timeout: 5_000});
                 // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, as for the Profile tab.
+                // PHONE — marco's row framed from its top (frameTarget), so the actions it opened are whole on the screen (G-15).
                 if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/users`);
+                else await frameTarget(page, marcoRow, `${viewport}/${lang}/${theme}/settings/users`);
                 await screenshot(page, viewport, lang, theme, 'settings', 'users');
                 await restoreTallScreen(page);
             });

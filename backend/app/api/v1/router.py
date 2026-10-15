@@ -13,6 +13,7 @@ from backend.app.api.v1 import (
     brokers,
     email,
     fx,
+    plugin_settings,
     portfolio_api,
     risk,
     settings,
@@ -36,6 +37,7 @@ router = APIRouter(dependencies=[Depends(refuse_when_blocked)])
 router.include_router(auth.router)  # Auth first (no prefix, uses /auth)
 router.include_router(ai_export.router)
 router.include_router(settings.router)  # Settings
+router.include_router(plugin_settings.router)  # Plugin settings (/settings/plugins)
 router.include_router(system.router)  # System info
 router.include_router(uploads.router)  # File uploads
 router.include_router(users.router)  # User search

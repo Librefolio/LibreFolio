@@ -3,6 +3,7 @@
  * role classes, so that the i18n audit and the colour gates see each one (theme-roles skill, rule 6).
  */
 import type {EmailStatus, EmailTestFailure} from './emailApi';
+import type {LinksProbeState} from './emailLinks';
 
 type Translate = (key: string, options?: {values?: Record<string, string | number>}) => string;
 
@@ -29,6 +30,31 @@ export const OUTCOME_CLASSES: Record<'sent' | 'failed', string> = {
     sent: 'rounded-lg border border-lf-success-line bg-lf-success-soft px-4 py-3 text-sm text-lf-success-on-soft',
     failed: 'rounded-lg border border-lf-danger-line bg-lf-danger-soft px-4 py-3 text-sm text-lf-danger-on-soft',
 };
+
+/** The check of the emailed links' base: what to say for each outcome. */
+export const LINKS_PROBE_KEYS: Record<LinksProbeState, string> = {
+    checking: 'email.links.probe.checking',
+    match: 'email.links.probe.match',
+    otherInstance: 'email.links.probe.otherInstance',
+    unreachable: 'email.links.probe.unreachable',
+    insecure: 'email.links.probe.insecure',
+    invalid: 'email.links.probe.invalid',
+};
+
+/** A running check and a match read as a line; anything else is a configuration notice, with a warning's colours. */
+export const LINKS_PROBE_CLASSES: Record<LinksProbeState, string> = {
+    checking: 'text-sm text-lf-muted',
+    match: 'text-sm text-lf-success',
+    otherInstance: 'rounded-lg border border-lf-warning-line bg-lf-warning-soft px-4 py-3 text-sm text-lf-warning-on-soft',
+    unreachable: 'rounded-lg border border-lf-warning-line bg-lf-warning-soft px-4 py-3 text-sm text-lf-warning-on-soft',
+    insecure: 'rounded-lg border border-lf-warning-line bg-lf-warning-soft px-4 py-3 text-sm text-lf-warning-on-soft',
+    invalid: 'rounded-lg border border-lf-warning-line bg-lf-warning-soft px-4 py-3 text-sm text-lf-warning-on-soft',
+};
+
+/** Whether an outcome is a notice the administrator may want to check again: anything but a running check or a match. */
+export function linksProbeWarns(state: LinksProbeState | null): boolean {
+    return state !== null && state !== 'checking' && state !== 'match';
+}
 
 const PROBLEM_KEYS: Record<string, string> = {
     SMTP_HOST_INVALID: 'email.problems.SMTP_HOST_INVALID',

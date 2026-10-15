@@ -220,6 +220,7 @@ class ProviderManagementOperations:
                             old_identifier,
                             str(existing.identifier_type),
                             old_hash,
+                            await core.settings_cache_part_for(existing.provider_code),
                         )
                         core._asset_history_cache.delete(old_key)
                         core._asset_current_cache.delete(old_key)
@@ -317,6 +318,8 @@ class ProviderManagementOperations:
     async def probe_provider_config(  # noqa: C901 — three parallel probe closures, duplicated try/except mapping
         config: FAProviderConfigBase,
         operations: list[ProbeOperation],
+        *,
+        user_id: int | None = None,
     ) -> FAProviderProbeResponse:
         """
         Probe a provider configuration without persisting anything.
@@ -326,8 +329,11 @@ class ProviderManagementOperations:
 
         Accepts FAProviderConfigBase — child objects (FAProviderAssignmentItem,
         FAProviderProbeRequest) pass directly without field copying.
+
+        ``user_id`` is the user who probes: the provider receives that user's settings too. A provider whose
+        required settings are missing answers every operation with ``NOT_CONFIGURED``.
         """
-        provider = AssetProviderRegistry.get_provider_instance(config.provider_code)
+        provider = await core.configured_provider(config.provider_code, user_id=user_id)
         if not provider:
             raise AssetSourceError(f"Unknown provider: {config.provider_code}", "UNKNOWN_PROVIDER")
 
@@ -345,10 +351,7 @@ class ProviderManagementOperations:
         async def _probe_current_price() -> ProbeCurrentPriceResult:
             op_start = time.monotonic_ns()
             try:
-                value = await core._run_provider_in_thread(
-                    lambda: provider.get_current_value(config.identifier, mapped_id_type, params),
-                    timeout=15.0,
-                )
+                value = await core.call_provider(provider, lambda: provider.get_current_value(config.identifier, mapped_id_type, params), timeout=15.0)
                 return ProbeCurrentPriceResult(
                     success=True,
                     value=value.value,
@@ -377,10 +380,7 @@ class ProviderManagementOperations:
             try:
                 end_date = date_type.today()
                 start_date = end_date - timedelta(days=7)
-                hist = await core._run_provider_in_thread(
-                    lambda: provider.get_history_value(config.identifier, mapped_id_type, params, start_date, end_date),
-                    timeout=15.0,
-                )
+                hist = await core.call_provider(provider, lambda: provider.get_history_value(config.identifier, mapped_id_type, params, start_date, end_date), timeout=15.0)
                 points = hist.prices if hist else []
                 date_range_str = None
                 sample = None
@@ -414,10 +414,7 @@ class ProviderManagementOperations:
         async def _probe_metadata() -> ProbeMetadataResult:
             op_start = time.monotonic_ns()
             try:
-                patch = await core._run_provider_in_thread(
-                    lambda: provider.fetch_asset_metadata(config.identifier, mapped_id_type, params),
-                    timeout=15.0,
-                )
+                patch = await core.call_provider(provider, lambda: provider.fetch_asset_metadata(config.identifier, mapped_id_type, params), timeout=15.0)
                 return ProbeMetadataResult(
                     success=patch is not None,
                     patch_data=patch.model_dump(mode="json") if patch else None,

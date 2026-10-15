@@ -17,6 +17,7 @@ from datetime import timedelta
 
 from backend.app.logging_config import get_logger
 from backend.app.services.fx.base import FXRateProvider
+from backend.app.services.fx.runtime import call_fx_provider, settings_cache_part
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 logger = get_logger(__name__)
@@ -36,23 +37,34 @@ def _fetch_lock(code: str) -> asyncio.Lock:
     return locks.setdefault(code, asyncio.Lock())
 
 
+def _cache_key(code: str, provider: FXRateProvider) -> str:
+    """The cache key of a provider's list: its code, plus the fingerprint of its settings when it declares any."""
+    settings_part = settings_cache_part(provider)
+    return f"{code}#{settings_part}" if settings_part else code
+
+
 async def get_supported_currencies_cached(code: str, provider: FXRateProvider, *, timeout: float = SUPPORTED_CURRENCIES_TIMEOUT_S) -> list[str]:
-    """The sorted supported currencies of ``provider`` (registry ``code``): cached, never raising, never waiting more than ``timeout``."""
-    cached, found = _currencies_cache.get(code)
+    """The sorted supported currencies of ``provider`` (registry ``code``): cached, never raising, never waiting more than ``timeout``.
+
+    ``provider`` is a configured instance (``fx/runtime.py``): its settings are part of the cache key, and the call goes
+    through the FX boundary.
+    """
+    key = _cache_key(code, provider)
+    cached, found = _currencies_cache.get(key)
     if found:
         return list(cached)
-    async with _fetch_lock(code):
-        cached, found = _currencies_cache.get(code)
+    async with _fetch_lock(key):
+        cached, found = _currencies_cache.get(key)
         if found:
             return list(cached)
         try:
-            currencies = sorted(await asyncio.wait_for(provider.get_supported_currencies(), timeout=timeout))
+            currencies = sorted(await asyncio.wait_for(call_fx_provider(provider, provider.get_supported_currencies), timeout=timeout))
         except Exception as exc:  # timeout, network or parse error: the catalog must still answer
             fallback = _last_known.get(code, [])
             reason = str(exc) or type(exc).__name__
             logger.warning(f"Supported currencies of {code} unavailable ({reason}): using {'the last known list' if fallback else 'an empty list'} for {RETRY_AFTER_FAILURE_S} s")
-            _currencies_cache.set(code, list(fallback), ttl=timedelta(seconds=RETRY_AFTER_FAILURE_S))
+            _currencies_cache.set(key, list(fallback), ttl=timedelta(seconds=RETRY_AFTER_FAILURE_S))
             return list(fallback)
         _last_known[code] = currencies
-        _currencies_cache.set(code, currencies)
+        _currencies_cache.set(key, currencies)
         return list(currencies)

@@ -30,7 +30,7 @@
 | Z3 | Scheduler: recupero immediato al risveglio e lock condiviso con `wake-sync` (`next_wake_at` e jitter nel backlog, punto 33) | ⏸ attende lo scheduler spostato da H |
 | Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ⏸ attende gli agganci di H |
 | Z5 | «Aggiornamento prezzi…» | ⏸ attende l'area avvisi e la configurazione pubblica di H |
-| Z6b | C-49: la cura | 📝 disegnato il 15/10 (sezione «Z6b — disegno»), punto 35 deciso; il codice aspetta gli agganci di H (CP2b) e l'autorizzazione del developer |
+| Z6b | C-49: la cura | autorizzato il 15/10; **parte 1 ✅ entrata** (`000090aaf`: variabile, drenaggio da `entrypoint.sh` e `dev.py server`, grazie a 10 s); **parte 2 ✅ 15/10** (cablaggio in `app_lifespan.py` dopo CP2b, watchdog solo sotto il gestore di uvicorn e armato solo da un segnale, test di processo 7/7, ciclo vero con watchdog installato, doc EN) — checkpoint FROZEN; sezione «Z6b — spegnimento con un tempo massimo» |
 | Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | 📝 disegnato il 15/10 (sezione «Z7 — disegno»), decisioni D-Z7 prese dal coordinatore; **Z7a ✅ 15/10** (primitiva, configurazione, servizio, test verdi; sezione «Z7a»); poi X con il contratto `RATE_LIMITED` (X1–X8), poi Z7b scheduler e Z7c frontend |
 
 Checkpoint FROZEN a fine Z6a; poi un checkpoint per lotto.
@@ -474,6 +474,48 @@ Pagine (solo i cicli di polling e il punto della pillola):
    > 65, il livello del via del coordinatore (soglia mia): è partita alle 15:57 a 38,8. Nel merge
    > `frontend/package.json` e il lock cambiano solo la versione della radice (1.1.0 → 0.0.0): `node_modules` resta
    > valido, nessun `npm ci`.
+7. Il flash del prezzo dal vivo nel dettaglio: correzione del test, solo test ✅ 2026-10-15
+
+   > **Richiesta del coordinatore** (15/10 ~21:13): Y ha trovato 3 rossi intermittenti nel blocco «Live price direction
+   > flash» di `front-asset asset-detail`. Il prezzo è passato al nuovo valore, ma `data-live-price-direction` restava
+   > `neutral`. La correzione spetta a Z, in un lotto piccolo, prima i rossi.
+   >
+   > **Rosso riprodotto** (21:19): 1 rosso su 4 («consecutive», atteso `up`, trovato `neutral`), con la pagina che
+   > mostrava `101.00`.
+   >
+   > Due corse nel test, entrambe con la stessa istantanea:
+   > 1. Fino al primo prezzo dal vivo l'elemento mostra l'ultima chiusura del grafico (Apple, 175–185), già `neutral`,
+   >    e i test 2–4 aspettavano solo `neutral` prima di cambiare il prezzo del mock. Con Z1 il primo poll parte da un
+   >    timer a 0 ms, per scelta, mentre prima partiva in modo sincrono dentro l'effetto. Sotto il `page.clock` e con
+   >    la pagina occupata può scattare dopo la mutazione, e allora il primo valore letto è già quello nuovo.
+   > 2. `page.clock.install()` senza pausa lascia scorrere il tempo reale, quindi il decadimento di circa 1,3 s parte
+   >    da solo, e una pausa della pagina o del worker oltre quel tempo nasconde il lampo ai controlli. L'ha segnalata
+   >    test-author.
+   >
+   > Il comportamento del prodotto è giusto: il primo valore è `neutral`, poi `up` o `down`. Difetto del test, non di
+   > Z1.
+   >
+   > **Correzione** (test-author, `frontend/e2e/assets/asset-detail.spec.ts`, 36 righe aggiunte e 3 tolte):
+   > - nei test 2–4, prima di cambiare il prezzo, `toHaveText('100.00')`: 100,00 può venire solo dal primo poll vivo;
+   > - poi `page.clock.pauseAt(ora della pagina + 5 s)`, così da lì in poi il tempo lo muove solo `fastForward`. Il
+   >   margine è 5 s perché `pauseAt` rifiuta il passato e non risincronizza l'orologio prima del calcolo. Nei 5 s non
+   >   scatta niente: il prossimo poll è a 30 s, la pausa per inattività a 2 min, nessun decadimento è in attesa;
+   > - corretto il commento del mock, che parlava ancora di «due poller»;
+   > - Prettier pulito.
+   >
+   > **Verdi**, slot pesante 1, una run alla volta:
+   >
+   > | Run | Workers | Esito |
+   > |---|---|---|
+   > | a | 1 | 4/4 |
+   > | b | 1 | 4/4 |
+   > | c | 2 | 4/4 |
+   >
+   > Comando: `dev.py test … --workers N front-asset asset-detail "Live price direction flash"`. Porta libera dopo
+   > ogni run. Log in `/tmp/libreFolio_flash_{a,b,c}.log`.
+   >
+   > **Fuori pista**: la prima run di riproduzione ha preso tutta la spec senza filtro (32/33), perché il mio wrapper
+   > delle prove mette le opzioni prima della categoria. Il filtro va dopo l'azione.
 
 ## Z7 — disegno: attesa crescente sui 429 (15/10, prima del codice)
 
@@ -603,6 +645,14 @@ fornitori: rallenta sui propri errori e rispetta il tempo d'attesa che il backen
   ripresa, per esempio «fornitore in pausa fino alle …», con una chiave i18n nuova nelle 4 lingue. Lì l'utente ha
   chiesto un'azione esplicita.
 - **Dipendenza**: X parte dopo l'ingresso di Z7a, perché usa `RateLimitedError` e `provider_cooldown`.
+- **Precisazioni di X** (15/10 ~20:47, inoltrate dal coordinatore, «non agire adesso»; il registro delle pause non
+  cambia):
+  - il primo argomento di `call_provider(provider, fn, *, timeout, scope=None)` è l'istanza configurata
+    (`configured_provider(code, user_id=…)`), non il codice; nella chiave del registro va il codice del fornitore,
+    preso dall'istanza;
+  - il confine unico dei cambi è `call_fx_provider` (`fx/runtime.py`), usato da `_fetch_provider`,
+    `ensure_rates_multi_source` e dal catalogo;
+  - `AssetRateLimitedError` passa il mascheramento dei segreti senza cambiare tipo.
 
 ### Z7b · Scheduler (Z, dopo Z7a)
 
@@ -1102,6 +1152,28 @@ tool.
    > - `exit(1)` gira anche quando falliscono il rapporto, i figli o la coverage;
    > - gli spazi in shell valgono come in Python (`sed`, e una `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN` vuota conta come non
    >   impostata).
+   >
+   > **Parte 2 in bozza** (15/10 ~19:30, test-author, non lanciata):
+   > - `backend/test_scripts/test_services/_shutdown_budget_app.py`: l'app di prova. Usa i pezzi veri (il watchdog
+   >   come primo passo d'avvio, `shutdown_deadline()` una volta nel `finally`, `child_processes_step()` per ultimo) e
+   >   ha degli interruttori `Z6B_APP_*`;
+   > - `test_shutdown_budget_process.py`: SDP-001…007, cioè i casi (a)–(f) su processi veri e (g) il cablaggio;
+   >   azione `services shutdown-process` (PURE). Il socket sta in `/tmp/lf-z6b-*`, perché macOS limita il percorso a
+   >   104 byte; il server gira nella sua sessione e la pulizia ne uccide il gruppo;
+   > - i codici d'uscita, letti nei sorgenti di uvicorn 0.52.4 e Python 3.13:
+   >   - con SIGTERM, uvicorn rilancia il segnale e si esce con −SIGTERM;
+   >   - con SIGINT, il `KeyboardInterrupt` viene inghiottito e l'interprete aspetterebbe per sempre il thread non
+   >     daemon: lo chiude solo il watchdog, con 1;
+   >   - (a), (b) e (d) accettano −SIGTERM o 1, ma 1 solo con «Shutdown budget exhausted» nel log;
+   > - la registrazione fa diventare rosso `services all` finché CP2b non entra: si committa con la parte 2.
+   >
+   > Rischi segnalati da test-author:
+   > 1. il passo d'avvio del watchdog restituisce un oggetto che non si può attendere, quindi `run_startup_steps` deve
+   >    attendere solo gli awaitable. **Chiuso** da H il 15/10: il risultato di `run()` passa per `_completed()`, che
+   >    lo attende solo se `inspect.isawaitable(result)`, all'avvio come allo spegnimento, e un suo test lo prova;
+   > 2. `child_processes_step()` è sincrono sul loop e con un figlio testardo dura fino a ~1 s, più del margine di
+   >    0,75 s; anche i passi dopo un taglio ricevono 0,2 s ciascuno. Nel caso peggiore il watchdog scatta durante
+   >    l'ultimo passo: termina comunque i figli e si esce con 1. È accettato, perché il processo esce nel budget.
 2. Rossi. ✅ 2026-10-15 (parte 1)
 
    > `services shutdown-budget` → exit 1, `ImportError: cannot import name 'DEFAULT_SHUTDOWN_TIMEOUT_SECONDS'`, alla
@@ -1169,5 +1241,184 @@ tool.
    >
    > Il carico era alto (fino a 95 al minuto): prima delle due run col backend ho aspettato che scendesse sotto 60.
    > Strumenti fuori dal repo: `/tmp/libreFolio_z6b_run.sh` e l'osservatore di Z6a. Log in `/tmp/libreFolio_z6b_*`.
-5. `.env.example`, la doc admin (`docs-writer`), il CHANGELOG proposto. ⏳
+   >
+   > **Parte 1 entrata** in `dev_release2` a `000090aaf` (15/10 ~18:57). Avanzamento veloce del mio ramo a `10d5ccd2d`.
+   > Il CHANGELOG lo scrive il coordinatore con la parte 2, quando tutto il budget è acceso. In attesa dello SHA di
+   > CP2b, i test di processo si scrivono in bozza e non si lanciano.
+   >
+   > **Checkpoint della bozza della parte 2** (15/10 ~20:00). CP2b è entrato (`4fb017a9a`) e il coordinatore ha dato
+   > il via alla parte 2. Il merge di `dev_release2` (`9b82187f6`) però si sarebbe fermato sulle mie modifiche aperte
+   > al backlog e a `_backend_services.py`. Quindi: commit delle modifiche aperte (bozza dei test di processo, doc EN,
+   > registrazione, journal), poi il merge. I blocchi non si sovrappongono: nel runner sono a 535 e 1336 contro 413,
+   > 902, 1242 e 1501; nel backlog Z-10 sta 7 righe sopra le 49 aggiunte alla sezione B. Il punto fermo ha ruff e black
+   > puliti sui file nuovi, le ammonizioni a posto e `git diff --check` pulito. In quel commit `services
+   > shutdown-process` è rosso, perché `lifecycle` non c'è ancora; dopo il merge resta rosso solo SDP-007, il
+   > cablaggio, fino alle 3 righe.
+5. `.env.example`, la doc admin (`docs-writer`), il CHANGELOG proposto. ⏳ (`.env.example` ✅ con la parte 1; doc
+   in bozza ✅ 2026-10-15, entra con la parte 2)
+
+   > **Note implementazione** (doc, da `docs-writer`, solo EN, nessuna build, niente stamp):
+   > - `admin/configuration.en.md`: sezione nuova «⏹️ Stopping the Server» `{: #shutdown }`, fra «Startup Checks» e
+   >   «Parameters Set by the Tools». Contiene la tabella delle due variabili, i tre tempi dello spegnimento e un
+   >   avviso: chi alza il budget alzi `stop_grace_period`, con un esempio YAML. Fly.io resta fuori (lo documenta X).
+   >   Nessuna riga in «Main Options», perché lì un valore sbagliato ferma il server, e questo no;
+   > - `developer/test-walkthrough/index.md` (453, 458–465) e `runner_architecture.md:802`: la grazia senza coverage è
+   >   10 s, e l'avviso «ignored SIGTERM» vuol dire budget mancato;
+   > - debito di traduzione vero sulle pagine admin IT, FR ed ES: la sezione nuova manca e deve tenere `{: #shutdown }`;
+   > - le pagine descrivono il comportamento completo, che c'è solo dopo il cablaggio: entrano con la parte 2.
+   >
+   > **Fuori pista**: docs-writer ha segnalato, dal codice, che Ctrl+C su `./dev.py server` uccide il server dopo
+   > 0,25 s (`subprocess.run` in `run_command_live`). Ho verificato la lettura nel codice: è un difetto che c'era già,
+   > in una superficie del coordinatore, ed è finito nel backlog come Z-10. Fuori regola: una volta docs-writer ha
+   > lanciato un `python3.14 -c` di sistema, in sola lettura.
 6. Checkpoint FROZEN. ⏳
+
+### Parte 2 — cablaggio (15/10, dopo CP2b)
+
+> **Via del coordinatore** (15/10 ~19:59): «CP2b è entrato … Via alla parte 2 di Z6b: le 3 righe in
+> `app_lifespan.py`, gli import di `lifecycle`, i test di processo, un ciclo di vita vero nella tua corsia (lo slot
+> pesante chiedilo a me), la doc admin, la riga del CHANGELOG». Checkpoint della bozza `1d47bd7af`, poi merge di
+> `dev_release2` (`b4597efad`): HEAD `cc0d340f3`.
+
+1. Cablaggio. ✅ 2026-10-15
+
+   > **Note implementazione**:
+   > - `app_lifespan.py` (di H), le righe concordate:
+   >   - `Step("shutdown-watchdog", lambda: install_shutdown_watchdog())` primo in `STARTUP_STEPS`;
+   >   - l'import di `shutdown_deadline` al posto della `def` che restituiva `None`;
+   >   - `child_processes_step()` ultimo in `SHUTDOWN_STEPS`;
+   >   - la frase della docstring sul gancio, che diceva `None`;
+   > - `shutdown_budget.py`: `lifecycle` importato in cima. Spariscono il ripiego `_lifecycle_current_step` e
+   >   l'import sotto `TYPE_CHECKING`.
+   >
+   > **Fuori pista (sicurezza, prima del codice)**: quattro file di test (`test_post_migration`, `test_signal_runtime`,
+   > `test_risk_scenario_catalog`, `test_market_calendar`) eseguono il `lifespan` vero nel thread principale di
+   > pytest. Con il contratto della parte 1 il watchdog si sarebbe installato anche lì, perché il gestore di SIGINT
+   > predefinito si può chiamare. Allo spegnimento `shutdown_deadline()` l'avrebbe armato, e 8 s dopo `os._exit(1)`
+   > avrebbe ucciso pytest; il passo dei figli avrebbe terminato i figli di pytest. Le correzioni:
+   > - il watchdog si installa solo se il gestore di SIGTERM è `Server.handle_exit` di uvicorn, cioè solo in un vero
+   >   server uvicorn. SIGINT si avvolge solo se lo gestisce uvicorn;
+   > - `shutdown_deadline()` non arma mai: dopo un segnale vale la scadenza del watchdog meno il margine; senza segnale,
+   >   o senza watchdog, vale `adesso + budget − drenaggio`, calcolata a ogni chiamata. La cache di processo della
+   >   parte 1 non serve più, perché il lifespan di H la chiama una volta per spegnimento; con più cicli di vita nello
+   >   stesso processo (i server dei test API) avrebbe dato una scadenza già passata.
+   >
+   > In quei quattro test resta solo una scadenza di circa 5 s sui passi di spegnimento, che lì sono stub; H conferma
+   > che il passo BRIM è `lambda wait=False: None`.
+   >
+   > **Accordo con H** (15/10 ~20:10): il suo test `test_the_shutdown_has_no_deadline_yet`, che chiedeva
+   > `shutdown_deadline() is None`, e la frase del contratto (d) nella docstring del suo file si tolgono nel mio commit
+   > di cablaggio. Prende il loro posto SDP-007. H approva anche la guardia su `handle_exit`.
+2. Test allineati (test-author): SDB al nuovo contratto, il test di H tolto, SDP rivisti. ✅ 2026-10-15
+
+   > **Note implementazione** (test-author, nessuna run):
+   > - `test_shutdown_budget.py`: **45 test, 188 casi** (prima 41 e 178).
+   >   - Tolti SDB-035 («la prima scadenza resta») e il `PreviousHandler` finto.
+   >   - Le prove d'installazione usano un vero `uvicorn.Server` (`log_config=None`): dopo il wrapper,
+   >     `should_exit is True` e `_captured_signals == [signum]`.
+   >   - Nuovi:
+   >     - SDB-042 (8 casi): un SIGTERM che non è di uvicorn non installa niente, nemmeno con quello di uvicorn su
+   >       SIGINT;
+   >     - SDB-043: una sottoclasse di `Server` vale;
+   >     - SDB-044: un watchdog installato e non armato resta non armato, e la scadenza è `clock + budget − drenaggio`;
+   >     - SDB-045: senza watchdog la scadenza si calcola a ogni chiamata;
+   >     - SDB-046: il passo dei figli, senza watchdog, non termina niente.
+   > - `test_shutdown_budget_process.py`: 7 test con gli stessi id. Nessuno dipendeva dal vecchio contratto. In SDP-004
+   >   è corretto un falso rosso latente: con l'uscita 1 il figlio può essere nominato dall'ultimo passo invece che dal
+   >   rapporto del watchdog.
+   > - `test_app_lifecycle.py` (di H): 26 test e 42 casi. Tolti, come concordato, il test sul `None` e la frase del
+   >   contratto (d).
+   >
+   > Rischi residui segnalati, accettati:
+   > - nei test d'installazione resta una finestra di microsecondi in cui un segnale vero andrebbe perso;
+   > - il passo dei figli può superare il margine di 0,75 s: si esce comunque nel tempo, con stato 1.
+3. Verdi: `services shutdown-budget`, `services shutdown-process`, `services app-lifecycle`, i quattro file del
+   lifespan, `check-orphans`. ✅ 2026-10-15 (`check-orphans` da test-author)
+
+   > **Note implementazione** (corsia 6186, `nice -n 15`, una prova alla volta, 20:40–20:45):
+   > - `services shutdown-budget` **188/188**; `services app-lifecycle` **42/42**;
+   > - `services shutdown-process` **7/7** alla prima esecuzione:
+   >
+   >   | Caso | Esito |
+   >   |---|---|
+   >   | SDP-001, SIGTERM con una richiesta in volo | annullata dopo il drenaggio; −15 dopo 1,21 s |
+   >   | SDP-002, un passo che non finisce | tagliato; −15 dopo 1,27 s |
+   >   | SDP-003, SIGINT con un thread non daemon bloccato | chiuso dal watchdog dopo 2,07 s, che nomina il thread |
+   >   | SDP-004, un figlio che ignora SIGTERM | ucciso; −15 dopo 0,74 s |
+   >   | SDP-005, budget 0 | il passo fa i suoi 4 s; uscita dopo 4,18 s |
+   >   | SDP-006, niente in sospeso | uscita dopo 0,16 s |
+   >   | SDP-007 | cablaggio a posto |
+   >
+   >   Nessun server di prova rimasto;
+   > - i file che eseguono il lifespan vero:
+   >   - `services signal-runtime` 6/6, `db post-migration` 41/41, con il runner;
+   >   - `test_market_calendar.py` 37/37 e `test_risk_scenario_catalog.py` 11/11 con pytest su un file solo e le
+   >     variabili della corsia (`TEST_PORT`, `LIBREFOLIO_TEST_DATA_DIR`, `LIBREFOLIO_TEST_MODE`), per non lanciare i
+   >     18 file di `risk-all`;
+   > - porta 6186 libera. Log in `/tmp/libreFolio_z6b2_*`.
+   >
+   > Poi la pausa delle prove chiesta dal coordinatore (20:46, galleria di DV): niente in esecuzione.
+4. Ciclo di vita vero (`api system` ed E2E con l'osservatore), poi `mkdocs build` e `check-links`, sullo slot del
+   coordinatore. ⏳ (`api system` ✅)
+
+   > **Note implementazione** (slot pesante 1 del coordinatore, dalle 20:54; `/tmp/libreFolio_z6b_run.sh`,
+   > `nice -n 10`):
+   > - `api system` **117/117**, con un ciclo di vita vero del backend condiviso della corsia:
+   >   - `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=3` nell'ambiente del listener;
+   >   - nel log dell'app «Shutdown watchdog installed» all'avvio, cioè il watchdog c'è nel server vero;
+   >   - allo spegnimento «Shutting down LibreFolio» e «All caches closed on shutdown» a 1,5 ms l'uno dall'altro, senza
+   >     passi tagliati né «Shutdown budget exhausted»;
+   >   - gruppo di processi vuoto 103 ms dopo la chiusura del listener;
+   >   - nessun «Shared backend ignored SIGTERM».
+   >
+   >   L'invocazione è durata 8 min 38 s, quasi tutti spesi nei prerequisiti dopo il merge.
+   >
+   > **Fuori pista**: alle 21:00 il coordinatore ha messo in pausa le prove fino alle 21:25 (scatti di G). `api system`
+   > era già in corso ed è finito alle 21:03; poi «fermo». `front-utility settings` va dopo la ripresa.
+   >
+   > Dopo la ripresa (21:09), sempre sullo slot pesante 1:
+   > - `front-utility settings` **46/46** con `--workers 2`: watchdog installato, «Shutting down» e «All caches closed»
+   >   a 4 ms l'uno dall'altro, gruppo vuoto dopo 543 ms, nessun avviso;
+   > - `dev.py mkdocs build` exit 0 in 57 s, 0 avvisi, 3044 URL relativi risolti; `dev.py mkdocs check-links` exit 0,
+   >   96 link validi;
+   > - `check-orphans` verde: 127 spec, 421 file Vitest, 315 file backend;
+   > - ruff e black puliti sui file del lotto; `git diff --check` pulito.
+   >
+   > **Fuori pista (Z1, su richiesta del coordinatore)**: Y aveva trovato 3 rossi intermittenti nel blocco «Live price
+   > direction flash» di `front-asset asset-detail`. Ho lanciato tutta la spec con `--workers 1`, senza il filtro per un
+   > errore mio nel wrapper, che mette le opzioni prima della categoria: 32/33, 1 rosso («consecutive», atteso `up`,
+   > trovato `neutral`).
+   > - Nell'istantanea la pagina mostra `101.00` con `neutral`: il primo poll vivo ha letto il prezzo già cambiato.
+   >   L'elemento esiste già, `neutral`, con l'ultima chiusura del grafico (Apple, intorno a 185), e i test 2–4
+   >   aspettano solo `neutral` prima di cambiare il prezzo.
+   > - Con Z1 il primo poll parte da un timer a 0 ms, che sotto il `page.clock` e con la pagina occupata può scattare
+   >   dopo la mutazione. È un'assunzione del test sul vecchio ciclo, non un difetto del prodotto.
+   > - La correzione, solo test, è un lotto a parte dopo questo checkpoint.
+   >
+   > La stessa run vale anche per C-49: spec degli asset, spegnimento in 1,6 s, gruppo vuoto dopo 1561 ms, nessun
+   > avviso.
+5. Checkpoint FROZEN con il CHANGELOG proposto. ✅ 2026-10-15
+
+   > CHANGELOG proposto, nel capitolo [Unreleased], «🔄 Changed», accanto alla riga di H sullo spegnimento: «**The
+   > server stops within 8 seconds.** After a `docker stop`, a restart or Ctrl+C, requests still running after 3 seconds
+   > are cancelled and what they had not saved is rolled back; the server's own work (scheduled syncs, workers,
+   > caches) gets the rest of the time, and worker processes still alive are ended, so none is left behind. If
+   > something still holds the server when the time is up, it ends anyway and its log says what was still running.
+   > `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` changes the budget (`0`: no limit, as before). Docker waits 10 seconds by
+   > default: if you raise the budget, give the container more time too (`stop_grace_period`).»
+6. Ingresso della parte 2. ✅ 2026-10-15
+
+   > **Note implementazione**: il coordinatore ha committato `fb3f98a0c` e `5b945a712`, poi ha fuso `dev_release2` a
+   > `f98c20f1b` (A6b, X CP10, J CP-4c, Y8, lo scatto di B): HEAD `7e491dd2e`, senza conflitti. Prove sulla
+   > revisione combinata, una alla volta con `nice -n 10`:
+   > - `services shutdown-budget` 188/188, `services app-lifecycle` 42/42;
+   > - `services shutdown-process` 7/7, con i tempi di prima (1,21, 1,30, 2,06, 0,67, 4,17 e 0,19 s);
+   > - `services signal-runtime` 6/6, `db post-migration` 41/41;
+   > - `check-orphans` verde: 128 spec, 428 file Vitest, 325 file backend;
+   > - porta 6186 libera, nessun server di prova rimasto.
+   >
+   > **Il filtro di X CP10 sul logging** (`utils/runtime/secret_masking.py`, il processore `mask_event_dict` e il
+   > filtro `SecretMaskingFilter`) maschera solo i segreti «in volo», che un `ContextVar` porta dentro una chiamata a
+   > un plugin. Senza segreti lascia l'evento com'è. Il thread del watchdog è un `threading.Thread` semplice, che non
+   > eredita il `ContextVar`, quindi il suo rapporto non cambia. La prova da capo a fondo è SDP-003: il rapporto del
+   > watchdog nomina ancora il thread bloccato, nell'uscita del server.

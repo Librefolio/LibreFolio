@@ -487,7 +487,7 @@ def services_email_messages(verbose: bool = False, test_names: list = None) -> b
     """Test the e-mail texts: typed builders, the four-language catalogue and the composed message."""
     print_section("Services: E-mail Messages")
     print_info("Testing: backend/app/services/email/messages.py, backend/app/services/email/templates/")
-    print_info("Tests: languages, keyword-only builders, http(s) links only, escaping, no user data in subjects, Babel durations, catalogue guard, headers and multipart/alternative, one recipient")
+    print_info("Tests: languages, keyword-only builders, http(s) links only, escaping, no user data in subjects, Babel durations, catalogue guard, headers and multipart/alternative, one recipient, every value on one line")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_messages.py", test_names)
     return run_command(cmd, "E-mail message tests", verbose=verbose)
@@ -497,30 +497,43 @@ def services_email_delivery(verbose: bool = False, test_names: list = None) -> b
     """Test SMTP delivery against a fake server on 127.0.0.1, the configuration state, the hourly budget and send_email."""
     print_section("Services: E-mail Delivery")
     print_info("Testing: backend/app/services/email/smtp.py, backend/app/services/email/delivery.py")
-    print_info("Tests: the fake SMTP server, error codes (TLS never falls back to plain), config state and its one-time log, budget on a fake clock, smtplib off the event loop, no secret in the logs")
+    print_info("Tests: the fake SMTP server, error codes (TLS never falls back to plain), config state and its one-time log, budget on a fake clock, smtplib off the event loop, no secret in the logs, a blocked instance sends nothing")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_delivery.py", test_names)
     return run_command(cmd, "E-mail delivery tests", verbose=verbose)
 
 
 def services_email_checks(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the configuration checks of the optional e-mail (email.smtp, email.smtp_encryption)."""
+    """Test the configuration checks of the optional e-mail (email.smtp, email.smtp_encryption, email.links)."""
     print_section("Services: E-mail Configuration Checks")
     print_info("Testing: backend/app/services/email/checks.py, their place in backend/app/services/platform/config_audit.py")
-    print_info("Tests: off/ok/invalid with problem and variable, plain text local or public, EMAIL_CONFIG_CHECKS, no password, host, user or sender in a detail; the end of CONFIG_CHECKS, run_config_checks, either module imported first in a fresh interpreter, the startup log")
+    print_info("Tests: off/ok/invalid with problem and variable, plain text local or public, links ok/missing/invalid, EMAIL_CONFIG_CHECKS, no password, host, user or sender in a detail")
+    print_info("Tests: the end of CONFIG_CHECKS, run_config_checks, either module imported first in a fresh interpreter, the startup log")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_checks.py", test_names)
     return run_command(cmd, "E-mail configuration check tests", verbose=verbose)
 
 
 def services_email_flows(verbose: bool = False, test_names: list = None) -> bool:
-    """Test what an action of the application sends: the language of an account's emails, and the test email."""
+    """Test what an action of the application sends: the language of an account's emails, the test email, the links an administrator emails and the forgotten password."""
     print_section("Services: E-mail Flows")
     print_info("Testing: backend/app/services/email/flows.py")
     print_info("Tests: account language (its own, else default_language, else English; no settings row created), the test email to the account's own address in its language, nothing sent when e-mail is off or unusable, configuration read off the event loop")
+    print_info("Tests: send_link_email (order of refusals, token states, recipients, languages, the PUBLIC_URL link)")
+    print_info("Tests: forgotten password admission (limits per address and identifier, budget) and work (per-account limits, revocation, silence, never raises)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_flows.py", test_names)
     return run_command(cmd, "E-mail flow tests", verbose=verbose)
+
+
+def services_email_links(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the links an email carries: built from LIBREFOLIO_PUBLIC_URL alone (developer decision 45)."""
+    print_section("Services: E-mail Links")
+    print_info("Testing: backend/app/services/email/links.py")
+    print_info("Tests: links_state missing/invalid/ready (an address no link can start from, trailing slash, path prefix, never raises, never echoes), the instance host with its port, require_links, email_link = base + page + token in the fragment, email_instance_config in every combination")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_links.py", test_names)
+    return run_command(cmd, "E-mail link tests", verbose=verbose)
 
 
 def services_provider_cooldown(verbose: bool = False, test_names: list = None) -> bool:
@@ -537,10 +550,20 @@ def services_shutdown_budget(verbose: bool = False, test_names: list = None) -> 
     """Test the shutdown time budget: the server exits within about 8 s of SIGTERM or SIGINT (decision 35)."""
     print_section("Services: Shutdown Budget")
     print_info("Testing: backend/app/services/platform/shutdown_budget.py, backend/app/config/sleep_wake.py, entrypoint.sh, the shutdown grace of the runner and of Playwright")
-    print_info("Tests: LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS and its 3/8 drain, UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN from entrypoint.sh, graces >= budget + 2 s, the watchdog (armed once, fired once, exit 1 on fakes), the SIGTERM/SIGINT wrappers, shutdown deadlines, children terminated then killed")
+    print_info("Tests: LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS, its 3/8 drain, entrypoint.sh, graces >= budget + 2 s, the watchdog (once, exit 1 on fakes) only under uvicorn's handle_exit, its wrappers, deadlines that never arm it, the child step idle without it, children terminated then killed")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_shutdown_budget.py", test_names)
     return run_command(cmd, "Shutdown budget tests", verbose=verbose)
+
+
+def services_shutdown_process(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the shutdown budget in real server processes under the uvicorn CLI, signalled with SIGTERM and SIGINT."""
+    print_section("Services: Shutdown Budget in a Server Process")
+    print_info("Testing: backend/app/services/platform/lifecycle.py and shutdown_budget.py under uvicorn, the wiring of backend/app/services/platform/app_lifespan.py")
+    print_info("Tests: budget 2 s, drain 1 s: a request in flight cancelled, a step that never ends cut, SIGINT with a blocked thread ended by the watchdog, a child ignoring SIGTERM killed, budget 0 runs a 4 s step to its end, nothing pending exits at once; first and last steps")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_shutdown_budget_process.py", test_names)
+    return run_command(cmd, "Shutdown budget process tests", verbose=verbose)
 
 
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
@@ -900,6 +923,54 @@ def services_config_env_example(verbose: bool = False, test_names: list = None) 
     print_info("Testing: .env.example against backend/app/, Settings and the compose files")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_env_example.py", test_names)
     return run_command(cmd, ".env.example guard tests", verbose=verbose)
+
+
+def services_plugin_settings_contract(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what a plugin declares to have settings, the values a field accepts, and what the core binds."""
+    print_section("Services: Plugin Settings Contract")
+    print_info("Testing: backend/app/services/plugin_settings/fields.py, contract.py, provider_registry.register")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_contract.py", test_names)
+    return run_command(cmd, "Plugin settings contract tests", verbose=verbose)
+
+
+def services_plugin_settings_crypto(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the encryption of the secret plugin settings and the re-encryption a restore needs."""
+    print_section("Services: Plugin Settings Encryption")
+    print_info("Testing: backend/app/services/plugin_settings/crypto.py (AES-256-GCM, AAD, key id, rekey, key status)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_crypto.py", test_names)
+    return run_command(cmd, "Plugin settings encryption tests", verbose=verbose)
+
+
+def services_plugin_settings_runtime(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the resolution of plugin settings and their delivery at the asset and FX call boundaries."""
+    print_section("Services: Plugin Settings Resolution and Delivery")
+    print_info("Testing: plugin_settings/resolver.py, runtime.py, assets/core.py (call_provider), fx/runtime.py (call_fx_provider)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_runtime.py", test_names)
+    return run_command(cmd, "Plugin settings runtime tests", verbose=verbose)
+
+
+def services_plugin_settings_service(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plugin settings catalogue and the all-or-nothing writes on a private database."""
+    print_section("Services: Plugin Settings Service")
+    print_info("Testing: backend/app/services/plugin_settings/service.py (read_catalogue, write_settings)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_service.py", test_names)
+    return run_command(cmd, "Plugin settings service tests", verbose=verbose)
+
+
+def services_secret_masking(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the masking of the secrets a plugin call carries, in its errors and its log lines."""
+    print_section("Services: Secret Masking")
+    print_info("Testing: backend/app/utils/runtime/secret_masking.py and its wiring in logging_config.configure_logging")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_secret_masking.py", test_names)
+    return run_command(cmd, "Secret masking tests", verbose=verbose)
+
+
+def services_plugin_settings_guards(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plugin settings guards: variables documented, derived names unique, AI Export never reads them."""
+    print_section("Services: Plugin Settings Guards")
+    print_info("Testing: registered declarations against .env.example, derived variable names, imports of services/ai_export/")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_guards.py", test_names)
+    return run_command(cmd, "Plugin settings guard tests", verbose=verbose)
 
 
 def services_platform_readiness(verbose: bool = False, test_names: list = None) -> bool:
@@ -1319,7 +1390,7 @@ Note: No backend server required.
         "email-messages",
         services_email_messages,
         name="E-mail Messages",
-        desc="EMAIL_LANGUAGES = default_language choices, email_language, keyword-only builders, http(s) links only, user values escaped in the HTML and absent from subjects, Babel durations, one more sentence for admin invites, catalogue guard (same keys and placeholders in en/it/fr/es, valid templates), compose_message headers, plain then HTML, exactly one recipient",
+        desc="EMAIL_LANGUAGES = default_language choices, email_language, keyword-only builders, http(s) links only, user values escaped in the HTML and absent from subjects, Babel durations, one more sentence for admin invites, catalogue guard (same keys and placeholders in en/it/fr/es, valid templates), compose_message headers, plain then HTML, exactly one recipient; every value shown on one line (control characters and line separators as spaces, bidirectional controls removed)",
         # PURE: no lane DB, no server, no environment read (inherited SMTP variables removed with monkeypatch); reads the committed templates only.
         isolation="pure",
     )
@@ -1328,7 +1399,7 @@ Note: No backend server required.
         "email-delivery",
         services_email_delivery,
         name="E-mail Delivery",
-        desc="Fake SMTP server self-checks; deliver: plain, AUTH, AUTH_FAILED, TLS_FAILED without fallback, CONNECTION_FAILED, TIMEOUT, refusals, non-221 QUIT is success; email_config_state never raises, one problem and variable per fault, logged once per process without the password; hourly budget on a fake clock; send_email off the event loop; no password, link or body in the logs",
+        desc="Fake SMTP server self-checks; deliver: plain, AUTH, AUTH_FAILED, TLS_FAILED without fallback, CONNECTION_FAILED, TIMEOUT, refusals, non-221 QUIT is success; email_config_state never raises, one problem and variable per fault, logged once per process without the password; hourly budget on a fake clock; send_email off the event loop; no password, link or body in the logs; a blocked instance (LIBREFOLIO_BLOCKED, or unreadable) sends nothing, before any other check; sending_blocked",
         # PURE: no lane DB, no server; env set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
         isolation="pure",
     )
@@ -1337,7 +1408,7 @@ Note: No backend server required.
         "email-checks",
         services_email_checks,
         name="E-mail Configuration Checks",
-        desc="email.smtp: off, ok, or error with problem and variable; email.smtp_encryption: ok unless plain text to a non-local host (warning); EMAIL_CONFIG_CHECKS; no password anywhere, no host, user or sender in a detail; config_audit.CONFIG_CHECKS ends with them, run_config_checks carries their results, either module imports first in a fresh interpreter; the startup audit logs an error, a warning, nothing when off, never the password",
+        desc="email.smtp: off, ok, or error with problem and variable; email.smtp_encryption: ok unless plain text to a non-local host (warning); email.links: ok when email is not usable or links are ready, info without LIBREFOLIO_PUBLIC_URL, warning when it is not http(s) or no link can start from it; EMAIL_CONFIG_CHECKS (three); no password anywhere, no host, user or sender in a detail; config_audit.CONFIG_CHECKS ends with them, run_config_checks carries their results, either module imports first in a fresh interpreter; the startup audit logs an error, warnings, an info, nothing when off, never the password",
         # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path; the
         # startup audit runs in test mode with its data directory in tmp_path, and so do the fresh interpreters of the import order.
         isolation="pure",
@@ -1347,9 +1418,18 @@ Note: No backend server required.
         "email-flows",
         services_email_flows,
         name="E-mail Flows",
-        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop",
+        desc="account_language: the account's own language when it names one of the four (an unknown one counts as unset, like an empty one), else default_language, else English, the language column alone, never creating a user_settings row; supported_email_language; send_test_email: one message to the account's own address in its language, EmailUnavailableError and no connection when e-mail is off or unusable, EmailRecipientError (a ValueError) for an address that is not one address, the configuration and its password file read off the event loop; send_link_email: email, then links, then the token, then the recipient, an inactive account's reset link refused, exactly the PUBLIC_URL link, the token never logged; admit_forgotten_password: held first (FORGOT_PASSWORD_DISABLED), then per address keyed by address_key (IPv6 by its /64, a mapped IPv4 as the IPv4, none without one), per identifier, the budget peeked; forgotten_password_work: per-account limits, an administrator's live link, per mailbox, the configuration read again before the link is made, a link made meanwhile rolled back, the new link revoked whatever stops the email, never raises, an unexpected error logged as its type alone; a blocked instance is refused first by every flow and makes no link",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server; LIBREFOLIO_SMTP_* removed then set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-links",
+        services_email_links,
+        name="E-mail Links",
+        desc="links_state: LIBREFOLIO_PUBLIC_URL missing, invalid (not http(s), or no host, a space, a ? or #, a bad port, credentials, a bracket the parser cannot read; never echoed) or ready (spaces and one trailing slash removed, path prefix kept), read at each call, never raises; LinksState.instance = host with port; require_links; email_link = base + /reset-password or /invite + the token urlencoded in the fragment, nothing from a request; email_instance_config: available, and links only with email usable and links ready",
+        # PURE: no lane DB, no server, no network; LIBREFOLIO_SMTP_* and LIBREFOLIO_PUBLIC_URL removed then set with monkeypatch.
         isolation="pure",
     )
     add_test(
@@ -1368,11 +1448,22 @@ Note: No backend server required.
         "shutdown-budget",
         services_shutdown_budget,
         name="Shutdown Budget",
-        desc="config.sleep_wake: LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS (0 = no limit, ASCII digits 2–600, default 8) read at call time, the drain max(1, budget*3//8), uvicorn_drain_env (a value set by hand wins, never raises); entrypoint.sh exports UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN under sh and dash; the runner's and Playwright's plain grace >= budget + 2 s; shutdown_budget: shutdown_budget_seconds never raises and logs once per process, ShutdownWatchdog arms once (re-entrant, one daemon thread) and fires once (ERROR log of step, threads and children, terminate_children(0.5), coverage saved only if measuring, flush, exit 1 even after a failing step), SIGTERM/SIGINT wrappers arm then call uvicorn's handler, shutdown_deadline, terminate_child_processes (terminate, timeout, kill, recursive, keep)",
+        desc="config.sleep_wake: LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS (0 = no limit, ASCII digits 2–600, default 8) read at call time, the drain max(1, budget*3//8), uvicorn_drain_env (a value set by hand wins, never raises); entrypoint.sh exports UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN under sh and dash; the runner's and Playwright's plain grace >= budget + 2 s; shutdown_budget: shutdown_budget_seconds never raises and logs once per process, ShutdownWatchdog arms once (re-entrant, one daemon thread) and fires once (ERROR log of step, threads and children, terminate_children(0.5), coverage saved only if measuring, flush, exit 1 even after a failing step), install_shutdown_watchdog only under uvicorn's Server.handle_exit on SIGTERM (a subclass's too; SIGINT wrapped only when uvicorn's; budget 0, another thread or any other SIGTERM handler, pytest's main thread included: nothing), the wrappers arm then call uvicorn's handler with (signum, frame), shutdown_deadline (an armed watchdog's less 0.75 s; otherwise clock + budget - drain at each call, never arming), the child-processes step terminates nothing without a watchdog, terminate_child_processes (terminate, timeout, kill, recursive, keep)",
         # PURE: no DB, no server, no lane port; environment only through monkeypatch; SIGTERM/SIGINT handlers saved and
         # restored around each test, never delivered (the wrappers are called directly); os._exit and the default
         # terminate_children replaced by recorders. Its subprocesses are `sh entrypoint.sh` runs and short-lived python
         # children of its own (fresh interpreters in tmp_path included), all reaped.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "shutdown-process",
+        services_shutdown_process,
+        name="Shutdown Budget in a Server Process",
+        desc="A fixture app with the real lifecycle and shutdown_budget under the uvicorn CLI, LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS=2 and UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=1: SIGTERM cancels a request in flight after the drain, cuts a shutdown step that never ends, kills a child that ignores SIGTERM, each within 6 s; SIGINT with a blocked non-daemon thread ends by the watchdog (status 1, 'Shutdown budget exhausted'); budget 0 runs a 4 s step to its end (status -SIGTERM, no watchdog); nothing pending exits within 3 s; app_lifespan: shutdown-watchdog first, child-processes last, shutdown_deadline from shutdown_budget",
+        # PURE: its own server processes on a Unix socket of their own (in a short directory under /tmp: an AF_UNIX path
+        # holds 104 bytes on macOS), data and logs in tmp_path; no lane port, no DB. Every process it starts — each server,
+        # in a session of its own, with its process group — is killed if still running and reaped.
         isolation="pure",
     )
     add_test(
@@ -1539,6 +1630,16 @@ Note: No backend server required.
     add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
+    # Plugin settings (CP10). PURE, all six: no lane DB and no server. The databases are private files under tmp_path
+    # built with create_all, the call boundaries read their rows through a private engine put in place of
+    # get_async_engine, the instance key is a test key set with monkeypatch (the data directory pointed into tmp_path,
+    # so no key file is ever read or made in the lane), and the real plugin registries are only read.
+    add_test(cat, "plugin-settings-contract", services_plugin_settings_contract, name="Plugin Settings Contract", desc="Declarations per family, refusal at registration, values per type, refusals without the value, derived variable names, BoundSettings and the test doubles", isolation="pure")
+    add_test(cat, "plugin-settings-crypto", services_plugin_settings_crypto, name="Plugin Settings Encryption", desc="AES-256-GCM blob and AAD, key id, subkeys, count and rekey on a sqlite3 copy (savepoint, idempotent, unreadable rows kept), key status (unusable key: totals)", isolation="pure")
+    add_test(cat, "plugin-settings-runtime", services_plugin_settings_runtime, name="Plugin Settings Resolution", desc="env > _FILE > row > default, invalid variable unconfigures, unusable key, fingerprints, configure_instance, NOT_CONFIGURED and masking at both boundaries", isolation="pure")
+    add_test(cat, "plugin-settings-service", services_plugin_settings_service, name="Plugin Settings Service", desc="Catalogue and all-or-nothing writes on a private DB: scopes, LOCKED_BY_ENV, managed profile, item rules, log without values, key unavailable, MOCKFX writes", isolation="pure")
+    add_test(cat, "secret-masking", services_secret_masking, name="Secret Masking", desc="mask_text with the URL forms, mask_exception through chains and groups, structlog processor and logging filter, the context variable across threads and tasks, the wiring in configure_logging", isolation="pure")
+    add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
     add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
     add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
     add_test(
