@@ -2726,12 +2726,12 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
   punto 35 delle decisioni. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione
   «Z6a — prove su C-49, senza codice di prodotto».
 - ✅ **Z-1 · Il ciclo del grafico del dettaglio asset gira anche su un intervallo passato** — chiusa da Z1 il 15/10
-  (checkpoint Z1): il ciclo unico del dettaglio ha la guardia `isHeadToday`; il test E2E `front-asset live-pause` (f)
-  prova che un intervallo passato non chiede nulla (rosso prima: richieste a +2,1 e +57,1 s). Era: basso, da
+  (commit `74d028ec6`): il ciclo unico del dettaglio ha la guardia `isHeadToday`; il test E2E `front-asset live-pause`
+  (f) prova che un intervallo passato non chiede nulla (rosso prima: richieste a +2,1 e +57,1 s). Era: basso, da
   verificare; Z, 14/10. Il poll di 60 s (`routes/(app)/assets/[id]/+page.svelte:1977-2083`) non aveva la guardia
   `isHeadToday`, e `mergeChartPointsIncremental` non taglia sull'intervallo. Dettagli:
   [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Passi di Z1».
-- ✅ **Z-2 · Due cicli sullo stesso endpoint nel dettaglio asset** — chiusa da Z1 il 15/10 (checkpoint Z1), per la
+- ✅ **Z-2 · Due cicli sullo stesso endpoint nel dettaglio asset** — chiusa da Z1 il 15/10 (commit `74d028ec6`), per la
   decisione 31: un ciclo solo ogni 30 s, una richiesta per giro che alimenta il riepilogo e la testa del grafico; la
   fusione è coordinata con X (FE5c) dal coordinatore. Era: basso; Z, 14/10, tre scritture di `POST
   /assets/prices/current` al minuto. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
