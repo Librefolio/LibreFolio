@@ -114,17 +114,21 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
   the internal `create-user` command instead (`is_superuser=False`): a regular account, even as the
   first account of an empty database.
 - **Promote and demote** go through `user_service.set_user_admin()`, which refuses a no-op
-  (*already an admin*, *not an admin*) and does **not** check that another superuser remains. The
-  only last-superuser guard is on self-deletion: `DELETE /api/v1/auth/users/me` answers `400` when
-  `count_superusers()` is 1 or less.
+  (*already an admin*, *not an admin*) and the demotion of the last active administrator. A
+  demotion also ends every session of the account (`user_service.end_sessions()` raises
+  `users.session_version`, see [Session Revocation](security.md#session-revocation)); a promotion
+  does not. Self-deletion has the same guard: `DELETE /api/v1/auth/users/me` answers `400` to an
+  administrator when no other active administrator remains (`count_active_superusers()`).
 - **Applied at the next request**: the user CLI writes the database directly, with the server
   running or not, and `get_current_user()` reloads the user on every request. A deactivated
   account (`user deactivate`, `user_service.set_user_active()`) gets `401` *User account is
-  disabled*, and its login `401` *Account is disabled*.
-- **Password reset** (`user reset`, `user_service.reset_password()`) changes only the hash. The
-  session JWT carries the user id alone (`sub`, with `iat` and `exp`) and nothing revokes it: a
-  token issued before the reset stays valid until it expires (`session_ttl_hours`). Deactivation
-  is the immediate lock-out.
+  disabled*; its login, with the right password, gets `403` `ACCOUNT_DISABLED`. Deactivation
+  refuses the last active administrator, and ends every session of the account: `user activate`
+  lets the user sign in again, but brings none of the old sessions back.
+- **Password reset** (`user reset`, `user_service.reset_password()`) sets the new hash, computed
+  in a worker thread off the event loop, and ends every session of the account in the same
+  commit: each device gets `401` at its next request, and signs in again with the new password.
+  To keep the account out altogether, deactivate it.
 - **CLI password rules**: `create` and `reset` call `validate_password()` in
   `scripts/user_cli.py`: at least 8 characters, with an upper-case letter, a lower-case letter, a
   digit and a symbol from its `special_chars` set. The API schemas only ask for 8 characters.

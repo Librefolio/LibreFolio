@@ -388,7 +388,8 @@ class User(SQLModel, table=True):
     donation_popup_last_shown_at: Optional[datetime] = Field(default=None, nullable=True)
     donation_popup_logins_since_shown: int = Field(default=0, nullable=False)
 
-    # Session generation of the account (migration 005); the code that raises and checks it comes later.
+    # Session version of the account, carried by the session JWT as `sv`: raising it (user_service.end_sessions)
+    # ends every session issued before.
     session_version: int = Field(default=0, nullable=False)
     # When the email address was verified; NULL for the accounts that existed before migration 005.
     email_verified_at: Optional[datetime] = Field(default=None, nullable=True)
