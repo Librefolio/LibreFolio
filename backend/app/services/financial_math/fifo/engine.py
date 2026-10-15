@@ -6,7 +6,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Literal, Sequence
+from typing import Callable, Literal, Sequence
 
 from backend.app.services.financial_math.fifo.eligibility import eligible_income_quantity
 from backend.app.services.financial_math.fifo.models import (
@@ -229,7 +229,10 @@ class FifoLotEngine:
                 adjustment_unit_price = tx.cost_basis_override if tx.cost_basis_override is not None else Decimal("0")
                 events.append(FifoEvent(kind="ADJUSTMENT_IN", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=tx.quantity, unit_price=adjustment_unit_price, raw_transaction_ids=(tx.id,)))
             elif tx.type == "ADJUSTMENT" and tx.quantity < Decimal("0"):
-                events.append(FifoEvent(kind="ADJUSTMENT_OUT", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=abs(tx.quantity), unit_price=Decimal("0"), raw_transaction_ids=(tx.id,)))
+                # A negative ADJUSTMENT that carries a per-unit cost_basis_override hands its units over at
+                # that cost (_apply_adjustment_out); without the override it remains a zero-price correction.
+                handover_unit_price = tx.cost_basis_override if tx.cost_basis_override is not None else Decimal("0")
+                events.append(FifoEvent(kind="ADJUSTMENT_OUT", date=tx.date, transaction_id=tx.id, broker_id=tx.broker_id, quantity=abs(tx.quantity), unit_price=handover_unit_price, raw_transaction_ids=(tx.id,)))
         self._classified_events_cache = sorted(events, key=self._event_sort_key)
         return self._classified_events_cache
 
@@ -343,6 +346,7 @@ class FifoLotEngine:
         if remainder <= Decimal("0"):
             return
         resolution = self._resolve_reference_price(self.asset_id, event.date)
+        tx = self._tx_by_id[event.transaction_id]
         self._open_lot(
             transaction_id=event.transaction_id,
             broker_id=broker_id,
@@ -350,7 +354,9 @@ class FifoLotEngine:
             direction="LONG",
             quantity=remainder,
             unit_price=_require_decimal(event.unit_price),
-            currency=self._tx_by_id[event.transaction_id].currency,
+            # A lot priced by its cost_basis_override is in the currency of that cost, not in the row's
+            # (an ADJUSTMENT moves no cash, so its own currency is often empty).
+            currency=(tx.cost_basis_currency or tx.currency) if tx.cost_basis_override is not None else tx.currency,
             reference_resolution=resolution,
         )
         if resolution.source == "fallback":
@@ -373,6 +379,7 @@ class FifoLotEngine:
 
     def _apply_adjustment_out(self, event: FifoEvent) -> None:
         broker_id = _require_id(event.broker_id)
+        tx = self._tx_by_id[event.transaction_id]
         closed = self._consume_broker_fragments(
             broker_id=broker_id,
             direction="LONG",
@@ -381,6 +388,7 @@ class FifoLotEngine:
             transaction_id=event.transaction_id,
             close_reason="ADJUSTMENT_OUT",
             close_unit_price=Decimal("0"),
+            close_unit_price_of=None if tx.cost_basis_override is None else (lambda fragment: self._handover_unit_price(tx, fragment)),
         )
         remainder = _require_decimal(event.quantity) - closed
         if remainder <= Decimal("0"):
@@ -401,6 +409,20 @@ class FifoLotEngine:
             message="ADJUSTMENT- exceeds available LONG quantity.",
             params={"missing_quantity": remainder},
         )
+
+    def _handover_unit_price(self, tx: FifoInputTransaction, fragment: FragmentInterval) -> Decimal:
+        """The price at which an ADJUSTMENT-out carrying a cost basis hands ``fragment`` over.
+
+        The row's per-unit cost — the average cost the units leave with, not the fragment's own FIFO cost — so
+        the lots realize what the average cost does: units from a cheaper lot realize the difference. It applies
+        when the cost is in the lot's currency; a lot without a currency counts in the report currency, as the
+        lots analysis converts it, and a cost without a currency in the lot's. In another currency the fragment
+        leaves at its own FIFO cost, realizing nothing, until a closure carries its own currency.
+        """
+        lot_currency = self._lots[fragment.lot_id].currency or self.target_currency
+        if (tx.cost_basis_currency or lot_currency) != lot_currency:
+            return fragment.unit_price
+        return _require_decimal(tx.cost_basis_override)
 
     def _apply_transfer_depart(self, event: FifoEvent) -> None:
         pair_id = _require_id(event.pair_id)
@@ -580,7 +602,12 @@ class FifoLotEngine:
         transaction_id: int,
         close_reason: Literal["SELL", "BUY", "ADJUSTMENT_OUT"],
         close_unit_price: Decimal,
+        close_unit_price_of: Callable[[FragmentInterval], Decimal] | None = None,
     ) -> Decimal:
+        """Close up to ``quantity`` of the broker's open fragments, oldest lot first; the quantity closed.
+
+        Each fragment closes at ``close_unit_price``, or at the price ``close_unit_price_of`` gives it.
+        """
         consumed = Decimal("0")
         remaining = quantity
         for fragment in self._broker_fragments(broker_id, direction):
@@ -593,7 +620,7 @@ class FifoLotEngine:
                 event_date=event_date,
                 transaction_id=transaction_id,
                 close_reason=close_reason,
-                close_unit_price=close_unit_price,
+                close_unit_price=close_unit_price if close_unit_price_of is None else close_unit_price_of(fragment),
             )
             consumed += matched
             remaining -= matched
@@ -612,7 +639,8 @@ class FifoLotEngine:
         lot = self._lots[fragment.lot_id]
         if lot.direction == "LONG":
             realized_pnl = matched_quantity * (close_unit_price - fragment.unit_price)
-            proceeds = matched_quantity * close_unit_price if close_reason == "SELL" else Decimal("0")
+            # A sale's cash, or the value an ADJUSTMENT-out hands over at cost (0 when it carries no cost).
+            proceeds = matched_quantity * close_unit_price if close_reason in ("SELL", "ADJUSTMENT_OUT") else Decimal("0")
         else:
             realized_pnl = matched_quantity * (fragment.unit_price - close_unit_price)
             proceeds = Decimal("0")
