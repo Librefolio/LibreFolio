@@ -539,7 +539,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 5 | T-6 palette del giro 2 e barra neutra (D-T15, D-T16) | ✅ checkpoint `078dec1ae`; base con `dc9a5d232` nel merge `e1443e952`, validato il 15/10; candidata T6 fatta, l'ingresso aspetta il via del developer |
 | 6 | T-7 header che si nasconde di nuovo, fascia verde del logo nella barra laterale | ✅ checkpoint `0580c92ab`; base `8f1abf89e` nel merge `fe618a0e3` |
 | 7 | T-8 giro 2 della designer (D-T17, D-T18, D-T19), T-4, TC-7 | ✅ checkpoint `68c990b35`; base `d22eb6f43` nel merge `02c23c773`, validato il 15/10 con contact sheet; correzione della marca di `sw.js` e del `background_color` da committare |
-| 8 | T-8b correzioni del developer (D-T23–D-T26), `ForgotPasswordCard`, `AuthPageFrame` | ⏳ checkpoint scritto il 15/10; merge di base con `c747a74c3` e prove pesanti al via del coordinatore |
+| 8 | T-8b correzioni del developer (D-T23–D-T26), `ForgotPasswordCard`, `AuthPageFrame` | ✅ checkpoint `312748dcc`; base `9bd3e39bb` nel merge `a74185670`, validato il 15/10 con contact sheet |
 
 ## Avanzamento
 
@@ -1221,7 +1221,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > - grammatica 0 sui 12 file toccati;
 > - Prettier sui file toccati: `manifest.json` non era formattato già in `HEAD`, lasciato com'era.
 
-### T-8b — 🔄 15/10/2026 (correzioni del developer dopo l'anteprima, D-T23)
+### T-8b — ✅ 15/10/2026 (correzioni del developer dopo l'anteprima, D-T23–D-T26; checkpoint 8)
 
 > **Avvio** (coordinatore, 17:59): T-8 e la sua validazione committati in `63de39c45`; TC-9 accettata (il manifest
 > resta beige). Scrittura subito, prove pesanti al via del coordinatore.
@@ -1301,3 +1301,29 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > **Prove leggere del checkpoint:** `--check` pulito (82 file sotto il record); grammatica 0 sui 9 componenti
 > toccati; `dev.py i18n check` rigoroso; script dei contrasti 0 su 270; `utils pwa-assets` 20/20; Prettier e
 > `git diff --check` puliti. Delta: 26 file tracciati, nessun file nuovo.
+
+> ✅ **11 · Checkpoint e merge di base.** Il coordinatore ha committato T-8b in `312748dcc` e aperto il merge con
+> `9bd3e39bb` (H, Z7a, Y2, E1b, J CP-4, E2b).
+> - **Un conflitto, `e2e/layout/header-scroll.spec.ts`:** i due lati rispondevano a `/system/instance` nella tabella
+>   sintetica. Tenuta quella di H, `[INSTANCE_CONFIG_PATH, plainInstanceConfig()]`, validata sullo schema; tolta la mia
+>   `{profile: 'selfhosted'}` di T-7. Il describe `auth-page-controls` usa il backend vero; `theme-roles.spec.ts` non
+>   ha sintetici di quella lettura.
+> - **Baseline fusa in automatico,** controllata riga per riga contro base, T e target: 317 invariate, 10 da T, 2 dal
+>   target, nessuna dai due lati, 8 righe `~` (con lo `~split` di `DataTable`). `--check` pulito, 81 file sotto il
+>   record. Merge committato dal coordinatore: `a74185670`.
+
+> ✅ **12 · Validazione della revisione fusa `a74185670`** (15/10, 18:33–19:03, un comando alla volta nella 6155):
+> - `api sync` rc 0 (schemi `system` e `users` cambiati; dipendenze e migrazioni no); `front check` 0 e 0;
+> - `core-unit` 4.880 su 4.881. **⚠️ Fuori pista:** il rosso è `htmlInterpolation.gate.test.ts`, una traduzione con
+>   `<` (`email.problems.SMTP_FROM_INVALID`, entrata con `b33654f22` di E, identica in `9bd3e39bb`): rosso del target,
+>   non di T, segnalato subito al coordinatore. I tre gate di T da soli: 78/78;
+> - `component-unit` 3.461/3.461; `onboarding-component-unit` 449/449;
+> - E2E a 1 worker: `theme-roles` 24 e 2 saltati (l'hover su mobile), `header-scroll` 10 e 2 saltati (i due casi
+>   della barra d'accesso, ciascuno sul suo progetto: su mobile la prova dello scorrimento passa), `auth` 33/33,
+>   `connection-security` 8/8;
+> - `utils pwa-assets` 20/20, `utils gate-i18n-catalog` 176/176, `utils gate-i18n-usage` 195/195;
+> - `front-designer-lab all`: unit 422/422, E2E 13/13;
+> - contact sheet: 30 scatti e due fogli in `files/T8b-shots/` della sessione T; server fermato, porta 6155 libera.
+> - **Visto negli scatti, fuori dal cambio chiesto:** su un telefono la card di registrazione, alta, nasce già sotto i
+>   controlli, a pagina non ancora scorsa, perché la cornice la centra in verticale. La card di accesso no. È la
+>   disposizione di `AuthPageFrame`, non `fixed`/`absolute`: proposta al coordinatore (un margine in alto sotto `lg`).
