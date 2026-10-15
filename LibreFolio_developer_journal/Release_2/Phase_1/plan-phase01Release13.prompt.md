@@ -531,6 +531,12 @@ fermati all'handoff, porta verificata libera.
 - Se un conflitto nasce comunque (il developer: «aiutalo a risolvere o rimappare»), lo
   risolve la sessione figlia che possiede il file, nel suo worktree, all'aggiornamento di
   base.
+- **Avvisi di merge: file del programma colori** (richiesta del coordinatore colori, 15/10). Ogni avviso di merge in
+  `dev_release2` elenca i file toccati sotto `scripts/visual_review/`, `frontend/scripts/theme/`,
+  `frontend/src/themeRoles*`, `frontend/e2e/gallery.spec.ts`, `scripts/test_runner/_frontend_utility.py` e
+  `Phase_1/10_colorSystem/`, anche quando cambia solo un commento: G, R e T li modificano nei loro checkpoint. Prima
+  dell'avviso, il coordinatore 1.3 li cerca con `git diff --name-only <target> <ramo> -- <quei percorsi>`.
+  `_frontend_utility.py` si è aggiunto il 15/10, dopo A3, su richiesta del coordinatore colori.
 - **Regola «chi parte prima»** (concordata fra i due coordinatori il 14/10 alle 22:05). Serve perché nessun riordino
   della 1.3 blocchi il tag.
   - Vale per i tagli di file della 1.3 su un'area che T converte (tabella sotto).
@@ -781,3 +787,56 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > - CP2b: il taglio di `main.py`, dopo il commit del coordinatore.
 >
 > Così CP3 (segreti) e CP4 (configurazione pubblica) non aspettano più la release.
+
+### Riordino del backend: sette lotti integrati ✅ (2026-10-15, 02:20)
+
+> **Note implementazione**: in `dev_release2`, nell'ordine:
+> - A1 (`769cc31cb`);
+> - H CP1 (`6a605904c`);
+> - A2, il frontend in `lib/features/` (`76e61889b`);
+> - W1 e W2, transazioni e broker per tema (`998fd2701`);
+> - H CP2a, il pacchetto `config/` con la guardia sulle letture d'ambiente (`60f8a35ce`);
+> - X CP1 e CP2a, registri per famiglia e `services/assets/` senza shim (`64a5a3fe7`).
+>
+> Ogni ingresso dopo un aggiornamento di base e la validazione della revisione combinata nel worktree del figlio:
+> - `all-backend` uguale alla base, più i test nuovi;
+> - `api schema` invariato;
+> - ricerca dei vecchi percorsi a zero;
+> - per X, anche la ricerca degli import vecchi che si fondono senza conflitto.
+>
+> **Fuori pista**:
+> - X, partito con due lotti dalla base iniziale, ha avuto 35 conflitti d'import, tutti risolti nel suo worktree.
+> - Gli ingressi frontend seguono la finestra della galleria del 15/10: prima delle 08:45 o dopo la chiusura.
+
+### W I1, integrità, integrato ✅ (2026-10-15, 03:01)
+
+> **Note implementazione**: `dc7e4e48e`, merge di `625e3dacc` su `ae998da78`. Il commit è creato con `git commit-tree`
+> sull'albero della simulazione (`1153296e3`), così l'avviso al coordinatore colori porta già lo SHA; poi
+> `merge --ff-only`. Validazione di W sulla revisione combinata `123c21efc`:
+> - `all-backend` 13 458 passed, 28 skipped, 0 failed;
+> - `api schema` cambia solo `asset_event_id` di `GET /api/v1/transactions`.
+>
+> CHANGELOG `[Unreleased]` aggiornato; chiuse V-23, C-79, la ricerca inversa di C-65, L5 e C-3; W-B9 nella sezione X.
+>
+> **Fuori pista**: due avvisi di aiosqlite sotto carico in un test dell'AI Export, non rossi: C-93, a J.
+
+### A3, schede di Settings e accesso, integrato ✅ (2026-10-15, 03:25)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `90491071d` (A3 `755eaa27d` e journal, base aggiornata con
+> W I1 in `d851c39bc`). Registro delle schede di Settings, O-15 (errori di login come chiavi di catalogo), K-17
+> (`PasswordInput` da tastiera, nome tradotto), L12 (`user_cli.py create-user`, `dev.py user create … --role`).
+> Validazione di A:
+> - revisione `35f1e0a16` completa: `all-backend` 13 440 passed, 28 skipped, 0 failed; E2E auth 29, settings 45,
+>   app-start-auth 3, onboarding-guides 24;
+> - revisione `d851c39bc` mirata dopo W I1: build e `front check` 0/0; core-unit 4 261, component-unit 3 192;
+>   `theme-roles` pulito; `check-orphans` 265 file backend; `dev-cli-image` 39, `gate-event-loop-io` 14; E2E auth
+>   29, settings 45, `tx-broker-access` 5.
+>
+> Chiusure di O-15, K-17 e L12 nel README del 38, scritte da A; CHANGELOG con tre righe. Il controllo di L12 sul DB
+> di test popolato: `populate_mock_data.py` crea già come utenti normali tutti tranne `e2e_test_admin`, e nessuna
+> spec entra come alice…eve.
+>
+> **Ordine dei prossimi ingressi** (deciso dal coordinatore, 15/10 03:25): X CP2b prima di J CP-1. X ha la coda
+> più lunga (CP3 e CP4, e gli eventi che passano a W), mentre il CP-2 di J aspetta comunque le decisioni del
+> developer. La risoluzione statica degli import sull'albero combinato X + W I1 + A3 + J dà 0 irrisolti su 9 459
+> nomi; J valida poi una sola volta, sopra X.

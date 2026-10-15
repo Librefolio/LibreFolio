@@ -32,7 +32,7 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-# The live-price path logs these, and nothing else does (backend/app/services/asset_sources/price_query.py and the
+# The live-price path logs these, and nothing else does (backend/app/services/assets/price_query.py and the
 # Yahoo Finance plugin). One line is enough to void a capture.
 MARKERS: tuple[tuple[str, str], ...] = (
     ("current_value for", "a provider answered a live quote (Yahoo Finance)"),

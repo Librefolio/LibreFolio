@@ -13,7 +13,7 @@ DELETE endpoint to clear a row; ``-1`` on close is meaningless).
 Endpoint under test: ``POST /api/v1/assets/prices`` (bulk upsert).
 
 Spec: ``backend/app/schemas/prices.py::FAPricePoint`` docstring +
-      ``backend/app/services/asset_source.py::_merge_field`` (L1367+).
+      ``backend/app/services/assets/price_store.py::_merge_field``.
 
 Related plan: ``plan-phase07-transaction-Part3_1_Closure_2-BlockG.prompt.md``
               §G.6 (G-batch1).
