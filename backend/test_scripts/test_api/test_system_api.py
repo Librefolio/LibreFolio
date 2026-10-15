@@ -881,7 +881,7 @@ class TestInstanceConfigLive:
         assert (
             set(accounts) == {"registration_mode", "registration_locked", "first_account_open"} and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool)
         ), f"accounts must be exactly the registration mode, whether it is locked and whether the instance has no account yet, the last two booleans (the lane's database is shared: the mode and first_account_open are not pinned here): {response.text}"
-        assert set(body["email"]) == {"available"} and isinstance(body["email"]["available"], bool), f"email must be exactly whether the instance can send emails (the lane's configuration, not pinned here): {response.text}"
+        assert set(body["email"]) == {"available", "links"} and all(isinstance(body["email"][key], bool) for key in ("available", "links")), f"email must be exactly whether the instance can send emails, and emails with a link (the lane's configuration, not pinned here): {response.text}"
 
 
 def _instance_app() -> FastAPI:
@@ -915,7 +915,7 @@ class TestInstanceConfigInProcess:
         assert (
             set(accounts) == {"registration_mode", "registration_locked", "first_account_open"} and accounts["registration_mode"] in {"open", "invite", "disabled"} and isinstance(accounts["registration_locked"], bool) and isinstance(accounts["first_account_open"], bool)
         ), f"accounts must be exactly the registration mode, whether it is locked and whether the instance has no account yet, the last two booleans (read from the lane's shared database: not pinned here): {response.text}"
-        assert set(body["email"]) == {"available"} and isinstance(body["email"]["available"], bool), f"email must be exactly whether the instance can send emails: {response.text}"
+        assert set(body["email"]) == {"available", "links"} and all(isinstance(body["email"][key], bool) for key in ("available", "links")), f"email must be exactly whether the instance can send emails, and emails with a link: {response.text}"
 
 
 def _schema_component(document: dict, schema: dict) -> dict:

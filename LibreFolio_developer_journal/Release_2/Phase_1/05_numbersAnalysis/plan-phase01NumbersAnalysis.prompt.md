@@ -1910,6 +1910,18 @@ CP-4, poi CP-15, poi la sostituzione della G/L % di W; per le prove pesanti chie
       `.github/instructions/backend.instructions.md`, con hunk separati (loro `:16`, `:91-92`, `:102`; mio `:75`).
       Unione automatica attesa. Per il golden vale la regola del coordinatore (sopra).
     - Slot liberato, porta 6185 libera, handoff FROZEN mandato.
+    - **Committato** dal coordinatore: `58f8e3967` fix(portfolio), `71c93da22` docs(journal).
+    - **Aggiornamento di base 7**: merge di `dev_release2` `695e6ad12` senza conflitti, HEAD `1ce3cc85c` (sono entrati
+      A6a, H, Z7a e Y2; nessuno tocca `financial_math`).
+      - Cancelli sulla revisione fusa, uno alla volta con `nice -n 10`, log in `/tmp/libreFolio_j/cp4m/`:
+        `test_portfolio_service` 98, golden 1 (file invariato), `test_data_quality_report` 38,
+        `test_data_quality_thresholds` 31, `test_returns_rebase_and_ratios` 53, la guardia del layer 37,
+        `check-orphans` (305 file del backend, tutti raggiungibili).
+      - Handoff d'ingresso mandato; via del coordinatore a CP-4c.
+    - **Avviso del coordinatore (18:11)**: `backend/app/main.py` è congelato fino a CP2b di H, che lo divide in
+      `services/platform/{lifecycle,middleware,static_site,database_bootstrap}.py`. Un passo d'avvio o di spegnimento, o
+      un middleware, aspetta CP2b; dopo basta una riga nel modulo giusto. H ripunterà sui moduli nuovi due test miei,
+      `test_signal_runtime.py` e `test_risk_scenario_catalog.py`, dichiarando le righe. Riguarda CP-9 e CP-10.
   - **CP-4c**: P1, in un modulo nuovo di `financial_math/portfolio/`, non dentro `derived_views.py`; C1, il costo unitario
     del passo in `CostStep`.
     - **Disegno** (letto il 15/10 sera, in attesa dello slot, nessun codice):
@@ -1930,13 +1942,145 @@ CP-4, poi CP-15, poi la sostituzione della G/L % di W; per le prove pesanti chie
         (`_wac_qualifying_txs`, `:239-272`), insieme al costo unitario originale della conversione. Per REDUCE serve il
         medio *prima*: il passo deve portarlo esplicito, perché costo tolto/quantità non è esatto in Decimal. Da leggere
         `CostStep` (`average_cost.py:139`) prima dei rossi.
+    - **Disegno rivisto** (15/10, 18:20, letto il codice):
+      - **Una copia gemella**: `_unrealized_breakdown_rows` (`:325-364`) ricalcola gli stessi stati di confine del
+        periodo di `_compute_period_summary_metrics`, con una docstring che dice «same boundary states». In
+        `period.py`, quindi, anche `period_boundaries(daily_states, date_from, as_of) -> PeriodBoundaries | None`
+        (`start` o None, `end`), usata da `period_pnl` e dal servizio per le righe del non realizzato per valuta. Le
+        righe restano nel servizio: sono lo schema della risposta; la sottrazione per parte la porterà CP-8.
+      - **C1 è una funzione, non un campo**: `movement_unit_costs(steps) -> tuple[MovementUnitCost, ...]` sulla linea
+        dei passi, con il medio precedente portato dal ciclo, come oggi: aritmetica identica. Un campo nuovo di
+        `CostStep` cambierebbe di nuovo il golden di cassa, che scarica `average_costs`.
+      - Nessun test chiama i tre aiutanti privati; due docstring nominano `_compute_period_summary_metrics`
+        (`data_quality.py:102`, mia; `test_data_quality_report.py:339`, la cambia il test-author).
+      - **Rossi chiesti** al test-author (18:20): un file nuovo in `test_financial_math/`, con le copie di oggi come
+        oracolo.
+
+    ✅ 15/10 sera. **Note implementazione**:
+    - **Rossi** (`test-author`): `test_financial_math/test_period_and_unit_costs.py`, nuovo, 25 test, tutti rossi sui
+      nomi mancanti (17 del modulo `period`, 8 di `movement_unit_costs`). L'oracolo è nel file: le due copie della
+      regola di confine coincidono su 315 casi; stati veri, con un valore «veleno» nei campi che la regola non legge;
+      confronto su `str()`, quindi stessi zeri e stesso ordine delle operazioni. In `test_data_quality_report.py:339`
+      la docstring nomina ora `period.period_pnl`.
+    - **Cura**:
+      - `financial_math/portfolio/period.py`, nuovo: `state_as_of`, `PeriodBoundaries` e `period_boundaries`,
+        `PeriodPnl` e `period_pnl`, `period_other_result`;
+      - `average_cost.py`: `MovementUnitCost` e `movement_unit_costs`;
+      - `portfolio_service.py`:
+        - via `_daily_state_as_of` (17 righe) e `_compute_period_summary_metrics` (71 righe);
+        - `_unrealized_breakdown_rows` usa `period_boundaries`, cioè la copia gemella tolta;
+        - `get_summary` e `get_positions_contribution` usano `period_pnl`, e il residuo usa `period_other_result`;
+        - `_wac_qualifying_txs` usa `movement_unit_costs`;
+        - tolto `import bisect`, non più usato;
+      - docstring di `data_quality.py:102` aggiornata.
+    - **⚠️ Fuori pista**: la prima parità era rossa (27 test). In `get_positions_contribution` c'è una variabile
+      locale `period_pnl` (`period_pnl = sum(...)`), e Python la vede locale in tutta la funzione: la chiamata alla
+      funzione della casa prendeva un Decimal, o niente (`TypeError`, `UnboundLocalError`). Cura: il servizio importa
+      il modulo (`from …portfolio import period as period_math`) e chiama `period_math.<nome>`. I nomi della casa
+      restano quelli pinnati dai test, e nessuna variabile locale li può più coprire.
+    - **Mappe**: tabella dei moduli di `financial-math.instructions.md` (`period`, `movement_unit_costs`), mappa di
+      `backend.instructions.md`, docstring di `financial_math/__init__.py`, albero di `financial_math.md`.
+    - **Verdi**, un file alla volta con `nice -n 10`, log in `/tmp/libreFolio_j/cp4c/j_*`:
+      - il file nuovo 25/25, la guardia del layer 38 (un caso in più per `period.py`);
+      - `test_portfolio_service` 98, `test_portfolio_service_native_cash` 21, golden 1 (file invariato),
+        `test_portfolio_cost_currency` 25, `test_data_quality_report` 38;
+      - AI Export: `portfolio_broker_financial` 126, `portfolio_broker_integration` 58;
+      - `services portfolio-allocation-source` 89, `api transactions-wac` 20, `api portfolio` 51;
+      - `dev.py lint` pulito, black invariato; porta libera.
+    - **`all-backend --workers 2`** (slot 1, 19:39–20:20, 40 min 44 s; carico 37 all'avvio, 77 alla fine): 6/7
+      categorie; totali, lavoratori paralleli compresi, **16 225 passed, 28 skipped, 2 failed**; i 7 avvisi soliti;
+      nessun C-93; passo di build di C-94 69 s.
+      - **I 2 rossi**: `test_api/test_brim_api.py::TestParseEndpoint::test_parse_file_success` e
+        `::test_parse_returns_asset_mappings`, entrambi `httpx.ReadTimeout`, con il timeout fisso del client a 30 s
+        (`TIMEOUT = 30`, `:53`).
+      - **Triage** (skill `test-triage`, prove raccolte prima di qualsiasi giudizio):
+        - BRIM non importa nessun modulo toccato da CP-4c;
+        - la run è durata 40 minuti contro i soliti 25, e il carico della macchina è salito a 77;
+        - `api brim` rieseguito da solo nella corsia, sotto carico 77: **87/87**, i due test compresi
+          (`h_brim_alone.log`).
+        - Causa: il server ha risposto oltre i 30 s del client per il sovraccarico della macchina, non per una
+          regressione. La decisione (accettare con questa prova o rifare `all-backend` a carico normale) è del
+          coordinatore.
   - **CP-4d**: R2. La riprova a freddo esce solo con la parità provata sul corpus del motore; altrimenti resta, col
     perché scritto.
+    - **Piano d'indagine** (15/10 sera, mandato al coordinatore, in attesa del suo via):
+      - **Cos'è R2** (`portfolio_service.py:2003+`, `get_report`): l'MWRR della sintesi è una soluzione sola a freddo
+        (`calculate_mwrr`); quello della storia è una serie con partenza «calda», dove ogni punto parte dalla
+        soluzione precedente (`calculate_mwrr_series`). Se l'ultimo punto e la sintesi divergono oltre
+        `max(0,5 pp, 5 %)`, R2 rifà la storia a freddo; se divergono ancora, annulla la serie e scrive un problema.
+        La matematica è già tutta nella casa: R2 è una guardia di coerenza, non una copia.
+      - **Perché possono divergere**: con flussi che cambiano segno più volte lo XIRR ha più radici, e Newton
+        converge a quella vicina al punto di partenza.
+      - **Passi**:
+        1. un controesempio puro (−100 / +230 / −132, con radici 10 % e 20 %), con le sole funzioni della casa;
+        2. se esiste, R2 resta (classe c) col perché scritto, un test pinnato dal test-author e, se il coordinatore
+           vuole, la regola di divergenza nella casa;
+        3. se non esiste, una prova casuale su migliaia di sequenze e un controllo sul DB popolato prima di toglierlo.
+    - **Passo 1 eseguito** (15/10 sera, via del coordinatore; solo le funzioni della casa, nessun DB né corsia; script e
+      log in `/tmp/libreFolio_j/cp4d/`: `search.py`, `verify.py`, `classify.py`). Su 20 000 scenari casuali (seme
+      20261015; prelievi grandi frequenti, mosse del ±10 %), costruiti come li chiamano sintesi e storia:
+
+      | | casi |
+      |---|---|
+      | la soluzione singola (sintesi, `calculate_mwrr`) **non è una radice** | 818 (4,1 %); 758 valgono esattamente 0,100110 |
+      | l'ultimo punto della serie «calda» non è una radice | 691 (3,5 %) |
+      | la serie «fredda» non è una radice | 818: parte dallo stesso punto della singola |
+      | divergenti oltre la tolleranza di R2 | 952: 455 sintesi sbagliata e serie giusta, 330 il contrario, 167 entrambe sbagliate |
+      | divergenze fra **due radici vere** | **0** |
+
+      - **Verifica sui casi n. 1, 16, 17**: il VAN ha una sola radice reale (−0,4375, −0,4305, −0,5605) e la serie
+        calda la trova (VAN ≈ 0). La singola restituisce 0,100110, dove il VAN vale −624, −1 189 e −2 102: non è una
+        soluzione. 0,100110 è il secondo punto di partenza del metodo delle secanti di scipy, `x0·(1+10⁻⁴)+10⁻⁴`; il
+        risolutore si ferma lì dopo un overflow (`RuntimeWarning: overflow encountered in scalar power`), e
+        `calculate_mwrr` controlla solo che il numero sia finito.
+      - **Cosa vuol dire**: il controesempio atteso (due radici vere) non c'è. C'è un difetto di numeri: i due
+        risolutori possono restituire un tasso che non risolve l'equazione. R2 lo peggiora: nei 455 casi rifà la storia
+        a freddo, prende lo stesso valore sbagliato della sintesi, e la Dashboard mostra circa +10 % annuo invece di circa
+        −44 %.
+      - Riportato al coordinatore con i numeri, come chiesto, prima di toccare qualsiasi cosa.
+    - **Decisione del coordinatore (19:08)**: via a CP-4d così come proposto. XIRR verificato in `returns.py`: Newton
+      con la derivata analitica, poi `brentq` sull'intervallo dove il segno cambia, la radice più vicina al punto di
+      partenza, `None` → «—», un'implementazione sola per sintesi e serie. Prima i rossi: i tre casi fissati, il test di
+      proprietà, la parità. Poi di nuovo le 20 000 prove: R2 si toglie solo con 0 divergenze. Valori che cambiano
+      dichiarati, riga 🐛 nel CHANGELOG. Il developer lo informa il coordinatore («correzione di un numero sbagliato,
+      dentro le regole che ha già dato»). **Ordine**: CP-4c entra prima (`all-backend` in coda sullo slot 1); CP-4d è un
+      lotto a sé, dopo. I suoi rossi non si scrivono prima del commit di CP-4c, perché renderebbero rosso il suo
+      `all-backend`.
+    - **Disegno di CP-4d**:
+      - `returns.py`: un risolutore privato, `_solve_xirr(flows, x0) -> float | None`, per i due chiamanti:
+        1. Newton con la derivata analitica, d/dr Σ a·(1+r)^(−t) = Σ −t·a·(1+r)^(−t−1), con t = giorni/365;
+        2. il tasso vale solo se è finito e |VAN(r)| ≤ ε · Σ|flussi|;
+        3. altrimenti si cercano i cambi di segno del VAN su una griglia in (−1, R_max], con passo geometrico su 1+r;
+           per ogni intervallo `brentq`, poi la radice più vicina a `x0`;
+        4. nessuna radice: `None`.
+        Il VAN lavora in float di Python, così un overflow è un `OverflowError` trattato come «non valutabile» e non un
+        `inf` silenzioso di numpy.
+      - `calculate_mwrr` lo usa con `x0 = 0,1`; `calculate_mwrr_series` con il punto precedente (calda, con il tetto di
+        oggi) o con 0,1 (fredda). Quantizzazione invariata.
+      - **R2**: rifatta la classificazione delle 20 000 prove con il risolutore nuovo, se le divergenze sono 0 esce il
+        blocco di `get_report` (`portfolio_service.py:2003+`) col parametro `_mwrr_use_warm_start` di `get_history`,
+        che serve solo a R2.
+      - **Valori che cambiano**: l'MWRR (sintesi, storia, fatti di portafoglio dell'AI Export) solo dove il risolutore
+        sbagliava. Prima un tasso falso, spesso +10,011 % annuo, o una serie sbagliata; dopo la radice vera, o «—».
+      - **CHANGELOG** (🐛 Fixed, proposta): «Portfolio: the money-weighted return (MWRR) comes from a checked solver,
+        and a rate is shown only when it solves its equation. In some portfolios with large withdrawals the Dashboard
+        showed a wrong rate (often +10.01% a year); it now shows the true one, or "—" when there is none.»
+    - **Prototipo, fuori dal worktree** (15/10 sera, mentre CP-4c aspetta lo slot; `/tmp/libreFolio_j/cp4d/proto.py`,
+      `bench.py`): il disegno sopra, con le funzioni copiate e il solo risolutore cambiato.
+      - **Le 20 000 prove di nuovo**: 0 divergenze oltre la tolleranza di R2, 0 «None», serie calda e fredda sempre
+        uguali. I tre casi fissati danno sintesi = calda = fredda = la radice vera (−0,437404, −0,430962, −0,560105). Con
+        il risolutore verificato R2 non ha più ragione d'essere: esce nell'implementazione, come deciso.
+      - **Costo**, su serie giornaliere lunghe, vecchio contro nuovo: 0,04 contro 0,05 s su 365 giorni, 0,25 contro
+        0,22 s e 0,21 contro 0,20 s su 1 095 giorni. Il ripiego sulla griglia è raro (1/365, 0/1 103, 2/1 095 punti) e i
+        valori su queste serie sono identici.
 - **`derived_views.py` e DV dei colori** (coordinatore, 15/10 16:25; ok di J alle 16:26): DV cambia 3 righe, l'import di
   `SECTOR_EMOJIS`, che diventa unica in `utils/asset/sector.py`; la guardia del layer ammette `utils`, e chiude la nota
   «Presentazione» del piano 43, §4. Nessun lotto di J sposta o riscrive il file: CP-4 non lo tocca (P1 in un modulo
   accanto); CP-11 (U7, i pesi) e forse CP-13 (U8) toccheranno il corpo di `_alloc` (`:231-243`): lì si tiene la loro
   chiamata dell'emoji.
+- **`planner/categoryLabels.svelte.ts:22` e DV** (avviso del coordinatore, 15/10 19:10, nessuna risposta richiesta): DV
+  cambia una riga nel suo lotto, dichiarata. Lo spazio prima dell'etichetta c'è solo se c'è l'emoji del settore, che
+  ora arriva dal backend. Nessun lotto aperto di J tocca quel file (CP-2 ha cambiato `format.ts` e `request.ts`).
 
 #### CP-6 — B11, i giorni in cui si muove solo il cambio di un titolo (piano, 15/10, nessun codice)
 

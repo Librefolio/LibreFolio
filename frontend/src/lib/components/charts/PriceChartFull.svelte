@@ -29,7 +29,7 @@
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {ChartLine, ChartCandlestick} from 'lucide-svelte';
     import {aggregateLineSeries, aggregateOHLCV, cascadeResolution, chooseInitialResolution, downsampleRenderedSignal, type ChartResolution} from './timeSeriesAggregation';
-    import {buildResponsiveXAxisPolicy} from './responsiveXAxis';
+    import {buildResponsiveXAxisPolicy, categoryAxisLabelPatch, visiblePointCountFromZoom} from './responsiveXAxis';
     import {
         buildDeltaHtml,
         buildEventScatterGroups,
@@ -427,8 +427,32 @@
 
             if (nextResolution !== resolution) {
                 resolution = nextResolution;
+            } else {
+                // No new resolution means no redraw: the labels are re-spaced on the settled window here (47-1).
+                applyZoomedAxisLabels();
             }
         }, 200);
+    }
+
+    /** How many of the drawn categories the current zoom leaves visible, from the logical range (47-1). */
+    function visibleCategoryCount(): number | undefined {
+        if (lastRenderedDates.length === 0) return undefined;
+        const zoomWindow = computeZoomWindow(getResolvedSeries(resolution).lineData, resolution, logicalRange);
+        return visiblePointCountFromZoom(zoomWindow, lastRenderedDates.length) ?? undefined;
+    }
+
+    /** Re-space the category labels on the zoomed window: the step is computed on all the points otherwise (47-1). */
+    function applyZoomedAxisLabels() {
+        if (!chartInstance || !chartContainer || lastRenderedDates.length === 0) return;
+        const policy = buildResponsiveXAxisPolicy({
+            width: chartContainer.clientWidth,
+            values: lastRenderedDates,
+            locale: uiLocale(),
+            axisType: 'category',
+            visibleCount: visibleCategoryCount(),
+        });
+        responsiveXAxisCompact = policy.compact;
+        chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
     }
 
     // =========================================================================
@@ -460,11 +484,12 @@
                                 values: lastRenderedDates,
                                 locale: uiLocale(),
                                 axisType: 'category',
+                                visibleCount: visibleCategoryCount(),
                             });
                             const wasCompact = responsiveXAxisCompact;
                             responsiveXAxisCompact = policy.compact;
                             if (policy.axisLabel) {
-                                chartInstance.setOption({xAxis: {axisLabel: policy.axisLabel}}, {lazyUpdate: true});
+                                chartInstance.setOption({xAxis: {axisLabel: categoryAxisLabelPatch(policy)}}, {lazyUpdate: true});
                             } else if (wasCompact) {
                                 renderChart();
                             }
@@ -890,6 +915,7 @@
             values: dates,
             locale: uiLocale(),
             axisType: 'category',
+            visibleCount: visiblePointCountFromZoom(zoomWindow, dates.length) ?? undefined,
         });
         responsiveXAxisCompact = xAxisPolicy.compact;
 

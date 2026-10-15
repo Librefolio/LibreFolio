@@ -21,6 +21,7 @@ from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncLegDetail, FXS
 from backend.app.services.fx.base import FXProviderStartDate, FXServiceError
 from backend.app.services.fx.conversion import compute_chain_rate
 from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.fx.runtime import call_fx_provider, configured_fx_provider, settings_cache_part
 from backend.app.services.fx.storage import normalize_rate_for_storage
 from backend.app.utils.runtime.cache import clear_cache, get_ttl_cache
 
@@ -109,8 +110,8 @@ async def ensure_rates_multi_source(  # noqa: C901 — linear staged sync pipeli
             "currencies_synced": [],
         }
 
-    # Get provider instance from registry
-    provider = FXProviderRegistry.get_provider_instance(provider_code)
+    # Get provider instance from registry, with the instance's settings
+    provider = await configured_fx_provider(provider_code)
     if not provider:
         available = [p["code"] for p in FXProviderRegistry.list_providers()]
         raise FXServiceError(f"Unknown FX provider: {provider_code}. " f"Available providers: {', '.join(available) if available else 'none registered'}")
@@ -171,7 +172,7 @@ async def ensure_rates_multi_source(  # noqa: C901 — linear staged sync pipeli
             )
 
     # Create tasks for parallel execution
-    fetch_task = asyncio.create_task(provider.fetch_rates(date_range, currencies, base_currency=base_currency))
+    fetch_task = asyncio.create_task(call_fx_provider(provider, lambda: provider.fetch_rates(date_range, currencies, base_currency=base_currency)))
 
     if all_pairs_conditions:
         existing_stmt = select(FxRate).where(or_(*all_pairs_conditions))
@@ -481,18 +482,18 @@ async def sync_pairs_bulk(  # noqa: C901 — TODO(P2-refactor): 3-phase concurre
     async def _fetch_provider(provider_code: str, target_currencies: set[str]):
         """Fetch all currencies for one provider, populate leg_rates, signal Events."""
         try:
-            provider = FXProviderRegistry.get_provider_instance(provider_code)
+            provider = await configured_fx_provider(provider_code)
             if not provider:
                 raise FXServiceError(f"Unknown provider: {provider_code}")
 
-            # Check TTL cache — skip provider fetch if recent data available
-            cache_key = (provider_code, frozenset(target_currencies), date_range)
+            # Check TTL cache — skip provider fetch if recent data available (the settings are part of the key)
+            cache_key = (provider_code, frozenset(target_currencies), date_range, settings_cache_part(provider))
             cached_result, cache_hit = _fx_fetch_cache.get(cache_key)
             if cache_hit:
                 logger.debug("FX provider cache hit, skipping fetch", provider=provider_code, currencies=len(target_currencies))
                 rates_by_currency = cached_result
             else:
-                rates_by_currency = await provider.fetch_rates(date_range, list(target_currencies), base_currency=None)
+                rates_by_currency = await call_fx_provider(provider, lambda: provider.fetch_rates(date_range, list(target_currencies), base_currency=None))
                 _fx_fetch_cache.set(cache_key, rates_by_currency)
 
             for _currency, observations in rates_by_currency.items():
