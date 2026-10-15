@@ -167,8 +167,8 @@ curl -b cookies.txt -X POST \
 ### 📄 Secrets from Files {: #secrets-from-files }
 
 Every secret of LibreFolio, `JWT_SECRET`, `LIBREFOLIO_INSTANCE_KEY`,
-`LIBREFOLIO_WEB_LINK_FINDER_API_KEY` and `LIBREFOLIO_SMTP_PASSWORD` today, is read by `env_secret(name)` in
-`backend/app/config/__init__.py`:
+`LIBREFOLIO_WEB_LINK_FINDER_API_KEY`, `LIBREFOLIO_SMTP_PASSWORD` and `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`
+today, is read by `env_secret(name)` in `backend/app/config/__init__.py`:
 
 1. `NAME`, when not blank, is the secret as written, spaces included;
 2. otherwise `NAME_FILE`, when not blank, is the path of a file that holds it, as Docker and Kubernetes
@@ -198,6 +198,16 @@ then logs `web_link_finder: <error>; disabling` and returns no engine, so that s
 Nor does a broken `LIBREFOLIO_SMTP_PASSWORD_FILE`: email is optional, so `email_config_state()` turns
 it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged at startup and shown to
 administrators in Settings › Email ([Email Service](../backend/email.md#config-state)).
+Nor does an unusable `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`: `backup_download_token()` in
+`backend/app/config/backup.py` reads it only when the hosting panel calls one of its routes, never at
+startup, so the server starts anyway. Besides the `SecretFileError` of a broken `_FILE`, it raises
+`BackupConfigError` for a token with anything but visible ASCII characters, spaces included
+(`BACKUP_DOWNLOAD_TOKEN_NOT_VISIBLE_ASCII`), or shorter than 32 characters
+(`BACKUP_DOWNLOAD_TOKEN_TOO_SHORT`). `require_panel_token()` in `backend/app/api/v1/backup/panel.py` turns
+either into `503` with the code `backup_panel_unavailable`, on every panel route, and logs one error line
+per refused call, `The hosting panel's backup token cannot be used: its routes refuse every request`, whose
+`error` names the variable, and the path of a file, never the token
+([Hosting for Others](../../admin/hosting_providers.md#panel-backups)).
 
 When `NAME` and `NAME_FILE` are both set, neither blank, `NAME` wins. `secrets_set_twice()` lists those
 names for the [configuration checks](#configuration-checks). It covers `JWT_SECRET` and every
@@ -341,7 +351,7 @@ Tests: `./dev.py test services config-audit`. What the administrator sees and do
 
 ## 🛡️ Endpoint Protection
 
-All endpoints that access or modify user data require a valid session cookie (`Depends(get_current_user)` in FastAPI).
+All endpoints that access or modify user data require a valid session cookie (`Depends(get_current_user)` in FastAPI), except the hosting panel's backup routes (`/backup/panel/jobs…`), which authenticate with the panel token instead: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups).
 
 ### 🌐 Public Endpoints (no auth required)
 
@@ -400,7 +410,7 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and every write of the global settings), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api).
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and every write of the global settings), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api). The hosting panel's backup routes, `/backup/panel/jobs…`, take no session: they authenticate with the panel token, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`, sent as `Authorization: Bearer <token>` and compared in constant time by `require_panel_token` (`backend/app/api/v1/backup/panel.py`), so a missing or wrong token answers `401`. While no token is set they answer `404`, as a path that does not exist: see [Hosting for Others](../../admin/hosting_providers.md#panel-backups).
 
 !!! info "📁 Files are protected too"
 
@@ -436,6 +446,8 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | `auth.login`, `auth.logout`, `auth.get_me` | Signing in and out, and who is signed in |
 | `POST /auth/tokens/inspect`, `POST /auth/password-reset` | `auth.inspect_link_token`, `auth.reset_password_with_link` | A link already sent: reading it, and setting a new password with a reset link; without them, someone who lost the password could never reach the block page, the account deletion or the backup |
 | `DELETE /auth/users/me`, `GET /auth/users/me/deletion-preview` | `auth.delete_own_account`, `auth.preview_own_account_deletion` | Deleting one's own account, and seeing first what it would delete; the block page has no button for it yet |
+| `POST /backup/instance`, `GET /backup/instance/jobs/{job_id}`, `GET /backup/instance/jobs/{job_id}/file`, `DELETE /backup/instance/jobs/{job_id}` | `backup_instance.start_instance_backup`, `backup_instance.get_instance_backup_job`, `backup_instance.download_instance_backup`, `backup_instance.delete_instance_backup_job` | The full backup, for an administrator: start, poll, download, delete. On a blocked instance the data can still be taken away; the block page has no button for it yet |
+| `POST /backup/panel/jobs`, `GET /backup/panel/jobs/{job_id}`, `GET /backup/panel/jobs/{job_id}/file`, `DELETE /backup/panel/jobs/{job_id}` | `backup_panel.start_panel_backup`, `backup_panel.get_panel_backup_job`, `backup_panel.download_panel_backup`, `backup_panel.delete_panel_backup_job` | The same, for the hosting panel, with its token (`require_panel_token`) instead of a session: the provider hands the data back |
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
@@ -484,8 +496,7 @@ fills it in `block.py` with one call to its service.
 lost the password (see the table above): they read a link already sent or spend a reset link, and
 create no account. Registration (`POST /auth/register`) stays out: it is still one of the public routes
 that answer `401` on a blocked instance, so an invitation link can be read there but not accepted. The
-full backup for the administrator and the scheduled wake-up join the list, one line each, when their
-routes exist; any other addition goes through the
+scheduled wake-up joins the list when its route exists; any other addition goes through the
 developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
 pins the list by name and by route, checks that every API route under `/api/v1` resolves
 `refuse_when_blocked` first, and that the only other routes under `/api/v1` are FastAPI's
