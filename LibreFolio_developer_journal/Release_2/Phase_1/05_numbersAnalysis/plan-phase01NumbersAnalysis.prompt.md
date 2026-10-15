@@ -977,7 +977,7 @@ all'avviso del coordinatore, niente `all-backend` né build pesanti.
   guardia sta nel `conftest.py` condiviso, con un elenco esplicito delle eccezioni per le connessioni di sessione
   volute, e l'handoff dice quali file di altri tocca. Il limite di `patch_effect.py` entra nei controlli dei merge.
 
-#### Aggiornamento di base 5 — A4, X CP3, W7, `dev_release2` `58be885a9` 🧊 (2026-10-15) — FROZEN, validato
+#### Aggiornamento di base 5 — A4, X CP3, W7, `dev_release2` `58be885a9` ✅ (2026-10-15) — nota `3a03a1b2c`, in `dev_release2` con `c412f8dad`
 
 Merge del coordinatore `a9fa704c9` (genitori `f29e82af5` e `58be885a9`): A4 (migrazione `005_accounts_invites.py`),
 X CP3 (cambi per tema), W7 (`schemas/transactions/` per tema). Unione automatica del solo backlog. Controllo leggero,
@@ -991,3 +991,58 @@ senza `all-backend`.
 > - `pytest --collect-only` (ambiente della corsia): fuso 13 985, bersaglio `58be885a9` estratto 13 981. Differenza
 >   esatta: i 4 test nuovi di C-93 (la prova di presenza della guardia e i 3 del percorso di successo degli scenari).
 > - Porta 6185 libera.
+
+### G-8 — il catalogo dei Tool oltre i 2 s d'ingresso 🧊 (2026-10-15)
+
+Via del coordinatore dopo l'ingresso di C-93 (`c412f8dad`, record `a628147a0`): G-8, poi J-6, un checkpoint FROZEN per
+voce. Riga d'origine di G: «`GET /api/v1/tools/catalog` ha impiegato 2 649 ms con carico 35 su 10 core», 503, pannello
+Impostazioni › About › diagnostica dei plugin in errore; da solo il test passa.
+
+#### Analisi e rosso ✅ (2026-10-15)
+
+> **Note implementazione**:
+> - **Dove si perdono i 2 s**: `ToolRoute.get_route_handler` (`api/v1/tools.py`) apre ogni richiesta `/tools` in
+>   `asyncio.timeout(ingress_timeout_ms)`, 2 s. Per catalogo e diagnostica il corpo dell'endpoint chiama subito
+>   `_execution_request()`, che sposta la scadenza al budget documentato di 20 s («The catalogue and diagnostics routes
+>   run under a 20 s request budget», `tool_plugins.en.md`). Ma FastAPI risolve le dipendenze prima del corpo, quindi
+>   `get_current_user` (cookie, JWT, una lettura) gira dentro la finestra d'ingresso. Sotto carico autenticazione e
+>   attesa del loop superano 2 s, e la richiesta muore in 503 prima di arrivare al catalogo.
+> - **Prova** (sonda in-process, fuori dal repository, `/tmp/libreFolio_j/g8/probe_ingress.py`: il router vero in
+>   un'app ASGI, ingresso 50 ms): autenticazione da 10 ms → 200; da 200 ms → **503 «Tool request deadline exceeded» e
+>   catalogo mai costruito (0 chiamate)**.
+> - **Scelta fra le due proposte di G**: il catalogo in cache non toglierebbe il 503, perché il tempo si perde prima
+>   che il catalogo sia costruito, e la costruzione avviene già sotto il budget di 20 s. Serve la prima proposta, resa
+>   precisa: una rotta senza corpo (`APIRoute.body_field is None`: catalogo e diagnostica) non ha una fase d'ingresso
+>   e apre direttamente sotto il suo budget; le rotte con corpo (compute) tengono la finestra d'ingresso com'è.
+> - **Rosso** (`test-author`, `test_tools_api.py`, app ASGI per test, nessun server né DB), sul codice di prima:
+>   - `test_read_routes_authenticate_within_their_own_budget_not_the_ingress_window[catalog, diagnostics]`: ingresso
+>     50 ms, autenticazione 250 ms → atteso 200; **rosso**: 503 e 0 costruzioni, per entrambe le rotte;
+>   - guardie verdi prima e dopo: `test_read_route_is_still_bounded_by_its_request_budget[catalog, diagnostics]`
+>     (budget di richiesta 100 ms, autenticazione bloccata → 503) e `test_compute_keeps_its_ingress_window`
+>     (ingresso 50 ms, autenticazione bloccata → 503, il percorso di calcolo non è mai raggiunto). Un tetto di 5 s per
+>     richiesta distingue la scadenza configurata da un ripiego sui 20 s.
+>   - `api tools`: 2 failed, 10 passed.
+
+#### Riparazione e verifica ✅ (2026-10-15)
+
+> **Note implementazione**:
+> - `api/v1/tools.py`: costante `_READ_ROUTE_TIMEOUT_MS = 20_000` (prima un letterale ripetuto nei valori predefiniti
+>   di `begin_execution` e `_execution_request`); in `ToolRoute` la finestra d'apertura è
+>   `ingress_timeout_ms` se la rotta ha un corpo, altrimenti `min(_READ_ROUTE_TIMEOUT_MS, request_timeout_ms)`. Il
+>   messaggio del 503, i controlli sulla dimensione del corpo e l'aritmetica dei budget del compute restano uguali.
+> - Doc (`docs-writer`): `tool_plugins.en.md`, §«📏 Supervisor and budgets», dice cosa limita la finestra d'ingresso
+>   (ricezione, decodifica e validazione della busta di un compute, con le dipendenze, autenticazione compresa) e che
+>   catalogo e diagnostica non ne hanno una; la riga della tabella diventa «Compute ingress / shared queue budget».
+>   Pagina del manuale per sviluppatori, solo in inglese: nessun timbro di traduzione.
+> - **Prove**: `api tools` **12 passed** (10 + i 5 casi nuovi, prima 2 rossi); `api pac-planner-tool` 12;
+>   `services tools-registry` 109; `utils tools-wire` 196; `api schema` contro `git archive` di `a628147a0`:
+>   `openapi.json` e `tool-contracts.openapi.json` identici a meno di `info.version`; ruff e black puliti;
+>   `mkdocs build` stretto (0 avvisi) e `check-links` (95); porta 6185 libera.
+> - Non provato: un carico vero come quello della galleria. La prova è il meccanismo, deterministico; dopo la cura il
+>   catalogo ha 20 s anche per l'autenticazione.
+
+#### Checkpoint G-8 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+
+- Delta: `backend/app/api/v1/tools.py`, `backend/test_scripts/test_api/test_tools_api.py`,
+  `mkdocs_src/docs/developer/architecture/patterns/tool_plugins.en.md`, questo piano, la riga G-8 della sezione J.
+- La riga G-8 della sezione G (di G) la chiude il coordinatore. Poi J-6.
