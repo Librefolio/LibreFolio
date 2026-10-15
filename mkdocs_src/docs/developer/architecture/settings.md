@@ -36,13 +36,15 @@ catalogue, `SETTINGS_REGISTRY`.
       `LIBREFOLIO_*` and read with `env_secret()`: its `_FILE` form then works, and the startup check
       of secrets set twice covers it without a list to update. `INSTANCE_TRUST_SECRETS` lists, in
       both forms, the secrets that a test runtime never inherits (`configure_test_runtime()` in
-      `scripts/cli_base.py`).
+      `scripts/cli_base.py`), like the rest of the instance's configuration: see
+      [Security → Test lanes and the instance's configuration](security.md#test-lanes-and-the-instances-configuration).
     - `backend/app/config/` is a package; the import path is still `backend.app.config`.
       `__init__.py` is the base: constants, data directories, test mode, the secret reader
       `env_secret()`, `Settings` and `get_settings()`. New variables go into one section module per
       topic, owned by the workstream of that area. Four exist today: `platform.py` (H:
       `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
-      `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`),
+      `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`,
+      `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`),
       `accounts.py` (A: `donation_popup_disabled()`, `registration_mode_override()`,
       `registration_mode_pinned()`, `max_users()`, `public_url()`, `billing_url()`), `plugins.py`
       (X: `web_link_finder_enabled()`, `web_link_finder_engine()`, `web_link_finder_api_key()`,

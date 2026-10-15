@@ -334,7 +334,7 @@ def save_upload(
 
 def list_uploads(user_id: Optional[int] = None) -> Tuple[List[UploadFileInfo], int]:
     """
-    List all uploaded files.
+    List all uploaded files, newest first; uploads of the same instant by name, then by id.
 
     Args:
         user_id: If provided, filter by uploading user
@@ -359,7 +359,9 @@ def list_uploads(user_id: Optional[int] = None) -> Tuple[List[UploadFileInfo], i
             if file_path.exists():
                 files.append(_metadata_to_info(metadata))
 
-    # Sort by upload date (newest first)
+    # Newest first. Uploads of the same instant (the seeded avatars share one) follow their name, then their id: the
+    # directory's order, which the random ids decide, would change at every seed.
+    files.sort(key=lambda f: (f.original_name.casefold(), f.id))
     files.sort(key=lambda f: f.uploaded_at, reverse=True)
 
     return files, len(files)
