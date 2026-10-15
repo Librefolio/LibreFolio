@@ -47,6 +47,7 @@
     } from '$lib/utils/transactions/importReportSets';
     import type {BrimSetPreview} from '$lib/types';
     import {brimPluginName} from '$lib/utils/brim/pluginText';
+    import {STATUS_TONES} from '$lib/theme/toneClasses';
 
     interface Props {
         set: ReportSetGroup;
@@ -305,12 +306,7 @@
         input.value = '';
     }
 
-    const statusClass: Record<string, string> = {
-        loading: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300',
-        complete: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-        incomplete: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-        error: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-    };
+    const statusClass: Record<string, string> = STATUS_TONES.reportSet;
 </script>
 
 <div

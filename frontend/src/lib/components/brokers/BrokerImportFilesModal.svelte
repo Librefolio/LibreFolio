@@ -27,6 +27,7 @@
     import SelectionBar from '$lib/components/table/SelectionBar.svelte';
     import type {BrimFile, FilePreviewResponse} from '$lib/types';
     import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
+    import '$lib/theme/components/files.css';
 
     interface Props {
         /** Whether the modal is open */
@@ -430,12 +431,12 @@
 
     .modal-header {
         padding: 1rem 1.5rem;
-        border-bottom: 1px solid #e5e7eb;
+        border-bottom: 1px solid var(--lf-cmp-broker-import-files-divider-border);
         flex-shrink: 0;
     }
 
     :global(.dark) .modal-header {
-        border-bottom-color: #374151;
+        border-bottom-color: var(--lf-cmp-broker-import-files-divider-border-dark);
     }
 
     .modal-header-row {
@@ -457,18 +458,18 @@
     .close-btn {
         padding: 0.5rem;
         border-radius: 0.5rem;
-        color: #6b7280;
+        color: var(--lf-cmp-broker-import-files-muted-text);
         transition: all 0.15s;
     }
 
     .close-btn:hover {
-        background-color: #f3f4f6;
-        color: #374151;
+        background-color: var(--lf-cmp-broker-import-files-hover-bg);
+        color: var(--lf-cmp-broker-import-files-hover-text);
     }
 
     :global(.dark) .close-btn:hover {
-        background-color: #374151;
-        color: #d1d5db;
+        background-color: var(--lf-cmp-broker-import-files-hover-bg-dark);
+        color: var(--lf-cmp-broker-import-files-hover-text-dark);
     }
 
     .btn {
@@ -483,35 +484,35 @@
     }
 
     .btn-primary {
-        background-color: #1a4031;
-        color: white;
+        background-color: var(--lf-cmp-broker-import-files-btn-primary-bg);
+        color: var(--lf-cmp-broker-import-files-on-fill-text);
     }
 
     .btn-primary:hover {
-        background-color: #143326;
+        background-color: var(--lf-cmp-broker-import-files-btn-primary-hover-bg);
     }
 
     .btn-secondary {
-        background-color: #6b7280;
-        color: white;
+        background-color: var(--lf-cmp-broker-import-files-btn-secondary-bg);
+        color: var(--lf-cmp-broker-import-files-on-fill-text);
     }
 
     .btn-secondary:hover {
-        background-color: #4b5563;
+        background-color: var(--lf-cmp-broker-import-files-btn-secondary-hover-bg);
     }
 
     .btn-ghost {
-        color: #6b7280;
+        color: var(--lf-cmp-broker-import-files-muted-text);
     }
 
     .btn-ghost:hover {
-        background-color: #f3f4f6;
-        color: #374151;
+        background-color: var(--lf-cmp-broker-import-files-hover-bg);
+        color: var(--lf-cmp-broker-import-files-hover-text);
     }
 
     :global(.dark) .btn-ghost:hover {
-        background-color: #374151;
-        color: #d1d5db;
+        background-color: var(--lf-cmp-broker-import-files-hover-bg-dark);
+        color: var(--lf-cmp-broker-import-files-hover-text-dark);
     }
 
     .btn:disabled {
@@ -521,16 +522,16 @@
 
     .upload-area {
         padding: 1rem 1.5rem;
-        border-bottom: 1px solid #e5e7eb;
-        background-color: #f9fafb;
+        border-bottom: 1px solid var(--lf-cmp-broker-import-files-divider-border);
+        background-color: var(--lf-cmp-broker-import-files-subtle-bg);
         flex-shrink: 0;
         max-height: 250px;
         overflow-y: auto;
     }
 
     :global(.dark) .upload-area {
-        background-color: #111827;
-        border-bottom-color: #374151;
+        background-color: var(--lf-cmp-broker-import-files-subtle-bg-dark);
+        border-bottom-color: var(--lf-cmp-broker-import-files-divider-border-dark);
     }
 
     .modal-body {
@@ -554,14 +555,14 @@
         display: flex;
         justify-content: flex-end;
         padding: 0.75rem 1.5rem;
-        border-top: 1px solid #e5e7eb;
-        background-color: #f9fafb;
+        border-top: 1px solid var(--lf-cmp-broker-import-files-divider-border);
+        background-color: var(--lf-cmp-broker-import-files-subtle-bg);
         flex-shrink: 0;
     }
 
     :global(.dark) .modal-footer {
-        background-color: #111827;
-        border-top-color: #374151;
+        background-color: var(--lf-cmp-broker-import-files-subtle-bg-dark);
+        border-top-color: var(--lf-cmp-broker-import-files-divider-border-dark);
     }
 
     .footer-actions {
@@ -575,7 +576,7 @@
         align-items: center;
         gap: 0.375rem;
         font-size: 0.875rem;
-        color: #1a4031;
+        color: var(--lf-cmp-broker-import-files-manage-link-text);
         text-decoration: none;
         transition: all 0.15s;
     }
@@ -585,6 +586,6 @@
     }
 
     :global(.dark) .manage-link {
-        color: #10b981;
+        color: var(--lf-cmp-broker-import-files-manage-link-text-dark);
     }
 </style>
