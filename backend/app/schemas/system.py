@@ -18,7 +18,7 @@ class DependencyInfo(StrictModel):
 
 
 class SystemInfoResponse(StrictModel):
-    """System information response."""
+    """``GET /system/info`` with a valid session: versions of the app, Python, the OS and the dependencies."""
 
     app_version: str
     python_version: str
@@ -28,6 +28,12 @@ class SystemInfoResponse(StrictModel):
     deployment_mode: str
     backend_dependencies: list[DependencyInfo]
     frontend_dependencies: list[DependencyInfo]
+
+
+class SystemInfoPublicResponse(StrictModel):
+    """``GET /system/info`` without a valid session: the app version, nothing else."""
+
+    app_version: str
 
 
 class PluginDiscoveryFailureInfo(StrictModel):
@@ -46,6 +52,27 @@ class HealthCheckResponse(StrictModel):
     """Health check response."""
 
     status: str = Field(..., description="Service status ('ok' when the service is healthy)")
+
+
+ReadinessDatabaseState = Literal["ok", "unreachable"]
+ReadinessMigrationsState = Literal["ok", "mismatch", "unknown"]
+
+
+class ReadinessChecks(StrictModel):
+    """One code per readiness check: never an error message, a path or a revision id."""
+
+    database: ReadinessDatabaseState = Field(description="ok: the database answers a query; unreachable: it does not")
+    migrations: ReadinessMigrationsState = Field(description=("ok: the database schema is at the head revision of the migrations; mismatch: it is at another revision; unknown: the revision of the database or of the migrations cannot be read"))
+
+
+class ReadinessResponse(StrictModel):
+    """``GET /system/ready``: whether this instance can serve requests, with status 200 when ready and 503 otherwise.
+
+    Public by design, for health checks and orchestrators: the body carries one code per check and nothing else.
+    """
+
+    status: Literal["ready", "not_ready"] = Field(description="ready when every check is ok")
+    checks: ReadinessChecks
 
 
 class ContainerImageStatusResponse(StrictModel):

@@ -1286,3 +1286,168 @@ Decisioni del coordinatore (15/10, ~05:49):
   `all-backend` dopo l'avviso di fine. W7 ha già messo `schemas/transactions/` per tema: è la forma da seguire.
 - **X-R9 con il FE4**; i test-id in `DataImportModal.svelte` il coordinatore li chiede a W, che ne è il proprietario.
 - La nota su `tx-bulk-operations.spec.ts:428` la scrive il coordinatore nella sezione di W, come W-B15.
+
+### CP3b in `dev_release2` ✅ (2026-10-15)
+
+Avanzamento veloce di `dev_release2` a `63a1f675c` (il journal del settimo aggiornamento), record del coordinatore
+`c81670354` (con W-B15 nella sezione di W); il mio ramo è avanzato lì, worktree pulito.
+
+### CP4 — gli schemi degli asset per tema (C3) ✅ (2026-10-15)
+
+Via del coordinatore alle ~05:55 («gli schemi di asset e cambi, nella forma C3 di W7»). Durante la finestra della galleria
+solo codice; `all-backend` prima delle 08:45 o dopo l'avviso di fine. Base: HEAD `c81670354`.
+
+**Perimetro.** C3 e il piano 43 (P2.2, riga dei moduli di schemi «da 2 522 a 1 000») dividono i moduli di schemi da ~1 000
+righe in su: fra i miei c'è solo `schemas/assets/assets.py` (1 001 righe, 28 nomi). Il resto è sotto soglia e resta dov'è:
+`schemas/fx.py` (500), `provider.py` (438, con `FXProviderInfo`), `prices.py` (370), `refresh.py` (245, FA e FX). La rinomina
+in pacchetto l'ha già fatta il CP2b (`schemas/assets.py` → `schemas/assets/assets.py`); qui solo tagli, come il secondo
+commit di W7 (`e28aad42f`). Nessuna dipendenza circolare fra i temi (analisi `/tmp/libreFolio_x_cp4_deps.py`).
+
+**Forma d'arrivo** (`schemas/assets/`, `__init__.py` con la sola docstring, mappa dei moduli):
+- `assets.py` (C1, resta): `FAAssetProviderAssignment`, creazione, lettura (`FAAinfoFiltersRequest`, `FAinfoResponse`),
+  cancellazione, `PATCH`, unione; importa `FAClassificationParams` da `metadata.py`.
+- `metadata.py` (nuovo): `BaseDistribution`, `FAGeographicArea`, `FASectorArea`, `FAClassificationParams`,
+  `FAAssetMetadataResponse`, `FAMetadataRefreshResult`, `FABulkMetadataRefreshResponse` (il nome segue
+  `services/assets/metadata.py`).
+- `scheduled_investment.py` (nuovo): `MaturationFrequency`, `DayCountConvention`, `InterestType`, `FAInterestRatePeriod`,
+  `FALateInterestConfig`, `FAScheduledInvestmentSchedule` (il nome segue il fornitore `scheduled_investment`).
+- `events.py`: di W, intatto.
+- Via l'`__all__` di `assets.py`: ripeteva anche 5 nomi di altri moduli (`BackwardFillInfo`, `FACurrentValue`, `FAPricePoint`,
+  `FAHistoricalData`, `FAAssetEventPoint`), cioè faceva da barile (C3: niente barili). Nessun `import *`, e i moduli di
+  W7 non hanno `__all__`.
+- Hub `schemas/__init__.py`: blocco `TYPE_CHECKING`, `_EXPORT_GROUPS` (`assets.assets` si divide in `assets.assets` e
+  `assets.metadata`) e docstring; `__all__` per nome, invariato. I nomi del calendario non sono esportati dall'hub.
+
+Passi:
+1. ✅ Basi a HEAD: `openapi.json`, `tool-contracts`, raccolta, impronta AST delle 27 definizioni.
+   > **Note implementazione**: `/tmp/libreFolio_x_cp4_baseline.sh` (05:59), in `/tmp/libreFolio_x_cp4_base/`: raccolta 13 981,
+   > 27 classi impresse con `ast.dump`, `openapi.json` e `tool-contracts` copiati.
+2. ✅ Taglio (`/tmp/libreFolio_x_cp4_split.py`): ogni definizione si sposta intatta col commento che la precede; ogni modulo
+   con i suoi import (poi `ruff --select F401,I --fix`).
+   > **Note implementazione**: lo script verifica da sé che le 27 classi escano identiche all'impronta (stesso `ast.dump`) e
+   > che ogni nome finisca in un solo modulo. Dopo ruff (47 import tolti o riordinati) e black (nessun cambio):
+   > `scheduled_investment.py` 279 righe (6 definizioni), `metadata.py` 309 (7), `assets.py` 397 (14, da 1 001). Ogni modulo
+   > ha una docstring nuova con la sua mappa; `assets.py` tiene le note di nomi e di disegno ancora vere e perde quelle
+   > dei temi andati via. Prova di fumo: i 24 modelli Pydantic dei tre moduli producono il loro JSON Schema (riferimenti in
+   > avanti risolti con `from __future__ import annotations`). Dipendenze fra temi: `assets` → `metadata`
+   > (`FAClassificationParams`); `scheduled_investment` → `events` (`FAAssetEventPoint`, di W, solo import).
+3. ✅ Hub e docstring del pacchetto.
+   > **Note implementazione**: `schemas/__init__.py`: blocco `TYPE_CHECKING` diviso (`assets.assets` 11 nomi, nuovo
+   > `assets.metadata` 7), `_EXPORT_GROUPS` uguale, docstring dell'elenco dei moduli; `__all__` invariato. Controllo:
+   > coppie (modulo, nome) del `TYPE_CHECKING` = quelle di `_EXPORT_GROUPS`; 190/190 nomi esportati risolvibili;
+   > `__all__` contenuto negli export. `schemas/assets/__init__.py`: mappa dei quattro moduli.
+4. ✅ Import dei 40 file (`/tmp/libreFolio_x_cp4_rewrite.py`, ogni nome al modulo che lo definisce) e casi a mano.
+   > **Note implementazione**: 20 istruzioni in 20 file (gli altri 20 importatori usano solo nomi rimasti in `assets.py`),
+   > nessun caso a mano; `ruff --select I --fix` ne ha riordinati 6. File di altri, una riga ciascuno: `db/models.py`
+   > (import locale di `FAClassificationParams`), `ai_export/components/asset_resources.py` e `risk/service.py` di J. Il
+   > riscrittore rilanciato a secco dà 0; risoluzione statica 0 irrisolti su 9 600 nomi. `api schema`: `openapi.json`
+   > identico (113 percorsi, 586 schemi), `tool-contracts` identico (160 schemi).
+5. ✅ Riferimenti: docstring e commenti nel codice, `.github`, MkDocs, devWiki (C6), `TODO_FUTURI.md:1121`.
+   > **Note implementazione**: 21 righe citavano il vecchio modulo; corrette quelle sui nomi spostati, lasciate quelle sui
+   > nomi rimasti (F-095 e F-114 della devWiki, le due pagine dei problemi: cancellazione, filtro, `PATCH`,
+   > `FAinfoResponse`). Codice: docstring di `scheduled_investment/plugin.py:33-34` (`schemas.assets.scheduled_investment`) e
+   > di `utils/asset/geo.py:5` (`metadata.py`); commenti di `populate_mock_data.py:1043`,
+   > `ScheduledInvestmentEditor.svelte:75`, `:81`, `:89`; docstring di `test_asset_schemas.py:9` e la stampa del runner
+   > `_backend_schemas.py:39` (le tre fonti). devWiki (C6): F-029 (`FAAssetMetadataResponse` → `metadata.py`) e F-096, riga
+   > della tabella e prosa (`FAInterestRatePeriod` → `scheduled_investment.py`); `check_source_paths` ai soliti 5 artefatti.
+   > `.github/instructions/backend-schemas.instructions.md`: l'albero mostra il pacchetto `assets/` coi suoi quattro moduli.
+   > `TODO_FUTURI.md:1121` di nuovo (la riga di X-R5 ora punta a `scheduled_investment.py`). MkDocs (docs-writer):
+   > `assets_pricing.md:66-67` (righe in `metadata.py`) e `lint_gates.md`, dove le eccezioni RUF022 scendono da 4 a 3 perché
+   > `assets.py` non ha più `__all__`.
+   > Controlli: raccolta 13 983 contro 13 981 (+2: i casi della guardia `config-package` per i due moduli nuovi); scanner
+   > delle stringhe senza righe nuove (spariscono le 2 vecchie della docstring del fornitore; l'unica in più,
+   > `test_brim_report_sets.py:3134`, è un `git show v1.1.0:…`, storico e giusto); guardia delle patch mute 42, nessuna
+   > muta; `schemas all` 1 705.
+6. ✅ Verifiche: identità AST, ruff e black, `api schema` e `tool-contracts` identici, raccolta, import, stringhe, patch mute,
+   suite mirate, `all-backend`; journal e handoff.
+   > **Note implementazione**: identità AST sui file finali (dopo ruff e black) 27/27 classi (14 `assets`, 7 `metadata`,
+   > 6 `scheduled_investment`); `ruff check` e `black --check` puliti sui 28 file Python toccati, Prettier sullo `.svelte`;
+   > `openapi.json` (586 schemi) e `tool-contracts` (160) identici a HEAD salvo la versione; raccolta 13 983 (+2, la guardia
+   > `config-package`); 0 import irrisolti su 9 600; nessuna patch muta; `schemas all` 1 705. Build e run completa
+   > (`/tmp/libreFolio_x_cp4_heavy.sh`): `front build --debug` 85 s, `mkdocs build` 34 s, **`all-backend` sulla 6183
+   > 06:10:32–06:31:13, 7/7, 13 972 passati, 28 saltati**, 0 falliti. Il +97 sui 13 875 della mia ultima run completa (su
+   > `d1ef3ddeb`) è la differenza di raccolta (13 886 → 13 983: A4 +90, W7 +5, CP4 +2): +72 nel blocco `services` e un
+   > blocco nuovo di 25 arrivato con gli aggiornamenti di base. Porta 6183 libera; `git diff --check` pulito. Log
+   > `/tmp/libreFolio_x_cp4_allbackend.log`, righe `/tmp/libreFolio_x_cp4_allbackend_counts.txt`.
+
+> **Fuori pista**:
+> - **Un commento di `pyproject.toml`** (file condiviso) contava ancora 4 barili RUF022 con `schemas/assets`: corretto a 3,
+>   come `lint_gates.md` (segnalato da docs-writer). Nessun effetto sulla configurazione.
+> - docs-writer ha corretto anche la riga 27 di `lint_gates.md` («with 4 deliberate exceptions»), fuori dalla sezione
+>   indicata: tenuta, perché la pagina altrimenti diceva 4 in cima e ne elencava 3.
+> - Nell'albero di `.github/instructions/backend-schemas.instructions.md` la riga `transactions.py` non esiste più dopo W7
+>   (`schemas/transactions/`): è di W, non toccata; segnalata al coordinatore.
+> - Un file `frontend/src/lib/api/.tools-codegen.lock` compare durante la build del frontend e sparisce alla fine
+>   (`frontend/scripts/tools-generation-io.mjs:94`): non è un artefatto da escludere.
+
+### Checkpoint CP4 ✅ (2026-10-15) — in `dev_release2` come `7f4618494` (merge del mio `805f2f112`), record `786f3e216`
+
+- **Base**: HEAD `c81670354`; `dev_release2` nel frattempo a `6d67fdaac` (J C-93, H CP4): nessun file in comune, nessun import
+  nuovo dei nomi spostati (55 coppie su tutti e due gli alberi).
+- **Elenchi**: rinomine pure, nessuna. Tagli: `schemas/assets/assets.py` → `assets.py` + `metadata.py` + `scheduled_investment.py`
+  (2 file nuovi; `assets.py` resta, da 1 001 a 397 righe). Modificati 35, compreso il piano: 20 file con le sole righe
+  d'import (3 di altri: `db/models.py`, `ai_export/components/asset_resources.py` e `risk/service.py` di J), l'hub e
+  `schemas/assets/__init__.py`, 6 di commenti e docstring (`scheduled_investment/plugin.py`, `utils/asset/geo.py`,
+  `populate_mock_data.py`, `test_asset_schemas.py`, `_backend_schemas.py`, `ScheduledInvestmentEditor.svelte`),
+  `TODO_FUTURI.md` (1 riga), `pyproject.toml` (commento), `.github` 1, MkDocs 2, devWiki 2.
+- **Messaggi di commit proposti**: `refactor(schemas): split asset schemas by theme` (36 percorsi: tutto tranne il piano) e
+  `docs(journal): X CP4 log` (il piano).
+
+Il coordinatore ha integrato il CP4 con un merge (`7f4618494`): nel frattempo erano entrati J C-93, H CP4 e J G-8, senza
+file in comune; il suo controllo sull'AST: 49/49 nomi identici, tolto solo `__all__`. `schemas/fx.py` resta intero (sotto
+soglia): niente lotto di simmetria. La riga `transactions.py` dell'albero delle istruzioni la gira lui a W. Il mio ramo è
+avanzato a `786f3e216`, che porta J-5 nella mia sezione del backlog.
+
+### J-5 — `_run_provider_in_thread` non lascia un loop chiuso come corrente ✅ (2026-10-15)
+
+Via del coordinatore alle ~06:34 («una riga più il test di test-author; poi X-R8»). Base: HEAD `786f3e216`.
+
+**Il difetto** (triage di J, piano 05 §10 «C-93»): `services/assets/core.py:114-119`, `_sync_runner` (dentro
+`asyncio.to_thread`), crea un loop, lo imposta come corrente, lo chiude e non lo toglie. Nel thread dell'executor resta
+così un loop chiuso come corrente: una connessione aiosqlite raccolta dal GC in quel thread crea il suo future con
+`asyncio.get_event_loop()`, lo lega al loop chiuso e muore con «Event loop is closed» (`PytestUnhandledThreadExceptionWarning`
+attribuito a un test estraneo). Nel backend è l'unico punto che lo fa.
+
+**La cura**: `asyncio.set_event_loop(None)` nel `finally`, prima di `loop.close()`, come fa `asyncio.Runner.close()`.
+
+Passi:
+1. ✅ Test (test-author) in `test_utilities/test_provider_core_cache.py`, classe `TestRunProviderInThread`: dopo una
+   chiamata, il thread che l'ha eseguita non ha un loop chiuso come corrente. Rosso sul codice di oggi.
+   > **Note implementazione**: `test_worker_thread_does_not_keep_closed_event_loop` (righe 267–315). Il thread si fissa con
+   > un `ThreadPoolExecutor(max_workers=1)` privato: `asyncio.to_thread` è sostituito, solo per quella chiamata
+   > (`monkeypatch.context()`), con il suo stesso corpo su quell'executor; una sonda prima e una dopo nello stesso thread
+   > (verificato, non supposto: il fornitore e le due sonde registrano il thread). L'executor di default del loop del test
+   > non c'entra. Asserzione stretta: nessun loop corrente, come il thread era stato trovato. **Rosso sul codice di oggi**:
+   > 1 fallito, 28 passati, «pinned-provider_0 still has <_UnixSelectorEventLoop running=False closed=True …> as its current
+   > loop» (`/tmp/libreFolio_x_j5_ta_red_current.log`).
+2. ✅ La riga in `core.py`; il test diventa verde.
+   > **Note implementazione**: `asyncio.set_event_loop(None)` nel `finally` di `_sync_runner`, prima di `loop.close()`
+   > (`core.py:120`). `utils provider-core-cache` 29/29 (`/tmp/libreFolio_x_j5_green.log`); ruff e black puliti.
+3. ✅ Verifiche: `utils provider-core-cache`, ruff e black, i test dei chiamanti; journal e handoff.
+   > **Note implementazione**: la riga sta nel percorso di ogni chiamata ai fornitori (prezzi, storico, metadati, ricerca),
+   > quindi la run completa: `front build --debug` (97 s) e `mkdocs build` (47 s), resi vecchi dall'integrazione del CP4 (14
+   > file di `frontend/src`, 8 di MkDocs, il CHANGELOG), poi **`all-backend` sulla 6183, 06:46–07:08, 7/7, 14 003 passati,
+   > 29 saltati**, 0 falliti (`/tmp/libreFolio_x_j5_heavy.sh`, log `/tmp/libreFolio_x_j5_allbackend.log`). Rispetto al CP4
+   > (13 972 / 28) il +32 è la differenza di raccolta (13 983 → 14 015, +33 −1): il mio test più 32 arrivati con
+   > l'aggiornamento di base (H CP4: `test_system_api` 8, `test_config_misc` 8, 7 casi della guardia `config-package`,
+   > uno tolto, `api/v1/system.py`; `test_tools_api` 5; J: 4 in `test_ai_export_components_portfolio_broker_integration`).
+   > Il saltato in più è `test_external/test_asset_providers.py::test_current_value[css_scraper]`: la pagina di Borsa
+   > Italiana senza prezzo («market closed or in Call status», 07:00), dipende dall'ora, non dalla riga. Porta 6183 libera.
+
+### Checkpoint J-5 🧊 (2026-10-15) — FROZEN, handoff al coordinatore
+
+- **Base**: HEAD `786f3e216`.
+- **Elenchi**: nessuna rinomina, nessun taglio, nessun file nuovo. Modificati 4: `backend/app/services/assets/core.py` (1 riga),
+  `backend/test_scripts/test_utilities/test_provider_core_cache.py` (il test e 4 import), il piano e il backlog (J-5 chiusa).
+- **Messaggi di commit proposti**: `fix(assets): unset the provider thread's closed event loop` (i 2 file di codice) e
+  `docs(journal): X J-5 log, W agreements` (piano e backlog).
+
+> **Accordi con W, comunicati dal coordinatore il 15/10 (~07:00), da rispettare nel FE5:**
+> - Lotto E1b degli eventi (dopo le decisioni 20–23 del developer): W modifica in
+>   `frontend/src/lib/components/assets/AssetDataEditorSection.svelte` il salvataggio degli eventi (righe 349–438: prima le
+>   cancellazioni, poi gli upsert; `asset_id` nella cancellazione; la valuta della riga quando c'è; la conferma per gli
+>   eventi collegati) e il toast d'errore con il `detail` (461–466). Finché il lotto non entra, quelle righe non le tocco.
+> - Lotto E0 (dopo la finestra della galleria): W scrive in `frontend/src/lib/components/assets/EventDataImportModal.svelte:38`
+>   `matchKey: true` sulla colonna `type`, così che i doppioni del CSV degli eventi siano solo le righe con stessa data e
+>   stesso tipo (I-11a). Prezzi, cambi e distribuzioni non cambiano.
+> Nessuna obiezione da parte mia: non ho modifiche previste su quelle righe.

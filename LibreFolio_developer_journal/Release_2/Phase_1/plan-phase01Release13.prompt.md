@@ -990,3 +990,70 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > finestra. Rosso prima e verde dopo (`api tools` 12); `api schema` identico. Senza nuovo controllo di J: H CP4 non
 > tocca il router dei Tool. Entra prima della galleria delle 09:00, così la misura finale di G ne tiene conto; la
 > riga G-8 nella sezione G è chiusa dal coordinatore. CHANGELOG con una riga in «🐛 Fixed».
+
+### X CP4, gli schemi degli asset per tema, integrato ✅ (2026-10-15, 06:40)
+
+> **Note implementazione**: `7f4618494`, merge di `805f2f112` su `78043417` (CP4 `b31ae0fce`). `schemas/assets/assets.py`
+> (1 001 righe, l'unico modulo di schemi di X sopra la soglia di C3) cede `metadata.py` e `scheduled_investment.py`;
+> via l'`__all__` che faceva da barile. Controllo del coordinatore sull'AST: 49/49 nomi identici. Validazione di X:
+> `all-backend` 13 972 passed, 28 skipped, 0 failed; `openapi.json` identico. Senza nuovo controllo di X: nessun file
+> in comune con J C-93, H CP4 e J G-8, controlli statici del coordinatore puliti. `schemas/fx.py` e gli altri restano
+> interi, sotto soglia. Poi J-5 e X-R8.
+
+### W K2a, rifiuti a codice e L6, integrato ✅ (2026-10-15, 06:50)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `62c964242` (K2a `0eac8e1b6`, base aggiornata con J C-93,
+> H CP4, J G-8 e X CP4 in `388a20f65`). C-70 parte a: DEGIRO e il Generic CSV rifiutano con codici tradotti nel
+> wizard (7 chiavi `importWizard.parseRefusal.*`); L6: il 400 del parse nomina plugin e file con i nomi visibili.
+> Validazione di W: `all-backend` 14 027 passed, 28 skipped, 0 failed sulla base `58be885a9`; sopra il fuso, controllo
+> leggero con le E2E `tx-import-broker-mismatch` e `tx-import-degiro` sul layout nuovo di H. CHANGELOG con due righe.
+> C-95 nuova (l'albero degli schemi nelle istruzioni). W prepara E1 in sola lettura; K2b, CP7, W3 e W5–W6 aspettano
+> un commit del coordinatore su `brokers.py` e `uploads.py`.
+
+### A4b, versione di sessione, integrato ✅ (2026-10-15, 07:05)
+
+> **Note implementazione**: `dbf89cdd5`, merge di `3d6ecb2fe` su `e7cf1ae80` (A4b `3ac4114d5`, decisione D-A17). Il
+> JWT porta `sv`, la versione di sessione dell'account; un token senza `sv` vale 0, quindi l'aggiornamento non
+> disconnette nessuno. Il cambio della password alza la versione e riemette il cookie del dispositivo corrente; un
+> reset da CLI, una disattivazione o un declassamento la alzano. A-3 chiusa (bcrypt in un thread); la voce «🔑
+> Sessioni» passa da `TODO_FUTURI.md` a `TODO_Completati.md`. Validazione di A sulla revisione con X CP3, W7, X CP3b,
+> J C-93 e H CP4: `all-backend` 14 046 passed, 28 skipped, 0 failed; E2E auth 29, settings 46, con un test nuovo che
+> invia davvero il cambio password e prova il secondo dispositivo. **Senza nuovo controllo di A** dopo J G-8, X CP4 e
+> W K2a: nessun test nuovo conia token (quelli dei Tool sostituiscono `get_current_user`); `models.py`,
+> `TODO_FUTURI.md` e il backlog si fondono da soli; controlli statici puliti. CHANGELOG con due righe in «🔄 Changed».
+
+### X J-5, il loop chiuso nel thread dei fornitori, integrato ✅ (2026-10-15, 07:20)
+
+> **Note implementazione**: `743fca514`, merge di `cb0bac88d` su `ee5d81a6f` (J-5 `7794e2fb0`). Una riga in
+> `services/assets/core.py`: `asyncio.set_event_loop(None)` prima di `loop.close()`, come `asyncio.Runner.close()`;
+> un test di test-author, rosso prima e verde dopo. Validazione di X: `all-backend` 14 003 passed, 29 skipped,
+> 0 failed sulla base `786f3e216` (lo skip in più è lo scraper CSS di Borsa Italiana a mercato chiuso). Senza nuovo
+> controllo di X: con W K2a e A4b condivide solo il backlog; controlli statici puliti. Niente CHANGELOG: non si
+> vede da fuori. Poi X-R8 (cache di 24 ore degli elenchi delle valute dei fornitori).
+
+### B, Backup e Docker, avviata in sola analisi (2026-10-15, 07:10)
+
+> **Note implementazione**: sessione `5618ecee`, worktree `e-alfy-miniature-telegram`, corsia 6187 +
+> `/tmp/librefolio-r13-b`, base `ee5d81a6f` (fast-forward da `origin/dev_release2`, file dell'agente presente).
+> Condizione del §4 soddisfatta: segreti e configurazione di H sono in `dev_release2` dal CP3. Nodi affidati
+> all'analisi: i segreti nello zip (specifica F01, D-X2, note di H-3), dove vive il backup dell'istanza rispetto agli
+> export per asset di `backup.py`, l'aggancio all'avvio dopo il CP2b di H, le decisioni 6–9 del §10, come si prova
+> lo scambio all'avvio. E parte dopo il checkpoint A5a (inviti), Y dopo il lotto B dei colori.
+
+### H CP5a, prontezza e versione, integrato ✅ (2026-10-15, 07:30)
+
+> **Note implementazione**: `9deb0ea08`, merge di `5d1242ae5` su `4fdc0d9c5`. Commit di H: `e8ceda504`
+> (`GET /system/ready`: 200 se il DB risponde ed è alla head delle migrazioni, 503 altrimenti, un codice per
+> controllo; `/system/info` senza sessione risponde solo `app_version`, decisione 15), `6e78b8c96` (R2: in un checkout
+> vince `git describe`; prima di tutto `LF_APP_VERSION`, come in `vite.config.ts`; `pyproject.toml` a 0.0.0, metà di
+> C-84), `d80c0a091` (la head delle migrazioni si legge in un thread, non nel ciclo di eventi: correzione chiesta dal
+> coordinatore all'handoff), più i log. Base aggiornata con G-8, X CP4, W K2a e A4b in `cf6f08856`. Validazione di
+> H: `all-backend` 12 436 passed, 3 skipped, 0 failed sulla base `6d67fdaac`; sopra il fuso, controllo leggero
+> (`platform-readiness` 14, `api system` 116, `api auth` 60, `session-revocation` 3, `utils version` 51,
+> `config-package` 592, `config-env-example` 36, `check-orphans`, `mkdocs build` stretto, `check-links` 95; `api
+> schema` con le sole aggiunte di CP5a). X J-5 entrato nel frattempo tocca solo file di X: niente nuovo controllo.
+> Il client generato non è versionato: si rifà alla prossima build in ogni corsia (avvisato il coordinatore colori).
+> CHANGELOG con tre righe; R2 chiusa (sezione 09 e piano d'origine), C-84 per metà; H-5 nuova (debito di
+> traduzione delle pagine admin). Note per gli altri: a Z, per Z2, `/system/ready`, `/system/health` e `/system/info`
+> anonimo non contano come attività dell'utente; ad A, `signed_in_user` chiama `get_current_user` direttamente, quindi
+> un override in `dependency_overrides` non arriva a `/system/info`. Poi CP5b dopo la finestra della galleria, e CP6.
