@@ -387,6 +387,7 @@ and **Maybe later** dismiss it, and a share button opens the share dialog above 
 | `transition_onboarding_progress()` | Completes or skips a flow; on a step-managed flow, applies the status to every registered step |
 | `transition_onboarding_step_progress()` | Completes or skips one step, then recomputes its flow |
 | `complete_welcome_onboarding()` | Saves the Welcome settings and completes `welcome` in one transaction |
+| `reset_onboarding_progress()` | Puts every flow of a user, or one, back to `pending`, steps included, clearing `completed_at` and `skipped_at`; for administrators: `POST /api/v1/users/{user_id}/onboarding/reset` ([Administrator API](../architecture/access_control.md#admin-user-api)) and `./dev.py user reset-onboarding` |
 
 A step-managed flow stays `pending` until every registered step is terminal at the current
 version; it then becomes `skipped` if all its steps were skipped, and `completed` otherwise.

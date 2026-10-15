@@ -35,6 +35,13 @@ function createLanguageStore() {
         locale.set(initialLocale);
     }
 
+    // With no stored preference the store follows the language svelte-i18n has in force, until one is picked here.
+    let stopFollowing: (() => void) | null = null;
+    function unfollow(): void {
+        stopFollowing?.();
+        stopFollowing = null;
+    }
+
     return {
         subscribe,
 
@@ -43,6 +50,7 @@ function createLanguageStore() {
          * Updates both the store and svelte-i18n locale
          */
         set: (lang: SupportedLocale) => {
+            unfollow();
             if (!SUPPORTED_LOCALES.includes(lang)) {
                 console.warn(`Unsupported locale: ${lang}, falling back to ${DEFAULT_LOCALE}`);
                 lang = DEFAULT_LOCALE;
@@ -58,6 +66,7 @@ function createLanguageStore() {
          * Useful for language picker buttons
          */
         cycle: () => {
+            unfollow();
             update((current) => {
                 const currentIndex = SUPPORTED_LOCALES.indexOf(current);
                 const nextIndex = (currentIndex + 1) % SUPPORTED_LOCALES.length;
@@ -81,17 +90,18 @@ function createLanguageStore() {
             const stored = localStorage.getItem('librefolio-locale');
             if (stored && SUPPORTED_LOCALES.includes(stored as SupportedLocale)) {
                 const lang = stored as SupportedLocale;
+                unfollow();
                 set(lang);
                 locale.set(lang);
-            } else {
-                // No stored value - sync with svelte-i18n's current locale
-                const unsub = locale.subscribe((currentLocale) => {
+            } else if (!stopFollowing) {
+                // No stored value: follow svelte-i18n's locale. It moves to the browser's language only once that
+                // dictionary has loaded, so the value read at mount can still be the default (TC-6: the page in
+                // Italian, the selector on English). Following stops when a language is picked through this store.
+                stopFollowing = locale.subscribe((currentLocale) => {
                     if (currentLocale && SUPPORTED_LOCALES.includes(currentLocale as SupportedLocale)) {
                         set(currentLocale as SupportedLocale);
                     }
                 });
-                // Only need to read once
-                unsub();
             }
         },
     };
