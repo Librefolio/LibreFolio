@@ -61,7 +61,9 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `provider_cooldown_base_seconds()`, `provider_cooldown_max_seconds()` and
       `provider_cooldown_settings()`; the shutdown budget, `shutdown_timeout_seconds()`, and
       uvicorn's share of it, `shutdown_drain_seconds()` and `uvicorn_drain_env()`; see
-      *Stopping the Server* in [Configuration](../../admin/configuration.md)) and `backup.py` (B:
+      *Stopping the Server* in [Configuration](../../admin/configuration.md); the token of the
+      scheduled wake-up, `wake_token()`, also as `_FILE`, with the rules of the panel's backup token;
+      see [Scheduled Wake-up](../../admin/sleep_wake.md#wake-sync)) and `backup.py` (B:
       `backup_download_token()`, the token a hosting panel presents to download the instance's
       backups, also as `_FILE`). Unlike a `Settings` field, an
       invalid `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL` or
