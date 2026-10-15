@@ -399,3 +399,20 @@ Preambolo: `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py
 > - `dev.py mkdocs check-links`: 95 link validi, nessuno rotto (log `/tmp/libreFolio_e1_check_links.log`).
 >
 > `site/` è ignorata; nessun file tracciato cambiato dalla build; porte 6188 e 6042 libere.
+
+#### E1.8 — Aggiornamento di base, validazione combinata, test TLS ✅ (2026-10-15)
+> **Note implementazione**:
+> - Checkpoint committato dal coordinatore: `2534cbd97` (codice, test, doc, navigazione) e `1e2f4b2f3` (journal).
+> - Aggiornamento di base con `dev_release2` (`13705dd05`), aperto dal coordinatore nel mio worktree. Un conflitto,
+>   `BACKLOG_POST_1.2.md`: tenuto il file di `dev_release2` più la sola voce E-1 (controllato con un diff contro
+>   `MERGE_HEAD`), messo in stage solo lui. Controllati a mano i due fusi da soli: `_backend_utils.py` (le voci dei due
+>   lati, AST valido) e `mkdocs.yml` (la riga dell'email e quella del Designer Lab, in punti diversi). Merge del
+>   coordinatore: `fc99e9bfe`.
+> - Validazione della revisione combinata, prima della pausa delle dipendenze (una alla volta, `nice -n 10`, log
+>   `/tmp/libreFolio_e1merge_*.log`): `utils rate-window` 26, `services email-config` 144, `email-messages` 245,
+>   `email-checks` 48, `email-delivery` 77 + 2 saltati, `config-package` 600, `config-env-example` 36, `utils
+>   gate-i18n-usage` 195, `check-orphans` ✅.
+> - Dopo la finestra delle dipendenze (`cryptography` 50.0.2, `dc9a5d232`), su `fc99e9bfe`: `services email-delivery`
+>   **79 passati, nessun saltato**; `EMD-017` (STARTTLS, poi autenticazione, poi invio) ed `EMD-018` (certificato non
+>   fidato → `TLS_FAILED`, nulla inviato) verdi. Log `/tmp/libreFolio_e1tls_email-delivery.log`. E-1 chiusa nel
+>   backlog.
