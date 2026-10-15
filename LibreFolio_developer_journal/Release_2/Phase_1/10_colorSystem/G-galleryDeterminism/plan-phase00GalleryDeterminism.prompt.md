@@ -141,7 +141,7 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 > ai 240 s); le misure degli schermi alti (`extendScreenToBlock`, `fitScreenToDialog`) avvengono prima dell'assestamento
 > (edit-modal, broker detail) → da correggere al passo 3; con t* = 3,6 s il login mostra una sola linea (passo 4).
 
-### Passo 2 — G-3, scelta del preset del replay 🟡 (codice ✅ 14/10; verde in 4 run desktop sotto carico su 5, la quinta con la misura finale)
+### Passo 2 — G-3, scelta del preset del replay ✅ (codice 14/10; DoD raggiunta il 15/10: 6 run desktop sotto carico su 6, tutte verdi)
 - Messaggio d'errore con la sequenza; puntatore parcheggiato prima dell'apertura; scelta che non dipende dal verso.
 - DoD: 0 rossi su 5 run desktop sotto carico.
 > **Note implementazione** (14/10, test-author `g-whatif-preset`): `chooseReplayPreset` in `galleryRiskDashboard.ts`
@@ -151,6 +151,13 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 > crisi, opzione sotto il puntatore). In `g-smoke1` il test passa su desktop e mobile (1/1 ciascuno). Riproduzione
 > deterministica della vecchia rossa e 5 run sotto carico: ancora da fare (ricetta nel rapporto dell'agente: hover
 > dell'ultima opzione prima del vecchio ciclo).
+> **Chiusura (15/10):** `what-if crisis replay` verde su desktop in 6 run su 6 sotto carico:
+> - `g-smoke1` a 6 worker;
+> - `g-final-r1` e `r2` a 10 worker, carico 17–35;
+> - `g-verify2` a 5 worker, carico fino a 94;
+> - `g-final3-r1` e `r2` a 6 worker, carico 11–16.
+>
+> La riproduzione deterministica della vecchia rossa non è servita: nessun rosso in nessuna run dopo la riscrittura.
 
 ### G-4 — Nome del provider non reattivo nel dettaglio asset ✅ (14/10)
 > **Note implementazione**: autorizzazione del coordinatore (solo il nome reso reattivo, test rosso→verde, `front check`
@@ -459,7 +466,7 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 > verificare: auth/* identici in 2 run dello stesso giorno (run di verifica del passo 3).
 > Verificato in `g-verify1`: auth/01 e auth/02 `stable`, auth/03 `low` (≤ 0,05 %).
 
-### Passo 5 — G-2 🟡 (14/10: verdetti per ogni rosso; conferma con la misura finale)
+### Passo 5 — G-2 ✅ (verdetto del 15/10: saturazione a 10 worker; a 6 worker 0 rossi in 2 run complete)
 - Riproduzione del primo blocco a 10 worker (con avviso), richieste in volo, verdetto per ogni rosso.
 > **Note implementazione** (14/10): nelle 2 gallery complete a 10 worker (`g-final-r1/r2`, carico 17–35) nessun rosso
 > del tipo originale: né «auth-loading» né modali delle transazioni. Verdetti dei rossi rimasti (skill `test-triage`):
@@ -468,8 +475,23 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 > - `Asset detail classification` e `risk lab historical replay (injected)`, solo in `g-verify2` a carico esterno
 >   87–94: renderer affamato, verdi da soli 2/2.
 > La riproduzione del primo blocco non è servita: nessun rosso di auth-loading in nessuna run a 5–10 worker del 14/10.
+> **Verdetto (15/10).**
+> - **10 worker.** Il coordinatore ha fermato dopo 10 minuti la prima r1 a 10 worker (`g-final2-r1`), con carico 65
+>   generato dalla run stessa e 8 rossi desktop:
+>   - `main dashboard`, `dashboard fifo lots panel`, `dashboard empty state`;
+>   - `user preferences`, `changelog modal`, `static resources grid view`;
+>   - `transaction list`, `transaction picker modal`.
+>
+>   Le righe ⏳ mostrano richieste in volo da 10–20 s: un chunk JS 20 s, `GET /api/v1/brokers/8` 10 s, icone statiche
+>   10 s. Rifatti da soli a 2 worker, passano tutti.
+> - **6 worker:** 0 rossi in 2 run complete.
+> - **Causa:** `dev.py mkdocs gallery` avvia di default un worker browser per CPU più 3 worker server, e 10 CPU non
+>   bastano. È la stessa firma dei rossi «ogni volta diversi» del 14/10.
+> - **Esito:** il README del toolkit dice `-- --workers 6`. Il default in `dev.py` va a J (C-94, decisione del
+>   coordinatore): C-94 sta già cambiando `cmd_mkdocs_gallery`, e G non tocca `dev.py`.
+> - G-8 è chiusa da J (`6ce5ea180`): le rotte di lettura di `/tools` non passano più per la finestra di ingresso di 2 s.
 
-### Passo 6 — Misura finale ⏳
+### Passo 6 — Misura finale ✅ (15/10, `g-final3`; 4 inquadrature corrette dopo, al passo 7)
 - 2 run complete nello stesso giorno, diff + stability, maschere per R; README, evidence e backlog aggiornati.
 - DoD: instabili di stile al minimo spiegabile; differenze di solo contenuto elencate come accettate.
 > Prima misura del 14/10 non valida (fuga del prezzo live, sopra). Rinviata al 15/10 su `dev_release2` con G dentro,
@@ -493,6 +515,111 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 - Validità: stesso `commit` e `dirty_files` 0 nei due `meta.json`; `live_price_check.py` con uscita 0 per entrambe (con 1
   la run è nulla e va rifatta, sempre nello stesso giorno). Poi analisi, maschere ed evidenze di G, nel checkpoint
   successivo.
+> **⚠️ Fuori pista — 6 worker, non 10.** La prima r1 a 10 worker (`g-final2-r1`) è stata fermata dal coordinatore dopo
+> 10 minuti: 8 rossi a carico 65, generato dalla run stessa (passo 5). La misura è stata rifatta con `-- --workers 6` e
+> le etichette `g-final3-*`. Le baseline del 14/10 erano a 10 worker: il confronto delle classi resta valido, perché ogni
+> misura confronta due run della stessa configurazione.
+> **Risultato** (15/10, coordinatore; analisi di G in sola lettura, poi
+> [evidence/analysis-final-2026-10-15.md](evidence/analysis-final-2026-10-15.md)).
+> - **Condizioni:** X = `2338aaf79`, checkout principale, corsia 6150, altre corsie ferme, carico 11–16.
+>   - r1 09:14:58, 1833 s; r2 09:45:57, 1791 s;
+>   - exit 0, 2824 PNG ciascuna, stessi 32 stale;
+>   - `app_version` fissata (`v0.0.0-review`, toolkit `70c84accc`);
+>   - `live_price_check` 0 su entrambe. I 7 marcatori sono ancora nel codice dopo il riordino di X
+>     (`services/assets/price_query.py`).
+> - **Classi:** 40 stabili, 112 basse, 19 medie, 6 instabili (14/10: 57, 74, 19, 27). Delle 27 instabili del 14/10, 8
+>   sono ora stabili, 16 basse, 1 media (`files/static-grid`, orari) e 2 ancora instabili, di solo contenuto.
+> - **Le 6 instabili:**
+>   - 2 di contenuto, già accettate: `asset-picker-modal`, `import-nway-compare`;
+>   - 4 di inquadratura: `detail-measures`, `detail-measures-active`, `about-plugin-diagnostics` (mobile) e la pagina
+>     dietro il modale di `scheduler-config`. Tutte da uno `scrollIntoViewIfNeeded()` il cui esito dipendeva da dove era
+>     la pagina, o da un layout ancora in movimento.
+> - **Le 19 medie:** contenuto (orari, account usa e getta, codici casuali, durate, ordine dei file) e due residui di resa
+>   (celle sticky della tabella dei lotti, antialiasing dei canvas RSI e MACD). Ritagli A | B in
+>   `g-workstream/2026-10-15/final3/crops/`.
+> - **Da `stable` a `low`, 27 schermate:** 24 con Δ ≤ 15 livelli, 3 con Δ 43–70 su poche decine di pixel (spigoli di
+>   icone). Raster, nessuno stile.
+> - **Impronte:** su 2696 scatti il frame differisce solo nei 3 scatti mobile. `🔎` non vede lo spostamento di
+>   `scheduler-config`: `ModalBase` blocca lo scroll del body (`position: fixed`, `top: -scrollY`).
+> **⚠️ Fuori pista — le 4 di inquadratura erano stabili il 14/10.** Prima lo scatto partiva 200 ms dopo un
+> `networkidle` che in una SPA si risolve subito, quindi coglieva sempre lo stesso stato transitorio. Con `settleShot`
+> lo scatto aspetta il contenuto finale, e lo scroll fatto prima nel test corre contro il layout. È un difetto messo a
+> nudo da G, non introdotto: l'inquadratura era già fragile. `scheduler-config` lo mostrava già la sera del 14/10, con
+> il solo codice di G.
+
+### Passo 7 — Correzioni dopo la misura (checkpoint 2) ✅ (15/10; 4 inquadrature su 5 stabili, 1 variante residua → G-11)
+- **Inquadrature** (test-author `g-frames-c2`, solo statica):
+  - measures e diagnostica su mobile con `frameTarget`; la diagnostica aspetta il pannello Tools su entrambi i viewport;
+  - un nuovo helper per i due modali dello scheduler: pagina ferma, pagina in cima, poi scroll solo se serve;
+  - `🔎` legge l'offset bloccato dal modale (`"lock":1`).
+
+  Le inquadrature desktop non cambiano.
+- **Modifiche leggere** (G): la docstring di `live_price_check.py` con pipenv; i percorsi spostati dal riordino di X in
+  `galleryOfflineData.ts` (`api/v1/fx/providers.py`, provider in una cartella ciascuno), `galleryProviderCompare.ts` e
+  `galleryReportSets.ts` (`services/assets/search.py`); README del toolkit (`-- --workers 6`, «Known gallery
+  behaviour» al 15/10); evidenze (`stability-2026-10-15.md`, `analysis-final-2026-10-15.md`); README di G; backlog.
+- **Verifica**, dopo la chiusura della finestra annunciata dal coordinatore, corsia 6153: i 4 test da soli ×2, più
+  `live_price_check`. Fino ad allora nessuna E2E, neanche da test-author.
+- DoD: le 4 inquadrature uguali nelle due run (impronte e pixel, a parte l'orario del server); statica pulita.
+> **Note implementazione** (15/10, 11:20, test-author `g-frames-c2`, solo statica; rivisto da G):
+> - *`detail-measures` e `-active`* (`gallery.spec.ts` ~5548–5575): su mobile `frameTarget(page, detailChart, …)` prima
+>   di ogni scatto; su desktop resta il percorso di prima (`scrollIntoViewIfNeeded`, `extendScreenToBlock`).
+> - *`about-plugin-diagnostics`* (~2160–2178): l'attesa del pannello Tools (`ready|degraded`, 15 s) vale per entrambi i
+>   viewport. Tolti il primo scroll, che correva contro il pannello, e `waitForTimeout(300)`. Desktop come prima, mobile
+>   con `frameTarget`.
+> - *Modali dello scheduler* (~2015–2025, ~2048–2056): nuovo `bringIntoViewFromTop` in `galleryShot.ts` (~862–884).
+>   1. `settledToOpen`: API ferme, nessun caricamento, attivatore fermo;
+>   2. pagina in cima, header `visible`;
+>   3. `scrollIntoViewIfNeeded`;
+>   4. il frame fermo (`standsStill` con l'header), poi l'attivatore nello schermo.
+>
+>   `settledToOpen` riceve un quarto parametro opzionale, il nome dell'ancora nei messaggi; i due chiamanti di prima non
+>   cambiano.
+> - *`🔎`:* con la pagina bloccata da un modale (`body` `position: fixed`, `top` in px ≤ 0), `y` è l'offset congelato e
+>   compare `"lock":1`; senza blocco la riga resta identica. Lo `0px`/`-0px` di un modale aperto in cima conta come
+>   blocco (scelta di test-author, tenuta).
+> - *Revisione:* l'header è `pinned` solo con guida, menu, modale aperto o focus dentro di sé (`Header.svelte`,
+>   `isPinned`). Prima della cima il focus è sul pulsante cliccato nella pagina, come per gli altri chiamanti di
+>   `frameTarget`, quindi l'asserzione `visible` regge.
+> - *Statica, rifatta da G:* `tsc -p frontend/tsconfig.e2e.json` con gli stessi 2 errori di base; prettier pulito sui 5
+>   file e2e toccati; `git diff --check` pulito, anche sui file nuovi.
+> - *Da misurare nella verifica:* la `y` desktop della diagnostica deve restare 1367/1397; le 3 inquadrature mobile
+>   cambiano una volta (blocco a 8 px dal bordo); dietro `scheduler-config` la pagina deve stare in cima (`"y":0,"lock":1`).
+> **Coordinatore (12:22):** via alle run mirate, in parallelo alla candidata di T a 6 worker nella corsia 6155. Due
+> segnalazioni per il backlog, analizzate in sola lettura durante le run:
+> - *`assets/detail-signals-macd`, candidata di L, mobile it chiaro:* scattato col menu degli indicatori aperto e il MACD
+>   non applicato. `selectIndicatorFromTree` non verifica l'esito del clic, e `waitForSignalCardsSettled` passa a vuoto
+>   finché la card non esiste → **G-9**, correzione proposta in perimetro G, non ancora fatta.
+> - *`files/static-grid`, miniatura diversa da corsia a corsia:* tutti gli avatar del seed hanno lo stesso `uploaded_at`,
+>   e `list_uploads` li ordina solo per data, lasciando i pari nell'ordine della directory, cioè degli UUID casuali. È la
+>   causa anche di `media/asset-picker-modal`, la prima instabile rimasta → **G-10**, prodotto, da instradare.
+> - *C-94 (J):* porterà il default dei worker a circa il 60 % dei core. Non è ancora in `dev_release2` (`9d57aa4c0`); il
+>   README del toolkit dice «until C-94».
+> **⚠️ Fuori pista — rebuild e carico all'avvio:** la run A ha ricostruito la build debug con la versione fissata
+> (`build.log` nello snapshot, toolkit di X) e ha rifatto il populate: carico 57 alle 12:29, con la candidata di T in
+> parallelo.
+> **Verifica** ✅ (`verify_frames_c2.sh 1`, corsia 6153, 1 worker, i 4 test × 2 progetti):
+> - A `g-c2-w1-a`: populate nuovo, 12:23–12:35, carico 13 → 72 → **8 passati** (7,8 min);
+> - B `g-c2-w1-b`: `--no-populate`, 12:35–12:43, carico 72 → 28 → **8 passati** (7,2 min);
+> - `live_price_check` 0 su entrambe; porta 6153 libera alla fine;
+> - diff A↔B (`diffs/g-c2-w1__a__vs__b`), 80 immagini, 47 identiche:
+>   - `about-plugin-diagnostics` stable 0/16, da 39,6 %;
+>   - `scheduler-log` stable;
+>   - `scheduler-config` low 0,026 %, l'orario del server;
+>   - `detail-measures-active` low, Δ ≤ 5;
+>   - `detail-measures` unstable per 1 variante, mobile es/light: l'header visibile in A, nascosto in B, 5,8 %.
+> - Impronte A↔B: frame identico in 80 scatti su 80, salvo quell'header. La diagnostica desktop resta 1367/1397.
+> - Rispetto a `g-final3-r1` cambiano una volta le 3 inquadrature mobile e il desktop di `scheduler-config` nelle 5
+>   varianti che r1 aveva non centrate. `scheduler-log` cambia solo per il contenuto: il log seminato a orari fissi del
+>   giorno prima esce dalla finestra «Last 24 hours» con l'ora del giorno (D2).
+> **⚠️ Fuori pista — previsione sbagliata su `scheduler-config`.** Avevo detto che dietro il modale la pagina sarebbe
+> tornata in cima (`"y":0,"lock":1`). Misurato invece `"y":880,"lock":1` in tutte le 8 varianti desktop: dalla cima il
+> pulsante sta sotto il primo schermo e viene centrato. È l'inquadratura della baseline del 14/10 (y≈359) e di r2; era r1
+> quella diversa. Corretti l'analisi e il commento di `bringIntoViewFromTop` (solo commento, prettier pulito).
+> **⚠️ Fuori pista — residuo es/light (G-11).** A scroll fermo in fondo alla pagina, l'header di
+> `mobile/es/light/assets/detail-measures` è rimasto visibile in A (↕️ «header visible»). È successo solo in spagnolo, 3
+> volte su 4 run contando `g-final3`. La causa sta fra i `syncScrollContext()` di `Header.svelte`; serve una run
+> strumentata. Registrato G-11, non corretto ora.
 
 ## ⏸️ Pausa del 14/10
 
@@ -589,3 +716,18 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
     - `live_price_check` come modulo pipenv: 0 su `g-alone5-b` e su `g-verify2`.
   - Residuo per il checkpoint 2: la docstring di `live_price_check.py` mostra ancora `python3 …`. È una riga, in un file
     non in conflitto, quindi non toccato ora.
+- **15/10, 10:20–11:00 — Checkpoint 2 di G aperto.**
+  - Misura finale del coordinatore su X = `2338aaf79` (`g-final3`). Analisi di G in sola lettura, con l'albero pulito per
+    l'aggiornamento di base.
+  - Il coordinatore ha portato il ramo a `6ed99c694` con un avanzamento veloce (X più un commit di journal della 1.3).
+  - Decisioni del coordinatore:
+    - piano approvato: test-author sulle 4 inquadrature, poi le modifiche leggere;
+    - run mirate solo dopo la chiusura della finestra, che annuncia lui; fino ad allora nessuna E2E;
+    - il default dei worker in `dev.py` passa a J (C-94);
+    - il prossimo riferimento dello stesso giorno per R deve contenere G2.
+  - test-author `g-frames-c2` lanciato (passo 7); modifiche leggere fatte da G.
+- **15/10, 12:50 — Checkpoint 2 di G pronto, FROZEN.**
+  - HEAD `6ed99c694`.
+  - Il delta del passo 7 più evidenze, README e backlog: G-1 aggiornata; G-2, G-3, G-6 ✅; nuove G-9, G-10, G-11.
+  - Verifica: `g-c2-w1-a/b`, 8 + 8 verdi, `live_price_check` 0.
+  - Commit proposto in `files/commit_c2.txt` della sessione.
