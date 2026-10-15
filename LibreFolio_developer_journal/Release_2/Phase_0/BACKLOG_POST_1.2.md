@@ -2549,6 +2549,32 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
 
 Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md).
 
+- **C-49 (sezione C) · presa in carico da Z** — prove senza codice in Z6a (autorizzate il 15/10), cura in Z6b con il
+  punto 35 delle decisioni. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione
+  «Z6a — prove su C-49, senza codice di prodotto».
+- **Z-1 · Il ciclo del grafico del dettaglio asset gira anche su un intervallo passato** — basso, da verificare; Z,
+  14/10. Il poll di 60 s (`routes/(app)/assets/[id]/+page.svelte:1977-2083`) non ha la guardia `isHeadToday`, e
+  `mergeChartPointsIncremental` (`:2553`) non taglia sull'intervallo: una scrittura al minuto inutile e forse il punto di
+  oggi in un grafico del passato. Cura proposta in Z1 (D3), dopo un rosso. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «1. Stato reale».
+- **Z-2 · Due cicli sullo stesso endpoint nel dettaglio asset** — basso; Z, 14/10. Il riepilogo (30 s) e il grafico
+  (60 s) chiamano entrambi `POST /assets/prices/current`, che scrive l'OHLC di oggi: tre scritture al minuto. Fusione
+  proposta per il taglio della pagina (FE5, X). Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
+  sezione «1. Stato reale».
+- **Z-3 · `isHeadToday` confronta con la data UTC** — basso, da verificare; Z, 14/10. Le due pagine degli asset usano
+  `new Date().toISOString().slice(0, 10)`: tra mezzanotte locale e mezzanotte UTC il «fino a oggi» sbaglia giorno
+  (classe `utc-today-vs-user-calendar` della devWiki). Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
+  sezione «1. Stato reale».
+- **Z-4 · Risvegli orari per singolo titolo** — medio; Z, 14/10, dalla decisione D-19 del business plan. Serve un campo
+  per asset; nella 1.3 c'è solo l'intraday globale, spento di default (D8). Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «4. Decisioni».
+- **Z-5 · Recupero dall'ultima data salvata invece dei 14 giorni fissi** — basso; Z, 14/10 (F07, priorità bassa). Serve
+  a un self-hosted spento per più di due settimane. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md),
+  sezione «2. Già fatto o contraddetto».
+- **Z-6 · Il docstring dello scheduler dice che l'elezione del leader gira in un thread** — minimo; Z, 14/10.
+  `services/platform/scheduler/scheduler.py:108` chiama `am_i_leader()` (psutil) sul loop. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «2. Già fatto o contraddetto».
+
 ## B · Backup e Docker (fase 01)
 
 Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md). Sessione avviata il 15/10 alle
