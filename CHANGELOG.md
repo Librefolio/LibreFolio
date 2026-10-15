@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Instance key**: one secret per installation, generated on first use in the `secrets/` folder of the data directory, or given through the environment. LibreFolio derives its encryption keys from it: back up `secrets/` together with the data.
 - At startup the log warns about settings that leave the instance weaker: a short session key, a secret set twice, loose permissions on the instance key, `SESSION_COOKIE_SECURE=never`, a verbose log level.
 - `.env.example` lists every option LibreFolio reads, grouped by function.
+- A currency exchange explains its two dates, in the form and in the guide: they usually match, and differ when the broker credits the new currency on another day.
 
 ### 🔄 Changed
 
@@ -36,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Deleting a broker also removes its leftover import folders and lock file**, which used to pile up in the broker reports storage.
 - Sign-in errors (the server does not answer, a server error, too many attempts) now appear in your language, no longer as technical English text.
 - The show/hide button of password fields can be reached with the keyboard and has a translated name.
+- The import wizard counts assets in the singular too ("1 unique asset, 1 needs resolution").
+- The data editor's counters (modified, deleted, new), its stale-rows switch and the import window's Help and Close buttons follow your language instead of English.
+- The transaction form lists a cash or quantity shortfall under its own heading, as the bulk editor does, instead of among the field problems.
 
 ---
 
