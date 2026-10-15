@@ -10,6 +10,7 @@ Tests verify that operations are correctly allowed/denied based on role.
 """
 
 import uuid
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Optional
 
@@ -396,7 +397,11 @@ class TestMultiUserRoles:
         test_server,
         restricted_role,
     ):
-        """EDITOR access on one broker cannot partially apply a two-broker batch."""
+        """EDITOR access on one broker cannot partially apply a two-broker batch.
+
+        V-23: the refusal sits on the row that touches the restricted broker — create #1 here. Before the fix
+        it is always (create, 0, None), the row of the broker the user may write.
+        """
         print_section("MULTI-008d: Cross-broker access failure is atomic")
 
         async with (
@@ -468,6 +473,10 @@ class TestMultiUserRoles:
                 assert check.status_code == 200, check.text
                 assert not any(tx.get("description") == marker for tx in check.json())
 
+            # V-23: last, so every check above has run when this one is red.
+            denial = access_issues[0]
+            assert (denial["operation"], denial["index"], denial["ref_id"]) == ("create", 1, None), f"the refusal must sit on create #1, the only row on broker {restricted_broker_id}; got {denial}"
+
             print_success("✓ Access denial returned no results or partial writes")
 
 
@@ -530,3 +539,298 @@ class TestEditorRestrictions:
             assert resp.status_code == 403
 
             print_success("✓ Editor correctly blocked from sharing broker")
+
+
+# ============================================================================
+# V-23 — THE ACCESS REFUSAL SITS ON THE ROW THAT TOUCHES THE BROKER
+# ============================================================================
+#
+# A batch touching a broker on which the user lacks EDITOR is refused whole: committed=false, nothing
+# written. The refusal is an issue, and the editor shows an issue on the row its coordinates point at,
+# (operation, index, ref_id). So there is one refusal per ROW touching such a broker, carrying that row's
+# coordinates — create #i with ref_id None, update / delete / split #i with ref_id the saved transaction
+# on that broker — and params.brokerId naming the broker. Before the fix there is one refusal per BROKER,
+# always at (create, 0, None) whatever row touched it: the TRANSFER whose receiving leg lands on a broker the
+# user only views is reported on its sending leg, and an update, a delete or a split is reported as a create.
+#
+# Every test owns its users, brokers and asset. The cleanup deletes the brokers with force (their
+# transactions go with them, both halves of a pair in one call), then the asset — after a red too. Users
+# stay, as in the rest of this module.
+
+
+@dataclass
+class _Owned:
+    """Brokers and assets one test created, each with the client of a user allowed to delete it."""
+
+    brokers: list[tuple[httpx.AsyncClient, int]] = field(default_factory=list)
+    assets: list[tuple[httpx.AsyncClient, int]] = field(default_factory=list)
+
+    async def drop(self) -> list[str]:
+        """Delete the brokers (force), grouped by owner, then the assets. Never raises: what is left is returned."""
+        problems: list[str] = []
+        by_owner: dict[int, tuple[httpx.AsyncClient, list[int]]] = {}
+        for client, broker_id in self.brokers:
+            by_owner.setdefault(id(client), (client, []))[1].append(broker_id)
+        for client, broker_ids in by_owner.values():
+            try:
+                resp = await client.delete(f"{API_BASE}/brokers", params={"ids": broker_ids, "force": True}, timeout=TIMEOUT)
+                deleted = {r.get("id") for r in resp.json().get("results", []) if r.get("success")} if resp.status_code == 200 else set()
+                problems += [f"broker {broker_id}: HTTP {resp.status_code} {resp.text}" for broker_id in broker_ids if broker_id not in deleted]
+            except Exception as exc:
+                problems.append(f"brokers {broker_ids}: {exc!r}")
+        for client, asset_id in self.assets:
+            try:
+                resp = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+                deleted = {r.get("asset_id") for r in resp.json().get("results", []) if r.get("success")} if resp.status_code == 200 else set()
+                if asset_id not in deleted:
+                    problems.append(f"asset {asset_id}: HTTP {resp.status_code} {resp.text}")
+            except Exception as exc:
+                problems.append(f"asset {asset_id}: {exc!r}")
+        return problems
+
+
+async def _new_broker(client: httpx.AsyncClient, owned: _Owned, prefix: str, **flags) -> int:
+    """A broker ``client``'s user owns, recorded for the cleanup the moment it exists."""
+    name = unique_name(prefix)
+    resp = await client.post(f"{API_BASE}/brokers", json=[{"name": name, **flags}], timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    row = next(r for r in resp.json()["results"] if r["name"] == name)
+    assert row["success"] is True, row
+    owned.brokers.append((client, row["broker_id"]))
+    return row["broker_id"]
+
+
+async def _new_asset(client: httpx.AsyncClient, owned: _Owned, prefix: str) -> int:
+    """An asset of this test only, recorded for the cleanup the moment it exists."""
+    name = unique_name(prefix)
+    resp = await client.post(f"{API_BASE}/assets", json=[{"display_name": name, "asset_type": "STOCK", "currency": "USD"}], timeout=TIMEOUT)
+    assert resp.status_code in (200, 201), resp.text
+    row = next(r for r in resp.json()["results"] if r["display_name"] == name)
+    assert row["success"] is True, row
+    owned.assets.append((client, row["asset_id"]))
+    return row["asset_id"]
+
+
+async def _grant(owner_client: httpx.AsyncClient, broker_id: int, user_id: int, role: str) -> None:
+    """``add_access``, verified: the role is read back from the broker's access list."""
+    await add_access(owner_client, broker_id, user_id, role)
+    resp = await owner_client.get(f"{API_BASE}/brokers/{broker_id}/access", timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    roles = {item["user_id"]: item["role"] for item in resp.json()["items"]}
+    assert roles.get(user_id) == role, f"Precondition: user {user_id} must be {role} on broker {broker_id}, access list {roles}"
+
+
+async def _editable_and_viewed(owner_client: httpx.AsyncClient, member_client: httpx.AsyncClient, owned: _Owned, **flags) -> tuple[int, int]:
+    """Register the owner and the member; two brokers of the owner, the member EDITOR on the first and VIEWER on the second."""
+    await create_user_and_login(owner_client)
+    member_id, _ = await create_user_and_login(member_client)
+    editable = await _new_broker(owner_client, owned, "V23Edit", **flags)
+    viewed = await _new_broker(owner_client, owned, "V23View", **flags)
+    await _grant(owner_client, editable, member_id, "EDITOR")
+    await _grant(owner_client, viewed, member_id, "VIEWER")
+    return editable, viewed
+
+
+def _deposit(broker_id: int, amount: str, description: Optional[str] = None) -> dict:
+    row = {"broker_id": broker_id, "type": "DEPOSIT", "date": date.today().isoformat(), "cash": {"code": "EUR", "amount": amount}}
+    if description is not None:
+        row["description"] = description
+    return row
+
+
+async def _commit_creates(client: httpx.AsyncClient, creates: list[dict]) -> list[int]:
+    """Setup: commit ``creates`` as one batch and return the id of each create, in request order."""
+    resp = await client.post(f"{API_BASE}/transactions/commit", json={"creates": creates}, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["committed"] is True, f"Setup commit rejected: {body['issues']}"
+    ids = {r["index"]: r["ids"] for r in body["results"] if r["operation"] == "create"}
+    assert sorted(ids) == list(range(len(creates))) and all(len(tx_ids) == 1 for tx_ids in ids.values()), body["results"]
+    return [ids[index][0] for index in range(len(creates))]
+
+
+async def _read(client: httpx.AsyncClient, tx_ids: list[int]) -> dict[int, dict]:
+    """The transactions among ``tx_ids`` that ``client`` can see, by id."""
+    resp = await client.get(f"{API_BASE}/transactions", params={"ids": tx_ids}, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    return {tx["id"]: tx for tx in resp.json()}
+
+
+async def _broker_tx_ids(client: httpx.AsyncClient, broker_id: int) -> list[int]:
+    """Ids of every transaction of ``broker_id`` (a broker of this test: the whole list is ours)."""
+    resp = await client.get(f"{API_BASE}/transactions", params={"broker_id": broker_id}, timeout=TIMEOUT)
+    assert resp.status_code == 200, resp.text
+    return sorted(tx["id"] for tx in resp.json())
+
+
+def _access_denials(body: dict) -> list[tuple[str, int, Optional[int], Optional[int]]]:
+    """Every accessDenied issue of a batch response as (operation, index, ref_id, params.brokerId), sorted."""
+    denials = [(issue["operation"], issue["index"], issue["ref_id"], (issue.get("params") or {}).get("brokerId")) for issue in body["issues"] if issue.get("code") == "accessDenied"]
+    return sorted(denials, key=lambda d: (d[0], d[1], -1 if d[2] is None else d[2], -1 if d[3] is None else d[3]))
+
+
+class TestAccessRefusalPlacement:
+    """V-23: one refusal per row touching a broker without EDITOR, on that row's coordinates."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("endpoint", ["validate", "commit"])
+    async def test_v23_transfer_refused_on_the_leg_landing_on_a_viewer_broker(self, test_server, endpoint):
+        """V-23 as reported: a TRANSFER from a broker the member owns to one it only views.
+
+        Creates #0 (sending leg, broker S: OWNER) and #1 (receiving leg, broker R: VIEWER) share a link_uuid.
+        Only #1 touches R, so the one refusal is (create, 1, None) with params {"brokerId": R}. Access is
+        checked before balances: no holding is needed for the refusal. Before the fix: (create, 0, None),
+        the sending leg, on the broker the member may write.
+        """
+        print_section(f"V-23: TRANSFER refused on its receiving leg ({endpoint})")
+        owned = _Owned()
+        async with httpx.AsyncClient() as member_client, httpx.AsyncClient() as owner_client:
+            try:
+                member_id, _ = await create_user_and_login(member_client)
+                await create_user_and_login(owner_client)
+                sender_broker = await _new_broker(member_client, owned, "V23Send")
+                receiver_broker = await _new_broker(owner_client, owned, "V23Recv")
+                await _grant(owner_client, receiver_broker, member_id, "VIEWER")
+                asset_id = await _new_asset(member_client, owned, "V23Asset")
+
+                link = str(uuid.uuid4())
+                marker = unique_name("v23-transfer")
+                day = date.today().isoformat()
+                legs = [
+                    {"broker_id": sender_broker, "asset_id": asset_id, "type": "TRANSFER", "date": day, "quantity": "-5", "link_uuid": link, "description": marker},
+                    {"broker_id": receiver_broker, "asset_id": asset_id, "type": "TRANSFER", "date": day, "quantity": "5", "link_uuid": link, "description": marker, "cost_basis_override": {"code": "USD", "amount": "50"}},
+                ]
+                resp = await member_client.post(f"{API_BASE}/transactions/{endpoint}", json={"creates": legs}, timeout=TIMEOUT)
+
+                assert resp.status_code == 200, resp.text
+                body = resp.json()
+                assert body["committed"] is False, body
+                assert await _broker_tx_ids(member_client, sender_broker) == [], "a refused batch writes nothing on the sending broker"
+                assert await _broker_tx_ids(owner_client, receiver_broker) == [], "a refused batch writes nothing on the receiving broker"
+                assert _access_denials(body) == [("create", 1, None, receiver_broker)], f"one refusal, on the receiving leg (create #1), the only row on broker {receiver_broker} the member cannot write; issues: {body['issues']}"
+                (denial,) = [issue for issue in body["issues"] if issue.get("code") == "accessDenied"]
+                assert denial["params"] == {"brokerId": receiver_broker}, denial
+                print_success("✓ The refusal sits on the receiving leg")
+            finally:
+                leftovers = await owned.drop()
+        assert not leftovers, leftovers
+
+    @pytest.mark.asyncio
+    async def test_v23_one_refusal_per_row_on_the_viewer_broker(self, test_server):
+        """V-23: one refusal per ROW touching the broker, not one per broker.
+
+        creates [#0 viewed, #1 editable, #2 viewed] → (create, 0) and (create, 2), both naming the viewed
+        broker. Before the fix a single (create, 0) stands for the broker: #2 is never pointed at.
+        """
+        print_section("V-23: one refusal per refused row")
+        owned = _Owned()
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as member_client:
+            try:
+                editable, viewed = await _editable_and_viewed(owner_client, member_client, owned)
+                creates = [_deposit(viewed, "100"), _deposit(editable, "200"), _deposit(viewed, "300")]
+                resp = await member_client.post(f"{API_BASE}/transactions/commit", json={"creates": creates}, timeout=TIMEOUT)
+
+                assert resp.status_code == 200, resp.text
+                body = resp.json()
+                assert body["committed"] is False, body
+                for broker_id in (editable, viewed):
+                    assert await _broker_tx_ids(owner_client, broker_id) == [], f"a refused batch writes nothing on broker {broker_id}"
+                assert _access_denials(body) == [("create", 0, None, viewed), ("create", 2, None, viewed)], f"one refusal per row on broker {viewed} (creates #0 and #2); issues: {body['issues']}"
+                print_success("✓ Each refused row carries its own refusal")
+            finally:
+                leftovers = await owned.drop()
+        assert not leftovers, leftovers
+
+    @pytest.mark.asyncio
+    async def test_v23_update_refused_on_the_row_of_the_viewer_broker(self, test_server):
+        """V-23, updates: [#0 a row of the editable broker, #1 a row of the viewed broker] → (update, 1, ref_id=that row).
+
+        Nothing is written: both rows keep their description. Before the fix: (create, 0, None) — an update
+        reported as a create that the batch does not even contain.
+        """
+        print_section("V-23: update refused on the viewer broker's row")
+        owned = _Owned()
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as member_client:
+            try:
+                editable, viewed = await _editable_and_viewed(owner_client, member_client, owned)
+                editable_tx, viewed_tx = await _commit_creates(owner_client, [_deposit(editable, "100", unique_name("v23-editable")), _deposit(viewed, "100", unique_name("v23-viewed"))])
+                before = {tx_id: tx["description"] for tx_id, tx in (await _read(owner_client, [editable_tx, viewed_tx])).items()}
+                assert set(before) == {editable_tx, viewed_tx}, f"Precondition: the owner reads both rows: {before}"
+
+                updates = [{"id": editable_tx, "description": unique_name("v23-edited")}, {"id": viewed_tx, "description": unique_name("v23-edited")}]
+                resp = await member_client.post(f"{API_BASE}/transactions/commit", json={"updates": updates}, timeout=TIMEOUT)
+
+                assert resp.status_code == 200, resp.text
+                body = resp.json()
+                assert body["committed"] is False, body
+                after = {tx_id: tx["description"] for tx_id, tx in (await _read(owner_client, [editable_tx, viewed_tx])).items()}
+                assert after == before, "a refused batch changes no row"
+                assert _access_denials(body) == [("update", 1, viewed_tx, viewed)], f"one refusal, on update #1 (transaction {viewed_tx} of broker {viewed}); issues: {body['issues']}"
+                print_success("✓ The refusal sits on the refused update")
+            finally:
+                leftovers = await owned.drop()
+        assert not leftovers, leftovers
+
+    @pytest.mark.asyncio
+    async def test_v23_delete_refused_on_the_row_of_the_viewer_broker(self, test_server):
+        """V-23, deletes: [#0 a row of the editable broker, #1 a row of the viewed broker] → (delete, 1, ref_id=that row).
+
+        Nothing is deleted. Before the fix: (create, 0, None).
+        """
+        print_section("V-23: delete refused on the viewer broker's row")
+        owned = _Owned()
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as member_client:
+            try:
+                editable, viewed = await _editable_and_viewed(owner_client, member_client, owned)
+                editable_tx, viewed_tx = await _commit_creates(owner_client, [_deposit(editable, "100"), _deposit(viewed, "100")])
+
+                resp = await member_client.post(f"{API_BASE}/transactions/commit", json={"deletes": [editable_tx, viewed_tx]}, timeout=TIMEOUT)
+
+                assert resp.status_code == 200, resp.text
+                body = resp.json()
+                assert body["committed"] is False, body
+                assert set(await _read(owner_client, [editable_tx, viewed_tx])) == {editable_tx, viewed_tx}, "a refused batch deletes nothing"
+                assert _access_denials(body) == [("delete", 1, viewed_tx, viewed)], f"one refusal, on delete #1 (transaction {viewed_tx} of broker {viewed}); issues: {body['issues']}"
+                print_success("✓ The refusal sits on the refused delete")
+            finally:
+                leftovers = await owned.drop()
+        assert not leftovers, leftovers
+
+    @pytest.mark.asyncio
+    async def test_v23_split_refused_on_the_leg_of_the_viewer_broker(self, test_server):
+        """V-23, splits: a saved CASH_TRANSFER whose second leg is on the viewed broker → (split, 0, ref_id=that leg).
+
+        The owner, OWNER of both brokers, saves the pair; the member (EDITOR on the sending broker, VIEWER on
+        the receiving one) asks to split it with id_a = the editable leg, id_b = the viewed leg. Nothing is
+        written: both legs stay a linked CASH_TRANSFER. Before the fix: (create, 0, None).
+        """
+        print_section("V-23: split refused on the viewer broker's leg")
+        owned = _Owned()
+        async with httpx.AsyncClient() as owner_client, httpx.AsyncClient() as member_client:
+            try:
+                editable, viewed = await _editable_and_viewed(owner_client, member_client, owned, allow_cash_overdraft=True)
+                link = str(uuid.uuid4())
+                marker = unique_name("v23-cash-transfer")
+                day = date.today().isoformat()
+                editable_leg, viewed_leg = await _commit_creates(
+                    owner_client,
+                    [
+                        {"broker_id": editable, "type": "CASH_TRANSFER", "date": day, "cash": {"code": "EUR", "amount": "-100"}, "link_uuid": link, "description": marker},
+                        {"broker_id": viewed, "type": "CASH_TRANSFER", "date": day, "cash": {"code": "EUR", "amount": "100"}, "link_uuid": link, "description": marker},
+                    ],
+                )
+                pair = {tx_id: (tx["type"], tx["related_transaction_id"]) for tx_id, tx in (await _read(owner_client, [editable_leg, viewed_leg])).items()}
+                assert pair == {editable_leg: ("CASH_TRANSFER", viewed_leg), viewed_leg: ("CASH_TRANSFER", editable_leg)}, f"Precondition: the two legs are a linked CASH_TRANSFER pair: {pair}"
+
+                resp = await member_client.post(f"{API_BASE}/transactions/commit", json={"splits": [{"id_a": editable_leg, "id_b": viewed_leg}]}, timeout=TIMEOUT)
+
+                assert resp.status_code == 200, resp.text
+                body = resp.json()
+                assert body["committed"] is False, body
+                after = {tx_id: (tx["type"], tx["related_transaction_id"]) for tx_id, tx in (await _read(owner_client, [editable_leg, viewed_leg])).items()}
+                assert after == pair, "a refused batch splits nothing"
+                assert _access_denials(body) == [("split", 0, viewed_leg, viewed)], f"one refusal, on split #0, pointing at the leg on broker {viewed} (transaction {viewed_leg}); issues: {body['issues']}"
+                print_success("✓ The refusal sits on the refused split, at the viewer broker's leg")
+            finally:
+                leftovers = await owned.drop()
+        assert not leftovers, leftovers
