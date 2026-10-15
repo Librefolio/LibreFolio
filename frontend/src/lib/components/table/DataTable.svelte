@@ -237,7 +237,7 @@
     let pendingRowAction = $state<{action: RowAction<T>; row: T} | null>(null);
 
     // Resize state
-    let resizing = $state<{columnId: string; startX: number; startWidth: number} | null>(null);
+    let resizing = $state<{columnId: string; pointerId: number; startX: number; startWidth: number} | null>(null);
 
     // Highlighted row (set by navigateToRowId, cleared on user interaction)
     let highlightedRowId = $state<string | null>(null);
@@ -684,38 +684,97 @@
     }
 
     // ============ Resize ============
+    // A handle answers Pointer Events, so a finger or a pen resizes a column like a mouse (D-Y18). The drag starts from
+    // the width the column is drawn at, and the drawn width follows the pointer (C-62): a table that shares its spare
+    // width among its columns (`tableLayout="auto"`, or a fixed table narrower than its box) draws a column wider than
+    // the width it is given, so the width written is corrected on the cell until the drawn one matches.
 
-    function startResize(columnId: string, event: MouseEvent) {
+    /** The header cell being resized: a plain variable, read only while dragging. */
+    let resizeCell: HTMLElement | null = null;
+
+    function startResize(columnId: string, event: PointerEvent) {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
         event.preventDefault();
         event.stopPropagation();
+        const handle = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+        try {
+            handle?.setPointerCapture?.(event.pointerId);
+        } catch {
+            // A pointer the browser no longer tracks: the document listeners below still see its moves.
+        }
+        resizeCell = handle?.closest('th') ?? null;
         resizing = {
             columnId,
+            pointerId: event.pointerId,
             startX: event.clientX,
-            startWidth: columnWidths[columnId] || columns.find((c) => c.id === columnId)?.width || 150,
+            startWidth: resizeCell?.getBoundingClientRect().width || columnWidths[columnId] || columns.find((c) => c.id === columnId)?.width || 150,
         };
-        document.addEventListener('mousemove', handleResize);
-        document.addEventListener('mouseup', stopResize);
+        document.addEventListener('pointermove', handleResize);
+        document.addEventListener('pointerup', stopResize);
+        document.addEventListener('pointercancel', stopResize);
     }
 
-    function handleResize(event: MouseEvent) {
-        if (!resizing) return;
-        const col = columns.find((c) => c.id === resizing!.columnId);
+    function handleResize(event: PointerEvent) {
+        if (!resizing || event.pointerId !== resizing.pointerId) return;
+        const {columnId, startWidth, startX} = resizing;
+        const col = columns.find((c) => c.id === columnId);
         const minWidth = col?.minWidth ?? 50;
         const maxWidth = col?.maxWidth ?? 600;
-        const diff = event.clientX - resizing.startX;
-        const newWidth = Math.min(maxWidth, Math.max(minWidth, resizing.startWidth + diff));
-        columnWidths = {...columnWidths, [resizing.columnId]: newWidth};
+        const target = Math.min(maxWidth, Math.max(minWidth, startWidth + event.clientX - startX));
+        columnWidths = {...columnWidths, [columnId]: fitDrawnWidth(target, columnWidths[columnId] ?? target, minWidth, maxWidth)};
     }
 
-    function stopResize() {
+    /**
+     * The width to give the header cell being resized so that it is drawn `target` px wide. The cell is measured after
+     * each guess: the first scales the given width by drawn/given, the next ones are secant steps. On a table that draws
+     * every column at its given width (fixed, wider than its box) the first guess is exact.
+     */
+    function fitDrawnWidth(target: number, given: number, minWidth: number, maxWidth: number): number {
+        const cell = resizeCell;
+        if (!cell) return target;
+        const clamp = (width: number) => Math.min(maxWidth, Math.max(minWidth, width));
+        const draw = (width: number) => {
+            cell.style.width = `${width}px`;
+            cell.style.minWidth = `${width}px`;
+            return cell.getBoundingClientRect().width;
+        };
+        let previous = {width: given, drawn: cell.getBoundingClientRect().width};
+        let width = clamp(previous.drawn > 0 ? (given * target) / previous.drawn : target);
+        for (let step = 0; step < 4; step++) {
+            const drawn = draw(width);
+            if (Math.abs(drawn - target) < 0.5) break;
+            const slope = (drawn - previous.drawn) / (width - previous.width);
+            const next = clamp(Number.isFinite(slope) && slope > 0 ? width + (target - drawn) / slope : width + target - drawn);
+            previous = {width, drawn};
+            if (Math.abs(next - width) < 0.1) break;
+            width = next;
+        }
+        return Math.round(width * 10) / 10;
+    }
+
+    function stopResize(event?: PointerEvent) {
+        if (event && resizing && event.pointerId !== resizing.pointerId) return;
         if (resizing) {
             const finalWidth = columnWidths[resizing.columnId];
             saveToStorage(getStorageKey('columnWidths'), columnWidths);
             if (finalWidth != null) onColumnResize?.(resizing.columnId, finalWidth);
         }
+        endResize();
+    }
+
+    function endResize() {
         resizing = null;
-        document.removeEventListener('mousemove', handleResize);
-        document.removeEventListener('mouseup', stopResize);
+        resizeCell = null;
+        document.removeEventListener('pointermove', handleResize);
+        document.removeEventListener('pointerup', stopResize);
+        document.removeEventListener('pointercancel', stopResize);
+    }
+
+    /** A column's minimum width: the user's width once they resized it (its width differs from the default), so a table
+     *  laid out `auto` keeps it (C-62); otherwise the column's own minimum. */
+    function columnMinWidth(column: ColumnDef<T>): number {
+        const width = columnWidths[column.id];
+        return width != null && width !== defaultColumnWidths[column.id] ? width : column.minWidth || 60;
     }
 
     // ============ Lifecycle ============
@@ -752,6 +811,7 @@
     });
 
     onDestroy(cancelHeaderTooltipLongPress);
+    onDestroy(endResize);
 
     // Notify parent when filters change (for URL sync)
     $effect(() => {
@@ -929,6 +989,7 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
         class="table-wrapper"
+        data-testid="dt-scroll"
         onkeydown={() => {
             highlightedRowId = null;
         }}
@@ -938,7 +999,7 @@
                 <tr>
                     <!-- Selection column (multi mode: checkboxes, single mode: no column header) -->
                     {#if effectiveSelectionMode === 'multi'}
-                        <th class="th-fixed th-select" style="width: {selectionColumnWidth};">
+                        <th class="th-fixed th-select" style="width: {selectionColumnWidth};" data-testid="dt-select-header">
                             <div class="flex items-center justify-center gap-1">
                                 <!-- data-state publishes the tri-state of the header checkbox so it can be
                                      observed without reading the icon's CSS class. -->
@@ -980,7 +1041,7 @@
                             class:sortable={column.sortable !== false && enableSorting}
                             class:th-fixed={column.pinned != null}
                             class:th-pinned-right={column.pinned === 'right'}
-                            style="width: {columnWidths[column.id] || column.width || 150}px; min-width: {column.minWidth || 60}px;{column.pinned === 'left' ? ' left: 0;' : column.pinned === 'right' ? ' right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
+                            style="width: {columnWidths[column.id] || column.width || 150}px; min-width: {columnMinWidth(column)}px;{column.pinned === 'left' ? ' left: 0;' : column.pinned === 'right' ? ' right: 0;' : ''}{column.align ? ` text-align: ${column.align};` : ''}"
                         >
                             <DataTableColumnHeader
                                 {column}
@@ -1008,7 +1069,7 @@
 
                     <!-- Actions column -->
                     {#if showActionsColumn}
-                        <th class="{stickyActions ? 'th-fixed' : ''} th-actions" style="width: {actionsColumnWidth};">
+                        <th class="{stickyActions ? 'th-fixed' : ''} th-actions" style="width: {actionsColumnWidth};" data-testid="dt-actions-header">
                             {resolvedActionsLabel}
                         </th>
                     {/if}
@@ -1078,7 +1139,7 @@
                         >
                             <!-- Selection cell (multi mode only - shows checkboxes) -->
                             {#if effectiveSelectionMode === 'multi'}
-                                <td class="td-fixed td-select">
+                                <td class="td-fixed td-select" data-testid="dt-select-cell-{rowId}">
                                     <div class="flex items-center justify-center gap-1">
                                         {#if !isRowSelectable || isRowSelectable(row)}
                                             <button
@@ -1129,7 +1190,7 @@
 
                             <!-- Actions cell -->
                             {#if showActionsColumn}
-                                <td class="{stickyActions ? 'td-fixed' : ''} td-actions">
+                                <td class="{stickyActions ? 'td-fixed' : ''} td-actions" data-testid="dt-actions-cell-{rowId}">
                                     <div class="actions-row">
                                         {#if visibleRowActions.length > 0}
                                             <button
@@ -1690,11 +1751,18 @@
         color: var(--lf-cmp-datatable-accent-text-dark);
     }
 
-    /* Responsive: hide sticky actions on mobile */
+    /* Phones: the pinned selection and actions columns scroll with the table, header and cells alike (D-Y17, C-38).
+       Each selector is one class more specific than the pin it undoes. A header cell keeps `position: sticky` and its
+       `top: 0`, so the header row still sticks inside its scroll area: only the horizontal pin goes. */
     @media (max-width: 768px) {
-        .th-actions,
-        .td-actions {
+        .datatable .td-select,
+        .datatable .td-actions {
             position: static;
+        }
+        .datatable .th-select,
+        .datatable .th-actions.th-fixed {
+            left: auto;
+            right: auto;
         }
     }
 
