@@ -161,7 +161,8 @@ async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[],
       provider's thread, and in the exception the call raises, its chain included (``utils/runtime/secret_masking.py``).
       An error that still shows a secret after masking (its text built by a ``__str__`` of its own) is replaced by an
       ``AssetSourceError`` with ``PROVIDER_ERROR`` (``RATE_LIMITED`` for a refusal), its masked description and no link
-      to the original.
+      to the original. ``PROVIDER_ERROR`` also carries the masked description in ``details["detail"]``, for the
+      localized message (``providerErrors.PROVIDER_ERROR``).
 
     A test double that is not a plugin has no settings and no pause: it is called as it is.
     """
@@ -199,7 +200,7 @@ async def call_provider[ResultT](provider: AssetSourceProvider, fn: Callable[[],
     # Raised out of the except block: the new error keeps no link to the one it replaces.
     if refused:
         raise AssetRateLimitedError(f"Provider {code} refused for too many requests: {description}", retry_after=retry_after, scope=error_scope)
-    raise AssetSourceError(f"Provider {code} failed: {description}", "PROVIDER_ERROR")
+    raise AssetSourceError(f"Provider {code} failed: {description}", "PROVIDER_ERROR", {"detail": description})
 
 
 async def _run_provider_in_thread(coro_factory, *, timeout: float = 60.0):

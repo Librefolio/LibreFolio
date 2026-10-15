@@ -233,7 +233,8 @@
           "realizedPnl": "P&L realizado",
           "splitRatio": "Ratio de desdoblamiento",
           "sourceBroker": "Desde",
-          "destinationBroker": "Hacia"
+          "destinationBroker": "Hacia",
+          "handedOverAtCost": "Valor cedido al coste"
         },
         "openingValue": "Valor de apertura",
         "cumulativeProceeds": "Ingresos acumulados"
