@@ -561,7 +561,7 @@
                             {/if}
                         </button>
                     {:else}
-                        <div class="flex items-center space-x-2 px-3 py-2 bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 rounded-lg" title={$_('settings.readOnlyMode')}>
+                        <div class="flex items-center space-x-2 px-3 py-2 bg-gray-50 dark:bg-slate-700 text-gray-500 dark:text-gray-400 rounded-lg" data-testid="settings-readonly-indicator" title={$_('settings.readOnlyMode')}>
                             <ShieldOff size={18} />
                         </div>
                     {/if}

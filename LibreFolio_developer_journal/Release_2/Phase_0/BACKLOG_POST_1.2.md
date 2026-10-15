@@ -2538,6 +2538,19 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     (`-sTCP:LISTEN`), come fa il runner.
 
   Dettagli: piano H, §14 «Due aggiornamenti di base … e la verifica di C-96».
+- **H-13 · `LIBREFOLIO_REGEN_NATIVE_CASH_GUARD` non arriva al test: la corsia la toglie (C-96)** — basso; DV dei colori
+  (DV-1), 15/10. ✅ 15/10: chiusa da J in CP-4, con la variabile rinominata `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD`.
+  - Il comando documentato per rigenerare `backend/test_scripts/fixtures/native_cash_guard/eur_only_golden.json`
+    (`test_native_cash_guard.py`, la docstring e `_REGEN_COMMAND`) esporta la variabile nella shell.
+    `configure_test_runtime()` toglie ogni `LIBREFOLIO_*` che la corsia non tiene (`_test_lane_drops`), quindi pytest non la
+    vede e il golden non si rigenera.
+  - È l'unica variabile di rigenerazione del repo. Le password del probe AI Export non passano da una corsia: il probe si
+    lancia con `pipenv run python`.
+  - Cura proposta: rinominarla `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD`, il prefisso che la corsia già tiene, senza un
+    elenco nuovo; aggiornare la docstring e `_REGEN_COMMAND`; un caso di `utils runtime-isolation` che fissi il passaggio di
+    `LIBREFOLIO_TEST_REGEN_*`. In alternativa, un elenco esplicito `LIBREFOLIO_REGEN_*` in `TEST_LANE_KEEPS`.
+
+  Dettagli: piano H, §14 «Ingresso dopo A6a».
 
 ## A · Account e accessi (fase 01)
 
@@ -2591,7 +2604,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
       giusta.
     - ✅ **Chiuse il 15/10** con A4b: `docs-writer` le ha corrette insieme alle righe sulle sessioni.
   - `frontend/components/features/settings.md`: il titolo «GlobalSettingsTab (Admin only)», ma la scheda la vedono
-    tutti. Si sistema in A6, con le schede Utenti e Sicurezza (attenzione all'ancora).
+    tutti. Si sistema in A6, con le schede Utenti e Sicurezza (attenzione all'ancora). ✅ **Chiusa il 15/10** con A6b:
+    titolo «🌍 GlobalSettingsTab (read by everyone, edited by administrators)», ancora esplicita
+    `#globalsettingstab-admin-only` per i link vecchi.
   - `frontend/state/app-state.md:11`: dice che lo store dell'autenticazione gestisce token JWT, ma usa il cookie
     HttpOnly. ✅ **Chiusa il 15/10** con A4b.
   - La prop `icon` di `PasswordInput`, aggiunta da T, manca in `core-ui/atoms.md` e `features/auth.md`. È di T:
@@ -2635,6 +2650,12 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Finché non sono tradotte il build stretto resta verde: le pagine vecchie non puntano alle ancore nuove.
   - Si fa dopo A6–A9, che toccano di nuovo le stesse pagine. La prepara il lotto A10, solo su richiesta
     esplicita del developer (coordinatore, 15/10).
+  - Da A6b (15/10) in più: la pagina nuova `admin/users` (senza traduzioni: IT, FR ed ES mostrano l'inglese) e le
+    sezioni cambiate di `user/settings/profile` («Delete Account»), `admin/cli_tools` («Manage Users», «Invite
+    Someone»), `admin/settings` («Who Can Sign Up», Related), `admin/configuration` (righe `LIBREFOLIO_PUBLIC_URL` e
+    `LIBREFOLIO_BILLING_URL`), `admin/index` e `user/settings/index`. La pagina nuova non usa ancore che esistono solo
+    in inglese; quando le traduzioni avranno `#accounts`, `#user-limit`, `#registration`, `#invite`, `#reset-link` e
+    `#reset-onboarding`, si potranno aggiungere i link precisi.
   - In `admin/configuration` IT, FR ed ES manca tutta la sezione «Accounts and Sign-ups» (`#accounts`): nessuna
     delle tre variabili `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`. Il coordinatore
     (15/10, 16:56) conferma che è debito di A.
@@ -2655,6 +2676,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `.first()`. Basta un test di componente (`SettingToggle`, `disabled` e `badge`).
   - I test «non admin» non provano la sola lettura: manca l'asserzione che `settings-lock-toggle` non c'è.
   - Si fa con la scheda Utenti (A6), che tocca la stessa pagina.
+  - ✅ **Chiusa il 15/10** con A6b (`test-author` E2): `data-busy`, `settings-lock-toggle`, righe per chiave,
+    `setting-save`/`setting-undo`, prova della sola lettura (nuovo `settings-readonly-indicator`), il segnaposto in
+    `SettingControls.test.ts`; `front-utility settings` 46 ✅. Commit al checkpoint A6b; dettagli in «A6b.2».
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.9».
 - **A-13 · Su un'istanza bloccata, `/invite` mostra il modulo e la registrazione finisce al login** — minimo;
   A (15/10, dal merge di H CP6; accettato dal coordinatore).
@@ -2680,6 +2704,34 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Una riga, da mettere nel lotto piccolo di H su `ALLOWED_WHEN_BLOCKED`, o da A al prossimo aggiornamento di base.
   - **Girata ad H** dal coordinatore (15/10, 16:56).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6.5».
+- **A-16 · L'unico admin che elimina il proprio account riceve 400 senza `error_code`** — minimo; A (15/10, dal
+  `test-author` V4 di A6b).
+  - `DELETE /auth/users/me` risponde `400 "Cannot delete account: you are the only administrator"`: una frase
+    inglese e nessun codice.
+  - Dal frontend di A6b, `accountErrors.ts` mostra la frase del server per un 400/409 senza codice, come faceva il
+    dialogo di prima. Funziona, ma non è tradotta.
+  - **Cura**: un `detail` con `error_code` (per esempio `LAST_ADMIN`) e un messaggio tradotto nel dialogo. Cambia la
+    forma della risposta, quindi servono un rosso e l'aggiornamento dei casi ACCDEL sull'unico amministratore.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6b.2».
+- **A-17 · KeePassXC mette la sua icona sul campo Email della registrazione** — basso; segnalata dal coordinatore
+  colori (15/10).
+  - KeePassXC prende come nome utente il campo subito prima della password, e in `RegisterCard` quel campo è Email.
+  - Possibile cura: Email prima di Username, nella registrazione e nella pagina d'invito che usa la stessa scheda.
+    Attenzione a T-8b dei colori, che tocca le stesse schede di accesso: si fa dopo il suo ingresso.
+- **A-18 · Il registro delle schede importa i corpi: ogni scheda nuova costringe a un `vi.mock` in più** — basso;
+  E-6, segnalato da E tramite il coordinatore (15/10).
+  - `settingsTabs.ts` importa il componente di ogni scheda. I test che usano il registro vero (`settingsTabs.test.ts`,
+    `routes/(app)/settings/page.tabs.test.ts`) devono rendere inerte ogni corpo con un `vi.mock`. Tocca B, E, X e A.
+  - **Opzione 1, caricamento pigro**: `load: () => import('…')` al posto di `component`; la pagina rende
+    `{#await tab.load()}`. In più ogni scheda da amministratore diventa un pezzo di JS separato. I test che leggono
+    solo id e ordini non importano più nessun corpo.
+  - **Opzione 2, registro senza corpi**: `settingsTabsMeta.ts` (id, etichetta, icona, ordine, `visible`, `props`,
+    `alignEnd`) più una mappa id → componente usata solo dalla pagina.
+  - **Non entra in A6b**: cambia il rendering della pagina e le asserzioni dei test di B ed E, e A6b è già validato.
+    Proposta: un lotto breve e coordinato, quando le schede di B, E e X sono tutte dentro, con
+    `settings`/`admin-users` E2E e lo scatto della galleria da ricontrollare (il corpo arriva dopo un `await`).
+  - Nello stesso giro, nota di G (15/10): i corpi e le rotte dello scatto `settings/users` in `fixtures/galleryUsers.ts`,
+    come `galleryEmail.ts`.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -3157,6 +3209,18 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   - **La scelta definitiva va al developer come punto 47**, con la raccomandazione di J (la 1) e la stessa domanda sullo
     split di una coppia: che cosa vuol dire per le unità in uscita. Se sceglie la 1: lotto di J con il rosso prima, poi
     la correzione degli orfani in uscita.
+  - **Decisione 47 del developer (15/10, 19:09)**, alla lettera: «sono daccordo, si va mantenuto lo stesso principio nel
+    senso opposto». La gamba in uscita rimasta senza coppia diventa una rettifica in uscita **con il costo** medio con
+    cui le unità partono, dalla funzione del costo «Auto»; nell'esempio guadagno 60 sia in Dashboard sia nei lotti.
+    - **Dove vale**: la cancellazione del broker che riceve, le gambe in uscita già spaiate nei database, «dividi la
+      coppia».
+    - **Lotti**: J, **CP-16**, la regola in FIFO con il rosso prima, dopo CP-4c e CP-4d e prima di CP-15 (ordine
+      confermato dal coordinatore il 15/10: CP-4d resta prima perché corregge un numero visibile; W non aspetta ancora
+      la regola, prima fa N2 e i file dei broker). Conversione delle cancellazioni e dei dati: W, sopra la regola di J,
+      con la firma da accordare.
+    - **Punto aperto per CP-16**: con più lotti a prezzi diversi le unità possono uscire al loro costo FIFO (realizzato
+      0, come in un trasferimento) oppure al costo medio della riga (realizzato = medio − costo FIFO). Nell'esempio le
+      due letture coincidono. Da proporre all'avvio di CP-16, con un rosso per ciascuna lettura.
 
   Dettagli: piano J, §10 «Domande di W N1».
 - **J-12 · Con l'analisi dei lotti `FAILED` il pannello disegna lo stesso lotti e cifre** — medio, chiarezza (utenti
@@ -3309,6 +3373,23 @@ sulla base `23f6578f3`.
     un'attenzione: un job della CLI si sposta fuori da `.jobs/` alla fine.
 
   Dettagli: piano 07, §13, B5a, terza tornata.
+- **B-9 · Il token del pannello non è fra i controlli della configurazione** — piccolo; B, 15/10 (B8).
+  - Oggi un `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` inutilizzabile (corto, non ASCII visibile, `_FILE` illeggibile) si vede
+    solo alla prima richiesta del pannello: 503 `backup_panel_unavailable` e una riga d'errore nel log.
+  - All'avvio, `log_configuration_audit()` non lo nomina, e la futura scheda «Sicurezza» non lo mostrerà.
+  - Cura possibile, come ha fatto E per l'email: `BACKUP_CONFIG_CHECKS` in un modulo di B (stato `ok`, `info` se
+    spento, `error` se inutilizzabile, mai il valore), una riga in `config_audit.CONFIG_CHECKS` (file di H) e le
+    chiavi `backup.checks.*` nelle 4 lingue.
+
+  Dettagli: piano 07, §13, «B8 — il token del pannello, rimesso sopra `ef61f0e7f`».
+- **B-10 · Un pulsante del pannello che chiede all'istanza il link di reset dell'admin** — piccolo; B, 15/10 (decisione
+  40, assegnata a B dal coordinatore). Recupero dell'admin dopo un ripristino o una password persa: oggi passa da
+  «password dimenticata» via email (E), o dall'assistenza con `dev.py user reset-link`.
+  - Cura: una rotta col token del pannello, come B8 (`require_panel_token`, permessa sull'istanza bloccata se il
+    developer lo vuole), che chiama la funzione dei link di reset di A e restituisce il link al pannello.
+  - Non per la 1.3, a meno che resti tempo (coordinatore, 15/10).
+
+  Dettagli: piano 07, §13, «Base `10697e618`, prove d'ingresso e decisioni 40–43».
 
 ## E · Email (fase 01)
 
