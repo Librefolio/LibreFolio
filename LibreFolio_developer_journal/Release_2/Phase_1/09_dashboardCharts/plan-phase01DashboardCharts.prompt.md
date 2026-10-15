@@ -74,6 +74,9 @@ il coordinatore.
 | D-Y15 | Resta un'inversione: le primitive di `components/charts` e `chartSettingsStore` importano dai segnali (`type RenderedSignal`, `signalLabelToHtml` e due aiuti dello schema). Va accettata fino a FE9 (backlog Y-7) |
 | D-Y16 | `chartCoreHelpers.test.ts` cambia solo i percorsi |
 | — | Ordine proposto dal coordinatore al developer, in attesa del suo via:<br>• Y3 dopo l'ingresso di DV (DV ha già cambiato `AllocationHistoryChart` e `AllocationPieChart`);<br>• Y4b dopo DV;<br>• Y4a dopo FE4 e FE5a di X;<br>• intanto Y8 (I-01, I-03, 47-1, O-16; 48-1 con l'ok di J) e Y7 (C-38, C-62).<br>Le dichiarazioni ai colori (scanner del Lab, `theme-roles.mjs:72`, tabella vecchio → nuovo) vanno al coordinatore al checkpoint di ogni lotto |
+| D-Y17 | (15/10, 20:52, Y7, C-38) Sotto i 768 px la colonna di selezione e quella delle azioni scorrono con la tabella, intestazione e corpo insieme; l'intestazione resta fissa in alto. Rientra nella decisione 50 («la cura generale»): il coordinatore la riferisce al developer nel riepilogo, e se lui vuole il contrario si cambia |
+| D-Y18 | (15/10, 20:52, Y7, C-62) Prima un rosso E2E su una tabella `layout-auto`. Se il rosso c'è: la larghezza trascinata diventa anche il `min-width` del `th`, e le maniglie passano ai Pointer Events. Se non c'è: C-62 si chiude con il test come guardia. In entrambi i casi la causa sbagliata della wiki si corregge. Il layout del PAC da telefono resta fuori da Y7 |
+| — | Y7 parte dopo le E2E di Y8, che costruiscono il frontend da questo worktree, e dopo l'ok dei colori su `DataTable` (ondata W6), chiesto dal coordinatore. La galleria mobile d'ingresso l'ha chiesta il coordinatore ai colori, probabilmente dopo G-13 |
 
 ### 0.4 Condizioni del coordinatore per il taglio di `GrowthChart` (15/10, dopo l'ok del coordinatore colori)
 
@@ -1095,3 +1098,112 @@ scrivono qui quando partono.
 >   (`be7de95b6`).
 > - **Dopo**: le 8 E2E sulla revisione unita, con lo slot 2 dopo X; poi la galleria d'ingresso, chiesta dal
 >   coordinatore al coordinatore dei colori.
+
+### Y8 — commit, merge di `dev_release2` e prove sulla revisione unita ✅ (2026-10-15, 20:19–20:31)
+
+> **Note implementazione**:
+> - **Commit del coordinatore**: `a25d09a69` fix(charts) e `df817a3a8` docs(journal).
+> - **Merge**: il coordinatore ha aperto il merge di `dev_release2` (`b4597efad`). Due conflitti, entrambi aggiunte
+>   allo stesso punto:
+>   - `CHANGELOG.md`: le 2 righe della base, poi le 3 di Y8 in fondo a «🐛 Fixed»;
+>   - `devWiki/log.md`: la voce di B, poi quella di Y8.
+> - **Stage**: solo i due file, tramite uno script che rifiutava più di un blocco di conflitto per file.
+> - **File uniti da Git, rivisti uno per uno**: `devWiki/index.md` e il backlog, ognuno con le modifiche dell'altro
+>   lato in sezioni diverse.
+> - **Sovrapposizioni di senso**: nessuna. Nessun file della base tocca le superfici di Y8, e nessuno legge le chiavi
+>   tolte.
+> - **Commit del merge**: `e587be8ce`, genitori `df817a3a8` e `b4597efad`, worktree pulito.
+> - **Prove sulla revisione unita**, una alla volta, `api sync` e svelte-check solo con il carico sotto 70:
+>   - `api sync`: nessun cambio tracciato;
+>   - svelte-check: 0 errori, 0 avvisi;
+>   - `htmlInterpolation` 26/26, verde grazie a `be7de95b6` di E;
+>   - gli altri 16 file Vitest di Y8 tutti verdi, con gli stessi conteggi di prima;
+>   - `theme-roles --check` pulito; `i18n check` verde (4517 chiavi, strict).
+>
+> **Regola nuova del coordinatore** (20:19): il CHANGELOG è una sua superficie. Dal prossimo lotto le righe vanno nel
+> messaggio del checkpoint, non nel file.
+>
+> **Da fare**:
+> - le 8 E2E nello slot 2, quando il coordinatore lo libera;
+> - la galleria d'ingresso dentro G-13 (decisione del coordinatore dei colori), con la revisione degli scatti di
+>   Dashboard, Brokers, Assets e FX che G manderà;
+> - nel prossimo checkpoint, una correzione della devWiki: la riga di 47-1 in `echarts-chart-gotchas` dice «on a
+>   phone» accanto al 33, che è l'esempio da desktop a 800 px, e il difetto colpisce anche un periodo lungo su
+>   desktop.
+
+### Y8 — E2E nello slot 2 ✅ (2026-10-15, 20:33–21:20, con due pause del coordinatore)
+
+> **Note implementazione**:
+> - **Slot pesante 2** dal coordinatore (20:32), sulla revisione `e587be8ce`. Script `/tmp/libreFolio_y8_e2e.sh`: una
+>   spec alla volta, `--workers 2`, `nice -n 10`, ci si ferma se la porta 6189 è occupata. Log in
+>   `files/y8_e2e_NN_*.log` della sessione.
+> - **01 `front-portfolio dashboard`: 27/27 verdi** (4,2 min). Prima, il build del test server: 449 s, perché il carico
+>   all'avvio era 191.
+>
+> **Fuori pista**: alle ~20:45 il coordinatore ha fermato le prove per circa 15 minuti, perché DV doveva rilanciare
+> una galleria e la macchina era satura.
+> - Ho fermato solo il ciclo, con `kill` del suo bash (pid 21017), e ho lasciato finire la spec in corso: il runner
+>   21099 è uscito da solo e la porta è tornata libera.
+> - Ho risposto «fermo» con l'elenco delle spec verdi.
+> - Per la ripresa, `/tmp/libreFolio_y8_e2e_resume.sh` riparte da `front-broker detail` (02) e arriva a
+>   `front-portfolio risk-lab` (08).
+>
+> **Durante la pausa**, la correzione della devWiki: la riga di 47-1 in `concepts/echarts-chart-gotchas` dice ora
+> «33 per un anno di giorni a 800 px, 90 o più su un telefono», e anche su desktop. Nel log una voce di correzione in
+> coda; la voce di Y8 resta com'era.
+
+> **Esito**, revisione `e587be8ce`, `--workers 2`, `nice -n 10`, una spec alla volta:
+>
+> | # | Spec | Esito |
+> |---|---|---|
+> | 01 | `front-portfolio dashboard` | 27/27 |
+> | 02 | `front-broker detail` | 37/37 |
+> | 03 | `front-asset asset-detail` | 30/33: i 3 test del blocco «Live price direction flash» (sotto) |
+> | 04 | `front-fx fx-detail` | 17/17 |
+> | 05 | `front-ai-export panel` | 6/6 |
+> | 06 | `front-portfolio dashboard-cache` | 6/6 |
+> | 07 | `front-portfolio risk` | 38/38 |
+> | 08 | `front-portfolio risk-lab` | 44/44 |
+> | 09 | `front-asset asset-detail "Live price direction flash"`, da soli con `--workers 1` | 4/4 |
+>
+> **Triage dei 3 rossi** (skill `test-triage`): `an up-tick flashes green then decays back to neutral`, `a down-tick
+> flashes red then decays back to neutral`, `consecutive same-direction ticks each restart the flash`
+> (`e2e/assets/asset-detail.spec.ts:8105`, `:8131`, `:8155`).
+> - **Cosa ha ricevuto il test**: dopo il tick di 30 s il prezzo è 105.00, quindi il poll è arrivato. Ma
+>   `data-live-price-direction` resta `neutral`, senza la classe del lampo.
+> - **Dove si decide la direzione**: solo in `applyLiveSummary` (`routes/(app)/assets/[id]/+page.svelte`). Torna
+>   `neutral` solo con il timer di 1,3 s o nel `$effect` del poller. Y8 non tocca la pagina, `AssetPriceSummary` né
+>   il poller. Senza zoom, il suo codice su quella pagina dà opzioni dell'asse identiche a prima.
+> - **Da soli passano**: con `--workers 1` sono 4/4 (09). Nella spec intera a `--workers 2` falliscono. È l'ipotesi
+>   §3 della skill: stato condiviso con un vicino, o carico. Non è un rosso deterministico, e non è di Y8.
+> - **Il ciclo vivo** della pagina l'ha riscritto oggi `74d028ec6` di Z (15:46). Il coordinatore ha chiesto a Z di
+>   lanciare i test sul suo ramo. Decisione del coordinatore: Y8 entra lo stesso, con i 3 test nell'handoff come rosso
+>   non suo.
+> - Porta 6189 libera dopo ogni spec. Nessun file tracciato toccato dalle prove.
+
+### Y7 — preanalisi e annuncio ⏳ (2026-10-15, 20:50–21:00 circa, sola lettura)
+
+> **Note implementazione**: durante la pausa delle prove un agente `explore` di sola lettura ha verificato C-38, i
+> difetti 2 e 5 del PAC e C-62 sul codice di oggi, cioè dopo il taglio di Y2. Ho ricontrollato io i punti dubbi.
+> - **C-38 e difetto 2**: `@media (max-width: 768px) { .th-actions, .td-actions { position: static } }`
+>   (`table/DataTable.svelte:1693-1699`) sblocca solo il corpo. `thead.sticky-header th` (0,1,2, `:1280-1285`) batte
+>   `.th-actions` (0,1,0): su un telefono «Azioni» resta fissata a destra (`:1324-1326`) mentre i ⋮ scorrono via.
+> - **Difetto 5**: in `TargetsStep.svelte:111-134` le larghezze minime, con la selezione (48 px) e le azioni (64 px),
+>   passano i 500 px. La colonna di selezione è fissata a sinistra a ogni larghezza (`:1314`, `:1548`) e copre
+>   l'inizio dei nomi.
+> - **C-62**:
+>   - la larghezza trascinata va solo nello `width` inline del `th` (`:983`; maniglia in
+>     `DataTableColumnHeader.svelte:175`, gestori in `DataTable.svelte:688-719`, solo eventi del mouse);
+>   - con `tableLayout="auto"`, 11 tabelle, è un suggerimento. È provata solo la L1° del Lab, che è `fixed`;
+>   - la causa «`onColumnResize` non letto» della wiki è sbagliata.
+> - **La spec `designer-lab-picker`** confronta le occorrenze dello scanner con i candidati dell'ancora, entrambi
+>   calcolati a runtime: un cambio dei numeri di riga di `DataTable.svelte` non la rompe.
+> - **Colori**: 0 classi di palette in `DataTable.svelte`; gli sfondi fissi vengono da `--lf-cmp-datatable-*`.
+> - **Annuncio al coordinatore** (`needs_input`), con le decisioni proposte:
+>   - D-Y17 (UX): sotto i 768 px la selezione e le azioni scorrono con la tabella, intestazione e corpo insieme;
+>     l'intestazione resta fissa in alto. L'alternativa: le azioni fissate a destra anche sul telefono;
+>   - D-Y18 (C-62): prima un rosso E2E su una tabella auto; poi il `min-width` dalla larghezza trascinata, e le
+>     maniglie ai Pointer Events.
+>   - Il layout del PAC da telefono resta fuori da Y7, come vuole la decisione 50.
+> - **Codice**: solo dopo le E2E di Y8, che costruiscono il frontend da questo worktree, e dopo il via del
+>   coordinatore.

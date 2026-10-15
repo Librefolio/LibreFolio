@@ -3561,3 +3561,9 @@ and after, all pre-existing.
 
 Filed: [[concepts/echarts-chart-gotchas]].
 Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-15] file | Correction: 47-1 was not a phone-only defect
+The Y8 entry above says «on a phone». The compact axis policy also applies below 24 px per point, so a long period lost
+its labels under zoom on desktop too: 33 is the step for a year of days in an 800 px chart, 90 or more on a phone.
+Corrected in the row of [[concepts/echarts-chart-gotchas]]; the CHANGELOG line was already right.
+Graph: not updated; graphify is not available in this worktree.
