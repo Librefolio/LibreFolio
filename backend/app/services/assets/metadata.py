@@ -25,12 +25,12 @@ from backend.app.schemas.common import (
 from backend.app.schemas.provider import (
     FAProviderRefreshFieldsDetail,
 )
-from backend.app.services.asset_sources import core
-from backend.app.services.asset_sources.core import (
+from backend.app.services.assets import core
+from backend.app.services.assets.core import (
     AssetSourceProvider,
 )
-from backend.app.services.asset_sources.crud import AssetCRUDService
-from backend.app.services.provider_registry import AssetProviderRegistry
+from backend.app.services.assets.crud import AssetCRUDService
+from backend.app.services.assets.registry import AssetProviderRegistry
 
 logger = structlog.get_logger(__name__)
 

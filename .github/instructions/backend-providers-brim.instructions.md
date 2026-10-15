@@ -42,7 +42,8 @@ The abstract base class is in `backend/app/services/brim_provider.py`. Read that
    docstring only, no re-export) and `plugin.py` (the code); helpers private to it go beside as `_*.py`, helpers shared
    by several brokers stay at the family root (`_brim_io.py`, `_brim_output.py`)
 2. Extend `BRIMProvider` (from `brim_provider.py`)
-3. Decorate with `@register_provider(BRIMProviderRegistry)`
+3. Decorate with `@register_provider(BRIMProviderRegistry)` (`BRIMProviderRegistry` from `services/brim/registry.py`, the
+   decorator from `services/provider_registry.py`)
 4. Implement the required abstract methods (see base class)
 5. Add sample report in `sample_reports/` for testing
 6. Add icon in `static/` directory

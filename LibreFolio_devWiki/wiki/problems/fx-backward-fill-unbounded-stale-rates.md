@@ -110,7 +110,7 @@ repairs it.
 
 | Role | Path |
 |------|------|
-| `convert_bulk()` — unlimited backward-fill, flag and debug log | `backend/app/services/fx.py` |
+| `convert_bulk()` — unlimited backward-fill, flag and debug log | `backend/app/services/fx/fx.py` |
 | Engine FX preload — discards date and flag | `backend/app/services/financial_math/portfolio/engine.py` |
 | Carried-forward FX count for Risk and Signals | `backend/app/services/series_preparation.py` |
 | Staleness threshold (7 days) | `backend/app/services/platform/data_quality_thresholds.py` |

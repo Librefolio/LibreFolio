@@ -19,10 +19,10 @@ NOT stop the counters above from being tracked. This variable is never exposed v
 API response and must never be added to .env.example or the docs.
 """
 
-import os
 from datetime import datetime
 from typing import Optional
 
+from backend.app.config.accounts import donation_popup_disabled
 from backend.app.db.models import User
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 
@@ -33,10 +33,10 @@ MAX_DAYS_WITHOUT_PROMPT = 60
 
 def is_donation_popup_disabled() -> bool:
     """
-    Hidden switch — checks env var directly (never part of Settings/.env.example),
-    same pattern as config.is_test_mode().
+    Hidden switch — LIBREFOLIO_DISABLE_DONATION_POPUP, read in backend.app.config.accounts
+    (never part of Settings/.env.example).
     """
-    return os.environ.get("LIBREFOLIO_DISABLE_DONATION_POPUP", "").lower() in ("1", "true", "yes")
+    return donation_popup_disabled()
 
 
 def should_show_donation_popup(

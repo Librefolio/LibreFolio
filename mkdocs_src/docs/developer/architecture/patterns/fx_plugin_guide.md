@@ -2,7 +2,7 @@
 
 How to create a new **FX Rate Provider** to fetch exchange rates from a new central bank or data source.
 
-**Base class**: `FXRateProvider` (in `backend/app/services/fx.py`)
+**Base class**: `FXRateProvider` (in `backend/app/services/fx/fx.py`)
 **Plugin folder**: `backend/app/services/fx_providers/<name>/` — the code in `plugin.py`, beside an `__init__.py` holding only its docstring (see [Plugin Folder](#plugin-folder))
 **Registry**: `FXProviderRegistry`
 
@@ -105,8 +105,9 @@ graph TD
 
 from datetime import date
 from decimal import Decimal
-from backend.app.services.fx import FXRateProvider
-from backend.app.services.provider_registry import register_provider, FXProviderRegistry
+from backend.app.services.fx.fx import FXRateProvider
+from backend.app.services.fx.registry import FXProviderRegistry
+from backend.app.services.provider_registry import register_provider
 
 @register_provider(FXProviderRegistry)
 class MyCentralBankProvider(FXRateProvider):

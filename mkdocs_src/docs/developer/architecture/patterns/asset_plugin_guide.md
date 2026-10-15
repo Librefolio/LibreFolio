@@ -2,17 +2,16 @@
 
 How to create a new **Asset Source Provider** to fetch prices from a new data source.
 
-**Base class**: `AssetSourceProvider` (canonical path:
-`backend/app/services/asset_sources/core.py`)
+**Base class**: `AssetSourceProvider` (defined in
+`backend/app/services/assets/core.py`)
 **Plugin folder**: `backend/app/services/asset_source_providers/<name>/` — the code in `plugin.py`, beside an `__init__.py` holding only its docstring (see [Plugin Folder and Translations](#plugin-folder))
 **Registry**: `AssetProviderRegistry`
 
-!!! info "Release 2 import compatibility"
+!!! info "Import from the defining module"
 
-    `backend.app.services.asset_source` remains a supported compatibility facade and re-exports
-    the identical public objects. New provider code should import `AssetSourceProvider` and
-    `AssetSourceError` from `backend.app.services.asset_sources.core`; the canonical thread
-    runner and shared caches live there too.
+    Import `AssetSourceProvider` and `AssetSourceError` from `backend.app.services.assets.core`,
+    where the thread runner and shared caches live too. No facade re-exports them: the
+    `backend/app/services/assets/` package `__init__.py` holds only a docstring.
 
 ---
 
@@ -89,7 +88,7 @@ graph TD
 
 Provider contracts are asynchronous, but the service layer treats provider implementations as an
 isolation boundary. Every provider I/O operation is invoked through the canonical
-`asset_sources.core._run_provider_in_thread()` helper. The helper starts a dedicated worker
+`assets.core._run_provider_in_thread()` helper. The helper starts a dedicated worker
 thread, creates a new event loop in that thread, runs the provider coroutine to completion, and
 enforces the caller's timeout.
 
@@ -288,8 +287,9 @@ from datetime import date
 from decimal import Decimal
 from backend.app.db import IdentifierType
 from backend.app.db.models import ProviderInputType
-from backend.app.services.asset_sources.core import AssetSourceError, AssetSourceProvider
-from backend.app.services.provider_registry import register_provider, AssetProviderRegistry
+from backend.app.services.assets.core import AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.provider_registry import register_provider
 from backend.app.schemas.assets import FACurrentValue, FAHistoricalData, FAPricePoint
 
 @register_provider(AssetProviderRegistry)

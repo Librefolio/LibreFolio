@@ -34,16 +34,12 @@ from backend.app.schemas.signals import (
     SignalWarmupRequirement,
 )
 from backend.app.services import provider_registry as registry_module
-from backend.app.services.provider_registry import (
-    DuplicatePluginCodeError,
-    PluginDiscoveryError,
-    SignalPluginRegistry,
-    register_plugin,
-)
+from backend.app.services.provider_registry import DuplicatePluginCodeError, PluginDiscoveryError, register_plugin
 from backend.app.services.signal_plugins.base import SignalPlugin
+from backend.app.services.signals.registry import SignalPluginRegistry
 
 # I10 — executable but catalog-hidden. The registry still resolves and runs it
-# (asset_source/SignalService go through get_plugin), while every public
+# (assets.price_query/SignalService go through get_plugin), while every public
 # catalog surface is built from list_definitions() and must not see it.
 CALENDAR_SIGNAL_CODE = "ASSET_CALENDAR_ROLLING_RETURN"
 CALENDAR_REPRESENTATIVE_WINDOWS = (1, 7, 14, 30, 60, 90, 365, 1095)
@@ -641,8 +637,8 @@ BrokenSignalRegistry.register(NestedSignal)
 
 
 def test_signal_base_and_registry_do_not_import_indicator_functions():
-    base_source = inspect.getsource(registry_module.SignalPlugin)
-    registry_source = inspect.getsource(registry_module.SignalPluginRegistry)
+    base_source = inspect.getsource(SignalPlugin)
+    registry_source = inspect.getsource(SignalPluginRegistry)
 
     for forbidden in ("pandas_ta_classic", "from talib import", "import talib"):
         assert forbidden not in base_source
