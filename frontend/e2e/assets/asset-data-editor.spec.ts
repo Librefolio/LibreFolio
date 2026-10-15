@@ -464,12 +464,12 @@ test.describe('Asset Data Editor', () => {
             return mine[0].id;
         }
 
-        /** Delete every event this test may have left behind, by id. Never throws. */
+        /** Delete every event this test may have left behind, by id, on its asset (the delete is scoped by asset: decision 21). Never throws. */
         async function cleanUp(page: Page, assetId: number, date: string, marker: string, knownIds: number[]): Promise<void> {
             const found = await markerEvents(page, assetId, date, marker).catch((): StoredEvent[] => []);
             const ids = [...new Set([...knownIds, ...found.map((e) => e.id)])];
             if (ids.length === 0) return;
-            await page.request.delete(`${EVENTS_URL}?${ids.map((id) => `ids=${id}`).join('&')}`).catch(() => undefined);
+            await page.request.delete(`${EVENTS_URL}?asset_id=${assetId}&${ids.map((id) => `ids=${id}`).join('&')}`).catch(() => undefined);
         }
 
         /** Open the editor of the asset page already loaded, on its Events tab. */
@@ -583,7 +583,8 @@ test.describe('Asset Data Editor', () => {
         test('a new event row deleted before saving sends no delete to the server', async ({page}) => {
             // S1. A new row deleted before it was ever saved stayed dirty, and Save read
             // its rowId — the row's date — as an event id: "2026-09-20" became
-            // DELETE /assets/events?ids=2026, on an endpoint not scoped by asset.
+            // DELETE /assets/events?ids=2026, on an endpoint then not scoped by asset. Since
+            // decision 21 (I-12a) it is, so the same bug would hit this asset's event 2026.
             const assetId = await appleAssetId(page);
             await navigateTo(page, `/assets/${assetId}`);
             const panel = await openEventsEditor(page);
@@ -605,8 +606,8 @@ test.describe('Asset Data Editor', () => {
             await expect(deleteAction).toBeHidden();
 
             // Every DELETE the page sends from here on is recorded and answered here, never
-            // by the backend: unfixed, it would delete whichever event has the year as its
-            // id. Every other request falls through to the routes and network as before.
+            // by the backend: unfixed, it would delete this asset's event whose id is the
+            // year, if it has one. Every other request falls through to the routes and network as before.
             const deletes: string[] = [];
             const isApi = (url: URL) => url.pathname.startsWith(`${API_BASE}/`);
             const handler = async (route: Route) => {
