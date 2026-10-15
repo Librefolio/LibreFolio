@@ -242,7 +242,7 @@ dall'ambiente **non compaiono** né nella UI né nelle API.
 `updated_by_user_id`); CHECK su scope/utente e «esattamente uno fra valore e cifrato»; indici unici **parziali** (uno per
 `system`, uno per `user`), perché in SQLite i NULL non collidono in un UNIQUE; gli indici parziali vanno dichiarati anche nel
 modello (`sqlite_where`), altrimenti il confronto modello/DB di `db_schema_validate.py` li vede come differenza. Righe di campi
-non più dichiarati: ignorate. Id della revisione `006_plugin_settings` (19 caratteri, sotto il limite di 32).
+non più dichiarati: ignorate. Id della revisione `007_plugin_settings` (19 caratteri, sotto il limite di 32).
 
 **Cifratura** (`crypto.py`, D-X1): `cryptography`, AES-256-GCM; sottochiave HKDF-SHA256 dalla chiave d'istanza di H con
 `derive_key(purpose="plugins.settings.v1", length=32)` di H (`services/platform/instance_key.py`); **AAD = contesto** (`famiglia|plugin|campo|scope|user_id`), così un cifrato spostato su
@@ -343,6 +343,73 @@ in più (D-X2) gli zip di backup scaricabili dalla UI contengono la chiave d'ist
   coordinatore al developer. Effetto per me: nessuna isolazione crittografica fra istanze che condividono la chiave; l'AAD
   con il contesto della riga resta l'unica separazione.
 
+#### Ripristino di un backup: il contratto con B (aggiunta del 15/10, solo disegno)
+
+Richiesta dell'analisi di B, girata dal coordinatore il 15/10. Contesto: le decisioni 18 e 39, ancora al developer. La chiave
+d'istanza entra in un backup solo con password e solo se generata; al ripristino l'istanza tiene la sua chiave e i segreti si
+ricifrano, altrimenti restano «impostati ma illeggibili, reinseriscili» (misura 4). Il disegno regge entrambi gli esiti. Il
+CP10 resta fermo fino alle decisioni 18–19 e alla finestra di `cryptography`.
+
+**Due funzioni sincrone** in `plugin_settings/crypto.py`, su una `sqlite3.Connection` della copia. Non usano il motore
+dell'app e non leggono la configurazione: ricevono le sottochiavi.
+
+- `rekey_plugin_secrets(conn, old_subkey, new_subkey) -> RekeyReport`. Per ogni riga con `secret_ciphertext`:
+  - con il `key_id` della nuova sottochiave è già corrente e non si tocca. Due giri danno lo stesso stato, e con la stessa
+    chiave sulle due istanze non c'è nessuna scrittura;
+  - con il `key_id` della vecchia, se la decifratura riesce (AES-GCM, AAD = `famiglia|plugin|campo|scope|user_id` della
+    riga), si ricifra con la nuova: nonce nuovo da 96 bit, `key_id` nuovo;
+  - altrimenti (un altro `key_id`, un tag non valido, un contesto cambiato) resta com'è e si conta illeggibile: mai
+    cancellata, mai un valore sbagliato.
+
+  `RekeyReport(rekeyed, already_current, unreadable_system, unreadable_user)`: solo conteggi, mai nomi né valori.
+- `count_unreadable_secrets(conn, subkey) -> UnreadableSecrets(system, user)`, con `total`. Sola lettura. È illeggibile una
+  riga con un `key_id` diverso, o quella con il `key_id` giusto che non si decifra (copia corrotta).
+
+Regole comuni:
+- **Transazione**: tutto dentro un `SAVEPOINT`. Da sola è atomica; se B ha una transazione aperta, ne diventa parte. Non fa
+  mai il `COMMIT` del lavoro di B. Un errore strutturale annulla il savepoint e risale; una riga illeggibile non è un errore.
+- **Ordine**: si chiamano dopo l'aggiornamento della copia alla revisione di testa. Su una copia senza `plugin_settings`
+  (un backup di prima della 007) rendono zeri.
+- **Sincrone**: dall'app si chiamano in `asyncio.to_thread` (regola dell'I/O asincrono). Il chiaro vive solo in memoria
+  durante la chiamata, mai nei log né nei rapporti.
+- **Sottochiavi**: B non conosce il `purpose`. `settings_subkey(instance_key: str | None = None)` rende la sottochiave
+  corrente, oppure quella di una chiave data (la chiave dello zip). Da H serve un solo pezzo: `derive_key_from(instance_key,
+  purpose, length=32)`, la stessa derivazione di `derive_key` da una chiave esplicita, con lo stesso controllo di lunghezza;
+  `derive_key` la userebbe con la chiave corrente.
+- **Privacy**: il conteggio è diviso per scope, perché l'admin non deve sapere nemmeno se esistono impostazioni personali
+  (§4.4). Il rapporto di ripristino mostra all'admin il numero dei segreti di sistema, e per quelli personali una frase
+  generica; ogni utente vede i propri «illeggibili, reinseriscili» nella sua scheda.
+- **Utenti**: l'AAD lega il cifrato al `user_id`. Un ripristino completo conserva gli id; uno che rinumerasse gli utenti
+  renderebbe illeggibili i segreti personali, per costruzione.
+
+**Il flusso di B**:
+1. Con la chiave nello zip: `rekey_plugin_secrets(copia, settings_subkey(chiave_dello_zip), settings_subkey())`. Se la
+   chiave dello zip non è quella che ha cifrato il DB, lo dice il rapporto (0 ricifrati, N illeggibili).
+2. Senza la chiave: `count_unreadable_secrets(copia, settings_subkey())`, per il rapporto. Le righe restano; chi le
+   reinserisce le sovrascrive con la chiave corrente.
+3. In entrambi i casi B non scrive altro per le impostazioni dei plugin: lo stato sta tutto nei `key_id` delle righe.
+
+**Il valore di controllo H-3**: d'accordo con B sul posto, «con i cifrati, nella 007», nella forma più semplice. È il
+`key_id` di ogni riga: un'impronta con chiave della sottochiave, `HMAC-SHA256(sottochiave, "LibreFolio plugin settings key
+id v1")` troncato a 16 byte, in esadecimale. Non rivela né la sottochiave né la chiave d'istanza. Nessuna tabella e nessuna
+riga a parte, perché:
+- i `key_id` dicono riga per riga quale chiave serve, e il rilevamento all'avvio è un conteggio delle righe con un `key_id`
+  diverso da quello corrente, senza decifrare;
+- senza segreti non c'è niente da perdere, e niente da segnalare;
+- al ripristino B non deve aggiornare nessun valore.
+
+Il controllo all'avvio è di H: un controllo con il DB, nel log e nella scheda Sicurezza come i `ConfigCheck` di
+`config_audit.py`, che oggi leggono solo la configurazione. Chiama `plugin_secrets_key_status(session) -> UnreadableSecrets`
+(la stessa regola, con un adattatore asincrono) e mostra all'admin solo il conteggio di sistema. Rischio residuo, dichiarato:
+con un `key_id` chi ha il DB può provare una chiave candidata, come può già con il tag di ogni cifrato. Con una chiave casuale
+da 256 bit non conta, ed è il motivo della regola «mai una passphrase» (nota di H).
+Un valore di controllo dell'istanza (una tabella di una riga, in una migrazione di H) servirà se un secondo uso della chiave
+d'istanza salverà dati nel DB. Nella 1.3 i segreti dei plugin sono l'unico dato cifrato con quella chiave.
+
+**Prove (nel CP10)**: sottochiavi fisse dei test, mai chiavi vere (misura 8); `sqlite3` in memoria con lo schema della 007;
+ricifratura, idempotenza, `key_id` misti, tag alterato, riga spostata (AAD), tabella assente, savepoint dentro una
+transazione di B che poi annulla.
+
 ### 4.6 Ordine dei fornitori nella ricerca (F21) e C-90
 
 - Ogni fornitore asset dichiara `tier` (`premium` | `community`, default `community`) e `search_priority` (intero, più basso =
@@ -374,7 +441,7 @@ SvelteKit sulla pagina lista per i filtri); C-66 (avviso nel dialogo di sync qua
 | PL7 | `api/v1/signals.py` + estrazione dei pezzi segnali da `prices/query` e `currencies/convert` | `api signal-*` | `backend-signals` (sezione API) |
 | Schemi | `schemas/{assets,prices,provider,refresh,fx}.py` (D-X9) | importatori | `backend-schemas.instructions.md` |
 | F05 | `assets/registry.py`, `fx/registry.py`, choke point nei servizi, schemi `provider_allowed` | nuovi pytest | sezione X di `.env.example`; testo per `admin/configuration` (H) |
-| Impostazioni | `plugin_settings/*`, `db/models.py` (un modello), `alembic/versions/006_plugin_settings.py`, `api/v1/plugin_settings.py`, `schemas/plugin_settings.py`, basi di famiglia, justETF/Borsa; frontend `lib/features/plugin-settings/*`, una riga nel registro schede di A, «Configura» | pytest servizi/API/migrazione/sicurezza; Vitest; E2E; galleria | pagina dev `patterns/plugin_settings.md`; admin (sicurezza e variabili); utente `user/settings/plugins.md`, pagine dei fornitori |
+| Impostazioni | `plugin_settings/*`, `db/models.py` (un modello), `alembic/versions/007_plugin_settings.py`, `api/v1/plugin_settings.py`, `schemas/plugin_settings.py`, basi di famiglia, justETF/Borsa; frontend `lib/features/plugin-settings/*`, una riga nel registro schede di A, «Configura» | pytest servizi/API/migrazione/sicurezza; Vitest; E2E; galleria | pagina dev `patterns/plugin_settings.md`; admin (sicurezza e variabili); utente `user/settings/plugins.md`, pagine dei fornitori |
 | F21 + C-90 | `assets/registry.py`, `assets/search.py`, `FAProviderInfo`; `features/assets/` ricerca e pannello | pytest, Vitest, E2E | `search_link_finder.md`, `user/assets/create-edit.en.md` |
 
 Runner (condiviso, solo le mie voci): `services plugin-settings`, `api plugin-settings`, `services provider-policy`, guardie dei
@@ -1732,3 +1799,40 @@ quella della descrizione, che usava il letterale `'Description'`: in italiano e 
    > `npm run check` 0/0; Prettier pulito. Nessuna classe toccata. Osservazione di test-author, fuori dalla voce: anche
    > `name`, `type`, `currency` e `sector` nelle `LABELS` dei test coincidono con le parole inglesi, quindi un letterale
    > futuro su quelle righe non si vedrebbe; oggi il sorgente passa `labels.*` per tutte.
+
+X-R11a committato sul mio ramo, non integrato: `ac89cea72` (fix) e `4b3455a9b` (journal). La riga 🐛 del CHANGELOG la scrive
+il coordinatore all'ingresso.
+
+### X-R1 + X-R2 — i vecchi percorsi nelle descrizioni di `openapi.json` ✅ (2026-10-15)
+
+Sopra `4b3455a9b`, chiesto dal coordinatore durante la finestra della galleria (lavoro leggero); entra con FE5b.
+
+1. ✅ (2026-10-15) Le docstring:
+   - `create_routes_bulk` (`api/v1/fx/providers.py`): `normalize_rate_for_storage` sta in `services/fx/storage.py`, non in
+     `services/fx.py` (X-R1, e la quinta voce di X-R10, che è la stessa riga);
+   - `BackwardFillInfo` (`schemas/common.py`): «FX (fx.py)» e «Asset pricing (asset_source.py)» diventano
+     `services/fx/conversion.py` (dove si calcola il riempimento all'indietro dei cambi) e `services/assets/price_query.py`
+     (dove lo calcolano i prezzi, con `AssetBackwardFillInfo`);
+   - `IdentifierType` (`db/models.py`): `schemas/assets/assets.py`, `services/assets/crud.py`, `services/brim/brim_provider.py`.
+     Verificato che le classi e le funzioni nominate esistono ancora lì (`FAAssetCreateItem`, `FAAssetPatchItem`,
+     `FAinfoResponse`, `FAAinfoFiltersRequest`; `list_assets`, `create_assets_bulk`; `search_asset_candidates`; il test
+     `test_identifier_columns_match_enum`).
+   > **⚠️ Fuori pista**: nella stessa docstring di `IdentifierType` il passo 1 diceva di aggiungere la colonna in
+   > `001_initial.py`. Contraddice la regola delle migrazioni incrementali (la tabella `assets` è già rilasciata: una colonna
+   > nuova vuole una migrazione nuova, come fu `002_identifier_other_json_list.py`), e un agente che seguisse la docstring
+   > romperebbe i DB installati. Corretta nello stesso commit, una riga: «a new incremental Alembic migration (./dev.py db
+   > migrate "..."), never 001_initial.py: the assets table has already shipped». Dichiarata nell'handoff.
+2. ✅ (2026-10-15) Prova: `dev.py api schema` prima della modifica (HEAD pulito) e dopo, con un confronto strutturato dei due
+   `openapi.json` (`/tmp/libreFolio_x_xr1_schema_diff.py`): **4 percorsi diversi, nessuno fuori dalle descrizioni**:
+   `components/schemas/BackwardFillInfo/description`, `components/schemas/IdentifierType/description`,
+   `paths//api/v1/fx/providers/routes/post/description` e `info/version` (il suffisso `-dirty`). `tool-contracts.openapi.json`
+   identico (`202402e5…`, lo stesso hash dal CP1). ruff e black puliti sui 3 file; nessun test cita quei testi; il grep dei
+   vecchi percorsi in `backend/app` trova solo `brim_providers/__init__.py:10`, che nomina il file `brim_provider.py` senza
+   percorso (il file esiste ancora, in `services/brim/`) e non finisce in `openapi.json`: lasciato.
+
+### CP10 — aggiunta al disegno per il ripristino dei backup (B) ✅ (2026-10-15, solo disegno)
+
+Chiesta dal coordinatore il 15/10 per l'analisi di B. Scritta in §4.5, «Ripristino di un backup: il contratto con B»:
+`rekey_plugin_secrets` e `count_unreadable_secrets` su una `sqlite3.Connection` della copia, e il valore di controllo H-3 = il
+`key_id` di ogni riga nella 007, senza tabelle a parte. Da H servono `derive_key_from(instance_key, purpose, length)` e il
+controllo all'avvio con il DB. Corrette anche due righe rimaste a `006_plugin_settings` (§4.4 e §5): la migrazione è la 007.
