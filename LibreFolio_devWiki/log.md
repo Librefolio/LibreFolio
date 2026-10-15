@@ -3492,3 +3492,9 @@ Pages updated:
 
 Filed: [[decisions/colour-factorisation-at-pixel-parity]], [[problems/esbuild-colour-minify-skips-custom-properties]],
 [[problems/colour-ratchet-resolve-drops-an-accept]]. Graph: not updated (P-6).
+
+## [2026-10-15] file | A mutation restored with its old file time skips the frontend rebuild
+Found by test-author during the Backup tab E2E mutations (workstream B, lot B5a): the runner's staleness check compares
+file times, so a restore with `cp -p` would leave the mutated bundle in place for the «final green» run.
+Filed: [[problems/mutation-restore-keeps-old-mtime-skips-frontend-rebuild]]. Graph: not updated (no graph in this
+worktree).
