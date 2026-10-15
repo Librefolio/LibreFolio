@@ -970,3 +970,14 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >
 > J-5 (un loop chiuso lasciato come corrente in `services/assets/core.py`) passa a X, dopo il CP4; J-6 (una guardia
 > di suite per le connessioni aperte) a J, dopo G-8.
+
+### H CP4, `/system/instance` e area degli avvisi, integrato ✅ (2026-10-15, 06:10)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `1b3eb54c7`. Cinque commit di H: la rinomina pura
+> `api/v1/system.py` → `api/v1/system/__init__.py` (`c43ea0460`, R100), il taglio per risorsa (`27a29af09`, 16/16
+> definizioni identiche al controllo del coordinatore), l'endpoint pubblico `GET /api/v1/system/instance` con
+> `LIBREFOLIO_PROFILE` (`42af16d54`), lo store `instanceConfig`, il registro e l'area `InstanceNotices` nel layout
+> (`2069c75cd`), il journal. Validazione di H sulla revisione con J CP-1, W4 e A4: E2E 181 verdi (comprese le spec che
+> contano le richieste), `all-backend` 12 343 passed, 3 skipped, 0 failed; senza avvisi l'area non disegna niente, e
+> la galleria resta invariata. Sopra X CP3, W7, X CP3b e J C-93: controllo leggero (guardia 584, raccolta, `api
+> schema` con il solo endpoint nuovo, build e `core-unit`). CHANGELOG con l'endpoint; `LIBREFOLIO_PROFILE` con CP6.
