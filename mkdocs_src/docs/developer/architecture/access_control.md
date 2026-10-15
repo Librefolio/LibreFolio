@@ -81,6 +81,8 @@ If a broker has only one user with the `OWNER` role:
 - ⬇️ **Self-demotion** (`update_own_role`): EDITOR → VIEWER is always allowed; OWNER →
   EDITOR/VIEWER is allowed only when another OWNER remains, and demoting from OWNER **zeroes
   the share** (only OWNERs may hold share > 0). Promotions stay on the OWNER-only path.
+- 🗑️ **Deleting an account** applies `leave_broker()` to every broker of the account, in one
+  commit: see [Deleting an Account](users_and_brokers.md#account-deletion).
 
 ## 🔧 Implementation Details
 
@@ -122,7 +124,9 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
   demotion also ends every session of the account (`user_service.end_sessions()` raises
   `users.session_version`, see [Session Revocation](security.md#session-revocation)); a promotion
   does not. Self-deletion has the same guard: `DELETE /api/v1/auth/users/me` answers `400` to an
-  administrator when no other active administrator remains (`count_active_superusers()`).
+  administrator when no other active administrator remains (`count_active_superusers()`). The
+  administrator API deletes no administrator, active or not: `DELETE /api/v1/users/{user_id}` answers
+  `409` `DEMOTE_FIRST` until the account is demoted ([Deleting an Account](#admin-account-deletion)).
 - **Applied at the next request**: the user CLI writes the database directly, with the server
   running or not, and `get_current_user()` reloads the user on every request. A deactivated
   account (`user deactivate`, `user_service.set_user_active()`, or the administrator API) gets `401`
@@ -237,19 +241,24 @@ or *links show the bare path until it is fixed*.
 ### 🛠️ Administrator API {: #admin-user-api }
 
 `backend/app/api/v1/users.py`, every route behind `require_admin` (`401` without a valid session,
-`403` *Admin access required* for a regular account). The static paths are declared before
-`/users/{user_id}`, so `/users/invites` is never read as a user id.
+`403` *Admin access required* for a regular account); the last row, the public half of the
+[address probe](security.md#address-probe), is in `auth.py`. The static paths are declared before
+`/users/{user_id}`, so `/users/invites` and `/users/address-probe` are never read as a user id.
 
 | Route | Body | Does | Answers |
 |-------|------|------|---------|
-| `GET /users` | — | Every account, oldest first (`id`, `username`, `email`, `is_active`, `is_superuser`, `created_at`), with `usage: {used, max_users, billing_url}` | `200` |
-| `PATCH /users/{user_id}` | `{is_active?, is_superuser?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing. A deactivation or a demotion ends every session of the account | `200` with the account; `404`; `409` `LAST_ADMIN` for the last active administrator; `409` `USER_LIMIT_REACHED` for a reactivation over the limit |
+| `GET /users` | — | Every account, oldest first (`id`, `username`, `email`, `is_active`, `is_superuser`, `created_at`, and `protected`: see [Protected Accounts](#account-protection)), with `usage: {used, max_users, billing_url}` | `200` |
+| `PATCH /users/{user_id}` | `{is_active?, is_superuser?}` | `update_user_status()`, all or nothing: an omitted field, or a value equal to the current one, changes nothing. A deactivation or a demotion ends every session of the account | `200` with the account; `404`; `409` `ACCOUNT_PROTECTED` for a deactivation or a demotion of a [protected account](#account-protection), checked first; `409` `LAST_ADMIN` for the last active administrator; `409` `USER_LIMIT_REACHED` for a reactivation over the limit |
+| `GET /users/{user_id}/deletion-preview` | — | `preview_user_deletion()`: what [deleting the account](#admin-account-deletion) would take with it. Writes nothing | `200` `AccountDeletionPreviewRead`; `404` |
+| `DELETE /users/{user_id}` | — | `delete_account()`: the account, and the brokers it is the only `OWNER` of, all or nothing. Cannot be undone: see [Deleting an Account](#admin-account-deletion) | `204` with an empty body; `404`; `409` `SELF_DELETION`, `ACCOUNT_PROTECTED` or `DEMOTE_FIRST`; `500` when the deletion fails, nothing deleted |
 | `POST /users/{user_id}/password-reset-link` | — | A [reset link](#reset-links), shown once | `201` `{token, path, url, expires_at}`; `404` |
 | `POST /users/{user_id}/sessions/revoke` | — | `end_sessions()`: every device of the account is signed out at its next request | `204`; `404` |
 | `POST /users/{user_id}/onboarding/reset` | optional `{flow}` | `reset_onboarding_progress()`: that flow, or every flow, back to `pending`, steps included, with `completed_at` and `skipped_at` cleared (backlog item 21-5) | `204`; `404`; `422` for a flow that does not exist |
 | `GET /users/invites` | — | The live invitations, oldest first (`id`, `grants_admin`, `email`, `created_at`, `expires_at`, `created_by_user_id`), with `usage` | `200` |
 | `POST /users/invites` | `{grants_admin=false, email?}` | `create_invite()`; the link is shown once | `201` `{invite, token, path, url}`; `409` `REGISTRATION_DISABLED`; `409` `USER_LIMIT_REACHED` |
 | `DELETE /users/invites/{invite_id}` | — | `revoke_invite()`: the link stops working and its place is freed | `204`; `404` when it is not a live invitation |
+| `POST /users/address-probe` | — | `issue_probe_nonce()`: a signed nonce for the [address probe](security.md#address-probe), valid 120 s and stored nowhere; a new one at every call | `200` `{nonce, expires_at}` |
+| `GET /auth/address-probe?nonce=…` | — | Public, the same answer with or without a session: `verify_probe_nonce()`, whether this instance issued the nonce. Readable from any origin (`Access-Control-Allow-Origin: *`) | `200` `{match}`: `false` for anything not issued here or expired, never `422` |
 
 - `path` is `token_path()`: the page, with the token in the fragment (`#token=…`, see
   [Links in Use](security.md#account-token-links)). `url` is `LIBREFOLIO_PUBLIC_URL` followed by the
@@ -257,8 +266,56 @@ or *links show the bare path until it is fixed*.
 - Each change writes a structured log event with the id of the account or of the invitation, and
   the administrator's (`admin_id`, or `created_by_user_id` for an invitation or a reset link):
   *Invitation created*, *Invitation revoked by an administrator*, *Account updated by an
-  administrator*, *Password reset link created*, *Sessions ended by an administrator*, *Onboarding
-  reset by an administrator*. None carries the token or its hash.
+  administrator*, *Account deleted by an administrator*, *Password reset link created*, *Sessions
+  ended by an administrator*, *Onboarding reset by an administrator*. None carries the token or its
+  hash.
+
+### 🗑️ Deleting an Account {: #admin-account-deletion }
+
+`DELETE /api/v1/users/{user_id}` deletes another account by the rule of deleting one's own: broker by
+broker, the last-owner rule of `BrokerService.leave_broker()`. A broker the account is the only `OWNER` of
+goes, with its transactions and its report files; on the others only the account's access goes. An inactive
+co-owner's `OWNER` row counts as another owner. The rule, the shared helper and the preview are in
+[Deleting an Account](users_and_brokers.md#account-deletion).
+
+`GET /api/v1/users/{user_id}/deletion-preview` tells the administrator beforehand what the deletion would
+take, by the same rule, writing nothing: `brokers_deleted`, `brokers_left` and `transfers_unpaired`.
+`GET /api/v1/auth/users/me/deletion-preview` gives any signed-in user the same for their own account.
+
+After `require_admin`, the deletion refuses, in this order:
+
+1. `404` *User not found*: no such account;
+2. `409` `SELF_DELETION`: the caller's own account, which is deleted from the profile
+   (`DELETE /api/v1/auth/users/me`);
+3. `409` `ACCOUNT_PROTECTED`, with the `reason` of the [protection hook](#account-protection). It comes
+   before `DEMOTE_FIRST` because demoting a protected account is refused too;
+4. `409` `DEMOTE_FIRST`: an administrator, active or not. It must be demoted first, so the last
+   administrator can never be deleted from here.
+
+Each `409` carries `detail` `{error_code, message}`, plus `reason` for `ACCOUNT_PROTECTED`. Otherwise the
+route calls `user_service.delete_account()`, the helper of `DELETE /auth/users/me` too, and answers `204`
+with an empty body. All or nothing: a technical failure rolls everything back and answers `500` *Account
+deletion failed: nothing was deleted*. The deleted account's sessions get `401` at their next request.
+
+- **Log**: one structured event, *Account deleted by an administrator*, with `user_id`, `username`,
+  `admin_id`, `brokers_deleted` (the ids of the deleted brokers) and `files_removed`. A failure logs
+  *Account deletion by an administrator failed: nothing was deleted*, with `user_id`, `admin_id` and the
+  traceback.
+- **Blocked instance**: both previews and the administrator's deletion are outside
+  `ALLOWED_WHEN_BLOCKED` ([Instance Block](security.md#instance-block)): `423` for a signed-in caller,
+  `401` for anyone else. Of the deletion routes, only `DELETE /api/v1/auth/users/me` is on the list.
+
+### 🛡️ Protected Accounts {: #account-protection }
+
+`user_service.account_protection(user) -> Optional[str]` gives the reason why nobody may delete, deactivate
+or demote an account, or `None`. It is the hook of lot A7, for the administrator created from the
+environment on a managed instance, who pays for it; until then it returns `None` for every account.
+
+- `GET /users` reflects it in `protected` (`AdminUserRead`), as do the accounts `PATCH` returns.
+- `DELETE /users/{user_id}`, and a `PATCH /users/{user_id}` that deactivates or demotes the account, answer
+  `409` `ACCOUNT_PROTECTED` with that `reason`. The `PATCH` checks it first, before the user limit and the
+  last-administrator rule.
+- Promoting or reactivating a protected account is not refused.
 
 ### 🔑 Password-Reset Links {: #reset-links }
 
@@ -282,7 +339,9 @@ mode, the usage, invitations, every branch of `register_user()`, the limit under
 `./dev.py test api registration` (`backend/test_scripts/test_api/test_registration_api.py`:
 registration by mode, inspection, the password reset, the `accounts` block, the locked setting) and
 `./dev.py test api users-admin` (`backend/test_scripts/test_api/test_users_admin_api.py`: the
-administrator API with its guards and its logs).
+administrator API with its guards and its logs; the deletion and its preview on the lane's server, and
+in process the protection hook replaced, the log event and an injected failure). The address probe has
+its own tests, listed in [Address Probe](security.md#address-probe).
 
 The web pages of the links, `/invite` and `/reset-password`, are in
 [Authentication Components](../frontend/components/features/auth.md#link-pages).
