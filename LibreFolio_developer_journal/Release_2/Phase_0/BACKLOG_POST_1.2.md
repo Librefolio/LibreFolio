@@ -2447,6 +2447,13 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     fra i due colori è minima.
 
   Dettagli: piano di T, passo T-8, punto 15.
+- **TC-10 · Revisione del mattino delle ondate notturne (D-T27)** — medio; T, 15/10 notte. Per D-T27 i lotti entrano
+  validati senza l'OK del developer; dove i ruoli e la skill `theme-roles` non coprono un caso, T sceglie il ruolo più
+  vicino e lo annota nel piano come **«da rivedere»**.
+  - W3-a: le barre della dashboard prendono il ruolo del testo (più scure in chiaro, niente fluo in scuro); le barre
+    categoriali «Costo d'acquisto» e «Liquidità» restano blu e smeraldo, in attesa di un ruolo categoriale.
+
+  Dettagli: piano di T, voci «da rivedere» di ogni lotto nell'avanzamento (da W3-a in poi).
 
 ---
 

@@ -1,8 +1,9 @@
 /**
  * Colours computed from a value — the one home for them.
  *
- * Each function was moved verbatim from the chart that computed it, so the same input still gives the same colour
- * string. They stay functions because their colour is a formula, not a table entry.
+ * Each function was moved verbatim from the chart that computed it, so the same input still gave the same colour
+ * string; `timingEffectColor` has since moved onto the gain and loss roles (TD-2). They stay functions because their
+ * colour is a formula, not a table entry.
  *
  * @module lib/theme/chartColorScales
  */
@@ -25,9 +26,11 @@ export function treemapPnlColor(pct: number | null, isDark: boolean): string {
 }
 
 /**
- * The KPI card's timing-effect text: green when favourable, red otherwise, its strength in `alpha`. The light-theme gain
- * and loss of the portfolio charts, in both themes.
+ * The KPI card's timing-effect text, for an inline `style`: the gain role when favourable, the loss role otherwise, its
+ * strength in `alpha` (0–1). A CSS `color-mix()` over the role variable, so it follows the theme like a class does; a
+ * canvas cannot read it — a chart takes its roles from `roleColors`.
  */
 export function timingEffectColor(favorable: boolean, alpha: number): string {
-    return favorable ? `rgba(22, 163, 74, ${alpha})` : `rgba(220, 38, 38, ${alpha})`;
+    const pct = Number((Math.min(Math.max(alpha, 0), 1) * 100).toFixed(2));
+    return favorable ? `color-mix(in oklab, var(--lf-gain) ${pct}%, transparent)` : `color-mix(in oklab, var(--lf-loss) ${pct}%, transparent)`;
 }
