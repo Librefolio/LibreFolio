@@ -17,6 +17,7 @@ block_router = APIRouter()
 
 
 @block_router.get("/block", response_model=InstanceBlockResponse)
-async def get_instance_block(_current_user: Annotated[User, Depends(get_current_user)]) -> InstanceBlockResponse:
-    """Whether this instance is blocked by its hosting provider, and the day it will be deleted, when given."""
-    return InstanceBlockResponse(blocked=instance_blocked(), deletion_date=instance_deletion_date())
+async def get_instance_block(current_user: Annotated[User, Depends(get_current_user)]) -> InstanceBlockResponse:
+    """Whether this instance is blocked by its hosting provider, the day it will be deleted, when given, and whether the
+    signed-in user may still download a full backup (administrators only)."""
+    return InstanceBlockResponse(blocked=instance_blocked(), deletion_date=instance_deletion_date(), backup_available=current_user.is_superuser)
