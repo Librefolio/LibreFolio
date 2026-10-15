@@ -11,17 +11,11 @@ from typing import Any, cast, get_args
 
 import pytest
 
-from backend.app.schemas.pac_allocator.pac_allocator import (
-    PAC_PLAN_INPUT_ADAPTER,
-    REBALANCER_PLAN_INPUT_ADAPTER,
-    FiniteDecimal,
-    PlannerIssue,
-    PlannerIssueCode,
-    PlannerIssuePath,
-)
-from backend.app.schemas.pac_allocator.pac_allocator import (
-    ExactRatio as WireExactRatio,
-)
+from backend.app.schemas.pac_allocator.base import PlannerIssueCode
+from backend.app.schemas.pac_allocator.exact import ExactRatio as WireExactRatio
+from backend.app.schemas.pac_allocator.exact import FiniteDecimal
+from backend.app.schemas.pac_allocator.issues import PlannerIssue, PlannerIssuePath
+from backend.app.schemas.pac_allocator.results import PAC_PLAN_INPUT_ADAPTER, REBALANCER_PLAN_INPUT_ADAPTER
 from backend.app.services.pac_allocator.issues import (
     CANONICAL_ISSUE_CODES,
     W1_NORMALIZER_ISSUE_DEFINITIONS,

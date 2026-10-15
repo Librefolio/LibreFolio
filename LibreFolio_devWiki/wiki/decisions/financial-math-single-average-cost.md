@@ -244,7 +244,7 @@ average cost comes from this one function.
 | `MISSING_COST_BASIS`, `UnrealizedBreakdownRow` | `backend/app/schemas/portfolio.py` |
 | `BRAssetHolding.total_cost`, `BRSummary.missing_fx_pairs` | `backend/app/schemas/brokers.py` |
 | Facade output (`WACPreviewResultItem`, `WACQualifyingTX`) | `backend/app/schemas/wac.py` |
-| PAC planner (passes T as override) | `backend/app/services/pac_allocator/source/portfolio_allocation_source.py` |
+| PAC planner (passes T as override) | `backend/app/services/pac_allocator/source/wac.py` |
 | `POST /portfolio/wac` | `backend/app/api/v1/portfolio_api.py` |
 | Batch auto cost basis | `backend/app/services/transaction_service.py` |
 | Dashboard tooltip | `frontend/src/lib/components/dashboard/KpiSection.svelte` |

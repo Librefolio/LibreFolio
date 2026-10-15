@@ -90,6 +90,7 @@ RISK_SERVICE_TEST_PATHS = (
 PAC_PLANNER_CORE_TEST_PATHS = (
     "backend/test_scripts/test_services/test_pac_planner_exact.py",
     "backend/test_scripts/test_services/test_pac_planner_normalize.py",
+    "backend/test_scripts/test_services/test_pac_planner_engine_boundaries.py",
 )
 PAC_PLANNER_EVALUATOR_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_evaluator.py"
 PAC_PLANNER_ORACLE_TEST_PATH = "backend/test_scripts/test_services/test_pac_planner_oracle.py"
@@ -102,7 +103,7 @@ PAC_PLANNER_SERVICE_TEST_PATH = "backend/test_scripts/test_services/test_pac_pla
 
 
 def services_pac_planner_core(verbose: bool = False, test_names: list = None) -> bool:
-    """Test exact PAC/Rebalancer primitives, models, and normalization."""
+    """Test exact PAC/Rebalancer primitives, models, normalization, and the engine's data boundary."""
     print_section("Services: PAC/Rebalancer Exact Core")
     cmd = [*pipenv_prefix(), "python", "-m", "pytest", *PAC_PLANNER_CORE_TEST_PATHS, "-v"]
     if test_names:
@@ -592,7 +593,7 @@ def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> 
 def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test the read-only PAC/Rebalancer portfolio source snapshot."""
     print_section("Services: Portfolio Allocation Source")
-    print_info("Testing: backend/app/services/pac_allocator/source/portfolio_allocation_source.py")
+    print_info("Testing: backend/app/services/pac_allocator/source/")
     print_info("Tests: selectors, exact facts, saved evidence, provenance and no side effects")
 
     cmd = _build_pytest_cmd(
@@ -933,7 +934,7 @@ Note: No backend server required.
         "pac-planner-core",
         services_pac_planner_core,
         name="PAC/Rebalancer Exact Core",
-        desc="Canonical rational arithmetic, posting, fee, FX and tax primitives plus strict v2 normalization, exact model mapping and typed issue precedence",
+        desc="Canonical rational arithmetic, posting, fee, FX and tax primitives plus strict v2 normalization, exact model mapping, typed issue precedence and the engine's data boundary (no database, no planner source)",
         isolation="pure",
     )
     add_test(

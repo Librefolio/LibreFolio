@@ -9,38 +9,28 @@ from decimal import Decimal
 
 from babel.numbers import get_currency_precision
 
-from backend.app.schemas.pac_allocator.pac_allocator import (
+from backend.app.schemas.pac_allocator.base import PlannerIssueCode, PlannerMoneyInput
+from backend.app.schemas.pac_allocator.exact import ExactNumber as WireExactNumber
+from backend.app.schemas.pac_allocator.exact import ExactRatio as WireExactRatio
+from backend.app.schemas.pac_allocator.exact import FiniteDecimal
+from backend.app.schemas.pac_allocator.issues import CurrencyIssueParam, IdIssueParam, PlannerIssue, PlannerIssueParam, PlannerIssuePath, TextIssueParam
+from backend.app.schemas.pac_allocator.request import (
     AmountFeeCap,
-    CurrencyIssueParam,
     DomainAssetIdentity,
     DomainBrokerIdentity,
     DomainCopyProvenance,
-    FiniteDecimal,
-    IdIssueParam,
     ManualProvenance,
     MonetaryAmountCapability,
     MonetaryAmountMinimum,
     NoOrderCap,
     NotionalOrderCap,
     PacPlannerRequest,
-    PlannerIssue,
-    PlannerIssueCode,
-    PlannerIssueParam,
-    PlannerIssuePath,
-    PlannerMoneyInput,
     PlannerOrderRouteInput,
     RebalancerInvestAndSellRequest,
     RebalancerInvestOnlyRequest,
     RebalancerPlannerRequest,
-    TextIssueParam,
     WholeQuantityCapability,
     WholeQuantityMinimum,
-)
-from backend.app.schemas.pac_allocator.pac_allocator import (
-    ExactNumber as WireExactNumber,
-)
-from backend.app.schemas.pac_allocator.pac_allocator import (
-    ExactRatio as WireExactRatio,
 )
 from backend.app.services.pac_allocator.issues import (
     PlannerAvailability,
