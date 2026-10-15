@@ -119,7 +119,8 @@ version and evaluated again after an update:
   no `plugin_version` bump: that version covers what `parse` and `combine` output, not detection;
 - a `can_parse` that raises counts as `False` (`get_compatible_plugins` skips the plugin), and that
   answer is cached like any other until the next version — never raise;
-- in a development checkout the version is `git describe --tags --always --dirty`, read once per
+- in a development checkout the version is `git describe --tags --always --dirty`, unless
+  `LF_APP_VERSION` is set ([Version Stamps](../../docs/release-pipeline.md#version-stamps)), read once per
   process: an edited `can_parse` reaches the files already uploaded only once that string changes
   (a commit) and the server restarts — or upload the file again.
 

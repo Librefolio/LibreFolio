@@ -356,7 +356,9 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   conteggio va scritto relativo, mai assoluto. Dettagli: [rapporto della run finale](38_postReleaseBacklog/report-R-final-run-coverage-20261013.md).
 - **C-84 · Le versioni scritte a mano nei file del progetto** — minimo; coordinatore, 14/10. `pyproject.toml` e
   `frontend/package.json` dicono ancora 1.1.0, fissate il 05/08; nessuno le legge, perché la versione dell'app viene da
-  `git describe`. Da allineare a ogni rilascio, o da togliere.
+  `git describe`. Da allineare a ogni rilascio, o da togliere. **Metà chiusa da H il 15/10** (decisione 14):
+  `pyproject.toml` a `0.0.0`, con un commento (`6e78b8c96`, in `dev_release2` con `9deb0ea08`); `frontend/package.json`
+  e le due righe radice del lock con il CP5b di H, dopo la finestra della galleria.
 - **C-85 · Mostrare che si sta aspettando il server, nelle richieste importanti** — medio; developer, 14/10, dalla
   verifica sul server della build `v1.1.0-1674-g797a7e432` (voce 7). Le sue parole: «quando un pacchetto è in volo non si
   ha chiaro che si sta attendendo la risposta, dobbiamo aggiungere nel backlog un task che si occupa di rendere palese
@@ -1758,8 +1760,11 @@ sulle tabelle del 21/09, «Il residuo vero» compreso. Correzione della ricogniz
   sorgente invece di eseguire le funzioni. Dettagli: idem.
 - **P4-10 · I sei siti di Risk fuori dal canale di mascheramento** — basso, da riverificare dopo il Round 2 della
   privacy. Dettagli: idem.
-- **R2 · `VERSION` stantio** — medio; manca la decisione: leggerlo solo senza `.git/`, o cancellarlo dopo la build.
-  Dettagli: idem, e [08](09_feedbackJobs/08_review_visiva_20260922.md) R2.
+- ✅ **R2 · `VERSION` stantio** — medio; manca la decisione: leggerlo solo senza `.git/`, o cancellarlo dopo la build.
+  Dettagli: idem, e [08](09_feedbackJobs/08_review_visiva_20260922.md) R2. **Chiusa da H il 15/10** (piano 1.3, §10
+  n. 12): con `.git` vince `git describe`; `VERSION` vale solo senza `.git` o quando git fallisce; prima di tutto
+  `LF_APP_VERSION`, che la pipeline di rilascio esporta già per la build del frontend (`6e78b8c96`, in `dev_release2`
+  con `9deb0ea08`).
 - **§2.4 · Il guardiano del catalogo finto** — basso; debito dichiarato, non verificato nel codice. Dettagli: idem, e
   [09](09_feedbackJobs/09_reperti_analisi_statica_20260922.md) §2.4.
 - **SP15 · `SensitiveValue`** — peso da stimare; sospeso dal 21/09 perché non c'era nessun consumatore misurato, e non
@@ -2068,6 +2073,13 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - È fail-closed, ma senza un messaggio chiaro: andrebbe trasformato in `ValueError` col percorso.
 
   Dettagli: piano H, §14 «CP3 passo 2», «Fuori pista».
+- **H-5 · Debito di traduzione delle pagine admin toccate da H** — basso; H, 15/10.
+  - `translate-validate --hide-localized` conta 102 errori nel repository. 33 vengono da CP5a: un riquadro su
+    `/api/v1/system/ready` in `docker_advanced` e in `service_exposure`, in IT, FR ed ES.
+  - Gli altri 69 c'erano già, in `configuration`, `filesystem` e `index`; ci sono anche le righe di CP3 e CP4.
+  - Si chiude con la traduzione, che parte solo su richiesta esplicita del developer.
+
+  Dettagli: piano H, §14 «CP5a passo 2».
 
 ## A · Account e accessi (fase 01)
 
@@ -2250,7 +2262,8 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   pulsante `hasText: 'Cancel'`. Per questi ultimi due `DataImportModal.svelte` non ha test-id: il `ConfirmModal` di `:305`
   accetta `testId` ma non lo riceve, e il pulsante Annulla di `:287` non ne ha. Cura: due test-id nel componente (condiviso,
   toccato da W in K1) e le quattro righe della spec. Deciso dal coordinatore il 15/10: con il FE4; i due test-id li chiede
-  lui a W, proprietario di `DataImportModal.svelte`.
+  lui a W, proprietario di `DataImportModal.svelte`. **15/10, i due test-id ci sono** (W E0, `d226bc69e`):
+  `data-import-cancel` e `data-import-discard-confirm`. Restano a X le quattro righe della spec, con il FE4.
   Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP3b.
 
 - ✅ **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — basso, robustezza; trovata da J il
@@ -2319,11 +2332,20 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   a `services/asset_source.py` e `schemas/assets.py` di X. La docstring diventa la descrizione dell'enum nell'OpenAPI,
   quindi un lotto di riordino, che vuole lo schema identico, non la tocca. Cura: un lotto che accetta la differenza
   nella descrizione, insieme a X per le sue due righe. Dettagli: piano 04, §12, W4.
-- **W-B15 · `tx-bulk-operations.spec.ts` prende il pulsante di chiusura per testo** — minimo, test; trovato da X il 15/10
+- **W-B16 · Un evento del fornitore reimportato da un backup torna come evento manuale, e poi raddoppia** — basso,
+  dati; W, 15/10 (analisi di E1, I-11b). L'export degli eventi (`backend/app/api/v1/backup.py:277-330`) porta la colonna
+  `source` (`MANUAL`/`PROVIDER`), che l'import ignora. Se la riga del fornitore trova ancora il suo evento, l'editor la
+  salta (`frontend/src/lib/components/ui/data-editor/DataEditor.svelte:545-548`); se non lo trova più, per esempio dopo
+  un cambio di valuta che cancella gli eventi, rientra come evento manuale, e il fornitore la ricrea al sync successivo:
+  due eventi. Oggi la guida chiede di togliere a mano quelle righe (`user/assets/detail/data-editor.en.md:71`). Proposta:
+  l'import degli eventi salta le righe `PROVIDER` quando l'asset ha un fornitore assegnato e le conta nel riepilogo;
+  un'opzione le importa comunque come manuali, per un asset rimasto senza fornitore. Dettagli: piano 04, §12, E0.
+- ✅ **W-B15 · `tx-bulk-operations.spec.ts` prende il pulsante di chiusura per testo** — minimo, test; trovato da X il 15/10
   (CP3b), assegnato a W dal coordinatore. `frontend/e2e/transactions/tx-bulk-operations.spec.ts:428` usa
   `button:has-text("Cancel"), button:has-text("Close"), [aria-label="Close"]`, che regge solo in inglese. Nella
   stessa famiglia, X-R9 (sezione X) chiede due `data-testid` in `DataImportModal.svelte` di W: il `ConfirmModal` di
-  `:305` e il pulsante Annulla di `:287`. Dettagli: piano 03, §15, CP3b.
+  `:305` e il pulsante Annulla di `:287`. Dettagli: piano 03, §15, CP3b. **Chiusa da W il 15/10** (E0, `d226bc69e`): la
+  spec chiude il picker con `tx-picker-cancel`, che c'era già; nessun difetto del prodotto.
 
 ## J · Numeri e analisi (fase 01)
 
@@ -2364,12 +2386,18 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
 - ↪ **J-5 · Un thread dell'executor resta con un loop chiuso come loop corrente** — spostata nella sezione X dal
   coordinatore il 15/10 (file di X), come lotto piccolo con un test dopo il CP4. ✅ Chiusa da X il 15/10
   (`743fca514`).
-- **J-6 · Nessuna guardia di suite per le connessioni aiosqlite lasciate aperte** — basso, facoltativa; J, 15/10
+- ✅ **J-6 · Nessuna guardia di suite per le connessioni aiosqlite lasciate aperte** — basso, facoltativa; J, 15/10
   (C-93). Oggi le connessioni aperte dopo un test sono 0 in tutta la suite, ma lo garantisce solo la guardia del file
   d'integrazione dell'AI Export. Una fixture autouse nel `conftest.py` condiviso potrebbe far fallire ogni test che
   lascia aperta una `aiosqlite.Connection` creata durante il test (registrando le connessioni create e controllando
   al teardown, come la sonda usata per C-93). Il conftest è condiviso: decide il coordinatore. Dettagli: piano J, §10
   «C-93».
+  - 15/10, J: chiusa al checkpoint J-6. Fixture autouse `_aiosqlite_leak_guard` nel `conftest.py` condiviso: un
+    test che lascia aperta una connessione aiosqlite creata nel thread principale ha un ERROR al proprio teardown, con
+    lo stack di creazione; elenco esplicito `AIOSQLITE_LEAK_EXCEPTIONS`, vuoto. Self-test in `utils
+    gate-aiosqlite-leak` (9). `all-backend --workers 2` verde senza rapporti. Dettagli: piano J, §10 «J-6».
+  - In `dev_release2` con `e2cb55054` (J-6 `b49a54645`); la regola è la n. 7 di
+    `.github/instructions/backend-testing.instructions.md`.
 
 ## Z · Sospensione e risveglio (fase 01)
 

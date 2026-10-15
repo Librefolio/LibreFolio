@@ -284,7 +284,7 @@
             {/if}
         </div>
         <div class="flex gap-2">
-            <button class="px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" onclick={requestClose}>{$t('common.cancel')}</button>
+            <button class="px-4 py-2 text-sm bg-gray-200 dark:bg-slate-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-500 transition-colors" data-testid="data-import-cancel" onclick={requestClose}>{$t('common.cancel')}</button>
             <button
                 class="px-4 py-2 text-sm bg-libre-green text-white rounded-lg hover:bg-libre-green/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 data-domain-error={domainError ? 'true' : 'false'}
@@ -302,4 +302,4 @@
 </ModalBase>
 
 <!-- Confirm discard modal (stacked above) -->
-<ConfirmModal confirmText={$t('common.discardAndClose')} message={$t('csvImport.discardMessage')} onCancel={() => (showDiscardConfirm = false)} onConfirm={doClose} open={showDiscardConfirm} title={$t('common.discardImport')} warning={true} />
+<ConfirmModal confirmText={$t('common.discardAndClose')} message={$t('csvImport.discardMessage')} onCancel={() => (showDiscardConfirm = false)} onConfirm={doClose} open={showDiscardConfirm} testId="data-import-discard-confirm" title={$t('common.discardImport')} warning={true} />

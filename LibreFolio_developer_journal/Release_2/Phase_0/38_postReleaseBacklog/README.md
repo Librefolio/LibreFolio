@@ -414,6 +414,9 @@ Origine: [20_performanceCharts](../../phases/20_performanceCharts/README.md),
   ripetuta; l'import ignora `source` (le righe dei provider tornano manuali e poi raddoppiano) e `currency` (un
   backup preso prima di un cambio di valuta torna rietichettato); il selettore della data disabilita le date già
   usate (`DataEditor.svelte:151-161`). Origine: AssetEvents.
+  - 15/10, nella 1.3 (W, E0, `d226bc69e`): ✅ **a** (due righe sono doppioni solo con la stessa data e lo stesso tipo) e
+    ✅ **d** (il selettore blocca solo i giorni con un evento dello stesso tipo). La **b** (`source`) è la W-B16 del
+    backlog post-1.2, la **c** (`currency`) va nel lotto E1b, dopo le decisioni 20–23.
 - **I-12 · guardie server degli eventi** — basso-medio. `DELETE /assets/events?ids=…` non è limitato all'asset
   (`backend/app/api/v1/assets.py:1070-1072`, `price_store.py:954`); `bulk_upsert_events` salva un elemento alla volta
   (`price_store.py:629`). Origine: AssetEvents.
