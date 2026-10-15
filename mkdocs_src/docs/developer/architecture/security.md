@@ -196,8 +196,8 @@ does not: `web_link_finder_api_key()` in `backend/app/config/plugins.py` reads i
 builds the `apikey` engine, and `_build_engine()` in `backend/app/services/assets/web_link_finder.py`
 then logs `web_link_finder: <error>; disabling` and returns no engine, so that search finds no links.
 Nor does a broken `LIBREFOLIO_SMTP_PASSWORD_FILE`: email is optional, so `email_config_state()` turns
-it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged and, from a later lot,
-shown to administrators ([Email Service](../backend/email.md#config-state)).
+it off instead, with the problem `SMTP_PASSWORD_UNREADABLE`, which is logged at startup and shown to
+administrators in Settings › Email ([Email Service](../backend/email.md#config-state)).
 
 When `NAME` and `NAME_FILE` are both set, neither blank, `NAME` wins. `secrets_set_twice()` lists those
 names for the [configuration checks](#configuration-checks). It covers `JWT_SECRET` and every
@@ -318,7 +318,8 @@ A check changes nothing, never raises and never puts a secret value in its resul
 | `platform.session_cookie` | `SESSION_COOKIE_SECURE=never` | `warning` |
 | `platform.log_level` | `LOG_LEVEL`, after the `LIBREFOLIO_LOG_LEVEL` override, is `DEBUG` or `TRACE` | `info` |
 
-At startup, the lifespan of `backend/app/main.py` runs `log_configuration_audit()` in a thread
+At startup, the `configuration-checks` step of the lifespan (`STARTUP_STEPS` in
+`backend/app/services/platform/app_lifespan.py`) runs `log_configuration_audit()` in a thread
 (`asyncio.to_thread`), right after the `Starting LibreFolio` line:
 
 1. `configured_jwt_secret()`: an unreadable `JWT_SECRET_FILE` raises `SecretFileError`. In practice
@@ -351,6 +352,7 @@ All endpoints that access or modify user data require a valid session cookie (`D
 | `/auth/register` | POST | New user registration, under the [registration mode](access_control.md#registration-modes) and the [user limit](access_control.md#user-limit) |
 | `/auth/tokens/inspect` | POST | The status of an invitation or password-reset link, for whoever holds its token: see [Links in use](#account-token-links) |
 | `/auth/password-reset` | POST | Spend a password-reset link: a new password, and every session of the account ended |
+| `/auth/address-probe` | GET | Whether this instance issued a nonce: `{match}` and nothing else, readable from any origin; see [Address Probe](#address-probe) |
 | `/system/health` | GET | Health check: the server answers |
 | `/system/info` | GET | System information, the app version only without a valid session (`SystemInfoPublicResponse`) and everything with one (`SystemInfoResponse`): see [System information and readiness](#system-info-and-readiness) |
 | `/system/instance` | GET | Public instance configuration, needed before sign-in: see [Public instance configuration](settings.md#public-instance-configuration) |
@@ -432,7 +434,8 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | Endpoints | Functions | For |
 |-----------|-----------|-----|
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me` | `auth.login`, `auth.logout`, `auth.get_me` | Signing in and out, and who is signed in |
-| `DELETE /auth/users/me` | `auth.delete_own_account` | Deleting one's own account; the block page has no button for it yet |
+| `POST /auth/tokens/inspect`, `POST /auth/password-reset` | `auth.inspect_link_token`, `auth.reset_password_with_link` | A link already sent: reading it, and setting a new password with a reset link; without them, someone who lost the password could never reach the block page, the account deletion or the backup |
+| `DELETE /auth/users/me`, `GET /auth/users/me/deletion-preview` | `auth.delete_own_account`, `auth.preview_own_account_deletion` | Deleting one's own account, and seeing first what it would delete; the block page has no button for it yet |
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
@@ -453,7 +456,7 @@ valid session gets these answers:
 | Routes | Not blocked | Blocked |
 |--------|-------------|---------|
 | Protected routes outside the list | `401` | The same `401` |
-| Public routes outside the list: `POST /auth/register`, `GET /utilities/*`, `GET /settings/global`, `GET /settings/global/{key}`, `GET /ai-export/catalog` | Their usual answer | `401` |
+| Public routes outside the list: `POST /auth/register`, `GET /auth/address-probe`, `GET /utilities/*`, `GET /settings/global`, `GET /settings/global/{key}`, `GET /ai-export/catalog` | Their usual answer | `401` |
 | The routes of the list | Their usual answer | The same answer |
 
 - The protected routes and the routes of the list do not reveal the block: `/system/instance`,
@@ -467,12 +470,22 @@ blocked one it runs before the route's own dependencies and before the body is v
 caller of a refused route gets the `423` even with an invalid body, never a `422`.
 
 **`GET /system/block`** (`backend/app/api/v1/system/block.py`) is for signed-in users only, and allowed
-on a blocked instance. It returns `InstanceBlockResponse` (`backend/app/schemas/system.py`): `blocked`,
-and `deletion_date`, `null` without a date. A workstream that owns part of the block page adds one
-field there and fills it in `block.py` with one call to its service.
+on a blocked instance. It returns `InstanceBlockResponse` (`backend/app/schemas/system.py`): `blocked`;
+`deletion_date`, `null` without a date; and `billing_url`, where the subscription is managed
+(`LIBREFOLIO_BILLING_URL`, from `registration_service.billing_link()`), for administrators only: it is
+`null` for the other users, and when the variable is unset or not an `http(s)` address (`billing_link()`
+logs the latter once per process). The block page
+(`frontend/src/lib/features/instance/components/InstanceBlockedPage.svelte`) checks again that it is an
+`http(s)` address, then shows an administrator a **Manage subscription** link to it, opened in a new tab
+(`rel="noopener noreferrer"`). A workstream that owns part of the block page adds one field there and
+fills it in `block.py` with one call to its service.
 
-**Changing the list.** The list is short on purpose. The full backup for the administrator and the
-scheduled wake-up join it, one line each, when their routes exist; any other addition goes through the
+**Changing the list.** The list is short on purpose. The two link endpoints joined it for someone who
+lost the password (see the table above): they read a link already sent or spend a reset link, and
+create no account. Registration (`POST /auth/register`) stays out: it is still one of the public routes
+that answer `401` on a blocked instance, so an invitation link can be read there but not accepted. The
+full backup for the administrator and the scheduled wake-up join the list, one line each, when their
+routes exist; any other addition goes through the
 developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
 pins the list by name and by route, checks that every API route under `/api/v1` resolves
 `refuse_when_blocked` first, and that the only other routes under `/api/v1` are FastAPI's
@@ -588,7 +601,7 @@ tokens:
   Any other token gets its status alone, and a token presented for the other purpose is `unknown`.
 - **Anonymous answers say nothing about the users.** The `409` `USER_LIMIT_REACHED` of `POST /auth/register`
   carries no count and no billing link; only the administrator's routes add `limit`, `used` and `billing_url`.
-  `GET /system/instance` publishes only the registration mode and whether a variable locks it.
+  About accounts, `GET /system/instance` publishes only the registration mode and whether a variable locks it.
 - **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…` and
   `/reset-password#token=…`. A browser never sends the fragment to the server, so the token is not in the request
   for the page: it stays out of the server's access log and out of the logs of every proxy on the way. A browser
@@ -600,6 +613,130 @@ tokens:
   the page changes only the fragment and loads nothing, so the page reads the new token there. Both declare
   `<meta name="referrer" content="no-referrer">`: a link followed from them sends no `Referer` at all. Their
   components are in [Authentication Components](../frontend/components/features/auth.md#link-pages).
+
+## 📡 Address Probe {: #address-probe }
+
+Developer decision D-A3 has the Invite dialog prefill the server's address and let the administrator edit
+it. When the address is edited, the browser checks that *this* instance answers there, not merely
+something. `backend/app/services/accounts/address_probe.py` does it with a signed nonce and two routes:
+
+1. the browser asks its own instance for a nonce: `POST /api/v1/users/address-probe`, administrators only
+   (`require_admin`), `200` `{nonce, expires_at}` (`AddressProbeIssued`), a new nonce at every call;
+2. it sends the nonce, without credentials, to `GET <address>/api/v1/auth/address-probe?nonce=…`, which is
+   public and answers `200` `{"match": true}` only when the instance there issued the nonce,
+   `{"match": false}` otherwise (`AddressProbeResult`), and nothing else.
+
+### 🎯 Why a Signed Nonce {: #address-probe-threat-model }
+
+A stable instance id readable from any origin would have been simpler, and was set aside: any page visited
+by someone on the instance's network could read it from a LibreFolio on the LAN, and recognise the same
+instance at two addresses, a fingerprint. With the nonce, the public answer is one bit about a value only an
+administrator of this instance can obtain:
+
+- issuing needs an administrator's session, and its answer carries no `Access-Control-Allow-Origin`: no
+  other origin can read a nonce;
+- the check answers `match` and nothing else: no id, no version, no configuration;
+- any page can still tell that *a* LibreFolio answers at an address, since the check answers
+  `{"match": false}` to anyone, but not *which* one.
+
+Unlike an [account token](#account-token-links), the nonce rides in the query string, so it reaches the
+request log: the [request-log filter](#request-logs) masks credential-like parameters, and `nonce` is not one.
+There it is worth the same bit, for at most two minutes.
+
+### 🧾 The Nonce {: #address-probe-nonce }
+
+`issue_probe_nonce()` returns the nonce and `expires_at`:
+
+```text
+base64url( rand16 ‖ expiry_be8 ‖ HMAC-SHA256(derive_key("accounts.address-probe.v1"), rand16 ‖ expiry_be8) )
+```
+
+| Part | Bytes | Content |
+|------|-------|---------|
+| `rand16` | 16 | `secrets.token_bytes(16)` |
+| `expiry_be8` | 8 | The expiry in Unix seconds, big-endian: the second of the issue plus 120 (`PROBE_TTL_SECONDS`) |
+| MAC | 32 | HMAC-SHA256 of the first 24 bytes, under the key `derive_key()` gives the purpose `accounts.address-probe.v1` (`PROBE_PURPOSE`): see [Instance Key](#instance-key) |
+
+The 56 bytes are written in base64url without padding: 75 characters. Nothing is stored: the nonce carries
+everything its check needs, so any worker verifies a nonce any worker issued, and a check consumes nothing:
+a nonce matches as often as it is asked until it expires. *This instance* means *this instance key*: a copy
+running with the same key, such as a restored backup, matches too. Without a configured key, issuing a
+nonce, or checking a well-formed one, can be the first use that generates the key file.
+
+### 🔍 Verification {: #address-probe-verification }
+
+`verify_probe_nonce(nonce)` is `True` only for a nonce this instance issued that has not expired, `False`
+for anything else, and never raises:
+
+1. **Shape**: a text over 256 characters (`MAX_NONCE_LENGTH`) is refused at once; otherwise it must be
+   exactly 75 characters of the base64url alphabet (`A–Z`, `a–z`, `0–9`, `-`, `_`). The alphabet is
+   checked before decoding because Python's base64 decoder is lenient: it skips the characters outside its
+   alphabet, and its URL-safe variant also reads `+` and `/`.
+2. **One spelling per nonce**: the text must decode to 56 bytes that encode back to the very same text.
+   The last character carries two bits the decoder ignores, so four texts would otherwise pass for one
+   nonce.
+3. **The MAC** is recomputed and compared with `hmac.compare_digest`, the only judge of the signature.
+4. **The expiry** is read only once the MAC holds: the nonce matches up to `expires_at`, included.
+
+An instance key that cannot be used makes every check `False`, with one warning per process (*Address
+probe: the instance key cannot be used, every probe answers no match*); the
+[configuration checks](#configuration-checks) give the reason at startup. Issuing has no such fallback:
+`POST /users/address-probe` then fails with `500`.
+
+`GET /auth/address-probe` reads `nonce` from the query string, `""` when it is absent, with no length
+constraint, so no value gets a `422`: an empty, malformed, oversized, non-canonical, forged, expired or
+foreign nonce is `200` `{"match": false}`. A session cookie, valid or not, changes nothing.
+
+### 🌐 One Route Readable from Any Origin {: #address-probe-cors }
+
+The check is cross-origin by nature: the page runs at the address the administrator is using, the check
+goes to the edited one. `answer_address_probe()` (`backend/app/api/v1/auth.py`) sets two headers on every
+answer, `true` or `false`:
+
+- `Access-Control-Allow-Origin: *`, once: no other route of the backend sets this header;
+- `Cache-Control: no-store`.
+
+The global `CORSMiddleware` (the `cors` entry of `MIDDLEWARE_STACK`, `backend/app/services/platform/middleware.py`:
+`allow_credentials=True`, no allowed origin) leaves that header in place on a simple `GET` and only adds
+`Access-Control-Allow-Credentials: true`, which the browser ignores for a request without credentials. Every other
+route answers a request from another origin without `Access-Control-Allow-Origin`.
+
+!!! warning "The check must be a CORS simple request"
+
+    `GET`, no custom header, no `Content-Type: application/json`, and `credentials: 'omit'`: a bare
+    `fetch`, not the Zodios client, whose Axios instance sends cookies (`withCredentials: true`); the
+    browser does not let a request with credentials read an answer with `Access-Control-Allow-Origin: *`.
+    Anything else makes the browser send an `OPTIONS` preflight first, which the middleware refuses with
+    `400 Disallowed CORS origin` (`CORSMiddleware.preflight_response()` in Starlette).
+
+**Limits.** Only a readable `200` `{"match": …}` is an answer: `false` means that a LibreFolio answers
+there but did not issue the nonce, or that the nonce has expired. Anything else must be read as «cannot
+verify», not as «no»; among the cases:
+
+- a network error: nothing answers, the connection is refused, DNS or TLS fails;
+- an HTTPS page checking an `http://` address: mixed content, which the browser blocks;
+- a page on a public origin checking a LAN address, which Chrome guards: a Private Network Access
+  preflight is refused by the middleware like any other, and Local Network Access, its successor, lets the
+  request through only once the user grants a permission;
+- anything at that address but a LibreFolio with this route, an earlier version included: no readable
+  `{match}`;
+- a [blocked instance](#instance-block): the check is a public route outside `ALLOWED_WHEN_BLOCKED`, so,
+  without a session as it always is, it gets the guard's `401`, which carries no
+  `Access-Control-Allow-Origin`. There, issuing a nonce answers `423`, like every route outside the list
+  for a signed-in caller.
+
+**Key changes and threads.** A change of the instance key invalidates the nonces issued before it:
+harmless, for a value that lives two minutes. `derive_key()` reads the instance key at every call, from a
+file unless `LIBREFOLIO_INSTANCE_KEY` holds it, so both routes are plain `def` functions, which FastAPI
+runs in a worker thread, off the event loop.
+
+Tests: `./dev.py test services address-probe`
+(`backend/test_scripts/test_services/test_address_probe.py`: the layout under the derived key, the expiry,
+every altered, malformed, oversized, non-canonical or foreign nonce refused, `hmac.compare_digest`, never
+raises) and `./dev.py test api address-probe` (`backend/test_scripts/test_api/test_address_probe_api.py`:
+`401`, `403` and `200` for the nonce; the exact `{match}` with both headers; a `GET` from another origin
+through the `CORSMiddleware` of the lane's server; cookies ignored; another instance, in process). No test
+sends a preflight: its refusal is the middleware's.
 
 ## 🧼 Output Escaping
 

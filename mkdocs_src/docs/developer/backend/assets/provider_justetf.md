@@ -90,9 +90,9 @@ During sync, the provider parses dividend data from `load_chart()` and generates
 
 All caches are global (module-level) TTL caches via `get_ttl_cache()`. They are populated lazily and cleared on server restart. Live gettex quotes are not TTL-cached: they sit in `_live_quote_store`, refreshed by the feed threads.
 
-!!! info "Pre-warm"
+!!! info "No pre-warm of the ETF list"
 
-    The ETF list cache is warmed at startup via `_prewarm_provider_caches()` in `main.py`. This makes the first search instant rather than waiting ~2-3 seconds for `load_overview()`.
+    The `provider-prewarm` startup step (`_prewarm_provider_caches()` in `backend/app/services/platform/app_lifespan.py`) only instantiates each registered asset provider, and `JustETFProvider` does no work when constructed. The ETF list is loaded by the first `search()` (`etf_list()` → `load_overview()`), which waits for the download; later searches read it from the cache until its 1-hour TTL expires.
 
 ---
 
