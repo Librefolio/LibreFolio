@@ -2,8 +2,10 @@
 
 from collections.abc import Mapping
 from datetime import datetime
+from typing import Optional
 
-from sqlalchemy import select
+import structlog
+from sqlalchemy import select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +25,8 @@ from backend.app.schemas.settings import (
 )
 from backend.app.services.accounts.global_settings_service import get_setting_value
 from backend.app.utils.datetime_utils import utcnow
+
+logger = structlog.get_logger(__name__)
 
 ONBOARDING_FLOW_VERSIONS: Mapping[OnboardingFlow, int] = {
     OnboardingFlow.WELCOME: 1,
@@ -405,3 +409,23 @@ async def complete_welcome_onboarding(
     except Exception:
         await session.rollback()
         raise
+
+
+async def reset_onboarding_progress(session: AsyncSession, user_id: int, flow: Optional[OnboardingFlow] = None) -> int:
+    """Put every onboarding flow of ``user_id`` — or only ``flow`` — back to pending, steps included; commits.
+
+    The guides start again for that user as for a new one, at their current version. Returns how many flow rows
+    were reset.
+    """
+    now = utcnow()
+    flow_filter = [UserOnboardingProgress.user_id == user_id]
+    step_filter = [UserOnboardingStepProgress.user_id == user_id]
+    if flow is not None:
+        flow_filter.append(UserOnboardingProgress.flow == flow.value)
+        step_filter.append(UserOnboardingStepProgress.flow == flow.value)
+    reset_values = {"status": OnboardingStatus.PENDING.value, "completed_at": None, "skipped_at": None, "updated_at": now}
+    result = await session.execute(update(UserOnboardingProgress).where(*flow_filter).values(**reset_values))
+    await session.execute(update(UserOnboardingStepProgress).where(*step_filter).values(**reset_values))
+    await session.commit()
+    logger.info("Onboarding progress reset", user_id=user_id, flow=flow.value if flow else None, flows=result.rowcount)
+    return result.rowcount

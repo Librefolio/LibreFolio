@@ -80,7 +80,27 @@ The contract:
   account of an empty database, prints ``✅`` and exits 0 (**IMG-012**); with a password that
   breaks the rules, or a username already taken, it prints ``❌``, exits 1 and creates or
   changes nobody (**IMG-012b**); ``create-superuser``, which still creates the E2E
-  administrators, keeps creating an active administrator (**IMG-012c**).
+  administrators, keeps creating an active administrator (**IMG-012c**);
+* **IMG-013**: ``user invite [--admin] [--email E]`` (plan phase01Accounts A5.1, point 6)
+  issues a live invitation and prints its link: without ``LIBREFOLIO_PUBLIC_URL`` the path
+  alone (``/invite?token=…``) with a note naming the variable (**IMG-013**); with it, the
+  URL without its trailing slash plus the path (**IMG-013b**). The row holds the hash of the
+  printed token for 7 days, ``--admin`` sets ``grants_admin`` and ``--email`` the e-mail
+  (**IMG-013c**). While registration is ``disabled``, by ``LIBREFOLIO_REGISTRATION`` or by
+  the ``registration_mode`` row, it prints ``❌``, exits 1 and issues nothing (**IMG-013d**);
+  at ``LIBREFOLIO_MAX_USERS`` it warns and issues anyway (**IMG-013e**);
+* **IMG-014**: ``user reset-link <username>`` prints the link of a live reset token of that
+  account, for 30 minutes, built the same way (**IMG-014**); a second link revokes the first
+  (**IMG-014b**); an unknown user is ``❌``, exit 1, and no token (**IMG-014c**);
+* **IMG-015**: ``user reset-onboarding <username>`` puts every flow and every step back to
+  pending (**IMG-015**), ``--flow F`` only that flow and its steps (**IMG-015b**); an unknown
+  user (``❌``, exit 1) or an unknown flow (exit 1, or argparse's 2) resets nothing
+  (**IMG-015c**). Pending is read as the app reads it: no row at all, or a pending row with
+  neither a completion nor a skip time;
+* **IMG-016**: at ``LIBREFOLIO_MAX_USERS`` the command line warns, a ``⚠️`` line that speaks
+  of the limit, and goes on: ``user create``, ``user create --role user`` and
+  ``user_cli.py create-user`` still create the account, ``✅`` and exit 0 (**IMG-016**);
+  below the limit there is no warning (**IMG-016b**).
 
 IMG-002b, IMG-004 and IMG-007 pin decision 1 of plan 35_devCliImage §0.1, IMG-008 its
 decision 4: a group whose sources the image lacks stays listed and answers for itself,
@@ -120,13 +140,17 @@ import uuid
 from collections.abc import Iterator
 from contextlib import closing
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 
 import pytest
 import yaml
 
+from backend.app.db.models import AccountTokenPurpose, OnboardingFlow
 from backend.app.services.accounts.auth_service import verify_password
+from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS
+from backend.app.services.accounts.token_service import DEFAULT_TTL, hash_token, token_path
 from backend.test_scripts.test_utils import print_info, print_section, print_success
 from scripts.user_cli import validate_password
 
@@ -1197,3 +1221,346 @@ class TestAccountRole:
         assert SUCCEEDED in run.output, f"expected the creation to be reported with {SUCCEEDED}: {run}"
         assert account(image_db.path, name) == ADMIN_ACCOUNT, f"create-superuser must make an active administrator: {account(image_db.path, name)}; {run}"
         print_success(f"{name}: an active administrator, {SUCCEEDED}, exit 0")
+
+
+# ---------------------------------------------------------------------------
+# IMG-013..IMG-016: invitations, reset links, onboarding and the user limit (A5a)
+# ---------------------------------------------------------------------------
+
+#: Plan phase01Accounts A5.1, point 6. The variables reach the tree's environment only.
+PUBLIC_URL_VARIABLE = "LIBREFOLIO_PUBLIC_URL"
+REGISTRATION_VARIABLE = "LIBREFOLIO_REGISTRATION"
+MAX_USERS_VARIABLE = "LIBREFOLIO_MAX_USERS"
+#: Given with a trailing slash on purpose: the printed link is the URL without it, then the path.
+CLI_PUBLIC_URL = "https://librefolio.example.test/base/"
+CLI_PUBLIC_ORIGIN = "https://librefolio.example.test/base"
+INVITE_PAGE = "/invite?token="
+RESET_PAGE = "/reset-password?token="
+#: secrets.token_urlsafe(32): 43 URL-safe characters, which the link's query string leaves as they are.
+LINK_TOKEN = r"([A-Za-z0-9_-]{43})(?![A-Za-z0-9_-])"
+#: The command line's warning marker (scripts/cli_base.py, print_warning).
+WARNING_MARK = "⚠️"
+SEEDED_AT = "2026-10-01 09:00:00.000000"
+INVITE = AccountTokenPurpose.INVITE
+PASSWORD_RESET = AccountTokenPurpose.PASSWORD_RESET
+STEPS = {flow.value: tuple(step_ids) for flow, step_ids in ONBOARDING_FLOW_STEPS.items()}
+INVITE_FLAGS = [
+    pytest.param((), False, None, id="no-flag"),
+    pytest.param(("--admin",), True, None, id="--admin"),
+    pytest.param(("--email", "guest@example.com"), False, "guest@example.com", id="--email"),
+    pytest.param(("--admin", "--email", "boss@example.com"), True, "boss@example.com", id="--admin --email"),
+]
+#: Each command that creates an account, as the command line and the runner run it.
+LIMITED_CREATIONS = [
+    pytest.param(("dev.py", "user", "create"), (), id="user create"),
+    pytest.param(("dev.py", "user", "create"), ("--role", "user"), id="user create --role user"),
+    pytest.param((USER_CLI, "create-user"), (), id="user_cli.py create-user"),
+]
+
+
+def printed_tokens(run: Run, page: str) -> list[str]:
+    """The distinct tokens of the links to ``page`` the command printed, in order."""
+    return list(dict.fromkeys(re.findall(re.escape(page) + LINK_TOKEN, run.output)))
+
+
+def printed_token(run: Run, page: str) -> str:
+    tokens = printed_tokens(run, page)
+    assert len(tokens) == 1, f"expected the command to print one link to {page}…: {run}"
+    return tokens[0]
+
+
+def absolute_links(run: Run, page: str, token: str) -> set[str]:
+    """Every absolute URL the command printed for this token's page."""
+    return set(re.findall(r"https?://\S*?" + re.escape(page + token), run.output))
+
+
+def token_row(db_path: Path, token: str) -> dict[str, object] | None:
+    """The account_tokens row of ``token``, found by its SHA-256 as stored; None when there is none."""
+    with closing(sqlite3.connect(db_path)) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("SELECT * FROM account_tokens WHERE token_hash = ?", (hash_token(token),)).fetchone()
+    return None if row is None else dict(row)
+
+
+def token_count(db_path: Path, purpose: AccountTokenPurpose) -> int:
+    with closing(sqlite3.connect(db_path)) as conn:
+        return conn.execute("SELECT COUNT(*) FROM account_tokens WHERE purpose = ?", (purpose.value,)).fetchone()[0]
+
+
+def user_id_of(db_path: Path, username: str) -> int:
+    with closing(sqlite3.connect(db_path)) as conn:
+        row = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+    assert row is not None, f"{username!r} is not in {db_path}"
+    return row[0]
+
+
+def stored_moment(value: object) -> datetime:
+    """A DATETIME as SQLite gives it back, as a naive UTC datetime."""
+    moment = datetime.fromisoformat(str(value))
+    return moment if moment.tzinfo is None else moment.astimezone(UTC).replace(tzinfo=None)
+
+
+def token_violations(row: dict[str, object] | None, purpose: AccountTokenPurpose, user_id: int | None) -> list[str]:
+    """What keeps ``row`` from being a live token of ``purpose`` for ``user_id``, issued for its purpose's whole lifetime."""
+    if row is None:
+        return ["no account_tokens row holds the hash of the printed token"]
+    expected = (purpose.value, user_id, None, None)
+    found = (row["purpose"], row["user_id"], row["consumed_at"], row["revoked_at"])
+    violations = [] if found == expected else [f"(purpose, user_id, consumed_at, revoked_at) must be {expected}, got {found}"]
+    expires_at = stored_moment(row["expires_at"])
+    if expires_at - stored_moment(row["created_at"]) != DEFAULT_TTL[purpose]:
+        violations.append(f"a {purpose.value} token lives {DEFAULT_TTL[purpose]}: created {row['created_at']}, expires {row['expires_at']}")
+    if expires_at <= datetime.now(UTC).replace(tzinfo=None):
+        violations.append(f"already expired: {row['expires_at']}")
+    return violations
+
+
+def set_registration_mode(db_path: Path, mode: str) -> None:
+    """The ``registration_mode`` row of this database says ``mode``."""
+    with closing(sqlite3.connect(db_path)) as conn:
+        with conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO global_settings (key, value, value_type, description, updated_at) VALUES ('registration_mode', ?, 'string', 'Who may create an account: open, invite or disabled', ?)",
+                (mode, SEEDED_AT),
+            )
+
+
+def registered_onboarding() -> list[str]:
+    """Every flow, and every step as ``flow:step``, the server registers."""
+    return [flow.value for flow in ONBOARDING_FLOW_VERSIONS] + [f"{flow}:{step}" for flow, step_ids in STEPS.items() for step in step_ids]
+
+
+def flow_keys(flow: str) -> set[str]:
+    """A flow and its steps, as ``onboarding_state`` names them."""
+    return {flow, *(f"{flow}:{step}" for step in STEPS.get(flow, ()))}
+
+
+def onboarding_reading(row: tuple[object, object, object] | None) -> str:
+    """How the app reads a flow or step row: none is pending (it is created so at the next read), and a pending row carries neither a completion nor a skip time."""
+    if row is None:
+        return "pending"
+    status, completed_at, skipped_at = row
+    if status == "pending" and (completed_at is not None or skipped_at is not None):
+        return f"pending, yet completed_at={completed_at} skipped_at={skipped_at}"
+    return str(status)
+
+
+def onboarding_state(db_path: Path, user_id: int) -> dict[str, str]:
+    """Every registered flow and step of the user, read from the database itself."""
+    with closing(sqlite3.connect(db_path)) as conn:
+        flows = {flow: (status, completed, skipped) for flow, status, completed, skipped in conn.execute("SELECT flow, status, completed_at, skipped_at FROM user_onboarding_progress WHERE user_id = ?", (user_id,))}
+        steps = {f"{flow}:{step}": (status, completed, skipped) for flow, step, status, completed, skipped in conn.execute("SELECT flow, step_id, status, completed_at, skipped_at FROM user_onboarding_step_progress WHERE user_id = ?", (user_id,))}
+    rows = {**flows, **steps}
+    return {key: onboarding_reading(rows.get(key)) for key in registered_onboarding()}
+
+
+def completed_user(image: ImageTree, database: Database) -> tuple[str, int]:
+    """An ordinary account of its own, created by the command line, whose every flow and step is written completed."""
+    name = unique_username()
+    assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, "--role", "user", env=database.env))
+    user_id = user_id_of(database.path, name)
+    flows = [(user_id, flow.value, version, SEEDED_AT, SEEDED_AT, SEEDED_AT) for flow, version in ONBOARDING_FLOW_VERSIONS.items()]
+    steps = [(user_id, flow.value, step, ONBOARDING_FLOW_VERSIONS[flow], SEEDED_AT, SEEDED_AT, SEEDED_AT) for flow, step_ids in ONBOARDING_FLOW_STEPS.items() for step in step_ids]
+    with closing(sqlite3.connect(database.path)) as conn:
+        with conn:
+            conn.executemany("INSERT INTO user_onboarding_progress (user_id, flow, status, version, created_at, updated_at, completed_at) VALUES (?, ?, 'completed', ?, ?, ?, ?)", flows)
+            conn.executemany("INSERT INTO user_onboarding_step_progress (user_id, flow, step_id, status, version, created_at, updated_at, completed_at) VALUES (?, ?, ?, 'completed', ?, ?, ?, ?)", steps)
+    assert set(onboarding_state(database.path, user_id).values()) == {"completed"}, f"premise: every flow and step of {name} is completed"
+    return name, user_id
+
+
+def warned_about_the_limit(run: Run) -> bool:
+    """A warning line (⚠️) that speaks of the limit."""
+    return any(WARNING_MARK in line and "limit" in line.lower() for line in run.output.splitlines())
+
+
+class TestInvitationFromTheCommandLine:
+    def test_invite_prints_the_path_and_a_note_without_a_public_url(self, image, image_db):
+        """IMG-013: user invite without LIBREFOLIO_PUBLIC_URL prints the path alone, with a note naming the variable, and the token is a live invitation."""
+        print_section("IMG-013: user invite, no public URL, in the image")
+
+        run = run_dev(image, "user", "invite", env=image_db.env)
+
+        assert_succeeds(run)
+        token = printed_token(run, INVITE_PAGE)
+        assert absolute_links(run, INVITE_PAGE, token) == set(), f"without {PUBLIC_URL_VARIABLE} the link is the path alone: {run}"
+        assert PUBLIC_URL_VARIABLE in run.output, f"the path alone comes with a note naming {PUBLIC_URL_VARIABLE}: {run}"
+        assert token_violations(token_row(image_db.path, token), INVITE, None) == [], f"the printed token must be a live invitation: {run}"
+        print_success("the path, a note, a live invitation")
+
+    def test_invite_prints_the_public_url_plus_the_path(self, image, image_db):
+        """IMG-013b: with LIBREFOLIO_PUBLIC_URL (trailing slash included) the link is the URL without the slash plus the path, and no other URL of it."""
+        print_section("IMG-013b: user invite with a public URL, in the image")
+
+        run = run_dev(image, "user", "invite", env={**image_db.env, PUBLIC_URL_VARIABLE: CLI_PUBLIC_URL})
+
+        assert_succeeds(run)
+        token = printed_token(run, INVITE_PAGE)
+        expected = CLI_PUBLIC_ORIGIN + token_path(INVITE, token)
+        assert absolute_links(run, INVITE_PAGE, token) == {expected}, f"the link must be {expected}, and only that: {run}"
+        assert token_violations(token_row(image_db.path, token), INVITE, None) == [], f"the printed token must be a live invitation: {run}"
+        print_success(expected.replace(token, "…"))
+
+    @pytest.mark.parametrize(("flags", "grants_admin", "email"), INVITE_FLAGS)
+    def test_invite_stores_the_role_and_the_email(self, image, image_db, flags, grants_admin, email):
+        """IMG-013c: the invitation's row holds the hash of the printed token, for 7 days, with grants_admin from --admin and the e-mail from --email."""
+        print_section(f"IMG-013c: user invite {' '.join(flags)}, in the image")
+
+        run = run_dev(image, "user", "invite", *flags, env=image_db.env)
+
+        assert_succeeds(run)
+        row = token_row(image_db.path, printed_token(run, INVITE_PAGE))
+        assert token_violations(row, INVITE, None) == [], f"the printed token must be a live invitation: {token_violations(row, INVITE, None)}; {run}"
+        assert (bool(row["grants_admin"]), row["email"]) == (grants_admin, email), f"(grants_admin, email) must be {(grants_admin, email)}: {row}"
+        print_success(f"grants_admin={grants_admin}, email={email}")
+
+    @pytest.mark.parametrize("source", ["variable", "row"])
+    def test_invite_is_refused_while_registration_is_disabled(self, image, fresh_db, source):
+        """IMG-013d: registration disabled by LIBREFOLIO_REGISTRATION, or by the registration_mode row: user invite prints ❌, exits 1, prints no link and issues nothing."""
+        print_section(f"IMG-013d: user invite while registration is disabled by the {source}, in the image")
+        env = {**fresh_db.env, REGISTRATION_VARIABLE: "disabled"} if source == "variable" else fresh_db.env
+        if source == "row":
+            set_registration_mode(fresh_db.path, "disabled")
+
+        run = run_dev(image, "user", "invite", "--admin", env=env)
+
+        assert_no_crash(run)
+        assert FAILED in run.output and run.returncode == 1, f"a refused invitation is reported with {FAILED} and exit 1: {run}"
+        assert printed_tokens(run, INVITE_PAGE) == [] and token_count(fresh_db.path, INVITE) == 0, f"a refused invitation issues nothing: {run}"
+        print_success(f"{FAILED}, exit 1, nothing issued")
+
+    def test_invite_at_the_limit_warns_and_issues(self, image, fresh_db):
+        """IMG-013e: LIBREFOLIO_MAX_USERS=1 with one account: user invite warns about the limit and still issues a live invitation, exit 0."""
+        print_section("IMG-013e: user invite at the limit, in the image")
+        name = unique_username()
+        assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, env=fresh_db.env))
+
+        run = run_dev(image, "user", "invite", env={**fresh_db.env, MAX_USERS_VARIABLE: "1"})
+
+        assert_succeeds(run)
+        assert warned_about_the_limit(run), f"at the limit the command line warns ({WARNING_MARK}, the limit) and goes on: {run}"
+        assert token_violations(token_row(fresh_db.path, printed_token(run, INVITE_PAGE)), INVITE, None) == [], f"the invitation must be issued anyway: {run}"
+        print_success("warned, issued")
+
+
+class TestResetLinkFromTheCommandLine:
+    @pytest.mark.parametrize("public_url", [pytest.param(None, id="path"), pytest.param(CLI_PUBLIC_URL, id="public-url")])
+    def test_reset_link_prints_a_live_link_of_that_account(self, image, image_db, public_url):
+        """IMG-014: user reset-link <username> prints the link of a live reset token of that account, 30 minutes: the path with a note, or the public URL plus the path."""
+        print_section(f"IMG-014: user reset-link, public URL {public_url}, in the image")
+        name = unique_username()
+        assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, "--role", "user", env=image_db.env))
+        env = image_db.env if public_url is None else {**image_db.env, PUBLIC_URL_VARIABLE: public_url}
+
+        run = run_dev(image, "user", "reset-link", name, env=env)
+
+        assert_succeeds(run)
+        token = printed_token(run, RESET_PAGE)
+        expected = set() if public_url is None else {CLI_PUBLIC_ORIGIN + token_path(PASSWORD_RESET, token)}
+        assert absolute_links(run, RESET_PAGE, token) == expected, f"the link must be {expected or 'the path alone'}: {run}"
+        assert public_url is not None or PUBLIC_URL_VARIABLE in run.output, f"the path alone comes with a note naming {PUBLIC_URL_VARIABLE}: {run}"
+        row = token_row(image_db.path, token)
+        assert token_violations(row, PASSWORD_RESET, user_id_of(image_db.path, name)) == [], f"the printed token must be a live reset link of {name}: {token_violations(row, PASSWORD_RESET, user_id_of(image_db.path, name))}"
+        print_success(f"a live reset link of {name}")
+
+    def test_a_second_reset_link_revokes_the_first(self, image, image_db):
+        """IMG-014b: two user reset-link of the same account: the first link is revoked, the second is live."""
+        print_section("IMG-014b: a second reset link, in the image")
+        name = unique_username()
+        assert_succeeds(run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, "--role", "user", env=image_db.env))
+        first_run, second_run = run_dev(image, "user", "reset-link", name, env=image_db.env), run_dev(image, "user", "reset-link", name, env=image_db.env)
+        assert_succeeds(first_run)
+        assert_succeeds(second_run)
+
+        first, second = token_row(image_db.path, printed_token(first_run, RESET_PAGE)), token_row(image_db.path, printed_token(second_run, RESET_PAGE))
+
+        assert first is not None and first["revoked_at"] is not None, f"the earlier link must be revoked by the new one: {first}"
+        assert token_violations(second, PASSWORD_RESET, user_id_of(image_db.path, name)) == [], f"the newest link must be live: {second}"
+        print_success("the first revoked, the second live")
+
+    def test_reset_link_of_an_unknown_user_fails(self, image, image_db):
+        """IMG-014c: user reset-link of a user who does not exist prints ❌, exits 1, prints no link and issues no token."""
+        print_section("IMG-014c: user reset-link of an unknown user, in the image")
+        before = token_count(image_db.path, PASSWORD_RESET)
+
+        run = run_dev(image, "user", "reset-link", unique_username(), env=image_db.env)
+
+        assert_no_crash(run)
+        assert FAILED in run.output and run.returncode == 1, f"an unknown user is reported with {FAILED} and exit 1: {run}"
+        assert printed_tokens(run, RESET_PAGE) == [] and token_count(image_db.path, PASSWORD_RESET) == before, f"no token for an unknown user: {run}"
+        print_success(f"{FAILED}, exit 1, no token")
+
+
+class TestResetOnboardingFromTheCommandLine:
+    def test_reset_onboarding_puts_every_flow_and_step_back_to_pending(self, image, image_db):
+        """IMG-015: user reset-onboarding <username> puts every flow and every step of that account back to pending."""
+        print_section("IMG-015: user reset-onboarding, in the image")
+        name, user_id = completed_user(image, image_db)
+
+        run = run_dev(image, "user", "reset-onboarding", name, env=image_db.env)
+
+        assert_succeeds(run)
+        state = onboarding_state(image_db.path, user_id)
+        assert state == dict.fromkeys(state, "pending"), f"every flow and step must be back to pending: {state}"
+        print_success("every flow and step pending")
+
+    @pytest.mark.parametrize("flow", [OnboardingFlow.INTRO_TOUR.value, OnboardingFlow.IMPORT_GUIDE.value])
+    def test_reset_onboarding_of_one_flow(self, image, image_db, flow):
+        """IMG-015b: --flow F puts that flow, and its steps when it has any, back to pending; every other flow and step stays completed."""
+        print_section(f"IMG-015b: user reset-onboarding --flow {flow}, in the image")
+        name, user_id = completed_user(image, image_db)
+
+        run = run_dev(image, "user", "reset-onboarding", name, "--flow", flow, env=image_db.env)
+
+        assert_succeeds(run)
+        state = onboarding_state(image_db.path, user_id)
+        expected = {key: "pending" if key in flow_keys(flow) else "completed" for key in state}
+        assert state == expected, f"only {flow} must be back to pending: {state}"
+        print_success(f"{flow} pending, the rest completed")
+
+    @pytest.mark.parametrize("target", ["unknown-user", "unknown-flow"])
+    def test_reset_onboarding_refuses_and_resets_nothing(self, image, image_db, target):
+        """IMG-015c: an unknown user (❌, exit 1) or an unknown --flow (exit 1, or argparse's 2) is refused, and the account's onboarding stays completed."""
+        print_section(f"IMG-015c: user reset-onboarding, {target}, in the image")
+        name, user_id = completed_user(image, image_db)
+        argv = ("reset-onboarding", unique_username()) if target == "unknown-user" else ("reset-onboarding", name, "--flow", "no_such_flow")
+
+        run = run_dev(image, "user", *argv, env=image_db.env)
+
+        assert_no_crash(run)
+        assert "invalid choice: 'reset-onboarding'" not in run.output, f"presence barrier: reset-onboarding must be a command, or argparse's exit 2 below proves nothing: {run}"
+        assert run.returncode in ({1} if target == "unknown-user" else {1, 2}), f"a refused reset fails: {run}"
+        assert target != "unknown-user" or FAILED in run.output, f"an unknown user is reported with {FAILED}: {run}"
+        assert set(onboarding_state(image_db.path, user_id).values()) == {"completed"}, "a refused reset must reset nothing"
+        print_success(f"refused, exit {run.returncode}, nothing reset")
+
+
+class TestUserLimitFromTheCommandLine:
+    @pytest.mark.parametrize(("command", "options"), LIMITED_CREATIONS)
+    def test_creation_at_the_limit_warns_and_creates(self, image, fresh_db, command, options):
+        """IMG-016: LIBREFOLIO_MAX_USERS=1 with one account: the command warns about the limit, creates the account anyway, ✅ and exit 0."""
+        label = " ".join((*command, *options))
+        print_section(f"IMG-016: {label} at the limit, in the image")
+        first = unique_username()
+        assert_succeeds(run_dev(image, "user", "create", first, f"{first}@example.com", OLD_PASSWORD, env=fresh_db.env))
+        name = unique_username()
+
+        run = run_python(image, *command, name, f"{name}@example.com", OLD_PASSWORD, *options, env={**fresh_db.env, MAX_USERS_VARIABLE: "1"})
+
+        assert_succeeds(run)
+        assert SUCCEEDED in run.output, f"the creation is still reported with {SUCCEEDED}: {run}"
+        assert warned_about_the_limit(run), f"at the limit the command line warns ({WARNING_MARK}, the limit) and goes on: {run}"
+        assert usernames(fresh_db.path) == [first, name], f"the account must be created anyway: {usernames(fresh_db.path)}"
+        print_success(f"{label}: warned, created")
+
+    def test_creation_below_the_limit_does_not_warn(self, image, fresh_db):
+        """IMG-016b: LIBREFOLIO_MAX_USERS=5 on an empty database: user create creates the account without any warning."""
+        print_section("IMG-016b: user create below the limit, in the image")
+        name = unique_username()
+
+        run = run_dev(image, "user", "create", name, f"{name}@example.com", OLD_PASSWORD, env={**fresh_db.env, MAX_USERS_VARIABLE: "5"})
+
+        assert_succeeds(run)
+        assert not any(WARNING_MARK in line for line in run.output.splitlines()), f"below the limit there is nothing to warn about: {run}"
+        assert usernames(fresh_db.path) == [name], f"premise: {name} alone in its database"
+        print_success("created, no warning")
