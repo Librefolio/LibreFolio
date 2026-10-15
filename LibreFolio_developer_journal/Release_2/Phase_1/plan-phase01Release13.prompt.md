@@ -1078,3 +1078,21 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > X-R9, W-B15), base aggiornata in `2bf015afa`; entra dopo la finestra della galleria. FE8a (tagli delle tre modali
 > delle transazioni) annunciato al coordinatore colori, che ha dato via libera: nessun loro annuncio aperto, T li
 > converte nell'ondata W4 sui pezzi già tagliati. Annuncio aperto nella tabella del §7 (`2c699f85c`).
+
+### B, analisi consegnata; punti 38–43 per il developer (2026-10-15, 08:05)
+
+> **Note implementazione**: analisi di B (13 sezioni, nella cartella della sessione `5618ecee`, `plan.md`; andrà in
+> `07_backupDocker/` al primo via). Zip con la forma della cartella dei dati (`VACUUM INTO`, elenco d'inclusione
+> esplicito, `manifest.json`); ripristino sempre su una copia (revisione più nuova o sconosciuta rifiutata, più
+> vecchia migrata sulla copia), conferma con backup automatico, scambio per rinomine all'avvio con giornale e ritorno
+> indietro, uscita ordinata; sessioni chiuse; Litestream v0.5 spento finché la variabile è vuota. Nessuna migrazione,
+> nessuna dipendenza nuova con la busta cifrata (`cryptography`, già nella finestra di X). Lotti B0–B9 più la
+> revisione finale; percorso minimo per il cloud B1 → B2 → B3 → B5 (+B4) → B7. Scelte per il developer nei punti
+> 38–43 del file delle decisioni; quelle di coordinamento lì sotto: B0 (divisione di `backup.py`) entra prima di E1
+> di W; `backup_service.py` → `series_export.py`; prova «stessi totali» in un sottoprocesso; M-1 alla fine.
+> Richieste a H (passi d'avvio di CP2b, percorsi dell'isolamento, funzioni di `instance_key.py` per H-3), ad A (una
+> riga nel registro delle schede), a X (ricifratura nel CP10), a J (totali di controllo in sola lettura): le gira il
+> coordinatore al via. B resta in modo piano, fermo, senza messaggi accodati.
+>
+> **Fuori pista**: nel file delle decisioni la riga delle migrazioni (§3) diceva ancora «la 006 delle impostazioni dei
+> plugin»: riallineata alla C7 (005 e 006 di A, 007 di X).

@@ -33,7 +33,7 @@ Ramo di integrazione: `dev_release2` (condiviso con il programma colori). Corsie
 | W | W - Import e transazioni | 6184 | `/tmp/librefolio-r13-w` | `e-alfy-w-import-e-transazioni` | `62c964242` | ✅ W1 e W2 (`998fd2701`), I1 (`dc7e4e48e`: V-23, C-65b, L5, C-79/C-3), K1 (`d915c869f`: O-12, C-89, V-38, P-15), W4 CP6 (`155d9b050`, BRIM in `services/brim/`), W7 (`1cd7300f3`, `schemas/transactions/` per tema) e K2a (`62c964242`: rifiuti a codice, L6) integrati; in corso E0 (frontend degli eventi, entra dopo la finestra della galleria); E1 aspetta le decisioni 20–23; CP7, W3 e W5–W6 dopo un commit del coordinatore su `brokers.py` e `uploads.py` (sessione `e71e0e34`) |
 | J | J - Numeri e analisi | 6185 | `/tmp/librefolio-r13-j` | `e-alfy-j-numeri-e-analisi` | `e2cb55054` | ✅ CP-1 (`e1fbc801f`: PAC per tema in `schemas/pac_allocator/` e `services/pac_allocator/`, guardia dei confini D-J18), C-93 (`c412f8dad`), G-8 (`c75f08101`) e J-6 (`e2cb55054`: guardia di suite sulle connessioni aiosqlite) integrati; CP-2 e seguenti aspettano le decisioni 26–30 (D-J1, D-J2, D-J3, D-J6, D-J15) (sessione `4c677a01`) |
 | Z | Z - Sospensione e risveglio | 6186 | `/tmp/librefolio-r13-z` | `e-alfy-z-sospensione-e-risveglio` | `459131eb8` | analisi consegnata; aspetta le decisioni 31 e 32 del developer (sessione `d401e062`) |
-| B | B - Backup e Docker | 6187 | `/tmp/librefolio-r13-b` | `e-alfy-b-backup-e-docker` | `ee5d81a6f` | avviata il 15/10 alle 07:10, solo analisi (sessione `5618ecee`) |
+| B | B - Backup e Docker | 6187 | `/tmp/librefolio-r13-b` | `e-alfy-b-backup-e-docker` | `ee5d81a6f` | analisi consegnata il 15/10; aspetta il via del developer e i punti 38–43 delle decisioni (sessione `5618ecee`) |
 | E | E - Email | 6188 | `/tmp/librefolio-r13-e` | — | — | parte in sola analisi al checkpoint A5a (inviti); i token monouso di A4 sono già integrati |
 | Y | Y - Cruscotto e grafici | 6189 | `/tmp/librefolio-r13-y` | — | — | dopo il lotto B dei colori |
 
@@ -52,8 +52,8 @@ L, R, G, T, C, U, S, P.
 | 1 | Admin iniziale da variabili (F02) | A | ⏳ |
 | 1 | Inviti, registrazione e gestione utenti (F13) | A | ⏳ in corso (A5a e A5b); i token monouso sono già integrati (A4) |
 | 2 | Email facoltativa (F04) | E | ⏳ parte al checkpoint A5a |
-| 2 | Backup e ripristino dalla UI (F01) | B | ⏳ analisi in corso (dal 15/10) |
-| 2 | Backup continuo con Litestream (F25) | B | ⏳ analisi in corso; il codice dopo il lotto Docker di H (CP7a) |
+| 2 | Backup e ripristino dalla UI (F01) | B | ⏳ analisi pronta; aspetta il via e i punti 38–43 |
+| 2 | Backup continuo con Litestream (F25) | B | ⏳ analisi pronta; il codice dopo il lotto Docker di H (CP7a) |
 | 2 | Avvio, aggiornamento all'accesso e risveglio (F07) | Z | ⏳ analisi pronta; aspetta le decisioni 31–35 e gli agganci d'avvio di H (CP2b) |
 | 2 | Impostazioni dei plugin | X | ⏳ dopo X-R8; migrazione 007, e `cryptography` nella finestra delle dipendenze |
 | 2 | Ordine dei fornitori nella ricerca (F21) | X | ⏳ |
