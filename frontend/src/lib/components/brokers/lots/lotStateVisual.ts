@@ -1,3 +1,6 @@
+import {themed} from '$lib/theme/themePair';
+import {LOT_STATE_COLORS} from '$lib/theme/chartTheme';
+
 /**
  * Shared visual encoding for a FIFO lot's open/closed state, used by BOTH the per-lot
  * performance bubbles' center dot (LotWacPriceChart) and the "Aperti | Chiusi" filter buttons
@@ -19,11 +22,11 @@ export function lotDisplayState(openQuantity: number, originalQuantity: number):
 export function lotStateColor(state: LotDisplayState, dark: boolean): string {
     switch (state) {
         case 'OPEN':
-            return dark ? '#38bdf8' : '#0284c7'; // sky
+            return themed(LOT_STATE_COLORS.open, dark); // sky
         case 'PARTIAL':
-            return dark ? '#fbbf24' : '#d97706'; // amber
+            return themed(LOT_STATE_COLORS.partial, dark); // amber
         case 'CLOSED':
-            return dark ? '#94a3b8' : '#64748b'; // slate
+            return themed(LOT_STATE_COLORS.closed, dark); // slate
     }
 }
 

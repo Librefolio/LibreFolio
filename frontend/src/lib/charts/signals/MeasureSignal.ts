@@ -10,6 +10,7 @@
 
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {ChartSignal, type SignalParamDescriptor, type SignalStyle} from './ChartSignal';
+import {SIGNAL_COLORS} from '$lib/theme/chartTheme';
 
 /** Computed measurement values between two points */
 export interface MeasurementResult {
@@ -41,7 +42,7 @@ export class MeasureSignal extends ChartSignal {
     /** Default style for measure lines */
     static getDefaultStyle(): SignalStyle {
         return {
-            color: '#f97316', // orange
+            color: SIGNAL_COLORS.measure, // orange
             lineWidth: 1,
             lineType: 'dotted',
             markerStart: 'pin',

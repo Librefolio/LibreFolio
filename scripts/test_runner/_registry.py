@@ -14,6 +14,7 @@ from ._backend_utils import populate_registry as _pop_utils
 from ._frontend_ai_export import populate_registry as _pop_front_ai_export
 from ._frontend_asset import populate_registry as _pop_front_asset
 from ._frontend_broker import populate_registry as _pop_front_broker
+from ._frontend_designer_lab import populate_registry as _pop_front_designer_lab
 from ._frontend_fx import populate_registry as _pop_front_fx
 from ._frontend_portfolio import populate_registry as _pop_front_portfolio
 from ._frontend_transaction import populate_registry as _pop_front_transaction
@@ -39,3 +40,4 @@ _pop_front_asset(TEST_REGISTRY)
 _pop_front_transaction(TEST_REGISTRY)
 _pop_front_portfolio(TEST_REGISTRY)
 _pop_front_ai_export(TEST_REGISTRY)
+_pop_front_designer_lab(TEST_REGISTRY)

@@ -100,7 +100,8 @@ import {existsSync, readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {beforeAll, describe, expect, it} from 'vitest';
 
-import {PALETTE_SLOTS, paletteDefects, readSourcePalette} from '$test/sourcePalettes';
+import {ALLOCATION_PIE_PALETTE} from '$lib/theme/chartPalettes';
+import {PALETTE_SLOTS, paletteDefects} from '$test/palettes';
 
 import {buildAllocationHierarchy, shadeForDepth} from '../allocationHierarchy';
 import {buildAllocationRingData, buildAllocationRings, type AllocationRingDatum, type AllocationRingItem, type AllocationRingsLayout} from '../allocationRings';
@@ -110,18 +111,17 @@ import {hexToHsl, hslToHex} from '$lib/utils/colors';
 // Fixtures
 // =============================================================================
 
-/** The only chart that draws rings. Its palettes are read from it, by name, not copied. */
-const PIE_CHART = new URL('../AllocationPieChart.svelte', import.meta.url);
-
-/** `PALETTE_LIGHT` in `AllocationPieChart.svelte`. */
-const PIE_PALETTE_LIGHT = readSourcePalette(PIE_CHART, 'PALETTE_LIGHT');
-/** `PALETTE_DARK` in `AllocationPieChart.svelte`. */
-const PIE_PALETTE_DARK = readSourcePalette(PIE_CHART, 'PALETTE_DARK');
+/**
+ * The palettes of the only chart that draws rings, imported from the module it takes them from, not copied. That
+ * the pie draws them is proven on the mounted pie, in `AllocationPieChart.test.ts`.
+ */
+const PIE_PALETTE_LIGHT = ALLOCATION_PIE_PALETTE.light;
+const PIE_PALETTE_DARK = ALLOCATION_PIE_PALETTE.dark;
 
 /** Both themes of that chart. */
 const PIE_PALETTES: ReadonlyArray<readonly [string, readonly string[]]> = [
-    ['PALETTE_LIGHT', PIE_PALETTE_LIGHT],
-    ['PALETTE_DARK', PIE_PALETTE_DARK],
+    ['ALLOCATION_PIE_PALETTE.light', PIE_PALETTE_LIGHT],
+    ['ALLOCATION_PIE_PALETTE.dark', PIE_PALETTE_DARK],
 ];
 
 type Resolver = (key: string) => string;
@@ -343,11 +343,11 @@ function hueDistance(a: string, b: string): number {
 }
 
 // =============================================================================
-// The palettes under test — what was read, so no loop below can pass on nothing
+// The palettes under test — checked whole first, so no loop below can pass on nothing
 // =============================================================================
 
 describe('the palettes under test', () => {
-    it.each(PIE_PALETTES)(`AllocationPieChart %s is ${PALETTE_SLOTS} distinct #rrggbb colours`, (_name, palette) => {
+    it.each(PIE_PALETTES)(`%s is ${PALETTE_SLOTS} distinct #rrggbb colours`, (_name, palette) => {
         expect(paletteDefects(palette), `the palette the rings draw with is not ${PALETTE_SLOTS} distinct colours: two families would share one, or a slot is missing`).toEqual([]);
     });
 

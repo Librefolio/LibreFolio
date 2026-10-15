@@ -20,6 +20,7 @@
     import {fxProvidersVersion} from '$lib/stores/currencyGraphStore';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     // =========================================================================
     // Types
@@ -123,8 +124,8 @@
     }
 
     function deltaColorClass(val: number | null): string {
-        if (val === null) return 'text-gray-400 dark:text-gray-500';
-        return val >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400';
+        if (val === null) return SIGN_TEXT.market.none;
+        return val >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss;
     }
 
     // Provider chain rendering — constants & helpers from $lib/utils/fxSync
