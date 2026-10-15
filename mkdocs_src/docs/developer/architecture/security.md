@@ -530,7 +530,8 @@ documentation, so an addition, or a route the guard does not reach, shows in rev
 FastAPI's own documentation (`/api/v1/docs`, `/api/v1/redoc`, `/api/v1/openapi.json`), are not
 covered: the browser still loads the app, which turns the first `423` into the block page (see
 [Instance block](../frontend/state/app-state.md#instance-block)). The scheduler does not go through
-HTTP, so its jobs keep running.
+HTTP, so the guard does not reach it: `run_due_jobs()` checks `instance_blocked()` itself and runs no
+job on a blocked instance ([Scheduler](../backend/scheduler.md#run-checks)).
 
 ## 🎟️ Single-use Account Tokens {: #account-tokens }
 
