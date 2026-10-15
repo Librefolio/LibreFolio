@@ -6,7 +6,9 @@ one in progress and, under a deadline, limits each. Every step reaches its funct
 module when it runs, so a test replaces one with ``monkeypatch.setattr(app_lifespan, "<name>", ...)``.
 
 Shutdown runs the tool executor's step in the lifespan's ``finally``, then the other steps: not the reverse of the
-startup. ``shutdown_deadline()`` is the hook of the shutdown budget: ``None`` here, so no step is ever cut.
+startup. ``shutdown_deadline()`` comes from the shutdown budget (``shutdown_budget.py``, workstream Z): it limits the
+shutdown steps; the first startup step installs the watchdog that ends the process when the budget runs out after a
+signal, and the last shutdown step terminates the child processes still alive.
 """
 
 import asyncio
@@ -31,6 +33,7 @@ from backend.app.services.platform.config_audit import log_configuration_audit
 from backend.app.services.platform.database_bootstrap import ensure_database_exists, run_post_migration_fixes_at_startup
 from backend.app.services.platform.lifecycle import Step, run_shutdown_steps, run_startup_steps
 from backend.app.services.platform.scheduler import get_shutdown_event, scheduler_loop
+from backend.app.services.platform.shutdown_budget import child_processes_step, install_shutdown_watchdog, shutdown_deadline
 from backend.app.services.risk.quant.workers import (
     shutdown_quant_worker_pools,
 )
@@ -186,6 +189,8 @@ def _shutdown_brim_parse_pool() -> None:
 # =============================================================================
 
 STARTUP_STEPS: tuple[Step, ...] = (
+    # First: from here on a SIGTERM or a SIGINT starts the shutdown budget (only under uvicorn's own signal handlers)
+    Step("shutdown-watchdog", lambda: install_shutdown_watchdog()),
     Step("announce", lambda: _announce()),
     Step("configuration-checks", lambda: _check_configuration()),
     Step("signal-plugins", lambda: _load_signal_plugins()),
@@ -217,12 +222,9 @@ SHUTDOWN_STEPS: tuple[Step, ...] = (
     Step("market-holidays", lambda: shutdown_market_holidays()),
     # Close all TTL caches (stop timer wheel threads for clean exit)
     Step("caches", lambda: close_all_caches()),
+    # Last: the child processes still alive (parse, risk, tool workers) are terminated, so none outlives the server
+    child_processes_step(),
 )
-
-
-def shutdown_deadline() -> float | None:
-    """The instant (``time.monotonic()``) the shutdown must end by, or ``None`` for no limit: the shutdown budget's hook."""
-    return None
 
 
 @asynccontextmanager
