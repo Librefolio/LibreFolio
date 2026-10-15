@@ -927,3 +927,15 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > 25, `account-tokens` 64, `config-package` 568. Prima del commit il coordinatore ha corretto un'attribuzione: la
 > scelta su `email_verified_at` è sua, non del developer. Nessuna riga nel CHANGELOG: non c'è ancora niente di
 > visibile. Poi A4b, la versione di sessione `sv` (D-A17).
+
+### X CP3, i cambi per tema, integrato ✅ (2026-10-15, 05:30)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `8000aba5a`. CP3 `b991d5e26` (PL4): `services/fx/fx.py` →
+> `base`, `storage`, `conversion`, `sync`; `api/v1/fx.py` → `api/v1/fx/` (`providers`, `currencies`). Nessuna rinomina
+> a −M95 %. Controllo del coordinatore sull'AST: 32/32 e 20/20 definizioni identiche. Validazione di X: run completa
+> sulla revisione con J CP-1 e W4 (`d1ef3ddeb`): `all-backend` 13 875 passed, 28 skipped, 0 failed; rotte (139) e
+> `api schema` identici. Sopra A4 (`9a3ba752a`) controllo leggero: guardia 573, raccolta e schema identici.
+>
+> **Decisioni del coordinatore**: CP3b = W-B9 (contratto e filtri sui fornitori a elenco statico; la BCE dal vivo
+> solo in `test_external`), W-B13, X-R5 (salvo `AssetModal` e le fixture di G, girate al coordinatore colori) e X-R7.
+> X-R8, proposta: cache di 24 ore dell'elenco delle valute dei fornitori, con l'ultimo elenco noto in caso d'errore.
