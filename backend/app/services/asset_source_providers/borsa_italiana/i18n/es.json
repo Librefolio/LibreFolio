@@ -16,5 +16,24 @@
         }
       }
     }
+  },
+  "pluginSettings": {
+    "asset": {
+      "borsa_italiana": {
+        "label": {
+          "preferred_language": "Idioma preferido"
+        },
+        "description": {
+          "preferred_language": "La búsqueda muestra cada instrumento solo en este idioma, el de su nombre y sus datos. Con Ambos idiomas, primero el italiano y luego el inglés."
+        },
+        "option": {
+          "preferred_language": {
+            "all": "Ambos idiomas",
+            "it": "🇮🇹 Italiano",
+            "en": "🇬🇧 Inglés"
+          }
+        }
+      }
+    }
   }
 }
