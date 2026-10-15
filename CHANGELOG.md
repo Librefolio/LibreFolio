@@ -81,6 +81,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A broken link already in the database no longer blocks the database fixes run at upgrade.** Since 1.2.0, a foreign-key violation already in the database made every post-migration fix fail at every start, leaving one more backup copy each time. Now a fix fails only for a violation it adds itself, and the ones already there are reported once in the log. The command-line run, `python -m backend.app.db.post_migration`, now prints its log.
 - **An asset whose events had a type LibreFolio does not know shows its events again.** A hand-written CSV could store such a type (`dividend`, `dividendo`), and then every read of that asset's events failed. An event type is now trimmed and upper-cased when saved, and refused if still unknown. At the first start after the upgrade, the post-migration fix `event_types` repairs the events already stored, once: a type that differed only in case or spaces is corrected; an event whose type stays unknown, which was never shown anyway, is deleted after its transactions are unlinked. Each change is logged.
 - **Saving asset events is all or nothing.** A request that saves several assets' events saves all of it or nothing, and a refusal names the asset and the event at fault. Until now, the assets before the refused one stayed saved.
+- PAC Allocator: percentages at an exact tie round half away from zero, like every other planner number (30.595 % shows 30.60 %).
+- PAC Allocator: a plan no longer fails when the solver reports a bound of minus zero.
+- PAC Allocator: a negative amount to use, declared liquidity or contribution, and an order step of zero or less, are reported on their own field before the request is sent.
+- PAC Allocator: the help texts of "Value after the plan" and "Ideal value" describe a PAC, which starts from zero.
+- Deleting your account: a technical failure now answers "nothing was deleted" instead of a generic server error, and a problem removing report files after the deletion no longer reports the deletion as failed.
 
 ### ⚠️ Breaking changes
 
