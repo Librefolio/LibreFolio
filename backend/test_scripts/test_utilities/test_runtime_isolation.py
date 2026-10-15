@@ -575,6 +575,69 @@ class TestConfigureTestRuntime:
         assert os.environ["LIBREFOLIO_TEST_LANE_ID"] == lane_id
 
 
+class TestTestLaneSecrets:
+    """A test lane signs sessions and derives keys with secrets of its own, never with the instance's.
+
+    ``configure_test_runtime`` removes every name of ``INSTANCE_TRUST_SECRETS`` from the environment the lane exports,
+    whether the shell or the dotenv file provided it, and a rejected lane changes nothing, those names included. The
+    dotenv file is a synthetic one in ``tmp_path``, named by ``PIPENV_DOTENV_LOCATION``; a probe variable in it proves
+    the file was loaded, so the absence of the secrets after loading it means something.
+    """
+
+    DOTENV_PROBE = "LIBREFOLIO_RUNTIME_ISOLATION_LANE_SECRETS_PROBE"
+    LANE_PORT = 6197
+
+    @staticmethod
+    def instance_values() -> dict[str, str]:
+        return {name: f"instance-value-of-{name}" for name in backend_config.INSTANCE_TRUST_SECRETS}
+
+    @staticmethod
+    def exported() -> dict[str, str | None]:
+        return {name: os.environ.get(name) for name in backend_config.INSTANCE_TRUST_SECRETS}
+
+    def use_dotenv(self, runtime_env, tmp_path: Path, values: dict[str, str]) -> None:
+        """Point the dotenv loader at a synthetic file holding ``values`` and the probe, and nothing else."""
+        dotenv_file = tmp_path / "lane-secrets.env"
+        dotenv_file.write_text("".join(f"{name}={value}\n" for name, value in {self.DOTENV_PROBE: "hydrated-from-dotenv", **values}.items()), encoding="utf-8")
+        runtime_env.setenv("PIPENV_DOTENV_LOCATION", str(dotenv_file))
+        runtime_env.delenv(self.DOTENV_PROBE, raising=False)
+
+    def test_the_session_signing_key_is_a_trust_secret(self):
+        assert "JWT_SECRET" in backend_config.INSTANCE_TRUST_SECRETS, f"JWT_SECRET must be among the secrets a test lane never inherits: {backend_config.INSTANCE_TRUST_SECRETS}"
+
+    @pytest.mark.parametrize("source", ["shell", "dotenv"])
+    def test_a_configured_lane_inherits_none_of_the_instance_secrets(self, runtime_env, tmp_path, source):
+        values = self.instance_values()
+        if source == "shell":
+            for name, value in values.items():
+                runtime_env.setenv(name, value)
+            self.use_dotenv(runtime_env, tmp_path, {})
+        else:
+            for name in values:
+                runtime_env.delenv(name, raising=False)
+            self.use_dotenv(runtime_env, tmp_path, values)
+
+        configured = cli_base.configure_test_runtime(port=self.LANE_PORT, data_dir=tmp_path / "lane-data")
+
+        assert configured == (self.LANE_PORT, (tmp_path / "lane-data").resolve())
+        assert os.environ.get(self.DOTENV_PROBE) == "hydrated-from-dotenv", "the synthetic dotenv file was not loaded, so the absence below would prove nothing"
+        inherited = sorted(name for name, value in self.exported().items() if value is not None)
+        assert not inherited, f"the test lane kept secrets of the instance from the {source}: {inherited}"
+        assert os.environ["PIPENV_DONT_LOAD_ENV"] == "1", "a nested pipenv run must not load the dotenv file again, or the removed secrets come back"
+
+    @pytest.mark.parametrize("lane", [pytest.param({"port": 0}, id="invalid-port"), pytest.param({"port": LANE_PORT, "data_dir": cli_base.DEFAULT_PROD_DATA_DIR}, id="production-data-dir")])
+    def test_a_rejected_lane_leaves_the_instance_secrets_untouched(self, runtime_env, tmp_path, lane):
+        for name, value in self.instance_values().items():
+            runtime_env.setenv(name, value)
+        self.use_dotenv(runtime_env, tmp_path, {})
+        before = runtime_state(), self.exported()
+
+        with pytest.raises(ValueError):
+            cli_base.configure_test_runtime(**lane)
+
+        assert (runtime_state(), self.exported()) == before
+
+
 class TestConfigureServerRuntime:
     @pytest.mark.parametrize("source", ["shell", "explicit"], ids=["shell-over-dotenv", "explicit-over-dotenv"])
     def test_winning_values_are_normalized_and_exported(self, runtime_env, source):
