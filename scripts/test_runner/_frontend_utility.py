@@ -164,6 +164,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/live-updates/activePolling.test.ts",
             "src/lib/features/email/emailText.test.ts",
             "src/lib/features/email/emailApi.test.ts",
+            "src/lib/features/backup/backupApi.test.ts",
+            "src/lib/features/backup/backupJob.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.test.ts",
             "src/lib/charts/signals/__tests__/syntheticSignals.languageSwitch.test.ts",
@@ -340,6 +342,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/instance/components/InstanceNotices.test.ts",
             "src/lib/features/instance/components/InstanceBlockedPage.test.ts",
             "src/lib/features/live-updates/LiveUpdatesStatus.test.ts",
+            "src/lib/features/backup/BackupDownloadCard.test.ts",
             *(["-t", "|".join(test_names)] if test_names else []),
         ],
         cwd="frontend",
@@ -664,6 +667,17 @@ def front_email_tab(verbose: bool = False, ui: bool = False, headed: bool = Fals
     return _run_playwright("settings/email-tab.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_backup(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the Settings › Backup tab E2E (workstream B, lot B5a) on desktop: the tab for administrators only, a backup created, downloaded, deleted, picked up after a reload."""
+    print_section("Frontend Backup Settings Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    # Desktop only (the default project), like every other serial spec: the tab's mobile rendering is the gallery's to cover.
+    return _run_playwright("settings/backup.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, coverage: bool = False) -> bool:
     """Run all frontend utility/component E2E tests."""
     print_header("Frontend Utility Tests (Playwright)")
@@ -848,6 +862,15 @@ def populate_registry(registry: dict) -> None:
         desc="Settings › Email (workstream E, lot E2b): on the lane's backend an administrator opens ?tab=email and finds email off (no SMTP server on the lane, asserted first through GET /api/v1/email/status), explained, the docs link opening admin/email/; a user has no Email tab and ?tab=email opens profile instead; on a simulated server (page.route on /email/status and /email/test, owned and unrouted by each test) ready with 48 of 50 left and a warning notice, a test email sent (200, busy and disabled while held, email.test.sent), refused by the SMTP server (502 EMAIL_DELIVERY_FAILED AUTH_FAILED) and by the hourly limit (429 EMAIL_RATE_LIMITED, retry_after), each read as the generated client rejects (email.test.failed) and followed by a second status read",
         prereq="Admin user + test users; no SMTP server on the lane (LIBREFOLIO_SMTP_HOST unset)",
         tests="settings/email-tab.spec.ts",
+    )
+    add_test(
+        cat,
+        "backup",
+        front_backup,
+        name="Backup Settings E2E",
+        desc="Settings › Backup (lot B5a), desktop: a regular user has no Backup tab and ?tab=backup opens the first tab, an administrator has it and it opens the card idle; from ?tab=backup a backup started and followed to done (backup.created with its 32-hex job id), the card naming the archive, a link to that job's file, the download a zip as large as the job reports under librefolio-backup-YYYYMMDD-HHMMSS.zip (backup.download.started); the delete back to idle (backup.deleted, GET of the job 404 backup_job_not_found); a reload picks the finished job up again without a second backup.created. Serial (one backup at a time per instance); every job deleted and the followed job id cleared after each test",
+        prereq="Admin user + populated DB",
+        tests="settings/backup.spec.ts",
     )
     add_test(cat, "all", front_utility_all, test_names=False, name="All Frontend Utility Tests", desc="Run all utility/component E2E tests")
     registry["front-utility"] = cat
