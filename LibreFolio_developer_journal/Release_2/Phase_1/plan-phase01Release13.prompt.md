@@ -1203,3 +1203,19 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 >   scartato (`SQLITE_BUSY_SNAPSHOT`). Cura decisa: un aiuto mirato in `db/session.py`, lotto piccolo di W dopo N1.
 >   W-B22 e W-B23 (quadro delle correzioni post-migrazione) assegnate a W come N1b-3: W-B22 è legata a N1b-2, perché
 >   una violazione di FK già nel DB ferma il giro prima di `orphan_pair_halves`.
+
+### La 1.2.1 pubblicata e riportata in `dev_release2` (2026-10-15, 12:00–12:50)
+
+> **Note implementazione**: il developer ha deciso di pubblicare la 1.2.1 subito, separata dal restyle dei colori, con
+> una terza correzione: un `JWT_SECRET` di soli spazi non è più la chiave che firma le sessioni (`c73d5d56a`, test
+> `utils jwt-secret-blank` rosso 9/15 prima, verde 15/15 dopo). Ramo `hotfix-1.2.1` = `064fb4fc2` (9 commit su v1.2.0);
+> `main` avanzato e release v1.2.1 pubblicata dal developer alle 12:27 (pipeline `38720357465`). Nessuna advisory né CVE
+> (decisione del developer). Riportata in `dev_release2` con il merge `6c349f907`, preparato in un worktree a parte:
+> conflitti solo in `CHANGELOG.md` e `services/accounts/auth_service.py` (tenuta la versione 1.3: `env_secret()` di H
+> scarta già il segreto vuoto); il test del segreto adattato alla 1.3 dal test-author; prove sull'albero fuso: i 4 test
+> della 1.2.1 (23, 26, 36, 15), `config-package` 594, ruff pulito. Sbloccati il CP2b di H e i lotti CP7, W3 e W5–W6 di W.
+> `dev_release2` si può pushare.
+>
+> **⚠️ Fuori pista**: avevo detto al developer che la pipeline di rilascio rifà i test; non è così: fa build, controlli
+> della documentazione, galleria e immagini. Il giro completo sull'hotfix (`utils all`, `api auth`) lo faccio dopo la
+> finestra della galleria.
