@@ -29,7 +29,14 @@
  *     request for a rate limit, `…resendErrors.unavailable` for the four ways the instance cannot send, and
  *     `…resendErrors.generic` for anything else, an inherited name included —; every one of these keys, and the
  *     notice's and the page's own (`loginRequired`, `resend`, `resending`, `resent`, `verified` with its
- *     `{username}`), is in the four catalogues with exactly the placeholders the code fills.
+ *     `{username}`), is in the four catalogues with exactly the placeholders the code fills;
+ *   - «send by email» and «forgot password» (lot E4a): `linkSendFailureMessage` makes one translator call per failure —
+ *     `email.sendLink.errors.<CODE>` for the codes of `POST /email/links`, the minutes for a rate limit, the SMTP reason's
+ *     `email.smtpErrors.<CODE>` for a refused delivery (`SEND_FAILED` when missing, unknown or inherited), and
+ *     `…errors.generic` for anything else —; `forgotFailureMessage` one per failure — the hold's own message, one
+ *     `…errors.unavailable` for both ways the instance cannot send, the minutes for a rate limit, `…errors.generic` for
+ *     anything else, a 422 included —; every key they produce, and the components' own, is in the four catalogues with
+ *     exactly the placeholders the code fills (`{to}` for «sent», `{minutes}` for the rate limits).
  *
  * The translator is a recording fake that answers a marker of its own, so a case reads which key and which values
  * were asked for, never a sentence. The catalogue block reads the generated catalogues (`$lib/i18n/<lang>.json`,
@@ -48,8 +55,26 @@ import es from '$lib/i18n/es.json';
 import {LEGACY_CLASS_RE, ROLE_CLASS_RE, readTokens, roleNames} from '../../../../scripts/theme/theme-roles.mjs';
 import type {EmailTestFailure} from './emailApi';
 import type {LinksProbeState} from './emailLinks';
+import type {ForgotFailure} from './forgotPasswordApi';
+import type {LinkSendFailure} from './sendLinkApi';
 import type {ResendFailure} from './verificationApi';
-import {LINKS_PROBE_CLASSES, LINKS_PROBE_KEYS, linksProbeWarns, minutesUntil, NOTICE_CLASSES, OUTCOME_CLASSES, problemKey, resendFailureMessage, STATE_BADGE_CLASSES, STATE_LABEL_KEYS, testFailureMessage, VERIFY_PAGE_KEYS, type VerifyPageStatus} from './emailText';
+import {
+    forgotFailureMessage,
+    linkSendFailureMessage,
+    LINKS_PROBE_CLASSES,
+    LINKS_PROBE_KEYS,
+    linksProbeWarns,
+    minutesUntil,
+    NOTICE_CLASSES,
+    OUTCOME_CLASSES,
+    problemKey,
+    resendFailureMessage,
+    STATE_BADGE_CLASSES,
+    STATE_LABEL_KEYS,
+    testFailureMessage,
+    VERIFY_PAGE_KEYS,
+    type VerifyPageStatus,
+} from './emailText';
 
 /** The problem codes of `backend/app/config/email.py`, each with a message of its own. */
 const PROBLEM_CODES = ['SMTP_HOST_INVALID', 'SMTP_TLS_INVALID', 'SMTP_PORT_INVALID', 'SMTP_FROM_MISSING', 'SMTP_FROM_INVALID', 'SMTP_REPLY_TO_INVALID', 'SMTP_MAX_PER_HOUR_INVALID', 'SMTP_PASSWORD_UNREADABLE', 'SMTP_CREDENTIALS_INCOMPLETE'];
@@ -391,5 +416,58 @@ describe('the verification of an address (lot E5a) — its words', () => {
     it.each(RESEND_FAILURES)('ETX-10: the message of $label is in the four catalogues, naming the values it is asked with', ({failure}) => {
         const {key, values} = askedResend(failure);
         expectInEveryCatalogue(key ?? '', Object.keys(values ?? {}));
+    });
+});
+
+// =====================================================================================================================
+/** What a failure function asked the translator for, how many times, and what it returned. */
+function askedOf<F>(word: (translate: Translate, failure: F) => string, failure: F): {calls: number; key: string | undefined; values: Values | undefined; answer: string} {
+    const translate = vi.fn<Translate>((key) => `«${key}»`);
+    const answer = word(translate, failure);
+    const [key, options] = translate.mock.calls[0] ?? [];
+    return {calls: translate.mock.calls.length, key, values: options?.values, answer};
+}
+
+/** The codes of `POST /email/links` that have a message of their own. */
+const LINK_SEND_CODES = ['EMAIL_UNAVAILABLE', 'EMAIL_LINKS_UNAVAILABLE', 'EMAIL_LINK_INVALID', 'EMAIL_ACCOUNT_INACTIVE', 'EMAIL_RECIPIENT_REQUIRED', 'EMAIL_RECIPIENT_NOT_ALLOWED', 'EMAIL_RECIPIENT_INVALID'];
+
+const LINK_SEND_FAILURES: Array<{label: string; failure: LinkSendFailure; key: string; values?: Values}> = [
+    ...LINK_SEND_CODES.map((errorCode) => ({label: errorCode, failure: {errorCode}, key: `email.sendLink.errors.${errorCode}`})),
+    {label: 'EMAIL_RATE_LIMITED, 1800 s', failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 1800}, key: 'email.sendLink.errors.EMAIL_RATE_LIMITED', values: {minutes: 30}},
+    {label: 'EMAIL_RATE_LIMITED, no wait said', failure: {errorCode: 'EMAIL_RATE_LIMITED'}, key: 'email.sendLink.errors.EMAIL_RATE_LIMITED', values: {minutes: 1}},
+    ...SMTP_CODES.map((smtpCode) => ({label: `EMAIL_DELIVERY_FAILED ${smtpCode}`, failure: {errorCode: 'EMAIL_DELIVERY_FAILED', smtpCode}, key: `email.smtpErrors.${smtpCode}`})),
+    ...[undefined, 'SMTP_SOMETHING_NEW', ...INHERITED_NAMES].map((smtpCode) => ({label: `EMAIL_DELIVERY_FAILED with ${String(smtpCode)}`, failure: {errorCode: 'EMAIL_DELIVERY_FAILED', smtpCode}, key: 'email.smtpErrors.SEND_FAILED'})),
+    ...['UNKNOWN', 'SOMETHING_NEW', ...INHERITED_NAMES].map((errorCode) => ({label: errorCode, failure: {errorCode}, key: 'email.sendLink.errors.generic'})),
+];
+
+const FORGOT_FAILURES: Array<{label: string; failure: ForgotFailure; key: string; values?: Values}> = [
+    {label: 'FORGOT_PASSWORD_DISABLED (the hold)', failure: {errorCode: 'FORGOT_PASSWORD_DISABLED'}, key: 'email.forgot.errors.FORGOT_PASSWORD_DISABLED'},
+    {label: 'EMAIL_UNAVAILABLE', failure: {errorCode: 'EMAIL_UNAVAILABLE'}, key: 'email.forgot.errors.unavailable'},
+    {label: 'EMAIL_LINKS_UNAVAILABLE', failure: {errorCode: 'EMAIL_LINKS_UNAVAILABLE'}, key: 'email.forgot.errors.unavailable'},
+    {label: 'EMAIL_RATE_LIMITED, 840 s', failure: {errorCode: 'EMAIL_RATE_LIMITED', retryAfter: 840}, key: 'email.forgot.errors.EMAIL_RATE_LIMITED', values: {minutes: 14}},
+    {label: 'EMAIL_RATE_LIMITED, no wait said', failure: {errorCode: 'EMAIL_RATE_LIMITED'}, key: 'email.forgot.errors.EMAIL_RATE_LIMITED', values: {minutes: 1}},
+    ...['INVALID', 'UNKNOWN', 'SOMETHING_NEW', ...INHERITED_NAMES].map((errorCode) => ({label: errorCode, failure: {errorCode}, key: 'email.forgot.errors.generic'})),
+];
+
+describe('«send by email» and «forgot password» (lot E4a) — their words', () => {
+    it.each(LINK_SEND_FAILURES)('ETX-11: linkSendFailureMessage of $label — one call, its key and values, the answer untouched', ({failure, key, values}) => {
+        expect(askedOf(linkSendFailureMessage, failure)).toEqual({calls: 1, key, values, answer: `«${key}»`});
+    });
+
+    it.each(FORGOT_FAILURES)('ETX-12: forgotFailureMessage of $label — one call, its key and values, the answer untouched', ({failure, key, values}) => {
+        expect(askedOf(forgotFailureMessage, failure)).toEqual({calls: 1, key, values, answer: `«${key}»`});
+    });
+
+    it.each([...LINK_SEND_FAILURES.map((entry) => ({...entry, word: 'linkSendFailureMessage'})), ...FORGOT_FAILURES.map((entry) => ({...entry, word: 'forgotFailureMessage'}))])(
+        'ETX-13: the message of $word for $label is in the four catalogues, naming the values it is asked with',
+        ({key, values}) => {
+            expectInEveryCatalogue(key, Object.keys(values ?? {}));
+        },
+    );
+
+    it('ETX-14: the components’ own keys are in the four catalogues: «sent» names the {to} it fills, the others nothing', () => {
+        expectInEveryCatalogue('email.sendLink.sent', ['to']);
+        for (const key of ['button', 'sending', 'toLabel', 'toPlaceholder', 'resetTarget', 'publicUrlHint']) expectInEveryCatalogue(`email.sendLink.${key}`, []);
+        for (const key of ['label', 'submit', 'sending', 'accepted']) expectInEveryCatalogue(`email.forgot.${key}`, []);
     });
 });

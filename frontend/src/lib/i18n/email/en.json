@@ -107,6 +107,38 @@
         "unavailable": "The email cannot be sent right now: try again later, or ask the administrator of this instance.",
         "generic": "The link could not be sent: try again."
       }
+    },
+    "sendLink": {
+      "button": "Send by email",
+      "sending": "Sending…",
+      "toLabel": "Send to",
+      "toPlaceholder": "name@example.com",
+      "resetTarget": "The link goes to the email address of the account.",
+      "publicUrlHint": "The link in the email starts with the address set in LIBREFOLIO_PUBLIC_URL, which may differ from the one above.",
+      "sent": "Sent to {to}.",
+      "errors": {
+        "EMAIL_UNAVAILABLE": "Email is off or not working on this instance.",
+        "EMAIL_LINKS_UNAVAILABLE": "Emails cannot carry links: LIBREFOLIO_PUBLIC_URL is not set, or cannot start a link.",
+        "EMAIL_LINK_INVALID": "This link no longer works: create a new one.",
+        "EMAIL_ACCOUNT_INACTIVE": "The account is not active: activate it before sending it a reset link.",
+        "EMAIL_RECIPIENT_REQUIRED": "Enter the address to send the invitation to.",
+        "EMAIL_RECIPIENT_NOT_ALLOWED": "A reset link goes only to the address of its account.",
+        "EMAIL_RECIPIENT_INVALID": "This is not one valid email address.",
+        "EMAIL_RATE_LIMITED": "The hourly email limit is reached: try again in {minutes} min.",
+        "generic": "The email could not be sent."
+      }
+    },
+    "forgot": {
+      "label": "Username or email address",
+      "submit": "Email me a reset link",
+      "sending": "Sending…",
+      "accepted": "If an active account matches, its owner gets an email with a link to choose a new password. Check the inbox and the spam folder: the link works for 30 minutes.",
+      "errors": {
+        "FORGOT_PASSWORD_DISABLED": "Password reset by email is not available on this instance yet: ask its administrator.",
+        "unavailable": "This instance cannot send emails right now: ask its administrator.",
+        "EMAIL_RATE_LIMITED": "Too many requests for now: try again in {minutes} min.",
+        "generic": "The request could not be sent: try again."
+      }
     }
   }
 }
