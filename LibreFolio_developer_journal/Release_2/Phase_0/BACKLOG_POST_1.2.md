@@ -2326,43 +2326,148 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     spagnolo, quindi conviene farla prima di G-13, o accettare un riferimento nuovo.
 
   Dettagli: snapshot `g-new3-a/b` in `LibreFolio_visual_review`, `desktop/<lingua>/light/settings/email.png`.
+- **G-16 · Scatto delle esposizioni del PAC (`tools/pac-result-exposures`)** — medio; coordinatore, 15/10 (TD-1: il
+  developer approva dagli scatti le barre «ideale vs reale» sui colori delle categorie, D-T21).
+  - Fatto da test-author, nel perimetro di G. Lo scatto è nel test `PAC allocator result`, fra il piano e la prova: 8
+    scatti per progetto.
+    - `framePacExposures` apre la sezione, che è chiusa di default, e ne verifica l'esito. Aspetta mappe e barre sugli
+      stati pubblicati (`data-state`, `data-chart-ready`) e controlla le righe attese.
+    - Inquadratura su desktop: dal titolo, e lo schermo alto tiene la sezione intera.
+    - Inquadratura su mobile: il corpo finisce in fondo allo schermo, con le barre intere e sopra quanto ci sta delle
+      mappe.
+    - `closePacExposures` la richiude, così gli scatti esistenti restano com'erano.
+  - Contenuto: le due mappe (USA, e la quota non classificata elencata sotto) e le barre per tipo (ETF, STOCK).
+  - **I settori restano piegati in una riga**: «nessuna classificazione dichiarata · 100% non classificato».
+    - Il seed divide Apple in Technology e Services e Microsoft in Technology e Cloud. Ma Services e Cloud non sono
+      settori di `FinancialSector`, quindi la sorgente del planner rifiuta le due suddivisioni intere
+      (`allocation.classification_invalid`).
+    - Per avere le barre dei settori serve un seed con settori validi. È fuori dal perimetro di G e cambia anche altri
+      scatti, per esempio `assets/detail-classification`.
+  - La pagina utente del PAC non lo mostra: non ha un segnaposto (`data-name`), da aggiungere con la documentazione se
+    serve.
+  - Verifica: statica pulita (`tsc` con i soli 2 errori di base, prettier). La run filtrata a 1 worker parte dopo il
+    merge della punta; poi la coppia di G-13 lo include.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
 > Workstream T del programma colori, aperto il 14/10 (D-T1). Da non confondere con la sezione «T · Matematica
 > finanziaria e riordino (43)». Piano: [T-tokensTheme](../Phase_1/10_colorSystem/T-tokensTheme/plan-phase01TokensTheme.prompt.md).
 
-- **T-B1 · I requisiti della password detti anche a chi usa un lettore di schermo** — basso; T, 14/10.
+- **TC-1 · I requisiti della password detti anche a chi usa un lettore di schermo** — basso; T, 14/10.
   - Oggi ✓ e ✗ distinguono un requisito soddisfatto senza affidarsi al colore, ma non hanno testo per i lettori di
     schermo.
   - Servono due chiavi i18n («soddisfatto», «non soddisfatto») in testo nascosto: lo fa A, che possiede la card di
     registrazione dopo il giro di T.
 
   Dettagli: piano di T, passo T-2.
-- **T-B2 · Ruoli in attesa del giro 2 della designer** — medio; T, 14/10.
+- ✅ **TC-2 · Ruoli in attesa del giro 2 della designer** — medio; T, 14/10. **Chiusa il 15/10 con T-8**
+  (checkpoint 7): il giro 2 (D-T17) risponde a N1–N6 e Q2–Q13, e i ruoli sono in `tokens.css`; gli stati sulla barra
+  verde sono di nuovo nella barra (D-T17 supera D-T15). Ciò che resta da confermare passa a TC-8.
   - Sono derivati provvisori, calcolati solo dai suoi valori: hover e premuto in chiaro, fondale delle modali, inverso
     dei tooltip, tinte di avviso, errore e informazione.
+  - ✅ **Stati sulla barra verde** (T-3, 15/10): chiusa da D-T15 (15/10). La barra laterale è neutra, e le icone di
+    `ConnectionSecurityIndicator` sono sui ruoli di stato (T-6).
   - Da decidere con lei:
     - guadagno e perdita distinti da successo ed errore;
     - l'info `#155EEF`, molto saturo;
     - le opacità delle colline del login in scuro;
     - palette categoriale e colori dei grafici.
   - Le otto correzioni minime di contrasto (D-T6) vanno confermate.
+  - **Domande di W1 e W2** (15/10, notte): Q1–Q13 nel piano di T, sezione W1–W6, «Ruoli che mancano». Q1 è chiusa da
+    D-T16 (15/10): un controllo selezionato è `bg-lf-checked` (focus) col segno `text-lf-on-checked` (card).
+  - **Giro 2, «Pietra e Salvia»** (15/10, T-6): la palette è applicata. I ruoli che la sua tabella non copre, i valori
+    provvisori e le correzioni minime di contrasto sono nel piano di T, passo T-6.
+  - **Decisioni del developer, 15/10:**
+    - D-T15, che supera D-T2: barra laterale neutra (`#EDF0EE`/`#111615`); il verde `#1B4334` resta per l'header del
+      login e i pulsanti;
+    - D-T16, che chiude Q1: un controllo selezionato è riempito di verde focus (`#236B4D`/`#429E79`) col segno nel
+      colore della card;
+    - D-T3 confermata: niente ponte, chi non è migrato resta visibilmente vecchio.
+  - **Domande aperte del giro 2 (N1–N6):**
+    - N1: voce attiva e hover della barra neutra, e il suo bordo;
+    - N2: la barra del titolo della PWA segue la barra neutra o resta verde (serve a T-4);
+    - N3: il bordo della card di accesso in scuro;
+    - N4: il sottotitolo «Crea un account» del render;
+    - N5: le sei correzioni di contrasto, soprattutto il bordo dei campi;
+    - N6: colline e linee scure, e i pallini sulle linee.
+  - **Domande aperte di W1/W2 (Q2–Q13):**
+    - controlli: interruttore spento (Q2), hover dei pulsanti pieni (Q3), stato «modificato» (Q4), pallino neutro (Q5);
+    - superfici e testi: codice e terminale (Q6), `mark` (Q7), ombre (Q8), coachmark (Q9), avviso nel tooltip (Q10);
+    - colori categoriali: viola dell'AI Export (Q11), icone decorative (Q12);
+    - fondale delle modali (Q13).
 
   Dettagli: piano di T, «Autorizzazione e decisioni»; `frontend/src/lib/theme/tokens.css`.
-- **T-B3 · Uno scanner dei colori solo, con L** — basso; T, 14/10.
+- **TC-3 · Uno scanner dei colori solo, con L** — basso; T, 14/10.
   - Il cricchetto (`frontend/scripts/theme/theme-roles.mjs`) copia la regex delle classi di palette dallo scanner del
     Designer Lab (`scan-colors.mjs`).
   - Quando L entra in `dev_release2`, un modulo comune evita che i due conteggi divergano.
 
   Dettagli: piano di T, passo T-1.
-- **T-B4 · Le cinque regole della password scritte due volte** — basso; T (trovato da `test-author`), 14/10.
+- **TC-4 · Le cinque regole della password scritte due volte** — basso; T (trovato da `test-author`), 14/10.
   - Le stesse regole stanno in `ui/input/PasswordStrength.svelte` (la lista mostrata) e in
     `auth/RegisterCard.svelte` (la validazione del modulo). Oggi coincidono; se divergessero, la lista direbbe
     «soddisfatta» mentre il modulo rifiuta la password.
   - Una fonte sola per le regole: è di A, che possiede la registrazione (F13).
 
   Dettagli: piano di T, passo T-2.
+- **TC-5 · Il tema scelto dall'header non sopravvive a un nuovo accesso** — basso; T (trovato da `test-author`), 15/10.
+  - `ThemeToggle` scrive solo `localStorage`; all'accesso `auth.ts` riapplica il tema salvato nell'account
+    (`applyTheme`), quindi una scelta fatta dall'header si perde se diverge da quella salvata. Comportamento di prima di
+    T, non di colore.
+  - **Accessibilità della shell, anche questa di prima:** la chiusura mobile della barra laterale non ha nome
+    accessibile; il `title` del pulsante di compressione e l'`aria-label` del fondale sono in inglese fisso; le
+    schermate d'attesa della shell scrivono «Loading...» e «Checking authentication...» in inglese.
+
+  Dettagli: piano di T, passo T-3.
+- **TC-6 · Alla prima visita il selettore della lingua mostra l'inglese mentre l'interfaccia è nella lingua del
+  browser** — basso; T, 15/10. Da instradare: non è di colore.
+  - Visto sugli scatti di T-5: browser `it-IT`, nessuna preferenza salvata, pagina di accesso in italiano con la
+    bandiera 🇬🇧, e nel menu è selezionato l'inglese.
+  - Causa probabile, letta e non provata: `currentLanguage` (`lib/stores/app/language.ts`) nasce col valore salvato o
+    con `en`; il suo `init()`, chiamato al montaggio del layout radice, legge una volta sola il `locale` di svelte-i18n,
+    che passa a `it` solo dopo aver caricato il dizionario. Il negozio resta `en`.
+
+  Dettagli: piano di T, passo T-5.
+- **TC-7 · `--resolve` non fa un vero merge a tre vie** — medio; R-8 della sezione R, spostata qui dal coordinatore il
+  15/10.
+  - **Il difetto:** `mergeBaselines` (`frontend/scripts/theme/theme-roles.mjs`) non guarda la base per una riga presente
+    su entrambi i lati: prende il minimo di m1 e i soli valori di m2 comuni ai due lati.
+  - **Cosa succede:** se un lato ha accettato uno scambio (`--accept`), per esempio D3 in `themeStore.ts`
+    (`#156534` → `#166534`), e l'altro ha ancora la riga della base, il valore accettato sparisce dal fuso. Il gate
+    dà rosso sull'albero fuso, e bisogna rifare `--accept` a mano. Successo due volte il 15/10, nei merge di R e di X.
+  - **La correzione:**
+    - un merge a tre vie vero: se un lato è uguale alla base, vince l'altro; se sono cambiati entrambi, il più
+      stretto;
+    - la riga di un file con `~accept` su un lato vince per quel file;
+    - test sintetici in `themeRoles.gate.test.ts`, scritti da `test-author`.
+  - 🔄 **Implementata in T-8** (15/10, checkpoint 7): una riga lasciata com'era da un lato prende quella dell'altro;
+    cambiata dai due lati vince il lato con un `~accept` nuovo (due: errore), altrimenti il più stretto. Si chiude con
+    la validazione della revisione fusa, quando i test passano.
+
+  Dettagli: piano di T, passo T-6, «Validazione del fuso», e T-8, punto 10.
+- **TC-8 · Giro 3 della designer: quello che resta da confermare** — medio; T, 15/10. Per D-T21 la designer rivede
+  tutto insieme nel giro 3.
+  - Le sette correzioni minime di contrasto di T-8 sui valori del giro 2 (D-T6), ciascuna col valore chiesto accanto in
+    `tokens.css`. L'ottava, sul caffè dell'header verde, è decaduta col suo ruolo in T-8b (D-T23: header neutro).
+  - I derivati provvisori: hover dell'azione in chiaro, testo su un pieno AI (`--lf-on-ai`), commenti del terminale,
+    ombra delle card in scuro (40 %).
+  - Le scelte di T: indicatore della voce attiva a sinistra; la fascia del logo fusa nella barra. (Il pallino di
+    sicurezza `#F87171` della barra verde è tornato `--lf-danger` con l'header neutro di D-T23.)
+  - Interruttore spento: in chiaro si riconosce solo dal bordo del pallino, e il gate dei contrasti non lo misura.
+  - Da TC-2: guadagno e perdita distinti da successo ed errore.
+  - Il rosso e il verde del tema scuro scelti dal developer dopo l'anteprima (D-T25 `#FF7A86`, D-T26 `#5ED69A`), estesi
+    agli stati della barra verde: per D-T21 la designer li rivede nel giro 3.
+
+  Dettagli: piano di T, passo T-8 nell'avanzamento.
+- **TC-9 · Il `background_color` del manifest resta il beige delle icone** — basso; T, 15/10. Da decidere.
+  - D-T7 vuole splash, pagina offline e `background_color` del manifest sullo sfondo pagina, che col giro 2 è
+    `#F3F5F3`. Splash e pagina offline lo seguono (T-8).
+  - Il manifest no: `test_pwa_assets.py` (K) lo fissa a `#F5F4EF`, il colore in cui sono dipinte fino al bordo le icone
+    maskable (`icon-maskable-{192,512}.png`), così il ritaglio del launcher incontra lo splash di sistema senza cucitura.
+  - Per seguire D-T7 servono le icone ridipinte e la costante del test aggiornata, nello stesso commit. La differenza
+    fra i due colori è minima.
+
+  Dettagli: piano di T, passo T-8, punto 15.
 
 ---
 
@@ -2373,8 +2478,76 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 > lettere: «D» e «V» erano già usate (developer, 15/10).
 >
 > Valori e controlli: [giro 2 della designer](../Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/README.md)
-> e la sua [analisi](../Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/analisi.md), §4–§6. Il piano
-> arriverà in `../Phase_1/10_colorSystem/DV-chartColors/`. Gli ID di questa sezione sono `DV-n`.
+> e la sua [analisi](../Phase_1/10_colorSystem/designer-feedback/2026-10-15-round2-palette/analisi.md), §4–§6. Il piano:
+> [`plan-phase00ChartColors.prompt.md`](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md).
+> Gli ID di questa sezione sono `DV-n`.
+
+- ✅ **DV-1 · La rigenerazione documentata del golden di `native_cash_guard` non arriva al test** — minimo; DV, 15/10
+  (S1). **Chiusa il 15/10 da J con CP-4**, entrato in `dev_release2` col merge `322d55042`: la variabile ora è
+  `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD`, e il docstring spiega perché porta il prefisso `LIBREFOLIO_TEST_`.
+  - Il comando del docstring, `LIBREFOLIO_REGEN_NATIVE_CASH_GUARD=1 ./dev.py test services roi-fifo-utils
+    native_cash_guard`, non funziona: la corsia di test scarta ogni `LIBREFOLIO_*` che non sia `LIBREFOLIO_TEST_*`
+    (`scripts/cli_base.py`, `_test_lane_drops`). Il test confronta, invece di riscrivere.
+  - In S1 il golden è stato aggiornato sulle 4 righe del diff del test (💵 → 💰), poi verificato verde byte per byte.
+  - Rimedio: rinominare la variabile in `LIBREFOLIO_TEST_…`, oppure aggiungerla a `TEST_LANE_KEEPS`. Fuori dal perimetro
+    di DV: il coordinatore la gira alla 1.3 (15/10).
+  - **La chiude J nel lotto CP-4** (coordinatore, 15/10): la variabile diventa
+    `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD=1`, che passa il filtro della corsia. Si chiude qui, citando CP-4, quando
+    entra.
+  - **Conflitto atteso sul golden:**
+    - J lo rigenera con un campo nuovo (+116 righe), DV ha cambiato 4 righe a mano;
+    - chi entra per secondo lo rigenera con la variabile nuova sulla revisione fusa, senza unire a mano.
+    - J è entrato per primo, quindi rigenera DV, al merge di base fatto dal coordinatore prima della sua validazione.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S1».
+- ✅ **DV-2 · Un settore senza emoji: l'endpoint ripiega su 📊, la vista dell'allocazione su `None`** — minimo; DV, 15/10
+  (`test-author`, S1). **Chiusa il 15/10** (in attesa del commit del coordinatore).
+  - Un solo ripiego, accanto alla mappa in `sector.py`: `SECTOR_EMOJI_FALLBACK`, cioè ❓, l'emoji di «Non
+    classificato». Lo usano l'endpoint e il motore (`sector_emoji`), ed è fissato nei test.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «DV-2 e
+    decisione 8».
+- **DV-3 · La torta non legge più l'`emoji` che le passano dashboard e pagina dell'asset** — minimo; DV, 15/10 (S3).
+  - Con la decisione 8 la torta per settore prende le emoji dallo store dei settori. Il campo `emoji` di
+    `AllocationEntry` è rimosso, ma è ancora calcolato e passato:
+    - `components/dashboard/AllocationPanel.svelte:65` (zona di Y10);
+    - `routes/(app)/assets/[id]/+page.svelte:3496` (`getSectorEmoji(name)`, zona di X).
+  - Per `front check` non è un errore: l'oggetto nasce dentro un `.map`, e TypeScript fa il controllo delle proprietà
+    in eccesso solo su un letterale assegnato direttamente (verificato con `tsc` 5.9 su una prova isolata, 15/10).
+  - È un dato morto e innocuo. Si toglie quando quei file si toccano.
+  - **Girata dalla 1.3** a Y-6/Y10 e a X (FE5c) (coordinatore, 15/10).
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S3».
+- **DV-4 · `hexToHsl` resta usato solo dai test** — minimo; DV, 15/10 (S3).
+  - Il suo unico consumatore di produzione era `shadeForDepth`, tolto con GR4 (miscela in OKLab).
+  - Da decidere se rimuoverlo con i suoi test o tenerlo come inverso documentato di `hslToHex` (`utils/colors.ts`).
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S3».
+- **DV-5 · Due pagine developer descrivono ancora le sfumature HSL** — minimo; DV, 15/10 (S3).
+  - Pagine:
+    - `mkdocs_src/docs/developer/frontend/components/charts.md`, «Pie Charts»: parla di `shadeForDepth`, della
+      passeggiata in luminosità e della diffusione sui due lati;
+    - `mkdocs_src/docs/developer/frontend/designer-lab.md:920` lo cita come esempio di colore derivato (pagina di L).
+  - Il sito si aggiorna solo alla chiusura del programma colori (developer, 14/10).
+  - Da scrivere allora:
+    - `categoryColor` come unico punto di lettura;
+    - GR4 a miscela in OKLab;
+    - il ponte `roleColors`;
+    - il segnale C4.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S2».
+- ✅ **DV-6 · Un'etichetta di settore comincia con uno spazio finché l'elenco dei settori non arriva** — minimo; DV,
+  15/10 (`test-author`, S10). **Chiusa il 15/10** (in attesa del commit del coordinatore).
+  - Causa: la decisione 8. Senza il ripiego scritto a mano, `getSectorEmoji` restituisce `''` fino al caricamento, e
+    due composizioni scrivono `` `${emoji} ${nome}` `` senza controllarlo:
+    - `components/risk/stressBucketLabel.ts:37`, usato da `L4Shock` e `RiskAnalysisPanel` (zona di Y):
+      `title=" Finanziari"` e `aria-label=" Finanziari"`;
+    - `features/tools/pac-allocator/planner/categoryLabels.svelte.ts:22` (PAC).
+  - Dura una richiesta: entrambi caricano l'elenco e si ridisegnano quando arriva.
+  - Rimedio di una riga, come fanno già torta e `SectorSearchSelect`: ``emoji ? `${emoji} ${nome}` : nome``.
+  - **OK della 1.3** (coordinatore, 15/10): le due righe le fa DV, dopo il merge di base e la prova 0 e prima dello
+    slot pesante; il test lo scrive `test-author`. I file sono di Y (`stressBucketLabel.ts`, che Y4b sposterà dopo
+    l'ingresso di DV) e del PAC, di J.
+  - **Fatto** sulla revisione `0182d890d`:
+    - in entrambi i file, il ramo del settore mette l'emoji solo se c'è;
+    - test nuovi `stressBucketLabel.test.ts` e `categoryLabels.test.ts`, 9 e 9, registrati in `core-unit`;
+    - il mirror di `L4Shock.test.ts` è allineato, 22.
+  - Dettagli: [piano di DV](../Phase_1/10_colorSystem/DV-chartColors/plan-phase00ChartColors.prompt.md), sezione «S10».
 
 ---
 
@@ -2480,7 +2653,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
   Dettagli: piano H, §14 «Lotto "credenziali nei log di accesso"».
 - **H-10 · `services static-uploads` è dichiarata `write-scoped`, ma svuota la cartella degli upload della corsia** —
-  basso; H (test-author, G-10), 15/10.
+  basso; H (test-author, G-10), 15/10. ✅ 15/10 (lotto 36, CP-U1): la fixture `_private_data_dir` punta la cartella dei
+  dati su `tmp_path` e non tocca più quella della corsia.
   - Il fixture autouse di `test_static_uploads.py` cancella e ricrea `custom-uploads` della corsia, dove stanno anche gli
     avatar del seed. Un'altra unità che li legge, in parallelo, li perde.
   - Nessun rosso visto finora; c'era già prima di G-10.
@@ -2523,6 +2697,27 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `LIBREFOLIO_TEST_REGEN_*`. In alternativa, un elenco esplicito `LIBREFOLIO_REGEN_*` in `TEST_LANE_KEEPS`.
 
   Dettagli: piano H, §14 «Ingresso dopo A6a».
+- **H-14 · `derive_key_from`: derivare da una chiave d'istanza data, non solo da quella corrente** — medio; X (CP10,
+  impostazioni dei plugin), 15/10.
+  - Serve al ripristino di B: i segreti dei plugin di un backup sono cifrati con la chiave dell'istanza d'origine, e
+    vanno cifrati di nuovo con quella dell'istanza che ripristina.
+  - Oggi `instance_key.derive_key(purpose)` deriva solo dalla chiave corrente.
+  - Cura: `derive_key_from(key, purpose, length=32)` nello stesso modulo, con lo stesso HKDF; `derive_key` la chiama
+    con la chiave corrente. Da accordare con X e B (nome, firma).
+
+  Dettagli: piano H, §14 «Voci di backlog da X CP10».
+- **H-15 · Un controllo d'avvio per una chiave dei segreti dei plugin inutilizzabile** — medio; X (CP10), 15/10.
+  - `plugin_secrets_key_status` (X) dice se i segreti salvati si possono ancora decifrare con la chiave corrente, con i
+    totali quando non si può, e gira in `to_thread`.
+  - Cura: un controllo in `config_audit.py` che lo usa, con un avviso nei log e nella UI dell'admin, nello stile degli
+    altri controlli (codice, gravità, chiave i18n).
+
+  Dettagli: piano H, §14 «Voci di backlog da X CP10».
+- **H-16 · `developer/architecture/security.md`: due frasi superate dai segreti dei plugin** — basso; X (CP10), 15/10.
+  - L'elenco dei segreti letti con `env_secret()` non ha le variabili dei plugin (`LIBREFOLIO_PLUGIN_*`).
+  - La «known limitation» chiama ancora «planned» un controllo della chiave che il `key_id` di X ora rende possibile.
+
+  Dettagli: piano H, §14 «Voci di backlog da X CP10».
 
 ## A · Account e accessi (fase 01)
 
@@ -2704,6 +2899,16 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `settings`/`admin-users` E2E e lo scatto della galleria da ricontrollare (il corpo arriva dopo un `await`).
   - Nello stesso giro, nota di G (15/10): i corpi e le rotte dello scatto `settings/users` in `fixtures/galleryUsers.ts`,
     come `galleryEmail.ts`.
+- **A-19 · Su un'istanza su invito «Register here» lampeggia al caricamento del login** — basso; deciso dal
+  coordinatore in A6d (15/10).
+  - Finché `GET /system/instance` non risponde, `LoginCard` usa `DEFAULT_INSTANCE_CONFIG` (`open`) e offre il link;
+    poi lo ritira. Il default resta `open` per non mettere in corsa gli scatti del login (G, theme-roles) e per lasciare
+    alle E2E negative di `auth.spec.ts` il loro controllo «prima».
+  - Possibile cura: nascondere il link finché l'istanza non risponde, con uno stato `data-*` sulla scheda che le prove
+    e la galleria possano aspettare. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
+    «A6d.1».
+- **A-20 · `black` fallisce su `scripts/test_runner/_backend_services.py`** — minimo; da E tramite il coordinatore
+  (15/10). Il `print_info` di `services_account_deletion_preview` (A6a, `5928176cf`) ha 305 caratteri: si spezza in A6d.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -2902,9 +3107,14 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   14/10. `_get_brim_file_with_access` (`backend/app/api/v1/brokers.py:119`) salta il controllo dei ruoli quando il file
   non ha un broker (i file vecchi, alla radice delle cartelle). Prima un rosso: se quei file possono ancora esistere, e
   chi li vede. Dettagli: piano 04.
+  ✅ 15/10 (F36, decisione 36): confermata (lista, lettura, parse e cancellazione aperti a chiunque con il login) e chiusa:
+  un file senza broker lo raggiungono solo chi l'ha caricato e l'admin (senza caricatore registrato, come i file di prima
+  del 24/01/2026, solo l'admin); 403 per gli altri, assente dalle loro liste. Dettagli: piano 04, sezione F36.
 - **W-B4 · Gli id dei file BRIM accettati senza controllo del formato** — basso, sicurezza; coordinatore, 14/10. Le rotte
   `/brokers/import/files/{file_id}` accettano una stringa qualsiasi: un controllo del formato UUID all'ingresso è una
   difesa in più sui percorsi. Dettagli: piano 04.
+  ✅ 15/10 (F36): un `file_id` che non è un UUID nella forma canonica minuscola risponde 404 prima di ogni ricerca (prima
+  un id di 300 caratteri dava 500, un file `<uuid>-1` veniva servito, e su macOS anche l'id in maiuscolo).
 - **W-B5 · La cassa del broker conta le transazioni future** — da verificare, numeri; coordinatore, 14/10 (D-J16
   dell'analisi di J, con B15 lato broker). `TransactionService.get_cash_balances`
   (`backend/app/services/transactions/transaction_service.py:476-480`) somma tutte le transazioni del broker, anche
@@ -3067,6 +3277,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   N2 legge dai metadati il costo obbligatorio (`cost_basis_required`). Leggerla da `TX_TYPE_METADATA` porterebbe un
   import circolare (`type_metadata.py` importa `transactions.py`): serve spostare la funzione o un import tardivo.
   Dettagli: piano 04, sezione N2.
+- **W-B32 · I report senza broker compaiono nella lista di ogni broker** — minimo, chiarezza; W, 15/10 (F36,
+  docs-writer). `brim_provider.list_files` tiene i file senza broker anche quando filtra per `broker_ids`
+  (`backend/app/services/brim/brim_provider.py`, «files without broker_id (legacy)»): dopo F36 li vedono solo il
+  caricatore e l'admin, ma nella lista «Uploaded Reports» di **ogni** broker (tutti per l'admin, i propri per gli altri).
+  Da decidere: con un filtro di broker esplicito, escluderli (restano nella vista senza filtro della pagina File).
+  Dettagli: piano 04, sezione F36.
 
 ## J · Numeri e analisi (fase 01)
 
@@ -3263,17 +3479,27 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   proposta: `flush=True` su quella riga, col via del coordinatore colori.
 
   Dettagli: piano J, §10, C-94, passo 6 (3), «Fuori pista».
+- **J-16 · Il test del gemello compatto del PAC non dice quale risultato fallisce** — basso, test; segnalata da X tramite
+  il coordinatore, 15/10. `test_pac_compute_plans_the_compact_twin_like_the_explicit_request` (`api pac-planner-tool`)
+  è caduto una volta sotto un carico fra 75 e 121, con `(1, 1)` invece di `(2, 0)`; da solo passa. I Tools non scrivono
+  nel log l'elemento fallito, e il test controlla i conteggi prima di stampare i risultati, quindi la causa non si
+  vede. Proposta: mettere `results` nel messaggio d'errore dell'asserzione, poi, alla prossima caduta, il triage con la
+  skill `test-triage`. Lotto piccolo, quando capita, con `test-author`.
 
 ## Z · Sospensione e risveglio (fase 01)
 
 Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md).
 
-- **C-49 (sezione C) · presa in carico da Z** — prove senza codice in Z6a (autorizzate il 15/10), cura in Z6b con il
+- ✅ **C-49 (sezione C) · presa in carico da Z** — prove senza codice in Z6a (autorizzate il 15/10), cura in Z6b con il
   punto 35 delle decisioni. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione
   «Z6a — prove su C-49, senza codice di prodotto».
   - 15/10, Z: 9 cicli di vita puliti su spec singole; il coordinatore cerca l'avviso nelle sue run di categoria. Dalla
     lettura di uvicorn 0.52.4, con SIGTERM l'ipotesi dei thread è esclusa; restano le richieste in volo (la più
     probabile), i passi del lifespan e i processi figli. Disegno della cura: piano 06, sezione «Z6b — disegno».
+  - ✅ 15/10, Z: **chiusa da Z6b** (commit `f0b9bcad2` e `fb3f98a0c`, entrati in `967094d81`): un tempo massimo di
+    spegnimento per tutti, `LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS` (8 s), con l'attesa delle richieste in volo a 3/8 e un
+    watchdog che chiude il processo allo scadere. Prove: piano 06, sezione «Z6b — codice». Le run di categoria del
+    coordinatore all'ingresso fanno da conferma; la riga di C-49 nella sezione C la riconcilia lui.
 - ✅ **Z-1 · Il ciclo del grafico del dettaglio asset gira anche su un intervallo passato** — chiusa da Z1 il 15/10
   (commit `74d028ec6`): il ciclo unico del dettaglio ha la guardia `isHeadToday`; il test E2E `front-asset live-pause`
   (f) prova che un intervallo passato non chiede nulla (rosso prima: richieste a +2,1 e +57,1 s). Era: basso, da
@@ -3316,6 +3542,15 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 
   Le variabili esistono da Z7a ma non hanno effetto finché X non aggancia il confine (X1–X4): la doc va scritta con
   l'aggancio. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7a», passo 5.
+- **Z-10 · Ctrl+C su `./dev.py server` uccide il server dopo 0,25 s** — basso; docs-writer di Z, 15/10 (Z6b), letto nel
+  codice e non provato. `run_command_live` (`scripts/cli_base.py:455`) usa `subprocess.run`, che a un
+  `KeyboardInterrupt` aspetta il figlio 0,25 s e poi lo uccide con SIGKILL. Con `--no-reload` o `--workers` il figlio è
+  il server stesso, che muore senza il suo spegnimento: niente budget, worker BRIM orfani, scritture tagliate. Con
+  `--reload` muore solo il supervisore, e il server vero ha già ricevuto il suo SIGINT dal terminale. Docker e il
+  runner non c'entrano. Cura possibile: in `run_command_live`, un `Popen` che dopo il Ctrl+C aspetta il figlio fino al
+  budget più un margine. Superficie del coordinatore. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z6b — spegnimento con un tempo
+  massimo».
 
 ## B · Backup e Docker (fase 01)
 

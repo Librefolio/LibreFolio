@@ -175,6 +175,12 @@ class BRIMFileInfo(StrictModel):
     combine_is_stale: bool = Field(default=False, description="True if a combined file was built by an older plugin version")
 
 
+class BRIMFileListItem(BRIMFileInfo):
+    """A file of ``GET /api/v1/brokers/import/files``, with what the current user may do with it (decision 36 of release 1.3)."""
+
+    can_delete: bool = Field(..., description="Whether the current user may delete the file: EDITOR or OWNER of its broker, the uploader of a file with no broker, or an administrator")
+
+
 # =============================================================================
 # PLUGIN SCHEMAS
 # =============================================================================

@@ -110,6 +110,11 @@ All caches are global (module-level) TTL caches via `get_ttl_cache()`. They are 
 - **ISIN only**: Does not accept tickers — use Yahoo Finance for ticker-based search.
 - **Live price in EUR only**: the gettex feed is EUR; USD/CHF/GBP current values are the daily `latestQuote`, converted by justETF.
 - **Scraping fragility**: The library scrapes justetf.com HTML. Site layout changes may break it.
+- **Too many requests**: `justetf-scraping` has no error class of its own and reports an HTTP 429
+  only in its message («Got status 429…»). `raise_if_rate_limited()`, first in the handlers of
+  current value, history, search and metadata, turns it into `AssetRateLimitedError`; metadata no
+  longer answers `None` for it. No `Retry-After` reaches the plugin, so the pause is the core's own
+  ([Provider Pauses](architecture.md#provider-pauses)).
 - **Blocking I/O**: All justetf-scraping calls are synchronous — wrapped in `asyncio.to_thread()` to avoid blocking the event loop.
 
 ---
