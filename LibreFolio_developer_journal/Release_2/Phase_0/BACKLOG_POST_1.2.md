@@ -1873,11 +1873,14 @@ plugin.
 Ogni ondata va dimostrata con una gallery dello stesso giorno `identical` (a parte le schermate instabili della 56).
 Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano generale, «Decisioni del developer»).
 
-- **R-1 · Colori dei grafici in un modulo unico** — alto; coordinatore, 14/10.
+> **Stato (R, 15/10): ✅ R chiuso.** Lotti A–D in `dev_release2` da `8fd8e494b`; cancello gallery unico A+B+C+D
+> superato. Restano aperte R-5…R-8. Piano: [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md).
+
+- ✅ **R-1 · Colori dei grafici in un modulo unico** — alto; coordinatore, 14/10.
   - Oggi: 4 set per assi, griglie e tooltip; 3 palette di allocazione; coppie chiaro/scuro scritte in 17 grafici.
   - Stessi valori, divergenze con un nome.
 
-  Dettagli: [report 04](55_colorSystem/analysis/04_charts_dataviz.md), §1–§3.
+  Dettagli: [report 04](../Phase_1/10_colorSystem/analysis/04_charts_dataviz.md), §1–§3.
   - Stato (R, 14/10): codice nel checkpoint del lotto B (W3–W5). `lib/theme/themePair.ts` (`themed()`),
     `chartTheme.ts`, `chartPalettes.ts`, `chartColorScales.ts`: 229 siti in 33 file; neutri, palette, serie, formule e
     lotti; ogni divergenza ha un nome (`CHART_GAIN_LOSS.price` `#ef4444` / `.portfolio` `#dc2626`, box del tooltip
@@ -1889,16 +1892,20 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - Il ridisegno a ogni cambio di classe di `<html>` resta.
     - Gate `themeModeReads`: niente letture o osservatori della classe fuori da `themeMode.ts`.
     - Piano: [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W8».
-- **R-2 · Funzioni condivise per segno, stati e badge** — medio; coordinatore, 14/10.
+  - ✅ Chiusa il 15/10 (R): lotti B (`75c45d923`) e D (`98731240d`), in `dev_release2` da `8fd8e494b`; cancello
+    gallery unico A+B+C+D superato.
+- ✅ **R-2 · Funzioni condivise per segno, stati e badge** — medio; coordinatore, 14/10.
   - Oggi: ternario guadagno/perdita in almeno 20 punti e 7 mappe di stato indipendenti.
   - Output identici.
 
-  Dettagli: [report 03](55_colorSystem/analysis/03_semantic_dynamic_logic.md), §1–§3.
+  Dettagli: [report 03](../Phase_1/10_colorSystem/analysis/03_semantic_dynamic_logic.md), §1–§3.
   - Stato (R, 14/10): codice nel checkpoint del lotto A (W1–W2): `lib/theme/toneClasses.ts` (`SIGN_TEXT`, `SIGN_BAR`,
     `POLARITY_TONES`, `STATUS_TONES`, `KIND_TONES`), 42 siti di segno in 20 file e 11 mappe di stato in 9 file; CSS
     compilato identico alla baseline. Si chiude con il commit del checkpoint e il cancello A.
-- **R-3 · Hex nei `<style>` in variabili CSS con lo stesso valore** (P8: `DataTable*`, modali file e immagini,
-  `ConfirmModal`) — medio; coordinatore, 14/10. Dettagli: [report 02](55_colorSystem/analysis/02_ui_components.md), §4.
+  - ✅ Chiusa il 15/10 (R): lotto A (`d80b9e0cd`), in `dev_release2` da `8fd8e494b`; cancello gallery unico
+    A+B+C+D superato.
+- ✅ **R-3 · Hex nei `<style>` in variabili CSS con lo stesso valore** (P8: `DataTable*`, modali file e immagini,
+  `ConfirmModal`) — medio; coordinatore, 14/10. Dettagli: [report 02](../Phase_1/10_colorSystem/analysis/02_ui_components.md), §4.
   - Stato (R, 14/10): codice nel checkpoint del lotto C (W6–W7).
     - 16 componenti, 908 dichiarazioni, 604 token `--lf-cmp-<componente>-<ruolo>` con gemelle `-dark`, su `:root` in
       `lib/theme/components/{table,media,files,dialogs}.css`, importati dai componenti; le regole `.dark` restano
@@ -1915,14 +1922,19 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - Letterali fuori da `lib/theme/**` e da `app.css`, dalla base al lotto D: hex da 1.554 a 88, funzioni colore da
       198 a 50.
     - Piano: [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W9».
-- **R-4 · Funzioni fragili e refusi senza effetto visibile** — basso; coordinatore, 14/10.
+  - ✅ Chiusa il 15/10 (R): lotti C (`0b660632f`) e D (`98731240d`), in `dev_release2` da `8fd8e494b`; cancello
+    gallery unico A+B+C+D superato.
+- ✅ **R-4 · Funzioni fragili e refusi senza effetto visibile** — basso; coordinatore, 14/10.
   - `hexToRgba` e la concatenazione `+ '88'` accettano solo `#rrggbb`.
   - La meta `theme-color` scura è `#156534` invece di `#166534`.
 
-  Dettagli: [report 01](55_colorSystem/analysis/01_theme_foundation.md), §6.5; [report 04](55_colorSystem/analysis/04_charts_dataviz.md), §5.
+  Dettagli: [report 01](../Phase_1/10_colorSystem/analysis/01_theme_foundation.md), §6.5; [report 04](../Phase_1/10_colorSystem/analysis/04_charts_dataviz.md), §5.
   - Stato (R, 14/10): codice e test nel checkpoint del lotto A (W0); `lib/theme/colorAlpha.ts`, meta corretta nei tre
     punti con gate di concordanza. Si chiude con il commit del checkpoint e il cancello A. Piano:
-    [R-colorRefactor](55_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W0».
+    [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W0».
+  - ✅ Chiusa il 15/10 (R): lotto A (`d80b9e0cd`), in `dev_release2` da `8fd8e494b`; cancello gallery unico
+    A+B+C+D superato. Il timbro di `static/sw.js`, che andava rifatto con la correzione di `offline.html`, l'ha
+    aggiunto il coordinatore all'ingresso (`23f6578f3`).
 - **R-5 · `withAlpha` su `hsl()` con spazi produce un colore non valido** — minimo; R, 14/10.
   - `hsla(210 68% 44%, a)` mescola le due sintassi; oggi nessun chiamante ci passa (`lotColor` non arriva a `withAlpha`).
   - Da correggere quando un colore con spazi ci arriverà (fase B), con la gallery.
@@ -1945,6 +1957,17 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     con ridisegno.
 
   Dettagli: [piano R](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W8», «Fuori pista».
+- **R-8 · `--resolve` della baseline colori toglie un `--accept`** — basso; R, 15/10; per T.
+  - `theme-roles.mjs --resolve` (`mergeBaselines`) dà a una riga presente sui due lati il m1 minore e **solo i
+    colori che entrambi hanno**, senza guardare la base né le righe `~accept`.
+  - Se un lato ha accettato uno scambio di colore e l'altro ha ancora la riga della base, il colore accettato
+    sparisce e `--check` torna rosso. È successo il 15/10, nel merge della base di R con T-2, sulla correzione D3 di
+    `themeStore.ts`: rimediato rilanciando lo stesso `--accept`, con l'OK del coordinatore.
+  - Correzione proposta: un vero merge a tre vie (se un lato è uguale alla base, vince l'altro), oppure vince il
+    lato che ha un `~accept` per quel file.
+
+  Dettagli: [piano R](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «Merge della base con T-2»; wiki
+  `problems/colour-ratchet-resolve-drops-an-accept`.
 
 ## G · Gallery deterministica (56)
 
