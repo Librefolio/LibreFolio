@@ -29,13 +29,28 @@ from backend.app.schemas.prices import (
     FAHistoricalData,
     FAPricePoint,
 )
-from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
 from backend.app.services.provider_registry import register_provider
 
 #: The search query that makes the mock describe the settings it received.
 SETTINGS_ECHO_QUERY = "lf-settings-echo"
+#: The search query that makes the mock refuse for too many requests, with a ``Retry-After`` of 30 s.
+RATE_LIMITED_QUERY = "lf-rate-limited"
+#: The provider parameter that makes the mock refuse for too many requests: a number of seconds (its ``Retry-After``) or
+#: ``true`` (no ``Retry-After``). For in-process tests only: never on the shared test backend, where a pause would
+#: outlive the test.
+RATE_LIMITED_PARAM = "mock_rate_limited"
+
+
+def _refuse_if_asked(provider_params: Dict | None) -> None:
+    """Raise ``AssetRateLimitedError`` when the parameters ask the mock to refuse for too many requests."""
+    asked = (provider_params or {}).get(RATE_LIMITED_PARAM)
+    if asked is None or asked is False:
+        return
+    retry_after = float(asked) if isinstance(asked, (int, float)) and not isinstance(asked, bool) else None
+    raise AssetRateLimitedError("Mock provider refused for too many requests (testing)", retry_after=retry_after)
 
 
 @register_provider(AssetProviderRegistry)
@@ -120,6 +135,7 @@ class MockProvider(AssetSourceProvider):
 
         Always returns: 100.0 USD as of today
         """
+        _refuse_if_asked(provider_params)
         if identifier == "INVALID_TICKER_12345":
             raise AssetSourceError("Invalid identifier for mock provider.", error_code="NOT_FOUND")
         return FACurrentValue(
@@ -147,6 +163,7 @@ class MockProvider(AssetSourceProvider):
 
         Returns daily prices of 100.0 for the entire date range.
         """
+        _refuse_if_asked(provider_params)
         prices = []
         current = ASSET_HISTORY_MIN_FALLBACK if start_date == "min" else start_date
 
@@ -175,8 +192,11 @@ class MockProvider(AssetSourceProvider):
         """
         Mock search - returns dummy result for any query.
 
-        ``SETTINGS_ECHO_QUERY`` returns one item whose display name describes the settings this call received.
+        ``SETTINGS_ECHO_QUERY`` returns one item whose display name describes the settings this call received;
+        ``RATE_LIMITED_QUERY`` refuses for too many requests.
         """
+        if query == RATE_LIMITED_QUERY:
+            raise AssetRateLimitedError("Mock provider refused for too many requests (testing)", retry_after=30.0)
         if query == SETTINGS_ECHO_QUERY:
             return [{"identifier": "MOCK_SETTINGS", "identifier_type": IdentifierType.TICKER, "display_name": self._settings_summary(), "currency": "USD", "type": "MOCK"}]
         return [
@@ -227,6 +247,7 @@ class MockProvider(AssetSourceProvider):
         Returns:
             FAAssetPatchItem object with classification_params populated
         """
+        _refuse_if_asked(provider_params)
         # Return mock data for testing as FAAssetPatchItem
         classification_params = FAClassificationParams(
             sector_area=FASectorArea(distribution={"Technology": Decimal("1.0")}),
