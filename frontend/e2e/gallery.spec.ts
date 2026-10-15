@@ -156,31 +156,152 @@ async function clickRowAction(page: Page, scope: Page | Locator, actionId: strin
 }
 
 /**
- * Open the grouped SignalTreeSelect (indicators category), expand a family group and
- * pick an option. Options render only while their group is expanded (or the search box
- * is filled); open() auto-expands the FIRST family, so the group click is conditional.
- * Assert-loud on purpose: the indicator select appears only after the backend signal
- * catalog has loaded, so a missing button is a real failure, not a skip.
+ * The indicator menu at one instant, read in one pass through the combobox's own contract — the trigger's `aria-expanded` and
+ * `aria-activedescendant`, the rows' test ids and ids — never through a position or a label, so that its parts agree.
  */
-async function selectIndicatorFromTree(page: Page, groupKey: string, optionValue: string): Promise<void> {
-    const selectButton = page.getByTestId('signals-indicator-select-button');
-    await expect(selectButton).toBeVisible({timeout: 15_000});
-    await selectButton.click();
-    // open() auto-expands the FIRST family group — click only when this one is collapsed
-    const group = page.getByTestId(`signal-tree-group-${groupKey}`);
-    await expect(group).toBeVisible({timeout: 3_000});
-    if ((await group.getAttribute('aria-expanded')) !== 'true') {
-        await group.click();
-        await expect(group).toHaveAttribute('aria-expanded', 'true', {timeout: 3_000});
-    }
-    const option = page.getByTestId(`signal-tree-option-${optionValue}`);
-    await expect(option).toBeVisible({timeout: 3_000});
-    await option.click();
+interface IndicatorTreeState {
+    /** The trigger says the menu is open. */
+    open: boolean;
+    /** The open menu's rows by test id, in screen order: the family rows, and the options of the families that are open. */
+    rows: string[];
+    /** The row the trigger names in `aria-activedescendant` — the one Enter acts on — by test id; '' when it names none. */
+    active: string;
+    /** What the pointer is over: the nearest test id, else the tag, else `nothing`. */
+    pointer: string;
 }
 
-/** Wait until every configured signal card has finished its backend computation. */
+/** How many of the walk's last keys a failure quotes: the ones where it went wrong. */
+const TREE_KEYS_QUOTED = 8;
+
+/** Read the indicator menu of `picker` (`signals-indicator-select`): TreeSelect renders the open menu inside its own root. */
+async function readIndicatorTree(picker: Locator): Promise<IndicatorTreeState> {
+    return picker.evaluate((root): IndicatorTreeState => {
+        const trigger = root.querySelector('[data-testid="signals-indicator-select-button"]');
+        const rows = Array.from(root.querySelectorAll('[data-testid^="signal-tree-group-"], [data-testid^="signal-tree-option-"]'));
+        const testIdOf = (element: Element): string => element.getAttribute('data-testid') ?? '';
+        const activeId = trigger?.getAttribute('aria-activedescendant') ?? '';
+        const activeRow = rows.find((row) => row.id === activeId);
+        const hovers = document.querySelectorAll(':hover');
+        const under = hovers.length > 0 ? hovers[hovers.length - 1] : null;
+        return {
+            open: trigger?.getAttribute('aria-expanded') === 'true',
+            rows: rows.map(testIdOf),
+            // An id that names no row is quoted as it stands, so that a failure shows it.
+            active: activeId === '' ? '' : activeRow ? testIdOf(activeRow) : `#${activeId}`,
+            pointer: under === null ? 'nothing' : (under.closest('[data-testid]')?.getAttribute('data-testid') ?? under.tagName.toLowerCase()),
+        };
+    });
+}
+
+/** A state as a failure quotes it: open or closed, the highlighted row and the wanted one with their place among the rows, the pointer, the rows. */
+function describeIndicatorTree(state: IndicatorTreeState, target: string): string {
+    if (!state.open) return `closed · pointer on ${state.pointer}`;
+    const place = (row: string): string => {
+        const index = state.rows.indexOf(row);
+        return index < 0 ? `${row || 'none'}, not a row` : `${row} (${index + 1}/${state.rows.length})`;
+    };
+    return `open · highlight on ${place(state.active)} · wanted ${place(target)} · pointer on ${state.pointer}\n  rows: ${state.rows.join(' · ')}`;
+}
+
+/**
+ * Walk the open indicator menu's highlight onto the row `target` (a test id): one key at a time from the search box — ↓ or ↑,
+ * whichever brings it nearer from wherever it stands — reading the menu again after each key. The keys walk the rows in
+ * screen order, family rows included (TreeSelect.test.ts pins it). From any row the target is fewer keys away than the menu
+ * has rows, so the walk stops after their count and two more, and fails with the last state read and the last keys pressed.
+ */
+async function walkIndicatorTreeTo(picker: Locator, search: Locator, target: string, shot: string): Promise<void> {
+    let state = await readIndicatorTree(picker);
+    const bound = state.rows.length + 2;
+    const keys: string[] = [];
+    while (state.active !== target) {
+        const to = state.rows.indexOf(target);
+        if (!state.open || to < 0 || keys.length >= bound) {
+            const why = !state.open ? 'the menu closed' : to < 0 ? 'the wanted row is not in the menu' : `${keys.length} keys did not get there`;
+            const quoted = keys.length > TREE_KEYS_QUOTED ? [`… ${keys.length - TREE_KEYS_QUOTED} earlier`, ...keys.slice(-TREE_KEYS_QUOTED)] : keys;
+            throw new Error(`${shot}: the indicator menu's highlight never reached ${target}: ${why}\n  last state: ${describeIndicatorTree(state, target)}\n  keys, oldest first: ${quoted.join(' · ') || 'none'}`);
+        }
+        const key = state.rows.indexOf(state.active) > to ? 'ArrowUp' : 'ArrowDown';
+        await search.press(key);
+        state = await readIndicatorTree(picker);
+        keys.push(`${key === 'ArrowUp' ? '↑' : '↓'} ${state.active || 'none'}`);
+    }
+}
+
+/**
+ * Choose `optionValue` in the signals panel's indicator picker for the shot `shot` (`viewport/lang/theme/category/name`), and
+ * end on the indicator added: the menu closed, and a card of that type in the panel. The picker is a TreeSelect of families
+ * (`groupKey`) whose options are rendered only while their family is open; the first family opens by itself.
+ *
+ * It used to click the trigger, the family and the option, and check nothing after. In the L candidate run of 15/10 (6
+ * workers), `mobile/it/light/assets/detail-signals-macd` was shot with the menu open and no MACD, 1 variant of 16, the test
+ * green: its line (🔎) had the focus on the MACD row and a page 342 px shorter. A mousedown had reached MACD, no click had
+ * chosen it, and the highlight stood on CCI, the row above. TreeSelect ends its opening on later tasks — one highlights the
+ * first row and focuses the search box, and has the next scroll the highlighted row into view — and a loaded browser runs
+ * input before timers: landed between the mousedown and the mouseup, they moved the list, the mouseup fell on CCI, and a
+ * press and a release on two rows click neither. The likeliest reading, not an observed one (plan 56, G-9).
+ *
+ * So no pointer goes near the menu, and the choice is checked. The pointer is parked first, where the menu never reaches — a
+ * row takes the highlight on `mouseenter` (galleryRiskDashboard.ts, `chooseReplayPreset`, H1) — and the page is settled for
+ * the picker ({@link settledToOpen}). ↓ on the trigger opens the menu, and the search box holding the focus says the opening
+ * has run. Then the keyboard, through the combobox's contract: ↓ and ↑ from the search box walk the highlight to the family's
+ * row, → opens the family when it is closed, the walk goes on to the option ({@link walkIndicatorTreeTo}), and Enter chooses
+ * the row `aria-activedescendant` names, wherever the list stands. A card's `data-signal-type` is the option's value: both
+ * are the catalogue's signal type (ChartSignalsSection, `addSignal`).
+ */
+async function selectIndicatorFromTree(page: Page, groupKey: string, optionValue: string, shot: string): Promise<void> {
+    const panel = page.getByTestId('asset-detail-signals-panel');
+    const picker = panel.getByTestId('signals-indicator-select');
+    const trigger = picker.getByTestId('signals-indicator-select-button');
+    // Assert-loud on purpose: the picker appears only once the backend signal catalogue has loaded, so a missing one is a
+    // real failure, not a skip.
+    await expect(trigger).toBeVisible({timeout: 15_000});
+    await expect(trigger, `${shot}: the indicator menu is open before the choice`).toHaveAttribute('aria-expanded', 'false');
+    await parkPointer(page);
+    await trigger.scrollIntoViewIfNeeded();
+    await settledToOpen(page, picker, shot, 'the indicator picker');
+
+    await trigger.press('ArrowDown');
+    await expect(trigger, `${shot}: ↓ did not open the indicator menu`).toHaveAttribute('aria-expanded', 'true');
+    // The search box is the open trigger's one input (TreeSelect gives it no test id). Its focus is the opening's last step,
+    // after the first row's highlight: from here on, with the pointer parked, only the keys below move the highlight.
+    const search = trigger.locator('input');
+    await expect(search, `${shot}: the indicator menu has not finished opening`).toBeFocused();
+    await expect(trigger, `${shot}: the open indicator menu highlights no row`).toHaveAttribute('aria-activedescendant', /.+/);
+
+    // The family's options are rendered only while it is open: opened here only when it is closed.
+    const familyRow = `signal-tree-group-${groupKey}`;
+    const family = picker.getByTestId(familyRow);
+    await expect(family, `${shot}: the indicator menu has no ${groupKey} family`).toBeVisible();
+    if ((await family.getAttribute('aria-expanded')) !== 'true') {
+        await walkIndicatorTreeTo(picker, search, familyRow, shot);
+        await search.press('ArrowRight');
+    }
+    await expect(family, `${shot}: the ${groupKey} family did not open`).toHaveAttribute('aria-expanded', 'true');
+
+    const optionRow = `signal-tree-option-${optionValue}`;
+    const option = picker.getByTestId(optionRow);
+    await expect(option, `${shot}: the ${groupKey} family holds no ${optionValue}`).toBeVisible();
+    const optionId = await option.getAttribute('id');
+    if (!optionId) throw new Error(`${shot}: the ${optionValue} row has no id for aria-activedescendant to name`);
+    await walkIndicatorTreeTo(picker, search, optionRow, shot);
+    await expect(search, `${shot}: Enter would act on another row than ${optionValue}`).toHaveAttribute('aria-activedescendant', optionId);
+    await search.press('Enter');
+
+    // The choice, proved: the menu closed, and the indicator added — its card is in the panel.
+    await expect(trigger, `${shot}: the indicator menu stayed open after Enter on ${optionValue}`).toHaveAttribute('aria-expanded', 'false');
+    await expect(panel.locator(`[data-testid^="signal-card-"][data-signal-type="${optionValue}"]`), `${shot}: no ${optionValue} card in the signals panel, the indicator was not added`).not.toHaveCount(0);
+}
+
+/**
+ * Wait until every configured signal card has finished its backend computation. A card first: with none in the panel there is
+ * no `signal-loading` either, and the wait passed on an empty panel — the MACD shot of 15/10 went out without its indicator
+ * that way (plan 56, G-9). A new card comes with its spinner: adding a signal sets the panel loading in the same update
+ * (assets/[id]/+page.svelte, `handleSignalsChange` → `loadChartData`).
+ */
 async function waitForSignalCardsSettled(page: Page, timeout = 30_000): Promise<void> {
-    await expect(page.getByTestId('asset-detail-signals-panel').getByTestId('signal-loading')).toHaveCount(0, {timeout});
+    const panel = page.getByTestId('asset-detail-signals-panel');
+    await expect(panel.locator('[data-testid^="signal-card-"]'), 'the signals panel holds no signal card: no computation to wait for').not.toHaveCount(0);
+    await expect(panel.getByTestId('signal-loading')).toHaveCount(0, {timeout});
 }
 
 /**
@@ -5165,7 +5286,7 @@ test.describe('Gallery Screenshots', () => {
                     // Open signals panel and add EMA indicator via the grouped SignalTreeSelect
                     await openSignalsPanel(page);
 
-                    await selectIndicatorFromTree(page, 'trend', 'ema');
+                    await selectIndicatorFromTree(page, 'trend', 'ema', `${viewport}/${lang}/${theme}/assets/detail-signals-ema`);
                     await waitForSignalCardsSettled(page);
                     // Scroll the chart into center of viewport; the shot's settle waits for the overlay's redraw to stand still
                     await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
@@ -5192,7 +5313,7 @@ test.describe('Gallery Screenshots', () => {
 
                     await openSignalsPanel(page);
 
-                    await selectIndicatorFromTree(page, 'momentum', 'rsi');
+                    await selectIndicatorFromTree(page, 'momentum', 'rsi', `${viewport}/${lang}/${theme}/assets/detail-signals-rsi`);
                     await waitForSignalCardsSettled(page);
                     // Scroll the chart into center of viewport (not just into view)
                     await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
@@ -5219,7 +5340,7 @@ test.describe('Gallery Screenshots', () => {
 
                     await openSignalsPanel(page);
 
-                    await selectIndicatorFromTree(page, 'momentum', 'macd');
+                    await selectIndicatorFromTree(page, 'momentum', 'macd', `${viewport}/${lang}/${theme}/assets/detail-signals-macd`);
                     await waitForSignalCardsSettled(page);
                     // Scroll the chart into center of viewport
                     await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
@@ -5246,7 +5367,7 @@ test.describe('Gallery Screenshots', () => {
 
                     await openSignalsPanel(page);
 
-                    await selectIndicatorFromTree(page, 'volatility', 'bollinger');
+                    await selectIndicatorFromTree(page, 'volatility', 'bollinger', `${viewport}/${lang}/${theme}/assets/detail-signals-bollinger`);
                     await waitForSignalCardsSettled(page);
                     await page.getByTestId('asset-detail-chart').evaluate((el) => el.scrollIntoView({block: 'center'}));
                     await freezeAnimations(page);
@@ -5322,7 +5443,7 @@ test.describe('Gallery Screenshots', () => {
                     await openSignalsPanel(page);
 
                     // Underwater Drawdown card with its Full history toggle (risk family)
-                    await selectIndicatorFromTree(page, 'risk', 'risk-drawdown');
+                    await selectIndicatorFromTree(page, 'risk', 'risk-drawdown', `${viewport}/${lang}/${theme}/assets/detail-signals-drawdown`);
                     await waitForSignalCardsSettled(page, 45_000); // full-history load is heavier
                     const fullHistoryParam = page.getByTestId('signal-param-full_history');
                     await expect(fullHistoryParam).toBeVisible({timeout: 5_000});

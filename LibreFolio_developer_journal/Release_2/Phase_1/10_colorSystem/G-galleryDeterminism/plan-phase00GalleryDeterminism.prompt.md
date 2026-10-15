@@ -621,6 +621,76 @@ prima del catalogo dei provider, il chip resta sul codice («yfinance») anche d
 > volte su 4 run contando `g-final3`. La causa sta fra i `syncScrollContext()` di `Header.svelte`; serve una run
 > strumentata. Registrato G-11, non corretto ora.
 
+### Passo 8 — G-9, scelta dell'indicatore verificata 🟡 (15/10: codice ✅ e helper riuscito 63/63 sotto carico; 5 rossi di carico fuori dall'helper, da rifare da soli quando il coordinatore dà il posto)
+- **Difetto.** Nella candidata di L lo scatto `mobile/it/light/assets/detail-signals-macd` ha il menu degli indicatori
+  aperto e il MACD non applicato, in 1 variante su 16, con il test verde.
+- **Prova (impronta 🔎).** Lo scatto sbagliato ha `{"y":798,"dh":1538,…,"focus":"signal-tree-option-macd"}`; le altre 15
+  varianti hanno `{"y":1140,"dh":1880,…,"focus":"-"}`. Un mousedown ha raggiunto l'opzione MACD, che tiene il focus, ma
+  nessun clic l'ha selezionata: manca il pannello MACD, la pagina è 342 px più corta. La voce attiva è CCI, la riga sopra.
+- **Meccanismo** (codice verificato; la tempistica è la spiegazione plausibile):
+  - `TreeSelect.open()` rimanda con due `setTimeout(0)` annidati l'attivazione della prima voce, il focus della ricerca e
+    uno `scrollIntoView` della voce attiva;
+  - sotto carico Chromium esegue l'input prima dei timer in attesa, quindi quei passi possono cadere fra mousedown e
+    mouseup sul MACD;
+  - la lista si muove, il mouseup cade su CCI, e il clic non arriva a nessuna delle due;
+  - `selectIndicatorFromTree` non verifica l'esito, e `waitForSignalCardsSettled` passa a vuoto se la card non esiste.
+- **Correzione** (test-author `g-g9-select`, brief in `files/taskG9_prompt.md`):
+  - pagina ferma prima di aprire (`settledToOpen`);
+  - attesa dei passi rimandati di `open()`;
+  - scelta senza puntatore, con le frecce fino a `aria-activedescendant` e poi Invio, come `chooseReplayPreset`;
+  - verifica del menu chiuso e della card `signal-card-*` con `data-signal-type`;
+  - `waitForSignalCardsSettled` che pretende almeno una card.
+- **Verifica:** `verify_g9.sh 5`, una run filtrata dei 5 test che usano l'helper (EMA, RSI, MACD, Bollinger e drawdown,
+  che usa lo stesso helper), `--no-populate`. Poi `live_price_check`, nessuna opzione con il focus, frame uguali a
+  `g-final3-r1`.
+- DoD: 5 test × 2 progetti verdi; in ogni scatto dei segnali nessun `signal-tree-option-*` con il focus; statica pulita.
+> **Note implementazione** (15/10, 13:25, test-author `g-g9-select`, solo statica, nessun Python per lo STOP; rivisto da G).
+> Tutto in `frontend/e2e/gallery.spec.ts`, intorno alle righe 158–305.
+> - `selectIndicatorFromTree(page, groupKey, optionValue, shot)` riceve il nome dello scatto come quarto parametro, così
+>   un fallimento nomina la variante.
+> - Prima di aprire: menu chiuso, puntatore parcheggiato (`parkPointer`), picker nello schermo, `settledToOpen`.
+> - Apertura con ↓ sul trigger. Il focus sulla ricerca prova che il passo rimandato di `open()` è avvenuto; poi
+>   `aria-activedescendant` impostato.
+> - Famiglia chiusa: camminata fino alla sua riga, poi →. Poi camminata fino all'opzione con
+>   `walkIndicatorTreeTo`: ↓ o ↑ secondo dove sta l'evidenza, rilettura dopo ogni tasto, al massimo il numero di righe
+>   più 2 tasti. Un fallimento cita l'ultimo stato, le righe, il puntatore e gli ultimi 8 tasti.
+> - Prima di Invio, `aria-activedescendant` della ricerca deve coincidere con l'`id` dell'opzione.
+> - Dopo Invio: menu chiuso, e almeno una card `signal-card-*` con `data-signal-type` uguale all'opzione nel pannello.
+>   I valori coincidono per i 5 chiamanti (`ema`, `rsi`, `macd`, `bollinger`, `risk-drawdown`), senza mappature.
+> - `waitForSignalCardsSettled` pretende almeno una card prima di aspettare zero `signal-loading`.
+> - *Statica, rifatta da G:* `tsc` e2e con i soli 2 errori di base; prettier pulito; `git diff --check` pulito.
+> - *Da verificare nella run:* il modello da tastiera in Chromium (in jsdom è fissato da `TreeSelect.test.ts:256–286`), i
+>   frame uguali a `g-final3-r1`, la durata entro i 240 s per test.
+> - *Fuori dal perimetro, non toccato:* `SignalTreeSelect.test.ts:306–311` descrive ancora il vecchio flusso a clic
+>   dell'helper; `TreeSelect.svelte:17–19` resta vero per lo scatto con la tendina aperta.
+> **Ripresa (13:36):** `cryptography` installato (`dc9a5d232`); comandi Python di nuovo permessi.
+> **⚠️ Fuori pista — build scadute dopo il merge.** La base `9f3b141a8` porta sorgenti frontend più recenti della build
+> delle 12:26, e 6 pagine della documentazione. Il server di test le ricostruisce all'avvio se le date dei sorgenti sono
+> più recenti, entro un limite di 300 s. Ricostruite prima, sotto carico 32–44:
+> - build debug con la versione fissata `v0.0.0-review`: 13:37–13:42, 4 min 37 s, rc 0;
+> - sito MkDocs: 13:42–13:45, 170 s, rc 0, 3020 URL relativi risolti.
+>
+> Sommate all'avvio, avrebbero sforato il limite.
+> **Verifica** (`verify_g9.sh 5`, corsia 6153, 5 worker, `--no-populate`, 13:46–13:56). Il carico è salito da 84 a 150,
+> poi è sceso a 86: altre corsie, prima del budget comune annunciato dal coordinatore alle 13:50.
+> - **5 passati, 5 falliti.** Verdi MACD desktop e mobile, EMA, RSI e Bollinger mobile.
+> - **L'helper nuovo ha funzionato in tutti gli scatti presi: 63 su 63.** Ogni scatto viene dopo la scelta verificata:
+>   menu chiuso, card del tipo giusto.
+> - In tutti i 63 scatti `focus` è "-": nessuna opzione tiene il focus. Il frame (`y`, `dh`, `vh`, `hdr`, `focus`) è
+>   identico a `g-final3-r1` in tutti i 63 scatti in comune; cambiano solo i contatori `charts` in 29.
+> - Nessun messaggio d'errore viene dall'helper. `live_price_check` 0.
+> - **I 5 rossi sono tutti fuori dall'helper, in passi già esistenti, per lentezza.** Verdetto con la skill
+>   `test-triage`: carico.
+>   - EMA e RSI desktop: `goToAssetsPage`, la lista asset ancora `data-busy` dopo 20 s, alla quarta combinazione
+>     (3 scatti presi);
+>   - Bollinger desktop: il clic sul tema oltre i 20 s, dopo 6 scatti;
+>   - drawdown desktop: `textStill` su es/dark, poi il limite di 240 s del test, dopo 7 scatti;
+>   - drawdown mobile: `page.screenshot` oltre i 60 s su it/dark (lo stallo del compositore sotto carico), dopo 4 scatti.
+> - **Per chiudere la DoD (10/10 verdi)** serve rifare da soli a 1 worker i 4 test con rossi (EMA, RSI, Bollinger,
+>   drawdown). Dalle 13:50 vale il budget comune con la 1.3 (al massimo 3 suite pesanti, 1 nostra), quindi lo chiedo
+>   nell'handoff. Snapshot `g-g9-w5`; log, confronto con `g-final3-r1` e log delle build in
+>   `g-workstream/2026-10-15/logs/`.
+
 ## ⏸️ Pausa del 14/10
 
 Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento della pausa:
@@ -731,3 +801,21 @@ Richiesta dal developer tramite il coordinatore (circa 18:20). Stato al momento 
   - Il delta del passo 7 più evidenze, README e backlog: G-1 aggiornata; G-2, G-3, G-6 ✅; nuove G-9, G-10, G-11.
   - Verifica: `g-c2-w1-a/b`, 8 + 8 verdi, `live_price_check` 0.
   - Commit proposto in `files/commit_c2.txt` della sessione.
+- **15/10, 12:53 — Checkpoint 2 committato e integrato** dal coordinatore.
+  - Commit `fcf6c6686`, fuso con il target `09a536cd0` in `9f3b141a8` (uguale alla simulazione, `tsc` e2e con i soli 2
+    errori di base); `dev_release2` = `9f3b141a8`. Verificato da G in sola lettura alle 12:54.
+  - G-10 girata alla 1.3 (difetto del prodotto, probabilmente H, che ha `services/files`). G-11 resta in backlog.
+  - G-9 rinviata alla chiusura della finestra. Durante il FROZEN, in sola lettura: diagnosi (passo 8) e brief di
+    test-author preparato fuori dal repo.
+- **15/10, 13:01 — Via a G-9** (coordinatore): test-author più una run filtrata dei test dei segnali, corsia 6153, base
+  `9f3b141a8`. test-author `g-g9-select` lanciato alle 13:03.
+- **15/10, 13:12 — STOP ai comandi Python** (coordinatore): il developer installa `cryptography` nell'ambiente Python
+  condiviso, circa 10 minuti. Nessun comando Python di G era in corso. test-author continua sul codice con la statica
+  Node; la run filtrata di G-9 aspetta la «ripresa».
+- **15/10, 13:36 — Ripresa**; 13:46–13:56 run G-9 (passo 8). Alle 13:50 il coordinatore fissa il budget comune con la 1.3:
+  al massimo 3 suite pesanti, 1 nostra. Dopo questa run, nessuna E2E, gallery o suite completa senza chiedere il posto.
+- **15/10, 14:00 — G-9 pronto per il checkpoint, FROZEN.**
+  - HEAD `9f3b141a8`.
+  - Delta: `gallery.spec.ts`, il piano, il backlog.
+  - Commit proposto in `files/commit_g9.txt` della sessione.
+  - Chiesto il posto per rifare da soli i 4 test con rossi di carico.

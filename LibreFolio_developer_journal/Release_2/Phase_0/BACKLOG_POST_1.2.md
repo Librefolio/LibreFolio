@@ -2152,8 +2152,23 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
     Un clic perso diventa un rosso con un messaggio chiaro, invece di uno scatto sbagliato. Vale per tutti i chiamanti:
     EMA, RSI, MACD, Bollinger.
+  - *15/10, diagnosi completata (G, sola lettura):*
+    - l'impronta dello scatto sbagliato ha il focus su `signal-tree-option-macd` e la pagina 342 px più corta: il
+      mousedown è arrivato, il clic no;
+    - `TreeSelect.open()` rimanda con due `setTimeout(0)` focus della ricerca e `scrollIntoView`; sotto carico l'input
+      passa prima dei timer, e il mouseup cade su un'altra voce;
+    - la correzione sceglie da tastiera tramite `aria-activedescendant`, dopo `settledToOpen`, e verifica l'esito;
+    - chiamanti: 5, con il drawdown.
 
-  Dettagli: piano della 56, passo 7.
+    Via del coordinatore alle 13:01: correzione e run filtrata nella corsia 6153.
+  - *15/10, correzione fatta (test-author, `gallery.spec.ts`):* scelta da tastiera dopo `settledToOpen` e il puntatore
+    parcheggiato, con l'esito verificato (menu chiuso, card del tipo). Nella run filtrata (`g-g9-w5`, 5 worker, carico
+    86–150) l'helper è riuscito in tutti i 63 scatti presi: `focus` "-" in tutti, frame identici a `g-final3-r1`, MACD
+    verde sui due progetti. 5 rossi fuori dall'helper (lista asset, clic sul tema, `textStill`, cattura), tutti di
+    carico.
+  - Resta da rifare da soli, quando il coordinatore dà il posto, EMA, RSI, Bollinger e drawdown: poi ✅.
+
+  Dettagli: piano della 56, passo 8.
 - **G-10 · Ordine casuale delle immagini del seed nelle liste di file** — medio-basso; G, 15/10, su segnalazione del
   coordinatore (`files/static-grid`: miniatura `men_04` in una corsia, `woman_07` in un'altra).
   - Causa (prodotto, verificata nel codice):
@@ -2169,7 +2184,8 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     una corsia all'altra. Oggi è contenuto accettato.
   - Correzione proposta (fuori dal perimetro di G): una chiave secondaria deterministica nell'ordinamento di
     `list_uploads`, per esempio il nome originale a parità di `uploaded_at`. Non cambia lo stile. Per un utente conta
-    solo fra file caricati nello stesso istante. Da instradare dal coordinatore.
+    solo fra file caricati nello stesso istante. **Instradata alla 1.3 dal coordinatore il 15/10** (difetto del
+    prodotto, probabilmente H, che ha `services/files`): la voce nella sezione di chi la prende la scrive lui.
 
   Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md).
 - **G-11 · Su mobile, a scroll fermo in fondo alla pagina, l'header resta a volte visibile, solo in spagnolo** — basso;
