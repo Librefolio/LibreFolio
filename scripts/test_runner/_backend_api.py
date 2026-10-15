@@ -268,6 +268,14 @@ def api_backup(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Backup API tests", verbose=verbose)
 
 
+def api_backup_instance_errors(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what POST /backup/instance answers when the run cannot start, in an app of the test (no server reached)."""
+    print_section("Backup API: start errors")
+    print_info("Testing: POST /backup/instance → backup_folder_unusable, backup_failed, backup_busy (in-process app, jobs.start_backup replaced)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_instance_errors.py", test_names)
+    return run_command(cmd, "Backup API start error tests", verbose=verbose)
+
+
 def api_transactions(verbose: bool = False, test_names: list = None) -> bool:
     """Run Transactions API endpoint tests."""
     print_section("Transactions API Endpoint Tests")
@@ -745,6 +753,16 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "utilities", api_utilities, name="Utilities API", desc="Sectors, countries")
     add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready, route order")
     add_test(api, "backup", api_backup, name="Backup API", desc="Instance backup jobs (admin only): start, poll, download, delete, busy, job ids, removed placeholders; route order (C2)")
+    add_test(
+        api,
+        "backup-instance-errors",
+        api_backup_instance_errors,
+        name="Backup API Start Errors",
+        desc="POST /backup/instance when the run cannot start: a link or a file in place of backups/ or backups/.jobs (BackupPathError) → 500 backup_folder_unusable, any other OSError → 500 backup_failed, another run → 409 backup_busy, never the data directory's path or the system's words in the answer; a run that starts → 202 with its first state",
+        # PURE: an app of the test holds instance_router, require_admin overridden and jobs.start_backup replaced: no
+        # data directory, DB, server or network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
     add_test(api, "transactions", api_transactions, name="Transactions API", desc="Bulk create, query, patch, delete")
     add_test(api, "transfer-promotion", api_transfer_promotion, name="Transfer Promotion", desc="DEPOSIT/WITHDRAWAL → TRANSFER")
     add_test(api, "transactions-validate", api_transactions_validate, name="Transactions Validate", desc="POST /transactions/validate dry-run")

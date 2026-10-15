@@ -15,8 +15,12 @@ from fastapi.responses import FileResponse
 
 from backend.app.api.v1.settings import require_admin
 from backend.app.db.models import User
+from backend.app.logging_config import get_logger
 from backend.app.schemas.backup import InstanceBackupJob
 from backend.app.services.platform.instance_backup import jobs
+from backend.app.services.platform.instance_backup.paths import BackupPathError
+
+logger = get_logger(__name__)
 
 instance_router = APIRouter()
 
@@ -47,7 +51,10 @@ def _job_response(job: jobs.BackupJob) -> InstanceBackupJob:
     "/instance",
     status_code=status.HTTP_202_ACCEPTED,
     response_model=InstanceBackupJob,
-    responses={409: {"description": "Another backup is running (code `backup_busy`)"}},
+    responses={
+        409: {"description": "Another backup is running (code `backup_busy`)"},
+        500: {"description": "The backup could not start: the backups folder of the data directory is a link or a file (code `backup_folder_unusable`), or it cannot be written (code `backup_failed`)"},
+    },
 )
 def start_instance_backup(_admin: User = Depends(require_admin)) -> InstanceBackupJob:
     """Start a backup of the whole instance in the background, and return the job to poll. Administrators only."""
@@ -55,6 +62,12 @@ def start_instance_backup(_admin: User = Depends(require_admin)) -> InstanceBack
         job = jobs.start_backup(origin="ui")
     except jobs.BackupBusyError:
         raise _error(status.HTTP_409_CONFLICT, "backup_busy", "Another backup is running") from None
+    except BackupPathError:
+        logger.error("Instance backup could not start: the backups folder of the data directory is not a plain folder")
+        raise _error(status.HTTP_500_INTERNAL_SERVER_ERROR, "backup_folder_unusable", "The backups folder of the data directory is not a plain folder") from None
+    except OSError as exc:
+        logger.error("Instance backup could not start", error=f"{type(exc).__name__}: {exc.strerror or exc}")
+        raise _error(status.HTTP_500_INTERNAL_SERVER_ERROR, "backup_failed", "The backup could not start") from None
     return _job_response(job)
 
 

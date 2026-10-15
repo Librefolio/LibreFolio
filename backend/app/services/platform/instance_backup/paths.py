@@ -32,7 +32,11 @@ _JOB_ID = re.compile(r"[0-9a-f]{32}")
 
 
 class BackupPathError(RuntimeError):
-    """A folder the backup writes to is not a plain folder: a link, or a file, stands where it should be."""
+    """A folder the backup writes to is not a plain folder: a link, or a file, stands where it should be (``path``)."""
+
+    def __init__(self, path: Path):
+        super().__init__(f"{path} is not a plain folder")
+        self.path = path
 
 
 def database_path(data_dir: Path) -> Path:
@@ -81,5 +85,5 @@ def ensure_private_dir(path: Path, data_dir: Path) -> Path:
         except FileExistsError:
             pass
         if not stat.S_ISDIR(current.lstat().st_mode):
-            raise BackupPathError(f"{current} is not a plain folder")
+            raise BackupPathError(current)
     return path

@@ -13,10 +13,12 @@ Without ``fcntl`` (not POSIX) the lock only serialises the runs of one process.
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import secrets
 import shutil
+import sqlite3
 import threading
 import time
 from collections.abc import Callable
@@ -149,6 +151,23 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+_NO_SPACE_ERRNOS = frozenset(code for code in (errno.ENOSPC, getattr(errno, "EDQUOT", None)) if code is not None)
+
+
+def _out_of_space(exc: BaseException) -> bool:
+    """Whether a failure, or one of its causes, is a full disk or quota: the file system's, or SQLite's ``SQLITE_FULL``."""
+    seen: BaseException | None = exc
+    for _ in range(8):
+        if seen is None:
+            return False
+        if isinstance(seen, OSError) and seen.errno in _NO_SPACE_ERRNOS:
+            return True
+        if isinstance(seen, sqlite3.Error) and getattr(seen, "sqlite_errorcode", None) == sqlite3.SQLITE_FULL:
+            return True
+        seen = seen.__cause__ or seen.__context__
+    return False
+
+
 def _write_state(folder: Path, job: BackupJob) -> None:
     """Write the state of a job atomically: a reader sees the old state or the new one, never half of one."""
     partial = folder / (STATE_FILE + ".part")
@@ -207,8 +226,9 @@ def _run(data_dir: Path, job: BackupJob, lock: _RunLock, progress: Callable[[Pha
         current = replace(current, status="failed", phase=None, finished_at=_now(), error_code="backup_no_space")
         logger.warning("Instance backup refused: not enough free space", job_id=job.job_id, needed_bytes=exc.needed, free_bytes=exc.free)
     except Exception as exc:  # noqa: BLE001 — any failure ends the job as failed, with the cause in the log
-        current = replace(current, status="failed", phase=None, finished_at=_now(), error_code="backup_failed")
-        logger.error("Instance backup failed", job_id=job.job_id, error=f"{type(exc).__name__}: {exc}")
+        error_code: JobError = "backup_no_space" if _out_of_space(exc) else "backup_failed"
+        current = replace(current, status="failed", phase=None, finished_at=_now(), error_code=error_code)
+        logger.error("Instance backup failed", job_id=job.job_id, error_code=error_code, error=f"{type(exc).__name__}: {exc}")
     else:
         current = replace(
             current,

@@ -6,8 +6,9 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
 (a) ``paths``: an archive carries ``sqlite/app.db`` and the folders ``custom-uploads``, ``broker_reports`` and
     ``scenario_catalog``, described by ``manifest.json``; backups are written in ``backups/``, the jobs in
     ``backups/.jobs/<32 lowercase hex>/`` under the lock ``backups/.jobs/.lock``. ``ensure_private_dir`` creates the
-    missing folders 0700 and refuses a link or a file where a folder belongs, without writing through it; ``job_dir``
-    never builds a path from something that is not a job id.
+    missing folders 0700 and refuses a link or a file where a folder belongs, without writing through it; the
+    ``BackupPathError`` names that very folder (``.path``: ``backups``, ``backups/.jobs`` or the job's own folder),
+    its message "<path> is not a plain folder". ``job_dir`` never builds a path from something that is not a job id.
 (b) ``snapshot``: ``snapshot_database`` copies the live database with ``VACUUM INTO``. The copy is the database as of
     one instant even while another connection keeps committing in WAL mode, that writer is never blocked, and the copy
     is a standalone rollback-journal file with nothing beside it. ``describe_database`` reads a file without changing
@@ -27,16 +28,28 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     unexpected entries are reported, a name written twice among the unexpected ones; a file that is not a zip is
     ``ArchiveError('archive_unreadable')``, a zip without manifest ``ManifestError('manifest_missing')``; an entry is
     never read beyond the size its manifest declares, plus one byte.
+(f) ``_add_file`` / ``build_archive``, a file that fails: before its entry starts (gone, a link, a folder or a FIFO in
+    its place, unreadable) it is an ``OSError``, the archive gets no entry, and the build leaves the file out
+    (``files_skipped``) and goes on, never blocked by a FIFO. Such a refusal closes the descriptor it opened: a folder
+    in place of a file used to leak one per call (``os.fdopen`` refuses a folder without closing the descriptor it is
+    given), for as long as the server runs. Once its entry has started, a failure reading the file, opening the
+    entry, writing it or closing it is ``PartialEntryError(entry)``, the ``OSError`` as its ``__cause__``: a zip entry
+    cannot be taken back, so the build stops instead of leaving the file out, and no archive reaches the target (the
+    ``.part`` is the caller's to remove).
 
 Pure: every data directory, database and archive lives in ``tmp_path``; ``LF_APP_VERSION`` is set so the manifest's
 ``app_version`` is exact and no git process runs. No lane database, no server, no network. The concurrent writer of (b)
 is a thread with its own SQLite connection, synchronised with the copy through the copy's progress handler: no clock
 wait decides anything, and every wait has a deadline. File modes, links and FIFOs are POSIX-only; the permission case is
-skipped as root, which bypasses it.
+skipped as root, which bypasses it. A file that fails half-way is simulated in this process only: the ``os`` of
+``archive`` is replaced, for one test, by a stand-in whose one file reads its first block, then fails (``EIO``); the
+stages of a zip entry fail through a stand-in for the archive given to ``_add_file``. The descriptors left open are
+found in ``/dev/fd``, the list of this process's own, by the device and inode of the test's folder or FIFO.
 """
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -57,7 +70,7 @@ from types import SimpleNamespace
 import pytest
 
 from backend.app.services.platform.instance_backup import archive, snapshot
-from backend.app.services.platform.instance_backup.archive import ArchiveError, BackupNoSpaceError, BuiltArchive, build_archive, check_archive, collect_files, required_space
+from backend.app.services.platform.instance_backup.archive import ArchiveError, BackupNoSpaceError, BuiltArchive, PartialEntryError, build_archive, check_archive, collect_files, required_space
 from backend.app.services.platform.instance_backup.manifest import FORMAT, FORMAT_VERSION, MANIFEST_MAX_BYTES, BackupManifest, ManifestDatabase, ManifestError, ManifestFile, check_entry_path
 from backend.app.services.platform.instance_backup.paths import (
     ARCHIVED_FOLDERS,
@@ -82,6 +95,7 @@ needs_posix_modes = pytest.mark.skipif(not POSIX, reason="file modes are POSIX o
 needs_symlinks = pytest.mark.skipif(not POSIX, reason="symbolic links need a privilege on Windows")
 needs_fifo = pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="this platform has no FIFOs")
 needs_permission_checks = pytest.mark.skipif(not POSIX or AS_ROOT, reason="needs POSIX permissions, which root bypasses")
+needs_dev_fd = pytest.mark.skipif(not Path("/dev/fd").is_dir(), reason="needs /dev/fd to list this process's open descriptors")
 
 #: What the manifest must say made the archive: set as LF_APP_VERSION, so no ``git describe`` runs.
 APP_VERSION = "v0.0.0-b1-archive-test"
@@ -392,6 +406,36 @@ def test_a_link_or_a_file_where_a_folder_belongs_is_refused_and_never_written_th
     assert list(elsewhere.iterdir()) == [], f"nothing may be created through the link: {sorted(p.name for p in elsewhere.iterdir())}"
     assert not (tmp_path / "nowhere").exists(), "a dangling link must not be made to point to a new folder"
     print_success(f"{case}: refused, nothing written through it")
+
+
+@needs_symlinks
+@pytest.mark.parametrize("case", ["backups-is-a-link", "backups-is-a-file", "jobs-is-a-link", "job-folder-is-a-file"])
+def test_the_refusal_names_the_folder_that_is_not_a_plain_folder(tmp_path, case):
+    """(a) ``BackupPathError.path`` is the folder that is a link or a file, not the one asked for: the CLI names it."""
+    data = tmp_path / "data"
+    data.mkdir()
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    if case == "backups-is-a-link":
+        backups_dir(data).symlink_to(elsewhere, target_is_directory=True)
+        culprit = backups_dir(data)
+    elif case == "backups-is-a-file":
+        backups_dir(data).write_bytes(b"not a folder")
+        culprit = backups_dir(data)
+    elif case == "jobs-is-a-link":
+        backups_dir(data).mkdir()
+        jobs_dir(data).symlink_to(elsewhere, target_is_directory=True)
+        culprit = jobs_dir(data)
+    else:
+        jobs_dir(data).mkdir(parents=True)
+        job_dir(data, VALID_ID).write_bytes(b"not a folder")
+        culprit = job_dir(data, VALID_ID)
+    with pytest.raises(BackupPathError) as raised:
+        ensure_private_dir(job_dir(data, VALID_ID), data)
+    assert raised.value.path == culprit, f"{case}: the error names {culprit}, not {raised.value.path}"
+    assert str(raised.value) == f"{culprit} is not a plain folder", f"{case}: the message keeps its format: {raised.value}"
+    assert list(elsewhere.iterdir()) == [], f"{case}: nothing is created through a link"
+    print_success(f"{case}: .path = {culprit.relative_to(data)}")
 
 
 # =============================================================================
@@ -1305,3 +1349,269 @@ def test_check_and_build_agree_on_a_manifest_rebuilt_from_the_entries(tmp_path):
     consistent = rewrite(built.path, tmp_path / "consistent.zip", swap={"custom-uploads/a.txt": changed, MANIFEST_ENTRY: manifest.to_bytes()})
     assert check_archive(consistent).ok, "an archive whose manifest lists the real size and SHA-256 of every entry checks ok"
     print_success("manifest and entries agree → ok")
+
+
+# =============================================================================
+# (f) a file that fails: before its entry starts, or once it has
+# =============================================================================
+
+
+ENTRY = "custom-uploads/a.txt"
+
+
+def os_error(code: int) -> OSError:
+    return OSError(code, os.strerror(code))
+
+
+class FailingReads:
+    """A file open for reading that gives its first block, then fails as a dying disk does (``EIO``)."""
+
+    def __init__(self, handle):
+        self._handle = handle
+        self.reads = 0
+
+    def read(self, size: int = -1) -> bytes:
+        self.reads += 1
+        if self.reads > 1:
+            raise os_error(errno.EIO)
+        return self._handle.read(size)
+
+    def __getattr__(self, name: str):
+        return getattr(self._handle, name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info) -> bool:
+        self._handle.close()
+        return False
+
+
+class OsReadingBadly:
+    """``archive``'s ``os``, every call the real one, but the file opened from ``path`` reads badly (``FailingReads``)."""
+
+    def __init__(self, path: Path):
+        self._path = path
+        self._fds: set[int] = set()
+
+    def __getattr__(self, name: str):
+        return getattr(os, name)
+
+    def open(self, path, flags, *args, **kwargs) -> int:
+        fd = os.open(path, flags, *args, **kwargs)
+        if Path(path) == self._path:
+            self._fds.add(fd)
+        return fd
+
+    def fdopen(self, fd: int, *args, **kwargs):
+        handle = os.fdopen(fd, *args, **kwargs)
+        if fd in self._fds:
+            self._fds.discard(fd)
+            return FailingReads(handle)
+        return handle
+
+
+class FailingEntryArchive:
+    """Stands for the zip ``_add_file`` writes into: the entry fails at ``stage`` with ``error``. ``open``: the entry
+    cannot start (its header cannot be written); ``write``: its first block cannot be written; ``close``: it cannot be
+    finished (the last compressed bytes, the sizes)."""
+
+    def __init__(self, stage: str, error: OSError):
+        self.stage = stage
+        self.error = error
+        self.written = 0
+
+    def open(self, info: zipfile.ZipInfo, mode: str = "r", *, force_zip64: bool = False) -> FailingEntry:
+        assert mode == "w", f"_add_file must open its entry for writing, not {mode!r}"
+        if self.stage == "open":
+            raise self.error
+        return FailingEntry(self)
+
+
+class FailingEntry:
+    def __init__(self, owner: FailingEntryArchive):
+        self._owner = owner
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        if exc_type is None and self._owner.stage == "close":
+            raise self._owner.error
+        return False
+
+    def write(self, data: bytes) -> int:
+        if self._owner.stage == "write":
+            raise self._owner.error
+        self._owner.written += len(data)
+        return len(data)
+
+
+@pytest.mark.parametrize("case", ["gone", pytest.param("link", marks=needs_symlinks), pytest.param("unreadable", marks=needs_permission_checks)])
+def test_a_file_that_fails_before_its_entry_starts_is_an_oserror_and_adds_no_entry(tmp_path, case):
+    """(f) Nothing of the file is in the archive yet: a plain ``OSError``, which ``build_archive`` turns into a skip."""
+    print_section("_add_file: before and after the entry starts")
+    path = tmp_path / "a.txt"
+    if case == "link":
+        write_files(tmp_path, {"secrets/instance.key": SECRET})
+        path.symlink_to(tmp_path / "secrets" / "instance.key")
+    elif case == "unreadable":
+        path.write_bytes(b"uploaded file\n")
+        path.chmod(0)
+    counted: list[int] = []
+    try:
+        with zipfile.ZipFile(tmp_path / "archive.zip", "w") as zf:
+            with pytest.raises(OSError) as raised:
+                archive._add_file(zf, path, ENTRY, counted.append)
+            names = zf.namelist()
+    finally:
+        if case == "unreadable":
+            path.chmod(0o600)
+    assert (names, counted) == ([], []), f"{case}: no entry was started and no byte counted: {names}, {counted}"
+    print_success(f"{case}: {type(raised.value).__name__}, no entry")
+
+
+#: Calls of ``_add_file`` on one refused path: a leak of one descriptor per call leaves that many open.
+LEAK_CALLS = 16
+
+
+def descriptors_on(path: Path) -> list[int]:
+    """The descriptors of this process open on the file ``path`` names (same device and inode), from ``/dev/fd``.
+
+    Found by what they are open on, not by their number: a descriptor another part of the process opens meanwhile
+    cannot pass for a leaked one, nor hide one.
+    """
+    wanted = path.lstat()
+    found: list[int] = []
+    for name in os.listdir("/dev/fd"):
+        try:
+            info = os.fstat(int(name))
+        except (OSError, ValueError):
+            continue  # the descriptor that listed /dev/fd, closed since
+        if (info.st_dev, info.st_ino) == (wanted.st_dev, wanted.st_ino):
+            found.append(int(name))
+    return sorted(found)
+
+
+@needs_dev_fd
+@pytest.mark.parametrize("replacement", ["folder", pytest.param("fifo", marks=needs_fifo)])
+def test_a_file_refused_before_its_entry_starts_leaves_no_descriptor_open(tmp_path, replacement):
+    """(f) Regression: a folder where a collected file was expected leaked the descriptor ``os.open`` gave, once per
+    call: ``os.fdopen`` refuses a folder without closing a descriptor it is handed. The server keeps running after a
+    backup, so every such entry of every backup kept one open for good. A refusal closes what it opened; a FIFO,
+    refused by the same check, too."""
+    path = tmp_path / "a.txt"
+    if replacement == "folder":
+        path.mkdir()
+    else:
+        os.mkfifo(path)
+    assert descriptors_on(path) == [], f"precondition: no descriptor of this process is open on the {replacement}"
+    with zipfile.ZipFile(tmp_path / "archive.zip", "w") as zf:
+        for _ in range(LEAK_CALLS):
+            with pytest.raises(OSError):
+                archive._add_file(zf, path, ENTRY, lambda count: None)
+        names = zf.namelist()
+    left_open = descriptors_on(path)
+    for fd in left_open:
+        os.close(fd)  # a red run must not carry them into the tests that follow
+    assert left_open == [], f"{len(left_open)} descriptor(s) left open on the {replacement} by {LEAK_CALLS} refused calls of _add_file: {left_open}"
+    assert names == [], f"a refused file starts no entry: {names}"
+    print_success(f"{replacement}: {LEAK_CALLS} refusals, no descriptor left open")
+
+
+@pytest.mark.parametrize(
+    ("stage", "code"),
+    [
+        pytest.param("open", errno.ENOSPC, id="open-ENOSPC"),
+        pytest.param("write", errno.ENOSPC, id="write-ENOSPC"),
+        pytest.param("close", errno.EIO, id="close-EIO"),
+    ],
+)
+def test_an_entry_that_fails_once_started_raises_partial_entry_error_with_its_cause(tmp_path, stage, code):
+    """(f) Opening, writing or closing the entry: part of it may be in the archive, which cannot take it back."""
+    path = tmp_path / "a.txt"
+    path.write_bytes(b"uploaded file\n" * 64)
+    error = os_error(code)
+    with pytest.raises(PartialEntryError) as raised:
+        archive._add_file(FailingEntryArchive(stage, error), path, ENTRY, lambda count: None)
+    assert raised.value.entry == ENTRY, f"{stage}: the error names the entry: {raised.value.entry!r}"
+    assert str(raised.value) == f"{ENTRY} failed while it was being archived", f"{stage}: {raised.value}"
+    assert raised.value.__cause__ is error, f"{stage}: the OSError is the cause, for the job to tell a full disk: {raised.value.__cause__!r}"
+    print_success(f"{stage} → PartialEntryError from {errno.errorcode[code]}")
+
+
+def test_a_file_that_fails_while_it_is_read_raises_partial_entry_error_with_its_cause(tmp_path, monkeypatch):
+    """(f) A real zip, a real file: its first block is in the entry when the second read fails (``EIO``)."""
+    path = tmp_path / "a.txt"
+    path.write_bytes(bytes(range(256)) * 16)
+    monkeypatch.setattr(archive, "_CHUNK", 1024)
+    monkeypatch.setattr(archive, "os", OsReadingBadly(path))
+    counted: list[int] = []
+    with zipfile.ZipFile(tmp_path / "archive.zip", "w") as zf:
+        with pytest.raises(PartialEntryError) as raised:
+            archive._add_file(zf, path, ENTRY, counted.append)
+    assert counted == [1024], f"precondition: the entry had started, its first block written, when the read failed: {counted}"
+    cause = raised.value.__cause__
+    assert raised.value.entry == ENTRY and isinstance(cause, OSError) and cause.errno == errno.EIO, f"PartialEntryError({ENTRY!r}) from the read's EIO: {raised.value!r} from {cause!r}"
+    print_success("read error after the first block → PartialEntryError from EIO")
+
+
+def test_a_file_that_fails_while_it_is_read_stops_the_build_instead_of_being_left_out(tmp_path, monkeypatch):
+    """(f) The build must not leave out a file of which part is archived: it stops, and no archive reaches the target."""
+    print_section("build_archive: a file that fails half-way")
+    data = small_data_dir(tmp_path / "data")
+    work = tmp_path / "work"
+    work.mkdir()
+    target = work / "librefolio-backup-test.zip"
+    monkeypatch.setattr(archive, "_CHUNK", 64)
+    monkeypatch.setattr(archive, "os", OsReadingBadly(data / ENTRY))
+    with pytest.raises(PartialEntryError) as raised:
+        build_archive(data, work, target, origin="cli")
+    cause = raised.value.__cause__
+    assert raised.value.entry == ENTRY and isinstance(cause, OSError) and cause.errno == errno.EIO, f"the build stops on {ENTRY}, its EIO as the cause: {raised.value!r} from {cause!r}"
+    assert not target.exists(), "no archive under the final name"
+    assert sorted(os.listdir(work)) == [target.name + ".part"], f"only the partial archive is left, for the caller to remove: {sorted(os.listdir(work))}"
+    print_success("build stopped, no archive at the target")
+
+
+@pytest.mark.parametrize("replacement", [pytest.param("fifo", marks=needs_fifo), pytest.param("unreadable", marks=needs_permission_checks)])
+def test_a_file_that_fails_before_its_entry_starts_is_left_out_and_the_build_goes_on(tmp_path, monkeypatch, replacement):
+    """(f) Collected as a file, then a FIFO in its place (never waited on) or unreadable: nothing of it is archived
+    yet, so it is left out and reported, and the archive is consistent without it."""
+    data = small_data_dir(tmp_path / "data")
+    swapped = data / ENTRY
+    real_collect = archive.collect_files
+
+    def collect_then_swap(data_dir):
+        collected = real_collect(data_dir)
+        if replacement == "fifo":
+            swapped.unlink()
+            os.mkfifo(swapped)
+        else:
+            swapped.chmod(0)
+        return collected
+
+    monkeypatch.setattr(archive, "collect_files", collect_then_swap)
+    outcome: dict[str, object] = {}
+
+    def build() -> None:
+        try:
+            outcome["built"] = build_into(data, tmp_path / "work")
+        except Exception as exc:  # reported below, in the test's thread
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=build, name="swapped-file-build", daemon=True)
+    worker.start()
+    worker.join(DEADLINE_S)
+    hung = worker.is_alive()
+    if hung and replacement == "fifo":
+        os.close(os.open(swapped, os.O_WRONLY | os.O_NONBLOCK))  # a writer appears and leaves: the blocked read ends
+        worker.join(DEADLINE_S)
+    if replacement == "unreadable":
+        swapped.chmod(0o600)
+    assert not hung, f"the build was still running after {DEADLINE_S}s: it waited on the {replacement}"
+    assert "error" not in outcome, f"a file that fails before its entry starts must not stop the build: {outcome.get('error')!r}"
+    built = outcome["built"]
+    assert (built.skipped, built.warnings) == ((ENTRY,), ("files_skipped",)), f"{replacement}: left out and reported: {built.skipped}, {built.warnings}"
+    assert ENTRY not in entry_names(built.path) and check_archive(built.path).ok, f"{replacement}: not in the archive, which checks ok without it"
+    print_success(f"{replacement} in place of a file → left out, build done")
