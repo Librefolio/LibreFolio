@@ -52,8 +52,8 @@ from backend.app.schemas.refresh import (
     SyncDateRangeModel,
     SyncStatus,
 )
-from backend.app.services.scheduler import joblog, jobs
-from backend.app.services.scheduler.state import JobState, SchedulerState
+from backend.app.services.platform.scheduler import joblog, jobs
+from backend.app.services.platform.scheduler.state import JobState, SchedulerState
 
 # ============================================================================
 # Fixtures and doubles

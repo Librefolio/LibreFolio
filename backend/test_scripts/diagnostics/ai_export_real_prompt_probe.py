@@ -35,11 +35,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.app.schemas.signals import SignalTemporalClass  # noqa: E402
+from backend.app.services.accounts.auth_service import hash_password, verify_password  # noqa: E402
 from backend.app.services.ai_export.temporal.policy import (  # noqa: E402
     BucketDetailLevel,
     BucketingPolicy,
 )
-from backend.app.services.auth_service import hash_password, verify_password  # noqa: E402
 from scripts.i18n_catalog import build as build_i18n_catalog  # noqa: E402
 
 DEFAULT_SOURCE_DB = PROJECT_ROOT / "backend" / "data" / "prod" / "sqlite" / "app.db"

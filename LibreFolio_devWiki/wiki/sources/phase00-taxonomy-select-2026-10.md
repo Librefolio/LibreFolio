@@ -99,4 +99,4 @@ doc; **K-25 the four devWiki pages — written on 2026-10-09** ([[problems/svelt
 | Step 23 (bulk guard) | `LibreFolio_developer_journal/Release_2/phases/25_taxonomySelect/plan-phase00TaxonomySelectStep23BulkCloneAndDiscardGuard.prompt.md` |
 | Backlog (K-1 … K-26) | `LibreFolio_developer_journal/Release_2/Phase_0/38_postReleaseBacklog/README.md` |
 | Title guard (step 12) | `frontend/src/routes/documentTitle.guard.test.ts` |
-| Preferences merge (step 21) | `frontend/src/lib/components/settings/tabs/PreferencesTab.svelte` |
+| Preferences merge (step 21) | `frontend/src/lib/features/settings/tabs/PreferencesTab.svelte` |

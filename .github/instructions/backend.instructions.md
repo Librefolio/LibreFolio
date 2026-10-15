@@ -13,10 +13,12 @@ backend/
 │   ├── db/models.py           # SQLModel ORM models
 │   ├── schemas/               # Pydantic schemas (I/O validation)
 │   ├── services/              # Business logic
+│   │   ├── platform/                 # scheduler, container registry, date sentinels, data-quality thresholds, backup export
+│   │   ├── files/                    # uploaded static files and their previews
 │   │   ├── asset_source_providers/   # yfinance, JustETF, CSS Scraper, Scheduled Investment
 │   │   ├── fx_providers/             # ECB, FED, BOE, SNB, MANUAL
 │   │   └── brim_providers/           # 11 broker import plugins
-│   ├── config.py              # get_data_dir(), paths, env vars
+│   ├── config/                # env vars, paths, get_data_dir(): the only place that reads os.environ
 │   └── utils/                 # Shared utilities
 ├── alembic/                   # Database migrations (001_initial.py)
 ├── test_scripts/              # Full test suite (850+ tests, 8 categories)
@@ -95,8 +97,10 @@ at the root. The truncation to the database precision reads the models, so it li
 | DB Models | `backend/app/db/models.py` |
 | API Schemas | `backend/app/schemas/*.py` |
 | Business Logic | `backend/app/services/*.py` |
+| Platform services (scheduler, data-quality thresholds, backup export) | `backend/app/services/platform/` |
+| Uploads and file previews | `backend/app/services/files/` |
 | API Endpoints | `backend/app/api/v1/*.py` |
-| Config & Data Paths | `backend/app/config.py` |
+| Config & Data Paths | `backend/app/config/` (base in `__init__.py`, one module per owner section; env vars are read only here) |
 | FX Providers | `backend/app/services/fx_providers/` |
 | Asset Providers | `backend/app/services/asset_source_providers/` |
 | Broker Import | `backend/app/services/brim_providers/` |

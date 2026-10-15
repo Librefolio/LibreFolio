@@ -1,7 +1,7 @@
 <script lang="ts">
     import {availableLanguages} from '$lib/stores/app/language';
-    import SettingCurrency from '$lib/components/settings/SettingCurrency.svelte';
-    import SettingSelect from '$lib/components/settings/SettingSelect.svelte';
+    import SettingCurrency from '$lib/features/settings/SettingCurrency.svelte';
+    import SettingSelect from '$lib/features/settings/SettingSelect.svelte';
     import {LogOut} from 'lucide-svelte';
     import type {SelectOption} from '$lib/components/ui/select';
     import type {WelcomeCopy, WelcomeDraft} from '$lib/features/onboarding/welcome';

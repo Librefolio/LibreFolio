@@ -59,7 +59,7 @@ No planned features in this domain. The auth foundation is intentionally minimal
 |------|------|
 | Primary mkdocs | `mkdocs_src/docs/developer/architecture/access_control.md` |
 | Auth API endpoints | `backend/app/api/v1/auth.py` |
-| Auth service | `backend/app/services/auth_service.py` |
-| User service | `backend/app/services/user_service.py` |
+| Auth service | `backend/app/services/accounts/auth_service.py` |
+| User service | `backend/app/services/accounts/user_service.py` |
 | Auth store (frontend) | `frontend/src/lib/stores/app/auth.ts` |
 | DB model (User, UserRole) | `backend/app/db/models.py` |
