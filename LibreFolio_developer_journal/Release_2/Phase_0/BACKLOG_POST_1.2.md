@@ -371,10 +371,12 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
 - **C-88 · Un pacchetto di dati di qualità in abbonamento** — minimo, un'idea da valutare per `TODO_FUTURI.md`; utente
   C, chat del 04/09. Prezzi storici e composizioni dei fondi a pagamento, per chi li vuole, anche come sostegno al
   progetto. Da valutare: licenze dei dati, costi, convivenza con l'installazione self-hosted. Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voce 14.
-- **C-89 · Spiegare le due date del cambio valuta** — minimo; utente C, chat del 04/09. Nel modulo, accanto alle date
+- ✅ **C-89 · Spiegare le due date del cambio valuta** — minimo; utente C, chat del 04/09. Nel modulo, accanto alle date
   «Da» e «A» (`TransactionFormModal.svelte:1645`, `:1693`), un suggerimento: di solito coincidono, e si separano quando
   il broker accredita la nuova valuta in un altro giorno. La stessa frase nella guida (`user/transactions/form.*.md`).
   Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voce 31.
+  - ✅ **Chiusa il 15/10** da W (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`): il suggerimento nel form
+    (`tx-form-fx-dates-hint`) e la stessa frase nella guida, nelle 4 lingue.
 - **C-90 · «Testa configurazione» dice che è solo una prova** — minimo; utente C, chat del 04/09. Accanto al risultato
   dello storico, una riga: la prova legge gli ultimi giorni, e alla creazione dell'asset LibreFolio scarica tutto lo
   storico disponibile. Oggi lo dice solo la guida (`user/assets/create-edit.en.md:67`). Dettagli: [mappatura dei suoi suggerimenti](38_postReleaseBacklog/feedback-early-user-C-20261014.md), voce 11.
@@ -567,6 +569,10 @@ sezione T, e P-7 (chiudere le issue #32 e #35) è un compito del rilascio, non d
 - **P-15 · Altre etichette inglesi scritte nel codice** — basso; test-author di P (11/10). `DataEditor`: «Date», i
   contatori «modified/deleted/new», un `aria-label`, «Reset layout»; `BrokerSharingPanel:832`: «max». Dettagli: idem,
   8.1 e 8.
+  - ✅ **Parte di W chiusa il 15/10** (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`): i contatori e l'`aria-label` della levetta delle righe
+    vecchie in `DataEditor`, «Help» e «Close» di `DataImportModal` (W-B8). «Date» era già `common.date`. Restano
+    «Reset layout» (`components/table/ColumnVisibilityToggle.svelte:177`) e «max» (`BrokerSharingPanel:832`), a Y
+    (decisione Q6 del piano 04).
 
 ## T · Matematica finanziaria e riordino (43)
 
@@ -1698,7 +1704,7 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
     - Dettagli: piano della 46, §12.16.
   - **Resta aperto, dopo la 1.2: V-37b, il pre-step completo** (§2 dell'analisi): ⚡ sempre cliccabile, prima gli
     obbligatori e poi il formato, il rosso su tutte le celle in errore, in singola, coppia e FX. Circa 1,5-2 giorni.
-- **V-38 · Il form elenca un problema di saldo tra i problemi dei campi** — basso, UX; letto nel codice da test-author
+- ✅ **V-38 · Il form elenca un problema di saldo tra i problemi dei campi** — basso, UX; letto nel codice da test-author
   di V, 13/10, e verificato da me; **non visto a schermo**.
   - Il form divide i problemi per indice: `index >= 0` sono dei campi, `< 0` di saldo
     (`TransactionFormModal.svelte:944-945`).
@@ -1707,6 +1713,8 @@ V il 12/10, nel checkpoint dei test E2E delle voci 21-23 della checklist.
   - Il bulk editor divide invece per codice (`isBulkBalanceIssue`, `utils/transactions/bulkDisplay.ts:145`), e mette lo
     stesso problema sotto il titolo del saldo.
   - Da verificare a schermo prima di decidere. Dettagli: piano della 46, §12.14.
+  - ✅ **Chiusa il 15/10** da W (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`): visto a schermo, poi il form divide i problemi per codice
+    come il bulk editor (`isBulkBalanceIssue`).
 
 ## 09 · Feedback e backlog strutturale
 
@@ -2114,6 +2122,11 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   ~139-143) rende una lista vuota. Va contro la regola dei test senza rete. Da sistemare con il CP3 (PL4, router dei cambi)
   o prima. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a.
 
+- **W-B13 · `fx-csv-import.spec.ts` prende la ✕ della modale d'importazione per testo** — minimo, test; trovato da W
+  il 15/10 (K1), assegnato a X dal coordinatore. `frontend/e2e/fx/fx-csv-import.spec.ts:247` e `:276` usano
+  `button[aria-label="Close"]`; con P-15 l'etichetta viene da `common.close`, quindi il selettore regge solo in
+  inglese. Cura: il `data-testid` `data-import-modal-close`, aggiunto in K1. Dettagli: piano 04, §12, K1 passo 4.
+
 ## W · Import e transazioni (fase 01)
 
 Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md).
@@ -2144,9 +2157,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `POST /transactions/events/suggest`, i test API sono 10 e non 8, `suggest_events_bulk` sta in
   `services/transactions/transaction_service.py:492`. Si aggiorna quando la voce entra nel lotto K3. Dettagli: piano 04,
   §2.
-- **W-B8 · `DataImportModal`: «Help» e «Close» in inglese** — minimo; W, 14/10 (analisi). Gli `aria-label` di
+- ✅ **W-B8 · `DataImportModal`: «Help» e «Close» in inglese** — minimo; W, 14/10 (analisi). Gli `aria-label` di
   `components/ui/data-editor/DataImportModal.svelte:211` e `:220` sono scritti nel codice; vanno con P-15 (lotto K1).
-  Dettagli: piano 04, §2 (P-15).
+  Dettagli: piano 04, §2 (P-15). ✅ Chiusa il 15/10 (lotto K1 della 1.3, `532a1fd9c`; in `dev_release2` con `d915c869f`).
 - ↪ **W-B9 · `test_fx_api.py` raggiunge ECB via rete** — spostata nella sezione X dal coordinatore il 15/10
   (dominio dei cambi), dove X l'ha già ripresa con i dettagli.
 - **W-B10 · `access_control.md`: l'elenco degli endpoint d'accesso non è quello dell'API** — minimo, doc; W, 15/10 (W2).
@@ -2162,10 +2175,8 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   (test-author di I1), 15/10. Il test (`backend/test_scripts/test_api/test_broker_multiuser_api.py`, MULTI-008d) crea
   due broker e non li cancella; i test V-23 della stessa classe nuova (`TestAccessRefusalPlacement`) puliscono anche dopo
   un rosso, e possono fargli da modello. Dettagli: piano 04, §12, I1.
-- **W-B13 · `fx-csv-import.spec.ts` prende la ✕ della modale d'importazione per testo** — minimo, test; W, 15/10 (K1);
-  **spec di X**. `frontend/e2e/fx/fx-csv-import.spec.ts:247` e `:276` usano `button[aria-label="Close"]`; con P-15
-  l'etichetta viene da `common.close`, quindi il selettore regge solo in inglese. Cura: il `data-testid`
-  `data-import-modal-close`, aggiunto in K1. Dettagli: piano 04, §12, K1 passo 4.
+- ↪ **W-B13 · `fx-csv-import.spec.ts` prende la ✕ della modale d'importazione per testo** — spostata nella sezione X
+  dal coordinatore il 15/10 (spec di X).
 
 ## J · Numeri e analisi (fase 01)
 
