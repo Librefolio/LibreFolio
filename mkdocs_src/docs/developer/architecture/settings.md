@@ -42,7 +42,8 @@ catalogue, `SETTINGS_REGISTRY`.
       `env_secret()`, `Settings` and `get_settings()`. New variables go into one section module per
       topic, owned by the workstream of that area. Three exist today: `platform.py` (H:
       `scheduler_disabled()`, `configured_jwt_secret()`, `configured_jwt_secret_origin()`,
-      `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`),
+      `configured_instance_key()`, `configured_instance_key_origin()`, `owning_test_lane_id()`,
+      `frozen_app_version()`, `instance_blocked()`, `instance_deletion_date()`),
       `accounts.py` (A: `donation_popup_disabled()`) and `plugins.py` (X: `web_link_finder_enabled()`,
       `web_link_finder_engine()`, `web_link_finder_api_key()`, `web_link_finder_ddgs_region()`,
       `web_link_finder_ddgs_backend()`, `web_link_finder_timeout()`,
