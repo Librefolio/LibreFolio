@@ -145,3 +145,8 @@ Sono tutti locali: la push la fa il developer.
 | 56 | 15/10 21:04 | X: CP10, impostazioni dei plugin (migrazione 007, segreti cifrati, `/settings/plugins`, confine unico per famiglia, mascheramento), X-R6 | `9fb7fe6c9` |
 | 57 | 15/10 21:24 | Y8: correzioni ai grafici (I-01, I-03, O-16, 47-1 etichette sull'asse zoomato, 48-1 pulsanti); CHANGELOG scritto da Y | `160562b56` |
 | 58 | 15/10 21:28 | Z6b parte 2: watchdog e scadenza dei passi nel lifespan, processi figli chiusi; spegnimento entro 8 s (decisione 35) | `967094d81` |
+| 59 | 15/10 21:31 | E3 + E3s: link nelle email solo da `LIBREFOLIO_PUBLIC_URL`, `POST /email/links`, «password dimenticata» (spenta fino ad A6e, revisione di sicurezza), controllo `email.links` | `8f908623b` |
+| 60 | 15/10 21:36 | Z: correzione della E2E del flash dal vivo (attesa del primo poll e orologio in pausa), solo test | `93292909d` |
+| 61 | 15/10 22:13 | E3p: sonda dei link della scheda Email dal browser dell'admin (decisione 45) | `e54ae96bb` |
+| 62 | 15/10 22:14 | A: G-15 (la barra delle schede di Settings scorre invece di tagliare; `TabBar` `scrollable`) | `369204ab5` |
+| 63 | 15/10 22:36 | W: F36 (report BRIM senza broker solo al caricatore e all'admin; `/parse` chiede EDITOR sul broker della richiesta; `file_id` non UUID → 404; `can_delete` nella lista; decisione 36, W-B3/W-B4) | `434af2925` |

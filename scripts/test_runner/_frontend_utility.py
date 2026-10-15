@@ -174,6 +174,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/live-updates/activePolling.test.ts",
             "src/lib/features/email/emailText.test.ts",
             "src/lib/features/email/emailApi.test.ts",
+            "src/lib/features/email/emailLinks.test.ts",
             "src/lib/features/backup/backupApi.test.ts",
             "src/lib/features/backup/backupJob.test.ts",
             "src/lib/charts/signals/__tests__/registry.test.ts",

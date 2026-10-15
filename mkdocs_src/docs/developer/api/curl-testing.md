@@ -124,10 +124,11 @@ curl -b /tmp/cookies.txt "http://localhost:6040/api/v1/brokers/import/files?stat
 # Filter by broker IDs
 curl -b /tmp/cookies.txt "http://localhost:6040/api/v1/brokers/import/files?broker_ids=1&broker_ids=2"
 
-# Upload a file (requires broker_id)
+# Upload a file (broker_id is a required form field)
 curl -b /tmp/cookies.txt \
   -F "file=@/path/to/report.csv" \
-  "http://localhost:6040/api/v1/brokers/import/upload?broker_id=1"
+  -F "broker_id=1" \
+  http://localhost:6040/api/v1/brokers/import/upload
 
 # Get available plugins
 curl -b /tmp/cookies.txt http://localhost:6040/api/v1/brokers/import/plugins
