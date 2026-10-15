@@ -117,6 +117,7 @@ async def _run_provider_in_thread(coro_factory, *, timeout: float = 60.0):
         try:
             return loop.run_until_complete(coro_factory())
         finally:
+            asyncio.set_event_loop(None)
             loop.close()
 
     return await asyncio.wait_for(

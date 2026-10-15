@@ -1,4 +1,4 @@
-import {type APIRequestContext, expect, type Page, type Request, type Response, test} from './fixtures/playwright';
+import {type APIRequestContext, type BrowserContext, expect, type Page, type Request, type Response, test} from './fixtures/playwright';
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
 import {eventSeq, waitForEvent} from './fixtures/app-events';
@@ -332,6 +332,143 @@ test.describe('Settings', () => {
 
             // Strength meter should appear
             await expect(page.getByTestId('password-strength-meter')).toBeVisible();
+        });
+    });
+
+    test.describe('Password change and sessions', () => {
+        // POST /api/v1/auth/change-password ends every session of the account except the one that sent it, which it
+        // keeps by setting a new `session` cookie in the same response (release 1.3, workstream A, lot A4b). The HTTP
+        // tests (backend/test_scripts/test_api/test_session_revocation_api.py) prove that contract with cookies sent by
+        // hand from clients without a jar, so nothing there says what a real browser does with the re-issued cookie:
+        // whether it stores it (SameSite and Secure must suit this origin), whether it replaces the old one rather than
+        // keeping both (same name, path and domain), and whether the app goes on with it — any 401 sends the app to the
+        // login, through the axios interceptor and the layout's auth gate. This test is that proof, on two browser
+        // contexts signed in to one account:
+        // - A, this test's page, changes the password in Settings → Profile and stays signed in. Red when the response
+        //   sets no cookie, or one the browser refuses or keeps beside the old: A's jar still holds the old cookie, and
+        //   its next request, refused, lands A on the login.
+        // - B, a context of its own signed in before the change, is signed out. Red when the old cookie is still
+        //   accepted: B's GET /auth/me answers 200 and its app page opens instead of the login.
+        // The account is the test's own, deleted in `finally`: changing a shared E2E user's password would sign out every
+        // spec running beside it. Both contexts live and die inside the one test, so the block stays parallel.
+
+        /** The values of the `session` cookies a browser context holds: what its pages, and its `request`, send. */
+        async function sessionCookies(context: BrowserContext): Promise<string[]> {
+            return (await context.cookies()).filter((cookie) => cookie.name === 'session').map((cookie) => cookie.value);
+        }
+
+        /** `api` holds a working session of `user`: GET /auth/me answers 200, with the account's id. */
+        async function expectSignedInAs(api: APIRequestContext, user: DisposableUser, what: string): Promise<void> {
+            const me = await api.get('/api/v1/auth/me');
+            expect(me.status(), what).toBe(200);
+            expect(((await me.json()) as {user: {id: number}}).user.id, `${what}, as the account this test registered`).toBe(user.id);
+        }
+
+        /**
+         * Sign the browser in as `user` through the login form and open Settings → Profile. A fresh account is gated
+         * on /welcome: every flow still due is skipped over the API, for this account only, and the page enters
+         * through the gate, which forwards to returnTo only once it has re-read that welcome is done — so landing on
+         * /settings proves the gate let it in.
+         */
+        async function openProfile(page: Page, user: DisposableUser): Promise<void> {
+            await login(page, user);
+            await skipDueFlowsExcept(page, []);
+            await navigateTo(page, '/welcome?returnTo=%2Fsettings');
+            await expect(page).toHaveURL((url) => url.pathname === '/settings', {timeout: 15_000});
+            const shell = page.getByTestId('app-shell');
+            await expect(shell).toBeVisible();
+            await expect(shell).toHaveAttribute('data-guide-inert', 'false');
+            const tab = page.getByTestId('settings-tab-profile');
+            await tab.click();
+            await expect(tab).toHaveAttribute('aria-selected', 'true');
+            // The tab shows the account the change will apply to.
+            await expect(page.getByTestId('profile-username')).toHaveValue(user.username, {timeout: 10_000});
+        }
+
+        test('changing the password keeps this browser signed in and signs every other session out', async ({page, browser, request}) => {
+            // A registration, a sign-in through the form, a skip per due flow, five app documents across the two devices
+            // and five API sign-ins: about twice what the 45 s of this file's other disposable-account tests holds, so that
+            // on a loaded lane a red still ends on its own assertion — and the clean-up in `finally` still runs.
+            test.setTimeout(90_000);
+            const user = await registerDisposableUser(request, 'pwchange');
+            const newPassword = `Changed7#_${uniqueSuffix()}`;
+            let deviceB: BrowserContext | undefined;
+            try {
+                // Device A, this test's page, on the Profile of the account.
+                await openProfile(page, user);
+                const cookieOfA = await sessionCookies(page.context());
+                expect(cookieOfA, 'Premise: device A holds one session cookie').toHaveLength(1);
+
+                // Device B, a browser context of its own, signed in over the API: the cookie lands in B's jar, which
+                // its pages send. Its app page opening on the same Profile makes «signed out» below a change of state,
+                // not a page that never worked.
+                deviceB = await browser.newContext();
+                const signedInB = await deviceB.request.post('/api/v1/auth/login', {data: {username: user.username, password: user.password}});
+                expect(signedInB.status(), 'Device B signs in').toBe(200);
+                await expectSignedInAs(deviceB.request, user, 'Premise: device B is signed in before the change');
+                const pageB = await deviceB.newPage();
+                await navigateTo(pageB, '/settings');
+                await expect(pageB.getByTestId('app-shell'), 'Premise: device B opens the app before the change').toBeVisible({timeout: 15_000});
+                await expect(pageB.getByTestId('profile-username')).toHaveValue(user.username, {timeout: 10_000});
+
+                // On A, the change, through the modal.
+                await page.getByTestId('change-password-button').click();
+                const modal = page.getByTestId('password-change-modal');
+                await expect(modal).toBeVisible();
+                const current = modal.getByTestId('password-current');
+                const fresh = modal.getByTestId('password-new');
+                const confirmation = modal.getByTestId('password-confirm');
+                await current.fill(user.password);
+                await fresh.fill(newPassword);
+                await confirmation.fill(newPassword);
+                await expect(current).toHaveValue(user.password);
+                await expect(fresh).toHaveValue(newPassword);
+                await expect(confirmation).toHaveValue(newPassword);
+                const submit = modal.getByTestId('password-change-submit');
+                await expect(submit, 'Save is armed: the new password meets the rules and the confirmation matches').toBeEnabled();
+                // The response is the subject: it is where the new cookie comes from.
+                const answer = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/auth/change-password');
+                await submit.click();
+                expect((await answer).status(), 'POST /auth/change-password accepts the change').toBe(200);
+                // A success shows its confirmation and closes the modal by itself; a refusal keeps it open, with the reason.
+                await expect(modal, 'The modal closes itself once the password has changed').toBeHidden({timeout: 10_000});
+
+                // A stays signed in. Stored: its jar holds the cookie the response set, in place of the old one —
+                // still the old one means the response set none or the browser refused it; two, that it landed beside
+                // the old one.
+                await expect.poll(() => sessionCookies(page.context()), {message: 'Device A stores the session cookie the change re-issued', timeout: 5_000}).not.toEqual(cookieOfA);
+                expect(await sessionCookies(page.context()), 'Device A holds one session cookie: the re-issued one replaced the old').toHaveLength(1);
+                // Used: A is still in the app, on the page it changed the password from…
+                await expect(page).toHaveURL((url) => url.pathname === '/settings');
+                await expect(page.getByTestId('app-shell')).toBeVisible();
+                // …and a new document, whose requests carry only what the jar holds, opens another app page, not the login.
+                await navigateTo(page, '/dashboard');
+                await expect(page.getByTestId('dashboard-page'), 'Device A, which changed the password, still opens the app').toBeVisible({timeout: 15_000});
+                await expect(page).toHaveURL((url) => url.pathname === '/dashboard');
+                await expect(page.getByTestId('login-page')).toBeHidden();
+                await expectSignedInAs(page.request, user, 'Device A is still signed in after the change');
+
+                // B is signed out: the server refuses the cookie it still holds…
+                expect((await deviceB.request.get('/api/v1/auth/me')).status(), 'Device B is signed out: the cookie it was issued before the change is refused').toBe(401);
+                // …and its browser, opening the same app page again, lands on the login, which keeps the page to come back to.
+                await navigateTo(pageB, '/settings');
+                await expect(pageB.getByTestId('login-page'), 'Device B is sent to the login').toBeVisible({timeout: 15_000});
+                await expect(pageB, 'The login carries the page B was on: /?redirect=%2Fsettings').toHaveURL((url) => url.pathname === '/' && url.searchParams.get('redirect') === '/settings');
+
+                // The credentials moved with the change, from the test's own API client.
+                const withOld = await request.post('/api/v1/auth/login', {data: {username: user.username, password: user.password}});
+                expect(withOld.status(), 'The old password no longer signs in').toBe(401);
+                const withNew = await request.post('/api/v1/auth/login', {data: {username: user.username, password: newPassword}});
+                expect(withNew.status(), 'The new password signs in').toBe(200);
+                expect(((await withNew.json()) as {user: {id: number}}).user.id).toBe(user.id);
+            } finally {
+                await deviceB?.close();
+                // The account ends with one of two passwords, depending on how far the test got: it is deleted with the
+                // one that still signs in, through the test's own API client — never through A or B, whose sessions
+                // may be the very thing that broke.
+                const changed = (await request.post('/api/v1/auth/login', {data: {username: user.username, password: newPassword}})).ok();
+                await deleteDisposableUser(request, changed ? {...user, password: newPassword} : user);
+            }
         });
     });
 

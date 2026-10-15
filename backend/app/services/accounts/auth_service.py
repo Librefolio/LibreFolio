@@ -6,6 +6,7 @@ Provides password hashing/verification and JWT token management.
 
 import functools
 import secrets
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Optional
 
@@ -105,13 +106,23 @@ _JWT_SECRET: str = configured_jwt_secret() or secrets.token_urlsafe(64)
 _JWT_ALGORITHM: str = "HS256"
 
 
-def create_jwt_token(user_id: int, ttl_hours: int) -> str:
+@dataclass(frozen=True)
+class SessionClaims:
+    """What a valid session token says: whose session it is, and of which session version of the account."""
+
+    user_id: int
+    session_version: int
+
+
+def create_jwt_token(user_id: int, ttl_hours: int, session_version: int) -> str:
     """
     Create a signed JWT token for a user.
 
     Args:
         user_id: ID of the authenticated user
         ttl_hours: Token TTL in hours (read from global settings by caller)
+        session_version: The account's current ``users.session_version``, carried as the ``sv`` claim:
+            raising it ends every session issued before
 
     Returns:
         Encoded JWT token string (to be stored in cookie)
@@ -119,6 +130,7 @@ def create_jwt_token(user_id: int, ttl_hours: int) -> str:
     now = utcnow()
     payload = {
         "sub": str(user_id),
+        "sv": session_version,
         "iat": now,
         "exp": now + timedelta(hours=ttl_hours),
     }
@@ -127,25 +139,34 @@ def create_jwt_token(user_id: int, ttl_hours: int) -> str:
     return token
 
 
-def decode_jwt_token(token: str) -> Optional[int]:
+def decode_jwt_token(token: str) -> Optional[SessionClaims]:
     """
     Decode and validate a JWT token.
+
+    A token without the ``sv`` claim was issued before session versions existed: it belongs to session
+    version 0, so the upgrade signs nobody out.
 
     Args:
         token: Encoded JWT token from cookie
 
     Returns:
-        User ID (int) or None if token is invalid/expired
+        The session claims, or None if the token is invalid or expired
     """
     try:
         payload = jwt.decode(token, _JWT_SECRET, algorithms=[_JWT_ALGORITHM])
-        user_id = payload.get("sub")
-        if user_id is None:
-            return None
-        return int(user_id)
     except jwt.ExpiredSignatureError:
         logger.debug("JWT token expired")
         return None
     except jwt.InvalidTokenError as e:
         logger.debug("JWT token invalid", error=str(e))
+        return None
+    session_version = payload.get("sv", 0)
+    # bool is an int in Python: a token saying "sv": true is malformed, not version 1.
+    if isinstance(session_version, bool) or not isinstance(session_version, int):
+        logger.debug("JWT token invalid", error="the session version is not an integer")
+        return None
+    try:
+        return SessionClaims(user_id=int(payload["sub"]), session_version=session_version)
+    except (KeyError, TypeError, ValueError):
+        logger.debug("JWT token invalid", error="no numeric subject")
         return None
