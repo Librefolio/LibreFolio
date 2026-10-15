@@ -52,6 +52,11 @@
     "invalidCredentials": "Nome utente o password non validi",
     "invalidInput": "Dati non validi",
     "loginFailed": "Accesso non riuscito",
-    "accountDisabled": "Questo account è disattivato: chiedi a un amministratore di riattivarlo."
+    "accountDisabled": "Questo account è disattivato: chiedi a un amministratore di riattivarlo.",
+    "loginServerUnreachable": "Il server non risponde: controlla la connessione e riprova tra un momento.",
+    "loginServerError": "Il server ha riscontrato un errore: riprova tra un momento e, se succede di nuovo, avvisa un amministratore.",
+    "tooManyAttempts": "Troppi tentativi di accesso: aspetta qualche minuto e riprova.",
+    "showPassword": "Mostra password",
+    "hidePassword": "Nascondi password"
   }
 }
