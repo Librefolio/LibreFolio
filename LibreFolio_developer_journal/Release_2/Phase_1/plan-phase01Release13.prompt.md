@@ -557,7 +557,7 @@ fermati all'handoff, porta verificata libera.
   | Taglio | Sessione | File | Fuori dai lotti di R | Annuncio aperto |
   |---|---|---|---|---|
   | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | nessuno |
-  | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | nessuno |
+  | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | **W, dal 15/10 alle 07:55** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
   | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | nessuno |
   | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | nessuno |
 
