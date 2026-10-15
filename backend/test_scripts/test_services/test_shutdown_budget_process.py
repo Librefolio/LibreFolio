@@ -7,7 +7,8 @@ to its exit. The environment is the server's whole environment: ``LIBREFOLIO_SHU
 30 s, or never; with it, within 6 s. The contract pinned here:
 
 1. Barrier, for every server: ``/ping`` answers from the process the test started, with the budget it was given and a
-   watchdog installed exactly when the budget is above 0.
+   watchdog installed exactly when the budget is above 0 — under the uvicorn CLI, SIGTERM's and SIGINT's handlers are
+   uvicorn's ``Server.handle_exit``, the only one ``install_shutdown_watchdog`` wraps.
 2. (a) SIGTERM with ``/slow`` in flight: uvicorn drains it for 1 s, then cancels it — the handler sees the cancellation —
    and the server exits within 6 s.
 3. (b) A shutdown step that never ends: it is cut at the steps' deadline, with a WARNING «Shutdown step cut by the
@@ -16,12 +17,17 @@ to its exit. The environment is the server's whole environment: ``LIBREFOLIO_SHU
    The watchdog ends the process at the budget: status 1, within 6 s, after an ERROR «Shutdown budget exhausted» naming
    the thread.
 5. (d) A child process that ignores SIGTERM: the last step kills it, the server exits within 6 s, the child is gone, and
-   the server says it killed it.
+   the server says it killed it — in the last step's line or, when the watchdog ended the process, in that line or in
+   the watchdog's report, which names only the children still alive when it fires.
 6. (e) Budget 0: no watchdog and no drain variable; a 4 s shutdown step runs to its end: the server still runs 2.5 s after
    SIGTERM, exits after the step, within 10 s, with status -SIGTERM; nothing cut, no watchdog.
 7. (f) Nothing pending: the server exits within 3 s, with status -SIGTERM; no watchdog.
 8. (g) The wiring of ``app_lifespan``, in this process, no server: the watchdog is the first startup step, the child
    processes the last shutdown step, and ``app_lifespan.shutdown_deadline`` is ``shutdown_budget.shutdown_deadline``.
+
+Every shutdown here begins with a signal, and the signal arms the watchdog. That a shutdown without one arms nothing —
+the lifespan run by a test, a server at its request limit — is pinned in-process, by SDB-044 of
+``test_shutdown_budget.py``.
 
 The exit statuses, read in uvicorn 0.52.4 (``Server.capture_signals``) and Python 3.13 (``asyncio.Runner``):
 
@@ -404,7 +410,7 @@ def test_sigint_with_a_blocked_thread_is_ended_by_the_watchdog(servers: Callable
 
 @POSIX_ONLY
 def test_a_child_that_ignores_sigterm_is_killed_before_the_server_exits(servers: Callable[..., ServerProcess]) -> None:
-    """SDP-004 — contract 5 (d): the server started a child that ignores SIGTERM. After SIGTERM the server exits within 6 s, the child is gone, and the server says it killed it: the last step («Child processes killed at shutdown») when uvicorn ended it, the watchdog's report when the watchdog did."""
+    """SDP-004 — contract 5 (d): the server started a child that ignores SIGTERM. After SIGTERM the server exits within 6 s, the child is gone, and the server says it killed it: the last step («Child processes killed at shutdown») when uvicorn ended it. When the watchdog did, either that line — the step killed the child before the watchdog fired, and its report names only the children still alive — or the watchdog's report."""
     print_section("SDP-004: a child that ignores SIGTERM")
     server = servers(switches={STUBBORN_CHILD_SWITCH: "1"})
     pid = int(server.wait_for_file("child.pid").read_text(encoding="utf-8"))
@@ -418,8 +424,9 @@ def test_a_child_that_ignores_sigterm_is_killed_before_the_server_exits(servers:
     output = server.output()
     assert _gone_within(child, 5.0), f"the child {pid} still runs after the server exited:\n{_tail(output)}"
     code = _ended_by_the_signal_or_the_watchdog(server)
-    killer = CHILDREN_KILLED_EVENT if code == -signal.SIGTERM else WATCHDOG_EVENT
-    assert any(_holds_pid(line, pid) for line in _lines(output, killer)), f"no {killer!r} line names the child {pid}:\n{_tail(output)}"
+    killers = (CHILDREN_KILLED_EVENT,) if code == -signal.SIGTERM else (CHILDREN_KILLED_EVENT, WATCHDOG_EVENT)
+    named = [line for killer in killers for line in _lines(output, killer) if _holds_pid(line, pid)]
+    assert named, f"no {' or '.join(map(repr, killers))} line names the child {pid}:\n{_tail(output)}"
     print_success(f"the child killed; status {code} after {elapsed:.2f} s")
 
 
