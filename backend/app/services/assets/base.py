@@ -31,6 +31,7 @@ from backend.app.schemas.provider import (
     FAProviderKind,
     FAVolumeKind,
 )
+from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 
 # Initialize structured logger
 logger = get_logger(__name__)
@@ -111,7 +112,7 @@ def _wrap_history_ohlc_guard(func):
     return wrapper
 
 
-class AssetSourceProvider(ABC):
+class AssetSourceProvider(PluginSettingsMixin, ABC):
     """
     Abstract base class for asset pricing providers (plugins).
 
@@ -171,6 +172,8 @@ class AssetSourceProvider(ABC):
     - test_search_query: Search query for tests (None if search unsupported)
 
     Optional overrides:
+    - settings_fields: the settings the plugin needs (plugin_settings/fields.py), read with self.settings
+    - test_only: True for a provider that exists for the tests, never listed to users
     - get_icon(): Provider icon URL
     - supports_history: False if provider cannot fetch historical data
     - search(): Search for assets by query

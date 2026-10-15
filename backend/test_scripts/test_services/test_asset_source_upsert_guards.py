@@ -54,11 +54,11 @@ from backend.app.schemas.provider import ProviderInputType
 from backend.app.schemas.refresh import FARefreshItem, SyncDateRangeModel, SyncStatus
 from backend.app.services.assets import core as asset_source_core
 from backend.app.services.assets import price_query as price_query_module
-from backend.app.services.assets import refresh as refresh_module
 from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.assets.event_store import EventStoreOperations
 from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.test_scripts.test_utils import unique_id
 
 # A date window far from the mock dataset's, so a stray row of this unit can
@@ -564,8 +564,10 @@ async def assigned_asset(owned_asset: int):
 
 
 def _patch_provider(monkeypatch, prices: list[FAPricePoint]) -> None:
+    # On the registry class itself: refresh reaches it through core.configured_provider, which looks the provider up
+    # on this same class (refresh no longer imports the registry, so it is no attribute of that module).
     monkeypatch.setattr(
-        refresh_module.AssetProviderRegistry,
+        AssetProviderRegistry,
         "get_provider_instance",
         staticmethod(lambda _code: _FakeProvider()),
     )
