@@ -290,6 +290,9 @@ class DailyPortfolioState:
     missing_fx_pairs: set[str] = field(default_factory=set)
     stale_price_asset_ids: set[int] = field(default_factory=set)
     transaction_implied_asset_ids: set[int] = field(default_factory=set)
+    # V-11: for each asset of transaction_implied_asset_ids, the day of its last market quote on or before
+    # this day (None when it was never quoted); the data-quality grace counts from it.
+    transaction_implied_last_quote_dates: dict[int, date_type | None] = field(default_factory=dict)
     nav_complete: bool = True
     # G1a — per-broker additive NAV/capital/P&L slice (see BrokerDailyContribution)
     broker_contributions: dict[int, BrokerDailyContribution] = field(default_factory=dict)

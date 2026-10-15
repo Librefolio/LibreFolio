@@ -1,16 +1,18 @@
 # 📧 Email Service (SMTP)
 
-LibreFolio can send a few transactional emails — a password-reset link, an invitation, an address to confirm, the
-activation link of the first administrator, a test message — through an SMTP server that the administrator names in
-environment variables. The service lives in `backend/app/services/email/`, its configuration in
-`backend/app/config/email.py`, and its hourly budget counts with the sliding-window limiter of
-`backend/app/utils/runtime/rate_window.py`.
+The email service sends LibreFolio's transactional emails through an SMTP server that the administrator names in
+environment variables. It can write five kinds — a password-reset link, an invitation, an address to confirm, the
+activation link of the first administrator, a test message. The service lives in `backend/app/services/email/`, its
+configuration in `backend/app/config/email.py`, and its hourly budget counts with the sliding-window limiter of
+`backend/app/utils/runtime/rate_window.py`. For administrators, two endpoints (`backend/app/api/v1/email.py`) and
+the Email tab of the settings (`frontend/src/lib/features/email/`) show the state of email and send a test email;
+the administrator's guide is [Email](../../admin/email.md).
 
-!!! note "Status: the service, without callers yet"
+!!! note "Status: lots E1 and E2 of release 1.3 — the test email only"
 
-    Lot E1 of release 1.3 delivers the service alone. No API endpoint, page or startup hook calls it yet:
-    `send_email()`, `budget_status()` and the five message builders are used only by their tests, and the two
-    configuration checks are not yet registered in the platform's `CONFIG_CHECKS`. See [Coming Next](#coming-next).
+    The only email with a caller is the test email an administrator sends to themselves
+    ([`POST /api/v1/email/test`](#api-test)); the four builders that carry a link have no caller yet. Still open in
+    E2: the Playwright test of the Email tab and its gallery screenshot. See [Coming Next](#coming-next).
 
 ---
 
@@ -24,8 +26,12 @@ Email is optional (feature F04 of the release 1.3 plan). Three rules shape the w
    outcome, not as a fault.
 2. **Environment only.** The configuration comes only from the `LIBREFOLIO_SMTP_*` variables, and the password also
    from a secret file (`LIBREFOLIO_SMTP_PASSWORD_FILE`). It is never written anywhere, so it is never in the
-   database and never in a backup; it is never shown in the interface either: the `detail` of the configuration
-   checks, the part meant for the interface, never holds the host, the user or the sender.
+   database and never in a backup; it is never shown in the interface either.
+   [`GET /api/v1/email/status`](#api-status) answers with the state, the problem and the variable at fault, the
+   checks' i18n keys and `detail`, and the hourly budget: never the host, the port, the user, the sender, the
+   Reply-To or the password. The `detail` of a check, the part meant for the interface, never holds the host, the
+   user or the sender either. The public [`GET /api/v1/system/instance`](#instance-email) says only whether email
+   is usable.
 3. **Read at every call.** The accessors read the process environment each time, nothing is cached, and they are
    the only readers of these variables, as the [config package rule](../architecture/settings.md) requires. The
    variables are documented, commented, in the «Email» section of `.env.example`.
@@ -34,10 +40,13 @@ Email is optional (feature F04 of the release 1.3 plan). Three rules shape the w
 |--------|------|
 | `backend/app/config/email.py` | The `LIBREFOLIO_SMTP_*` accessors and `EmailConfigError` |
 | `services/email/smtp.py` | The transport: `deliver()`, `SmtpServer`, `SmtpErrorCode`, `SmtpDeliveryError` |
-| `services/email/delivery.py` | `email_config_state()`, the hourly budget (`INSTANCE_BUDGET`, `budget_status()`), `send_email()` and the `EmailError` family |
+| `services/email/delivery.py` | `email_config_state()`, `email_available()`, the hourly budget (`INSTANCE_BUDGET`, `budget_status()`), `send_email()` and the `EmailError` family |
 | `services/email/messages.py` and `templates/` | `EmailKind`, `email_language()`, the five builders and `compose_message()`; the texts in four languages and the HTML layout. Nothing here sends, reads the configuration or logs |
-| `services/email/checks.py` | `check_smtp_configuration()`, `check_smtp_encryption()`, `EMAIL_CONFIG_CHECKS` |
+| `services/email/checks.py` | `check_smtp_configuration()`, `check_smtp_encryption()`, `EMAIL_CONFIG_CHECKS`, which closes the platform's `CONFIG_CHECKS` |
+| `services/email/flows.py` | `account_language()` and `send_test_email()`: what an action of the application sends, to whom and in which language ([Flows](#flows)) |
+| `backend/app/api/v1/email.py` and `backend/app/schemas/email.py` | `GET /email/status` and `POST /email/test`, for administrators only, and their response models ([The API](#api)); `EmailInstanceConfig`, the `email` field of `GET /system/instance` |
 | `backend/app/utils/runtime/rate_window.py` | `SlidingWindowLimiter` and `RateDecision`, the [sliding-window limiter](#rate-window) |
+| `frontend/src/lib/features/email/` and `frontend/src/lib/i18n/email/` | The Email tab of the settings, its seam over the API client and its texts ([The Email Tab](#email-tab)) |
 
 `services/email/__init__.py` holds only the package docstring.
 
@@ -106,10 +115,11 @@ read, not at every send. A different reason is new information and is logged aga
 was missing and is now empty. The `reason` is the accessor's message or the `SecretFileError` message, which names
 the variable and the path of the file, never its content: no secret reaches the log.
 
-The server starts either way. In this lot nothing reads the email configuration at startup; when the checks join
-`CONFIG_CHECKS` (E2), the startup audit will log the `email.smtp` error, and `log_configuration_audit()` stops a
-start only for an unreadable `JWT_SECRET_FILE` or an unusable configured instance key
-([Configuration Checks](../architecture/security.md#configuration-checks)).
+The server starts either way. The startup audit reads the configuration at every start of every process, through
+the two [configuration checks](#configuration-checks): an unusable value is logged there, first by
+`_report_invalid()`, then as the `email.smtp` error of the audit. Later reads in the process log it again only for a
+new reason. `log_configuration_audit()` never stops a start for email, only for the platform's own secrets and
+settings ([Configuration Checks](../architecture/security.md#configuration-checks)).
 
 ---
 
@@ -164,8 +174,9 @@ password and masks nothing. It leaves the process only through the `Email not se
 
 `INSTANCE_BUDGET` is a `SlidingWindowLimiter` over 3600 s (`BUDGET_WINDOW_SECONDS`) with a single key, shared by
 every send of the process. `send_email()` hits it with `limit=` the configured `LIBREFOLIO_SMTP_MAX_PER_HOUR`,
-read at call time; `budget_status()` peeks it with the same limit and returns its `RateDecision` (`allowed`, `remaining`,
-`retry_after`) without spending anything.
+read at call time; `budget_status(max_per_hour=None)` peeks it with the limit it is given (the status passes the one
+of the state it has just read) or else the configured one, and returns its `RateDecision` (`allowed`, `remaining`,
+`retry_after`) without spending anything, for [`GET /api/v1/email/status`](#api-status).
 
 - **One unit per attempt.** An attempt that passes the configuration and recipient checks spends one unit before
   any connection, whether the server then accepts the message or not.
@@ -177,19 +188,21 @@ read at call time; `budget_status()` peeks it with the same limit and returns it
 
     The budget lives in the memory of each process: with N worker processes the instance may send N times
     `LIBREFOLIO_SMTP_MAX_PER_HOUR` emails an hour, and a restart starts from zero. `.env.example` says so: the limit
-    is per server process.
+    is per server process. `GET /api/v1/email/status` shows the budget of the process that answers it.
 
 ### 📨 `send_email()` {: #send-email }
 
-`async def send_email(content, *, to, user_id=None)` sends one `EmailContent` to one address:
+`async def send_email(content, *, to, user_id=None)` sends one `EmailContent` to one address. It reads the
+configuration with `asyncio.to_thread(email_config_state)`: with `LIBREFOLIO_SMTP_PASSWORD_FILE` that read opens a
+file, and no file is read on the event loop.
 
 ```mermaid
 flowchart TD
-    Call["send_email(content, to, user_id)"] --> State{"email_config_state()<br/>usable?"}
+    Call["send_email(content, to, user_id)"] --> State{"email_config_state()<br/>in a worker thread: usable?"}
     State -->|"no host"| Off["EmailUnavailableError<br/>EMAIL_NOT_CONFIGURED"]
     State -->|"unusable value"| Bad["EmailUnavailableError<br/>the SMTP_* problem code"]
     State -->|yes| Compose["compose_message()"]
-    Compose -->|"not exactly one address"| Value["ValueError"]
+    Compose -->|"not exactly one address"| Value["EmailRecipientError<br/>a ValueError"]
     Compose --> Budget{"INSTANCE_BUDGET.hit()"}
     Budget -->|refused| Limited["EmailRateLimitedError<br/>retry_after"]
     Budget -->|"allowed: one unit spent"| Thread["asyncio.to_thread(smtp.deliver)"]
@@ -200,12 +213,13 @@ flowchart TD
 | Raised | `code` | When | Budget |
 |--------|--------|------|--------|
 | `EmailUnavailableError` | `EMAIL_NOT_CONFIGURED`, or the problem code of the configuration | No host, or an unusable value | Not spent |
-| `ValueError` | — | `to` is not exactly one address | Not spent |
+| `EmailRecipientError` (a `ValueError`) | — | `to` is not exactly one address | Not spent |
 | `EmailRateLimitedError` | `EMAIL_RATE_LIMITED`; `retry_after` in seconds | The hourly budget is spent | Not spent; no connection |
 | `EmailDeliveryError` | A `SmtpErrorCode` value | The server did not take the message | Spent |
 
 The three `Email*Error` classes derive from `EmailError`, which carries `code`: a caller needs a single
-`except EmailError`. The `ValueError` of a bad recipient is not part of the family.
+`except EmailError`. `EmailRecipientError`, from `messages.py`, is not part of the family: it subclasses
+`ValueError`, and a caller that maps it to an answer catches it by name, never as any `ValueError`.
 
 ### 📝 What Is Logged {: #logs }
 
@@ -215,6 +229,7 @@ The three `Email*Error` classes derive from `EmailError`, which carries `code`: 
 | `Email not sent` | `warning` | `kind`, `code`, `detail` (masked), `user_id`, `recipient_domain` |
 | `Email not sent: the hourly limit of the instance is reached` | `warning` | `kind`, `user_id`, `recipient_domain`, `retry_after` (rounded) |
 | `Email configuration cannot be used: email stays off` | `error` | `variable`, `problem`, `reason`; once per process for each combination of the three |
+| `Test email sent by an administrator` | `info` | `admin_id`, `language`: logged by [`POST /email/test`](#api-test) after `Email sent` |
 
 **Never logged**: the body (text and HTML), the link it carries and its token, the SMTP password, the recipient's
 full address. The recipient appears as the domain of its address and as the `user_id` the caller passes.
@@ -251,7 +266,11 @@ Each kind of email has a keyword-only builder that returns an `EmailContent`, a 
   `mailto:`, a relative path) is a `ValueError`. Plain `http://` is accepted for an instance on a home network.
 - An invitation opens without a name (the account does not exist yet), names the inviter only when `inviter` is
   given, and adds one sentence when `grants_admin` is true.
-- `instance` is the name of the instance, written in the body and in the footer.
+- `instance` names the instance in the body and in the footer; the test email passes the host the request was sent
+  to ([`POST /email/test`](#api-test)).
+
+Only `build_test_message()` has a caller today, [`send_test_email()`](#flows); the four link kinds have none yet
+([Coming Next](#coming-next)).
 
 ### 🌍 Languages
 
@@ -334,8 +353,8 @@ can display. `Content-Language` is set **after** the body, because `set_content(
 and turning the message into a multipart moves them into its first part.
 
 `to` must be **exactly one** bare address: one `@` with something on both sides, and no whitespace (not even a
-trailing line break: nothing is trimmed), comma, `<`, `>` or `"`. Anything else is a `ValueError`, so no message
-is composed for a second, hidden recipient.
+trailing line break: nothing is trimmed), comma, `<`, `>` or `"`. Anything else is an `EmailRecipientError` (a
+`ValueError`), so no message is composed for a second, hidden recipient.
 
 ---
 
@@ -364,14 +383,164 @@ judged as written, nothing is resolved: a tailnet name such as `relay.tailnet.ts
 
 The `detail` travels to the admin interface as the parameters of a translated message, so it never names the host,
 the user or the sender. The English `summary` is for the log only, and the plain-text warning's summary does name
-the host. The keys are written whole, like the platform's; their messages do not exist yet in the frontend
-catalogue.
+the host. [`GET /api/v1/email/status`](#api-status) never returns a `summary`. The keys are written whole, like the
+platform's; their messages are in the `email` i18n source of the frontend ([The Email Tab](#email-tab)).
 
-`EMAIL_CONFIG_CHECKS = (check_smtp_configuration, check_smtp_encryption)` is the tuple that will join the
-platform's `CONFIG_CHECKS` in lot E2; until then, nothing runs them outside their tests. `checks.py` imports
-`config_audit` as a module (`from backend.app.services.platform import config_audit`) and reads
-`config_audit.ConfigCheck` only when a check runs, so that `config_audit` can import `checks.py` in turn without an
-import cycle.
+`EMAIL_CONFIG_CHECKS = (check_smtp_configuration, check_smtp_encryption)` closes the platform's `CONFIG_CHECKS`
+(`*EMAIL_CONFIG_CHECKS` at the end of the tuple in `backend/app/services/platform/config_audit.py`), so the two
+checks run in two places:
+
+- **At startup**, `log_configuration_audit()` logs every check that is not `ok`, with its `summary` as the message
+  and `check` and `detail` as fields. For email that is the `email.smtp` error,
+  `<variable> cannot be used (<problem>): email stays off until it is fixed`, and the plain-text warning,
+  `LIBREFOLIO_SMTP_TLS=none with <host>: emails, their links and the SMTP password travel unencrypted; use starttls or tls`.
+  Neither stops the start. An unusable configuration thus gives two lines:
+  `Email configuration cannot be used: email stays off` from `_report_invalid()`, while the check reads the state,
+  then the audit's summary.
+- **On demand**, [`GET /api/v1/email/status`](#api-status) evaluates `EMAIL_CONFIG_CHECKS` at every call and
+  returns each result without its `summary`.
+
+`config_audit` imports `EMAIL_CONFIG_CHECKS` at module level to build its tuple, before it defines `ConfigCheck`.
+A module-level `from backend.app.services.platform.config_audit import ConfigCheck` in `checks.py` would therefore
+fail whenever `config_audit` is imported first, on a half-initialized module. So `checks.py` imports `ConfigCheck`
+inside each check, when the check runs, and under `TYPE_CHECKING` for its annotations (the module has
+`from __future__ import annotations`): either module can be imported first.
+
+---
+
+## 🔀 Flows (`flows.py`) {: #flows }
+
+`services/email/flows.py` has one function per email that an action of the application sends. A flow decides the
+content, the recipient and the language; `send_email()` checks the configuration and the budget, sends and logs.
+
+| Function | What it does |
+|----------|--------------|
+| `async account_language(session, user_id)` | The language of every email of an account: its own `user_settings.language`, else the instance's `default_language` global setting, else English. It reads the `language` column alone and `get_setting_value()`: a settings row that no longer validates (a theme outside light/dark/auto, say) never stops an email, and an account without a `user_settings` row is left without one |
+| `async send_test_email(session, user, *, instance)` | `build_test_message()` in the account's language, with `user.username` and `instance`, sent to `user.email` with `user_id`; returns the language. Raises what `send_email()` raises |
+
+- `supported_email_language()` reduces `it-IT`, `it_IT` and `IT` to `it`, and gives `None` for a language the emails
+  do not speak or an empty value; `email_language()` is the same with `en` instead of `None`.
+- An account whose own language is one the emails do not speak counts as an account without one: it gets the
+  instance's `default_language`, then English. A missing `default_language` setting reads as `en`.
+- The language rule holds for every email of an account, as the module's docstring says: a new flow for an account
+  takes its language from `account_language()`.
+
+---
+
+## 🌐 The API (`api/v1/email.py`) {: #api }
+
+`backend/app/api/v1/email.py` is a router with `prefix="/email"` and the tag `Email`, which `api/v1/router.py`
+mounts under `/api/v1`; its response models, all `StrictModel`, are in `backend/app/schemas/email.py`. Both routes
+depend on `require_admin` (`backend/app/api/v1/settings.py`): 401 without a session, 403 for an account that is not
+an administrator; then the email configuration is not read, and nothing is sent or spent. One more route, outside
+this router, publishes whether email is usable: [`email` in `GET /api/v1/system/instance`](#instance-email).
+
+### 📊 `GET /api/v1/email/status` {: #api-status }
+
+A plain `def`: reading the configuration may read the password file, so FastAPI runs the route in its thread pool,
+not on the event loop. Every call evaluates `EMAIL_CONFIG_CHECKS` and `email_config_state()` afresh; it opens no
+connection and resolves no name. It answers an `EmailStatusResponse`:
+
+| Field | Value |
+|-------|-------|
+| `state` | `off` (no host), `ready` (usable) or `invalid` (a value cannot be used: email stays off) |
+| `problem`, `variable` | `invalid` only: the code and the variable at fault, as in [Email Off, Usable or Unusable](#config-state); `null` otherwise |
+| `checks` | The two checks of `EMAIL_CONFIG_CHECKS`, in that order, each an `EmailCheckRead`: `check_id`, `severity`, `i18n_key`, `detail` |
+| `budget` | `ready` only: an `EmailBudgetRead` from `budget_status()`, which spends nothing — `max_per_hour`, `remaining`, and `retry_after_seconds`, the limiter's `retry_after` rounded up, 0 while an email fits |
+
+`EmailCheckRead` is a `ConfigCheck` without its `summary`, because the English log line of the plain-text warning
+names the SMTP host. No state returns the host, the port, the user, the sender, the Reply-To, the password or the
+path of a password file.
+
+### 📮 `POST /api/v1/email/test` {: #api-test }
+
+An `async def` without a body. It calls `flows.send_test_email(session, admin, instance=request.url.netloc)`: the
+test email goes to the administrator's own address, in their language, and names the instance by the host the
+request was sent to, port included (behind a reverse proxy, the `Host` header it forwards): a label in the text,
+never a link. Like any [`send_email()`](#send-email), it spends one unit of the budget once the configuration and the
+address pass.
+
+| Status | Body | When | Budget |
+|--------|------|------|--------|
+| 200 | `EmailTestResponse`: `language` (`en`, `it`, `fr` or `es`) and `message`, `Test email sent` | The server accepted the message | Spent |
+| 409 | `detail`: `error_code` `EMAIL_UNAVAILABLE`, `problem`, `message` | `EmailUnavailableError`: `problem` is `EMAIL_NOT_CONFIGURED` without a host, else the code of the configuration problem | Not spent; no connection |
+| 422 | `detail`: `error_code` `EMAIL_RECIPIENT_INVALID`, `message` | The administrator's stored address is not exactly one address: the `EmailRecipientError` of `compose_message()`, caught by name (another `ValueError` is a 500) | Not spent; no connection |
+| 429 | `detail`: `error_code` `EMAIL_RATE_LIMITED`, `retry_after`, `message`; the `Retry-After` header | `EmailRateLimitedError`: `retry_after` and `Retry-After` are the same whole number of seconds, at least 1 | Not spent; no connection |
+| 502 | `detail`: `error_code` `EMAIL_DELIVERY_FAILED`, `smtp_code`, `message` | `EmailDeliveryError`: `smtp_code` is the [`SmtpErrorCode`](#transport) | Spent |
+
+The rows follow the order of the checks in `send_email()`: an unusable configuration answers 409 even for an
+address that is not one address. `message` is a fixed English sentence; the interface translates the codes. No
+answer carries the server's own words, which reach only the log, masked ([What Is Logged](#logs)). After a 200 the
+route logs `Test email sent by an administrator`, with `admin_id` and `language`.
+
+### 🌍 `email` in `GET /api/v1/system/instance` {: #instance-email }
+
+The public configuration of the instance, which answers without a session
+([Public instance configuration](../architecture/settings.md#public-instance-configuration)), has an `email` field:
+an `EmailInstanceConfig` (`backend/app/schemas/email.py`) with one boolean, `available`. `get_instance_config()`
+(`backend/app/api/v1/system/instance.py`) fills it with `delivery.email_available()`, which returns
+`email_config_state().usable`, through `asyncio.to_thread`: the read may open the password file.
+
+- **Usable, not delivered**: `available` is true when a server is set and every variable can be used, the state
+  `ready` of [`GET /api/v1/email/status`](#api-status). Nothing is sent and no server is contacted to tell, so a
+  server that refuses the login still counts as available.
+- **Nothing more**: the answer is the same for whoever asks and never holds the configuration or the budget. An
+  unusable value read here is logged like any other read, at most once per process for the same reason.
+- **Off by default**: `available` defaults to `False`, and `InstanceConfigResponse` declares the field with
+  `default_factory=EmailInstanceConfig`, so it is optional in the schema: an answer built without it, or read from
+  an older server, says that nothing can be sent.
+
+Nothing in the frontend reads it yet.
+
+---
+
+## 🖥️ The Email Tab {: #email-tab }
+
+The tab is in `frontend/src/lib/features/email/`, its texts in `frontend/src/lib/i18n/email/`.
+
+| File | Role |
+|------|------|
+| `emailApi.ts` | The seam over the client that `./dev.py api sync` generates: `fetchEmailStatus()` and `sendTestEmail()` call `get_email_status_api_v1_email_status_get` and `send_test_api_v1_email_test_post`. `fetchEmailStatus()` narrows the answer into `EmailStatus`, all five keys present: the generated type of an optional field is wider than its runtime schema (`string \| null` also admits an array), so `problem` and `variable` become a string or `null`, `checks` a list, `budget` an object or `null`. `readTestFailure()` reads the `detail` of a refused test — from the `AxiosError` the generated client rejects with, or from an `ApiError` — into `{errorCode, problem, smtpCode, retryAfter}`; `errorCode` is `UNKNOWN` without a `detail` object, after a network error for one |
+| `emailText.ts` | Every code to a whole i18n key and every state to whole classes of the theme roles (`*-lf-*`), as string literals that the i18n audit and the colour gates can see: `STATE_LABEL_KEYS`, `STATE_BADGE_CLASSES`, `NOTICE_CLASSES`, `OUTCOME_CLASSES`. `problemKey()` falls back to `email.problems.unknown` (only the maps' own entries count: a code such as `constructor` finds nothing); `minutesUntil()` gives whole minutes, at least 1; `testFailureMessage()` falls back to `email.smtpErrors.SEND_FAILED` for an unknown `smtp_code` and to `email.test.errors.generic` for any other failure |
+| `EmailSettingsTab.svelte` | The tab body, in Svelte 5 runes |
+
+What the tab does:
+
+- **On mount** it reads `GET /email/status`; a failure shows `email.loadError`, above the last state read if there
+  is one. Only the latest read writes: an older answer never replaces a newer one. `data-busy` (and `aria-busy`) is
+  `true` while a request runs, the status or the test email.
+- **The state**: a badge (`email.state.*`), then the explanation for `off`; for `invalid`, the message of the
+  problem with its `{variable}` and the reminder to restart; for `ready`, the budget — `email.budget.remaining`, or
+  `email.budget.spent` with the minutes to wait when none is left.
+- **The checks**: one line for each check that is not `ok`, except `email.smtp`, whose problem the state already
+  explains. Today that leaves the plain-text warning.
+- **The test email**, in `ready` only. The button is disabled while any request runs, the status read again
+  included, so one click sends one email. The outcome shows below it,
+  `role="status"` or `role="alert"`, rendered from the stored outcome so that it follows a change of language; then
+  the tab reads the status again, so the budget follows. Each outcome is also an app event, through `notify()`
+  without a toast since the outcome is already on screen: `email.test.sent` with the `language`, or
+  `email.test.failed` with the failure fields.
+- **The guide**: the header's `DocsLink` opens `admin/email/`, the administrator's guide.
+- **Test hooks**: a `data-testid` on each part (`email-tab`, `email-state`, `email-problem`, `email-budget`,
+  `email-check`, `email-test-button`, `email-test-outcome`…) and the values a test checks as `data-*` attributes:
+  `data-state`, `data-problem`, `data-variable`, `data-remaining`, `data-max`, `data-check-id`, `data-severity`,
+  `data-outcome`.
+
+The texts are a subsystem source of the frontend catalogue ([The Sources](../frontend/i18n.md#sources)): its
+`prefixes.txt` owns `email`, and the four languages hold the same keys. They cover the tab, the states, the nine
+problem codes and `unknown`, the messages of both checks (`email.checks.*`, the `i18n_key` values of `checks.py`),
+the budget, the test email and its errors, and the seven `SmtpErrorCode` values (`email.smtpErrors.*`). The emails'
+own texts stay in the backend catalogue ([The Catalogue](#catalogue)).
+
+`SETTINGS_TABS`, the [tab registry](../frontend/components/features/settings.md#tab-registry) of the Settings page,
+registers the tab:
+
+```ts
+{id: 'email', labelKey: 'email.tab.label', icon: Mail, order: 130, component: EmailSettingsTab, visible: (ctx) => ctx.isSuperuser},
+```
+
+Order 130 puts it after Admin (100), so in the right-hand group on a wide screen, and `visible` keeps it for
+administrators: a regular user never sees it in the bar, and a `?tab=email` they open is ignored.
 
 ---
 
@@ -419,17 +588,27 @@ planned to reuse it. A new limit of this kind uses it too, instead of a counter 
 | `./dev.py test services email-config` | `test_services/test_email_config.py` (EMC-001…019) | The accessors: blank as unset, the three modes and their ports, the port and the hourly limit in ASCII digits, one mailbox for From and Reply-To (no CR or LF, no second address), the password exactly as `env_secret()` gives it, `EmailConfigError` naming the variable and never the password, nothing cached |
 | `./dev.py test services email-messages` | `test_services/test_email_messages.py` (EMM-001…030) | Languages and kinds, keyword-only builders, `http(s)` links only, escaping, no user value in a subject, Babel durations, the administrator invitation's extra sentence, the catalogue guard, the headers and parts of `compose_message()`, exactly one recipient |
 | `./dev.py test services email-delivery` | `test_services/test_email_delivery.py` (EMD-001…038) | The fake server itself and `closed_port()`; `deliver()` and its error codes (TLS never falls back to plain text, a bad `QUIT` is a success, the certificate is verified); `email_config_state()` and its one-time log; the budget; `send_email()` off the event loop; no secret and no full recipient address in the logs |
-| `./dev.py test services email-checks` | `test_services/test_email_checks.py` (EMK-001…009) | Both checks in every state, local and public hosts, `EMAIL_CONFIG_CHECKS`, no password in any field and no host, user or sender in a `detail` |
+| `./dev.py test services email-checks` | `test_services/test_email_checks.py` (EMK-001…015) | Both checks in every state, local and public hosts, `EMAIL_CONFIG_CHECKS`, no password in any field and no host, user or sender in a `detail`; the two checks closing the platform's `CONFIG_CHECKS` and `run_config_checks()`; the three import orders, each in a fresh interpreter; the startup audit: one `email.smtp` error and no exception for an unusable configuration, one `email.smtp_encryption` warning for plain text to a public host, nothing when email is off, never the password |
 | `./dev.py test utils rate-window` | `test_utilities/test_rate_window.py` (RWL-001…017) | The window edge, `peek` never counting, refused hits not recorded, `retry_after`, the per-call limit, independent keys, LRU eviction, exactly N allowed under concurrent threads |
+| `./dev.py test services email-flows` | `test_services/test_email_flows.py` (EMF-001…010) | The two signatures; `supported_email_language()`; `account_language()`: the account's own language when the emails speak it, else `default_language`, else English, never creating a `user_settings` row, and a settings row that no longer validates still giving its language; `send_test_email()`: one message to the account's own address in its language, naming the instance and the user, one unit spent; nothing sent or spent when email is off or unusable; the configuration and its password file read off the event loop |
+| `./dev.py test api email` | `test_api/test_email_api.py` (EMA-001…022) | Admin only: 401 without a session, 403 for a member, nothing sent or spent; the status in its three states with both checks and, when ready, the budget, never the SMTP configuration or a check's `summary`, without a connection or a name lookup; the test email in the administrator's language, naming the request's host with its port; 409, 422 (only for `EmailRecipientError`: another `ValueError` is a 500), 429 with `Retry-After` and 502 with the `SmtpErrorCode`, no secret and no server words in an answer; a settings row that no longer validates still sending; both routes reading the configuration off the event loop; `GET /system/instance`: no session needed, `email` exactly `{available}` in each state, never a value of the configuration, no connection and no name lookup, the password file read off the event loop, `available: false` when the answer is built without it |
+| `./dev.py test front-utility core-unit` | `frontend/src/lib/features/email/emailText.test.ts`, `emailApi.test.ts` | The code-to-key maps (own entries only), the minutes, the failure messages and their keys in the four catalogues, the role classes (no palette class, no hex, no `dark:`); `fetchEmailStatus()` narrowing the answer; `readTestFailure()` on an `AxiosError` and on an `ApiError`, with the real client and a fake transport |
+| `./dev.py test front-utility component-unit` | `frontend/src/lib/features/email/EmailSettingsTab.test.ts` | The tab in jsdom: each state, the notices, the budget, `data-busy` over every request, one email per click, the outcome after 200, 409, 422, 429, 502 and a network error, a failed read keeping the last state |
+| `./dev.py test front-utility email-tab` | `frontend/e2e/settings/email-tab.spec.ts` | In the browser: an administrator's tab on the real backend in the `off` state, hidden from a member; the test email against a simulated API (200, 502, 429) |
 
-The files are under `backend/test_scripts/`. All five entries are `pure` in the runner catalogue: no lane
-database, no server.
+The backend files are under `backend/test_scripts/`. All seven backend entries are `pure` in the runner catalogue:
+no lane database, no server. The two E2 files build their database as a private SQLite file under `tmp_path`, and
+`api email` mounts the real auth and email routers under the API prefix in an app of its own: its accounts sign in
+through `POST /auth/login`, over `httpx.ASGITransport`. The Settings tab registry's own test
+(`settingsTabs.test.ts`) pins the Email tab: administrators only, no props, after Admin. The gallery has a
+`settings/email` shot, with the state answered `ready` by the test.
 
 - **No inherited configuration.** Every module, the rate window's included, starts with an autouse fixture that
   removes every `LIBREFOLIO_SMTP_*` variable; each test then sets only what it needs with `monkeypatch`, and
-  password files live in `tmp_path`. A test lane may still inherit the developer's `.env`:
-  `configure_test_runtime()` (`scripts/cli_base.py`) removes only `INSTANCE_TRUST_SECRETS` today. A new email test
-  follows the same rule and never reads the lane's environment.
+  password files live in `tmp_path`. A test lane already drops them: `configure_test_runtime()`
+  (`scripts/cli_base.py`) removes every variable `.env.example` documents and every `LIBREFOLIO_*` name, so the
+  lane's server runs without email. The fixture keeps a run outside a lane honest too: a new email test follows the
+  same rule and never reads the lane's environment.
 - **Never a real network.** `FakeSmtpServer` (`backend/test_scripts/fixtures/email/fake_smtp.py`) is written with
   the standard library and listens on 127.0.0.1, on a port the OS picks. It speaks the part of SMTP that `smtplib`
   uses (`EHLO` with `AUTH PLAIN LOGIN`, `STARTTLS` only when given a `tls_context`, `MAIL`, `RCPT`, `DATA`, `QUIT`),
@@ -438,31 +617,35 @@ database, no server.
   `550` reply, as Postfix does, so the masking of the log meets a real server's habit. As a context manager it
   closes every socket, joins every thread and fails the test on a defect of its own. `closed_port()`, also a context
   manager, yields a port of 127.0.0.1 that refuses connections and holds it for the whole block, so no listener
-  started meanwhile can take it.
-- **No waiting.** The delivery tests replace `delivery.INSTANCE_BUDGET` with a limiter on a fake clock, clear the
-  cache of `_report_invalid()` around each test, and lower `smtp.SMTP_TIMEOUT_SECONDS` to 5 s as a bound for a
-  hang; both are module attributes read at call time for that purpose. The only real wait is the timeout test,
-  0.2 s.
-- **Optional TLS tests.** EMD-017 (STARTTLS against a certificate the client trusts) and EMD-018 (an untrusted
-  certificate refused: the verification is real) need `cryptography`, which is not a dependency:
-  `pytest.importorskip` skips them without it.
+  started meanwhile can take it. In `api email`, `socket.getaddrinfo` resolves the loopback only and records any
+  other name, which proves that the status never looks up the configured host.
+- **No waiting.** The delivery, flows and API tests replace `delivery.INSTANCE_BUDGET` with a limiter on a fake
+  clock, clear the cache of `_report_invalid()` around each test, and lower `smtp.SMTP_TIMEOUT_SECONDS` to 5 s as a
+  bound for a hang; both are module attributes read at call time for that purpose. The only real wait is the timeout
+  test, 0.2 s.
+- **TLS tests.** EMD-017 (STARTTLS against a certificate the client trusts) and EMD-018 (an untrusted
+  certificate refused: the verification is real) build their certificates with `cryptography`, a dependency of the
+  `Pipfile` since release 1.3; `pytest.importorskip` still skips them in an environment without it.
 
 ---
 
 ## 🔭 Coming Next {: #coming-next }
 
-Later lots of workstream E build on this service; none of this exists yet:
+Still open in lot E2: the Playwright test of the Email tab and its gallery screenshot.
 
-- **E2**: for administrators, the email status and a test email; the checks join `CONFIG_CHECKS` and get their
-  messages.
-- **E3–E4**: password-reset and invitation links sent by email, and the activation link of the first
-  administrator.
-- **E5**: email verification, still subject to a decision.
+Planned in later lots of workstream E; none of it is in the code yet:
+
+- **E3**: the links of an email (`links.py`), password-reset links sent by email, and the activation link of the
+  first administrator;
+- **E4**: the «forgot password» form and «Send by email» next to the copied invitation and reset links;
+- **E5**: email verification, whose meaning is still a decision of the developer.
 
 ---
 
 ## 🔗 Related
 
+* 📧 **[Email](../../admin/email.md)** — The administrator's guide: the variables, the Email tab, what to check
+  when email does not work
 * 🔐 **[Secrets from Files](../architecture/security.md#secrets-from-files)** — `env_secret()` and the `_FILE` form
   of a secret
 * 🩺 **[Configuration Checks](../architecture/security.md#configuration-checks)** — `ConfigCheck`, `CONFIG_CHECKS`
@@ -471,3 +654,6 @@ Later lots of workstream E build on this service; none of this exists yet:
   emails carry
 * ⚡ **[Asynchronous Architecture](../architecture/patterns/async.md)** — the Event Loop Blocking Rule
 * ⚙️ **[Settings System](../architecture/settings.md)** — the `backend/app/config/` package and `.env.example`
+* 🌍 **[Internationalization](../frontend/i18n.md#sources)** — the i18n sources, the `email` subsystem among them
+* 🗂️ **[Tab registry](../frontend/components/features/settings.md#tab-registry)** — `SETTINGS_TABS`, the tabs of
+  the Settings page

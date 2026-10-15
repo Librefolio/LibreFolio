@@ -16,7 +16,7 @@ responsibility:
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
 | `price_store.py` | Price upserts/deletes, OHLC integrity checks, and bounded write chunks. |
 | `currency_change.py` | Currency-change market-data wipes: every price and event of the asset, with the transactions linked to those events unlinked. |
-| `event_store.py` | Event upserts (rows updated in place: a provider refresh commits them in the same bounded chunks as prices, the manual upsert once for the whole request, all or nothing) and deletes scoped to one asset, plus the event queries and reads by id behind `/assets/events`. |
+| `event_store.py` | Event upserts (rows updated in place: a provider refresh commits them in the same bounded chunks as prices, the manual upsert once for the whole request, all or nothing, after deleting the events its items list in `delete_ids`) and deletes scoped to one asset, plus the event queries and reads by id behind `/assets/events`. |
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
 | `refresh.py` | Provider-driven price refresh and its explicit PREPARE/FETCH/PERSIST phases. |
 | `crud.py` | Asset create, list, patch, delete, and merge operations. |
@@ -321,7 +321,7 @@ reports `valuation_source = LAST_TRADE_PRICE`.
 | `POST /api/v1/assets/prices/current` | POST | Bulk current quotes with DB fallback and today's OHLC write-back |
 | `POST /api/v1/assets/prices/sync` | POST | Bulk refresh prices from provider |
 | `GET /api/v1/assets/prices/signals` | GET | Signal catalog: the visible plugins compatible with Asset prices |
-| `POST /api/v1/assets/events` | POST | Bulk upsert manual events, all or nothing (the asset's currency only); `mode: "create"` refuses a date and type the asset already has (409 `EVENT_EXISTS`) |
+| `POST /api/v1/assets/events` | POST | Bulk upsert manual events, all or nothing (the asset's currency only); `mode: "create"` refuses a date and type the asset already has (409 `EVENT_EXISTS`); `delete_ids` deletes events of the asset first, manual or from a provider, in the same transaction (400 `EVENT_NOT_DELETABLE` for an id that is not one of them, 409 `EVENT_IN_USE` for an event a transaction uses), each result listing them in `deleted_ids` |
 | `DELETE /api/v1/assets/events` | DELETE | Bulk delete the events of one asset (`asset_id` required, with `ids`): an id of another asset comes back `not_found`, an event a transaction uses `in_use` |
 | `POST /api/v1/assets/events/query` | POST | Bulk event query, each event with its `id` and `is_auto` flag |
 | `GET /api/v1/assets/events` | GET | Events by id |

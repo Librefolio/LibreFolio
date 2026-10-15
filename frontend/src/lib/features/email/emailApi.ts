@@ -1,0 +1,87 @@
+/**
+ * The email administration API (workstream E, lot E2): the state of the instance's email and the test email.
+ *
+ * Thin wrappers over the generated client, so that the Email tab and its tests share one seam. The SMTP configuration
+ * never reaches the browser: `GET /email/status` answers with the state, the problem and the variable at fault, the
+ * configuration checks and the hourly budget only.
+ */
+import {isAxiosError} from 'axios';
+import type {z} from 'zod';
+import {ApiError, zodiosApi} from '$lib/api';
+import type {schemas} from '$lib/api/generated';
+
+export type EmailCheck = z.infer<typeof schemas.EmailCheckRead>;
+export type EmailBudget = z.infer<typeof schemas.EmailBudgetRead>;
+export type EmailTestResult = z.infer<typeof schemas.EmailTestResponse>;
+
+/**
+ * The state of the instance's email, as the tab reads it. The generated type of an optional field is wider than its
+ * runtime schema (`string | null` also admits an array there), so `fetchEmailStatus()` narrows each one here, once.
+ */
+export interface EmailStatus {
+    state: z.infer<typeof schemas.EmailStatusResponse>['state'];
+    /** `invalid` only: the code of the problem. */
+    problem: string | null;
+    /** `invalid` only: the variable at fault. */
+    variable: string | null;
+    checks: EmailCheck[];
+    /** `ready` only: the hourly budget. */
+    budget: EmailBudget | null;
+}
+
+function textOrNull(value: unknown): string | null {
+    return typeof value === 'string' && value ? value : null;
+}
+
+function budgetOrNull(value: unknown): EmailBudget | null {
+    return typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as EmailBudget) : null;
+}
+
+export async function fetchEmailStatus(): Promise<EmailStatus> {
+    const answer = await zodiosApi.get_email_status_api_v1_email_status_get();
+    return {
+        state: answer.state,
+        problem: textOrNull(answer.problem),
+        variable: textOrNull(answer.variable),
+        checks: answer.checks ?? [],
+        budget: budgetOrNull(answer.budget),
+    };
+}
+
+export function sendTestEmail(): Promise<EmailTestResult> {
+    return zodiosApi.send_test_api_v1_email_test_post(undefined);
+}
+
+/** Why a test email failed, read from the API's `detail`: its code and what goes with it. */
+export interface EmailTestFailure {
+    /** `EMAIL_UNAVAILABLE`, `EMAIL_RATE_LIMITED`, `EMAIL_DELIVERY_FAILED`, `EMAIL_RECIPIENT_INVALID`, or `UNKNOWN`. */
+    errorCode: string;
+    /** `EMAIL_UNAVAILABLE`: the problem of the configuration. */
+    problem?: string;
+    /** `EMAIL_DELIVERY_FAILED`: why the SMTP server did not take the message. */
+    smtpCode?: string;
+    /** `EMAIL_RATE_LIMITED`: seconds until the next email fits. */
+    retryAfter?: number;
+}
+
+function text(value: unknown): string | undefined {
+    return typeof value === 'string' && value ? value : undefined;
+}
+
+/** The body of a refused request: the generated client rejects with axios's own error (`AxiosError`, whose response
+ * carries it); an `ApiError` carries it in `data`. */
+function refusalBody(error: unknown): unknown {
+    if (isAxiosError(error)) return error.response?.data;
+    return error instanceof ApiError ? error.data : undefined;
+}
+
+/** The failure of `sendTestEmail()`: the fields of the API's `detail`; `UNKNOWN` when there is no such `detail` (a
+ * network error, an answer without a `detail` object). */
+export function readTestFailure(error: unknown): EmailTestFailure {
+    const body = refusalBody(error);
+    const detail = typeof body === 'object' && body !== null ? (body as {detail?: unknown}).detail : undefined;
+    if (typeof detail !== 'object' || detail === null) return {errorCode: 'UNKNOWN'};
+    const fields = detail as Record<string, unknown>;
+    const retryAfter = typeof fields.retry_after === 'number' && Number.isFinite(fields.retry_after) ? fields.retry_after : undefined;
+    return {errorCode: text(fields.error_code) ?? 'UNKNOWN', problem: text(fields.problem), smtpCode: text(fields.smtp_code), retryAfter};
+}

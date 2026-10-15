@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import date as date_type
 
 from sqlalchemy import select
@@ -43,6 +43,30 @@ async def load_configured_fx_pair_sets(db) -> tuple[set[str], set[str]]:
         if any(str(step.get("provider", "")).strip().upper() != "MANUAL" for step in route.parsed_steps):
             real_provider_pairs.add(slug)
     return configured_pairs, real_provider_pairs
+
+
+def transaction_implied_assets_to_report(
+    implied_asset_ids: Iterable[int],
+    last_quote_dates: Mapping[int, date_type | None],
+    first_position_dates: Mapping[int, date_type],
+    as_of: date_type,
+    grace_days: int,
+) -> set[int]:
+    """The assets valued from their own trades on ``as_of`` that the data-quality report lists.
+
+    A market price may simply not have landed yet (a BTP during its placement), so a grace of
+    ``grace_days`` passes first. It counts from the asset's last market quote on or before
+    ``as_of`` (developer decision 30): an asset quoted yesterday and bought again today is valued at
+    today's trade, which is no gap, while a feed that stopped long ago is reported at once. An asset
+    never quoted counts from its first position date, and is listed when that is unknown.
+    """
+    reported: set[int] = set()
+    for asset_id in implied_asset_ids:
+        start = last_quote_dates.get(asset_id) or first_position_dates.get(asset_id)
+        if start is not None and (as_of - start).days <= grace_days:
+            continue
+        reported.add(asset_id)
+    return reported
 
 
 def build_data_quality_report(  # noqa: C901 — flat sequential issue-section assembly, one block per issue type

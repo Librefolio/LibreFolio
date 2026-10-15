@@ -73,6 +73,11 @@ PRIORITY_MAP = {
     "backend/app/schemas/": "LOW",
     # INFRA — not unit-testable
     "backend/app/main.py": "INFRA",
+    # The startup, middleware and static serving cut out of main.py (CP2b)
+    "backend/app/services/platform/app_lifespan.py": "INFRA",
+    "backend/app/services/platform/database_bootstrap.py": "INFRA",
+    "backend/app/services/platform/middleware.py": "INFRA",
+    "backend/app/services/platform/static_site.py": "INFRA",
     "backend/app/logging_config.py": "INFRA",
     "backend/app/uploads.py": "INFRA",
     "backend/app/db/models.py": "INFRA",

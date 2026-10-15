@@ -537,7 +537,7 @@ def test_migration_chain_has_exactly_one_head_and_004_keeps_its_parent(tmp_path)
     into two sibling 003 revisions and needed an empty merge node to become
     upgradable again; a fork is cheap to see here and expensive to see on an
     install, where Alembic simply refuses to upgrade — and where the startup
-    check (`main.py:_alembic_head_revision`, `get_current_head()`) raises on
+    check (`readiness.alembic_head_revision`, `get_current_head()`) raises on
     two heads, swallows it, and lets the server boot without migrating.
 
     Which revision is the head is deliberately not pinned. This test used to
