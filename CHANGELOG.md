@@ -69,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **A new colour palette, in light and in dark**, chosen with a designer: «Stone and Sage» in light, «Slate and Sage» in dark. It already covers the sign-in pages, the sidebar, the header and its menus; the rest of the app keeps its current look and moves to the new palette over the next updates. Every text and control of the palette meets the WCAG contrast minimum (4.5:1 for text, 3:1 for controls) in both themes.
 - **Green sidebar, neutral header.** The sidebar takes the brand green in both themes, with the page you are on marked by a bar on its left; the header sits on a neutral band, a shade darker than the page in light and lighter in dark. The control you reach with the keyboard shows a clear focus ring. The title bar of the installed app takes the sidebar's green.
-- **Softer red and green in the dark theme**, easier on the eyes, for errors, success marks, the password-strength bar and the connection status. The amounts on the Dashboard follow in a later update.
+- **Softer red and green in the dark theme**, easier on the eyes, for errors, success marks, the password-strength bar, the connection status and the gains and losses on the Dashboard.
 - **Sign-in pages, new look:** icons in the fields, a highlighted border under the pointer and in focus, the password requirements in a box of their own, no subtitle under the logo, and the recovery commands in a dark terminal box.
 - **Charts: every asset type and sector keeps one colour everywhere:** the same in the allocation pie and in its history, in every portfolio, broker and period. Liquidity has a colour of its own, subtypes are shades of their family, and the maps, the sharing semi-donut and the correlation matrix follow the light and dark theme.
 
@@ -126,6 +126,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sign-in pages on a phone:** the theme, language and help buttons no longer cover the card. They scroll away with the page, and a tall card such as registration starts below them, in the app installed on an iPhone too.
 - **The header hides again when you scroll down** after clicking one of its buttons with the mouse; reaching a button with the keyboard still keeps it in view.
 - **The allocation pie and its history show the same sector emoji.**
+- **Deleting several brokers at once**: a broker whose deletion fails part-way now stays exactly as it was, with nothing changed on the other broker of a transfer, and the other brokers of the request are still deleted.
+- **Lots: an adjustment that takes units away while carrying a cost now hands them over at that cost**, as the Dashboard already did, so the lots show the same gain instead of reading the units as destroyed. Units from a lot bought at another price realize the difference from that average cost: 10 units bought at 10 and handed over at an average cost of 15 realize +50. In a lot's history these rows show the value handed over at cost instead of proceeds. Lots opened by an adjustment whose cost is in another currency now convert that cost from its own currency.
 
 #### 🔒 Security
 

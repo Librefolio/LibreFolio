@@ -47,7 +47,7 @@ def run_fifo_lot_engine(
 | `split_event_ids_by_tx_id` | Split transaction ID → its `SPLIT` `AssetEvent` id, carried by the synthesized event as `asset_event_id`. Yield on Cost passes it; the lots analysis does not. |
 | `reference_price_lookup` | Optional pure lookup used by current implementation when `ADJUSTMENT_IN` opens a new LONG lot. |
 | `economic_events` | Asset-linked `DIVIDEND` / `INTEREST` / `FEE` / `TAX` as `EconomicEvent`s, each with its native amount and the target-currency amount its caller resolved; consumed by the [economic allocation stage](#economic-allocation-stage). |
-| `target_currency` | The caller's report currency; each `EconomicEvent` also carries its own `target_currency`. |
+| `target_currency` | The caller's report currency; each `EconomicEvent` also carries its own `target_currency`. `_handover_unit_price()` also reads it: a lot without a currency counts in it (see [Hand-over at cost](#handover-at-cost)). |
 
 ### 📤 Output
 
@@ -83,11 +83,11 @@ One FIFO lot. Usually opened by a `BUY`, by the remainder of an `ADJUSTMENT_IN`,
 | `original_quantity` | Original lot quantity, adjusted later by splits. |
 | `opening_unit_price` | Per-unit opening cost currently attached to lot. |
 | `original_cost` | Original economic cost basis kept invariant across splits/transfers. |
-| `currency` | Transaction currency captured at open time. |
+| `currency` | Currency of the opening price, captured at open time: the opening row's `currency` for a `BUY` or a short-opening `SELL`; for an `ADJUSTMENT_IN` priced by its `cost_basis_override`, the cost basis's (`cost_basis_currency`, or the row's `currency` when that is empty — an adjustment moves no cash, so its own `currency` is often empty); for one without, the row's `currency`. |
 | `open_quantity` | Remaining open quantity after FIFO closures. |
 | `realized_quantity` | Quantity already closed. |
 | `realized_pnl` | Cumulative realized P&L from closures. |
-| `cumulative_proceeds` | Cumulative sale proceeds for LONG lots, or opening proceeds for SHORT lots. |
+| `cumulative_proceeds` | Cumulative closure `proceeds` for LONG lots — a `SELL`'s cash, plus the value an `ADJUSTMENT_OUT` with a cost basis hands over at that cost — or opening proceeds for SHORT lots. |
 | `reference_unit_price` | Optional reference price the engine resolves for a lot (e.g. when an `ADJUSTMENT_IN` opens a new LONG lot), consumed downstream by `LotsAnalysisService`. |
 | `reference_price_source` | `"exact"`, `"fallback"`, `"unavailable"`, or `None`. |
 
@@ -124,9 +124,9 @@ Single FIFO close operation against one fragment.
 | `close_reason` | `"SELL"`, `"BUY"`, or `"ADJUSTMENT_OUT"`. |
 | `fragment_id` | Exact fragment consumed. |
 | `open_unit_price` | Cost carried by consumed fragment. |
-| `close_unit_price` | Sell/buy/adjustment close price. |
+| `close_unit_price` | Price the piece closed at: the `SELL` / `BUY` unit price; for an `ADJUSTMENT_IN` closing a SHORT, its `cost_basis_override` (0 without one); for an `ADJUSTMENT_OUT`, the fragment's `_handover_unit_price()` with a cost basis, 0 without one. |
 | `realized_pnl` | Realized P&L for this matched piece. |
-| `proceeds` | Non-zero only for LONG `SELL` closures. |
+| `proceeds` | `quantity × close_unit_price` on LONG closures — a `SELL`'s cash, or the value an `ADJUSTMENT_OUT` hands over at cost (0 without a cost basis); 0 on every SHORT closure. |
 
 ### 📊 `FifoEngineResult`
 
@@ -196,8 +196,8 @@ EventKind = Literal[
 
 - `BUY` transaction → `BUY`
 - `SELL` transaction → `SELL`
-- positive `ADJUSTMENT` → `ADJUSTMENT_IN`
-- negative `ADJUSTMENT` → `ADJUSTMENT_OUT`
+- positive `ADJUSTMENT` → `ADJUSTMENT_IN`, its `unit_price` the row's `cost_basis_override` (0 without one)
+- negative `ADJUSTMENT` → `ADJUSTMENT_OUT`, its `unit_price` the row's `cost_basis_override` (0 without one); the price each fragment closes at is resolved when the event is applied (see [Hand-over at cost](#handover-at-cost))
 - transaction ID found in `split_ratios_by_tx_id` → `SPLIT`
 - paired `TRANSFER` legs → synthesized `TRANSFER_DEPART` + `TRANSFER_ARRIVE`
 
@@ -207,8 +207,8 @@ EventKind = Literal[
 |-----------|---------------------|
 | `BUY` | First closes existing `SHORT` fragments on same broker (`close_reason="BUY"`). Any remainder opens new `LONG` lot. |
 | `SELL` | Closes `LONG` fragments FIFO on same broker. Any remainder opens new `SHORT` lot only if `broker_shorting[broker_id]` is true; otherwise emits `FIFO_SOURCE_QUANTITY_MISSING`. |
-| `ADJUSTMENT_IN` | First closes existing `SHORT` fragments with `close_unit_price = 0`. Any remainder opens zero-price `LONG` lot. |
-| `ADJUSTMENT_OUT` | Closes `LONG` fragments FIFO with `close_unit_price = 0`. If quantity still missing, engine emits issue; it never opens/consumes unsupported SHORT adjustment legs. |
+| `ADJUSTMENT_IN` | First closes existing `SHORT` fragments on same broker (`close_reason="BUY"`) at the event's `unit_price` — the row's `cost_basis_override`, 0 without one. Any remainder opens a new `LONG` lot at that price — in the cost basis's currency when the row carries one, else in the row's `currency` — and resolves its reference price. |
+| `ADJUSTMENT_OUT` | Closes `LONG` fragments FIFO on same broker (`close_reason="ADJUSTMENT_OUT"`): with a `cost_basis_override`, each fragment at its `_handover_unit_price()` — the units are handed over at cost; without one, at `close_unit_price = 0` — a write-off. If quantity still missing, engine emits issue; it never opens/consumes unsupported SHORT adjustment legs. |
 | `TRANSFER_DEPART` | Extracts `LONG` broker fragments FIFO from source broker, optionally opens `IN_TRANSIT` fragments, records pending transfer pieces, realizes **no P&L**. |
 | `TRANSFER_ARRIVE` | Closes matching transit fragments and reopens broker custody at destination with same quantity and unit price. |
 | `SPLIT` | Multiplies active fragment quantities by ratio, divides unit prices by ratio, then recomputes lot-level quantities/reference price while preserving cost. |
@@ -243,12 +243,20 @@ Then `_consume_broker_fragments()` walks oldest fragments first:
 4. Reduce fragment or close it entirely
 5. Continue until requested quantity is satisfied or inventory runs out
 
+Every fragment closes at the one `close_unit_price` the caller passes, unless the caller also passes the optional per-fragment hook `close_unit_price_of(fragment)`, which prices each fragment on its own. Only `_apply_adjustment_out()` passes it, and only for a row carrying a `cost_basis_override` (see [Hand-over at cost](#handover-at-cost)).
+
 ### 🧮 Realized P&L math
 
 - **LONG close**: `matched_quantity * (close_unit_price - fragment.unit_price)`
 - **SHORT close**: `matched_quantity * (fragment.unit_price - close_unit_price)`
 
-`SELL` creates `proceeds` only when closing LONG inventory. `BUY` closes SHORT inventory but does not add proceeds.
+`SELL` and `ADJUSTMENT_OUT` — the two closures of LONG inventory — create `proceeds = matched_quantity * close_unit_price`: a sale's cash, or the value an `ADJUSTMENT_OUT` hands over at cost. An `ADJUSTMENT_OUT` without a cost basis closes at 0: no proceeds, and it realizes `-matched_quantity * fragment.unit_price` (a write-off). `BUY` and `ADJUSTMENT_IN` close SHORT inventory but do not add proceeds.
+
+### 📤 Hand-over at cost {: #handover-at-cost }
+
+A negative `ADJUSTMENT` carrying a per-unit `cost_basis_override` hands its units over at that cost (developer decision 47: the principle of a priced `ADJUSTMENT_IN`, in the opposite direction). The average cost already treats it so — the cost of the units leaves the capital, it is not a loss — and the lots agree: `_handover_unit_price(tx, fragment)` gives every fragment the row's `cost_basis_override`, the average cost the units leave with, **not** the fragment's own `unit_price`, so a fragment of a cheaper lot realizes the difference. Example: 10 units bought at 10 and 10 at 20 (average 15); an `ADJUSTMENT_OUT` of 10 at cost 15 closes the first lot at 15 — `realized_pnl = +50`, `proceeds = 150` — and the lots total equals the Dashboard's P&L. With a single lot the realized part is 0.
+
+The cost applies only when it is in the lot's currency: the lot's is `lot.currency`, or `target_currency` for a lot without one (the lots analysis converts such a lot from the report currency), and the cost's is `tx.cost_basis_currency`, or the lot's when empty. In another currency `_handover_unit_price()` returns `fragment.unit_price`: that fragment leaves at its own FIFO cost and realizes nothing — a declared fallback, until a closure carries its own currency.
 
 ---
 

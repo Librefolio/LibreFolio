@@ -2468,6 +2468,13 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     fra i due colori è minima.
 
   Dettagli: piano di T, passo T-8, punto 15.
+- **TC-10 · Revisione del mattino delle ondate notturne (D-T27)** — medio; T, 15/10 notte. Per D-T27 i lotti entrano
+  validati senza l'OK del developer; dove i ruoli e la skill `theme-roles` non coprono un caso, T sceglie il ruolo più
+  vicino e lo annota nel piano come **«da rivedere»**.
+  - W3-a: le barre della dashboard prendono il ruolo del testo (più scure in chiaro, niente fluo in scuro); le barre
+    categoriali «Costo d'acquisto» e «Liquidità» restano blu e smeraldo, in attesa di un ruolo categoriale.
+
+  Dettagli: piano di T, voci «da rivedere» di ogni lotto nell'avanzamento (da W3-a in poi).
 
 ---
 
@@ -2857,12 +2864,13 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `/system/instance`, da concordare con H e con la decisione 15), oppure `tokens/inspect` che sul blocco
     risponde come per un link non valido quando lo scopo è `invite`.
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.10».
-- **A-14 · `access_control.md`: «The last OWNER cannot remove themselves» contraddice «Self-Management»** — minimo;
+- ✅ **A-14 · `access_control.md`: «The last OWNER cannot remove themselves» contraddice «Self-Management»** — minimo;
   trovata dal `docs-writer` di A6a (15/10), fuori dal perimetro di A, segnalata al coordinatore.
   - In «Key Rules & Constraints» l'ultimo OWNER non può togliersi; in «Self-Management», e nel codice
     (`BrokerService.leave_broker`), l'ultimo OWNER che se ne va elimina il broker.
   - La pagina è del controllo d'accesso ai broker: la correzione è di chi la tiene (W, o chi decide il coordinatore).
   - **Assegnata a W** dal coordinatore (15/10, 16:56), con la doc di `leave_broker`.
+  - **Chiusa** (16/10, 01:38) dal lotto di doc di W (`bf66d4fe7`), entrato col treno 72 (`6fa3f8936`).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6.5».
 - **A-15 · La docstring di `instance_block.py` non cita la sonda dell'indirizzo** — minimo; trovata dal
   `docs-writer` di A6a (15/10). Il file è di H.
@@ -3143,6 +3151,8 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `PATCH`/`DELETE /brokers/{id}/access/{user_id}`; l'API ha `GET` e `PUT /brokers/{broker_id}/access` (tutta la
   configurazione in un colpo), `PATCH` e `DELETE /brokers/{broker_id}/access/me` (`backend/app/api/v1/brokers.py:408`,
   `:440`, `:493`, `:519`). L'elenco dei metodi sopra è stato corretto in W2. Dettagli: piano 04, §12, W2 passo 5.
+  ✅ 15/10 (lotto di doc A-14): «🌐 API Endpoints» elenca le quattro rotte vere (`GET`/`PUT …/access`, `PATCH`/`DELETE
+  …/access/me`), con chi le chiama e le risposte d'errore. Dettagli: piano 04, sezione «Lotto di doc A-14».
 - ✅ **W-B11 · `TransactionBulkModal.svelte`: `brokerName()` non ha chiamanti** — minimo, codice morto; W, 15/10 (I1). La
   funzione (`frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte:1597`) non è usata da nessuna
   parte del file né altrove; i nomi dei broker passano da `renderBrokerHtml`. Si toglie col taglio della modale (FE8a).
@@ -3212,6 +3222,11 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   savepoint di un percorso di scrittura (lo stesso `UPDATE` vuoto, o `BEGIN IMMEDIATE` se nessuna transazione è aperta);
   `delete_bulk` lo usa per broker, con un rosso prima; X potrà poi sostituirci il trucco locale di `crud.py`. Lotto
   piccolo di W, dopo l'ingresso di N1. Dettagli: piano 04, §12, N1.
+  ✅ 15/10 (W-B20): `begin_writes(session, table)` in `backend/app/db/session.py` (in aggiunta: l'`UPDATE` vuoto) e
+  `delete_bulk` con un savepoint per broker (`_delete_one`, il `flush` dentro): un broker che fallisce a metà non lascia
+  niente, gli altri della richiesta si cancellano, la cancellazione dell'account resta tutto o niente. Rossi BR-U-081…085;
+  la mutazione senza l'aiuto fa tornare rossi BR-U-082 e i due test dell'account. Il trucco di `crud.py` resta a X.
+  Dettagli: piano 04, sezione W-B20.
 - **W-B21 · `admin/cli_tools`: la correzione `orphan_pair_halves` solo in inglese** — minimo, doc; W, 15/10 (N1b-2).
   La sezione «Post-Migration Fixes» di `mkdocs_src/docs/admin/cli_tools.en.md` dice la seconda correzione solo in EN
   (coordinatore: niente IT/FR/ES né stamp, perché il file lo toccano anche A e H). Va nel debito di traduzione di A-10
@@ -3255,6 +3270,9 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   «Save failed: » scritti a mano in inglese, e la frase porta le date in ISO. In più le chiavi `events.deleteBlocked` e
   `events.deleteNotFound` (sorgente i18n `assets`) non le usa più nessuno: da togliere. Righe di X: da assegnare.
   Dettagli: piano 04, sezione E1, passo 3.
+  ◐ 15/10 (lotto di doc A-14): **le due chiavi sono tolte** (`dev.py i18n remove`, in EN/IT/FR/ES; nessun lettore nel
+  prodotto, nei test, nelle E2E, nel backend né nella doc). Resta aperto il prefisso «Save failed:» con le date ISO in
+  `AssetDataEditorSection.svelte`: righe di X, da assegnare.
 - **W-B28 · Debito di traduzione delle pagine utente di E1b** — minimo, doc; W, 15/10 (E1b). Cambiate solo in inglese,
   senza stamp: `user/assets/detail/data-editor.en.md` (§ 📅 Events tab: il salvataggio tutto o niente e l'elenco dei
   rifiuti; § 📥 Import from CSV: il `type` e la colonna `currency`), `user/assets/detail/events.en.md` («From you» e il
@@ -3283,6 +3301,31 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   caricatore e l'admin, ma nella lista «Uploaded Reports» di **ogni** broker (tutti per l'admin, i propri per gli altri).
   Da decidere: con un filtro di broker esplicito, escluderli (restano nella vista senza filtro della pagina File).
   Dettagli: piano 04, sezione F36.
+- **W-B33 · `transactions/service.md`, «Broker Deletion»: tre imprecisioni di testo** — minimo, doc; W, 15/10 (W-B20,
+  docs-writer). In `mkdocs_src/docs/developer/backend/transactions/service.md`:
+  - «One is required since (`costBasisRequired`)» resta senza data né versione e si legge troncata;
+  - «both helpers come from `_compute_wac_for_auto_items()`» nomina tre aiuti, e quella funzione li usa tutti e tre;
+  - la tabella dei chiamanti dice che `delete_bulk()` chiede `OWNER` e tace il superuser: `as_user_id="all"` salta il
+    controllo, `as_user_id=<id>` controlla quell'utente.
+  Da fare nel lotto di doc A-14 / W-B10. Dettagli: piano 04, sezione W-B20.
+  ✅ 15/10 (lotto di doc A-14): le tre frasi corrette (il codice `costBasisRequired` quando un batch crea quella metà
+  senza costo, con il rimando alla regola; «all three helpers»; l'admin con `as_user_id` nella riga di `delete_bulk()`).
+- **W-B34 · L'elenco degli accessi di un broker lo legge chiunque abbia un login, e-mail comprese** — da decidere
+  (developer), sicurezza; W, 15/10 (lotto di doc A-14, docs-writer). `GET /brokers/{broker_id}/access`
+  (`backend/app/api/v1/brokers.py:446`) chiama `get_by_id(…, as_user_id="all")` e `list_accesses()` non controlla: ogni
+  utente autenticato legge username, e-mail, ruoli e quote dei membri di qualsiasi broker (id sequenziali). Accettato
+  per decisione del developer (C-8 della 38) per l'istanza di famiglia; nel cloud gli utenti sono estranei. Proposta di
+  W: solo chi ha un ruolo sul broker e l'admin, 404 agli altri (come i file di F36); unico chiamante del frontend
+  `BrokerSharingPanel`; da cambiare ACCESS-002/003 e `test_account_deletion_api.py:351-352`. Inviata al coordinatore il
+  15/10 (regola della notte). Dettagli: piano 04, sezione «Lotto di doc A-14».
+- **W-B35 · Docstring e commenti superati dell'accesso ai broker** — minimo, chiarezza; W, 15/10 (lotto di doc A-14,
+  docs-writer). `backend/app/services/brokers/access.py:98` («skip access check»: `list_accesses()` non ne fa, e i suoi
+  argomenti `user_id`/`is_superuser` non servono); `access.py:141` e `backend/app/api/v1/brokers.py:496` (un controllo
+  «calling user cannot remove themselves as last OWNER» che non esiste: lo copre «almeno un OWNER»); la docstring di
+  `list_broker_access` (`brokers.py:455`, già in C-8 della 38); `backend/app/services/transactions/transaction_service.py:84`
+  («one is required since», troncata come la doc di W-B33). Il `PUT …/access` su un broker che non esiste risponde 403
+  all'utente e 400 all'admin, non 404. Le docstring delle rotte finiscono nell'OpenAPI: `api sync` dopo. Da fare con
+  W-B34 o in un lotto di codice. Dettagli: piano 04, sezione «Lotto di doc A-14».
 
 ## J · Numeri e analisi (fase 01)
 
@@ -3376,7 +3419,7 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   Playwright passano prima da `_ensure_frontend_build`, che ora si ferma, e lanciano `npm run test:e2e`, non `npx`;
   quelle solo Vitest no. Cura possibile: lo stesso controllo di `dev.require_frontend_dependencies` in un punto comune
   del runner, oppure i binari di `frontend/node_modules/.bin` al posto di `npx`. Dettagli: piano J, §10 «C-94».
-- **J-9 · Il lotto da ADJUSTMENT-in prende la valuta della riga, non quella del costo** — medio, numeri; trovata dal
+- ✅ **J-9 · Il lotto da ADJUSTMENT-in prende la valuta della riga, non quella del costo** — medio, numeri; trovata dal
   test-author di W (V-3), verificata da J il 15/10. `fifo/engine.py:353` apre il lotto con la `currency` della riga,
   mentre il prezzo è `cost_basis_override`, che sta in `cost_basis_currency`. Con `currency` nulla, ammessa perché
   l'importo è 0 (`db/models.py`, docstring di `Transaction`), `FxRateResolver.convert` (`financial_math/lots/conversions.py:59-60`)
@@ -3385,6 +3428,10 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   Tocca ogni ADJUSTMENT-in con il costo in un'altra valuta, e anche le righe convertite da V-3. Cura: la valuta del
   lotto è `cost_basis_currency` quando il prezzo viene dall'override. Prima il rosso: un ADJUSTMENT-in in USD e un
   report in EUR, con `currency` diversa e con `currency` nulla. Dettagli: piano J, §10 «Domande di W N1».
+  ✅ Chiusa da J il 15/10 in CP-16 (decisione del coordinatore, 23:00): il lotto prende `cost_basis_currency` quando il
+  prezzo viene dall'override; la riga d'apertura della cronologia converte con la valuta del lotto e la cronologia
+  registra quel cambio. Rossi in `test_fifo_adjustment_out_with_cost.py` e `test_lots_analysis_pure.py`. Commit: il
+  checkpoint di CP-16. Dettagli: piano J, §10 «CP-16».
 - **J-10 · I lotti falliscono quando il broker mittente di un TRANSFER è fuori dallo scope** — medio, numeri e
   chiarezza; trovata dal test-author di W, allargata da J il 15/10. Letta nel codice, non provata.
   `_load_transactions` (`lots_analysis_service.py:518-520`) carica solo i broker dello scope, e la pagina del broker
@@ -3435,8 +3482,14 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
     - **Punto aperto per CP-16**: con più lotti a prezzi diversi le unità possono uscire al loro costo FIFO (realizzato
       0, come in un trasferimento) oppure al costo medio della riga (realizzato = medio − costo FIFO). Nell'esempio le
       due letture coincidono. Da proporre all'avvio di CP-16, con un rosso per ciascuna lettura.
+    - **La regola nei lotti (J, CP-16, 15/10)**: lettura (b), il costo medio della riga, decisa dal coordinatore la notte
+      del 15/10, «da rivedere» col developer. Ogni lotto consumato chiude al costo della riga e il valore ceduto conta
+      come proventi; un lotto comprato a un altro prezzo realizza la differenza (10 a 10 e 10 a 20, uscita −10 al costo
+      15: il primo lotto realizza +50; lotti 150 = Dashboard 150). In un'altra valuta il lotto esce al suo costo FIFO
+      fino a CP-7. Anche la performance dei lotti conta l'uscita al costo come flusso esterno. Resta di W la conversione
+      delle gambe in uscita, con la firma che il coordinatore gli gira.
 
-  Dettagli: piano J, §10 «Domande di W N1».
+  Dettagli: piano J, §10 «Domande di W N1» e «CP-16».
 - **J-12 · Con l'analisi dei lotti `FAILED` il pannello disegna lo stesso lotti e cifre** — medio, chiarezza (utenti
   non esperti); trovata dal test-author di W (V-3, caso speculare), confermata da J nel codice il 15/10.
   - **Il caso**: un TRANSFER in uscita orfano. FIFO salta la coppia irrisolta (`_resolve_transfer_pair`, `FAILED` con
@@ -3485,6 +3538,17 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   nel log l'elemento fallito, e il test controlla i conteggi prima di stampare i risultati, quindi la causa non si
   vede. Proposta: mettere `results` nel messaggio d'errore dell'asserzione, poi, alla prossima caduta, il triage con la
   skill `test-triage`. Lotto piccolo, quando capita, con `test-author`.
+- **J-17 · Una rettifica col costo segna il prezzo dell'asset a quel costo** — medio, numeri (titoli quotati di rado);
+  J, 15/10, in CP-16. Letta nel codice, non provata. `build_asset_price_series` (`financial_math/price_marks.py:307-309`)
+  prende ogni ADJUSTMENT con `cost_basis_override` diverso da zero come un'osservazione TRADE, in entrata e in uscita.
+  In un giorno senza quotazione di mercato il prezzo dell'asset, per tutti i broker, diventa quel costo, e resta fino
+  alla quotazione successiva: Dashboard e lotti valutano le posizioni al costo, non all'ultimo prezzo di mercato. Oggi
+  succede ai seed (Intesa, Crédit Agricole, di solito prima di ogni quotazione) e alle gambe in entrata convertite da
+  V-3; con la decisione 47 succederà anche alle gambe in uscita convertite da W e allo split di una coppia, dove prima
+  il TRANSFER non segnava nulla. Proposta: una rettifica in uscita non segna mai il prezzo (consegnare unità al costo
+  non è un prezzo osservato); per quelle in entrata, segnare solo se l'asset non ha ancora una quotazione di mercato.
+  Prima il rosso; serve la decisione del developer, perché cambia il comportamento dei seed. Dettagli: piano J, §10
+  «CP-16».
 
 ## Z · Sospensione e risveglio (fase 01)
 
