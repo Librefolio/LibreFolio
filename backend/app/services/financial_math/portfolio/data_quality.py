@@ -99,7 +99,7 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     figures need the whole history — so without these bounds a NAV gap from
     years ago is reported on a dashboard showing the last three months, and
     the user is told to fix something that changes nothing on screen. Every
-    period figure is re-based (``_compute_period_summary_metrics`` reads only
+    period figure is re-based (``period.period_pnl`` reads only
     the state at ``date_from`` and the one at ``date_to``; TWRR and MWRR are
     chained over period-scoped inputs), so a gap outside the window is
     genuinely invisible here. The day at ``period_from`` is kept: it is the
