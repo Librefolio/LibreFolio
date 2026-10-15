@@ -110,6 +110,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The growth chart's % view comes back by itself.** With a period or a broker that has no rate-of-return data, the chart shows **Abs**, and returns to **%** as soon as the data has percentages again, unless you pick another view meanwhile. Before, only the view restored at opening fell back; otherwise **%** stayed pressed and greyed out.
 - **Zoomed date axes keep their labels.** Zooming into a long period on the price charts of the asset and FX pages, or on the risk charts, left two or three dates on the axis, on phones especially: the labels are now spaced on the days you see.
 - The **Lot Life & Custody** tooltip says "1 share open out of 10" in the singular, in every language, and stays plural while amounts are hidden.
+- **The money-weighted return (MWRR) is checked before it is shown.** In some portfolios with large withdrawals the Dashboard showed a wrong rate, often +10.01% a year; it now shows the true one, or "—" when there is none.
 
 #### 🔒 Security
 
