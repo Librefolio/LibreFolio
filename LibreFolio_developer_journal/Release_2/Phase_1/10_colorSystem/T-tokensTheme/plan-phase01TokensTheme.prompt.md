@@ -233,6 +233,33 @@ ramo; il merge lo fa il coordinatore e la 1.3 rifà la sua galleria di riferimen
 - **Chi taglia** dichiara il taglio nel cricchetto, nello stesso commit:
   `node frontend/scripts/theme/theme-roles.mjs --split VECCHIO:NUOVO1,NUOVO2`.
 
+#### Spacchettamento di W3, stati e mappe (B2) — 15/10, sera; prima ondata dopo l'ingresso
+
+> Mandato del coordinatore (15/10, 22:10): W3 per prima, perché chiude TD-2 (i verdi e i rossi fluo dei KPI della
+> dashboard, notati dal developer). Le mappe dell'analisi `03_semantic_dynamic_logic.md` stanno quasi tutte, dal lotto A
+> di R, nelle tabelle centrali di `lib/theme/toneClasses.ts` (202 classi legacy): convertire una voce cambia di colpo
+> tutti i suoi consumatori, quindi un lotto è la voce più i consumatori da controllare (G3 a runtime: un elemento che
+> riceve una classe `-lf-` dalla tabella e ne tiene una legacy esce dal remap scuro di P1 a metà).
+
+| Lotto | Tabelle e funzioni | Consumatori | File |
+|---|---|---|---|
+| W3-a · segno sulla dashboard (TD-2) | `SIGN_TEXT.kpi`, `.headline`, `.portfolio`; `SIGN_BAR.kpi`, `.accent`; `timingEffectColor` di `chartColorScales.ts` (oggi `rgba(22,163,74,α)` / `rgba(220,38,38,α)` fissi) → `--lf-gain` / `--lf-loss`, l'alfa con `color-mix` o col ponte di DV (`ChartRole` allargata a `--lf-gain` / `--lf-loss`, `STAND_INS` e gate di parità) | `KpiCard`, `KpiSection`, `ContributionTable`, `ExposureTable`, `OtherPeriodEffectsTable`, `KpiDivergingFlowBar`, `RiskMetricCard` | 10 |
+| W3-b · segno su mercato e broker | `SIGN_TEXT.market`, `.brokerCard` → `--lf-gain` / `--lf-loss` (via la divergenza emerald/green); i bordi di segno di `CompactCashCell` (`<style>`, emerald/red al 70 %) | `AssetCard`, `AssetPriceSummary`, `AssetTable`, `FxCard`, `FxPriceSummary`, `FxTable`, `BrokerCard`, `UnifiedLotsTable`, `MeasurePanel`, `CompactCashCell` | 11 |
+| W3-c · stati | `STATUS_TONES` (`syncIcon`, `pacBadge`, `pacNotice`, `pacTargetBar`, `pacTargetTotal`, `toast`, `reportSet`, `fileSet`, `riskAssetChip`, `dataQuality`) → ruoli di stato (`-soft`, `-line`, `-on-soft`; i pieni `bg-lf-X text-lf-on-status`, il rosso pieno `danger-solid` per Q3) | `FileSetBadges`, `AssetChip`, `ReportSetCard`, `DataQualityBanner`, `ToastContainer`, `SyncResultRow`, `TargetsStep`, `planner/ui.ts`, `syncHelpers.ts` | 10 |
+| W3-d · polarità e tipi d'identificativo | `POLARITY_TONES` (correlazione: negativa `danger`, positiva `info`; contributo al rischio; divergenza, dove più alto è peggio); `KIND_TONES.identifier` (ISIN, simbolo, nome) | `CorrelationPairsList`, `RiskAnalysisPanel`, `L2Diversification`, `AssetGroupStep` | 5 |
+
+- **Ordine:** W3-a (TD-2) → W3-b → W3-c → W3-d; ingresso a gruppi (D-T20): W3-a da solo, poi W3-b, poi W3-c con W3-d.
+- **Prima di ogni lotto:** il coordinatore conferma che nessuna sessione della 1.3 ha annunciato quei file («chi parte
+  prima»); `test-author` aggiorna i test che leggono le classi delle tabelle.
+- **Da chiedere** (designer o developer): `DataQualityBanner` oggi colora l'errore come l'avviso (ambra); il violetto
+  del simbolo in `KIND_TONES` è categoriale (la Q11 riguarda solo l'AI).
+- **Fuori da W3:** `ROLE_COLORS` dei segnali (B4, grafici); `PROVIDER_COLORS` e `BADGE_CLASS_MAP` dei tipi d'asset
+  (categoriali, con le tabelle dei tipi del giro 2 di DV); TD-3, la card «Allocazione Patrimoniale» (W5), un lotto
+  piccolo subito dopo W3-a, sui file che il coordinatore conferma.
+- **Prove pesanti per gruppo:** `--check`, i gate di T e la parità di DV, `front check`, `component-unit`; E2E
+  `front-portfolio dashboard` (W3-a), `asset-list`, `fx-list`, `broker-*` (W3-b), `settings`, `tx-import-*`, `files`,
+  `risk-lab` (W3-c, W3-d); gli scatti di galleria delle scene toccate.
+
 #### Spacchettamento di W1 e W2 (analisi del 15/10, notte; sola lettura)
 
 > Chiesto dal coordinatore il 15/10 all'01:08: lotti di W1 e W2, file liberi prima, quelli toccati da un ramo attivo
@@ -547,7 +574,8 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 6 | T-7 header che si nasconde di nuovo, fascia verde del logo nella barra laterale | ✅ checkpoint `0580c92ab`; base `8f1abf89e` nel merge `fe618a0e3` |
 | 7 | T-8 giro 2 della designer (D-T17, D-T18, D-T19), T-4, TC-7 | ✅ checkpoint `68c990b35`; base `d22eb6f43` nel merge `02c23c773`, validato il 15/10 con contact sheet; correzione della marca di `sw.js` e del `background_color` da committare |
 | 8 | T-8b correzioni del developer (D-T23–D-T26), `ForgotPasswordCard`, `AuthPageFrame` | ✅ checkpoint `312748dcc`; base `9bd3e39bb` nel merge `a74185670`, validato il 15/10 con contact sheet |
-| 9 | T-8c `AuthPageFrame`: la card d'accesso non nasce sotto i controlli su telefono | ⏳ validato il 15/10 su `e0c88bbc3` più il delta; da committare (riga dichiarata in un file di A all'ingresso) |
+| 9 | T-8c `AuthPageFrame`: la card d'accesso non nasce sotto i controlli su telefono | ✅ checkpoint `87dbd494e` |
+| 10 | T-9 ramo combinato T + DV: `STAND_INS`, baseline stretta, test dell'header da tastiera | ⏳ validato il 15/10 su `ec1ddba96` più il delta; due commit da fare, poi l'ingresso unico |
 
 ## Avanzamento
 
@@ -1368,3 +1396,40 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > - scatto prima/dopo, `files/T8c-shots/before-after.png` della sessione T: prima i controlli stavano sulla testata
 >   verde della card; dopo, nei due temi, i controlli finiscono a 60 px e la card comincia a 64 px. Server fermato,
 >   porta 6155 libera.
+
+### T-9 — ✅ 15/10/2026 (ramo combinato T + DV: una review e un ingresso)
+
+> **Avvio** (coordinatore, 21:29): il developer chiede una review unica per T-8b, T-8c e DV, e un ingresso unico. Il
+> ramo di T diventa il ramo combinato, T il proprietario d'integrazione. Merge del coordinatore, puliti: `620476853`
+> (`dev_release2` = `4294ba12a` sopra `87dbd494e`) e `ec1ddba96` (DV `ebd1dfff6`).
+> **Esito della review** (22:2x): «mergia il lavoro fatto, correggi gli aspetti tecnici e avanza sulle altre wave».
+
+> ✅ **1 · I sei `STAND_INS` di `lib/theme/roleColors.ts`** (DV), allineati al `tokens.css` unito: card `#FAFBFA` /
+> `#151B19`, pannello `#E8ECE9` / `#1B2421`, testo `#1C2420` / `#EDF2F0`, su-inverso come la card, rosso `#C82838` /
+> `#FF7A86` (D-T25), info `#155EEF` / `#3F86FA`. Erano i valori del giro 1. Nessun altro test li leggeva.
+
+> ✅ **2 · Baseline.** Le 8 righe `~` ci sono e i file che dichiarano esistono tutti. Nessuna riga `~` per `ProfileTab`:
+> A6b vi ha tolto `AccountDeletionDialog`, che è già sui ruoli (m1 0), quindi niente `~split`; `ProfileTab` misura 153
+> contro un record di 180. `--update`: m1 11.185 → 11.026, m2 1.562 → 83 (i file che R ha portato sui token di
+> componente, `--lf-cmp-*`, esenti da m2); nessuna riga allargata; 22 chiavi nuove, gli spostamenti di A2 sotto il nome
+> nuovo, più `lib/theme/toneClasses.ts`; le 8 righe `~` identiche; `--check` pulito, 0 file sotto il record.
+
+> ✅ **3 · Validazione combinata** (21:33–22:32, nella 6155, un comando alla volta):
+> - `api sync` rc 0; `front check` 0 e 0;
+> - `core-unit` 5.378/5.378 (con i gate di T e la parità di DV); `component-unit` 3.675/3.675;
+>   `onboarding-component-unit` 449/449; `front-portfolio allocation-unit` 173/173, `risk-levels-component` 273/273;
+> - E2E a 1 worker: `theme-roles` 24 e 2 saltati, `header-scroll` 11 e 3 saltati (tutti per progetto, come previsto),
+>   `auth` 33/33, `connection-security` 8/8;
+> - `front-designer-lab all`: unit 548/548, E2E 15/15;
+> - backend: `utils pwa-assets` 20, `gate-i18n-catalog` 176, `gate-i18n-usage` 195, `api utilities` 9.
+> - **⚠️ Fuori pista — l'header bloccato dal focus:** `front-portfolio dashboard` 4 rossi su 27 e `privacy-masking` 7
+>   su 18, tutti su `data-scroll-state` atteso `pinned`, letto `visible`. Gli spec degli altri facevano `focus()` da
+>   script e si aspettavano l'header bloccato; con T-7 lo blocca solo il focus `:focus-visible`, e un `focus()` dopo
+>   un clic non lo è. Il coordinatore approva: il prodotto resta com'è, si correggono i test. `test-author`:
+>   `e2e/fixtures/headerKeyboardFocus.ts` (`focus()`, `Tab`, `Shift+Tab`, poi focus e `:focus-visible` verificati) in
+>   cinque punti degli spec portfolio. Per la galleria, su proposta di G (l'anello di focus sarebbe finito in tutti i
+>   16 scatti), nessun focus: clic col mouse, poi 8 px giù e 8 px su, così l'header torna `visible` per le sue soglie
+>   e l'inquadratura resta identica. Dopo: `dashboard` 27/27, `privacy-masking` 18/18.
+> - **Galleria filtrata** `dashboard privacy mode`, 1 worker, nella corsia (`LIBREFOLIO_TEST_DATA_DIR`): mobile ✓ in
+>   47 s; desktop in timeout all'ottavo scatto col carico a 82, dopo 7 scatti buoni con l'header visibile, poi ✓ 8/8 in
+>   49 s nella finestra tranquilla. Scatti guardati: header neutro visibile, occhio in vista, nessun anello di focus.
