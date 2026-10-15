@@ -2218,6 +2218,24 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     D-T16 (15/10): un controllo selezionato è `bg-lf-checked` (focus) col segno `text-lf-on-checked` (card).
   - **Giro 2, «Pietra e Salvia»** (15/10, T-6): la palette è applicata. I ruoli che la sua tabella non copre, i valori
     provvisori e le correzioni minime di contrasto sono nel piano di T, passo T-6.
+  - **Decisioni del developer, 15/10:**
+    - D-T15, che supera D-T2: barra laterale neutra (`#EDF0EE`/`#111615`); il verde `#1B4334` resta per l'header del
+      login e i pulsanti;
+    - D-T16, che chiude Q1: un controllo selezionato è riempito di verde focus (`#236B4D`/`#429E79`) col segno nel
+      colore della card;
+    - D-T3 confermata: niente ponte, chi non è migrato resta visibilmente vecchio.
+  - **Domande aperte del giro 2 (N1–N6):**
+    - N1: voce attiva e hover della barra neutra, e il suo bordo;
+    - N2: la barra del titolo della PWA segue la barra neutra o resta verde (serve a T-4);
+    - N3: il bordo della card di accesso in scuro;
+    - N4: il sottotitolo «Crea un account» del render;
+    - N5: le sei correzioni di contrasto, soprattutto il bordo dei campi;
+    - N6: colline e linee scure, e i pallini sulle linee.
+  - **Domande aperte di W1/W2 (Q2–Q13):**
+    - controlli: interruttore spento (Q2), hover dei pulsanti pieni (Q3), stato «modificato» (Q4), pallino neutro (Q5);
+    - superfici e testi: codice e terminale (Q6), `mark` (Q7), ombre (Q8), coachmark (Q9), avviso nel tooltip (Q10);
+    - colori categoriali: viola dell'AI Export (Q11), icone decorative (Q12);
+    - fondale delle modali (Q13).
 
   Dettagli: piano di T, «Autorizzazione e decisioni»; `frontend/src/lib/theme/tokens.css`.
 - **TC-3 · Uno scanner dei colori solo, con L** — basso; T, 14/10.
@@ -2251,6 +2269,20 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     che passa a `it` solo dopo aver caricato il dizionario. Il negozio resta `en`.
 
   Dettagli: piano di T, passo T-5.
+- **TC-7 · `--resolve` non fa un vero merge a tre vie** — medio; R-8 della sezione R, spostata qui dal coordinatore il
+  15/10.
+  - **Il difetto:** `mergeBaselines` (`frontend/scripts/theme/theme-roles.mjs`) non guarda la base per una riga presente
+    su entrambi i lati: prende il minimo di m1 e i soli valori di m2 comuni ai due lati.
+  - **Cosa succede:** se un lato ha accettato uno scambio (`--accept`), per esempio D3 in `themeStore.ts`
+    (`#156534` → `#166534`), e l'altro ha ancora la riga della base, il valore accettato sparisce dal fuso. Il gate
+    dà rosso sull'albero fuso, e bisogna rifare `--accept` a mano. Successo due volte il 15/10, nei merge di R e di X.
+  - **La correzione:**
+    - un merge a tre vie vero: se un lato è uguale alla base, vince l'altro; se sono cambiati entrambi, il più
+      stretto;
+    - la riga di un file con `~accept` su un lato vince per quel file;
+    - test sintetici in `themeRoles.gate.test.ts`, scritti da `test-author`.
+
+  Dettagli: piano di T, passo T-6, «Validazione del fuso».
 
 ---
 

@@ -469,7 +469,7 @@ Blocchi per lotto:
 | 2 | T-2, poi integrazione subito: A aspetta | ✅ checkpoint `a73eb7eda`, integrato con `d80b986bf` |
 | 3 | T-3 con la gallery completa | ✅ checkpoint `bd51acbc2`, base aggiornata con G nel merge `dad0f6292`; la gallery la lancia il coordinatore il 15/10 |
 | 4 | T-5 sfondo del login, prima della gallery candidata del 15/10 | ✅ checkpoint `f43aa7200`; spacchettamento W1/W2 `48cc52e5b`; base con X nel merge `2c7553e0b` |
-| 5 | T-6 palette del giro 2 e barra neutra (D-T15, D-T16) | ✅ pronto il 15/10, FROZEN in attesa del commit |
+| 5 | T-6 palette del giro 2 e barra neutra (D-T15, D-T16) | ✅ checkpoint `078dec1ae`; base con `dc9a5d232` nel merge `e1443e952`, validato il 15/10; candidata T6 fatta, l'ingresso aspetta il via del developer |
 
 ## Avanzamento
 
@@ -910,3 +910,32 @@ Blocchi per lotto:
 >   Niente ponte: `app.css` e le tabelle di R restano come sono.
 > - **Ricetta delle tinte in scuro:** provata 8/25/40, tenuta quella del giro 1, 6/22/37, che chiede una correzione
 >   minore del testo attenuato (`#7F8C87` invece di `#818E89`).
+>
+> **Validazione del fuso `e1443e952`** (15/10, pomeriggio)
+>
+> Il merge `e1443e952` ha due padri: `078dec1ae`, cioè T-6, e `dc9a5d232`. Porta R completo, il Lab di L, il
+> checkpoint 2 di G, la 1.2.1 e `cryptography`, già nel venv condiviso (50.0.2). Nessuna migrazione nuova; `npm`
+> invariato.
+>
+> Le esecuzioni vanno in serie, un comando alla volta: il coordinatore ha chiesto un budget di carico, con la macchina
+> a 110–139.
+> - `api sync`, poi `front check` 0/0.
+> - `--check` pulito, con 82 file sotto il record. I totali misurati sono m1 11.069 e m2 83, contro 11.185 e 1.773
+>   nella baseline: R ha portato i letterali in `lib/theme`. Niente `--update`.
+> - Unità: `core-unit` 4.381 (dopo la correzione qui sotto), `component-unit` 3.225, `onboarding-component-unit` 441.
+> - E2E: `theme-roles` 18/18, `connection-security` 8, `auth` 29.
+> - Lab di L, `front-designer-lab all`: unità 394, E2E 11.
+>
+> **Fuori pista:**
+> - **Il controllo positivo del cricchetto era rotto dal progresso.** Il test chiedeva letterali in più di 20 file e
+>   ne trovava 19: con R completo, più T-3 e T-5, i letterali sono quasi tutti in `lib/theme`.
+>   - `test-author` ha sostituito le soglie assolute con un controllo che il progresso non rompe: finché la baseline
+>     registra una metrica, la scansione deve misurarne qualcosa.
+>   - Nuovo nome del test: «measures each metric while the baseline still records it, with no floor on how much is
+>     left (positive control)».
+>   - Prova per mutazione: con la scansione a zero il test è rosso per entrambe le metriche.
+> - **Il backend condiviso non ha risposto entro 300 s per due volte** (`theme-roles`, `connection-security`). Dopo il
+>   merge, all'avvio ricostruisce il frontend in debug, e la macchina era carica. Al terzo avvio il build era pronto: le
+>   due azioni ripetute sono verdi. Non è un difetto dei test.
+> - **TC-7 nel backlog:** `--resolve` non fa un vero merge a tre vie. È la R-8 di R, spostata a T dal coordinatore.
+>   Due volte oggi, a R e a X, un `~accept` di un lato si è perso nel merge della baseline.
