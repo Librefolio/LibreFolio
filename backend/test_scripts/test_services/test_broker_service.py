@@ -8,7 +8,8 @@ Reference: backend/app/services/brokers/broker_service.py
 """
 
 import sys
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -25,7 +26,7 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import (
@@ -53,6 +54,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.brokers.broker_service import BrokerService
+from backend.app.services.transactions import auto_cost
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._tx_test_helpers import create_bulk
@@ -626,9 +628,9 @@ async def _assert_no_fx_data(session: AsyncSession, currency: str, other: str = 
     assert (rates, routes) == (0, 0), f"precondition broken: {base}/{quote} has {rates} rate(s) and {routes} route(s) — this case needs a pair nobody stores"
 
 
-async def _owned_broker(session: AsyncSession, user: User, label: str) -> int:
-    """A broker the user owns, created through the service (OWNER access, no cash)."""
-    response = await BrokerService(session).create_bulk([BRCreateItem(name=f"{label} {uuid4().hex[:12]}")], user_id=user.id)
+async def _owned_broker(session: AsyncSession, user: User, label: str, **flags: bool) -> int:
+    """A broker the user owns, created through the service (OWNER access, no cash); ``flags`` are BRCreateItem's allow_* flags."""
+    response = await BrokerService(session).create_bulk([BRCreateItem(name=f"{label} {uuid4().hex[:12]}", **flags)], user_id=user.id)
     assert response.success_count == 1, response.errors
     return response.results[0].broker_id
 
@@ -807,6 +809,141 @@ class TestGetSummaryHoldingCost:
             }
         assert _cost_view(_only_holding(summary, asset)) == expected_view
         assert summary.missing_fx_pairs == [], "an unknown cost basis is not a missing rate"
+
+
+# ============================================================================
+# 4.4c GET_SUMMARY — AS OF A DAY (W-B5: B15, D-J16)
+# ============================================================================
+#
+# The broker summary is a picture as of one day: the caller's, passed as ``as_of``; when it is
+# omitted, the server's (``date.today()``, the Dashboard's default: portfolio_service.py,
+# ``date_to or today``). A transaction dated after that day counts in none of the cash balances,
+# the holdings' quantity, their average and total cost; one dated on that day counts.
+#
+# A currency whose only movement comes after that day is not listed. The summary lists a
+# currency for its history — even at 0, "as long as it has transaction history" (summary.py) —
+# and as of that day the currency has none.
+#
+# The rows straddle the server's today, so every case anchors on ``date.today()``, read once at
+# seeding. Rows are written straight into the session and never committed, as in 4.4b.
+
+# One deposit and one purchase of 10 units a day, each at a price of its own, so that every
+# cut-off gives a different cash, quantity and average cost:
+# (day offset from the anchor, EUR deposited, EUR paid for the 10 units).
+AS_OF_DAYS = (
+    (-1, "5000", "1000"),  # 10 @ 100
+    (0, "1000", "2000"),  # 10 @ 200
+    (1, "4000", "6000"),  # 10 @ 600
+    (2, "10500", "10000"),  # 10 @ 1000
+)
+AS_OF_USD_DAY = 1  # +250 USD: the broker's only USD movement
+
+# What the summary shows when it counts the rows up to the offset given, inclusive.
+AS_OF_VIEWS = {
+    -1: {"cash": {"EUR": "4000"}, "quantity": "10", "total_cost": "1000", "average": "100"},  # 5000 − 1000
+    0: {"cash": {"EUR": "3000"}, "quantity": "20", "total_cost": "3000", "average": "150"},  # + 1000 − 2000; (1000 + 2000) / 20
+    1: {"cash": {"EUR": "1000", "USD": "250"}, "quantity": "30", "total_cost": "9000", "average": "300"},  # + 4000 − 6000; 9000 / 30
+    2: {"cash": {"EUR": "1500", "USD": "250"}, "quantity": "40", "total_cost": "19000", "average": "475"},  # + 10500 − 10000: every row, today's summary
+}
+
+
+def _cash_row(broker_id: int, tx_type: TransactionType, day: date, amount: str, currency: str) -> Transaction:
+    return Transaction(broker_id=broker_id, asset_id=None, type=tx_type, date=day, quantity=Decimal("0"), amount=Decimal(amount), currency=currency)
+
+
+async def _seed_as_of(session: AsyncSession, user: User, anchor: date, *, last_day: int = 2) -> tuple[int, Asset]:
+    """A broker of the user and an EUR asset, with the AS_OF_DAYS rows up to ``anchor + last_day``."""
+    broker_id = await _owned_broker(session, user, "As of")
+    asset = await _own_asset(session, "EUR")
+    rows = []
+    for offset, deposited, paid in AS_OF_DAYS:
+        if offset <= last_day:
+            day = anchor + timedelta(days=offset)
+            rows += [_cash_row(broker_id, TransactionType.DEPOSIT, day, deposited, "EUR"), _row(broker_id, asset, TransactionType.BUY, day, "10", f"-{paid}", "EUR")]
+    if AS_OF_USD_DAY <= last_day:
+        rows.append(_cash_row(broker_id, TransactionType.DEPOSIT, anchor + timedelta(days=AS_OF_USD_DAY), "250", "USD"))
+    await _add(session, *rows)
+    return broker_id, asset
+
+
+def _cash_and_holdings(summary: BRSummary | None) -> dict:
+    assert summary is not None
+    return {
+        "cash": {balance.code: balance.amount for balance in summary.cash_balances},
+        "holdings": [(holding.asset_id, holding.quantity, holding.total_cost, holding.average_cost_per_unit) for holding in summary.holdings],
+    }
+
+
+def _expected_as_of(asset: Asset, *, through: int) -> dict:
+    view = AS_OF_VIEWS[through]
+    return {
+        "cash": {code: Decimal(amount) for code, amount in view["cash"].items()},
+        "holdings": [(asset.id, Decimal(view["quantity"]), Currency(code="EUR", amount=Decimal(view["total_cost"])), Decimal(view["average"]))],
+    }
+
+
+def _assert_same_server_day(anchor: date) -> None:
+    """Precondition of a case read without ``as_of``: midnight did not pass between seeding and reading."""
+    assert date.today() == anchor, f"precondition broken: the server's day moved from {anchor} to {date.today()} during the test — rerun it"
+
+
+class TestGetSummaryAsOf:
+    """The summary as of a day: the caller's ``as_of``; without it, the server's ``date.today()``."""
+
+    @pytest.mark.asyncio
+    async def test_get_summary_without_as_of_leaves_out_the_rows_dated_after_the_server_date(self, session, test_user):
+        """BR-U-090 (RED, whatever the signature): rows from the server's yesterday to two days ahead, no ``as_of`` → yesterday's and today's count, nothing later."""
+        anchor = date.today()
+        broker_id, asset = await _seed_as_of(session, test_user, anchor)
+
+        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
+
+        _assert_same_server_day(anchor)
+        # Not the USD: its only deposit is tomorrow's.
+        assert _cash_and_holdings(summary) == _expected_as_of(asset, through=0)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "offset",
+        [
+            # The user's day is the server's yesterday: the row dated the server's today does not count yet.
+            pytest.param(-1, id="user-a-day-behind-the-server"),
+            pytest.param(0, id="user-on-the-server-day"),
+            # The user's day is the server's tomorrow: a row dated then is the user's today and counts; the day after does not.
+            pytest.param(1, id="user-a-day-ahead-of-the-server"),
+        ],
+    )
+    async def test_get_summary_as_of_counts_the_rows_up_to_that_day_inclusive(self, session, test_user, offset):
+        """BR-U-091 (RED): the caller's day passed as ``as_of`` decides, not the server's date — its rows count, later ones do not."""
+        anchor = date.today()
+        broker_id, asset = await _seed_as_of(session, test_user, anchor)
+
+        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id, as_of=anchor + timedelta(days=offset))
+
+        assert _cash_and_holdings(summary) == _expected_as_of(asset, through=offset)
+
+    @pytest.mark.asyncio
+    async def test_get_summary_as_of_defaults_to_the_server_date(self, session, test_user):
+        """BR-U-092 (RED until ``as_of`` exists, then the guard of its default): omitting it reads exactly as ``as_of=date.today()``."""
+        anchor = date.today()
+        broker_id, _asset = await _seed_as_of(session, test_user, anchor)
+        service = BrokerService(session)
+
+        omitted = await service.get_summary(broker_id, user_id=test_user.id)
+        explicit = await service.get_summary(broker_id, user_id=test_user.id, as_of=anchor)
+
+        _assert_same_server_day(anchor)
+        assert omitted == explicit
+
+    @pytest.mark.asyncio
+    async def test_get_summary_without_future_rows_counts_every_row_today_included(self, session, test_user):
+        """BR-U-093 (guard): rows of the server's yesterday and today only, no ``as_of`` → every row counts, today's included, as before."""
+        anchor = date.today()
+        broker_id, asset = await _seed_as_of(session, test_user, anchor, last_day=0)
+
+        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
+
+        assert _cash_and_holdings(summary) == _expected_as_of(asset, through=0)
 
 
 # ============================================================================
@@ -1196,3 +1333,441 @@ class TestDeleteBulkForceBehavior:
         result = await session.execute(stmt)
         remaining = result.scalars().all()
         assert len(remaining) == 0
+
+
+# ============================================================================
+# 4.9 DELETE_BULK — THE OTHER HALF OF A CROSS-BROKER PAIR (V-3, D-J4)
+# ============================================================================
+#
+# Deleting a broker deletes its rows, and so one half of every pair it shares with another
+# broker. The half left on the other broker becomes what the app's own split makes of it
+# (batch_edits.apply_splits, TransactionService.SPLIT_TYPE_MAP): the incoming half of a TRANSFER an
+# ADJUSTMENT with the same signed quantity and the same cost_basis_override; the half of a
+# CASH_TRANSFER a DEPOSIT when its amount is positive, a WITHDRAWAL when it is negative, same
+# amount and currency. Its related_transaction_id ends up NULL — the reciprocal column is the
+# whole durable pair, link_uuid is request-scoped and never stored. Date, broker, asset,
+# description and tags stay. Today the half keeps its type and only loses its link: a TRANSFER
+# without its pair, which the lots and the Dashboard misread
+# (test_financial/test_orphan_transfer_after_broker_delete.py).
+#
+# Where the deletion departs from a split — J, 15/10, and the coordinator's point 47:
+# - The incoming half of a TRANSFER without a cost basis gets, before the sender's rows go, the cost
+#   the Auto mode gives the receiving side of a TRANSFER: TransactionAutoCostMixin._auto_cost_source
+#   (transactions/auto_cost.py:173-186 — the sender's broker, without the two halves, up to the
+#   sender's date) and compute_wac_iterative (portfolio_service.py), written as cost_basis_override
+#   and cost_basis_currency together. An empty pool gives 0 in the asset currency, decision P-1:
+#   compute_wac_iterative returns Currency(asset currency, 0) for no rows (portfolio_service.py:
+#   185-190), and `if wac_result.wac:` is true for it (_write_auto_cost, auto_cost.py:141). A split
+#   writes no cost.
+# - The outgoing half of a TRANSFER is not converted until the coordinator decides: it stays a
+#   TRANSFER, unlinked, nothing else changed. Converted it would be an ADJUSTMENT −4, which cannot
+#   carry a cost basis (type_metadata.py:286, TRANSFER cost_basis_pair ["forbidden", …]), and the
+#   sender's lots and P&L would read the moved units as destroyed. A split converts it.
+#
+# Every case goes through BrokerService.delete_bulk(force=True), the path of DELETE /brokers and
+# of the last owner leaving (BrokerAccessMixin.leave_broker). Rows are written straight into the
+# session and never committed; each test owns its brokers and its asset.
+
+PAIR_FUNDING_DAY = date(2019, 9, 2)
+PAIR_DAY = date(2019, 9, 4)
+
+_CROSS_PAIR_SIDES = [
+    pytest.param(TransactionType.TRANSFER, "sender", id="transfer-sender-deleted"),
+    pytest.param(TransactionType.TRANSFER, "receiver", id="transfer-receiver-deleted"),
+    pytest.param(TransactionType.CASH_TRANSFER, "sender", id="cash-transfer-sender-deleted"),
+    pytest.param(TransactionType.CASH_TRANSFER, "receiver", id="cash-transfer-receiver-deleted"),
+]
+# What the surviving half becomes (BR-U-073).
+_CROSS_PAIR_CASES = [
+    pytest.param(TransactionType.TRANSFER, "sender", TransactionType.ADJUSTMENT, id="transfer-sender-deleted"),
+    # The sender's outgoing half stays a TRANSFER, unlinked, pending the coordinator's decision (J 15/10).
+    pytest.param(TransactionType.TRANSFER, "receiver", TransactionType.TRANSFER, id="transfer-receiver-deleted-outgoing-half-kept-pending-decision"),
+    pytest.param(TransactionType.CASH_TRANSFER, "sender", TransactionType.DEPOSIT, id="cash-transfer-sender-deleted"),
+    pytest.param(TransactionType.CASH_TRANSFER, "receiver", TransactionType.WITHDRAWAL, id="cash-transfer-receiver-deleted"),
+]
+# BR-U-076 compares a deletion with a split. Left out: the receiver deleted from a TRANSFER pair — a
+# split converts the outgoing half, the deletion leaves it a TRANSFER until the coordinator decides
+# (J 15/10); BR-U-073 and BR-U-078 pin it.
+_SPLIT_PARITY_SIDES = [side for side in _CROSS_PAIR_SIDES if side.id != "transfer-receiver-deleted"]
+
+# The surviving broker's summary, the same before and after the deletion: its cash per currency
+# and its holding of X as (quantity, total cost, average cost) — X is quoted in EUR, bought in EUR.
+_SURVIVOR_SUMMARIES = {
+    (TransactionType.TRANSFER, "sender"): ({"EUR": "10", "USD": "44"}, [("4", "80", "20")]),  # receiver: 50 − 40; the 4 X at their 20 EUR cost basis
+    (TransactionType.TRANSFER, "receiver"): ({"EUR": "700", "USD": "110"}, [("6", "120", "20")]),  # sender: 1000 − 200 − 100; 10 − 4 X at 20
+    (TransactionType.CASH_TRANSFER, "sender"): ({"EUR": "310", "USD": "44"}, []),  # receiver: 50 − 40 + 300
+    (TransactionType.CASH_TRANSFER, "receiver"): ({"EUR": "400", "USD": "110"}, [("10", "200", "20")]),  # sender: 1000 − 200 − 100 − 300; its 10 X
+}
+
+# Every column a deletion must leave as it was, except the two the conversion changes.
+_ROW_FIELDS = ("broker_id", "asset_id", "type", "date", "quantity", "amount", "currency", "cost_basis_override", "cost_basis_currency", "related_transaction_id", "description", "tags", "asset_event_id")
+# What a split decides of a half: the columns compared between a deletion and a split.
+_SPLIT_FIELDS = ("type", "quantity", "amount", "currency", "cost_basis_override", "cost_basis_currency", "asset_id", "related_transaction_id")
+
+
+@dataclass
+class CrossPair:
+    """Two brokers of the user with a pair between them; each broker also holds rows of its own."""
+
+    asset: Asset
+    brokers: dict[str, int]  # "sender" / "receiver" → broker id
+    legs: dict[str, Transaction]  # each broker's half of the pair
+    own_rows: dict[str, list[Transaction]]  # each broker's other rows, a same-broker FX_CONVERSION pair included
+
+    @staticmethod
+    def survivor_of(deleted: str) -> str:
+        return "receiver" if deleted == "sender" else "sender"
+
+
+async def _seed_cross_pair(
+    session: AsyncSession,
+    user: User,
+    kind: TransactionType,
+    *,
+    asset: Asset | None = None,
+    receiver_cost_basis: str | None = "20",
+    sender_purchases: tuple[tuple[date, str, str], ...] = ((PAIR_FUNDING_DAY, "10", "-200"),),
+    sender_flags: dict[str, bool] | None = None,
+) -> CrossPair:
+    """A ``kind`` pair on PAIR_DAY from a sender broker to a receiver broker, both owned by the user.
+
+    Sender: +1000 EUR on PAIR_FUNDING_DAY and its purchases of X — ``sender_purchases``, (day,
+    quantity, EUR amount) each, by default 10 X for 200 EUR that day; ``sender_flags`` go to its
+    BRCreateItem —; on PAIR_DAY a same-broker FX_CONVERSION pair (−100 EUR → +110 USD) and its half:
+    TRANSFER −4 X, or CASH_TRANSFER −300 EUR. Receiver: +50 EUR; on PAIR_DAY a same-broker
+    FX_CONVERSION pair (−40 EUR → +44 USD) and its half: TRANSFER +4 X with a cost basis of
+    ``receiver_cost_basis`` EUR per unit — 20 by default, 80 EUR; None for no cost basis — or
+    CASH_TRANSFER +300 EUR. With the defaults no balance goes negative, so a split of the pair passes
+    the balance replay.
+    """
+    asset = asset or await _own_asset(session, "EUR")
+    sender = await _owned_broker(session, user, "Pair sender", **(sender_flags or {}))
+    receiver = await _owned_broker(session, user, "Pair receiver")
+    own_rows = {
+        "sender": [_cash_row(sender, TransactionType.DEPOSIT, PAIR_FUNDING_DAY, "1000", "EUR"), *(_row(sender, asset, TransactionType.BUY, day, quantity, amount, "EUR") for day, quantity, amount in sender_purchases)],
+        "receiver": [_cash_row(receiver, TransactionType.DEPOSIT, PAIR_FUNDING_DAY, "50", "EUR")],
+    }
+    conversions = {
+        "sender": (_cash_row(sender, TransactionType.FX_CONVERSION, PAIR_DAY, "-100", "EUR"), _cash_row(sender, TransactionType.FX_CONVERSION, PAIR_DAY, "110", "USD")),
+        "receiver": (_cash_row(receiver, TransactionType.FX_CONVERSION, PAIR_DAY, "-40", "EUR"), _cash_row(receiver, TransactionType.FX_CONVERSION, PAIR_DAY, "44", "USD")),
+    }
+    if kind == TransactionType.TRANSFER:
+        legs = {"sender": _row(sender, asset, kind, PAIR_DAY, "-4"), "receiver": _row(receiver, asset, kind, PAIR_DAY, "4", cbo=receiver_cost_basis)}
+    else:
+        legs = {"sender": _cash_row(sender, kind, PAIR_DAY, "-300", "EUR"), "receiver": _cash_row(receiver, kind, PAIR_DAY, "300", "EUR")}
+    legs["sender"].description, legs["sender"].tags = "to the receiver", "pair,out"
+    legs["receiver"].description, legs["receiver"].tags = "from the sender", "pair,in"
+    await _add(session, *own_rows["sender"], *own_rows["receiver"], *conversions["sender"], *conversions["receiver"], *legs.values())
+    # A pair references itself both ways: the ids exist only after the first flush.
+    for first, second in (*conversions.values(), (legs["sender"], legs["receiver"])):
+        first.related_transaction_id, second.related_transaction_id = second.id, first.id
+    await session.flush()
+    for side, conversion in conversions.items():
+        own_rows[side] += conversion
+    return CrossPair(asset=asset, brokers={"sender": sender, "receiver": receiver}, legs=legs, own_rows=own_rows)
+
+
+def _fields(tx: Transaction | None, names: tuple[str, ...] = _ROW_FIELDS) -> dict | None:
+    return None if tx is None else {name: getattr(tx, name) for name in names}
+
+
+async def _rows_now(session: AsyncSession, *criteria) -> dict[int, Transaction]:
+    """The rows matching ``criteria`` as the database holds them now, in-memory copies refreshed."""
+    rows = (await session.execute(select(Transaction).where(*criteria).execution_options(populate_existing=True))).scalars().all()
+    return {row.id: row for row in rows}
+
+
+async def _delete_broker(session: AsyncSession, user: User, broker_id: int) -> None:
+    """The real path: BrokerService.delete_bulk with force, as DELETE /brokers?force=true and leave_broker call it."""
+    response = await BrokerService(session).delete_bulk([BRDeleteItem(id=broker_id, force=True)], user_id=user.id)
+    assert [(result.id, result.success, result.message) for result in response.results] == [(broker_id, True, None)]
+
+
+def _expected_survivor_summary(pair: CrossPair, kind: TransactionType, deleted: str) -> dict:
+    cash, holdings = _SURVIVOR_SUMMARIES[(kind, deleted)]
+    return {
+        "cash": {code: Decimal(amount) for code, amount in cash.items()},
+        "holdings": [(pair.asset.id, Decimal(quantity), Currency(code="EUR", amount=Decimal(total)), Decimal(average)) for quantity, total, average in holdings],
+    }
+
+
+# BR-U-077: the sender's purchases of X before the transfer and after it, (day, quantity, EUR amount).
+# The deposit of 1000 EUR covers them and the FX_CONVERSION of 100: no balance goes negative.
+_AUTO_COST_HISTORIES = [
+    pytest.param(
+        ((PAIR_FUNDING_DAY, "10", "-200"), (PAIR_DAY - timedelta(days=1), "10", "-300")),  # 10 at 20, 10 at 30: 4 of 20 X sent
+        ((PAIR_DAY + timedelta(days=1), "10", "-400"),),  # 10 at 40 the day after
+        id="part-of-the-position-sent",
+    ),
+    pytest.param(
+        # 2 at 20, 2 at 30: the 4 X sent are the whole position — with the outgoing half in it, the
+        # emptied pool would average 0 (average_cost.py:154-156), not 25.
+        ((PAIR_FUNDING_DAY, "2", "-40"), (PAIR_DAY - timedelta(days=1), "2", "-60")),
+        ((PAIR_DAY + timedelta(days=1), "10", "-400"),),
+        id="whole-position-sent",
+    ),
+]
+
+# BR-U-080: a deletion that fails half way. Unlike the rest of 4.9 this case COMMITS, as DELETE /brokers does:
+# it commits whenever response.errors is empty (api/v1/brokers.py), and delete_bulk reports a broker that failed
+# in its result, never in errors. What the case reads is therefore what the database keeps, through sessions of
+# its own. Its rows are its own — a user, three brokers, an asset, none shared — and it removes them at the end.
+
+# Every column of a row, the two timestamps included: "as it was" means all of them.
+_EVERY_ROW_FIELD = (*_ROW_FIELDS, "created_at", "updated_at")
+
+
+async def _kept(engine, broker_ids: list[int]) -> dict:
+    """What the database holds for ``broker_ids``, read by a session of its own: each broker's name, every column of each row."""
+    async with AsyncSession(engine) as reader:
+        brokers = (await reader.execute(select(Broker.id, Broker.name).where(Broker.id.in_(broker_ids)))).all()
+        rows = (await reader.execute(select(Transaction).where(Transaction.broker_id.in_(broker_ids)))).scalars().all()
+        return {"brokers": dict(brokers), "rows": {row.id: _fields(row, _EVERY_ROW_FIELD) for row in rows}}
+
+
+def _changed(before: dict[int, dict], after: dict[int, dict], labels: dict[int, str]) -> dict[str, object]:
+    """The rows that differ between ``before`` and ``after``, by label: their changed columns as (before, after), or gone / new."""
+    changes: dict[str, object] = {}
+    for tx_id in sorted(before.keys() | after.keys()):
+        old, new = before.get(tx_id), after.get(tx_id)
+        if old != new:
+            label = labels.get(tx_id, f"row {tx_id}")
+            changes[label] = "gone" if new is None else "new" if old is None else {name: (old[name], new[name]) for name in old if old[name] != new[name]}
+    return changes
+
+
+async def _remove_committed(engine, *, user_id: int, broker_ids: list[int], asset_id: int) -> None:
+    """Whoever commits, cleans up: every row the case committed, in foreign-key order, whatever state it was left in."""
+    async with AsyncSession(engine) as cleaner:
+        await cleaner.execute(delete(Transaction).where(Transaction.broker_id.in_(broker_ids)))
+        await cleaner.execute(delete(BrokerUserAccess).where(BrokerUserAccess.broker_id.in_(broker_ids)))
+        await cleaner.execute(delete(Broker).where(Broker.id.in_(broker_ids)))
+        await cleaner.execute(delete(Asset).where(Asset.id == asset_id))
+        await cleaner.execute(delete(User).where(User.id == user_id))
+        await cleaner.commit()
+
+
+class TestDeleteBulkCrossBrokerPair:
+    """Deleting a broker leaves the other half of each cross-broker pair as a standalone row, as a split would."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("kind", "deleted", "survivor_type"), _CROSS_PAIR_CASES)
+    async def test_delete_bulk_turns_the_surviving_half_into_a_standalone_row(self, session, test_user, kind, deleted, survivor_type):
+        """BR-U-073 (RED but for the outgoing TRANSFER half): the surviving half takes its standalone type and loses its link; quantity, amount, cost basis, date, broker, asset, description and tags stay.
+
+        The sender's outgoing TRANSFER half — the receiver deleted — keeps its type and only loses its
+        link, as today: pending the coordinator's decision (J 15/10), that case is green today and after.
+        """
+        pair = await _seed_cross_pair(session, test_user, kind)
+        survivor = pair.legs[CrossPair.survivor_of(deleted)]
+        before = _fields(survivor)
+
+        await _delete_broker(session, test_user, pair.brokers[deleted])
+
+        after = await _rows_now(session, Transaction.id == survivor.id)
+        assert {tx_id: _fields(tx) for tx_id, tx in after.items()} == {survivor.id: {**before, "type": survivor_type, "related_transaction_id": None}}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("kind", "deleted"), _CROSS_PAIR_SIDES)
+    async def test_delete_bulk_leaves_the_rest_of_the_surviving_broker_untouched(self, session, test_user, kind, deleted):
+        """BR-U-074 (guard): the survivor's own rows — its same-broker FX_CONVERSION pair included — stay as they were and nothing joins them; the deleted broker's rows all go, its own same-broker pair with them, none converted."""
+        pair = await _seed_cross_pair(session, test_user, kind)
+        survivor = CrossPair.survivor_of(deleted)
+        own_rows_before = {tx.id: _fields(tx) for tx in pair.own_rows[survivor]}
+        deleted_ids = [tx.id for tx in (*pair.own_rows[deleted], pair.legs[deleted])]
+
+        await _delete_broker(session, test_user, pair.brokers[deleted])
+
+        on_survivor = await _rows_now(session, Transaction.broker_id == pair.brokers[survivor])
+        observed = {
+            "rows on the surviving broker": sorted(on_survivor),
+            "its own rows": {tx_id: _fields(tx) for tx_id, tx in on_survivor.items() if tx_id != pair.legs[survivor].id},
+            "rows of the deleted broker left anywhere": sorted(await _rows_now(session, Transaction.id.in_(deleted_ids))),
+            "rows filed under the deleted broker": sorted(await _rows_now(session, Transaction.broker_id == pair.brokers[deleted])),
+        }
+        assert observed == {
+            "rows on the surviving broker": sorted([*own_rows_before, pair.legs[survivor].id]),  # nothing moved over, nothing re-created
+            "its own rows": own_rows_before,
+            "rows of the deleted broker left anywhere": [],
+            "rows filed under the deleted broker": [],
+        }
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("kind", "deleted"), _CROSS_PAIR_SIDES)
+    async def test_delete_bulk_leaves_the_cash_and_holdings_of_the_surviving_broker_unchanged(self, session, test_user, kind, deleted):
+        """BR-U-075 (guard): the surviving broker's summary — cash per currency, its holding's quantity and cost — reads the same before and after."""
+        pair = await _seed_cross_pair(session, test_user, kind)
+        survivor_broker = pair.brokers[CrossPair.survivor_of(deleted)]
+        service = BrokerService(session)
+        before = _cash_and_holdings(await service.get_summary(survivor_broker, user_id=test_user.id))
+
+        await _delete_broker(session, test_user, pair.brokers[deleted])
+
+        after = _cash_and_holdings(await service.get_summary(survivor_broker, user_id=test_user.id))
+        expected = _expected_survivor_summary(pair, kind, deleted)
+        assert {"before": before, "after": after} == {"before": expected, "after": expected}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("kind", "deleted"), _SPLIT_PARITY_SIDES)
+    async def test_delete_bulk_leaves_the_surviving_half_as_a_split_of_the_same_pair_does(self, session, test_user, kind, deleted):
+        """BR-U-076 (RED today; once fixed, the guard against drift): deleting a broker and splitting the same kind of pair leave the surviving half alike.
+
+        The parity holds for an incoming TRANSFER half that carries a cost basis, as here, and for the
+        cash halves. Without a cost basis the deletion also writes the sender's Auto cost and a split
+        does not (by design, J 15/10: BR-U-077). The outgoing TRANSFER half is not compared: a split
+        converts it, the deletion leaves it a TRANSFER until the coordinator decides (BR-U-073, BR-U-078).
+        """
+        by_deletion = await _seed_cross_pair(session, test_user, kind)
+        by_split = await _seed_cross_pair(session, test_user, kind, asset=by_deletion.asset)
+        side = CrossPair.survivor_of(deleted)
+
+        split = await TransactionService(session).execute_batch(
+            creates_raw=[],
+            updates_raw=[],
+            deletes=[],
+            splits_raw=[{"id_a": by_split.legs["sender"].id, "id_b": by_split.legs["receiver"].id}],
+            user_id=test_user.id,
+            commit=True,
+        )
+        assert ([issue.error for issue in split.issues], [(result.operation, result.status) for result in split.results]) == ([], [("split", "success")])
+        await _delete_broker(session, test_user, by_deletion.brokers[deleted])
+
+        halves = await _rows_now(session, Transaction.id.in_([by_deletion.legs[side].id, by_split.legs[side].id]))
+        assert _fields(halves.get(by_deletion.legs[side].id), _SPLIT_FIELDS) == _fields(halves.get(by_split.legs[side].id), _SPLIT_FIELDS)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("before_transfer", "after_transfer"), _AUTO_COST_HISTORIES)
+    async def test_delete_bulk_writes_the_senders_auto_cost_on_an_incoming_half_without_cost_basis(self, session, test_user, before_transfer, after_transfer):
+        """BR-U-077 (RED): the incoming TRANSFER half has no cost basis — deleting the sender writes on it the sender's Auto cost, its average cost up to the transfer date without the outgoing half: 25 EUR, the purchase of the day after left out."""
+        pair = await _seed_cross_pair(session, test_user, TransactionType.TRANSFER, receiver_cost_basis=None, sender_purchases=(*before_transfer, *after_transfer))
+        survivor = pair.legs["receiver"]
+        before = _fields(survivor)
+        # The oracle, by hand: what the sender paid for the X it held when the 4 left, over their number.
+        paid = sum(-Decimal(amount) for _day, _quantity, amount in before_transfer)
+        held = sum(Decimal(quantity) for _day, quantity, _amount in before_transfer)
+        expected_cost = paid / held
+        assert expected_cost == Decimal("25"), "the oracle: 500 / 20, or 100 / 4"
+
+        await _delete_broker(session, test_user, pair.brokers["sender"])
+
+        after = await _rows_now(session, Transaction.id == survivor.id)
+        assert _fields(after.get(survivor.id)) == {
+            **before,
+            "type": TransactionType.ADJUSTMENT,
+            "related_transaction_id": None,
+            "cost_basis_override": expected_cost,
+            "cost_basis_currency": "EUR",  # with its currency, as the model wants
+        }
+
+    @pytest.mark.asyncio
+    async def test_delete_bulk_leaves_the_outgoing_half_a_transfer_without_cost_basis(self, session, test_user):
+        """BR-U-078 (guard, green today and after N1b-1): neither half has a cost basis; deleting the receiver leaves the sender's outgoing half a TRANSFER, unlinked, with no cost basis written — pending the coordinator's decision (J 15/10)."""
+        pair = await _seed_cross_pair(session, test_user, TransactionType.TRANSFER, receiver_cost_basis=None)
+        survivor = pair.legs["sender"]
+        before = _fields(survivor)
+
+        await _delete_broker(session, test_user, pair.brokers["receiver"])
+
+        after = await _rows_now(session, Transaction.id == survivor.id)
+        assert _fields(after.get(survivor.id)) == {
+            **before,
+            "type": TransactionType.TRANSFER,
+            "related_transaction_id": None,  # the only change
+            "cost_basis_override": None,  # no Auto cost on the way out: an outgoing half carries none
+            "cost_basis_currency": None,
+        }
+
+    @pytest.mark.asyncio
+    async def test_delete_bulk_writes_the_auto_cost_of_an_empty_pool(self, session, test_user):
+        """BR-U-079 (RED): the sender held no X when the 4 left (shorting allowed; its only purchase is the day after) — the Auto cost of an empty pool, 0 in the asset currency (decision P-1), is written with that currency."""
+        pair = await _seed_cross_pair(
+            session,
+            test_user,
+            TransactionType.TRANSFER,
+            receiver_cost_basis=None,
+            sender_purchases=((PAIR_DAY + timedelta(days=1), "10", "-400"),),  # the sender's only X, the day after
+            sender_flags={"allow_asset_shorting": True},  # −4 X from the transfer to that purchase
+        )
+        survivor = pair.legs["receiver"]
+        before = _fields(survivor)
+
+        await _delete_broker(session, test_user, pair.brokers["sender"])
+
+        after = await _rows_now(session, Transaction.id == survivor.id)
+        # P-1: compute_wac_iterative gives Currency(asset currency, 0) for a pool without rows
+        # (portfolio_service.py:185-190), and Auto writes it: `if wac_result.wac:` is true for a
+        # Currency of amount 0 (_write_auto_cost, auto_cost.py:141).
+        assert _fields(after.get(survivor.id)) == {
+            **before,
+            "type": TransactionType.ADJUSTMENT,
+            "related_transaction_id": None,
+            "cost_basis_override": Decimal("0"),
+            "cost_basis_currency": "EUR",  # X's currency
+        }
+
+    @pytest.mark.asyncio
+    async def test_delete_bulk_that_fails_on_an_auto_cost_leaves_every_row_as_it_was(self, session, engine, monkeypatch):
+        """BR-U-080 (RED): a failure while computing an Auto cost leaves every row as it was — the broker, its rows and both receiving halves.
+
+        The sender sent two TRANSFERs without cost basis to two other brokers of the user: two receiving
+        halves that need an Auto cost. The first computation runs, the second raises (compute_wac_iterative
+        patched where auto_cost calls it). delete_bulk reports the broker failed, in its result, and the
+        case then does what DELETE /brokers does: it commits when ``response.errors`` is empty. Today the
+        cost computed for the first half is written on it before the second fails, and that commit keeps
+        it — a cost basis on a TRANSFER half whose partner and broker were never deleted.
+        """
+        marker = uuid4().hex[:12]
+        user = User(username=f"failed_delete_{marker}", email=f"failed_delete_{marker}@test.com", hashed_password="fakehash", is_active=True)
+        session.add(user)
+        await session.flush()
+        asset = await _own_asset(session, "EUR")
+        sender = await _owned_broker(session, user, "Failed deletion sender")
+        receivers = [await _owned_broker(session, user, f"Failed deletion receiver {n}") for n in (1, 2)]
+        deposit = _cash_row(sender, TransactionType.DEPOSIT, PAIR_FUNDING_DAY, "1000", "EUR")
+        purchase = _row(sender, asset, TransactionType.BUY, PAIR_FUNDING_DAY, "10", "-200", "EUR")
+        departures = [_row(sender, asset, TransactionType.TRANSFER, PAIR_DAY, f"-{quantity}") for quantity in ("4", "3")]
+        arrivals = [_row(receiver, asset, TransactionType.TRANSFER, PAIR_DAY, quantity) for receiver, quantity in zip(receivers, ("4", "3"), strict=True)]  # no cost basis
+        await _add(session, deposit, purchase, *departures, *arrivals)
+        for departure, arrival in zip(departures, arrivals, strict=True):
+            departure.related_transaction_id, arrival.related_transaction_id = arrival.id, departure.id
+        await session.flush()
+        # Plain ids from here on: a rollback expires the objects, and an expired attribute cannot be loaded in async.
+        user_id, asset_id, broker_ids = user.id, asset.id, [sender, *receivers]
+        links = {arrival.id: departure.id for departure, arrival in zip(departures, arrivals, strict=True)}
+        labels = {deposit.id: "sender's deposit", purchase.id: "sender's purchase"}
+        for n, (departure, arrival) in enumerate(zip(departures, arrivals, strict=True), start=1):
+            labels |= {departure.id: f"departure to receiver {n}", arrival.id: f"arrival at receiver {n}"}
+
+        try:
+            await session.commit()  # the user's data as the database holds it when the request comes
+            before = await _kept(engine, broker_ids)
+            assert {tx_id: (before["rows"][tx_id]["type"], before["rows"][tx_id]["related_transaction_id"], before["rows"][tx_id]["cost_basis_override"], before["rows"][tx_id]["cost_basis_currency"]) for tx_id in links} == {
+                tx_id: (TransactionType.TRANSFER, partner_id, None, None) for tx_id, partner_id in links.items()
+            }, "precondition broken: two receiving TRANSFER halves, linked to the sender's, without cost basis"
+
+            calls: list[int] = []
+            real_compute = auto_cost.compute_wac_iterative
+
+            async def computes_once_then_fails(*args, **kwargs):
+                calls.append(kwargs.get("broker_id"))
+                if len(calls) > 1:
+                    raise RuntimeError("boom")
+                return await real_compute(*args, **kwargs)
+
+            monkeypatch.setattr(auto_cost, "compute_wac_iterative", computes_once_then_fails)
+
+            response = await BrokerService(session).delete_bulk([BRDeleteItem(id=sender, force=True)], user_id=user_id)
+            if not response.errors:  # what DELETE /brokers does next (api/v1/brokers.py)
+                await session.commit()
+            else:
+                await session.rollback()
+
+            after = await _kept(engine, broker_ids)
+            assert len(calls) == 2, f"precondition broken: the sender's pool was to be averaged twice, the second time failing; calls: {calls}"
+            assert [(result.id, result.success) for result in response.results] == [(sender, False)]
+            assert "boom" in (response.results[0].message or ""), f"the error belongs in the broker's result: {response.results[0].message!r}"
+            assert after["brokers"] == before["brokers"], "every broker must still be there, the sender first"
+            assert _changed(before["rows"], after["rows"], labels) == {}
+        finally:
+            await session.rollback()
+            await _remove_committed(engine, user_id=user_id, broker_ids=broker_ids, asset_id=asset_id)
