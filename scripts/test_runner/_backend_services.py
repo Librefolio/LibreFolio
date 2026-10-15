@@ -523,6 +523,16 @@ def services_provider_cooldown(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Provider cooldown tests", verbose=verbose)
 
 
+def services_shutdown_budget(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the shutdown time budget: the server exits within about 8 s of SIGTERM or SIGINT (decision 35)."""
+    print_section("Services: Shutdown Budget")
+    print_info("Testing: backend/app/services/platform/shutdown_budget.py, backend/app/config/sleep_wake.py, entrypoint.sh, the shutdown grace of the runner and of Playwright")
+    print_info("Tests: LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS and its 3/8 drain, UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN from entrypoint.sh, graces >= budget + 2 s, the watchdog (armed once, fired once, exit 1 on fakes), the SIGTERM/SIGINT wrappers, shutdown deadlines, children terminated then killed")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_shutdown_budget.py", test_names)
+    return run_command(cmd, "Shutdown budget tests", verbose=verbose)
+
+
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
     """Test session revocation through the session version (the sv claim of the session cookie)."""
     print_section("Services: Session Version")
@@ -1310,6 +1320,18 @@ Note: No backend server required.
         # PURE: no DB, no server; environment changed only through monkeypatch, process-local; the module instance
         # replaced by monkeypatch. The once-per-process log is read in a fresh interpreter of its own (sys.executable,
         # run in tmp_path, with a copy of this environment): no DB, no server there either.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "shutdown-budget",
+        services_shutdown_budget,
+        name="Shutdown Budget",
+        desc="config.sleep_wake: LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS (0 = no limit, ASCII digits 2–600, default 8) read at call time, the drain max(1, budget*3//8), uvicorn_drain_env (a value set by hand wins, never raises); entrypoint.sh exports UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN under sh and dash; the runner's and Playwright's plain grace >= budget + 2 s; shutdown_budget: shutdown_budget_seconds never raises and logs once per process, ShutdownWatchdog arms once (re-entrant, one daemon thread) and fires once (ERROR log of step, threads and children, terminate_children(0.5), coverage saved only if measuring, flush, exit 1 even after a failing step), SIGTERM/SIGINT wrappers arm then call uvicorn's handler, shutdown_deadline, terminate_child_processes (terminate, timeout, kill, recursive, keep)",
+        # PURE: no DB, no server, no lane port; environment only through monkeypatch; SIGTERM/SIGINT handlers saved and
+        # restored around each test, never delivered (the wrappers are called directly); os._exit and the default
+        # terminate_children replaced by recorders. Its subprocesses are `sh entrypoint.sh` runs and short-lived python
+        # children of its own (fresh interpreters in tmp_path included), all reaped.
         isolation="pure",
     )
     add_test(
