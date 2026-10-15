@@ -1114,9 +1114,31 @@ per le connessioni volute e `test-author`; l'handoff elenca i file di altri che 
 > - Non fatto: documentazione per sviluppatori. Nessuna pagina descrive le fixture del conftest condiviso; una riga
 >   in `.github/instructions/backend-testing.instructions.md` è proposta al coordinatore (file condiviso).
 
-#### Checkpoint J-6 🧊 (2026-10-15) — FROZEN, in attesa del commit del coordinatore
+#### Checkpoint J-6 ✅ (2026-10-15) — committato dal coordinatore (`b49a54645`, journal `1edcedbfe`)
 
 - Delta: 2 file nuovi (`backend/test_scripts/test_aiosqlite_guard.py`,
   `backend/test_scripts/test_utilities/test_aiosqlite_leak_gate.py`), 2 condivisi modificati solo con aggiunte
   (`backend/test_scripts/conftest.py` +37, `scripts/test_runner/_backend_utils.py` +20), questo piano, la riga J-6
   della sezione J.
+
+#### Revisione combinata con la guardia — `dev_release2` `6cd64b71b` 🧊 (2026-10-15) — FROZEN, validata
+
+Merge del coordinatore `c7a2b050e` (genitori `1edcedbfe` e `6cd64b71b`): X CP4, W K2a, A4b, X J-5, H CP5a, coi loro
+record. Un conflitto nel solo backlog (la chiusura di J-5 del coordinatore accanto alla mia J-6), risolto dal
+coordinatore tenendo le due: la mia riga J-6 è come la volevo. Richiesta: la validazione completa, perché la guardia gira
+intorno a ogni test e il fuso porta i test di cinque lotti che non ci sono mai passati (il più vicino,
+`test_platform_readiness.py` di H, crea DB su file).
+
+> **Note implementazione** (log in `/tmp/libreFolio_j/j6m/`):
+> - `dev.py front build --debug` (CP5a cambia l'API): svelte-check 0 errori e 0 avvisi; `dev.py mkdocs build`
+>   stretto: 0 avvisi; `utils gate-aiosqlite-leak` 9; `check-orphans` verde (276 file del backend raggiungibili).
+> - Lettura dei test nuovi o cambiati dal merge: creano motori aiosqlite e li smaltiscono `test_platform_readiness.py`
+>   (`_session(path)`, `:140-147`), `test_session_version.py`, `test_auth_api.py`, `populate_mock_data.py`. L'unico senza
+>   `dispose()` è `test_ai_export_components_asset.py` (cambiato da X), col suo `_make_async_session()` «tableless» su
+>   cui non gira SQL.
+> - **`all-backend --workers 2`** (07:25–07:38, carico fino a 48 all'avvio): 7/7, «ALL BACKEND TESTS PASSED»;
+>   **14 199 passed, 29 skipped, 0 failed, 0 errors**. **Nessun rapporto della guardia**, nessun ERROR al teardown,
+>   nessun `PytestUnhandledThreadExceptionWarning`; lo skip in più è ancora quello di `css_scraper` a mercato chiuso.
+> - `pytest --collect-only` (ambiente della corsia): fuso 14 211, `6cd64b71b` estratto 14 202: esattamente i 9 self-test
+>   della guardia, nessun test perso.
+> - Porta 6185 libera.
