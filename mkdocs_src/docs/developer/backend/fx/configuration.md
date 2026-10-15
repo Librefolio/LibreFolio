@@ -11,7 +11,7 @@ When the system needs to fetch FX rates (e.g., via the `/api/v1/fx/currencies/sy
 Each currency pair can have multiple **routes** assigned, ranked by **priority** (1 = highest/primary).
 
 1. **Primary Route**: The system first attempts to use the route with `priority=1`.
-2. **Fallback**: If the primary route fails (API error, timeout, provider down), the system automatically tries the route with `priority=2`, and so on.
+2. **Fallback**: If the primary route fails (API error, timeout, provider down, provider [paused](#paused-providers) after «too many requests»), the system automatically tries the route with `priority=2`, and so on.
 3. **Failure**: If all configured routes fail, the sync operation reports an error for that specific pair.
 
 ### 🔗 Direct vs. Chain Routes
@@ -239,3 +239,26 @@ This ensures resilience to individual provider outages and supports currency pai
 The scheduler's history-sync job (`run_history_sync()`, `backend/app/services/platform/scheduler/jobs.py`)
 calls the same function for every pair with a route that has no `MANUAL` step, from today minus
 `scheduler_history_sync_horizon_days` (default 14) to today.
+
+### ⏸️ Paused Providers {: #paused-providers }
+
+Every call to an FX provider goes through `call_fx_provider()` (`backend/app/services/fx/runtime.py`):
+the fetches of `sync_pairs_bulk()`, those of the older `ensure_rates_multi_source()`, and the
+supported-currency catalogue. A provider that refused for too many requests is paused, as the asset
+providers are ([Provider Pauses](../assets/architecture.md#provider-pauses)): until the pause ends,
+the boundary raises `FXRateLimitedError` (`error_code = "RATE_LIMITED"`, `retry_after` = the seconds
+left) without calling it. A refusal met during a fetch pauses the provider the same way, and the
+error carries the pause decided.
+
+- **A paused provider is a failed leg.** `_fetch_provider()` records the refusal and fails every leg
+  of that provider with its message, logged at INFO with no traceback. The pair goes on to its next
+  route, as after any failed leg; the legs of every route were fetched in the same pass, so the next
+  route is not delayed.
+- **The cache comes first.** A fetch found in the 5-minute cache of the sync (`_fx_fetch_cache`) is
+  used even while its provider is paused.
+- **The pair result.** A pair that ended `failed` or `partial` while one of its routes uses a
+  provider that refused or was paused carries `error_code: "RATE_LIMITED"` and `retry_after`: the
+  shortest wait among those providers, the first moment one of its routes may work again. A pair
+  that another route served (`ok`), and a `skipped` pair, carry neither.
+- **The catalogue** (`GET /fx/providers`) answers with the provider's last known list, as after any
+  failure, and asks again 5 minutes later.

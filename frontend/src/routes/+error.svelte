@@ -7,7 +7,7 @@
 <AnimatedBackground />
 
 <div class="min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-md bg-lf-card text-lf-primary border border-lf-subtle rounded-2xl shadow-2xl overflow-hidden">
+    <div class="w-full max-w-md bg-lf-card text-lf-primary border border-lf-raised rounded-2xl shadow-2xl shadow-lf-shadow overflow-hidden">
         <!-- Header (brand green) -->
         <div class="bg-lf-brand p-6 flex flex-col items-center justify-center">
             <div class="text-6xl text-lf-on-brand mb-2">
