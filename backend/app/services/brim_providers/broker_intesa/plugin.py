@@ -50,8 +50,8 @@ from backend.app.db.models import TransactionType
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions import TXCreateItem
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
-from backend.app.services.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim_providers import _brim_io as io
 from backend.app.services.brim_providers._brim_output import attach_maturity_notices
 from backend.app.services.provider_registry import register_provider

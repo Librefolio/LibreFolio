@@ -277,6 +277,88 @@ All other endpoints — including Auth (profile, password), Settings (including 
 
 For a complete endpoint reference, see the [API Overview](../api/overview.md).
 
+## 🎟️ Single-use Account Tokens {: #account-tokens }
+
+Invitations, password-reset links, email verification and the setup link of the initial administrator all hand
+someone a secret inside a URL. `backend/app/services/accounts/token_service.py` is the building block of these
+single-use links in the accounts domain: it issues, checks, spends and revokes their tokens, with the same
+guarantees for all four. No API endpoint calls it today, and the web interface has no page at the paths of its
+links.
+
+### 🎲 Generation and Storage
+
+- `issue_token()` draws a new token on every call with `secrets.token_urlsafe(32)`: 32 random bytes (256 bits),
+  written as 43 URL-safe characters.
+- The plaintext is returned once, in `IssuedToken.token`, beside the new row (`IssuedToken.record`). The database
+  keeps only `hash_token(token)` — the SHA-256 of the UTF-8 token, 64 lowercase hex characters — in
+  `account_tokens.token_hash`, which is unique. A link cannot be rebuilt from the database: a lost one is replaced
+  by a new token, never recovered.
+- A fast hash is enough: unlike a password, 256 random bits are out of reach of guessing, so no slow salted hash
+  is needed. Being deterministic, the hash is also the lookup key: `inspect_token()` and `consume_token()` hash
+  the token they receive and search `token_hash`.
+
+### 🎯 Purposes, Lifetimes and Links
+
+Each token serves one `AccountTokenPurpose`, stored in `purpose`. Every lookup matches the hash **and** the
+purpose: a token presented for another purpose is `unknown`, exactly like a token never issued — a reset link is
+never an invitation.
+
+| Purpose | Default lifetime (`DEFAULT_TTL`) | `user_id` | `grants_admin` | Link (`token_path()`) |
+|---------|----------------------------------|-----------|----------------|-----------------------|
+| `invite` | 7 days | Refused: the account does not exist yet | Allowed | `/invite?token=…` |
+| `password_reset` | 30 minutes | Required | Refused | `/reset-password?token=…` |
+| `email_verification` | 24 hours | Required | Refused | `/verify-email?token=…` |
+| `admin_setup` | 72 hours | Required | Refused | `/setup?token=…` |
+
+`expires_at` is `created_at` plus the lifetime; a `ttl` argument replaces the default. `issue_token()` raises
+`ValueError` on a refused or missing `user_id`, on a refused `grants_admin` and on a lifetime that is not
+positive, before writing anything. `token_path(purpose, token)` returns the link as a path with its query string.
+
+### 🚦 Checking and Spending a Token
+
+`inspect_token(session, token, purpose)` returns a `TokenInspection` — a `TokenStatus` and the row — and writes
+nothing. The status is `unknown` (with no row), `revoked`, `consumed`, `expired` or `valid`, checked in that
+order: a revoked token that has also expired reports `revoked`. A token expires at `expires_at` exactly; it is
+valid until the microsecond before.
+
+`consume_token(session, token, purpose, consumed_by_user_id=…)` spends a token with one conditional `UPDATE`,
+which amounts to:
+
+```sql
+UPDATE account_tokens
+SET consumed_at = :now, consumed_by_user_id = :consumer
+WHERE token_hash = :hash AND purpose = :purpose
+  AND consumed_at IS NULL AND revoked_at IS NULL
+  AND expires_at > :now
+```
+
+When the statement changes exactly one row, `consume_token()` returns that row, read again from the database;
+otherwise it returns `None` and nothing changed — `inspect_token()` tells why. The check and the write are one
+statement, with no gap between them: of two requests racing for the same link, only the one whose `UPDATE`
+changes the row gets it.
+
+### 🚫 Revocation
+
+`revoke_tokens(session, token_id=…)` revokes one token, `revoke_tokens(session, user_id=…)` the tokens of one
+account, optionally of one `purpose`. It sets `revoked_at` on the matching tokens that are neither consumed nor
+revoked — expired ones included — and returns how many; consumed and revoked tokens keep their timestamps.
+Without a `token_id` or a `user_id` it raises `ValueError` rather than revoke every token. An invitation has no
+`user_id`: it is revoked by its id.
+
+### 🔁 Transactions and Logs
+
+- The service never commits. `issue_token()` flushes, so the new row has its id; `consume_token()` and
+  `revoke_tokens()` run their `UPDATE` in the session's transaction. The caller commits: spending an invitation
+  and creating the account it opens share one transaction, and fail together. A rollback undoes an issue, a
+  consumption or a revocation.
+- The plaintext token is never logged, and neither is its hash. The events *Account token issued*, *Account
+  token consumed* and *Account tokens revoked* carry the token id, the purpose and the user ids.
+
+`./dev.py test services account-tokens` (`backend/test_scripts/test_services/test_account_tokens.py`) pins this
+contract, including two sessions consuming one token at once and a search of the logs and of every database
+column for the plaintext. The table — columns, constraints, foreign-key actions — is described in
+[`ACCOUNT_TOKEN`](database/users_access.md#account-token).
+
 ## 🧼 Output Escaping
 
 User- and provider-supplied text — asset, broker, and file names, notes, currency codes, icon

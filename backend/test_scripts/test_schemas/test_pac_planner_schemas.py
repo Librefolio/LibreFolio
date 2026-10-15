@@ -19,27 +19,24 @@ from typing import Any, get_args
 import pytest
 from pydantic import BaseModel, TypeAdapter, ValidationError
 
-from backend.app.schemas import pac_allocator as pac_schemas
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator import base as pac_schema_base
+from backend.app.schemas.pac_allocator.base import PlannerFixedDecimal
+from backend.app.schemas.pac_allocator.evidence import SolverStageEvidence, ValuationMoneyUnit
+from backend.app.schemas.pac_allocator.exact import ExactNumber
+from backend.app.schemas.pac_allocator.issues import PlannerIssue
+from backend.app.schemas.pac_allocator.request import PacPlannerRequest, PlannerBrokerIdentity, RebalancerInvestAndSellRequest, RebalancerInvestOnlyRequest
+from backend.app.schemas.pac_allocator.results import (
     PAC_PLAN_INPUT_ADAPTER,
     PAC_PLAN_OUTPUT_ADAPTER,
     REBALANCER_PLAN_INPUT_ADAPTER,
     REBALANCER_PLAN_OUTPUT_ADAPTER,
-    ExactNumber,
-    ObjectiveStageResult,
     PacPlannerInvalidResult,
     PacPlannerNeedsInputResult,
     PacPlannerReadyIncumbentResult,
     PacPlannerReadyInfeasibleResult,
     PacPlannerReadyNoIncumbentResult,
     PacPlannerReadyNoOpResult,
-    PacPlannerRequest,
     PacPlannerUnsupportedResult,
-    PlannerBrokerIdentity,
-    PlannerFixedDecimal,
-    PlannerIssue,
-    RebalancerInvestAndSellRequest,
-    RebalancerInvestOnlyRequest,
     RebalancerPlannerInvalidResult,
     RebalancerPlannerNeedsInputResult,
     RebalancerPlannerReadyIncumbentResult,
@@ -47,9 +44,8 @@ from backend.app.schemas.pac_allocator import (
     RebalancerPlannerReadyNoIncumbentResult,
     RebalancerPlannerReadyNoOpResult,
     RebalancerPlannerUnsupportedResult,
-    SolverStageEvidence,
-    ValuationMoneyUnit,
 )
+from backend.app.schemas.pac_allocator.rows import ObjectiveStageResult
 from backend.app.services.tools.schema import (
     declared_operations,
     generate_tool_schema,
@@ -64,6 +60,12 @@ FIXTURE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "pac_allocator"
 GENERATED_CONTRACT = ROOT / "frontend" / "src" / "lib" / "api" / "tool-contracts.openapi.json"
 
 PLANNER_PARAMETER_BYTES = 131_072
+from backend.app.schemas.pac_allocator.base import AllocationStrictModel, NotProvenReasonCode, PlannerIntegerText, PlannerIssueCode, PlannerPositiveWholeDecimal, PlannerWholeQuantityStep
+from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, NotProvenProof, ObjectiveSense, OptimalProvenProof, ReadyPlanProof, ReportedFloatingSolverEvidence, SolverStatusWitness
+from backend.app.schemas.pac_allocator.request import NoFeeCap, NoOrderCap, NoOrderMinimum, PlannerSellOrderRouteInput, QuantityOrderCap, WholeQuantityCapability, WholeQuantityMinimum
+from backend.app.schemas.pac_allocator.rows import PlannerCatalogAsset, PlannerFundingAction
+from backend.app.schemas.pac_allocator.solutions import DeploymentCoincident, DeploymentUnavailable
+
 PLANNER_RESULT_BYTES = 262_144
 CANDIDATE_FIXTURE_STATUS = "structural specimen only; not capacity proof"
 
@@ -801,9 +803,9 @@ def test_six_authoritative_fixtures_strict_roundtrip_with_byte_headroom(
 
 
 FIXED_DECIMAL_ADAPTER = TypeAdapter(PlannerFixedDecimal)
-INTEGER_TEXT_ADAPTER = TypeAdapter(pac_schemas.PlannerIntegerText)
-WHOLE_QUANTITY_STEP_ADAPTER = TypeAdapter(pac_schemas.PlannerWholeQuantityStep)
-POSITIVE_WHOLE_DECIMAL_ADAPTER = TypeAdapter(pac_schemas.PlannerPositiveWholeDecimal)
+INTEGER_TEXT_ADAPTER = TypeAdapter(PlannerIntegerText)
+WHOLE_QUANTITY_STEP_ADAPTER = TypeAdapter(PlannerWholeQuantityStep)
+POSITIVE_WHOLE_DECIMAL_ADAPTER = TypeAdapter(PlannerPositiveWholeDecimal)
 
 WHOLE_QUANTITY_STEP_CASES = (
     pytest.param("1", True, id="one"),
@@ -867,7 +869,7 @@ def test_whole_quantity_step_schema_is_signed_request_only_while_output_whole_de
         re.compile(pattern)
         assert not any(fragment in pattern for fragment in ("(?=", "(?!", "(?<=", "(?<!"))
 
-    capability_schema = TypeAdapter(pac_schemas.WholeQuantityCapability).json_schema()
+    capability_schema = TypeAdapter(WholeQuantityCapability).json_schema()
     assert contract(capability_schema["properties"]["quantity_step"]) == signed_contract
 
     for adapter in (PAC_PLAN_INPUT_ADAPTER, REBALANCER_PLAN_INPUT_ADAPTER):
@@ -903,7 +905,7 @@ def test_option_b_whole_quantity_step_defers_nonpositive_semantics_to_the_downst
     emitted_capability = _find(emitted_broker["capabilities"], "capability_id", "cap-alpha-eur-whole")
 
     assert emitted_capability["quantity_step"] == quantity_step
-    assert "allocation.nonpositive_quantity_step" in get_args(pac_schemas.PlannerIssueCode)
+    assert "allocation.nonpositive_quantity_step" in get_args(PlannerIssueCode)
 
 
 @pytest.mark.parametrize(
@@ -1082,7 +1084,7 @@ def test_domain_broker_strictly_rejects_source_only_fields(
 
 
 PLANNER_ISSUE_ADAPTER = TypeAdapter(PlannerIssue)
-PLANNER_ISSUE_CODE_ADAPTER = TypeAdapter(pac_schemas.PlannerIssueCode)
+PLANNER_ISSUE_CODE_ADAPTER = TypeAdapter(PlannerIssueCode)
 
 EXPECTED_PLANNER_ISSUE_CODES = (
     "allocation.asset_inactive_not_buyable",
@@ -1214,7 +1216,7 @@ def _catalogue_issue_specimen(code: str) -> JsonObject:
 def test_planner_issue_code_catalogue_is_exact_closed_and_sorted() -> None:
     assert len(EXPECTED_PLANNER_ISSUE_CODES) == 77
     assert EXPECTED_PLANNER_ISSUE_CODES == tuple(sorted(EXPECTED_PLANNER_ISSUE_CODES))
-    assert get_args(pac_schemas.PlannerIssueCode) == EXPECTED_PLANNER_ISSUE_CODES
+    assert get_args(PlannerIssueCode) == EXPECTED_PLANNER_ISSUE_CODES
     assert PLANNER_ISSUE_CODE_ADAPTER.json_schema()["enum"] == list(EXPECTED_PLANNER_ISSUE_CODES)
 
 
@@ -1238,7 +1240,7 @@ NON_ISSUE_REASON_CATALOGUE_CASES = (
     pytest.param(
         "FundingActionReasonCode",
         ("allocation.fund_declared_orders",),
-        ((pac_schemas.PlannerFundingAction, "reason_code"),),
+        ((PlannerFundingAction, "reason_code"),),
         id="funding-action",
     ),
     pytest.param(
@@ -1250,8 +1252,8 @@ NON_ISSUE_REASON_CATALOGUE_CASES = (
             "allocation.primary_is_deployment",
         ),
         (
-            (pac_schemas.DeploymentUnavailable, "reason_code"),
-            (pac_schemas.DeploymentCoincident, "reason_code"),
+            (DeploymentUnavailable, "reason_code"),
+            (DeploymentCoincident, "reason_code"),
         ),
         id="deployment",
     ),
@@ -1261,7 +1263,7 @@ NON_ISSUE_REASON_CATALOGUE_CASES = (
             "allocation.exact_proof_not_established",
             "portfolio_rebalancer.sell_irreducibility_unresolved",
         ),
-        ((pac_schemas.NotProvenProof, "reason_code"),),
+        ((NotProvenProof, "reason_code"),),
         id="not-proven",
     ),
 )
@@ -1280,7 +1282,7 @@ def test_non_issue_reason_catalogues_are_closed_and_bound_to_their_fields(
     expected_codes: tuple[str, ...],
     bound_fields: tuple[tuple[type[BaseModel], str], ...],
 ) -> None:
-    reason_type = getattr(pac_schemas, type_name, None)
+    reason_type = getattr(pac_schema_base, type_name, None)
     assert reason_type is not None, f"{type_name} must be a public closed alias"
     assert get_args(reason_type) == expected_codes
 
@@ -1309,7 +1311,7 @@ def test_non_issue_reason_catalogues_are_closed_and_bound_to_their_fields(
     ),
 )
 def test_not_proven_reason_code_rejects_unknown_namespaced_and_uppercase_values(reason_code: str) -> None:
-    adapter = TypeAdapter(pac_schemas.NotProvenReasonCode)
+    adapter = TypeAdapter(NotProvenReasonCode)
     with pytest.raises(ValidationError):
         adapter.validate_json(_wire(reason_code), strict=True)
 
@@ -1818,13 +1820,13 @@ def test_compact_pac_request_fills_every_omitted_default_as_a_model_instance() -
     assert model.funding_routes == []
     assert _select(model, ("brokers", ("broker_id", "broker-one"))).fee_schedules == []
     route = _select(model, ("order_routes", ("route_id", "route-asset-one-broker-one-buy")))
-    assert type(route.required_minimum) is pac_schemas.NoOrderMinimum
+    assert type(route.required_minimum) is NoOrderMinimum
     assert route.execution_margin_rate == "0"
     assert route.fee_schedule_id is None
     # What the twin does say is kept as sent.
     assert route.priority == 1
-    assert type(route.minimum_if_active) is pac_schemas.WholeQuantityMinimum
-    assert type(route.cap) is pac_schemas.QuantityOrderCap
+    assert type(route.minimum_if_active) is WholeQuantityMinimum
+    assert type(route.cap) is QuantityOrderCap
     assert [row.cash_id for row in model.existing_cash] == ["cash-broker-one-eur"]
 
     sparse = deepcopy(twin)
@@ -1848,12 +1850,12 @@ def test_compact_pac_request_fills_every_omitted_default_as_a_model_instance() -
     assert schedule.fixed_fee is None
     assert schedule.rate == "0"
     assert schedule.variable_floor is None
-    assert type(schedule.variable_cap) is pac_schemas.NoFeeCap
+    assert type(schedule.variable_cap) is NoFeeCap
     filled_route = _select(model, ("order_routes", ("route_id", "route-asset-one-broker-one-buy")))
     assert filled_route.priority == 0
-    assert type(filled_route.minimum_if_active) is pac_schemas.NoOrderMinimum
-    assert type(filled_route.required_minimum) is pac_schemas.NoOrderMinimum
-    assert type(filled_route.cap) is pac_schemas.NoOrderCap
+    assert type(filled_route.minimum_if_active) is NoOrderMinimum
+    assert type(filled_route.required_minimum) is NoOrderMinimum
+    assert type(filled_route.cap) is NoOrderCap
     assert filled_route.execution_margin_rate == "0"
 
 
@@ -1949,7 +1951,7 @@ def test_manual_provenance_label_and_sell_route_fee_schedule_stay_required(path:
 
 
 def test_catalog_asset_class_is_required_but_nullable() -> None:
-    assert pac_schemas.PlannerCatalogAsset.model_fields["asset_class"].is_required()
+    assert PlannerCatalogAsset.model_fields["asset_class"].is_required()
 
     result = _pac_no_op_result()
     catalog_asset = _find(result["catalogs"]["assets"], "asset_id", "asset-one")
@@ -1965,7 +1967,7 @@ def test_catalog_asset_class_is_required_but_nullable() -> None:
 
 
 def test_input_defaults_are_optional_in_validation_schema_and_required_in_serialization_schema() -> None:
-    assert pac_schemas.AllocationStrictModel.model_config.get("json_schema_serialization_defaults_required") is True
+    assert AllocationStrictModel.model_config.get("json_schema_serialization_defaults_required") is True
 
     validation = generate_tool_schema(PAC_PLAN_INPUT_ADAPTER, "validation")
     serialization = generate_tool_schema(PAC_PLAN_INPUT_ADAPTER, "serialization")
@@ -2148,7 +2150,7 @@ def test_medium_fixture_sell_routes_strict_roundtrip_without_gross_amount_reques
     assert capability["kind"] == capability_kind
     assert "gross_amount_requested" not in route
 
-    adapter = TypeAdapter(pac_schemas.PlannerSellOrderRouteInput)
+    adapter = TypeAdapter(PlannerSellOrderRouteInput)
     model, emitted = _strict_roundtrip(adapter, route)
     assert json.loads(emitted) == route
     assert "gross_amount_requested" not in adapter.dump_python(model, mode="json")
@@ -2219,9 +2221,9 @@ def test_rebalancer_ready_sell_orders_and_irreducibility_are_forbidden_only_for_
 EXACT_NUMBER_ADAPTER = TypeAdapter(ExactNumber)
 OBJECTIVE_STAGE_ADAPTER = TypeAdapter(ObjectiveStageResult)
 SOLVER_STAGE_ADAPTER = TypeAdapter(SolverStageEvidence)
-SOLVER_EVIDENCE_ADAPTER = TypeAdapter(pac_schemas.ReportedFloatingSolverEvidence)
-SOLVER_STATUS_WITNESS_ADAPTER = TypeAdapter(pac_schemas.SolverStatusWitness)
-INFEASIBILITY_PROOF_ADAPTER = TypeAdapter(pac_schemas.InfeasibilityProvenProof)
+SOLVER_EVIDENCE_ADAPTER = TypeAdapter(ReportedFloatingSolverEvidence)
+SOLVER_STATUS_WITNESS_ADAPTER = TypeAdapter(SolverStatusWitness)
+INFEASIBILITY_PROOF_ADAPTER = TypeAdapter(InfeasibilityProvenProof)
 
 VALUATION_OBJECTIVE_CASES = (
     pytest.param("fixed_l2", {"kind": "valuation_money_squared", "currency_code": "EUR"}, id="fixed-l2"),
@@ -2412,15 +2414,15 @@ def test_ready_result_non_optimal_proof_matrix_remains_typed() -> None:
     wire = PAC_PLAN_OUTPUT_ADAPTER.dump_python(model, mode="json")
     assert wire["proof"]["kind"] == "not_proven"
 
-    ready_proof_union, _discriminator = get_args(pac_schemas.ReadyPlanProof.__value__)
+    ready_proof_union, _discriminator = get_args(ReadyPlanProof.__value__)
     ready_proof_kinds = {get_args(member.model_fields["kind"].annotation) for member in get_args(ready_proof_union)}
     assert ready_proof_kinds == {("optimal_proven",), ("not_proven",)}
 
 
 def test_objective_sense_schema_explicitly_preserves_min_and_max() -> None:
     expected = ("min", "max")
-    assert get_args(pac_schemas.ObjectiveSense) == expected
-    assert TypeAdapter(pac_schemas.ObjectiveSense).json_schema()["enum"] == list(expected)
+    assert get_args(ObjectiveSense) == expected
+    assert TypeAdapter(ObjectiveSense).json_schema()["enum"] == list(expected)
     for model_type in (ObjectiveStageResult, SolverStageEvidence):
         assert get_args(model_type.model_fields["sense"].annotation) == expected
 
@@ -2806,8 +2808,8 @@ def test_infeasibility_proof_names_exactly_one_objective_code() -> None:
 
 
 SOLVER_STATUS_PROOF_CASES = (
-    pytest.param(pac_schemas.OptimalProvenProof, _optimal_proof_specimen, id="optimal"),
-    pytest.param(pac_schemas.InfeasibilityProvenProof, _infeasibility_proof_specimen, id="infeasibility"),
+    pytest.param(OptimalProvenProof, _optimal_proof_specimen, id="optimal"),
+    pytest.param(InfeasibilityProvenProof, _infeasibility_proof_specimen, id="infeasibility"),
 )
 
 
@@ -2821,7 +2823,7 @@ def test_solver_status_is_the_only_proof_source_and_witness_kind(
     foreign: str,
 ) -> None:
     assert get_args(proof_type.model_fields["proof_source"].annotation) == ("solver_status",)
-    assert get_args(pac_schemas.SolverStatusWitness.model_fields["kind"].annotation) == ("solver_status",)
+    assert get_args(SolverStatusWitness.model_fields["kind"].annotation) == ("solver_status",)
     adapter = TypeAdapter(proof_type)
     proof = factory()
     _strict_roundtrip(adapter, proof)

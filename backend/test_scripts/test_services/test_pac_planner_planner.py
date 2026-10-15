@@ -110,10 +110,10 @@ from typing import get_args
 
 import pytest
 
-from backend.app.schemas.pac_allocator import (
+from backend.app.schemas.pac_allocator.evidence import InfeasibilityProvenProof, ReportedFloatingSolverEvidence
+from backend.app.schemas.pac_allocator.results import (
     PAC_PLAN_INPUT_ADAPTER,
     PAC_PLAN_OUTPUT_ADAPTER,
-    InfeasibilityProvenProof,
     PacPlannerInvalidResult,
     PacPlannerNeedsInputResult,
     PacPlannerReadyIncumbentResult,
@@ -122,11 +122,11 @@ from backend.app.schemas.pac_allocator import (
     PacPlannerReadyNoOpResult,
     PacPlannerUnsupportedResult,
     PlannerResultSnapshot,
-    ReportedFloatingSolverEvidence,
 )
-from backend.app.services.pac_allocator import evaluator as EV
 from backend.app.services.pac_allocator import planner
-from backend.app.services.pac_allocator.evaluator import build_exact_policy_view, evaluate_exact_candidate, exact_decision_id
+from backend.app.services.pac_allocator.evaluation.errors import ExactEvaluatorError, ExactReplayRejectedError
+from backend.app.services.pac_allocator.evaluation.evaluator import build_exact_policy_view, evaluate_exact_candidate
+from backend.app.services.pac_allocator.evaluation.keys import exact_decision_id
 from backend.app.services.pac_allocator.normalize import normalize_pac_plan
 from backend.app.services.pac_allocator.planner import plan_pac_allocation
 from backend.test_scripts.test_schemas.test_pac_planner_schemas import _compact_pac_request, _fixture, _pac_request
@@ -613,7 +613,7 @@ def test_replay_rejection_beyond_the_rounding_threshold_raises(monkeypatch):
     assert -ledger.final_spendable > rounded_postings * spec.minor_unit
 
     assert not isinstance(outcome, PacPlannerReadyNoIncumbentResult), f"a replay rejection must raise ExactReplayRejectedError, not answer {outcome.result_state} / {outcome.stop_reason}"
-    assert isinstance(outcome, EV.ExactReplayRejectedError), repr(outcome)
+    assert isinstance(outcome, ExactReplayRejectedError), repr(outcome)
 
 
 # --------------------------------------------------------------------------
@@ -2023,7 +2023,7 @@ def test_solver_infeasibility_contradicted_by_the_exact_zero_plan_raises(monkeyp
     from backend.app.services.pac_allocator.planner import SolverInfeasibilityContradictedError  # noqa: PLC0415 — added by S3
 
     assert isinstance(outcome, SolverInfeasibilityContradictedError), repr(outcome)
-    assert isinstance(outcome, EV.ExactEvaluatorError)
+    assert isinstance(outcome, ExactEvaluatorError)
     assert re.search(r"\d+\.\d+", str(outcome)) is None, str(outcome)
 
 
