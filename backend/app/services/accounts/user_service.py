@@ -36,6 +36,14 @@ class AccountDeletionError(Exception):
 logger = structlog.get_logger(__name__)
 
 
+def end_sessions(user: User) -> None:
+    """Raise the account's session version: every session token issued before it is refused at its next request.
+
+    Not committed: the caller commits it together with the change that asks for it.
+    """
+    user.session_version += 1
+
+
 async def get_user_by_username(session: AsyncSession, username: str) -> Optional[User]:
     """
     Get user by username.
@@ -185,7 +193,7 @@ async def reset_password(
     new_password: str,
 ) -> tuple[bool, Optional[str]]:
     """
-    Reset a user's password.
+    Reset a user's password, and end every open session of the account.
 
     Args:
         session: Database session
@@ -202,14 +210,14 @@ async def reset_password(
     # Save user_id before commit (to avoid expired attribute access)
     user_id = user.id
 
-    user.hashed_password = hash_password(new_password)
+    # bcrypt is slow on purpose: it runs off the event loop.
+    user.hashed_password = await asyncio.to_thread(hash_password, new_password)
+    end_sessions(user)
     user.updated_at = utcnow()
     session.add(user)
     await session.commit()
 
-    # Note: JWT tokens cannot be revoked server-side. Existing tokens
-    # for this user will remain valid until they expire naturally.
-    logger.info("Password reset", user_id=user_id, username=username)
+    logger.info("Password reset, sessions ended", user_id=user_id, username=username)
     return True, None
 
 
@@ -222,7 +230,8 @@ async def set_user_active(
     Activate or deactivate a user.
 
     The last active administrator cannot be deactivated: an inactive user cannot log in, so the
-    instance would be left with nobody to administer it.
+    instance would be left with nobody to administer it. Deactivating ends every session of the account,
+    so that a later activation does not bring them back.
 
     Args:
         session: Database session
@@ -243,6 +252,8 @@ async def set_user_active(
     user_id = user.id
 
     user.is_active = active
+    if not active:
+        end_sessions(user)
     user.updated_at = utcnow()
     session.add(user)
     await session.commit()
@@ -261,7 +272,8 @@ async def set_user_admin(
     Promote or demote a user to/from admin.
 
     The last active administrator cannot be demoted: the instance would be left with nobody to
-    administer it. Demoting an inactive administrator removes no active one, and is allowed.
+    administer it. Demoting an inactive administrator removes no active one, and is allowed. Demoting
+    ends every session of the account.
 
     Args:
         session: Database session
@@ -286,6 +298,8 @@ async def set_user_admin(
     user_id = user.id
 
     user.is_superuser = is_admin
+    if not is_admin:
+        end_sessions(user)
     user.updated_at = utcnow()
     session.add(user)
     await session.commit()

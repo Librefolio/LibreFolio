@@ -63,7 +63,7 @@ graph TD
 
 **Phase 1** runs automatically when a file is uploaded — every registered plugin is asked if it can parse the file. Compatible plugins are listed for the user. It runs again, once per app version, when an original detected by another version is read: see [The lifecycle of `compatible_plugins`](#compatible-plugins-lifecycle).
 
-A file's `compatible_plugins` are what the import wizard offers for it, so `can_parse` must not claim a file that `parse` would refuse, fallback plugins included: the Generic CSV (`broker_generic_csv`, `detection_priority` 0) says `True` only for a `.csv` whose header row names both required columns, `date` and `type`, directly or through its multilingual aliases (`HEADER_MAPPINGS`: `data`, `fecha`, `datum`…; `tipo`, `operazione`, `action`…) — it used to claim any CSV with a header, then fail at parse. A file no plugin recognises is offered every plugin; parsing it with a single-file plugin whose `can_parse` says no answers 400 `Plugin '<code>' cannot parse file '<file_id><ext>'`, followed by `: <reason>` when the plugin says why ([`cannot_parse_reason`](#cannot-parse-reason)), and moves the file to `failed` with that message as its error.
+A file's `compatible_plugins` are what the import wizard offers for it, so `can_parse` must not claim a file that `parse` would refuse, fallback plugins included: the Generic CSV (`broker_generic_csv`, `detection_priority` 0) says `True` only for a `.csv` whose header row names both required columns, `date` and `type`, directly or through its multilingual aliases (`HEADER_MAPPINGS`: `data`, `fecha`, `datum`…; `tipo`, `operazione`, `action`…) — it used to claim any CSV with a header, then fail at parse. A file no plugin recognises is offered every plugin; parsing it with a single-file plugin whose `can_parse` says no answers 400 `Plugin '<name>' cannot parse file '<file name>'` — the plugin's `provider_name` and the name the file was uploaded with —, followed by `: <reason>` when the plugin says why ([`cannot_parse_reason`](#cannot-parse-reason)), and moves the file to `failed` with that message as its error.
 
 The rule has one **extension**: a plugin may claim a file it recognises as its own broker's even
 when it cannot import it, provided `parse` explains what is wrong — no transactions and one
@@ -256,13 +256,15 @@ say.
 - **What it returns.** One short English sentence saying why `can_parse` refuses the file, with a
   lowercase start and no final period, because it completes the guard's message; `None` when
   there is nothing to add.
-- **What the user reads.** The guard's `Plugin '<code>' cannot parse file '<file_id><ext>'` (the
-  name LibreFolio stores the file under, not the user's file name) gains `: <reason>`. The API
-  answers 400 with that text, the file goes to `failed` with it as its `error_message`, and the
-  wizard's parse-error box shows it after the user's file name:
+- **What the user reads.** The guard's `Plugin '<name>' cannot parse file '<file name>'` gains
+  `: <reason>`. It names the plugin by its `provider_name` and the file by the name the user
+  uploaded it with, never by the plugin code or the `<file_id><ext>` LibreFolio stores it under; a
+  duck-typed plugin without `provider_name` is named by its code. The API answers 400 with that
+  text, the file goes to `failed` with it as its `error_message`, and the wizard's parse-error box
+  shows it after the user's file name:
 
     ```text
-    export.csv — Plugin 'broker_generic_csv' cannot parse file '<file_id>.csv': required column 'date' not found in the CSV header
+    export.csv — Plugin 'Generic CSV' cannot parse file 'export.csv': required column 'date' not found in the CSV header
     ```
 
 - **Cost and failure.** Keep it as cheap as `can_parse` and never raise. Without a reason — the
@@ -270,18 +272,20 @@ say.
   stays plain. If the method raises anyway, the guard logs the exception and keeps the plain
   message: still a 400, never a 500.
 
-The Generic CSV is the reference implementation. It checks, in this order:
+The Generic CSV is the reference implementation. It checks, in this order, and gives each refusal
+a [code](#cannot-parse-detail) too:
 
-| The file | `cannot_parse_reason` answers |
-|----------|-------------------------------|
-| has an extension other than `.csv` | `the Generic CSV reads only .csv files` |
-| cannot be read | `the file could not be read` |
-| is empty, or starts with an empty row | `the file has no header row` |
-| has a header row without `date`, `type` or both — no alias of `HEADER_MAPPINGS` matches | `required column 'date' not found in the CSV header`, the same with `'type'`, or `required columns 'date' and 'type' not found in the CSV header` |
-| has a header row naming both | `None` |
+| The file | `cannot_parse_reason` answers | `code` and `context` |
+|----------|-------------------------------|----------------------|
+| has an extension other than `.csv` | `the Generic CSV reads only .csv files` | `csv_only`, with its own `plugin_code` |
+| cannot be read | `the file could not be read` | `file_unreadable` |
+| is empty, or starts with an empty row | `the file has no header row` | `no_header_row` |
+| has a header row without `date`, `type` or both — no alias of `HEADER_MAPPINGS` matches | `required column 'date' not found in the CSV header`, the same with `'type'`, or `required columns 'date' and 'type' not found in the CSV header` | `missing_columns`, with `columns` (`date`, `type` or `date, type`) and `count` (1 or 2) |
+| has a header row naming both | `None` | — |
 
-Its `can_parse` is `return self.cannot_parse_reason(file_path) is None`, so the two can never
-disagree: build yours the same way when your refusals have causes worth naming. The suite holds
+Its `can_parse` is `return self.cannot_parse_reason(file_path) is None`, and the sentence is the
+`message` of its `cannot_parse_detail`, so the three can never disagree: build yours the same way
+when your refusals have causes worth naming. The suite holds
 every registered plugin to the contract: `test_every_plugin_answers_nothing_or_one_sentence`, in
 `backend/test_scripts/test_external/test_brim_providers.py` (`./dev.py test external brim-providers`),
 asks the method about every file of `sample_reports/` and about paths with nothing to read, and
@@ -368,6 +372,44 @@ plugin that reads it (`_scalable.refusal`):
 
 `context` names the other plugin, as `plugin_code` and `plugin_name`. Any other file gets `None`:
 the two plugins give a reason only for Scalable's own exports.
+
+**Shared codes.** Some causes belong to no broker: the extension, a file that cannot be read, no
+header row, missing required columns, no movement rows. Their codes are shared: a plugin that
+refuses a file for one of these causes reuses the code, and its translation, instead of adding
+its own.
+
+| `code` | Given today by | `context` | English text |
+|--------|----------------|-----------|--------------|
+| `csv_only` | Generic CSV | `plugin_code` of the refusing plugin | The {plugin_name} plugin reads only .csv files. |
+| `file_unreadable` | Generic CSV, DEGIRO | empty | The file could not be read. |
+| `no_header_row` | Generic CSV | empty | The file has no header row. |
+| `missing_columns` | Generic CSV | `columns`, the names joined by `, `; `count`, an integer that picks the plural | Required column(s) {columns} not found in the CSV header. |
+| `no_movement_rows` | DEGIRO | empty | The file has no movement rows. |
+
+**Example: DEGIRO.** `broker_degiro` reads only the Account Statement exported as CSV. Besides the
+shared `file_unreadable` and `no_movement_rows`, it has two codes of its own, with an empty
+`context`: `degiro_csv_only`, for a file that is not a `.csv` (the message asks to download the
+Account Statement as CSV), and `degiro_not_account_statement`, for a CSV of another layout (12
+columns with the ISIN fifth, unnamed amount columns ninth and eleventh, dates as `DD-MM-YYYY`).
+Unlike its notices, which keep the language of the file (the tip *Warning language follows the
+input format*, below), a refusal is shown in the UI language: a file the plugin refuses has no
+language it recognised.
+
+**Where the translations live.** Every code is a key of `importWizard.parseRefusal`, in the import
+wizard's sources (`frontend/src/lib/i18n/importWizard/{en,it,fr,es}.json`), whether it is shared or
+a plugin's own: a plugin's fragment holds only its `brimPlugins.<code>` keys
+([The Ownership Gate](registry_pattern.md#plugin-i18n-gate)). Add one with the i18n tool, which finds
+the source from the prefix:
+
+```bash
+./dev.py i18n add "importWizard.parseRefusal.mybroker_xlsx_only" --en "…" --it "…" --fr "…" --es "…"
+```
+
+A message with a count is an ICU plural, and its text must differ between languages (*Locale-Sensitive
+ICU Messages*, in the [frontend i18n guide](../../frontend/i18n.md)). `TestGenericCSVRefusesWithACode` (`test_brim_providers.py`) and
+`TestRefusalCodes` (`test_brim_degiro.py`) pin the codes and contexts of the two plugins file by
+file; `defaultPluginCheck.test.ts` (`./dev.py test front-transaction tx-unit`) checks that every
+code has its key in the four languages.
 
 ### 🧰 Base-class helpers you should use
 
