@@ -1074,6 +1074,14 @@ Nota dev: no non mi piace che i dati vengano sporcati o che compare un badge per
 
 La vera domanda che ti faccio è, ci sono pagine in cui questo non è possibile e se si, in quelle cosa potremmo riusare per evitare di essere invasivi?
 
+**Decisione (15/10)**: respinta la proposta del badge; vale la regola del developer. Quando una pagina aspetta il
+server (cambio del periodo o altro ricaricamento), il pulsante «Aggiorna» della barra in cima alla pagina diventa grigio
+e la sua icona gira, come se fosse stato premuto. I dati restano come sono, senza attenuazione e senza badge. Quel
+pulsante dovrebbe essere l'unico «Aggiorna» della pagina: un pezzo che si ricarica da solo fa girare quello, non uno
+suo. Tutte le pagine con un periodo hanno già il pulsante in cima (Dashboard, broker, asset, cambi); i pulsanti
+«Aggiorna» dentro i pannelli (per esempio quelli del Rischio) si verificano uno per uno nel lotto di Y. Il PAC
+(«Calcola») e il wizard d'import tengono i loro indicatori.
+
 #### 49. La liquidità negativa nel grafico dell'allocazione — 🟡 (54-1, D-Y11)
 - **Oggi**: con un saldo di liquidità negativo, le quote positive sommano più di 100 %. Il grafico dell'allocazione nel
   tempo ha l'asse fermo a 100 e taglia la cima; tooltip e torta scartano le voci negative, quindi la liquidità negativa
@@ -1083,6 +1091,11 @@ La vera domanda che ti faccio è, ci sono pagine in cui questo non è possibile 
 - **Alternativa**: Numeri e analisi la toglie dal totale nel backend, e il grafico non la vede.
 - **Per chi usa già LibreFolio**: tocca solo chi ha liquidità negativa.
 nota dev: parliamo del grafico a torta vero? o cosa?
+
+**Decisione (15/10)**: approvata la proposta. Il grafico è soprattutto quello dell'allocazione nel tempo della
+Dashboard: la liquidità negativa si disegna sotto lo zero, l'asse va oltre il 100 % quando serve, il tooltip ha la riga
+negativa. Nella torta restano le quote positive, con la nota «liquidità negativa: −X». Il backend non la toglie dal
+totale: il debito resta visibile.
 
 #### 50. Il PAC sul telefono (difetto 5) — 🟢 (D-Y12)
 - **Oggi**: sul telefono la tabella dei target del PAC non sta nella larghezza: i nomi sono tagliati, gli input Target %
