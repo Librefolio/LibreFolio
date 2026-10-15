@@ -18,10 +18,16 @@
  * reads in the page's CSSOM, through the chip of its `@theme inline` alias. Where the code writes a colour is not written
  * down either: the export is held to the verifier the Lab ships, which finds each occurrence in today's code.
  *
+ * The editor's opacity slider (A, `lab-editor-a`) is held to the same effect in the other tab. On an opaque role — the
+ * login card's background — it writes the colour with an alpha, in whichever notation; on a variable the sources write
+ * at an opacity, `color-mix(in <space>, <base> <p>%, transparent)`, it moves the share and keeps the base, and a `var()`
+ * base stays a reference, which the app tab proves by following it. That variable is read from the catalogue the Lab
+ * lists, never named here, and colours are compared as the app tab paints them (`paintedColours`), not as texts.
+ *
  * Nothing is written server-side: TEST_USER only reads, the visitor never signs in, the theme toggle and the Lab keep
  * their state in this context's localStorage, and the context dies with the test.
  */
-import {expect, test} from '../fixtures/playwright';
+import {expect, test, type Page} from '../fixtures/playwright';
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {
@@ -32,10 +38,12 @@ import {
     computedStyle,
     CROSS_TAB,
     dateColumnHeader,
+    describeColour,
     DESKTOP_ONLY,
     downloadExport,
     editLightTheme,
     expectChanges,
+    expectPainted,
     hexKeyOf,
     IDLE_STATS,
     labActive,
@@ -46,13 +54,20 @@ import {
     opaqueHexOf,
     opaqueKeysOf,
     openDashboardGrowthChart,
+    openEditor,
     openLab,
     openSignIn,
     openTransactions,
+    paintedColours,
     placesInComponent,
+    rootValueOf,
+    sameColour,
+    setSlider,
     transactionsSubtitle,
+    transparentMixOf,
     verifyExport,
     waitForLabClient,
+    type TransparentMix,
 } from './lab-helpers';
 
 test.setTimeout(60_000);
@@ -71,6 +86,42 @@ const NEW_COLOURS = [
     {hex: GREEN, rgb: GREEN_RGB},
 ];
 const GROWTH_CHART = '[data-testid="growth-chart"]';
+/** A base the editor keeps as a reference: `var(--x)`, without a fallback. */
+const VAR_BASE = /^var\(\s*(--[\w-]+)\s*\)$/;
+
+/**
+ * A root variable the sources write at an opacity, read from the catalogue the Lab lists: those the «Variables» tab
+ * finds for `transparent`, each opened in the editor, whose source value in the edited theme (`lab-editor-from`) is a mix
+ * in the role tokens' form (`transparentMixOf`). One whose base is a `var()` first — the case where keeping the base
+ * matters — else any. Fails, naming every value it read, when the catalogue has none.
+ */
+async function translucentVariable(lab: Page): Promise<{name: string; from: string; mix: TransparentMix}> {
+    await lab.getByTestId('lab-tab-vars').click();
+    const search = lab.getByTestId('lab-search');
+    await search.fill('transparent');
+    await expect(search).toHaveValue('transparent');
+    const prefix = 'lab-item-var-';
+    const items = lab.locator(`[data-testid^="${prefix}"]`);
+    await expect(items, 'the «Variables» tab must list a variable whose definition mentions transparent: the role tokens write a colour at an opacity as color-mix(in <space>, <base> <p>%, transparent)').not.toHaveCount(0);
+    const names = await items.evaluateAll((nodes, start) => nodes.map((node) => (node.getAttribute('data-testid') ?? '').slice(start.length)), prefix);
+    const editor = lab.getByTestId('lab-editor');
+    const read: string[] = [];
+    const mixes: {name: string; from: string; mix: TransparentMix}[] = [];
+    for (const name of names) {
+        await lab.getByTestId(`${prefix}${name}`).click();
+        await expect(editor).toHaveAttribute('data-target', name);
+        const from = ((await lab.getByTestId('lab-editor-from').textContent()) ?? '').trim();
+        read.push(`${name} = ${from}`);
+        const mix = transparentMixOf(from);
+        if (mix) mixes.push({name, from, mix});
+    }
+    const found = mixes.find((m) => VAR_BASE.test(m.mix.base)) ?? mixes[0];
+    if (!found)
+        throw new Error(
+            `no root variable of the catalogue is a colour at an opacity in the edited theme: none of those the «Variables» tab finds for transparent has a source value color-mix(in <space>, <base> <p>%, transparent), the form of the role tokens (lib/theme/tokens.css). Source values read: ${read.join('; ')}`,
+        );
+    return found;
+}
 
 test.describe('Designer Lab — live preview in another tab', () => {
     test.beforeEach(async ({}, testInfo) => {
@@ -196,6 +247,133 @@ test.describe('Designer Lab — live preview in another tab', () => {
         await lab.getByTestId('lab-reset-all').click();
         await expectChanges(lab, 0);
         await expect(card, 'reset: the card shows its own background again').toHaveCSS('background-color', original, CROSS_TAB);
+        await expect.poll(() => labActive(page), CROSS_TAB).toBe(false);
+        await expect.poll(() => labStats(page)).toEqual(IDLE_STATS);
+    });
+
+    test('A: the opacity of a colour role reaches another tab', async ({page, context}) => {
+        const card = await openSignIn(page);
+        await waitForLabClient(page);
+        await chooseTheme(page, 'light');
+        // The card's background class, followed to the role its rule reads; its colour, as the page paints it.
+        const source = await colourSourceOf(card, 'bg');
+        expect(source.role, `${source.className} must be a colour-role utility: the login card reads the roles of workstream T`).toBe(true);
+        const original = await computedStyle(card, 'background-color');
+        const [shown] = await paintedColours(page, [original]);
+        if (!shown || shown.alpha !== 1) throw new Error(`the login card's background must be opaque, so that half of its opacity shows: it is ${original}`);
+
+        const lab = await openLab(context);
+        await editLightTheme(lab);
+        await openEditor(lab, {tab: 'palette', search: source.chipVar, item: `lab-item-var-${source.chipVar}`, layer: 'css-var', target: source.target});
+        await expect(lab.getByTestId(`lab-item-var-${source.chipVar}`), `the chip of ${source.chipVar} edits the role`).toHaveAttribute('data-target', source.target);
+        const to = lab.getByTestId('lab-editor-to');
+        const opacity = lab.getByTestId('lab-editor-a');
+        // The editor starts from the role's value in the light theme: opaque, and the colour the card shows.
+        await expect(opacity, 'the editor shows the opacity of the role').toBeVisible();
+        await expect(opacity, 'an opaque colour: A at 1').toHaveValue('1');
+        const start = await to.inputValue();
+        const [startColour] = await paintedColours(page, [start]);
+        expect(startColour !== null && sameColour(startColour, shown), `the editor starts from the colour the card shows: ${start} paints ${startColour ? describeColour(startColour) : 'nothing'}, the card ${describeColour(shown)}`).toBe(true);
+
+        // Half the opacity: the same colour with an alpha, in whichever notation the editor writes it.
+        const half = {r: shown.r, g: shown.g, b: shown.b, alpha: 0.5};
+        await setSlider(opacity, 0.5);
+        await expect(to, 'A rewrites the value').not.toHaveValue(start);
+        const written = await to.inputValue();
+        const [writtenColour] = await paintedColours(page, [written]);
+        expect(writtenColour !== null && sameColour(writtenColour, half), `${written} is the colour of the card at half opacity, ${describeColour(half)}: it paints ${writtenColour ? describeColour(writtenColour) : 'nothing'}`).toBe(true);
+        const apply = lab.getByTestId('lab-editor-apply');
+        await expect(apply).toBeEnabled();
+        await apply.click();
+        await expectChanges(lab, 1);
+
+        await expectPainted(page, () => computedStyle(card, 'background-color'), half, `${source.className} reads ${source.target}: the card shows its own colour at half opacity`);
+        await expect.poll(() => labActive(page)).toBe(true);
+        await expect.poll(() => labStats(page)).toMatchObject({varOverrides: 1, elementRules: 0});
+
+        // The export carries the value as the editor wrote it, from the value it started from.
+        const {doc} = await downloadExport(lab);
+        expect(doc.changes.map((c) => [c.id, c.layer, c.scope, c.target, c.from, c.to])).toEqual([[`css-var:${source.target}@light`, 'css-var', 'light', source.target, start, written]]);
+
+        await lab.getByTestId('lab-reset-all').click();
+        await expectChanges(lab, 0);
+        await expect(card, 'reset: the card shows its own background again').toHaveCSS('background-color', original, CROSS_TAB);
+        await expect.poll(() => labActive(page), CROSS_TAB).toBe(false);
+        await expect.poll(() => labStats(page)).toEqual(IDLE_STATS);
+    });
+
+    test('A on a translucent mix keeps its base', async ({page, context}) => {
+        await openSignIn(page);
+        await waitForLabClient(page);
+        await chooseTheme(page, 'light');
+        const lab = await openLab(context);
+        await editLightTheme(lab);
+        const {name, from, mix} = await translucentVariable(lab);
+        const baseVar = VAR_BASE.exec(mix.base)?.[1] ?? null;
+        // A share the source does not already have: 25%, or 50% when it says 25%.
+        const share = mix.percent === 25 ? 0.5 : 0.25;
+        const moved = `color-mix(in ${mix.space}, ${mix.base} ${share * 100}%, transparent)`;
+
+        // The app tab before any change: the variable on <html>, its base as the page paints it, and the base at its share.
+        const originalValue = await rootValueOf(page, name);
+        const [base] = await paintedColours(page, [mix.base]);
+        if (!base || base.alpha === 0) throw new Error(`the base of ${name}, ${mix.base}, must be a colour the app tab paints: it computes to ${base?.css ?? 'nothing'}`);
+        await expectPainted(page, async () => `var(${name})`, {...base, alpha: (mix.percent / 100) * base.alpha}, `positive control: before any change, an element painted with ${name} shows ${mix.base} at ${mix.percent}%`);
+
+        // The editor reads the mix: its source text, its share on A, Apply enabled.
+        await openEditor(lab, {tab: 'vars', search: name, item: `lab-item-var-${name}`, layer: 'css-var', target: name});
+        const to = lab.getByTestId('lab-editor-to');
+        const opacity = lab.getByTestId('lab-editor-a');
+        await expect(lab.getByTestId('lab-editor-from'), 'the editor shows the source definition').toHaveText(from);
+        await expect(to, 'and starts from it').toHaveValue(from);
+        await expect(opacity, 'the editor reads the mix: its share on the A slider').toBeVisible();
+        await expect.poll(async () => Math.abs(Number(await opacity.inputValue()) - mix.percent / 100), {message: `A reads the share of the mix, ${mix.percent}%, to its step of 1%`}).toBeLessThanOrEqual(0.005 + 1e-9);
+        await expect(lab.getByTestId('lab-editor-invalid'), 'the mix is a value the editor knows').toHaveCount(0);
+        const apply = lab.getByTestId('lab-editor-apply');
+        await expect(apply, 'the mix applies as it is').toBeEnabled();
+
+        // A moves the share in place: the same space, the same base — a var() still one.
+        await setSlider(opacity, share);
+        await expect(to, `the mix at ${share * 100}%, its space and its base unchanged`).toHaveValue(moved);
+        await apply.click();
+        await expectChanges(lab, 1);
+
+        // <html> of the app tab computes the mix at the new share. The browser substitutes a var() base when it computes a
+        // custom property, so the base is compared as a colour.
+        await expect
+            .poll(
+                async () => {
+                    const value = await rootValueOf(page, name);
+                    return {value, mix: transparentMixOf(value)};
+                },
+                {...CROSS_TAB, message: `${name} on <html> of the app tab: the mix at ${share * 100}%`},
+            )
+            .toMatchObject({mix: {space: mix.space, percent: share * 100}});
+        const computed = transparentMixOf(await rootValueOf(page, name));
+        if (!computed) throw new Error(`${name} on <html> of the app tab stopped being a mix: ${await rootValueOf(page, name)}`);
+        const [computedBase] = await paintedColours(page, [computed.base]);
+        expect(computedBase !== null && sameColour(computedBase, base), `the same base: ${computed.base} on <html> paints ${computedBase ? describeColour(computedBase) : 'nothing'}, ${mix.base} paints ${describeColour(base)}`).toBe(true);
+        await expectPainted(page, async () => `var(${name})`, {...base, alpha: share * base.alpha}, `an element painted with ${name} shows ${mix.base} at ${share * 100}%`);
+        await expect.poll(() => labActive(page)).toBe(true);
+        await expect.poll(() => labStats(page)).toMatchObject({varOverrides: 1, elementRules: 0});
+
+        if (baseVar) {
+            // The base stays a reference in the app tab too: given another value on <html>, the mix follows it.
+            const fresh = await newColourFor(page, baseVar, NEW_COLOURS);
+            const [freshColour] = await paintedColours(page, [fresh.hex]);
+            if (!freshColour) throw new Error(`the app tab must paint ${fresh.hex}`);
+            await page.evaluate(({variable, value}) => document.documentElement.style.setProperty(variable, value), {variable: baseVar, value: fresh.hex});
+            try {
+                await expectPainted(page, async () => `var(${name})`, {...freshColour, alpha: share * freshColour.alpha}, `${name} reads ${baseVar}: with ${baseVar} at ${fresh.hex}, the mix follows`);
+            } finally {
+                await page.evaluate((variable) => document.documentElement.style.removeProperty(variable), baseVar);
+            }
+            await expectPainted(page, async () => `var(${name})`, {...base, alpha: share * base.alpha}, `${baseVar} restored: the mix shows ${mix.base} again`);
+        }
+
+        await lab.getByTestId('lab-reset-all').click();
+        await expectChanges(lab, 0);
+        await expect.poll(() => rootValueOf(page, name), {...CROSS_TAB, message: `reset: ${name} on <html> is its own value again`}).toBe(originalValue);
         await expect.poll(() => labActive(page), CROSS_TAB).toBe(false);
         await expect.poll(() => labStats(page)).toEqual(IDLE_STATS);
     });

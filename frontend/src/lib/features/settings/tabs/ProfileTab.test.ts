@@ -4,15 +4,16 @@
  *
  * The account panel: username, e-mail, avatar, and the two irreversible actions
  * (change password, delete account). It takes no props; everything that decides
- * its behaviour comes from the `currentUser` store, one GET for the avatar, and
- * the three writes it issues — all controllable from here.
+ * its behaviour comes from the `currentUser` store, one GET for the avatar, the
+ * deletion preview its dialog asks for on opening, and the three writes it
+ * issues — all controllable from here.
  *
  * Why a component test and not an E2E. `front-utility settings` already walks the
  * happy path. What it cannot reach is the half of this component that only exists
  * when the server refuses: `saveField` **puts the old value back in the input**
  * on failure, `saveAll` reports saved versus failed fields and reverts refusals,
- * the avatar save reverts, and `handleDeleteAccount` has to survive a rejection
- * without logging the user out.
+ * the avatar save reverts, and a refused account deletion has to leave the user
+ * signed in, with the deletion dialog still open.
  * Provoking those against a live backend means making it reject a profile PUT on
  * command; here they are four lines of setup. The error banner also disappears on
  * a 5 s timer, which a real clock makes either slow or flaky and fake timers make
@@ -29,6 +30,11 @@
  *   - `PasswordChangeModal` and `ImagePickerWrapper` internals. Each is its own
  *     component with its own lane; here they are only checked for being opened,
  *     and the avatar value is injected through the wrapper's `onchange` contract.
+ *   - `AccountDeletionDialog` internals (accounts lot A6b): the preview's lists,
+ *     the admin mode and the error codes are `AccountDeletionDialog.test.ts`'s.
+ *     Here only what ProfileTab decides: that dialog, in self mode, under the
+ *     `profile-delete` prefix, asking for the user's own preview, and a deletion
+ *     that ends the session — `auth.logout()`, then `goto('/')`.
  *   - the amber "modified" tint on a row. That is a CSS class, and the observable
  *     half of the same state — the Save button appearing — is asserted instead.
  */
@@ -114,6 +120,19 @@ const settingsGet = () => vi.mocked(zodiosApi.get_user_settings_endpoint_api_v1_
 const settingsPut = () => vi.mocked(zodiosApi.update_user_settings_endpoint_api_v1_settings_user_put as never) as ReturnType<typeof vi.fn>;
 const profilePut = () => vi.mocked(zodiosApi.update_profile_api_v1_auth_profile_put as never) as ReturnType<typeof vi.fn>;
 const deleteMe = () => vi.mocked(zodiosApi.delete_own_account_api_v1_auth_users_me_delete as never) as ReturnType<typeof vi.fn>;
+// What the deletion dialog asks on opening (lot A6b), and the administrator's pair it must never use from here.
+const previewMe = () => vi.mocked(zodiosApi.preview_own_account_deletion_api_v1_auth_users_me_deletion_preview_get as never) as ReturnType<typeof vi.fn>;
+const previewAccount = () => vi.mocked(zodiosApi.preview_account_deletion_api_v1_users__user_id__deletion_preview_get as never) as ReturnType<typeof vi.fn>;
+const deleteAccount = () => vi.mocked(zodiosApi.delete_account_api_v1_users__user_id__delete as never) as ReturnType<typeof vi.fn>;
+
+/** What deleting alice's own account would take, as `GET /auth/users/me/deletion-preview` answers. */
+const OWN_PREVIEW = {
+    user_id: 1,
+    username: 'alice',
+    brokers_deleted: [{id: 12, name: 'Alice Solo', transactions: 5}],
+    brokers_left: [{id: 3, name: 'Family', role: 'VIEWER'}],
+    transfers_unpaired: 0,
+};
 
 /** An axios-shaped rejection carrying `response.data.detail`. */
 function axiosError(detail: unknown, message = 'Request failed with status code 400'): Error {
@@ -175,6 +194,7 @@ beforeEach(() => {
     settingsPut().mockResolvedValue({} as never);
     profilePut().mockResolvedValue({} as never);
     deleteMe().mockResolvedValue({} as never);
+    previewMe().mockResolvedValue(OWN_PREVIEW as never);
     storeSnapshot.mockReturnValue(null);
 });
 
@@ -584,104 +604,175 @@ describe('ProfileTab — the avatar', () => {
 });
 
 // =========================================================================
+/**
+ * Lot A6b: the inline dialog gave way to `AccountDeletionDialog`, the one the Users
+ * tab shares, opened in self mode under the `profile-delete` prefix. It is found by
+ * those testids — the same ones `e2e/brokers/account-deletion.spec.ts` drives, and
+ * through the dialog — and no longer by role, element id or button label, which
+ * belonged to the dialog it replaced. The error of a refused deletion now lives in
+ * the dialog (`profile-delete-error`), not in the tab's banner.
+ */
 describe('ProfileTab — deleting the account', () => {
+    const dialog = () => screen.getByTestId('profile-delete-dialog');
+    const confirmInput = () => within(dialog()).getByTestId('profile-delete-confirm-input') as HTMLInputElement;
+    const confirmButton = () => within(dialog()).getByTestId('profile-delete-confirm');
+    const deleteError = () => within(dialog()).queryByTestId('profile-delete-error');
+
+    /**
+     * Opens the dialog and waits for the preview it asks for on opening to have been
+     * answered: a call made after the click, settled, and the dialog no longer busy.
+     * The count is sampled before the click, so a second opening waits for its own
+     * request and not for the first one's.
+     */
     const openDelete = async () => {
+        const asked = previewMe().mock.calls.length;
         await fireEvent.click(screen.getByTestId('delete-account-button'));
-        return screen.getByRole('dialog');
+        await waitFor(() => {
+            expect(previewMe().mock.calls.length).toBeGreaterThan(asked);
+            expect(previewMe().mock.settledResults.at(-1)?.type).not.toBe('incomplete');
+            expect(dialog()).toHaveAttribute('data-busy', 'false');
+        });
+        return dialog();
     };
-    const confirmInput = () => document.getElementById('delete-confirm-input') as HTMLInputElement;
-    const confirmButton = (dialog: HTMLElement) => within(dialog).getByRole('button', {name: 'settings.deleteAccountPermanently'});
+
+    it('asks nothing about a deletion until the dialog is opened', async () => {
+        // `mount` waits for the avatar GET of `onMount`: a request made on mount would already be on record.
+        await mount();
+
+        expect(screen.getByTestId('delete-account-button')).toBeInTheDocument();
+        expect(screen.queryByTestId('profile-delete-dialog')).toBeNull();
+        expect(previewMe()).not.toHaveBeenCalled();
+    });
+
+    it("opens the shared dialog for the signed-in user's own account, which asks for its own preview", async () => {
+        await mount();
+
+        await openDelete();
+
+        expect(previewMe()).toHaveBeenCalledTimes(1);
+        expect(previewAccount()).not.toHaveBeenCalled();
+        // The answer reached the dialog: the broker that would go is listed under this tab's prefix.
+        expect(
+            within(dialog())
+                .getAllByTestId('profile-delete-broker-deleted')
+                .map((item) => item.getAttribute('data-broker-id')),
+        ).toEqual(['12']);
+        // Self mode: nobody is offered to deactivate their own account instead.
+        expect(within(dialog()).queryByTestId('profile-delete-deactivate')).toBeNull();
+    });
 
     it('refuses until the username is typed exactly', async () => {
         await mount();
-        const dialog = await openDelete();
+        await openDelete();
 
-        expect(confirmButton(dialog)).toBeDisabled();
+        expect(confirmButton()).toBeDisabled();
 
         await type(confirmInput(), 'alic');
-        expect(confirmButton(dialog)).toBeDisabled();
+        expect(confirmButton()).toBeDisabled();
 
         await type(confirmInput(), 'Alice');
-        expect(confirmButton(dialog)).toBeDisabled();
+        expect(confirmButton()).toBeDisabled();
 
         await type(confirmInput(), 'alice');
-        await waitFor(() => expect(confirmButton(dialog)).toBeEnabled());
+        await waitFor(() => expect(confirmButton()).toBeEnabled());
     });
 
     it('deletes, logs out and leaves the app once confirmed', async () => {
         await mount();
-        const dialog = await openDelete();
+        await openDelete();
         await type(confirmInput(), 'alice');
+        await waitFor(() => expect(confirmButton()).toBeEnabled());
 
-        await fireEvent.click(confirmButton(dialog));
+        await fireEvent.click(confirmButton());
 
-        await waitFor(() => expect(deleteMe()).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(goto).toHaveBeenCalledWith('/'));
+        expect(deleteMe()).toHaveBeenCalledTimes(1);
+        expect(deleteAccount()).not.toHaveBeenCalled();
         expect(logout).toHaveBeenCalledTimes(1);
-        expect(goto).toHaveBeenCalledWith('/');
+        // The session ends before the app is left: logout first, then the navigation.
+        expect(logout.mock.invocationCallOrder[0]).toBeLessThan(goto.mock.invocationCallOrder[0]);
     });
 
     it('keeps the user logged in and explains itself when the deletion is refused', async () => {
-        deleteMe().mockRejectedValue(axiosError('Cannot delete the last administrator'));
+        // The server's own refusal: the only active administrator stays (400, a sentence, no error_code).
+        deleteMe().mockRejectedValue(axiosError('Cannot delete account: you are the only administrator'));
         await mount();
-        const dialog = await openDelete();
+        await openDelete();
         await type(confirmInput(), 'alice');
+        await waitFor(() => expect(confirmButton()).toBeEnabled());
 
-        await fireEvent.click(confirmButton(dialog));
+        await fireEvent.click(confirmButton());
 
-        await waitFor(() => expect(error()).not.toBeNull());
-        expect(error()!).toHaveTextContent('Cannot delete the last administrator');
+        await waitFor(() => expect(deleteError()).not.toBeNull());
+        // The explanation is in the dialog, which stays open — and the user is still signed in, still here.
+        expect(dialog()).toBeInTheDocument();
         expect(logout).not.toHaveBeenCalled();
         expect(goto).not.toHaveBeenCalled();
-        // `deleting` is cleared, so the button is usable again for a retry.
-        await waitFor(() => expect(confirmButton(dialog)).toBeEnabled());
+        // Nothing was deleted and the name is still typed: the button is usable again for a retry.
+        await waitFor(() => expect(confirmButton()).toBeEnabled());
     });
 
-    it('falls back to a translated failure when the rejection carries nothing usable', async () => {
+    it('still explains itself when the rejection carries nothing usable', async () => {
         deleteMe().mockRejectedValue('opaque');
         await mount();
-        const dialog = await openDelete();
+        await openDelete();
         await type(confirmInput(), 'alice');
+        await waitFor(() => expect(confirmButton()).toBeEnabled());
 
-        await fireEvent.click(confirmButton(dialog));
+        await fireEvent.click(confirmButton());
 
-        await waitFor(() => expect(error()).not.toBeNull());
-        expect(error()!).toHaveTextContent('settings.deleteAccountFailed');
+        await waitFor(() => expect(deleteError()).not.toBeNull());
+        expect(dialog()).toBeInTheDocument();
+        expect(logout).not.toHaveBeenCalled();
     });
 
     it('forgets what was typed when the dialog is dismissed', async () => {
         await mount();
-        const dialog = await openDelete();
+        await openDelete();
         await type(confirmInput(), 'alice');
 
-        await fireEvent.click(within(dialog).getByRole('button', {name: 'common.cancel'}));
+        await fireEvent.click(within(dialog()).getByTestId('profile-delete-cancel'));
 
-        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        await waitFor(() => expect(screen.queryByTestId('profile-delete-dialog')).toBeNull());
         await openDelete();
         // A fresh, empty confirmation: the arming does not survive a cancel.
         expect(confirmInput()).toHaveValue('');
+        expect(confirmButton()).toBeDisabled();
         expect(deleteMe()).not.toHaveBeenCalled();
+        // Each opening asks again: what a deletion would take may have changed in between.
+        expect(previewMe()).toHaveBeenCalledTimes(2);
     });
 
     it('closes on Escape as well as on Cancel', async () => {
         await mount();
-        const dialog = await openDelete();
+        await openDelete();
 
-        await fireEvent.keyDown(dialog, {key: 'Escape'});
+        await fireEvent.keyDown(dialog(), {key: 'Escape'});
 
-        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        await waitFor(() => expect(screen.queryByTestId('profile-delete-dialog')).toBeNull());
+        expect(deleteMe()).not.toHaveBeenCalled();
     });
 
-    it('says "deleting" instead of inviting a second click', async () => {
+    it('disables the confirmation while the deletion is in flight, and ends the session only once it is done', async () => {
         const pending = deferred<never>();
         deleteMe().mockReturnValue(pending.promise as never);
         await mount();
-        const dialog = await openDelete();
+        await openDelete();
         await type(confirmInput(), 'alice');
+        await waitFor(() => expect(confirmButton()).toBeEnabled());
 
-        await fireEvent.click(confirmButton(dialog));
+        await fireEvent.click(confirmButton());
 
-        await waitFor(() => expect(within(dialog).getByRole('button', {name: 'common.deleting'})).toBeDisabled());
+        await waitFor(() => {
+            expect(deleteMe()).toHaveBeenCalledTimes(1);
+            expect(confirmButton()).toBeDisabled();
+        });
+        expect(logout).not.toHaveBeenCalled();
+
         pending.resolve(undefined as never);
+
+        await waitFor(() => expect(goto).toHaveBeenCalledWith('/'));
+        expect(logout).toHaveBeenCalledTimes(1);
     });
 });
 

@@ -91,22 +91,37 @@ For detailed architectural documentation of specific subsystems, see:
 
 ## 🚀 Server Startup {: #server-startup }
 
-The FastAPI lifespan (`lifespan()` in `backend/app/main.py`) prepares everything before the first request, in this order:
+`backend/app/main.py` sets up the test mode and the logging, then builds the app: `FastAPI(..., lifespan=lifespan)`, `install_middleware(app)`, the API v1 router under `API_V1_PREFIX`, and `install_static_site(app)` (`backend/app/services/platform/static_site.py`). The latter registers the documentation (`/mkdocs`), `/`, the `/_app` chunks when the frontend build has them and, last, the SPA catch-all `GET /{path:path}`: a GET route added after it would never be reached. `backend.app.main:app` stays uvicorn's entry point.
 
-1. Logs `Starting LibreFolio` with the version, the database path and the test mode.
-2. Runs the [configuration checks](security.md#configuration-checks) (`log_configuration_audit()`, in a thread): a configured secret that cannot be used stops the server, every other finding is logged.
-3. Checks the signal-plugin runtime (`validate_signal_runtime()`) and discovers the signal plugins.
-4. Loads the [Tool](patterns/tool_plugins.md) catalogue (`ToolPluginRegistry.get_snapshot()`, in a thread).
-5. Creates the [data directories](database/index.md#data-directory) (`ensure_data_dirs()`).
-6. Loads the [risk](../backend/risk/architecture.md) scenario catalogue (`initialize_risk_scenario_catalog()`).
-7. Seeds the default avatars (`seed_default_avatars()`).
-8. Creates or [migrates](database/index.md#migrations) the database (`ensure_database_exists()`); a failed `alembic upgrade head` stops the server (`sys.exit(1)`).
-9. Runs the [post-migration fixes](database/index.md#post-migration-fixes), which never stop the startup.
-10. Seeds the missing [global settings](settings.md) (`_initialize_global_settings()`).
-11. Starts, in the background, the provider cache pre-warm (`_prewarm_provider_caches()`) and the market-holiday table, built in its own process (`start_market_holiday_prewarm()`).
-12. Starts the [scheduler](../backend/scheduler.md) task (`scheduler_loop()`).
+The lifespan (`lifespan()` in `backend/app/services/platform/app_lifespan.py`) prepares everything before the first request by running `STARTUP_STEPS`, in this order:
 
-On shutdown it stops the Tool executor and the scheduler, then shuts down the asset, FX and BRIM providers, the BRIM parse pool, the quant worker pools and any market-holiday build, and closes the TTL caches.
+1. `announce`: logs `Starting LibreFolio` with the version, the database path and the test mode.
+2. `configuration-checks`: runs the [configuration checks](security.md#configuration-checks) (`log_configuration_audit()`, in a thread): a configured secret that cannot be used stops the server, every other finding is logged.
+3. `signal-plugins`: checks the signal-plugin runtime (`validate_signal_runtime()`) and discovers the signal plugins.
+4. `tool-catalog`: loads the [Tool](patterns/tool_plugins.md) catalogue (`ToolPluginRegistry.get_snapshot()`, in a thread).
+5. `data-directories`: creates the [data directories](database/index.md#data-directory) (`ensure_data_dirs()`).
+6. `risk-scenarios`: loads the [risk](../backend/risk/architecture.md) scenario catalogue (`initialize_risk_scenario_catalog()`).
+7. `default-avatars`: seeds the default avatars (`seed_default_avatars()`).
+8. `database`: creates or [migrates](database/index.md#migrations) the database (`ensure_database_exists()` in `database_bootstrap.py`); a failed `alembic upgrade head` stops the server (`sys.exit(1)`).
+9. `post-migration-fixes`: runs the [post-migration fixes](database/index.md#post-migration-fixes) in a thread; they never stop the startup.
+10. `global-settings`: seeds the missing [global settings](settings.md) (`_initialize_global_settings()`).
+11. `provider-prewarm`: starts the provider cache pre-warm in the background (`_prewarm_provider_caches()`).
+12. `market-holidays`: starts building the market-holiday table in the background, in its own process (`start_market_holiday_prewarm()`).
+13. `scheduler`: starts the [scheduler](../backend/scheduler.md) task (`scheduler_loop()`).
+
+On shutdown, the lifespan's `finally` runs `FINALLY_STEPS`: `tool-executor` stops the Tool executor, also when serving ended with an error. Then, only after a normal end, it logs `Shutting down LibreFolio` and runs `SHUTDOWN_STEPS`: `scheduler` (sets the scheduler's stop event and awaits its task), `providers` (the asset, FX and BRIM providers), `brim-parse-pool`, `quant-pools`, `market-holidays` (ends any holiday build at once) and `caches` (closes the TTL caches).
+
+### 🧩 Steps and Middleware: the Contract {: #lifecycle-contract }
+
+`backend/app/services/platform/lifecycle.py` runs the steps; it imports nothing of the app.
+
+- **Adding a step** takes one line at its place in `STARTUP_STEPS`, `SHUTDOWN_STEPS` or `FINALLY_STEPS`: `Step("my-step", lambda: my_function())`. `run` returns `None` or an awaitable (a coroutine, a `Task`), which the runner awaits; a blocking startup call goes through `asyncio.to_thread()`, as `post-migration-fixes` does. The lambda finds `my_function` in `app_lifespan` when the step runs, so a test replaces it with `monkeypatch.setattr(app_lifespan, "my_function", ...)`.
+- **Startup** (`run_startup_steps()`): each step runs to its end, in order. An exception stops the startup, and no shutdown step runs.
+- **Shutdown order** is declared, not derived: `SHUTDOWN_STEPS` is not the reverse of `STARTUP_STEPS`, and a step that must also run after a serving error belongs in `FINALLY_STEPS`.
+- **Shutdown** (`run_shutdown_steps(steps, deadline)`): a step that raises is logged as an error (`Shutdown step failed`) and the next step runs anyway. `deadline` is an instant on `time.monotonic()`, from `shutdown_deadline()`, which returns `None` today: no limit, no step is ever cut. Under a deadline, each step gets the time left, never less than `MIN_STEP_SECONDS` (0.2 s), so the short steps still run after an overrun; a step past its time is cut (the coroutine or task it awaits is cancelled) and logged as a warning (`Shutdown step cut by the deadline`). The runner returns one `StepOutcome` per step.
+- **`blocking=True`** marks a synchronous call that may block (`brim-parse-pool`): under a deadline `run()` is called in a worker thread, so the deadline holds; the thread cannot be stopped, and the sequence moves on without it. What `run()` returns is awaited as for any step. Without a deadline, and at startup, the flag changes nothing. A synchronous step without it runs on the event loop, where a deadline cannot cut it.
+- **`current_step()`** names the step in progress, `startup:<name>` or `shutdown:<name>`, and is `None` between steps and while the app serves: a watchdog thread can read it to name a step that hangs.
+- **Adding a middleware** takes one `MiddlewareEntry(name, cls, options)` at its place in `MIDDLEWARE_STACK` (`backend/app/services/platform/middleware.py`). The first entry is the outermost, the first to see a request and the last to see its response: `gzip`, then `cors`. `install_middleware(app)` adds the entries from the last, because Starlette puts each middleware outside the ones added before it.
 
 ## 🐳 Docker Image {: #docker-image }
 

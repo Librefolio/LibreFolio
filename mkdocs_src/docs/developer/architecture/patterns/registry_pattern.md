@@ -157,7 +157,7 @@ The base class of every registry. Each subclass gets its own storage, discovery 
 | `auto_discover(cls)` | Scan plugin folder and import all modules, once |
 | `get_discovery_errors(cls)` | Import failures recorded by the discovery |
 
-A subclass specializes it through class-method hooks: `_get_plugin_folder()` (a folder under `backend/app/services/`), `_get_plugin_code_attr()` (default `plugin_code`), `_normalize_lookup_code()`, `_validate_plugin_class()`, `_ignored_module_stems()`, `_reject_duplicate_codes()`, and `_fail_on_discovery_errors()`.
+A subclass specializes it through class-method hooks: `_get_plugin_folder()` (a folder under `backend/app/services/`), `_get_plugin_code_attr()` (default `plugin_code`), `_normalize_lookup_code()`, `_validate_plugin_class()`, `_ignored_module_stems()`, `_reject_duplicate_codes()`, `_fail_on_discovery_errors()`, and `settings_family()` (`asset` or `fx` for the registries whose plugins may declare settings, `None` otherwise).
 
 ### 📋 `AbstractProviderRegistry`
 
@@ -176,7 +176,7 @@ The specialization shared by the three provider registries (asset, FX, BRIM). It
 
 Each ABC base class (`AssetSourceProvider`, `FXRateProvider`, `BRIMProvider`) declares a no-op `shutdown()` method. Providers that hold persistent resources (e.g., background threads, WebSocket connections) override it to release them.
 
-At application shutdown, `main.py`'s lifespan calls:
+At application shutdown, the `providers` step of the lifespan (`SHUTDOWN_STEPS` in `backend/app/services/platform/app_lifespan.py`) calls:
 
 ```python
 AssetProviderRegistry.shutdown_all_providers()
@@ -204,11 +204,13 @@ The registries share the folder scan but differ in when they discover, how they 
 | Registry | Code attribute (lookup) | Discovery runs | Import failure | Duplicate code |
 |----------|-------------------------|----------------|----------------|----------------|
 | Asset, FX, BRIM | `provider_code` (exact) | First lookup. At startup, the background cache pre-warm walks the asset registry | Logged and recorded; the other modules stay registered | The class imported last replaces the earlier one |
-| `SignalPluginRegistry` | `signal_code` (trimmed, upper-cased) | Startup, in the `main.py` lifespan | Every later lookup raises `PluginDiscoveryError`, so the application does not start | `DuplicatePluginCodeError`, which fails that module's import |
+| `SignalPluginRegistry` | `signal_code` (trimmed, upper-cased) | Startup, in the `signal-plugins` step of the lifespan (`app_lifespan.py`) | Every later lookup raises `PluginDiscoveryError`, so the application does not start | `DuplicatePluginCodeError`, which fails that module's import |
 | `RiskAnalyticRegistry` | `analytic_code` (trimmed, lower-cased) | First risk catalogue request or analytic run | Every later lookup raises `PluginDiscoveryError` | `DuplicatePluginCodeError`, which fails that module's import |
 | `ToolPluginRegistry` | `services`: one definition per `ToolService.tool_code` | Startup, off the event loop (`asyncio.to_thread(ToolPluginRegistry.get_snapshot)`) | The module's claims are quarantined as `import_failed`; healthy services stay available | Every claimant is quarantined as `duplicate_code` |
 
 The signal and risk registries are strict in one more way: `register()` accepts only subclasses of their base class and calls its `validate_definition()`, so an invalid declaration fails at import. The Tool registry does not store classes as they register. It stages claims, expands each packaged class into its services, validates every service definition, and publishes one read-only, code-sorted snapshot; registration is closed afterwards. See [Tool plugins](tool_plugins.md#discovery-and-version-lifecycle).
+
+The shared `register()` also checks a plugin's settings declaration (`settings_fields`, see [Plugin Settings](plugin_settings.md)) against its family's rules, which only the asset and FX registries define, and reserves the environment variables of its fields for that plugin alone: an invalid declaration, a variable another plugin already reads, or any declaration in the BRIM, signal or risk registries raises `SettingsDeclarationError`, so the module's import fails and the plugin is not registered.
 
 `GET /api/v1/system/plugin-diagnostics` lists the import failures of the asset, FX, BRIM, and signal registries. Quarantined Tool services appear in `GET /api/v1/tools/diagnostics` instead.
 

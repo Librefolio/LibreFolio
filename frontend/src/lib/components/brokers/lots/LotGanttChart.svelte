@@ -35,6 +35,7 @@
         laneKeyForFragmentId,
         laneKeyForSegment,
         laneSortKey,
+        lotQuantityLine,
         parseDateToUtcMs,
         parseUnknownNumber,
         safeUnknownString,
@@ -45,7 +46,7 @@
         thicknessForQuantity,
         type EventMarkerKind,
     } from './lotGanttChartHelpers';
-    import {maskableQuantity} from '$lib/utils/privacy/maskable';
+    import {maskableQuantity, shouldMaskAmount} from '$lib/utils/privacy/maskable';
     import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -702,9 +703,13 @@
         const valueField = isClosedLot ? lotDto?.original_cost : currentValue;
         const valueLabel = isClosedLot ? translateOr($t, 'brokers.lots.tooltip.initialValue', 'Initial value') : translateOr($t, 'brokers.lots.currentValue', 'Current value');
         const assetIncome = parseUnknownNumber(lotDto?.asset_income);
-        const quantityLine = isClosedLot
-            ? `${maskableQuantity(formatQuantity(originalQuantity))} → 0 ${translateOr($t, 'brokers.lots.tooltip.shares', 'shares')}`
-            : `${maskableQuantity(formatQuantity(openQuantity))} ${translateOr($t, 'brokers.lots.tooltip.sharesOpenOutOf', 'shares open out of')} ${maskableQuantity(formatQuantity(originalQuantity))}`;
+        const quantityLine = lotQuantityLine($t, {
+            closed: isClosedLot,
+            open: openQuantity,
+            openText: maskableQuantity(formatQuantity(openQuantity)),
+            originalText: maskableQuantity(formatQuantity(originalQuantity)),
+            masked: shouldMaskAmount(),
+        });
         const closeDate = isClosedLot ? (latestLotEndDate(meta.lotId) ?? meta.endDate) : null;
         const footer = isClosedLot ? `${formatDateLong(openingDate)} → ${closeDate ? formatDateLong(closeDate) : '…'}` : `${translateOr($t, 'brokers.lots.tooltip.since', 'Since')} ${formatDateLong(openingDate)}`;
         let html = buildTooltipHeader(escapeHtml(lotLabel(openingDate)), theme.textColor);

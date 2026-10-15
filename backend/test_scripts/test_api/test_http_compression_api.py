@@ -1,4 +1,4 @@
-"""HTTP compression and HTML freshness on the live backend: what ``backend/app/main.py`` does to each kind of response (M, R2 P0; L, #26).
+"""HTTP compression and HTML freshness on the live backend: what the app's middleware and static site (``backend/app/services/platform/middleware.py``, ``static_site.py``) do to each kind of response (M, R2 P0; L, #26).
 
 ``app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)`` sits in front
 of everything the backend serves, so its contract is as much about what it must leave
@@ -69,7 +69,7 @@ SERVER_URL = f"http://localhost:{settings.TEST_PORT}"
 API_BASE = f"{SERVER_URL}/api/v1"
 TIMEOUT = 30.0
 
-#: GZipMiddleware(minimum_size=...) in backend/app/main.py: the contract under test.
+#: GZipMiddleware's minimum_size in MIDDLEWARE_STACK (backend/app/services/platform/middleware.py): the contract under test.
 MINIMUM_SIZE = 1024
 GZIP_MAGIC = b"\x1f\x8b"
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"

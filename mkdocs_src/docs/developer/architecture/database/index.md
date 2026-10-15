@@ -39,7 +39,7 @@ graph TD
 
 The database is organized into four logical subsystems. Each has its own detailed page:
 
-- 👤 **[Users & Access](users_access.md)** — Authentication, user settings, onboarding progress, and broker sharing (RBAC)
+- 👤 **[Users & Access](users_access.md)** — Authentication, user settings, onboarding progress, broker sharing (RBAC), and the plugin settings
 - 🏦 **[Brokers & Transactions](brokers_transactions.md)** — The core financial data structure
 - 📊 **[Assets & Pricing](assets_pricing.md)** — Global financial instruments and provider assignments
 - 💱 **[FX Rates & Routes](fx_rates.md)** — Currency exchange rates and routing configuration
@@ -55,9 +55,13 @@ The database is organized into four logical subsystems. Each has its own detaile
 ## 🧬 Migrations {: #migrations }
 
 Schema changes ship as Alembic revisions in `backend/alembic/versions/` (workflow:
-[Database Migrations](../patterns/alembic.md)). At startup, `ensure_database_exists()` in
-`backend/app/main.py` builds a missing, empty or table-less database from scratch, and runs
-`alembic upgrade head` when the revision stored in `alembic_version` is not the head of the scripts.
+[Database Migrations](../patterns/alembic.md)). At startup, the `database` step of the
+[lifespan](../overview.md#server-startup) runs `ensure_database_exists()`
+(`backend/app/services/platform/database_bootstrap.py`), which builds a missing, empty or table-less
+database from scratch, and runs `alembic upgrade head` when the revision stored in `alembic_version`
+is not the head of the scripts. The head comes from `alembic_head_revision()`
+(`backend/app/services/platform/readiness.py`), the reader
+[`GET /system/ready`](../security.md#system-info-and-readiness) uses too.
 
 The chain is linear:
 
@@ -69,6 +73,7 @@ The chain is linear:
 | `004_release_1_2_0_schema.py` | `004_release_1_2_0_schema` | `5b1333fa6b07` | `assets.is_benchmark` and the two onboarding progress tables |
 | `005_accounts_invites.py` | `005_accounts_invites` | `004_release_1_2_0_schema` | `users.session_version`, `users.email_verified_at` and `users.last_seen_version`, and the [`account_tokens`](users_access.md#account-token) table of single-use account links |
 | `006_registration_mode.py` | `006_registration_mode` | `005_accounts_invites` | Data only: the global setting `enable_registration` becomes [`registration_mode`](users_access.md#global-setting) — `open` when the old value read as true (`true`, `1`, `yes`, `on`, any case), `disabled` otherwise; the downgrade writes `true` for `open`, `false` for `invite` and `disabled` |
+| `007_plugin_settings.py` | `007_plugin_settings` | `006_registration_mode` | The [`plugin_system_settings`](users_access.md#plugin-system-setting) and [`plugin_user_settings`](users_access.md#plugin-user-setting) tables of the plugin settings, created empty; the downgrade drops them, with their values and secrets |
 
 !!! warning "The revision id is the contract, not the filename"
 
@@ -86,9 +91,10 @@ Some repairs cannot be Alembic revisions. Rebuilding a table that others referen
 listener turns foreign keys on, and dropping the old table would then empty the tables that point
 at it. These repairs live in `backend/app/db/post_migration/` as ordered `PostMigrationFix`
 subclasses (`FIXES`: a new fix is appended, never inserted before an older one). Right after
-`ensure_database_exists()`, the lifespan calls `run_post_migration_fixes_at_startup()`, which never
-lets an error stop the startup. `run_post_migration_fixes()` works on a direct `sqlite3`
-connection:
+the `database` step, the `post-migration-fixes` step of the lifespan runs
+`run_post_migration_fixes_at_startup()` (`backend/app/services/platform/database_bootstrap.py`) in a
+worker thread; it never lets an error stop the startup. `run_post_migration_fixes()` works on a
+direct `sqlite3` connection:
 
 1. It holds an exclusive `fcntl.flock` on `<db file>.post-migration.lock`, beside the database,
    from the integrity check to the cleanup, dry runs included: the workers of a multi-worker server

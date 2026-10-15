@@ -8,10 +8,10 @@ exceptions are FastAPI's own documentation routes, ``/api/v1/openapi.json``, ``/
 (``main.py``): they carry the API's schema and no data, and answer as they do for anyone; the test pins them. The list is
 short on purpose: signing in and out, a password-reset or invitation link already sent (read it, reset the password
 with it: someone who lost the password must still reach the block page, the account deletion or the backup), the block
-page, the deletion of one's own account and its preview, the probes, and the full backup of an administrator
-(decision 12: on a blocked instance an administrator can still take the data away). Registration stays out. The
-scheduled wake-up joins it when its route exists; anything else goes through the developer first. A test pins the
-list.
+page, the deletion of one's own account and its preview, the probes, and the full backup of an administrator or of
+the hosting panel (decision 12: on a blocked instance the data can still be taken away; the panel's routes want its
+token, not a session). Registration stays out. The scheduled wake-up joins it when its route exists; anything else
+goes through the developer first. A test pins the list.
 
 FastAPI hands a dependency the endpoint function of the matched route (``scope["endpoint"]``), not its full path, so
 the list holds endpoint functions. The refusal is ``423 Locked`` with the code ``instance_blocked``, and only a
@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1 import auth
 from backend.app.api.v1.backup import instance as backup_instance
+from backend.app.api.v1.backup import panel as backup_panel
 from backend.app.api.v1.system import block, health, info, instance, ready
 from backend.app.config.platform import instance_blocked
 from backend.app.db.session import get_session_generator
@@ -54,6 +55,11 @@ ALLOWED_WHEN_BLOCKED = frozenset(
         backup_instance.get_instance_backup_job,
         backup_instance.download_instance_backup,
         backup_instance.delete_instance_backup_job,
+        # The same, for the hosting panel, with its token instead of a session (B8): the provider hands the data back
+        backup_panel.start_panel_backup,
+        backup_panel.get_panel_backup_job,
+        backup_panel.download_panel_backup,
+        backup_panel.delete_panel_backup_job,
         # The block page
         block.get_instance_block,
         instance.get_instance_config,

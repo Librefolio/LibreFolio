@@ -450,11 +450,16 @@ writes `.coverage.<pid>` before the process exits.
 
     SIGTERM is only half the story: Playwright falls back to **SIGKILL** once the
     `gracefulShutdown.timeout` expires. Flushing the coverage data file takes real
-    time, and the default 5 s was not always enough — when it wasn't, the run lost
+    time, and the original 5 s was not always enough — when it wasn't, the run lost
     **all** backend coverage and reported only a terse
     `No .coverage.* files found!` at the end, which looks like a configuration
     problem rather than a race.
 
     The timeout is therefore widened to **30 s whenever `COVERAGE_BACKEND` is set**,
-    and left at 5 s otherwise (outside coverage there is nothing to flush, so a slow
-    shutdown would only waste time).
+    and is 10 s otherwise: the server has its own shutdown budget
+    (`LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS`, 8 s by default), and the window gives it
+    that plus a margin. The runner's shared backend gets the same two windows
+    (`SHUTDOWN_GRACE_COVERAGE` and `SHUTDOWN_GRACE_PLAIN` in
+    `scripts/test_runner/_server.py`), so outside coverage its
+    `Shared backend ignored SIGTERM` warning means that the server broke its own
+    budget.
