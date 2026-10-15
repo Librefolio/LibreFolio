@@ -949,3 +949,12 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > `all-backend` 13 965 passed, 28 skipped, 0 failed, API identica; sopra X CP3 controllo leggero (guardia 578, raccolta
 > e schema identici). Poi K2a (codici dei rifiuti di DEGIRO e del Generic CSV, L6); K2b dopo un commit del
 > coordinatore su `brokers.py` e `uploads.py`.
+
+### X CP3b, test dei cambi senza rete, integrato ✅ (2026-10-15, 06:00)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `63a1f675c` (CP3b `cea5ce859`). W-B9: il contratto e i
+> filtri dei fornitori di cambi provati su FED e BOE, che hanno elenchi statici; la SNB va anch'essa in rete, quindi
+> resta con la BCE in `test_external` (scostamento motivato dalla decisione delle 05:20, che citava anche la SNB).
+> W-B13, X-R5 (percorsi vecchi in commenti e docstring, compresi una riga di A e 2 di `TODO_FUTURI.md`) e X-R7.
+> Validazione di X: `api fx` 21/21 anche senza rete; raccolta identica sopra W7. W-B15 (un selettore per testo in una
+> spec di W) nella sezione di W; X-R9 con il FE4.
