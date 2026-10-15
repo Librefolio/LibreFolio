@@ -1159,3 +1159,88 @@ Prima del giro: HEAD verificato, albero pulito, porta libera. Comando: `/tmp/lib
 > - Il passaggio di `custom` da 912 a 942 viene dal codice fuso, non dal Lab. C'è una voce nuova, `--color-lf-page` → `--lf-surface-page` (`bg-lf-page`), e 5 file nuovi con utility di ruolo: `AuthCard`, `AuthPageFrame`, `LinkStatusCard`, `ResetPasswordCard`, `InstanceBlockedPage`. Il Lab li riconosce tutti col loro ruolo senza cambi di codice: è il meccanismo generico di L-10 al lavoro.
 > - Il test `layout.authGate.test.ts` arrivato con H è un test funzionale del layout, non un gate di sorgente, e non entra nel mio insieme.
 > - Il giro a 4 worker non l'ho ripetuto sul fuso: era verde alle 15:33 sulla revisione di prima, e il coordinatore ha chiesto `all`.
+
+## ✅ Indirizzo del Lab nel banner di `dev.py` (15/10/2026)
+
+**Base:** `dae4de4fa`; durante il lavoro `d22eb6f43`, con un fast-forward del coordinatore che porta C-94 di J: `--build-only` e un ritorno anticipato in `cmd_server`, prima della lista. Ho riletto `cmd_server` sulla versione nuova prima di modificarlo. La 1.3 dà via libera sul blocco «Available endpoints».
+
+**Richiesta del developer** (testuale, 16:48): «puoi fare che in dev.py quando si avvia il server, viene mostrato anche il path per il design lab? similmente a quanto facciamo per le pagine delle api? ovviamente solo se è stato compilato, quindi in debug mode».
+
+**✅ Passo 1 — codice (15/10, 16:5x).**
+> **Note implementazione** (`dev.py`, solo inserimenti, +29 righe in 3 punti):
+> - **Helper** vicino ai marcatori della build: `DESIGNER_LAB_MARKER = b"lf-designer-lab"`, lo stesso `LAB_MARKER` di `vite-plugin.mjs`, e `_frontend_build_has_designer_lab(build_dir)`.
+>   - Legge gli script di `frontend/build/_app/immutable/` e si ferma al primo che contiene il marcatore.
+>   - È esatto: quando il Lab è spento, il plugin fa fallire la build se un file emesso contiene il marcatore.
+>   - Il file del modo di build non basta: una build di debug fatta con `LF_DESIGNER_LAB=0` non ha il Lab.
+>   - Gli errori di lettura (`OSError`) danno False, oppure saltano il file: la riga non compare e il server parte lo stesso.
+> - **Banner:** `├── 🎨 Designer Lab: http://localhost:{port}/designer-lab`, subito dopo `Frontend`, solo se l'helper dice True. Le altre righe non cambiano. Con `--build-only` la lista non si stampa, come prima.
+> - **`front dev`:** la stessa riga per la porta 5173, tranne con `LF_DESIGNER_LAB=0`. È la regola di `designerLabEnabled()` per `vite dev`: solo `'0'` lo spegne.
+> - **Costo** sulla build di debug vera: 5–14 ms con l'uscita anticipata, fino a 112 ms a freddo con la macchina carica. Nel caso peggiore, una build senza Lab con 22 MB di JS da leggere, 17–71 ms.
+>
+> **Prove leggere** (`/tmp/libreFolio_lab_banner_check.py`):
+> - build vera → True;
+> - cartella mancante → False;
+> - marcatore solo in `index.html` e in un `.map` → False;
+> - marcatore in uno script di `nodes/` → True;
+> - `front dev` con `npm` sostituito: la riga c'è senza variabile e con `1`, non c'è con `0`.
+>
+> `ruff check dev.py`: 44 segnalazioni, tutte preesistenti, nessuna sulle mie righe (`lint` del progetto copre solo `backend/`). `git diff --check` pulito.
+> **⚠️ Fuori pista:** il mio script in `/tmp` importava un `dev/` che sta nel site-packages del venv condiviso: è un pacchetto namespace, non un altro checkout. Ho risolto mettendo il worktree in testa a `sys.path`. I test del progetto non ne risentono, perché hanno la radice del progetto in `sys.path`.
+
+**✅ Passo 2 — documentazione (15/10, 17:0x).** `docs-writer` ha aggiunto tre righe in «🎨 Opening It for a Designer» di `designer-lab.md` (117–119), con link a `#release-builds`. Nessuna traduzione. La skill `devpy-server` non elenca il banner, quindi resta com'è; nessun'altra pagina riproduce la lista.
+> **Decisione del coordinatore (17:0x):** niente server di prova. La build di debug della corsia è vecchia: dopo i fast-forward sono cambiati 42 file in `frontend/src` e 22 in `mkdocs_src`, quindi servirebbe una ricostruzione pesante, e lo slot è del percorso critico di T. La prova è il test pytest con sei casi obbligati: nessuna build, release, debug col Lab, debug con `LF_DESIGNER_LAB=0`, `--build-only`, errore di lettura che non blocca l'avvio. Il banner vero lo vedrà il developer al primo `./dev.py server` dopo l'ingresso.
+
+**✅ Passo 3 — test (`test-author`, 15/10, 17:0x–17:2x).**
+> **Note implementazione:**
+> - **File nuovo:** `backend/test_scripts/test_utilities/test_dev_designer_lab_banner.py`, 21 funzioni, 37 casi, isolamento `pure`.
+> - **Registrazione:** `scripts/test_runner/_backend_utils.py`, solo aggiunte (+21 righe): la funzione `utils_dev_designer_lab_banner` dopo `utils_dev_port_check`, e la voce `utils dev-designer-lab-banner` dopo `dev-port-check`.
+> - **I sei casi del coordinatore,** eseguendo davvero `cmd_server` su una build finta in `tmp_path`, con l'helper vero legato via `functools.partial`:
+>   - nessuna build;
+>   - release;
+>   - debug col Lab: la riga c'è, subito dopo Frontend e prima di API Redoc, con la porta giusta;
+>   - debug con `LF_DESIGNER_LAB=0`: `.build-debug=1` ma niente riga;
+>   - `--build-only`: niente lista e l'helper non viene chiamato;
+>   - errori di lettura (`rglob` e `read_bytes`): False o file saltato, e l'avvio arriva comunque al lancio di uvicorn.
+> - **In più:**
+>   - marcatore fuori dagli script (`.map`, CSS, `index.html`, `sw.js`, `offline.html`, `_app/env.js`) → False;
+>   - build di produzione con `LF_DESIGNER_LAB=1` → la riga c'è;
+>   - parità di `DESIGNER_LAB_MARKER` con `LAB_MARKER` di `vite-plugin.mjs`;
+>   - `front dev` con `LF_DESIGNER_LAB` assente, `1`, `false`, `""` e `0`.
+> - **Protezioni:**
+>   - nessun processo, `exec` o segnale vero;
+>   - `os.environ` confrontato prima e dopo;
+>   - `dev.PROJECT_ROOT` puntato su `tmp_path`;
+>   - la build vera non viene né letta né scritta.
+
+**✅ Passo 4 — verifica (15/10, 17:2x), solo comandi leggeri.**
+> - `dev.py test --test-port 6152 --data-dir /tmp/librefolio-r2-l utils dev-designer-lab-banner`: **37/37**, due volte da `test-author` e una da me (1,02 s). `check-orphans` verde, eseguito da `test-author`.
+> - `ruff check` e `black --check` sul file di test: puliti. `ruff` su `_backend_utils.py`: 0 segnalazioni.
+> - Diff: solo aggiunte. `dev.py` +29, `_backend_utils.py` +21, `designer-lab.md` +4, più il file di test nuovo. `git diff --check` pulito. Porta 6152 libera.
+> - **Non eseguito:**
+>   - il server di prova (decisione del coordinatore);
+>   - `mkdocs build`, perché lo slot non è mio. È a basso rischio: tre righe con un link a un'ancora della stessa pagina, che esiste (`#release-builds`).
+> - **Residuo minimo, solo segnalato:** la regola «solo `'0'` spegne il Lab sotto `vite dev`» di `front dev` è allineata a `designerLabEnabled()` solo da un commento; il test di parità copre il marcatore, non la regola.
+
+## ⏳ Giro 3 della designer nel Lab — analisi in sola lettura (15/10/2026)
+
+Richiesta del coordinatore (16:50), compito 2: cosa serve perché la designer modifichi dal vivo i ruoli nuovi di T-8 e i colori fissi di categoria di DV (`lib/theme/chartCategories.ts`, opzione A, non ancora scritto). Fonti: `designer-feedback/2026-10-15-round2-palette/README.md` e `analisi.md` §6. Testo completo inviato al coordinatore; bozza negli artefatti di sessione (`files/L-validate-2026-10-15/round3-analysis-draft.md`).
+
+**Sintesi:**
+- **Ruoli di T-8:** il Lab li gestisce già, perché L-10 è generico (prova: `bg-lf-page` è entrato col suo ruolo senza modifiche). Restano tre punti condizionati a come T-8 li scrive:
+  - **isole `.dark`/`.light`:** per terminale, stato sulla barra verde e tooltip, il selettore deve leggere il tema dall'isola più vicina, non da `<html>` (`picker/describe.ts:384`);
+  - **ombre:** servono come ruoli colore separati; l'editor non applica una `box-shadow` intera. Più un cursore per l'alfa;
+  - **coppie di contrasto dei ruoli** nel pannello (L-15): `CONTRAST_PAIRS` va spostato da `themeTokens.gate.test.ts` a un modulo condiviso.
+- **Tinte esplicite (B):** dopo T-8 la modifica di `--lf-warning` non trascina più le tinte. È giusto, va detto alla designer.
+- **Categorie:** «per valore» non funziona. Tipi e settori condividono 7 esadecimali in chiaro e 11 in scuro, e in scuro le coppie sono diverse da quelle in chiaro. I sottotipi sono calcolati, e ci sono coincidenze con i ruoli (`#B45309` = Immobiliare e `--lf-warning` chiaro; `#6D28D9`/`#A78BFA` = Azione e viola AI).
+  - **Contratto proposto con DV:**
+    - C1: un solo punto di lettura, `categoryColor(kind, key, dark)`;
+    - C2: valori letterali, uno per chiave e per tema;
+    - C3: aggancio solo in debug, in un ramo `__LF_DESIGNER_LAB__`, verso `__lfDesignerLab`;
+    - C4: segnale di ridisegno completo (contratto L-5).
+  - **Nel Lab:** sezione `categories` del catalogo, livello nuovo `category`, scheda «Categorie», motore che risponde a C3 ed emette C4, avviso nella scheda Grafici, export e `verify-export`, una riga nella skill, ΔE00 dal vivo facoltativo, test unit ed E2E (ETF cambia, Tecnologia no).
+  - **Costo:** medio-grande, simile al 5b.
+- **Decisioni da portare:**
+  - D1: contratto con DV e sede del segnale;
+  - D2: con T-8, ombre come ruoli e uso delle isole;
+  - D3: con T, `CONTRAST_PAIRS` condiviso;
+  - D4: priorità fra ruoli e categorie.
