@@ -399,7 +399,7 @@ class TestDataDirResolution:
 
         assert not production_dir.exists() and not candidate.exists()
 
-    @pytest.mark.parametrize("managed_relative", ["sqlite", "sqlite/app.db"])
+    @pytest.mark.parametrize("managed_relative", ["sqlite", "sqlite/app.db", "secrets", "secrets/instance.key"])
     def test_managed_symlink_escaping_into_another_root_is_rejected_before_mutation(self, runtime_env, tmp_path, managed_relative):
         # Both roots are synthetic: the only thing under test is whether the guard
         # resolves symlinks instead of comparing unresolved path strings.
@@ -573,6 +573,69 @@ class TestConfigureTestRuntime:
         cli_base.configure_test_runtime(port=6132, data_dir="runtime/stable-lane-id-test-data")
 
         assert os.environ["LIBREFOLIO_TEST_LANE_ID"] == lane_id
+
+
+class TestTestLaneSecrets:
+    """A test lane signs sessions and derives keys with secrets of its own, never with the instance's.
+
+    ``configure_test_runtime`` removes every name of ``INSTANCE_TRUST_SECRETS`` from the environment the lane exports,
+    whether the shell or the dotenv file provided it, and a rejected lane changes nothing, those names included. The
+    dotenv file is a synthetic one in ``tmp_path``, named by ``PIPENV_DOTENV_LOCATION``; a probe variable in it proves
+    the file was loaded, so the absence of the secrets after loading it means something.
+    """
+
+    DOTENV_PROBE = "LIBREFOLIO_RUNTIME_ISOLATION_LANE_SECRETS_PROBE"
+    LANE_PORT = 6197
+
+    @staticmethod
+    def instance_values() -> dict[str, str]:
+        return {name: f"instance-value-of-{name}" for name in backend_config.INSTANCE_TRUST_SECRETS}
+
+    @staticmethod
+    def exported() -> dict[str, str | None]:
+        return {name: os.environ.get(name) for name in backend_config.INSTANCE_TRUST_SECRETS}
+
+    def use_dotenv(self, runtime_env, tmp_path: Path, values: dict[str, str]) -> None:
+        """Point the dotenv loader at a synthetic file holding ``values`` and the probe, and nothing else."""
+        dotenv_file = tmp_path / "lane-secrets.env"
+        dotenv_file.write_text("".join(f"{name}={value}\n" for name, value in {self.DOTENV_PROBE: "hydrated-from-dotenv", **values}.items()), encoding="utf-8")
+        runtime_env.setenv("PIPENV_DOTENV_LOCATION", str(dotenv_file))
+        runtime_env.delenv(self.DOTENV_PROBE, raising=False)
+
+    def test_the_session_signing_key_is_a_trust_secret(self):
+        assert "JWT_SECRET" in backend_config.INSTANCE_TRUST_SECRETS, f"JWT_SECRET must be among the secrets a test lane never inherits: {backend_config.INSTANCE_TRUST_SECRETS}"
+
+    @pytest.mark.parametrize("source", ["shell", "dotenv"])
+    def test_a_configured_lane_inherits_none_of_the_instance_secrets(self, runtime_env, tmp_path, source):
+        values = self.instance_values()
+        if source == "shell":
+            for name, value in values.items():
+                runtime_env.setenv(name, value)
+            self.use_dotenv(runtime_env, tmp_path, {})
+        else:
+            for name in values:
+                runtime_env.delenv(name, raising=False)
+            self.use_dotenv(runtime_env, tmp_path, values)
+
+        configured = cli_base.configure_test_runtime(port=self.LANE_PORT, data_dir=tmp_path / "lane-data")
+
+        assert configured == (self.LANE_PORT, (tmp_path / "lane-data").resolve())
+        assert os.environ.get(self.DOTENV_PROBE) == "hydrated-from-dotenv", "the synthetic dotenv file was not loaded, so the absence below would prove nothing"
+        inherited = sorted(name for name, value in self.exported().items() if value is not None)
+        assert not inherited, f"the test lane kept secrets of the instance from the {source}: {inherited}"
+        assert os.environ["PIPENV_DONT_LOAD_ENV"] == "1", "a nested pipenv run must not load the dotenv file again, or the removed secrets come back"
+
+    @pytest.mark.parametrize("lane", [pytest.param({"port": 0}, id="invalid-port"), pytest.param({"port": LANE_PORT, "data_dir": cli_base.DEFAULT_PROD_DATA_DIR}, id="production-data-dir")])
+    def test_a_rejected_lane_leaves_the_instance_secrets_untouched(self, runtime_env, tmp_path, lane):
+        for name, value in self.instance_values().items():
+            runtime_env.setenv(name, value)
+        self.use_dotenv(runtime_env, tmp_path, {})
+        before = runtime_state(), self.exported()
+
+        with pytest.raises(ValueError):
+            cli_base.configure_test_runtime(**lane)
+
+        assert (runtime_state(), self.exported()) == before
 
 
 class TestConfigureServerRuntime:
@@ -801,7 +864,14 @@ def test_db_create_clean_rejects_a_production_test_dir_before_any_mutation(runti
 
 
 class TestRunnerDbCreateSafety:
-    @pytest.mark.parametrize(("marked_relative", "managed_root"), [pytest.param("custom-uploads/provider-cache/nested-production-root", "custom-uploads", id="custom-uploads"), pytest.param("broker_reports/uploaded/broker_7/nested-production-root", "broker_reports", id="broker-reports")])
+    @pytest.mark.parametrize(
+        ("marked_relative", "managed_root"),
+        [
+            pytest.param("custom-uploads/provider-cache/nested-production-root", "custom-uploads", id="custom-uploads"),
+            pytest.param("broker_reports/uploaded/broker_7/nested-production-root", "broker_reports", id="broker-reports"),
+            pytest.param("secrets/nested-production-root", "secrets", id="secrets"),
+        ],
+    )
     def test_nested_production_marker_is_rejected_before_destructive_mutation(self, runtime_env, monkeypatch, tmp_path, marked_relative, managed_root):
         production_root, test_root = tmp_path / "synthetic-production-data", tmp_path / "synthetic-test-data"
         production_root.mkdir()
