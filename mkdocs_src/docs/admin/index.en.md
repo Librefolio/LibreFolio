@@ -83,6 +83,12 @@ JWT_SECRET=paste-the-generated-value-here
 Restart LibreFolio (with Docker Compose: `docker compose up -d`). Keep the key private: whoever
 knows it can forge a session.
 
+??? tip "🐳 Keep the key out of `.env` — `JWT_SECRET_FILE`"
+
+    Save the key in a file, such as a Docker secret, and set `JWT_SECRET_FILE` to its path instead of
+    `JWT_SECRET`, for example `JWT_SECRET_FILE=/run/secrets/jwt_secret`. The rules and a Docker
+    Compose example are in [Secrets](configuration.md#secrets).
+
 The workers of a single `./dev.py server --workers …` share one key on their own. How long a
 session lasts is the **Session Duration** in [Global Settings](settings.md). For the details, see
 the developer page [Security Architecture](../developer/architecture/security.md).
