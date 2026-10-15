@@ -34,6 +34,10 @@ could plausibly "simplify" away without a failing test to stop them:
   used to raise ``WireNumberTooLargeError`` and turn a sound plan into a
   failure. A repeating residual is an ``exact_ratio``; a terminating one, zero
   included, a ``finite_decimal``.
+* **A zero solver observation publishes as ``0``, whatever its float sign.**
+  SCIP reports its bounds as floats, and a float zero carries a sign; the
+  wire's fixed-decimal text refuses ``-0``, so that spelling would turn a
+  valid plan into a result that fails validation (C-75).
 
 The headline gate is a genuine end-to-end assembly: a real
 ``build_exact_policy_view -> compile -> solve -> replay -> conclude -> project``
@@ -58,7 +62,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from backend.app.schemas.pac_allocator.evidence import OptimalProvenProof, SolverStatusWitness
+from backend.app.schemas.pac_allocator.evidence import OptimalProvenProof, ReportedFloatingSolverEvidence, SolverStageEvidence, SolverStatusWitness
 from backend.app.schemas.pac_allocator.exact import ExactRatio as WireExactRatio
 from backend.app.schemas.pac_allocator.exact import FiniteDecimal, exact_fraction, validate_weight_availability
 from backend.app.schemas.pac_allocator.results import PacPlannerReadyIncumbentResult
@@ -1252,3 +1256,96 @@ def test_absolute_gap_stays_absent_when_the_stage_has_no_primal() -> None:
 
     row = _evidence_row(evidence, target)
     assert (row.status, row.primal, row.dual, row.absolute_gap, row.relative_gap) == ("unfinished", None, "7.770482487229448", None, None)
+
+
+# --------------------------------------------------------------------------
+# Solver robustness — a zero observation publishes as ``0`` whatever its
+# float sign, so a bound SCIP reports as ``-0.0`` cannot fail the wire
+# contract (C-75).
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("value", "nonnegative"),
+    [
+        pytest.param(-0.0, False, id="negative-zero-bound"),
+        pytest.param(0.0, False, id="positive-zero-bound"),
+        pytest.param(-0.0, True, id="negative-zero-gap"),
+    ],
+)
+def test_float_text_writes_a_zero_of_either_sign_as_zero(value: float, nonnegative: bool) -> None:
+    """A float zero carries a sign, and ``PlannerFixedDecimal`` refuses the
+    text ``-0``: a zero bound or gap is published as ``0``, whatever its sign.
+    """
+    assert PR._float_text(value, nonnegative=nonnegative) == "0"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(Decimal("-0"), id="negative-zero"),
+        pytest.param(Decimal("-0.000"), id="negative-zero-with-scale"),
+        pytest.param(Decimal("-0E+3"), id="negative-zero-with-positive-exponent"),
+        pytest.param(Decimal("0E-7"), id="zero-with-negative-exponent"),
+    ],
+)
+def test_decimal_text_writes_a_zero_of_any_sign_or_exponent_as_zero(value: Decimal) -> None:
+    """Every zero ``Decimal`` publishes as ``0``: no sign, no scale, no exponent."""
+    assert PR._decimal_text(value) == "0"
+
+
+@pytest.mark.parametrize(
+    ("primal", "dual"),
+    [
+        pytest.param(-0.0, 0.0, id="negative-zero-primal"),
+        pytest.param(0.0, -0.0, id="negative-zero-dual"),
+        pytest.param(-0.0, -0.0, id="negative-zero-both"),
+    ],
+)
+def test_a_negative_zero_bound_publishes_as_zero_and_the_evidence_validates(primal: float, dual: float) -> None:
+    """The defect as a user would meet it: a run whose every stage finished,
+    the last named one closing at zero on a bound SCIP reported as ``-0.0``.
+    The evidence is built the way the report builds it for a ready plan, so
+    each row is judged by ``SolverStageEvidence`` itself. A bound published as
+    ``-0`` makes that model refuse the row, and a valid plan comes back as a
+    result that fails validation.
+
+    The doctored stage keeps its finished status; its observations are read
+    the way ``solver._observe`` reads them, the absolute gap being the float
+    ``abs(primal - dual)`` and, the two bounds being equal, the relative gap
+    zero.
+    """
+    assert (primal, dual) == (0.0, 0.0) and "-0.0" in (str(primal), str(dual)), "PREMISE: both bounds are zero and at least one carries the negative sign"
+    scenario, view, result = _two_asset_full_run()
+    target = _last_named_stage(view, result)
+    closed = replace(target, primal=primal, dual=dual, absolute_gap=abs(primal - dual), relative_gap=0.0)
+    doctored = replace(result, stages=tuple(closed if stage.ordinal == target.ordinal else stage for stage in result.stages))
+
+    evidence = PR.build_solver_evidence(scenario, view, doctored)
+
+    row = _evidence_row(evidence, target)
+    assert (row.status, row.primal, row.dual, row.absolute_gap, row.relative_gap) == ("finished", "0", "0", "0", "0")
+    assert SolverStageEvidence.model_validate_json(row.model_dump_json()) == row
+    assert ReportedFloatingSolverEvidence.model_validate_json(evidence.model_dump_json()) == evidence
+
+
+@pytest.mark.parametrize(
+    ("value", "nonnegative", "expected"),
+    [
+        pytest.param(-1.5, False, "-1.5", id="negative-bound-keeps-its-sign"),
+        pytest.param(None, False, None, id="absent-observation-stays-absent"),
+        pytest.param(-1e-12, True, "0", id="tiny-negative-gap-is-zero"),
+    ],
+)
+def test_float_text_keeps_its_spelling_of_signed_and_absent_observations(value: float | None, nonnegative: bool, expected: str | None) -> None:
+    """Guards around the zero spelling: a negative bound keeps its sign, an
+    absent observation stays absent instead of becoming a measured zero, and
+    a tiny negative gap, solver noise around zero, is still published as
+    ``0``.
+    """
+    assert PR._float_text(value, nonnegative=nonnegative) == expected
+
+
+def test_tolerance_text_spells_a_float_tolerance_positionally() -> None:
+    """A SCIP tolerance such as ``1e-06`` is published positionally, as the wire pattern requires."""
+    assert PR._tolerance_text(1e-06) == "0.000001"

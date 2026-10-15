@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LIBREFOLIO_MAX_USERS` caps the number of accounts (unset: no cap). `LIBREFOLIO_PUBLIC_URL` prints full links instead of bare paths. `LIBREFOLIO_BILLING_URL` is for hosting providers.
 - Admin API under `/api/v1/users`: list accounts, activate and deactivate, promote and demote, sign out of every device, restart the guides, reset links, invitations.
 - `./dev.py user reset-onboarding <username> [--flow …]` restarts an account's guides.
+- `GET /api/v1/brokers/{id}/summary` accepts `as_of`, the day to read the summary for; the broker page sends your today.
+- `POST /api/v1/assets/events` accepts `mode: "create"` for an event that must be new. One on a day and type the asset already has, manual or from a provider, is refused with 409 `EVENT_EXISTS` listing the events already there, instead of overwriting them. Each result also gives the `event_ids` it wrote, in request order.
 
 ### 🔄 Changed
 
@@ -42,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `./dev.py user create`, `invite` and `activate` warn, then go ahead, when the instance has reached `LIBREFOLIO_MAX_USERS`.
 - API: refusals of `POST /auth/register` carry an error code (`REGISTRATION_DISABLED`, `INVITE_REQUIRED`, `INVITE_INVALID`, `USER_LIMIT_REACHED`). `GET /system/instance` carries `accounts`.
 - Docker: the image exposes only port 6040, and both compose files set `PORT=6040` inside the container; `PORT` in `.env` still chooses the host port. The unused 6041 mapping is gone.
+- **Live prices pause while you are away.** On the Assets page (every minute) and on an asset's page (every 30 seconds), live prices stop refreshing while the tab is in the background or after two minutes without using the page, with a small «Updates paused» label, and start again by themselves as soon as you come back. An asset's page now sends one request per refresh instead of two, and none at all on a date range that ends in the past.
 
 ### 🧹 Repository cleanup
 
@@ -72,10 +75,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A locally built image carries one version in its tag, its `VERSION` file and the sidebar, even when a build step changes a tracked file.
 - The server's request log masks the value of credential-like query parameters (`token`, `password`, `api_key`, `code`…).
 - Files uploaded in the same instant (the default avatars) are listed in a stable order, by name.
+- **A broker's cash, holdings and average costs stop at today.** The broker page counted every transaction, future-dated ones included; it now counts those up to today, your day, as on the Dashboard.
+- **Deleting a broker no longer leaves the other half of its transfers behind.** Assets the deleted broker transferred to another broker stay there as an opening position (an adjustment) at their transfer cost; when that cost was missing, it is computed automatically, as for a transfer whose cost is on *Auto*. A cash transfer or currency exchange becomes a deposit or a withdrawal there. Until now that half stayed a transfer with no other side. The receiving broker's figures change, as the confirmation says: its gain now also counts what the asset gained before the transfer. On the Dashboard, its later purchases can move between new capital and reinvested gains, and an incoming cash transfer counts as a deposit on its day.
+- **Transfers left without their other half by an earlier broker deletion are repaired once, at the first start after the upgrade.** The same conversion runs on the database (post-migration fix `orphan_pair_halves`). An incoming transfer without a cost basis becomes an adjustment without cost, with the *missing cost basis* warning. Each converted transaction is logged, and `python -m backend.app.db.post_migration --dry-run`, with the server stopped, lists them first.
+- **A broken link already in the database no longer blocks the database fixes run at upgrade.** Since 1.2.0, a foreign-key violation already in the database made every post-migration fix fail at every start, leaving one more backup copy each time. Now a fix fails only for a violation it adds itself, and the ones already there are reported once in the log. The command-line run, `python -m backend.app.db.post_migration`, now prints its log.
+- **An asset whose events had a type LibreFolio does not know shows its events again.** A hand-written CSV could store such a type (`dividend`, `dividendo`), and then every read of that asset's events failed. An event type is now trimmed and upper-cased when saved, and refused if still unknown. At the first start after the upgrade, the post-migration fix `event_types` repairs the events already stored, once: a type that differed only in case or spaces is corrected; an event whose type stays unknown, which was never shown anyway, is deleted after its transactions are unlinked. Each change is logged.
+- **Saving asset events is all or nothing.** A request that saves several assets' events saves all of it or nothing, and a refusal names the asset and the event at fault. Until now, the assets before the refused one stayed saved.
+- PAC Allocator: percentages at an exact tie round half away from zero, like every other planner number (30.595 % shows 30.60 %).
+- PAC Allocator: a plan no longer fails when the solver reports a bound of minus zero.
+- PAC Allocator: a negative amount to use, declared liquidity or contribution, and an order step of zero or less, are reported on their own field before the request is sent.
+- PAC Allocator: the help texts of "Value after the plan" and "Ideal value" describe a PAC, which starts from zero.
 
 ### ⚠️ Breaking changes
 
 - The global setting `enable_registration` becomes `registration_mode` (`open`, `invite`, `closed`): an API client that read the old key must read the new one.
+- **`DELETE /api/v1/assets/events` requires `asset_id`.** Only that asset's events are deleted, so a wrong or crafted request can no longer delete another asset's events. A request with `ids` alone is refused (422), and an id of another asset answers `not_found`, its event untouched. A client deleting events must send their asset.
+- **`POST /api/v1/assets/events` answers a refusal with an object.** `detail` is `{error_code, message, params}` instead of a sentence; `params` names the item (`item_index`, `asset_id`) and the events at fault. A missing asset is now a 400 instead of a 200 that saved nothing. A client showing `detail` as text must read `detail.message`.
 
 ---
 

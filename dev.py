@@ -174,9 +174,10 @@ def _ensure_shared_jwt_secret(env: dict) -> None:
 
 
 def cmd_server(args):
-    """Start the development server."""
+    """Start the development server; with --build-only, only build what it serves and exit."""
     test_mode = getattr(args, 'test', False)
     rebuild = getattr(args, 'rebuild', False)
+    build_only = getattr(args, 'build_only', False)
     debug_mode = getattr(args, 'debug', False)
     force = getattr(args, 'force', False)
     try:
@@ -239,6 +240,12 @@ def cmd_server(args):
 
     auto_build_mkdocs()
     update_js_cache()
+
+    # The test runner and the gallery run this first, in the foreground, so that these builds
+    # (minutes after a merge) never count against the startup timeout of the server they start next.
+    if build_only:
+        print_success("Server prerequisites ready (--build-only): frontend, documentation and JS cache; server not started")
+        return 0
 
     # Check immediately before binding. Builds can take minutes, so checking
     # before them left a large race in which another worktree could claim the
@@ -611,8 +618,41 @@ def cmd_fe_dev(args):
     return run_command_live(["npm", "run", "dev"], cwd=PROJECT_ROOT / "frontend")
 
 
+#: Where `npm ci` (in frontend/, from the lock) installs the frontend's command-line tools.
+FRONTEND_NODE_BIN = PROJECT_ROOT / "frontend" / "node_modules" / ".bin"
+#: What a frontend build calls: the API client generator (`generate-api`), `svelte-check`, and `vite` (`npm run build`).
+FRONTEND_BUILD_BINARIES = ("openapi-zod-client", "svelte-check", "vite")
+#: The API client and the Tool codecs need only their generator: `generate-api` runs it, `generate-tools` imports it.
+API_CLIENT_BINARIES = ("openapi-zod-client",)
+
+
+def missing_frontend_binaries(names) -> list[str]:
+    """The tools of ``names`` that ``frontend/node_modules/.bin`` does not hold, in the order asked."""
+    return [name for name in names if not (FRONTEND_NODE_BIN / name).exists()]
+
+
+def require_frontend_dependencies(names, *, purpose: str) -> int:
+    """0 when the frontend tools ``names`` are installed; otherwise say what is missing and return 1.
+
+    Checked before any npm or npx call. Without ``frontend/node_modules``, ``npx`` does not fail: it fetches
+    whatever version the registry serves (or one cached earlier) instead of the one the lock pins.
+    """
+    missing = missing_frontend_binaries(names)
+    if not missing:
+        return 0
+    print_error(f"Cannot run {purpose}: the frontend dependencies are not installed (missing from frontend/node_modules/.bin: {', '.join(missing)})")
+    print("   Install them from the lock file, then retry:  cd frontend && npm ci")
+    print("   dev.py never falls back to npx: without node_modules it would run unpinned versions from the registry.")
+    return 1
+
+
 def cmd_fe_build(args):
     """Build frontend for production."""
+    # Before anything that runs npm or npx: the API client generation and svelte-check below go through npx.
+    deps_result = require_frontend_dependencies(FRONTEND_BUILD_BINARIES, purpose="the frontend build")
+    if deps_result != 0:
+        return deps_result
+
     # Ensure fonts/JS libs exist before SvelteKit prerender (validates app.html refs)
     # Only resources the frontend ships can stop this build: MathJax lives in
     # mkdocs_src/ and is never referenced from frontend/, so letting it abort
@@ -703,6 +743,9 @@ def cmd_api_schema(args):
 
 def cmd_api_client(args):
     """Generate the API client and exact Tool codecs from exported schemas."""
+    deps_result = require_frontend_dependencies(API_CLIENT_BINARIES, purpose="the TypeScript contracts generation")
+    if deps_result != 0:
+        return deps_result
     print(Colors.success("Generating TypeScript contracts..."))
     script = "generate-tools" if getattr(args, "tools_only", False) else "generate-api"
     return run_command_live(
@@ -930,6 +973,20 @@ def _reuse_gallery_test_db() -> bool:
     return True
 
 
+#: Share of the CPUs the gallery gives to browser workers when --workers is not given. One per CPU saturated a
+#: 10-CPU Mac (load 65, 8 reds in 10 minutes, requests stuck 10-20 s); 6 ran two 30-minute galleries green at load 11-16.
+GALLERY_BROWSER_WORKERS_PER_CPU = 0.6
+
+
+def default_gallery_workers(cpu_count: Optional[int] = None) -> int:
+    """Browser workers of `mkdocs gallery` without --workers: 60% of the CPUs, at least one.
+
+    ``None`` reads the CPU count when called, so a test (or a container) that changes it is seen.
+    """
+    cpus = cpu_count if cpu_count is not None else (os.cpu_count() or 2)
+    return max(1, round(GALLERY_BROWSER_WORKERS_PER_CPU * cpus))
+
+
 def cmd_mkdocs_gallery(args):
     """Generate gallery screenshots for documentation using Playwright."""
 
@@ -996,13 +1053,12 @@ def cmd_mkdocs_gallery(args):
         return 1
 
     failures = []
-    # Determine worker count: --workers flag or CPU count
+    # Determine worker count: --workers flag, or 60% of the CPUs (default_gallery_workers)
     explicit_workers = getattr(args, 'workers', None)
-    cpu_count = os.cpu_count() or 2
-    worker_count = explicit_workers if explicit_workers else max(2, cpu_count)
+    worker_count = explicit_workers if explicit_workers else default_gallery_workers()
     # Server workers: browser workers here spend most of their time rendering,
     # so one server per four of them (vs one per two for API/E2E).
-    from scripts.test_runner._server import CLIENTS_PER_SERVER_WORKER_GALLERY, server_workers_for
+    from scripts.test_runner._server import CLIENTS_PER_SERVER_WORKER_GALLERY, build_server_prerequisites, server_workers_for
     server_workers = server_workers_for(worker_count, CLIENTS_PER_SERVER_WORKER_GALLERY)
     print(f"{Colors.BLUE}Browser workers: {worker_count}  |  Server workers: {server_workers}{Colors.NC}")
 
@@ -1067,7 +1123,6 @@ def cmd_mkdocs_gallery(args):
         cmd.extend(["-g", filter_text])
 
     viewport_labels = ', '.join(v[0] for v in viewports)
-    print(f"\n{Colors.CYAN}📸 Running screenshots for: {viewport_labels}...{Colors.NC}")
     # Pass server worker count + optional port via env so playwright.config.ts can use it
     # Stream output live to terminal (no capture_output) so user sees progress
     gallery_env = os.environ.copy()
@@ -1086,6 +1141,15 @@ def cmd_mkdocs_gallery(args):
     if test_port:
         gallery_env["TEST_PORT"] = str(test_port)
 
+    # Playwright's webServer starts `dev.py server --test` and waits STARTUP_TIMEOUT_S for it, and that
+    # server builds a stale frontend (debug) and MkDocs before it binds. Built here first, in the
+    # foreground, they no longer count against that wait. Same environment as the webServer's:
+    # LF_APP_VERSION included, which the build bakes into the sidebar of every screenshot.
+    if not build_server_prerequisites(env=gallery_env):
+        print_error("The test server's builds failed: gallery not started")
+        return 1
+
+    print(f"\n{Colors.CYAN}📸 Running screenshots for: {viewport_labels}...{Colors.NC}")
     run_cmd = cmd
 
     try:
@@ -2518,6 +2582,8 @@ Examples:
     p = subparsers.add_parser("server", help="🖥️  Start development server")
     p.add_argument("--test", "-t", action="store_true", help="Use test database (port 6041)")
     p.add_argument("--rebuild", "-r", action="store_true", help="Force rebuild frontend before starting")
+    p.add_argument("--build-only", action="store_true", dest="build_only",
+                   help="Only build what the server serves (frontend, docs, JS cache), then exit without starting it")
     p.add_argument("--debug", "-d", action="store_true", help="Debug mode: verbose logging + frontend debug build")
     p.add_argument("--force", "-f", action="store_true", help="Kill blocking processes on port before starting")
     p.add_argument("--workers", "-w", metavar="N|auto", default=1, help="Number of uvicorn workers, or 'auto' for 2 × (CPU-1) (default: 1)")
@@ -2641,7 +2707,7 @@ Examples:
     mk_p.add_argument("--no-populate", action="store_true",
                       help="Reuse the existing test database as it is (faster re-runs; needs one earlier full run)")
     mk_p.add_argument("--workers", "-w", type=int, default=None,
-                      help="Number of Playwright workers (default: CPU count)")
+                      help="Number of Playwright workers (default: 60%% of the CPU count, at least 1)")
     mk_p.add_argument("--test-port", type=int, default=None,
                       help="Port for the test server (default: TEST_PORT env or 6041)")
     mk_p.add_argument("--headed", action="store_true",

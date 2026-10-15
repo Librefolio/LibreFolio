@@ -557,7 +557,7 @@ fermati all'handoff, porta verificata libera.
   | Taglio | Sessione | File | Fuori dai lotti di R | Annuncio aperto |
   |---|---|---|---|---|
   | FE5 | X | `assets/AssetModal.svelte`, `routes/(app)/assets/[id]/+page.svelte` | `AssetModal` già oggi; la pagina dopo la riga di G | ~~X, FE5b (`AssetModal`), dal 15/10 alle 08:20~~ **chiuso: entrato in `dev_release2` il 15/10 alle 14:22 (`ec0dc7ebd`)**. La pagina (FE5c) dopo il lotto di Z sul polling |
-  | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | **W, dal 15/10 alle 07:55** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
+  | FE8a | W | `transactions/modals/{ImportWizardModal,TransactionBulkModal,TransactionFormModal}.svelte` | già oggi (i passi in `transactions/import/` dopo il lotto A) | ~~W, dal 15/10 alle 07:55~~ **chiuso: entrato il 15/10 alle 16:19 (`14d58cc61`)** (via libera del coordinatore colori: nessun annuncio loro; T li converte nell'ondata W4, sui pezzi già tagliati) |
   | FE6 | Y | `dashboard/GrowthChart.svelte` | dopo il lotto D (è nei lotti A, B e D) | ~~Y, FE6a, dal 15/10 alle 12:47~~ **chiuso: entrato il 15/10 alle 15:12 (`badec1465`)** (via libera del coordinatore colori: nessun annuncio loro; T lo converte in W5; restano `data-testid="growth-chart"` e la forma dell'opzione ECharts, letta dalla E2E del Lab) |
   | `DataTable` | Y | `table/DataTable.svelte` | dopo il lotto C | **Y, Y2 (due figli: `DataTableColumnHeader`, `DataTableCellContent`), dal 15/10 alle 15:24** (via libera del coordinatore colori; le 4 classi di `editable-checkbox` passano al figlio con il record ereditato) |
 
@@ -1261,3 +1261,33 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > di default). Avviati A6 (scheda Utenti; verifica dell'indirizzo con un nonce firmato al posto del CORS su
 > `/system/instance`) e Y2 (`DataTable`). Checkpoint committati: E2a (`c1d1c3c2d`), Z1 (`a6199d0e7`, base aggiornata
 > `4618a2116`).
+
+### Treni 39–40, punto 46 (2026-10-15, 16:00–16:20)
+
+> **Note implementazione**: entrati Z1 (`9d2074b2b`) e W (`14d58cc61`: FE8a, N1, N1b-2/3, E1a, E1c). Punto 46
+> deciso dal developer: la correzione `orphan_pair_halves` entra; una metà senza costo resta «costo mancante». Verificato
+> poi sul codice che una metà ricevuta senza costo nasce solo da chiamate dirette all'API (il modulo e il Bulk, import
+> compresi, richiedono la modalità di costo: `cost_basis_pair` del TRANSFER ricevuto = `required_qty_pos`) o da dati
+> precedenti alla 1.0; il developer: «una protezione in caso di chiamate dirette dalle api, ma non certo metterci a fare
+> bonifiche» → lotto N2 di W. E1b: `delete_ids` nella richiesta di upsert, salvataggio atomico (decisione 22).
+>
+> **⚠️ Fuori pista**: al developer avevo detto che gli import creano trasferimenti senza costo; era sbagliato (avevo
+> letto i plugin, non il Bulk che li completa). Corretto in chat e ritirata la voce di backlog a W.
+>
+> **⚠️ Fuori pista (2)**: anche «nasce solo da chiamate dirette all'API» era sbagliato. L'analisi N2 di W (16:25) mostra
+> che il backend la regola la controlla già: `validate_cost_basis` (`batch_costs.py`) gira dopo il WAC su ogni percorso
+> di `execute_batch` (validate, commit, `promote-transfer`) e una creazione senza costo dà `costBasisRequired`, con il
+> batch non committato. Le righe senza costo nascono dai dati vecchi, dalle due conversioni di N1, dall'Auto senza
+> media (P-1) e dalle ADJUSTMENT di uno SPLIT. Il controllo sulle modifiche è invece più stretto del deciso: rifiuta
+> anche la modifica delle sole note di una riga senza costo, che con N1b-2 esistono. **N2 ridefinito**: la regola letta
+> da `TX_TYPE_METADATA` (`cost_basis_required(type, quantity)`), e il controllo sulle modifiche solo quando cambiano
+> tipo, quantità (segno compreso) o costo, confrontando i valori con la riga salvata. Auto senza media e split restano
+> fuori. Parte dopo E1b.
+
+### Treno 41, decisioni 38–39 (2026-10-15, 16:40–16:55)
+
+> **Note implementazione**: entrato J (`2faa88a34`: C-94 e CP-2). `copilot-instructions.md` aggiornato con il testo di J
+> sul build in primo piano (`--build-only`). Decisioni del developer: 38, «ok all'idea della busta» (`.lfbackup`,
+> scrypt + AES-256-GCM, solo `cryptography`; lo zip con password classico avrebbe richiesto `pyzipper`); 39, «così
+> l'utente sceglie se fare un backup in "chiaro" o un backup "sicuro" e nel messaggio gli viene detto la differenza».
+> B4 dopo B3 e B5: è l'unico pezzo di B che può slittare. Z7a autorizzato dal developer («Sì, Z parta con Z7a»).

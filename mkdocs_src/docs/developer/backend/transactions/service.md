@@ -207,17 +207,111 @@ separate legacy promote endpoint.
 
 ---
 
+## 🗑️ Broker Deletion {: #broker-deletion }
+
+`delete_by_broker(broker_id)` deletes every transaction of a broker and returns how
+many it deleted. Its callers are in `BrokerService`:
+
+| Caller | When |
+|--------|------|
+| `delete_bulk()` | `DELETE /brokers?ids=…&force=true` on a broker that still has transactions; it requires `OWNER` on the broker |
+| `leave_broker()` | The last `OWNER` leaves (`DELETE /brokers/{broker_id}/access/me`): it calls `delete_bulk()` with `force`. Account deletion (`delete_user()`, `accounts/user_service.py`) calls `leave_broker()` on every broker of the account |
+
+The method checks neither access nor balances. The broker's own pairs, both halves
+on it (an intra-broker `FX_CONVERSION`), go whole: their links are cleared, then
+every row of the broker is deleted. A pair with **another** broker loses one half.
+The other half — on that broker, whatever the caller's role there — becomes the
+standalone row a split of the pair leaves (backlog V-3; D-J4, decisions of
+2026-10-13 and 2026-10-15), instead of a linked type without its partner, which
+the FIFO lots refuse for a `TRANSFER` (`TRANSFER_PAIR_MISSING`). Two cases only
+lose the link: the giving leg of a `TRANSFER`, and a link no split knows.
+
+| Surviving half | Becomes |
+|----------------|---------|
+| Received `TRANSFER` (quantity > 0) | `ADJUSTMENT` with the same quantity, asset, cost basis and its currency, cash currency, date, description and tags; first given its sender's Auto cost when it has no cost basis (below) |
+| `CASH_TRANSFER`, `FX_CONVERSION` | `WITHDRAWAL` when its amount is negative, `DEPOSIT` otherwise, without asset |
+| Giving `TRANSFER` (quantity < 0) | Still a `TRANSFER`, without its link — for now (below) |
+| Any other type carrying a link (an `ADJUSTMENT` can) | The same type, without its link |
+
+Each of these rows loses its `related_transaction_id` and gets a new `updated_at`,
+so the caches fingerprinted on it — the portfolio engine's
+(`_compute_tx_fingerprint()`) and the WAC facade's (`compute_wac_iterative()`) —
+compute again. No quantity or amount changes: the other broker's balances stay as
+they were.
+
+The side rule and the per-half conversion are the split's own helpers in
+`batch_edits.py`, shared with `apply_splits()`: `pair_sides()` returns the giving
+and the receiving half (by quantity for a `TRANSFER`, by amount otherwise), and
+`make_standalone()` re-types one half in place, clears its link — and its asset,
+unless it becomes an `ADJUSTMENT` — and sets `updated_at`.
+
+**A received `TRANSFER` without a cost basis.** One is required since
+(`costBasisRequired`), but older data can lack it. Such a leg first gets its
+sender's **Auto cost**, computed while the sender's rows still exist:
+`_auto_cost_source()` names the pool — the sender's broker up to the date the units
+left, without the outgoing leg — `_auto_cost()` runs `compute_wac_iterative()` on it,
+and `_write_auto_cost()` writes `cost_basis_override` and `cost_basis_currency`
+together; both helpers come from `_compute_wac_for_auto_items()`, which uses them
+too. Every cost is computed before any row changes, so a computation that fails
+leaves every row as it was (`delete_bulk()` reports that broker as failed). An
+empty pool gives what Auto gives, a zero cost (backlog P-1); a missing conversion
+writes nothing, and the `ADJUSTMENT` stays without a cost basis (see
+[WAC & Cost Basis — Diagnostics](wac.md#diagnostics)).
+
+**The giving leg of a `TRANSFER`** only loses its link, for now. The outgoing side
+of a `TRANSFER` takes no cost basis (`cost_basis_pair` in `TX_TYPE_METADATA` marks
+it `forbidden`), so the split's conversion would leave an `ADJUSTMENT` taking units
+out without a cost, which reads the units it moved as destroyed. Its conversion
+waits for the developer's answer to point 47 of release 1.3.
+
+What the conversion changes in the figures:
+
+- **Received asset.** The receiving broker's lots open a **new** lot on the
+  transfer date, at the cost basis (`ADJUSTMENT_IN` in
+  `financial_math/fifo/engine.py`): the holding period restarts, since the
+  sender's lots can no longer move there with their own dates. On the Dashboard,
+  the receiving broker's capital takes the units at their cost, as for any priced
+  in-kind `ADJUSTMENT` (`_is_capital_adjustment()`), instead of their market value
+  at arrival (`DailyStateBuilder._transfer_leg_capital()`): its gain also counts
+  what the units gained before the transfer.
+- **Cash halves.** Capital and P&L do not change: an unlinked `CASH_TRANSFER` or
+  `FX_CONVERSION` already counted as an external cash flow
+  (`ScopeAwareTransactionClassifier`), as the `DEPOSIT` or `WITHDRAWAL` it becomes
+  does. What reads the type now counts the converted row: the cash pools that fund
+  purchases from new capital or from reinvested returns (`K_b`, `R_b`, `W` of the
+  [Three-Pool Cash Model](../../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)),
+  which ignored the unlinked leg; the portfolio summary's `total_deposited`,
+  `total_withdrawn` and `net_deposited_capital`; and the deposits series of
+  `get_deposit_history()` (`DEPOSIT` only).
+
+---
+
 ## ⚖️ Balance Queries
 
-The service exposes two public query methods used by the broker summary:
+The service exposes two public query methods (`TransactionBalancesMixin`,
+`balances.py`), used by the broker summary:
 
 ```python
-await svc.get_cash_balances(broker_id)   # Dict[currency, Decimal]
-await svc.get_asset_holdings(broker_id)  # Dict[asset_id, Decimal]
+await svc.get_cash_balances(broker_id, as_of=None)   # Dict[currency, Decimal]
+await svc.get_asset_holdings(broker_id, as_of=None)  # Dict[asset_id, Decimal]
 ```
 
+Both count the broker's rows dated up to `as_of`, inclusive, and every row when
+`as_of` is `None`.
+
+- **Cash** comes from the layer, the one home of cash per broker and currency:
+  `cash_movement_from_transaction(tx)` turns each row with an amount and a
+  currency into a movement at share 1 — the broker's own cash, not a user's
+  share — and `financial_math.native_cash.native_balances()`, the function behind
+  `NativeCash.balances()`, sums them by currency without any rate (see
+  [The Native-Cash Function](wac.md#compute-native-cash)). A currency whose
+  movements cancel out keeps its line, at zero.
+- **Holdings** stay a SQL sum of `quantity` per asset, with the same date cut:
+  the layer has no home for a broker's quantities at a date.
+
 The holdings' cost no longer comes from this service: the broker summary computes
-it with the shared average cost (see [WAC & Cost Basis](wac.md#broker-summary)).
+it with the shared average cost, on the same `as_of` (see
+[WAC & Cost Basis](wac.md#broker-summary)).
 
 ---
 
