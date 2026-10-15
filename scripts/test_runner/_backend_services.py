@@ -503,6 +503,16 @@ def services_email_checks(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "E-mail configuration check tests", verbose=verbose)
 
 
+def services_provider_cooldown(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the process's provider pauses after HTTP 429 and their two variables."""
+    print_section("Services: Provider Cooldown")
+    print_info("Testing: backend/app/services/platform/provider_cooldown.py, backend/app/config/sleep_wake.py")
+    print_info("Tests: LIBREFOLIO_PROVIDER_COOLDOWN_BASE/MAX_SECONDS and settings, instance read per call, (domain, provider, scope) keys, base/max read at each refusal, in-flight answers ignored, base 0 off, defaults if invalid, logged once per (variable, code) per process (fake clock)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_cooldown.py", test_names)
+    return run_command(cmd, "Provider cooldown tests", verbose=verbose)
+
+
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
     """Test session revocation through the session version (the sv claim of the session cookie)."""
     print_section("Services: Session Version")
@@ -1248,6 +1258,17 @@ Note: No backend server required.
         name="E-mail Configuration Checks",
         desc="email.smtp: off, ok, or error with problem and variable; email.smtp_encryption: ok unless plain text to a non-local host (warning); EMAIL_CONFIG_CHECKS; no password anywhere, no host, user or sender in a detail",
         # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "provider-cooldown",
+        services_provider_cooldown,
+        name="Provider Cooldown",
+        desc="config.sleep_wake: LIBREFOLIO_PROVIDER_COOLDOWN_BASE_SECONDS (ASCII digits, 0–86400, 0 = off, default 60) and _MAX_SECONDS (1–86400, default 3600) read at each call, blank is unset, SleepWakeConfigError with variable and code, a max below an enabled base refused; provider_cooldown: PROVIDER_COOLDOWNS read at call time, keys (domain, provider, scope), wait_before_call/record_refusal/record_success/record_no_verdict over check/refused/succeeded/released with base and max read at each refusal and retry_after passed on, cooldown_snapshot, reset_provider_cooldowns; the answers of calls in flight while a pause runs change nothing (five 429s at once count one refusal, a late success does not lift the pause); base 0 records and skips nothing; an invalid configuration never raises, works on 60/3600 and is logged once per (variable, code) per process",
+        # PURE: no DB, no server; environment changed only through monkeypatch, process-local; the module instance
+        # replaced by monkeypatch. The once-per-process log is read in a fresh interpreter of its own (sys.executable,
+        # run in tmp_path, with a copy of this environment): no DB, no server there either.
         isolation="pure",
     )
     add_test(
