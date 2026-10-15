@@ -129,3 +129,4 @@ class InstanceBlockResponse(StrictModel):
         default=None,
         description="Where the hosting provider's customer manages the subscription (LIBREFOLIO_BILLING_URL), for administrators only: null for other users, and when it is not set or not a valid http(s) address",
     )
+    backup_available: bool = Field(description="Whether the signed-in user may still download a full backup of the instance, blocked or not: administrators only (decision 12)")

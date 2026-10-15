@@ -3538,3 +3538,32 @@ file operation, like the other entries of 15/10.
 Filed: [[decisions/asset-event-saves-all-or-nothing]], [[problems/provider-event-dated-today-not-synced]],
 [[problems/select-list-under-the-sticky-table-header]], [[problems/testing-library-events-prop-read-as-mount-option]].
 Graph: not updated (P-6); graphify is not available in this worktree.
+
+## [2026-10-15] file | A mutation restored with its old file time skips the frontend rebuild
+Found by test-author during the Backup tab E2E mutations (workstream B, lot B5a): the runner's staleness check compares
+file times, so a restore with `cp -p` would leave the mutated bundle in place for the «final green» run.
+Filed: [[problems/mutation-restore-keeps-old-mtime-skips-frontend-rebuild]]. Graph: not updated (no graph in this
+worktree).
+
+## [2026-10-15] file | Category axes under zoom, and the AI Export button — workstream Y, lot Y8
+Y's lot Y8 closed two items the wiki still listed as open, and taught one ECharts rule.
+
+- 47-1: on a phone, a zoomed category axis kept the compact `interval` computed for every point. The policy now takes
+  the visible count (`visiblePointCountFromZoom`, read from the event), and `LineChart`, `CandlestickChart` and
+  `PriceChartFull` merge `categoryAxisLabelPatch()` once the gesture settles.
+- The rule: a `setOption` merge keeps every key the patch omits, so the patch always sets `interval: 'auto'`. Filed as a
+  row of [[concepts/echarts-chart-gotchas]].
+- 48-1: the AI Export trigger and the Dashboard's `sync-button` use `gap-1.5 px-2.5`, like the other toolbars.
+
+Pages updated: [[problems/line-chart-axes-lost-the-day]], [[problems/toolbar-measurements-differed-by-the-scrollbar-gutter]],
+[[concepts/echarts-chart-gotchas]] and their index rows. `check_source_paths.py` gives 5 missing (8 occurrences) before
+and after, all pre-existing.
+
+Filed: [[concepts/echarts-chart-gotchas]].
+Graph: not updated; graphify is not available in this worktree.
+
+## [2026-10-15] file | Correction: 47-1 was not a phone-only defect
+The Y8 entry above says «on a phone». The compact axis policy also applies below 24 px per point, so a long period lost
+its labels under zoom on desktop too: 33 is the step for a year of days in an 800 px chart, 90 or more on a phone.
+Corrected in the row of [[concepts/echarts-chart-gotchas]]; the CHANGELOG line was already right.
+Graph: not updated; graphify is not available in this worktree.

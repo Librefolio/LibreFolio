@@ -411,6 +411,16 @@ def services_transaction(verbose: bool = False, test_names: list = None) -> bool
     return run_command(cmd, "Transaction service tests", verbose=verbose)
 
 
+def services_transaction_cost_basis_rule(verbose: bool = False, test_names: list = None) -> bool:
+    """Test which transaction rows need a cost basis (read from TX_TYPE_METADATA) and when a batch holds them to it."""
+    print_section("Services: Transaction Cost Basis Rule")
+    print_info("Testing: backend/app/services/transactions/validation.py (_requires_cost_basis) + batch_costs.py (validate_cost_basis)")
+    print_info("Tests: the rule follows TX_TYPE_METADATA; creates without a cost refused on their row; updates held to it when they change type, quantity or cost; notes/tags edits of rows stored without a cost")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transaction_cost_basis_rule.py", test_names)
+    return run_command(cmd, "Transaction cost basis rule tests", verbose=verbose)
+
+
 def services_brim_parse_pool(verbose: bool = False, test_names: list = None) -> bool:
     """Test that parsing off-loads to a process pool and degrades safely."""
     print_section("Services: BRIM Parse Pool")
@@ -521,6 +531,26 @@ def services_provider_cooldown(verbose: bool = False, test_names: list = None) -
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_cooldown.py", test_names)
     return run_command(cmd, "Provider cooldown tests", verbose=verbose)
+
+
+def services_shutdown_budget(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the shutdown time budget: the server exits within about 8 s of SIGTERM or SIGINT (decision 35)."""
+    print_section("Services: Shutdown Budget")
+    print_info("Testing: backend/app/services/platform/shutdown_budget.py, backend/app/config/sleep_wake.py, entrypoint.sh, the shutdown grace of the runner and of Playwright")
+    print_info("Tests: LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS, its 3/8 drain, entrypoint.sh, graces >= budget + 2 s, the watchdog (once, exit 1 on fakes) only under uvicorn's handle_exit, its wrappers, deadlines that never arm it, the child step idle without it, children terminated then killed")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_shutdown_budget.py", test_names)
+    return run_command(cmd, "Shutdown budget tests", verbose=verbose)
+
+
+def services_shutdown_process(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the shutdown budget in real server processes under the uvicorn CLI, signalled with SIGTERM and SIGINT."""
+    print_section("Services: Shutdown Budget in a Server Process")
+    print_info("Testing: backend/app/services/platform/lifecycle.py and shutdown_budget.py under uvicorn, the wiring of backend/app/services/platform/app_lifespan.py")
+    print_info("Tests: budget 2 s, drain 1 s: a request in flight cancelled, a step that never ends cut, SIGINT with a blocked thread ended by the watchdog, a child ignoring SIGTERM killed, budget 0 runs a 4 s step to its end, nothing pending exits at once; first and last steps")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_shutdown_budget_process.py", test_names)
+    return run_command(cmd, "Shutdown budget process tests", verbose=verbose)
 
 
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
@@ -882,12 +912,84 @@ def services_config_env_example(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, ".env.example guard tests", verbose=verbose)
 
 
+def services_plugin_settings_contract(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what a plugin declares to have settings, the values a field accepts, and what the core binds."""
+    print_section("Services: Plugin Settings Contract")
+    print_info("Testing: backend/app/services/plugin_settings/fields.py, contract.py, provider_registry.register")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_contract.py", test_names)
+    return run_command(cmd, "Plugin settings contract tests", verbose=verbose)
+
+
+def services_plugin_settings_crypto(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the encryption of the secret plugin settings and the re-encryption a restore needs."""
+    print_section("Services: Plugin Settings Encryption")
+    print_info("Testing: backend/app/services/plugin_settings/crypto.py (AES-256-GCM, AAD, key id, rekey, key status)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_crypto.py", test_names)
+    return run_command(cmd, "Plugin settings encryption tests", verbose=verbose)
+
+
+def services_plugin_settings_runtime(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the resolution of plugin settings and their delivery at the asset and FX call boundaries."""
+    print_section("Services: Plugin Settings Resolution and Delivery")
+    print_info("Testing: plugin_settings/resolver.py, runtime.py, assets/core.py (call_provider), fx/runtime.py (call_fx_provider)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_runtime.py", test_names)
+    return run_command(cmd, "Plugin settings runtime tests", verbose=verbose)
+
+
+def services_plugin_settings_service(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plugin settings catalogue and the all-or-nothing writes on a private database."""
+    print_section("Services: Plugin Settings Service")
+    print_info("Testing: backend/app/services/plugin_settings/service.py (read_catalogue, write_settings)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_service.py", test_names)
+    return run_command(cmd, "Plugin settings service tests", verbose=verbose)
+
+
+def services_secret_masking(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the masking of the secrets a plugin call carries, in its errors and its log lines."""
+    print_section("Services: Secret Masking")
+    print_info("Testing: backend/app/utils/runtime/secret_masking.py and its wiring in logging_config.configure_logging")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_secret_masking.py", test_names)
+    return run_command(cmd, "Secret masking tests", verbose=verbose)
+
+
+def services_plugin_settings_guards(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the plugin settings guards: variables documented, derived names unique, AI Export never reads them."""
+    print_section("Services: Plugin Settings Guards")
+    print_info("Testing: registered declarations against .env.example, derived variable names, imports of services/ai_export/")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_plugin_settings_guards.py", test_names)
+    return run_command(cmd, "Plugin settings guard tests", verbose=verbose)
+
+
 def services_platform_readiness(verbose: bool = False, test_names: list = None) -> bool:
     """Test the readiness checks: database and migration codes, the head read once, no detail in the response."""
     print_section("Services: Instance Readiness")
     print_info("Testing: backend/app/services/platform/readiness.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_platform_readiness.py", test_names)
     return run_command(cmd, "Instance readiness tests", verbose=verbose)
+
+
+def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the app's startup and shutdown steps and their runner, the middleware stack and the static site's routes."""
+    print_section("Services: App Lifecycle")
+    print_info("Testing: backend/app/services/platform/lifecycle.py, app_lifespan.py, middleware.py, static_site.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_app_lifecycle.py", test_names)
+    return run_command(cmd, "App lifecycle tests", verbose=verbose)
+
+
+def services_backup_archive(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance backup archive: layout, consistent database copy, manifest, build and check."""
+    print_section("Services: Instance Backup Archive")
+    print_info("Testing: backend/app/services/platform/instance_backup/paths.py, snapshot.py, manifest.py, archive.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_archive.py", test_names)
+    return run_command(cmd, "Instance backup archive tests", verbose=verbose)
+
+
+def services_backup_jobs(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance backup jobs: background and foreground runs, one at a time, state on disk, retention."""
+    print_section("Services: Instance Backup Jobs")
+    print_info("Testing: backend/app/services/platform/instance_backup/jobs.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_jobs.py", test_names)
+    return run_command(cmd, "Instance backup jobs tests", verbose=verbose)
 
 
 def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
@@ -1230,6 +1332,13 @@ Note: No backend server required.
     add_test(cat, "synthetic-yield", services_synthetic_yield, name="Synthetic Yield", desc="SCHEDULED_YIELD asset valuation")
     add_test(cat, "synthetic-yield-integration", services_synthetic_yield_integration, name="Synthetic Yield Integration", desc="E2E scenarios (P2P, bond, mixed)")
     add_test(cat, "transaction", services_transaction, name="Transaction Service", desc="CRUD, balance validation, link resolution")
+    add_test(
+        cat,
+        "transaction-cost-basis-rule",
+        services_transaction_cost_basis_rule,
+        name="Transaction Cost Basis Rule",
+        desc="Which rows need a cost basis, read from TX_TYPE_METADATA; creates refused without one; updates held to it only when they change type, quantity or cost; notes/tags edits of rows stored without a cost commit",
+    )
     add_test(cat, "broker", services_broker, name="Broker Service", desc="CRUD, initial deposits, summaries")
     add_test(cat, "user-profile", services_user_profile, name="User Profile", desc="Username/email update, validation")
     add_test(
@@ -1310,6 +1419,29 @@ Note: No backend server required.
         # PURE: no DB, no server; environment changed only through monkeypatch, process-local; the module instance
         # replaced by monkeypatch. The once-per-process log is read in a fresh interpreter of its own (sys.executable,
         # run in tmp_path, with a copy of this environment): no DB, no server there either.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "shutdown-budget",
+        services_shutdown_budget,
+        name="Shutdown Budget",
+        desc="config.sleep_wake: LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS (0 = no limit, ASCII digits 2–600, default 8) read at call time, the drain max(1, budget*3//8), uvicorn_drain_env (a value set by hand wins, never raises); entrypoint.sh exports UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN under sh and dash; the runner's and Playwright's plain grace >= budget + 2 s; shutdown_budget: shutdown_budget_seconds never raises and logs once per process, ShutdownWatchdog arms once (re-entrant, one daemon thread) and fires once (ERROR log of step, threads and children, terminate_children(0.5), coverage saved only if measuring, flush, exit 1 even after a failing step), install_shutdown_watchdog only under uvicorn's Server.handle_exit on SIGTERM (a subclass's too; SIGINT wrapped only when uvicorn's; budget 0, another thread or any other SIGTERM handler, pytest's main thread included: nothing), the wrappers arm then call uvicorn's handler with (signum, frame), shutdown_deadline (an armed watchdog's less 0.75 s; otherwise clock + budget - drain at each call, never arming), the child-processes step terminates nothing without a watchdog, terminate_child_processes (terminate, timeout, kill, recursive, keep)",
+        # PURE: no DB, no server, no lane port; environment only through monkeypatch; SIGTERM/SIGINT handlers saved and
+        # restored around each test, never delivered (the wrappers are called directly); os._exit and the default
+        # terminate_children replaced by recorders. Its subprocesses are `sh entrypoint.sh` runs and short-lived python
+        # children of its own (fresh interpreters in tmp_path included), all reaped.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "shutdown-process",
+        services_shutdown_process,
+        name="Shutdown Budget in a Server Process",
+        desc="A fixture app with the real lifecycle and shutdown_budget under the uvicorn CLI, LIBREFOLIO_SHUTDOWN_TIMEOUT_SECONDS=2 and UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN=1: SIGTERM cancels a request in flight after the drain, cuts a shutdown step that never ends, kills a child that ignores SIGTERM, each within 6 s; SIGINT with a blocked non-daemon thread ends by the watchdog (status 1, 'Shutdown budget exhausted'); budget 0 runs a 4 s step to its end (status -SIGTERM, no watchdog); nothing pending exits within 3 s; app_lifespan: shutdown-watchdog first, child-processes last, shutdown_deadline from shutdown_budget",
+        # PURE: its own server processes on a Unix socket of their own (in a short directory under /tmp: an AF_UNIX path
+        # holds 104 bytes on macOS), data and logs in tmp_path; no lane port, no DB. Every process it starts — each server,
+        # in a session of its own, with its process group — is killed if still running and reaped.
         isolation="pure",
     )
     add_test(
@@ -1476,7 +1608,38 @@ Note: No backend server required.
     add_test(cat, "config-instance-key", services_config_instance_key, name="Instance Key", desc="HKDF-SHA256 (RFC 5869), key sources, first-use generation 0700/0600, never replaced, race between processes", isolation="pure")
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
+    # Plugin settings (CP10). PURE, all six: no lane DB and no server. The databases are private files under tmp_path
+    # built with create_all, the call boundaries read their rows through a private engine put in place of
+    # get_async_engine, the instance key is a test key set with monkeypatch (the data directory pointed into tmp_path,
+    # so no key file is ever read or made in the lane), and the real plugin registries are only read.
+    add_test(cat, "plugin-settings-contract", services_plugin_settings_contract, name="Plugin Settings Contract", desc="Declarations per family, refusal at registration, values per type, refusals without the value, derived variable names, BoundSettings and the test doubles", isolation="pure")
+    add_test(cat, "plugin-settings-crypto", services_plugin_settings_crypto, name="Plugin Settings Encryption", desc="AES-256-GCM blob and AAD, key id, subkeys, count and rekey on a sqlite3 copy (savepoint, idempotent, unreadable rows kept), key status (unusable key: totals)", isolation="pure")
+    add_test(cat, "plugin-settings-runtime", services_plugin_settings_runtime, name="Plugin Settings Resolution", desc="env > _FILE > row > default, invalid variable unconfigures, unusable key, fingerprints, configure_instance, NOT_CONFIGURED and masking at both boundaries", isolation="pure")
+    add_test(cat, "plugin-settings-service", services_plugin_settings_service, name="Plugin Settings Service", desc="Catalogue and all-or-nothing writes on a private DB: scopes, LOCKED_BY_ENV, managed profile, item rules, log without values, key unavailable, MOCKFX writes", isolation="pure")
+    add_test(cat, "secret-masking", services_secret_masking, name="Secret Masking", desc="mask_text with the URL forms, mask_exception through chains and groups, structlog processor and logging filter, the context variable across threads and tasks, the wiring in configure_logging", isolation="pure")
+    add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
     add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
+    add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
+    add_test(
+        cat,
+        "backup-archive",
+        services_backup_archive,
+        name="Instance Backup Archive",
+        desc="Layout and job ids, private folders never written through a link; VACUUM INTO copy as of one instant beside a WAL writer it never blocks, in rollback mode with nothing beside it; read-only description (integrity, foreign keys, rows, revision); manifest round trip, unknown fields ignored, UTC dates, database first, no entry twice, entry paths, every from_bytes code; an archive of the database and custom-uploads, broker_reports, scenario_catalog only (no logs, secrets, scheduler state, backups, -wal/-shm or post-migration files), the -wal's rows included, links, FIFOs and non-UTF-8 names left out and never followed, 0600, written as .part then renamed, space checked first; a file that fails before its entry starts left out with no descriptor left open, one that fails after it (read or write) stops the build (PartialEntryError); check_archive: missing, mismatched, unexpected and duplicated entries, archive_unreadable, manifest codes, reads bounded by the declared size",
+        # PURE: every data directory, database and archive is built under tmp_path; the concurrent WAL writer is a
+        # thread of this process on its own file. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-jobs",
+        services_backup_jobs,
+        name="Instance Backup Jobs",
+        desc="start_backup to done in the background, job_archive, delete_job; run_backup in the calling thread; busy for both while the run lock is held; a running state with a free lock read as backup_interrupted and written down; a failed build (backup_failed) and no space (backup_no_space) end with the work files removed and the lock free, the final state on disk before the lock is released; one-hour retention of finished, dead and unreadable jobs, never links or other entries, a running job holding the lock kept; job ids never paths; state round trip, unknown keys ignored, 50 left-out entries kept; the process-local lock without fcntl; a full disk or quota during the build (ENOSPC, EDQUOT, SQLITE_FULL, through causes and contexts) ends as backup_no_space, any other failure as backup_failed",
+        # PURE: data directories under tmp_path, every call given its data_dir (jobs.get_data_dir is a guard that fails
+        # the test); every background run ends, joined, inside its test. No lane DB, no server, no network.
+        isolation="pure",
+    )
     add_test(
         cat,
         "logging-access-filter",

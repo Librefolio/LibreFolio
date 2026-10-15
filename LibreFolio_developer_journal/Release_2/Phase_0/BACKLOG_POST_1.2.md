@@ -1941,8 +1941,14 @@ plugin.
   - Il pannello del contrasto del Lab confronta solo `--theme-text-*` con `--theme-bg-*`, più i bordi sulla card. I componenti migrati da T leggono i ruoli `--lf-*`, che il pannello non considera.
   - T ha già un gate di contrasto sui ruoli. Al Lab servirebbe per vedere dal vivo l'effetto di una modifica.
   - Le coppie vanno prese dalla tabella di T, non indovinate.
+  - **Decisione D3 (coordinatore, 15/10):** T sposta `CONTRAST_PAIRS` da `themeTokens.gate.test.ts` a un modulo condiviso dopo T-8; il pannello lo legge da lì, senza copie.
 
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-10 — Ruoli di T nel Lab».
+- **L-16 · Giro 3 della designer nel Lab: ruoli di T-8 e colori di categoria** — medio; coordinatore, 15/10 (decisioni D1–D4). Il cursore dell'opacità (D2) è fatto e validato il 15/10.
+  - **Dopo l'ingresso di T-8:** verifica del catalogo sui ruoli nuovi (barra verde, stati espliciti, terminale, interruttore, ombre, viola AI, hover dei campi) e una prova L1 a mano. Niente isole `.dark`/`.light`: T usa ruoli dedicati (D2).
+  - **Dopo l'ingresso del modulo di DV** (`lib/theme/chartCategories.ts`, contratto C1–C4): livello `category` (scheda «Categorie», aggancio C3 con `categoryColor` su `LabHook`, segnale C4 `notifyChartColorsChange()`, export e `verify-export`, una riga nella skill, test unit ed E2E). «Per valore» non basta: tipi e settori condividono 7 esadecimali in chiaro e 11 in scuro.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Giro 3 della designer nel Lab» e «Cursore dell'opacità nell'editor».
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 
@@ -2280,6 +2286,46 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     - fra quelle di contenuto, solo `brokers/import-nway-compare`, accettata.
 
   Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), §4, registro del 15/10, 16:05.
+- **G-14 · Gli orari della gallery dipendono dal fuso della macchina** — basso; G, 15/10, su domanda del coordinatore
+  (revisione di `settings/backup-ready`, B). **Proposta: valore e momento li decide il developer.**
+  - Ogni istante si disegna nel fuso del browser, e la gallery lo lascia alla macchina: non c'è `timezoneId`.
+    - Qui il fuso è Europe/Rome. La gallery pubblicata nasce invece in CI (`release.yml`, `mkdocs gallery --workers 4`),
+      su un runner GitHub in UTC.
+    - Quindi la documentazione mostra ore diverse da quelle delle run locali: pagina File, scheduler, `updated_at` delle
+      impostazioni globali, Users, Backup.
+    - I 5 grafici con un asse `time` di ECharts (Growth, AllocationHistory e i tre dei lotti) mettono le tacche alla
+      mezzanotte locale.
+    - Il backend non aggiunge differenze: `server_tz` e il default di `scheduler_timezone` sono sempre UTC.
+  - Non riguarda il cancello di R né la coppia di G-13: sulla stessa macchina il fuso è lo stesso. Un istante fisso si
+    disegna con l'offset di quell'istante, quindi nemmeno il cambio d'ora del 25/10 lo sposta.
+  - Correzione proposta (perimetro G, test-author): una riga a livello di file in `gallery.spec.ts`,
+    `test.use({timezoneId: …})`, accanto a quella di `launchOptions`. `playwright.config.ts` resta com'è.
+  - Il valore:
+    - `Europe/Rome`, consigliato: è il fuso di questa macchina, quindi non cambia nessuno scatto locale. Riferimenti e
+      candidate restano validi in qualunque ordine d'ingresso; cambiano una volta sola le ore delle immagini generate
+      in CI.
+    - `UTC`: neutro e uguale alle immagini pubblicate oggi, ma cambia ogni scatto locale con un'ora o un asse del tempo.
+      Dovrebbe entrare prima di G-13, e ogni candidata dovrebbe averlo nella base prima del suo cancello.
+  - Verifica: una run filtrata di `settings/backup-ready`, che con `Europe/Rome` deve mostrare la stessa ora di prima.
+- **G-15 · Su desktop, in spagnolo, la scheda Email esce dalla barra delle schede di Settings** — basso-medio; G,
+  15/10, doppio lancio degli scatti nuovi (`g-new3-a/b`). **Difetto del prodotto, proprietario da instradare.**
+  - Con le 3 schede nuove (Utenti, Backup, Email) l'admin ha 7 schede. In uno scatto desktop di 1280 px:
+    - in inglese ci stanno, e resta lo spazio prima di «Admin»;
+    - in italiano e francese ci stanno di misura;
+    - in spagnolo «Copia de seguridad» le spinge oltre il bordo, e di «Correo» resta visibile solo la «C».
+  - Anche nello scatto `settings/email`, dove «Correo» è la scheda attiva, si vede solo la sua «C».
+  - Causa: in `routes/(app)/settings/+page.svelte` la card della barra ha `overflow-hidden`, e `TabBar` non scorre in
+    orizzontale. Con la barra laterale e in spagnolo, la scheda si raggiunge solo con `?tab=email` o con la tastiera.
+  - *Inferenza, non misurata:* nelle finestre fra 640 px (`sm:`, dove compaiono le etichette) e circa 1200 px, la barra
+    può uscire anche nelle altre lingue.
+  - Correzioni possibili, a scelta del prodotto:
+    - `shrinkLabelsToFit`, che `TabBar` ha già e che Settings non usa;
+    - uno scorrimento orizzontale che tenga in vista la scheda attiva;
+    - un'etichetta spagnola più corta.
+  - Per la gallery è deterministico: a e b sono identici. La correzione però cambierà gli scatti desktop di Settings in
+    spagnolo, quindi conviene farla prima di G-13, o accettare un riferimento nuovo.
+
+  Dettagli: snapshot `g-new3-a/b` in `LibreFolio_visual_review`, `desktop/<lingua>/light/settings/email.png`.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
@@ -2548,6 +2594,19 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     (`-sTCP:LISTEN`), come fa il runner.
 
   Dettagli: piano H, §14 «Due aggiornamenti di base … e la verifica di C-96».
+- **H-13 · `LIBREFOLIO_REGEN_NATIVE_CASH_GUARD` non arriva al test: la corsia la toglie (C-96)** — basso; DV dei colori
+  (DV-1), 15/10. ✅ 15/10: chiusa da J in CP-4, con la variabile rinominata `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD`.
+  - Il comando documentato per rigenerare `backend/test_scripts/fixtures/native_cash_guard/eur_only_golden.json`
+    (`test_native_cash_guard.py`, la docstring e `_REGEN_COMMAND`) esporta la variabile nella shell.
+    `configure_test_runtime()` toglie ogni `LIBREFOLIO_*` che la corsia non tiene (`_test_lane_drops`), quindi pytest non la
+    vede e il golden non si rigenera.
+  - È l'unica variabile di rigenerazione del repo. Le password del probe AI Export non passano da una corsia: il probe si
+    lancia con `pipenv run python`.
+  - Cura proposta: rinominarla `LIBREFOLIO_TEST_REGEN_NATIVE_CASH_GUARD`, il prefisso che la corsia già tiene, senza un
+    elenco nuovo; aggiornare la docstring e `_REGEN_COMMAND`; un caso di `utils runtime-isolation` che fissi il passaggio di
+    `LIBREFOLIO_TEST_REGEN_*`. In alternativa, un elenco esplicito `LIBREFOLIO_REGEN_*` in `TEST_LANE_KEEPS`.
+
+  Dettagli: piano H, §14 «Ingresso dopo A6a».
 
 ## A · Account e accessi (fase 01)
 
@@ -2601,7 +2660,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
       giusta.
     - ✅ **Chiuse il 15/10** con A4b: `docs-writer` le ha corrette insieme alle righe sulle sessioni.
   - `frontend/components/features/settings.md`: il titolo «GlobalSettingsTab (Admin only)», ma la scheda la vedono
-    tutti. Si sistema in A6, con le schede Utenti e Sicurezza (attenzione all'ancora).
+    tutti. Si sistema in A6, con le schede Utenti e Sicurezza (attenzione all'ancora). ✅ **Chiusa il 15/10** con A6b:
+    titolo «🌍 GlobalSettingsTab (read by everyone, edited by administrators)», ancora esplicita
+    `#globalsettingstab-admin-only` per i link vecchi.
   - `frontend/state/app-state.md:11`: dice che lo store dell'autenticazione gestisce token JWT, ma usa il cookie
     HttpOnly. ✅ **Chiusa il 15/10** con A4b.
   - La prop `icon` di `PasswordInput`, aggiunta da T, manca in `core-ui/atoms.md` e `features/auth.md`. È di T:
@@ -2645,6 +2706,12 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Finché non sono tradotte il build stretto resta verde: le pagine vecchie non puntano alle ancore nuove.
   - Si fa dopo A6–A9, che toccano di nuovo le stesse pagine. La prepara il lotto A10, solo su richiesta
     esplicita del developer (coordinatore, 15/10).
+  - Da A6b (15/10) in più: la pagina nuova `admin/users` (senza traduzioni: IT, FR ed ES mostrano l'inglese) e le
+    sezioni cambiate di `user/settings/profile` («Delete Account»), `admin/cli_tools` («Manage Users», «Invite
+    Someone»), `admin/settings` («Who Can Sign Up», Related), `admin/configuration` (righe `LIBREFOLIO_PUBLIC_URL` e
+    `LIBREFOLIO_BILLING_URL`), `admin/index` e `user/settings/index`. La pagina nuova non usa ancore che esistono solo
+    in inglese; quando le traduzioni avranno `#accounts`, `#user-limit`, `#registration`, `#invite`, `#reset-link` e
+    `#reset-onboarding`, si potranno aggiungere i link precisi.
   - In `admin/configuration` IT, FR ed ES manca tutta la sezione «Accounts and Sign-ups» (`#accounts`): nessuna
     delle tre variabili `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`. Il coordinatore
     (15/10, 16:56) conferma che è debito di A.
@@ -2665,6 +2732,9 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
     `.first()`. Basta un test di componente (`SettingToggle`, `disabled` e `badge`).
   - I test «non admin» non provano la sola lettura: manca l'asserzione che `settings-lock-toggle` non c'è.
   - Si fa con la scheda Utenti (A6), che tocca la stessa pagina.
+  - ✅ **Chiusa il 15/10** con A6b (`test-author` E2): `data-busy`, `settings-lock-toggle`, righe per chiave,
+    `setting-save`/`setting-undo`, prova della sola lettura (nuovo `settings-readonly-indicator`), il segnaposto in
+    `SettingControls.test.ts`; `front-utility settings` 46 ✅. Commit al checkpoint A6b; dettagli in «A6b.2».
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A5b.9».
 - **A-13 · Su un'istanza bloccata, `/invite` mostra il modulo e la registrazione finisce al login** — minimo;
   A (15/10, dal merge di H CP6; accettato dal coordinatore).
@@ -2690,6 +2760,34 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Una riga, da mettere nel lotto piccolo di H su `ALLOWED_WHEN_BLOCKED`, o da A al prossimo aggiornamento di base.
   - **Girata ad H** dal coordinatore (15/10, 16:56).
   - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6.5».
+- **A-16 · L'unico admin che elimina il proprio account riceve 400 senza `error_code`** — minimo; A (15/10, dal
+  `test-author` V4 di A6b).
+  - `DELETE /auth/users/me` risponde `400 "Cannot delete account: you are the only administrator"`: una frase
+    inglese e nessun codice.
+  - Dal frontend di A6b, `accountErrors.ts` mostra la frase del server per un 400/409 senza codice, come faceva il
+    dialogo di prima. Funziona, ma non è tradotta.
+  - **Cura**: un `detail` con `error_code` (per esempio `LAST_ADMIN`) e un messaggio tradotto nel dialogo. Cambia la
+    forma della risposta, quindi servono un rosso e l'aggiornamento dei casi ACCDEL sull'unico amministratore.
+  - Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md), «A6b.2».
+- **A-17 · KeePassXC mette la sua icona sul campo Email della registrazione** — basso; segnalata dal coordinatore
+  colori (15/10).
+  - KeePassXC prende come nome utente il campo subito prima della password, e in `RegisterCard` quel campo è Email.
+  - Possibile cura: Email prima di Username, nella registrazione e nella pagina d'invito che usa la stessa scheda.
+    Attenzione a T-8b dei colori, che tocca le stesse schede di accesso: si fa dopo il suo ingresso.
+- **A-18 · Il registro delle schede importa i corpi: ogni scheda nuova costringe a un `vi.mock` in più** — basso;
+  E-6, segnalato da E tramite il coordinatore (15/10).
+  - `settingsTabs.ts` importa il componente di ogni scheda. I test che usano il registro vero (`settingsTabs.test.ts`,
+    `routes/(app)/settings/page.tabs.test.ts`) devono rendere inerte ogni corpo con un `vi.mock`. Tocca B, E, X e A.
+  - **Opzione 1, caricamento pigro**: `load: () => import('…')` al posto di `component`; la pagina rende
+    `{#await tab.load()}`. In più ogni scheda da amministratore diventa un pezzo di JS separato. I test che leggono
+    solo id e ordini non importano più nessun corpo.
+  - **Opzione 2, registro senza corpi**: `settingsTabsMeta.ts` (id, etichetta, icona, ordine, `visible`, `props`,
+    `alignEnd`) più una mappa id → componente usata solo dalla pagina.
+  - **Non entra in A6b**: cambia il rendering della pagina e le asserzioni dei test di B ed E, e A6b è già validato.
+    Proposta: un lotto breve e coordinato, quando le schede di B, E e X sono tutte dentro, con
+    `settings`/`admin-users` E2E e lo scatto della galleria da ricontrollare (il corpo arriva dopo un `await`).
+  - Nello stesso giro, nota di G (15/10): i corpi e le rotte dello scatto `settings/users` in `fixtures/galleryUsers.ts`,
+    come `galleryEmail.ts`.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
@@ -2747,15 +2845,18 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   il coordinatore gira al coordinatore colori. **Chiusa nel CP3b il 15/10** per le 13 righe del perimetro deciso; i due
   commenti di `AssetModal` restano in X-R3, le 3 fixture sono passate a G. Dettagli:
   [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», quinto aggiornamento di base e CP3b.
-- **X-R6 · `web_link_finder`: timeout e numero massimo di URL non validati** — piccolo; segnalato da H il 15/10 (lotto
+- ✅ **X-R6 · `web_link_finder`: timeout e numero massimo di URL non validati** — piccolo; segnalato da H il 15/10 (lotto
   `web_link_finder`), girato a X dal coordinatore. Preesistente e invariato dagli spostamenti. `config/plugins.py:46-52`
   accetta `LIBREFOLIO_WEB_LINK_FINDER_TIMEOUT` a `nan` o `inf` (`float()`), e `services/assets/web_link_finder.py:108`
   (`DDGS(timeout=int(timeout) or None)`) allora solleva: la ricerca rende `[]` scrivendo solo un debug (`:244-245`); un
   timeout sotto 1 diventa `int(…) == 0`, cioè nessun timeout; con `LIBREFOLIO_WEB_LINK_FINDER_MAX=0` il controllo di
   `:259` arriva dopo il primo `append`, e torna comunque un URL. Cura: valori finiti e ≥ 1 negli accessori di
   `config/plugins.py` (file di H: d'accordo con H) e un timeout non intero rispettato; con il CP6 (F05) o il CP10, che
-  toccano la configurazione dei plugin. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
-  sezione «15», quinto aggiornamento di base.
+  toccano la configurazione dei plugin. **Chiusa nel CP10 il 15/10** (commit al checkpoint del CP10): i due accessori di
+  `config/plugins.py` danno il default per un valore non finito o sotto 1, `DDGS(timeout=math.ceil(timeout))` rispetta un
+  timeout non intero, `.env.example` e la docstring dicono «at least 1»; i sei casi di `test_config_package.py` che
+  fissavano il vecchio comportamento aggiornati. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
+  sezione «15», quinto aggiornamento di base, e sezione «CP10», passo 8.
 - ✅ **X-R7 · La pagina di Borsa Italiana elenca le variabili del `web_link_finder` senza `_FILE`** — minimo, doc; segnalato
   da H il 15/10. `mkdocs_src/docs/developer/backend/assets/provider_borsa_italiana.md:123` cita `_API_KEY` ma non
   `_API_KEY_FILE` (segreti Docker, `env_secret()`); la fonte di verità è `search_link_finder.md`: la riga va ridotta a un
@@ -2845,6 +2946,29 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   `asyncio.Runner.close()`; test `test_provider_core_cache.py::TestRunProviderInThread::test_worker_thread_does_not_keep_closed_event_loop`,
   rosso prima della riga e verde dopo (`7794e2fb0`, in `dev_release2` con `743fca514`). Dettagli:
   [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», J-5.
+
+- **X-R12 · Un evento del fornitore datato oggi arriva solo il giorno dopo** — piccolo, prodotto; trovata da W in E1b,
+  girata a X dal coordinatore il 15/10, valutata da X lo stesso giorno, fuori dal CP10. Il refresh chiede la storia fino
+  a ieri (`services/assets/refresh.py:227`, `history_end = today - 1` quando `end >= today`), e gli eventi arrivano
+  solo con la storia: un dividendo o uno split con la data di oggi entra il giorno dopo.
+  - **Perché c'è il taglio**: protegge i prezzi. La chiusura di oggi non c'è ancora, e il valore di oggi arriva da
+    `get_current_value`.
+  - **Gli eventi non hanno questa ragione**: una data di stacco annunciata è un fatto. Restano legati al taglio solo
+    perché viaggiano nella stessa chiamata.
+  - **Effetto**: nessun errore di valore. Uno split sposta le posizioni solo con la transazione ADJUSTMENT legata
+    all'evento (`portfolio/engine.py:213-223`). Ritarda di un giorno la comparsa dell'evento, il suo collegamento da una
+    transazione e i dati di AI Export.
+  - **Cura proposta**: chiedere la storia fino a oggi e scartare il prezzo di oggi prima della cache e della scrittura,
+    tenendo gli eventi fino a oggi. Va rivisto il calcolo della copertura della cache (`dates`), che non deve contare
+    oggi. Va verificato per ogni plugin che `end_date` sia inclusivo, e con `scheduled_investment`, che i punti futuri
+    li genera da sé.
+  - Un lotto con un test di regressione su `mockprov`, dopo X1–X8, che toccano lo stesso percorso.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», nota su X-R12.
+- **X-R13 · La pagina dell'asset calcola ancora `emoji` per il grafico dei settori** — minimo, frontend; dal programma
+  colori (DV-3, innocua), girata a X dal coordinatore il 15/10. Con DV il campo `emoji` di `AllocationEntry` sparisce,
+  ma `routes/(app)/assets/[id]/+page.svelte:3496` (su `dev_release2`, il `map` dei dati di `AllocationPieChart` per i
+  settori) lo calcola ancora: un dato morto, che `front check` non vede. Da togliere nel FE5c, col taglio della pagina.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «CP10», note della sera.
 
 ## W · Import e transazioni (fase 01)
 
@@ -3015,6 +3139,18 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   con un marcatore `Date.now()`: se i progetti desktop e mobile lo eseguono insieme, il secondo upsert sovrascrive la riga
   del primo. Lo scenario 2 marca le righe con una sonda `isVisible().catch`. Cura: un asset proprio per test, come in
   `asset-event-editor-save.spec.ts`. Dettagli: piano 04, sezione E1, passo 3.
+- **W-B30 · Svuotare un costo manuale non lo toglie: la modifica lo tiene in silenzio** — basso, numeri; W, 15/10 (N2,
+  test-author). In un aggiornamento `cost_basis_override: null` vale «invariato», come un campo assente
+  (`_apply_update_values`, `backend/app/services/transactions/batch_edits.py`): il modulo, quando l'utente svuota un costo
+  manuale, manda `null` e il backend tiene il costo di prima senza dirlo. Da decidere: un modo esplicito di togliere il
+  costo (con la regola del costo obbligatorio che poi lo rifiuta dove serve) o un messaggio. Dettagli: piano 04, sezione
+  N2.
+- **W-B31 · La regola 12 del costo è una seconda copia scritta a mano** — minimo, codice; W, 15/10 (N2, test-author).
+  `validate_transaction_business_rules` (`backend/app/schemas/transactions/transactions.py`, regola 12,
+  `costBasisModeIncompatible`) ammette `cost_basis_mode` solo per TRANSFER e ADJUSTMENT con quantità > 0, a mano, mentre
+  N2 legge dai metadati il costo obbligatorio (`cost_basis_required`). Leggerla da `TX_TYPE_METADATA` porterebbe un
+  import circolare (`type_metadata.py` importa `transactions.py`): serve spostare la funzione o un import tardivo.
+  Dettagli: piano 04, sezione N2.
 
 ## J · Numeri e analisi (fase 01)
 
@@ -3155,6 +3291,18 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   - **La scelta definitiva va al developer come punto 47**, con la raccomandazione di J (la 1) e la stessa domanda sullo
     split di una coppia: che cosa vuol dire per le unità in uscita. Se sceglie la 1: lotto di J con il rosso prima, poi
     la correzione degli orfani in uscita.
+  - **Decisione 47 del developer (15/10, 19:09)**, alla lettera: «sono daccordo, si va mantenuto lo stesso principio nel
+    senso opposto». La gamba in uscita rimasta senza coppia diventa una rettifica in uscita **con il costo** medio con
+    cui le unità partono, dalla funzione del costo «Auto»; nell'esempio guadagno 60 sia in Dashboard sia nei lotti.
+    - **Dove vale**: la cancellazione del broker che riceve, le gambe in uscita già spaiate nei database, «dividi la
+      coppia».
+    - **Lotti**: J, **CP-16**, la regola in FIFO con il rosso prima, dopo CP-4c e CP-4d e prima di CP-15 (ordine
+      confermato dal coordinatore il 15/10: CP-4d resta prima perché corregge un numero visibile; W non aspetta ancora
+      la regola, prima fa N2 e i file dei broker). Conversione delle cancellazioni e dei dati: W, sopra la regola di J,
+      con la firma da accordare.
+    - **Punto aperto per CP-16**: con più lotti a prezzi diversi le unità possono uscire al loro costo FIFO (realizzato
+      0, come in un trasferimento) oppure al costo medio della riga (realizzato = medio − costo FIFO). Nell'esempio le
+      due letture coincidono. Da proporre all'avvio di CP-16, con un rosso per ciascuna lettura.
 
   Dettagli: piano J, §10 «Domande di W N1».
 - **J-12 · Con l'analisi dei lotti `FAILED` il pannello disegna lo stesso lotti e cifre** — medio, chiarezza (utenti
@@ -3252,12 +3400,87 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 
   Le variabili esistono da Z7a ma non hanno effetto finché X non aggancia il confine (X1–X4): la doc va scritta con
   l'aggancio. Dettagli: [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z7a», passo 5.
+- **Z-10 · Ctrl+C su `./dev.py server` uccide il server dopo 0,25 s** — basso; docs-writer di Z, 15/10 (Z6b), letto nel
+  codice e non provato. `run_command_live` (`scripts/cli_base.py:455`) usa `subprocess.run`, che a un
+  `KeyboardInterrupt` aspetta il figlio 0,25 s e poi lo uccide con SIGKILL. Con `--no-reload` o `--workers` il figlio è
+  il server stesso, che muore senza il suo spegnimento: niente budget, worker BRIM orfani, scritture tagliate. Con
+  `--reload` muore solo il supervisore, e il server vero ha già ricevuto il suo SIGINT dal terminale. Docker e il
+  runner non c'entrano. Cura possibile: in `run_command_live`, un `Popen` che dopo il Ctrl+C aspetta il figlio fino al
+  budget più un margine. Superficie del coordinatore. Dettagli:
+  [piano 06](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md), sezione «Z6b — spegnimento con un tempo
+  massimo».
 
 ## B · Backup e Docker (fase 01)
 
 Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md). Sessione avviata il 15/10 alle
 07:10, solo analisi, sulla base `ee5d81a6f`. Codice autorizzato il 15/10 alle 11:25 (delega del developer): B0 e B1,
 sulla base `23f6578f3`.
+
+- ✅ **B-1 · devWiki: F-073 e `domains/infrastructure` danno per fatto il backup completo** — minimo, doc; B, 15/10
+  (analisi). **Chiusa il 15/10 con B1**: F-073 racconta il backup dell'istanza e il ripristino che manca, la nota sullo
+  streaming è giusta, la riga di Impostazioni rimanda a B5; la riga di `domains/infrastructure.md` dice lo stesso.
+  - `features/F-073.md` è `implemented`, ma il backup completo risponde 501; dice «streaming, nessun accumulo», ma gli
+    export per serie materializzano le righe; chiama `GET /backup/export`, che è un `POST`; cita una sezione di
+    backup in Impostazioni che non esiste.
+  - `domains/infrastructure.md`, riga F-073: «export and import the full SQLite database — implemented».
+  - Le righe «Source files» sono giuste da B0 (15/10); la prosa si corregge con B1, che fa il backup vero, o con
+    `project-historian`.
+
+  Dettagli: [piano 07](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md), §2, punto 1.
+- **B-2 · Un commento di `DataEditor.test.ts` cita `backend/app/api/v1/backup.py`** — minimo; B, 15/10 (B0).
+  `frontend/src/lib/components/ui/data-editor/DataEditor.test.ts:802`: l'export degli eventi ora sta in
+  `backend/app/api/v1/backup/exports.py`. Il file è di T (`ui/data-editor`): non lo tocco. Dettagli: piano 07, §13, B0
+  passo 3.
+- ✅ **B-3 · La docstring di `backup_asset_prices` cita `backup_service.PRICE_COLUMNS`, ed è nell'OpenAPI** — minimo, doc;
+  B, 15/10 (B0). **Chiusa il 15/10 con B1**, che cambia comunque l'API. `backend/app/api/v1/backup/exports.py:71`: il modulo ora è `series_export.py`. Un lotto di riordino
+  lascia lo schema identico, quindi la correggo in B1, che cambia comunque l'API. Dettagli: piano 07, §13, B0 passo 2.
+- **B-4 · I comandi dell'immagine elencati senza `backup`** — minimo, doc; B, 15/10 (B6a, segnalato da docs-writer).
+  `docker_advanced.en.md#docker-exec` («In the image, `user`, `db` and `info` work»), il commento in testa a
+  `docker-compose.yml` e `admin/index.en.md:21` («user management, database upgrades») non dicono che anche
+  `dev.py backup` funziona nell'immagine. I file Docker sono di H fino al CP7a. **Passata ad H dal coordinatore** (15/10,
+  14:37). Dettagli: piano 07, §13, B6a.
+- **B-5 · `filesystem.en.md` «💾 Backup» non conosce `dev.py backup`** — piccolo, doc; B, 15/10 (B6a). Il file è di H
+  (CP3). Mancano:
+  - un rimando a `cli_tools.md#backup`, l'unico modo di fare un backup coerente a server acceso senza `sqlite3`;
+  - la nota che la copia della cartella dati prende anche `backups/`, con gli archivi;
+  - `backups/` nell'albero della cartella;
+  - un'ancora esplicita `{: #what-to-back-up }` sul titolo «✅ What to Back Up», nelle 4 lingue: i titoli tradotti hanno
+    slug diversi, quindi la pagina della CLI ora punta a `filesystem.md#backup`.
+
+  Testo proposto da docs-writer nel piano 07, §13, B6a. **Passata ad H dal coordinatore** (15/10, 14:37).
+- **B-6 · Il polling della scheda Backup ha il suo ciclo** — minimo; B, 15/10 (B5a). `BackupJobController` legge il
+  job con un suo `setTimeout`, perché nella base non c'è ancora l'aiuto comune di Z (F26, «un solo aiuto di polling per
+  tutti i cicli»). Quando entra, il controller lo usa. Il ciclo è breve e solo durante un backup avviato dall'admin.
+  Dettagli: piano 07, §13, B5a.
+- **B-7 · Debito di traduzione di `cli_tools.{it,fr,es}.md`** — piccolo, doc; B, 15/10 (B6a). Mancano la sezione
+  «💾 Back Up the Instance» (5 sottosezioni), una frase dell'introduzione e il punto Docker del suggerimento. La pagina
+  inglese non è timbrata: la traduzione passa dalla pipeline Aphra, su richiesta del developer.
+- **B-8 · Un backup avviato dalla UI la cui risposta si perde resta invisibile alla scheda** — minimo; B, 15/10 (B5a,
+  segnalato da test-author). Se la risposta di `POST /backup/instance` si perde (rete, timeout), il job gira sul server
+  ma la scheda non conosce il suo id. Nessuna rotta elenca il job in corso, e il rifiuto `backup_busy` non lo porta.
+  - Effetto: «busy» finché quel job finisce; il suo archivio scade dopo un'ora senza essere offerto; lo spazio su disco
+    resta occupato per quell'ora.
+  - Cura possibile: l'id (e l'origine) del job in corso nel dettaglio di `backup_busy`, così la scheda lo segue. Con
+    un'attenzione: un job della CLI si sposta fuori da `.jobs/` alla fine.
+
+  Dettagli: piano 07, §13, B5a, terza tornata.
+- **B-9 · Il token del pannello non è fra i controlli della configurazione** — piccolo; B, 15/10 (B8).
+  - Oggi un `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN` inutilizzabile (corto, non ASCII visibile, `_FILE` illeggibile) si vede
+    solo alla prima richiesta del pannello: 503 `backup_panel_unavailable` e una riga d'errore nel log.
+  - All'avvio, `log_configuration_audit()` non lo nomina, e la futura scheda «Sicurezza» non lo mostrerà.
+  - Cura possibile, come ha fatto E per l'email: `BACKUP_CONFIG_CHECKS` in un modulo di B (stato `ok`, `info` se
+    spento, `error` se inutilizzabile, mai il valore), una riga in `config_audit.CONFIG_CHECKS` (file di H) e le
+    chiavi `backup.checks.*` nelle 4 lingue.
+
+  Dettagli: piano 07, §13, «B8 — il token del pannello, rimesso sopra `ef61f0e7f`».
+- **B-10 · Un pulsante del pannello che chiede all'istanza il link di reset dell'admin** — piccolo; B, 15/10 (decisione
+  40, assegnata a B dal coordinatore). Recupero dell'admin dopo un ripristino o una password persa: oggi passa da
+  «password dimenticata» via email (E), o dall'assistenza con `dev.py user reset-link`.
+  - Cura: una rotta col token del pannello, come B8 (`require_panel_token`, permessa sull'istanza bloccata se il
+    developer lo vuole), che chiama la funzione dei link di reset di A e restituisce il link al pannello.
+  - Non per la 1.3, a meno che resti tempo (coordinatore, 15/10).
+
+  Dettagli: piano 07, §13, «Base `10697e618`, prove d'ingresso e decisioni 40–43».
 
 ## E · Email (fase 01)
 
@@ -3310,10 +3533,13 @@ da Y il 15/10.
 - **Le voci di Y vivono nelle loro sezioni** (C-85, C-62 e C-38 nella C; B10, 47-1, 48-1 e 54-1 nella I; T-U8 e
   T-FE2…FE11 nella T; K-13, K-15, C-15, C-34, I-01, I-03 e O-16 nel backlog 38; i difetti 2 e 5 nel README della 13):
   le chiude il coordinatore a ogni treno. Stato all'analisi e lotto di ciascuna: piano di Y, §2.
-- **Y-1 · I-03 è curata solo a metà** — basso; Y, 15/10 (analisi). Il ripiego da % ad Abs scatta solo per la vista %
-  ripristinata al caricamento (`GrowthChart.svelte:785-789`, dal 24/09); cambiando periodo o broker verso una storia
-  senza dati in percentuale, il bottone resta premuto e disabilitato (`:2539-2546`). Da confermare nel browser, nel lotto
-  Y8. Dettagli: piano di Y, §2.
+- ✅ **Y-1 · I-03 è curata solo a metà** — chiusa da Y8 il 15/10 (commit al checkpoint di Y8): un `$effect`, a ogni
+  caricamento finito, ripiega da `%` ad Abs quando la storia non ha dati in percentuale, e torna al `%` quando li
+  ritrova, salvo una scelta esplicita nel frattempo. Rosso prima in `GrowthChart.test.ts` («% view without % data,
+  after every load»); provata in Vitest, non ancora nel browser. Era: basso; Y, 15/10 (analisi). Il ripiego da % ad Abs
+  scattava solo per la vista % ripristinata al caricamento (`GrowthChart.svelte:785-789`, dal 24/09); cambiando periodo
+  o broker verso una storia senza dati in percentuale, il bottone restava premuto e disabilitato (`:2539-2546`).
+  Dettagli: piano di Y, §2 e §7 «Y8 — passo 2».
 - **Y-2 · Nella cascata settimanale una linea di broker che finisce a metà settimana diventa un buco** — basso, da
   verificare; `test-author` di Y, 15/10 (Y1). Comportamento preesistente, spostato alla lettera in
   `dashboard/growthChartData.ts` (`aggregateMetric`): il valore di un secchio si cerca sull'ultimo giorno della settimana
@@ -3338,3 +3564,23 @@ da Y il 15/10.
   15/10. `dashboard/AllocationPanel.svelte:65` (`toAllocEntries`) mette `emoji` in ogni voce, e il tipo `AllocEntry`
   (`:23`) lo dichiara: dopo l'ingresso di DV la torta non lo legge più, quindi è un dato morto. Da togliere in Y10,
   dopo DV. Dettagli: piano di Y, §2.
+- **Y-7 · Dopo Y4a le primitive dei grafici importeranno dalla feature dei segnali** — medio-basso; Y (analisi di Y3 e
+  Y4), approvata come residuo dal coordinatore, 15/10 (D-Y15).
+  - Con `lib/charts` in `features/signals`, restano fuori i generici: `LineChart`, `CandlestickChart`,
+    `PriceChartCompact`, `PriceChartFull`, `chartCoreHelpers`, `lineChartHelpers`, `priceChartHelpers`,
+    `timeSeriesAggregation` di `components/charts`, e `stores/chartSettingsStore`.
+  - Questi importano da `$lib/features/signals`: quasi solo `type RenderedSignal`, più `signalLabelToHtml` e, in
+    `priceChartHelpers`, `backendSignalSchemas` e `getBackendSignalProblem`.
+  - È un'inversione di livello: la UI generica dipende da una feature.
+  - Da chiudere in FE9, spostando il contratto fra grafico e segnale in `components/charts` o in un modulo neutro.
+  - Dettagli: piano di Y, §0.3 e §7 «Y3 e Y4 — analisi».
+- **Y-8 · `updateArrowRotations()` legge `getOption()` a ogni passo dello zoom** — basso, prestazioni; `test-author` di
+  Y, 15/10 (Y8). `charts/lineChartHelpers.ts:594` chiama `chart.getOption()`, che clona tutta l'opzione, e i tre
+  gestori di `dataZoom` la chiamano a ogni passo del gesto: `LineChart.svelte:399`, `CandlestickChart.svelte:290` e
+  `PriceChartFull.svelte:612`.
+  - Contraddice la nota di `PriceChartFull.svelte:604-609` («do NOT read chartInstance.getOption() here»), scritta
+    proprio contro gli scatti sui grafici con anni di dati giornalieri.
+  - È preesistente, e 47-1 non la peggiora: le sue letture aspettano che il gesto si fermi.
+  - Prima un rosso che conti le chiamate a `getOption()` per passo; poi la rotazione delle frecce letta in altro modo,
+    o rinviata come le etichette.
+  - Dettagli: piano di Y, §7 «Y8 — passo 3».

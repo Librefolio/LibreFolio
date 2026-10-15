@@ -266,9 +266,9 @@
       "totalPnl": "P&L total",
       "tooltip": {
         "initialValue": "Valeur initiale",
-        "shares": "parts",
-        "sharesOpenOutOf": "parts ouvertes sur",
-        "since": "Depuis le"
+        "since": "Depuis le",
+        "quantityClosed": "{original} → 0 {count, plural, one {part} other {parts}}",
+        "quantityOpen": "{count, plural, one {{open} part ouverte sur {original}} other {{open} parts ouvertes sur {original}}}"
       },
       "footerTotals": "Totaux",
       "closedOnly": "Fermés",

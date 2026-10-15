@@ -271,10 +271,26 @@ def api_http_compression(verbose: bool = False, test_names: list = None) -> bool
 def api_backup(verbose: bool = False, test_names: list = None) -> bool:
     """Test backup API."""
     print_section("Backup API Tests")
-    print_info("Testing: backup.py placeholder endpoints")
+    print_info("Testing: instance backup jobs (start, poll, download, delete; admin only) and the /backup route order")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_api.py", test_names)
     return run_command(cmd, "Backup API tests", verbose=verbose)
+
+
+def api_backup_instance_errors(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what POST /backup/instance answers when the run cannot start, in an app of the test (no server reached)."""
+    print_section("Backup API: start errors")
+    print_info("Testing: POST /backup/instance → backup_folder_unusable, backup_failed, backup_busy (in-process app, jobs.start_backup replaced)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_instance_errors.py", test_names)
+    return run_command(cmd, "Backup API start error tests", verbose=verbose)
+
+
+def api_backup_panel(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the hosting panel's backup routes (/backup/panel/jobs) and their token, in an app of the test (no server reached)."""
+    print_section("Backup API: the hosting panel's token")
+    print_info("Testing: LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN(_FILE) → 404 off, 503 unusable (short, not visible ASCII), 401 without it; with it, the panel's own jobs only (in-process app, jobs replaced)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_panel.py", test_names)
+    return run_command(cmd, "Backup API panel token tests", verbose=verbose)
 
 
 def api_transactions(verbose: bool = False, test_names: list = None) -> bool:
@@ -548,6 +564,17 @@ def api_settings(verbose: bool = False, test_names: list[str] | None = None) -> 
     return run_command(cmd, "Settings API tests", verbose=verbose)
 
 
+def api_plugin_settings(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the plugin settings API tests: catalogue, all-or-nothing writes, write-only secrets, isolation, delivery."""
+    print_section("Plugin Settings API Tests")
+    print_info("Testing GET /settings/plugins and PATCH /settings/plugins/bulk with the test double mockprov (MOCKFX read-only)")
+    print_info("Tests: catalogue and roles, write-only secrets, 422 with every item, no input echo, isolation, delivery to the plugin, CASCADE and SET NULL")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_plugin_settings_api.py", test_names)
+    return run_command(cmd, "Plugin settings API tests", verbose=verbose)
+
+
 def api_cache_admin(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run cache admin API tests."""
     print_section("Cache Admin API Tests")
@@ -799,7 +826,28 @@ Tests for REST API endpoints (server auto-started):
     # H CP6: the block is set in the test process only (ASGI app + monkeypatch); the lane's backend stays unblocked, and
     # each test registers and deletes its own user, so the category's write-scoped holds.
     add_test(api, "instance-block", api_instance_block, name="Instance Block", desc="423 on a blocked instance but the allowed routes, 401 first for anonymous callers, GET /system/block, route guard")
-    add_test(api, "backup", api_backup, name="Backup API", desc="Placeholder endpoints")
+    add_test(api, "backup", api_backup, name="Backup API", desc="Instance backup jobs (admin only): start, poll, download, delete, busy, job ids, removed placeholders; route order (C2)")
+    add_test(
+        api,
+        "backup-instance-errors",
+        api_backup_instance_errors,
+        name="Backup API Start Errors",
+        desc="POST /backup/instance when the run cannot start: a link or a file in place of backups/ or backups/.jobs (BackupPathError) → 500 backup_folder_unusable, any other OSError → 500 backup_failed, another run → 409 backup_busy, never the data directory's path or the system's words in the answer; a run that starts → 202 with its first state",
+        # PURE: an app of the test holds instance_router, require_admin overridden and jobs.start_backup replaced: no
+        # data directory, DB, server or network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-panel",
+        api_backup_panel,
+        name="Backup API Panel Token",
+        desc="The hosting panel's backup routes (/backup/panel/jobs) and LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN(_FILE): backup_download_token() (variable or file, BOM and trailing line breaks dropped, variable wins, blank is unset, anything but visible ASCII refused first, 31 characters refused, never the value, 32 taken, unreadable file); unset → 404 Not Found as a path that does not exist; unusable → 503 backup_panel_unavailable and one error line naming the variable; missing or wrong token → 401 backup_panel_unauthorized, WWW-Authenticate: Bearer; with it, the panel's own jobs only (another origin answers as no job, archive never read, never deleted), the archive's exact bytes with no-store, the shared start errors; an administrator still sees every job; the token never in an answer or the log",
+        # PURE: an app of the test holds backup_router under /api/v1 (require_admin overridden where called) and the four
+        # functions of jobs replaced by a fake under tmp_path; the token variables are set with monkeypatch: no data
+        # directory, DB, server or network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
     add_test(api, "transactions", api_transactions, name="Transactions API", desc="Bulk create, query, patch, delete")
     add_test(api, "transfer-promotion", api_transfer_promotion, name="Transfer Promotion", desc="DEPOSIT/WITHDRAWAL → TRANSFER")
     add_test(api, "transactions-validate", api_transactions_validate, name="Transactions Validate", desc="POST /transactions/validate dry-run")
@@ -831,6 +879,15 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "users-admin", api_users_admin, name="Users Admin API", desc="Invitations, accounts and usage, PATCH with the last-admin and limit guards, reset links, sessions revoke, onboarding reset, token-free logs")
     add_test(api, "profile", api_profile, name="Profile API", desc="Username/email update")
     add_test(api, "settings", api_settings, name="Settings API", desc="User and global settings")
+    add_test(
+        api,
+        "plugin-settings",
+        api_plugin_settings,
+        name="Plugin Settings API",
+        desc="Catalogue and roles, write-only secrets, all-or-nothing 422 with every item, no input echo in FastAPI's 422, user isolation, delivery to mockprov, CASCADE and SET NULL",
+        # The user fields are written by accounts the module registers and deletes; the system fields are not scopable.
+        exclusive_because="writes and clears the instance-wide plugin settings of mockprov, whose values make the fingerprint in the cache keys of every mockprov call: a concurrent unit would see its mockprov values change and miss its cache entries mid-test",
+    )
     add_test(
         api,
         "cache-admin",

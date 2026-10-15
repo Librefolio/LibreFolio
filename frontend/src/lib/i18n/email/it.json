@@ -21,7 +21,7 @@
       "SMTP_TLS_INVALID": "{variable} deve essere starttls, tls o none.",
       "SMTP_PORT_INVALID": "{variable} deve essere un numero intero da 1 a 65535.",
       "SMTP_FROM_MISSING": "Manca {variable}: l'indirizzo del mittente è obbligatorio.",
-      "SMTP_FROM_INVALID": "{variable} deve essere un solo indirizzo, per esempio LibreFolio <noreply@example.com>.",
+      "SMTP_FROM_INVALID": "{variable} deve essere un solo indirizzo, per esempio noreply@example.com, eventualmente dopo un nome, con l'indirizzo tra parentesi angolari.",
       "SMTP_REPLY_TO_INVALID": "{variable} deve essere un solo indirizzo.",
       "SMTP_MAX_PER_HOUR_INVALID": "{variable} deve essere un numero intero di almeno 1.",
       "SMTP_PASSWORD_UNREADABLE": "Il file della password indicato da {variable} non si può leggere.",
