@@ -27,7 +27,7 @@ counter per account, `users.session_version`, that ends all of the account's ses
 - 🧠 **Stateless**: No session is stored server-side — the version check reads `users.session_version` from the user row every request loads anyway — so any uvicorn worker can validate any token, provided all workers share the same `JWT_SECRET`.
 - 🔑 **Restarts**: Sessions survive a restart only if `JWT_SECRET`, or the file named by `JWT_SECRET_FILE`, holds a fixed value. Without it, every start generates a new random key, existing tokens no longer verify, and everyone is signed out. See [JWT Secret](security.md#jwt-secret) for how the key is resolved.
 - ⏱️ **TTL (Time To Live)**: The session duration is configurable via the `session_ttl_hours` Global Setting (default: 24 hours), read whenever a session cookie is issued: at login, and when a password change re-issues it. There is no refresh: after expiry the user logs in again.
-- 🚪 **Revocation**: Logout only deletes the cookie. A password change or reset (`./dev.py user reset`), a deactivation or a demotion raises the account's `session_version`: every session issued before it gets `401` at its next request, and a later reactivation does not bring them back. The password change also sends a new cookie to the device that made it, which stays signed in. Deleting the user cuts access at the next request; changing `JWT_SECRET` signs everyone out. See [Session Revocation](security.md#session-revocation).
+- 🚪 **Revocation**: Logout only deletes the cookie. A password change, a password reset (`./dev.py user reset`, or a reset link once spent), a deactivation or a demotion (from the CLI or the administrator API), or an administrator's sign-out of the account raises the account's `session_version`: every session issued before it gets `401` at its next request, and a later reactivation does not bring them back. The password change also sends a new cookie to the device that made it, which stays signed in. Deleting the user cuts access at the next request; changing `JWT_SECRET` signs everyone out. See [Session Revocation](security.md#session-revocation).
 
 ## 👤 User Roles
 
@@ -40,9 +40,11 @@ There are two system-level user roles in LibreFolio:
 
 2. 👑 **Superuser (Admin)**:
     - ✅ Has all permissions of a normal user.
-    - ⚙️ Can manage system-wide **Global Settings**.
-    - 🔧 Can manage other users (reset passwords, deactivate accounts) via CLI or API.
+    - ⚙️ Can manage system-wide **Global Settings**, the registration mode included, unless `LIBREFOLIO_REGISTRATION` pins it.
+    - 🔧 Can manage the other accounts through the administrator API under `/api/v1/users`: list them, activate or deactivate, promote or demote, create a password-reset link, sign an account out everywhere, restart its onboarding, and create, list or revoke invitations. The API never sets a password: the user chooses it through the reset link. See [Registration, Invitations and the Admin API](access_control.md#registration).
     - 🔍 Can access *any* broker and transaction in the system for support purposes.
+
+Whoever has a shell on the server manages accounts with the user CLI (`./dev.py user …`), no account needed: it lists, creates, activates or deactivates, promotes or demotes accounts, sets a password directly (`user reset`), creates invitations and password-reset links, and restarts a user's onboarding. It has no command to list or revoke invitations, or to sign an account out without another change. See [Command-Line Tools](../../admin/cli_tools.md).
 
 ## 🏗️ User-Broker Mapping and Data Segregation
 

@@ -195,7 +195,7 @@ A subnet router is part of your network's plumbing: if you skipped it, disable k
 
 !!! warning "🔐 Before you go public"
 
-    With Funnel, anyone on the internet can open your LibreFolio login page. Create your own account first: the first account registered becomes the administrator. Sign-ups stay open after that (**Enable Registration**, `enable_registration`, is on by default): turn it off in the **Global Settings** if you do not want strangers to register (see [Global Settings](settings.md)).
+    With Funnel, anyone on the internet can open your LibreFolio login page. Create your own account first: the first account registered becomes the administrator. Sign-ups stay open after that (**Registration** is **Open** by default): once your account exists, switch **Registration** in the **Global Settings** to **By invitation**, and send an invitation link to each person you want to let in, or to **Closed** if nobody else should join (see [Who Can Sign Up](settings.md#registration)).
 
 1. Visit the [Access Controls](https://login.tailscale.com/admin/acls) page in the Tailscale admin console.
 2. Click the **Add node attribute** button.
