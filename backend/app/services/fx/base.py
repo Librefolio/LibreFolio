@@ -15,6 +15,7 @@ from decimal import Decimal
 from typing import Literal
 
 from backend.app.services.plugin_settings.contract import PluginSettingsMixin
+from backend.app.utils.runtime.cooldown import RateLimitedError, retry_after_seconds
 
 FXProviderStartDate = date | Literal["min"]
 FX_HISTORY_MIN_FALLBACK = date(1900, 1, 1)
@@ -332,3 +333,56 @@ class FXNotConfiguredError(FXServiceError):
         super().__init__(f"Provider {provider_code} is not configured: {', '.join(missing)} missing")
         self.provider_code = provider_code
         self.missing = missing
+
+
+class FXRateLimitedError(FXServiceError, RateLimitedError):
+    """The provider refused for too many requests, or is paused after such a refusal.
+
+    ``retry_after`` is a wait in seconds: the provider's ``Retry-After`` (or None) when a plugin raises it, the pause
+    the call boundary decided when it reaches a caller (``fx/runtime.call_fx_provider``). An ``FXServiceError``: the
+    sync records it as a failed leg and tries the next route. A plugin raises it and never retries in its own code.
+    """
+
+    error_code = "RATE_LIMITED"
+
+    def __init__(self, message: str, *, retry_after: float | None = None, scope: str | None = None):
+        RateLimitedError.__init__(self, message, retry_after=retry_after, scope=scope)
+
+
+def fx_rate_limited_from_response(response: object, provider_code: str) -> FXRateLimitedError | None:
+    """An ``FXRateLimitedError`` when ``response`` (``httpx``) is an HTTP 429, with its ``Retry-After``; else None."""
+    if getattr(response, "status_code", None) != 429:
+        return None
+    headers = getattr(response, "headers", None)
+    retry_after = retry_after_seconds(headers.get("Retry-After")) if headers is not None and hasattr(headers, "get") else None
+    return FXRateLimitedError(f"{provider_code}: too many requests (HTTP 429)", retry_after=retry_after)
+
+
+def raise_if_fx_rate_limited(error: BaseException, provider_code: str) -> None:
+    """Raise an ``FXRateLimitedError`` (from ``error``) when ``error`` carries an HTTP 429 response (``httpx``).
+
+    For the first line of a plugin's ``except httpx.HTTPError``: the other errors go on to the plugin's own handling.
+    """
+    refused = fx_rate_limited_from_response(getattr(error, "response", None), provider_code)
+    if refused is not None:
+        raise refused from error
+
+
+def longest_refusal(outcomes: object) -> FXRateLimitedError | None:
+    """Among the outcomes of calls made together (``asyncio.gather(..., return_exceptions=True)``), the refusal for too
+    many requests with the longest ``Retry-After``; None when none was refused.
+
+    A provider that refuses one of its currencies refuses the whole call: the caller raises it, and the sync tries the
+    next route while the provider is paused.
+    """
+    refusals = [outcome for outcome in outcomes if isinstance(outcome, FXRateLimitedError)]  # type: ignore[union-attr]
+    if not refusals:
+        return None
+    return max(refusals, key=lambda refusal: refusal.retry_after if refusal.retry_after is not None else -1.0)
+
+
+def raise_longest_refusal(outcomes: object) -> None:
+    """Raise ``longest_refusal(outcomes)`` when there is one: a provider refusing one currency refuses the whole call."""
+    refused = longest_refusal(outcomes)
+    if refused is not None:
+        raise refused

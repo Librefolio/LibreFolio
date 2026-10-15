@@ -2,12 +2,17 @@
   AllocationPieChart — Pie chart for allocation distribution (sector or asset type).
 
   Supports two modes:
-  - 'sector' (default): uses emoji from backend AllocationItem; shows emoji inside each slice
+  - 'sector' (default): shows each sector's emoji inside its slice — read from the sector
+    store, i.e. the backend's one map (GET /utilities/sectors), never from the data;
   - 'type': translates asset-type keys via assets.types.*; shows the PNG icon
     inside each slice (ECharts rich text), icon + label in legend and tooltip.
 
+  Every slice wears its category's own colour (GR1 of the designer's round 2): the same
+  family or sector is the same colour in every view, portfolio and period, read through
+  `categoryColor` (lib/theme/chartCategories). Subtypes are GR4 shades of their family.
+
   Props:
-  - data: AllocationEntry[] — name, value (0-100%), amount (abs), optional emoji
+  - data: AllocationEntry[] — name, value (0-100%), amount (abs)
   - height: CSS height (default "280px")
   - mode: 'sector' | 'type' (default 'sector')
   - currency: currency code for absolute value formatting (default 'EUR')
@@ -33,8 +38,11 @@
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
     import {ALLOCATION_CHART_COLORS, CHART_NEUTRALS, CHART_TOOLTIP_COLORS} from '$lib/theme/chartTheme';
-    import {ALLOCATION_PIE_PALETTE} from '$lib/theme/chartPalettes';
-    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {categoryColor} from '$lib/theme/chartCategories';
+    import {familyShade, shadePoles} from '$lib/theme/chartShades';
+    import {chartRoles} from '$lib/theme/roleColors';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+    import {ensureSectorsLoaded, getSectorEmoji, sectorEmojiVersion} from '$lib/stores/reference/sectorStore';
 
     // =========================================================================
     // Types & Props
@@ -46,8 +54,6 @@
         value: number;
         /** Absolute amount in base currency */
         amount: number;
-        /** Emoji from backend (sectors) */
-        emoji?: string | null;
     }
 
     interface Props {
@@ -55,7 +61,7 @@
         data: AllocationEntry[];
         /** CSS height of the chart container */
         height?: string;
-        /** Display mode: 'sector' uses backend emoji + i18n labels; 'type' uses asset type PNG icons */
+        /** Display mode: 'sector' uses the sector store's emoji + i18n labels; 'type' uses asset type PNG icons */
         mode?: 'sector' | 'type';
         /**
          * Legend placement strategy.
@@ -109,10 +115,8 @@
     // transition asks ECharts to replace the series; every other rebuild merges as before.
     let lastRings = false;
     let needsInitialLayoutStabilityPass = false;
-
-    // Diversified color palette — high chromatic distance
-    const PALETTE_LIGHT = ALLOCATION_PIE_PALETTE.light;
-    const PALETTE_DARK = ALLOCATION_PIE_PALETTE.dark;
+    /** The sector store's version the last full build wrote its emoji from: a new list rebuilds the names. */
+    let lastEmojiVersion = -1;
 
     // =========================================================================
     // Lifecycle
@@ -120,10 +124,22 @@
 
     onMount(() => {
         const observer = onThemeClassChange(() => renderChart());
+        // A colour changed without a theme switch (a Designer Lab edit, contract C4): rebuild the whole option, never
+        // the data-only fast path below.
+        const colors = onChartColorsChange(() => {
+            chartFullyInitialized = false;
+            renderChart();
+        });
         return () => {
             observer.disconnect();
+            colors.disconnect();
             cleanup();
         };
+    });
+
+    // The sector emoji come from the sector store (the backend's one map), in every view.
+    $effect(() => {
+        if (mode === 'sector') void ensureSectorsLoaded();
     });
 
     $effect(() => {
@@ -135,6 +151,8 @@
         void data.map((slice) => ({...slice}));
         // Labels and amounts are written in the interface locale: a language switch redraws them (M-18).
         void uiLocale();
+        // The sector names carry their emoji, which arrive with the sector store: a new list redraws them.
+        if (mode === 'sector') void sectorEmojiVersion();
 
         if (chartContainer) {
             tick().then(() => {
@@ -174,7 +192,11 @@
 
         const isDark = isDarkTheme();
         const tr = $t;
-        const palette = isDark ? PALETTE_DARK : PALETTE_LIGHT;
+        // GR4: a subtype is a shade of its family's colour, toward white in the light theme and toward the card the
+        // chart sits on in the dark one.
+        const poles = shadePoles(isDark, chartRoles(isDark, chartContainer).color('--lf-surface-card'));
+        const shade = (base: string, rank: number) => familyShade(base, rank, poles);
+        const emojiVersion = sectorEmojiVersion();
 
         const entries = data.filter((e) => e.value > 0);
         if (entries.length === 0) return; // Keep old chart visible, don't clear
@@ -185,7 +207,7 @@
             if (mode === 'sector') {
                 const i18nKey = `sectors.${sectorI18nKey(entry.name)}`;
                 const translated = tr(i18nKey) !== i18nKey ? tr(i18nKey) : entry.name.replace(/_/g, ' ');
-                const emoji = entry.emoji ?? '';
+                const emoji = getSectorEmoji(entry.name);
                 displayName = emoji ? `${emoji} ${translated}` : translated;
             } else {
                 // Bugfix: namespace is plural "assets.types.X" (matches en.json) — the
@@ -195,25 +217,22 @@
                 const translated = tr(typeKey);
                 displayName = translated !== typeKey ? translated : entry.name;
             }
-            return {name: displayName, value: entry.value, amount: entry.amount, rawName: entry.name, emoji: entry.emoji ?? ''};
+            return {name: displayName, value: entry.value, amount: entry.amount, rawName: entry.name};
         });
 
-        // Asset-type subtypes sit inside their family, adjacent to it — ordering and
-        // colour are one change, because two similar colours on opposite sides of the
-        // circle read as an accident. The family is the **vehicle** (developer's
-        // decision of 24/09/2026, R12 option B), as K's taxonomy files it
-        // (`assetTypeFamily`): every ETF subtype belongs to ETF, real-estate
-        // crowdfunding to Crowdfund.
+        // Asset-type subtypes sit inside their family, adjacent to it: two similar colours
+        // on opposite sides of the circle read as an accident. The family is the
+        // **vehicle** (developer's decision of 24/09/2026, R12 option B), as K's taxonomy
+        // files it (`assetTypeFamily`): every ETF subtype belongs to ETF, real-estate
+        // crowdfunding to Crowdfund. Its colour is its own (GR1), whatever its rank.
         //
-        // 'type' only, deliberately: the sector dimension has no taxonomy to fold,
-        // and this same component draws the Asset Detail sector pie, which is out
-        // of scope. With no subtypes present every group is a singleton, so the
-        // order and the colours are identical to the plain value sort below.
+        // 'type' only: the sector dimension has no taxonomy to fold. A sector wears its
+        // own colour too, in the plain value order below.
         const hierarchy =
             mode === 'type'
                 ? buildAllocationHierarchy(
                       mappedEntries.map((item) => ({key: item.rawName, weight: item.value, item})),
-                      {resolvePrimary: assetTypeFamily, palette},
+                      {resolvePrimary: assetTypeFamily, colorOf: (primary) => categoryColor('type', primary, isDark), shade},
                   )
                 : [];
         const chartData =
@@ -225,13 +244,13 @@
                       groupSize,
                       primaryTotal,
                   }))
-                : mappedEntries.sort((a, b) => b.value - a.value);
+                : mappedEntries.sort((a, b) => b.value - a.value).map((item) => ({...item, itemStyle: {color: categoryColor('sector', item.rawName, isDark)}}));
 
         // D72: as soon as one family contains a subtype, the relation is drawn as a
         // second ring, separate from the first, instead of a shade (R12). With no
         // subtype on screen the layout says so, and the single legacy ring below is
         // drawn untouched.
-        const layout = mode === 'type' ? buildAllocationRings(hierarchy, {weightOf: (item) => item.value}) : null;
+        const layout = mode === 'type' ? buildAllocationRings(hierarchy, {weightOf: (item) => item.value, shade}) : null;
         const rings = layout?.rings === true;
 
         const typeLabel = (key: string) => {
@@ -266,9 +285,10 @@
         const currentRawTypeKeys = mode === 'type' ? [...new Set(chartData.map((d) => d.rawName.toUpperCase()))].sort().join(',') + (rings ? '|rings' : '') : '';
         const sameTypeSet = mode !== 'type' || currentRawTypeKeys === lastRawTypeKeys;
         // A language switch rebuilds in full, as a theme switch does: the legend's name map and
-        // the label formatters were built for the previous language (M-18).
+        // the label formatters were built for the previous language (M-18). So does a new list of
+        // sector emoji: the names carry them.
         const locale = uiLocale();
-        if (chartFullyInitialized && lastDark === isDark && lastLocale === locale && sameTypeSet) {
+        if (chartFullyInitialized && lastDark === isDark && lastLocale === locale && lastEmojiVersion === emojiVersion && sameTypeSet) {
             // Bugfix: preserve the FULL data item (not just {name, value}) — formatters
             // (tooltip especially) read params.data.rawName/amount, and stripping them
             // here silently broke the fallback path for any type whose translated name
@@ -376,7 +396,7 @@
         const pieCenter = legendBelow ? ['50%', '40%'] : ['35%', '50%'];
         const pieRadius = legendBelow ? ['25%', '55%'] : ['35%', '70%'];
 
-        // Inner label — sector: emoji only (from data.emoji); type: PNG icon via rich text.
+        // Inner label — sector: emoji only (from the sector store, in the display name); type: PNG icon via rich text.
         const labelConfig: any =
             mode === 'sector'
                 ? {
@@ -465,7 +485,6 @@
         const option: echarts.EChartsOption = {
             ...CHART_ANIMATION_CONFIG,
             ...(opts.skipAnimation ? {animation: false} : {}),
-            color: palette,
             tooltip: {
                 trigger: 'item',
                 formatter: tooltipFormatter,
@@ -546,6 +565,7 @@
         chartFullyInitialized = true;
         lastDark = isDark;
         lastLocale = locale;
+        lastEmojiVersion = emojiVersion;
         if (needsInitialLayoutStabilityPass) {
             needsInitialLayoutStabilityPass = false;
             scheduleFirstRenderStabilityFix(chartInstance, chartContainer);

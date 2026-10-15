@@ -8,6 +8,7 @@ Supports both current values and historical OHLC (Open, High, Low, Close) data.
 # Postpones evaluation of type hints to improve imports and performance. Also avoid circular import issues.
 from __future__ import annotations
 
+import re
 import time as _time_mod
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -29,6 +30,11 @@ except ImportError:
     pd = None
     YFINANCE_AVAILABLE = False
 
+try:
+    from yfinance.exceptions import YFRateLimitError
+except ImportError:  # pragma: no cover — yfinance missing, or a version without it: the message words still count
+    YFRateLimitError = None
+
 from datetime import UTC
 from datetime import datetime as _dt
 
@@ -45,7 +51,7 @@ from backend.app.schemas.prices import (
     FAPricePoint,
 )
 from backend.app.schemas.provider import FAVolumeKind
-from backend.app.services.assets.base import AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.base import AssetHistoryStartDate, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector
@@ -53,6 +59,10 @@ from backend.app.utils.asset.sector import validate_sector
 logger = get_logger(__name__)
 
 # ── Retry helpers for transient yfinance errors ─────────────────────────
+
+# «Too many requests» is never retried in the thread: the core pauses the provider (decision 34, release 1.3).
+# A whole-word 429, so a ticker such as 4290.T in a message is no refusal.
+_RATE_LIMIT_PATTERN = re.compile(r"\b429\b|too many requests|rate limit")
 
 # Keywords that indicate transient network/API errors worth retrying
 _TRANSIENT_KEYWORDS = frozenset(
@@ -66,9 +76,6 @@ _TRANSIENT_KEYWORDS = frozenset(
         "nonetype",
         "temporary",
         "503",
-        "429",
-        "too many requests",
-        "rate limit",
         "ssl",
         "eof",
         "broken pipe",
@@ -78,6 +85,13 @@ _TRANSIENT_KEYWORDS = frozenset(
 
 _YF_MAX_RETRIES = 3
 _YF_BASE_DELAY = 1.5  # seconds
+
+
+def _is_rate_limited(exc: Exception) -> bool:
+    """True for a «too many requests» refusal: yfinance's ``YFRateLimitError``, or its words in the message."""
+    if YFRateLimitError is not None and isinstance(exc, YFRateLimitError):
+        return True
+    return _RATE_LIMIT_PATTERN.search(str(exc).lower()) is not None
 
 
 def _is_transient(exc: Exception) -> bool:  # pragma: no cover
@@ -90,8 +104,9 @@ def _yf_with_retry(fn, *, label: str = "yfinance"):
     """
     Execute a yfinance operation with retry on transient errors.
 
-    Uses simple exponential backoff (1.5s → 3s → 6s).
-    Non-transient errors are raised immediately.
+    Up to three attempts, with exponential backoff between them (1.5 s, then 3 s).
+    Non-transient errors are raised immediately. A «too many requests» refusal is raised at once as
+    ``AssetRateLimitedError``, never retried: the call boundary pauses the provider (``core.call_provider``).
 
     Args:
         fn: Zero-arg callable that performs the yfinance operation
@@ -101,13 +116,16 @@ def _yf_with_retry(fn, *, label: str = "yfinance"):
         Result of fn()
 
     Raises:
-        The last exception if all retries are exhausted or non-transient
+        AssetRateLimitedError on a refusal for too many requests; otherwise the last exception if all retries are
+        exhausted or non-transient
     """
     last_exc: Exception | None = None
     for attempt in range(1, _YF_MAX_RETRIES + 1):
         try:
             return fn()
         except Exception as e:
+            if _is_rate_limited(e):
+                raise AssetRateLimitedError(f"Yahoo Finance refused for too many requests ({label})") from e
             last_exc = e
             if not _is_transient(e) or attempt == _YF_MAX_RETRIES:
                 raise
@@ -673,6 +691,8 @@ class YahooFinanceProvider(AssetSourceProvider):
             logger.debug(f"Search for '{query}': found {len(results)} results")
             return results
 
+        except AssetRateLimitedError:
+            raise  # the core pauses the provider: not an empty result
         except Exception as e:
             logger.warning(f"Search failed for '{query}': {e}")
             return []
@@ -816,6 +836,8 @@ class YahooFinanceProvider(AssetSourceProvider):
             logger.debug(f"Fetched metadata from yfinance for {identifier}: asset_type={asset_type}, sector={sector}")
             return patch_item
 
+        except AssetRateLimitedError:
+            raise  # the core pauses the provider: not "no metadata"
         except Exception as e:
             logger.warning(f"Could not fetch metadata for {identifier}: {e}")
             return None

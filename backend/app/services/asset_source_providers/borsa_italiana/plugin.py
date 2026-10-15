@@ -28,7 +28,7 @@ from backend.app.schemas.prices import (
     FAPricePoint,
 )
 from backend.app.schemas.provider import FAVolumeKind
-from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetRateLimitedError, AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.provider_registry import register_provider
 
@@ -49,12 +49,25 @@ try:
         ottieni_scheda,
         ottieni_storico,
     )
+    from borsa_italiana_scraping.eccezioni import RateLimitRaggiunto
 
     BORSA_ITALIANA_AVAILABLE = True
 except ImportError:
     BORSA_ITALIANA_AVAILABLE = False
 
 logger = get_logger(__name__)
+
+
+def _raise_if_rate_limited(error: Exception) -> None:
+    """Raise ``AssetRateLimitedError`` when Borsa Italiana refused for too many requests (HTTP 429) or its firewall
+    blocked the session (HTTP 403): the library's ``RateLimitRaggiunto``. The core then pauses the provider.
+
+    The library has already retried a 429 by itself, sleeping 2, 4 and 8 s in the provider's thread after each refusal
+    (``Sessione``, version 0.3.2): a gap of the library, written in the plugin guide.
+    """
+    if isinstance(error, RateLimitRaggiunto):
+        raise AssetRateLimitedError(f"Borsa Italiana refused for too many requests: {error}") from error
+
 
 # ISIN (optionally followed by a ``-MIC`` market segment) embedded in a Borsa
 # Italiana stock/bond/ETF scheda URL, e.g. ``…/scheda/IT0005436693-MOTX.html``.
@@ -518,6 +531,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 {"identifier": identifier, "error": str(e)},
             ) from e
         except BorsaItalianaErrore as e:
+            _raise_if_rate_limited(e)
             raise AssetSourceError(
                 f"Failed to fetch current value for {identifier} from Borsa Italiana: {e}",
                 "FETCH_ERROR",
@@ -603,6 +617,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 {"identifier": identifier, "error": str(e)},
             ) from e
         except BorsaItalianaErrore as e:
+            _raise_if_rate_limited(e)
             raise AssetSourceError(
                 f"Failed to fetch history for {identifier} from Borsa Italiana: {e}",
                 "FETCH_ERROR",
@@ -632,6 +647,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 {"codice_fondo": codice_fondo, "error": str(e)},
             ) from e
         except BorsaItalianaErrore as e:
+            _raise_if_rate_limited(e)
             raise AssetSourceError(
                 f"Failed to fetch NAV for fund {codice_fondo} from Borsa Italiana: {e}",
                 "FETCH_ERROR",
@@ -731,6 +747,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
         except (StrumentoNonTrovato, DatiNonDisponibili):
             return None
         except Exception as e:  # best-effort — never fatal to search
+            _raise_if_rate_limited(e)  # a refusal is no miss: the core pauses the provider
             logger.debug(f"Borsa Italiana resolve_url (scheda) failed for '{isin}': {e}")
             return None
         asset_type = _map_asset_type(scheda.tipo)
@@ -793,6 +810,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
             except (StrumentoNonTrovato, DatiNonDisponibili):
                 return None
             except Exception as e:  # best-effort — never fatal to search
+                _raise_if_rate_limited(e)  # a refusal is no miss: the core pauses the provider
                 logger.debug(f"Borsa Italiana resolve_url (fund) failed for '{url}': {e}")
                 return None
             return self._fund_search_items_all_langs(dati)
@@ -812,6 +830,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
                     mic = found_mic or mic
                     break
         except Exception as e:  # best-effort — fall back to URL-only params
+            _raise_if_rate_limited(e)  # a refusal is no miss: the core pauses the provider
             logger.debug(f"Borsa Italiana resolve_url: market-param discovery failed for '{isin}': {e}")
         # If the discovery couldn't supply the platform (e.g. the instrument is
         # temporarily de-indexed from the site search), fall back to reading the
@@ -930,6 +949,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
                 {"query": query, "error": str(e)},
             ) from e
         except Exception as e:
+            _raise_if_rate_limited(e)
             raise AssetSourceError(
                 f"Search failed for '{query}' on Borsa Italiana: {e}",
                 "SEARCH_ERROR",
@@ -975,6 +995,8 @@ class BorsaItalianaProvider(AssetSourceProvider):
         """
         try:
             dati = self._fetch_fund(codice_fondo)
+        except AssetRateLimitedError:
+            raise  # the core pauses the provider: not "no metadata"
         except AssetSourceError as e:
             logger.warning(f"Could not fetch fund metadata for code '{codice_fondo}' from Borsa Italiana: {e}")
             return None
@@ -1098,6 +1120,7 @@ class BorsaItalianaProvider(AssetSourceProvider):
             # Unresolved market page: actionable — surface, don't swallow.
             raise _unsupported_page_error(identifier, e) from e
         except Exception as e:
+            _raise_if_rate_limited(e)
             logger.warning(f"Could not fetch metadata for {identifier} from Borsa Italiana: {e}")
             return None
 
