@@ -470,6 +470,7 @@ Blocchi per lotto:
 | 3 | T-3 con la gallery completa | ✅ checkpoint `bd51acbc2`, base aggiornata con G nel merge `dad0f6292`; la gallery la lancia il coordinatore il 15/10 |
 | 4 | T-5 sfondo del login, prima della gallery candidata del 15/10 | ✅ checkpoint `f43aa7200`; spacchettamento W1/W2 `48cc52e5b`; base con X nel merge `2c7553e0b` |
 | 5 | T-6 palette del giro 2 e barra neutra (D-T15, D-T16) | ✅ checkpoint `078dec1ae`; base con `dc9a5d232` nel merge `e1443e952`, validato il 15/10; candidata T6 fatta, l'ingresso aspetta il via del developer |
+| 6 | T-7 header che si nasconde di nuovo, fascia verde del logo nella barra laterale | ✅ pronto il 15/10, FROZEN in attesa del commit |
 
 ## Avanzamento
 
@@ -939,3 +940,58 @@ Blocchi per lotto:
 >   due azioni ripetute sono verdi. Non è un difetto dei test.
 > - **TC-7 nel backlog:** `--resolve` non fa un vero merge a tre vie. È la R-8 di R, spostata a T dal coordinatore.
 >   Due volte oggi, a R e a X, un `~accept` di un lato si è perso nel merge della baseline.
+
+### T-7 — ✅ 15/10/2026 (header che si nasconde; fascia verde del logo; checkpoint 6)
+
+> **Avvio** (coordinatore, 14:08): il developer, dopo l'anteprima sulla 6160, chiede due cose, con priorità.
+> - Una regressione, testuale: «è scomparsa la cosa che la header bar scrollando in basso si nasconde».
+> - Una richiesta, testuale: «almeno nel riquadro del logo, nel menù laterale, metti il verde della head della login».
+>
+> Base `c5a8a03a4`.
+>
+> **Diagnosi:**
+> - **Nella corsia lo scorrimento funziona.** Con lo script di diagnosi (utente E2E, dati veri, rotella del mouse) su
+>   `/dashboard` e `/assets`, in desktop e mobile, l'header va `hidden`: `translate` `0px -100%`, cima a −57 px.
+>   `/settings` in desktop non scorre affatto: la pagina sta nello schermo.
+> - **Il sintomo del developer** viene dal blocco per focus di `Header.svelte` (`focusPinned`, dal 9/9, `ef722b552`).
+>   In Chrome un clic su un pulsante dell'header, per esempio `theme-toggle`, gli lascia il focus. L'header resta
+>   allora `pinned` e non si nasconde più finché non si clicca nella pagina: provato, si scorre di 600 px e resta
+>   fermo.
+> - **Non è una regressione di T né del merge.** La revisione dei colori l'ha resa visibile, perché il developer cambia
+>   tema dall'header.
+> - **La E2E `header-scroll`** non poteva vederlo: scorre col focus fuori dall'header. Ed era rossa per un altro
+>   motivo: il suo insieme di API sintetiche non risponde al `GET /api/v1/system/instance` di H, arrivato col merge.
+>
+> **Note implementazione:**
+> - **`layout/Header.svelte`**, solo lo script, markup intatto:
+>   - `focusPinsHeader()` blocca l'header solo se l'elemento con il focus corrisponde a `:focus-visible`, cioè per il
+>     focus da tastiera;
+>   - se il motore non sa leggere `:focus-visible`, vale la regola di prima.
+> - **`layout/Sidebar.svelte`:** il blocco del logo diventa la fascia `bg-lf-brand text-lf-on-brand` (con
+>   `data-testid="sidebar-brand"`, sullo stesso elemento) e perde il bordo inferiore, perché lo segna il cambio di
+>   colore. Il pulsante di chiusura su mobile usa `hover:bg-lf-on-brand/10`. Il resto della barra resta neutro (D-T15).
+> - **Test di `test-author`**, scritti senza eseguirli per il budget di carico:
+>   - `header-scroll`:
+>     - il sintetico di `/api/v1/system/instance` (`{profile: 'selfhosted'}`, il valore predefinito dello store);
+>     - due test nuovi, desktop e mobile: dopo un clic su un controllo dell'header lo scorrimento lo nasconde; col focus
+>       da tastiera (un vero Tab) resta fermo;
+>   - `theme-roles` (b): `sidebar-brand` = `--lf-brand` con testo `--lf-on-brand`;
+>   - `Header.test.ts`:
+>     - un aiuto `ownFocusVisible` fissa la risposta di `:focus-visible`;
+>     - il test esistente dichiara il focus da tastiera;
+>     - due test nuovi: il clic non blocca, e il motore che non legge `:focus-visible` tiene la regola vecchia;
+>     - `test-author` ha visto che jsdom, letto file per file, ricorda l'ultimo evento di mouse: per questo il test
+>       esistente ora dichiara il suo focus.
+> - **Runner:** le descrizioni di `header-scroll` e `theme-roles`; `black` riformatta la sola chiamata di
+>   `header-scroll`.
+>
+> **Evidenze finora**, una alla volta, prima del passaggio dello slot a Y1:
+> - E2E `header-scroll` 8/8;
+> - `Header.test.ts` 30/30, a file intero;
+> - `front check` 0/0;
+> - `--check` pulito; Prettier, `ruff` e `black` verdi.
+>
+> **Al via dello slot**, in serie:
+> - E2E `theme-roles` 18/18, compresa la fascia;
+> - `component-unit` 3.227 e `onboarding-component-unit` 443 (+2 ciascuna, i casi nuovi di `Header.test.ts`);
+> - **4 scatti** in `files/T7-shots/`: dashboard in desktop e barra mobile aperta, chiaro e scuro.
