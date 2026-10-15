@@ -70,6 +70,7 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | Average purchase cost (WAC), cost-basis steps and conversions | `services/financial_math/average_cost.py` |
 | Cash per broker and currency, its daily value, FX results on cash | `services/financial_math/native_cash.py` |
 | Daily portfolio state: NAV, capital baseline, P&L, per-broker contributions | `services/financial_math/portfolio/` (`daily_state.py`, run by `engine.py`) |
+| A period's boundary states, P&L and identity | `services/financial_math/portfolio/period.py` |
 | FIFO lots and realized gains | `services/financial_math/fifo/` |
 | Lots analysis: lot histories, economic events, average cost lines | `services/financial_math/lots/` |
 | Simple ROI, TWRR, MWRR, annualization, a period's start (rebasing), net holding return, G/L ratio | `services/financial_math/returns.py` |
