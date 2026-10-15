@@ -1463,3 +1463,187 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
 5. ⏳ **Prove dopo l'avviso di fine finestra**: svelte-check, Vitest `tx-unit`, `core-unit`, `component-unit`
    (`ImportWizardModal.test.ts`), E2E `front-transaction all --workers 4`, `front-utility onboarding-tour` (la guida
    dell'import ancora le sue àncore ai passi), `mkdocs build` e `check-links`; poi l'handoff FROZEN.
+
+   > **Note implementazione (coordinatore, 15/10 ~09:05)**: FE8a-3 committato come checkpoint prima delle prove,
+   > `b92e655d9` (`refactor(import-wizard): cut wizard steps and footer`, 13 file; 595 = 222 + 20 + 22 + 67 + 77 + 86 +
+   > 101, `#dc2626` nel padre, `--check` pulito) e `063e5b7cf` (journal). Le prove della lista dopo la finestra, prima
+   > dell'ingresso.
+
+### N1 — numeri e dati: la cassa della pagina broker (W-B5) e il TRANSFER orfano (V-3) ⏳ (2026-10-15)
+
+**Via del coordinatore** (15/10 ~09:05), con le risposte: (Q1) «oggi» ~~è la data del server~~ — **corretta alle ~09:12**
+dopo la verifica di J: è il giorno dell'utente, come nella Dashboard: l'endpoint accetta `as_of` facoltativo (senza,
+`date.today()`) e la pagina del broker passa `todayIso()`; (Q2) una CASH_TRANSFER orfana diventa
+DEPOSIT o WITHDRAWAL secondo il segno (decisione del coordinatore nello spirito di quella del developer del 13/10 sul
+TRANSFER; il developer può correggerla); (Q3) gli orfani già nei DB con una migrazione dei dati e il log di ogni riga
+(D-J4, 14/10), numero 006, il primo libero sulla mia base (C7: rinominata se entra prima la 006 di A). I rossi su lotti e
+Dashboard li scrive il mio test-author (J ha C-94 aperto); **J rivede i numeri attesi prima della cura** (sessione
+`4c677a01-…`, gli scrivo io). Alle ~09:08: **N1b in due**: N1b-1 (la cancellazione converte la metà rimasta) entra
+quando è pronto; N1b-2 (la migrazione) in un commit a parte, **solo con l'ok esplicito del developer** (punto 46 delle
+decisioni). Durante la finestra: codice e singoli file pytest senza server, uno alla volta, con `nice -n 15`; `api`,
+`all-backend` ed E2E dopo l'avviso di fine.
+
+**Disegno** (verificato sul codice di `063e5b7cf`):
+
+- **N1a · W-B5 (B15, D-J16)**: `BrokerSummaryOperations.get_summary` (`services/brokers/summary.py:74,78,86`) legge
+  `TransactionService.get_cash_balances` e `get_asset_holdings` (`services/transactions/balances.py:153-163`), due somme
+  SQL di ogni transazione del broker senza data, e `_holding_average_costs` (`summary.py:200-229`), che legge anche gli
+  acquisti futuri. Cura: un solo «oggi», `as_of` (il giorno dell'utente; `date.today()` se assente), per la cassa, le
+  quantità e il costo medio. La cassa da
+  `financial_math/native_cash.py` (la casa unica: «Cash per broker and currency»), che ha già `balances(as_of)`; le due
+  somme di `balances.py` sono una copia di quel calcolo e non hanno altri chiamanti. Le quantità: nessuna casa nella
+  tabella di `backend.instructions.md` (la segnalo); restano la somma per asset, con la data.
+- **N1b-1 · V-3 (D-J4)**: `TransactionService.delete_by_broker` (`services/transactions/transaction_service.py:60-79`),
+  chiamata da `broker_service.py:494` (anche dalla cancellazione dell'account), oggi toglie solo
+  `related_transaction_id` alla metà rimasta sull'altro broker. Cura: la metà rimasta di un TRANSFER diventa un
+  ADJUSTMENT con la stessa quantità e lo stesso `cost_basis_override`; quella di una CASH_TRANSFER un DEPOSIT o un
+  WITHDRAWAL secondo il segno dell'importo; in tutti e due i casi senza `related_transaction_id` né `link_uuid`.
+- **N1b-2 · gli orfani già nei DB**: ~~migrazione dei dati `006`~~ → **correzione post-migrazione**
+  (`db/post_migration/orphan_pair_halves.py`, decisione del coordinatore ~09:58), con una riga di log per ogni
+  transazione convertita; commit a parte, in attesa del punto 46.
+
+**Passi**:
+
+1. ✅ Rossi (test-author), 2026-10-15: N1a in `services broker`; N1b-1 in `services transaction` / `services broker`; lotti e
+   Dashboard dopo la cancellazione in `test_services/test_financial/`, numeri attesi rivisti da J.
+   > **Note implementazione** (prima tornata, 09:30, rossi visti prima della cura): `test_broker_service.py`
+   > (`TestGetSummaryAsOf` BR-U-090…093; `TestDeleteBulkCrossBrokerPair` BR-U-073…076) → `services broker` 13 rossi /
+   > 48 verdi; nuovo `test_financial/test_orphan_transfer_after_broker_delete.py` con l'azione `services
+   > orphan-transfer-numbers` (`in_all=False`; il file è anche dentro `roi-fifo-utils`) → 4 rossi / 2 controlli verdi.
+   > **API** (seconda tornata, 10:15, scritti senza eseguirli per la finestra; `py_compile`, `ruff`, `black` puliti):
+   > `test_brokers_api.py` `TestBrokerSummaryAsOf` BR-A-070…073 (verdi attesi: la cura di N1a c'è già; con una linea
+   > USD a zero contro «nessuna linea», e un controllo di mezzanotte su BR-A-070) e, rossi fino a N1b-1, BR-A-032C (la
+   > gamba in arrivo diventa ADJUSTMENT, quantità e costo invariati) e BR-A-032D nuovo (CASH_TRANSFER: la metà del
+   > mittente diventa WITHDRAWAL −300); `test_account_deletion_api.py` ACCDEL-001 (`[new]` sul tipo ADJUSTMENT), con
+   > docstring allineate al punto 47. I test nuovi puliscono i propri broker e asset (righe future nel DB condiviso).
+   > **Terza tornata, in corso**: opzione b (BR-U-077 costo Auto 25 con taglio alla data; BR-U-079 pool vuoto = P-1),
+   > caso speculare con i valori di oggi (BR-U-078 guardia; Dashboard 100/+80, lotti FAILED, posizione 6/20/180/60), i
+   > perni di J (data del lotto, prezzo di riferimento, valuta del costo) e le due serie della cassa (finanziamento degli
+   > acquisti, punto dei depositi) segnalate da J alle ~10:20.
+2. Cure:
+   - **N1a, backend** ✅ (2026-10-15 09:40). Q1 corretta dal coordinatore alle ~09:12, dopo la verifica di J: «oggi» è
+     il **giorno dell'utente**, come nella Dashboard. Ok del coordinatore (~09:18, opzione A) per le sole 3 righe di
+     `get_broker_summary` in `api/v1/brokers.py`; il resto del file aspetta il suo commit (W3, K2b, CP7).
+     > **Note implementazione**: `GET /brokers/{id}/summary` accetta `as_of` facoltativo (aggiunta, nessun campo
+     > tolto); `BrokerSummaryMixin.get_summary(..., as_of=None)` usa `as_of or date.today()` per cassa, quantità e costo
+     > medio (`_holding_average_costs` filtra `date <= as_of`). `get_cash_balances(broker_id, as_of=None)` ora legge
+     > la cassa dal layer: `native_balances(movements, as_of)`, funzione di modulo estratta da `NativeCash.balances`
+     > (che le delega, stesso risultato), sui movimenti di `cash_movement_from_transaction` — stesse righe della somma
+     > SQL di prima (valuta e importo presenti; la linea a zero resta). `get_asset_holdings(broker_id, as_of=None)`
+     > resta una somma SQL con la data (nessuna casa delle quantità nella tabella di `backend.instructions.md`: lo
+     > segnalo nell'handoff). Estrazione nel layer di J: approvazione chiesta a J, in attesa.
+     > Prove (`nice -n 15`, senza server): `ruff --select I`, `ruff`, `black --check` puliti sui 4 file;
+     > `services broker` 53 passed / 8 failed — verdi i 6 di `TestGetSummaryAsOf` (BR-U-090…093), rossi solo gli 8
+     > di N1b-1 (BR-U-073 ×4, BR-U-076 ×4); `services financial-math` 212 passed (guardie del layer).
+     > Resta per N1a: la riga di `routes/(app)/brokers/[id]/+page.svelte:281` (`as_of: todayIso()`), `api sync`, e un
+     > rosso/verde API del parametro, dopo l'avviso di fine finestra.
+   - ⏳ **N1b-1**, dopo l'ok di J sui numeri.
+     > **Esito di J** (15/10 ~09:50, letto nel codice): numeri giusti (investito 80, P&L 40); il cambio per il
+     > co-proprietario (100/20 → 80/40) accettato ma **da dichiarare** (conferma di cancellazione, doc, CHANGELOG);
+     > **caso 2 = opzione b** per le cancellazioni nuove: il costo **Auto** già esistente (`_auto_cost_source` +
+     > `compute_wac_iterative`), calcolato prima che spariscano le righe del mittente, override e valuta insieme
+     > (eredita P-1); i tre perni da fissare nei test: (a) il lotto riparte alla data del trasferimento, (b) prezzo di
+     > riferimento del giorno d'apertura (rendimento relativo +20 %, P&L % +50 %), (c) valuta del costo con l'override.
+     > Ok sul diff di `native_cash.py` (golden `test_native_cash_guard.py` byte-identico: `services roi-fifo-utils`
+     > 657 verdi, i 4 rossi sono i miei). J-9 e J-10 (fuori N1) li registra J.
+     > **⚠️ Fuori pista** (J, ~10:10): il caso speculare — cancellato il **destinatario**, resta la gamba in uscita del
+     > mittente — convertito alla lettera (ADJUSTMENT −4 senza costo: una gamba in uscita non può portarlo) farebbe
+     > leggere le unità spostate come distrutte (P&L di A da +80 a −20, lotti −20). Decisione chiesta da J al
+     > coordinatore; **intanto**: si convertono solo le metà **in arrivo** di un TRANSFER; quella in uscita perde solo il
+     > link, come oggi; CASH_TRANSFER e FX_CONVERSION per segno. Il caso speculare entra nei test coi valori di oggi.
+     > Lo split (`batch_edits.py:126-139`) produce già ADJUSTMENT in uscita senza costo: J lo porta al coordinatore.
+     > **Confermato dal coordinatore** (~10:12): in N1b-1 e N1b-2 solo le gambe in arrivo di un TRANSFER e quelle di
+     > cassa; le gambe in uscita restano come oggi fino alla risposta del developer al **punto 47**; il dry run le conta a parte.
+   - **N1b-1, cura** ✅ (2026-10-15 10:25; riordino «prima i costi» 10:51). `/tmp/libreFolio_w_n1b1_final.py --apply`, poi
+     `/tmp/libreFolio_w_n1b1_atomic.py --apply` (`_auto_cost()` calcola, `_write_auto_cost()` scrive; BR-U-080 verde).
+     > **Note implementazione**: `batch_edits.py`: `pair_sides()` (la regola del lato: quantità per un TRANSFER, importo
+     > per la cassa) e `make_standalone()` (tipo, link via, asset via se non è un ADJUSTMENT, `updated_at` adesso)
+     > estratti da `apply_splits()`, che li usa: stesso comportamento. `auto_cost.py`: `_write_auto_cost()` estratto da
+     > `_compute_wac_for_auto_items()` (asset, `compute_wac_iterative`, override e valuta insieme); nessun nuovo punto
+     > d'import di `compute_wac_iterative` (per il CP-8 di J). `transaction_service.delete_by_broker()`: carica le metà
+     > rimaste sugli altri broker (`related_transaction_id IN` le righe del broker), scrive il costo Auto sulle gambe in
+     > arrivo senza costo finché le righe del mittente ci sono, scollega le coppie interne del broker, poi converte in
+     > place con `SPLIT_TYPE_MAP` — salvo la gamba in uscita di un TRANSFER (punto 47) e un link ignoto allo split
+     > (ADJUSTMENT), che perdono solo il link (con `updated_at`) — e infine cancella. La FK `DEFERRABLE INITIALLY
+     > DEFERRED` regge l'ordine.
+     > Prove (`nice -n 15`, senza server): `services broker` **64/64** (prima 9 rossi), `services orphan-transfer-numbers`
+     > **16/16** (prima 6 rossi), `services transaction` 66/66 (copre `apply_splits`), `services roi-fifo-utils` 671/671
+     > (golden di J byte-identico). `ruff`, `black` puliti.
+     > **⚠️ Fuori pista** (docs-writer, 10:20): `DELETE /brokers` fa commit quando `response.errors` è vuoto
+     > (`api/v1/brokers.py:389`) e `delete_bulk` non lo riempie mai (cattura per broker): un errore a metà di
+     > `delete_by_broker` lascerebbe nel commit il costo Auto già scritto su una prima gamba. Un SAVEPOINT per broker non è
+     > sicuro qui: senza il listener `begin` di SQLAlchemy, pysqlite non apre la transazione prima del primo DML, e il
+     > RELEASE del savepoint più esterno farebbe commit (romperebbe l'atomicità della cancellazione dell'account di A).
+     > Cura scelta: **prima tutti i costi Auto, poi le modifiche** (`_auto_cost()` calcola, `_write_auto_cost()` scrive),
+     > con il rosso BR-U-080 prima (test-author, in corso). Il resto del difetto generale (nessuna atomicità per broker in
+     > `delete_bulk`) va nella sezione W del backlog.
+     > **Revisione di J delle serie di cassa** ✅ (~10:45, a mano sul ramo del frame, `daily_state.py:451-570`): C1 oggi
+     > 300/0 → dopo 100/200, depositi {1/10: 1000} → {1/10: 1000, 5/10: 300}; C2 oggi 400/200 → dopo 500/100; capitale e
+     > P&L fermi (C1 100/300/200, C2 400/600/200); giuste le correzioni del test-author (seconda vendita in C2, utili
+     > ritirati prima in C1, citazioni `:505-570`); W globale = semantica esistente. Perni (a), (b), (c), BR-U-077,
+     > BR-U-079 e speculare: ok. La lista dei lotti sotto FAILED la prende J (J-12); W-B19: copia per la metà di cassa.
+     > Provato (10:33) su un SQLite in `/tmp` con `aiosqlite` e un `AsyncSession` come quelli dell'app: SELECT, poi
+     > `begin_nested()` con un INSERT, poi il rollback esterno → la riga **resta** (il RELEASE ha fatto commit); con un
+     > DML prima del savepoint → nessuna riga. Lo stesso vale per `assets/crud.py:392` (X), dove ogni asset cancellato
+     > in blocco entra subito nel commit: lo segnalo al coordinatore. W-B19 e W-B20 nella sezione W del backlog.
+     > **Superfici concesse dal coordinatore** (~10:05): testo `brokers.confirmDeleteWithTransactions` (4 lingue, `i18n
+     > update`, nessun markup); frase in `user/brokers/index.{en,it,fr,es}.md:49` + `translate-stamp`; riga del
+     > CHANGELOG proposta nell'handoff. Fatte (10:03): il testo EN approvato, precisato dopo la restrizione di J (solo
+     > gli asset **trasferiti da** questo broker diventano posizioni d'apertura); `translate-stamp` sul file EN.
+     > Cura pronta in `/tmp/libreFolio_w_n1b1_final.py` (helper `pair_sides`/`make_standalone` estratti da
+     > `apply_splits`; `_write_auto_cost` estratto da `_compute_wac_for_auto_items`; nessun nuovo punto d'import di
+     > `compute_wac_iterative`), da applicare dopo i rossi aggiornati (test-author, opzione b e caso speculare).
+3. ✅ N1b-2 (scritta e provata, 11:00; entra solo con l'ok del developer sul **punto 46**) — **correzione post-migrazione**, non Alembic (coordinatore, ~09:58: il log di una migrazione Alembic si
+   perde all'avvio, `main.py:202-209` con `capture_output=True`, anche in Docker). `post_migration/orphan_pair_halves.py`
+   è mio; la voce in `FIXES` di `post_migration/__init__.py` concessa, solo in aggiunta. Commit a parte, entra solo con
+   l'ok del developer sul punto 46.
+   > **Note implementazione** (10:00): `OrphanPairHalfFix` (`fix_id` `orphan_pair_halves`): `detect` trova le righe
+   > TRANSFER/CASH_TRANSFER/FX_CONVERSION senza la metà (link NULL o verso una riga assente) e logga un **warning** con
+   > le conversioni per tipo, le righe che resteranno senza costo, quelle lasciate come sono (gamba in uscita di un
+   > TRANSFER, in attesa della decisione; segno illeggibile) — visibile anche nel dry run della CLI, che mostra solo
+   > WARNING+; `apply` converte (tipo, link NULL, asset NULL per la cassa, `updated_at` adesso); `verify` richiede zero
+   > convertibili rimasti e il tipo atteso su ognuna; `finish` logga una riga per transazione convertita **solo dopo
+   > il commit**. Le righe senza costo restano senza (opzione a: il mittente non c'è più → `MISSING_COST_BASIS`).
+   > Prova a mano su un SQLite in `/tmp` (9 righe, ogni classe): conversioni giuste, coppia collegata intatta,
+   > seconda esecuzione `clean`. I test veri con test-author dopo i rossi di N1b-1. `ruff`/`black` puliti.
+   > **Ritocchi** (10:16): una metà **non** convertita (gamba in uscita di un TRANSFER, punto 47; segno illeggibile) il
+   > cui link nomina una riga che non c'è più perde solo il link, come la lascia la cancellazione: altrimenti il
+   > `foreign_key_check` del quadro farebbe fallire la correzione, e a ogni avvio resterebbe una copia del DB in più.
+   > Il warning della rilevazione esce **a ogni avvio** finché esistono gambe in uscita lasciate (il dry run deve
+   > contarle comunque, e la CLI mostra solo WARNING+), con un messaggio distinto quando non c'è nulla da convertire.
+   > Seconda prova attraverso il vero `run_post_migration_fixes` (FK dichiarata, una gamba in uscita con link
+   > pendente): dry run `would_apply`; poi `applied`, copia cancellata, `foreign_key_check` vuoto, una riga di log per
+   > ogni riga cambiata, seconda esecuzione `clean`. Nella CLI le righe INFO per riga non si vedono (il `__main__` non
+   > configura il livello INFO): si vede il warning con gli id per conversione; nel log del server (anche in Docker) ci
+   > sono tutte.
+   > **Test** (test-author, 10:48): `test_db/test_post_migration_orphan_pairs.py`, 42 test (un DB alla testa con
+   > alembic `-x sqlalchemy.url=`, copiato per test, data dir in sandbox con canarino come `test_post_migration.py`):
+   > registrazione dopo `autoincrement`; DB pulito; 16 conversioni (6 tipi × link NULL/pendente, più l'arrivo con e
+   > senza costo); 15 righe lasciate (gambe in uscita, segno illeggibile, coppie intere, altri tipi) e 3 che perdono solo
+   > il link pendente; esito `applied` con FK pulite e conteggi invariati; seconda esecuzione `clean`; dry run; il
+   > warning; una riga INFO per riga cambiata; verifica fallita → DB com'era, copia tenuta. Azione nuova `db
+   > post-migration-orphan-pairs` in `scripts/test_runner/_backend_db.py` (solo aggiunta, anche in `db_order`).
+   > **Rosso visto** (10:52): tolta la registrazione da `FIXES` → **42 rossi**; rimessa → `git diff` di `__init__.py`
+   > uguale a prima (import più la voce). Con la registrazione: **42/42** (due volte).
+   > **⚠️ Fuori pista** (test-author): una riga di un altro tipo (un ADJUSTMENT può portare un link) con il link
+   > pendente farebbe fallire il `foreign_key_check` del quadro a ogni avvio, con una copia del DB in più ogni volta.
+   > Cura: anche lei perde solo il link, come fa la cancellazione per «un link che lo split non conosce». Rossi prima
+   > (test-author), poi `/tmp/libreFolio_w_n1b2_otherlinks.py`.
+   > Fatto (10:58): 2 rossi visti (`failed` con la copia tenuta; `clean` con la violazione rimasta), poi l'estensione
+   > → **45/45**; un link verso una riga che esiste non si tocca (guardia verde).
+4. Verdi senza server durante la finestra ✅ (11:00); `api`, `all-backend` ed E2E dopo l'avviso di fine ⏳; handoff
+   FROZEN per N1a+N1b-1, e N1b-2 separato.
+   > **Note implementazione** (11:00, tutto con `nice -n 15`, senza server): `services broker` 65/65 (con BR-U-080 dopo
+   > il riordino «prima i costi»: rosso visto alle 10:48), `services orphan-transfer-numbers` 19/19 (con il controllo
+   > dell'opzione a: un ADJUSTMENT +4 senza costo → lotti DEGRADED, Dashboard investito 0 / P&L 120 / MISSING_COST_BASIS),
+   > `services transaction` 66/66, `services roi-fifo-utils` 671/671, `services financial-math` 212/212,
+   > `db post-migration-orphan-pairs` 45/45 (rossi visti: 42 senza la registrazione, poi 2 per gli altri tipi con link
+   > pendente prima dell'estensione), `db post-migration` 37/37 (piano 34, invariato); `ruff`/`black` puliti sui 15
+   > file Python; `git diff --check` pulito; `i18n check` stretto pulito (4 392 chiavi); `check_source_paths` invariato
+   > (5 percorsi inesistenti, 8 occorrenze, nessuno mio). devWiki: `decisions/orphan-transfer-becomes-an-adjustment.md`,
+   > stato aggiornato (la correzione post-migrazione solo in prosa: il suo file entra con il commit a parte).
+   > **Dopo la finestra**, nell'ordine: `api sync` (atteso: solo il parametro `as_of`); `test db populate --force
+   > --clean` sulla mia data-dir; `api brokers` (BR-A-070…073 verdi, BR-A-032C/D), `api account-deletion` (ACCDEL-001),
+   > `api batch-split-promote` (il riordino di `apply_splits`); `all-backend`; `front check`; E2E `front-broker
+   > detail`, `front-broker list` (testo della conferma), `front-user account-deletion`; `mkdocs build` stretto e
+   > `check-links`. Prima di tutto questo, le prove di FE8a-3 già in fila.
