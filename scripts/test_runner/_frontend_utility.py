@@ -131,6 +131,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/brokers/lots/lotStateVisual.test.ts",
             "src/lib/components/brokers/lots/unifiedLotsTableHelpers.test.ts",
             "src/lib/components/brokers/lots/lotCustodyModalHelpers.test.ts",
+            "src/lib/components/brokers/lots/lotCustodyModalHelpers.closureValueLabel.test.ts",
             "src/lib/components/brokers/lots/lotsAnalysisHelpers.test.ts",
             "src/lib/components/brokers/lots/lotDataQualityHelpers.test.ts",
             "src/lib/stores/chartSettingsStore.test.ts",
