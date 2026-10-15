@@ -949,3 +949,53 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > `all-backend` 13 965 passed, 28 skipped, 0 failed, API identica; sopra X CP3 controllo leggero (guardia 578, raccolta
 > e schema identici). Poi K2a (codici dei rifiuti di DEGIRO e del Generic CSV, L6); K2b dopo un commit del
 > coordinatore su `brokers.py` e `uploads.py`.
+
+### X CP3b, test dei cambi senza rete, integrato ✅ (2026-10-15, 06:00)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `63a1f675c` (CP3b `cea5ce859`). W-B9: il contratto e i
+> filtri dei fornitori di cambi provati su FED e BOE, che hanno elenchi statici; la SNB va anch'essa in rete, quindi
+> resta con la BCE in `test_external` (scostamento motivato dalla decisione delle 05:20, che citava anche la SNB).
+> W-B13, X-R5 (percorsi vecchi in commenti e docstring, compresi una riga di A e 2 di `TODO_FUTURI.md`) e X-R7.
+> Validazione di X: `api fx` 21/21 anche senza rete; raccolta identica sopra W7. W-B15 (un selettore per testo in una
+> spec di W) nella sezione di W; X-R9 con il FE4.
+
+### J C-93, connessioni aiosqlite lasciate aperte, integrato ✅ (2026-10-15, 06:05)
+
+> **Note implementazione**: `c412f8dad`, merge di `3a03a1b2c` su `c81670354`. Causa trovata con la skill
+> `test-triage`: 7 test dell'AI Export lasciavano aperte connessioni aiosqlite, e un GC in un thread con un loop corrente
+> chiuso ne uccideva il thread di lavoro; pytest attribuiva l'avviso al test in corso, estraneo. Curato nei test.
+> Validazione di J sulla revisione con A4, X CP3 e W7: `services ai-export` 1 025, raccolta +4; prima `all-backend
+> --workers 2` con la sonda: 0 connessioni aperte. **Senza nuovo controllo di J** dopo X CP3b: nessun file in comune
+> salvo il backlog, test da entrambe le parti, controlli statici del coordinatore puliti.
+>
+> J-5 (un loop chiuso lasciato come corrente in `services/assets/core.py`) passa a X, dopo il CP4; J-6 (una guardia
+> di suite per le connessioni aperte) a J, dopo G-8.
+
+### H CP4, `/system/instance` e area degli avvisi, integrato ✅ (2026-10-15, 06:10)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `1b3eb54c7`. Cinque commit di H: la rinomina pura
+> `api/v1/system.py` → `api/v1/system/__init__.py` (`c43ea0460`, R100), il taglio per risorsa (`27a29af09`, 16/16
+> definizioni identiche al controllo del coordinatore), l'endpoint pubblico `GET /api/v1/system/instance` con
+> `LIBREFOLIO_PROFILE` (`42af16d54`), lo store `instanceConfig`, il registro e l'area `InstanceNotices` nel layout
+> (`2069c75cd`), il journal. Validazione di H sulla revisione con J CP-1, W4 e A4: E2E 181 verdi (comprese le spec che
+> contano le richieste), `all-backend` 12 343 passed, 3 skipped, 0 failed; senza avvisi l'area non disegna niente, e
+> la galleria resta invariata. Sopra X CP3, W7, X CP3b e J C-93: controllo leggero (guardia 584, raccolta, `api
+> schema` con il solo endpoint nuovo, build e `core-unit`). CHANGELOG con l'endpoint; `LIBREFOLIO_PROFILE` con CP6.
+
+### J G-8, il catalogo dei Tool sotto carico, integrato ✅ (2026-10-15, 06:30)
+
+> **Note implementazione**: `c75f08101`, merge di `47e0f9eec` su `6d67fdaac` (fix `6ce5ea180`). FastAPI risolve
+> `get_current_user` prima che l'endpoint sposti la scadenza, quindi il login del catalogo girava dentro la finestra
+> d'ingresso di 2 s: sotto carico 503. Le rotte senza corpo partono con il loro budget di 20 s; il compute tiene la
+> finestra. Rosso prima e verde dopo (`api tools` 12); `api schema` identico. Senza nuovo controllo di J: H CP4 non
+> tocca il router dei Tool. Entra prima della galleria delle 09:00, così la misura finale di G ne tiene conto; la
+> riga G-8 nella sezione G è chiusa dal coordinatore. CHANGELOG con una riga in «🐛 Fixed».
+
+### X CP4, gli schemi degli asset per tema, integrato ✅ (2026-10-15, 06:40)
+
+> **Note implementazione**: `7f4618494`, merge di `805f2f112` su `78043417` (CP4 `b31ae0fce`). `schemas/assets/assets.py`
+> (1 001 righe, l'unico modulo di schemi di X sopra la soglia di C3) cede `metadata.py` e `scheduled_investment.py`;
+> via l'`__all__` che faceva da barile. Controllo del coordinatore sull'AST: 49/49 nomi identici. Validazione di X:
+> `all-backend` 13 972 passed, 28 skipped, 0 failed; `openapi.json` identico. Senza nuovo controllo di X: nessun file
+> in comune con J C-93, H CP4 e J G-8, controlli statici del coordinatore puliti. `schemas/fx.py` e gli altri restano
+> interi, sotto soglia. Poi J-5 e X-R8.

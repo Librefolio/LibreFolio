@@ -29,6 +29,7 @@ Environment Variables (see .env):
     RISK_OPTIMIZATION_WORKERS: Spawned optimization workers (default: 1)
     RISK_SIMULATION_IDLE_TIMEOUT_SECONDS: Simulation worker idle reap (default: 600)
     RISK_OPTIMIZATION_IDLE_TIMEOUT_SECONDS: Optimization worker idle reap (default: 600)
+    LIBREFOLIO_PROFILE: Instance profile: selfhosted | managed (default: selfhosted)
 
 Secrets (JWT_SECRET, LIBREFOLIO_INSTANCE_KEY, ...) also accept NAME_FILE, the path of a file holding the value: see
 env_secret(). Every variable the code reads is listed in .env.example.
@@ -217,6 +218,15 @@ class Settings(BaseSettings):
     @field_validator("SESSION_COOKIE_SECURE", mode="before")
     @classmethod
     def _cookie_secure_mode(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
+
+    # Instance profile: "selfhosted" (an install run by its owner) or "managed" (an instance a hosting provider runs for
+    # its customers), reported by GET /system/instance
+    LIBREFOLIO_PROFILE: Literal["selfhosted", "managed"] = "selfhosted"
+
+    @field_validator("LIBREFOLIO_PROFILE", mode="before")
+    @classmethod
+    def _instance_profile(cls, value: object) -> object:
         return value.strip().lower() if isinstance(value, str) else value
 
     # Native quantitative engines

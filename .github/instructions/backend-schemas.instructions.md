@@ -9,7 +9,11 @@ applyTo: "backend/app/schemas/**"
 ```text
 backend/app/schemas/
 ├── common.py          # Shared base classes (Currency, BackwardFillInfo, BaseBulkResponse, etc.)
-├── assets.py          # Asset CRUD schemas (FAAssetCreateItem, FAinfoResponse, etc.)
+├── assets/            # Asset schemas, one module per theme (C3):
+│   ├── assets.py      #   the asset and its CRUD (FAAssetCreateItem, FAinfoResponse, patch, merge, etc.)
+│   ├── metadata.py    #   distributions, classification, metadata (FAClassificationParams, FAGeographicArea, etc.)
+│   ├── scheduled_investment.py  # financial enums and the interest schedule (FAScheduledInvestmentSchedule, etc.)
+│   └── events.py      #   asset events (FAAssetEventPoint, event CRUD)
 ├── prices.py          # Price schemas (FAUpsert, FAPriceQueryItem, etc.)
 ├── provider.py        # Provider schemas (FAProviderInfo, FAProviderAssignmentItem, etc.)
 ├── refresh.py         # Refresh/sync schemas

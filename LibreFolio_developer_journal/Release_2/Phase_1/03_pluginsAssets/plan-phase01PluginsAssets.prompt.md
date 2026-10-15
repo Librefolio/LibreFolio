@@ -1177,3 +1177,218 @@ Decisioni del coordinatore sul CP3b (15/10, ~05:20):
 - **X-R7**: sì.
 - **X-R8, proposta del coordinatore** (il developer può cambiarla): una cache dell'elenco delle valute dei fornitori,
   valida 24 ore; se la BCE non risponde si usa l'ultimo elenco noto, con un timeout breve. In un mio lotto dopo il CP3b.
+
+### CP3 in `dev_release2` ✅ (2026-10-15)
+
+Avanzamento veloce di `dev_release2` a `8000aba5a` (il journal del sesto aggiornamento sopra `9a3ba752a`), record del
+coordinatore `5d21f2d85`; il mio ramo è avanzato lì, worktree pulito. Le 3 fixture della galleria le ha girate il
+coordinatore al coordinatore colori.
+
+### CP3b — test dei cambi senza rete e residui di testo ✅ (2026-10-15)
+
+Via del coordinatore alle ~05:25, nel perimetro deciso: W-B9, W-B13, X-R5 (tranne `AssetModal` e le fixture di G), X-R7.
+Base: HEAD `5d21f2d85`. Nessun file del backend dell'app cambia comportamento; `openapi.json` deve restare identico.
+
+Passi:
+1. ✅ Prova a vuoto della rete: `api fx` con `HTTP(S)_PROXY` su una porta chiusa (localhost escluso), prima delle modifiche,
+   per vedere quali test dipendono dalla rete.
+   > **Note implementazione**: `env HTTP_PROXY=… HTTPS_PROXY=… ALL_PROXY=…` (anche in minuscolo) `=http://127.0.0.1:9`,
+   > `NO_PROXY=localhost,127.0.0.1,::1`, poi `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test
+   > --test-port 6183 --data-dir /tmp/librefolio-r13-x api fx` (05:27–05:28): **2 falliti, 19 passati**. Rossi
+   > `test_providers_include_target_currencies` («Provider ECB should have at least one target currency», `:126`) e
+   > `test_get_providers` («Provider should have target_currencies», `:175`); gli altri 19 non dipendono dalla rete (la
+   > creazione delle rotte con ECB non chiama il fornitore, e i sync usano MOCKFX). httpx sul server rispetta le variabili del
+   > proxy: è la prova che il server è rimasto senza rete. Log `/tmp/libreFolio_x_cp3b_offline_before.log`.
+2. ✅ X-R5: i commenti e le docstring nel perimetro deciso (io).
+   > **Note implementazione**: 13 righe in 9 file, sostituzioni sul posto (Prettier ha `printWidth` 300, nessun ritorno a
+   > capo): docstring di `scheduled_investment/plugin.py:33-34` (→ `schemas.assets.assets`), `services/assets/core.py:15`
+   > (→ `services/fx/`), `test_fx_compress_errors.py:1` (→ `api/v1/fx/currencies.py`), `test_fx_core.py:5` (→
+   > `services/fx/` `storage.py`, `sync.py`); commenti di `e2e/assets/asset-modal.spec.ts:526` (→
+   > `services/assets/provider_management.py`, dove c'è «provider changed», `:134`), `ScheduledInvestmentEditor.svelte:75`,
+   > `:81`, `:89` (→ `schemas/assets/assets.py`), `auth.test.ts:574` di A (→ `api/v1/assets/crud.py`, il 409 con `error_code`
+   > in `detail`, `:139-146`), `fxRoutesStore.test.ts:8` (→ `services/fx/sync.py`, che salva il tasso composto su
+   > `route.base/route.quote`, `:728`); `TODO_FUTURI.md:1121` e `:2067`. Restano, come deciso: X-R1, X-R2, `AssetModal`
+   > (X-R3) e le 3 fixture di G; `schemas/fx.py` esiste ancora, e `TODO_Completati.md:202` è storia.
+3. ✅ X-R7: la riga di `provider_borsa_italiana.md` (docs-writer).
+   > **Note implementazione**: `provider_borsa_italiana.md:123` non ripete più le variabili: rimanda a
+   > [Asset Search & Link-Finder](search_link_finder.md#configuration-env-vars-all-optional), che le elenca tutte, compresa
+   > `LIBREFOLIO_WEB_LINK_FINDER_API_KEY_FILE`, e dice che si leggono in `backend/app/config/plugins.py`. docs-writer ha
+   > controllato l'ancora nell'HTML costruito (en, it, fr, es): MkDocs segnala le ancore sbagliate solo come INFO.
+   > `mkdocs build` stretto verde (3 012 URL), `check-links` 95 validi, 0 rotti. Pagina senza traduzioni: nessun timbro.
+4. ✅ Una sola build del frontend (le modifiche in `frontend/src` la rendono vecchia) e di MkDocs, prima dei test.
+   > **Note implementazione**: `dev.py front build --debug` 05:30:55–05:32:27, rc 0, dopo le modifiche di X-R5 in
+   > `frontend/src` (`scripts/cli_base.py`, `check_frontend_needs_build`: conta ogni file di `frontend/src` più nuovo della
+   > build; `frontend/e2e` no, quindi W-B13 non la invecchia). MkDocs ricostruito da docs-writer dopo X-R7 (il sito va in
+   > `mkdocs_src/site`, separato da `frontend/build`: le due build potevano sovrapporsi).
+5. ✅ W-B9 e W-B13 (test-author).
+   > **Note implementazione**: `test_fx_api.py`: due costanti (`_STATIC_FX_PROVIDERS = ("FED", "BOE")`,
+   > `_PUBLIC_FX_PROVIDERS`) con il perché in commento; `test_providers_include_target_currencies` chiede l'elenco filtrato
+   > sui fornitori statici, vuole esattamente quei codici e tiene i controlli per fornitore di prima; `test_get_providers`
+   > sposta il contratto completo su una chiamata filtrata (2a), prova i filtri con FED e con FED + BOE (2b, 2c), e le chiamate
+   > senza filtro (la prima e 2d) controllano solo che ci siano i codici pubblici ECB, FED, BOE, SNB (sottoinsieme, mai un
+   > conteggio). `test_manual_provider_hidden_from_list` è rimasto com'era; `TIMEOUT` invariato. `fx-csv-import.spec.ts:247` e
+   > `:276`: `modal.getByTestId('data-import-modal-close')`. Prove di test-author: `api fx` senza rete 21/21, `api fx` normale
+   > 21/21, `front-fx fx-csv-import` 21/21 (log `/tmp/libreFolio_x_cp3b_ta_*.log`).
+
+> **Fuori pista**:
+> - **La SNB non ha un elenco statico: l'errore era mio.** Nell'handoff della validazione di `d1ef3ddeb` ho scritto che FED,
+>   BOE e SNB hanno elenchi statici, e il coordinatore ha deciso su quella base. Il mio controllo guardava solo il corpo di
+>   `get_supported_currencies` (nessuna chiamata HTTP); la SNB però passa da `_ensure_currency_map()`
+>   (`fx_providers/snb/plugin.py:139-149`), che scarica la mappa delle valute da data.snb.ch con 15 s di timeout e la tiene
+>   in memoria solo se riesce. test-author l'ha trovato: con FED, BOE e SNB come deciso, `api fx` senza rete dà ancora 2
+>   rossi, tutti e due sulla SNB (`/tmp/libreFolio_x_cp3b_ta_offline_literal_snb.log`; nel log del server, `Failed to fetch
+>   target currencies for SNB … All connection attempts failed`, già presente nella mia prova a vuoto, dove però l'ECB
+>   veniva prima in ordine alfabetico). Ha tenuto il principio della decisione (solo fornitori statici, nessuna rete) e
+>   ristretto a FED e BOE; la SNB dal vivo è già in `test_external/test_fx_providers.py::test_supported_currencies`.
+>   **Scostamento dalla decisione: confermato dal coordinatore il 15/10** («la regola era nessuna rete nei test, e la SNB
+>   dal vivo resta coperta in `test_external`»).
+> - La SNB cade anche nel residuo X-R8: senza filtro il server la interroga finché non riesce una volta nel processo.
+> - Nella stessa spec restano quattro selettori in inglese (`:233`, `:234`, `:250`, `:261`), fuori dal perimetro di W-B13:
+>   registrati come X-R9.
+6. ✅ Verifica: `api fx` di nuovo senza rete, `api schema` identico, lint, test mirati, journal e handoff.
+   > **Note implementazione** (`/tmp/libreFolio_x_cp3b_verify.sh`, 05:44–05:45, log `/tmp/libreFolio_x_cp3b_verify.log`):
+   > `api schema` identico a quello di `be2ad6573` salvo `info.version` (113 percorsi), `tool-contracts` identico; scoperta
+   > dei registri identica (6 / 7 / 33 / 23 / 15); **`api fx` senza rete 21/21** (prima delle modifiche 19/21); `api
+   > fx-compress-errors` 6; `services fx-core` 23; vitest `front-user user-unit` 78 (con `auth.test.ts`) e `front-utility
+   > core-unit` 4 266 (con `fxRoutesStore.test.ts`); `ruff` e `black --check` puliti sui 5 file Python; Prettier pulito sui 5
+   > file del frontend; `git diff --check` pulito; porta 6183 libera.
+
+### Checkpoint CP3b ✅ (2026-10-15) — committato dal coordinatore: `cea5ce859` (codice, 12 file) e `cc242dee8` (journal)
+
+- **Base**: HEAD `5d21f2d85`.
+- **Elenchi**: nessuna rinomina, nessun taglio. 14 file modificati, nessuno nuovo:
+  - test: `backend/test_scripts/test_api/test_fx_api.py` (W-B9), `frontend/e2e/fx/fx-csv-import.spec.ts` (W-B13);
+  - commenti e docstring (X-R5): `backend/app/services/asset_source_providers/scheduled_investment/plugin.py`,
+    `backend/app/services/assets/core.py`, `backend/test_scripts/test_api/test_fx_compress_errors.py`,
+    `backend/test_scripts/test_services/test_fx_core.py`, `frontend/e2e/assets/asset-modal.spec.ts`,
+    `frontend/src/lib/components/assets/ScheduledInvestmentEditor.svelte`, `frontend/src/lib/stores/app/auth.test.ts` (di A),
+    `frontend/src/lib/stores/reference/fxRoutesStore.test.ts`, `TODO_FUTURI.md` (del developer, 2 righe);
+  - doc (X-R7): `mkdocs_src/docs/developer/backend/assets/provider_borsa_italiana.md`;
+  - journal: il piano e il backlog.
+- **Commit proposti**: `test(fx): keep FX provider tests offline, fix stale module paths` (12 file: tutto tranne il journal)
+  e `docs(journal): X CP3b log, backlog W-B9, W-B13, X-R5, X-R7 closed, X-R9` (piano e backlog).
+
+### Settimo aggiornamento di base: W7 — controllo minimo di `7d6710fd0` ✅ (2026-10-15)
+
+Il coordinatore ha fuso `dev_release2` a `58be885a9` (W7: `schemas/transactions/` per tema) nel mio ramo: HEAD `7d6710fd0`
+(genitori `cc242dee8` e `58be885a9`), merge pulito, nessun file in comune. Controllo minimo sulla 6183
+(`/tmp/libreFolio_x_base7.sh`, 05:49–05:53, log `/tmp/libreFolio_x_base7.log`):
+- ✅ Raccolta contro `58be885a9` estratto: 13 981 contro 13 981, nessuna differenza (il CP3 è già in `dev_release2`, e il CP3b
+  cambia i corpi dei test, non i loro nomi).
+- ✅ `front build --debug` (89 s) e `mkdocs build` (36 s, 3 012 URL) prima dei test: W7 tocca un file di `frontend/src` e uno
+  di `mkdocs_src`, e il server li avrebbe ricostruiti dentro il suo limite d'avvio.
+- ✅ `api fx` 21/21; `api fx` senza rete (proxy su `127.0.0.1:9`) 21/21.
+- Worktree pulito dopo le build; porta 6183 libera.
+
+Decisioni del coordinatore (15/10, ~05:49):
+- W-B9 con FED e BOE: confermato.
+- **CP4 (schemi) prima di X-R8**: il riordino viene prima. Durante la finestra della galleria si scrive il codice;
+  `all-backend` dopo l'avviso di fine. W7 ha già messo `schemas/transactions/` per tema: è la forma da seguire.
+- **X-R9 con il FE4**; i test-id in `DataImportModal.svelte` il coordinatore li chiede a W, che ne è il proprietario.
+- La nota su `tx-bulk-operations.spec.ts:428` la scrive il coordinatore nella sezione di W, come W-B15.
+
+### CP3b in `dev_release2` ✅ (2026-10-15)
+
+Avanzamento veloce di `dev_release2` a `63a1f675c` (il journal del settimo aggiornamento), record del coordinatore
+`c81670354` (con W-B15 nella sezione di W); il mio ramo è avanzato lì, worktree pulito.
+
+### CP4 — gli schemi degli asset per tema (C3) ✅ (2026-10-15)
+
+Via del coordinatore alle ~05:55 («gli schemi di asset e cambi, nella forma C3 di W7»). Durante la finestra della galleria
+solo codice; `all-backend` prima delle 08:45 o dopo l'avviso di fine. Base: HEAD `c81670354`.
+
+**Perimetro.** C3 e il piano 43 (P2.2, riga dei moduli di schemi «da 2 522 a 1 000») dividono i moduli di schemi da ~1 000
+righe in su: fra i miei c'è solo `schemas/assets/assets.py` (1 001 righe, 28 nomi). Il resto è sotto soglia e resta dov'è:
+`schemas/fx.py` (500), `provider.py` (438, con `FXProviderInfo`), `prices.py` (370), `refresh.py` (245, FA e FX). La rinomina
+in pacchetto l'ha già fatta il CP2b (`schemas/assets.py` → `schemas/assets/assets.py`); qui solo tagli, come il secondo
+commit di W7 (`e28aad42f`). Nessuna dipendenza circolare fra i temi (analisi `/tmp/libreFolio_x_cp4_deps.py`).
+
+**Forma d'arrivo** (`schemas/assets/`, `__init__.py` con la sola docstring, mappa dei moduli):
+- `assets.py` (C1, resta): `FAAssetProviderAssignment`, creazione, lettura (`FAAinfoFiltersRequest`, `FAinfoResponse`),
+  cancellazione, `PATCH`, unione; importa `FAClassificationParams` da `metadata.py`.
+- `metadata.py` (nuovo): `BaseDistribution`, `FAGeographicArea`, `FASectorArea`, `FAClassificationParams`,
+  `FAAssetMetadataResponse`, `FAMetadataRefreshResult`, `FABulkMetadataRefreshResponse` (il nome segue
+  `services/assets/metadata.py`).
+- `scheduled_investment.py` (nuovo): `MaturationFrequency`, `DayCountConvention`, `InterestType`, `FAInterestRatePeriod`,
+  `FALateInterestConfig`, `FAScheduledInvestmentSchedule` (il nome segue il fornitore `scheduled_investment`).
+- `events.py`: di W, intatto.
+- Via l'`__all__` di `assets.py`: ripeteva anche 5 nomi di altri moduli (`BackwardFillInfo`, `FACurrentValue`, `FAPricePoint`,
+  `FAHistoricalData`, `FAAssetEventPoint`), cioè faceva da barile (C3: niente barili). Nessun `import *`, e i moduli di
+  W7 non hanno `__all__`.
+- Hub `schemas/__init__.py`: blocco `TYPE_CHECKING`, `_EXPORT_GROUPS` (`assets.assets` si divide in `assets.assets` e
+  `assets.metadata`) e docstring; `__all__` per nome, invariato. I nomi del calendario non sono esportati dall'hub.
+
+Passi:
+1. ✅ Basi a HEAD: `openapi.json`, `tool-contracts`, raccolta, impronta AST delle 27 definizioni.
+   > **Note implementazione**: `/tmp/libreFolio_x_cp4_baseline.sh` (05:59), in `/tmp/libreFolio_x_cp4_base/`: raccolta 13 981,
+   > 27 classi impresse con `ast.dump`, `openapi.json` e `tool-contracts` copiati.
+2. ✅ Taglio (`/tmp/libreFolio_x_cp4_split.py`): ogni definizione si sposta intatta col commento che la precede; ogni modulo
+   con i suoi import (poi `ruff --select F401,I --fix`).
+   > **Note implementazione**: lo script verifica da sé che le 27 classi escano identiche all'impronta (stesso `ast.dump`) e
+   > che ogni nome finisca in un solo modulo. Dopo ruff (47 import tolti o riordinati) e black (nessun cambio):
+   > `scheduled_investment.py` 279 righe (6 definizioni), `metadata.py` 309 (7), `assets.py` 397 (14, da 1 001). Ogni modulo
+   > ha una docstring nuova con la sua mappa; `assets.py` tiene le note di nomi e di disegno ancora vere e perde quelle
+   > dei temi andati via. Prova di fumo: i 24 modelli Pydantic dei tre moduli producono il loro JSON Schema (riferimenti in
+   > avanti risolti con `from __future__ import annotations`). Dipendenze fra temi: `assets` → `metadata`
+   > (`FAClassificationParams`); `scheduled_investment` → `events` (`FAAssetEventPoint`, di W, solo import).
+3. ✅ Hub e docstring del pacchetto.
+   > **Note implementazione**: `schemas/__init__.py`: blocco `TYPE_CHECKING` diviso (`assets.assets` 11 nomi, nuovo
+   > `assets.metadata` 7), `_EXPORT_GROUPS` uguale, docstring dell'elenco dei moduli; `__all__` invariato. Controllo:
+   > coppie (modulo, nome) del `TYPE_CHECKING` = quelle di `_EXPORT_GROUPS`; 190/190 nomi esportati risolvibili;
+   > `__all__` contenuto negli export. `schemas/assets/__init__.py`: mappa dei quattro moduli.
+4. ✅ Import dei 40 file (`/tmp/libreFolio_x_cp4_rewrite.py`, ogni nome al modulo che lo definisce) e casi a mano.
+   > **Note implementazione**: 20 istruzioni in 20 file (gli altri 20 importatori usano solo nomi rimasti in `assets.py`),
+   > nessun caso a mano; `ruff --select I --fix` ne ha riordinati 6. File di altri, una riga ciascuno: `db/models.py`
+   > (import locale di `FAClassificationParams`), `ai_export/components/asset_resources.py` e `risk/service.py` di J. Il
+   > riscrittore rilanciato a secco dà 0; risoluzione statica 0 irrisolti su 9 600 nomi. `api schema`: `openapi.json`
+   > identico (113 percorsi, 586 schemi), `tool-contracts` identico (160 schemi).
+5. ✅ Riferimenti: docstring e commenti nel codice, `.github`, MkDocs, devWiki (C6), `TODO_FUTURI.md:1121`.
+   > **Note implementazione**: 21 righe citavano il vecchio modulo; corrette quelle sui nomi spostati, lasciate quelle sui
+   > nomi rimasti (F-095 e F-114 della devWiki, le due pagine dei problemi: cancellazione, filtro, `PATCH`,
+   > `FAinfoResponse`). Codice: docstring di `scheduled_investment/plugin.py:33-34` (`schemas.assets.scheduled_investment`) e
+   > di `utils/asset/geo.py:5` (`metadata.py`); commenti di `populate_mock_data.py:1043`,
+   > `ScheduledInvestmentEditor.svelte:75`, `:81`, `:89`; docstring di `test_asset_schemas.py:9` e la stampa del runner
+   > `_backend_schemas.py:39` (le tre fonti). devWiki (C6): F-029 (`FAAssetMetadataResponse` → `metadata.py`) e F-096, riga
+   > della tabella e prosa (`FAInterestRatePeriod` → `scheduled_investment.py`); `check_source_paths` ai soliti 5 artefatti.
+   > `.github/instructions/backend-schemas.instructions.md`: l'albero mostra il pacchetto `assets/` coi suoi quattro moduli.
+   > `TODO_FUTURI.md:1121` di nuovo (la riga di X-R5 ora punta a `scheduled_investment.py`). MkDocs (docs-writer):
+   > `assets_pricing.md:66-67` (righe in `metadata.py`) e `lint_gates.md`, dove le eccezioni RUF022 scendono da 4 a 3 perché
+   > `assets.py` non ha più `__all__`.
+   > Controlli: raccolta 13 983 contro 13 981 (+2: i casi della guardia `config-package` per i due moduli nuovi); scanner
+   > delle stringhe senza righe nuove (spariscono le 2 vecchie della docstring del fornitore; l'unica in più,
+   > `test_brim_report_sets.py:3134`, è un `git show v1.1.0:…`, storico e giusto); guardia delle patch mute 42, nessuna
+   > muta; `schemas all` 1 705.
+6. ✅ Verifiche: identità AST, ruff e black, `api schema` e `tool-contracts` identici, raccolta, import, stringhe, patch mute,
+   suite mirate, `all-backend`; journal e handoff.
+   > **Note implementazione**: identità AST sui file finali (dopo ruff e black) 27/27 classi (14 `assets`, 7 `metadata`,
+   > 6 `scheduled_investment`); `ruff check` e `black --check` puliti sui 28 file Python toccati, Prettier sullo `.svelte`;
+   > `openapi.json` (586 schemi) e `tool-contracts` (160) identici a HEAD salvo la versione; raccolta 13 983 (+2, la guardia
+   > `config-package`); 0 import irrisolti su 9 600; nessuna patch muta; `schemas all` 1 705. Build e run completa
+   > (`/tmp/libreFolio_x_cp4_heavy.sh`): `front build --debug` 85 s, `mkdocs build` 34 s, **`all-backend` sulla 6183
+   > 06:10:32–06:31:13, 7/7, 13 972 passati, 28 saltati**, 0 falliti. Il +97 sui 13 875 della mia ultima run completa (su
+   > `d1ef3ddeb`) è la differenza di raccolta (13 886 → 13 983: A4 +90, W7 +5, CP4 +2): +72 nel blocco `services` e un
+   > blocco nuovo di 25 arrivato con gli aggiornamenti di base. Porta 6183 libera; `git diff --check` pulito. Log
+   > `/tmp/libreFolio_x_cp4_allbackend.log`, righe `/tmp/libreFolio_x_cp4_allbackend_counts.txt`.
+
+> **Fuori pista**:
+> - **Un commento di `pyproject.toml`** (file condiviso) contava ancora 4 barili RUF022 con `schemas/assets`: corretto a 3,
+>   come `lint_gates.md` (segnalato da docs-writer). Nessun effetto sulla configurazione.
+> - docs-writer ha corretto anche la riga 27 di `lint_gates.md` («with 4 deliberate exceptions»), fuori dalla sezione
+>   indicata: tenuta, perché la pagina altrimenti diceva 4 in cima e ne elencava 3.
+> - Nell'albero di `.github/instructions/backend-schemas.instructions.md` la riga `transactions.py` non esiste più dopo W7
+>   (`schemas/transactions/`): è di W, non toccata; segnalata al coordinatore.
+> - Un file `frontend/src/lib/api/.tools-codegen.lock` compare durante la build del frontend e sparisce alla fine
+>   (`frontend/scripts/tools-generation-io.mjs:94`): non è un artefatto da escludere.
+
+### Checkpoint CP4 🧊 (2026-10-15) — FROZEN, handoff al coordinatore
+
+- **Base**: HEAD `c81670354`; `dev_release2` nel frattempo a `6d67fdaac` (J C-93, H CP4): nessun file in comune, nessun import
+  nuovo dei nomi spostati (55 coppie su tutti e due gli alberi).
+- **Elenchi**: rinomine pure, nessuna. Tagli: `schemas/assets/assets.py` → `assets.py` + `metadata.py` + `scheduled_investment.py`
+  (2 file nuovi; `assets.py` resta, da 1 001 a 397 righe). Modificati 35, compreso il piano: 20 file con le sole righe
+  d'import (3 di altri: `db/models.py`, `ai_export/components/asset_resources.py` e `risk/service.py` di J), l'hub e
+  `schemas/assets/__init__.py`, 6 di commenti e docstring (`scheduled_investment/plugin.py`, `utils/asset/geo.py`,
+  `populate_mock_data.py`, `test_asset_schemas.py`, `_backend_schemas.py`, `ScheduledInvestmentEditor.svelte`),
+  `TODO_FUTURI.md` (1 riga), `pyproject.toml` (commento), `.github` 1, MkDocs 2, devWiki 2.
+- **Messaggi di commit proposti**: `refactor(schemas): split asset schemas by theme` (36 percorsi: tutto tranne il piano) e
+  `docs(journal): X CP4 log` (il piano).

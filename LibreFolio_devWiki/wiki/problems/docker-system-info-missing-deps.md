@@ -105,7 +105,7 @@ unrelated, still-open bug discovered while verifying this fix (blocks
 | Role | Path |
 |------|------|
 | Version resolution | `backend/app/utils/runtime/version.py` |
-| System info endpoint | `backend/app/api/v1/system.py` |
+| System info endpoint | `backend/app/api/v1/system/info.py` |
 | VERSION file generation | `dev.py` (`_docker_ensure_assets_built()`) |
 | Docker image build | `Dockerfile` |
 | Frontend display | `frontend/src/lib/features/settings/tabs/AboutTab.svelte` |
