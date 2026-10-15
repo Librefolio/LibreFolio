@@ -1327,6 +1327,13 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 >   perché `backend.app.config` importa `version.py`.
 > - `.env.example` ha una sezione «App Version» con `# LF_APP_VERSION=` commentata: «lasciala vuota».
 > - Senza la variabile, cioè per ogni installazione, l'ordine è quello di R2.
+>
+> **Per gli altri e per i miei CP**:
+>
+> - Z (F26): `/system/ready`, `/system/health` e `/system/info` senza sessione non sono attività dell'utente;
+> - CP6: nell'elenco corto dei permessi del blocco ci vanno `/system/ready`, `/system/health`, `/system/info` e
+>   `/system/instance`;
+> - CP7a: proporre `/system/ready` per l'healthcheck del `Dockerfile` e dei compose.
 
 #### CP5a passo 2 — test e doc ✅ (2026-10-15, alba)
 
@@ -1396,10 +1403,38 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 > - **Backlog**: H-5, il debito di traduzione delle pagine admin.
 
 ### Checkpoint CP5a 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
+
+> Handoff inviato. Il coordinatore ha committato CP5a in tre commit: `e8ceda504` (`feat(system)`, 15 file),
+> `6e78b8c96` (`fix(version)`, 11 file) e `2d6d0488d` (journal, 2 file). Poi ha aggiornato la base: `cf6f08856`, merge
+> pulito di `dev_release2` a `ee5d81a6f` (G-8, X CP4, W K2a, A4b e i suoi record).
 >
-> **Per gli altri e per i miei CP**:
+> **Nota**: il blocco «Per gli altri e per i miei CP» del passo 1 era finito qui, sotto questo titolo. L'ho riportato
+> nel passo 1.
+
+### Correzione prima dell'ingresso: la head fuori dal ciclo di eventi ✅ (2026-10-15, alba)
+
+> **Richiesta** del coordinatore: in `readiness.py`, `_run_checks` chiamava `alembic_head_revision()` dentro la rotta
+> `async`. Il primo calcolo legge `alembic.ini` e importa le migrazioni in modo sincrono, e se fallisce lo rifà a ogni
+> sonda.
 >
-> - Z (F26): `/system/ready`, `/system/health` e `/system/info` senza sessione non sono attività dell'utente;
-> - CP6: nell'elenco corto dei permessi del blocco ci vanno `/system/ready`, `/system/health`, `/system/info` e
->   `/system/instance`;
-> - CP7a: proporre `/system/ready` per l'healthcheck del `Dockerfile` e dei compose.
+> **Note implementazione**:
+>
+> - `head = await asyncio.to_thread(alembic_head_revision)`. Il nome si risolve alla chiamata, quindi le sostituzioni
+>   dei test valgono ancora. La docstring del modulo dice perché.
+> - Test (test-author), `test_the_head_is_read_off_the_event_loop`:
+>   - un registratore prende il posto di `alembic_head_revision`, nota il thread e verifica che lì non giri un ciclo;
+>   - prima, il test controlla che la stessa sonda veda il ciclo dal test stesso;
+>   - `services platform-readiness` 14.
+> - A4b (`get_current_user`) aggiunge solo un 401, per una versione di sessione superata. Per `signed_in_user` vale
+>   come gli altri: una sessione revocata riceve la sola versione.
+> - **Controllo leggero della revisione combinata** (corsia 6181, una invocazione alla volta):
+>   - `front build --debug` rc 0, svelte-check 0/0; `mkdocs build` stretto senza avvisi; `check-links` 95;
+>   - `services platform-readiness` 14, `api system` 116, `api auth` 60, `api session-revocation` 3,
+>     `utils version` 51, `services config-env-example` 36;
+>   - `services config-package` 592: i 2 casi in più sono i moduli nuovi di X CP4 (`schemas/assets/metadata.py`,
+>     `schemas/assets/scheduled_investment.py`), che non leggono l'ambiente;
+>   - `check-orphans` pulito;
+>   - `api schema` contro `ee5d81a6f`: solo le aggiunte di CP5a; Tool contracts identici;
+>   - porta 6181 libera; `git diff --check` pulito.
+
+### Checkpoint della correzione 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore
