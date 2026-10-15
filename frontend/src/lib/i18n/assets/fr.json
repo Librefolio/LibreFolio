@@ -411,6 +411,11 @@
     "MISSING_PARAMS": "La configuration du fournisseur ne contient pas les paramètres requis.",
     "PARSE_ERROR": "La réponse du fournisseur n'a pas pu être analysée.",
     "SCRAPE_ERROR": "La page du fournisseur n'a pas pu être lue.",
-    "UNSUPPORTED_PAGE": "Le fournisseur a trouvé cet instrument mais sa page de marché n'est pas encore lisible. Ouvrez une issue sur GitHub (Librefolio/LibreFolio) en indiquant cet ISIN pour que le support soit ajouté."
+    "UNSUPPORTED_PAGE": "Le fournisseur a trouvé cet instrument mais sa page de marché n'est pas encore lisible. Ouvrez une issue sur GitHub (Librefolio/LibreFolio) en indiquant cet ISIN pour que le support soit ajouté.",
+    "RATE_LIMITED": "En pause pour trop de requêtes jusqu'à {time}",
+    "RATE_LIMITED_NO_TIME": "Trop de requêtes : réessayez plus tard",
+    "RATE_LIMITED_DAY": "En pause pour trop de requêtes jusqu'au {time}",
+    "NOT_CONFIGURED": "Ce fournisseur doit être configuré avant usage",
+    "PROVIDER_ERROR": "Le fournisseur a échoué : {detail}"
   }
 }

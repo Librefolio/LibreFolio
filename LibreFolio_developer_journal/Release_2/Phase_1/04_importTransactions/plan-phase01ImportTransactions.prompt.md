@@ -2358,3 +2358,110 @@ dice chi vede i report) e handoff.
 > `all-backend` nello slot (chiesto), poi l'handoff.
 > **`all-backend --workers 2`** (slot pesante 2, 21:50–22:15, `nice -n 10`): **7/7 gruppi**, 14 803 passati, 4 saltati, 0
 > rossi. Porta libera, slot restituito. Backlog: **W-B3** e **W-B4** chiuse (✅ F36). Handoff FROZEN (22:17).
+> **Ingresso di F36** (coordinatore 22:17: committato `3907eed36`, `258407d4d`, `4213b175a`, `c65421690`; base aggiornata con
+> `dev_release2` `2415faf33` senza conflitti → HEAD `d3afcf779`). Prove sulla revisione combinata (22:17–22:30, `nice`):
+> `api sync` (602 righe, tutte d'altri: impostazioni dei plugin, lavori del backup), `front check` **0/0**, `api brim`
+> **116/116**, Vitest `ImportWizardModal` **26/26**, `check-orphans` pulito; l'E2E `files-uploader` dopo la pausa di T
+> (22:28, 10 minuti senza E2E): **8/8** (22:32–22:34). Pronto all'ingresso.
+
+### W-B20 — la cancellazione dei broker atomica per broker ✅ FROZEN (2026-10-15)
+
+**Cura decisa** (coordinatore, 15/10 11:19, con i reperti di X): un aiuto in `db/session.py` che apre la transazione
+prima del primo savepoint di un percorso di scrittura (lo stesso `UPDATE` vuoto di `assets/crud.py:349-351`, o `BEGIN
+IMMEDIATE`), usato da `delete_bulk` per broker; il rosso prima. Il listener `begin` generale resta scartato
+(`SQLITE_BUSY_SNAPSHOT`). Ordine (coordinatore, 22:17): W-B20, poi la 47 quando J ha CP-16, poi A-14 con W-B10 e le
+chiavi di W-B27.
+
+**Analisi** (22:30, codice di `d3afcf779`): `BrokerService.delete_bulk`
+(`backend/app/services/brokers/broker_service.py:424-520`) **non ha nessun savepoint**: per ogni broker un `try` che, su
+un'eccezione, aggiunge un risultato fallito e passa al successivo. Quello che `delete_by_broker` (N1b-1: costi Auto,
+conversioni delle metà rimaste, cancellazioni) aveva già scritto resta nella sessione, e `DELETE /brokers` fa commit
+perché `response.errors` resta vuoto (`api/v1/brokers.py`). Cioè: un errore a metà della cancellazione di un broker lascia
+scritto metà del lavoro. La cura vuole **un savepoint per broker** (`session.begin_nested()`), e prima del primo savepoint
+l'aiuto che fa emettere `BEGIN` a pysqlite (che lo rimanda fino alla prima scrittura: un savepoint aperto dopo sole
+letture sarebbe il più esterno, e il suo RELEASE farebbe commit).
+
+**Disegno**:
+1. `db/session.py`: `begin_writes(session, table)`, un `UPDATE` di `table` che non tocca righe (`WHERE false`, sulla
+   chiave primaria), con la docstring del perché; nessun effetto se una transazione è già aperta.
+2. `delete_bulk`: `begin_writes(self.session, Broker)` prima del ciclo; il corpo di ogni broker dentro
+   `async with self.session.begin_nested()`; su un'eccezione il savepoint torna indietro e il risultato dice l'errore.
+   La cancellazione dell'account (che chiama la stessa strada) resta atomica per intero: i savepoint stanno dentro la sua
+   transazione.
+3. X potrà sostituire il trucco locale di `crud.py` con l'aiuto (non in questo lotto).
+
+**Rossi previsti** (servizi, `services broker`): due broker in una richiesta, il secondo fallisce a metà di
+`delete_by_broker` (un errore provocato dopo una prima scrittura) → oggi la scrittura parziale del secondo resta dopo il
+commit; dopo la cura il primo è cancellato e il secondo è com'era. Guardie: la cancellazione normale; l'atomicità della
+cancellazione dell'account; nessun commit prima della fine della richiesta.
+
+**Passi**: 1. ✅ rossi (test-author); 2. ✅ cura; 3. ✅ prove; 4. ✅ doc e handoff (sotto, con il dettaglio).
+> **F36 entrato** (coordinatore 22:35: treno 63, merge `434af2925`, registri `e05eaf17d`; CHANGELOG sotto una nuova «🔒
+> Security» di `[Unreleased]`). **Via a W-B20** come disegnato (savepoint per broker con `_delete_one` e il `flush` dentro);
+> `begin_writes` in `db/session.py` è un file condiviso: funzione piccola, documentata, solo in aggiunta, dichiarata
+> nell'handoff. Cura pronta: `/tmp/libreFolio_w_wb20_fix.py` (dry run ok; l'import di `begin_writes` dopo `db.models`).
+> Verifiche di lettura (22:40): nessun servizio delle transazioni o dei broker fa `commit`/`rollback` dentro;
+> `leave_broker` (F4) e la cancellazione dell'account passano da `delete_bulk` e restano atomiche per intero (il loro
+> `rollback` esterno disfa anche i savepoint rilasciati). Doc: aggiornare la pagina devWiki
+> `problems/sqlite-savepoint-without-write-begins-as-transaction.md` («Seen again», oggi «not built»).
+> **Finestra tranquilla** (coordinatore 22:53, corretta alle 22:55): **00:00–01:15** (G-13 dei colori, schermate con la
+> data del 16/10); fino a mezzanotte lavoro normale, poi niente E2E né run pesanti finché non scrive «galleria finita».
+
+1. ✅ **Rossi** (2026-10-15 22:58). test-author ha aggiunto la sezione 4.10 `TestDeleteBulkOneSavepointPerBroker` a
+   `backend/test_scripts/test_services/test_broker_service.py` (azione `services broker`, nessuna registrazione nuova):
+   BR-U-081 e BR-U-082 rossi, BR-U-083/084/085 guardie. Il fallimento è provocato sostituendo `make_standalone` nello
+   spazio di nomi di `transaction_service` (dopo le due scritture di `delete_by_broker`: il costo Auto sulla metà
+   ricevente, lo scollegamento dell'FX_CONVERSION del mittente); ogni caso fa commit come il router, legge da una
+   sessione propria e pulisce con la fixture `committed`. Nessun caso nuovo per la cancellazione dell'account: il test
+   esistente `test_delete_user_is_all_or_nothing_when_a_broker_deletion_reports_failure` (`services user-profile`) fallisce
+   con una cura senza `begin_writes`; lo giro dopo la cura.
+   > **Note implementazione**: `nice -n 10 … dev.py test --fresh-run --test-port 6184 --data-dir /tmp/librefolio-r13-w
+   > services broker TestDeleteBulkOneSavepointPerBroker` → **2 failed, 3 passed** (2,5 s), per il motivo atteso: in
+   > BR-U-081 il commit tiene `sender's FX_CONVERSION -100/110` senza `related_transaction_id` e la metà ricevente con il
+   > costo Auto, mentre il mittente esiste ancora; in BR-U-082 le stesse scritture dentro la transazione della richiesta
+   > (dopo il rollback del chiamante tutto torna com'era). Log `/tmp/libreFolio_w_wb20_red1.log`.
+2. ✅ **Cura** (2026-10-15 23:05). `/tmp/libreFolio_w_wb20_fix.py --apply`:
+   - `backend/app/db/session.py` (**file condiviso, solo in aggiunta**): `false, update` nell'import di `sqlalchemy` e la
+     funzione `begin_writes(session, table)` in fondo al file (un `UPDATE` di `table` con `WHERE false`, chiave primaria
+     su sé stessa, `synchronize_session=False`; la docstring dice perché, e perché non un listener `begin`);
+   - `backend/app/services/brokers/broker_service.py`: `delete_bulk` chiama `begin_writes(self.session, Broker)` prima del
+     ciclo e cancella ogni broker in `async with self.session.begin_nested()`; il corpo è passato tale e quale in
+     `_delete_one(item, user_id, as_user_id) -> BRDeleteResult`, con un `flush` dopo `session.delete(broker)` dentro il
+     savepoint (un errore di scrittura emerge prima del RELEASE e il broker risulta fallito); su un'eccezione il savepoint
+     torna indietro e il risultato porta il messaggio. Messaggi e conteggi invariati.
+   > **Note implementazione**: `black` invariato, `ruff check` pulito (anche sul file di test). Verdi: `services broker
+   > TestDeleteBulkOneSavepointPerBroker` **5/5**; `services user-profile test_delete_user_is_all_or_nothing` **2/2**.
+   > **Prova di mutazione** (`/tmp/libreFolio_w_wb20_mutation.sh`: tolta solo la chiamata a `begin_writes`, file
+   > ripristinato all'uscita e verificato): BR-U-082 **rosso** (1 failed, 4 passed) e i due test dell'account **rossi**
+   > («A technical failure half-way must commit nothing (D6)»: il primo broker resta cancellato dopo il rollback, perché
+   > il RELEASE del suo savepoint, il più esterno, ha fatto commit). Cioè l'aiuto serve, e i test lo custodiscono.
+   > **⚠️ Fuori pista** (23:08–23:15): ho lanciato `dev.py test --workers 2 … services broker` con il carico a 79 (sopra
+   > 70: ho concatenato il controllo invece di aspettare). Con `--workers N` il runner **ignora l'azione**: la passata
+   > parallela (`_run_parallel_prepass` → `_parallel_for_scope(args, category, …)`, `scripts/test_runner/_cli.py:906-949`)
+   > copre tutta la categoria, e sono partiti i pytest di `test_ai_export_*`, cioè un run pesante senza slot. Fermato dopo
+   > ~7 minuti (`stop_bash`), nessun processo rimasto, porta 6184 libera; la base della corsia era solo il DB vuoto dei
+   > servizi. Segnalato al coordinatore. Da ora: mai `--workers` con un'azione singola, e il carico si controlla prima, in
+   > un comando a parte.
+3. ✅ **Prove** (2026-10-15 23:10–23:21, `nice -n 10`, una alla volta, carico controllato prima in un comando a parte):
+   `services broker` **70/70**; `services user-profile` **36/36**; `services orphan-transfer-numbers` **19/19**;
+   `services account-deletion-preview` **15/15**; `db populate --force --clean`; `api brokers` **34/34**; `api
+   broker-access` **25 passed, 1 skipped** (ACCESS-050, salto previsto dal test: il primo utente non è superuser in un DB
+   popolato); `api account-deletion` **9/9**; `api users-admin` **64/64** (`DELETE /users/{id}` passa da `delete_user`);
+   `check-orphans` pulito (326 backend, 429 frontend). `services transaction` non serve: il suo `delete_bulk` è l'aiuto
+   delle transazioni (`_tx_test_helpers.py`), non quello dei broker. Porta 6184 libera dopo ogni prova API.
+4. ✅ **Doc e handoff** (2026-10-15 23:25–23:40).
+   - **docs-writer**: `mkdocs_src/docs/developer/backend/transactions/service.md`, «🗑️ Broker Deletion», un blocco nuovo
+     «One savepoint per broker» (33 righe aggiunte, nessuna tolta): il savepoint per broker, chi fa commit (`DELETE
+     /brokers`, `leave_broker`, `delete_user` tutto o niente), perché `begin_writes()` e quando chiamarla, i test. Il
+     Developer Manual è solo in inglese: nessun debito di traduzione. `mkdocs build` stretto (`nice -n 15`): 0 avvisi,
+     0 errori; nessun link nuovo, quindi niente `check-links`.
+   - **devWiki** (skill `wiki-file`, pagina esistente aggiornata, nessun duplicato):
+     `problems/sqlite-savepoint-without-write-begins-as-transaction.md` («Fixed (2026-10-15, W-B20)», la lezione sui
+     test, Prevention con `begin_writes`, fonti), la riga in `index.md`, una voce in fondo a `log.md`.
+     `check_source_paths.py`: 5 mancanti (8 occorrenze) prima e dopo, tutti preesistenti. Grafo non aggiornato
+     (graphify assente nel worktree).
+   - **Backlog**: W-B20 ✅; **W-B33** nuova (tre imprecisioni di testo nella stessa sezione, trovate da docs-writer: le
+     metto nel lotto di doc A-14 / W-B10).
+   > **Note implementazione**: nessun file nuovo; delta di 9 file tracciati. Non girati: `all-backend` (lo chiedo nello
+   > slot se il coordinatore lo vuole), E2E (nessun cambiamento del frontend né dell'API), `api sync` (nessuno schema
+   > toccato).

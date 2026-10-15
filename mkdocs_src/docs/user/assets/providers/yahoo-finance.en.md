@@ -32,7 +32,8 @@ Amsterdam.
 
 - **ISIN** also works as **Identifier Type**, but only when Yahoo can match it to a ticker: prefer
   the ticker.
-- Yahoo may throttle frequent requests, and some tickers have missing days.
+- Yahoo may throttle frequent requests: LibreFolio then pauses it for a while and keeps showing the
+  last saved prices. Some tickers have missing days.
 
 ## 🔗 Related
 

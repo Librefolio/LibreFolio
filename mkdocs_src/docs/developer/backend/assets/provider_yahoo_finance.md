@@ -129,7 +129,14 @@ are owned by `assets/core.py`; Yahoo owns only its currency sub-operation cache.
 
 ## ⚠️ Limitations
 
-- **Rate limits**: Yahoo Finance may throttle requests. No built-in rate limiter — rely on core sync Semaphore.
+- **Rate limits**: Yahoo Finance may refuse for too many requests. `_is_rate_limited()` recognises
+  yfinance's `YFRateLimitError` and, in any error message, «429» as a whole word, «too many requests»
+  or «rate limit»; `_yf_with_retry()` then raises `AssetRateLimitedError` at once, without retrying
+  in the thread, and search and metadata let it through instead of answering `[]` or `None`. The core
+  pauses the provider ([Provider Pauses](architecture.md#provider-pauses)); yfinance gives no
+  `Retry-After`, so the pause is the core's own. A false positive costs a pause of about a minute.
+  Other transient errors (timeouts, reset connections, `503`…) are still retried: at most three
+  attempts, 1.5 s and then 3 s apart.
 - **ISIN resolution**: Not all ISINs are resolvable by yfinance (depends on market coverage).
 - **Data gaps**: Some tickers may have missing days or delayed data.
 

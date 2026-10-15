@@ -4,6 +4,7 @@
  */
 import type {EmailStatus, EmailTestFailure} from './emailApi';
 import type {LinksProbeState} from './emailLinks';
+import type {ResendFailure, VerificationLinkRefusal} from './verificationApi';
 
 type Translate = (key: string, options?: {values?: Record<string, string | number>}) => string;
 
@@ -106,5 +107,41 @@ export function testFailureMessage(translate: Translate, failure: EmailTestFailu
             return translate(ownKey(SMTP_ERROR_KEYS, failure.smtpCode) ?? 'email.smtpErrors.SEND_FAILED');
         default:
             return translate('email.test.errors.generic');
+    }
+}
+
+/** What the page of a verification link shows: the wait, why the link cannot be used, or a check that failed. */
+export type VerifyPageStatus = 'checking' | VerificationLinkRefusal | 'missing' | 'error';
+
+export const VERIFY_PAGE_KEYS: Record<VerifyPageStatus, string> = {
+    checking: 'email.verification.page.checking',
+    expired: 'email.verification.page.expired',
+    consumed: 'email.verification.page.consumed',
+    revoked: 'email.verification.page.revoked',
+    unknown: 'email.verification.page.unknown',
+    missing: 'email.verification.page.missing',
+    error: 'email.verification.page.error',
+};
+
+/** The sign-in's «send the link again» failed: what to tell its owner. */
+export function resendFailureMessage(translate: Translate, failure: ResendFailure): string {
+    switch (failure.errorCode) {
+        case 'INVALID_CREDENTIALS':
+            return translate('email.verification.resendErrors.INVALID_CREDENTIALS');
+        case 'EMAIL_RATE_LIMITED':
+            return translate('email.verification.resendErrors.EMAIL_RATE_LIMITED', {values: {minutes: minutesUntil(failure.retryAfter)}});
+        case 'EMAIL_VERIFICATION_NOT_NEEDED':
+            return translate('email.verification.resendErrors.EMAIL_VERIFICATION_NOT_NEEDED');
+        case 'USER_LIMIT_REACHED':
+            return translate('email.verification.resendErrors.USER_LIMIT_REACHED');
+        case 'ACCOUNT_DISABLED':
+            return translate('email.verification.resendErrors.ACCOUNT_DISABLED');
+        case 'EMAIL_UNAVAILABLE':
+        case 'EMAIL_LINKS_UNAVAILABLE':
+        case 'EMAIL_DELIVERY_FAILED':
+        case 'EMAIL_RECIPIENT_INVALID':
+            return translate('email.verification.resendErrors.unavailable');
+        default:
+            return translate('email.verification.resendErrors.generic');
     }
 }
