@@ -133,6 +133,12 @@ def email_config_state() -> EmailConfigState:  # noqa: PLR0911 — one return pe
     return EmailConfigState(configured=True, server=server, sender=sender, reply_to=reply_to, max_per_hour=max_per_hour)
 
 
+def email_available() -> bool:
+    """Whether the instance can send emails now: a server is set and every variable can be used. For the public
+    configuration (``GET /system/instance``); it may read the password file, so an async caller runs it in a thread."""
+    return email_config_state().usable
+
+
 def budget_status(max_per_hour: int | None = None) -> RateDecision:
     """What the hourly budget of the instance allows now, without spending it: against ``max_per_hour`` when given (a
     state already read), else against the configured limit."""

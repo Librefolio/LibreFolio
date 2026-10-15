@@ -47,6 +47,7 @@ from pathlib import Path
 import pytest
 
 from backend.app.config import SECRET_FILE_MAX_BYTES, SecretFileError
+from backend.app.services.email.checks import check_smtp_configuration, check_smtp_encryption
 from backend.app.services.platform import config_audit
 from backend.app.services.platform.config_audit import (
     CONFIG_CHECKS,
@@ -75,6 +76,8 @@ CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     check_instance_key: "platform.instance_key",
     check_session_cookie: "platform.session_cookie",
     check_log_level: "platform.log_level",
+    check_smtp_configuration: "email.smtp",
+    check_smtp_encryption: "email.smtp_encryption",
 }
 SEVERITIES = ("ok", "info", "warning", "error")
 I18N_PREFIX = "instance.checks."
@@ -125,6 +128,9 @@ def _configure(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, production: b
         monkeypatch.delenv(variable)
     for variable in ("JWT_SECRET", "LIBREFOLIO_INSTANCE_KEY", "LIBREFOLIO_LOG_LEVEL", "LIBREFOLIO_DATA_DIR", "LIBREFOLIO_TEST_DATA_DIR", "LIBREFOLIO_BLOCKED", "LIBREFOLIO_DELETION_DATE"):
         monkeypatch.delenv(variable, raising=False)
+    # Workstream E: email off whatever the environment holds, so its two checks are ok
+    for variable in [name for name in os.environ if name.startswith("LIBREFOLIO_SMTP_")]:
+        monkeypatch.delenv(variable)
     monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "0" if production else "1")
     monkeypatch.setenv("LIBREFOLIO_DATA_DIR" if production else "LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("SESSION_COOKIE_SECURE", "auto")

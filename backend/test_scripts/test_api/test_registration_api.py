@@ -690,7 +690,7 @@ class TestInstanceAccounts:
 
     @pytest.mark.asyncio
     async def test_the_public_configuration_says_nothing_about_users(self, private: _Private, monkeypatch: pytest.MonkeyPatch) -> None:
-        """INSTANCE-002: with accounts, a live invitation, a limit and a billing link configured, the body is exactly ``profile`` and ``accounts``, ``accounts`` exactly its two fields, and the link nowhere."""
+        """INSTANCE-002: with accounts, a live invitation, a limit and a billing link configured, the body is exactly ``profile``, ``accounts`` and ``email``, ``accounts`` exactly its two fields, and the link nowhere."""
         owner = await _add_user(private.engine, "alice", admin=True)
         await _issue(private.engine, created_by_user_id=owner)
         monkeypatch.setenv(MAX_USERS_VARIABLE, "5")
@@ -701,7 +701,7 @@ class TestInstanceAccounts:
 
         assert response.status_code == 200, f"{response.status_code} {response.text}"
         body = response.json()
-        assert set(body) == {"profile", "accounts"}, f"the public configuration holds nothing undeclared: {body}"
+        assert set(body) == {"profile", "accounts", "email"}, f"the public configuration holds nothing undeclared: {body}"
         assert set(body["accounts"]) == {"registration_mode", "registration_locked"}, f"accounts says nothing about users: {body['accounts']}"
         assert BILLING_LINK not in response.text
 

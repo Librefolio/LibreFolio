@@ -44,3 +44,12 @@ class EmailTestResponse(StrictModel):
 
     language: Literal["en", "it", "fr", "es"] = Field(..., description="The language the test email was written in")
     message: str = "Test email sent"
+
+
+class EmailInstanceConfig(StrictModel):
+    """The email part of ``GET /system/instance``: public, the same for whoever asks, never the configuration itself."""
+
+    # One-line docstring on purpose: the API client generator writes a multi-line description as a template literal
+    # without escaping its backticks. The default is the instance without email: an answer built without this part
+    # says that nothing can be sent.
+    available: bool = Field(default=False, description="Whether this instance can send emails now: an SMTP server is set and every LIBREFOLIO_SMTP_* variable can be used")

@@ -1,6 +1,7 @@
 {
   "email": {
     "tab": {
+      "label": "Correo",
       "title": "Correo",
       "intro": "LibreFolio puede enviar correos a través de un servidor SMTP, configurado por quien gestiona la instancia. El correo es opcional: sin él, todo lo demás funciona."
     },

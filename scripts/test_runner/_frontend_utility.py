@@ -652,6 +652,16 @@ def front_scheduler(verbose: bool = False, ui: bool = False, headed: bool = Fals
     return _run_playwright("settings/scheduler.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_email_tab(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the Settings › Email E2E tests (admin tab: the lane's own status, and a test email on a simulated server)."""
+    print_section("Frontend Email Settings Tab Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("settings/email-tab.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_utility_all(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, coverage: bool = False) -> bool:
     """Run all frontend utility/component E2E tests."""
     print_header("Frontend Utility Tests (Playwright)")
@@ -828,5 +838,14 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(cat, "tooltip", front_tooltip, name="Tooltip Component Tests", desc="Pinned hover/click model: hover-only, click-to-pin, grace dismiss, click-outside", prereq="Login working", tests="tooltip-component.spec.ts")
     add_test(cat, "scheduler", front_scheduler, name="Scheduler Settings E2E", desc="ConfigModal, LogModal, status row, fetch_interval regression", prereq="Admin user + populated DB", tests="settings/scheduler.spec.ts")
+    add_test(
+        cat,
+        "email-tab",
+        front_email_tab,
+        name="Email Settings Tab E2E",
+        desc="Settings › Email (workstream E, lot E2b): on the lane's backend an administrator opens ?tab=email and finds email off (no SMTP server on the lane, asserted first through GET /api/v1/email/status), explained, the docs link opening admin/email/; a user has no Email tab and ?tab=email opens profile instead; on a simulated server (page.route on /email/status and /email/test, owned and unrouted by each test) ready with 48 of 50 left and a warning notice, a test email sent (200, busy and disabled while held, email.test.sent), refused by the SMTP server (502 EMAIL_DELIVERY_FAILED AUTH_FAILED) and by the hourly limit (429 EMAIL_RATE_LIMITED, retry_after), each read as the generated client rejects (email.test.failed) and followed by a second status read",
+        prereq="Admin user + test users; no SMTP server on the lane (LIBREFOLIO_SMTP_HOST unset)",
+        tests="settings/email-tab.spec.ts",
+    )
     add_test(cat, "all", front_utility_all, test_names=False, name="All Frontend Utility Tests", desc="Run all utility/component E2E tests")
     registry["front-utility"] = cat

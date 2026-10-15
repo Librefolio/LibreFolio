@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `./dev.py user reset-onboarding <username> [--flow …]` restarts an account's guides.
 - `GET /api/v1/brokers/{id}/summary` accepts `as_of`, the day to read the summary for; the broker page sends your today.
 - `POST /api/v1/assets/events` accepts `mode: "create"` for an event that must be new. One on a day and type the asset already has, manual or from a provider, is refused with 409 `EVENT_EXISTS` listing the events already there, instead of overwriting them. Each result also gives the `event_ids` it wrote, in request order.
+- **Email, optional**: LibreFolio can send emails through your own SMTP server, named only by the `LIBREFOLIO_SMTP_*` variables, the password also from a file (`LIBREFOLIO_SMTP_PASSWORD_FILE`). Nothing of it is stored, shown in the app or put in a backup, and without a server nothing changes. **Settings › Email**, for administrators, says whether email works, which variable to fix when it does not, and sends a test email to your own address in your language. `LIBREFOLIO_SMTP_MAX_PER_HOUR` caps the emails of the instance (50 an hour by default); the startup checks report an unusable configuration and a server reached without encryption. Documented in the new admin page "Email".
 
 ### 🔄 Changed
 

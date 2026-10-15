@@ -2041,6 +2041,51 @@ test.describe('Gallery Screenshots', () => {
             });
         });
 
+        test('email (admin) - all languages and themes', async ({page}, testInfo) => {
+            // The administrators' Email tab where email works. The gallery's lane has no SMTP server — its status says `off` —
+            // so the status is answered here, in the shape of GET /api/v1/email/status (backend/app/schemas/email.py): ready,
+            // 47 of 50 emails left this hour, every check `ok`, so no notice. The test email is offered, and never pressed.
+            // The route stays for the whole test, since every load of the tab reads the status; the outer afterEach drops it
+            // once the page has left.
+            const viewport = getViewport(testInfo);
+            const status = {
+                state: 'ready',
+                problem: null,
+                variable: null,
+                checks: [
+                    {check_id: 'email.smtp', severity: 'ok', i18n_key: 'email.checks.smtp.ok', detail: {}},
+                    {check_id: 'email.smtp_encryption', severity: 'ok', i18n_key: 'email.checks.smtpEncryption.ok', detail: {}},
+                ],
+                budget: {max_per_hour: 50, remaining: 47, retry_after_seconds: 0},
+            };
+            await page.route('**/api/v1/email/status', (route) => route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(status)}));
+            await login(page, TEST_ADMIN);
+
+            await forEachLanguageAndTheme(page, async (lang, theme) => {
+                // Straight to the tab, as the preferences shots open theirs: the page honours ?tab= (settings/+page.svelte).
+                await navigateTo(page, '/settings?tab=email');
+                await expectLanguageAndTheme(page, lang, theme);
+                await expect(page.getByTestId('settings-tab-email')).toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+                // The status arrives after the tab is drawn: the tab says when it is in (data-busy).
+                const email = page.getByTestId('email-tab');
+                await waitForSettled(email, 15_000);
+                await expect(page.getByTestId('email-state'), 'the simulated status is drawn').toHaveAttribute('data-state', 'ready');
+                await expect(page.getByTestId('email-budget'), 'the budget left is on show').toHaveAttribute('data-remaining', '47');
+                await expect(page.getByTestId('email-checks'), 'no notice: every check is ok').toHaveCount(0);
+                await expect(page.getByTestId('email-test-button'), 'the test email is offered').toBeEnabled();
+                await parkPointer(page);
+                await freezeAnimations(page);
+                await waitForMotionSettled(email, 'the Email tab');
+                await expect(page.getByTestId('deferred-app-popups'), 'a popup lies over the shot').toHaveAttribute('data-active-popup', 'none');
+                await expectNoToast(page);
+                // DESKTOP — the tall-screen rule (coordinator, C4; galleryTallShots.ts): the whole card, its tab bar and the tab
+                // down to its rounded bottom edge, as the profile shot frames it.
+                if (viewport === 'desktop') await extendScreenToBlock(page, page.getByTestId('settings-page'), `desktop/${lang}/${theme}/settings/email`);
+                await screenshot(page, viewport, lang, theme, 'settings', 'email');
+                await restoreTallScreen(page);
+            });
+        });
+
         test('about tab - all languages and themes', async ({page}, testInfo) => {
             const viewport = getViewport(testInfo);
             await login(page, TEST_ADMIN);
