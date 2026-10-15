@@ -60,7 +60,7 @@ The [Financial Theory guide](../../financial-theory/instruments/transaction-type
 
 ### 🔗 Paired transactions {: #composite-transactions }
 
-A paired operation is recorded as two linked transactions, which the form shows as one, with a **From** and a **To** side. Each side has its own date, and the **Swap sides** arrow turns the direction around.
+A paired operation is recorded as two linked transactions, which the form shows as one, with a **From** and a **To** side. Each side has its own date, and the **Swap sides** arrow turns the direction around. In a currency exchange the two dates usually match: they differ when the broker credits the new currency on another day.
 
 | Type | What it records | Theory |
 |------|-----------------|--------|
