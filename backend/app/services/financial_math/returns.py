@@ -17,6 +17,7 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import NamedTuple
 
+from scipy.optimize import brentq
 from scipy.optimize import newton as scipy_newton
 
 
@@ -351,6 +352,88 @@ def calculate_twrr_series(
     ]
 
 
+# XIRR: a rate is returned only when it is a root of the flows' NPV (|NPV| within this share of the
+# flows' size). The bracketing fallback searches 1 + r on a geometric grid, 50 points a decade: from a
+# near-total annualized loss (a large loss over a few days annualizes to within 1e-12 of −100%) to a
+# gain of 10 000 times a year.
+_XIRR_ROOT_TOLERANCE = 1e-7
+_XIRR_GRID = tuple(10.0 ** (exponent / 50.0) for exponent in range(-600, 201))
+
+
+def _xirr_npv(flows: Sequence[tuple[float, float]], rate: float) -> float:
+    """NPV of ``(years, amount)`` flows at ``rate``; OverflowError where it cannot be evaluated (1 + r ≤ 0, overflow)."""
+    base = 1.0 + float(rate)
+    if base <= 0.0:
+        raise OverflowError("1 + rate <= 0")
+    return sum(amount * base ** (-years) for years, amount in flows)
+
+
+def _xirr_npv_slope(flows: Sequence[tuple[float, float]], rate: float) -> float:
+    """Derivative of :func:`_xirr_npv` with respect to the rate."""
+    base = 1.0 + float(rate)
+    if base <= 0.0:
+        raise OverflowError("1 + rate <= 0")
+    return sum(-years * amount * base ** (-years - 1.0) for years, amount in flows)
+
+
+def _is_xirr_root(flows: Sequence[tuple[float, float]], rate: float, scale: float) -> bool:
+    try:
+        return math.isfinite(rate) and abs(_xirr_npv(flows, rate)) <= _XIRR_ROOT_TOLERANCE * scale
+    except (OverflowError, ZeroDivisionError):
+        return False
+
+
+def _solve_xirr(flows: Sequence[tuple[float, float]], x0: float) -> float | None:
+    """A verified root of the NPV of ``(years, amount)`` flows, or None when there is none.
+
+    Newton's method with the analytic slope starts from ``x0``, and its answer is kept only when the NPV
+    really vanishes there. Otherwise every interval of the grid where the NPV changes sign is solved by
+    bracketing (Brent), and the root nearest ``x0`` is returned. A rate that does not solve the equation
+    is never returned: the bare secant method used before could stop, after an overflow, on one of its
+    own starting points and give it back as the rate.
+    """
+    scale = sum(abs(amount) for _, amount in flows) or 1.0
+    try:
+        rate = float(scipy_newton(lambda r: _xirr_npv(flows, r), x0, fprime=lambda r: _xirr_npv_slope(flows, r), tol=1e-12, maxiter=100))
+        if _is_xirr_root(flows, rate, scale):
+            return rate
+    except (OverflowError, ZeroDivisionError, RuntimeError, ValueError):
+        pass
+    roots: list[float] = []
+    previous_rate: float | None = None
+    previous_npv: float | None = None
+    for base in _XIRR_GRID:
+        rate = base - 1.0
+        try:
+            npv = _xirr_npv(flows, rate)
+        except (OverflowError, ZeroDivisionError):
+            previous_rate = previous_npv = None
+            continue
+        if not math.isfinite(npv):
+            previous_rate = previous_npv = None
+            continue
+        if npv == 0.0:
+            roots.append(rate)
+        elif previous_rate is not None and previous_npv is not None and previous_npv * npv < 0.0:
+            try:
+                roots.append(brentq(lambda r: _xirr_npv(flows, r), previous_rate, rate, xtol=1e-14, maxiter=200))
+            except (OverflowError, ZeroDivisionError, RuntimeError, ValueError):
+                pass
+        previous_rate, previous_npv = rate, npv
+    verified = [root for root in roots if _is_xirr_root(flows, root, scale)]
+    return min(verified, key=lambda root: abs(root - x0)) if verified else None
+
+
+def _rate_decimal(rate: float) -> Decimal:
+    """A solved rate at 6 decimals; a zero is written without a sign.
+
+    A rate equal to zero can come out of the solver a hair below it (about −1e-16), and would print as
+    «-0.000000»: the rate is zero, so it carries no sign.
+    """
+    value = Decimal(str(rate)).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
+    return value.copy_abs() if value.is_zero() else value
+
+
 def calculate_mwrr(
     cash_flows: list[CashFlowInput],
     initial_nav: Decimal,
@@ -360,7 +443,8 @@ def calculate_mwrr(
 ) -> MWRRPoint:
     """Money-Weighted Rate of Return / XIRR.
 
-    Solves: NPV = Σ(CF_i / (1+r)^(d_i/365)) = 0 for r using scipy.optimize.newton.
+    Solves: NPV = Σ(CF_i / (1+r)^(d_i/365)) = 0 for r with :func:`_solve_xirr`, which returns only a
+    verified root (None when there is none).
 
     Flow construction:
       t=0:  -initial_nav  (investor "buys" the portfolio at start)
@@ -387,19 +471,14 @@ def calculate_mwrr(
         if 0 < days < total_days:
             flows.append((float(days), float(cf.amount)))
 
-    def npv(r: float) -> float:
-        if 1.0 + r <= 0.0:
-            return float("inf")
-        return sum(amount / (1.0 + r) ** (d / 365.0) for d, amount in flows)
-
-    try:
-        rate = scipy_newton(npv, x0=0.1, tol=1e-8, maxiter=100)
-        if not math.isfinite(rate):
-            return MWRRPoint(date=end_date, mwrr=None)
-        mwrr = Decimal(str(rate)).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
-        return MWRRPoint(date=end_date, mwrr=mwrr)
-    except (RuntimeError, ValueError, InvalidOperation):
+    rate = _solve_xirr([(days / 365.0, amount) for days, amount in flows], 0.1)
+    if rate is None:
         return MWRRPoint(date=end_date, mwrr=None)
+    try:
+        mwrr = _rate_decimal(rate)
+    except InvalidOperation:
+        return MWRRPoint(date=end_date, mwrr=None)
+    return MWRRPoint(date=end_date, mwrr=mwrr)
 
 
 def calculate_mwrr_series(  # noqa: C901 — TODO(P2-refactor): nested warm-start solver retry/guard chain
@@ -457,16 +536,12 @@ def calculate_mwrr_series(  # noqa: C901 — TODO(P2-refactor): nested warm-star
             days = (cf_date - start_date).days
             if 0 < days < total_days:
                 flows.append((float(days), float(cf_amt)))
-
-        def npv(r: float, _flows: list[tuple[float, float]] = flows) -> float:
-            if 1.0 + r <= 0.0:
-                return float("inf")
-            return sum(amount / (1.0 + r) ** (d / 365.0) for d, amount in _flows)
+        year_flows = [(days / 365.0, amount) for days, amount in flows]
 
         try:
             x0 = prev_guess if use_warm_start else _DEFAULT_GUESS
-            rate = scipy_newton(npv, x0=x0, tol=1e-8, maxiter=100)
-            if not math.isfinite(rate):
+            rate = _solve_xirr(year_flows, x0)
+            if rate is None:
                 result.append(MWRRPoint(date=snap.date, mwrr=None))
                 continue
 
@@ -481,8 +556,8 @@ def calculate_mwrr_series(  # noqa: C901 — TODO(P2-refactor): nested warm-star
                     prev_guess = rate
                 else:
                     # Extreme rate — try again from default guess to find moderate root
-                    rate2 = scipy_newton(npv, x0=_DEFAULT_GUESS, tol=1e-8, maxiter=100)
-                    if math.isfinite(rate2) and abs(rate2) < abs(rate):
+                    rate2 = _solve_xirr(year_flows, _DEFAULT_GUESS)
+                    if rate2 is not None and abs(rate2) < abs(rate):
                         rate = rate2
                         if abs(rate) <= cap:
                             prev_guess = rate
@@ -491,7 +566,7 @@ def calculate_mwrr_series(  # noqa: C901 — TODO(P2-refactor): nested warm-star
                     else:
                         prev_guess = _DEFAULT_GUESS
 
-            mwrr = Decimal(str(rate)).quantize(_PREC_PCT, rounding=ROUND_HALF_UP)
+            mwrr = _rate_decimal(rate)
             result.append(MWRRPoint(date=snap.date, mwrr=mwrr))
         except (RuntimeError, ValueError, InvalidOperation):
             result.append(MWRRPoint(date=snap.date, mwrr=None))
