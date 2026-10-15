@@ -426,6 +426,13 @@ Dettagli: [backlog 38](38_postReleaseBacklog/README.md). Qui le voci più pesant
   `pac_allocator/`, `portfolio`, `risk`, `risk_scenarios`, `signals`, `system`, `tools`, `wac`; le righe di
   `assets/` e `transactions/` le hanno già aggiornate X (CP4) e W (K2a). Da fare in una passata sola a fine
   riordino. Dettagli: piano 04, §12, K2a.
+- **C-96 · Le corsie dei test prendono la configurazione dell'istanza dal `.env` del developer** — medio, sicurezza dei
+  test; E, 15/10 (analisi). `scripts/cli_base.py:configure_test_runtime()` carica il `.env` e toglie solo
+  `INSTANCE_TRUST_SECRETS` (S2 di H): ogni altra `LIBREFOLIO_*` arriva alle corsie. Con la configurazione SMTP di E i
+  test spedirebbero email vere; con `LIBREFOLIO_BLOCKED` o il profilo gestito tutte le corsie cambierebbero
+  comportamento. Cura: la corsia tiene solo le variabili del runner e scarta il resto della configurazione d'istanza
+  venuta dal `.env`; un test usa `.env.example` come elenco. Assegnata a H dal coordinatore, prima del primo lotto di E;
+  comprende A-9 (le quattro variabili di account di A5a). Dettagli: analisi di E; piano H.
 - **Devwiki e grafo** — medio: il passo 3 dell'historian e la ricostruzione del grafo dopo la 1.2 (P-6). **14/10, prima
   va sistemato lo strumento**: graphify 0.9.54 (quello nel lock) non indicizza più i link simbolici che puntano fuori
   dalla radice, e il corpus (`LibreFolio_devWiki/corpus/`) è fatto solo di quelli. Il rilevamento vede 0 file e, con un
@@ -1915,23 +1922,101 @@ plugin.
 Ogni ondata va dimostrata con una gallery dello stesso giorno `identical` (a parte le schermate instabili della 56).
 Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano generale, «Decisioni del developer»).
 
-- **R-1 · Colori dei grafici in un modulo unico** — alto; coordinatore, 14/10.
+> **Stato (R, 15/10): ✅ R chiuso.** Lotti A–D in `dev_release2` da `8fd8e494b`; cancello gallery unico A+B+C+D
+> superato. Restano aperte R-5…R-8. Piano: [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md).
+
+- ✅ **R-1 · Colori dei grafici in un modulo unico** — alto; coordinatore, 14/10.
   - Oggi: 4 set per assi, griglie e tooltip; 3 palette di allocazione; coppie chiaro/scuro scritte in 17 grafici.
   - Stessi valori, divergenze con un nome.
 
-  Dettagli: [report 04](55_colorSystem/analysis/04_charts_dataviz.md), §1–§3.
-- **R-2 · Funzioni condivise per segno, stati e badge** — medio; coordinatore, 14/10.
+  Dettagli: [report 04](../Phase_1/10_colorSystem/analysis/04_charts_dataviz.md), §1–§3.
+  - Stato (R, 14/10): codice nel checkpoint del lotto B (W3–W5). `lib/theme/themePair.ts` (`themed()`),
+    `chartTheme.ts`, `chartPalettes.ts`, `chartColorScales.ts`: 229 siti in 33 file; neutri, palette, serie, formule e
+    lotti; ogni divergenza ha un nome (`CHART_GAIN_LOSS.price` `#ef4444` / `.portfolio` `#dc2626`, box del tooltip
+    comune e della candela, interesse di Growth e dei lotti…). Il dividendo di Growth e dei lotti è ora una voce sola. Si
+    chiude con il commit e il cancello B.
+  - Stato (R, 14/10), lotto D (W8, D4): il tema si legge da un solo punto, `lib/theme/themeMode.ts`
+    (`isDarkTheme()`, `onThemeClassChange()`).
+    - Interessa 16 osservatori e 23 letture di `classList.contains('dark')` in 19 file.
+    - Il ridisegno a ogni cambio di classe di `<html>` resta.
+    - Gate `themeModeReads`: niente letture o osservatori della classe fuori da `themeMode.ts`.
+    - Piano: [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W8».
+  - ✅ Chiusa il 15/10 (R): lotti B (`75c45d923`) e D (`98731240d`), in `dev_release2` da `8fd8e494b`; cancello
+    gallery unico A+B+C+D superato.
+- ✅ **R-2 · Funzioni condivise per segno, stati e badge** — medio; coordinatore, 14/10.
   - Oggi: ternario guadagno/perdita in almeno 20 punti e 7 mappe di stato indipendenti.
   - Output identici.
 
-  Dettagli: [report 03](55_colorSystem/analysis/03_semantic_dynamic_logic.md), §1–§3.
-- **R-3 · Hex nei `<style>` in variabili CSS con lo stesso valore** (P8: `DataTable*`, modali file e immagini,
-  `ConfirmModal`) — medio; coordinatore, 14/10. Dettagli: [report 02](55_colorSystem/analysis/02_ui_components.md), §4.
-- **R-4 · Funzioni fragili e refusi senza effetto visibile** — basso; coordinatore, 14/10.
+  Dettagli: [report 03](../Phase_1/10_colorSystem/analysis/03_semantic_dynamic_logic.md), §1–§3.
+  - Stato (R, 14/10): codice nel checkpoint del lotto A (W1–W2): `lib/theme/toneClasses.ts` (`SIGN_TEXT`, `SIGN_BAR`,
+    `POLARITY_TONES`, `STATUS_TONES`, `KIND_TONES`), 42 siti di segno in 20 file e 11 mappe di stato in 9 file; CSS
+    compilato identico alla baseline. Si chiude con il commit del checkpoint e il cancello A.
+  - ✅ Chiusa il 15/10 (R): lotto A (`d80b9e0cd`), in `dev_release2` da `8fd8e494b`; cancello gallery unico
+    A+B+C+D superato.
+- ✅ **R-3 · Hex nei `<style>` in variabili CSS con lo stesso valore** (P8: `DataTable*`, modali file e immagini,
+  `ConfirmModal`) — medio; coordinatore, 14/10. Dettagli: [report 02](../Phase_1/10_colorSystem/analysis/02_ui_components.md), §4.
+  - Stato (R, 14/10): codice nel checkpoint del lotto C (W6–W7).
+    - 16 componenti, 908 dichiarazioni, 604 token `--lf-cmp-<componente>-<ruolo>` con gemelle `-dark`, su `:root` in
+      `lib/theme/components/{table,media,files,dialogs}.css`, importati dai componenti; le regole `.dark` restano
+      dove sono.
+    - I valori sono quelli che la build emetteva: esbuild quantizza i colori delle dichiarazioni, ma non quelli delle
+      custom property.
+    - Fuori dal CSS, cioè cheetah-grid e SVG in data URL, i colori vanno in `lib/theme/drawnColors.ts`.
+    - Prove: CSS compilato identico regola per regola; definizioni presenti con ogni pagina che le usa; gate
+      `themeComponentTokens` in `core-unit` (definizione unica, import, nessun token orfano).
+    - Si chiude con il commit e il cancello C.
+  - Stato (R, 14/10), lotto D (W9, D5): i quattro file P8 fuori elenco (pagina dei file, `BrokerImportFilesModal`,
+    `ImportBrokerMismatchModal`, `CompactCashCell`).
+    - 172 letterali diventano 124 token: 728 in tutto.
+    - Letterali fuori da `lib/theme/**` e da `app.css`, dalla base al lotto D: hex da 1.554 a 88, funzioni colore da
+      198 a 50.
+    - Piano: [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W9».
+  - ✅ Chiusa il 15/10 (R): lotti C (`0b660632f`) e D (`98731240d`), in `dev_release2` da `8fd8e494b`; cancello
+    gallery unico A+B+C+D superato.
+- ✅ **R-4 · Funzioni fragili e refusi senza effetto visibile** — basso; coordinatore, 14/10.
   - `hexToRgba` e la concatenazione `+ '88'` accettano solo `#rrggbb`.
   - La meta `theme-color` scura è `#156534` invece di `#166534`.
 
-  Dettagli: [report 01](55_colorSystem/analysis/01_theme_foundation.md), §6.5; [report 04](55_colorSystem/analysis/04_charts_dataviz.md), §5.
+  Dettagli: [report 01](../Phase_1/10_colorSystem/analysis/01_theme_foundation.md), §6.5; [report 04](../Phase_1/10_colorSystem/analysis/04_charts_dataviz.md), §5.
+  - Stato (R, 14/10): codice e test nel checkpoint del lotto A (W0); `lib/theme/colorAlpha.ts`, meta corretta nei tre
+    punti con gate di concordanza. Si chiude con il commit del checkpoint e il cancello A. Piano:
+    [R-colorRefactor](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W0».
+  - ✅ Chiusa il 15/10 (R): lotto A (`d80b9e0cd`), in `dev_release2` da `8fd8e494b`; cancello gallery unico
+    A+B+C+D superato. Il timbro di `static/sw.js`, che andava rifatto con la correzione di `offline.html`, l'ha
+    aggiunto il coordinatore all'ingresso (`23f6578f3`).
+- **R-5 · `withAlpha` su `hsl()` con spazi produce un colore non valido** — minimo; R, 14/10.
+  - `hsla(210 68% 44%, a)` mescola le due sintassi; oggi nessun chiamante ci passa (`lotColor` non arriva a `withAlpha`).
+  - Da correggere quando un colore con spazi ci arriverà (fase B), con la gallery.
+
+  Dettagli: piano R, «W0», nota «Fuori pista».
+- **R-6 · Viola della linea di anteprima negli editor dei dati** — minimo; coordinatore, 14/10.
+  - `color: '#a855f7'` scritto a mano in `assets/AssetDataEditorSection.svelte:248` e in
+    `fx/FxDataEditorSection.svelte:129`.
+  - Fuori dal perimetro di R: sono cartelle della 1.3. Passa alla fase B.
+  - Fino ad allora è un'eccezione del cricchetto dei colori letterali, che dal 14/10 è il gate M2 di T: R gli ha
+    consegnato l'elenco delle eccezioni.
+
+  Dettagli: piano R, «W7», nota sulle eccezioni del cricchetto.
+- **R-7 · Due viste non seguono il cambio di tema dal vivo** — basso; R, 14/10 (osservazione del `test-author` in W8).
+  - `charts/SemiDonutChart.svelte` e l'anteprima a tabella di `files/FilePreviewModal.svelte` (cheetah-grid)
+    leggono il tema quando disegnano, ma non hanno osservatore. Dopo un cambio di tema mostrano i colori vecchi fino
+    al ridisegno successivo o alla riapertura.
+  - Precede R. Correggerlo cambia il comportamento, quindi non è di R.
+  - Riguarda T (B4) e il Designer Lab, che riapplica i colori dal vivo. La correzione è un `onThemeClassChange()`
+    con ridisegno.
+
+  Dettagli: [piano R](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «W8», «Fuori pista».
+- **R-8 · `--resolve` della baseline colori toglie un `--accept`** — basso; R, 15/10; per T.
+  - `theme-roles.mjs --resolve` (`mergeBaselines`) dà a una riga presente sui due lati il m1 minore e **solo i
+    colori che entrambi hanno**, senza guardare la base né le righe `~accept`.
+  - Se un lato ha accettato uno scambio di colore e l'altro ha ancora la riga della base, il colore accettato
+    sparisce e `--check` torna rosso. È successo il 15/10, nel merge della base di R con T-2, sulla correzione D3 di
+    `themeStore.ts`: rimediato rilanciando lo stesso `--accept`, con l'OK del coordinatore.
+  - Correzione proposta: un vero merge a tre vie (se un lato è uguale alla base, vince l'altro), oppure vince il
+    lato che ha un `~accept` per quel file.
+
+  Dettagli: [piano R](../Phase_1/10_colorSystem/R-colorRefactor/plan-phase00ColorRefactor.prompt.md), «Merge della base con T-2»; wiki
+  `problems/colour-ratchet-resolve-drops-an-accept`.
 
 ## G · Gallery deterministica (56)
 
@@ -2458,14 +2543,16 @@ Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md)
 ## B · Backup e Docker (fase 01)
 
 Piano: [`07_backupDocker`](../Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md). Sessione avviata il 15/10 alle
-07:10, solo analisi, sulla base `ee5d81a6f`.
+07:10, solo analisi, sulla base `ee5d81a6f`. Codice autorizzato il 15/10 alle 11:25 (delega del developer): B0 e B1,
+sulla base `23f6578f3`.
 
 ## E · Email (fase 01)
 
 Piano: [`08_email`](../Phase_1/08_email/plan-phase01Email.prompt.md). Sessione avviata il 15/10 alle 08:37, solo
-analisi, sulla base `380a3e768`.
+analisi, sulla base `380a3e768`. Codice autorizzato il 15/10 alle 11:25 (delega del developer): E0 ed E1, sulla base
+`23f6578f3`.
 
 ## Y · Cruscotto e grafici (fase 01)
 
-Piano: [`09_dashboardCharts`](../Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md). Sessione non ancora
-avviata.
+Piano: [`09_dashboardCharts`](../Phase_1/09_dashboardCharts/plan-phase01DashboardCharts.prompt.md). Sessione avviata il
+15/10 alle 11:28, solo analisi, sulla base `23f6578f3`.

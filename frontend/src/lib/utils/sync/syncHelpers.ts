@@ -84,7 +84,7 @@ export interface SyncSection {
 }
 
 // =========================================================================
-// Status icons and colors
+// Status icons (their colours: STATUS_TONES.syncIcon in $lib/theme/toneClasses)
 // =========================================================================
 
 export const STATUS_ICONS: Record<SyncStatus, Component> = {
@@ -92,13 +92,6 @@ export const STATUS_ICONS: Record<SyncStatus, Component> = {
     partial: AlertTriangle as unknown as Component,
     failed: AlertCircle as unknown as Component,
     skipped: SkipForward as unknown as Component,
-};
-
-export const STATUS_COLORS: Record<SyncStatus, string> = {
-    ok: 'text-emerald-500',
-    partial: 'text-amber-500',
-    failed: 'text-red-500',
-    skipped: 'text-gray-400',
 };
 
 // =========================================================================

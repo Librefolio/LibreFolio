@@ -32,6 +32,10 @@
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {buildChoroplethData, buildGeoLabel, buildGeoNameMaps, centroidOf, choroplethMax, computeUnknownPct} from '$lib/components/charts/geographyMapHelpers';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {themed} from '$lib/theme/themePair';
+    import {CHART_NEUTRALS, GEO_MAP_COLORS} from '$lib/theme/chartTheme';
+    import {GEO_CHOROPLETH_SCALE} from '$lib/theme/chartPalettes';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     // =========================================================================
     // Props
@@ -100,8 +104,7 @@
     onMount(() => {
         registerWorldMap();
         // Re-render on dark mode toggle
-        const observer = new MutationObserver(() => renderChart());
-        observer.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        const observer = onThemeClassChange(() => renderChart());
         return () => {
             observer.disconnect();
             cleanup();
@@ -259,7 +262,7 @@
             chartContainer.addEventListener('touchcancel', handleTouchPanEnd, {passive: true});
         }
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
 
         // Convert ISO A3 → GeoJSON country name + percentage (skip unclassified)
         const chartData = buildChoroplethData(data, iso3ToGeoName);
@@ -279,9 +282,9 @@
         const fixedLabelStyle = {
             show: true,
             formatter: labelFormatter,
-            color: isDark ? '#e2e8f0' : '#1e293b',
+            color: themed(GEO_MAP_COLORS.label, isDark),
             fontSize: 10,
-            backgroundColor: isDark ? 'rgba(15, 23, 42, 0.55)' : 'rgba(255,255,255,0.72)',
+            backgroundColor: themed(GEO_MAP_COLORS.labelBackground, isDark),
             borderRadius: 4,
             padding: [1, 3],
         };
@@ -294,9 +297,9 @@
                 realtime: false,
                 calculable: false,
                 inRange: {
-                    color: isDark ? ['#1e3a2f', '#22543d', '#276749', '#2f855a', '#38a169', '#48bb78'] : ['#f0fdf4', '#bbf7d0', '#86efac', '#4ade80', '#22c55e', '#16a34a'],
+                    color: themed(GEO_CHOROPLETH_SCALE, isDark),
                 },
-                textStyle: {color: isDark ? '#94a3b8' : '#64748b', fontSize: 11},
+                textStyle: {color: themed(CHART_NEUTRALS.dashboard.text, isDark), fontSize: 11},
                 left: 'left',
                 bottom: 10,
                 orient: 'horizontal',
@@ -313,15 +316,15 @@
                     scaleLimit: {min: 1, max: 5},
                     emphasis: {
                         label: fixedLabelStyle,
-                        itemStyle: {areaColor: isDark ? '#fbbf24' : '#f59e0b'},
+                        itemStyle: {areaColor: themed(GEO_MAP_COLORS.highlight, isDark)},
                     },
                     select: {
                         label: fixedLabelStyle,
-                        itemStyle: {areaColor: isDark ? '#fbbf24' : '#f59e0b'},
+                        itemStyle: {areaColor: themed(GEO_MAP_COLORS.highlight, isDark)},
                     },
                     itemStyle: {
-                        areaColor: isDark ? '#334155' : '#e2e8f0',
-                        borderColor: isDark ? '#1e293b' : '#cbd5e1',
+                        areaColor: themed(GEO_MAP_COLORS.land, isDark),
+                        borderColor: themed(GEO_MAP_COLORS.border, isDark),
                         borderWidth: 0.5,
                     },
                     // Always show translated fixed labels for countries that have data.

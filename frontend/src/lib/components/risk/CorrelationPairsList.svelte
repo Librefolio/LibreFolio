@@ -29,6 +29,7 @@
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
     import {buildLookup, pairKey, topPairs, type CorrelationPair} from './correlationHelpers';
     import {formatFixed} from '$lib/utils/core/formatFixed';
+    import {POLARITY_TONES} from '$lib/theme/toneClasses';
 
     interface Props {
         output: RiskCorrelationOutput;
@@ -61,7 +62,7 @@
      * views together.
      */
     function toneClass(pair: CorrelationPair): string {
-        return pair.value < 0 ? 'text-red-700 dark:text-red-300' : 'text-blue-700 dark:text-blue-300';
+        return pair.value < 0 ? POLARITY_TONES.correlationText.negative : POLARITY_TONES.correlationText.positive;
     }
 
     /** The short verdict next to the value: the names are on the line below, and the cell in the matrix. */
@@ -71,7 +72,7 @@
     }
 
     function tagClass(pair: CorrelationPair): string {
-        return pair.value < 0 ? 'bg-red-50 text-red-800 dark:bg-red-900/40 dark:text-red-200' : 'bg-blue-50 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200';
+        return pair.value < 0 ? POLARITY_TONES.correlationTag.negative : POLARITY_TONES.correlationTag.positive;
     }
 </script>
 

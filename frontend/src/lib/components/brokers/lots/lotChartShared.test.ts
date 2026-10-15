@@ -10,6 +10,9 @@
  * be unknown (`null`: no FX rate to the target currency). An unknown amount is
  * shown as «—», never hidden as if it were 0, and a sum with an unknown part is
  * unknown.
+ *
+ * `withAlpha` moved to `$lib/theme/colorAlpha` (colour workstream R, R-4), and
+ * its tests moved with it, unchanged: `src/lib/theme/colorAlpha.test.ts`.
  */
 import {afterEach, describe, expect, it, vi} from 'vitest';
 
@@ -21,7 +24,7 @@ vi.hoisted(() => {
 
 import {waitLocale} from 'svelte-i18n';
 import {currentLanguage} from '$lib/stores/app/language';
-import {addOrNull, clamp, formatAxisNumber, isUnknownOrNonZero, normalizeZero, resolveBrokerName, withAlpha} from './lotChartShared';
+import {addOrNull, clamp, formatAxisNumber, isUnknownOrNonZero, normalizeZero, resolveBrokerName} from './lotChartShared';
 
 describe('normalizeZero', () => {
     it('collapses negative zero to a plain zero', () => {
@@ -50,35 +53,6 @@ describe('clamp', () => {
     it('honours the bounds at the exact edges', () => {
         expect(clamp(0, 0, 10)).toBe(0);
         expect(clamp(10, 0, 10)).toBe(10);
-    });
-});
-
-describe('withAlpha', () => {
-    it('rewrites an hsl() color into hsla() with the alpha inserted literally', () => {
-        expect(withAlpha('hsl(210 68% 44%)', 0.5)).toBe('hsla(210 68% 44%, 0.5)');
-    });
-
-    it('appends a clamped alpha byte to a #rrggbb color', () => {
-        expect(withAlpha('#00ff00', 1)).toBe('#00ff00ff');
-        expect(withAlpha('#00ff00', 0)).toBe('#00ff0000');
-        // 0.5 * 255 = 127.5 → rounds to 128 → 0x80
-        expect(withAlpha('#112233', 0.5)).toBe('#11223380');
-    });
-
-    it('clamps an out-of-range alpha before scaling the hex byte', () => {
-        expect(withAlpha('#112233', 2)).toBe('#112233ff');
-        expect(withAlpha('#112233', -1)).toBe('#11223300');
-    });
-
-    it('pads a small alpha byte to two hex digits', () => {
-        // 0.02 * 255 = 5.1 → 5 → "05", not "5"
-        expect(withAlpha('#112233', 0.02)).toBe('#11223305');
-    });
-
-    it('returns unrecognised color shapes unchanged', () => {
-        expect(withAlpha('red', 0.5)).toBe('red');
-        expect(withAlpha('#abc', 0.5)).toBe('#abc');
-        expect(withAlpha('rgba(1,2,3,0.4)', 0.5)).toBe('rgba(1,2,3,0.4)');
     });
 });
 
