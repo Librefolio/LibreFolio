@@ -1351,3 +1351,126 @@
   - 1.3 avvisata prima del merge e dopo, con lo SHA. L è fermo fino a L-16, dopo T.
 - **19:36:** slot a T per l'E2E breve, dopo `AuthPageFrame`. Se T non è pronto, passa a DV.
 - **19:45, registri:** decisioni D-T22…D-T26 nel piano generale e in `analisi.md` §1 (D-T19 superata da D-T23); tabella delle corsie rifatta in testa a questo registro e nel piano; registro copiato nel repo.
+- **19:44, G su `settings/users` (A6b, `c576a0499`):** OK, in sola lettura. Merge simulato di `gallery.spec.ts` con E2b: pulito. Non bloccanti: commento «(G-10)» sbagliato; facoltativi «(admin)» nel titolo e `fixtures/galleryUsers.ts`. Correzione: il filtro `-f` è una regex (`-g`), quindi `-f "email \(admin\)|users - all languages"`. Girato alla 1.3. G resta in attesa di G-13.
+- **19:50, T-8c (`AuthPageFrame`) committato:** `87dbd494e` (genitore `e0c88bbc3`), 3 file.
+  - Il contenitore ha `pt-[calc(4rem_+_env(safe-area-inset-top,0px))] lg:pt-4`; la riga in un file di A va dichiarata all'ingresso.
+  - `header-scroll.spec.ts` ha 3 casi nuovi; esito 11 passati e 3 saltati per progetto; `auth` 33/33.
+  - Prima/dopo: `review/T8-preview/T8c-before-after.png`.
+- **19:50, DV, merge di base:** `d0065fb8e` (genitori `fb59c7bec` ed `e70be943b`), automatico, albero uguale alla simulazione.
+  - **Slot a DV per le prove 1–7:** prima `api sync`; i `STAND_INS` restano della base; galleria filtrata ai soli grafici, per il contact sheet del developer (D-T21).
+  - **Ordine d'ingresso previsto:** DV prima di T, se il developer approva l'aspetto. T allinea i 6 `STAND_INS` e stringe la baseline (79 file sotto il record) al suo merge di base.
+- **19:52, anteprima 6160 → T-8c:** `preview6160d` fermato; ramo nuovo `preview-colori-t8c` = `87dbd494e`; `designer_live.sh` staccato, shellId `preview6160e`, log `/tmp/libreFolio_preview6160e.log`. La lista `cosa-guardare-t8b.md` è aggiornata.
+- **19:59, 1.3: entra CP2b di H.** `main.py` è diviso in `services/platform/{app_lifespan,lifecycle,middleware,static_site,database_bootstrap}.py`; rotte, middleware e OpenAPI restano identici (test `services app-lifecycle`); merge di `7fa313269` sopra `e70be943b`, senza file nostri. `main.py` non è più congelato.
+  - **Per DV**, validato su `d0065fb8e`, cioè prima di CP2b: nessuna sovrapposizione con i suoi file del backend (`utilities.py`, `schemas/utilities.py`, `sector.py`, `derived_views.py`). All'ingresso basta un controllo leggero sulla revisione unita: `api utilities` e `test_runner` sui settori.
+  - Anteprima 6160 (worktree proprio, `87dbd494e`) non toccata.
+- **20:00, CP2b entrato:** `dev_release2` = `4fb017a9a` (merge di `7fa313269` sopra `e70be943b`); registri `9b82187f6`.
+- **20:12, Y8 (1.3), controllo in galleria:** scelta la strada 1. Y8 entra prima di G-13; la coppia di G-13 fa da controllo di stabilità; G manda a Y il sottoinsieme Dashboard/Brokers/Assets/FX da rivedere.
+  - **Perché:** il diff di Y8 non si isola, perché DV e T cambiano proprio quelle pagine.
+  - **Y8 ∩ DV:** nessun file di codice, solo il backlog. Contatto semantico possibile sui moduli del tema dei grafici: chi entra per secondo rifà i test dei grafici sul fuso.
+- **20:23, 1.3: entra B8** (token del pannello per scaricare i backup; merge di `24d643df6` sopra `b4597efad`): solo backend, test, runner backend, `.env.example` e journal; nessun file nostro. Lo scatto `settings/backup-ready` di B arriva dopo, e G lo rivede.
+- **20:31, 1.3: entra A6b** (scheda Users; merge di `daa0cdee2` sopra `6102d5097`). File nostri: `gallery.spec.ts` (scatto `settings/users`, approvato da G) e `_frontend_utility.py` (solo voci). `ProfileTab` -69 righe: la sua riga nella baseline dei colori scende, quindi **T la verifica al suo merge di base** (`--resolve` e righe `~`). Con A6b dentro ci sono tutte e tre le schede: G-13 parte dopo l'ingresso di T.
+- **20:33, A6b entrato:** `dev_release2` = `09ca36b9d` (registri `e4edb39a2`); `theme-roles --check` pulito, con 80 file sotto il record. Ci sono tutte e tre le schede.
+- **20:41, 1.3: entra CP-4c di J** (`a180ea0b7`, `financial_math/portfolio/period.py`, valori identici; registri `a744e5f89`). Nessun file nostro. Simulazione DV → target `a744e5f89`: pulita (albero `efbcbbc94`); in comune solo il backlog e `_frontend_utility.py`, `derived_views.py` non toccato.
+- **20:42, DV, prova 7** (galleria filtrata dei grafici, 20:29–20:38): 12 rossi su 18, tutti da saturazione.
+  - `uptime`: load 57 / 89 / 87 su 10 core, con 6 corsie della 1.3 attive: E, Y, H, J, X, Z.
+  - Sintomi: `auth-loading` 30 s, header che scorre ancora, timeout di clic e screenshot. Nessuna asserzione.
+  - Le prove 1–6 sono verdi.
+  - **Chiesta alla 1.3 una finestra tranquilla di ~15 min** per il rilancio dei 12 (`--workers 2 --no-populate`). DV aspetta il mio via.
+  - Se il dashboard mobile resta fermo anche a carico basso, DV lo indaga come difetto suo.
+- **20:42, DV:** il rilancio dei 12 era già partito alle 20:40 (8 desktop, poi 4 mobile, 2 worker): lo finisce, con `uptime` prima e dopo ogni pezzo. La pausa della 1.3, se arriva, lo copre.
+- **20:45, 1.3:** lo scatto `settings/backup-ready` di B (`a675d2eb2`) è girato a G per la revisione in sola lettura, compreso il dubbio sul fuso orario (`timezoneId` non fissato nella galleria). Entra con B2a.
+- **20:46, 1.3:** finestra tranquilla accettata. A, B, H e J sono fermi; X, E, Z e W finiscono un comando breve; Y chiude la spec in corso. Il «corsie ferme» arriva entro ~5 min.
+- **20:47, 1.3:** pausa confermata, nessun nuovo lancio fino alla loro ripresa. Avvisato DV: i rossi del pezzo desktop si rilanciano dentro la finestra; quando DV finisce, libero la 1.3.
+- **20:49, 1.3:** corsie ferme dalle 20:49:18 (nessun processo nei 9 worktree, load 47 e in discesa). Restano ferme fino al mio «galleria finita», al massimo fino alle 21:05.
+- **20:53, Y7 (1.3), tabelle sul telefono:** tocca `DataTable.svelte` e forse `DataTableColumnHeader.svelte`. Solo CSS di posizione, 0 classi di palette, sfondi fissi su `--lf-cmp-datatable-*`.
+  - **Risposte:** nessun lavoro nostro su quei file (0 in T, DV, L e G); W6 è l'ultima ondata, nessun vincolo di tempo.
+  - **Regola «chi parte prima»:** T converte dopo l'ingresso di Y7, e prima chiede a me.
+  - Riga `~split` di `DataTable` nella baseline: basta `--check` pulito nell'handoff di Y7.
+  - **Galleria d'ingresso:** solo mobile, filtrata (regex), nel nostro slot dopo G-13, con una finestra tranquilla; confronto col riferimento di G-13, e G legge il diff.
+- **20:53, DV, prova 7 bis:** dentro la finestra tranquilla, 12 verdi su 12: desktop 8/8 in 7,4 min, mobile 4/4 in 2,9 min; `live_price_check` pulito; il dashboard mobile non si blocca più.
+  - Verdetto: era l'ambiente. Esempio da ricordare: una galleria con le corsie della 1.3 attive (load 80+) dà falsi rossi.
+  - **«Galleria finita» alla 1.3, che riparte.** L'handoff di DV, con il contact sheet, è in arrivo.
+- **20:56, G su `settings/backup-ready` (B, `a675d2eb2`):** OK in sola lettura; merge simulato contro `a744e5f89` pulito. Girato alla 1.3.
+  - **Le prove dei 3 scatti nuovi sono solo statiche** (`--list`). Proposto un doppio lancio filtrato quando B2a è nel target, nel nostro slot, con una finestra tranquilla: G nella 6153, `-f "email \(admin\)|backup ready \(admin\)|users - all languages"`, `--no-populate`, `-w 2`, ~25 min. Chiesto alla 1.3 se E e A li hanno eseguiti.
+  - **G-14 (fuso della gallery):** committato sul ramo di G, `8b9c25ac5`; entra con G-13. **Decisione del developer in sospeso:** `test.use({timezoneId})` in `gallery.spec.ts`, consigliato `Europe/Rome` (nessuno scatto locale cambia; la CI pubblica oggi in UTC).
+- **20:58, la 1.3 conferma:** E e A non hanno mai eseguito i loro scatti, solo `tsc` e `--list`. Lo scatto di B è entrato da solo: `ab2ddf86e` (merge di `9c3e6be47` sopra `a744e5f89`). Ora i 3 scatti nuovi sono nel target.
+- **20:59, G, merge di base:** `df20d8bf1` (genitori `8b9c25ac5` e `ab2ddf86e`), pulito. Via al doppio lancio filtrato dei 3 scatti nella 6153, a `-w 2`; finestra tranquilla della 1.3 dalle 21:00 fino al mio «galleria finita» (stima 21:25). Eventuali rossi vanno ad A, B o E.
+- **21:05, DV, S10 finito** sulla revisione `d0065fb8e`:
+  - `front check` 0/0, con una riga di tipo in `CorrelationHeatmap.test.ts` aggiunta da TA-2;
+  - `core-unit` 5.243, `component-unit` 3.524, `allocation-unit` 173, `risk-levels-component` 273, `api utilities` 9;
+  - E2E: dashboard 27, risk 38, broker-sharing 17, utilities 16;
+  - galleria filtrata: 22 scatti, 352 PNG, verdi dopo il rilancio a carico basso.
+  - **Commit `4321da3e6`** (2 path). **Merge di base `31d2b15d8`** sopra `ab2ddf86e`, pulito: il target non tocca le aree di DV.
+  - **Contact sheet:** `LibreFolio_visual_review/snapshots/dv-charts-d0065fb8e-sheet/index.html`. Controllato da me: GR1 regge, ETF blu e Crowdfunding verde acqua uguali tra «Ora» e storico; la cornice è ancora quella vecchia, perché T non è entrato.
+  - **Ingresso:** dopo l'OK del developer sull'aspetto (D-T21) e un controllo leggero sul fuso (`api sync`, `front check`, `allocation-unit`, file di `lib/theme`, `api utilities`, `sector-normalization`), da fare dopo la galleria di G.
+  - **Voci di `CHANGELOG.md` da girare alla 1.3** all'ingresso: Changed (colori fissi per tipo e settore, Liquidità, sfumature, mappe, semi-ciambella e correlazione col tema) e Fixed (stesse emoji nella torta e nello storico).
+  - **Giro 3:** nello storico geografico il primo paese prende l'ardesia (`#475569` / `#94A3B8`), a ΔE00 12,8 / 15,2 da «Non classificato» nelle aree traslucide.
+- **21:04, 1.3: entra CP10 di X** (impostazioni dei plugin; merge di `5dbdd5c96` sopra `ab2ddf86e`): backend, migrazione 007, doc e nav di `mkdocs.yml`; nessun file nostro né del frontend. È solo un commit dentro la finestra tranquilla. **Nota:** la migrazione 007 vale per i dati dell'anteprima 6160 al prossimo riavvio e per le corsie che fanno il merge di base.
+- **21:04, CP10 entrato:** `dev_release2` = `9fb7fe6c9`, registri `86da642c3`.
+- **21:08, G, doppio lancio dei 3 scatti nuovi:** 6/6 verdi in tutte e due le run, 48 PNG per run, `live_price_check` 0. Diff: 47 identici e 1 cambiato, che G sta analizzando. **«Galleria finita» alla 1.3** (riparte). DV ha il via per il controllo leggero sul fuso `31d2b15d8`.
+- **21:12, handoff di G sul doppio lancio:** i 3 scatti sono verdi e deterministici, 6/6 in tutte e due le run.
+  - L'unico cambiato (`desktop/en/light/settings/users`, 9 px) è il residuo noto degli angoli del logo, che le maschere di G-13 coprono.
+  - **Difetto del prodotto, G-15:** la barra delle schede di Settings trabocca; in spagnolo a 1280 px «Correo» esce dal bordo (`overflow-hidden` della card, `TabBar` non scorre). Rimedi: `shrinkLabelsToFit`, scorrimento, etichetta più corta. **Girato alla 1.3:** meglio prima di G-13.
+  - Facoltativo per A: `frameTarget` sulla riga aperta di `settings/users` su mobile.
+- **21:13, journal di G nel target:** G-15 committato (`ee0445f95`); `dev_release2` = **`b09776a3d`**, merge di `ee0445f95` sopra `86da642c3`, uguale alla simulazione, solo la sezione G del backlog (G-14 e G-15). 1.3 informata.
+- **21:15, 1.3:** G-15 dato ad A come lotto piccolo prima di A6d: `shrinkLabelsToFit` in Settings, o lo scorrimento se a 640 px non basta, con prima un test a viewport stretta in spagnolo. Entra prima di G-13, con avviso. Ad A girato anche il `frameTarget` facoltativo.
+- **21:19, DV:** controllo leggero sul fuso `31d2b15d8` tutto verde (`api sync`, `front check` 0/0, `allocation-unit` 173, file di `lib/theme` e `sectorStore`, `api utilities` 9, `sector-normalization` 73). Il journal è committato. **Pronto per l'ingresso, aspetta l'OK del developer sull'aspetto (D-T21).**
+- **21:30, il developer chiede una review unica** di T-8b, T-8c e DV, con un solo merge.
+  - **Merge fatti da me nel ramo di T, tutti e due puliti e uguali alla simulazione:** `620476853` (target `4294ba12a` sopra `87dbd494e`) e **`ec1ddba96`** (DV `ebd1dfff6`). `theme-roles --check` è pulito, con 82 file sotto il record.
+  - **T è il proprietario d'integrazione:** allinea i 6 `STAND_INS`, verifica e stringe la baseline, e rifà la validazione combinata nello slot (6155).
+  - DV resta FROZEN. 1.3 avvisata: Y9, Y10 e Y4b dopo l'ingresso unico; voci del CHANGELOG all'avviso di merge.
+  - **Anteprima 6160:** ramo `preview-colori-t8c-dv` = `ec1ddba96`, shellId `preview6160f`. Lista unica in `cosa-guardare-t8b.md`.
+- **21:37, 1.3: entra Z6b parte 2** (watchdog dello spegnimento collegato all'avvio; merge di `ce1cadd9d` sopra `f98c20f1b`): backend, test, runner e journal; nessun file nostro. Da adesso i server di prova si spengono entro 8 s in ogni caso. T rifarà il merge di base all'ingresso.
+- **21:37, 1.3:** OK all'ingresso insieme di T e DV; i testi del CHANGELOG di T e DV glieli mandiamo alla fusione e li scrivono loro. G-15 di A in corso, ci avvisano all'ingresso. **Da preparare:** voci di T (proposta di T nell'handoff) + quelle di DV (già proposte).
+- **21:38, 1.3: entra E3 con E3s** (link nelle email; la «password dimenticata» resta spenta fino ad A6e; merge di `30c27d6b9` sopra `4294ba12a`). Frontend: solo 3 chiavi in `i18n/email`, senza `<` né `>`; non tocca `ForgotPasswordCard` né `i18n/auth`, quindi niente contro T-8b.
+- **22:01, T, validazione combinata: rosso con causa trovata.**
+  - E2E `dashboard` 4/27 e `privacy-masking` 7/18 rossi, tutti su `data-scroll-state` `pinned` (ricevuto `visible`). Con T-7 l'header si blocca solo con `:focus-visible`, mentre i test fanno `toggle.focus()` dopo un clic.
+  - **OK mio:** il prodotto resta com'è; test-author scrive l'aiuto `focusHeaderControlByKeyboard` in `e2e/fixtures/` (`focus()` + `Tab` + `Shift+Tab`), usato nelle 6 chiamate (`dashboard.spec.ts` 983/994, `privacy-masking.spec.ts` 163/175, `gallery.spec.ts` 1076/1461).
+  - **Prove:** T rilancia `dashboard`, `privacy-masking` e una galleria filtrata `-f "dashboard privacy mode"` a `-w 1` nella 6155.
+  - Avvisati la 1.3 (spec portfolio; nessun altro worktree li tocca) e G (galleria). A ha modifiche aperte in `gallery.spec.ts` intorno alla 2196: nessuna sovrapposizione.
+- **22:04, 1.3:** OK, nessun loro lotto aperto tocca `dashboard.spec.ts` o `privacy-masking.spec.ts` (Y è su Y7). La regola dell'aiuto `focusHeaderControlByKeyboard` è girata a Y e ad A.
+- **22:15, T:** per la galleria accoglie la proposta di G: nessun focus da tastiera, quindi niente anello. `setPrivacyFromHeader` clicca col mouse con l'header `visible`, poi 8 px giù e 8 su; la riga 1461 diventa `visible`. Gli spec portfolio tengono l'aiuto da tastiera.
+- **22:08–22:20, review unica del developer** sull'anteprima `ec1ddba96`:
+  - **Esito:** tema e cornice OK; il meccanismo dei grafici OK, ma la lista dei colori no. Verdi in torte, mappe e storico; Liquidità salvia inattesa; correlazione vicino allo 0 in scuro; PAC grigio e verde.
+  - **Verificato:** DV ha applicato alla lettera le tabelle della designer, con 6 voci verdi, verde acqua o ciano più la scala della mappa a 6 verdi; il centro della correlazione è il pannello (1,1:1 sulla card). Il PAC era un errore della mia lista: `PAC_EXPOSURE_BAR_COLORS` vecchio (`#1A4031` / `#00D681`).
+  - **Pacchetto per la designer:** `package/grafici-giro3-2026-10-15.zip` (HTML, md, 12 schermate), con le domande 2.1–2.9 e la richiesta di una lista definitiva.
+  - **Lista tecnica nel piano generale:** TD-1 PAC (DV), TD-2 KPI ed effetto tempi (T, W3/W5), TD-3 card dell'allocazione (W5), TD-4 ondate.
+  - **Mandato del developer:** «mergia il lavoro fatto, correggi gli aspetti tecnici e avanza sulle altre wave» → l'ingresso appena la validazione combinata di T è verde.
+- **22:21, 1.3, dichiarazione per Y7:** in `_frontend_utility.py` 2 funzioni e 2 `add_test` (`datatable-mobile` e `datatable-resize`), solo aggiunte. In `DataTable.svelte` 5 `data-testid` nuovi; `--check` pulito e riga `~split` invariata. Spec nuove `e2e/layout/datatable-{mobile,resize}.spec.ts`. Nessuna risposta richiesta.
+- **22:22, 1.3: in fila E3p** (sonda dei link nella scheda Email: `EmailSettingsTab.svelte` solo ruoli, `emailLinks.ts`, 8 chiavi i18n, 1 riga nel runner) **e G-15 di A** (`TabBar.svelte` con prop `scrollable` facoltativa; classi colore da template literal ad array, stessi token, `--check` pulito; Settings; `frameTarget` in `gallery.spec.ts` ~2196; E2E `settings` a 1280/640 px in spagnolo). **Controllo:** T non tocca `TabBar`; in `gallery.spec.ts` T è sulle righe 1076/1461, A sulla ~2196. Al merge di base finale prima dell'ingresso T li prende tutti e due.
+- **22:24, entrati:** E3p `e54ae96bb` e G-15 `369204ab5`; registri `2415faf33`. `--check` pulito, con 80 file sotto il record. G-13 ora aspetta solo l'ingresso di T+DV.
+- **22:25, 1.3:** J (CP-4d, MWRR verificato) rigenera `eur_only_golden.json` (8 righe `mwrr_*`) ed entra prima di T+DV. Girato a T: al merge di base finale rigenera il golden sulla revisione unita (diff vuoto se il merge è automatico; il rigenerato se c'è conflitto).
+- **22:30, decisioni su TD-1 (DV):**
+  - neutro di «ideale» = `--lf-text-secondary`, da rimisurare su T-8b, con un test ΔE00 ≥ 10 da ogni categoria;
+  - il ruolo in `ChartRole` lo aggiunge DV, poi B4 di T parte da lì;
+  - sottotipi con le sfumature GR4;
+  - legenda: «ideale» pieno, «reale» bordato;
+  - galleria (a): G-16, scatto `tools/pac-result-exposures` scritto da G.
+  - DV parte dopo l'ingresso, sulla base nuova.
+- **22:31, G:** merge di base `e4dceabe1` (sopra `2415faf33`), pulito; via a G-16.
+- **22:32, T:** galleria filtrata `dashboard privacy mode` a 1 worker con load 82; chiesta alla 1.3 una finestra di ~10 min.
+- **22:33, T:** galleria filtrata `dashboard privacy mode` verde, desktop 8/8 nella finestra e mobile; il primo giro desktop era andato in timeout all'ottavo scatto per il carico (load 82). «Galleria finita» alla 1.3. L'handoff completo della validazione combinata è in arrivo.
+- **22:33, T, handoff della validazione combinata: tutto verde.**
+  - Numeri: `front check` 0/0, `core-unit` 5.378, `component-unit` 3.675, `onboarding` 449, `allocation-unit` 173, `risk-levels-component` 273.
+  - E2E: `theme-roles`, `header-scroll`, `auth`, `connection-security`, `dashboard` 27/27, `privacy-masking` 18/18.
+  - Lab 548 + 15; backend `pwa-assets`, gate i18n, `api utilities`; galleria filtrata OK.
+  - **Commit:** A `690472ce3` (`STAND_INS` sul `tokens.css` unito; baseline `--update`, m1 11.185 → 11.026, m2 1.562 → 83, le 8 righe `~` identiche) e B `54b0076e4` (aiuto `headerKeyboardFocus.ts`; galleria con il clic e la soglia di scroll).
+  - CHANGELOG di T pronto (Changed ×4, Fixed ×2).
+  - **Piano delle ondate approvato:** W3-a (TD-2: `SIGN_TEXT`, `SIGN_BAR`, `timingEffectColor`), poi TD-3, W3-b, W3-c+W3-d, poi W1 e W2 nei gruppi I1–I6.
+- **22:36, 1.3:** entrato F36 di W (`434af2925`, registri `e05eaf17d`).
+- **22:37, merge di base finale di T:** `2ce572779`, genitori `54b0076e4` ed `e05eaf17d`, pulito e uguale alla simulazione; `--check` pulito. T fa il controllo leggero, poi l'ingresso.
+  - Alla 1.3: ordine con J per il golden (chi entra per secondo lo rigenera), e TD-3 su `AllocationPanel` (zona di Y10): chi parte prima?
+- **22:40, 1.3:** J CP-4d entrato (`40f44f364`, registri **`45499dec4`**), quindi il golden lo rigeneriamo noi. **TD-3 lo fa T dopo W3-a;** Y10 parte dopo, e non tocca `AllocationPanel.svelte` finché TD-3 non entra.
+- **22:41, secondo merge di base di T:** `dd4be16ad`, genitori `2ce572779` e `45499dec4`, uguale alla simulazione. Il golden si è unito da solo (contro il target, solo le 4 righe 💰). J cambia `schemas/portfolio.py` e l'i18n `dataQuality`, quindi T rifà il controllo leggero su `dd4be16ad`: `api sync`, `front check`, gate, i18n, golden rigenerato con diff vuoto, E2E.
+- **22:46, 1.3: entra Z2a** (middleware di attività, solo backend, 10 file, nessun file di colore). All'ingresso di T+DV simulo la fusione e controllo che non ci siano sovrapposizioni.
+- **22:47, Z2a entrato:** `8b2d4782d`, registri **`3c72334e3`**.
+- **22:48, direttiva del developer (va a dormire), testuale:**
+  - «cerca di migrare tutti i componenti che riesci, via via che lo fai, crea un nuovo file di cosa guardare»;
+  - «se anche i colori non andassero bene, con la desiner possiamo migliorarli poi, il tuo obiettivo è finire la migrazione e fattorizzazione dei colori, cercando comunque di seguire le direttive della designer».
+  - **Applicazione:** stanotte i lotti validati entrano senza l'approvazione per lotto (D-T21 sospesa per la notte, da registrare come D-T27); la revisione si fa domattina con `review/notte-15-16/cosa-guardare.md`, l'anteprima 6160 aggiornata e la galleria di fine notte confrontata con G-13. Niente push.
+- **22:55, T+DV nel target:** `dev_release2` = **`a0915bef9`**, merge `--no-ff` di `dd4be16ad` sopra `3c72334e3`, uguale alla simulazione; `--check` pulito.
+  - Controllo leggero di T su `dd4be16ad`: `api sync`, `front check` 0/0, gate 237, `i18n check` stretto (4.632 chiavi), golden rigenerato con diff vuoto, E2E `theme-roles` e `header-scroll`.
+  - Righe in file di A, Y, J e nei test dichiarate alla 1.3, con le voci del CHANGELOG (T e DV), che scrive la 1.3.
+  - **In avanti veloce su `a0915bef9`:** T, DV e L. Via a T (W3-a), DV (TD-1) e L (L-16). G sta scrivendo G-16; poi G-13.
+- **23:00, 1.3:** CHANGELOG di T+DV scritto (`2be2f067c`). Finestra lunga per G-13 accettata, da dopo le 23:15 (fine dell'`all-backend` di X); durante la finestra, solo l'`all-backend` di A sotto `nice` a 2 worker.
+- **23:00, registri:** D-T27 e la sezione «Review unica» nel piano generale, righe T/DV/anteprima della tabella delle corsie, registro copiato.
