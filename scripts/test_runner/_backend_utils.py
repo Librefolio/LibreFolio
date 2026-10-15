@@ -241,6 +241,15 @@ def utils_gate_event_loop_io(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Event loop BRIM I/O gate tests", verbose=verbose)
 
 
+def utils_gate_aiosqlite_leak(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the aiosqlite leak guard the shared conftest runs around every backend test (J-6)."""
+    print_section("Utils: aiosqlite Leak Gate")
+    print_info("Testing: backend/test_scripts/test_aiosqlite_guard.py, the autouse _aiosqlite_leak_guard of backend/test_scripts/conftest.py")
+    print_info("Tests: C-93 shape reported until disposed, closed connections tracked but not reported, other threads untracked, no attribution before a window, exceptions at nodeid boundaries, loud failure without aiosqlite's _connection, a child pytest under the real conftest")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_aiosqlite_leak_gate.py", test_names)
+    return run_command(cmd, "aiosqlite leak gate tests", verbose=verbose)
+
+
 def utils_tools_wire(verbose: bool = False, test_names: list = None) -> bool:
     """Test bounded Tool JSON encoding and sanitized validation errors."""
     print_section("Utils: Tool Wire")
@@ -376,7 +385,7 @@ Tests for utility modules and helper functions:
     add_test(cat, "datetime", utils_datetime, name="Datetime Utils", desc="Timezone-aware datetime helpers")
     add_test(cat, "day-count", utils_day_count, name="Day Count Conventions", desc="ACT/365, ACT/360, ACT/ACT, 30/360")
     add_test(cat, "geo-utils", utils_geo_utils, name="Geographic Utils", desc="ISO-3166-A3 normalization, weights")
-    add_test(cat, "version", utils_version, name="Version Utils", desc="get_git_version, get_version_info")
+    add_test(cat, "version", utils_version, name="Version Utils", desc="get_git_version: LF_APP_VERSION when set, else git describe in a checkout, else VERSION, else unknown; get_version_info")
     add_test(
         cat,
         "coverage-js-adapter",
@@ -511,6 +520,17 @@ Tests for utility modules and helper functions:
         desc="No async def under backend/app/api/v1 calls a synchronous function of backend/app/services/brim/brim_provider.py (its top-level defs and their aliases) directly: such I/O runs on the event loop and must go through await asyncio.to_thread(fn, ...); a reference handed to to_thread, the body of a nested def or lambda, an awaited coroutine of the module and a sync handler are allowed; every import form is followed (from-import, import as, plain, relative, lazy, a function imported by name); the detector is proven both ways on in-memory sources, and the scan must reach an API module that imports the store",
         # ast and filesystem reads of the repository's sources, never imported; the control
         # cases are in-memory strings. No DB, no server, no network, no writes.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "gate-aiosqlite-leak",
+        utils_gate_aiosqlite_leak,
+        name="aiosqlite Leak Gate",
+        desc="No backend test leaves open an aiosqlite connection it created: the shared conftest's autouse guard tracks every connection born in the main thread during a test (weak references, creation stack followed across SQLAlchemy's greenlet) and fails that test at its own teardown if one is still open and not excused by the explicit, reasoned AIOSQLITE_LEAK_EXCEPTIONS (empty); proven as presences: the C-93 shape (in-memory engine queried, session closed, engine not disposed) is reported with a stack reaching the test and cleared by dispose; connections closed by async with, dispose or a NullPool session are tracked but not reported; a connection born in another thread is not tracked, one born before a window is not attributed to it; an exception excuses its own nodeid at a boundary only, and an entry without a prefix or a reason is refused; a tracked object without aiosqlite's private _connection fails loudly; install wraps once and the conftest's window surrounds every test; a child pytest loading the real conftest errors the leaking test, and only it, at its teardown",
+        # Private in-memory aiosqlite databases, a worker thread of its own, and a child pytest that loads
+        # the real conftest on a synthetic file under tmp_path: no lane DB beyond the conftest's own session
+        # read (as in every pytest process), no server, no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(

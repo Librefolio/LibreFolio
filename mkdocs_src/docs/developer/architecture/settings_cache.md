@@ -46,7 +46,7 @@ rows — clears `portfolio_layer2` and `portfolio_blob` (see
 
 ### 🗂️ Caches registered today
 
-Caches register lazily at import time, so the list below is the full registry as of 2026-09-03
+Caches register lazily at import time, so the list below is the full registry as of 2026-10-15
 (grep `get_ttl_cache(` under `backend/app` to re-derive it):
 
 | Cache | maxsize | TTL | Owner |
@@ -57,6 +57,7 @@ Caches register lazily at import time, so the list below is the full registry as
 | `asset_current_fetch` | 300 | 2 min | `assets/core.py` |
 | `asset_metadata_fetch` | 200 | 30 min | `assets/core.py` |
 | `fx_provider_responses` | 200 | 5 min | `fx/sync.py` |
+| `fx_provider_currencies` | 32 | 24 h | `fx/catalog.py` — supported currencies per FX provider, for `GET /fx/providers`; a fallback after a failed fetch is kept 5 min |
 | `portfolio_blob` | 30 | 24 h | `financial_math/portfolio/engine.py` |
 | `portfolio_layer2` | 20 | 30 min | `portfolio_service` |
 | `portfolio_wac` | 200 | 1 h | `portfolio_service` |
@@ -71,6 +72,10 @@ Two module-local caches stay outside the registry, so the admin panel does not l
 image-preview cache (`PreviewCache` in `backend/app/api/v1/uploads.py`, sized by
 `PREVIEW_CACHE_MAX_MB`, 1 h TTL) and the link-finder's 15-minute query cache in
 `backend/app/services/assets/web_link_finder.py`.
+
+The last currency list each FX provider returned is kept outside the registry too, in a module-level
+dict of `fx/catalog.py` that no clear empties: after a clear of `fx_provider_currencies`, a fetch that
+fails still answers with that list.
 
 ## 🌐 The three admin endpoints
 

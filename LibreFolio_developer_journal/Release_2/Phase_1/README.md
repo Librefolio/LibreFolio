@@ -27,14 +27,14 @@ Ramo di integrazione: `dev_release2` (condiviso con il programma colori). Corsie
 | Lettera | Sessione | Corsia | Data-dir | Ramo | HEAD | Stato |
 |---|---|---|---|---|---|---|
 | — | Coordinatore 1.3 (in place) | 6180 | `/tmp/librefolio-r13-main` | `dev_release2` | — | attivo |
-| H | H - Piattaforma | 6181 | `/tmp/librefolio-r13-h` | `e-alfy-h-piattaforma` | `1b3eb54c7` | ✅ CP1 (`6a605904c`), CP2a (`60f8a35ce`, pacchetto `config/`), CP3 (`d08d9358f`: segreti da `*_FILE`, chiave d'istanza, controlli all'avvio) il lotto `web_link_finder` (`9dda5ccd9`) e CP4 (`1b3eb54c7`: router di sistema per risorsa, `/system/instance`, area degli avvisi) integrati; in corso CP5; CP2b dopo il commit del coordinatore su `main.py` (sessione `8490facf`) |
-| A | A - Account e accessi | 6182 | `/tmp/librefolio-r13-a` | `e-alfy-a-account-e-accessi` | `dbf89cdd5` | ✅ A1 (`769cc31cb`), A2 (`76e61889b`, frontend in `lib/features/`), A3 (`90491071d`: registro delle schede, O-15, K-17, L12) A4 (`e476d2ed4`: migrazione 005, token monouso) e A4b (`dbf89cdd5`: versione di sessione `sv`) integrati; in corso A5 (sessione `119ed166`) |
-| X | X - Plugin asset e ricerca | 6183 | `/tmp/librefolio-r13-x` | `e-alfy-x-plugin-asset-e-ricerca` | `7f4618494` | ✅ CP1 (registri per famiglia), CP2a (`services/assets/`, senza shim, `64a5a3fe7`), CP2b (`92b42d796`: asset per tema, router per risorsa, eventi nei loro moduli) CP3 (`8000aba5a`: cambi per tema in `services/fx/` e `api/v1/fx/`) CP3b (`63a1f675c`: test dei cambi senza rete, W-B9, W-B13, X-R5, X-R7) e CP4 (`7f4618494`: schemi degli asset per tema) integrati; in corso J-5, poi X-R8 (sessione `ad5f37c8`) |
-| W | W - Import e transazioni | 6184 | `/tmp/librefolio-r13-w` | `e-alfy-w-import-e-transazioni` | `62c964242` | ✅ W1 e W2 (`998fd2701`), I1 (`dc7e4e48e`: V-23, C-65b, L5, C-79/C-3) K1 (`d915c869f`: O-12, C-89, V-38, P-15) e W4 CP6 (`155d9b050`, BRIM in `services/brim/`) W7 (`1cd7300f3`, `schemas/transactions/` per tema) e K2a (`62c964242`: rifiuti a codice, L6) integrati; E1 in preparazione; CP7, W3 e W5–W6 dopo un commit del coordinatore su `brokers.py` e `uploads.py` (sessione `e71e0e34`) |
-| J | J - Numeri e analisi | 6185 | `/tmp/librefolio-r13-j` | `e-alfy-j-numeri-e-analisi` | `c75f08101` | ✅ CP-1 (`e1fbc801f`: PAC per tema in `schemas/pac_allocator/` e `services/pac_allocator/`, guardia dei confini D-J18) C-93 (`c412f8dad`) e G-8 (`c75f08101`) integrati; CP-2 e seguenti aspettano D-J1, D-J2, D-J3, D-J6 e D-J15; intanto J-6 (sessione `4c677a01`) |
+| H | H - Piattaforma | 6181 | `/tmp/librefolio-r13-h` | `e-alfy-h-piattaforma` | `9deb0ea08` | ✅ CP1 (`6a605904c`), CP2a (`60f8a35ce`, pacchetto `config/`), CP3 (`d08d9358f`: segreti da `*_FILE`, chiave d'istanza, controlli all'avvio), il lotto `web_link_finder` (`9dda5ccd9`), CP4 (`1b3eb54c7`: router di sistema per risorsa, `/system/instance`, area degli avvisi) e CP5a (`9deb0ea08`: `/system/ready`, `/system/info` minimo senza sessione, R2) integrati; CP5b (frontend, versioni a 0.0.0) dopo la finestra della galleria, poi CP6; CP2b dopo il commit del coordinatore su `main.py` (sessione `8490facf`) |
+| A | A - Account e accessi | 6182 | `/tmp/librefolio-r13-a` | `e-alfy-a-account-e-accessi` | `dbf89cdd5` | ✅ A1 (`769cc31cb`), A2 (`76e61889b`, frontend in `lib/features/`), A3 (`90491071d`: registro delle schede, O-15, K-17, L12), A4 (`e476d2ed4`: migrazione 005, token monouso) e A4b (`dbf89cdd5`: versione di sessione `sv`) integrati; in corso A5: A5a (backend, migrazione 006) e A5b (frontend), che entrano insieme dopo la finestra della galleria (sessione `119ed166`) |
+| X | X - Plugin asset e ricerca | 6183 | `/tmp/librefolio-r13-x` | `e-alfy-x-plugin-asset-e-ricerca` | `173ba19e2` | ✅ CP1 (registri per famiglia), CP2a (`services/assets/`, senza shim, `64a5a3fe7`), CP2b (`92b42d796`: asset per tema, router per risorsa, eventi nei loro moduli), CP3 (`8000aba5a`: cambi per tema in `services/fx/` e `api/v1/fx/`), CP3b (`63a1f675c`: test dei cambi senza rete, W-B9, W-B13, X-R5, X-R7), CP4 (`7f4618494`: schemi degli asset per tema), J-5 (`743fca514`) e X-R8 (`173ba19e2`: elenchi delle valute dei fornitori in cache) integrati; in corso FE5b, il taglio di `AssetModal` (sessione `ad5f37c8`) |
+| W | W - Import e transazioni | 6184 | `/tmp/librefolio-r13-w` | `e-alfy-w-import-e-transazioni` | `d226bc69e` | ✅ W1 e W2 (`998fd2701`), I1 (`dc7e4e48e`: V-23, C-65b, L5, C-79/C-3), K1 (`d915c869f`: O-12, C-89, V-38, P-15), W4 CP6 (`155d9b050`, BRIM in `services/brim/`), W7 (`1cd7300f3`, `schemas/transactions/` per tema), K2a (`62c964242`: rifiuti a codice, L6) ed E0 (`d226bc69e`: eventi distinti per data e tipo, X-R9 per la parte di W, W-B15) integrati; in corso FE8a, i tagli delle tre modali delle transazioni, a pezzi (Form, Bulk, Wizard); E1 aspetta le decisioni 20–23; CP7, W3 e W5–W6 dopo un commit del coordinatore su `brokers.py` e `uploads.py` (sessione `e71e0e34`) |
+| J | J - Numeri e analisi | 6185 | `/tmp/librefolio-r13-j` | `e-alfy-j-numeri-e-analisi` | `e2cb55054` | ✅ CP-1 (`e1fbc801f`: PAC per tema in `schemas/pac_allocator/` e `services/pac_allocator/`, guardia dei confini D-J18), C-93 (`c412f8dad`), G-8 (`c75f08101`) e J-6 (`e2cb55054`: guardia di suite sulle connessioni aiosqlite) integrati; CP-2 e seguenti aspettano le decisioni 26–30 (D-J1, D-J2, D-J3, D-J6, D-J15) (sessione `4c677a01`) |
 | Z | Z - Sospensione e risveglio | 6186 | `/tmp/librefolio-r13-z` | `e-alfy-z-sospensione-e-risveglio` | `459131eb8` | analisi consegnata; aspetta le decisioni 31 e 32 del developer (sessione `d401e062`) |
-| B | B - Backup e Docker | 6187 | `/tmp/librefolio-r13-b` | — | — | dopo il primo checkpoint di H |
-| E | E - Email | 6188 | `/tmp/librefolio-r13-e` | — | — | dopo token e inviti di A |
+| B | B - Backup e Docker | 6187 | `/tmp/librefolio-r13-b` | `e-alfy-b-backup-e-docker` | `ee5d81a6f` | analisi consegnata il 15/10; aspetta il via del developer e i punti 38–43 delle decisioni (sessione `5618ecee`) |
+| E | E - Email | 6188 | `/tmp/librefolio-r13-e` | — | — | parte in sola analisi al checkpoint A5a (inviti); i token monouso di A4 sono già integrati |
 | Y | Y - Cruscotto e grafici | 6189 | `/tmp/librefolio-r13-y` | — | — | dopo il lotto B dei colori |
 
 Corsie del programma colori, da non usare: 6150–6154 e 6160. Lettere riservate ai colori:
@@ -44,18 +44,18 @@ L, R, G, T, C, U, S, P.
 
 | Ondata | Funzione | Sessione | Stato |
 |---|---|---|---|
-| 1 | Pausa degli aggiornamenti e sospensione (F26) | Z | ⏳ |
-| 1 | Segreti e configurazione (F03) | H | ⏳ |
-| 1 | Prontezza e versione (F08) | H | ⏳ |
-| 1 | Profilo gestito (F05) | H, A, X | ⏳ |
+| 1 | Pausa degli aggiornamenti e sospensione (F26) | Z | ⏳ analisi pronta; aspetta le decisioni 31 e 32 |
+| 1 | Segreti e configurazione (F03) | H | 🟡 backend integrato (CP2a `60f8a35ce`, CP3 `d08d9358f`): segreti da `*_FILE`, chiave d'istanza, avvisi nel log, `.env.example` completo. Gli avvisi per l'admin arrivano con A8. `JWT_SECRET` resta casuale se manca, per la regola del developer sui default (piano H, §2) |
+| 1 | Prontezza e versione (F08) | H | 🟡 backend integrato (CP5a, `9deb0ea08`); CP5b dopo la finestra |
+| 1 | Profilo gestito (F05) | H, A, X | ⏳ la base c'è (`/system/instance`, CP4 di H); profilo e blocco dell'istanza con il CP6 di H |
 | 1 | Disclaimer e link legali (F09) | A | ⏳ |
 | 1 | Admin iniziale da variabili (F02) | A | ⏳ |
-| 1 | Inviti, registrazione e gestione utenti (F13) | A | ⏳ |
-| 2 | Email facoltativa (F04) | E | ⏳ |
-| 2 | Backup e ripristino dalla UI (F01) | B | ⏳ |
-| 2 | Backup continuo con Litestream (F25) | B | ⏳ |
-| 2 | Avvio, aggiornamento all'accesso e risveglio (F07) | Z | ⏳ |
-| 2 | Impostazioni dei plugin | X | ⏳ |
+| 1 | Inviti, registrazione e gestione utenti (F13) | A | ⏳ in corso (A5a e A5b); i token monouso sono già integrati (A4) |
+| 2 | Email facoltativa (F04) | E | ⏳ parte al checkpoint A5a |
+| 2 | Backup e ripristino dalla UI (F01) | B | ⏳ analisi pronta; aspetta il via e i punti 38–43 |
+| 2 | Backup continuo con Litestream (F25) | B | ⏳ analisi pronta; il codice dopo il lotto Docker di H (CP7a) |
+| 2 | Avvio, aggiornamento all'accesso e risveglio (F07) | Z | ⏳ analisi pronta; aspetta le decisioni 31–35 e gli agganci d'avvio di H (CP2b) |
+| 2 | Impostazioni dei plugin | X | ⏳ dopo X-R8; migrazione 007, e `cryptography` nella finestra delle dipendenze |
 | 2 | Ordine dei fornitori nella ricerca (F21) | X | ⏳ |
 | 3 | Fornitore di prezzi a pagamento (F06) | X | quando sarà scelto |
 
@@ -63,13 +63,13 @@ L, R, G, T, C, U, S, P.
 
 | Lotto | Sessione | Stato |
 |---|---|---|
-| Registri per famiglia di plugin (PL2) | X | ⏳ |
-| Asset senza shim (PL6), cambi in `services/fx/` (PL4), router di asset e cambi, router dei segnali (PL7) | X | ⏳ |
-| Import broker in `services/brim/` (PL5, U-B3, U-B4), transazioni, broker | W | ⏳ |
-| Segnali (PL1), rischio, preparazione delle serie, portafoglio, PAC | J | ⏳ |
-| Piattaforma, file, agganci di `main.py`, configurazione | H | ⏳ |
-| Servizi account | A | ⏳ |
-| Frontend: auth, settings, support | A | ⏳ |
+| Registri per famiglia di plugin (PL2) | X | ✅ X CP1 (`64a5a3fe7`) |
+| Asset senza shim (PL6), cambi in `services/fx/` (PL4), router di asset e cambi, router dei segnali (PL7) | X | 🟡 integrati PL6 (CP2a), asset per tema e router per risorsa (CP2b), PL4 e router dei cambi (CP3), schemi degli asset (CP4); PL7 dopo PL1 di J |
+| Import broker in `services/brim/` (PL5, U-B3, U-B4), transazioni, broker | W | 🟡 integrati transazioni e broker per tema (W1, W2), BRIM in `services/brim/` (W4 CP6), schemi delle transazioni (W7); restano CP7 (taglio di `brim_provider.py`), W3 e W5–W6 |
+| Segnali (PL1), rischio, preparazione delle serie, portafoglio, PAC | J | 🟡 PAC per tema integrato (CP-1); il resto con CP-2 e seguenti, dopo le decisioni 26–30 |
+| Piattaforma, file, agganci di `main.py`, configurazione | H | 🟡 integrati `services/platform/` e `services/files/` (CP1) e il pacchetto `config/` (CP2a); il taglio di `main.py` (CP2b) dopo un commit del coordinatore |
+| Servizi account | A | ✅ A1 (`769cc31cb`) |
+| Frontend: auth, settings, support | A | ✅ A2 (`76e61889b`) |
 | Frontend: cambi (FE4), asset (FE5) — dopo il lotto A dei colori | X | ⏳ |
 | Frontend: transazioni (FE8) — dopo il lotto A dei colori | W | ⏳ |
 | Frontend: segnali e rischio (FE2), dashboard (FE6), broker e lotti (FE7) — dopo il lotto B | Y | ⏳ |
@@ -79,6 +79,39 @@ L, R, G, T, C, U, S, P.
 
 ## Treni
 
-| # | Data | Cosa | Commit |
+Ogni ingresso in `dev_release2` è un treno: checkpoint del figlio, aggiornamento di base, validazione della
+revisione combinata, merge. Prove e note di ciascuno nel §12 del [piano generale](plan-phase01Release13.prompt.md).
+Sono tutti locali: la push la fa il developer.
+
+| # | Data | Cosa | Commit in `dev_release2` |
 |---|---|---|---|
-| 1 | 2026-10-14 | Piano della fase, sezioni 1.3 nel backlog | (questo commit) |
+| 1 | 14/10 17:41 | Piano della fase, sezioni 1.3 nel backlog | `459131eb8` |
+| 2 | 15/10 00:25 | A1: servizi account in `services/accounts/` | `769cc31cb` |
+| 3 | 15/10 00:48 | H CP1: `services/platform/` e `services/files/` | `6a605904c` |
+| 4 | 15/10 01:03 | A2: frontend di auth, settings e support in `lib/features/` | `76e61889b` |
+| 5 | 15/10 01:09 | W1 e W2: transazioni e broker per tema | `998fd2701` |
+| 6 | 15/10 01:20 | H CP2a: pacchetto `config/`, guardia sulle letture d'ambiente | `60f8a35ce` |
+| 7 | 15/10 02:17 | X CP1 e CP2a: registri per famiglia, `services/assets/` senza shim | `64a5a3fe7` |
+| 8 | 15/10 03:01 | W I1: rifiuti d'accesso, pulizia BRIM (V-23, C-65b, L5, C-79, C-3) | `dc7e4e48e` |
+| 9 | 15/10 03:17 | A3: registro delle schede di Settings (O-15, K-17, L12) | `90491071d` |
+| 10 | 15/10 03:45 | H CP3: segreti da `*_FILE`, chiave d'istanza, controlli all'avvio | `d08d9358f` |
+| 11 | 15/10 03:46 | X CP2b: asset per tema, router per risorsa | `92b42d796` |
+| 12 | 15/10 04:04 | W K1: chiarezza (O-12, C-89, V-38, P-15) | `d915c869f` |
+| 13 | 15/10 04:15 | H: letture di `web_link_finder` in `config/` | `9dda5ccd9` |
+| 14 | 15/10 04:29 | J CP-1: PAC per tema, guardia dei confini | `e1fbc801f` |
+| 15 | 15/10 04:37 | W4 CP6: BRIM in `services/brim/` | `155d9b050` |
+| 16 | 15/10 05:15 | A4: migrazione 005, token monouso | `e476d2ed4` |
+| 17 | 15/10 05:24 | X CP3: cambi per tema in `services/fx/` e `api/v1/fx/` | `8000aba5a` |
+| 18 | 15/10 05:35 | W7: schemi delle transazioni in `schemas/transactions/` | `1cd7300f3` |
+| 19 | 15/10 05:54 | X CP3b: test dei cambi senza rete | `63a1f675c` |
+| 20 | 15/10 05:57 | J C-93: connessioni aiosqlite chiuse nei test dell'AI Export | `c412f8dad` |
+| 21 | 15/10 05:59 | H CP4: `/system/instance`, area degli avvisi | `1b3eb54c7` |
+| 22 | 15/10 06:24 | J G-8: catalogo dei Tool sotto carico | `c75f08101` |
+| 23 | 15/10 06:33 | X CP4: schemi degli asset per tema | `7f4618494` |
+| 24 | 15/10 06:45 | W K2a: rifiuti a codice, L6 | `62c964242` |
+| 25 | 15/10 06:54 | A4b: versione di sessione, uscita degli altri dispositivi al cambio password | `dbf89cdd5` |
+| 26 | 15/10 07:12 | X J-5: loop chiuso nel thread dei fornitori | `743fca514` |
+| 27 | 15/10 07:17 | H CP5a: `/system/ready`, `/system/info` minimo senza sessione, R2 | `9deb0ea08` |
+| 28 | 15/10 07:40 | J-6: guardia di suite sulle connessioni aiosqlite lasciate aperte | `e2cb55054` |
+| 29 | 15/10 07:51 | W E0: eventi distinti per data e tipo nel CSV e nel selettore della data (I-11 a e d), X-R9, W-B15 | `d226bc69e` |
+| 30 | 15/10 08:18 | X-R8: elenchi delle valute dei fornitori dei cambi in cache per un giorno | `173ba19e2` |
