@@ -45,7 +45,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
     // Everyone reads the global settings; only an administrator changes them.
     {id: 'admin', labelKey: 'settings.admin', icon: Shield, order: 100, component: GlobalSettingsTab, props: (ctx) => ({canEdit: ctx.isSuperuser}), alignEnd: true},
     // Administrators only: the state of the instance's email and a test email (workstream E).
-    {id: 'email', labelKey: 'email.tab.label', icon: Mail, order: 110, component: EmailSettingsTab, visible: (ctx) => ctx.isSuperuser},
+    {id: 'email', labelKey: 'email.tab.label', icon: Mail, order: 130, component: EmailSettingsTab, visible: (ctx) => ctx.isSuperuser},
 ];
 
 /** The tabs this context may see, by ascending `order`, as a new array: `tabs` is left as it was. */

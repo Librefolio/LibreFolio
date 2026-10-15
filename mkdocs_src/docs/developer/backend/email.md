@@ -536,10 +536,10 @@ own texts stay in the backend catalogue ([The Catalogue](#catalogue)).
 registers the tab:
 
 ```ts
-{id: 'email', labelKey: 'email.tab.label', icon: Mail, order: 110, component: EmailSettingsTab, visible: (ctx) => ctx.isSuperuser},
+{id: 'email', labelKey: 'email.tab.label', icon: Mail, order: 130, component: EmailSettingsTab, visible: (ctx) => ctx.isSuperuser},
 ```
 
-Order 110 puts it after Admin (100), so in the right-hand group on a wide screen, and `visible` keeps it for
+Order 130 puts it after Admin (100), so in the right-hand group on a wide screen, and `visible` keeps it for
 administrators: a regular user never sees it in the bar, and a `?tab=email` they open is ignored.
 
 ---

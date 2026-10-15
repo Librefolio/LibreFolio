@@ -37,7 +37,7 @@ it draws the bar and the active body from that list. Each entry is a `SettingsTa
 | `preferences` | 20 | `PreferencesTab` | everyone | — |
 | `about` | 30 | `AboutTab` | everyone | — |
 | `admin` | 100 | `GlobalSettingsTab` | everyone | `props: (ctx) => ({canEdit: ctx.isSuperuser})`, `alignEnd: true` |
-| `email` | 110 | `EmailSettingsTab` | administrators | `visible: (ctx) => ctx.isSuperuser` |
+| `email` | 130 | `EmailSettingsTab` | administrators | `visible: (ctx) => ctx.isSuperuser` |
 
 The first four bodies are in `lib/features/settings/tabs/`. The Email tab's body,
 `lib/features/email/EmailSettingsTab.svelte`, and its label, `email.tab.label`, live with the email feature: see
@@ -78,7 +78,7 @@ export const SETTINGS_TABS: readonly SettingsTab[] = [
   and a `?tab=` naming it is ignored for them. Leave `visible` out for a tab everyone sees.
 - **`props`**: only when the body depends on the context, as `admin` does for `canEdit`.
 - **`alignEnd`**: one tab carries it, today `admin`. A tab with a higher `order` (above 100) joins
-  the right-hand group, after Admin, as `email` (110) does.
+  the right-hand group, after Admin, as `email` (130) does.
 - **`id` and `labelKey`**: the `id` is unique, made of lowercase letters, digits and dashes, and
   starts with a letter; the `labelKey` is a sentence in all four catalogues.
 - **Tests**: `lib/features/settings/settingsTabs.test.ts` pins the content of the registry through
