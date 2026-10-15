@@ -2632,7 +2632,8 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
 
   Dettagli: piano H, §14 «Lotto "credenziali nei log di accesso"».
 - **H-10 · `services static-uploads` è dichiarata `write-scoped`, ma svuota la cartella degli upload della corsia** —
-  basso; H (test-author, G-10), 15/10.
+  basso; H (test-author, G-10), 15/10. ✅ 15/10 (lotto 36, CP-U1): la fixture `_private_data_dir` punta la cartella dei
+  dati su `tmp_path` e non tocca più quella della corsia.
   - Il fixture autouse di `test_static_uploads.py` cancella e ricrea `custom-uploads` della corsia, dove stanno anche gli
     avatar del seed. Un'altra unità che li legge, in parallelo, li perde.
   - Nessun rosso visto finora; c'era già prima di G-10.
@@ -2675,6 +2676,27 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
     `LIBREFOLIO_TEST_REGEN_*`. In alternativa, un elenco esplicito `LIBREFOLIO_REGEN_*` in `TEST_LANE_KEEPS`.
 
   Dettagli: piano H, §14 «Ingresso dopo A6a».
+- **H-14 · `derive_key_from`: derivare da una chiave d'istanza data, non solo da quella corrente** — medio; X (CP10,
+  impostazioni dei plugin), 15/10.
+  - Serve al ripristino di B: i segreti dei plugin di un backup sono cifrati con la chiave dell'istanza d'origine, e
+    vanno cifrati di nuovo con quella dell'istanza che ripristina.
+  - Oggi `instance_key.derive_key(purpose)` deriva solo dalla chiave corrente.
+  - Cura: `derive_key_from(key, purpose, length=32)` nello stesso modulo, con lo stesso HKDF; `derive_key` la chiama
+    con la chiave corrente. Da accordare con X e B (nome, firma).
+
+  Dettagli: piano H, §14 «Voci di backlog da X CP10».
+- **H-15 · Un controllo d'avvio per una chiave dei segreti dei plugin inutilizzabile** — medio; X (CP10), 15/10.
+  - `plugin_secrets_key_status` (X) dice se i segreti salvati si possono ancora decifrare con la chiave corrente, con i
+    totali quando non si può, e gira in `to_thread`.
+  - Cura: un controllo in `config_audit.py` che lo usa, con un avviso nei log e nella UI dell'admin, nello stile degli
+    altri controlli (codice, gravità, chiave i18n).
+
+  Dettagli: piano H, §14 «Voci di backlog da X CP10».
+- **H-16 · `developer/architecture/security.md`: due frasi superate dai segreti dei plugin** — basso; X (CP10), 15/10.
+  - L'elenco dei segreti letti con `env_secret()` non ha le variabili dei plugin (`LIBREFOLIO_PLUGIN_*`).
+  - La «known limitation» chiama ancora «planned» un controllo della chiave che il `key_id` di X ora rende possibile.
+
+  Dettagli: piano H, §14 «Voci di backlog da X CP10».
 
 ## A · Account e accessi (fase 01)
 
