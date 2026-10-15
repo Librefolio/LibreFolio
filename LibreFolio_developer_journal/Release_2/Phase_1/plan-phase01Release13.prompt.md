@@ -855,3 +855,18 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > **Ordine**: H era pronto prima di X, quindi entra prima; X lo assorbe con un controllo leggero (guardia delle
 > letture d'ambiente sui suoi moduli nuovi, raccolta, `api schema`). La run completa sulla combinazione X + H la fa
 > J, che aggiorna la base sopra tutti e due.
+
+### X CP2b, asset per tema e router per risorsa, integrato ✅ (2026-10-15, 04:00)
+
+> **Note implementazione**: `dev_release2` avanza veloce a `92b42d796`. CP2b è `870c9956f` (124 file): rinomina pura
+> `schemas/assets.py` → `schemas/assets/assets.py` (R099, l'unica coppia di git) e tagli nello stesso commit (§6,
+> opzione 1); `services/assets/core` → `base` + `core`, `price_store` → `price_store` + `currency_change` +
+> `event_store`, `api/v1/assets.py` → pacchetto per risorsa, schemi degli eventi in `schemas/assets/events.py`.
+> Controllo indipendente del coordinatore sull'AST: definizioni spostate identiche, salvo docstring, percorsi e 6
+> richiami a `EventStoreOperations`; 50 file con soli import, 8 rivisti a mano. Validazione di X: revisione
+> `eb245b624` (con W I1 e A3) `all-backend` 13 476 passed, 28 skipped, 0 failed; 139 rotte e `api schema`
+> identici; poi, sopra H CP3 (`92b42d796`), controllo leggero: guardia 485 (+10, i moduli nuovi), raccolta, schema
+> e rotte identici.
+>
+> Gli eventi passano a W (lotto E1): moduli, contratti e righe che restano a X nel messaggio del coordinatore a W del
+> 15/10. Le impostazioni dei plugin di X diventano la migrazione 007.
