@@ -10,7 +10,10 @@ so every assertion is on an exact value.
 Covered: library-unavailable, wrong identifier type, the EUR real-time quote
 path, the USD chart-fallback path, price-not-found, fetch failures, history with
 dividend events and intraday OHL enrichment, search (4 currency variants) and
-its failure, param validation, and metadata assembly / failure.
+its failure, param validation, and metadata assembly / failure. And «too many
+requests» (X-RL X3): the library reports a 429 only in its ``RuntimeError``
+text, and each of the four handlers turns it into ``AssetRateLimitedError``
+while a 500 keeps its old handling.
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
 from backend.app.services.asset_source_providers.justetf import plugin as je
 from backend.app.services.asset_source_providers.justetf.plugin import JustETFProvider
-from backend.app.services.assets.base import AssetSourceError
+from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceError
 
 # Captured at import, before the autouse fixture swaps in the no-op stub, so the
 # real function's early-return can be exercised directly.
@@ -439,6 +442,72 @@ async def test_metadata_unknown_sector_maps_to_other(monkeypatch):
     result = await _provider().fetch_asset_metadata("IE00B4L5Y983", IdentifierType.ISIN)
     assert result is not None
     assert result.classification_params.sector_area is not None
+
+
+# ── «too many requests» (X-RL X3): the library says it only in its message ──
+
+ISIN = "IE00B4L5Y983"
+#: The two texts justetf_scraping raises for a status that is not 200 (helpers.assert_response_status_ok, etf_profile).
+_HELPERS_TEXT = "Got status {status} when requesting {name}.\nError page saved to '{name}-error-page.html'."
+_PROFILE_TEXT = "Failed to fetch ETF page for {isin}: status {status}"
+
+#: handler → (the library function it calls, the call, what a non-429 failure gives: an error code, or None returned)
+_HANDLERS = {
+    "current": ("load_raw_chart", lambda p: p.get_current_value(ISIN, IdentifierType.ISIN, {"currency": "USD"}), "FETCH_ERROR"),
+    "history": ("load_chart", lambda p: p.get_history_value(ISIN, IdentifierType.ISIN, {"currency": "USD"}, date(2026, 1, 1), date(2026, 1, 31)), "FETCH_ERROR"),
+    "search": ("load_overview", lambda p: p.search("S&P 500"), "SEARCH_ERROR"),
+    "metadata": ("get_etf_overview", lambda p: p.fetch_asset_metadata(ISIN, IdentifierType.ISIN, {"currency": "EUR"}), None),
+}
+
+
+def _failing(error: Exception, calls: list[int]):
+    """A library function that fails with ``error`` whatever its arguments, counting its calls."""
+
+    def fail(*_args, **_kwargs):
+        calls.append(1)
+        raise error
+
+    return fail
+
+
+def _library_text(handler: str, status: int) -> str:
+    """The text the library raises for ``status`` on the path ``handler`` takes."""
+    if handler == "metadata":
+        return _PROFILE_TEXT.format(isin=ISIN, status=status)
+    return _HELPERS_TEXT.format(status=status, name="chart" if handler in ("current", "history") else "overview")
+
+
+@pytest.mark.parametrize("handler", list(_HANDLERS))
+@pytest.mark.asyncio
+async def test_a_429_from_the_library_is_a_refusal_in_every_handler(monkeypatch, handler):
+    """Each of the four handlers raises ``AssetRateLimitedError`` from the library's ``RuntimeError``: no ``FETCH_ERROR``, no ``None``."""
+    function, call, _other = _HANDLERS[handler]
+    calls: list[int] = []
+    library_error = RuntimeError(_library_text(handler, 429))
+    monkeypatch.setattr(je, function, _failing(library_error, calls), raising=False)
+
+    with pytest.raises(AssetRateLimitedError) as refused:
+        await call(_provider())
+
+    assert (refused.value.error_code, refused.value.retry_after) == ("RATE_LIMITED", None)
+    assert refused.value.__cause__ is library_error
+    assert len(calls) == 1, "a refusal is never retried by the plugin"
+
+
+@pytest.mark.parametrize("handler", list(_HANDLERS))
+@pytest.mark.asyncio
+async def test_another_status_from_the_library_keeps_its_old_handling(monkeypatch, handler):
+    """The same text with status 500: the handler's own error code, or ``None`` for metadata — never ``RATE_LIMITED``."""
+    function, call, other = _HANDLERS[handler]
+    monkeypatch.setattr(je, function, _failing(RuntimeError(_library_text(handler, 500)), []), raising=False)
+
+    if other is None:
+        assert await call(_provider()) is None
+        return
+    with pytest.raises(AssetSourceError) as failed:
+        await call(_provider())
+    assert not isinstance(failed.value, AssetRateLimitedError)
+    assert failed.value.error_code == other
 
 
 if __name__ == "__main__":
