@@ -1335,3 +1335,54 @@ strutturato del parse e `preview_unreadable_workbook`) dopo il commit del coordi
    `front-transaction tx-bulk-operations` 10.
 5. ✅ **Doc**: `mkdocs build` stretto con 0 avvisi; `check-links` 95 validi. `git diff --check` pulito; porta 6184 libera
    (07:44).
+
+   > **Note implementazione (coordinatore, 15/10 ~07:45–07:51)**: E0 validato e committato (`2326624c1`), poi entrato
+   > in `dev_release2` con `d226bc69e` alle 07:51, prima della finestra, su richiesta del coordinatore colori. **Via per
+   > FE8a** (annuncio nel §7 del piano generale, `2c699f85c`). Dal coordinatore colori: nessun loro annuncio aperto sui
+   > tre file; T li converte nell'ondata W4, sui pezzi già tagliati; conteggi da ripartire: `ImportWizardModal` m1 595
+   > più il letterale `#dc2626`, `TransactionBulkModal` 190, `TransactionFormModal` 218; comando `theme-roles.mjs --split
+   > <vecchio>:<nuovi>`, poi `--check`; il `#dc2626` in uno dei pezzi, classi nuove solo sui ruoli `lf-*`. Regole: solo
+   > tagli, niente `transactions/import/`, niente spostamento della cartella; la baseline del cricchetto nello stesso
+   > commit del taglio; W-B11 si chiude qui. Dalle 09:00, per circa 2 ore, la finestra della galleria: solo codice.
+
+### FE8a — i tagli delle tre modali ⏳ (2026-10-15)
+
+**Analisi** (07:45–07:50, su `2326624c1`):
+
+- Il peso sta negli script (righe di script / template): Form 1 378 / 790, Bulk 3 143 / 460, Wizard 4 414 / ~1 500.
+  Quasi tutte le funzioni chiudono sullo stato del componente (nel Form 2 pure su 39, script
+  `/tmp/libreFolio_w_fe8/purity.mjs`): accorciare gli script vorrebbe lo stato in una classe `.svelte.ts`, come
+  `features/tools/pac-allocator/planner/draft.svelte.ts`, cioè un ridisegno.
+- **Disegno, approvato dal coordinatore (07:51)**: si taglia il **template** per sezione (Form, Bulk) o per passo
+  (Wizard) in componenti figli con props esplicite; `bind:` solo dove il template già scriveva lo stato; stato, `$effect`
+  e handler restano nel padre; i tipi condivisi in un `.ts`. Il ridisegno dello stato non rientra nella 1.3. Cartelle
+  `components/transactions/form/`, `bulk/`, `wizard/` (`wizard/` confluisce in `import/` con FE8b). Tre
+  sotto-checkpoint, ognuno FROZEN e validato a parte; ogni taglio chiude con `--split` e `--check`. Dopo la finestra
+  entrano prima R e L dei colori, poi i lotti della 1.3.
+- **Strumenti** (fuori dal repo, `/tmp/libreFolio_w_fe8/`): `refs.mjs` legge l'AST di Svelte e dà, per un intervallo di
+  righe del template, i nomi dello script che usa (con chi è scritto: `bind:`, assegnazione), i componenti, le direttive
+  `use:` e gli store `$x`, e le righe d'import ridotte a quei nomi; `gen_form.py` genera i figli (import, `Props` con un
+  tipo per ogni nome, markup copiato alla lettera) e sostituisce le sezioni nel padre con la chiamata. svelte-check
+  verifica tutto il cablaggio.
+
+#### FE8a-1 — il Form ✅ (2026-10-15) — 🧊 FROZEN
+
+1. ✅ **Taglio** (07:52): `TransactionFormModal.svelte` 2 275 → 1 616 righe; in `components/transactions/form/`:
+   `TxFormBanners.svelte` (righe 1464-1542 del padre, 12 props, legati `commitFailed`, `formError`, `issuesDismissed`),
+   `TxFormPairSection.svelte` (1548-1817, 46 props, legati `costBasisMode`, `createAssetOpen`, `createBrokerOpen`,
+   `draft`), `TxFormSingleSection.svelte` (1823-2035, 40 props, gli stessi legati), `TxFormOptionalSection.svelte`
+   (2066-2131, 8 props, legati `createEventOpen`, `draft`, `optionalOpen`); `txFormTypes.ts` con `ValidationIssue`,
+   `FormDraft`, `DualDraftTo` (spostati dal padre) e `TxFormWacResult` (il tipo che il padre scriveva due volte in
+   linea). Restano nel padre header, footer, piè di pagina in sola lettura, il blocco del costo di un TRANSFER e le
+   modali impilate. Il DOM non cambia (un componente non aggiunge elementi); gli stili del padre sono tutti `:global`.
+2. ✅ **Cricchetto**: `theme-roles.mjs --split` del Form nei quattro pezzi; m1 218 = 35 (padre) + 6 + 96 + 56 + 25; riga
+   `~split` nella baseline; `--check` pulito.
+3. ✅ **Prove** (07:52–08:12, corsia 6184): `prettier --write` sui file toccati; `svelte-check` 0 errori, 0 avvisi su
+   5 667 file; Vitest `tx-unit` 903, `core-unit` 4 290 (con le guardie dell'HTML e dei colori), `component-unit` 3 225
+   (con `TransactionFormModal.test.ts`, i cui `vi.mock` sono su moduli condivisi); E2E `front-transaction all
+   --workers 4` (07:56–08:06; avviso al coordinatore): 46/46 azioni verdi, 337 + 34 (mobile) passed, 32 skipped del
+   progetto mobile; fuori dalle transazioni `front-broker detail` 37, `front-utility onboarding-tour` 10,
+   `front-utility tooltip` 9. Doc: `features/transaction-form.md` (i quattro componenti; `FormDraft` in
+   `txFormTypes.ts`); devWiki `problems/browser-autofill-numeric-fields.md` (la riga del Form punta anche ai pezzi; le
+   altre righe che citano la modale restano vere, la logica è nel padre); `check_source_paths.py` invariato (5 path di
+   prima); `mkdocs build` stretto con 0 avvisi; `check-links` verde.
