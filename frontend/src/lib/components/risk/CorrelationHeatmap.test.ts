@@ -160,7 +160,7 @@ const SECTOR_LIST = {
 };
 
 /** Sector distributions: two holdings mostly in technology, one in health care, one unclassified. */
-const SECTORS: ReadonlyMap<number, Readonly<Record<string, number>> | null> = new Map([
+const SECTORS: ReadonlyMap<number, Readonly<Record<string, number>> | null> = new Map<number, Readonly<Record<string, number>> | null>([
     [ALPHA, {Technology: 0.8, 'Health Care': 0.2}],
     [BETA, {Technology: 0.9, 'Health Care': 0.1}],
     [GAMMA, {'Health Care': 1}],
