@@ -22,9 +22,11 @@ import {formatDay} from '$lib/utils/core/formatAxisDate';
  * Provider error codes that mean "config is fine, just no data here" — a warning,
  * not a hard failure. `NO_DATA` (e.g. a fund whose NAV isn't dated today) and
  * `NOT_IMPLEMENTED` (the provider doesn't offer this operation) must never gate
- * the "Save Without Testing?" warning.
+ * the "Save Without Testing?" warning. Nor does `RATE_LIMITED`: the provider is
+ * paused after «too many requests» (decision 34), the configuration may well be
+ * right, and the message says until when.
  */
-export const SOFT_FAIL_CODES = new Set(['NO_DATA', 'NOT_IMPLEMENTED']);
+export const SOFT_FAIL_CODES = new Set(['NO_DATA', 'NOT_IMPLEMENTED', 'RATE_LIMITED']);
 
 /**
  * Classify whether a failed operation is a *soft* failure (a warning) rather than

@@ -103,7 +103,7 @@ The provider opts into the generic **URL → search-item** capability:
     - **Fund detail pages** (`/borsa/fondi/dettaglio/{code}.html`) — fetches the page and returns the **full canonical set a normal search would emit** for that fund: the **IT + EN pair** (Italian first, with flag in `display_name`), each `{identifier: <ISIN from page> or code, identifier_type, display_name, currency, type: "FUND", provider_params: {codice_fondo, language}}`.
     - **Stock / bond / ETF scheda pages** (`…/scheda/{ISIN}[-{MIC}].html`) — returns the same IT + EN canonical set, priced by ISIN. The rows' `currency` comes from one chart-API call shared by every row (`None` if it fails), not from the scheda.
 
-It is only a different **entry point** — the orchestration flattens the list and de-dupes by `(identifier, language)`. Anything that is not a recognisable Borsa page (off-domain, no extractable fund code or ISIN path) returns `None`. Best-effort: fetch/parse errors return `None`, never raise.
+It is only a different **entry point** — the orchestration flattens the list and de-dupes by `(identifier, language)`. Anything that is not a recognisable Borsa page (off-domain, no extractable fund code or ISIN path) returns `None`. Best-effort: fetch/parse errors return `None`, never raise — except a refusal for too many requests, on the fund page, in the market-parameter search (`cerca`) or on the scheda page, which leaves as `RATE_LIMITED` so that the core pauses the provider. The search's link-finder, which calls `resolve_url`, then skips that URL without reporting an error. Only the rows' currency lookup still swallows a refusal (see [Error Handling](#error-handling)).
 
 This lets an externally discovered page URL (e.g. found via `web_link_finder`, or pasted by the user in a future UI) be turned into a ready-to-create asset with the correct pricing params.
 
@@ -159,8 +159,32 @@ Uses `option_labels` for human-readable display in the frontend dropdown. Each f
 | `StrumentoNonRisolto` | `UNSUPPORTED_PAGE` | Instrument found but its market page can't be resolved/read (unhandled market family) — user is invited to open a GitHub issue |
 | `StrumentoNonTrovato` | `NOT_FOUND` | ISIN not recognized |
 | `DatiNonDisponibili` | `NO_DATA` | No data available (market closed, delisted, or empty window for an illiquid instrument) |
+| `RateLimitRaggiunto` | `RATE_LIMITED` | HTTP 429 after the library's own retries, or HTTP 403 (the Imperva WAF blocked the session): `_raise_if_rate_limited()` raises `AssetRateLimitedError`, with no `Retry-After`, and the core pauses the provider ([Provider Pauses](architecture.md#provider-pauses)) |
 | `RicercaNonDisponibile` | `FETCH_ERROR` | Search endpoint down |
 | `BorsaItalianaErrore` | `FETCH_ERROR` | Generic library error |
+
+`RateLimitRaggiunto` is recognised in current value, history, fund NAV, search, metadata (listed
+instruments and funds), where it used to read as "no metadata" (`None`), and the three lookups of
+`resolve_url`: the fund page, the market-parameter search and the scheda page. During a search, the
+link-finder skips a URL whose `resolve_url` was refused without reporting an error; the provider is
+paused all the same.
+
+Two best-effort enrichments still swallow a refusal, on purpose: it pauses nothing, and the
+operation goes on as after any other failure there.
+
+- The fund-page lookup inside `search()` (`ottieni_dati_fondo`): the fund's rows fall back to its
+  internal code, as an `OTHER` identifier.
+- The chart-API currency lookup (`_price_api_currency()`), in a listed instrument's metadata and in
+  `resolve_url`'s scheda rows: the currency stays unknown.
+
+!!! warning "Known gap: the library sleeps in the provider's thread"
+
+    On an HTTP 429 the library's `Sessione` retries by itself before raising `RateLimitRaggiunto`:
+    three attempts, each followed by a `time.sleep` of 2, 4 and 8 s, 14 s in all in the provider's
+    thread — against the rule of the
+    [Asset Plugin Guide](../../architecture/patterns/asset_plugin_guide.md#too-many-requests). The
+    library is a separate package (`borsa-italiana-scraping`, 0.3.2): the gap stays until it raises
+    at the first 429. A 403 raises at once.
 
 Note (library ≥ 0.3.0): an **empty history window** (e.g. an illiquid ExtraMOT bond over 1M) now maps to `NO_DATA`, never `NOT_FOUND` — the library distinguishes "unknown instrument" from "known but no trades in the window" via a MAX-period probe.
 
