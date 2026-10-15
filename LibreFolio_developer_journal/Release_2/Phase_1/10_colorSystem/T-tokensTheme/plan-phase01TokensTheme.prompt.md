@@ -196,6 +196,13 @@ flowchart LR
 - `theme-color`: resta `#1B4334` (D-T24); solo i commenti delle tre copie passano da «le barre verdi» alla barra laterale.
 - Test con `test-author`: C3, `theme-roles` (b), `header-scroll`.
 
+### T-8c · La card d'accesso non nasce sotto i controlli, su telefono
+
+- Visto negli scatti di T-8b: su un telefono la card di registrazione, alta, partiva a 16 px, sotto i controlli in
+  alto, già a pagina non scorsa. `AuthPageFrame` (di A): la 1.3 lo assegna a T, riga dichiarata all'ingresso.
+- Il contenitore riserva in alto lo spazio dei controlli sotto `lg`; il desktop resta com'è.
+- Test di `test-author` in `header-scroll.spec.ts`; E2E `header-scroll` e `auth` a 1 worker; scatto prima e dopo.
+
 ### W1–W6 · Ondate di migrazione (sotto-agenti)
 
 Ordine e prerequisiti: analisi §4.5.
@@ -540,6 +547,7 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 | 6 | T-7 header che si nasconde di nuovo, fascia verde del logo nella barra laterale | ✅ checkpoint `0580c92ab`; base `8f1abf89e` nel merge `fe618a0e3` |
 | 7 | T-8 giro 2 della designer (D-T17, D-T18, D-T19), T-4, TC-7 | ✅ checkpoint `68c990b35`; base `d22eb6f43` nel merge `02c23c773`, validato il 15/10 con contact sheet; correzione della marca di `sw.js` e del `background_color` da committare |
 | 8 | T-8b correzioni del developer (D-T23–D-T26), `ForgotPasswordCard`, `AuthPageFrame` | ✅ checkpoint `312748dcc`; base `9bd3e39bb` nel merge `a74185670`, validato il 15/10 con contact sheet |
+| 9 | T-8c `AuthPageFrame`: la card d'accesso non nasce sotto i controlli su telefono | ⏳ validato il 15/10 su `e0c88bbc3` più il delta; da committare (riga dichiarata in un file di A all'ingresso) |
 
 ## Avanzamento
 
@@ -1327,3 +1335,36 @@ già scrivere il gruppo dopo: scrivere è leggero. Il developer approva da conta
 > - **Visto negli scatti, fuori dal cambio chiesto:** su un telefono la card di registrazione, alta, nasce già sotto i
 >   controlli, a pagina non ancora scorsa, perché la cornice la centra in verticale. La card di accesso no. È la
 >   disposizione di `AuthPageFrame`, non `fixed`/`absolute`: proposta al coordinatore (un margine in alto sotto `lg`).
+
+### T-8c — ✅ 15/10/2026 (la card d'accesso non nasce sotto i controlli, su telefono)
+
+> **Avvio** (coordinatore, 19:07): la 1.3 assegna a T la correzione in `AuthPageFrame`, file di A, come riga dichiarata
+> all'ingresso. Scrittura subito; E2E breve al via, dopo L.
+
+> ✅ **1 · Il contenitore.** `min-h-screen flex items-center justify-center p-4` più
+> `pt-[calc(4rem_+_env(safe-area-inset-top,0px))] lg:pt-4`: sotto `lg` la pagina tiene libero in alto lo spazio della
+> fila di controlli, così una card troppo alta per stare al centro parte sotto di loro; da `lg` resta 1rem.
+> - **Perché non solo `pt-16`, come proposto:** i controlli stanno a `1rem + env(safe-area-inset-top)`
+>   (`safe-top-offset`), e `app.html` dichiara `black-translucent` e `viewport-fit=cover`. Nell'app installata su un
+>   iPhone con la tacca l'inset vale circa 50 px, e con `pt-16` fisso la sovrapposizione tornerebbe. In una scheda del
+>   browser l'inset è 0 e il valore è `pt-16`.
+> - **Controllato compilando le tre classi** col Tailwind del progetto: `padding-top: calc(4rem + env(…))`, nell'ordine
+>   `p-4`, padding in alto, `lg:pt-4`.
+
+> ✅ **2 · Test (`test-author`, solo scrittura).** `e2e/layout/header-scroll.spec.ts`, describe `auth-page-controls`:
+> - mobile, nella finestra del progetto (430×740), caso nuovo: barra `absolute`, card di registrazione coi requisiti,
+>   e a scorrimento 0 il bordo alto di `register-modal` non sta sopra il bordo basso di `auth-page-controls`; prima il
+>   controllo positivo che le due scatole abbiano altezza. Margine misurato sul CSS: circa 4 px fra le scatole (60 e
+>   64 px), circa 12 px visivi, perché le icone hanno il loro padding;
+> - mobile, finestra accorciata (430×560): lo stesso controllo a scorrimento 0, poi la prova dello scorrimento;
+> - desktop: barra `fixed` e `padding-top` 16 px della cornice (`lg:pt-4`).
+> - Prove leggere: Prettier, `tsc` mirato (anche `--noUnusedLocals`), `--check` e `git diff --check` puliti.
+
+> ✅ **3 · Validazione** (15/10, 19:36–19:45, slot dopo L, un comando alla volta nella 6155, su `e0c88bbc3` più il
+> delta):
+> - E2E `header-scroll` a 1 worker: 11 passati e 3 saltati (i tre casi della barra d'accesso, ciascuno sul suo
+>   progetto: i due mobili ✓, il desktop ✓);
+> - E2E `auth` a 1 worker: 33/33;
+> - scatto prima/dopo, `files/T8c-shots/before-after.png` della sessione T: prima i controlli stavano sulla testata
+>   verde della card; dopo, nei due temi, i controlli finiscono a 60 px e la card comincia a 64 px. Server fermato,
+>   porta 6155 libera.
