@@ -171,7 +171,6 @@ class IssueCode(StrEnum):
     MISSING_COST_BASIS = "MISSING_COST_BASIS"
     NAV_INCOMPLETE = "NAV_INCOMPLETE"
     MWRR_NOT_CALCULABLE = "MWRR_NOT_CALCULABLE"
-    MWRR_SERIES_UNRELIABLE = "MWRR_SERIES_UNRELIABLE"
 
     # Asset detail (constructed client-side in assets/[id]/+page.svelte)
     ASSET_ARCHIVED = "ASSET_ARCHIVED"
