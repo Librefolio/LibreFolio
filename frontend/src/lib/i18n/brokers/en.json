@@ -233,7 +233,8 @@
           "realizedPnl": "Realized P&L",
           "splitRatio": "Split ratio",
           "sourceBroker": "From",
-          "destinationBroker": "To"
+          "destinationBroker": "To",
+          "handedOverAtCost": "Value handed over at cost"
         },
         "openingValue": "Opening Value",
         "cumulativeProceeds": "Cumulative proceeds"

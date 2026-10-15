@@ -108,6 +108,9 @@ def collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collect
             tx = tx_by_id.get(event.transaction_id)
             if tx is not None:
                 fx_resolver.need(tx.currency, event.date)
+            # An opening row's price is in its lot's currency (for a priced ADJUSTMENT, its cost basis's).
+            if event.kind in ("BUY", "ADJUSTMENT_IN") and event.transaction_id in lots_by_id:
+                fx_resolver.need(lots_by_id[event.transaction_id].currency, event.date)
         for closure in closures:
             if closure.lot_id in selected_ids:
                 lot = lots_by_id[closure.lot_id]
@@ -170,6 +173,8 @@ def collect_performance_fx_needs(
                 fx_resolver.need(tx.cost_basis_currency or asset_currency, tx.date)
             elif tx.amount != Decimal("0"):
                 fx_resolver.need(tx.currency or asset_currency, tx.date)
+        elif tx_type == "ADJUSTMENT" and tx.quantity < 0 and tx.cost_basis_override not in (None, Decimal("0")):
+            fx_resolver.need(tx.cost_basis_currency or asset_currency, tx.date)
     for closure in closures:
         lot = lots_by_id.get(closure.lot_id)
         if lot is not None and lot.direction == "LONG" and closure.close_reason == "SELL":
