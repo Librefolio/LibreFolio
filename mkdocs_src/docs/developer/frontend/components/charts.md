@@ -138,11 +138,13 @@ not. The general rule is in [ECharts formatters](../state/app-state.md#privacy-e
 
 The `pnl` mode has three submodes (`pnlSubmode`). The mode and the submode persist per user
 (`dashboard-growth-mode`, `dashboard-growth-pnl-submode`), shared by Dashboard and Broker detail;
-the defaults are `eur` and `line`. A restored `pct` waits for the first completed load: without %
-data (`hasPctData`) the chart shows `eur` and the % button is disabled, but the stored value is
-kept, so the next mount with % data opens on `pct`. The submode buttons float over the plot's
-top-left corner and fold to their icon below a 640 px container (`CONTROLS_COMPACT_BELOW_PX`),
-keeping the label as `title` and `aria-label`.
+the defaults are `eur` and `line`. After every completed load, a `pct` view, restored or picked,
+over a history without % data (`hasPctData`) shows `eur`, and the % button is disabled. The
+fallback is display-only: the stored value is kept and `pctFallback` marks the fallback, so the next
+loaded history with % data brings the view back to `pct`, and the next mount still restores `pct`;
+`selectMode()` clears `pctFallback`, so a mode picked meanwhile, `eur` included, wins. The submode
+buttons float over the plot's top-left corner and fold to their icon below a 640 px container
+(`CONTROLS_COMPACT_BELOW_PX`), keeping the label as `title` and `aria-label`.
 
 | Submode | Series | x-axis |
 |---|---|---|
@@ -371,6 +373,18 @@ Two neighbouring labels never read the same (pinned in `chartCoreHelpers.test.ts
   year tick next to the edge would win, and the end label, pulled inward, would be the one hidden;
   its charts make room for the label instead (next bullet). The first label needs no alignment: it
   spills at most into the y-axis labels, inside the chart.
+- **Zoom** (category axis): an optional `visibleCount`, how many points a zoom leaves visible,
+  replaces `values.length` in the compactness test and the `interval`; without it, every value
+  counts. On the whole series, 365 daily points in 800 px get `interval` 33, which leaves a 34-point
+  zoom only its edge labels; counted on that window, `interval` is 2. `visiblePointCountFromZoom()`
+  reads the count from a `dataZoom` event or a `{start, end}` window, never from `getOption()`, which
+  deep-clones the whole option. `categoryAxisLabelPatch()`, the
+  `axisLabel` merged with `setOption`, puts `interval: 'auto'` first, so no merge keeps the previous
+  window's step, and gives the compact keys back their ECharts defaults once the window is wide.
+  `LineChart` and `CandlestickChart` merge it when a gesture pauses for `ZOOM_LABEL_SETTLE_MS`
+  (120 ms), `PriceChartFull` in its 200 ms `scheduleResolutionRecompute()`; resizes and full renders
+  count the visible window too. Time axes need none of it: ECharts spreads their `splitNumber` ticks
+  over the visible extent.
 - **Right inset** (time axis, compact or wide): the axis ends on the last day of the data or of the
   zoom, and ECharts centres that day's label on its tick, so half of it overhangs the plot's right
   edge. `grid.containLabel: true` reserves the labels' height, never that overhang, so on a phone
@@ -424,7 +438,8 @@ through `PriceChartCompact`, date axis hidden). The time axis serves `GrowthChar
 views (the Candles and Income ladders plan their own labels, above), `AllocationHistoryChart` and
 the broker lots charts (`LotWacPriceChart`, `LotComparisonChart` and `LotGanttChart`, which pass
 their own padding). When a chart goes back from compact to wide, its consumer rebuilds the whole
-option, so compact-only keys such as `alignMaxLabel` do not linger.
+option, or merges `categoryAxisLabelPatch()` on a zoom, so compact-only keys such as
+`alignMaxLabel` do not linger.
 
 Three of the time-axis charts take the right inset. `GrowthChart` (`base: '4%'`, 14 px labels)
 computes it in its time-axis views only (the ladders keep `'4%'`: their plan keeps the outermost

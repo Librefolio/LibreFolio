@@ -2240,3 +2240,121 @@ change to its type, quantity or cost still needs one.»
   > c'è solo `if file_info.target_broker_id and not current_user.is_superuser`: un file **senza** `target_broker_id` è
   > aperto a ogni utente con il login, anche la cancellazione (il `min_role=EDITOR` salta) — W-B3 confermata. Da
   > chiarire nell'analisi: quando nasce un file senza broker, chi l'ha caricato (se è registrato), e cosa fa la lista.
+
+### F36 — i file dei broker solo a chi ha la vista sul broker (decisione 36, W-B3) ✅ (2026-10-15) — 🧊 FROZEN
+
+**Richiesta** (coordinatore, 19:28 e 19:31; decisione 36 del developer, approvata il 15/10): «**File dei broker**
+(report, estratti): lista, anteprima e scarico solo a chi ha almeno la vista su quel broker». I nomi dei broker restano
+visibili a tutti. I file comuni e personali sono di H: accordarsi sull'elenco e sullo scarico. Lotto dopo N2, prima di
+W-B20. `backend/app/main.py` congelato fino al CP2b di H (questo lotto non lo tocca).
+
+**Analisi** (19:40, letta sul codice di `f8e0a9b35`):
+- Le rotte dei report sono `brim_router` in `backend/app/api/v1/brokers.py` (`/api/v1/brokers/import/…`). Il caricamento vuole un
+  broker con EDITOR (`:577-601`); la lista (`:653-684`) filtra per broker accessibili; info, anteprima, scarico, ultimo
+  parse, controllo del plugin (VIEWER+) e parse, cancellazione (EDITOR) passano da `_get_brim_file_with_access`
+  (`:120-140`). I set (`/sets/preview`, `/sets/combine`), `/gap-fix` e `/duplicates` vogliono EDITOR sul broker e leggono
+  solo i file di quel broker (`brim_report_sets.py:128`, `target_broker_id == broker_id`).
+- **Il buco (W-B3, confermata)**: i file **senza broker** (cartella radice di ogni stato in `broker_reports/`, «backward
+  compatibility»: caricati da versioni vecchie) li vede e li tocca chiunque abbia il login.
+  `_get_brim_file_with_access` controlla solo `if file_info.target_broker_id and not current_user.is_superuser`, quindi
+  per loro salta tutto, anche la cancellazione e il parse (EDITOR); `brim_provider.list_files` (`:1068-1070`) li aggiunge
+  a ogni lista filtrata per broker («files without broker_id (legacy)»).
+- `BRIMFileInfo` registra `uploaded_by_user_id`: per i file senza broker si sa chi li ha caricati.
+
+**Accordo con H** (19:45): H tocca la pagina File (`routes/(app)/files/+page.svelte`), `FilesTable` e
+`FilePreviewModal` per lo scopo dei suoi file; **io nessun file del frontend**. Stessa regola dei suoi file personali per i
+miei report senza broker: **chi li ha caricati e l'admin**. H propone `can_delete: bool` per voce dell'elenco (lo mette su
+`/uploads`; la tabella nasconde «elimina» quando è falso): lo aggiungo all'elenco BRIM. Codici: `/uploads` risponderà
+404 a chi non può vedere; i report restano a **403**, come oggi e come fissano i test (`test_brim_api.py:809,948`, RS-006,
+GF-007): H lo scrive così nella doc. `services/files/file_preview.py` resta condiviso e puro; il controllo resta nelle rotte.
+
+**Disegno proposto**:
+1. `_get_brim_file_with_access`: per chi non è admin, un file con broker come oggi (ruolo ≥ `min_role` sul broker, altrimenti
+   403); un file **senza** broker solo a chi l'ha caricato (`uploaded_by_user_id`), altrimenti 403, anche per anteprima,
+   scarico, ultimo parse, controllo del plugin, parse e cancellazione.
+2. Lista: per chi non è admin, i file dei broker con almeno la vista e quelli senza broker caricati da lui; per l'admin
+   come oggi. `list_files` del provider non cambia: il filtro sul caricatore lo fa la rotta.
+3. `can_delete` sulle voci dell'elenco (`BRIMFileListItem(BRIMFileInfo)`, solo nella risposta, non nel file di metadati):
+   admin; EDITOR/OWNER sul broker (`get_accessible_broker_ids(min_role=EDITOR)`); il caricatore per un file senza broker.
+   `api sync` (campo aggiunto).
+4. Facoltativo, da W-B4 (stessa superficie): rifiutare con 404 un `file_id` che non è un UUID, prima di cercarlo.
+5. Nessuna bonifica: i file senza broker restano dove sono; chi li ha caricati e l'admin li vedono ancora.
+
+**Rossi previsti** (API, `test_brim_api.py`, con un file senza broker scritto nella cartella radice della corsia come una
+versione vecchia, `uploaded_by_user_id` = U): per V (né U né admin) lista senza il file, info/anteprima/scarico/ultimo
+parse/controllo del plugin/parse → 403, cancellazione → 403 e il file resta (oggi 200 e cancellato); `can_delete` assente
+oggi. **Guardie**: U e l'admin vedono e cancellano il file senza broker; sui file con broker VIEWER vede ma non cancella
+né fa il parse, chi non ha accesso riceve 403, EDITOR/OWNER cancella; `can_delete` falso per VIEWER, vero per
+EDITOR/OWNER, caricatore e admin.
+
+**Per l'utente**: chi condivideva un'istanza smette di vedere i report caricati da altri senza broker (versioni vecchie);
+li vedono chi li ha caricati e l'admin. CHANGELOG all'ingresso.
+
+**Passi**: 1. ✅ analisi al coordinatore (19:46; **via** alle 19:40: disegno approvato, i file senza broker solo al
+caricatore e all'admin, `can_delete` nel modello di risposta con `api sync` dichiarato, **W-B4 dentro**, nessuna bonifica;
+prove mirate una alla volta, `all-backend` nello slot da chiedere, `front check` dopo `api sync`); 2. ⏳ rossi
+(test-author, 19:48); 3. cura (pronta, non applicata: `/tmp/libreFolio_w_f36_fix.py`, dry run ok: `BRIMFileListItem`,
+`_is_brim_file_id`, `_get_brim_file_with_access` e la lista); 4. prove; 5. doc (`developer/…` sui file BRIM, `user/…` se
+dice chi vede i report) e handoff.
+> **Rossi visti** (test-author, Categoria 18 di `test_api/test_brim_api.py`, righe 2770–3371; azione `api brim` con
+> `TestReportsWithoutBroker TestReportsOfABroker TestListCanDelete TestFileIdsAreUuids`; 20:12–20:14, dopo `db populate`
+> perché i test dell'admin entrano con `e2e_test_admin`): **14 rossi / 10 verdi**, come previsto — il file senza broker
+> (nella radice di `uploaded/`, scritto come una versione vecchia, con il lock `.locks/broker_none.lock`) nella lista di un
+> altro utente (3 casi), 200 su info/anteprima/scarico/ultimo parse/controllo del plugin/parse/cancellazione per un altro
+> utente (7), il file senza broker e senza caricatore aperto a tutti, `can_delete` assente, un id di 300 caratteri → **500**
+> su tutte le rotte (pathlib «file name too long»), un file chiamato `<uuid>-1` servito con 200; guardie: caricatore e
+> admin vedono e cancellano, VIEWER legge ma né parse né cancellazione, chi non ha accesso 403, EDITOR cancella, id non UUID
+> semplici già 404.
+> **⚠️ Fuori pista — `/parse` e il broker del corpo** (test-author, 20:05; incluso dal coordinatore alle 20:15): `POST
+> /files/{id}/parse` non controlla il `broker_id` del corpo, contro cui confronta duplicati e storia dei set: un EDITOR del
+> broker del file poteva lavorare su un broker che non vede. Cura: `_require_broker_editor(request.broker_id, …)`, come
+> `/duplicates`; rosso prima (test-author). Aggiunta a `/tmp/libreFolio_w_f36_fix.py` (dry run ok).
+> **Rossi di `/parse`** (`TestParseTargetBroker`, 20:20–20:21): **2 rossi / 2 verdi** (EDITOR di A che fa il parse nel
+> broker B dove è VIEWER o senza ruolo: oggi 200, la risposta e la cache con B; guardie: il parse in A, l'admin in B).
+> **Cura applicata** (20:21): `/tmp/libreFolio_w_f36_fix.py --apply`; `ruff`/`black` puliti; `api sync` (nuovo
+> `BRIMFileListItem` con `can_delete` obbligatorio; `GET /files` lo usa). **Verdi**: `api brim` **115/115** (20:22–20:31,
+> le 28 della Categoria 18 comprese). `front check`: **1 errore**, un mock di `ImportWizardModal.test.ts:307` senza
+> `can_delete` (il client valida le risposte con Zod, `validate: 'response'`; nessuna E2E finge la lista): riparazione al
+> test-author.
+> **Riparato** (test-author: `can_delete: true` sull'unica voce finta della lista in `ImportWizardModal.test.ts:315`; gli
+> altri mock di quel file non hanno voci; `defaultPluginCheck.test.ts`, `ParseDetailModal.test.ts` e `FilesTable.test.ts`
+> non fingono la lista) → `front check` svelte-check **0/0**, Vitest `ImportWizardModal.test.ts` **26/26** (20:44).
+> **Pausa delle prove** (coordinatore, ~20:45, carico 89, galleria di DV): nulla in esecuzione, «fermo». Restano dopo la
+> ripresa: le E2E mirate sulla lista dei report (`tx-import-file-selection`, `files`), la doc (docs-writer in corso),
+> `mkdocs build` e `check-links`, poi `all-backend` nello slot del coordinatore.
+> **Doc** (docs-writer, 20:58; solo EN, senza stamp): `developer/backend/brim/architecture.md` (riga dei campi del
+> sidecar e nuova sezione «🔐 Who reaches a report file» `{: #file-access }`, citata da 4 link),
+> `developer/architecture/access_control.md` (solo le righe BRIM e una frase), `developer/architecture/patterns/
+> brim_plugin_guide.md` (controllo del plugin, quali rotte vogliono EDITOR, `BRIMFileListItem`), `developer/api/
+> overview.md` (prefisso), `developer/api/curl-testing.md` (`broker_id` come campo del form: con la query era 422);
+> utente `user/files/index.en.md` (l'admin vede e cancella ogni report: debito di traduzione di una frase).
+> **⚠️ Fuori pista** (dai reperti del docs-writer): (1) `_is_brim_file_id` confrontava con `file_id.lower()`, quindi un UUID
+> **maiuscolo** passava e su un disco che non distingue maiuscole (macOS) il file veniva servito → controllo stretto,
+> rosso prima (test-author); (2) un file senza broker «vero» (prima di `f0b7aad8d`, 24/01/2026) non ha nemmeno il
+> caricatore: è solo dell'admin (la doc lo dice); (3) docstring delle rotte e di `BRIMFileListItem` (finisce nell'OpenAPI)
+> col prefisso sbagliato o senza la regola nuova → `/tmp/libreFolio_w_f36_tweaks.py` (dry run ok, anche `is not None`
+> per «ha un broker»); (4) `broker_ids` non toglie i file senza broker → **W-B32**. Corretta da me la frase della doc sul
+> maiuscolo (`architecture.md:155-158`). Da fare: la riga 72 di `LibreFolio_devWiki/wiki/decisions/brim-broker-scoped.md`
+> («Legacy metadata without `target_broker_id` is still discoverable») e il controllo del parse nel suo elenco;
+> `developer/architecture/access_control.md` «API Endpoints» resta con A-14 (stessa pagina, W-B10).
+> **Maiuscolo** (test-author F36-15, `api brim upper_cased`; 20:54–21:03): **rosso visto** (macOS: 200 su tutte e sette le
+> rotte con l'id in maiuscolo). **Ritocchi applicati** (21:03, `/tmp/libreFolio_w_f36_tweaks.py --apply`: confronto stretto
+> in `_is_brim_file_id`, `is not None`, docstring di `get_file`/`delete_file`/`download_file`/`parse_file` e di
+> `BRIMFileListItem`); `ruff`/`black` puliti. Wiki: `decisions/brim-broker-scoped.md` (il contratto: `can_delete`, il parse
+> sul broker del corpo, W-B4, i file senza broker solo al caricatore e all'admin); `check_source_paths.py` invariato (5).
+> **Seconda pausa** (21:00–21:25, G): dopo la ripresa `api sync`, `front check`, `api brim` intero, le E2E della lista
+> (`front-utility files`, `files-uploader`, `front-transaction tx-import-file-selection`, `front-broker detail`),
+> `mkdocs build`, `check-links`; `all-backend` da chiedere.
+> **Prove dopo la ripresa** (21:09–21:27, `nice`, una alla volta, in attesa quando il carico superava 70): `api sync`
+> (12 righe: le descrizioni); `front check` **0/0**; `api brim` **116/116**; E2E `front-utility files` **28**,
+> `front-transaction tx-import-file-selection` **2**, `front-broker detail` **37**; `mkdocs build` stretto, 0 avvisi
+> (3 044 URL), `check-links` **96**. **⚠️ Fuori pista**: `front-utility files-uploader` **2 rossi / 6** (desktop e mobile di
+> «BRIM URL keeps an unknown numeric uploader distinct from an absent owner»): lo spec **finge** la lista dei report
+> (`files-uploader.spec.ts:188`, una tabella di rotte, sfuggita alla ricerca di `route(` del test-author) con voci senza
+> `can_delete`, e la validazione Zod delle risposte rompe la scheda: riparazione al test-author (un campo per voce).
+> **Riparato** (test-author: `can_delete: true` sulle tre voci di `REPORTS`, l'utente della pagina è OWNER del broker; una
+> ricerca più larga non trova altri mock con voci: `files-destructive.spec.ts:232` risponde con una lista vuota,
+> `galleryReportSets.ts` filtra la risposta vera) → `front-utility files-uploader` **8/8** (21:31–21:33). Restano:
+> `all-backend` nello slot (chiesto), poi l'handoff.
+> **`all-backend --workers 2`** (slot pesante 2, 21:50–22:15, `nice -n 10`): **7/7 gruppi**, 14 803 passati, 4 saltati, 0
+> rossi. Porta libera, slot restituito. Backlog: **W-B3** e **W-B4** chiuse (✅ F36). Handoff FROZEN (22:17).

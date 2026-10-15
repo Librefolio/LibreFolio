@@ -77,6 +77,7 @@ graph TD
 | Method | Signature | Description |
 |--------|-----------|-------------|
 | `code` | `@property → str` | Provider code (e.g., `"ECB"`, `"FED"`) |
+| `provider_code` | `@property → str` | The key the registry stores the provider under, and the `<CODE>` of its settings' variables: return `self.code`, as every shipped provider does. Not abstract, but a provider without it is not registered |
 | `name` | `@property → str` | Display name (e.g., `"European Central Bank"`) |
 | `base_currency` | `@property → str` | Primary base currency (e.g., `"EUR"` for ECB) |
 | `get_supported_currencies()` | `async → list[str]` | List of available quote currencies (static, or fetched over the network). Reached only through a 24 h cache with a 5 s timeout — see Phase 1 in [Flow](#flow) |
@@ -95,6 +96,8 @@ graph TD
 | `test_currencies` | `["USD","EUR","GBP","JPY","CHF"]` | Currencies that must be available for tests |
 | `multi_unit_currencies` | `set()` | Currencies quoted per 100 units (e.g., JPY, SEK). Plugin must normalize ÷100. |
 | `generate_static_url(path)` | — | Helper to build `/api/v1/uploads/plugin/fx/{path}` |
+| `settings_fields` | `()` | The values the provider needs from the instance: an API key, an account. Read with `self.settings` in `fetch_rates()` and `get_supported_currencies()`, never in `__init__`: see [Settings](#settings) |
+| `test_only` | `False` | `True` for a provider that exists for the tests: hidden from `GET /fx/providers` and from the settings catalogue |
 
 ---
 
@@ -115,6 +118,10 @@ class MyCentralBankProvider(FXRateProvider):
     @property
     def code(self) -> str:
         return "MCB"
+
+    @property
+    def provider_code(self) -> str:
+        return self.code  # the registry's key
 
     @property
     def name(self) -> str:
@@ -189,10 +196,36 @@ fx_providers/
 
 ---
 
+## 🎛️ Settings {: #settings }
+
+An FX provider that needs an API key or another value declares it in `settings_fields`. The core
+resolves the values (environment variable, saved value, default), decrypts the secret ones and binds
+them to a new instance before each use; the provider reads them in `fetch_rates()` and
+`get_supported_currencies()` with `self.settings.get("key")` and `self.settings.secret("key")`.
+
+- **Never read settings in `__init__`.** The core binds them after the instance is created, so
+  `__init__` sees only the declared defaults and no secret.
+- **System fields only.** A sync serves every user, so an FX provider receives the instance's values
+  only, and a `user` field is refused at registration. A field may be secret.
+- **Who sets them.** An administrator saves them, or the environment sets them with
+  `LIBREFOLIO_PLUGIN_FX_<CODE>_<FIELD>`, `<CODE>` being derived from `provider_code`; a set variable
+  locks the field. A secret field may also keep, in `env`, the variable the provider read its key
+  from before it declared settings.
+- **The boundary.** The service calls a provider through `call_fx_provider()`
+  (`backend/app/services/fx/runtime.py`), on an instance from `configured_fx_provider()`: a required
+  field without a value raises `FXNotConfiguredError` before any I/O, and the secrets are masked in
+  the log lines and errors of the call. Never return a secret, log it, or put it in a URL you log or
+  in an exception message: masking is only a safety net.
+
+The full contract is in [Plugin Settings](plugin_settings.md).
+
+---
+
 ## 🔗 Related Documentation
 
 - [FX Architecture](../../backend/fx/architecture.md) — Multi-provider design, sync process
 - [FX Configuration & Routing](../../backend/fx/configuration.md) — Chain routing algorithm, fallback
 - [FX Providers](../../backend/fx/providers/index.md) — ECB, FED, BOE, SNB technical details
 - [Registry Pattern Overview](registry_pattern.md) — How the plugin system works
+- [Plugin Settings](plugin_settings.md) — Declared settings, secrets and the provider call boundary
 
