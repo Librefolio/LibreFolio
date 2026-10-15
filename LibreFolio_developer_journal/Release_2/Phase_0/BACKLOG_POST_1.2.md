@@ -2077,9 +2077,18 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - `translate-validate --hide-localized` conta 102 errori nel repository. 33 vengono da CP5a: un riquadro su
     `/api/v1/system/ready` in `docker_advanced` e in `service_exposure`, in IT, FR ed ES.
   - Gli altri 69 c'erano già, in `configuration`, `filesystem` e `index`; ci sono anche le righe di CP3 e CP4.
+  - CP6 aggiunge la pagina nuova `admin/hosting_providers` (solo inglese, titolo di navigazione compreso), le righe delle
+    variabili del blocco e dei controlli d'avvio in `configuration`, e un punto in `admin/index`.
   - Si chiude con la traduzione, che parte solo su richiesta esplicita del developer.
 
-  Dettagli: piano H, §14 «CP5a passo 2».
+  Dettagli: piano H, §14 «CP5a passo 2» e «CP6 passo 4».
+- **H-6 · Due controlli d'assenza in `AboutTab.test.ts` non possono fallire** — minimo; H (test-author, CP5b), 15/10.
+  - «omits a provider section entirely when nothing is installed» e «shows each section only when its own list has
+    something in it» cercano `settings.assetProviders` con un confronto esatto.
+  - L'intestazione è però «etichetta (n)», quindi la ricerca non trova niente anche quando la sezione c'è.
+  - Cura: confrontare con `/settings\.assetProviders/`, come fa il test nuovo di CP5b.
+
+  Dettagli: piano H, §14 «CP5b».
 
 ## A · Account e accessi (fase 01)
 
