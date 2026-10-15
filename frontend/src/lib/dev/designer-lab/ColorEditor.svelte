@@ -1,7 +1,7 @@
 <script lang="ts">
     import {untrack} from 'svelte';
     import {colorKey, formatOklch, inSrgbGamut, parseColor, rgbaToOklch, toHex} from './color.js';
-    import {sourceVarValue} from './catalogView';
+    import {editTarget, isInlineAlias, sourceVarValue, varImpact} from './catalogView';
     import {literalsOf} from './export';
     import {labT} from './i18n';
     import {changeId} from './store';
@@ -60,7 +60,7 @@
         snap = c && /^var\(/.test(c.to) ? c.to.slice(4, -1).trim() : '';
     });
 
-    const varNames = $derived([...new Set([...catalog.palette.map((p) => p.var), ...catalog.css_vars.filter((v) => v.defs.length).map((v) => v.name)])].sort());
+    const varNames = $derived([...new Set([...catalog.palette.map((p) => editTarget(p)), ...catalog.css_vars.filter((v) => v.defs.length && !isInlineAlias(v)).map((v) => v.name)])].sort());
     const resolved = $derived.by(() => {
         void revision;
         const ref = /^var\(\s*(--[\w-]+)\s*\)$/.exec(to.trim());
@@ -70,12 +70,12 @@
     const oklch = $derived(resolved ? rgbaToOklch(resolved) : null);
     const outOfGamut = $derived(!!resolved && !inSrgbGamut(resolved));
     const occurrences = $derived(isLiteral ? literalsOf(catalog, {id: '', layer: selection.layer, target: selection.target, scope, from: '', to: '', alphaVariants}) : []);
-    const palette = $derived(isVar ? catalog.palette.find((p) => p.var === selection.target) : undefined);
-    const cssVar = $derived(isVar ? catalog.css_vars.find((v) => v.name === selection.target) : undefined);
+    const impact = $derived(isVar ? varImpact(catalog, selection.target) : null);
+    const cssVar = $derived(impact?.variable);
     const sharedRule = $derived(selection.layer === 'css-literal' && scope !== 'both' && occurrences.some((l) => l.theme === 'both'));
     const topClasses = $derived(
-        palette
-            ? Object.entries(palette.classes)
+        impact
+            ? Object.entries(impact.classes)
                   .sort((a, b) => b[1] - a[1])
                   .slice(0, 12)
             : [],
@@ -211,7 +211,7 @@
 
     {#if isVar}
         <h3>{$labT('editor.impact')}</h3>
-        <p>{(palette?.uses ?? 0) + (cssVar?.uses ?? 0)} {$labT('uses')} · {new Set([...Object.keys(palette?.files ?? {}), ...Object.keys(cssVar?.files ?? {})]).size} {$labT('files')}</p>
+        <p>{impact?.uses ?? 0} {$labT('uses')} · {impact?.files ?? 0} {$labT('files')}</p>
         {#if topClasses.length}<p class="classes">
                 {#each topClasses as [cls, n] (cls)}<code>{cls}</code>×{n}
                 {/each}

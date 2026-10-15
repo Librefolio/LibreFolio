@@ -61,7 +61,7 @@ An **inline tabular editor** for structured data (add, edit, delete rows).
 |---|---|---|
 | Tables and columns | one table: `rate` | **Prices**: `close` (required), `open`, `high`, `low`, `volume` (erasable). **Events**: `type` (one of the five event types) and `amount` (required), `notes` |
 | Written through | `POST /api/v1/fx/currencies/rate`; a pair shown inverted (its base after its quote in alphabetical order) stores `1 / rate` under the alphabetical pair | `POST /api/v1/assets/prices`; `POST /api/v1/assets/events`, a saved event with its `id` (edited in place, type included), a new one without |
-| Deleted through | `DELETE /api/v1/fx/currencies/rate` | `DELETE /api/v1/assets/prices`; `DELETE /api/v1/assets/events` by id, whose per-item `in_use` result (an event a transaction uses) is reported, not deleted. An event row never saved sends no DELETE |
+| Deleted through | `DELETE /api/v1/fx/currencies/rate` | `DELETE /api/v1/assets/prices`; `DELETE /api/v1/assets/events` with the asset's `asset_id` and the event ids (the server deletes only that asset's events), whose per-item `in_use` result (an event a transaction uses) is reported, not deleted. An event row never saved sends no DELETE |
 | Rows not sent | A rate that is not a number above 0, counted as *skipped (invalid)*. When every row is invalid and none is deleted, the save stops with *Rate must be strictly greater than zero (0 is not allowed).* | A price whose close is not a number above 0, counted as *skipped (invalid)*; an event without a type or a numeric amount |
 
 Both wrappers:

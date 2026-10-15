@@ -8,6 +8,8 @@ This document describes how LibreFolio manages the transient staging state of tr
 
 The staging state acts as a local in-memory sandbox where users can add, edit, clone, split, promote, and delete transactions. Rather than immediately saving changes, the operations are staged in the `TransactionBulkModal` as a list of operations. 
 
+The workspace is `TransactionBulkModal.svelte`. It owns the staging state, the validation and the commit, and renders its banners and its toolbar through `TxBulkBanners` and `TxBulkToolbar` (`frontend/src/lib/components/transactions/bulk/`), which read that state as props, write back only what they bind, and call the modal's handlers.
+
 ```mermaid
 ---
 config:
@@ -36,7 +38,7 @@ graph TD
 
 ## 🏷️ The `PendingOp` Tagged Union
 
-LibreFolio represents each staged row as a `PendingOp`. It is implemented as a TypeScript **discriminated (tagged) union** in `TransactionBulkModal.svelte` that separates metadata from pure transaction data fields (`DraftFields`).
+LibreFolio represents each staged row as a `PendingOp`. It is implemented as a TypeScript **discriminated (tagged) union**, declared with `DraftFields` in `components/transactions/bulk/txBulkTypes.ts` and held by `TransactionBulkModal.svelte`, that separates metadata from pure transaction data fields (`DraftFields`).
 
 ### State Schema
 

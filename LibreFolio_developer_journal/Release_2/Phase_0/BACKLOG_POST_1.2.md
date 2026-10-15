@@ -1898,13 +1898,19 @@ plugin.
   - Il percorso strutturale del selettore di anteprima si rompe se il DOM cambia.
 
   Dettagli: pagina developer `designer-lab.md`, «Known Limits».
-- **L-10 · Ruoli di T nel catalogo** — basso-medio; L, 14/10 (avviso del coordinatore sul workstream T). **Dipende da T-1 nella base di L.**
+- **L-10 · Ruoli di T nel catalogo** — basso-medio; L, 14/10 (avviso del coordinatore sul workstream T). **Dipende da T-1 nella base di L.** ✅ **Chiusa il 15/10**: commit `a6f29298e` (base `9d57aa4c0`), fuso con `dev_release2` in `fb2526cc4` e validato lì.
   - Classi `*-lf-<nome>`: il conteggio va esteso nello scanner **e** in `color_inventory.py` con una riga ciascuno, per tenere la parità. La riga Python di `tw_custom_re` è **assegnata a L** come estensione di ④ (coordinatore, 14/10 alle 21:59). Si fanno entrambe nello stesso cambio; la parità si verifica dopo, sullo stesso albero; i numeri prima e dopo vanno nell'handoff.
   - Catena `@theme inline`: `--color-lf-card: var(--lf-surface-card)` è un alias che a runtime non esiste. La palette e le «Variabili dell'app» devono mandare la modifica a `--lf-surface-card`, non all'alias.
   - L1: oggi gli override stanno su `html`, quindi un sotto-albero `.dark`/`.light` che ridefinisce i ruoli tiene i suoi valori. Da scriverli anche sui selettori del token (`html.dark, .dark`). Oggi nessun sotto-albero lo fa.
   - Il selettore di elementi non ha bisogno di nulla: con `inline` la regola vincitrice legge già `var(--lf-…)`.
+  - **Fatto (15/10):**
+    - `lf-` è nelle due regex, nello stesso cambio. La parità è identica prima e dopo, con `custom` da 764 a 912.
+    - Le definizioni di `@theme inline` portano `inline` e `alias_of`; la voce di palette porta `role`.
+    - Chip, editor, impatto, export e candidati `class-use` passano dal ruolo. Nell'export le occorrenze di un alias hanno `raw` uguale alla classe.
+    - L1 scrive anche su `.light` e `.dark` (`VAR_SELECTOR`).
+    - Il selettore di elementi ha avuto bisogno di due ritocchi: i candidati via ruolo e il filtro con gli alias.
 
-  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 6».
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 6»; chiusura in «L-10 — Ruoli di T nel Lab».
 - **L-11 · Interruttore «mostra i rimasti indietro»** — basso; proposta di T, 14/10.
   - Un contorno di debug, nel layer `lf-designer-lab` e sincronizzato tra le schede, sugli elementi con classi legacy (`-gray-`, `-slate-`, `bg-white`, `libre-`).
   - La lista va presa dal piano di migrazione di T.
@@ -1918,13 +1924,25 @@ plugin.
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Passo 6».
 - **L-13 · Soggetti degli E2E del Lab che seguono la migrazione di T** — basso; L, 15/10, dal rapporto di `test-author` dopo il fuso con R.
   - Gli E2E del Lab ricavano a runtime come un componente scrive il colore (fuso con R). Restano però legati ad alcuni elementi dell'app, che le ondate di T cambieranno:
-    - **W4**, transazioni: il sottotitolo della pagina passa a un'utility di ruolo (`text-lf-*`). `textPaletteClassOf` cerca una classe di palette e fallisce in modo esplicito. Con L-10 l'helper deve accettare anche le utility di ruolo, con la catena alias → ruolo. Il test L1, la sospensione e la scorciatoia vanno riportati su quel percorso.
+    - **W4**, transazioni: il sottotitolo della pagina passa a un'utility di ruolo (`text-lf-*`). `textPaletteClassOf` cerca una classe di palette e fallisce in modo esplicito. Con L-10 l'helper deve accettare anche le utility di ruolo, con la catena alias → ruolo. Il test L1, la sospensione e la scorciatoia vanno riportati su quel percorso. ✅ **Pronto con L-10 (15/10):** `colourSourceOf()` di `lab-helpers.ts` legge la classe, che sia di palette o di ruolo; per un'utility di ruolo ricava il ruolo dal CSSOM della pagina. Il test L1, la sospensione, l'export e la scorciatoia lo usano già, con chip = alias e bersaglio = ruolo; quando W4 entra non serve toccarli. `textPaletteClassOf` è stato tolto.
     - **B6**, pulizia: sparisce l'override P1 di `app.css` su `text-gray-500`. Il test del selettore in scuro va ritirato o riportato su un nuovo soggetto P1, se ne resta uno. Decisione di L in quel momento.
-    - **W6**, DataTable: l'intestazione con un'utility di ruolo chiede a `pickView` i candidati `class-use` via ruolo, cioè L-10 (2). Senza L-10 il controllo «candidato in `DataTable.svelte`» diventa rosso, e a ragione.
+    - **W6**, DataTable: l'intestazione con un'utility di ruolo chiede a `pickView` i candidati `class-use` via ruolo, cioè L-10 (2). Senza L-10 il controllo «candidato in `DataTable.svelte`» diventa rosso, e a ragione. ✅ **Coperto da L-10 (15/10):** i candidati `class-use` passano dal ruolo, verificati dal test unitario in `pickView.test.ts` e dall'E2E del selettore sul `login-modal`.
     - **W5**, ponte sRGB per ECharts: se i colori dei grafici smettono di essere letterali, il test L3 e forse il motore L3 vanno rivisti.
   - Ogni rottura è esplicita: il test cade con un messaggio che nomina il presupposto mancante.
 
   Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «Gallery candidata di L e validazione del fuso con R».
+- **L-14 · Le classi scritte nei commenti contano come usi** — basso; L, 15/10 (L-10). **Proprietari: L per lo scanner, il coordinatore per `color_inventory.py`.** Il cambio va fatto in tutti e due insieme, per non perdere la parità.
+  - Scanner e inventario Python contano le classi colore anche dentro i commenti, per tutte le famiglie. Dopo T-1, 5 dei 148 usi delle classi `lf` sono commenti di intestazione di `app.css` e `tokens.css`.
+  - Nel Lab quei commenti compaiono fra gli usi, nell'impatto e fra le occorrenze dell'export: l'agente trova una riga di commento.
+  - Correzione possibile: saltare i commenti CSS, JS e HTML nelle due implementazioni, nello stesso cambio, e rimisurare la parità.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-10 — Ruoli di T nel Lab», passo 1.
+- **L-15 · Coppie di contrasto sui ruoli `--lf-*`** — basso; L, 15/10 (L-10).
+  - Il pannello del contrasto del Lab confronta solo `--theme-text-*` con `--theme-bg-*`, più i bordi sulla card. I componenti migrati da T leggono i ruoli `--lf-*`, che il pannello non considera.
+  - T ha già un gate di contrasto sui ruoli. Al Lab servirebbe per vedere dal vivo l'effetto di una modifica.
+  - Le coppie vanno prese dalla tabella di T, non indovinate.
+
+  Dettagli: [piano di L](../Phase_1/10_colorSystem/L-designerLab/plan-phase00DesignerLab.prompt.md), «L-10 — Ruoli di T nel Lab».
 
 ## R · Fattorizzazione colori a parità di aspetto (55)
 
@@ -2029,7 +2047,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
 ## G · Gallery deterministica (56)
 
-- **G-1 · 27 schermate instabili su 177** — medio; coordinatore, 14/10, misura di due esecuzioni identiche.
+- ✅ **G-1 · 27 schermate instabili su 177** — medio; coordinatore, 14/10, misura di due esecuzioni identiche.
   - Sfondo animato del login non congelato.
   - Scorrimento di pochi pixel nel pannello lotti.
   - Altre instabili da analizzare.
@@ -2050,6 +2068,11 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
       variante su 16 (G-11).
 
     Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md).
+  - ✅ **15/10, chiusa** con il piano della 56, su decisione del coordinatore delle 16:05.
+    - La DoD è raggiunta con `g-final3`.
+    - Dopo sono arrivati il checkpoint 2, G-9 e G-10, corretta da H.
+    - **Resta aperta G-11.**
+    - La conferma su due run complete viene dalla nuova coppia di riferimento (G-13).
 - **G-2 · 4–5 test desktop falliti in ogni esecuzione completa a 10 worker, ogni volta diversi** — medio; coordinatore,
   14/10.
   - Login fermo su «auth-loading» nel primo blocco; modali delle transazioni.
@@ -2139,7 +2162,7 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     checkpoint di J. La voce nella sezione di J la scrive J.
 
   Dettagli: piano della 56, passo 6.
-- **G-9 · La gallery può fotografare un indicatore non applicato** — basso-medio; coordinatore, 15/10 (candidata di L,
+- ✅ **G-9 · La gallery può fotografare un indicatore non applicato** — basso-medio; coordinatore, 15/10 (candidata di L,
   `assets/detail-signals-macd`, mobile it chiaro: menu degli indicatori ancora aperto, MACD non applicato, 1 variante su
   16).
   - Causa (G, verificata nel codice): `selectIndicatorFromTree` (`frontend/e2e/gallery.spec.ts:165`) clicca l'opzione e
@@ -2152,9 +2175,27 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
 
     Un clic perso diventa un rosso con un messaggio chiaro, invece di uno scatto sbagliato. Vale per tutti i chiamanti:
     EMA, RSI, MACD, Bollinger.
+  - *15/10, diagnosi completata (G, sola lettura):*
+    - l'impronta dello scatto sbagliato ha il focus su `signal-tree-option-macd` e la pagina 342 px più corta: il
+      mousedown è arrivato, il clic no;
+    - `TreeSelect.open()` rimanda con due `setTimeout(0)` focus della ricerca e `scrollIntoView`; sotto carico l'input
+      passa prima dei timer, e il mouseup cade su un'altra voce;
+    - la correzione sceglie da tastiera tramite `aria-activedescendant`, dopo `settledToOpen`, e verifica l'esito;
+    - chiamanti: 5, con il drawdown.
 
-  Dettagli: piano della 56, passo 7.
-- **G-10 · Ordine casuale delle immagini del seed nelle liste di file** — medio-basso; G, 15/10, su segnalazione del
+    Via del coordinatore alle 13:01: correzione e run filtrata nella corsia 6153.
+  - *15/10, correzione fatta (test-author, `gallery.spec.ts`):* scelta da tastiera dopo `settledToOpen` e il puntatore
+    parcheggiato, con l'esito verificato (menu chiuso, card del tipo). Nella run filtrata (`g-g9-w5`, 5 worker, carico
+    86–150) l'helper è riuscito in tutti i 63 scatti presi: `focus` "-" in tutti, frame identici a `g-final3-r1`, MACD
+    verde sui due progetti. 5 rossi fuori dall'helper (lista asset, clic sul tema, `textStill`, cattura), tutti di
+    carico.
+  - ✅ **15/10, chiusa (DoD 10/10):** codice in `5da3c9eba`, che entra in `dev_release2` con l'ingresso di G-9. Sulla
+    revisione fusa `6f0198a08`, i 5 test con rossi di carico rifatti da soli a 1 worker sono verdi: EMA, RSI e Bollinger
+    desktop, drawdown desktop e mobile. Su 40 scatti: nessuna opzione con il focus, frame identici a `g-final3-r1`,
+    `live_price_check` 0.
+
+  Dettagli: piano della 56, passo 8.
+- ✅ **G-10 · Ordine casuale delle immagini del seed nelle liste di file** — medio-basso; G, 15/10, su segnalazione del
   coordinatore (`files/static-grid`: miniatura `men_04` in una corsia, `woman_07` in un'altra).
   - Causa (prodotto, verificata nel codice):
     - `seed_default_avatars()` (`backend/app/services/files/static_uploads.py:480`) scrive tutti gli avatar con lo
@@ -2169,7 +2210,17 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     una corsia all'altra. Oggi è contenuto accettato.
   - Correzione proposta (fuori dal perimetro di G): una chiave secondaria deterministica nell'ordinamento di
     `list_uploads`, per esempio il nome originale a parità di `uploaded_at`. Non cambia lo stile. Per un utente conta
-    solo fra file caricati nello stesso istante. Da instradare dal coordinatore.
+    solo fra file caricati nello stesso istante. **Instradata alla 1.3 dal coordinatore il 15/10** (difetto del
+    prodotto, probabilmente H, che ha `services/files`): la voce nella sezione di chi la prende la scrive lui.
+  - ✅ **15/10, chiusa da H** con `b4533a949` (`fix(uploads): list same-instant uploads in a stable order`), entrata in
+    `dev_release2` con `744f5a0ee`.
+    - `list_uploads()` ordina sempre per `uploaded_at`, dal più recente. A parità di data ora decide il nome originale,
+      senza distinguere le maiuscole, e poi l'id: gli avatar del seed, che hanno tutti la stessa data, escono sempre
+      nello stesso ordine.
+    - Test di H in `backend/test_scripts/test_services/test_static_uploads.py`.
+    - Nella gallery si aspetta un ordine fisso in `media/asset-picker-modal`, `files/static-tab` e `files/static-grid`, e
+      la stessa miniatura in ogni corsia. Da confermare alla prossima coppia di run dello stesso giorno sul target.
+    - Voce collegata nella sezione di H: H-10, sulla cartella degli upload svuotata dal test dei servizi.
 
   Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md).
 - **G-11 · Su mobile, a scroll fermo in fondo alla pagina, l'header resta a volte visibile, solo in spagnolo** — basso;
@@ -2190,6 +2241,45 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     Se la causa è nel prodotto, va segnalata e non corretta qui.
 
   Dettagli: [analisi del 15/10](../Phase_1/10_colorSystem/G-galleryDeterminism/evidence/analysis-final-2026-10-15.md), «Verifica delle correzioni».
+- **G-12 · Due commenti nel codice descrivono ancora il vecchio helper della gallery** — minimo; G, 15/10, handoff di
+  G-9; voce aperta su richiesta del coordinatore. **Instradata alla 1.3 dal coordinatore il 15/10**, perché
+  `SignalTreeSelect.test.ts` è del perimetro dei grafici: la voce nella sezione di chi la prende la scrive lui.
+  - Da G-9 (`5da3c9eba`), `selectIndicatorFromTree` (`frontend/e2e/gallery.spec.ts`) non tocca più il menu con il
+    puntatore. Apre con ↓, aspetta il focus sulla ricerca, sposta l'evidenziazione con ↓/↑ leggendo
+    `aria-activedescendant`, apre la famiglia chiusa con → e sceglie con Invio.
+  - `frontend/src/lib/components/charts/SignalTreeSelect.test.ts`, la rete di caratterizzazione D-K1 (workstream K):
+    - righe 16–17, l'elenco «Who leans on the contract»: attribuisce all'helper la prima famiglia aperta da sola, che
+      oggi serve allo scatto `assets/detail-signals-tree`, e la famiglia chiusa aperta con un clic, che oggi si apre
+      con →;
+    - righe 306–310: il titolo «the way the gallery helper drives it» e il commento «expand the family only when it is
+      collapsed, then click the option» descrivono il percorso vecchio.
+
+    La riga 213 resta vera. Le asserzioni restano giuste: la scelta con il clic è un percorso degli utenti. Il percorso
+    nuovo della gallery è già fissato dal blocco `keyboard` dello stesso file: ↓ sul trigger chiuso apre con il focus
+    sulla ricerca, poi ↓/↑, → sulla famiglia chiusa, Invio sceglie. Va aggiornato solo il testo, nessuna asserzione.
+  - `frontend/src/lib/components/ui/select/TreeSelect.svelte`, commento alle righe 17–19: resta vero, perché lo scatto
+    `assets/detail-signals-tree` conta sulla prima famiglia aperta da sola (`defaultExpanded`). Da rileggere insieme
+    all'elenco del test: ora la gallery si appoggia anche al contratto da tastiera.
+  - L'intestazione del test vieta di cambiarlo «to accommodate the refactor». Qui il refactor non c'entra: cambia chi
+    usa il contratto, non il contratto. Decide comunque il proprietario.
+
+  Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), passo 8.
+- **G-13 · Nuova coppia di riferimento della gallery sul target, dopo l'ingresso di T** — medio; coordinatore, 15/10,
+  assegnata a G.
+  - Quando: T entra in `dev_release2` (D-T20, dopo la revisione di T-8 da parte del developer). Via e slot li dà il
+    coordinatore; fino ad allora nessuna run.
+  - Cosa:
+    - due gallery complete dello stesso giorno sul target, con `-- --workers 6` e un populate nuovo per ogni run;
+    - `live_price_check` dopo ogni run;
+    - il diff con le maschere e l'analisi di stabilità.
+  - Perché: diventano il riferimento delle ondate e della 1.3. Contengono le inquadrature del checkpoint 2, G-9 e G-10,
+    che `g-final3` non ha.
+  - Conferma attesa:
+    - 0 instabili di inquadratura, salvo l'eventuale variante di G-11;
+    - `media/asset-picker-modal` stabile;
+    - fra quelle di contenuto, solo `brokers/import-nway-compare`, accettata.
+
+  Dettagli: [piano della 56](../Phase_1/10_colorSystem/G-galleryDeterminism/plan-phase00GalleryDeterminism.prompt.md), §4, registro del 15/10, 16:05.
 
 ## T (colori) · Token e tema (Phase_1/10_colorSystem)
 
@@ -2318,6 +2408,60 @@ Piano: [`01_platform`](../Phase_1/01_platform/plan-phase01Platform.prompt.md).
   - Cura: confrontare con `/settings\.assetProviders/`, come fa il test nuovo di CP5b.
 
   Dettagli: piano H, §14 «CP5b».
+- **H-7 · Senza `tzdata` di PyPI, su un sistema senza database dei fusi lo scheduler va in UTC** — basso; H (CP7a,
+  docs-writer), 15/10.
+  - `zoneinfo` legge il database del sistema, poi il pacchetto `tzdata` di PyPI, che non è nel lock.
+  - Nell'immagine Docker lo copre `tzdata-legacy` (CP7a). Su un host senza database (Windows), ogni fuso salvato
+    ricadrebbe in UTC (`scheduler.py:20-24`).
+  - Cura: `tzdata` nel Pipfile, nella finestra delle dipendenze.
+
+  Dettagli: piano H, §14 «CP7a passo 2».
+- **H-8 · La scheda «password dimenticata» mostra un `docker exec` che gira come root** — minimo; H (CP7a,
+  docs-writer), 15/10; il file è di A.
+  - `ForgotPasswordCard.svelte:43` mostra `docker compose exec … user reset`.
+  - Da CP7a, `./dev.py docker exec` passa per gosu con gli id numerici; il comando nudo gira come root, e i file che
+    crea restano di root fino al riavvio.
+  - Cura: mostrare il comando con gosu, come `admin/docker_advanced` (sezione «docker exec»), oppure
+    `./dev.py docker exec`.
+
+  Dettagli: piano H, §14 «CP7a passo 2».
+- **H-9 · Una seconda chiamata di `configure_logging()` lascia aperti i gestori che toglie** — minimo; H (test-author,
+  lotto del log di accesso), 15/10.
+  - `logging_config.py` toglie i gestori della radice con `removeHandler` senza `close()`; poi `basicConfig(force=True)`
+    non trova più niente da chiudere.
+  - Conta solo per il file di log, e in produzione la chiamata è una per processo.
+  - Cura: `close()` su ogni gestore tolto, oppure lasciare la pulizia a `basicConfig(force=True)`.
+
+  Dettagli: piano H, §14 «Lotto "credenziali nei log di accesso"».
+- **H-10 · `services static-uploads` è dichiarata `write-scoped`, ma svuota la cartella degli upload della corsia** —
+  basso; H (test-author, G-10), 15/10.
+  - Il fixture autouse di `test_static_uploads.py` cancella e ricrea `custom-uploads` della corsia, dove stanno anche gli
+    avatar del seed. Un'altra unità che li legge, in parallelo, li perde.
+  - Nessun rosso visto finora; c'era già prima di G-10.
+  - Cura: una cartella di upload temporanea per ogni test, sostituendo `get_uploads_dir`, oppure dichiarare l'unità
+    esclusiva.
+
+  Dettagli: piano H, §14 «Lotto piccolo: G-10 e due note di E».
+- **H-11 · Un build locale dell'immagine, dietro un proxy che ri-firma il TLS, si ferma a `pip install`** — basso; H
+  (prova Docker di CP7a), 15/10.
+  - Il container di build non conosce la CA del proxy: PyPI risponde «self-signed certificate in certificate chain».
+  - Le immagini di rilascio si costruiscono in CI: tocca solo chi costruisce in locale, in una rete aziendale o dietro un
+    proxy.
+  - Cura possibile: un secret di build facoltativo con una CA in più per pip
+    (`RUN --mount=type=secret,id=extra_ca,required=false`), documentato in `admin/docker_advanced`.
+
+  Dettagli: piano H, §14 «Validazione unica dei quattro lotti e prova Docker».
+- **H-12 · Un avvio fallito del server condiviso dei test non dice perché** — basso; H (verifica di A5), 15/10.
+  - `scripts/test_runner/_server.py` avvia `dev.py server --test` con stdout e stderr su `DEVNULL`: il runner stampa
+    solo «Shared backend exited during startup (code 1)».
+  - Le due verifiche della porta sono diverse: il runner guarda solo i listener; `cmd_server` usa `lsof -i :PORT -t`,
+    che conta ogni socket sulla porta, anche quelli del server precedente ancora in chiusura.
+  - Visto una volta, subito dopo un'altra invocazione sulla stessa corsia; non si è ripetuto. La causa resta
+    un'ipotesi.
+  - Cura: le ultime righe dell'output del server nel messaggio d'errore, e in `cmd_server` solo i listener
+    (`-sTCP:LISTEN`), come fa il runner.
+
+  Dettagli: piano H, §14 «Due aggiornamenti di base … e la verifica di C-96».
 
 ## A · Account e accessi (fase 01)
 
@@ -2619,9 +2763,16 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   dell'analisi di J, con B15 lato broker). `TransactionService.get_cash_balances`
   (`backend/app/services/transactions/transaction_service.py:476-480`) somma tutte le transazioni del broker, anche
   quelle con una data futura. Dettagli: piano 04; analisi di J.
+  ✅ 15/10, `6be11ecf3` (N1a): il riepilogo del broker prende `as_of`, il giorno dell'utente, per cassa, quantità e costo
+  medio; la cassa dalla casa unica (`native_balances`). Il resto della copia per la convalida del batch è W-B19.
 - **W-B6 · V-3, TRANSFER orfano: la scrittura e la migrazione dei dati** — basso; coordinatore, 14/10 (D-J4). A W la
   conversione in ADJUSTMENT della metà rimasta quando si cancella un broker, e la correzione degli orfani già presenti
   nei DB; a J i rossi su lotti e Dashboard. Dettagli: voce V-3 nella sezione V.
+  ✅ 15/10, `6be11ecf3` (N1b-1, la cancellazione) e `5e19c6018` + `0e4bd9790` (N1b-2/N1b-3, la correzione
+  post-migrazione `orphan_pair_halves`, entrata col punto 46 del developer): la gamba in arrivo di un TRANSFER diventa un
+  ADJUSTMENT col suo costo (Auto se mancava, finché c'è il mittente; senza, «costo mancante» con l'avviso), quelle di
+  cassa un DEPOSIT o un WITHDRAWAL. **Resta aperto il punto 47** del developer: la gamba in uscita di un TRANSFER perde
+  solo il link, come prima; se si decide di convertirla, è un lotto nuovo.
 - **W-B7 · `TODO_FUTURI`, eventi collegabili: percorso e conteggi superati** — minimo; W, 14/10 (analisi). L'endpoint è
   `POST /transactions/events/suggest`, i test API sono 10 e non 8, `suggest_events_bulk` sta in
   `services/transactions/transaction_service.py:492`. Si aggiorna quando la voce entra nel lotto K3. Dettagli: piano 04,
@@ -2636,10 +2787,10 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   `PATCH`/`DELETE /brokers/{id}/access/{user_id}`; l'API ha `GET` e `PUT /brokers/{broker_id}/access` (tutta la
   configurazione in un colpo), `PATCH` e `DELETE /brokers/{broker_id}/access/me` (`backend/app/api/v1/brokers.py:408`,
   `:440`, `:493`, `:519`). L'elenco dei metodi sopra è stato corretto in W2. Dettagli: piano 04, §12, W2 passo 5.
-- **W-B11 · `TransactionBulkModal.svelte`: `brokerName()` non ha chiamanti** — minimo, codice morto; W, 15/10 (I1). La
+- ✅ **W-B11 · `TransactionBulkModal.svelte`: `brokerName()` non ha chiamanti** — minimo, codice morto; W, 15/10 (I1). La
   funzione (`frontend/src/lib/components/transactions/modals/TransactionBulkModal.svelte:1597`) non è usata da nessuna
   parte del file né altrove; i nomi dei broker passano da `renderBrokerHtml`. Si toglie col taglio della modale (FE8a).
-  Dettagli: piano 04, §12, I1.
+  Dettagli: piano 04, §12, I1. ✅ Chiusa il 15/10 (lotto FE8a-2: la funzione è tolta col taglio del Bulk).
 - **W-B12 · `test_cross_broker_access_failure_is_atomic` lascia i suoi broker nel DB condiviso** — minimo, test; W
   (test-author di I1), 15/10. Il test (`backend/test_scripts/test_api/test_broker_multiuser_api.py`, MULTI-008d) crea
   due broker e non li cancella; i test V-23 della stessa classe nuova (`TestAccessRefusalPlacement`) puliscono anche dopo
@@ -2665,6 +2816,76 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   stessa famiglia, X-R9 (sezione X) chiede due `data-testid` in `DataImportModal.svelte` di W: il `ConfirmModal` di
   `:305` e il pulsante Annulla di `:287`. Dettagli: piano 03, §15, CP3b. **Chiusa da W il 15/10** (E0, `d226bc69e`): la
   spec chiude il picker con `tx-picker-cancel`, che c'era già; nessun difetto del prodotto.
+- **W-B17 · L'API accetta una FX_CONVERSION fra due broker** — basso, dati; W, 15/10 (N1). I metadati vogliono le due
+  metà sullo stesso broker (`backend/app/schemas/transactions/type_metadata.py:313-315`, `broker_id: equal`), e il form, la
+  promozione e gli import le scrivono così; ma `_validate_linked_pair` (`backend/app/services/transactions/validation.py:64-89`)
+  rifiuta TRANSFER e CASH_TRANSFER sullo stesso broker e non rifiuta una FX_CONVERSION su due broker, quindi
+  `POST /transactions/commit` con un `link_uuid` su due broker la crea, e cancellando uno dei due broker ne resta una metà
+  (N1b-1 la converte per segno, come lo split). Cura: `pairBrokerMismatch` per una FX_CONVERSION su due broker, con il
+  rosso. Dettagli: piano 04, §12, N1.
+- **W-B18 · `test_account_deletion_api.py`: docstring ferme al piano 34** — minimo, test; W, 15/10 (N1, segnalato da
+  test-author). ACCDEL-003 dice ancora «NEW, red today» e che la guardia conta ogni superutente con `count_superusers`
+  (l'endpoint usa `count_active_superusers`); ACCDEL-002/004/005 dicono «green today and after the fix» (la cura del
+  piano 34); `_service_delete_brokers` parla di «today's code». Le asserzioni sono giuste: cambia solo il testo. Cura:
+  un passaggio di sola prosa, nel primo lotto che tocca il file. Dettagli: piano 04, §12, N1.
+- **W-B19 · La convalida dei saldi del batch somma la cassa da sé (copia della casa unica)** — basso, numeri; W, 15/10
+  (N1, trovato da docs-writer). `backend/app/services/transactions/balances.py`: `_validate_broker_balances` (`:41-47`),
+  `_get_balances_before_date` (`:93-100`) e `get_balances_at_end_of` (`:107`, usato dal gap-fix dell'import) sommano la
+  cassa per broker e valuta senza `financial_math/native_cash.py` (regola 4, `backend.instructions.md`). Oggi le regole
+  coincidono (righe con importo e valuta), quindi nessun numero è sbagliato. **J conferma** (15/10): copia per la metà
+  di cassa. Cura: le due somme su `native_balances` (le esclusioni come filtro sui movimenti); il cammino di
+  `_validate_broker_balances` (`:68-82`) su una funzione pura della casa per il percorso (per broker e valuta, il primo
+  giorno sotto zero), con la sola attribuzione alla riga del batch e l'errore nella convalida; in una passata sola
+  (saldo iniziale più percorso), perché gira a ogni batch: misurare sui set dei report BRIM. Di passaggio, la somma
+  `Decimal` della casa toglie il dubbio del `SUM` di SQLite in virgola mobile (`Numeric(18, 6)`; mai visto sbagliare).
+  La metà delle quantità resta fuori: la casa non ha la quantità per posizione a una data (J-1 di J). Dettagli: piano
+  04, §12, N1.
+- **W-B20 · `delete_bulk` non è atomico per broker** — basso, dati; W, 15/10 (N1, trovato da docs-writer; riscritta il
+  15/10 con i reperti di X). `BrokerService.delete_bulk` (`backend/app/services/brokers/broker_service.py:424`) cattura gli
+  errori per broker e non riempie mai `errors`, e `DELETE /brokers` fa commit quando `errors` è vuoto
+  (`backend/app/api/v1/brokers.py:389`): ciò che un broker fallito ha già scritto nella sessione entra nel commit. N1b-1
+  calcola tutti i costi Auto prima di ogni modifica (BR-U-080), quindi la cancellazione stessa non lascia mezze scritture;
+  resta il caso generale. Un SAVEPOINT per broker da solo non basta: pysqlite non apre la transazione prima del primo
+  DML, e il RELEASE del savepoint più esterno fa commit (provato su un SQLite di prova: SELECT, savepoint, rollback
+  esterno → la riga resta). Reperti di X: `delete_assets_bulk` è **già atomico**, perché un `UPDATE` vuoto prima del
+  primo savepoint fa emettere `BEGIN` (`backend/app/services/assets/crud.py:349-351`, da `e50d66408`), e lo fissa
+  `backend/test_scripts/test_services/test_asset_source.py::test_delete_assets_bulk_commit_failure_propagates_and_rolls_back_tentative_deletes`
+  (rosso senza l'`UPDATE`); il listener `begin` generale è **scartato**, perché una sessione che legge, vede un altro
+  scrittore fare commit e poi scrive fallisce subito con `SQLITE_BUSY_SNAPSHOT`, che `busy_timeout` non aspetta.
+  **Cura decisa** (coordinatore, 15/10): un aiuto in `backend/app/db/session.py` che apre la transazione prima del primo
+  savepoint di un percorso di scrittura (lo stesso `UPDATE` vuoto, o `BEGIN IMMEDIATE` se nessuna transazione è aperta);
+  `delete_bulk` lo usa per broker, con un rosso prima; X potrà poi sostituirci il trucco locale di `crud.py`. Lotto
+  piccolo di W, dopo l'ingresso di N1. Dettagli: piano 04, §12, N1.
+- **W-B21 · `admin/cli_tools`: la correzione `orphan_pair_halves` solo in inglese** — minimo, doc; W, 15/10 (N1b-2).
+  La sezione «Post-Migration Fixes» di `mkdocs_src/docs/admin/cli_tools.en.md` dice la seconda correzione solo in EN
+  (coordinatore: niente IT/FR/ES né stamp, perché il file lo toccano anche A e H). Va nel debito di traduzione di A-10
+  (sezione A), che nel mio ramo non c'è ancora: da riunire alla riconciliazione. N1b-3 aggiunge un punto (il warning
+  delle violazioni di FK già presenti) e cambia una frase del riquadro (lo script stampa il log); E1c aggiunge il
+  paragrafo della correzione `event_types` (due punti). Dettagli: piano 04, §12, N1 ed E1.
+- ✅ **W-B22 · Correzioni post-migrazione: una violazione di FK già nel DB blocca ogni correzione, a ogni avvio** — basso,
+  dati; W, 15/10 (N1b-2, provato da docs-writer su un DB di prova). Il controllo comune
+  (`backend/app/db/post_migration/__init__.py`, `_common_problems`) vuole `PRAGMA foreign_key_check` **vuoto** sull'intero
+  DB dopo ogni correzione: su un DB che chiede ancora `autoincrement` e ha un link pendente, `autoincrement` fallisce, il
+  giro si ferma prima di `orphan_pair_halves` (che quel link l'avrebbe tolto), e si ripete a ogni avvio con una copia
+  `.bak` in più ogni volta. Vale per ogni violazione di FK preesistente, in qualunque tabella (già prima di N1b-2). Il
+  caso reale è raro: le cancellazioni dell'app scollegavano sempre prima, con le FK accese. Proposta: il controllo
+  confronta le violazioni prima e dopo, come già fa con i conteggi delle righe (una correzione non ne aggiunge), più un
+  rosso; file del quadro del piano 34, da assegnare. Dettagli: piano 04, §12, N1. **Chiusa** (N1b-3, 15/10, `0e4bd9790`, assegnata a W
+  dal coordinatore): conta solo una violazione nuova; quelle già presenti restano, con un warning per giro.
+- ✅ **W-B23 · `python -m backend.app.db.post_migration` non registra le righe INFO** — minimo, log; W, 15/10 (N1b-2,
+  trovato da docs-writer). Lo script (`backend/app/db/post_migration/__main__.py`) non chiama `configure_logging()`: si
+  vede il warning su stderr (con gli id per conversione, anche nel dry run), ma una riparazione fatta a mano non lascia
+  la riga per transazione né «applied and verified», che all'avvio del server vanno nel log. Proposta: configurare il
+  log nello script (console e `logs/` della data-dir configurata), con un test che non sporchi la sandbox dei test del
+  piano 34. File del quadro, da assegnare. Dettagli: piano 04, §12, N1. **Chiusa** (N1b-3, 15/10, `0e4bd9790`): il log sulla console
+  soltanto (JSON su stdout, nessun file nella data-dir), configurato solo quando lo script gira con `python -m`.
+- **W-B24 · Chi può modificare i dati condivisi degli asset: un modello per il futuro** — basso, decisione; W, 15/10
+  (decisione 25 del developer). Asset, prezzi manuali, eventi (dividendi, split) e classificazioni sono condivisi fra
+  tutti gli utenti di un'istanza: chiunque abbia fatto il login li crea, modifica, unisce e cancella, anche chi vede un
+  broker solo in lettura, e una correzione cambia i calcoli di tutti. Il developer (15/10): «l'istanza è condivisa
+  apposta, è un rischio necessario che uno sbagli, è noto e accettato» — nella 1.3 resta così. Per il futuro (istanze
+  cloud con più famiglie?): un modello fra solo gli admin, solo chi ha creato l'asset, solo chi ne ha posizioni, o un
+  registro delle modifiche con l'autore. Dettagli: file delle decisioni, punto 25.
 
 ## J · Numeri e analisi (fase 01)
 

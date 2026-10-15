@@ -91,6 +91,9 @@
     import {TRANSACTION_BULK_STEP_IDS, type TransactionBulkStepId} from '$lib/features/onboarding/onboardingGuideCatalog';
     import {resolveFormItemsFromOps, type FormModalItems} from '../shared/resolveFormItems';
     import type {TXReadItem, ValidationIssue} from '../types';
+    import type {DraftFields, PendingOp, SuggestEntry, WacResultEntry} from '../bulk/txBulkTypes';
+    import TxBulkBanners from '../bulk/TxBulkBanners.svelte';
+    import TxBulkToolbar from '../bulk/TxBulkToolbar.svelte';
     import type {TransactionCreateItem} from '$lib/types';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -102,55 +105,6 @@
     /** WorkspaceIntent — declarative API for opening the BulkModal.
      *  +page passes only action + txIds; BulkModal resolves data from txStore. */
     export type WorkspaceIntent = {action: 'create'} | {action: 'import'} | {action: 'edit'; txIds: number[]} | {action: 'delete'; txIds: number[]} | {action: 'clone'; txIds: number[]};
-
-    /** Fields displayed & editable in the grid — pure data, no metadata. */
-    interface DraftFields {
-        broker_id: number;
-        asset_id: number | null;
-        type: TransactionTypeCode;
-        date: string;
-        quantity: string;
-        cash: {code: string; amount: string} | null;
-        tags: string[];
-        description: string;
-        asset_event_id: number | null;
-        cost_basis_override: {code: string; amount: string} | null;
-        /** UI-only: tracks whether cost_basis is auto-calculated, manual, or not applicable.
-         *  null = field not applicable for this type/side (forbidden).
-         *  'auto' = WAC will be calculated automatically.
-         *  'manual' = user provided explicit value. */
-        cost_basis_mode: 'auto' | 'manual' | null;
-    }
-
-    /** Pending operation — one per row in the BulkModal (visible + hidden partners).
-     *  Tagged union: 'create' for new rows, 'edit' for existing DB rows.
-     *  If `pairedWith` is set, this op is the hidden partner of a paired row.
-     *  `link_uuid` is the shared pairing UUID for backend payloads (WAC, commit). */
-    type PendingOp = ({op: 'create'} | {op: 'edit'; txId: number; markedDelete: boolean; addedViaPicker?: boolean}) & {
-        tempId: string;
-        /** Stamped at creation (`nextCreatedSeq`): keeps new rows of the same day in the order they were added. */
-        createdSeq: number;
-        fields: DraftFields;
-        pairedWith?: string;
-        link_uuid?: string | null;
-        /** W4b: partner on inaccessible broker — read-only sentinel */ inaccessible?: boolean;
-        /**
-         * Type this row had before a *mixed* promote reassigned it.
-         *
-         * A mixed promote (one saved row + one new one) is executed by the backend,
-         * which expects both halves in their pre-promote types and derives the target
-         * itself. The grid, however, must already show the promoted type. The two
-         * therefore diverge for exactly one row, and this remembers the wire value.
-         *
-         * Unset for create+create promotes: those carry no backend promote at all —
-         * the pair is formed by a shared link_uuid — so the target type is what must
-         * be sent.
-         */
-        promoteFromType?: TransactionTypeCode | null;
-        /** Cached WAC result from validate — transient, not sent to backend */ _wacCache?: WacResultEntry | null;
-        /** Currency hint for WAC target — null = backend decides */ wacCurrencyHint?: string | null;
-        /** BRIM import field todos — blocker severity prevents commit until resolved */ todos?: ImportTodo[];
-    };
 
     interface Props {
         open: boolean;
@@ -362,13 +316,6 @@
     // WAC results — populated from validate response (Phase C: inline WAC)
     // =========================================================================
 
-    /** Single source of truth: WAC results per auto-op (keyed by tempId).
-     *  Contains full details (qualifying_txs) for FormModal display. */
-    type WacResultEntry = {
-        wac: {code: string; amount: string} | null;
-        qualifying_txs: Array<Record<string, any>>;
-        missing_pairs: string[];
-    };
     let wacResults = $state<Map<string, WacResultEntry>>(new Map());
     /** TX IDs from the last validate response (uncommitted batch) — for pending markers in qualifying tables */
     let pendingTxIds = $state<Set<number>>(new Set());
@@ -1591,11 +1538,6 @@
         const amt = Number(cash.amount);
         if (isNaN(amt)) return `${cash.amount} ${cash.code}`;
         return formatCurrencyAmountHtml(amt, cash.code, {showSign: true});
-    }
-
-    /** Broker name lookup. */
-    function brokerName(brokerId: number): string {
-        return brokers.find((b) => b.id === brokerId)?.name ?? '—';
     }
 
     /** H1-fix: Asset name with icon for readonly cells. */
@@ -2920,10 +2862,6 @@
         return results;
     });
 
-    /** Minimal suggest entry — all display data is read live from ops[].
-     *  This is future-proof: if fields change in ops, suggestions auto-update. */
-    type SuggestEntry = {tempIdA: string; tempIdB: string; targetType: string; isDB?: boolean; dbCandidateId?: number};
-
     /** Banner suggestions: only pairs where BOTH TX are already in ops[] (local↔local or local↔imported-DB) */
     let bannerSuggestions = $derived.by(() => {
         const combined: SuggestEntry[] = [];
@@ -3191,267 +3129,44 @@
         </div>
 
         <!-- Banners -->
-        <div class="px-5 pt-3 space-y-2 shrink-0">
-            {#if formError}
-                <TransactionResultBanner variant="error" title={`⛔ ${$t('common.saveCancelled')}`} subtitle={formError} dismissible ondismiss={() => (formError = null)} testId="tx-bulk-error" />
-            {:else if commitFailed && issues.length > 0}
-                <TransactionResultBanner variant="error" title={`⛔ ${$t('common.saveCancelled')}`} dismissible ondismiss={() => (commitFailed = false)} testId="tx-bulk-error">
-                    {#snippet titleAction()}
-                        {#if hasWacFxIssues}
-                            <button type="button" class="text-xs px-2 py-0.5 rounded bg-red-100 dark:bg-red-800/40 hover:bg-red-200 dark:hover:bg-red-700/50 font-medium whitespace-nowrap" onclick={handleSyncFx} disabled={syncFxLoading} data-testid="tx-bulk-sync-fx-error">
-                                {syncFxLoading ? '⏳' : '🔄'} Sync FX
-                            </button>
-                        {/if}
-                    {/snippet}
-                    {#if fieldIssues.length > 0}
-                        <p class="font-semibold text-sm mt-1 mb-1">{$t('transactions.validate.issuesHeader')}</p>
-                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-issues">
-                            {#each fieldIssues as issue}
-                                <li>
-                                    <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue" data-code={issue.code} data-row-label={getVisualRowLabel(issue)}>
-                                        {#if issue.index < 0}{getVisualRowLabel(issue)}:
-                                        {:else}{$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}:
-                                        {/if}{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}
-                                    </button>
-                                </li>
-                            {/each}
-                        </ul>
-                    {/if}
-                    {#if balanceIssues.length > 0}
-                        <p class="font-semibold text-sm mt-2 mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
-                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-balance-issues">
-                            {#each balanceIssues as issue}
-                                <li data-testid="tx-bulk-balance-issue">
-                                    {@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}
-                                    {#if getIssueRows(issue).length > 0}
-                                        <button type="button" class="block underline hover:opacity-80 text-left disabled:opacity-50" disabled={lastIssueDraftKey !== lastDraftKey} onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-balance-rows">
-                                            {issueRowsLabel(issue)}
-                                        </button>
-                                    {:else}
-                                        <span class="block text-xs">{bulkDisplayText('transactions.bulk.balanceGroupOutsideWorkspace', "No contributing rows from this workspace match this group. Check the broker's history.")}</span>
-                                    {/if}
-                                </li>
-                            {/each}
-                        </ul>
-                    {/if}
-                </TransactionResultBanner>
-            {/if}
-            {#if showIssuesBanner && !formError && !commitFailed}
-                <TransactionResultBanner variant="warning" title={`⚠️ ${$t('transactions.validate.issuesHeader')}`} dismissible ondismiss={() => (issuesDismissed = true)} testId="tx-bulk-issues-header">
-                    {#snippet titleAction()}
-                        {#if hasWacFxIssues}
-                            <button type="button" class="text-xs px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-800/40 hover:bg-amber-200 dark:hover:bg-amber-700/50 font-medium whitespace-nowrap" onclick={handleSyncFx} disabled={syncFxLoading} data-testid="tx-bulk-sync-fx">
-                                {syncFxLoading ? '⏳' : '🔄'} Sync FX
-                            </button>
-                        {/if}
-                    {/snippet}
-                    {#if fieldIssues.length > 0}
-                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-issues">
-                            {#each fieldIssues as issue}
-                                <li>
-                                    <button type="button" class="underline hover:opacity-80 text-left" onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-issue" data-code={issue.code} data-row-label={getVisualRowLabel(issue)}>
-                                        {#if issue.index < 0}{getVisualRowLabel(issue)}:
-                                        {:else}{$t('common.rowN', {values: {n: getVisualRowLabel(issue)}})}:
-                                        {/if}{@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}
-                                    </button>
-                                </li>
-                            {/each}
-                        </ul>
-                    {/if}
-                    {#if balanceIssues.length > 0}
-                        <p class="font-semibold text-sm {fieldIssues.length > 0 ? 'mt-2' : ''} mb-1">{$t('transactions.validate.balanceIssuesHeader')}</p>
-                        <ul class="list-disc pl-4 space-y-0.5 text-sm text-left" data-testid="tx-bulk-balance-issues">
-                            {#each balanceIssues as issue}
-                                <li data-testid="tx-bulk-balance-issue">
-                                    {@html sanitizeHtml(resolveIssueMessage(issue, $t, resolverCtx))}
-                                    {#if getIssueRows(issue).length > 0}
-                                        <button type="button" class="block underline hover:opacity-80 text-left disabled:opacity-50" disabled={lastIssueDraftKey !== lastDraftKey} onclick={() => jumpToIssue(issue)} data-testid="tx-bulk-balance-rows">
-                                            {issueRowsLabel(issue)}
-                                        </button>
-                                    {:else}
-                                        <span class="block text-xs">{bulkDisplayText('transactions.bulk.balanceGroupOutsideWorkspace', "No contributing rows from this workspace match this group. Check the broker's history.")}</span>
-                                    {/if}
-                                </li>
-                            {/each}
-                        </ul>
-                    {/if}
-                </TransactionResultBanner>
-            {/if}
-            {#if visibleOps.length > AUTO_VALIDATE_THRESHOLD}
-                <InfoBanner variant="info">
-                    <p data-testid="tx-bulk-auto-off">ⓘ {$t('transactions.validate.autoOff', {values: {n: visibleOps.length, threshold: AUTO_VALIDATE_THRESHOLD}})}</p>
-                </InfoBanner>
-            {/if}
-            {#if hasPairedDelete}
-                <InfoBanner variant="info">
-                    <p data-testid="tx-bulk-split-hint">ℹ️ {$t('transactions.bulk.splitHint')}</p>
-                </InfoBanner>
-            {/if}
-            {#if todoBlockerEntries.length > 0}
-                <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs" data-testid="tx-bulk-todo-blockers">
-                    <button type="button" class="flex w-full items-center gap-1.5 p-3 text-left font-medium text-red-800 dark:text-red-200" onclick={() => (todoBlockersExpanded = !todoBlockersExpanded)} data-testid="tx-bulk-todo-blockers-toggle">
-                        {#if todoBlockersExpanded}
-                            <ChevronDown size={14} class="shrink-0" />
-                        {:else}
-                            <ChevronRight size={14} class="shrink-0" />
-                        {/if}
-                        <span class="min-w-0 flex-1">🔴 {$t('importWizard.todoBlockerVerifyHint', {values: {n: todoBlockerEntries.length}})}</span>
-                    </button>
-                    {#if todoBlockersExpanded}
-                        <ul class="max-h-72 space-y-2 overflow-y-auto px-3 pb-3">
-                            {#each todoBlockerEntries as entry}
-                                <li class="space-y-1.5">
-                                    <button type="button" class="block w-full text-left text-red-700 dark:text-red-300 leading-relaxed hover:underline" onclick={() => jumpToTodoRow(entry.rowId)} title={$t('importWizard.todoGoto')} data-testid="tx-bulk-todo-goto" data-row-id={entry.rowId}>
-                                        <span class="font-mono opacity-70">#{entry.rowNumber}</span>
-                                        {resolveBrimTodoMessage(entry.todo, $t)}
-                                    </button>
-                                    {#each entry.todo.evidence ?? [] as evidence}
-                                        <BrimEvidenceTable {evidence} tone="blocker" collapsible />
-                                    {/each}
-                                </li>
-                            {/each}
-                        </ul>
-                    {/if}
-                </div>
-            {/if}
-            {#if todoWarningRowCount > 0}
-                <InfoBanner variant="warning">
-                    <div data-testid="tx-bulk-todo-warnings">
-                        <button type="button" class="flex w-full items-center gap-1.5 text-left" onclick={() => (todoWarningsExpanded = !todoWarningsExpanded)} data-testid="tx-bulk-todo-warnings-toggle">
-                            {#if todoWarningsExpanded}
-                                <ChevronDown size={14} class="shrink-0" />
-                            {:else}
-                                <ChevronRight size={14} class="shrink-0" />
-                            {/if}
-                            <span class="min-w-0 flex-1">🔧 {$t('importWizard.todoWarningVerifyHint', {values: {n: todoWarningRowCount}})}</span>
-                        </button>
-                        {#if todoWarningsExpanded}
-                            <ul class="mt-1.5 max-h-48 space-y-1 overflow-y-auto">
-                                {#each todoWarningEntries as entry}
-                                    <li>
-                                        <button type="button" class="block w-full text-left leading-relaxed hover:underline" onclick={() => jumpToTodoRow(entry.rowId)} title={$t('importWizard.todoGoto')} data-testid="tx-bulk-todo-goto" data-row-id={entry.rowId}>
-                                            <span class="font-mono opacity-70">#{entry.rowNumber}</span>
-                                            {resolveBrimTodoMessage(entry.todo, $t) || entry.todo.field}
-                                        </button>
-                                    </li>
-                                {/each}
-                            </ul>
-                        {/if}
-                    </div>
-                </InfoBanner>
-            {/if}
-            {#if bannerSuggestions.length > 0}
-                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-xs" data-testid="promote-suggest-banner" onclickcapture={() => (promoteBannerSeen = true)}>
-                    <div class="flex items-center gap-2 mb-1.5">
-                        <span class="font-medium text-green-800 dark:text-green-200">{$t('transactions.promoteSuggest.detected')}</span>
-                        {#if mergeAllPairs.length > 1}
-                            <button type="button" class="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded bg-libre-green text-white hover:bg-libre-green/90 font-medium" onclick={() => (promoteAllOpen = true)} data-testid="promote-suggest-merge-all">
-                                <Link2 size={12} />
-                                {$t('transactions.promoteSuggest.mergeAll', {values: {n: mergeAllPairs.length}})}
-                            </button>
-                        {/if}
-                    </div>
-                    <ul class="space-y-1.5">
-                        {#each bannerSuggestions.slice(0, 5) as sug, idx}
-                            {@const rawA = ops.find((o) => o.tempId === sug.tempIdA)}
-                            {@const rawB = ops.find((o) => o.tempId === sug.tempIdB)}
-                            <!-- Semantic order: "from" (negative cash) first, "to" (positive) second -->
-                            {@const needSwap = rawA && rawB && rawA.fields.cash && rawB.fields.cash && Number(rawA.fields.cash.amount) > 0 && Number(rawB.fields.cash.amount) < 0}
-                            {@const opA = needSwap ? rawB : rawA}
-                            {@const opB = needSwap ? rawA : rawB}
-                            {@const rowIdxA = opA ? ops.indexOf(opA) : -1}
-                            {@const rowIdxB = sug.isDB ? ops.findIndex((o) => o.op === 'edit' && (o as any).txId === sug.dbCandidateId) : opB ? ops.indexOf(opB) : -1}
-                            {@const typeA = opA?.fields.type ?? ''}
-                            {@const typeB = opB?.fields.type ?? ''}
-                            {@const deltaDays = opA && opB ? Math.round((new Date(opB.fields.date).getTime() - new Date(opA.fields.date).getTime()) / 86400000) : 0}
-                            {@const targetLabel = $t('transactions.types.' + sug.targetType) || sug.targetType}
-                            <li class="relative pl-3 flex items-center gap-1.5 flex-wrap" data-testid="promote-suggest-item-{idx}">
-                                <span class="absolute left-0 top-1 text-green-800 dark:text-green-200">•</span>
-                                <button
-                                    type="button"
-                                    class="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-800/30 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-700/40 font-medium"
-                                    onclick={() => triggerPromoteFromSuggestion(sug)}
-                                    data-testid="promote-suggest-link-{idx}"
-                                >
-                                    <Link2 size={12} />
-                                    {$t('transactions.promoteSuggest.merge')}
-                                </button>
-                                <!-- Row A reference (clickable — "from" / negative side) -->
-                                <button
-                                    type="button"
-                                    class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600"
-                                    onclick={() => {
-                                        if (opA) tableRef?.navigateToRowId(opA.tempId);
-                                    }}
-                                >
-                                    {rowIdxA >= 0 ? $t('transactions.promoteSuggest.rowRef', {values: {n: rowIdxA + 1}}) : typeA}
-                                </button>
-                                <img src={getTransactionTypeIconUrl(typeA)} alt="" class="w-4 h-4 inline object-contain" />
-                                <span class="text-gray-500">{$t('common.and')}</span>
-                                <!-- Row B reference -->
-                                {#if sug.isDB}
-                                    <button
-                                        type="button"
-                                        class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600"
-                                        onclick={() => {
-                                            const op = ops.find((o) => o.op === 'edit' && (o as any).txId === sug.dbCandidateId);
-                                            if (op) tableRef?.navigateToRowId(op.tempId);
-                                        }}
-                                    >
-                                        {rowIdxB >= 0 ? $t('transactions.promoteSuggest.rowRef', {values: {n: rowIdxB + 1}}) : `#${sug.dbCandidateId}`}
-                                    </button>
-                                {:else}
-                                    <button
-                                        type="button"
-                                        class="underline text-gray-700 dark:text-gray-300 hover:text-blue-600"
-                                        onclick={() => {
-                                            if (opB) tableRef?.navigateToRowId(opB.tempId);
-                                        }}
-                                    >
-                                        {rowIdxB >= 0 ? $t('transactions.promoteSuggest.rowRef', {values: {n: rowIdxB + 1}}) : typeB}
-                                    </button>
-                                {/if}
-                                <img src={getTransactionTypeIconUrl(typeB)} alt="" class="w-4 h-4 inline object-contain" />
-                                <span class="text-gray-500">→</span>
-                                <span class="font-medium text-green-700 dark:text-green-300">{targetLabel}</span>
-                                <img src={getTransactionTypeIconUrl(sug.targetType)} alt="" class="w-4 h-4 inline object-contain" />
-                                {#if deltaDays !== 0}
-                                    <span class="text-gray-400">(Δ{deltaDays > 0 ? '+' : ''}{deltaDays}d)</span>
-                                {/if}
-                                {#if sug.targetType === 'FX_CONVERSION' && opA?.fields.cash && opB?.fields.cash}
-                                    {@const aAmtFx = Number(opA.fields.cash.amount)}
-                                    {@const fromOpFx = aAmtFx < 0 ? opA : opB}
-                                    {@const toOpFx = aAmtFx < 0 ? opB : opA}
-                                    {#if fromOpFx.fields.cash && toOpFx.fields.cash && fromOpFx.fields.cash.code !== toOpFx.fields.cash.code}
-                                        {@const fxInfo = computeFxConversionInfo(Number(fromOpFx.fields.cash.amount), fromOpFx.fields.cash.code, Number(toOpFx.fields.cash.amount), toOpFx.fields.cash.code)}
-                                        {#if fxInfo}
-                                            {@const cacheKey = `${fxInfo.base}-${fxInfo.quote}-${fromOpFx.fields.date}`}
-                                            {@const fxPoint = fxMarketCache.get(cacheKey)}
-                                            {@const tooltipData = buildFxTooltipData(fxInfo, fxPoint)}
-                                            <span class="text-gray-400 mx-0.5">·</span>
-                                            <Tooltip html={buildFxTooltipHtml(tooltipData, $t)} position="bottom">
-                                                <span class="inline-flex items-center gap-0.5 text-xs text-violet-600 dark:text-violet-400 cursor-help" data-testid="promote-suggest-fx-info-{idx}">
-                                                    {@html formatCurrencyCodeHtml(fxInfo.base)}
-                                                    <span>→</span>
-                                                    {@html formatCurrencyCodeHtml(fxInfo.quote)}
-                                                    <span class="font-mono">@ {formatFixed(fxInfo.impliedRate, 4)}</span>
-                                                    {#if tooltipData.staleDays != null && tooltipData.staleDays > 0}
-                                                        <span class="text-amber-500">⚠️</span>
-                                                    {/if}
-                                                </span>
-                                            </Tooltip>
-                                        {/if}
-                                    {/if}
-                                {/if}
-                            </li>
-                        {/each}
-                    </ul>
-                    {#if allSuggestions.length > 5}
-                        <span class="text-gray-500 text-[11px] mt-1">{$t('transactions.promoteSuggest.bannerMore', {values: {n: allSuggestions.length - 5}})}</span>
-                    {/if}
-                </div>
-            {/if}
-        </div>
+        <TxBulkBanners
+            bind:commitFailed
+            bind:formError
+            {fxMarketCache}
+            {issues}
+            bind:issuesDismissed
+            {lastDraftKey}
+            {lastIssueDraftKey}
+            {ops}
+            bind:promoteAllOpen
+            bind:promoteBannerSeen
+            {syncFxLoading}
+            {tableRef}
+            bind:todoBlockersExpanded
+            bind:todoWarningsExpanded
+            {allSuggestions}
+            {balanceIssues}
+            {bannerSuggestions}
+            {fieldIssues}
+            {hasPairedDelete}
+            {hasWacFxIssues}
+            {mergeAllPairs}
+            {resolverCtx}
+            {showIssuesBanner}
+            {todoBlockerEntries}
+            {todoWarningEntries}
+            {todoWarningRowCount}
+            {visibleOps}
+            {AUTO_VALIDATE_THRESHOLD}
+            {bulkDisplayText}
+            {getIssueRows}
+            {getVisualRowLabel}
+            {handleSyncFx}
+            {issueRowsLabel}
+            {jumpToIssue}
+            {jumpToTodoRow}
+            {triggerPromoteFromSuggestion}
+        />
 
         <!-- Toolbar (Bugfix-2 §U9: action buttons right-aligned, most important first
              from the right via flex-row-reverse).
@@ -3459,111 +3174,25 @@
              TransactionFormModal that pushes its draft into the grid (no
              commit) so the user gets the structured single-row UX while
              staying in the bulk batch. -->
-        <div class="flex items-center gap-2 px-5 py-3 border-b border-gray-100 dark:border-slate-800 text-xs shrink-0" use:guideAnchor={'transaction.bulk.add_import'}>
-            <!-- Left: search & add -->
-            {#if txStoreCount() > 0}
-                <button
-                    type="button"
-                    class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600"
-                    onclick={openPicker}
-                    data-testid="tx-bulk-picker"
-                    title={$t('transactions.picker.searchAdd') || 'Search & add'}
-                >
-                    🔍 <span class="hidden sm:inline">{$t('transactions.picker.searchAdd') || 'Search & add'}</span>
-                </button>
-            {/if}
-
-            <!-- R3-B5: Delta-days filter for promote suggestions -->
-            <div class="inline-flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400">
-                <span class="hidden sm:inline">{$t('transactions.promoteSuggest.deltaLabel') || 'Max Δ days'}</span>
-                <span class="sm:hidden" title="Max delta days">Δ</span>
-                <input type="range" min="0" max="14" step="1" class="w-20 accent-libre-green" bind:value={maxDeltaDays} data-testid="promote-suggest-delta-input" />
-                <span class="text-[11px] font-mono w-5 text-center">{maxDeltaDays}</span>
-            </div>
-
-            <!-- Inline selection toolbar moved to Right group below -->
-
-            <!-- Right: actions -->
-            <div class="ml-auto flex flex-row-reverse items-center gap-2 flex-wrap">
-                <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-libre-green text-white hover:bg-libre-green/90" onclick={openAddRowForm} data-testid="tx-bulk-add-row" title={$t('common.addRow') || 'Add row'}>
-                    <Plus size={12} /> <span class="hidden sm:inline">{$t('common.addRow') || 'Add row'}</span>
-                </button>
-                <button
-                    type="button"
-                    class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 border border-gray-200 dark:border-gray-600"
-                    onclick={() => (importWizardOpen = true)}
-                    data-testid="tx-bulk-import"
-                    title={$t('common.import') || 'Import'}
-                >
-                    <Upload size={12} /> <span class="hidden sm:inline">{$t('common.import') || 'Import'}</span>
-                </button>
-                {#if importableSuggestions.length > 0}
-                    <button
-                        type="button"
-                        class="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 border border-amber-200 dark:border-amber-700"
-                        onclick={openSuggestPicker}
-                        data-testid="tx-bulk-suggest-import"
-                        title={$t('transactions.bulk.suggestLightbulb') || 'Import suggested pairs'}
-                    >
-                        <Lightbulb size={14} />
-                        <span class="text-[10px] font-medium">{importableSuggestions.reduce((n, s) => n + s.candidates.length, 0)}</span>
-                    </button>
-                {/if}
-                {#if visibleOps.some((d) => d.op === 'edit' && (deriveStatus(d) === 'edited' || deriveStatus(d) === 'delete')) || pendingSplits.length > 0}
-                    <button type="button" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700" onclick={resetAll} data-testid="tx-bulk-reset-all" title={$t('common.resetAllChanges')}>
-                        <Undo2 size={12} /> <span class="hidden sm:inline">{$t('common.resetAllChanges')}</span>
-                    </button>
-                {/if}
-                <ColumnVisibilityToggle tableRef={tableRefForToggle} />
-                {#if bulkTableSelectedRows.length > 0}
-                    <div class="flex items-center gap-2" use:guideAnchor={'transaction.bulk.selection'}>
-                        <button
-                            type="button"
-                            class="inline-flex items-center gap-1 px-2 py-1 rounded text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 text-[11px]"
-                            onclick={() => {
-                                tableRef?.clearSelection();
-                                bulkTableSelectedRows = [];
-                            }}
-                        >
-                            <span class="font-medium">{bulkTableSelectedRows.length}</span> <span class="hidden sm:inline">{$t('common.selected') || 'selected'}</span> <span class="opacity-60 ml-0.5">×</span>
-                        </button>
-                        {#if bulkTableSelectedRows.some((d) => d.op === 'edit' && (deriveStatus(d) === 'edited' || deriveStatus(d) === 'delete'))}
-                            <button
-                                type="button"
-                                class="inline-flex items-center gap-1 px-2 py-1 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700 text-[11px]"
-                                onclick={() => {
-                                    for (const r of bulkTableSelectedRows) resetRow(r.tempId);
-                                }}
-                                title={$t('transactions.bulk.resetSelected') || 'Reset selected'}
-                                data-testid="tx-bulk-reset-selected"
-                            >
-                                <Undo2 size={12} /> <span class="hidden sm:inline">{$t('transactions.bulk.resetSelected') || 'Reset'}</span>
-                            </button>
-                        {/if}
-                        <button
-                            type="button"
-                            class="inline-flex items-center gap-1 px-2 py-1 rounded text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 text-[11px]"
-                            onclick={executeBulkDeleteOnSelected}
-                            title={$t('transactions.bulk.deleteSelected') || 'Delete selected'}
-                            data-testid="tx-bulk-delete-selected"
-                        >
-                            <Trash2 size={12} /> <span class="hidden sm:inline">{$t('common.delete') || 'Delete'}</span>
-                        </button>
-                        {#if selectedForPromote}
-                            <button
-                                type="button"
-                                class="inline-flex items-center gap-1 px-2 py-1 rounded text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 text-[11px]"
-                                onclick={handlePromoteSelected}
-                                data-testid="promote-toolbar-confirm"
-                                title={$t('transactions.actions.promotePair')}
-                            >
-                                <Link2 size={12} /> <span class="hidden sm:inline">🔗 {selectedForPromote.targetLabel}</span>
-                            </button>
-                        {/if}
-                    </div>
-                {/if}
-            </div>
-        </div>
+        <TxBulkToolbar
+            bind:bulkTableSelectedRows
+            bind:importWizardOpen
+            bind:maxDeltaDays
+            {pendingSplits}
+            {tableRef}
+            {importableSuggestions}
+            {selectedForPromote}
+            {tableRefForToggle}
+            {visibleOps}
+            {deriveStatus}
+            {executeBulkDeleteOnSelected}
+            {handlePromoteSelected}
+            {openAddRowForm}
+            {openPicker}
+            {openSuggestPicker}
+            {resetAll}
+            {resetRow}
+        />
 
         <!-- DataTable body -->
         <div class="flex-1 min-h-0 overflow-y-auto px-3 py-2" data-testid="tx-bulk-body">

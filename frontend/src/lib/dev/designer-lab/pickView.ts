@@ -167,7 +167,9 @@ export function ruleLiterals(catalog: ColorCatalog, winner: PickedDeclaration, p
 }
 
 function classSites(catalog: ColorCatalog, className: string, varName: string | null, nearFiles: Set<number>): LabAnchorCandidate[] {
-    const entry = varName ? catalog.palette.find((p) => p.var === varName) : undefined;
+    // The class reads the variable directly (`text-gray-500`, `--color-gray-500`) or through an inline alias
+    // (`bg-lf-card` → `--color-lf-card` → `--lf-surface-card`, the role the utility really reads).
+    const entry = varName ? catalog.palette.find((p) => (p.var === varName || p.role === varName) && Object.keys(p.classes).includes(className)) : undefined;
     if (!entry) return [];
     const names = Object.keys(entry.classes);
     const index = names.indexOf(className);
@@ -322,5 +324,7 @@ export function pickView(catalog: ColorCatalog, element: PickedElement): PickVie
             for (const k of keysOf(d.value)) keys.add(k);
         }
     }
+    // The palette lists a role's classes under their inline alias (`--color-lf-card` for `--lf-surface-card`).
+    for (const p of catalog.palette) if (p.role && vars.has(p.role)) vars.add(p.var);
     return {element, properties, chart, filter: {vars, keys}};
 }

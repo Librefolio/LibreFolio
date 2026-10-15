@@ -20,7 +20,8 @@
 > **Decisione del developer, 15/10 alle 15:03 (D-T17).** Testuale: «archiviali opportunamente e poi dai mandato ai vari
 > sotto agenti di realizzare quanto pianificato».
 > - Il giro 2 è approvato e supera D-T15: la barra laterale torna verde.
-> - Resta aperto solo il bordo dei campi (N5): vedi [`analisi.md`](analisi.md) §2.
+> - Il bordo dei campi (N5) resta al 3:1, con un hover nuovo (D-T18); l'header è verde anche su desktop (D-T19). Vedi
+>   [`analisi.md`](analisi.md) §1, §2 e §5.
 >
 > Controlli, interpretazioni e instradamento stanno in [`analisi.md`](analisi.md). Qui sotto c'è la trascrizione
 > ordinata dei valori: dove sembra diversa dall'originale, vale l'originale.
@@ -95,7 +96,8 @@ Le tinte tenue diventano valori espliciti, al posto della ricetta 8/25/60 % in c
   - approvati `--lf-text-muted` (`#616D67` / `#7F8C87`), `--lf-danger` scuro (`#F84361`), `--lf-info` scuro
     (`#3F86FA`);
   - **bordo dei campi:** chiede di ammorbidirlo, `#94A09B` in chiaro e `#43524D` in scuro, «passando a `#606F6A` solo
-    in `:hover`». **Aperto:** [`analisi.md`](analisi.md) §2.
+    in `:hover`». **Deciso dal developer (D-T18):** restano `#7E8984` / `#606F6A`, con hover `#616D67` / `#7F8C87`;
+    vedi [`analisi.md`](analisi.md) §2.
 - **N6 · Colline e linee del login:**
   - niente pallini sulle linee;
   - chiaro: invariato (`#9BAF9B` al 25, 18 e 12 %, linea `#1A4235` al 30 %);
