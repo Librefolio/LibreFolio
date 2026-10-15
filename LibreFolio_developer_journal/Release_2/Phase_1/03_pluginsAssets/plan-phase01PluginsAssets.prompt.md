@@ -200,7 +200,7 @@ riga d'import in `main.py` o nel suo successore, da riallineare all'aggiornament
 ### 4.3 Elenchi dei fornitori permessi (F05, parte X)
 
 - `LIBREFOLIO_ASSET_PROVIDERS_ALLOWED`, `LIBREFOLIO_FX_PROVIDERS_ALLOWED` (+ `_FILE` non serve: non sono segreti), letti con
-  l'helper di configurazione di H. **Non impostate = tutti permessi** (self-hosted invariato). Profilo gestito (interruttore di
+  un accessore in `backend/app/config/<sezione>.py` (regola di H, sotto §6) e scritti in `.env.example`. **Non impostate = tutti permessi** (self-hosted invariato). Profilo gestito (interruttore di
   H) e non impostate = solo i fornitori **non scraper** (D-X4). `MANUAL` sempre permesso; i fornitori di test esclusi.
 - Ogni fornitore dichiara `is_scraper` (asset: yfinance, justETF, Borsa Italiana, CSS scraper = sì; scheduled_investment = no;
   FX: banche centrali = no). Default **prudente**: un fornitore che non lo dichiara conta come scraper, così un plugin di terzi
@@ -230,12 +230,14 @@ La dichiarazione è statica, validata alla registrazione (chiavi uniche, tipi, d
 rifiutato: un Tool non chiama fonti esterne). Un campo personale serve alle preferenze di un utente; un campo di sistema
 all'istanza (per esempio la chiave di un fornitore a pagamento, che nel self-hosted l'admin inserisce una volta per tutti).
 
-**Valori e precedenza** (`resolver.py`): variabile d'ambiente `NAME` → `NAME_FILE` → DB → default. Nome derivato
+**Valori e precedenza** (`resolver.py`): variabile d'ambiente (`NAME`, poi `NAME_FILE`, letta con `env_secret()` di H in un
+accessore di `backend/app/config/`) → DB → default. Nome derivato
 `LIBREFOLIO_PLUGIN_<FAMIGLIA>_<CODICE>_<CAMPO>` (maiuscolo, non alfanumerici → `_`), più l'alias dichiarato (es.
 `LIBREFOLIO_TWELVEDATA_API_KEY`, D-X6). Una variabile impostata **vince e blocca** il campo. Profilo gestito: i campi bloccati
 dall'ambiente **non compaiono** né nella UI né nelle API.
 
-**Archivio** (`store.py`, migrazione **006**, `006_plugin_settings`): tabella `plugin_settings` (`family`, `plugin_code`,
+**Archivio** (`store.py`, migrazione **007**, `007_plugin_settings`; la 005 e la 006 sono di A, A4 i token e A5
+`registration_mode`, regola C7 del piano generale `ed29f77c2`): tabella `plugin_settings` (`family`, `plugin_code`,
 `field_key`, `scope`, `user_id` FK `users.id ON DELETE CASCADE`, `value_json` | `secret_ciphertext`, `key_id`, `updated_at`,
 `updated_by_user_id`); CHECK su scope/utente e «esattamente uno fra valore e cifrato»; indici unici **parziali** (uno per
 `system`, uno per `user`), perché in SQLite i NULL non collidono in un UNIQUE; gli indici parziali vanno dichiarati anche nel
@@ -243,7 +245,7 @@ modello (`sqlite_where`), altrimenti il confronto modello/DB di `db_schema_valid
 non più dichiarati: ignorate. Id della revisione `006_plugin_settings` (19 caratteri, sotto il limite di 32).
 
 **Cifratura** (`crypto.py`, D-X1): `cryptography`, AES-256-GCM; sottochiave HKDF-SHA256 dalla chiave d'istanza di H con
-`info="librefolio/plugin-settings/v1"`; **AAD = contesto** (`famiglia|plugin|campo|scope|user_id`), così un cifrato spostato su
+`derive_key(purpose="plugins.settings.v1", length=32)` di H (`services/platform/instance_key.py`); **AAD = contesto** (`famiglia|plugin|campo|scope|user_id`), così un cifrato spostato su
 un'altra riga non si decifra; `key_id` = impronta della sottochiave, per la rotazione; nonce casuale da 96 bit.
 
 **API** (`api/v1/plugin_settings.py`, bulk come il resto del progetto): `GET /api/v1/plugins/settings` (catalogo dei plugin
@@ -331,8 +333,8 @@ in più (D-X2) gli zip di backup scaricabili dalla UI contengono la chiave d'ist
 - **HKDF non ha un fattore di lavoro**: la chiave d'istanza dev'essere casuale, mai una passphrase (la doc di H lo dice già).
   La sottochiave delle impostazioni si deriva dalla chiave d'istanza, non da un segreto scelto da una persona.
 - **`derive_key(purpose, n)`**: la lunghezza ora entra in `info`, quindi chiavi di lunghezze diverse non sono più una il
-  prefisso dell'altra. Da parte mia: un solo `purpose` fisso e distinto per le impostazioni dei plugin (per esempio
-  `plugin-settings/v1`), sempre lo stesso.
+  prefisso dell'altra. Da parte mia: un solo `purpose` fisso e distinto per le impostazioni dei plugin,
+  `plugins.settings.v1` (indicazione del coordinatore, 15/10), sempre lo stesso.
 - **Valore di controllo della chiave (H-3)**: se `instance.key` si perde dopo il primo uso, oggi l'istanza ne genera una
   nuova senza avvisare, e i segreti cifrati diventano illeggibili. La cura è un valore di controllo salvato nel DB, da
   **progettare con H al mio primo uso di `derive_key`, nel CP10**: è il caso «chiave persa o cambiata» della misura 4,
@@ -384,15 +386,21 @@ vecchi percorsi; stringhe di percorso in `_backend_services.py`/`_backend_utils.
 
 | Da | Cosa | Serve a |
 |---|---|---|
-| H | helper `NAME` → `NAME_FILE` → default; accessore del profilo gestito; dove dichiaro le mie variabili (nel modulo di H o nel mio dominio con il suo helper) | F05, impostazioni |
+| H | ✅ consegnato con il CP3 di H: `env_secret()` (`NAME`, poi `NAME_FILE`), accessori per sezione in `backend/app/config/<sezione>.py`, guardie `config-package` e `config-env-example`; resta l'accessore del profilo gestito (CP6 di H) | F05, impostazioni |
 | H | API della chiave d'istanza (`bytes` + id), comportamento se manca o cambia, piano di rotazione | impostazioni |
 | H | area avvisi d'istanza (facoltativa) | F05, chiavi illeggibili |
-| A | registro delle schede; id della revisione 005; cancellazione account (verifico la cascata) | impostazioni, 006 |
-| W | PL5 dopo PL2; presa in carico, appena integrato CP2b, di `api/v1/assets/events.py`, `services/assets/event_store.py`, `schemas/asset_events.py` (e dei loro test); ordine di V-22 e C-65 rispetto a FE5 | eventi, BRIM |
+| A | registro delle schede; id delle revisioni 005 e 006; cancellazione account (verifico la cascata) | impostazioni, 007 |
+| W | PL5 dopo PL2; presa in carico, appena integrato CP2b, di `api/v1/assets/events.py`, `services/assets/event_store.py`, `schemas/assets/events.py` (e dei loro test; consegnati a W dopo l'ingresso del CP2b, `05c21b2b6`); ordine di V-22 e C-65 rispetto a FE5 | eventi, BRIM |
 | J | PL1 dopo PL2; finestra per PL4 rispetto alle sue modifiche nei consumatori di `convert_bulk` | PL2, PL4, PL7 |
 | Z | M2 sulle pagine asset prima di FE5; `scheduler/jobs.py` (riga d'import dello shim) | FE5, CP2a |
 | Colori | liste dei lotti B/C/D sui miei file (`ui/modals/{SyncModalBase,PageSyncModal}`, `AssetSyncModal`, `FxSyncModal`, `utils/sync/syncHelpers.ts`, `Asset/FxDataEditorSection`, `AssetModal`, `AssetSearchAutocomplete`, pagine asset e cambi) | FE4, FE5, C-66, O-8 |
 | Developer | `cryptography` nella finestra delle dipendenze | impostazioni |
+
+**Regole di H per le variabili d'ambiente** (dal CP3 di H, riportate dal coordinatore il 15/10; guardie `services
+config-package` e `services config-env-example`), valide per ogni mia variabile nuova (F05, impostazioni dei plugin, F21):
+- si leggono solo in `backend/app/config/<sezione>.py`, con un accessore; il resto del codice chiama l'accessore;
+- un segreto si chiama `LIBREFOLIO_*` e si legge con `env_secret()`, così vale anche la variante `_FILE` (Docker secrets);
+- ogni variabile va in `.env.example`, nella sua sezione, come riga commentata con il default.
 
 **Decisioni (con la mia raccomandazione)**
 
@@ -403,7 +411,7 @@ vecchi percorsi; stringhe di percorso in `_backend_services.py`/`_backend_utils.
 | D-X3 | F21 senza fornitori premium attivi | lista come oggi: gruppi e avviso solo se almeno un premium è permesso |
 | D-X4 | Default degli elenchi nel profilo gestito | solo fornitori non scraper (flag dichiarato); `MANUAL` sempre |
 | D-X5 | Asset legati a un fornitore non più permesso | assegnazione intatta, sync saltato con esito chiaro, avviso e «Cambia fonte» |
-| D-X6 | Nome delle variabili per campo | `LIBREFOLIO_PLUGIN_<FAMIGLIA>_<CODICE>_<CAMPO>` (+ `_FILE`) più alias dichiarato |
+| D-X6 | Nome delle variabili per campo | `LIBREFOLIO_PLUGIN_<FAMIGLIA>_<CODICE>_<CAMPO>` (+ `_FILE`) più alias dichiarato; letti solo in `backend/app/config/` con `env_secret()`, ogni variabile in `.env.example` (regola di H, sotto) |
 | D-X7 | K-16 | `etc/etn` → `ETF_COMMODITY` |
 | D-X8 | Sovrascrittura di tier e priorità | due variabili (`…_PREMIUM`, `…_ORDER`); nessuna UI admin nella 1.3 |
 | D-X9 | Forma degli schemi degli asset | **superata da C3** (coordinatore, 14/10): pacchetto `schemas/assets/` con moduli per tema, eventi in `schemas/assets/events.py`, `__init__.py` con la sola docstring, hub invariato |
@@ -419,7 +427,7 @@ vecchi percorsi; stringhe di percorso in `_backend_services.py`/`_backend_utils.
 | Con | Dove | Gestione |
 |---|---|---|
 | H | `main.py:44-49,318-320,348-350`, `api/v1/system.py:26` (import dei registri), `api/v1/router.py`, `market_calendar.py` (import in `main.py:44`), `web_link_finder.py` (F03), middleware (corpo delle richieste) | PL2 entra prima dell'estrazione dell'avvio da `main.py`, altrimenti le righe d'import si sistemano all'aggiornamento di base; `market_calendar`/`web_link_finder` nel commit a parte (§4.1); `router.py`: righe concordate |
-| A | registro schede, catena 005→006, `db/models.py` (un modello in coda) | 006 con `down_revision` rimesso all'aggiornamento di base; nessun file di A toccato oltre la riga |
+| A | registro schede, catena 005→006 (A) → 007 (X), `db/models.py` (un modello in coda) | 007 con `down_revision` rimesso all'aggiornamento di base; nessun file di A toccato oltre la riga |
 | W | import in 31 plugin BRIM, `brim_provider.py`, `brim_*`, `api/v1/brokers.py`; eventi; FE5 tocca gli import di `ImportWizardModal`/`TransactionFormModal`; V-22 e C-65 su componenti asset | PL2 integrato prima di PL5; il taglio degli eventi (CP2b) prima che W scriva codice sugli eventi, poi la consegna; FE5a (solo import) prima del taglio FE8; V-22 prima o dopo FE5, deciso col coordinatore |
 | J | import in 23 plugin segnali, 15 rischio, `signal_service`, `risk/service`, AI Export, `financial_math/*` (FX), `series_preparation`/`risk` (`market_calendar`) | PL2 e PL4 presto, prima che J tocchi quegli import; PL7 dopo PL1; `signals/` e `risk/registry.py` sono file nuovi: J parte dalla base con PL2 dentro |
 | Z | pagine asset (polling), `scheduler/jobs.py` | FE5 dopo M2; la riga d'import dello shim cambia in CP2a |
@@ -463,7 +471,7 @@ graph TD
   LA --> CP8[CP8 FE5a + voci asset]
   Z2[Z: M2] --> CP8
   CP8 --> CP9[CP9 FE5b/c tagli]
-  H2[H: chiave d'istanza] --> CP10[CP10 impostazioni backend + 006]
+  H2[H: chiave d'istanza] --> CP10[CP10 impostazioni backend + 007]
   DEP[cryptography] --> CP10
   CP6 --> CP10
   CP10 --> CP11[CP11 impostazioni UI + Configura + justETF/Borsa]
@@ -501,7 +509,7 @@ graph TD
 8. **CP6 — F05**: elenchi, `is_scraper`, punto unico, esiti `PROVIDER_NOT_ALLOWED`, `provider_allowed`, sezione `.env.example`;
    avviso minimo nella UI (asset e cambi). K-16 e O-9 (backend, piccoli) viaggiano qui o in un treno qualunque.
 9. **CP7 — FE4**; **CP8 — FE5a** con O-8, O-20, K-20, K-19; **CP9 — FE5b/c**.
-10. **CP10 — impostazioni backend**: contratto e validazione, modello e migrazione 006 (upgrade/downgrade su un DB 1.2 popolato),
+10. **CP10 — impostazioni backend**: contratto e validazione, modello e migrazione 007 (upgrade/downgrade su un DB 1.2 popolato),
     cifratura, archivio, risoluzione, redazione, API, consegna asset/FX, test di sicurezza.
 11. **CP11 — impostazioni UI**: scheda, modulo, «Configura», i18n, galleria; primo uso justETF/Borsa Italiana.
 12. **CP12 — BRIM e tools**: mixin nelle due basi e consegna (BRIM con W, dopo PL5).
@@ -516,7 +524,7 @@ graph TD
   identico (o D-X10 per PL7); `mkdocs build` e `check-links` verdi; `check_source_paths.py` non peggiora; rinomine ≥ 95 %.
 - Frontend: `svelte-check`, Vitest, `front build`, E2E di asset e cambi verdi; `data-testid` e chiavi invariati.
 - F05: default invariato nel self-hosted provato da test; profilo gestito provato; asset orfani gestiti.
-- Impostazioni: §4.5 nel piano prima del codice; contratto in 4 famiglie; 006 testata su un DB 1.2; nessun segreto in risposte,
+- Impostazioni: §4.5 nel piano prima del codice; contratto in 4 famiglie; 007 testata su un DB 1.2; nessun segreto in risposte,
   log, errori, AI Export (test); permessi provati (utente/utente, admin/personale, non-admin/sistema); env vince e blocca;
   invisibilità nel profilo gestito; chiave persa o cambiata gestita; 4 lingue; doc; `security-review` senza HIGH/CRITICAL aperti.
 - F21: ordine, gruppi, badge, azioni, sezione chiusa, avviso per asset; D-X3 provato.
@@ -550,7 +558,7 @@ mai riavviando il server della corsia. Il risolutore legge l'ambiente a ogni chi
   `api assets-provider`, `fx-sync` (comportamento di default, invariato).
 - **Impostazioni**: `services plugin-settings` (nuovo: dichiarazioni, cifratura, AAD, risoluzione, redazione, blocco da ambiente
   in processo), `api plugin-settings` (nuovo: permessi, scrittura sola, esiti per campo; profilo gestito in processo),
-  `db post-migration` + test della 006 (upgrade/downgrade su un DB 1.2 popolato, `db validate`), `api account-deletion`,
+  `db post-migration` + test della 007 (upgrade/downgrade su un DB 1.2 popolato, `db validate`), `api account-deletion`,
   `services ai-export` (marcatore), `utils gate-plugin-i18n-ownership`; Vitest del modulo; E2E delle impostazioni.
 - **Frontend**: `front-asset asset-unit|asset-list|asset-detail|asset-modal|asset-data-editor|asset-classification|asset-event-delete|asset-merge`,
   `front-fx fx-unit|fx-list|fx-detail|fx-add-pair|fx-editor|fx-csv-import|fx-sync|fx-sync-mock|fx-bulk|fx-destructive`,
@@ -986,3 +994,101 @@ Validazione sulla corsia 6183, confronti con `0ddd296a0` estratto da `git archiv
   consolidate: `services` +3, `utils` +22, `api` +9); gli altri 20 riepiloghi sono identici. Porta 6183 libera.
 
 > **Fuori pista**: nessuno.
+
+### Quarto aggiornamento di base: H CP3, controllo leggero ✅ (2026-10-15) — CP2b in `dev_release2` (`05c21b2b6`)
+
+Merge `92b42d796` del coordinatore (H CP3 `940297265`: `env_secret()`, chiave d'istanza e `derive_key`, controlli all'avvio,
+`.env.example`, guardie `config-package` estesa e `config-env-example`). Controllo leggero, senza `all-backend` (la run completa
+su X CP2b + H CP3 la fa J): `services config-package` 485 (475 su `940297265`, +10 = la guardia per file: −2 file spariti, +12
+moduli nuovi del CP2b), `services config-env-example` 36, raccolta 13 760 contro 13 750 (le stesse differenze del CP2b),
+`api schema` identico salvo `info.version`, sonda delle rotte identica (139 rotte, 46 richieste). Ingresso: avanzamento veloce
+di `dev_release2` a `92b42d796`, record `05c21b2b6`; eventi passati a W con i miei elenchi.
+
+### CP3 — PL4: il servizio e il router dei cambi tagliati per tema ✅ (2026-10-15)
+
+Via del coordinatore il 15/10 (~03:51), sul mio ramo a `05c21b2b6`. Lotto di soli tagli: nessuna rinomina (con
+`git diff -M95%` nessuna coppia; alla soglia di default git appaia due file tagliati al loro pezzo più grande, sotto).
+
+- ✅ **Taglio di `services/fx/fx.py`** (1 673 righe, il file sparisce) per tema; le 17 definizioni sono identiche a HEAD, ognuna
+  con il commento che la precede; ogni modulo ha i suoi import e, dove serve, il suo logger:
+  - `base.py` (323): `FXRateProvider`, `FXProviderStartDate`, `FX_HISTORY_MIN_FALLBACK`, `FXServiceError`, `RateNotFoundError`;
+  - `sync.py` (834): `sync_pairs_bulk`, `_count_actual_changes`, `_is_date_within_sync_range`, la cache `_fx_fetch_cache` e
+    l'orchestratore non collegato `ensure_rates_multi_source`;
+  - `conversion.py` (269): `compute_chain_rate`, `_RateRow`, `convert_bulk`;
+  - `storage.py` (298): `normalize_rate_for_storage`, `upsert_rates_bulk`, `delete_rates_bulk`.
+  Dipendenze a senso unico: `sync` → `conversion`, `storage`, `base`; `conversion` → `base`. `__init__.py` con la sola
+  docstring (la mappa dei moduli).
+- ✅ **Router (C2)**: `api/v1/fx.py` (1 083) → pacchetto `api/v1/fx/`: `providers.py` (`router_providers`, 4 rotte: catalogo e
+  rotte di conversione) e `currencies.py` (`router_currencies`, 5 rotte: sync, tassi manuali, catalogo dei segnali,
+  conversione); `__init__.py` ricompone `fx_router` (prefisso `/fx`, tag `FX (Forex)`) nell'ordine di prima; `router.py`
+  intatto. Le 18 definizioni sono identiche.
+- ✅ **Import**: 31 istruzioni in 31 file (`/tmp/libreFolio_x_cp3_rewrite.py`, ogni nome al modulo che lo definisce). Alias di
+  modulo nei test, a mano: `test_fx_sync_service.py` (`fx as fx_service` → `sync as fx_service`), `test_fx_signals_api.py`
+  (→ `currencies`), `test_fx_route_schemas.py` (→ `providers`), `test_fx_api_unit.py` (alias diviso in
+  `fx_providers_api`/`fx_currencies_api`: 13 usi su `providers`, 5 su `currencies`, le 3 `monkeypatch.setattr` su
+  `currencies`, dove gli endpoint leggono `sync_pairs_bulk`, `upsert_rates_bulk` e `delete_rates_bulk`).
+- ✅ **Guardia contro le patch mute (C4)** (`/tmp/libreFolio_x_cp3_mute_patch_guard.py`): per ogni
+  `monkeypatch.setattr(<alias di modulo>, "<nome>")` dei test sui pacchetti asset e cambi, il modulo bersaglio deve legare il
+  nome a livello di modulo e leggerlo (nel suo codice o come `modulo.nome` da un altro modulo dell'app): 39 patch, nessuna
+  muta.
+- ✅ **Riferimenti**: docstring e commenti dei componenti dell'AI Export (`fx.fx.convert_bulk` → `fx.conversion.convert_bulk`,
+  9 righe in 6 file di J), 5 docstring di test, le forme sintetiche di `test_layer_boundaries.py`, 5 righe del runner,
+  `coverage_analysis.py` (pacchetto `services/fx/`), `.github` 9 righe (istruzioni FX, mappa del backend, segnali, esempi
+  dell'agente historian); docs-writer 11 sostituzioni in 6 pagine; devWiki (C6) 57 sostituzioni in 37 pagine, compresi
+  alcuni `services/fx.py` di prima del CP1 rimasti nella prosa al presente. Una riga della wiki puntava già male (il
+  «serializer» dei tassi del backup): ora punta a `api/v1/backup.py`.
+- ✅ **Prova C2** (`/tmp/libreFolio_x_cp3_routes_probe.py`, con 17 richieste in più sui cambi): tabella delle 139 rotte identica
+  e 63 risoluzioni identiche, compresi i 405 e il catch-all.
+- ✅ **Verifiche statiche** (HEAD estratto in `/tmp/libreFolio_x_cp3_base_tree`): `openapi.json` identico tranne
+  `info.version`, `tool-contracts` identico; raccolta 13 765 contro 13 760 (+5: la guardia `config-package` per file, −2 file
+  spariti e +7 moduli nuovi); scoperta dei registri invariata; ruff pulito; `black --check backend/` con i soliti 4; codice
+  morto identico (`ensure_rates_multi_source` con il percorso nuovo); `mkdocs build` stretto verde; `check-links` 95;
+  `check_source_paths.py` con i 5 artefatti ignorati; `git diff --check` pulito; grep dei vecchi percorsi di CP1-CP3: solo X-R1
+  (ora `api/v1/fx/providers.py:183`) e X-R2; riscrittori dei quattro lotti e scansione delle stringhe: zero.
+- ✅ **Suite del dominio** sulla 6183 (`/tmp/libreFolio_x_cp3_targeted.sh`, 04:04–04:13), tutte verdi: `services`
+  fx-conversion 18, fx-core 23, fx-sync-service 5, financial-math 212, config-package 490, provider-registry 7,
+  signal-registry 65, ai-export 1 021, risk-all 896; `db` fx-rates 6; `schemas` all 1 705; `api` fx 21, fx-unit 29, fx-signals 8,
+  fx-compress-errors 6, fx-sync 10, signal-catalogs 4, signal-request-validation 2.
+- ✅ **Note del coordinatore nel piano** (richieste al checkpoint): migrazione delle impostazioni **007** (§4.4, §5, §6, §7, §9,
+  §10, §11); `derive_key(purpose="plugins.settings.v1")` (§4.4, §4.5); regole di H per le variabili d'ambiente (§6, §4.3,
+  D-X6); la nota H-3 resta in §4.5.
+- ✅ **Backlog**: X-R1 riformulata (il PL4 non la chiude: il testo è in `openapi.json`, segue X-R2); W-B9 con il percorso nuovo
+  (`api/v1/fx/providers.py`, `list_providers`) e non chiusa qui: il CP3 è un riordino puro, con test e `openapi.json`
+  invariati, quindi propongo al coordinatore un lotto di solo test dopo l'ingresso; X-R4 nuova (il diagramma della guida
+  dei plugin FX, segnalata da docs-writer). Nel §6 corretto un percorso degli eventi rimasto dall'analisi
+  (`schemas/asset_events.py` → `schemas/assets/events.py`).
+- ✅ **`all-backend`** sulla 6183 (04:15:11–04:36:04, 20 min 53 s): 7/7 verdi, **13 754 passati, 28 saltati**, 0 falliti, 0 errori;
+  i 23 blocchi sono identici a quelli di `eb245b624` (13 476 / 28) tranne due: `services` 6 921 → 7 186 (+265) e `utils`
+  2 208 → 2 221 (+13). La somma, +278, è +273 di H CP3 (la differenza di raccolta già misurata nel controllo leggero, 13 487 →
+  13 760) e +5 del CP3 (la guardia `config-package` per file, nel blocco `services`). Porta 6183 libera alla fine
+  (`lsof -nP -iTCP:6183 -sTCP:LISTEN` vuoto). Log in `/tmp/libreFolio_x_cp3_allbackend.log`, righe in
+  `/tmp/libreFolio_x_cp3_allbackend_counts.txt`.
+
+### Checkpoint CP3 🧊 (2026-10-15) — FROZEN, handoff al coordinatore
+
+- **Base**: HEAD `05c21b2b6` (record dell'ingresso del CP2b); `dev_release2` è nel frattempo a `d9b853395` (W K1, lotto
+  `web_link_finder` di H).
+- **Elenchi**: rinomine pure, nessuna. Tagli: `services/fx/fx.py` → `services/fx/{base,storage,conversion,sync}.py` e
+  `api/v1/fx.py` → `api/v1/fx/{__init__,providers,currencies}.py` (2 file tolti, 7 nuovi). Con la soglia di default git
+  appaia `fx.py` → `sync.py` (53 %) e `api/v1/fx.py` → `fx/providers.py` (50 %); con `-M95%` nessuna coppia. Nessun file è
+  insieme rinominato e tagliato. Modificati 93: 23 nel backend, 18 test, 3 script, 4 in `.github`, 6 pagine MkDocs, 37
+  pagine della devWiki, 2 del journal. Totale 102 percorsi (`/tmp/libreFolio_x_cp3_paths.txt`).
+- **Conflitti previsti** (simulati con `git merge-file`, a vuoto): con `dev_release2` solo il backlog, che si fonde da solo;
+  con J (`b8d604086`) cinque file in comune, tutti fusi da soli: `test_layer_boundaries.py` (J sposta
+  `portfolio_allocation_source`, io `fx.fx` → `fx.conversion`, righe diverse della stessa tupla),
+  `_backend_services.py`, `financial_math.md`, `financial-math-single-average-cost.md` e il backlog. Nessun riferimento
+  nuovo ai vecchi percorsi dei cambi in `dev_release2` né in J (confronto per file e testo con la base). Con A, T, G, R e il
+  laboratorio di design solo il backlog. Rischio semantico: codice scritto altrove dopo questa base che importi
+  `services.fx.fx` o `api.v1.fx` come modulo cade all'import; i nomi stanno ora nel modulo che li definisce.
+- **Mappa per J** (U1, regola 10): `fx.py:717` di U1 è l'inversione in `compute_chain_rate`, ora
+  `services/fx/conversion.py:62`; X7 è `services/fx/storage.py:99` (`upsert_rates_bulk`) e `api/v1/fx/currencies.py:129`
+  (`upsert_rates_endpoint`); X8 è `api/v1/fx/currencies.py:532` (`convert_currency_bulk`); X6 è
+  `services/assets/price_query.py:474-489` dal CP2a.
+- **Messaggi di commit proposti**: `refactor(fx): cut FX service and router by theme` (100 percorsi, tutto tranne il journal)
+  e `docs(journal): X CP3 log, plan 007 and env rules, backlog X-R1, X-R4, W-B9` (piano e backlog).
+
+> **Fuori pista**:
+> - Il riscrittore del CP1, rilanciato a secco, segnalava `from backend.app.services.fx import sync as fx_service`: conosceva
+>   come sottomoduli del pacchetto solo `fx` e `registry`. Falso positivo; aggiornata la sua lista (`/tmp`, fuori dal repo).
+> - La prima versione della guardia delle patch mute dava 13 falsi positivi sugli asset (letture `core.X` da altri moduli,
+>   `DDGS` legato in un `try` di modulo): corretta prima di usarla come prova.
