@@ -9,14 +9,17 @@ Reference: backend/app/schemas/transactions/transactions.py
 
 from datetime import date
 from decimal import Decimal
+from typing import Optional
 
 import pytest
 from pydantic import ValidationError
+from pydantic_core import PydanticCustomError
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.batch import TXPromoteBatchItem, TXSplitBatchItem
-from backend.app.schemas.transactions.transactions import TXCreateItem, TXUpdateItem, tags_to_csv, validate_tags_list
+from backend.app.schemas.transactions.transactions import TXCreateItem, TXUpdateItem, tags_to_csv, validate_tags_list, validate_transaction_business_rules
+from backend.app.schemas.transactions.type_metadata import TX_TYPE_METADATA
 
 # ============================================================================
 # 1.1 LINK UUID REQUIREMENTS
@@ -912,3 +915,159 @@ class TestTXPromoteBatchItem:
     def test_duplicate_ref_for_tx_b(self):
         with pytest.raises(ValidationError, match="Provide either id_b or link_uuid_b for TX B, not both"):
             TXPromoteBatchItem(id_a=1, id_b=2, link_uuid_b="create-b")
+
+
+# ============================================================================
+# 1.10 COST BASIS MODE — RULE 12 READS TX_TYPE_METADATA (W-B31)
+# ============================================================================
+
+
+COST_BASIS_MODE_INCOMPATIBLE = "costBasisModeIncompatible"
+RULE12_QUANTITIES = (Decimal("-1"), Decimal("0"), Decimal("1"))
+
+
+def _metadata_cost_basis_rule(tx_type: TransactionType, quantity: Decimal) -> str:
+    """The cost basis rule ``TX_TYPE_METADATA`` gives ``tx_type`` on the side of ``quantity``, read when called.
+
+    The side as ``cost_basis_required()`` picks it: a paired type reads ``cost_basis_pair[1]`` for quantity > 0 (the
+    receiving side) and ``cost_basis_pair[0]`` otherwise (the sending side); any other type reads ``cost_basis_mode``.
+    (The frontend reads a quantity of 0 as the ``self`` side, ``cost_basis_mode``: on today's table the two agree.)
+    """
+    entry = TX_TYPE_METADATA[tx_type]
+    return entry.cost_basis_pair[1 if quantity > 0 else 0] if entry.cost_basis_pair else entry.cost_basis_mode
+
+
+def _metadata_admits_cost_basis(tx_type: TransactionType, quantity: Decimal) -> bool:
+    """Whether ``TX_TYPE_METADATA`` admits a cost basis for ``tx_type`` with ``quantity``: the frontend's ``cbAllowed``.
+
+    ``txPayloadHelpers.ts`` sends a ``cost_basis_mode`` only when the rule of the side is neither ``forbidden`` nor
+    ``required_qty_pos`` with quantity <= 0. Computed here from the table, not imported: the expectation must not take
+    the word of the code under test.
+    """
+    rule = _metadata_cost_basis_rule(tx_type, quantity)
+    return rule != "forbidden" and not (rule == "required_qty_pos" and quantity <= 0)
+
+
+def _rule12_refusals(tx_type: TransactionType, quantity: Decimal, cost_basis_mode: Optional[str]) -> list[PydanticCustomError]:
+    """The ``costBasisModeIncompatible`` errors ``validate_transaction_business_rules`` returns for this type, quantity and mode.
+
+    Every other input is neutral (no asset, no cash, no event), so rules 5-11 fire on most types (``assetRequired``,
+    ``cashRequired``, the sign rules). They are not the subject: only rule 12's code is kept.
+    """
+    errors = validate_transaction_business_rules(
+        tx_type=tx_type,
+        asset_id=None,
+        quantity=quantity,
+        cash=None,
+        asset_event_id=None,
+        cost_basis_mode=cost_basis_mode,
+    )
+    return [error for error in errors if error.type == COST_BASIS_MODE_INCOMPATIBLE]
+
+
+def _replace_metadata_entry(monkeypatch: pytest.MonkeyPatch, tx_type: TransactionType, **update: object) -> None:
+    """Replace ``TX_TYPE_METADATA[tx_type]`` with a copy carrying ``update``, for this test only.
+
+    ``monkeypatch.setitem`` swaps the dict's value and puts the original entry back at teardown; the original object is
+    never touched. A rule that reads ``TX_TYPE_METADATA`` when it runs sees the copy; one that never reads it, like
+    today's rule 12, or that copied the table at import time, does not.
+    """
+    monkeypatch.setitem(TX_TYPE_METADATA, tx_type, TX_TYPE_METADATA[tx_type].model_copy(update=update))
+    replaced = TX_TYPE_METADATA[tx_type]
+    assert all(getattr(replaced, field) == value for field, value in update.items()), f"scaffold: TX_TYPE_METADATA[{tx_type.value}] does not show {update}"
+
+
+class TestCostBasisModeRule12:
+    """Rule 12 of ``validate_transaction_business_rules`` (``costBasisModeIncompatible``) against ``TX_TYPE_METADATA``.
+
+    A ``cost_basis_mode`` belongs only where the metadata admits a cost basis: the rule of the side (``cost_basis_pair``
+    for a paired type, ``cost_basis_mode`` otherwise) neither ``forbidden`` nor ``required_qty_pos`` with quantity <= 0,
+    the frontend's ``cbAllowed``. Today rule 12 is a second copy written by hand (TRANSFER and ADJUSTMENT with
+    quantity > 0); W-B31 makes it read the table.
+
+    - TX-S-090, TX-S-091, TX-S-094: guards, green today (the copy matches today's table) and after W-B31.
+    - TX-S-092, TX-S-093: RED until W-B31. An entry of ``TX_TYPE_METADATA`` is replaced for one test and rule 12 must
+      follow it; the hand-written copy never reads the table, so it answers as before.
+
+    Pure: no database, no server. The only module state touched is one ``TX_TYPE_METADATA`` entry, through
+    ``monkeypatch``, which puts the original back.
+    """
+
+    def test_rule12_follows_metadata_for_every_type_and_side(self):
+        """TX-S-090: cost_basis_mode is refused exactly where TX_TYPE_METADATA admits no cost basis, every type × sign.
+
+        Guard: green today because the hand-written rule happens to match today's table, and after W-B31 because the rule
+        reads it. A cure reading the wrong side of a pair, the mode of a paired type, or ``required_qty_pos`` without its
+        quantity sign, turns a cell red. One table, one assertion: a failure shows every wrong cell at once.
+        """
+        refused: dict[tuple[str, str], bool] = {}
+        expected: dict[tuple[str, str], bool] = {}
+        rules: dict[tuple[str, str], str] = {}
+        for tx_type in TransactionType:
+            for quantity in RULE12_QUANTITIES:
+                cell = (tx_type.value, str(quantity))
+                refused[cell] = bool(_rule12_refusals(tx_type, quantity, "auto"))
+                expected[cell] = not _metadata_admits_cost_basis(tx_type, quantity)
+                rules[cell] = _metadata_cost_basis_rule(tx_type, quantity)
+
+        wrong = {cell: f"refused={refused[cell]}, metadata rule {rules[cell]!r} says refused={expected[cell]}" for cell in expected if refused[cell] != expected[cell]}
+        assert refused == expected, f"Rule 12 must refuse cost_basis_mode='auto' (costBasisModeIncompatible) exactly where TX_TYPE_METADATA admits no cost basis. Wrong cells (type, quantity): {wrong}"
+
+    def test_rule12_silent_without_cost_basis_mode(self):
+        """TX-S-091: with cost_basis_mode=None no type and no sign gets costBasisModeIncompatible.
+
+        Guard, green today and after W-B31: the metadata says WHERE a cost_basis_mode may go, never that leaving it out is
+        a fault (a missing cost is ``costBasisRequired``, a batch rule, not rule 12).
+        """
+        refused = [(tx_type.value, str(quantity)) for tx_type in TransactionType for quantity in RULE12_QUANTITIES if _rule12_refusals(tx_type, quantity, None)]
+
+        assert refused == [], f"With cost_basis_mode=None rule 12 has nothing to judge, yet it refused (type, quantity): {refused}"
+
+    def test_rule12_admits_cost_basis_mode_where_metadata_opens_it(self, monkeypatch):
+        """TX-S-092: RED until W-B31. A BUY made ``optional`` in TX_TYPE_METADATA is admitted with a cost_basis_mode.
+
+        Red today: rule 12 never reads the table, and its hand-written list (TRANSFER and ADJUSTMENT with quantity > 0)
+        refuses the BUY with costBasisModeIncompatible whatever the metadata says.
+        """
+        quantity = Decimal("1")
+        _replace_metadata_entry(monkeypatch, TransactionType.BUY, cost_basis_mode="optional")
+        assert _metadata_admits_cost_basis(TransactionType.BUY, quantity), "scaffold: the replaced BUY entry does not admit a cost basis, so this test proves nothing about rule 12"
+
+        refusals = _rule12_refusals(TransactionType.BUY, quantity, "auto")
+
+        assert refusals == [], f"W-B31: with TX_TYPE_METADATA[BUY].cost_basis_mode = 'optional', rule 12 must admit cost_basis_mode='auto' on a BUY with quantity {quantity}; it refused it {[error.context for error in refusals]}: still the hand-written copy"
+
+    def test_rule12_refuses_cost_basis_mode_where_metadata_closes_it(self, monkeypatch):
+        """TX-S-093: RED until W-B31. An ADJUSTMENT made ``forbidden`` in TX_TYPE_METADATA is refused a cost_basis_mode.
+
+        Red today: the hand-written list admits every ADJUSTMENT with quantity > 0 whatever the metadata says, so no
+        costBasisModeIncompatible comes back.
+        """
+        quantity = Decimal("1")
+        _replace_metadata_entry(monkeypatch, TransactionType.ADJUSTMENT, cost_basis_mode="forbidden")
+        assert TX_TYPE_METADATA[TransactionType.ADJUSTMENT].cost_basis_pair is None, "scaffold: ADJUSTMENT has a cost_basis_pair, which overrides the cost_basis_mode this test replaces"
+        assert not _metadata_admits_cost_basis(TransactionType.ADJUSTMENT, quantity), "scaffold: the replaced ADJUSTMENT entry still admits a cost basis, so this test proves nothing about rule 12"
+
+        refusals = _rule12_refusals(TransactionType.ADJUSTMENT, quantity, "auto")
+
+        assert refusals, f"W-B31: with TX_TYPE_METADATA[ADJUSTMENT].cost_basis_mode = 'forbidden', rule 12 must refuse cost_basis_mode='auto' on an ADJUSTMENT with quantity {quantity} (costBasisModeIncompatible); it admitted it: still the hand-written copy"
+
+    def test_rule12_create_path_refuses_cost_basis_mode_on_buy(self):
+        """TX-S-094: TXCreateItem refuses a BUY that is valid in every other respect, for its cost_basis_mode alone.
+
+        Guard, green today and after W-B31: the create path still hands cost_basis_mode to rule 12, and the refusal keeps
+        its code and params (``type``, ``qty``); W-B31 changes only the English message.
+        """
+        with pytest.raises(ValidationError) as exc_info:
+            TXCreateItem(
+                broker_id=1,
+                asset_id=1,
+                type=TransactionType.BUY,
+                date=date.today(),
+                quantity=Decimal("10"),
+                cash=Currency(code="EUR", amount=Decimal("-500")),
+                cost_basis_mode="auto",
+            )
+
+        errors = [(error["type"], error.get("ctx")) for error in exc_info.value.errors()]
+        assert errors == [(COST_BASIS_MODE_INCOMPATIBLE, {"type": "BUY", "qty": "10"})], f"A BUY with cost_basis_mode='auto' must be refused by rule 12 alone, with code and params unchanged; got {errors}"

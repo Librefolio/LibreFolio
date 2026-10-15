@@ -1,5 +1,6 @@
 """
 Transaction type metadata: the field modes and pair-form rules of each transaction type (``TX_TYPE_METADATA``),
+the type swap groups, the cost-basis rules read from the table (``cost_basis_required``, ``cost_basis_allowed``),
 the event type metadata, and the ``GET /transactions/types`` response.
 """
 
@@ -15,7 +16,6 @@ from backend.app.schemas.common import (
     StrictModel,
 )
 from backend.app.schemas.transactions.batch import VALIDATION_CODE_METADATA, TXValidationCodeInfo
-from backend.app.schemas.transactions.transactions import _swap_group_codes
 
 # =============================================================================
 # TRANSACTION TYPE METADATA
@@ -134,6 +134,32 @@ class TXTypeMetadata(StrictModel):
         None,
         description="[from_side, to_side] cost_basis rules for paired types. " "Index 0 = 'Da' (sender, qty<0), index 1 = 'A' (receiver, qty>0). " "Overrides cost_basis_mode when present. None for standalone types.",
     )
+
+
+# Sign-flip swap groups: types with identical field structure that can be
+# swapped.  Types not listed here are singletons (swap group = [self]).
+# Paired types are currently singletons but this may evolve.
+SWAP_GROUPS: list[frozenset[TransactionType]] = [
+    frozenset({TransactionType.BUY, TransactionType.SELL}),
+    frozenset({TransactionType.DEPOSIT, TransactionType.WITHDRAWAL}),
+    frozenset({TransactionType.DIVIDEND, TransactionType.INTEREST}),
+    frozenset({TransactionType.TAX, TransactionType.FEE}),
+]
+
+
+def get_swap_group(tx_type: TransactionType) -> frozenset[TransactionType]:
+    """Return the swap group containing *tx_type*, or a singleton frozenset."""
+    for group in SWAP_GROUPS:
+        if tx_type in group:
+            return group
+    return frozenset({tx_type})
+
+
+def _swap_group_codes(tx_type: TransactionType) -> list[str]:
+    """Return swap partners as a sorted list of code strings (EXCLUDING self).
+    Empty list = no swap possible (singleton or paired type)."""
+    group = get_swap_group(tx_type)
+    return sorted(t.value for t in group if t != tx_type)
 
 
 # Precomputed metadata for all transaction types.
@@ -375,21 +401,38 @@ def _build_tx_type_metadata() -> dict[TransactionType, TXTypeMetadata]:
 TX_TYPE_METADATA: dict[TransactionType, TXTypeMetadata] = _build_tx_type_metadata()
 
 
+def _cost_basis_rule(tx_type: TransactionType, quantity: Decimal) -> CostBasisFieldMode | None:
+    """The cost-basis rule ``TX_TYPE_METADATA`` gives ``tx_type`` on the side ``quantity`` puts it; ``None`` for an
+    unknown type.
+
+    A paired type reads the rule of its side — ``cost_basis_pair[0]`` for the sending one (quantity not above zero),
+    ``[1]`` for the receiving one — and any other type its ``cost_basis_mode``. The table is read at call time.
+    """
+    meta = TX_TYPE_METADATA.get(tx_type)
+    if meta is None:
+        return None
+    return meta.cost_basis_pair[1 if quantity > 0 else 0] if meta.cost_basis_pair else meta.cost_basis_mode
+
+
 def cost_basis_required(tx_type: TransactionType, quantity: Decimal | None) -> bool:
     """Whether a transaction of ``tx_type`` with ``quantity`` needs a cost basis, as ``TX_TYPE_METADATA`` says.
 
-    A paired type reads the rule of its side — ``cost_basis_pair[0]`` for the sending one (quantity below zero),
-    ``[1]`` for the receiving one — and any other type its ``cost_basis_mode``; ``required_qty_pos`` asks for a cost
-    basis when the quantity is above zero. The frontend reads the same table (``GET /transactions/types``) to decide where
-    a cost basis may be sent.
+    ``required_qty_pos``, the rule of its side (``_cost_basis_rule``), asks for a cost basis when the quantity is above
+    zero. The frontend reads the same table (``GET /transactions/types``) to decide where a cost basis may be sent.
     """
     if quantity is None:
         return False
-    meta = TX_TYPE_METADATA.get(tx_type)
-    if meta is None:
-        return False
-    rule = meta.cost_basis_pair[1 if quantity > 0 else 0] if meta.cost_basis_pair else meta.cost_basis_mode
-    return rule == "required_qty_pos" and quantity > 0
+    return _cost_basis_rule(tx_type, quantity) == "required_qty_pos" and quantity > 0
+
+
+def cost_basis_allowed(tx_type: TransactionType, quantity: Decimal) -> bool:
+    """Whether a transaction of ``tx_type`` with ``quantity`` may carry a cost basis, so a ``cost_basis_mode`` (rule 12).
+
+    Allowed when the rule of its side (``_cost_basis_rule``) is not ``forbidden``, a ``required_qty_pos`` one only with
+    a quantity above zero: the test the frontend makes as ``cbAllowed`` (``utils/transactions/txPayloadHelpers.ts``).
+    """
+    rule = _cost_basis_rule(tx_type, quantity)
+    return rule is not None and rule != "forbidden" and not (rule == "required_qty_pos" and quantity <= 0)
 
 
 class EventTypeMetadata(StrictModel):
