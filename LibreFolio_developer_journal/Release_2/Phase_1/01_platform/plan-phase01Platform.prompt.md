@@ -1645,3 +1645,287 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 >   l'interceptor un ramo, la scheda Informazioni una guardia).
 
 ### Checkpoint CP5b e CP6 🧊 (2026-10-15) — FROZEN, in attesa del coordinatore; E2E dopo la finestra
+
+> Committati dal coordinatore: `87be1e2d8`, `f8b827877` (CP5b), `2c3b00139`, `cb34327e9` (CP6) e `0326a1d02` (journal).
+> Base aggiornata: `5b2b9061f`, merge di `dev_release2` a `2338aaf79` (J-6, W E0, X-R8), pulito. Entrano dopo la
+> finestra della galleria, dopo R e L. Dopo l'avviso di fine finestra, sulla revisione combinata: `front build --debug`;
+> `api instance-block`, `api system`, `services config-audit` e `config-package`, con la guardia di J-6 arrivata con la
+> base; `core-unit`, `component-unit`; le E2E `auth`, `app-start-auth` e `settings`; `mkdocs build` stretto.
+
+### CP7a — il lotto Docker (2026-10-15, mattina) — scritto e provato in leggero
+
+> **Via** del coordinatore (08:46): durante la finestra si scrive il codice; la prova con Docker si chiede prima, perché
+> richiede il daemon acceso. B aspetta CP7a per Litestream.
+>
+> **Ordine con CP6**: CP6 va validato sulla revisione committata. Prima di quella validazione salvo CP7a come patch nella
+> cartella della sessione e lo tolgo con `git apply -R`; dopo, lo riapplico.
+>
+> **Superato** (coordinatore, 10:04): nessun file si sposta a mano. I tre lotti scritti (CP7a, C-96, il filtro del log)
+> entrano come tre checkpoint «prima delle prove» sopra `5b2b9061f`; vedi «Handoff dei tre lotti» in fondo.
+
+#### CP7a passo 1 — il codice ✅ (2026-10-15, mattina)
+
+> **Note implementazione**:
+>
+> - **P-4** (D11): `tzdata` e `tzdata-legacy` via apt nello stadio finale del `Dockerfile`. `zoneinfo` legge il
+>   database del sistema, e `tzdata` di PyPI non è nel lock. Senza `tzdata-legacy`, un fuso salvato con un nome vecchio
+>   (`Asia/Calcutta`, `US/Eastern`) farebbe ricadere lo scheduler in UTC (`scheduler.py:20-24`). Da provare
+>   nell'immagine.
+> - **C-37**: `EXPOSE 6040` soltanto; tolta la mappatura `${TEST_PORT:-6041}:6041` da `docker-compose.yml`.
+> - **N-8**: `PORT=6040` fra le `environment` dei due compose, con un commento: `PORT` è il lato host della mappatura,
+>   nel container il server ascolta sempre su 6040.
+> - **32-3** (D8): `./dev.py docker exec` lancia
+>   `sh -c 'exec gosu "$LIBREFOLIO_UID:$LIBREFOLIO_GID" python dev.py "$@"' sh …`. Gli argomenti passano da `"$@"`, gli
+>   id numerici vengono dall'ambiente dell'immagine. Corretto il commento del compose, che diceva «the 'librefolio'
+>   user».
+> - **M-25**:
+>   - `_docker_ensure_assets_built()` congela la versione una volta sola, al passo 0, prima che un passo possa scrivere
+>     un file tracciato;
+>   - il frontend si ricostruisce, con `LF_APP_VERSION` uguale a quella versione, se i sorgenti sono cambiati, se
+>     l'ultimo build era di debug o di modo ignoto, o se `frontend/build/.build-version` dice un'altra versione;
+>   - `VERSION` riceve la stessa versione. Ogni build svuota `frontend/build/`, quindi il segno esiste solo dopo un build
+>     per un'immagine;
+>   - la logica sta in `_docker_frontend_stale_reason()` e `_docker_ensure_frontend_built()`: la complessità di
+>     `_docker_ensure_assets_built` scende da 14 a 13, e la regola si prova da sola.
+> - **C-26**: il tag `test` su GHCR si cancella con un'azione remota del developer; le istruzioni vanno nell'handoff.
+>   Lettura anonima del registro (15/10, 08:55): 11 tag, `test` c'è ancora. Il suo digest (`a9cf8f56…`) non è
+>   condiviso con nessun altro tag, quindi cancellare la sua versione non tocca `latest`, `nightly` né i rilasci.
+> - `dev.py` si importa; i rilievi di ruff sono gli stessi di HEAD, a parte la complessità scesa.
+
+#### CP7a passo 2 — doc, e le correzioni venute dalla sua lettura ✅ (2026-10-15, mattina)
+
+> **Note implementazione**:
+>
+> - **Doc** (docs-writer, senza build: siamo nella finestra della galleria):
+>   - `admin/docker_advanced.en.md`: `docker exec` con gli id numerici, porte, `PORT=6040`, la modalità di test, la
+>     tabella e il YAML annotato;
+>   - `developer/dev_workflow.en.md` (passi del build con la versione congelata, niente più conflitto sulla 6041);
+>   - `release-pipeline.md` (sottosezione «Local image builds»), `architecture/overview.md`, `backend/scheduler.md`
+>     (`tzdata-legacy`), `admin/cli_tools.en.md`, `admin/configuration.en.md`;
+>   - `- PORT=6040` negli snippet di `user/installation.en.md` e `admin/service_exposure.en.md`;
+>   - debito di traduzione in `docker_advanced`, `cli_tools`, `configuration`, `service_exposure` e `installation`, non
+>     timbrato.
+> - **Correzioni dalla lettura di docs-writer**:
+>   - un `.build-version` mancante ora ha il suo motivo («made without a recorded version»), distinto da una versione
+>     diversa;
+>   - `_get_docker_tag()` rifaceva `git describe` dopo i passi di build, quindi il tag poteva dire `-dirty` mentre
+>     `VERSION` e la barra laterale no. Ora legge `VERSION`, scritto con la versione congelata; senza il file la
+>     ricalcola;
+>   - `_check_env_file()` avvisava anche per `TEST_PORT`, che il compose non usa più: ora solo `PORT`;
+>   - l'intestazione di `.env.example` ora dice che il compose fissa anche `PORT=6040`.
+>
+> **Fuori pista** (fuori dal lotto, nel backlog):
+>
+> - H-7: senza `tzdata` di PyPI, un'installazione su un sistema senza database dei fusi (Windows) fa ricadere ogni fuso
+>   dello scheduler in UTC;
+> - H-8: `ForgotPasswordCard.svelte`, di A, mostra ancora un `docker compose exec … user reset`, che gira come root.
+
+### C-96 — le corsie dei test non prendono la configurazione dell'istanza (2026-10-15, mattina) — scritto e provato in leggero
+
+> **Richiesta** del coordinatore (09:05), da un difetto trovato da E. `configure_test_runtime()` toglieva solo
+> `INSTANCE_TRUST_SECRETS`: ogni altra impostazione del `.env` del developer arrivava alle corsie (SMTP, blocco, profilo
+> gestito, le variabili di account di A5a). A-9 di A diventa parte di C-96. Il codice si scrive adesso; le prove complete
+> dopo la finestra.
+>
+> **Disegno**: le vie per cui l'impostazione arrivava sono due.
+>
+> - L'ambiente. `pipenv run` carica il `.env` prima che `dev.py` parta, e `_load_project_dotenv()` lo completava. La
+>   corsia ora toglie, qualunque sia l'origine (`.env` o shell):
+>   - ogni chiave del `.env` del developer;
+>   - ogni variabile documentata in `.env.example`;
+>   - i segreti d'istanza.
+>   Restano solo `TEST_LANE_KEEPS` (porte, cartelle dei dati, `HOST`, livello di log) e `TEST_LANE_RUNNER_OWNED` (il
+>   token della corsia). Dal `.env` si completa solo quell'elenco.
+> - `Settings`, che legge il `.env` da sé (`env_file`). In modalità test, `settings_customise_sources` toglie la fonte
+>   dotenv: un `Settings()` diretto obbedisce come `get_settings()`.
+> - Una variabile nuova di B o di E è coperta da sola: è documentata in `.env.example`, come esige la guardia, oppure
+>   sta nel `.env` del developer.
+>
+> **Note implementazione**:
+>
+> - `scripts/cli_base.py`: `TEST_LANE_KEEPS`, `TEST_LANE_RUNNER_OWNED`, `documented_instance_variables()` (le righe
+>   variabile di `.env.example`, commentate o no), `_test_lane_drops()`, `_load_project_dotenv(only=…)`;
+>   `configure_test_runtime()` toglie le variabili dopo le verifiche, prima di `PIPENV_DONT_LOAD_ENV`.
+> - `backend/app/config/__init__.py`: `Settings.settings_customise_sources`.
+> - `.env.example`: una nota nella sezione «Test Server».
+> - **Prova in processo**: un `.env` temporaneo, più esportazioni della shell.
+>   - Tolti: profilo, blocco, SMTP (non documentata, ma nel `.env`), cache delle anteprime, l'interruttore delle
+>     donazioni, `JWT_SECRET` e un'esportazione della shell di una variabile documentata.
+>   - Restano: livello di log, `HOST`, `PORT`, una variabile estranea a LibreFolio e quelle del runner.
+>   - Una seconda chiamata, come quella del server condiviso, tiene lo stesso token.
+>   - `Settings` in modalità test non legge il `.env` nemmeno quando glielo si passa; fuori dalla modalità test lo legge.
+> - Il server condiviso e il `webServer` di Playwright passano `--no-scheduler`, che `cmd_server` rimette dopo la
+>   configurazione della corsia. Toglierla dal `.env` non riaccende quindi lo scheduler.
+> - Ruff pulito. Black segnala su `cli_base.py` un debito di formato che c'era già; il file non è nel suo perimetro.
+> - **Doc**, mia, pagine solo inglesi:
+>   - `developer/architecture/security.md`: la sottosezione «Test lanes and the instance's configuration»;
+>   - `developer/test-walkthrough/index.md`: un paragrafo in «Isolated Runtime Lanes»;
+>   - `developer/architecture/settings.md`: un rimando.
+>   - Build e `check-links` dopo la finestra.
+> - **Test** affidati a test-author: il test guidato da `.env.example` che il coordinatore ha chiesto, più le chiavi non
+>   documentate, la chiamata annidata, la corsia rifiutata e `Settings` in modalità test.
+
+#### CP7a passo 3 — i test ✅ (2026-10-15, mattina)
+
+> **Note implementazione** (test-author):
+>
+> - Nuovo `backend/test_scripts/test_utilities/test_dev_cli_docker.py`, IMG-013…024, registrato come
+>   `utils dev-cli-docker` (puro). 95 test, circa 3 s; Docker non serve e nel repo non si scrive niente.
+>   - Statici, ciascuno con il suo controllo che deve fallire su file sintetici, compreso lo stato prima di CP7a:
+>     `tzdata-legacy` nell'immagine finale, `EXPOSE` uguale al `--port` del CMD, il servizio `librefolio` che pubblica
+>     solo la 6040, `PORT`/`HOST`/`LIBREFOLIO_DATA_DIR` nei due compose;
+>   - `docker exec`: l'argv esatto; gli argomenti ostili restano elementi separati, e una prova con un vero `sh` lo
+>     dimostra; gli id dati a gosu vengono da un `ENV` dell'immagine finale;
+>   - M-25: i motivi della ricostruzione, `LF_APP_VERSION` messo e rimesso a posto anche su errore ed eccezione, la
+>     versione congelata fino a `VERSION` e al tag anche quando git, dopo il passo 0, risponde `-dirty`; `cmd_docker_build`
+>     da capo a fondo;
+>   - `_check_env_file` avvisa per `PORT` e tace su `TEST_PORT`.
+> - `utils dev-cli-docker` 95 passed; `check-orphans` pulito.
+>
+> **Fuori pista**: lo script di `docker exec` non aveva i valori predefiniti degli id, che `entrypoint.sh` ha
+> (`:-1000`): ora li ha, e la doc lo riporta. test-author ha aggiornato l'argv esatto. Il caso nuovo, con un `gosu`
+> finto sul `PATH`, verifica che senza le variabili arrivi `1000:1000`, e che `entrypoint.sh` usi gli stessi valori.
+> `utils dev-cli-docker` 96 passed.
+>
+> **Fuori pista** (dal rapporto di test-author, 15 test nuovi, `utils runtime-isolation` 190):
+>
+> - La prima regola toglieva `LF_APP_VERSION`, documentata in `.env.example`. Così il job di rilascio avrebbe perso,
+>   nella galleria, la versione congelata di CP5a.
+> - Un `LIBREFOLIO_*` non documentato esportato nella shell restava. Ogni chiave del `.env` veniva tolta, comprese
+>   quelle estranee a LibreFolio (un proxy, `PYTHONPATH`).
+> - **Regola corretta**:
+>   - `kept_in_a_test_lane(name)`: `TEST_LANE_KEEPS` (le due porte, la cartella di produzione, `HOST`, il livello di
+>     log, `LF_APP_VERSION` e il `LIBREFOLIO_SERVER_WORKERS` di Playwright) oppure ogni nome `LIBREFOLIO_TEST_*`, cioè
+>     quelli del runner e dei test, compreso il token della corsia. `TEST_LANE_RUNNER_OWNED` non serve più;
+>   - si toglie ogni variabile documentata, ogni segreto d'istanza e ogni `LIBREFOLIO_*` dell'ambiente, salvo quelli
+>     tenuti;
+>   - il `.env` si carica per intero come prima, poi si toglie: le chiavi che non sono di LibreFolio restano.
+> - Prova in processo ripetuta: `LF_APP_VERSION` resta, come `LIBREFOLIO_TEST_STARTUP_TIMEOUT` e le chiavi estranee del
+>   `.env`. Un `LIBREFOLIO_*` nuovo esportato nella shell se ne va. Doc e nota di `.env.example` allineate.
+> - Restano due limiti, scritti nel codice e nella doc:
+>   - senza `.env.example`, cioè nell'immagine Docker, dove però non gira nessuna corsia, cadono solo i `LIBREFOLIO_*` e
+>     i segreti;
+>   - un helper dei test che chiama `configure_test_runtime()` toglie anche nel processo del test. Nessun test di oggi
+>     imposta una variabile documentata prima di chiamarlo.
+> - **Test allineati alla regola corretta** (test-author): `utils runtime-isolation` 194 passed.
+>   - Le attese sono costruite con `kept_in_a_test_lane`. Tre controlli nominano i valori direttamente:
+>     `LF_APP_VERSION`, i cinque `LIBREFOLIO_TEST_*` e la sonda non documentata.
+>   - Dieci regressioni simulate in memoria fanno fallire ciascuna almeno un test.
+>   - Chiesto in più un figlio `pipenv run` vero: pipenv carica il `.env` con `override=True`, e solo
+>     `PIPENV_DONT_LOAD_ENV` tiene fuori le impostazioni tolte.
+>   - Fatto: `test_a_pipenv_run_child_of_the_lane_gets_no_dropped_setting_back`, con il suo controllo. Lo stesso figlio
+>     senza la guardia riprende le impostazioni tolte; con la guardia no, e tiene `LF_APP_VERSION`.
+>   - Prima dei figli, `pipenv --venv` verifica che pipenv usi questo interprete, e il test salta se no: così pipenv
+>     non crea mai un ambiente. La stessa guardia va al test annidato che c'era già e non l'aveva.
+>   - `utils runtime-isolation` 195 passed.
+>   - Le due prove annidate passano ora da un helper solo, `run_python_in_a_pipenv_child()`. Prima di ogni
+>     `pipenv run`, l'helper fa `pipenv --venv`, e salta se l'ambiente non è questo. La verifica con un `subprocess`
+>     finto: se l'ambiente è un altro, o se non c'è, parte solo `pipenv --venv` e niente viene creato.
+>     `utils runtime-isolation` 195 passed, 0 skipped.
+
+#### C-96 — stato (2026-10-15, mattina)
+
+> Codice, test e doc scritti. Le prove complete dopo la finestra della galleria: `all-backend`, perché
+> `configure_test_runtime` e `Settings` toccano ogni corsia; `mkdocs build` e `check-links`.
+
+### Lotto «credenziali nei log di accesso» (2026-10-15, mattina) — scritto e provato in leggero
+
+> **Richiesta**: una nota di A5b, girata dal coordinatore alle 09:59. I link di invito, reset, setup e verifica ora
+> portano il token nel frammento, che il browser non manda. Resta un `?token=` scritto a mano, che il log di accesso di
+> uvicorn scriveva in chiaro. Il posto lo scelgo io: un lotto a parte, dopo CP7a e C-96, prima di CP7b e della
+> revisione di sicurezza finale.
+
+#### Passo 1 — il codice e la doc ✅ (2026-10-15, mattina)
+
+> **Note implementazione**:
+>
+> - `backend/app/logging_config.py`:
+>   - `mask_query_credentials(text)` sostituisce con `***` il valore di un parametro di query che si chiama `code`, o il
+>     cui nome contiene `token`, `secret`, `password`, `passwd`, `api_key`/`apikey`/`api-key` o `signature`, in
+>     qualunque maiuscolo. Il nome si giudica decodificato (`unquote_plus`), come lo legge l'app; il valore no;
+>   - `_QueryCredentialFilter` maschera ogni argomento stringa del record, al suo posto: numero e ordine restano, e
+>     l'`AccessFormatter` di uvicorn li spacchetta. Un messaggio senza argomenti si maschera da sé; una stringa di
+>     formato con argomenti non si tocca, così i segnaposto restano allineati;
+>   - `configure_logging()` mette lo stesso oggetto filtro su `uvicorn.access` (HTTP) e su `uvicorn.error` (le strette
+>     di mano WebSocket, che portano anche loro percorso e query): le chiamate ripetute non lo duplicano, e ogni worker
+>     lo installa importando l'app.
+> - Il log resta acceso ovunque: chi ospita da sé lo usa.
+> - Nessun reindirizzamento dell'app copia il frammento in una query: `loginUrl()`, `hooks.server.ts` e `returnTo`
+>   portano percorso e query, mai il frammento.
+> - **Prova in processo**: 13 casi della regola e 6 di record. Fra questi: `GET /setup?token=***&next=/home`;
+>   `tok%65n`, `api%5Fkey`, `api-key` mascherati; `currency_code`, `codes` e `q=token` tenuti; la riga WebSocket
+>   mascherata; un record senza niente da mascherare tiene lo stesso oggetto. Ruff e black puliti.
+> - **Doc**: in `security.md` la sezione nuova «📜 Request Logs», lontana da quella dei token di A.
+>
+> **Fuori pista** (dal primo rapporto di test-author, 51 test):
+>
+> - Il primo filtro leggeva solo il terzo argomento, se il record ne aveva almeno tre: diverso da come l'avevo
+>   descritto, e legato alla forma di un solo record. Ora ogni argomento stringa, al suo posto.
+> - Fuori dalla prima regola: un nome codificato (`tok%65n`), `api-key` con il trattino, e le righe WebSocket su
+>   `uvicorn.error`. Ora coperti tutti e tre.
+> - Limite scritto nel codice e nella doc: un URL codificato dentro il valore di un altro parametro non si legge.
+> - H-9 nel backlog: una seconda chiamata di `configure_logging()` lascia aperti i gestori che toglie. C'era già.
+
+#### Passo 2 — i test ✅ (2026-10-15, mattina)
+
+> **Note implementazione** (test-author):
+>
+> - `backend/test_scripts/test_services/test_logging_access_filter.py`, selettore puro `services logging-access-filter`
+>   in `scripts/test_runner/_backend_services.py`: 96 passed.
+>   - (a) la regola, 54 test:
+>     - i nomi semplici, quelli codificati (`tok%65n`, `api%5Fkey`, `c%6Fde`) e il trattino;
+>     - i nomi tenuti e l'URL annidato non codificato;
+>     - il valore vuoto, mascherato;
+>     - il valore codificato, fissato come limite: prima il test verifica che lo stesso URL, decodificato, viene
+>       mascherato.
+>   - (b) il filtro su un record, 30 test:
+>     - ogni posizione in una tupla da 1 a 6 argomenti;
+>     - lo stesso oggetto quando non c'è niente da mascherare;
+>     - bytes, `None`, interi e mappe intatti;
+>     - il messaggio senza argomenti mascherato;
+>     - la stringa di formato con argomenti mai riscritta.
+>   - (c) i record di uvicorn, 11 test, ciascuno con il suo controllo negativo senza filtro:
+>     - una richiesta HTTP vera, in memoria, con h11 e con httptools;
+>     - una stretta di mano WebSocket vera, rifiutata, con `WebSocketsSansIOProtocol`, quello che `--ws auto` sceglie.
+>   - (d) `configure_logging()` chiamata due volte lascia un solo filtro, quello del modulo, su ciascuno dei due logger.
+>     Le righe di uvicorn escono mascherate; i logger e structlog vengono rimessi a posto.
+> - 13 regressioni simulate, ciascuna presa da almeno un test. Per esempio: il vecchio filtro sul solo terzo argomento
+>   fa 26 rossi; i nomi non decodificati 7; `configure_logging` solo su `uvicorn.access` 1.
+> - Ruff, black e `check-orphans` puliti.
+>
+> **Fuori pista**:
+>
+> - Il test della stringa di formato con argomenti fissava una riga con il valore in chiaro. Ora verifica solo che `msg`
+>   e `args` restano intatti e che la formattazione non fallisce.
+> - **Residuo**, letto nel sorgente di uvicorn: con `--log-level trace`, `MessageLoggerMiddleware` scrive ogni messaggio
+>   ASGI su `uvicorn.asgi`, intestazioni comprese.
+>   - uvicorn fissa `uvicorn.error` a INFO, e né `dev.py` né il `Dockerfile` passano `--log-level`: la modalità si
+>     accende solo se qualcuno la chiede.
+>   - È scritto come limite in `security.md`.
+
+### Handoff dei tre lotti — checkpoint «prima delle prove» 🧊 (2026-10-15, mattina)
+
+> **Decisione del coordinatore** (10:04): nessun file si sposta a mano.
+>
+> - I tre lotti entrano come tre checkpoint separati sopra `5b2b9061f`, più il journal, con le prove leggere.
+> - Dopo la finestra il coordinatore stacca il worktree su `5b2b9061f` per la validazione di CP6, poi lo riattacca al
+>   ramo per le prove dei tre lotti.
+> - CP6 entra in `dev_release2` da `5b2b9061f`; i tre lotti restano sul ramo finché non sono provati.
+>
+> **Prove leggere**: corsia 6181, solo selettori puri, uno alla volta, con `nice`. In tutto 1451 passed.
+>
+> - `utils`: `dev-cli-docker` 96, `dev-cli-image` 44, `release-image-contract` 192, `runtime-isolation` 195.
+> - `services`: `config-env-example` 36, `config-package` 632, `config-secrets` 58, `config-audit` 90, `config-misc`
+>   12, `logging-access-filter` 96.
+> - `check-orphans` e `git diff --check` puliti.
+> - Ruff e black:
+>   - puliti sui file nuovi e su quelli dei lotti;
+>   - su `dev.py` e `cli_base.py`, gli stessi rilievi della base;
+>   - la complessità di `_docker_ensure_assets_built` scende da 14 a 13.
+>
+> **Dopo la finestra**:
+>
+> - `all-backend`, perché C-96 tocca ogni corsia;
+> - `front build --debug`, perché `dev.py` è cambiato;
+> - `mkdocs build` stretto e `check-links`;
+> - la prova Docker di CP7a, con il via del coordinatore.
