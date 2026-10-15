@@ -566,6 +566,16 @@ def services_shutdown_process(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Shutdown budget process tests", verbose=verbose)
 
 
+def services_sleep_wake_activity(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the process's record of the user's presence and of the work in progress, read by sleep and wake (lot Z2a)."""
+    print_section("Services: Sleep and Wake Activity")
+    print_info("Testing: backend/app/services/platform/sleep_wake/activity.py, its entry in backend/app/services/platform/middleware.py")
+    print_info("Tests: request_kind, Activity on a fake clock (in flight and stamped, return listeners, idle seconds, busy spans and checks, threads), current_activity, ActivityMiddleware (scopes, probes, wake-sync, 404, streaming, background tasks, errors), activity first in MIDDLEWARE_STACK")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_sleep_wake_activity.py", test_names)
+    return run_command(cmd, "Sleep and wake activity tests", verbose=verbose)
+
+
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
     """Test session revocation through the session version (the sv claim of the session cookie)."""
     print_section("Services: Session Version")
@@ -1464,6 +1474,17 @@ Note: No backend server required.
         # PURE: its own server processes on a Unix socket of their own (in a short directory under /tmp: an AF_UNIX path
         # holds 104 bytes on macOS), data and logs in tmp_path; no lane port, no DB. Every process it starts — each server,
         # in a session of its own, with its process group — is killed if still running and reaped.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "sleep-wake-activity",
+        services_sleep_wake_activity,
+        name="Sleep and Wake Activity",
+        desc="request_kind: the probes (system/health, ready, test-lane-health) and system/wake-sync under API_V1_PREFIX, trailing slashes ignored, then exact and case-sensitive, anything else user; Activity on an injected clock (time.time by default): request(presence) in flight for its whole body, an exception or a cancellation included, presence stamped at start and at end, return listeners at or below the silence called with it in registration order on the calling thread before the body (one that raises logged and skipped, a name registered again replaced), presence=False only in flight, idle_seconds from started_at or the last user request and never below 0; busy(reason) nestable across threads, a blank reason refused; busy checks read at every call, true or raising = busy, a raising one warned once per streak; busy_reasons without duplicates, is_busy; thread safety; current_activity read at call time; ActivityMiddleware: other scopes untouched, probes uncounted, wake-sync in flight without presence, any other path (a 404 included) presence and in flight through the last chunk of a stream and its background tasks, errors and cancellations propagate, current_activity read per request without activity=; activity the outermost entry of MIDDLEWARE_STACK",
+        # PURE: no DB, no server, no lane port, no network; every Activity is the test's own, on a fake clock, and the
+        # process's ACTIVITY is replaced only through monkeypatch; the FastAPI apps are built in the test and served in
+        # this process by httpx.ASGITransport (no socket); its threads are daemon threads joined within a deadline.
         isolation="pure",
     )
     add_test(
