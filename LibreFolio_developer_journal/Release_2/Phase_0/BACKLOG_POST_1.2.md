@@ -2156,18 +2156,22 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   14/10 senza codice: già fatta il 10/09 in `e50d66408` (conteggio e link nella cancellazione singola e in quella multipla,
   `FAAssetDeleteResult.transaction_count`, E2E in `e2e/assets/asset-list.spec.ts`); nella devWiki F-095 era già
   `documented`, e `domains/assets.md` non la elenca più fra le cose da fare. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «2.5».
-- **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1,
+- ✅ **X-R1 · Il percorso di `normalize_rate_for_storage` nella descrizione di un endpoint dei cambi** — minimo; X, 14/10 (CP1,
   CP3). La docstring di `create_routes_bulk` (oggi `api/v1/fx/providers.py:183`) cita ancora «``services/fx.py``»; la
   funzione sta in `services/fx/storage.py` dal CP3. Il testo è nella descrizione dell'endpoint in `openapi.json`, e il PL4 è
   un riordino a `openapi.json` invariato: come X-R2, si corregge in un lotto che cambia comunque l'API (il CP6, F05, o
-  prima). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1 e CP3.
-- **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
+  prima). **Chiusa il 15/10**, con X-R2, in un commit sopra X-R11a che entra con FE5b; `openapi.json` cambia solo nelle tre
+  descrizioni. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP1, CP3
+  e X-R1 + X-R2.
+- ✅ **X-R2 · I vecchi percorsi degli asset in due descrizioni di schemi dell'API** — minimo; X, 15/10 (CP2a, CP2b). Le
   docstring di `BackwardFillInfo` (`schemas/common.py:369`) e di `IdentifierType` (`db/models.py:117` e `:123`) citano ancora
   `schemas/assets.py` (diventato `schemas/assets/assets.py` nel CP2b) e `asset_source.py` (tolto nel CP2a). Il testo finisce
   in `openapi.json`: resta fino a un lotto che cambia comunque l'API (il CP6, F05, o prima). Nella stessa docstring di
   `db/models.py`, la riga `:127` cita `services/brim_provider.py`, spostato da W (W4 CP6) in `services/brim/`: per la stessa
-  ragione resta, e si corregge insieme alle altre (aggiunta il 15/10, validazione di `d1ef3ddeb`). Dettagli:
-  [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «15», CP2a e CP2b.
+  ragione resta, e si corregge insieme alle altre (aggiunta il 15/10, validazione di `d1ef3ddeb`). **Chiusa il 15/10** con
+  X-R1; nella stessa docstring anche il passo 1, che mandava la colonna nuova in `001_initial.py` contro la regola delle
+  migrazioni incrementali. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione
+  «15», CP2a, CP2b e X-R1 + X-R2.
 - ✅ **X-R3 · Tre commenti del frontend citano il modulo degli asset tolto** — minimo; X, 15/10 (CP2b, validazione di
   `eb245b624`). `AssetModal.svelte:1507` e `:1636` attribuiscono ad `asset_source.py` le cancellazioni di prezzi ed eventi
   generati (oggi in `services/assets/provider_management.py`, `bulk_assign_providers`), e `assetPayload.test.ts:58` la fusione
@@ -2244,6 +2248,7 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
   - la docstring di `create_routes_bulk` (`api/v1/fx/providers.py:180`) cita ancora `services/fx.py`, che dopo il CP3 è
     `services/fx/` (la normalizzazione sta in `storage.py`): segnalata dal coordinatore il 15/10, è la stessa riga di
     **X-R1**, aperta dal CP1; resta lì, perché il testo finisce nella descrizione dell'endpoint in `openapi.json`.
+    ✅ Chiusa il 15/10 con X-R1.
   Proposta: con il FE4 (frontend dei cambi). Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md),
   sezione «15», X-R8.
 - ✅ **W-B9 · Un test dei cambi chiama dal vivo la BCE** — piccolo; trovato da W, assegnato a X dal coordinatore il 15/10.
