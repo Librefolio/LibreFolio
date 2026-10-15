@@ -10,7 +10,8 @@ Under test: ``backend/app/services/platform/readiness.py``, which answers ``GET 
     scripts; ``mismatch`` when its one row is another revision; ``unknown`` when the head cannot be read (no
     ``alembic.ini``, no revision, several heads), the table is missing, or it holds no row or several;
 (c) ``status`` is ``ready`` only when both checks are ``ok``, ``not_ready`` otherwise;
-(d) the head is read from the migration scripts once per process; a failed read is not kept, the next check reads again;
+(d) the head is read from the migration scripts once per process, in a worker thread and never on the event loop (the
+    read is synchronous I/O); a failed read is not kept, the next check reads again;
 (e) the response carries one code per check and nothing else: no revision id, no database path, no error text. The
     details go to the log, once per change of state.
 
@@ -22,8 +23,10 @@ cache and its last logged state are reset around each test. No server, no shared
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import sqlite3
+import threading
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -259,13 +262,45 @@ class TestReadinessCodes:
 
 
 # =============================================================================
-# (d) THE HEAD REVISION: READ ONCE, A FAILURE NOT KEPT
+# (d) THE HEAD REVISION: READ ONCE, OFF THE EVENT LOOP, A FAILURE NOT KEPT
 # =============================================================================
+
+
+def _loop_runs_here() -> bool:
+    """Whether an event loop runs in the calling thread: ``asyncio.get_running_loop()`` raises ``RuntimeError`` where none does."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return False
+    return True
 
 
 @pytest.mark.asyncio
 class TestHeadRevision:
-    """The head is read from the migration scripts once per process, and read again after a failure."""
+    """The head is read from the migration scripts once per process, off the event loop, and read again after a failure."""
+
+    async def test_the_head_is_read_off_the_event_loop(self, tmp_path, monkeypatch, head):
+        """The read parses ``alembic.ini`` and imports the migration scripts, synchronous I/O: it runs in a worker thread, where no loop runs."""
+        database = _make_database(tmp_path / "app.db", [head])
+        real_head_revision = readiness.alembic_head_revision
+        reads: list[tuple[int, bool]] = []
+
+        def recording_head_revision() -> str | None:
+            reads.append((threading.get_ident(), _loop_runs_here()))
+            return real_head_revision()
+
+        monkeypatch.setattr(readiness, "alembic_head_revision", recording_head_revision)
+        loop_thread = threading.get_ident()
+        # Presence barrier: the probe sees the loop where it runs, so "no loop" in the recorder is about its thread.
+        assert _loop_runs_here(), "Barrier: the test runs on the event loop, and the probe must see the loop there"
+
+        result = await _check(database)
+
+        assert len(reads) == 1, f"one check must read the head once, through alembic_head_revision: {reads}"
+        read_thread, loop_in_read_thread = reads[0]
+        assert read_thread != loop_thread, f"the head was read in the event loop's thread ({loop_thread}): the synchronous read blocks the loop"
+        assert loop_in_read_thread is False, f"the head was read in a thread where an event loop runs: {reads}"
+        assert result.model_dump() == READY, f"the recorder returned the real head {head!r} and the database is at it: got {result.model_dump()}"
 
     async def test_the_head_is_read_once_for_several_checks(self, tmp_path, head, head_reads):
         at_head = _make_database(tmp_path / "at-head.db", [head])
