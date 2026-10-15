@@ -8,7 +8,7 @@ exceptions are FastAPI's own documentation routes, ``/api/v1/openapi.json``, ``/
 (``main.py``): they carry the API's schema and no data, and answer as they do for anyone; the test pins them. The list is
 short on purpose: signing in and out, a password-reset or invitation link already sent (read it, reset the password
 with it: someone who lost the password must still reach the block page, the account deletion or the backup), the block
-page, the deletion of one's own account, and the probes. Registration stays out. The full backup for the admin and the
+page, the deletion of one's own account and its preview, and the probes. Registration stays out. The full backup for the admin and the
 scheduled wake-up join it, one line each, when their routes exist; anything else goes through the developer first. A
 test pins the list.
 
@@ -16,8 +16,10 @@ FastAPI hands a dependency the endpoint function of the matched route (``scope["
 the list holds endpoint functions. The refusal is ``423 Locked`` with the code ``instance_blocked``, and only a
 signed-in user gets it: anyone else gets the 401 of ``get_current_user``, so a protected route answers a caller without
 a session the same way whether or not the instance is blocked. A public route outside the list (registration, the
-reference lists of ``utilities``, the global settings, the AI Export catalogue) answers that 401 only while the instance
-is blocked: from those, a caller without a session can tell that it is blocked, and nothing more. The web app tells 423
+address probe ``GET /auth/address-probe``, the reference lists of ``utilities``, the global settings, the AI Export
+catalogue) answers that 401 only while the instance is blocked: from those, a caller without a session can tell that it
+is blocked, and nothing more. The address probe's 401 carries no CORS header, so an administrator's check from another
+address reads it as not verifiable: intended (A6a). The web app tells 423
 from a permission refusal (403) and shows the block page.
 """
 
@@ -42,8 +44,9 @@ ALLOWED_WHEN_BLOCKED = frozenset(
         # A link already sent: reading it, and setting a new password with a reset link (no account is created)
         auth.inspect_link_token,
         auth.reset_password_with_link,
-        # The deletion of one's own account
+        # The deletion of one's own account, and what it would delete (A6a)
         auth.delete_own_account,
+        auth.preview_own_account_deletion,
         # The block page
         block.get_instance_block,
         instance.get_instance_config,
