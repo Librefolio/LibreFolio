@@ -40,7 +40,7 @@ from backend.app.schemas.provider import (
     FAVolumeKind,
 )
 from backend.app.services.assets import core
-from backend.app.services.assets.base import AssetSourceProvider
+from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceProvider
 from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.fx.conversion import convert_bulk
@@ -751,6 +751,7 @@ class PriceQueryOperations:
                 return FACurrentPriceItem(asset_id=asset_id, error="Asset not found")
 
             assignment = assign_map.get(asset_id)
+            refusal: AssetRateLimitedError | None = None
 
             # --- Try provider ---
             if assignment:
@@ -778,7 +779,7 @@ class PriceQueryOperations:
                         _id_type = mapped_id_type
                         _params = params
                         async with sem:
-                            cv = await core.call_provider(provider, lambda: provider.get_current_value(_id, _id_type, _params), timeout=10.0)
+                            cv = await core.call_provider(provider, lambda: provider.get_current_value(_id, _id_type, _params), timeout=10.0, scope=core.cooldown_scope_for(provider, _id, _id_type, _params))
                         core._asset_current_cache.set(cache_key, cv)
                         return FACurrentPriceItem(
                             asset_id=asset_id,
@@ -787,12 +788,19 @@ class PriceQueryOperations:
                             as_of_date=cv.as_of_date,
                             source=f"provider:{assignment.provider_code}",
                         )
+                    except AssetRateLimitedError as refused:
+                        # Paused after «too many requests»: no call was made, or the provider refused this one. The
+                        # last stored price stands, and the item says why and for how long (decision 34, D-Z7-2).
+                        refusal = refused
+                        logger.debug("Provider paused, falling back to DB", asset_id=asset_id, retry_after=refused.retry_after)
                     except Exception as prov_err:
                         logger.debug(
                             "Provider current-price failed, falling back to DB",
                             asset_id=asset_id,
                             error=str(prov_err),
                         )
+
+            refusal_fields = {"error_code": refusal.error_code, "retry_after": refusal.retry_after} if refusal is not None else {}
 
             # --- Fallback: last known price from DB ---
             last_stmt = select(PriceHistory).where(PriceHistory.asset_id == asset_id).order_by(PriceHistory.date.desc()).limit(1)
@@ -806,11 +814,13 @@ class PriceQueryOperations:
                     currency=last_price.currency,
                     as_of_date=last_price.date,
                     source="db:last_known",
+                    **refusal_fields,
                 )
 
             return FACurrentPriceItem(
                 asset_id=asset_id,
                 error="No price data available",
+                **refusal_fields,
             )
 
         # Run all fetches in parallel

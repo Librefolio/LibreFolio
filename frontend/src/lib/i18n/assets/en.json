@@ -411,6 +411,9 @@
     "MISSING_PARAMS": "The provider configuration is missing required parameters.",
     "PARSE_ERROR": "The provider response could not be parsed.",
     "SCRAPE_ERROR": "The provider page could not be read.",
-    "UNSUPPORTED_PAGE": "The provider found this instrument but its market page cannot be read yet. Please open an issue on GitHub (Librefolio/LibreFolio) reporting this ISIN so support can be added."
+    "UNSUPPORTED_PAGE": "The provider found this instrument but its market page cannot be read yet. Please open an issue on GitHub (Librefolio/LibreFolio) reporting this ISIN so support can be added.",
+    "RATE_LIMITED": "Paused for too many requests until {time}",
+    "RATE_LIMITED_NO_TIME": "Too many requests: try again later",
+    "RATE_LIMITED_DAY": "Paused for too many requests until {time}"
   }
 }

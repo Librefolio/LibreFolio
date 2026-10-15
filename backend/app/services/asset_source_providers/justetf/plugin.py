@@ -27,7 +27,7 @@ from backend.app.schemas.prices import (
     FAHistoricalData,
     FAPricePoint,
 )
-from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetHistoryStartDate, AssetSourceError, AssetSourceProvider, raise_if_rate_limited
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.provider_registry import register_provider
 from backend.app.utils.asset.sector import validate_sector
@@ -321,6 +321,7 @@ class JustETFProvider(AssetSourceProvider):
         except AssetSourceError:
             raise
         except Exception as e:
+            raise_if_rate_limited(e, self.provider_name)
             raise AssetSourceError(
                 f"Failed to fetch current value for {identifier} from JustETF: {e}",
                 "FETCH_ERROR",
@@ -431,6 +432,7 @@ class JustETFProvider(AssetSourceProvider):
 
             return FAHistoricalData(prices=prices, events=events, currency=currency, source=self.provider_name)
         except Exception as e:
+            raise_if_rate_limited(e, self.provider_name)
             raise AssetSourceError(
                 f"Failed to fetch history for {identifier} from JustETF: {e}",
                 "FETCH_ERROR",
@@ -477,6 +479,7 @@ class JustETFProvider(AssetSourceProvider):
                     )
             return items
         except Exception as e:
+            raise_if_rate_limited(e, self.provider_name)
             raise AssetSourceError(
                 f"Search failed for '{query}' on JustETF: {e}",
                 "SEARCH_ERROR",
@@ -622,6 +625,7 @@ class JustETFProvider(AssetSourceProvider):
                 identifier_ticker=ticker_val if ticker_val else None,
             )
         except Exception as e:
+            raise_if_rate_limited(e, self.provider_name)  # the core pauses the provider: not "no metadata"
             logger.warning(f"Could not fetch metadata for {identifier} from JustETF: {e}")
             return None
 
