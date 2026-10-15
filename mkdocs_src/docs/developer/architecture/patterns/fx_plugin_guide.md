@@ -25,6 +25,9 @@ Paste this entire page into an LLM with the central bank or API documentation an
     Write a complete Python FXRateProvider implementation. Follow all conventions:
     @register_provider, correct fetch_rates return type, multi_unit_currencies if needed,
     description_i18n, warning_i18n if applicable. Use asyncio.to_thread for sync HTTP calls.
+    On "too many requests" (HTTP 429), raise FXRateLimitedError (raise_if_fx_rate_limited as
+    the first line of the except) and never retry or sleep; one refused currency refuses the
+    whole call (raise_longest_refusal after a gather).
     ```
 
     After scaffolding, test with a manual sync from the FX settings page. Save it as
@@ -213,11 +216,75 @@ them to a new instance before each use; the provider reads them in `fetch_rates(
   from before it declared settings.
 - **The boundary.** The service calls a provider through `call_fx_provider()`
   (`backend/app/services/fx/runtime.py`), on an instance from `configured_fx_provider()`: a required
-  field without a value raises `FXNotConfiguredError` before any I/O, and the secrets are masked in
-  the log lines and errors of the call. Never return a secret, log it, or put it in a URL you log or
-  in an exception message: masking is only a safety net.
+  field without a value raises `FXNotConfiguredError` before any I/O, a provider paused after «too
+  many requests» raises `FXRateLimitedError` before any I/O ([Too Many Requests](#too-many-requests)),
+  and the secrets are masked in the log lines and errors of the call. Never return a secret, log it,
+  or put it in a URL you log or in an exception message: masking is only a safety net.
 
 The full contract is in [Plugin Settings](plugin_settings.md).
+
+---
+
+## 🚦 Too Many Requests {: #too-many-requests }
+
+When a source refuses for too many requests, the core pauses the provider: `call_fx_provider()` stops
+calling it for a while and raises `FXRateLimitedError` (`error_code = "RATE_LIMITED"`, `retry_after`
+in seconds) to every caller at once, without any I/O. By default the pause starts at 60 s and
+doubles at each refusal in a row, up to 1 h, plus up to 10 % of jitter; a `Retry-After` the source
+sent is honoured, up to 24 h. The sync counts a paused provider as a failed leg and tries the pair's
+next route ([Paused Providers](../../backend/fx/configuration.md#paused-providers)); the currency
+catalogue answers with the provider's last known list.
+
+The plugin's part is only to report the refusal:
+
+- **Raise `FXRateLimitedError`** (`backend/app/services/fx/base.py`), with the source's `Retry-After`
+  in seconds as `retry_after` when it sent one. It is an `FXServiceError`.
+- **Never retry or sleep** (`asyncio.sleep`) after a refusal: the core decides how long to wait.
+- **One refused currency refuses the whole call.** Do not skip the refused currency and return the
+  others, as you would after another error: the provider is paused either way, and the sync fetches
+  the pair from its next route. After an `asyncio.gather(..., return_exceptions=True)`, call
+  `raise_longest_refusal()` on the outcomes (BOE, FED); in a serial loop, re-raise
+  `FXRateLimitedError` at once (ECB).
+- An FX pause always covers the whole provider: unlike asset providers, there is no scope hook.
+
+| Helper (`fx/base.py`) | Use |
+|---|---|
+| `fx_rate_limited_from_response(response, provider_code)` | An `httpx` response: an `FXRateLimitedError` when it is an HTTP 429, with its `Retry-After`; else `None` |
+| `raise_if_fx_rate_limited(error, provider_code)` | The first line of an `except httpx.HTTPError`: raises the refusal (`from error`) when the error carries an HTTP 429 response, and lets every other error go on to the plugin's own handling |
+| `raise_longest_refusal(outcomes)` | After `asyncio.gather(..., return_exceptions=True)`: raises the refusal with the longest `Retry-After` among the outcomes, if there is one (`longest_refusal()` returns it instead) |
+
+```python
+import asyncio
+
+import httpx
+
+from backend.app.services.fx.base import FXServiceError, raise_if_fx_rate_limited, raise_longest_refusal
+
+
+class MyCentralBankProvider(FXRateProvider):
+    async def fetch_rates(self, date_range, currencies, base_currency=None):
+        async def _fetch_one(currency: str):
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.get(self.API_URL, params={"currency": currency})
+                    response.raise_for_status()
+                    return currency, self._parse(response.text, currency)
+            except httpx.HTTPError as e:
+                raise_if_fx_rate_limited(e, self.provider_code)  # a 429 leaves as RATE_LIMITED: no retry, no sleep
+                raise FXServiceError(f"MCB API error for {currency}: {e}") from e
+
+        outcomes = await asyncio.gather(*(_fetch_one(c) for c in currencies), return_exceptions=True)
+        raise_longest_refusal(outcomes)  # one refused currency refuses the whole call
+        # Any other error skips its currency only.
+        return {c: ([] if isinstance(o, BaseException) else o[1]) for c, o in zip(currencies, outcomes)}
+```
+
+**Testing a refusal.** The test-only `MOCKFX` provider refuses every call, `fetch_rates()` and
+`get_supported_currencies()`, while its class attribute `rate_limited` is true, with
+`rate_limited_retry_after` as the `Retry-After` (`None` for none). Set them with
+`monkeypatch.setattr` on `MockFXProvider` (`backend/app/services/fx_providers/mockfx/plugin.py`),
+in in-process tests only: the pause that follows is real and holds for the whole process, so never
+use it on a lane's shared test backend.
 
 ---
 

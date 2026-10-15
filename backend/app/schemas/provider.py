@@ -359,6 +359,7 @@ class BaseProbeOperationResult(StrictModel):
     # so the frontend can render a LOCALIZED message from code + params instead
     # of the raw English `error`. JSON-safe (non-primitives stringified).
     error_details: Optional[dict] = Field(None, description="Structured error parameters for frontend i18n (e.g. nav_date for NO_DATA)")
+    retry_after: Optional[float] = Field(None, ge=0, description="With error_code 'RATE_LIMITED': seconds until the provider may be called again")
     execution_time_ms: int = Field(..., description="Backend execution time in milliseconds")
 
 
@@ -436,3 +437,7 @@ class FAProviderSearchResponse(StrictModel):
     results: List[FAProviderSearchResultItem] = Field(..., description="Search results")
     providers_queried: List[str] = Field(..., description="Provider codes that were queried")
     providers_with_errors: List[str] = Field(default_factory=list, description="Providers that returned errors")
+    providers_not_configured: List[str] = Field(
+        default_factory=list,
+        description="Providers not called because a required setting has no value (NOT_CONFIGURED): also in providers_with_errors. Their settings: GET /api/v1/settings/plugins",
+    )
