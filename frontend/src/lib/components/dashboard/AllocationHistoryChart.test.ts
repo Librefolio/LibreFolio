@@ -19,8 +19,9 @@
  * - on every date it holds the sum of the values its members have on that date;
  * - the families are stacked by summed average weight, heaviest first: the group order of
  *   `buildAllocationHierarchy`;
- * - each is drawn in `palette[rank]`, verbatim. No shade anywhere: no subtype series is left to shade, and
- *   the tooltip shows none either.
+ * - each is drawn in its own colour, `categoryColor('type', family)` — GR1 of the designer's round 2
+ *   (D-T17): by key, never by rank, the very colour the pie gives the family. No shade anywhere: no
+ *   subtype series is left to shade, and the tooltip shows none either.
  *
  * The subtypes live in the tooltip only. It lists one entry per family, ranked by that day's value; more
  * than six families give the top five and «Remaining», today's rule. A family whose one member present that
@@ -37,20 +38,26 @@
  * the chart first clears the series — `setOption({series: []}, {replaceMerge: ['series']})` — and then
  * applies the new option. When the order holds, it does not clear.
  *
- * Sector and geography are otherwise untouched: one series per raw category, ranked by weight, coloured by
- * index, and today's tooltip.
+ * Sector and geography are otherwise untouched by D375: one series per raw category, ranked by weight,
+ * and today's tooltip. Their colours follow GR1 and GR5: a sector wears its own,
+ * `categoryColor('sector', key)`; a country has none, so it takes the sector sequence by its rank
+ * among the classified countries (`sequenceColor` over `KEYLESS_SEQUENCE`), one GR4 shade further at
+ * each round past the fourteenth, while the unclassified one (`Unknown`, `Other`) keeps the Unknown
+ * grey and takes no rank. A chart-colour change (contract C4, `notifyChartColorsChange`) redraws the
+ * whole option, reading the roles again.
  *
  * ## How the expectations are built
  *
  * Families, sums and ranks are counted in the test, from the fixture's weights and K's real
- * `assetTypeFamily`; the palette is imported from `$lib/theme/chartPalettes`, the module the chart takes it from,
- * never copied — and the series colours the mounted chart hands ECharts are compared with it, so these tests also
- * prove that the chart draws that palette: its light half in every block but one (jsdom's document carries no `dark`
- * class), its dark half in the block that mounts the chart under that class.
+ * `assetTypeFamily`; the colours are those of the theme's own functions — `categoryColor`,
+ * `sequenceColor`, `familyShade`, the card read through `chartRoles` — never copied hex values, which
+ * the theme's tests pin. Most blocks draw in the light theme, jsdom's default; the ones that read both
+ * themes mount the chart under the `dark` class of <html> as well.
  * Every type fixture is chosen so that grouping by content would draw something else, and a barrier says
  * so: without it, the comparison could not tell the two resolvers apart. No order rests on a tie. The
- * shades D375 removes are the ones `buildAllocationHierarchy` hands the subtypes of the same weights —
- * what the chart drew before D375 — so "no shade" is checked against colours that really were drawn.
+ * shades the history must not draw are the ones the pie gives the subtypes of the same weights —
+ * `buildAllocationHierarchy` with `familyShade`, wired as the pie wires it — so "no shade" is checked
+ * against colours a chart really draws.
  *
  * Nothing translated is written down. A label is resolved from the shipped catalogue by its key
  * (`assets.types.*`, `dashboard.allocationGeneric`, `common.remaining`), with or without the type's emoji
@@ -182,7 +189,11 @@ import {render, setupI18n, waitFor} from '$test/component';
 import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
-import {ALLOCATION_HISTORY_PALETTE} from '$lib/theme/chartPalettes';
+import {debug} from '$lib/debug';
+import {categoryColor, KEYLESS_SEQUENCE, sequenceColor} from '$lib/theme/chartCategories';
+import {familyShade, shadePoles} from '$lib/theme/chartShades';
+import {chartRoles, setRoleReader} from '$lib/theme/roleColors';
+import {notifyChartColorsChange} from '$lib/theme/themeMode';
 import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
 import {buildTooltipByThreshold, buildTooltipHeader, buildTooltipTheme} from '$lib/components/charts/echartsTooltipHelpers';
 import {timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
@@ -544,13 +555,24 @@ type Taxonomy = typeof import('$lib/utils/assetTypes');
 
 let AllocationHistoryChart: ChartComponent;
 let K: Taxonomy;
-/**
- * The light palette the chart draws with, `ALLOCATION_HISTORY_PALETTE.light`: jsdom's document carries no `dark`
- * class (checked per mount). Imported, not copied: the series colours below are compared with it, so a chart drawing
- * any other palette fails them.
- */
-const palette: readonly string[] = ALLOCATION_HISTORY_PALETTE.light;
 let restoreLayout: (() => void) | undefined;
+
+/** The colour a family is drawn in (GR1): its key's, through the one read point of the category colours. */
+const familyColour = (family: string, dark = false): string => categoryColor('type', family, dark);
+
+/** The GR4 poles in `dark`: the card read through the sRGB bridge — the stand-in under jsdom, unless a reader is injected. */
+const polesFor = (dark: boolean) => shadePoles(dark, chartRoles(dark).color('--lf-surface-card'));
+
+/**
+ * The colours of countries drawn in the order `keys` gives, by GR5: the n-th classified country takes the
+ * sector sequence at rank n — one GR4 shade further at each round of fourteen — and the unclassified
+ * (`Unknown`, `Other`) the Unknown grey, without taking a rank. Spelled out here, not read from the chart.
+ */
+function countryColours(keys: readonly string[], dark = false): string[] {
+    const poles = polesFor(dark);
+    let rank = 0;
+    return keys.map((key) => (key === 'Unknown' || key === 'Other' ? categoryColor('sector', 'Unknown', dark) : sequenceColor('sector', KEYLESS_SEQUENCE, rank++, dark, poles)));
+}
 
 /**
  * jsdom lays nothing out, so the chart's visibility guard would keep it from ever drawing. The chart's
@@ -581,6 +603,12 @@ beforeEach(() => {
     chartInstances.length = 0;
 });
 
+afterEach(() => {
+    // Module-level state every test of the file shares: the role reader and the theme class.
+    setRoleReader(null);
+    document.documentElement.classList.remove('dark');
+});
+
 /** One component of `by_type` (or `by_sector`, `by_country`) on one date, as `POST /allocation-history` returns it. */
 interface AllocationComponent {
     name: string;
@@ -595,7 +623,7 @@ function historyOf(days: readonly Day[]): Array<{date: string; components: Alloc
 
 /** Mounts the chart on `days`, as the allocation panel does, in `theme`, and waits for its first full option. */
 async function mountChart(days: readonly Day[], dimension: Dimension, theme: 'light' | 'dark' = 'light') {
-    expect(document.documentElement.classList.contains('dark'), `precondition: the ${theme} theme, whose palette the expectations read`).toBe(theme === 'dark');
+    expect(document.documentElement.classList.contains('dark'), `precondition: the ${theme} theme, whose colours the expectations read`).toBe(theme === 'dark');
     const view = render(AllocationHistoryChart, {props: {data: historyOf(days), dimension, height: '400px'}});
     await waitFor(() => expect(lastFullOption(), 'the chart never handed ECharts a full option').toBeDefined(), {timeout: 5_000});
     expect(chartInstances, 'the chart did not create exactly one ECharts instance').toHaveLength(1);
@@ -741,10 +769,14 @@ function averageWeights(days: readonly Day[]): Weight[] {
     return [...totals].map(([key, total]) => [key, total / days.length] as const);
 }
 
-/** `buildAllocationHierarchy` on `weights`, fed as the chart fed it before D375: heaviest first, grouped by family. */
+/**
+ * `buildAllocationHierarchy` on `weights` as the pie wires it — heaviest first, grouped by family, each
+ * family in its own colour and every member after the first a GR4 shade of it — in the light theme.
+ */
 function hierarchyOf(weights: readonly Weight[]) {
     const entries = [...weights].sort((left, right) => right[1] - left[1]).map(([key, percent]) => ({key, weight: percent, item: key}));
-    return buildAllocationHierarchy(entries, {resolvePrimary: familyOf, palette});
+    const poles = polesFor(false);
+    return buildAllocationHierarchy(entries, {resolvePrimary: familyOf, colorOf: (family) => familyColour(family), shade: (base, rank) => familyShade(base, rank, poles)});
 }
 
 /** The order of the hierarchy's groups: the contract's other word for "by summed weight". */
@@ -753,19 +785,13 @@ function hierarchyGroupOrder(weights: readonly Weight[]): string[] {
 }
 
 /**
- * The shades the hierarchy hands the subtypes of `weights`: what the chart drew before D375, and what may
- * now be drawn nowhere. A shade that happens to equal a palette entry is left out, since the palette is
- * still drawn.
+ * The shades the pie gives the subtypes of `weights`: what the history may draw nowhere. A shade that
+ * happens to equal the colour of a family drawn is left out, since that colour is still drawn.
  */
 function shadesOf(weights: readonly Weight[]): string[] {
-    const verbatim = new Set(palette.map((colour) => colour.toLowerCase()));
-    return [
-        ...new Set(
-            hierarchyOf(weights)
-                .filter(({depth}) => depth > 0)
-                .map(({color}) => color.toLowerCase()),
-        ),
-    ].filter((shade) => !verbatim.has(shade));
+    const hierarchy = hierarchyOf(weights);
+    const verbatim = new Set(hierarchy.map(({primary}) => familyColour(primary).toLowerCase()));
+    return [...new Set(hierarchy.filter(({depth}) => depth > 0).map(({color}) => color.toLowerCase()))].filter((shade) => !verbatim.has(shade));
 }
 
 /** The shades of `shades` found in `text`, as `#rrggbb` or as the `rgb(…)` a browser writes back. */
@@ -1034,10 +1060,11 @@ function seriesCallBefore(index: number, since: number): string {
 // =============================================================================
 
 describe('AllocationHistoryChart — the type dimension draws one series per family (D375, by assetTypeFamily as D15 decided)', () => {
-    it('draws one series per family, heaviest first: the family key as id, named after the family, in palette[rank] verbatim, with no shade anywhere', async () => {
-        // WHY: D375, "one area per family". Catches a series left per raw type, a family keyed by one
-        // of its members or by the cash bucket's Title Case, families ranked by their heaviest member
-        // instead of their sum, a family named after a member, and a subtype shade left in the option.
+    it('draws one series per family, heaviest first: the family key as id, named after the family, in its own colour — the line and the area too — with no shade anywhere', async () => {
+        // WHY: D375, "one area per family", and GR1, a colour per key. Catches a series left per raw type, a
+        // family keyed by one of its members or by the cash bucket's Title Case, families ranked by their
+        // heaviest member instead of their sum, a family named after a member, a colour handed out by rank,
+        // and a subtype shade left in the option.
         const byFamily = familiesOf(oneDay(D15_WEIGHTS));
         // Barriers: grouping by content would draw other series, so the comparison tells the two resolvers
         // apart; and the contract's two words for the order — summed weight, the hierarchy's group order —
@@ -1051,15 +1078,19 @@ describe('AllocationHistoryChart — the type dimension draws one series per fam
             'precondition: the summed weights rank the families as buildAllocationHierarchy orders its groups',
         ).toEqual(hierarchyGroupOrder(D15_WEIGHTS));
         const shades = shadesOf(D15_WEIGHTS);
-        expect(shades, 'precondition: the hierarchy shades subtypes of these weights, so "no shade" can fail').not.toEqual([]);
+        expect(shades, 'precondition: the pie shades subtypes of these weights, so "no shade" can fail').not.toEqual([]);
 
         await mountChart(oneDay(D15_WEIGHTS), 'type');
-        const drawn = drawnSeries();
+        const drawn = drawnSeries() as Array<DrawnSeries & {lineStyle?: {color?: string}}>;
 
         expect(
             drawn.map(({id, name, itemStyle}) => ({id, name: withoutEmoji(name, id), color: itemStyle?.color})),
-            'not one series per family, keyed, named, ranked and coloured as D375 says',
-        ).toEqual(byFamily.map(({family}, rank) => ({id: family, name: typeLabel(family), color: palette[rank]})));
+            'not one series per family, keyed, named, ranked and coloured as D375 and GR1 say',
+        ).toEqual(byFamily.map(({family}) => ({id: family, name: typeLabel(family), color: familyColour(family)})));
+        expect(
+            drawn.map(({id, lineStyle}) => `${id} ${lineStyle?.color}`),
+            'a line not in its family’s colour',
+        ).toEqual(byFamily.map(({family}) => `${family} ${familyColour(family)}`));
         expect(shadesFoundIn(JSON.stringify(drawn), shades), 'a subtype shade is still in the option').toEqual([]);
     });
 
@@ -1100,10 +1131,10 @@ describe('AllocationHistoryChart — the type dimension draws one series per fam
         ).toEqual(byFamily.map(({family, perDate}) => ({id: family, values: perDate.map((value) => expect.closeTo(value, 9))})));
     });
 
-    it('draws every asset type of the generated enum, and the cash bucket, inside the family assetTypeFamily gives it — each family on a palette slot of its own, verbatim', async () => {
-        // WHY: D15 for every type there is, under D375. A new enum value lands in the family K gives it, and
-        // no family wears another's colour. Catches a subtype drawn on its own, or in the family of its
-        // content, and a family past the palette's slots.
+    it('draws every asset type of the generated enum, and the cash bucket, inside the family assetTypeFamily gives it — each family in its own colour, no two alike', async () => {
+        // WHY: D15 for every type there is, under D375 and GR1. A new enum value lands in the family K gives
+        // it, and no family wears another's colour. Catches a subtype drawn on its own, or in the family of
+        // its content, and a family drawn in a colour that is not its key's.
         const keys = [...(K.ASSET_TYPES as readonly string[]), CASH_BUCKET];
         // Anti-vacuous: the enum was read, with the subtypes whose family is not their content.
         expect(keys).toEqual(expect.arrayContaining(['ETF_STOCK', 'ETF_BOND', 'ETF_REAL_ESTATE', 'ETF_MONETARY', 'CROWDFUND_REAL_ESTATE']));
@@ -1117,18 +1148,17 @@ describe('AllocationHistoryChart — the type dimension draws one series per fam
             byFamily.map(({family}) => family),
             'precondition: grouping by content would stack the enum the same way',
         ).not.toEqual(familiesOf(oneDay(weights), K.primaryAssetType).map(({family}) => family));
-        expect(byFamily.length, `${byFamily.length} families for ${palette.length} palette slots: one would wear the colour of another`).toBeLessThanOrEqual(palette.length);
         const shades = shadesOf(weights);
-        expect(shades, 'precondition: the hierarchy shades subtypes of these weights, so "no shade" can fail').not.toEqual([]);
+        expect(shades, 'precondition: the pie shades subtypes of these weights, so "no shade" can fail').not.toEqual([]);
 
         await mountChart(oneDay(weights), 'type');
         const drawn = drawnSeries();
 
         expect(
             drawn.map(({id, data, itemStyle}) => ({id, sum: pointValue(data?.[0]), color: itemStyle?.color})),
-            'not one series per family, holding its members, in palette[rank]',
-        ).toEqual(byFamily.map(({family, perDate}, rank) => ({id: family, sum: expect.closeTo(perDate[0], 9), color: palette[rank]})));
-        expect(new Set(drawn.map(({itemStyle}) => itemStyle?.color)).size, 'two families are drawn in the same colour').toBe(drawn.length);
+            'not one series per family, holding its members, in its own colour',
+        ).toEqual(byFamily.map(({family, perDate}) => ({id: family, sum: expect.closeTo(perDate[0], 9), color: familyColour(family)})));
+        expect(new Set(drawn.map(({itemStyle}) => itemStyle?.color?.toLowerCase())).size, 'two families are drawn in the same colour').toBe(drawn.length);
         expect(shadesFoundIn(JSON.stringify(drawn), shades), 'a subtype shade is still in the option').toEqual([]);
     });
 });
@@ -1228,13 +1258,16 @@ describe('AllocationHistoryChart — a redraw that changes the order of the seri
 // D375 — sector and geography draw as before
 // =============================================================================
 
-describe('AllocationHistoryChart — sector and geography draw as before (D375 leaves them alone)', () => {
-    it.each(UNTOUCHED)('$title: one series per raw category, ranked by weight, in palette[index] (green today and after D375)', async ({dimension, weights}) => {
-        // WHY: the family is a type notion. Catches the type rules leaking into the other dimensions: a
-        // regrouping, a re-ranking, or a palette walked another way.
+describe('AllocationHistoryChart — sector and geography: grouped as before (D375 leaves them alone), coloured by GR1 and GR5', () => {
+    it.each(UNTOUCHED)('$title: one series per raw category, ranked by weight — a sector in its own colour, a country in the sequence colour of its rank', async ({dimension, weights}) => {
+        // WHY: the family is a type notion, and a category is coloured by its key — or, for a country, which
+        // has none, by its rank in the sequence. Catches the type rules leaking into the other dimensions — a
+        // regrouping, a re-ranking — and a colour handed out the wrong way.
         await mountChart(oneDay(weights), dimension);
+        const keys = rankedKeys(weights);
+        const colours = dimension === 'sector' ? keys.map((key) => categoryColor('sector', key, false)) : countryColours(keys);
 
-        expect(drawnSeries().map(({id, data, itemStyle}) => ({id, value: pointValue(data?.[0]), color: itemStyle?.color}))).toEqual(rankedKeys(weights).map((key, index) => ({id: key, value: weights.find(([name]) => name === key)?.[1], color: palette[index % palette.length]})));
+        expect(drawnSeries().map(({id, data, itemStyle}) => ({id, value: pointValue(data?.[0]), color: itemStyle?.color}))).toEqual(keys.map((key, index) => ({id: key, value: weights.find(([name]) => name === key)?.[1], color: colours[index]})));
     });
 
     it.each(UNTOUCHED)("$title: today's tooltip, every category under 3% grouped in «Remaining» (D375 leaves it alone; plan 52 C2 writes its day in the interface language)", async ({dimension, weights}) => {
@@ -1264,32 +1297,173 @@ describe('AllocationHistoryChart — sector and geography draw as before (D375 l
 });
 
 // =============================================================================
-// The dark theme — the dark half of the palette
+// Both themes — every series in its colour for the theme it is drawn in
+// =============================================================================
+
+/** The two themes, as the chart reads them off the `dark` class of <html> when it draws. */
+const THEMES = [
+    {theme: 'light', dark: false},
+    {theme: 'dark', dark: true},
+] as const;
+
+/** What `dimension` draws `keys` in, in that order, in `dark`: a family's colour, a sector's, the countries' sequence. */
+function coloursOf(dimension: Dimension, keys: readonly string[], dark: boolean): string[] {
+    if (dimension === 'type') return keys.map((family) => familyColour(family, dark));
+    if (dimension === 'sector') return keys.map((key) => categoryColor('sector', key, dark));
+    return countryColours(keys, dark);
+}
+
+/**
+ * Most blocks draw in the light theme, jsdom's default. Here each colouring path — the type dimension's
+ * families, the sectors, the countries' sequence — is mounted in both themes, the dark one under the `dark`
+ * class of <html>, and compared with the colours of that theme.
+ */
+describe('AllocationHistoryChart — both themes: every series in its colour for the theme it is drawn in', () => {
+    const CASES = [{title: 'type', dimension: 'type' as Dimension, weights: D15_WEIGHTS}, ...UNTOUCHED].flatMap((path) => THEMES.map(({theme, dark}) => ({...path, theme, dark})));
+
+    it.each(CASES)('$title, $theme theme: each series in its colour for that theme', async ({dimension, weights, theme, dark}) => {
+        const order = expectedOrder(dimension, weights);
+        // Control: the two themes differ on every series drawn, so a chart deaf to the theme fails one of the two rows.
+        const [light, darkColours] = [coloursOf(dimension, order, false), coloursOf(dimension, order, true)];
+        expect(
+            order.filter((_key, index) => light[index] === darkColours[index]),
+            'series with one colour in both themes',
+        ).toEqual([]);
+
+        document.documentElement.classList.toggle('dark', dark);
+        await mountChart(oneDay(weights), dimension, theme);
+
+        expect(drawnSeries().map(({id, itemStyle}) => `${id} ${itemStyle?.color}`)).toEqual(order.map((id, index) => `${id} ${(dark ? darkColours : light)[index]}`));
+    });
+});
+
+// =============================================================================
+// GR5 — the countries take the sector sequence by rank, the unclassified their grey
 // =============================================================================
 
 /**
- * Every other block draws in the light theme, jsdom's default, and reads `ALLOCATION_HISTORY_PALETTE.light`. Its dark
- * half is measured in `colors.test.ts` and `allocationHierarchy.test.ts`, which says something about this chart only
- * while the chart draws it in the dark theme. So the chart is mounted under the `dark` class of <html>, which it
- * reads when it draws, on each colouring path: the type dimension's families and the raw categories of the other two.
+ * Sixteen classified countries, all weights distinct, with `Unknown` third and `Other` last. In the order
+ * they rank among the classified ones: USA is rank 0, DEU — right after Unknown — rank 2, IND rank 14, the
+ * first of the second round, KOR rank 15.
  */
-describe('AllocationHistoryChart — the dark theme draws ALLOCATION_HISTORY_PALETTE.dark', () => {
-    afterEach(() => {
-        document.documentElement.classList.remove('dark');
+const RANKED_COUNTRIES = ['USA', 'ITA', 'DEU', 'FRA', 'ESP', 'GBR', 'JPN', 'CHN', 'CAN', 'AUS', 'CHE', 'NLD', 'SWE', 'BRA', 'IND', 'KOR'];
+const GEO_WEIGHTS: readonly Weight[] = [
+    ['USA', 30],
+    ['ITA', 20],
+    ['Unknown', 15],
+    ['DEU', 10],
+    ['FRA', 9],
+    ['ESP', 8],
+    ['GBR', 7],
+    ['JPN', 6],
+    ['CHN', 5],
+    ['CAN', 4.5],
+    ['AUS', 4],
+    ['CHE', 3.5],
+    ['NLD', 3],
+    ['SWE', 2.5],
+    ['BRA', 2],
+    ['IND', 1.5],
+    ['KOR', 1],
+    ['Other', 0.5],
+];
+
+describe('AllocationHistoryChart — geography: the countries take the sector sequence by rank (GR5), the unclassified keep their grey', () => {
+    it.each(THEMES)('$theme theme: Unknown and Other in the Unknown grey, taking no rank; the n-th classified country in the n-th colour of the sequence; rank 14 the first-round shade of the first colour', async ({theme, dark}) => {
+        // Premises: one round of the sequence is fourteen colours, and the fixture ranks as described.
+        expect(KEYLESS_SEQUENCE).toHaveLength(14);
+        expect(rankedKeys(GEO_WEIGHTS).filter((key) => key !== 'Unknown' && key !== 'Other')).toEqual(RANKED_COUNTRIES);
+
+        document.documentElement.classList.toggle('dark', dark);
+        await mountChart(oneDay(GEO_WEIGHTS), 'geo', theme);
+        const colourOf = new Map(drawnSeries().map(({id, itemStyle}) => [id, itemStyle?.color]));
+        const grey = categoryColor('sector', 'Unknown', dark);
+        const sequence = (rank: number) => categoryColor('sector', KEYLESS_SEQUENCE[rank % KEYLESS_SEQUENCE.length], dark);
+
+        // The unclassified wear their own grey, wherever they rank.
+        expect({Unknown: colourOf.get('Unknown'), Other: colourOf.get('Other')}).toEqual({Unknown: grey, Other: grey});
+        // DEU comes right after Unknown in the stack and takes rank 2, not 3: the grey consumed no rank.
+        expect(colourOf.get('DEU'), 'DEU, the first country after Unknown').toBe(sequence(2));
+        // Round 0: the fourteen colours of the sequence, in its order.
+        expect(RANKED_COUNTRIES.slice(0, 14).map((key) => colourOf.get(key))).toEqual(KEYLESS_SEQUENCE.map((_key, rank) => sequence(rank)));
+        // Round 1: the first GR4 shade of the first colour — never the first colour again — then of the second.
+        const poles = polesFor(dark);
+        expect({IND: colourOf.get('IND'), KOR: colourOf.get('KOR')}).toEqual({IND: familyShade(sequence(0), 1, poles), KOR: familyShade(sequence(1), 1, poles)});
+        expect(colourOf.get('IND'), 'rank 14 repeats rank 0').not.toBe(colourOf.get('USA'));
+        const classified = RANKED_COUNTRIES.map((key) => colourOf.get(key)?.toLowerCase());
+        expect(new Set(classified).size, 'two countries in one colour').toBe(RANKED_COUNTRIES.length);
     });
 
-    it.each([{title: 'type', dimension: 'type' as Dimension, weights: D15_WEIGHTS}, ...UNTOUCHED])('$title: each series in the dark entry of its rank', async ({dimension, weights}) => {
-        const order = expectedOrder(dimension, weights);
-        // Control: the two halves differ on the slots drawn, so a chart deaf to the theme fails below.
-        expect(ALLOCATION_HISTORY_PALETTE.dark.slice(0, order.length)).not.toEqual(ALLOCATION_HISTORY_PALETTE.light.slice(0, order.length));
+    it('announces a colour coming back — past the 98 the sequence and its six rounds of shades give — and stays silent at 98', async () => {
+        // The warning is the chart's own debug channel: spied, not printed.
+        const warn = vi.spyOn(debug, 'warn').mockImplementation(() => {});
+        try {
+            /** `count` classified countries, weights all distinct, and the unclassified bucket, which takes no rank. */
+            const countries = (count: number): Weight[] => [...Array.from({length: count}, (_, index) => [`C${String(index).padStart(3, '0')}`, 1000 - index] as const), ['Unknown', 0.5] as const];
 
+            const view = await mountChart(oneDay(countries(98)), 'geo');
+            expect(drawnSeries(), 'precondition: 98 countries and the bucket drawn').toHaveLength(99);
+            expect(warn, 'a warning with 98 countries: every colour is still distinct').not.toHaveBeenCalled();
+            view.unmount();
+            chartInstances.length = 0;
+
+            const crowded = await mountChart(oneDay(countries(99)), 'geo');
+            expect(drawnSeries(), 'precondition: 99 countries and the bucket drawn').toHaveLength(100);
+            expect(warn, 'no warning with 99 countries: the 99th repeats a colour in silence').toHaveBeenCalled();
+            expect(warn.mock.calls.map(([component]) => component)).toEqual(warn.mock.calls.map(() => 'AllocationHistoryChart'));
+            // Unmounted under the spy: a redraw after the test (the shared afterEach touches <html>) would print it.
+            crowded.unmount();
+        } finally {
+            warn.mockRestore();
+        }
+    });
+});
+
+// =============================================================================
+// C4 — a chart-colour change redraws the whole option, the roles read again
+// =============================================================================
+
+describe('AllocationHistoryChart — redrawn in full when its colours change (C4)', () => {
+    it("notifyChartColorsChange() hands ECharts a full option again, the card read again from the chart's own element: a second-round country follows it", async () => {
+        const FIRST_CARD = '#2a1f3d';
+        const NEXT_CARD = '#1f3d2a';
+        let card = FIRST_CARD;
+        const chartElement = () => document.querySelector(`[data-testid="${CHART_CONTAINER_TESTID}"]`);
+        // The card answered for the chart's own element only: a shade made from any other read would differ.
+        setRoleReader((role, scope) => (role === '--lf-surface-card' && scope !== null && scope === chartElement() ? card : ''));
         document.documentElement.classList.add('dark');
-        await mountChart(oneDay(weights), dimension, 'dark');
 
-        expect(
-            drawnSeries().map(({id, itemStyle}) => ({id, color: itemStyle?.color})),
-            'the series, each in the dark entry of its rank',
-        ).toEqual(order.map((id, rank) => ({id, color: ALLOCATION_HISTORY_PALETTE.dark[rank]})));
+        await mountChart(oneDay(GEO_WEIGHTS), 'geo', 'dark');
+        // IND is rank 14: the first-round shade of the first colour, which the dark theme takes toward the card.
+        const first = categoryColor('sector', KEYLESS_SEQUENCE[0], true);
+        const shadeOn = (onCard: string) => familyShade(first, 1, shadePoles(true, onCard));
+        const drawnIND = () => drawnSeries().find(({id}) => id === 'IND')?.itemStyle?.color;
+        // Control: the two cards shade the first colour differently.
+        expect(shadeOn(FIRST_CARD)).not.toBe(shadeOn(NEXT_CARD));
+        expect(drawnIND()).toBe(shadeOn(FIRST_CARD));
+
+        card = NEXT_CARD;
+        const before = recordedCalls().length;
+        // Nothing redraws by itself: a role is read when the option is built, and only the signal says it changed.
+        flushSync();
+        await tick();
+        expect(recordedCalls().length, 'the chart redrew without being told its colours changed').toBe(before);
+
+        notifyChartColorsChange();
+
+        expect(recordedCalls().slice(before).filter(isFullOption).length, 'no full option followed the notification').toBeGreaterThan(0);
+        expect(drawnIND(), 'the shade of the new card').toBe(shadeOn(NEXT_CARD));
+        expect(chartInstances, 'the notification made a new chart').toHaveLength(1);
+    });
+
+    it('a notification redraws the type dimension in full as well, each family still in its own colour', async () => {
+        await mountChart(oneDay(D15_WEIGHTS), 'type');
+        const before = recordedCalls().length;
+
+        notifyChartColorsChange();
+
+        expect(recordedCalls().slice(before).filter(isFullOption).length, 'no full option followed the notification').toBeGreaterThan(0);
+        expect(drawnSeries().map(({id, itemStyle}) => `${id} ${itemStyle?.color}`)).toEqual(familiesOf(oneDay(D15_WEIGHTS)).map(({family}) => `${family} ${familyColour(family)}`));
     });
 });
 

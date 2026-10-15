@@ -112,7 +112,7 @@
     }
 </script>
 
-<div class="w-full max-w-lg bg-lf-card text-lf-primary border border-lf-subtle rounded-2xl shadow-2xl overflow-hidden flex flex-col font-sans" data-testid="register-modal">
+<div class="w-full max-w-lg bg-lf-card text-lf-primary border border-lf-raised rounded-2xl shadow-2xl shadow-lf-shadow overflow-hidden flex flex-col font-sans" data-testid="register-modal">
     <!-- Header Section (brand green); no subtitle: the Register button says it (designer, round 1) -->
     <div class="bg-lf-brand p-8 flex flex-col items-center justify-center space-y-2">
         <div class="flex items-center space-x-3 text-lf-on-brand">
@@ -152,6 +152,7 @@
                         class="w-full pl-12 pr-4 py-3 rounded-lg border bg-lf-field text-lf-primary placeholder:text-lf-placeholder focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
                         class:border-lf-input={!usernameError}
                         class:border-lf-danger={usernameError}
+                        class:hover:border-lf-input-hover={!usernameError}
                         class:focus:border-lf-focus={!usernameError}
                         class:focus:border-lf-danger={usernameError}
                         class:focus:ring-lf-focus={!usernameError}
@@ -182,6 +183,7 @@
                         class="w-full pl-12 pr-4 py-3 rounded-lg border bg-lf-field text-lf-primary placeholder:text-lf-placeholder focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
                         class:border-lf-input={!emailError}
                         class:border-lf-danger={emailError}
+                        class:hover:border-lf-input-hover={!emailError}
                         class:focus:border-lf-focus={!emailError}
                         class:focus:border-lf-danger={emailError}
                         class:focus:ring-lf-focus={!emailError}

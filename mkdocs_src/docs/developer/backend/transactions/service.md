@@ -284,6 +284,39 @@ What the conversion changes in the figures:
   `total_withdrawn` and `net_deposited_capital`; and the deposits series of
   `get_deposit_history()` (`DEPOSIT` only).
 
+**One savepoint per broker.** `delete_bulk()` deletes each broker of a request in a
+savepoint of its own (`self.session.begin_nested()`) through `_delete_one()`, which
+flushes its writes, the broker's own delete included, while the savepoint is open: a
+write error surfaces before the savepoint is released. A broker whose deletion fails
+at any point — even after `delete_by_broker()` wrote the Auto cost on a receiving
+half or unlinked the broker's own pairs — leaves every row as it was, its own and the
+other halves on other brokers. Its result has `success=False` and the error as
+`message`; the brokers before and after it in the request are still deleted.
+`delete_bulk()` never commits; its caller does:
+
+- `DELETE /brokers` commits when `response.errors` is empty, which `delete_bulk()`
+  never fills: a broker that fails is reported in `results`;
+- `DELETE /brokers/{broker_id}/access/me` commits when `leave_broker()` succeeds;
+- account deletion (`delete_user()`) is all or nothing: it rolls everything back when
+  a broker cannot be released, and the savepoints nest inside its transaction.
+
+Nesting needs an open transaction, and pysqlite defers `BEGIN` until the first write:
+a savepoint opened after reads alone is SQLite's outermost transaction, and its
+`RELEASE` commits — the caller's later rollback can no longer bring that broker back.
+So `delete_bulk()` first calls `begin_writes(self.session, Broker)`
+(`backend/app/db/session.py`), which runs an `UPDATE` of that table matching no row
+(`where(false())`): pysqlite emits `BEGIN` before it, and inside an open transaction
+it changes nothing. A write path that opens per-item savepoints after reads must call
+`begin_writes()` first; `AssetCRUDService.delete_assets_bulk()` (`assets/crud.py`)
+runs its own no-op `UPDATE` for the same reason. A global SQLAlchemy `begin` listener
+emitting `BEGIN` up front is ruled out: a session that reads, sees another writer
+commit, then writes, fails at once with `SQLITE_BUSY_SNAPSHOT`.
+
+Tests: `./dev.py test services broker` (`TestDeleteBulkOneSavepointPerBroker`,
+BR-U-081…085) and `./dev.py test services user-profile` (`TestDeleteUser`, the two
+`test_delete_user_is_all_or_nothing_*` cases); BR-U-082 and those two fail without
+`begin_writes()`.
+
 ---
 
 ## ⚖️ Balance Queries
