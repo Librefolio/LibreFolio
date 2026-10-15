@@ -8,7 +8,7 @@ The **App & UI State** category contains stores responsible for the global user 
 
 | Store | File | Purpose |
 |:------|:-----|:--------|
-| **Auth** | `app/auth.ts` | Manages login status, JWT tokens, and the current user object. |
+| **Auth** | `app/auth.ts` | Holds the session state — the current user (`null` when signed out) and the loading, error and initialized flags — through `login()`, `logout()` and `checkAuth()` (`GET /auth/me`). The session itself is the HttpOnly `session` cookie the backend sets: the frontend never sees the token. |
 | **Settings** | `app/settings.ts` | User-specific preferences (language, theme, base currency, avatar). Syncs with the backend. |
 | **Global Settings** | `app/globalSettings.ts` | Application-wide settings (admin-only writes), like max upload sizes. |
 | **Language** | `app/language.ts` | The interface language. `currentLanguage.set()` also sets the `svelte-i18n` locale and saves the choice in this browser (`librefolio-locale`), which the next load starts from. Nothing listens to the Settings store: the language is set explicitly — by the auth store at login, from the user's settings in the login response, and by the UI: the Preferences tab and the Welcome page after their write, or the header selector (this browser only). |
