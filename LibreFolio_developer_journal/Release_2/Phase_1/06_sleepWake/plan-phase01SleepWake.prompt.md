@@ -30,7 +30,7 @@
 | Z3 | Scheduler: recupero immediato al risveglio e lock condiviso con `wake-sync` (`next_wake_at` e jitter nel backlog, punto 33) | ⏸ attende lo scheduler spostato da H |
 | Z4 | `POST /system/wake-sync` (F07): token, risposta in streaming; niente `next-wake` (punto 33) | ⏸ attende gli agganci di H |
 | Z5 | «Aggiornamento prezzi…» | ⏸ attende l'area avvisi e la configurazione pubblica di H |
-| Z6b | C-49: la cura | 📝 disegnato il 15/10 (sezione «Z6b — disegno»), punto 35 deciso; il codice aspetta gli agganci di H (CP2b) e l'autorizzazione del developer |
+| Z6b | C-49: la cura | autorizzato il 15/10; **parte 1 ✅ entrata** (`000090aaf`: variabile, drenaggio da `entrypoint.sh` e `dev.py server`, watchdog e scadenza non ancora cablati, grazie a 10 s); parte 2 (cablaggio in `app_lifespan.py`, test di processo, ciclo vero, doc) allo SHA di CP2b di H — sezione «Z6b — spegnimento con un tempo massimo» |
 | Z7 | Attesa crescente sui 429, nello scheduler, nelle richieste dal vivo e nel polling del frontend (punto 34) | 📝 disegnato il 15/10 (sezione «Z7 — disegno»), decisioni D-Z7 prese dal coordinatore; **Z7a ✅ 15/10** (primitiva, configurazione, servizio, test verdi; sezione «Z7a»); poi X con il contratto `RATE_LIMITED` (X1–X8), poi Z7b scheduler e Z7c frontend |
 
 Checkpoint FROZEN a fine Z6a; poi un checkpoint per lotto.
@@ -1102,6 +1102,28 @@ tool.
    > - `exit(1)` gira anche quando falliscono il rapporto, i figli o la coverage;
    > - gli spazi in shell valgono come in Python (`sed`, e una `UVICORN_TIMEOUT_GRACEFUL_SHUTDOWN` vuota conta come non
    >   impostata).
+   >
+   > **Parte 2 in bozza** (15/10 ~19:30, test-author, non lanciata):
+   > - `backend/test_scripts/test_services/_shutdown_budget_app.py`: l'app di prova. Usa i pezzi veri (il watchdog
+   >   come primo passo d'avvio, `shutdown_deadline()` una volta nel `finally`, `child_processes_step()` per ultimo) e
+   >   ha degli interruttori `Z6B_APP_*`;
+   > - `test_shutdown_budget_process.py`: SDP-001…007, cioè i casi (a)–(f) su processi veri e (g) il cablaggio;
+   >   azione `services shutdown-process` (PURE). Il socket sta in `/tmp/lf-z6b-*`, perché macOS limita il percorso a
+   >   104 byte; il server gira nella sua sessione e la pulizia ne uccide il gruppo;
+   > - i codici d'uscita, letti nei sorgenti di uvicorn 0.52.4 e Python 3.13:
+   >   - con SIGTERM, uvicorn rilancia il segnale e si esce con −SIGTERM;
+   >   - con SIGINT, il `KeyboardInterrupt` viene inghiottito e l'interprete aspetterebbe per sempre il thread non
+   >     daemon: lo chiude solo il watchdog, con 1;
+   >   - (a), (b) e (d) accettano −SIGTERM o 1, ma 1 solo con «Shutdown budget exhausted» nel log;
+   > - la registrazione fa diventare rosso `services all` finché CP2b non entra: si committa con la parte 2.
+   >
+   > Rischi segnalati da test-author:
+   > 1. il passo d'avvio del watchdog restituisce un oggetto che non si può attendere, quindi `run_startup_steps` deve
+   >    attendere solo gli awaitable. **Chiuso** da H il 15/10: il risultato di `run()` passa per `_completed()`, che
+   >    lo attende solo se `inspect.isawaitable(result)`, all'avvio come allo spegnimento, e un suo test lo prova;
+   > 2. `child_processes_step()` è sincrono sul loop e con un figlio testardo dura fino a ~1 s, più del margine di
+   >    0,75 s; anche i passi dopo un taglio ricevono 0,2 s ciascuno. Nel caso peggiore il watchdog scatta durante
+   >    l'ultimo passo: termina comunque i figli e si esce con 1. È accettato, perché il processo esce nel budget.
 2. Rossi. ✅ 2026-10-15 (parte 1)
 
    > `services shutdown-budget` → exit 1, `ImportError: cannot import name 'DEFAULT_SHUTDOWN_TIMEOUT_SECONDS'`, alla
@@ -1169,5 +1191,34 @@ tool.
    >
    > Il carico era alto (fino a 95 al minuto): prima delle due run col backend ho aspettato che scendesse sotto 60.
    > Strumenti fuori dal repo: `/tmp/libreFolio_z6b_run.sh` e l'osservatore di Z6a. Log in `/tmp/libreFolio_z6b_*`.
-5. `.env.example`, la doc admin (`docs-writer`), il CHANGELOG proposto. ⏳
+   >
+   > **Parte 1 entrata** in `dev_release2` a `000090aaf` (15/10 ~18:57). Avanzamento veloce del mio ramo a `10d5ccd2d`.
+   > Il CHANGELOG lo scrive il coordinatore con la parte 2, quando tutto il budget è acceso. In attesa dello SHA di
+   > CP2b, i test di processo si scrivono in bozza e non si lanciano.
+   >
+   > **Checkpoint della bozza della parte 2** (15/10 ~20:00). CP2b è entrato (`4fb017a9a`) e il coordinatore ha dato
+   > il via alla parte 2. Il merge di `dev_release2` (`9b82187f6`) però si sarebbe fermato sulle mie modifiche aperte
+   > al backlog e a `_backend_services.py`. Quindi: commit delle modifiche aperte (bozza dei test di processo, doc EN,
+   > registrazione, journal), poi il merge. I blocchi non si sovrappongono: nel runner sono a 535 e 1336 contro 413,
+   > 902, 1242 e 1501; nel backlog Z-10 sta 7 righe sopra le 49 aggiunte alla sezione B. Il punto fermo ha ruff e black
+   > puliti sui file nuovi, le ammonizioni a posto e `git diff --check` pulito. In quel commit `services
+   > shutdown-process` è rosso, perché `lifecycle` non c'è ancora; dopo il merge resta rosso solo SDP-007, il
+   > cablaggio, fino alle 3 righe.
+5. `.env.example`, la doc admin (`docs-writer`), il CHANGELOG proposto. ⏳ (`.env.example` ✅ con la parte 1; doc
+   in bozza ✅ 2026-10-15, entra con la parte 2)
+
+   > **Note implementazione** (doc, da `docs-writer`, solo EN, nessuna build, niente stamp):
+   > - `admin/configuration.en.md`: sezione nuova «⏹️ Stopping the Server» `{: #shutdown }`, fra «Startup Checks» e
+   >   «Parameters Set by the Tools». Contiene la tabella delle due variabili, i tre tempi dello spegnimento e un
+   >   avviso: chi alza il budget alzi `stop_grace_period`, con un esempio YAML. Fly.io resta fuori (lo documenta X).
+   >   Nessuna riga in «Main Options», perché lì un valore sbagliato ferma il server, e questo no;
+   > - `developer/test-walkthrough/index.md` (453, 458–465) e `runner_architecture.md:802`: la grazia senza coverage è
+   >   10 s, e l'avviso «ignored SIGTERM» vuol dire budget mancato;
+   > - debito di traduzione vero sulle pagine admin IT, FR ed ES: la sezione nuova manca e deve tenere `{: #shutdown }`;
+   > - le pagine descrivono il comportamento completo, che c'è solo dopo il cablaggio: entrano con la parte 2.
+   >
+   > **Fuori pista**: docs-writer ha segnalato, dal codice, che Ctrl+C su `./dev.py server` uccide il server dopo
+   > 0,25 s (`subprocess.run` in `run_command_live`). Ho verificato la lettura nel codice: è un difetto che c'era già,
+   > in una superficie del coordinatore, ed è finito nel backlog come Z-10. Fuori regola: una volta docs-writer ha
+   > lanciato un `python3.14 -c` di sistema, in sola lettura.
 6. Checkpoint FROZEN. ⏳
