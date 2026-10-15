@@ -35,12 +35,12 @@ from backend.app.schemas.provider import (
     ProbeMetadataResult,
     ProbeOperation,
 )
-from backend.app.services.asset_sources import core
-from backend.app.services.asset_sources.core import (
+from backend.app.services.assets import core
+from backend.app.services.assets.core import (
     AssetSourceError,
     AssetSourceProvider,
 )
-from backend.app.services.provider_registry import AssetProviderRegistry
+from backend.app.services.assets.registry import AssetProviderRegistry
 
 logger = structlog.get_logger(__name__)
 

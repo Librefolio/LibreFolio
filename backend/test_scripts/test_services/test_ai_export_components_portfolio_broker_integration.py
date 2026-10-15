@@ -98,7 +98,7 @@ from backend.app.services.ai_export.dependencies import (
     ResourceKeyConflictError,
     build_bucket_plan_for_scope,
 )
-from backend.app.services.asset_source import AssetSourceManager
+from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.signal_service import SignalExecutionContext, SignalService

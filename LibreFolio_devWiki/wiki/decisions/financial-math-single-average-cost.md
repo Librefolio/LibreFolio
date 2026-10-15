@@ -240,7 +240,7 @@ average cost comes from this one function.
 | Lots WAC line math (since 2026-10-12) | `backend/app/services/financial_math/lots/average_cost_lines.py` |
 | Lot value and return histories, no native fallback (since 2026-10-11/12) | `backend/app/services/financial_math/lots/histories.py` |
 | Broker summary holdings cost | `backend/app/services/brokers/summary.py` |
-| FX service (`convert_bulk`) | `backend/app/services/fx.py` |
+| FX service (`convert_bulk`) | `backend/app/services/fx/fx.py` |
 | `MISSING_COST_BASIS`, `UnrealizedBreakdownRow` | `backend/app/schemas/portfolio.py` |
 | `BRAssetHolding.total_cost`, `BRSummary.missing_fx_pairs` | `backend/app/schemas/brokers.py` |
 | Facade output (`WACPreviewResultItem`, `WACQualifyingTX`) | `backend/app/schemas/wac.py` |

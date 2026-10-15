@@ -37,8 +37,9 @@ from backend.app.schemas.signals import (
     SignalWarning,
     SignalWarningCode,
 )
-from backend.app.services.provider_registry import SignalPluginRegistry, register_plugin
+from backend.app.services.provider_registry import register_plugin
 from backend.app.services.signal_plugins.base import SignalPlugin, SignalUnavailableError
+from backend.app.services.signals.registry import SignalPluginRegistry
 
 CalendarWindowDays = Annotated[int, Field(strict=True, gt=0)]
 

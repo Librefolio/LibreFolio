@@ -223,7 +223,7 @@ Add a `## Source files` section at the bottom of every page:
 
 | Role | Path |
 |------|------|
-| Abstract base | `backend/app/services/fx.py` |
+| Abstract base | `backend/app/services/fx/fx.py` |
 | ECB provider | `backend/app/services/fx_providers/ecb/plugin.py` |
 | FED provider | `backend/app/services/fx_providers/fed/plugin.py` |
 | API endpoints | `backend/app/api/v1/fx.py` |
@@ -553,7 +553,7 @@ Add a `## Source files` section at the bottom of every page:
 
 | Role | Path |
 |------|------|
-| Abstract base | `backend/app/services/fx.py` |
+| Abstract base | `backend/app/services/fx/fx.py` |
 | ECB provider | `backend/app/services/fx_providers/ecb/plugin.py` |
 | FED provider | `backend/app/services/fx_providers/fed/plugin.py` |
 | API endpoints | `backend/app/api/v1/fx.py` |

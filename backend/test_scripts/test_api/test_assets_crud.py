@@ -1674,7 +1674,7 @@ async def test_list_held_flags_read_positions_through_the_portfolio_dust_thresho
 # .patch_assets_bulk / prepared patch_dict must shallow-merge classification_
 # params per subfield, not fully replace it: an unrelated field patch must
 # leave it alone, and an explicit null on one subfield must clear only that
-# subfield, never the whole block. See backend/app/services/asset_source.py
+# subfield, never the whole block. See backend/app/services/assets/crud.py
 # ~ patch_assets_bulk (prepared patch_dict + per-field merge loop).
 # ============================================================================
 
