@@ -18,7 +18,6 @@
            ResizeObserver for responsive sizing.
 -->
 <script lang="ts">
-    import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {onMount, tick} from 'svelte';
     import * as echarts from 'echarts';
     import {attachChartReady} from '$lib/utils/chartReady';
@@ -27,28 +26,44 @@
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {scrollOnOverflow} from '$lib/actions/scrollOnOverflow';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
-    import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
+    import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS} from '$lib/components/charts/echartsAnimationConfig';
     import {_} from '$lib/i18n';
     import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
     import {clampGrowthLogicalRange, type GrowthLogicalRange} from './growthChartRange';
     import {planLadderAxis, ladderAxisOption, type LadderAxisPlan} from './growthLadderAxis';
-    import {buildCalendarLadder, countCalendarBuckets, type CalendarPeriod, type LadderRung} from './growthLadderBuckets';
-    import {daysBetween, todayIso} from '$lib/utils/dateOnly';
+    import {countCalendarBuckets} from './growthLadderBuckets';
+    import {todayIso} from '$lib/utils/dateOnly';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
-    import {aggregateLineSeries, mapDateToBucket, cascadeResolution, chooseInitialResolution, computeDensity, type ChartGrammar} from '$lib/components/charts/timeSeriesAggregation';
+    import {cascadeResolution, chooseInitialResolution, computeDensity, type ChartGrammar} from '$lib/components/charts/timeSeriesAggregation';
     import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
-    import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import type {PortfolioHistoryPoint, PortfolioBrokerPnlHistory, PortfolioPnlCandleSeries, PortfolioIncomeHistorySeries, PortfolioCostHistorySeries, PortfolioDepositHistorySeries, PortfolioAcquisitionFundingSeries} from '$lib/stores/portfolio/portfolioStore.svelte';
-    import {aggregateOHLCV, aggregateSumSeries} from '$lib/components/charts/timeSeriesAggregation';
-    import {buildTooltipTheme, buildTooltipHeader, buildTooltipRow, buildTooltipDivider, tooltipPositionSide, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
+    import {buildTooltipTheme, tooltipPositionSide, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG} from '$lib/components/charts/chartCoreHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
-    import {buildOhlcQuad} from '$lib/components/charts/candlestickChartHelpers';
-    import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
     import {ChartLine, ChartCandlestick, Coins} from 'lucide-svelte';
     import {formatPercent} from '$lib/utils/core/formatPercent';
-    import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {themed} from '$lib/theme/themePair';
+    import {CHART_NEUTRALS, CHART_TOOLTIP_COLORS, GROWTH_CHART_COLORS} from '$lib/theme/chartTheme';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
+    import {
+        alignFlowToDates,
+        buildLadderData,
+        buildResolutionData,
+        buildZoomWindow,
+        cascadeIndicesAt,
+        countBuckets,
+        ladderIndicesAt,
+        mapBrokerPnlSeries,
+        mapCandlesByDate,
+        mapEurStackedData,
+        mapPctValues,
+        type AggregatedResolutionData,
+        type AggregationInputs,
+        type CandleWidth,
+    } from './growthChartData';
+    import {buildGrowthFullSeries, buildGrowthUpdateSeries, INCOME_BAR_SHARE, PNL_REFERENCE_SERIES_NAME, type GrowthMode, type GrowthSeriesContext, type GrowthSeriesData, type PnlSubmode} from './growthChartSeries';
+    import {buildGrowthTooltip, type GrowthTooltipView} from './growthChartTooltip';
 
     // =========================================================================
     // Props
@@ -87,11 +102,6 @@
     // =========================================================================
     // State
     // =========================================================================
-
-    // coreMode = value|return|pnl (plan §5.1); kept as the existing 'eur'/'pct'/'pnl'
-    // literal union for minimal churn on the 14 existing branches, not a rename.
-    type GrowthMode = 'eur' | 'pct' | 'pnl';
-    type PnlSubmode = 'line' | 'candles' | 'income';
 
     // The mode and the P&L submode persist per user, with one key shared by Dashboard and
     // Broker detail (AllocationPanel and PositionsPanel do the same). The candle width is
@@ -156,7 +166,6 @@
      * quarters, halves and years, and `3D` and `2W` are fixed blocks whose edges never move.
      * The periods are `growthLadderBuckets`'s.
      */
-    type CandleWidth = LadderRung;
     const CANDLE_WIDTH_ORDER: CandleWidth[] = ['1D', '3D', '1W', '2W', '1M', '3M', '6M', '1Y'];
     /**
      * Rung captions are localized: the unit letter is NOT part of the key.
@@ -220,25 +229,8 @@
      */
     const LADDER_MIN_BODY_PX = 2.5;
     /**
-     * Income draws three columns in every bucket — the income stack (dividends and
-     * interest above zero, costs below it), the deposit, the acquisition stack — so its
-     * rule is checked per COLUMN, not per bucket: a slot that holds one readable candle
-     * holds three bars a third as wide.
-     *
-     * The gaps are the ones the Income series declare, so the offer and the drawing cannot
-     * disagree: bar = slot × (1 − category gap) / (columns + (columns − 1) × bar gap).
-     *
-     * Two gaps, deliberately unequal (developer's review of 06/10/2026: «ok fare le barre
-     * larghe, ma se sono tutte attaccate non si capisce nulla»): 30 % of the slot between two
-     * buckets, a visible margin, and 10 % of a bar between the three columns of one bucket, so
-     * a bucket still reads as one group.
-     */
-    const INCOME_COLUMNS = 3;
-    const INCOME_BAR_GAP = 0.1;
-    const INCOME_CATEGORY_GAP = 0.3;
-    const INCOME_BAR_SHARE = (1 - INCOME_CATEGORY_GAP) / (INCOME_COLUMNS + (INCOME_COLUMNS - 1) * INCOME_BAR_GAP);
-    /**
-     * Narrowest Income bar the ladder will still offer — a bucket of 20.6 px with the gaps above.
+     * Narrowest Income bar the ladder will still offer — a bucket of 20.6 px with the Income gaps
+     * (`INCOME_BAR_SHARE`, declared with the series in `growthChartSeries.ts`).
      *
      * Set by the developer's target of 06/10/2026: at nine months on a desktop, 2W is the
      * finest width («a 9 mesi, 2S mi paiono strette ma sono più accettabili»). Measured plots:
@@ -248,18 +240,6 @@
     const INCOME_MIN_BAR_PX = 4.5;
     /** Below three bodies a "chart" is a couple of rectangles — except at 1D, which is exempt. */
     const LADDER_MIN_BODIES = 3;
-    /**
-     * Opacity of a ladder bucket that is not comparable with the others (candle or Income bars).
-     *
-     * The buckets are calendar periods, and the series cuts the ones at its ends. A period that
-     * is over and that the series covers only in part — the month the range starts in, or the
-     * one it ends in when the range ends in the past — would read as a weak period, or its
-     * candle as a narrow range, when it is simply a shorter one. Fading it says "not
-     * comparable"; the tooltip says by how much. The period that has not ended yet is not
-     * faded: its missing days are the future (developer, 06/10/2026: «essendo il futuro non
-     * ancora scritto, lo consideriamo comunque pieno»).
-     */
-    const PARTIAL_BUCKET_OPACITY = 0.5;
     let candleWidth: CandleWidth = $state('1W');
     /** True until the ladder has picked its own opening rung; see reconcileCandleWidth(). */
     let candleWidthPending = $state(true);
@@ -344,124 +324,6 @@
      *  must not force extra resizes because that can interrupt a visible mobile tooltip. */
     let needsInitialLayoutStabilityPass = false;
 
-    // Color palettes
-    const COLORS = {
-        nav: {light: '#1a4031', dark: '#4ade80'}, // NAV — prominent line
-        bookAssetLike: {light: '#3b82f6', dark: '#60a5fa'}, // Assets at cost — blue area
-        cashContributed: {light: '#9caf9c', dark: '#6b8e6b'}, // Capital cash — subdued green area
-        cashGenerated: {light: '#10b981', dark: '#34d399'}, // Returns cash — bright emerald area
-        capitalBaseline: {light: '#6b7280', dark: '#9ca3af'}, // Capital baseline — grey dashed
-        invested: {light: '#2563eb', dark: '#60a5fa'}, // TWRR (% mode)
-        pctCash: {light: '#9caf9c', dark: '#94a3b8'}, // ROI (% mode)
-        totalPnl: {light: '#1a4031', dark: '#4ade80'}, // P&L mode — Total line (same prominence as NAV)
-        // P&L income submode — Dividend stacked bar. Gold, away from the deposit teal and the reinvested emerald;
-        // the pair of `incomeEventColor` in lotComparisonChartHelpers.ts, so change both together.
-        dividend: {light: '#b08d00', dark: '#facc15'},
-        interest: {light: '#7c3aed', dark: '#a78bfa'}, // P&L income submode — Interest stacked bar
-        costs: {light: '#ea580c', dark: '#fb923c'}, // P&L income submode — Costs (FEE+TAX) bar (batch 2)
-        deposit: {light: '#0d9488', dark: '#2dd4bf'}, // P&L income submode — Deposit-size bar (batch 2)
-    };
-
-    // Rotating palette for the P&L broker overlay (G1a) — distinct hues, cycled by index
-    // so any broker count renders with a stable, distinguishable color per line.
-    const BROKER_PALETTE: Array<{light: string; dark: string}> = [
-        {light: '#2563eb', dark: '#60a5fa'}, // blue
-        {light: '#d97706', dark: '#fbbf24'}, // amber
-        {light: '#7c3aed', dark: '#a78bfa'}, // violet
-        {light: '#db2777', dark: '#f472b6'}, // pink
-        {light: '#0891b2', dark: '#22d3ee'}, // cyan
-        {light: '#65a30d', dark: '#a3e635'}, // lime
-    ];
-
-    function brokerColor(index: number, isDark: boolean): string {
-        const entry = BROKER_PALETTE[index % BROKER_PALETTE.length];
-        return isDark ? entry.dark : entry.light;
-    }
-
-    /** A ladder bucket also carries the day-index range it spans, which is what the local
-     *  reducers walk — no date re-parsing, no calendar lookup. */
-    type LadderBucket = BucketInfo & {startIndex: number; endIndex: number};
-
-    type SeriesPoint = ReturnType<typeof namedPoint> & {
-        bucketStart: string;
-        bucketEnd: string;
-        resolution: ChartResolution;
-        /** Only on a ladder bucket that is not comparable; see PARTIAL_BUCKET_OPACITY. */
-        itemStyle?: {opacity: number};
-    };
-
-    type EurSeriesKey = 'bookAssetLike' | 'cashContributed' | 'cashGenerated' | 'nav' | 'capitalBaseline' | 'totalPnl';
-    type PctSeriesKey = 'mwrrCum' | 'twrr' | 'roi';
-
-    interface BucketInfo {
-        date: string;
-        bucketStart: string;
-        bucketEnd: string;
-        resolution: ChartResolution;
-        /** Only on a ladder bucket: the calendar period it stands for. `bucketStart`/`bucketEnd`
-         *  are the days of it the series covers, so the closing date stays a day with data. */
-        period?: CalendarPeriod;
-        /** Only on a ladder bucket that is over and that the series covers in part: faded,
-         *  and its tooltip says how many of the period's days it holds. */
-        partial?: {days: number; total: number};
-        /** Only on the ladder bucket that has not ended yet, wider than a day: drawn whole, and
-         *  its tooltip says how far it has got. */
-        current?: {days: number; total: number};
-    }
-
-    interface AggregatedMetric {
-        values: Array<number | null>;
-        points: SeriesPoint[];
-    }
-
-    interface AggregatedLookupEntry {
-        value: number;
-        bucketStart: string;
-        bucketEnd: string;
-    }
-
-    /** One broker's P&L overlay line, aggregated at a given resolution (G1a). */
-    interface AggregatedBrokerPnl {
-        brokerId: number;
-        brokerName: string;
-        metric: AggregatedMetric;
-    }
-
-    /** One synthetic P&L candle point, aggregated at a given resolution (G1b). */
-    type CandleSeriesPoint = SeriesPoint & {
-        open: number | null;
-        high: number | null;
-        low: number | null;
-        close: number | null;
-    };
-
-    interface AggregatedCandleMetric {
-        points: CandleSeriesPoint[];
-    }
-
-    interface AggregatedResolutionData {
-        resolution: ChartResolution;
-        /** True for an entry built by the ladder (P&L candles and Income): its buckets are
-         *  categories on the x axis, not points in time. A property of the entry, not of
-         *  the mode on screen, so a stale entry can never be read with the wrong geometry. */
-        ladder: boolean;
-        /** The rung a ladder entry was built on, which names its axis labels; absent on a density entry. */
-        rung?: LadderRung;
-        dates: string[];
-        buckets: BucketInfo[];
-        eur: Record<EurSeriesKey, AggregatedMetric>;
-        pct: Record<PctSeriesKey, AggregatedMetric>;
-        pnl: {
-            total: AggregatedMetric;
-            brokers: AggregatedBrokerPnl[];
-            candle: AggregatedCandleMetric;
-            income: {dividend: AggregatedMetric; interest: AggregatedMetric};
-            costs: AggregatedMetric;
-            deposits: AggregatedMetric;
-            acquisition: {fromNewCapital: AggregatedMetric; fromReinvested: AggregatedMetric};
-        };
-    }
-
     /**
      * Candles need a far wider bucket slot than a line to stay legible, so the resolution
      * cascade is asked a grammar-specific question. Only the submode decides this — the
@@ -532,16 +394,6 @@
     // percentage/absolute-value merge conflict here — unlike AllocationHistoryChart — but
     // replacing it wholesale on a resolution switch is still the clearest way to reposition it).
     const CHART_SERIES_UPDATE_OPTS = {notMerge: false, replaceMerge: ['dataZoom']};
-    /** ECharts' empty-value sentinel. MUST be used instead of `null` for a gap in a
-     *  candlestick series on a category axis — a `null` item crashes
-     *  `whiskerBoxCommon.getInitialData` during SeriesModel.init (see
-     *  `toCandlestickPoint`). */
-    const ECHARTS_EMPTY_VALUE = '-';
-    /** Name of the non-data decoration series behind the P&L Line submode's dashed
-     *  reference line. Declared once and referenced everywhere (series construction
-     *  AND the legend exclusion in applyFullOption) so the sentinel never becomes a
-     *  magic string that a second site has to remember independently. */
-    const PNL_REFERENCE_SERIES_NAME = '__pnlReference__';
     /**
      * Fallback for the plot's left edge, used only until ECharts has laid the grid out once.
      *
@@ -587,41 +439,8 @@
 
     const dates = $derived(history.map((pt) => pt.date));
 
-    /** Helper to safely extract amount from an optional Currency field (handles union types). */
-    function amt(field: any): number | null {
-        if (field != null && !Array.isArray(field) && typeof field === 'object' && 'amount' in field) return Number(field.amount);
-        return null;
-    }
-
-    // EUR mode: Capital Baseline narrative
-    // Stacked areas: book_asset_like + cash_from_contributed + cash_from_generated = book_value
-    // Overlay: NAV line (solid) + Capital Baseline line (dashed)
-    // P&L = NAV - Capital Baseline (visible as gap between NAV line and baseline line)
-    //
-    // Convention "returns consumed first":
-    //   - Cash from contributed capital = undeployed external capital sitting in cash
-    //   - Cash from generated returns = income/gains not yet reinvested
-    //   - When buying, returns are consumed first → deposit residuals stay as capital cash
-    const eurStackedData = $derived({
-        bookAssetLike: history.map((pt) => amt(pt.book_asset_like)),
-        cashContributed: history.map((pt) => amt(pt.cash_from_contributed_capital)),
-        cashGenerated: history.map((pt) => amt(pt.cash_from_generated_returns)),
-        nav: history.map((pt) => (pt.nav_value != null ? Number(pt.nav_value.amount) : null)),
-        capitalBaseline: history.map((pt) => amt(pt.capital_baseline)),
-        totalPnl: history.map((pt) => amt(pt.total_pnl)),
-    });
-
-    /**
-     * Period-relative P&L baseline: Total P&L already accumulated at the start of the shown period.
-     * Subtracting this gives "how much was gained IN this period", starting at 0.
-     */
-    const periodBasePnl = $derived(
-        (() => {
-            const idx = eurStackedData.totalPnl.findIndex((v) => v != null);
-            if (idx < 0) return 0;
-            return eurStackedData.totalPnl[idx] ?? 0;
-        })(),
-    );
+    // EUR mode: the Capital Baseline narrative (stacked book value, NAV and baseline); see `mapEurStackedData`.
+    const eurStackedData = $derived(mapEurStackedData(history));
 
     // Translated labels for EUR mode (tracked for reactivity on locale change)
     const eurLabels = $derived({
@@ -652,71 +471,29 @@
         bookValue: $_('dashboard.bookValue'),
     });
 
-    /**
-     * P&L mode broker overlay (G1a): one aligned-to-`dates` values array per broker in
-     * `brokerPnlHistory`, built via a date lookup (a broker's points may not cover every
-     * date 1:1 with `history` — e.g. it joined the scope later). `total_pnl` here is the
-     * SAME already-computed `eurStackedData.totalPnl` used by EUR mode — canonical,
-     * inception-based, never rebased (plan §3.2). Only rendered when ≥2 brokers are
-     * present, matching "one selected broker: total line only".
-     */
-    const pnlBrokerSeriesRaw = $derived(
-        brokerPnlHistory.length >= 2
-            ? brokerPnlHistory.map((broker) => {
-                  const byDate = new Map(broker.points.map((p) => [p.date, amt(p.total_pnl)]));
-                  return {
-                      brokerId: broker.broker_id,
-                      brokerName: broker.broker_name,
-                      values: dates.map((d) => byDate.get(d) ?? null),
-                  };
-              })
-            : [],
-    );
+    /** P&L mode broker overlay (G1a): one line per broker, aligned to `dates`; see `mapBrokerPnlSeries`. */
+    const pnlBrokerSeriesRaw = $derived(mapBrokerPnlSeries(brokerPnlHistory, dates));
 
-    /** P&L candles submode (G1b): per-date OHLC lookup from the fetched series. A date
-     *  absent from the map means that day's candle was unavailable (a resolved held-asset
-     *  valuation was MISSING) — a genuine gap, never guessed. */
-    const pnlCandleByDate = $derived(new Map((pnlCandles?.points ?? []).map((p) => [p.date, {open: Number(p.open.amount), high: Number(p.high.amount), low: Number(p.low.amount), close: Number(p.close.amount)}])));
+    /** P&L candles submode (G1b): per-date OHLC lookup; a date absent from it is a genuine gap, never guessed. */
+    const pnlCandleByDate = $derived(mapCandlesByDate(pnlCandles));
 
     /** P&L income submode (G1c): signed dividend/interest values aligned to `dates`.
      *  A date absent from incomeHistory.points means no DIVIDEND/INTEREST that day —
      *  rendered as 0 (a sparse-flow series, distinct from candle "gap" semantics). */
-    const dividendValues = $derived.by(() => {
-        const byDate = new Map((incomeHistory?.points ?? []).map((p) => [p.date, Number(p.dividend.amount)]));
-        return dates.map((d) => byDate.get(d) ?? 0);
-    });
-    const interestValues = $derived.by(() => {
-        const byDate = new Map((incomeHistory?.points ?? []).map((p) => [p.date, Number(p.interest.amount)]));
-        return dates.map((d) => byDate.get(d) ?? 0);
-    });
+    const dividendValues = $derived(alignFlowToDates(dates, incomeHistory?.points ?? [], (p) => Number(p.dividend.amount)));
+    const interestValues = $derived(alignFlowToDates(dates, incomeHistory?.points ?? [], (p) => Number(p.interest.amount)));
 
     /** Batch 2 income-submode dimensions: costs (FEE+TAX, signed/negative), deposits
      *  (fresh external cash), and the new-vs-reinvested BUY funding split. Same sparse
      *  "absent date -> 0" semantics as dividend/interest above. */
-    const costValues = $derived.by(() => {
-        const byDate = new Map((costHistory?.points ?? []).map((p) => [p.date, Number(p.cost.amount)]));
-        return dates.map((d) => byDate.get(d) ?? 0);
-    });
-    const depositValues = $derived.by(() => {
-        const byDate = new Map((depositHistory?.points ?? []).map((p) => [p.date, Number(p.deposit.amount)]));
-        return dates.map((d) => byDate.get(d) ?? 0);
-    });
-    const acqFromNewCapitalValues = $derived.by(() => {
-        const byDate = new Map((acquisitionFunding?.points ?? []).map((p) => [p.date, Number(p.from_new_capital.amount)]));
-        return dates.map((d) => byDate.get(d) ?? 0);
-    });
-    const acqFromReinvestedValues = $derived.by(() => {
-        const byDate = new Map((acquisitionFunding?.points ?? []).map((p) => [p.date, Number(p.from_reinvested.amount)]));
-        return dates.map((d) => byDate.get(d) ?? 0);
-    });
+    const costValues = $derived(alignFlowToDates(dates, costHistory?.points ?? [], (p) => Number(p.cost.amount)));
+    const depositValues = $derived(alignFlowToDates(dates, depositHistory?.points ?? [], (p) => Number(p.deposit.amount)));
+    const acqFromNewCapitalValues = $derived(alignFlowToDates(dates, acquisitionFunding?.points ?? [], (p) => Number(p.from_new_capital.amount)));
+    const acqFromReinvestedValues = $derived(alignFlowToDates(dates, acquisitionFunding?.points ?? [], (p) => Number(p.from_reinvested.amount)));
 
     // Values are split from labels deliberately: the aggregation memo reads ONLY these,
     // so a language switch rebuilds `pctSeriesRaw` (names) without invalidating the cache.
-    const pctValuesRaw = $derived({
-        mwrrCum: history.map((pt) => (pt.mwrr_cumulative != null ? Number(pt.mwrr_cumulative) * 100 : null)),
-        twrr: history.map((pt) => (pt.twrr != null ? Number(pt.twrr) * 100 : null)),
-        roi: history.map((pt) => (pt.roi != null ? Number(pt.roi) * 100 : null)),
-    });
+    const pctValuesRaw = $derived(mapPctValues(history));
 
     const pctSeriesRaw = $derived([
         {
@@ -745,14 +522,15 @@
     const pctSeries = $derived(pctSeriesRaw.filter((s) => s.values.some((v) => v != null)));
 
     /**
-     * The COMPLETE set of reactive values `getResolutionData()` is allowed to read.
+     * The COMPLETE set of reactive values an aggregation is allowed to read.
      *
      * This exists to make cache invalidation correct *by construction* rather than by a
      * hand-maintained list somebody must remember to join. Because it is `$derived`, Svelte
      * rebuilds this object — giving it a fresh identity — whenever any member changes; and
-     * because `getResolutionData()` reads its inputs ONLY from here, a new input physically
-     * cannot be consumed without first becoming a member, which automatically enrols it in
-     * invalidation. Adding a field is the whole ceremony.
+     * because the aggregations (`buildResolutionData`, `buildLadderData`) receive their inputs
+     * ONLY from here, a new input physically cannot be consumed without first becoming a
+     * member, which automatically enrols it in invalidation. Adding a field (here and in
+     * `AggregationInputs`) is the whole ceremony.
      *
      * The bug this replaces (G1b): seven inputs woke the render effect while exactly ONE
      * (`history`) cleared `resolutionCache`, whose key spanned only `resolution`. A lazily
@@ -765,20 +543,6 @@
      * `pctValuesRaw`, which is split from the labels for exactly this reason. Invalidating on them would trade a
      * silent-wrong bug for a silent-slow one, discarding a memo that exists for a reason.
      */
-    type AggregationInputs = {
-        dates: string[];
-        eurStackedData: typeof eurStackedData;
-        pctValuesRaw: typeof pctValuesRaw;
-        pnlBrokerSeriesRaw: typeof pnlBrokerSeriesRaw;
-        pnlCandleByDate: typeof pnlCandleByDate;
-        dividendValues: number[];
-        interestValues: number[];
-        costValues: number[];
-        depositValues: number[];
-        acqFromNewCapitalValues: number[];
-        acqFromReinvestedValues: number[];
-    };
-
     const aggregationInputs: AggregationInputs = $derived({
         dates,
         eurStackedData,
@@ -824,267 +588,6 @@
         return {startDate: visibleStartDate, endDate: visibleEndDate};
     }
 
-    function buildBucketInfos(resolution: ChartResolution, dates: string[]): BucketInfo[] {
-        if (resolution === 'daily') {
-            return dates.map((date) => ({
-                date,
-                bucketStart: date,
-                bucketEnd: date,
-                resolution,
-            }));
-        }
-
-        const buckets: BucketInfo[] = [];
-        let lastBucketEnd: string | null = null;
-
-        for (const date of dates) {
-            const {bucketStart, bucketEnd} = mapDateToBucket(date, resolution);
-            // The point stands on the last day of its bucket the history holds, where the
-            // aggregators put its value: a whole period's calendar end, the running one's last
-            // day with data. The calendar end of a period still running has not happened yet.
-            if (bucketEnd === lastBucketEnd) {
-                buckets[buckets.length - 1].date = date;
-                continue;
-            }
-
-            buckets.push({
-                date,
-                bucketStart,
-                bucketEnd,
-                resolution,
-            });
-            lastBucketEnd = bucketEnd;
-        }
-
-        return buckets;
-    }
-
-    /**
-     * Ladder buckets: one per calendar period of `rung` the series touches
-     * (`growthLadderBuckets`; developer's decision of 06/10/2026, which replaces D16-ii's
-     * day counts anchored at the last day). The closing date of each bucket — its category
-     * value — is the last day of it the series holds, so the axis planner's contract and the
-     * candles' "value at" date stay days with data; the calendar edges travel in `period`.
-     *
-     * A period that is over and that the series covers in part is marked `partial` (faded);
-     * the one that has not ended yet is `current` (whole). Both carry the period's covered
-     * days and its length for the tooltip.
-     *
-     * Kept separate from `buildBucketInfos` on purpose. That one delegates to the shared
-     * calendar aggregators (`aggregateLineSeries` and friends), which can only express ISO
-     * weeks and calendar months — there is no way to ask them for a three-day block, a pair
-     * of weeks or a quarter. The OUTPUT is the same `AggregatedResolutionData` the rest of the
-     * component already consumes, so this is one pipeline with two bucket builders, not a
-     * second pipeline.
-     *
-     * `resolution` is carried for the tooltip only: a one-day bucket prints a date, any
-     * wider bucket prints its range.
-     */
-    function buildLadderBuckets(sourceDates: string[], rung: CandleWidth, today: string): LadderBucket[] {
-        return buildCalendarLadder(sourceDates, rung, today).map((bucket) => {
-            const days = {days: bucket.coveredDays, total: bucket.periodDays};
-            // A one-day period has nothing to report on how far it has got (developer, 06/10/2026:
-            // no «In progress: 1 of 1 days» on today's 1D candle), so it carries no current mark.
-            const current = bucket.current && bucket.periodDays > 1;
-            return {
-                date: sourceDates[bucket.endIndex],
-                bucketStart: sourceDates[bucket.startIndex],
-                bucketEnd: sourceDates[bucket.endIndex],
-                resolution: rung === '1D' ? 'daily' : 'weekly',
-                period: bucket.period,
-                ...(bucket.partial ? {partial: days} : current ? {current: days} : {}),
-                startIndex: bucket.startIndex,
-                endIndex: bucket.endIndex,
-            };
-        });
-    }
-
-    /** End-of-period reduction: the last value that actually exists inside the bucket. */
-    function ladderLast(values: Array<number | null>, bucket: LadderBucket): number | null {
-        for (let i = bucket.endIndex; i >= bucket.startIndex; i--) {
-            const v = values[i];
-            if (v != null) return v;
-        }
-        return null;
-    }
-
-    function ladderMetric(values: Array<number | null>, buckets: LadderBucket[]): AggregatedMetric {
-        const aggregated = buckets.map((bucket) => ladderLast(values, bucket));
-        return {values: aggregated, points: buckets.map((bucket, i) => toSeriesPoint(bucket, aggregated[i]))};
-    }
-
-    /** Flow reduction: a bucket's value is the SUM of what happened inside it, never the
-     *  last day's balance — a flow has no closing level to read. */
-    function ladderFlowMetric(values: number[], buckets: LadderBucket[]): AggregatedMetric {
-        const aggregated = buckets.map((bucket) => {
-            let sum = 0;
-            for (let i = bucket.startIndex; i <= bucket.endIndex; i++) sum += values[i] ?? 0;
-            return sum;
-        });
-        return {values: aggregated, points: buckets.map((bucket, i) => toSeriesPoint(bucket, aggregated[i]))};
-    }
-
-    /** OHLC reduction: first open, max high, min low, last close — the composition order
-     *  the plan fixes (daily candles first, aggregation second, never the reverse). */
-    function ladderCandleMetric(byDate: Map<string, {open: number; high: number; low: number; close: number}>, buckets: LadderBucket[]): AggregatedCandleMetric {
-        return {
-            points: buckets.map((bucket) => {
-                let open: number | null = null;
-                let high: number | null = null;
-                let low: number | null = null;
-                let close: number | null = null;
-                for (let i = bucket.startIndex; i <= bucket.endIndex; i++) {
-                    const c = byDate.get(dates[i]);
-                    if (!c) continue;
-                    if (open == null) open = c.open;
-                    high = high == null ? c.high : Math.max(high, c.high);
-                    low = low == null ? c.low : Math.min(low, c.low);
-                    close = c.close;
-                }
-                return {...toSeriesPoint(bucket, close), open, high, low, close};
-            }),
-        };
-    }
-
-    function toSeriesPoint(bucket: BucketInfo | LadderBucket, value: number | null): SeriesPoint {
-        return {
-            ...namedPoint(bucket.date, value),
-            bucketStart: bucket.bucketStart,
-            bucketEnd: bucket.bucketEnd,
-            resolution: bucket.resolution,
-        };
-    }
-
-    function aggregateMetric(values: Array<number | null>, resolution: ChartResolution, buckets: BucketInfo[]): AggregatedMetric {
-        if (resolution === 'daily') {
-            return {
-                values: [...values],
-                points: buckets.map((bucket, index) => toSeriesPoint(bucket, values[index] ?? null)),
-            };
-        }
-
-        const sourcePoints: LineDataPoint[] = dates.flatMap((date, index) => {
-            const value = values[index];
-            return value == null ? [] : [{date, value}];
-        });
-        const aggregated = aggregateLineSeries(sourcePoints, resolution);
-        const lookup = new Map<string, AggregatedLookupEntry>(
-            aggregated.map((point) => [
-                point.date,
-                {
-                    value: point.value,
-                    bucketStart: 'bucketStart' in point && typeof point.bucketStart === 'string' ? point.bucketStart : point.date,
-                    bucketEnd: 'bucketEnd' in point && typeof point.bucketEnd === 'string' ? point.bucketEnd : point.date,
-                },
-            ]),
-        );
-
-        const aggregatedValues = buckets.map((bucket) => lookup.get(bucket.date)?.value ?? null);
-        const points = buckets.map((bucket, index) => {
-            const meta = lookup.get(bucket.date);
-            return toSeriesPoint(
-                {
-                    ...bucket,
-                    bucketStart: meta?.bucketStart ?? bucket.bucketStart,
-                    bucketEnd: meta?.bucketEnd ?? bucket.bucketEnd,
-                },
-                aggregatedValues[index],
-            );
-        });
-
-        return {values: aggregatedValues, points};
-    }
-
-    /** Aggregate a sparse economic-flow metric (signed DIVIDEND/INTEREST, G1c) using
-     *  aggregateSumSeries — mirrors aggregateMetric()'s structure exactly but sums
-     *  every day in a bucket instead of taking the last value (plan §3.4/§5.2: "Weekly/
-     *  monthly buckets sum them; they never use end-of-period/last-value semantics"). */
-    function aggregateFlowMetric(values: number[], resolution: ChartResolution, buckets: BucketInfo[]): AggregatedMetric {
-        if (resolution === 'daily') {
-            return {
-                values: [...values],
-                points: buckets.map((bucket, index) => toSeriesPoint(bucket, values[index] ?? 0)),
-            };
-        }
-
-        const sourcePoints: LineDataPoint[] = dates.map((date, index) => ({date, value: values[index] ?? 0}));
-        const aggregated = aggregateSumSeries(sourcePoints, resolution);
-        const lookup = new Map<string, AggregatedLookupEntry>(
-            aggregated.map((point) => [
-                point.date,
-                {
-                    value: point.value,
-                    bucketStart: 'bucketStart' in point && typeof point.bucketStart === 'string' ? point.bucketStart : point.date,
-                    bucketEnd: 'bucketEnd' in point && typeof point.bucketEnd === 'string' ? point.bucketEnd : point.date,
-                },
-            ]),
-        );
-
-        const aggregatedValues = buckets.map((bucket) => lookup.get(bucket.date)?.value ?? 0);
-        const points = buckets.map((bucket, index) => {
-            const meta = lookup.get(bucket.date);
-            return toSeriesPoint(
-                {
-                    ...bucket,
-                    bucketStart: meta?.bucketStart ?? bucket.bucketStart,
-                    bucketEnd: meta?.bucketEnd ?? bucket.bucketEnd,
-                },
-                aggregatedValues[index],
-            );
-        });
-
-        return {values: aggregatedValues, points};
-    }
-
-    /** Aggregate the daily synthetic P&L candle series to a coarser resolution, reusing
-     *  the shared aggregateOHLCV reducer (first open / max high / min low / last close) —
-     *  the exact "compose daily first, then roll up" contract (plan §4.3), never re-derived
-     *  here. Days with no candle (map miss) are excluded before aggregating, matching
-     *  aggregateMetric()'s null-filtering convention for the same reason: a bucket with no
-     *  contributing day must not synthesize a false zero-range candle. */
-    function aggregateCandleMetric(byDate: Map<string, {open: number; high: number; low: number; close: number}>, resolution: ChartResolution, buckets: BucketInfo[]): AggregatedCandleMetric {
-        if (resolution === 'daily') {
-            return {
-                points: buckets.map((bucket) => {
-                    const c = byDate.get(bucket.date);
-                    return {...toSeriesPoint(bucket, c?.close ?? null), open: c?.open ?? null, high: c?.high ?? null, low: c?.low ?? null, close: c?.close ?? null};
-                }),
-            };
-        }
-
-        const sourcePoints: LineDataPoint[] = dates.flatMap((date) => {
-            const c = byDate.get(date);
-            return c ? [{date, value: c.close, open: c.open, high: c.high, low: c.low, close: c.close}] : [];
-        });
-        const aggregated = aggregateOHLCV(sourcePoints, resolution);
-        const lookup = new Map(
-            aggregated.map((point) => [
-                point.date,
-                {
-                    open: point.open ?? null,
-                    high: point.high ?? null,
-                    low: point.low ?? null,
-                    close: point.close ?? null,
-                    bucketStart: 'bucketStart' in point && typeof point.bucketStart === 'string' ? point.bucketStart : point.date,
-                    bucketEnd: 'bucketEnd' in point && typeof point.bucketEnd === 'string' ? point.bucketEnd : point.date,
-                },
-            ]),
-        );
-
-        const points = buckets.map((bucket) => {
-            const meta = lookup.get(bucket.date);
-            return {
-                ...toSeriesPoint({...bucket, bucketStart: meta?.bucketStart ?? bucket.bucketStart, bucketEnd: meta?.bucketEnd ?? bucket.bucketEnd}, meta?.close ?? null),
-                open: meta?.open ?? null,
-                high: meta?.high ?? null,
-                low: meta?.low ?? null,
-                close: meta?.close ?? null,
-            };
-        });
-
-        return {points};
-    }
-
     function getResolutionData(resolution: ChartResolution): AggregatedResolutionData {
         // Identity check, not an equality list: `aggregationInputs` is rebuilt by Svelte
         // whenever any input changes, so a stale entry cannot be returned by construction.
@@ -1092,59 +595,14 @@
         const cached = resolutionCache.get(resolution);
         if (cached && cached.inputs === inputs) return cached.data;
 
-        const buckets = buildBucketInfos(resolution, inputs.dates);
-        const entry: AggregatedResolutionData = {
-            resolution,
-            ladder: false,
-            dates: buckets.map((bucket) => bucket.date),
-            buckets,
-            eur: {
-                bookAssetLike: aggregateMetric(inputs.eurStackedData.bookAssetLike, resolution, buckets),
-                cashContributed: aggregateMetric(inputs.eurStackedData.cashContributed, resolution, buckets),
-                cashGenerated: aggregateMetric(inputs.eurStackedData.cashGenerated, resolution, buckets),
-                nav: aggregateMetric(inputs.eurStackedData.nav, resolution, buckets),
-                capitalBaseline: aggregateMetric(inputs.eurStackedData.capitalBaseline, resolution, buckets),
-                totalPnl: aggregateMetric(inputs.eurStackedData.totalPnl, resolution, buckets),
-            },
-            pct: {
-                mwrrCum: aggregateMetric(inputs.pctValuesRaw.mwrrCum, resolution, buckets),
-                twrr: aggregateMetric(inputs.pctValuesRaw.twrr, resolution, buckets),
-                roi: aggregateMetric(inputs.pctValuesRaw.roi, resolution, buckets),
-            },
-            pnl: {
-                // Reuses the exact same Decimal-sourced totalPnl values as EUR mode's
-                // tooltip line — one canonical, non-rebased total_pnl series (plan §3.2).
-                total: aggregateMetric(inputs.eurStackedData.totalPnl, resolution, buckets),
-                brokers: inputs.pnlBrokerSeriesRaw.map((broker) => ({
-                    brokerId: broker.brokerId,
-                    brokerName: broker.brokerName,
-                    metric: aggregateMetric(broker.values, resolution, buckets),
-                })),
-                candle: aggregateCandleMetric(inputs.pnlCandleByDate, resolution, buckets),
-                income: {
-                    dividend: aggregateFlowMetric(inputs.dividendValues, resolution, buckets),
-                    interest: aggregateFlowMetric(inputs.interestValues, resolution, buckets),
-                },
-                costs: aggregateFlowMetric(inputs.costValues, resolution, buckets),
-                deposits: aggregateFlowMetric(inputs.depositValues, resolution, buckets),
-                acquisition: {
-                    fromNewCapital: aggregateFlowMetric(inputs.acqFromNewCapitalValues, resolution, buckets),
-                    fromReinvested: aggregateFlowMetric(inputs.acqFromReinvestedValues, resolution, buckets),
-                },
-            },
-        };
-
+        const entry = buildResolutionData(inputs, resolution);
         resolutionCache.set(resolution, {inputs, data: entry});
         return entry;
     }
 
     /**
      * Ladder branch of the same memo: identical shape, identical invalidation discipline
-     * (identity of `aggregationInputs`), different bucket builder.
-     *
-     * Only the P&L sections are filled. EUR and % never reach this branch — they keep the
-     * density cascade — so computing their series here would be work whose result nothing
-     * reads, and a memo that computes what nobody asks for is how a memo becomes a cost.
+     * (identity of `aggregationInputs`), different bucket builder (`buildLadderData`).
      */
     function getLadderData(width: CandleWidth): AggregatedResolutionData {
         const inputs = aggregationInputs;
@@ -1152,27 +610,7 @@
         const cached = ladderCache.get(width);
         if (cached && cached.inputs === inputs && cached.today === today) return cached.data;
 
-        const buckets = buildLadderBuckets(inputs.dates, width, today);
-        const empty: AggregatedMetric = {values: [], points: []};
-        const entry: AggregatedResolutionData = {
-            resolution: buckets[0]?.resolution ?? 'daily',
-            ladder: true,
-            rung: width,
-            dates: buckets.map((bucket) => bucket.date),
-            buckets,
-            eur: {bookAssetLike: empty, cashContributed: empty, cashGenerated: empty, nav: empty, capitalBaseline: empty, totalPnl: empty},
-            pct: {mwrrCum: empty, twrr: empty, roi: empty},
-            pnl: {
-                total: ladderMetric(inputs.eurStackedData.totalPnl, buckets),
-                brokers: inputs.pnlBrokerSeriesRaw.map((broker) => ({brokerId: broker.brokerId, brokerName: broker.brokerName, metric: ladderMetric(broker.values, buckets)})),
-                candle: ladderCandleMetric(inputs.pnlCandleByDate, buckets),
-                income: {dividend: ladderFlowMetric(inputs.dividendValues, buckets), interest: ladderFlowMetric(inputs.interestValues, buckets)},
-                costs: ladderFlowMetric(inputs.costValues, buckets),
-                deposits: ladderFlowMetric(inputs.depositValues, buckets),
-                acquisition: {fromNewCapital: ladderFlowMetric(inputs.acqFromNewCapitalValues, buckets), fromReinvested: ladderFlowMetric(inputs.acqFromReinvestedValues, buckets)},
-            },
-        };
-
+        const entry = buildLadderData(inputs, width, today);
         ladderCache.set(width, {inputs, today, data: entry});
         return entry;
     }
@@ -1184,22 +622,7 @@
     }
 
     function computeBucketCounts(startDate: string, endDate: string): {dailyCount: number; weeklyCount: number; monthlyCount: number} {
-        let dailyCount = 0;
-        const weekly = new Set<string>();
-        const monthly = new Set<string>();
-
-        for (const date of dates) {
-            if (date < startDate || date > endDate) continue;
-            dailyCount += 1;
-            weekly.add(mapDateToBucket(date, 'weekly').bucketEnd);
-            monthly.add(mapDateToBucket(date, 'monthly').bucketEnd);
-        }
-
-        return {
-            dailyCount,
-            weeklyCount: weekly.size,
-            monthlyCount: monthly.size,
-        };
+        return countBuckets(dates, startDate, endDate);
     }
 
     function getZoomPercent(): {start: number; end: number} {
@@ -1214,52 +637,6 @@
         } catch (_) {}
 
         return {start: 0, end: 100};
-    }
-
-    /** How close, in days, a cascade window edge may fall to a drawn point and still stand on it: float and DST error, never a day the user chose. */
-    const ZOOM_EDGE_SNAP_DAYS = 0.1;
-    const cascadeDayOffsets = new WeakMap<AggregatedResolutionData, number[]>();
-
-    /**
-     * Each cascade point, in days from the first one. The cascade draws on a time axis,
-     * where ECharts maps a dataZoom percent to time over the drawn extent, not to a bucket
-     * index: the two agree only while the points are evenly spaced, which a running
-     * period, drawn on its last day, or a gap in the history breaks.
-     */
-    function cascadeDayOffsetsOf(entry: AggregatedResolutionData): number[] {
-        let offsets = cascadeDayOffsets.get(entry);
-        if (!offsets) {
-            const first = entry.buckets[0]?.date ?? '';
-            offsets = entry.buckets.map((bucket) => daysBetween(first, bucket.date));
-            cascadeDayOffsets.set(entry, offsets);
-        }
-        return offsets;
-    }
-
-    /** The ladder buckets a dataZoom window shows. ECharts snaps a category window's edge to the NEAREST bucket, so it is read the way it is drawn. */
-    function ladderIndicesAt(entry: AggregatedResolutionData, start: number, end: number): {startIndex: number; endIndex: number} {
-        const maxIndex = Math.max(entry.buckets.length - 1, 0);
-        const startIndex = Math.max(0, Math.min(maxIndex, Math.round((start / 100) * maxIndex)));
-        const endIndex = Math.max(startIndex, Math.min(maxIndex, Math.round((end / 100) * maxIndex)));
-        return {startIndex, endIndex};
-    }
-
-    /** The cascade buckets a dataZoom window shows, widened to the points at or outside its edges, so a partly visible period is never lost. */
-    function cascadeIndicesAt(entry: AggregatedResolutionData, start: number, end: number): {startIndex: number; endIndex: number} {
-        const offsets = cascadeDayOffsetsOf(entry);
-        const maxIndex = offsets.length - 1;
-        const span = offsets[maxIndex] ?? 0;
-        if (maxIndex <= 0 || span <= 0) return {startIndex: 0, endIndex: Math.max(maxIndex, 0)};
-
-        const startDay = (start / 100) * span;
-        const endDay = (end / 100) * span;
-        const startIndex = Math.max(
-            0,
-            offsets.findLastIndex((day) => day <= startDay + ZOOM_EDGE_SNAP_DAYS),
-        );
-        const firstAtEnd = offsets.findIndex((day) => day >= endDay - ZOOM_EDGE_SNAP_DAYS);
-        const endIndex = Math.max(startIndex, firstAtEnd < 0 ? maxIndex : firstAtEnd);
-        return {startIndex, endIndex};
     }
 
     function getLogicalRangeFromChart(): {startDate: string; endDate: string} | null {
@@ -1279,35 +656,6 @@
         return {
             startDate: startBucket.bucketStart,
             endDate: endBucket.bucketEnd,
-        };
-    }
-
-    /** The zoom percentages that put `entry`'s buckets holding `startDate` and `endDate` at the window edges. */
-    function buildZoomWindow(entry: AggregatedResolutionData, startDate: string, endDate: string): {start: number; end: number} {
-        if (entry.buckets.length <= 1) return {start: 0, end: 100};
-
-        const startIndex = Math.max(
-            0,
-            entry.buckets.findIndex((bucket) => bucket.bucketEnd >= startDate),
-        );
-        const endIndex = Math.max(
-            startIndex,
-            entry.buckets.findLastIndex((bucket) => bucket.bucketStart <= endDate),
-        );
-        // The cascade's percent is time over its drawn extent, the ladder's an index.
-        const offsets = entry.ladder ? null : cascadeDayOffsetsOf(entry);
-        const span = offsets?.at(-1) ?? 0;
-        if (offsets && span > 0) {
-            return {
-                start: (offsets[startIndex] / span) * 100,
-                end: (offsets[endIndex] / span) * 100,
-            };
-        }
-        const denominator = entry.buckets.length - 1;
-
-        return {
-            start: (startIndex / denominator) * 100,
-            end: (endIndex / denominator) * 100,
         };
     }
 
@@ -1428,426 +776,25 @@
         return offered.reduce((best, width) => (distance(width) < distance(best) ? width : best));
     }
 
-    function formatTooltipMonth(date: string): string {
-        const activeLocale = uiLocale();
-        const [year, month, day] = date.split('-').map(Number);
-        return new Intl.DateTimeFormat(activeLocale, {
-            month: 'long',
-            year: 'numeric',
-            timeZone: 'UTC',
-        }).format(new Date(Date.UTC(year, month - 1, day)));
+    /** The view on screen, read now: what the series are built for. */
+    function seriesContext(): GrowthSeriesContext {
+        return {viewMode, pnlSubmode, eurLabels, pnlLabels, pctSeries, aggregationInputs};
+    }
+
+    function buildChartUpdateSeries(_isDark: boolean, entry: AggregatedResolutionData, referenceDate: string | null = null): GrowthSeriesData[] {
+        return buildGrowthUpdateSeries(seriesContext(), entry, referenceDate);
+    }
+
+    function buildFullSeries(isDark: boolean, seriesData: GrowthSeriesData[]): echarts.SeriesOption[] {
+        return buildGrowthFullSeries(seriesContext(), isDark, seriesData);
     }
 
     /**
-     * The line under a ladder bucket's header that says how much of its period it holds:
-     * "Partial: 26 of 31 days" on a period that is over and that the series covers in part,
-     * "In progress: 6 of 31 days" on the one that has not ended yet; empty on a whole period.
-     * The translation is data inside tooltip HTML, so it is escaped and reads as written. Two
-     * literal calls, never a key chosen at runtime: the project's i18n sweep only sees literals.
+     * What the tooltip reads on hover: the entry and the view on screen at that moment, as the
+     * formatter always has. The theme it is drawn in is the one the option was built with.
      */
-    function buildPartialBucketLine(bucket: BucketInfo, theme: ReturnType<typeof buildTooltipTheme>): string {
-        let text: string;
-        if (bucket.partial) text = $_('chart.tooltip.partialBucket', {values: {days: bucket.partial.days, total: bucket.partial.total}});
-        else if (bucket.current) text = $_('chart.tooltip.currentBucket', {values: {days: bucket.current.days, total: bucket.current.total}});
-        else return '';
-        return `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${escapeHtml(text)}</div>`;
-    }
-
-    /** Every day of the header is written in the interface language, never as raw ISO (plan 52, C2). */
-    function buildTooltipBucketHeader(bucket: BucketInfo, theme: ReturnType<typeof buildTooltipTheme>): string {
-        const partialHtml = buildPartialBucketLine(bucket, theme);
-        // A one-day bucket has nothing to span, so it keeps the plain date. A ladder bucket is
-        // judged by its period: a week the series covers for one day still prints its week.
-        const span = bucket.period ?? {start: bucket.bucketStart, end: bucket.bucketEnd};
-        if (span.start === span.end) {
-            return `${buildTooltipHeader(formatDay(bucket.bucketEnd), theme.textColor)}${partialHtml}`;
-        }
-
-        if (ladderActive) {
-            // "1M - Oct 1, 2026 → Oct 31, 2026": the calendar period the bucket stands for. The
-            // old form said "Week" for every bucket wider than a day, which was simply false
-            // on a three-day or fourteen-day rung.
-            const headerHtml = `${buildTooltipHeader(`${candleWidthLabel(candleWidth)} - ${formatDay(span.start)} → ${formatDay(span.end)}`, theme.textColor)}${partialHtml}`;
-            // "Value at <date>" is true of a closing level and false of a sum, so the
-            // Income submode — whose bars are sums over the bucket — does not claim it. The
-            // date is the last day with data, never a day of the period still to come.
-            if (pnlSubmode === 'income') return headerHtml;
-            return `${headerHtml}<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${$_('chart.tooltip.valueAt', {values: {date: formatDay(bucket.bucketEnd)}})}</div>`;
-        }
-
-        // The point stands for its bucket up to its own day, the last one with data: the
-        // period still running ends there.
-        const upTo = bucketSpanUpTo(bucket.date, bucket);
-        const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${$_('chart.tooltip.valueAt', {values: {date: formatDay(upTo.bucketEnd)}})}</div>`;
-
-        if (bucket.resolution === 'weekly') {
-            return `${buildTooltipHeader($_('chart.tooltip.weekRange', {values: {start: formatDay(upTo.bucketStart), end: formatDay(upTo.bucketEnd)}}), theme.textColor)}${contextLine}`;
-        }
-
-        return `${buildTooltipHeader($_('chart.tooltip.monthLabel', {values: {month: formatTooltipMonth(upTo.bucketEnd)}}), theme.textColor)}${contextLine}`;
-    }
-
-    /** ECharts candlestick data point for a `category` xAxis: a flat `[open, close,
-     *  low, high]` quad (note the element order — NOT open/high/low/close),
-     *  reusing the exact same shared convention as CandlestickChart.svelte via
-     *  `buildOhlcQuad` (see PR discussion: candlestick series silently fails to
-     *  paint any body/wick on a `time` xAxis — a known upstream ECharts limitation
-     *  — so this submode uses a `category` axis instead, matching the codebase's
-     *  own already-proven Asset Detail price-chart pattern).
-     *
-     *  A gap day/bucket (no candle) MUST be ECharts' empty-value sentinel `'-'`,
-     *  never `null`. On a category base axis the candlestick series clones its data
-     *  through `whiskerBoxCommon.getInitialData`, which branches
-     *  `isArray(item) -> … else if (isArray(item.value))` — so a `null` item
-     *  dereferences `null.value` and throws *inside SeriesModel.init*, before the
-     *  GlobalModel finishes building. The chart then has no `_seriesIndices`, so
-     *  every later `setOption` silently no-ops and the canvas freezes on the
-     *  previous submode's paint. `'-'` falls through that same branch chain
-     *  harmlessly (verified empirically against this exact echarts build, not
-     *  inferred: `null` throws "Cannot read properties of null (reading 'value')",
-     *  `'-'` renders). Position in the array (not the date itself) is what aligns
-     *  a point to the shared `xAxis.data` category list, so the gap must still
-     *  occupy its slot — which is exactly why it can't just be omitted. */
-    function toCandlestickPoint(point: CandleSeriesPoint): number[] | string {
-        if (point.open == null || point.close == null || point.low == null || point.high == null) return ECHARTS_EMPTY_VALUE;
-        return buildOhlcQuad(point.open, point.close, point.low, point.high, false, 1);
-    }
-
-    /** Clip a point's value to null when it doesn't match `keepPositive` — used to
-     *  split the Total P&L line into two fixed, same-length series (positive-part /
-     *  negative-part), each with its own solid green/red color. A FIXED two-series
-     *  split (rather than a variable number of contiguous same-sign segments) keeps
-     *  `updateChartData`'s partial by-index series merge valid across zoom/pan,
-     *  where the count of sign-crossings in the visible window can change on every
-     *  frame. ECharts' visualMap does not reliably recolor a line series'
-     *  lineStyle/areaStyle per value — a documented upstream limitation (see
-     *  apache/echarts#8034) — so per-point coloring needs this series-split
-     *  approach instead, same spirit as LineChart.svelte's segment-based coloring. */
-    function clipToSign(point: SeriesPoint, keepPositive: boolean): SeriesPoint {
-        const v = point.value[1];
-        if (v == null || v >= 0 === keepPositive) return point;
-        return {...point, value: [point.value[0], null]};
-    }
-
-    /**
-     * Split a signed series into its positive and negative halves WITHOUT leaving a hole
-     * at the sign change.
-     *
-     * `clipToSign` alone cannot do it: it is a point-to-point map, so it can null a value
-     * but never add one. Between +430 on Monday and −50 on Tuesday the positive half held
-     * [+430, null] and the negative [null, −50], and with `connectNulls: false` neither
-     * covered the interval — the area vanished and reappeared, which is exactly what the
-     * developer reported.
-     *
-     * The missing point is the zero crossing. It is interpolated on the segment and
-     * inserted into BOTH halves, so each one reaches the axis instead of stopping short.
-     *
-     * The series COUNT is untouched — still one positive, one negative — which is what
-     * `updateChartData`'s by-index partial merge depends on. Only the number of points
-     * inside them changes, and that is per-series data, not series identity.
-     */
-    function splitBySign(points: SeriesPoint[]): {positive: SeriesPoint[]; negative: SeriesPoint[]} {
-        const positive: SeriesPoint[] = [];
-        const negative: SeriesPoint[] = [];
-
-        for (let i = 0; i < points.length; i++) {
-            const point = points[i];
-            positive.push(clipToSign(point, true));
-            negative.push(clipToSign(point, false));
-
-            const current = point.value[1];
-            const next = points[i + 1]?.value[1];
-            if (current == null || next == null || current === 0 || next === 0) continue;
-            if (current > 0 === next > 0) continue;
-
-            // Linear crossing between the two x positions. `value[0]` is a DATE STRING,
-            // not a number — so it is parsed to millis, interpolated, and formatted back.
-            // The crossing falls inside a day, which a `time` axis accepts as an ISO
-            // instant; this path is only ever reached from the Line submode, whose axis
-            // is `time` (the candles path uses `category`, where a fractional position
-            // would be meaningless).
-            const x0 = new Date(points[i].value[0]).getTime();
-            const x1 = new Date(points[i + 1].value[0]).getTime();
-            if (!Number.isFinite(x0) || !Number.isFinite(x1)) continue;
-            const t = Math.abs(current) / (Math.abs(current) + Math.abs(next));
-            const crossingX = new Date(x0 + (x1 - x0) * t).toISOString();
-            const crossing: SeriesPoint = {...point, value: [crossingX, 0]};
-            positive.push(crossing);
-            negative.push(crossing);
-        }
-
-        return {positive, negative};
-    }
-
-    /**
-     * Total P&L **on** `referenceDate` — the anchor for the dashed baseline that answers
-     * "was P&L up or down across the period on screen".
-     *
-     * Read from the DAILY series, not from the aggregated buckets. The previous version
-     * took the first bucket whose end reached the date, and its own docstring said so:
-     * "at (or just after)". Under a monthly bucket that "just after" is up to a month of
-     * drift, which is how a line that should have sat at 0 in June sat at ~600 instead.
-     * A baseline that marks the first visible day cannot be allowed to land after it.
-     *
-     * Reading the daily value also makes the anchor independent of the bucket width, so
-     * it stays correct when the candle-width ladder changes how many days a body spans.
-     */
-    function findReferenceTotalPnl(entry: AggregatedResolutionData, referenceDate: string | null): number | null {
-        const daily = aggregationInputs.eurStackedData.totalPnl;
-        const allDates = aggregationInputs.dates;
-        if (allDates.length === 0) return entry.pnl.total.points[0]?.value[1] ?? null;
-
-        if (referenceDate == null) return daily[0] ?? null;
-
-        // Exact day if present; otherwise the last day BEFORE it — never a later one,
-        // because the value on a day that has not happened yet is not a baseline.
-        let idx = allDates.indexOf(referenceDate);
-        if (idx < 0) {
-            idx = 0;
-            for (let i = 0; i < allDates.length; i++) {
-                if (allDates[i] <= referenceDate) idx = i;
-                else break;
-            }
-        }
-        return daily[idx] ?? null;
-    }
-
-    function buildChartUpdateSeries(_isDark: boolean, entry: AggregatedResolutionData, referenceDate: string | null = null): {name: string; data: SeriesPoint[]}[] {
-        if (viewMode === 'eur') {
-            return [
-                {name: eurLabels.bookAssetLike, data: entry.eur.bookAssetLike.points},
-                {name: eurLabels.cashContributed, data: entry.eur.cashContributed.points},
-                {name: eurLabels.cashGenerated, data: entry.eur.cashGenerated.points},
-                {name: eurLabels.nav, data: entry.eur.nav.points},
-                {name: eurLabels.capitalBaseline, data: entry.eur.capitalBaseline.points},
-            ];
-        }
-
-        if (viewMode === 'pnl' && pnlSubmode === 'line') {
-            // A fixed positive/negative pair plus a third fixed slot for the dashed
-            // reference line (flat at the first-visible-day P&L). The three slots are
-            // what updateChartData's partial by-index series merge depends on across
-            // zoom/pan; splitBySign adds POINTS inside two of them (the interpolated zero
-            // crossings) and leaves the slot count alone, so the merge stays valid.
-            const signSplit = splitBySign(entry.pnl.total.points);
-            const referenceValue = findReferenceTotalPnl(entry, referenceDate);
-            const referencePoints: SeriesPoint[] = entry.pnl.total.points.map((p) => ({...p, value: [p.value[0], referenceValue]}));
-            return [{name: pnlLabels.total, data: signSplit.positive}, {name: pnlLabels.total, data: signSplit.negative}, {name: PNL_REFERENCE_SERIES_NAME, data: referencePoints}, ...entry.pnl.brokers.map((broker) => ({name: broker.brokerName, data: broker.metric.points}))];
-        }
-
-        if (viewMode === 'pnl' && pnlSubmode === 'candles') {
-            // TOTAL CANDLE ONLY (developer review 2026-09-21). The per-broker dashed
-            // overlay was removed everywhere, not just on Broker detail: a candle already
-            // carries four numbers per position, and laying broker lines over it made the
-            // one series that has to be read precisely the hardest one to see.
-            // Candlestick data is structurally a flat quad, not a SeriesPoint — cast
-            // through unknown; ECharts itself doesn't care, only the shared return-type
-            // annotation does (see buildFullSeries's matching cast). The partial first
-            // bucket wraps its quad as `{value, itemStyle}`, the item form ECharts reads
-            // through `isArray(item.value)`; a gap stays the bare sentinel.
-            const candles = entry.pnl.candle.points.map((point, index) => {
-                const quad = toCandlestickPoint(point);
-                return quad !== ECHARTS_EMPTY_VALUE && entry.buckets[index]?.partial ? {value: quad, itemStyle: {opacity: PARTIAL_BUCKET_OPACITY}} : quad;
-            });
-            return [{name: pnlLabels.total, data: candles as unknown as SeriesPoint[]}];
-        }
-
-        if (viewMode === 'pnl' && pnlSubmode === 'income') {
-            // DIVIDEND/INTEREST stacked bars (plan §3.4) + batch 2's costs/deposit/
-            // acquisition dimensions — no broker overlay for this submode (the plan's
-            // hybrid-overlay rule is specific to Line/Candles). Fixed 6-slot order
-            // matches buildFullSeries's matching index reads exactly. The partial first
-            // bucket is faded on every column alike.
-            const faded = (points: SeriesPoint[]): SeriesPoint[] => points.map((point, index) => (entry.buckets[index]?.partial ? {...point, itemStyle: {opacity: PARTIAL_BUCKET_OPACITY}} : point));
-            return [
-                {name: pnlLabels.dividend, data: faded(entry.pnl.income.dividend.points)},
-                {name: pnlLabels.interest, data: faded(entry.pnl.income.interest.points)},
-                {name: pnlLabels.costs, data: faded(entry.pnl.costs.points)},
-                {name: pnlLabels.deposit, data: faded(entry.pnl.deposits.points)},
-                {name: pnlLabels.bookValue, data: faded(entry.pnl.acquisition.fromNewCapital.points)},
-                {name: pnlLabels.bookValue, data: faded(entry.pnl.acquisition.fromReinvested.points)},
-            ];
-        }
-
-        // See buildChartUpdateSeries's matching guard.
-        if (viewMode === 'pnl') return [];
-
-        return pctSeries.map((series) => ({
-            name: series.name,
-            data: entry.pct[series.key].points,
-        }));
-    }
-
-    function buildFullSeries(isDark: boolean, seriesData: {name: string; data: SeriesPoint[]}[]): echarts.SeriesOption[] {
-        if (viewMode === 'eur') {
-            const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
-            return [
-                {
-                    name: eurLabels.bookAssetLike,
-                    type: 'line',
-                    stack: 'bookValue',
-                    data: seriesData[0].data,
-                    smooth: false,
-                    symbol: 'none',
-                    lineStyle: {color: cc('bookAssetLike'), width: 1, opacity: 0.7},
-                    areaStyle: {color: cc('bookAssetLike') + '44'},
-                    itemStyle: {color: cc('bookAssetLike')},
-                    emphasis: {focus: 'series'},
-                },
-                {
-                    name: eurLabels.cashContributed,
-                    type: 'line',
-                    stack: 'bookValue',
-                    data: seriesData[1].data,
-                    smooth: false,
-                    symbol: 'none',
-                    lineStyle: {color: cc('cashContributed'), width: 1, opacity: 0.7},
-                    areaStyle: {color: cc('cashContributed') + '44'},
-                    itemStyle: {color: cc('cashContributed')},
-                    emphasis: {focus: 'series'},
-                },
-                {
-                    name: eurLabels.cashGenerated,
-                    type: 'line',
-                    stack: 'bookValue',
-                    data: seriesData[2].data,
-                    smooth: false,
-                    symbol: 'none',
-                    lineStyle: {color: cc('cashGenerated'), width: 1, opacity: 0.7},
-                    areaStyle: {color: cc('cashGenerated') + '44'},
-                    itemStyle: {color: cc('cashGenerated')},
-                    emphasis: {focus: 'series'},
-                },
-                {name: eurLabels.nav, type: 'line', data: seriesData[3].data, smooth: false, symbol: 'none', lineStyle: {color: cc('nav'), width: 2, type: 'solid'}, itemStyle: {color: cc('nav')}, emphasis: {focus: 'series'}},
-                {name: eurLabels.capitalBaseline, type: 'line', data: seriesData[4].data, smooth: false, symbol: 'none', lineStyle: {color: cc('capitalBaseline'), width: 1.5, type: 'dashed'}, itemStyle: {color: cc('capitalBaseline')}, emphasis: {focus: 'series'}},
-            ];
-        }
-
-        if (viewMode === 'pnl' && pnlSubmode === 'line') {
-            const greenColor = isDark ? '#4ade80' : '#16a34a';
-            const redColor = isDark ? '#f87171' : '#dc2626';
-            // Positive/negative split (see clipToSign) instead of a single fixed-color
-            // line — ECharts visualMap doesn't reliably recolor a line's
-            // lineStyle/areaStyle per value (apache/echarts#8034), so this uses the
-            // same "split into multiple series" idiom as LineChart.svelte's own
-            // segment coloring, just as a fixed 2-slot pair (not a variable segment
-            // count) so it stays compatible with updateChartData's partial merge.
-            const positiveSeries: echarts.SeriesOption = {
-                name: pnlLabels.total,
-                type: 'line',
-                data: seriesData[0].data,
-                smooth: false,
-                connectNulls: false,
-                symbol: 'none',
-                lineStyle: {color: greenColor, width: 2, type: 'solid'},
-                itemStyle: {color: greenColor},
-                areaStyle: {color: greenColor, opacity: 0.15},
-                emphasis: {focus: 'series'},
-            };
-            const negativeSeries: echarts.SeriesOption = {
-                name: pnlLabels.total,
-                type: 'line',
-                data: seriesData[1].data,
-                smooth: false,
-                connectNulls: false,
-                symbol: 'none',
-                lineStyle: {color: redColor, width: 2, type: 'solid'},
-                itemStyle: {color: redColor},
-                areaStyle: {color: redColor, opacity: 0.15},
-                emphasis: {focus: 'series'},
-            };
-            // Dashed reference line at the first-visible-day P&L (plan follow-up #3) —
-            // drawn as a dedicated flat-line series, not markLine, to avoid an ECharts
-            // bug where markLine + visualMap (piecewise, dimension:1, tuple data)
-            // crashes with "Cannot read properties of undefined (reading 'coord')"
-            // (same precedent as LineChart.svelte's own baseline reference line).
-            const referenceSeries: echarts.SeriesOption = {
-                type: 'line',
-                name: PNL_REFERENCE_SERIES_NAME,
-                data: seriesData[2].data,
-                symbol: 'none',
-                showSymbol: false,
-                lineStyle: {color: isDark ? '#64748b' : '#9ca3af', type: 'dashed', width: 1},
-                itemStyle: {color: 'transparent'},
-                emphasis: {disabled: true},
-                tooltip: {show: false},
-                silent: true,
-                z: 0,
-            };
-            const brokerSeries: echarts.SeriesOption[] = seriesData.slice(3).map((s, index) => ({
-                name: s.name,
-                type: 'line' as const,
-                data: s.data,
-                smooth: false,
-                connectNulls: false,
-                symbol: 'none',
-                lineStyle: {color: brokerColor(index, isDark), width: 1.5, type: 'dashed'},
-                itemStyle: {color: brokerColor(index, isDark)},
-                emphasis: {focus: 'series'},
-            }));
-            return [positiveSeries, negativeSeries, referenceSeries, ...brokerSeries];
-        }
-
-        if (viewMode === 'pnl' && pnlSubmode === 'candles') {
-            // Same up/down colors as the P&L tooltip's sign coloring, for consistency.
-            const greenColor = isDark ? '#4ade80' : '#16a34a';
-            const redColor = isDark ? '#f87171' : '#dc2626';
-            // seriesData[0].data is really (number[]|null)[] here (see the matching cast
-            // in buildChartUpdateSeries) — a flat [open,close,low,high] quad per category
-            // position, matching CandlestickChart.svelte's own category-axis convention
-            // (a `time` xAxis silently fails to paint any candlestick body/wick — a known
-            // upstream ECharts limitation). `any` here matches the existing
-            // CandlestickChart.svelte convention (`const series: any[] = []`) rather than
-            // fighting the generated types file-wide.
-            const candleSeries: any = {
-                name: pnlLabels.total,
-                type: 'candlestick',
-                data: seriesData[0].data,
-                barWidth: '80%',
-                itemStyle: {color: greenColor, color0: redColor, borderColor: greenColor, borderColor0: redColor},
-            };
-            // Total candle only — see the matching note in buildChartUpdateSeries.
-            return [candleSeries];
-        }
-
-        if (viewMode === 'pnl' && pnlSubmode === 'income') {
-            const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
-            // Three columns per bucket: the income stack (dividends and interest above zero,
-            // costs hanging below it — a same-sign stack splits by sign), the deposit, the
-            // acquisition stack. The gaps are the ones the rung offer assumes
-            // (INCOME_BAR_SHARE). ECharts keeps the last value it meets on the axis, so
-            // every series declares them rather than trusting one to be read.
-            const gaps = {barGap: `${Math.round(INCOME_BAR_GAP * 100)}%`, barCategoryGap: `${Math.round(INCOME_CATEGORY_GAP * 100)}%`};
-            return [
-                {name: pnlLabels.dividend, type: 'bar' as const, stack: 'income', data: seriesData[0].data, itemStyle: {color: cc('dividend')}, ...gaps},
-                {name: pnlLabels.interest, type: 'bar' as const, stack: 'income', data: seriesData[1].data, itemStyle: {color: cc('interest')}, ...gaps},
-                {name: pnlLabels.costs, type: 'bar' as const, stack: 'income', data: seriesData[2].data, itemStyle: {color: cc('costs')}, ...gaps},
-                {name: pnlLabels.deposit, type: 'bar' as const, data: seriesData[3].data, itemStyle: {color: cc('deposit')}, ...gaps},
-                // Acquisition 2-zone stacked bar (batch 2, plan §5.2): the purchase value,
-                // split by the money that paid for it (R11). Both zones carry its name, so
-                // the legend lists it once and one click hides both. Each zone keeps the
-                // colour its money has in the Abs view (D26): new capital the KPI blue of
-                // the assets at cost, reinvested the green of the generated returns.
-                // The Abs area shows the same text and ECharts keeps legend state by name,
-                // so hiding it in one view hides it in the other too (accepted, D27).
-                {name: pnlLabels.bookValue, type: 'bar' as const, stack: 'acquisition', data: seriesData[4].data, itemStyle: {color: cc('bookAssetLike')}, ...gaps},
-                {name: pnlLabels.bookValue, type: 'bar' as const, stack: 'acquisition', data: seriesData[5].data, itemStyle: {color: cc('cashGenerated')}, ...gaps},
-            ];
-        }
-
-        // See buildChartUpdateSeries's matching guard.
-        if (viewMode === 'pnl') return [];
-
-        return pctSeries.map((series, index) => ({
-            name: series.name,
-            type: 'line' as const,
-            data: seriesData[index].data,
-            smooth: false,
-            connectNulls: false,
-            symbol: 'none',
-            lineStyle: {color: COLORS[series.colorKey][isDark ? 'dark' : 'light'], width: 2, type: series.lineStyle},
-            itemStyle: {color: COLORS[series.colorKey][isDark ? 'dark' : 'light']},
-        }));
+    function tooltipView(): Omit<GrowthTooltipView, 'isDark' | 'theme'> {
+        return {entry: activeChartData, viewMode, pnlSubmode, ladderActive, candleWidthCaption: () => candleWidthLabel(candleWidth), eurLabels, pnlLabels, baseCurrency, t: $_};
     }
 
     function updateChartData(entry: AggregatedResolutionData, isDark: boolean, zoomWindow: {start: number; end: number}, skipAnimation: boolean, referenceDate: string | null = null) {
@@ -1955,7 +902,7 @@
 
         currentResolution = targetResolution;
         const entry = getResolutionData(targetResolution);
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
         const zoomWindow = buildZoomWindow(entry, logicalRange.startDate, logicalRange.endDate);
 
         activeChartData = entry;
@@ -1996,8 +943,7 @@
     let tooltipCleanup: (() => void) | null = null;
 
     onMount(() => {
-        darkModeObserver = new MutationObserver(() => renderChart());
-        darkModeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        darkModeObserver = onThemeClassChange(() => renderChart());
 
         return () => {
             if (resolutionDebounceTimer) clearTimeout(resolutionDebounceTimer);
@@ -2127,7 +1073,7 @@
             dataZoomCleanup = () => zoomInstance.off('dataZoom', onDataZoom);
         }
 
-        const isDark = document.documentElement.classList.contains('dark');
+        const isDark = isDarkTheme();
         const liveRange = getLogicalRangeFromChart();
         if (liveRange) {
             visibleStartDate = liveRange.startDate;
@@ -2174,7 +1120,7 @@
     function applyFullOption(isDark: boolean, series: echarts.SeriesOption[], zoomWindow: {start: number; end: number}) {
         if (!chartInstance) return;
         const {bg: tooltipBg, border: tooltipBorder, textColor, mutedColor} = buildTooltipTheme(isDark);
-        const gridColor = isDark ? '#1e293b' : '#f1f5f9';
+        const gridColor = themed(CHART_NEUTRALS.dashboard.gridLine, isDark);
         /**
          * Bucket separators need their own colour. `gridColor` is tuned for horizontal
          * value lines, which run the full width and read even when very faint; a vertical
@@ -2182,7 +1128,7 @@
          * tint it disappeared — in dark mode entirely (#1e293b is barely off the slate-800
          * background it is drawn on).
          */
-        const bucketLineColor = isDark ? '#64748b' : '#cbd5e1';
+        const bucketLineColor = themed(GROWTH_CHART_COLORS.bucketSeparator, isDark);
         // The ladder (Candles and Income) draws on a category axis: one slot per bucket,
         // so every bar and body gets the same width from the first render, whatever the
         // zoom. Its labels and separators come from the ladder plan, not from the shared
@@ -2241,37 +1187,6 @@
         // keeps its zero label: its axis starts at 0, which bars need to stand on.
         const yAxisFormatter = (v: number, index?: number) => (!incomeBars && index === 0 ? '' : formatTick(v));
 
-        /**
-         * Colour for a signed amount: green up, red down, **neutral at zero**.
-         *
-         * `v >= 0` painted every zero green, which reads as a gain that did not happen —
-         * and in the Income submode most buckets are legitimately zero, so the tooltip was
-         * mostly green for weeks in which nothing was earned.
-         *
-         * Zero is what the row prints as zero, as for the sign (D23b): `fmtCurrency` keeps two
-         * decimals, so under half a cent it prints `0.00` with no sign. A bucket sum can land
-         * there without being 0 (0.1 + 0.2 − 0.3 is 5.55e-17), and tested on the raw value it
-         * would print `EUR 0.00` in green.
-         */
-        const signedValueColor = (v: number, dark: boolean, neutral: string) => (Math.abs(v) < 0.005 ? neutral : v > 0 ? (dark ? '#4ade80' : '#16a34a') : dark ? '#f87171' : '#dc2626');
-
-        /**
-         * Format a number as currency: `EUR 1,234.56`, and with `signed` `EUR +5.00` or
-         * `EUR -12.00`, the one form of every signed tooltip row (D23b).
-         *
-         * The sign comes from the same `toLocaleString` call as the digits, in the interface locale
-         * (`uiLocale()`, D23): `-` in the four UI languages and their regions. `signed`
-         * adds `+` to a gain and no sign to an amount that rounds to zero. As in
-         * `formatCurrencyAmountPlain`, only the digits are masked; the currency and the sign stay
-         * readable (D8).
-         */
-        const fmtCurrency = (v: number | null | undefined, signed = false) => {
-            if (v == null) return '—';
-            // `-0 === 0`, so a negative zero becomes +0: `signDisplay: 'auto'` would print it `-0.00`.
-            const formatted = (v === 0 ? 0 : v).toLocaleString(uiLocale(), {minimumFractionDigits: 2, maximumFractionDigits: 2, signDisplay: signed ? 'exceptZero' : 'auto'});
-            return `${baseCurrency} ${maskFormattedNumber(formatted)}`;
-        };
-
         const option: echarts.EChartsOption = {
             ...CHART_ANIMATION_CONFIG,
             backgroundColor: 'transparent',
@@ -2311,124 +1226,8 @@
                 backgroundColor: tooltipBg,
                 borderColor: tooltipBorder,
                 borderWidth: 1,
-                textStyle: {color: isDark ? '#e2e8f0' : '#1e293b', fontSize: 12},
-                formatter: (params: any) => {
-                    const items = Array.isArray(params) ? params : [params];
-                    const idx = items[0]?.dataIndex ?? 0;
-                    const bucket = activeChartData?.buckets[idx];
-                    if (!bucket) return '';
-                    let html = buildTooltipBucketHeader(bucket, {bg: tooltipBg, border: tooltipBorder, textColor, mutedColor});
-
-                    if (viewMode === 'eur') {
-                        const assetCostVal = activeChartData?.eur.bookAssetLike.values[idx];
-                        const cashGenVal = activeChartData?.eur.cashGenerated.values[idx];
-                        const cashContribVal = activeChartData?.eur.cashContributed.values[idx];
-                        const navVal = activeChartData?.eur.nav.values[idx];
-                        const baselineVal = activeChartData?.eur.capitalBaseline.values[idx];
-                        const totalPnlVal = activeChartData?.eur.totalPnl.values[idx];
-
-                        const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
-                        const fmtOrDash = (v: number | null | undefined) => (v != null && v !== 0 ? fmtCurrency(v) : '—');
-
-                        html += buildTooltipRow(`<b>${eurLabels.nav}</b>`, fmtCurrency(navVal), cc('nav'));
-                        html += buildTooltipRow(eurLabels.capitalBaselineTooltip, fmtCurrency(baselineVal), cc('capitalBaseline'));
-                        if (totalPnlVal != null) {
-                            const pnlColor = signedValueColor(totalPnlVal, isDark, textColor);
-                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${pnlColor}"><span><b>${$_('dashboard.totalPnl')}</b></span><b>${fmtCurrency(totalPnlVal, true)}</b></div>`;
-                        }
-                        html += `<div style="font-size:10px;color:${textColor};opacity:0.7">${$_('dashboard.pnlFormulaHint')}</div>`;
-                        html += buildTooltipDivider(tooltipBorder);
-                        html += buildTooltipRow(eurLabels.bookAssetLikeTooltip, fmtOrDash(assetCostVal), cc('bookAssetLike'));
-                        html += buildTooltipRow(eurLabels.cashGenerated, fmtOrDash(cashGenVal), cc('cashGenerated'));
-                        html += buildTooltipRow(eurLabels.cashContributed, fmtOrDash(cashContribVal), cc('cashContributed'));
-                        return html;
-                    }
-
-                    if (viewMode === 'pnl' && pnlSubmode === 'line') {
-                        const totalVal = activeChartData?.pnl.total.values[idx];
-                        const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
-                        const pnlRow = (label: string, v: number | null | undefined, color: string) => {
-                            if (v == null) return buildTooltipRow(label, '—', color);
-                            const signColor = signedValueColor(v, isDark, textColor);
-                            return `<div style="display:flex;justify-content:space-between;gap:16px;color:${color}"><span>${label}</span><b style="color:${signColor}">${fmtCurrency(v, true)}</b></div>`;
-                        };
-                        html += pnlRow(`<b>${pnlLabels.total}</b>`, totalVal, cc('totalPnl'));
-                        activeChartData?.pnl.brokers.forEach((broker, index) => {
-                            html += pnlRow(escapeHtml(broker.brokerName), broker.metric.values[idx], brokerColor(index, isDark));
-                        });
-                        return html;
-                    }
-
-                    if (viewMode === 'pnl' && pnlSubmode === 'candles') {
-                        const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
-                        const candle = activeChartData?.pnl.candle.points[idx];
-                        const ohlcRow = (label: string, v: number | null | undefined) => `<div style="display:flex;justify-content:space-between;gap:16px;color:${textColor}"><span>${label}</span><b>${v != null ? fmtCurrency(v) : '—'}</b></div>`;
-                        if (candle && candle.close != null) {
-                            html += ohlcRow($_('dataEditor.col.open'), candle.open);
-                            html += ohlcRow($_('dataEditor.col.close'), candle.close);
-                            html += ohlcRow($_('dataEditor.col.high'), candle.high);
-                            html += ohlcRow($_('dataEditor.col.low'), candle.low);
-                        } else {
-                            html += `<div style="color:${mutedColor}">${$_('common.noData')}</div>`;
-                        }
-                        // No synthetic-candle footnote in the tooltip: the caption under the
-                        // chart is the single disclosure.
-                        activeChartData?.pnl.brokers.forEach((broker, index) => {
-                            const v = broker.metric.values[idx];
-                            if (v == null) return;
-                            const signColor = signedValueColor(v, isDark, textColor);
-                            html += `<div style="display:flex;justify-content:space-between;gap:16px;color:${brokerColor(index, isDark)}"><span>${escapeHtml(broker.brokerName)}</span><b style="color:${signColor}">${fmtCurrency(v, true)}</b></div>`;
-                        });
-                        return html;
-                    }
-
-                    if (viewMode === 'pnl' && pnlSubmode === 'income') {
-                        const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
-                        const divVal = activeChartData?.pnl.income.dividend.values[idx] ?? 0;
-                        const intVal = activeChartData?.pnl.income.interest.values[idx] ?? 0;
-                        const costVal = activeChartData?.pnl.costs.values[idx] ?? 0;
-                        const depositVal = activeChartData?.pnl.deposits.values[idx] ?? 0;
-                        const acqNewVal = activeChartData?.pnl.acquisition.fromNewCapital.values[idx] ?? 0;
-                        const acqReinvestedVal = activeChartData?.pnl.acquisition.fromReinvested.values[idx] ?? 0;
-                        const signedRow = (label: string, v: number, color: string) => {
-                            const signColor = signedValueColor(v, isDark, textColor);
-                            return `<div style="display:flex;justify-content:space-between;gap:16px;color:${color}"><span>${label}</span><b style="color:${signColor}">${fmtCurrency(v, true)}</b></div>`;
-                        };
-                        html += signedRow(pnlLabels.dividend, divVal, cc('dividend'));
-                        html += signedRow(pnlLabels.interest, intVal, cc('interest'));
-                        html += buildTooltipDivider(tooltipBorder);
-                        html += signedRow(`<b>${$_('assets.distribution.total')}</b>`, divVal + intVal, textColor);
-                        // Batch 2 dimensions: costs/deposit/acquisition are distinct economic
-                        // concepts from personal income, so each gets its own row rather than
-                        // folding into the income total above.
-                        if (costVal !== 0 || depositVal !== 0 || acqNewVal !== 0 || acqReinvestedVal !== 0) {
-                            html += buildTooltipDivider(tooltipBorder);
-                            if (costVal !== 0) html += signedRow(pnlLabels.costs, costVal, cc('costs'));
-                            if (depositVal !== 0) html += signedRow(pnlLabels.deposit, depositVal, cc('deposit'));
-                            if (acqNewVal !== 0 || acqReinvestedVal !== 0) {
-                                // R11: the purchase value in bold, like the income total, then
-                                // its two halves under it, each in its zone's colour (D26).
-                                html += signedRow(`<b>${pnlLabels.bookValue}</b>`, acqNewVal + acqReinvestedVal, textColor);
-                                html += signedRow(`↳ ${pnlLabels.acqNewCapital}`, acqNewVal, cc('bookAssetLike'));
-                                html += signedRow(`↳ ${pnlLabels.acqReinvested}`, acqReinvestedVal, cc('cashGenerated'));
-                            }
-                        }
-                        return html;
-                    }
-
-                    // See buildChartUpdateSeries's matching guard.
-                    if (viewMode === 'pnl') return html;
-
-                    html += items
-                        .filter((p: any) => p.value != null)
-                        .map((p: any) => {
-                            const rawVal = Array.isArray(p.value) ? p.value[1] : p.value;
-                            const val = formatPercent(Number(rawVal), {signed: false});
-                            return buildTooltipRow(escapeHtml(String(p.seriesName ?? '')), val, p.color);
-                        })
-                        .join('');
-                    return html;
-                },
+                textStyle: {color: themed(CHART_TOOLTIP_COLORS.box.text, isDark), fontSize: 12},
+                formatter: (params: any) => buildGrowthTooltip(params, {...tooltipView(), isDark, theme: {bg: tooltipBg, border: tooltipBorder, textColor, mutedColor}}),
             },
             legend: {
                 type: 'scroll',

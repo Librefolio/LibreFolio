@@ -24,6 +24,7 @@
     import type {Snippet} from 'svelte';
     import type {HTMLAttributes} from 'svelte/elements';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {STATUS_TONES} from '$lib/theme/toneClasses';
 
     export type AssetChipVariant = 'default' | 'warning' | 'excluded';
 
@@ -40,9 +41,9 @@
     let {asset, variant = 'default', help = false, testId, trailing, ...rest}: Props = $props();
 
     const VARIANT_CLASSES: Record<AssetChipVariant, string> = {
-        default: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-300',
-        warning: 'border border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-600 dark:bg-amber-900/20 dark:text-amber-300',
-        excluded: 'border border-dashed border-gray-300 text-gray-400 dark:border-slate-600 dark:text-gray-500',
+        default: STATUS_TONES.riskAssetChip.default,
+        warning: `border ${STATUS_TONES.riskAssetChip.warning}`,
+        excluded: `border border-dashed ${STATUS_TONES.riskAssetChip.excluded}`,
     };
 
     let excluded = $derived(variant === 'excluded');

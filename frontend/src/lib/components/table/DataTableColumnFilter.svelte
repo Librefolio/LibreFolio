@@ -26,6 +26,7 @@
 
     import {numericArrows} from '$lib/actions/numericArrows';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import '$lib/theme/components/table.css';
     type TextMatchMode = 'contains' | 'startsWith' | 'endsWith' | 'equals';
     type SizeUnit = 'B' | 'KB' | 'MB' | 'GB';
 
@@ -1120,18 +1121,18 @@
         margin-top: 0.25rem;
         min-width: 240px;
         box-sizing: border-box;
-        background: white;
-        border: 1px solid #e2e8f0;
+        background: var(--lf-cmp-datatable-filter-surface-bg);
+        border: 1px solid var(--lf-cmp-datatable-filter-border);
         border-radius: 8px;
         box-shadow:
-            0 10px 15px -3px rgba(0, 0, 0, 0.1),
-            0 4px 6px -4px rgba(0, 0, 0, 0.1);
+            0 10px 15px -3px var(--lf-cmp-datatable-filter-shadow),
+            0 4px 6px -4px var(--lf-cmp-datatable-filter-shadow);
         z-index: 9999;
     }
 
     :global(.dark) .filter-popover {
-        background: #1e293b;
-        border-color: #334155;
+        background: var(--lf-cmp-datatable-filter-surface-bg-dark);
+        border-color: var(--lf-cmp-datatable-filter-border-dark);
     }
 
     .filter-header {
@@ -1139,22 +1140,22 @@
         justify-content: space-between;
         align-items: center;
         padding: 0.5rem 0.75rem;
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid var(--lf-cmp-datatable-filter-border);
     }
 
     :global(.dark) .filter-header {
-        border-bottom-color: #334155;
+        border-bottom-color: var(--lf-cmp-datatable-filter-border-dark);
     }
 
     .filter-title {
         font-size: 0.75rem;
         font-weight: 600;
-        color: #64748b;
+        color: var(--lf-cmp-datatable-filter-muted-text);
         text-transform: uppercase;
     }
 
     :global(.dark) .filter-title {
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-filter-muted-text-dark);
     }
 
     .reset-btn {
@@ -1166,19 +1167,19 @@
         border: none;
         border-radius: 4px;
         background: transparent;
-        color: #64748b;
+        color: var(--lf-cmp-datatable-filter-btn-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .reset-btn:hover {
-        background: #f1f5f9;
-        color: #0f172a;
+        background: var(--lf-cmp-datatable-filter-hover-bg);
+        color: var(--lf-cmp-datatable-filter-strong-text);
     }
 
     :global(.dark) .reset-btn:hover {
-        background: #334155;
-        color: #f1f5f9;
+        background: var(--lf-cmp-datatable-filter-hover-bg-dark);
+        color: var(--lf-cmp-datatable-filter-strong-text-dark);
     }
 
     .filter-body {
@@ -1196,7 +1197,7 @@
     .search-input-wrapper :global(.search-icon) {
         position: absolute;
         left: 0.5rem;
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-filter-faint-text);
         pointer-events: none;
     }
 
@@ -1204,25 +1205,25 @@
         width: 100%;
         padding: 0.375rem 1.75rem;
         font-size: 0.8125rem;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-datatable-filter-field-border);
         border-radius: 6px;
-        background: white;
-        color: #0f172a;
+        background: var(--lf-cmp-datatable-filter-field-bg);
+        color: var(--lf-cmp-datatable-filter-strong-text);
     }
 
     :global(.dark) .filter-input {
-        background: #0f172a;
-        border-color: #334155;
-        color: #f1f5f9;
+        background: var(--lf-cmp-datatable-filter-field-bg-dark);
+        border-color: var(--lf-cmp-datatable-filter-field-border-dark);
+        color: var(--lf-cmp-datatable-filter-strong-text-dark);
     }
 
     .filter-input:focus {
         outline: none;
-        border-color: #1a4031;
+        border-color: var(--lf-cmp-datatable-filter-accent-border);
     }
 
     :global(.dark) .filter-input:focus {
-        border-color: #4ade80;
+        border-color: var(--lf-cmp-datatable-filter-accent-border-dark);
     }
 
     .clear-input-btn {
@@ -1235,41 +1236,41 @@
         height: 18px;
         border: none;
         border-radius: 50%;
-        background: #e2e8f0;
-        color: #64748b;
+        background: var(--lf-cmp-datatable-filter-clear-btn-bg);
+        color: var(--lf-cmp-datatable-filter-muted-text);
         cursor: pointer;
     }
 
     .clear-input-btn:hover {
-        background: #cbd5e1;
-        color: #0f172a;
+        background: var(--lf-cmp-datatable-filter-clear-btn-hover-bg);
+        color: var(--lf-cmp-datatable-filter-strong-text);
     }
 
     :global(.dark) .clear-input-btn {
-        background: #475569;
-        color: #94a3b8;
+        background: var(--lf-cmp-datatable-filter-clear-btn-bg-dark);
+        color: var(--lf-cmp-datatable-filter-muted-text-dark);
     }
 
     :global(.dark) .clear-input-btn:hover {
-        background: #64748b;
-        color: #f1f5f9;
+        background: var(--lf-cmp-datatable-filter-clear-btn-hover-bg-dark);
+        color: var(--lf-cmp-datatable-filter-strong-text-dark);
     }
 
     .match-mode-select {
         width: 100%;
         padding: 0.375rem 0.5rem;
         font-size: 0.8125rem;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-datatable-filter-field-border);
         border-radius: 6px;
-        background: white;
-        color: #0f172a;
+        background: var(--lf-cmp-datatable-filter-field-bg);
+        color: var(--lf-cmp-datatable-filter-strong-text);
         cursor: pointer;
     }
 
     :global(.dark) .match-mode-select {
-        background: #0f172a;
-        border-color: #334155;
-        color: #f1f5f9;
+        background: var(--lf-cmp-datatable-filter-field-bg-dark);
+        border-color: var(--lf-cmp-datatable-filter-field-border-dark);
+        color: var(--lf-cmp-datatable-filter-strong-text-dark);
     }
 
     /* Number/Date filter */
@@ -1289,36 +1290,36 @@
     .range-label {
         min-width: 35px;
         font-size: 0.75rem;
-        color: #64748b;
+        color: var(--lf-cmp-datatable-filter-muted-text);
     }
 
     :global(.dark) .range-label {
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-filter-muted-text-dark);
     }
 
     .range-input {
         flex: 1;
         padding: 0.375rem 0.5rem;
         font-size: 0.8125rem;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-datatable-filter-field-border);
         border-radius: 6px;
-        background: white;
-        color: #0f172a;
+        background: var(--lf-cmp-datatable-filter-field-bg);
+        color: var(--lf-cmp-datatable-filter-strong-text);
     }
 
     :global(.dark) .range-input {
-        background: #0f172a;
-        border-color: #334155;
-        color: #f1f5f9;
+        background: var(--lf-cmp-datatable-filter-field-bg-dark);
+        border-color: var(--lf-cmp-datatable-filter-field-border-dark);
+        color: var(--lf-cmp-datatable-filter-strong-text-dark);
     }
 
     .range-input:focus {
         outline: none;
-        border-color: #1a4031;
+        border-color: var(--lf-cmp-datatable-filter-accent-border);
     }
 
     :global(.dark) .range-input:focus {
-        border-color: #4ade80;
+        border-color: var(--lf-cmp-datatable-filter-accent-border-dark);
     }
 
     /* Size filter */
@@ -1337,11 +1338,11 @@
     .size-label {
         min-width: 30px;
         font-size: 0.75rem;
-        color: #64748b;
+        color: var(--lf-cmp-datatable-filter-muted-text);
     }
 
     :global(.dark) .size-label {
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-filter-muted-text-dark);
     }
 
     .size-input-group {
@@ -1355,43 +1356,43 @@
         min-width: 60px;
         padding: 0.375rem 0.5rem;
         font-size: 0.8125rem;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-datatable-filter-field-border);
         border-radius: 6px 0 0 6px;
-        background: white;
-        color: #0f172a;
+        background: var(--lf-cmp-datatable-filter-field-bg);
+        color: var(--lf-cmp-datatable-filter-strong-text);
     }
 
     :global(.dark) .size-input {
-        background: #0f172a;
-        border-color: #334155;
-        color: #f1f5f9;
+        background: var(--lf-cmp-datatable-filter-field-bg-dark);
+        border-color: var(--lf-cmp-datatable-filter-field-border-dark);
+        color: var(--lf-cmp-datatable-filter-strong-text-dark);
     }
 
     .size-input:focus {
         outline: none;
-        border-color: #1a4031;
+        border-color: var(--lf-cmp-datatable-filter-accent-border);
     }
 
     :global(.dark) .size-input:focus {
-        border-color: #4ade80;
+        border-color: var(--lf-cmp-datatable-filter-accent-border-dark);
     }
 
     .size-unit-select {
         width: 55px;
         padding: 0.375rem 0.25rem;
         font-size: 0.75rem;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-datatable-filter-field-border);
         border-left: none;
         border-radius: 0 6px 6px 0;
-        background: #f8fafc;
-        color: #0f172a;
+        background: var(--lf-cmp-datatable-filter-size-unit-select-bg);
+        color: var(--lf-cmp-datatable-filter-strong-text);
         cursor: pointer;
     }
 
     :global(.dark) .size-unit-select {
-        background: #1e293b;
-        border-color: #334155;
-        color: #f1f5f9;
+        background: var(--lf-cmp-datatable-filter-size-unit-select-bg-dark);
+        border-color: var(--lf-cmp-datatable-filter-field-border-dark);
+        color: var(--lf-cmp-datatable-filter-strong-text-dark);
     }
 
     /* Dual range slider */
@@ -1407,26 +1408,26 @@
         left: 0;
         right: 0;
         height: 4px;
-        background: #e2e8f0;
+        background: var(--lf-cmp-datatable-filter-slider-track-bg);
         border-radius: 2px;
         transform: translateY(-50%);
         overflow: visible;
     }
 
     :global(.dark) .size-slider-track {
-        background: #475569;
+        background: var(--lf-cmp-datatable-filter-slider-track-bg-dark);
     }
 
     .size-slider-range {
         position: absolute;
         top: 0;
         bottom: 0;
-        background: #1a4031;
+        background: var(--lf-cmp-datatable-filter-accent-bg);
         border-radius: 2px;
     }
 
     :global(.dark) .size-slider-range {
-        background: #4ade80;
+        background: var(--lf-cmp-datatable-filter-accent-bg-dark);
     }
 
     .slider-tick {
@@ -1434,14 +1435,14 @@
         top: -4px;
         width: 2px;
         height: 12px;
-        background: #94a3b8;
+        background: var(--lf-cmp-datatable-filter-slider-tick-bg);
         transform: translateX(-50%);
         z-index: 1;
         border-radius: 1px;
     }
 
     :global(.dark) .slider-tick {
-        background: #64748b;
+        background: var(--lf-cmp-datatable-filter-slider-tick-bg-dark);
     }
 
     .size-slider {
@@ -1461,40 +1462,40 @@
         appearance: none;
         width: 16px;
         height: 16px;
-        background: #1a4031;
-        border: 2px solid white;
+        background: var(--lf-cmp-datatable-filter-accent-bg);
+        border: 2px solid var(--lf-cmp-datatable-filter-slider-thumb-border);
         border-radius: 50%;
         cursor: pointer;
         pointer-events: auto;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 1px 3px var(--lf-cmp-datatable-filter-slider-thumb-shadow);
     }
 
     :global(.dark) .size-slider::-webkit-slider-thumb {
-        background: #4ade80;
-        border-color: #0f172a;
+        background: var(--lf-cmp-datatable-filter-accent-bg-dark);
+        border-color: var(--lf-cmp-datatable-filter-slider-thumb-border-dark);
     }
 
     .size-slider::-moz-range-thumb {
         width: 16px;
         height: 16px;
-        background: #1a4031;
-        border: 2px solid white;
+        background: var(--lf-cmp-datatable-filter-accent-bg);
+        border: 2px solid var(--lf-cmp-datatable-filter-slider-thumb-border);
         border-radius: 50%;
         cursor: pointer;
         pointer-events: auto;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 1px 3px var(--lf-cmp-datatable-filter-slider-thumb-shadow);
     }
 
     :global(.dark) .size-slider::-moz-range-thumb {
-        background: #4ade80;
-        border-color: #0f172a;
+        background: var(--lf-cmp-datatable-filter-accent-bg-dark);
+        border-color: var(--lf-cmp-datatable-filter-slider-thumb-border-dark);
     }
 
     .size-slider-labels {
         display: flex;
         justify-content: space-between;
         font-size: 0.5625rem;
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-filter-faint-text);
         margin-top: 0.25rem;
     }
 
@@ -1513,39 +1514,39 @@
         flex: 1;
         padding: 0.25rem 0.5rem;
         font-size: 0.6875rem;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-datatable-filter-border);
         border-radius: 4px;
-        background: #f8fafc;
-        color: #64748b;
+        background: var(--lf-cmp-datatable-filter-enum-action-btn-bg);
+        color: var(--lf-cmp-datatable-filter-muted-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .enum-action-btn:hover {
-        background: #f1f5f9;
-        color: #0f172a;
+        background: var(--lf-cmp-datatable-filter-enum-action-btn-hover-bg);
+        color: var(--lf-cmp-datatable-filter-strong-text);
     }
 
     :global(.dark) .enum-action-btn {
-        background: #0f172a;
-        border-color: #334155;
-        color: #94a3b8;
+        background: var(--lf-cmp-datatable-filter-enum-action-btn-bg-dark);
+        border-color: var(--lf-cmp-datatable-filter-border-dark);
+        color: var(--lf-cmp-datatable-filter-muted-text-dark);
     }
 
     :global(.dark) .enum-action-btn:hover {
-        background: #1e293b;
-        color: #f1f5f9;
+        background: var(--lf-cmp-datatable-filter-enum-action-btn-hover-bg-dark);
+        color: var(--lf-cmp-datatable-filter-strong-text-dark);
     }
 
     .enum-list {
         max-height: 180px;
         overflow-y: auto;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-datatable-filter-border);
         border-radius: 6px;
     }
 
     :global(.dark) .enum-list {
-        border-color: #334155;
+        border-color: var(--lf-cmp-datatable-filter-border-dark);
     }
 
     .enum-option {
@@ -1556,7 +1557,7 @@
         padding: 0.375rem 0.5rem;
         border: none;
         background: transparent;
-        color: #475569;
+        color: var(--lf-cmp-datatable-filter-enum-option-text);
         font-size: 0.8125rem;
         text-align: left;
         cursor: pointer;
@@ -1564,15 +1565,15 @@
     }
 
     .enum-option:hover {
-        background: #f8fafc;
+        background: var(--lf-cmp-datatable-filter-enum-option-hover-bg);
     }
 
     :global(.dark) .enum-option {
-        color: #e2e8f0;
+        color: var(--lf-cmp-datatable-filter-enum-option-text-dark);
     }
 
     :global(.dark) .enum-option:hover {
-        background: #334155;
+        background: var(--lf-cmp-datatable-filter-enum-option-hover-bg-dark);
     }
 
     .enum-checkbox {
@@ -1581,33 +1582,33 @@
         justify-content: center;
         width: 16px;
         height: 16px;
-        border: 1px solid #cbd5e1;
+        border: 1px solid var(--lf-cmp-datatable-filter-enum-checkbox-border);
         border-radius: 3px;
-        background: white;
+        background: var(--lf-cmp-datatable-filter-field-bg);
         transition: all 0.15s;
     }
 
     .enum-checkbox.checked {
-        background: #1a4031;
-        border-color: #1a4031;
-        color: white;
+        background: var(--lf-cmp-datatable-filter-accent-bg);
+        border-color: var(--lf-cmp-datatable-filter-accent-border);
+        color: var(--lf-cmp-datatable-filter-on-accent-text);
     }
 
     :global(.dark) .enum-checkbox {
-        background: #0f172a;
-        border-color: #475569;
+        background: var(--lf-cmp-datatable-filter-field-bg-dark);
+        border-color: var(--lf-cmp-datatable-filter-enum-checkbox-border-dark);
     }
 
     :global(.dark) .enum-checkbox.checked {
-        background: #4ade80;
-        border-color: #4ade80;
-        color: #0f172a;
+        background: var(--lf-cmp-datatable-filter-accent-bg-dark);
+        border-color: var(--lf-cmp-datatable-filter-accent-border-dark);
+        color: var(--lf-cmp-datatable-filter-on-accent-text-dark);
     }
 
     .enum-empty {
         padding: 0.5rem;
         font-size: 0.75rem;
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-filter-faint-text);
         text-align: center;
         max-width: 200px;
         margin: 0 auto;
@@ -1662,19 +1663,19 @@
         height: 0.625rem;
         border-radius: 9999px;
         flex-shrink: 0;
-        box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06);
+        box-shadow: 0 0 0 1px var(--lf-cmp-datatable-filter-enum-option-dot-shadow);
     }
 
     :global(.dark) .enum-option-dot {
-        box-shadow: 0 0 0 1px rgb(255 255 255 / 0.08);
+        box-shadow: 0 0 0 1px var(--lf-cmp-datatable-filter-enum-option-dot-shadow-dark);
     }
 
     .enum-count {
         margin-left: auto;
         font-size: 0.6875rem;
         font-variant-numeric: tabular-nums;
-        color: #94a3b8;
-        background: #f1f5f9;
+        color: var(--lf-cmp-datatable-filter-enum-count-text);
+        background: var(--lf-cmp-datatable-filter-enum-count-bg);
         padding: 0 0.35rem;
         border-radius: 9999px;
         min-width: 1.25rem;
@@ -1683,8 +1684,8 @@
     }
 
     :global(.dark) .enum-count {
-        color: #64748b;
-        background: #334155;
+        color: var(--lf-cmp-datatable-filter-enum-count-text-dark);
+        background: var(--lf-cmp-datatable-filter-enum-count-bg-dark);
     }
 
     /* Currency-stack filter */
@@ -1700,7 +1701,7 @@
     }
     .currency-stack-empty {
         font-size: 0.75rem;
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-filter-faint-text);
         text-align: center;
         padding: 0.5rem;
         max-width: 200px;
@@ -1723,35 +1724,35 @@
         align-items: center;
         gap: 0.4rem;
         padding: 0.3rem 0.5rem;
-        border: 1px solid #e2e8f0;
+        border: 1px solid var(--lf-cmp-datatable-filter-border);
         border-radius: 6px;
-        background: #f8fafc;
+        background: var(--lf-cmp-datatable-filter-currency-stack-row-bg);
     }
     :global(.dark) .currency-stack-row {
-        background: #0f172a;
-        border-color: #334155;
+        background: var(--lf-cmp-datatable-filter-currency-stack-row-bg-dark);
+        border-color: var(--lf-cmp-datatable-filter-border-dark);
     }
     .currency-stack-code {
         font-weight: 600;
         font-size: 0.75rem;
-        color: #1a4031;
+        color: var(--lf-cmp-datatable-filter-currency-stack-code-text);
     }
     :global(.dark) .currency-stack-code {
-        color: #4ade80;
+        color: var(--lf-cmp-datatable-filter-currency-stack-code-text-dark);
     }
     .currency-stack-range {
         font-size: 0.75rem;
-        color: #475569;
+        color: var(--lf-cmp-datatable-filter-currency-stack-range-text);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
         max-width: 120px;
     }
     :global(.dark) .currency-stack-range {
-        color: #cbd5e1;
+        color: var(--lf-cmp-datatable-filter-currency-stack-range-text-dark);
     }
     .currency-stack-any {
-        color: #94a3b8;
+        color: var(--lf-cmp-datatable-filter-faint-text);
         font-style: italic;
     }
     .currency-stack-btn {
@@ -1763,36 +1764,36 @@
         border: 1px solid transparent;
         border-radius: 4px;
         background: transparent;
-        color: #64748b;
+        color: var(--lf-cmp-datatable-filter-btn-text);
         cursor: pointer;
         transition: all 0.15s;
     }
     .currency-stack-btn:hover {
-        background: #e2e8f0;
-        color: #0f172a;
+        background: var(--lf-cmp-datatable-filter-currency-stack-btn-hover-bg);
+        color: var(--lf-cmp-datatable-filter-strong-text);
     }
     :global(.dark) .currency-stack-btn:hover {
-        background: #334155;
-        color: #f1f5f9;
+        background: var(--lf-cmp-datatable-filter-currency-stack-btn-hover-bg-dark);
+        color: var(--lf-cmp-datatable-filter-strong-text-dark);
     }
     .currency-stack-btn.danger:hover {
-        background: #fee2e2;
-        color: #b91c1c;
+        background: var(--lf-cmp-datatable-filter-currency-stack-btn-danger-hover-bg);
+        color: var(--lf-cmp-datatable-filter-currency-stack-btn-danger-hover-text);
     }
     :global(.dark) .currency-stack-btn.danger:hover {
-        background: #7f1d1d;
-        color: #fecaca;
+        background: var(--lf-cmp-datatable-filter-currency-stack-btn-danger-hover-bg-dark);
+        color: var(--lf-cmp-datatable-filter-currency-stack-btn-danger-hover-text-dark);
     }
     .currency-stack-range-editor {
         grid-column: 1 / -1;
         margin-top: 0.4rem;
         padding-top: 0.4rem;
-        border-top: 1px dashed #e2e8f0;
+        border-top: 1px dashed var(--lf-cmp-datatable-filter-border);
         display: flex;
         flex-direction: column;
         gap: 0.3rem;
     }
     :global(.dark) .currency-stack-range-editor {
-        border-top-color: #334155;
+        border-top-color: var(--lf-cmp-datatable-filter-border-dark);
     }
 </style>

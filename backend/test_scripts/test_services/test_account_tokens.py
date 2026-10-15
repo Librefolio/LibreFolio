@@ -7,7 +7,9 @@ contract pinned here:
 
 1. The vocabulary: ``AccountTokenPurpose`` and ``TokenStatus`` with their values; ``DEFAULT_TTL`` — invite 7 days,
    reset 30 minutes, setup 72 hours, e-mail verification 24 hours; ``hash_token``, the SHA-256 hex digest of the UTF-8
-   token; ``token_path``, one front-end page per purpose; ``IssuedToken`` and ``TokenInspection``, frozen.
+   token; ``token_path``, one front-end page per purpose with the token in the URL fragment (``#token=…``, encoded by
+   ``urlencode``), never in the query string — a browser never sends the fragment, so the token stays out of the
+   instance's access log and out of every proxy's (review of 15/10); ``IssuedToken`` and ``TokenInspection``, frozen.
 2. ``issue_token``: 256 random bits, URL-safe (43 characters); only the hash is stored; ``created_at`` is ``now`` and
    ``expires_at`` is ``now`` plus the purpose's TTL, or the one given, which must be positive. An invite belongs to
    nobody yet and may carry an e-mail, the admin role and its creator; the other purposes belong to a user and never
@@ -45,6 +47,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 import pytest
 import pytest_asyncio
@@ -241,12 +244,36 @@ def test_hash_token_is_the_sha256_hex_digest_of_the_utf8_token() -> None:
     ("purpose", "page"),
     [(INVITE, "/invite"), (PASSWORD_RESET, "/reset-password"), (ADMIN_SETUP, "/setup"), (EMAIL_VERIFICATION, "/verify-email")],
 )
-def test_token_path_sends_each_purpose_to_its_page(purpose: AccountTokenPurpose, page: str) -> None:
-    """Contract 1: ``token_path`` is the page of the purpose with the token as its ``token`` query parameter."""
-    print_section(f"Contract 1: token_path({purpose.value})")
+def test_token_path_sends_each_purpose_to_its_page_with_the_token_in_the_fragment(purpose: AccountTokenPurpose, page: str) -> None:
+    """Contract 1 (review of 15/10): ``token_path`` is the page of the purpose with the token in the URL fragment, ``#token=…``, and no query string.
 
-    assert token_path(purpose, SAMPLE_TOKEN) == f"{page}?token={SAMPLE_TOKEN}"
-    print_success(f"{purpose.value} → {page}?token=…")
+    A browser never sends the fragment of a URL to the server: whoever opens the link, the token reaches neither the
+    instance's access log nor a proxy's on the way. A token in the query string reaches both.
+    """
+    print_section(f"Contract 1: token_path({purpose.value})")
+    path = token_path(purpose, SAMPLE_TOKEN)
+    parts = urlsplit(path)
+
+    assert (parts.path, parts.query) == (page, ""), f"the token must not travel in the query string, which the server and every proxy log: {path!r}"
+    assert parse_qs(parts.fragment) == {"token": [SAMPLE_TOKEN]}, f"the token must travel in the fragment, as its 'token' field: {path!r}"
+    assert path == f"{page}#token={SAMPLE_TOKEN}"
+    print_success(f"{purpose.value} → {page}#token=…")
+
+
+def test_token_path_encodes_the_token_in_the_fragment_as_urlencode_does() -> None:
+    """Contract 1 (review of 15/10): the fragment is ``urlencode({'token': token})``, so a token holding characters that mean something in a URL (``+``, a space, ``&``, ``=``, ``/``, ``#``, a non-ASCII letter) comes back intact from the fragment, read as form fields — as the page reads it.
+
+    Real tokens are URL-safe base64 and never need it; the encoding is pinned so that the page and the service cannot drift.
+    """
+    print_section("Contract 1: token_path encodes the token")
+    odd = "a+b c&d=e/é#f"
+    path = token_path(INVITE, odd)
+    parts = urlsplit(path)
+
+    assert (parts.path, parts.query) == ("/invite", ""), f"the token must not travel in the query string: {path!r}"
+    assert parse_qs(parts.fragment) == {"token": [odd]}, f"the fragment must give the token back intact: {path!r}"
+    assert path == "/invite#" + urlencode({"token": odd})
+    print_success("the fragment gives the token back intact")
 
 
 def test_the_results_are_frozen_dataclasses() -> None:

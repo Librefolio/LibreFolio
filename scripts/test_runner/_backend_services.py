@@ -453,6 +453,56 @@ def services_account_tokens(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Account token service tests", verbose=verbose)
 
 
+def services_registration(verbose: bool = False, test_names: list = None) -> bool:
+    """Test who may create an account: registration modes, invitations, the user limit, and their variables."""
+    print_section("Services: Registration")
+    print_info("Testing: backend/app/services/accounts/registration_service.py, backend/app/config/accounts.py, the registration_mode setting")
+    print_info("Tests: the four variables, the effective mode (variable over row, invalid closes), usage, invitations, every register_user branch, the limit under a race, bcrypt off the loop")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_registration_service.py", test_names)
+    return run_command(cmd, "Registration service tests", verbose=verbose)
+
+
+def services_email_config(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the SMTP configuration accessors of the optional e-mail: LIBREFOLIO_SMTP_* read at call time."""
+    print_section("Services: E-mail Configuration")
+    print_info("Testing: backend/app/config/email.py")
+    print_info("Tests: blank is unset, TLS modes and their ports, ASCII-digit port and hourly limit, one mailbox for From and Reply-To, password through env_secret, EmailConfigError codes, no password in a message")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_config.py", test_names)
+    return run_command(cmd, "E-mail configuration tests", verbose=verbose)
+
+
+def services_email_messages(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the e-mail texts: typed builders, the four-language catalogue and the composed message."""
+    print_section("Services: E-mail Messages")
+    print_info("Testing: backend/app/services/email/messages.py, backend/app/services/email/templates/")
+    print_info("Tests: languages, keyword-only builders, http(s) links only, escaping, no user data in subjects, Babel durations, catalogue guard, headers and multipart/alternative, one recipient")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_messages.py", test_names)
+    return run_command(cmd, "E-mail message tests", verbose=verbose)
+
+
+def services_email_delivery(verbose: bool = False, test_names: list = None) -> bool:
+    """Test SMTP delivery against a fake server on 127.0.0.1, the configuration state, the hourly budget and send_email."""
+    print_section("Services: E-mail Delivery")
+    print_info("Testing: backend/app/services/email/smtp.py, backend/app/services/email/delivery.py")
+    print_info("Tests: the fake SMTP server, error codes (TLS never falls back to plain), config state and its one-time log, budget on a fake clock, smtplib off the event loop, no secret in the logs")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_delivery.py", test_names)
+    return run_command(cmd, "E-mail delivery tests", verbose=verbose)
+
+
+def services_email_checks(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the configuration checks of the optional e-mail (email.smtp, email.smtp_encryption)."""
+    print_section("Services: E-mail Configuration Checks")
+    print_info("Testing: backend/app/services/email/checks.py")
+    print_info("Tests: off/ok/invalid with problem and variable, plain text local or public, EMAIL_CONFIG_CHECKS, no password, host, user or sender in a detail")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_email_checks.py", test_names)
+    return run_command(cmd, "E-mail configuration check tests", verbose=verbose)
+
+
 def services_session_version(verbose: bool = False, test_names: list = None) -> bool:
     """Test session revocation through the session version (the sv claim of the session cookie)."""
     print_section("Services: Session Version")
@@ -477,7 +527,7 @@ def services_global_settings(verbose: bool = False, test_names: list = None) -> 
     """Test GlobalSettingsService."""
     print_section("Services: Global Settings Service")
     print_info("Testing: backend/app/services/accounts/global_settings_service.py")
-    print_info("Tests: Type conversion, DB reads with defaults, TTL/upload/registration getters")
+    print_info("Tests: Type conversion, DB reads with defaults, TTL/upload getters, the registration_mode row")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_global_settings_service.py", test_names)
     return run_command(cmd, "Global settings service tests", verbose=verbose)
@@ -491,6 +541,17 @@ def services_fx_core(verbose: bool = False, test_names: list = None) -> bool:
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_core.py", test_names)
     return run_command(cmd, "FX core helpers tests", verbose=verbose)
+
+
+def services_fx_catalog(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the cached supported-currency catalog of the FX providers (X-R8)."""
+    print_section("Services: FX Provider Currency Catalog")
+    print_info("Testing: backend/app/services/fx/catalog.py (get_supported_currencies_cached, behind GET /fx/providers)")
+    print_info("Tests: 24 h cache and copies, last known list on failure/timeout, 5-minute retry delay, one fetch per event loop, cache panel")
+    print_info("Fake providers only — no network, no database, no server")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_catalog.py", test_names)
+    return run_command(cmd, "FX provider currency catalog tests", verbose=verbose)
 
 
 def services_static_uploads(verbose: bool = False, test_names: list = None) -> bool:
@@ -610,6 +671,16 @@ def services_roi_fifo_engine(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "ROI/FIFO/Portfolio service tests", verbose=verbose)
 
 
+def services_orphan_transfer_numbers(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the lots and the Dashboard of a broker whose TRANSFER partner was deleted with its broker (V-3, D-J4)."""
+    print_section("Services: Orphan Transfer After Broker Delete (V-3 numbers)")
+    print_info("Testing: LotsAnalysisService and PortfolioService after BrokerService.delete_bulk leaves the other half of a TRANSFER")
+    print_info("Tests: TRANSFER_PAIR_MISSING vs the ADJUSTMENT-in lot, in-kind capital at market value vs at cost basis, against a control book")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_orphan_transfer_after_broker_delete.py", test_names)
+    return run_command(cmd, "Orphan transfer numbers tests", verbose=verbose)
+
+
 def services_portfolio_allocation_source(verbose: bool = False, test_names: list = None) -> bool:
     """Test the read-only PAC/Rebalancer portfolio source snapshot."""
     print_section("Services: Portfolio Allocation Source")
@@ -639,6 +710,15 @@ def services_asset_source_guards(verbose: bool = False, test_names: list = None)
     print_info("Tests: OHLC rejection policy, close-only bound widening, identifier filters, event FX pass")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_source_upsert_guards.py", test_names)
     return run_command(cmd, "Asset Source guard tests", verbose=verbose)
+
+
+def services_asset_event_store(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the manual asset-event store contract tests (release 1.3, W E1a: decisions 20-23)."""
+    print_section("Services: Asset Event Store")
+    print_info("Testing: backend/app/services/assets/event_store.py, backend/app/schemas/assets/events.py")
+    print_info("Tests: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_asset_event_store.py", test_names)
+    return run_command(cmd, "Asset Event Store tests", verbose=verbose)
 
 
 def services_portfolio_engine_vnext(verbose: bool = False, test_names: list = None) -> bool:
@@ -768,6 +848,15 @@ def services_platform_readiness(verbose: bool = False, test_names: list = None) 
     print_info("Testing: backend/app/services/platform/readiness.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_platform_readiness.py", test_names)
     return run_command(cmd, "Instance readiness tests", verbose=verbose)
+
+
+def services_logging_access_filter(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the credential mask of uvicorn's request lines: the rule, the filter on any record, uvicorn's HTTP and WebSocket records, configure_logging installing it once on each logger."""
+    print_section("Services: Credentials in uvicorn's Request Lines")
+    print_info("Testing: backend/app/logging_config.py (mask_query_credentials, _QueryCredentialFilter, configure_logging)")
+    print_info("Tests: the rule (decoded names, nested URL, encoded-value limit), every string arg masked in place, the message without args, format strings never rewritten, uvicorn's h11/httptools access and WebSocket handshake lines with negative controls, one filter per logger after two calls")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_logging_access_filter.py", test_names)
+    return run_command(cmd, "Access log credential tests", verbose=verbose)
 
 
 def services_donation_popup(verbose: bool = False, test_names: list = None) -> bool:
@@ -1115,6 +1204,54 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "registration",
+        services_registration,
+        name="Registration",
+        desc="registration_mode in the registry, LIBREFOLIO_REGISTRATION/MAX_USERS/PUBLIC_URL/BILLING_URL accessors, effective mode, usage, invitations, register_user rule, limit under a race, bcrypt off the loop",
+        # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
+        # server. The variables are set with monkeypatch in this process, and the once-per-process error log is checked
+        # in this process too (the report cache cleared around each test); the race holds two connections to that
+        # private file only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-config",
+        services_email_config,
+        name="E-mail Configuration",
+        desc="LIBREFOLIO_SMTP_* accessors read at call time: blank is unset, three TLS modes with their default ports, port and hourly limit in ASCII digits, one mailbox for From and Reply-To (no CR/LF, no second address), the password through env_secret, EmailConfigError naming the variable and never the password",
+        # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-messages",
+        services_email_messages,
+        name="E-mail Messages",
+        desc="EMAIL_LANGUAGES = default_language choices, email_language, keyword-only builders, http(s) links only, user values escaped in the HTML and absent from subjects, Babel durations, one more sentence for admin invites, catalogue guard (same keys and placeholders in en/it/fr/es, valid templates), compose_message headers, plain then HTML, exactly one recipient",
+        # PURE: no lane DB, no server, no environment read (inherited SMTP variables removed with monkeypatch); reads the committed templates only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-delivery",
+        services_email_delivery,
+        name="E-mail Delivery",
+        desc="Fake SMTP server self-checks; deliver: plain, AUTH, AUTH_FAILED, TLS_FAILED without fallback, CONNECTION_FAILED, TIMEOUT, refusals, non-221 QUIT is success; email_config_state never raises, one problem and variable per fault, logged once per process without the password; hourly budget on a fake clock; send_email off the event loop; no password, link or body in the logs",
+        # PURE: no lane DB, no server; env set with monkeypatch; the fake SMTP server listens on an ephemeral 127.0.0.1 port.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "email-checks",
+        services_email_checks,
+        name="E-mail Configuration Checks",
+        desc="email.smtp: off, ok, or error with problem and variable; email.smtp_encryption: ok unless plain text to a non-local host (warning); EMAIL_CONFIG_CHECKS; no password anywhere, no host, user or sender in a detail",
+        # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "session-version",
         services_session_version,
         name="Session Version",
@@ -1130,7 +1267,7 @@ Note: No backend server required.
         services_global_settings,
         name="Global Settings",
         desc="Type conversion, DB reads, TTL getters",
-        exclusive_because="an autouse fixture truncates global_settings before every test; that table holds enable_registration, which conftest seeds once per process, so a concurrent unit loses it mid-run and fails far from the cause",
+        exclusive_because="an autouse fixture truncates global_settings before every test; that table holds registration_mode, which conftest seeds once per process, so a concurrent unit loses it mid-run and fails far from the cause",
     )
     add_test(
         cat,
@@ -1139,6 +1276,16 @@ Note: No backend server required.
         name="FX Core Helpers",
         desc="normalize_rate, upsert/delete bulk, changes",
         exclusive_because="an autouse fixture truncates fx_rates before every test, so any concurrent unit reading rates loses them mid-test",
+    )
+    add_test(
+        cat,
+        "fx-catalog",
+        services_fx_catalog,
+        name="FX Provider Currency Catalog",
+        desc="Supported currencies cached 24 h and handed out as copies, last known list on failure or timeout, 5-minute retry delay, one fetch per provider and event loop, listed in the cache panel",
+        # PURE: fake providers only, no session and no server. The one shared surface is this process's
+        # fx_provider_currencies cache and last known lists, which an autouse fixture empties before and after each test.
+        isolation="pure",
     )
     add_test(cat, "static-uploads", services_static_uploads, name="Static Uploads", desc="File save/list/get/delete, security")
     add_test(cat, "brim-parse-error", services_brim_parse_error, name="BRIM Parse Error", desc="Exception class tests")
@@ -1163,6 +1310,16 @@ Note: No backend server required.
         isolation="pure",
     )
     add_test(cat, "roi-fifo-utils", services_roi_fifo_engine, name="ROI/FIFO/Portfolio Utils", desc="TWRR/MWRR/SimpleROI series, FIFO lots (FifoLotEngine), WAC multi-broker, price marks")
+    add_test(
+        cat,
+        "orphan-transfer-numbers",
+        services_orphan_transfer_numbers,
+        name="Orphan Transfer Numbers",
+        desc="Lots and Dashboard once a broker deletion leaves the other half of a TRANSFER: the orphan against an ADJUSTMENT-in control",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+    )
     add_test(
         cat,
         "portfolio-allocation-source",
@@ -1196,6 +1353,18 @@ Note: No backend server required.
         # teardown, but the tables themselves are shared surfaces.
         isolation="write-global",
     )
+    add_test(
+        cat,
+        "asset-event-store",
+        services_asset_event_store,
+        name="Asset Event Store",
+        desc="Manual events: type normalisation, all-or-nothing upsert with located errors, create mode, event_ids, delete scoped by asset",
+        # WRITE_GLOBAL: Asset and AssetEvent carry no user_id (nor do the AssetProviderAssignment,
+        # Broker and Transaction written beside them), so the two assets this unit creates and
+        # every event and transaction written against them are visible to all concurrent tests.
+        # Rows are uniquely named and dropped in teardown, but the tables are shared surfaces.
+        isolation="write-global",
+    )
     add_test(cat, "portfolio-engine", services_portfolio_engine_vnext, name="Portfolio Engine vNext", desc="Inline WAC, last_buy_price, 3-pool, position states, accumulators, pre-frame/frame")
     add_test(cat, "asset-sync-counts", services_asset_sync_counts, name="Asset Sync Counts", desc="Asset sync count tracking")
     add_test(cat, "brim-versioning", services_brim_versioning, name="BRIM Versioning", desc="Provider version detection and compatibility")
@@ -1224,6 +1393,18 @@ Note: No backend server required.
     add_test(cat, "config-audit", services_config_audit, name="Configuration Checks", desc="Startup configuration checks: states, no secret in results, startup stops on a broken configured secret", isolation="pure")
     add_test(cat, "config-env-example", services_config_env_example, name=".env.example Guard", desc="Every variable read is documented in .env.example; uncommented lines unchanged", isolation="pure")
     add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
+    add_test(
+        cat,
+        "logging-access-filter",
+        services_logging_access_filter,
+        name="Credentials in uvicorn's Request Lines",
+        desc="mask_query_credentials: an exact code, or a name holding token/secret/password/passwd/api_key/apikey/api-key/signature, judged percent-decoded, masked in any case; a URL nested unencoded read too; other parameters, the path, the fragment and an encoded value kept. The filter masks every string arg where it stands and a message without args, never a format string with args; mappings and non-string args untouched. uvicorn's h11/httptools access line and WebSocket handshake line (--ws auto) masked, each with a negative control; configure_logging twice leaves one filter on uvicorn.access and on uvicorn.error",
+        # PURE: uvicorn's protocol objects get one request or handshake in memory through a fake transport, no socket
+        # and no server; records go to private loggers or to the real uvicorn loggers inside a block that puts every
+        # logger and structlog's configuration back (configure_logging with file logging off). No DB, no network, no
+        # file written.
+        isolation="pure",
+    )
     add_test(cat, "donation-popup", services_donation_popup, name="Donation Popup", desc="Trigger decision logic (50-login/7-day/60-day rules), hidden env var, counter updates")
     add_test(cat, "date-sentinel", services_date_sentinel, name="Date Sentinel", desc="resolve_date_sentinels min/max/passthrough, broker filter")
     add_test(cat, "file-preview", services_file_preview, name="File Preview", desc="CSV/Excel/text preview detection helpers")

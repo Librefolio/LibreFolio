@@ -33,8 +33,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('$lib/api', () => ({zodiosApi: {get_instance_config_api_v1_system_instance_get: mocks.getInstanceConfig}}));
 vi.mock('$lib/debug', () => ({debug: {log: vi.fn(), warn: mocks.warn, error: vi.fn(), info: vi.fn()}, isDebugEnabled: () => false}));
 
-const SELFHOSTED: InstanceConfig = {profile: 'selfhosted'};
-const MANAGED: InstanceConfig = {profile: 'managed'};
+// The accounts part (A5a/A5b): the default is an open registration nobody pinned; the managed answer differs in it too.
+const SELFHOSTED: InstanceConfig = {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}};
+const MANAGED: InstanceConfig = {profile: 'managed', accounts: {registration_mode: 'invite', registration_locked: true}};
 
 /** The store of a page load that has just begun, with the rune helpers and `flushSync` of the same module graph. */
 async function freshPageLoad() {

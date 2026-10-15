@@ -27,6 +27,7 @@
     import type {ColumnDef, HtmlCell} from '$lib/components/table/types';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     // =========================================================================
     // Props
@@ -339,7 +340,7 @@
     }
 
     function colorClass(v: number): string {
-        return v >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400';
+        return v >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss;
     }
 
     function wrapGhost(html: string, isGhost?: boolean): HtmlCell {
@@ -561,7 +562,7 @@
                                 📏 {measure.params.startDate} → {measure.params.endDate}
                                 {#if result}
                                     {@const delta = compactDelta(result)}
-                                    <span class={delta.value >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}>
+                                    <span class={delta.value >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}>
                                         {delta.label}
                                     </span>
                                     <span class="text-gray-400 dark:text-gray-500">· {result.days}{$t('measure.days', {values: {days: ''}}).replace(/^\s*$/, 'd')}</span>
@@ -574,7 +575,7 @@
                             {#if result}
                                 {@const delta = compactDelta(result)}
                                 <div class="flex items-center gap-2 shrink-0 {isExpanded ? '' : 'hidden'}">
-                                    <span class="text-xs font-mono shrink-0 {delta.value >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}">
+                                    <span class="text-xs font-mono shrink-0 {delta.value >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss}">
                                         {delta.label}
                                     </span>
                                     <span class="text-xs font-mono text-gray-400 dark:text-gray-500 shrink-0">· {result.days}d</span>

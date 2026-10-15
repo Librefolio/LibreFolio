@@ -101,6 +101,21 @@ broker_router = APIRouter(prefix="/brokers", tags=["BR (Broker)"])
 
 brim_router = APIRouter(prefix="/import", tags=["BR Import"])
 
+# Report types a browser may display in place. HTML, SVG, XML and every other type are always served as a download.
+INLINE_SAFE_MEDIA_TYPES = frozenset(
+    {
+        "application/pdf",
+        "application/json",
+        "text/plain",
+        "text/csv",
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/webp",
+        "image/bmp",
+    }
+)
+
 
 async def _get_brim_file_with_access(
     file_id: str,
@@ -254,6 +269,7 @@ async def get_broker_summary(
     broker_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
+    as_of: Optional[date] = Query(None, description="The user's today (YYYY-MM-DD); the server date when omitted. Cash, holdings and their average cost count the transactions dated up to that day; prices are the latest known."),
     session: AsyncSession = Depends(get_session_generator),
 ) -> BRSummary:
     """
@@ -280,7 +296,7 @@ async def get_broker_summary(
         raise HTTPException(status_code=403, detail="Only superusers can use as_user_id parameter")
 
     service = BrokerService(session)
-    result = await service.get_summary(broker_id, user_id=current_user.id, as_user_id=as_user_id)
+    result = await service.get_summary(broker_id, user_id=current_user.id, as_user_id=as_user_id, as_of=as_of)
 
     if not result:
         raise HTTPException(status_code=404, detail=f"Broker {broker_id} not found")
@@ -770,11 +786,15 @@ async def download_file(
 
     media_type = mimetypes.guess_type(file_info.filename)[0] or "application/octet-stream"
 
+    # Shown in the browser only when the type cannot carry active content; anything else is a download.
+    inline = not download and media_type in INLINE_SAFE_MEDIA_TYPES
+
     return FileResponse(
         path=file_path,
         filename=file_info.filename,
         media_type=media_type,
-        content_disposition_type="attachment" if download else "inline",
+        content_disposition_type="inline" if inline else "attachment",
+        headers={"X-Content-Type-Options": "nosniff"},
     )
 
 

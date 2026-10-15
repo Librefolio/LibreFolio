@@ -63,6 +63,7 @@ component/workstream. All 7 verified ✅ implemented against the actual sources.
 | Compact/static variant | `frontend/src/lib/components/charts/PriceChartCompact.svelte` |
 | Resolution badge | `frontend/src/lib/components/charts/ResolutionBadge.svelte` |
 | Growth chart | `frontend/src/lib/components/dashboard/GrowthChart.svelte` |
+| Growth chart buckets and aggregation | `frontend/src/lib/components/dashboard/growthChartData.ts` |
 | Allocation history chart | `frontend/src/lib/components/dashboard/AllocationHistoryChart.svelte` |
 | Feasibility study + refinement | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_3/chart_resolution/study_chart_dynamic_resolution.md` |
 | 7 implementation plans | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-09-subplan/Milestone_3/chart_resolution/impl_plan_chart_resolution_*.md` |

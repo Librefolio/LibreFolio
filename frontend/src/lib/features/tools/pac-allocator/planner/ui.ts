@@ -1,5 +1,7 @@
 /** Shared Tailwind class sets of the planner UI: one place, so the review changes one file. */
 
+import {STATUS_TONES} from '$lib/theme/toneClasses';
+
 export const BUTTON_PRIMARY =
     'inline-flex items-center justify-center gap-2 rounded-lg bg-libre-green px-4 py-2 text-sm font-semibold text-white hover:bg-libre-green/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-libre-green disabled:cursor-not-allowed disabled:opacity-50 dark:bg-green-600 dark:hover:bg-green-500';
 
@@ -77,17 +79,21 @@ export const TD_NUM = 'px-3 py-2 text-right align-top tabular-nums text-gray-800
 
 export const BADGE_BASE = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium';
 
+/** Status badges: the layout here, the colours with every other status pattern in `$lib/theme/toneClasses`. */
 export const BADGE = {
-    neutral: `${BADGE_BASE} bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200`,
-    success: `${BADGE_BASE} bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200`,
-    info: `${BADGE_BASE} bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-200`,
-    warning: `${BADGE_BASE} bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200`,
-    danger: `${BADGE_BASE} bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200`,
+    neutral: `${BADGE_BASE} ${STATUS_TONES.pacBadge.neutral}`,
+    success: `${BADGE_BASE} ${STATUS_TONES.pacBadge.success}`,
+    info: `${BADGE_BASE} ${STATUS_TONES.pacBadge.info}`,
+    warning: `${BADGE_BASE} ${STATUS_TONES.pacBadge.warning}`,
+    danger: `${BADGE_BASE} ${STATUS_TONES.pacBadge.danger}`,
 } as const;
 
+const NOTICE_BASE = 'rounded-lg border p-3 text-sm';
+
+/** Notices: the layout here, the colours in `$lib/theme/toneClasses`. */
 export const NOTICE = {
-    info: 'rounded-lg border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100',
-    warning: 'rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100',
-    danger: 'rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/30 dark:text-red-100',
-    success: 'rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100',
+    info: `${NOTICE_BASE} ${STATUS_TONES.pacNotice.info}`,
+    warning: `${NOTICE_BASE} ${STATUS_TONES.pacNotice.warning}`,
+    danger: `${NOTICE_BASE} ${STATUS_TONES.pacNotice.danger}`,
+    success: `${NOTICE_BASE} ${STATUS_TONES.pacNotice.success}`,
 } as const;

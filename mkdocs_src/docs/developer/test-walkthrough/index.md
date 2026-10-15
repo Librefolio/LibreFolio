@@ -117,6 +117,14 @@ runs tests at the same time needs a different one — on the command line, or as
 that worktree's `.env`. If you set `LIBREFOLIO_TEST_DATA_DIR` to an absolute path, give each
 worktree a different one as well.
 
+A lane runs on the instance's defaults. Of the checkout's `.env` and of the shell it keeps only
+the ports, the production data directory, `HOST`, the log level, the version a release job froze
+and every `LIBREFOLIO_TEST_*` name (`kept_in_a_test_lane()` in `scripts/cli_base.py`); every other
+setting of the instance (secrets, profile, block, mail, accounts, plugins) is removed from its
+environment, and in test mode `Settings` does not read `.env` either. A test that needs a setting
+sets it itself — see
+[Security → Test lanes and the instance's configuration](../architecture/security.md#test-lanes-and-the-instances-configuration).
+
 ```bash
 # A second worktree, testing while another one uses the default lane (6041)
 ./dev.py test --test-port 6141 api all
@@ -166,7 +174,7 @@ Frontend test categories support additional flags (`--headed`, `--debug`, `--ui`
 
 ## 📋 Test Categories
 
-LibreFolio organizes tests into **15 categories** — seven backend, eight frontend — grouped by layer:
+LibreFolio organizes tests into **16 categories** — seven backend, nine frontend — grouped by layer:
 
 | Category | Command | What It Tests |
 |----------|---------|---------------|
@@ -185,6 +193,7 @@ LibreFolio organizes tests into **15 categories** — seven backend, eight front
 | **Front-Transaction** | `./dev.py test front-transaction all` | Transaction modals, table, bulk operations, WAC, import wizard (Playwright) + payload and commit helpers (Vitest) |
 | **Front-Portfolio** | `./dev.py test front-portfolio all` | Dashboard charts, banners, page cache, privacy masking, risk analysis (Playwright) + portfolio and risk stores (Vitest) |
 | **Front-AI-Export** | `./dev.py test front-ai-export all` | AI Export panel, catalog, session memory, contracts (Playwright) + AI Export and signal units (Vitest) |
+| **Front-Designer-Lab** | `./dev.py test front-designer-lab all` | Designer Lab: live preview in another tab, element picker, neutrality (Playwright) + Lab units (Vitest) |
 
 ### 🏃 Meta Categories
 
@@ -192,7 +201,7 @@ LibreFolio organizes tests into **15 categories** — seven backend, eight front
 |---------------|---------|--------------|
 | **All** | `./dev.py test all` | All backend + frontend tests |
 | **All Backend** | `./dev.py test all-backend` | All backend tests (external → e2e) |
-| **All Frontend** | `./dev.py test all-frontend` | All frontend tests (front-utility → front-ai-export) |
+| **All Frontend** | `./dev.py test all-frontend` | All frontend tests (front-utility → front-designer-lab) |
 
 ---
 
@@ -254,6 +263,7 @@ without a walkthrough page list their actions with `./dev.py test <category> -h`
 - **Front-Transaction** (`./dev.py test front-transaction all`) — Tests the Transactions module: bulk and form modals, transactions table, split and promote, WAC, import wizard.
 - **Front-Portfolio** (`./dev.py test front-portfolio all`) — Tests the Dashboard and the risk views: charts, data-quality banners, page cache, privacy masking, risk analysis.
 - **Front-AI-Export** (`./dev.py test front-ai-export all`) — Tests AI Export: panel, catalog, session memory, public contracts.
+- **Front-Designer-Lab** (`./dev.py test front-designer-lab all`) — Tests the debug-only [Designer Lab](../frontend/designer-lab.md): live preview in another tab, element picker, neutrality of the idle client.
 
 !!! info "Frontend tests require a running server"
 

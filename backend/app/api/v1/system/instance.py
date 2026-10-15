@@ -5,15 +5,23 @@ configuration adds one field there, typed with a model of its own schemas, and f
 service. Everything here is public and the same for whoever asks: nothing private, nothing that depends on a session.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config import get_settings
+from backend.app.db.session import get_session_generator
+from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.system import InstanceConfigResponse
+from backend.app.services.accounts.registration_service import effective_registration_mode
 
 instance_router = APIRouter()
 
 
 @instance_router.get("/instance", response_model=InstanceConfigResponse)
-def get_instance_config() -> InstanceConfigResponse:
+async def get_instance_config(session: AsyncSession = Depends(get_session_generator)) -> InstanceConfigResponse:
     """The public configuration of this instance, read by the app at startup; no session needed."""
-    return InstanceConfigResponse(profile=get_settings().LIBREFOLIO_PROFILE)
+    registration = await effective_registration_mode(session)
+    return InstanceConfigResponse(
+        profile=get_settings().LIBREFOLIO_PROFILE,
+        accounts=AccountsInstanceConfig(registration_mode=registration.mode, registration_locked=registration.locked),
+    )
