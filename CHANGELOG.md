@@ -96,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An events CSV line in another currency is refused instead of being relabelled.** The Events tab saved it in the asset's currency, with an amount that was wrong.
 - **The transaction form's event picker shows an event's new values** right after it is edited from the form.
 - Data quality: the "valued at cost" warning counts its two weeks from the asset's last market quote, as its text says. An asset quoted the day before and bought again is no longer flagged, and a price feed that stopped long ago is flagged at once; an asset never quoted still counts from its first purchase.
+- Editing only the notes, tags or date of a received transfer, or of an incoming adjustment, saved without a cost basis is no longer refused by the API; changing its type, quantity, cost or linked event still needs one.
 
 ### ⚠️ Breaking changes
 
