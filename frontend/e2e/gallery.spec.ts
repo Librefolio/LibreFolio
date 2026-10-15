@@ -110,9 +110,11 @@ import {
     buildPacDraft,
     calculatePacPlan,
     closePacBrokerEditor,
+    closePacExposures,
     fitScreenToPacProof,
     framePacAssets,
     framePacBrokerEditor,
+    framePacExposures,
     framePacLiquidity,
     framePacPlan,
     framePacProof,
@@ -2522,7 +2524,8 @@ test.describe('Gallery Screenshots', () => {
             });
         });
 
-        // PAC allocator — user/tools/pac-allocator/index.en.md: one placeholder per wizard step, three for the result.
+        // PAC allocator — user/tools/pac-allocator/index.en.md: one placeholder per wizard step, three for the result; the result
+        // has a fourth shot, the Exposures (pac-result-exposures), with no placeholder there yet.
         // The planner's draft lives in the open page only: it survives a language or theme picked from the header, not a
         // load. What a page has drawn keeps the browser locale it was drawn under (galleryLocale.ts), so each language opens
         // the planner again after its switch and builds the same draft there, at its first combination (perLanguage); its
@@ -2571,7 +2574,7 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('PAC allocator result - all languages and themes', async ({page}, testInfo) => {
-            // A draft and its calculation per language (the local solver: milliseconds for this draft) and 24 shots; on the
+            // A draft and its calculation per language (the local solver: milliseconds for this draft) and 32 shots; on the
             // desktop the proof shot also resizes the screen and back, every combination. With a single draft the test took
             // about 2 minutes on a quiet lane; the budget keeps room for three more.
             test.setTimeout(360_000);
@@ -2600,6 +2603,10 @@ test.describe('Gallery Screenshots', () => {
                 const draft = await draftIn(lang);
                 await shoot(await framePacResult(page), 'the PAC result', lang, theme, 'pac-result', page.locator('[data-testid="pac-planner-result-section"][data-section="allocation"]'));
                 await shoot(await framePacPlan(page, draft), 'the Operational plan', lang, theme, 'pac-result-plan', page.locator('[data-testid="pac-planner-result-section"][data-section="plan"]'));
+                // «Exposures – ideal vs actual» starts closed: opened for its shot, and closed right after it, so the next
+                // combination's result and plan shots find the page under them as before (galleryPac.ts, framePacExposures).
+                await shoot(await framePacExposures(page, viewport), 'the Exposures', lang, theme, 'pac-result-exposures', page.locator('[data-testid="pac-planner-result-section"][data-section="exposures"]'));
+                await closePacExposures(page);
                 // «Proof and timings» opens the section on a language's first combination; it stays open for the second.
                 const proof = await framePacProof(page);
                 // DESKTOP — coordinator's decision, provisional: the simulation shot's rule (see 'risk what-if simulation on the
