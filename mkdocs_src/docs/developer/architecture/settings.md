@@ -6,9 +6,9 @@ catalogue, `SETTINGS_REGISTRY`.
 
 !!! info "A third layer, outside these two tiers: process configuration (`.env`)"
 
-    Startup values (ports, data folder, log level, secrets, risk-engine workers) come from `.env` and
-    the environment; the admin-facing list is [Configuration](../../admin/configuration.md). How they
-    load:
+    Startup values (ports, data folder, log level, instance profile, secrets, risk-engine workers)
+    come from `.env` and the environment; the admin-facing list is
+    [Configuration](../../admin/configuration.md). How they load:
 
     - `Settings(BaseSettings)` in `backend/app/config/__init__.py` reads the project-root `.env`;
       environment variables override it, names are case-sensitive, unknown keys are ignored.
@@ -180,6 +180,29 @@ explicit user choice always wins afterwards.
     every reader silently fell back to `EUR` regardless of the configured default. Any new code
     that needs "the user's base currency" must call this helper — the three current consumers
     are `financial_math/portfolio/engine.py`, `portfolio_service.py`, and `lots_analysis_service.py`.
+
+## 🌍 Public instance configuration {: #public-instance-configuration }
+
+`GET /api/v1/system/instance` answers, without a session, what the web app needs to know about the
+instance before anyone signs in. The app reads it at startup: the `(app)` layout calls
+`instanceConfig.load()` when it mounts, before the auth check, and works with a self-hosted default
+until the server answers (see [Instance configuration](../frontend/state/app-state.md#instance-config)).
+Its response is `InstanceConfigResponse` (`backend/app/schemas/system.py`), and today it has one field:
+
+| Field | Values | Source |
+|-------|--------|--------|
+| `profile` | `selfhosted`, an install run by its owner, or `managed`, an instance a hosting provider runs for its customers | `LIBREFOLIO_PROFILE`, a field of `Settings`, so it comes from `.env` or the environment like `PORT`. Default `selfhosted`; case and spaces around the value are ignored, and any other value stops the startup. Admin side: [Configuration](../../admin/configuration.md). |
+
+The rule for a workstream that owns part of the public configuration:
+
+- it adds **one** field to `InstanceConfigResponse`, typed with a model of its own schemas;
+- it fills that field in `get_instance_config()` (`backend/app/api/v1/system/instance.py`) with one
+  call to its service;
+- the field holds only what is public and the same for whoever asks: nothing private, nothing that
+  depends on the user or the session.
+
+After `./dev.py api sync`, the field appears in the frontend type `InstanceConfig`, inferred from the
+generated client.
 
 ## 🧹 Related: cache administration
 
