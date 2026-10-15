@@ -39,7 +39,7 @@ lib/components/brokers/BrokerSharingModal.svelte	10
 lib/components/brokers/BrokerSharingPanel.svelte	223
 lib/components/brokers/DeleteBrokerDialog.svelte	30
 lib/components/brokers/lots/LotComparisonChart.svelte	96
-lib/components/brokers/lots/LotCustodyModal.svelte	219
+lib/components/brokers/lots/LotCustodyModal.svelte	205
 lib/components/brokers/lots/LotDataQualityBanner.svelte	20
 lib/components/brokers/lots/LotGanttChart.svelte	36
 lib/components/brokers/lots/LotWacPriceChart.svelte	48
@@ -176,20 +176,7 @@ lib/components/ui/modals/ModalBase.svelte	0	#1e293b	rgba(0,0,0,0.25)	rgba(0,0,0,
 lib/components/ui/modals/PageSyncModal.svelte	2
 lib/components/ui/modals/SyncModalBase.svelte	66
 lib/components/ui/modals/SyncResultRow.svelte	22
-lib/components/ui/select/AssetPickerPanel.svelte	107
-lib/components/ui/select/AssetSelect.svelte	28
-lib/components/ui/select/AssetTypeSelect.svelte	8
-lib/components/ui/select/CheckMenu.svelte	36
-lib/components/ui/select/CountrySearchSelect.svelte	10
-lib/components/ui/select/CurrencySearchSelect.svelte	13
-lib/components/ui/select/FxProviderSelect.svelte	148	#fbbf24
-lib/components/ui/select/ImportPluginSelect.svelte	4
-lib/components/ui/select/SearchSelect.svelte	63
-lib/components/ui/select/SectorSearchSelect.svelte	6
-lib/components/ui/select/SelectPopover.svelte	8
-lib/components/ui/select/SimpleSelect.svelte	40
-lib/components/ui/select/TreeSelect.svelte	47
-lib/components/ui/select/UserSearchSelect.svelte	10
+lib/components/ui/select/FxProviderSelect.svelte	0	#fbbf24
 lib/components/ui/tabs/TabBar.svelte	20
 lib/components/ui/toolbar/PageToolbar.svelte	4
 lib/features/ai-export/AiExportMenu.svelte	12
