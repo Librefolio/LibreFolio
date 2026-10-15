@@ -2712,8 +2712,17 @@ Piano: [`02_accounts`](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md).
   - Possibile cura: nascondere il link finché l'istanza non risponde, con uno stato `data-*` sulla scheda che le prove
     e la galleria possano aspettare. Dettagli: [piano 02_accounts](../Phase_1/02_accounts/plan-phase01Accounts.prompt.md),
     «A6d.1».
-- **A-20 · `black` fallisce su `scripts/test_runner/_backend_services.py`** — minimo; da E tramite il coordinatore
+- ✅ **A-20 · `black` fallisce su `scripts/test_runner/_backend_services.py`** — minimo; chiusa in A6d (15/10); da E tramite il coordinatore
   (15/10). Il `print_info` di `services_account_deletion_preview` (A6a, `5928176cf`) ha 305 caratteri: si spezza in A6d.
+- **A-21 · Lo username accetta qualsiasi testo, e finisce nel saluto delle email** — basso; dal coordinatore (15/10,
+  dalla revisione di sicurezza di E3).
+  - Oggi `username` ha solo una lunghezza (3–50): passano anche frasi intere, link e testo che imita un messaggio
+    del sistema, e le email di E lo mettono nel saluto.
+  - Possibile cura: un insieme di caratteri ammessi (lettere, cifre, `._-`), uguale in registrazione, profilo, CLI e
+    inviti; gli username già salvati restano validi (la regola vale solo quando se ne sceglie uno nuovo), come per le
+    password (decisione 37).
+- **Nota per A8** (limite dei tentativi): anche `PUT /auth/profile` (con A6e) e `POST /auth/change-password`
+  verificano la password attuale: vanno sotto lo stesso limite del login, o diventano un modo per indovinarla.
 
 ## X · Plugin, asset e ricerca (fase 01)
 
