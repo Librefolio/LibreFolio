@@ -36,7 +36,8 @@
     import {writeExportToClipboard} from '$lib/utils/clipboard';
     import {clearTimer} from '$lib/utils/core/clearTimer';
     import type {SyncResult} from '$lib/utils/sync/syncHelpers';
-    import {formatElapsed, STATUS_COLORS, STATUS_ICONS} from '$lib/utils/sync/syncHelpers';
+    import {formatElapsed, STATUS_ICONS} from '$lib/utils/sync/syncHelpers';
+    import {STATUS_TONES} from '$lib/theme/toneClasses';
 
     interface Props {
         result: SyncResult;
@@ -121,10 +122,10 @@
         {/if}
     {:else if statusTooltip}
         <Tooltip text={statusTooltip} position="top">
-            <StatusIcon size={14} class="{STATUS_COLORS[result.status] ?? 'text-gray-400'} shrink-0 cursor-help" />
+            <StatusIcon size={14} class="{STATUS_TONES.syncIcon[result.status] ?? STATUS_TONES.syncIcon.unknown} shrink-0 cursor-help" />
         </Tooltip>
     {:else}
-        <StatusIcon size={14} class="{STATUS_COLORS[result.status] ?? 'text-gray-400'} shrink-0" />
+        <StatusIcon size={14} class="{STATUS_TONES.syncIcon[result.status] ?? STATUS_TONES.syncIcon.unknown} shrink-0" />
     {/if}
 
     <span class="flex items-center gap-2 min-w-0 font-medium truncate {identityWidth}">

@@ -25,6 +25,7 @@
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
+    import {SIGN_TEXT} from '$lib/theme/toneClasses';
 
     // =========================================================================
     // Types
@@ -117,8 +118,8 @@
     }
 
     function deltaColorClass(val: number | null | undefined): string {
-        if (val === null || val === undefined) return 'text-gray-400 dark:text-gray-500';
-        return Number(val) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400';
+        if (val === null || val === undefined) return SIGN_TEXT.market.none;
+        return Number(val) >= 0 ? SIGN_TEXT.market.gain : SIGN_TEXT.market.loss;
     }
 
     function typeBadgeHtml(type: string | null | undefined): string {

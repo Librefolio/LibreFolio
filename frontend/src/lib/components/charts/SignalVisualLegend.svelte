@@ -6,6 +6,7 @@
     import {resolveVisualSignalStyle, type SignalConfig, type SignalDefinition, type SignalStyle, type SignalVisualComponent, type SignalVisualPartition} from '$lib/charts/signals';
     import {humanizeKey} from '$lib/utils/text';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
+    import {SIGNAL_COLORS} from '$lib/theme/chartTheme';
 
     interface Props {
         definition: SignalDefinition;
@@ -115,9 +116,9 @@
 {#snippet componentPreview(component: SignalVisualComponent, style: SignalStyle, customized: boolean)}
     {#if component.kind === 'bar'}
         <svg width="34" height="14" viewBox="0 0 34 14" aria-hidden="true" class="shrink-0">
-            <rect x="3" y="5" width="6" height="7" rx="1" fill={customized ? style.color : '#16a34a'} />
-            <rect x="14" y="2" width="6" height="10" rx="1" fill={customized ? style.color : '#16a34a'} />
-            <rect x="25" y="7" width="6" height="5" rx="1" fill={customized ? style.color : '#dc2626'} />
+            <rect x="3" y="5" width="6" height="7" rx="1" fill={customized ? style.color : SIGNAL_COLORS.legendBarPreview.up} />
+            <rect x="14" y="2" width="6" height="10" rx="1" fill={customized ? style.color : SIGNAL_COLORS.legendBarPreview.up} />
+            <rect x="25" y="7" width="6" height="5" rx="1" fill={customized ? style.color : SIGNAL_COLORS.legendBarPreview.down} />
         </svg>
     {:else if component.kind === 'band'}
         <svg width="34" height="14" viewBox="0 0 34 14" aria-hidden="true" class="shrink-0">
