@@ -5,6 +5,7 @@
 <script lang="ts">
     import {t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
+    import '$lib/theme/components/table.css';
 
     interface BulkActionInfo {
         id: string;
@@ -74,17 +75,17 @@
         padding: 0.25rem 0.5rem;
         border: 1px solid transparent;
         border-radius: 6px;
-        background: rgba(26, 64, 49, 0.1);
+        background: var(--lf-cmp-datatable-toolbar-selected-count-btn-bg);
         font-size: 0.8125rem;
-        color: #1a4031;
+        color: var(--lf-cmp-datatable-toolbar-selected-count-btn-text);
         font-weight: 500;
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .selected-count-btn:hover {
-        background: rgba(26, 64, 49, 0.15);
-        border-color: rgba(26, 64, 49, 0.2);
+        background: var(--lf-cmp-datatable-toolbar-selected-count-btn-hover-bg);
+        border-color: var(--lf-cmp-datatable-toolbar-selected-count-btn-hover-border);
     }
 
     .selected-count-btn .clear-icon {
@@ -98,13 +99,13 @@
     }
 
     :global(.dark) .selected-count-btn {
-        background: rgba(74, 222, 128, 0.1);
-        color: #4ade80;
+        background: var(--lf-cmp-datatable-toolbar-selected-count-btn-bg-dark);
+        color: var(--lf-cmp-datatable-toolbar-selected-count-btn-text-dark);
     }
 
     :global(.dark) .selected-count-btn:hover {
-        background: rgba(74, 222, 128, 0.15);
-        border-color: rgba(74, 222, 128, 0.2);
+        background: var(--lf-cmp-datatable-toolbar-selected-count-btn-hover-bg-dark);
+        border-color: var(--lf-cmp-datatable-toolbar-selected-count-btn-hover-border-dark);
     }
 
     .bulk-actions {
@@ -120,42 +121,42 @@
         height: 28px;
         border: none;
         border-radius: 6px;
-        background: #f1f5f9;
-        color: #64748b;
+        background: var(--lf-cmp-datatable-toolbar-bulk-btn-bg);
+        color: var(--lf-cmp-datatable-toolbar-bulk-btn-text);
         cursor: pointer;
         transition: all 0.15s;
     }
 
     .bulk-btn:hover {
-        background: #e2e8f0;
-        color: #0f172a;
+        background: var(--lf-cmp-datatable-toolbar-bulk-btn-hover-bg);
+        color: var(--lf-cmp-datatable-toolbar-bulk-btn-hover-text);
     }
 
     .bulk-btn.danger {
-        color: #dc2626;
+        color: var(--lf-cmp-datatable-toolbar-bulk-btn-danger-text);
     }
 
     .bulk-btn.danger:hover {
-        background: #fef2f2;
-        color: #b91c1c;
+        background: var(--lf-cmp-datatable-toolbar-bulk-btn-danger-hover-bg);
+        color: var(--lf-cmp-datatable-toolbar-bulk-btn-danger-hover-text);
     }
 
     :global(.dark) .bulk-btn {
-        background: #334155;
-        color: #94a3b8;
+        background: var(--lf-cmp-datatable-toolbar-bulk-btn-bg-dark);
+        color: var(--lf-cmp-datatable-toolbar-bulk-btn-text-dark);
     }
 
     :global(.dark) .bulk-btn:hover {
-        background: #475569;
-        color: #f1f5f9;
+        background: var(--lf-cmp-datatable-toolbar-bulk-btn-hover-bg-dark);
+        color: var(--lf-cmp-datatable-toolbar-bulk-btn-hover-text-dark);
     }
 
     :global(.dark) .bulk-btn.danger {
-        color: #f87171;
+        color: var(--lf-cmp-datatable-toolbar-bulk-btn-danger-text-dark);
     }
 
     :global(.dark) .bulk-btn.danger:hover {
-        background: #7f1d1d;
-        color: #fecaca;
+        background: var(--lf-cmp-datatable-toolbar-bulk-btn-danger-hover-bg-dark);
+        color: var(--lf-cmp-datatable-toolbar-bulk-btn-danger-hover-text-dark);
     }
 </style>

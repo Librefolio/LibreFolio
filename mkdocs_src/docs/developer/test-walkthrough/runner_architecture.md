@@ -441,16 +441,17 @@ So the units of a category are grouped into one Playwright invocation and one vi
 | `front-ai-export` | 4 | 22 | 26 | 2 |
 | `front-asset` | 7 | 15 | 22 | 2 |
 | `front-broker` | 2 | 3 | 5 | 2 |
+| `front-designer-lab` | 3 | 15 | 18 | 2 |
 | `front-fx` | 8 | 3 | 11 | 2 |
 | `front-portfolio` | 3 | 3 | 6 | 2 |
 | `front-transaction` | 25 | 7 | 32 | 2 |
 | `front-user` | 2 | 2 | 4 | 2 |
 | `front-utility` | 8 | 6 | 14 | 2 |
-| **total** | **59** | **61** | **120** | **16** |
+| **total** | **62** | **76** | **138** | **18** |
 
 The `after` column is the shape without JS coverage. With `--coverage js` the Playwright side is run
 in batches of 8 specs (see below), so `front-transaction` costs 4 invocations instead of 1 and the
-total is 21 rather than 16.
+total is 23 rather than 18.
 
 !!! tip "Consolidation is now also what makes parallelism possible"
 
