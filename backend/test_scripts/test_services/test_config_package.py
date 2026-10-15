@@ -85,7 +85,7 @@ ENVIRONMENT_READ_EXCEPTIONS: dict[str, str] = {}
 
 # Presence barrier: modules the scan must reach, relative to backend/app/. The writer sets environment variables for
 # its spawned children and reads none.
-KNOWN_MODULES = ("main.py", "api/v1/system.py", "services/risk/quant/spawn_worker.py")
+KNOWN_MODULES = ("main.py", "api/v1/system/health.py", "services/risk/quant/spawn_worker.py")
 ENVIRONMENT_WRITER = "services/risk/quant/spawn_worker.py"
 
 # One parametrized case per file, so a failure names the file.
