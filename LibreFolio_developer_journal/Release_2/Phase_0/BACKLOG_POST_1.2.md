@@ -2481,9 +2481,19 @@ Ciò che cambia l'aspetto non è di R: aspetta il report della designer (piano g
     la traccia ancora di palette; i chip neutri su `bg-lf-neutral`.
   - Rimandato: le due funzioni di segno di `brokers/lots/LotCustodyModal.svelte` (righe 103–114), dopo l'ingresso di J,
     che ha il file aperto; `ui/input/DistributionEditor.svelte` (copie di `pacTargetBar`/`pacTargetTotal`) con W1-d,
-    dopo che G avrà cambiato l'asserzione `text-green-600` di `gallery.spec.ts:6067`.
+    dopo che G avrà cambiato l'asserzione `text-green-600` di `gallery.spec.ts:6067`. ✅ `LotCustodyModal` fatto il 16/10
+    dopo J CP-16 (I1).
+  - I1: le righe evidenziate delle liste su `bg-lf-selected`, più quiete in scuro della vecchia piena verde; il bordo
+    quasi nero del selettore dei segnali su `border-lf-input` (manca un bordo di campo forte); il filtro attivo di
+    `CheckMenu` sui ruoli `info`; l'avviso dentro il tooltip di `FxProviderSelect` resta `#fbbf24` finché
+    `ui/feedback/Tooltip.svelte` non passa a `bg-lf-inverse` (Q10 li lega: da proporre come lotto a parte).
 
   Dettagli: piano di T, voci «da rivedere» di ogni lotto nell'avanzamento (da W3-a in poi).
+- **TC-11 · Una select disabilitata a lista aperta accetta ancora un clic su un'opzione** — basso; trovata da
+  `test-author` il 16/10 in I1, fuori dai colori. `SimpleSelect`: la lista resta aperta quando `disabled` o `loading` si
+  accendono, e il gestore del clic rifiuta solo le opzioni disabilitate e le intestazioni; la tastiera invece controlla
+  `disabled || loading`. Se il prodotto chiuderà la lista, lo stato «aperto, poi disabilitato» di `SimpleSelect.test.ts`
+  va tolto. Dettagli: piano di T, I1, passo 4.
 
 ---
 
