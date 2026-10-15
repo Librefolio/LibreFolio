@@ -3141,6 +3141,18 @@ il 14/10, nel checkpoint J-0; i numeri di riga sono di `c9bb8f257`. G-8 e J-4 sc
   - **La scelta definitiva va al developer come punto 47**, con la raccomandazione di J (la 1) e la stessa domanda sullo
     split di una coppia: che cosa vuol dire per le unità in uscita. Se sceglie la 1: lotto di J con il rosso prima, poi
     la correzione degli orfani in uscita.
+  - **Decisione 47 del developer (15/10, 19:09)**, alla lettera: «sono daccordo, si va mantenuto lo stesso principio nel
+    senso opposto». La gamba in uscita rimasta senza coppia diventa una rettifica in uscita **con il costo** medio con
+    cui le unità partono, dalla funzione del costo «Auto»; nell'esempio guadagno 60 sia in Dashboard sia nei lotti.
+    - **Dove vale**: la cancellazione del broker che riceve, le gambe in uscita già spaiate nei database, «dividi la
+      coppia».
+    - **Lotti**: J, **CP-16**, la regola in FIFO con il rosso prima, dopo CP-4c e CP-4d e prima di CP-15 (ordine
+      confermato dal coordinatore il 15/10: CP-4d resta prima perché corregge un numero visibile; W non aspetta ancora
+      la regola, prima fa N2 e i file dei broker). Conversione delle cancellazioni e dei dati: W, sopra la regola di J,
+      con la firma da accordare.
+    - **Punto aperto per CP-16**: con più lotti a prezzi diversi le unità possono uscire al loro costo FIFO (realizzato
+      0, come in un trasferimento) oppure al costo medio della riga (realizzato = medio − costo FIFO). Nell'esempio le
+      due letture coincidono. Da proporre all'avvio di CP-16, con un rosso per ciascuna lettura.
 
   Dettagli: piano J, §10 «Domande di W N1».
 - **J-12 · Con l'analisi dei lotti `FAILED` il pannello disegna lo stesso lotti e cifre** — medio, chiarezza (utenti
