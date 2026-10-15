@@ -1652,7 +1652,7 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 > `api instance-block`, `api system`, `services config-audit` e `config-package`, con la guardia di J-6 arrivata con la
 > base; `core-unit`, `component-unit`; le E2E `auth`, `app-start-auth` e `settings`; `mkdocs build` stretto.
 
-### CP7a — il lotto Docker (2026-10-15, mattina) — scritto e provato in leggero
+### CP7a — il lotto Docker (2026-10-15, mattina) — ✅ provato; manca solo la prova dell'immagine a runtime
 
 > **Via** del coordinatore (08:46): durante la finestra si scrive il codice; la prova con Docker si chiede prima, perché
 > richiede il daemon acceso. B aspetta CP7a per Litestream.
@@ -1720,7 +1720,7 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 >   dello scheduler in UTC;
 > - H-8: `ForgotPasswordCard.svelte`, di A, mostra ancora un `docker compose exec … user reset`, che gira come root.
 
-### C-96 — le corsie dei test non prendono la configurazione dell'istanza (2026-10-15, mattina) — scritto e provato in leggero
+### C-96 — le corsie dei test non prendono la configurazione dell'istanza (2026-10-15, mattina) — ✅ provato
 
 > **Richiesta** del coordinatore (09:05), da un difetto trovato da E. `configure_test_runtime()` toglieva solo
 > `INSTANCE_TRUST_SECRETS`: ogni altra impostazione del `.env` del developer arrivava alle corsie (SMTP, blocco, profilo
@@ -1828,7 +1828,7 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 > Codice, test e doc scritti. Le prove complete dopo la finestra della galleria: `all-backend`, perché
 > `configure_test_runtime` e `Settings` toccano ogni corsia; `mkdocs build` e `check-links`.
 
-### Lotto «credenziali nei log di accesso» (2026-10-15, mattina) — scritto e provato in leggero
+### Lotto «credenziali nei log di accesso» (2026-10-15, mattina) — ✅ provato
 
 > **Richiesta**: una nota di A5b, girata dal coordinatore alle 09:59. I link di invito, reset, setup e verifica ora
 > portano il token nel frammento, che il browser non manda. Resta un `?token=` scritto a mano, che il log di accesso di
@@ -1929,3 +1929,124 @@ H offre nel lifecycle un timeout facoltativo per passo, con default nessuno, cio
 > - `front build --debug`, perché `dev.py` è cambiato;
 > - `mkdocs build` stretto e `check-links`;
 > - la prova Docker di CP7a, con il via del coordinatore.
+>
+> **Committati dal coordinatore** (10:48), con `git apply --cached` per patch e le impronte verificate:
+> `2e2d7ee70` (CP7a, 16 file), `901fa33f6` (C-96, 7), `4f5757915` (filtro del log, 4), `056ed3897` (journal, 2).
+
+### Validazione di CP5b e CP6 sulla revisione combinata ✅ (2026-10-15, pomeriggio)
+
+> **Come**: dopo la finestra della galleria il coordinatore ha staccato il worktree su una revisione combinata, cioè
+> `dev_release2` più `5b2b9061f`, senza i tre lotti. Nessun file modificato, quindi il piano si scrive adesso.
+>
+> - `64ed18b05` = `13705dd05` + `5b2b9061f` (con R, L, G e la 1.2.1); poi `83eaa5a28` = `dc9a5d232` + `5b2b9061f`,
+>   dopo la finestra delle dipendenze (`cryptography` 50.0.2, `pycparser` 3.11). Fra le due cambiano solo `Pipfile` e
+>   `Pipfile.lock`.
+> - L'altro lato tocca solo `main.py` (il `confined_path` della 1.2.1), il `+layout.svelte` della radice (Designer Lab)
+>   e `themeStore.ts`. Non tocca `(app)/+layout.svelte`, `zodios-client.ts`, `features/instance/` né `AboutTab`.
+>
+> **Esiti** (corsia 6181, un comando alla volta, con `nice`):
+>
+> - Su `64ed18b05`:
+>   - `front build --debug` (con `api sync` dentro, le uscite sono file ignorati): rc 0, svelte-check 0/0;
+>   - `npm run check`, cioè `dev.py front check`, lanciato durante la pausa del Python: 0/0;
+>   - Vitest con gli elenchi del runner: `core-unit` 4407, `component-unit` 3240 (con `InstanceBlockedPage`,
+>     `InstanceNotices` e `AboutTab`), `onboarding-component-unit` 447 (con i gate del layout `(app)`).
+> - Su `83eaa5a28`:
+>   - `mkdocs build` stretto rc 0; `check-links`: 95 link validi, 3028 URL di asset risolti;
+>   - **`all-backend`** (`-q --fresh-run --workers 2`, slot pesante 1): 7/7, **12 725 passed, 3 skipped, 0 failed**, in
+>     31 min 32 s;
+>   - E2E `front-utility` con `--workers 2`: `auth` 29, `app-start-auth` 3, `settings` 46, tutte passed.
+>
+> **Fuori pista**: alle 13:54 il carico era a 110–139 su 10 core, con X, A, E, un'altra corsia e il mio `all-backend`.
+> L'ho segnalato con i numeri per corsia; il coordinatore ha fermato le prove medie di A e di E.
+>
+> **Ingresso**: CP5b e CP6 sono in `dev_release2` = `83eaa5a28`, con un avanzamento veloce; sopra è entrato X
+> (`ec0dc7ebd`). Il ramo è tornato al suo posto con il merge di `dev_release2` in `aa0e3a49a` (genitori `056ed3897` e
+> `ec0dc7ebd`), senza conflitti. CHANGELOG di CP5b e CP6 mandato al coordinatore, che lo scrive.
+>
+> **Ordine deciso**:
+>
+> 1. questa nota;
+> 2. un lotto piccolo, G-10 e le due note di E, con il rosso prima;
+> 3. una validazione unica di CP7a, C-96, filtro del log, G-10 e doc. Per `all-backend` lo slot si chiede al
+>    coordinatore;
+> 4. la prova Docker. Il daemon è acceso; alla fine si tolgono le immagini e i container creati da H.
+
+### Lotto piccolo: G-10 e due note di E (2026-10-15, pomeriggio) — ✅ provato
+
+> **G-10**, dal programma colori: `list_uploads` (`services/files/static_uploads.py`) ordina solo per `uploaded_at`. Gli
+> avatar del seed hanno tutti la stessa data, quindi l'ordine segue quello della cartella, cioè gli UUID casuali, e la
+> galleria diventa instabile: `asset-picker-modal` al 24 %, la miniatura di `static-grid`.
+>
+> - Cura: a parità di data, il nome e poi l'id. L'id da solo non basta: è un UUID nuovo a ogni seed, quindi stabile
+>   dentro un DB ma diverso in ogni galleria.
+> - `AssetPickerModal` mostra l'ordine dell'API senza riordinare: basta il backend.
+>
+> **Note di E**:
+>
+> - Il paragrafo «Secrets» di `.env.example` dice che un `NAME_FILE` illeggibile ferma il server. È già falso oggi per
+>   il link finder: `web_link_finder.py` registra un avviso e spegne il link finder, e l'avvio continua.
+>   `admin/configuration.en.md` lo dice già bene. Il paragrafo si allinea: si fermano solo `JWT_SECRET_FILE` e
+>   `LIBREFOLIO_INSTANCE_KEY_FILE`, un segreto facoltativo spegne solo la sua funzione. Il segreto dell'email di E ci
+>   rientra senza nominarlo prima che esista.
+> - `settings.md`: all'elenco di `platform.py` mancano `frozen_app_version()` (CP5a), `instance_blocked()` e
+>   `instance_deletion_date()` (CP6).
+>
+> **Note implementazione**:
+>
+> - **Il rosso prima** (test-author): la classe nuova `TestListUploadsOrder` in `test_static_uploads.py`, 4 test.
+>   - `get_uploads_dir` viene sostituita da un `Path` il cui `glob()` dà i file veri in ordine crescente o decrescente;
+>     ogni test elenca gli stessi upload nei due ordini, e i due risultati devono essere uguali e quelli attesi. Così il
+>     rosso non dipende dal caso. Un'asserzione in più fallisce se `list_uploads` smette di elencare con
+>     `get_uploads_dir().glob()`.
+>   - Sul codice di prima: 3 rossi (stesso istante e nomi `b`, `A`, `C`, che fissano anche il `casefold`; stesso nome e
+>     stesso istante; i 30 avatar del seed) e un controllo verde, il più recente prima.
+> - **Cura**, `list_uploads()`: due ordinamenti stabili, prima per `(original_name.casefold(), id)`, poi per
+>   `uploaded_at` decrescente. `services static-uploads`: 39 passed. Ruff e black puliti.
+> - **Note di E**: il paragrafo «Secrets» di `.env.example` e l'elenco di `platform.py` in `settings.md`, come sopra.
+>   `services config-env-example`: 36 passed.
+>
+> **Fuori pista** (da test-author, nel backlog come H-10): `services static-uploads` è dichiarata `write-scoped`, ma il
+> suo fixture autouse cancella e ricrea la cartella `custom-uploads` della corsia, dove stanno anche gli avatar del seed.
+> C'era già prima.
+
+### Validazione unica dei quattro lotti e prova Docker (2026-10-15, pomeriggio) — 🧊
+
+> **Revisione**: `aa0e3a49a` più il lotto piccolo, non committato. Corsia 6181, un comando alla volta, con `nice`.
+>
+> - `front build --debug` rc 0, svelte-check 0/0. `mkdocs build` stretto rc 0. `check-links`: 95 link validi, 3028 URL
+>   di asset risolti.
+> - **`all-backend`** (`-q --fresh-run --workers 2`, slot pesante 1, 14:37:55–15:00:34): 7/7, **12 941 passed, 3
+>   skipped, 0 failed**.
+>
+> **Prova Docker** (slot 1; il daemon lo accende il developer):
+>
+> - **Prima**: le immagini `alpine:3.20` e `python:3.13-slim`, nessun container, nessun progetto compose.
+> - `dev.py docker build`, con un `.env` temporaneo (`PORT=7001`).
+>   - La versione si congela una volta sola: `VERSION`, `frontend/build/.build-version` e il tag
+>     `librefolio:v1.2.1-323-gaa0e3a49a-dirty` coincidono, e il bundle di produzione, ricostruito per quella versione,
+>     la contiene. È M-25 dal lato host.
+>   - Il passo apt dell'immagine finale (`gosu`, `sqlite3`, `tzdata`, `tzdata-legacy`) è andato.
+> - **Il build si ferma a `pip install` nello stadio `pybuilder`**: dal container di build, PyPI risponde «self-signed
+>   certificate in certificate chain».
+>   - Su questa rete un proxy ri-firma il TLS, e il container non ne conosce la CA. Dalla cache di pip arrivano solo le
+>     due dipendenze git; `aiosqlite==0.22.1` non c'è.
+>   - CP7a non tocca il passo di pip.
+> - **Provato senza l'immagine**:
+>   - **P-4**, in un container usa e getta sulla stessa base. `python:3.13-slim` (trixie) ha `tzdata` 2026c ma non
+>     `tzdata-legacy`: `Asia/Kolkata` ed `Europe/Rome` si risolvono, `Asia/Calcutta` e `US/Eastern` no. Dopo la riga apt
+>     del `Dockerfile` si risolvono tutti e quattro.
+>   - **N-8**, con `docker compose config`, che non crea niente: con `PORT=7001` nel `.env`, i due compose pubblicano
+>     7001 → 6040 e mettono `PORT=6040` nel container.
+>   - **C-37 e 32-3** non sono provati a runtime. Li coprono i controlli statici di `utils dev-cli-docker`: `EXPOSE`,
+>     l'argv esatto, un vero `sh` con un `gosu` finto.
+> - **Pulizia**, confrontata con lo stato di prima:
+>   - tolta la rete del progetto `lf-h-cp7a`; nessuna immagine nuova, perché il build non ne ha create;
+>   - container, reti e volumi come prima;
+>   - tolti `.env`, `VERSION` e `requirements.txt`; il worktree è come prima;
+>   - la cache di BuildKit, condivisa, non è stata toccata;
+>   - poi `front build --debug`, per rimettere il bundle di debug.
+> - **Resta da fare**: la prova a runtime dell'immagine (avvio, healthcheck, `docker exec` come uid:gid, versione nella
+>   barra laterale) dove PyPI si raggiunge senza proxy.
+>
+> **Fuori pista**: H-11 nel backlog. Un build locale dietro un proxy che ri-firma il TLS si ferma a `pip install`.
