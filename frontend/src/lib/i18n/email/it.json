@@ -1,6 +1,7 @@
 {
   "email": {
     "tab": {
+      "label": "Email",
       "title": "Email",
       "intro": "LibreFolio può spedire email attraverso un server SMTP, configurato da chi gestisce l'istanza. L'email è facoltativa: senza, tutto il resto funziona."
     },
