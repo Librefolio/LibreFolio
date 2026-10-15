@@ -6,6 +6,19 @@ or one linked pair, shown as a single two-sided form. It adapts its fields to th
 transaction type, validates against the backend while the user types, and either hands the result
 back to the bulk workspace or commits it itself.
 
+The modal owns the whole state — the draft, the validation, the handlers — and renders its
+sections through four components in `frontend/src/lib/components/transactions/form/`, which read
+that state as props, write back only what they bind, and call the modal's handlers:
+
+| Component | Section |
+|---|---|
+| `TxFormBanners` | The inline banners: a failed commit, the validation result and its issues, the partner loading |
+| `TxFormPairSection` | The two-sided form of a pair (FX, transfer of an asset, transfer of cash): the shared fields, then **From** and **To** |
+| `TxFormSingleSection` | The one-row form: date, type, quantity and cash, asset, broker, and the cost basis of an adjustment |
+| `TxFormOptionalSection` | The optional fields: linked event, tags, description, link id, pair partner |
+
+The header, the footer, the read-only footer and the stacked modals stay in the modal.
+
 ---
 
 ## 🏗️ Architecture
@@ -54,7 +67,7 @@ values the new type forbids.
 
 ### 📋 Common Fields
 
-`FormDraft` (declared in `TransactionFormModal.svelte`):
+`FormDraft` (declared, with `DualDraftTo`, in `components/transactions/form/txFormTypes.ts`):
 
 | Field | Type | Description |
 |-------|------|-------------|

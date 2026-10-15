@@ -12,6 +12,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
+    import {todayIso} from '$lib/utils/dateOnly';
     import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
     import BrokerModal from '$lib/components/brokers/BrokerModal.svelte';
     import BrokerIcon from '$lib/components/brokers/BrokerIcon.svelte';
@@ -278,7 +279,8 @@
         error = null;
 
         try {
-            broker = (await zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: data.brokerId}})) as BrokerSummary;
+            // The cash and holdings of the user's today: a transaction dated later counts in none of them (W-B5)
+            broker = (await zodiosApi.get_broker_summary_api_v1_brokers__broker_id__summary_get({params: {broker_id: data.brokerId}, queries: {as_of: todayIso()}})) as BrokerSummary;
         } catch (e) {
             console.error('Failed to load broker:', e);
             error = $_('brokers.loadFailed');
