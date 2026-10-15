@@ -36,7 +36,7 @@ PREFIXES = ("bg text border border-t border-b border-l border-r border-x border-
 
 tw_re = re.compile(r"(?<![\w-])((?:[a-z0-9-]+:)*)(" + "|".join(sorted(PREFIXES, key=len, reverse=True)) + r")-(" + "|".join(FAMILIES) + r")-(50|100|200|300|400|500|600|700|800|900|950)(/\d{1,3}|/\[[^\]]+\])?(?![\w-])")
 tw_bw_re = re.compile(r"(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via)-(white|black|transparent|current)(/\d{1,3})?(?![\w-])")
-tw_custom_re = re.compile(r"(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via|outline|divide)-(libre-[a-z-]+|theme-[a-z-]+|primary[a-z-]*|accent[a-z-]*)(/\d{1,3})?(?![\w-])")
+tw_custom_re = re.compile(r"(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via|outline|divide)-(libre-[a-z-]+|theme-[a-z-]+|primary[a-z-]*|accent[a-z-]*|lf-[a-z0-9-]+)(/\d{1,3})?(?![\w-])")
 tw_arbitrary_re = re.compile(r"(?<![\w-])((?:[a-z0-9-]+:)*)(bg|text|border|ring|fill|stroke|from|to|via|outline|divide|shadow)-\[([^\]]*(?:#|rgb|hsl|var\(|oklch)[^\]]*)\]")
 hex_re = re.compile(r"(?<![\w&])#([0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b")
 func_re = re.compile(r"\b(rgba?|hsla?|oklch|color-mix)\(([^()]*(?:\([^()]*\)[^()]*)*)\)")
