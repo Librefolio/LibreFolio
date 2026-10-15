@@ -1,5 +1,5 @@
 import {type APIRequestContext, type BrowserContext, expect, type Locator, type Page, type Request, type Response, test} from './fixtures/playwright';
-import {login, navigateTo} from './fixtures/auth-helpers';
+import {login, navigateTo, setLanguage} from './fixtures/auth-helpers';
 import {TEST_ADMIN, TEST_USER} from './fixtures/test-users';
 import {eventSeq, waitForEvent} from './fixtures/app-events';
 import {optionsClosed} from './fixtures/probe';
@@ -1131,4 +1131,211 @@ test.describe('Onboarding replay controls', () => {
             tracker.stop();
         }
     });
+});
+
+// ---------------------------------------------------------------------------
+// G-15: the tab bar keeps every tab reachable (workstream A, release 1.3)
+// ---------------------------------------------------------------------------
+//
+// The defect, found by workstream G. The Settings page draws its TabBar inside a card with `overflow-hidden`. From
+// `sm` (640 px) up the tabs keep their natural width (`flex-1 sm:flex-none`) and the row does not scroll, so the seven
+// tabs of an administrator can be wider than the card: at 1280 px in Spanish the last one, `email`, is pushed past the
+// card's edge — only its first letter shows, even while it is the active tab — and between 640 and ~1200 px the same
+// happens in the other languages. A clipped tab is reachable only through `?tab=` or the keyboard.
+//
+// The cure (TabBar's opt-in `scrollable`, which the page passes) wraps the row in a sideways scroll container and keeps
+// the active tab scrolled whole into view. These cases do not depend on that markup: they measure the tab against
+// everything that can hide it — the viewport, the card around the bar, and every ancestor that clips (today the card,
+// after the cure the scroller too) — with 1 px of rounding. The scroller's own testid and layout are pinned by the
+// component test (`TabBar.test.ts`, G-15).
+//
+// Why the second case reads the bar before it clicks. Playwright scrolls a target into view before clicking it, and
+// it scrolls an `overflow: hidden` box as readily as a scroll container: a script can, a user cannot. A click alone
+// would therefore reach every tab today, and prove nothing. What tells the two apart is the reading taken first: a tab
+// is whole inside the bar, or some container between it and the card scrolls sideways (`overflow-x: auto | scroll`)
+// and has more to show — something a user can scroll. Today neither holds for a clipped tab: that is the red, at the
+// first clipped tab in bar order, before any click has scrolled the card.
+//
+// Nothing is written. The language goes through the header's selector, which writes `librefolio-locale` in this
+// context's localStorage and nothing on the server (the account's saved language is applied only at login, which is
+// over by then); opening a tab only reads. `e2e_test_admin`, shared by the whole lane, is left as it was found.
+
+/** The widths of the defect: a desktop in Spanish, and `sm`, the first width at which the tabs show their labels. */
+const G15_VIEWPORTS = [
+    {width: 1280, height: 800},
+    {width: 640, height: 800},
+] as const;
+/** Boxes are fractional: a tab up to this far past an edge is rounding, not a cut label. */
+const G15_TOLERANCE_PX = 1;
+/** Every tab an administrator sees, in the order of the registry (`settingsTabs.ts`): `email` is the last. */
+const G15_ADMIN_TABS = ['profile', 'preferences', 'about', 'admin', 'users', 'backup', 'email'].map((id) => `settings-tab-${id}`);
+/** A tab is revealed a frame or two after its change: a deadline on a loaded lane, never a delay. */
+const G15_REVEAL_MS = 5_000;
+/** What {@link g15WholeInView} returns when nothing hides the tab. */
+const G15_WHOLE = 'whole inside the bar';
+/** What {@link g15Reachable} returns when the tab is inside the bar, or the user can scroll the bar to it. */
+const G15_REACHABLE = 'reachable';
+
+/** Where one Settings tab sits against everything that can hide it. Crosses `evaluate`, so plain data only. */
+interface G15Placement {
+    /** Whole inside the viewport, the card around the bar and every ancestor that clips, within the tolerance. */
+    inside: boolean;
+    /** The edge the tab runs furthest past, and by how much: '' when it is inside. */
+    past: string;
+    /** A container between the tab and the card (included) scrolls sideways and has more to show: a user can scroll it. */
+    userScrollable: boolean;
+    /** That container and its widths, or why none qualifies. */
+    scroll: string;
+}
+
+/** Runs inside the page: serialised by `evaluate`, so it references nothing outside itself. */
+function g15PlaceInPage(tab: Element, tolerancePx: number): G15Placement {
+    const name = (element: Element): string => {
+        const testId = element.getAttribute('data-testid');
+        if (testId) return `[data-testid="${testId}"]`;
+        const role = element.getAttribute('role');
+        return `<${element.tagName.toLowerCase()}${role ? ` role="${role}"` : ''}>`;
+    };
+    const settingsPage = tab.closest('[data-testid="settings-page"]');
+    if (!settingsPage) return {inside: false, past: 'the tab is not inside [data-testid="settings-page"]', userScrollable: false, scroll: 'no card around it'};
+    // The card: the child of the page that holds the bar, whatever the bar's own markup inside it.
+    let card: Element = tab;
+    while (card.parentElement && card.parentElement !== settingsPage) card = card.parentElement;
+
+    const box = tab.getBoundingClientRect();
+    let worstPx = Number.NEGATIVE_INFINITY;
+    let worst = '';
+    const against = (what: string, left: number, right: number, top: number, bottom: number): void => {
+        const overruns: Array<[number, string]> = [
+            [left - box.left, 'left'],
+            [box.right - right, 'right'],
+            [top - box.top, 'top'],
+            [box.bottom - bottom, 'bottom'],
+        ];
+        for (const [px, edge] of overruns) {
+            if (px <= worstPx) continue;
+            worstPx = px;
+            worst = `${px.toFixed(1)} px past the ${edge} edge of ${what} (the tab spans ${box.left.toFixed(1)}–${box.right.toFixed(1)} px)`;
+        }
+    };
+    against('the viewport', 0, window.innerWidth, 0, window.innerHeight);
+    const cardBox = card.getBoundingClientRect();
+    against('the card around the bar', cardBox.left, cardBox.right, cardBox.top, cardBox.bottom);
+
+    let scroller: Element | null = null;
+    const idle: string[] = [];
+    for (let element = tab.parentElement; element && element !== document.body; element = element.parentElement) {
+        const style = getComputedStyle(element);
+        if (card.contains(element) && (style.overflowX === 'auto' || style.overflowX === 'scroll')) {
+            if (element.scrollWidth > element.clientWidth) {
+                if (!scroller) scroller = element;
+            } else {
+                idle.push(`${name(element)} scrolls sideways but holds ${element.scrollWidth} px in ${element.clientWidth} px`);
+            }
+        }
+        const clipsX = style.overflowX !== 'visible';
+        const clipsY = style.overflowY !== 'visible';
+        if (!clipsX && !clipsY) continue;
+        // What a clipping box shows: its padding box, less any scrollbar.
+        const clip = element.getBoundingClientRect();
+        const left = clip.left + element.clientLeft;
+        const top = clip.top + element.clientTop;
+        const what = `${element === card ? 'the card around the bar' : name(element)}, which clips (overflow-x: ${style.overflowX})`;
+        against(what, clipsX ? left : Number.NEGATIVE_INFINITY, clipsX ? left + element.clientWidth : Number.POSITIVE_INFINITY, clipsY ? top : Number.NEGATIVE_INFINITY, clipsY ? top + element.clientHeight : Number.POSITIVE_INFINITY);
+    }
+    const inside = worstPx <= tolerancePx;
+    return {
+        inside,
+        past: inside ? '' : worst,
+        userScrollable: scroller !== null,
+        scroll: scroller ? `${name(scroller)} scrolls sideways: ${scroller.scrollWidth} px of tabs in ${scroller.clientWidth} px` : ['nothing between the tab and the card scrolls sideways', ...idle].join('; '),
+    };
+}
+
+async function g15Place(page: Page, testId: string): Promise<G15Placement> {
+    return page.getByTestId(testId).evaluate(g15PlaceInPage, G15_TOLERANCE_PX);
+}
+
+/** {@link G15_WHOLE}, or the edge the tab runs past: a plain value `expect.poll` can retry and print. */
+async function g15WholeInView(page: Page, testId: string): Promise<string> {
+    const placement = await g15Place(page, testId);
+    return placement.inside ? G15_WHOLE : placement.past;
+}
+
+/** {@link G15_REACHABLE} when the tab is inside the bar or the user can scroll to it; otherwise what hides it, and why. */
+async function g15Reachable(page: Page, testId: string): Promise<string> {
+    const placement = await g15Place(page, testId);
+    return placement.inside || placement.userScrollable ? G15_REACHABLE : `${placement.past}, and the user cannot scroll to it: ${placement.scroll}`;
+}
+
+/**
+ * Sign the administrator in, switch the interface to Spanish, and open `/settings?tab=email` at `viewport`. Returns
+ * once the email tab is the active one, the Spanish dictionary is in and the fonts are loaded.
+ */
+async function g15OpenEmailTabInSpanish(page: Page, viewport: {width: number; height: number}): Promise<void> {
+    await login(page, TEST_ADMIN);
+    // At the project's own viewport, on the app shell login() lands on: its header holds the selector.
+    await setLanguage(page, 'es');
+    // Loaded at the width under test: the content column's margin transition across 1024 px never runs.
+    await page.setViewportSize(viewport);
+    await navigateTo(page, '/settings?tab=email');
+    const html = page.locator('html');
+    await expect(html, 'precondition: Settings renders in Spanish').toHaveAttribute('lang', 'es');
+    await expect(html, 'precondition: the Spanish dictionary has landed').toHaveAttribute('data-i18n-ready', 'true');
+    // ?tab= is applied once the tab is visible, that is once the page knows an administrator is signed in.
+    await expect(page.getByTestId('settings-tab-email'), 'precondition: ?tab=email opened the last tab of an administrator').toHaveAttribute('aria-selected', 'true', {timeout: 10_000});
+    // The labels are measured in their own font, not in a fallback about to swap.
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
+}
+
+test.describe('G-15: the tab bar keeps every tab reachable', () => {
+    test.skip(({isMobile}) => isMobile, 'Desktop widths, set by each case: the mobile project emulates a phone (touch, DPR 3), where the bar shows icons only and fills its row');
+    // A sign-in on a loaded lane can take most of the default 30 s by itself (login()'s ARRIVAL_MS, V-27), and the
+    // second case then opens seven tabs.
+    test.setTimeout(45_000);
+
+    for (const viewport of G15_VIEWPORTS) {
+        const at = `es, ${viewport.width}x${viewport.height}`;
+
+        test(`the active tab opened by ?tab=email lies whole inside the bar (${at})`, async ({page}) => {
+            await g15OpenEmailTabInSpanish(page, viewport);
+
+            await expect
+                .poll(() => g15WholeInView(page, 'settings-tab-email'), {
+                    message: `G-15 (${at}): settings-tab-email, the active tab, lies whole inside the visible box of the bar — received: the edge it runs past`,
+                    timeout: G15_REVEAL_MS,
+                })
+                .toBe(G15_WHOLE);
+        });
+
+        test(`every tab fits the bar or the bar scrolls to it, and a picked tab lies whole in view (${at})`, async ({page}) => {
+            await g15OpenEmailTabInSpanish(page, viewport);
+            const bar = page.getByRole('tablist').filter({has: page.getByTestId('settings-tab-email')});
+            await expect(bar, 'precondition: one tab bar holds the email tab').toHaveCount(1);
+            // All read at once: the tabs of an administrator are drawn together, with the email tab already active.
+            const tabIds = await bar.getByRole('tab').evaluateAll((tabs) => tabs.map((tab) => tab.getAttribute('data-testid') ?? '(a tab without a data-testid)'));
+            expect(tabIds, 'precondition: the bar holds every tab an administrator sees').toEqual(expect.arrayContaining(G15_ADMIN_TABS));
+
+            for (const testId of tabIds) {
+                await test.step(testId, async () => {
+                    // Read before the click, which would scroll even a box that only clips (see above).
+                    await expect
+                        .poll(() => g15Reachable(page, testId), {
+                            message: `G-15 (${at}): ${testId} lies whole inside the bar, or a container of the bar scrolls sideways to it — received: what hides it`,
+                            timeout: G15_REVEAL_MS,
+                        })
+                        .toBe(G15_REACHABLE);
+                    const tab = page.getByTestId(testId);
+                    await tab.click();
+                    await expect(tab).toHaveAttribute('aria-selected', 'true');
+                    await expect
+                        .poll(() => g15WholeInView(page, testId), {
+                            message: `G-15 (${at}): ${testId}, once picked, lies whole inside the visible box of the bar — received: the edge it runs past`,
+                            timeout: G15_REVEAL_MS,
+                        })
+                        .toBe(G15_WHOLE);
+                });
+            }
+        });
+    }
 });
