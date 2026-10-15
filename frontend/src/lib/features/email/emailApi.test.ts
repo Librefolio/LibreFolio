@@ -1,12 +1,17 @@
 /**
- * emailApi — the seam of the Email tab on the generated client (workstream E, lot E2).
+ * emailApi — the seam of the Email tab on the generated client (workstream E, lots E2 and E3p).
  *
  * The contract under test:
  *   - `fetchEmailStatus()` asks `GET /email/status` once, through its generated alias, and normalizes the answer into
- *     `EmailStatus`, all five keys always present: `state` as answered; `problem` and `variable` a non-empty string,
- *     else null; `checks` the answered list, else `[]`; `budget` an object, else null. The generated type of an
- *     optional field is wider than its schema (it admits an array), so a value of the wrong shape is dropped, never
- *     carried. A refusal reaches the caller as the client raised it;
+ *     `EmailStatus`, all six keys always present: `state` as answered; `problem` and `variable` a non-empty string,
+ *     else null; `checks` the answered list, else `[]`; `budget` an object, else null; `links` narrowed to
+ *     `{ready, base, problem}` — ready only when `ready` is `true` and `base` a non-empty string, `base` null unless
+ *     ready, `problem` a non-empty string else null, and `{ready: false, base: null, problem: null}` when `links` is
+ *     absent (an older server) or not an object. The generated type of an optional field is wider than its schema (it
+ *     admits an array), so a value of the wrong shape is dropped, never carried. A refusal reaches the caller as the
+ *     client raised it;
+ *   - `issueProbeNonce()` posts `POST /users/address-probe` once, through its alias, with no body, and answers the
+ *     nonce alone; a refusal reaches the caller as the client raised it;
  *   - `sendTestEmail()` posts `POST /email/test` once, through its alias, with no body, and answers what it answered;
  *   - `readTestFailure(error)` reads the `detail` of a refused test email — `{error_code, problem | retry_after |
  *     smtp_code, message}`, `backend/app/api/v1/email.py` — carried either by axios's own `AxiosError` (its
@@ -26,7 +31,7 @@
  * transport is the one the client uses (a 200 comes back through the generated schema) and record the method and path
  * it was asked.
  *
- * Mocks: the two aliases are spied on the real generated client (`vi.spyOn`, restored after each test), which also
+ * Mocks: the three aliases are spied on the real generated client (`vi.spyOn`, restored after each test), which also
  * proves they exist on it; `ApiError` is the real class `readTestFailure` tests with `instanceof`. The last block
  * replaces `axiosInstance.defaults.adapter` and puts it back after each test. Axios errors are built with axios's own
  * `AxiosError`, as in `stores/app/auth.test.ts`.
@@ -36,7 +41,7 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {AxiosError, AxiosHeaders, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
 import {ApiError, axiosInstance, zodiosApi} from '$lib/api';
-import {fetchEmailStatus, readTestFailure, sendTestEmail, type EmailBudget, type EmailCheck, type EmailStatus, type EmailTestFailure} from './emailApi';
+import {fetchEmailStatus, issueProbeNonce, readTestFailure, sendTestEmail, type EmailBudget, type EmailCheck, type EmailLinks, type EmailStatus, type EmailTestFailure} from './emailApi';
 
 /** What `GET /email/status` answers, as the generated client types it: wider than its schema. */
 type StatusAnswer = Awaited<ReturnType<typeof zodiosApi.get_email_status_api_v1_email_status_get>>;
@@ -46,6 +51,9 @@ const SMTP_INVALID: EmailCheck = {check_id: 'email.smtp', severity: 'error', i18
 const ENCRYPTION_OK: EmailCheck = {check_id: 'email.smtp_encryption', severity: 'ok', i18n_key: 'email.checks.smtpEncryption.ok', detail: {}};
 const ENCRYPTION_PLAIN: EmailCheck = {check_id: 'email.smtp_encryption', severity: 'warning', i18n_key: 'email.checks.smtpEncryption.plain', detail: {}};
 const BUDGET: EmailBudget = {max_per_hour: 20, remaining: 17, retry_after_seconds: 0};
+/** `links` when the answer carries none (an older server), or nothing usable: emails cannot carry links. */
+const NO_LINKS: EmailLinks = {ready: false, base: null, problem: null};
+const PUBLIC_URL = 'https://folio.example.com:8443/app';
 
 /** The config axios attaches to an error raised outside a request. */
 const REQUEST = {headers: new AxiosHeaders()} as InternalAxiosRequestConfig;
@@ -96,14 +104,14 @@ afterEach(() => {
 describe('fetchEmailStatus — GET /email/status, normalized into EmailStatus', () => {
     it.each<{label: string; answer: StatusAnswer; status: EmailStatus}>([
         {
-            label: 'ready, with its checks and its budget',
-            answer: {state: 'ready', problem: null, variable: null, checks: [SMTP_OK, ENCRYPTION_PLAIN], budget: BUDGET},
-            status: {state: 'ready', problem: null, variable: null, checks: [SMTP_OK, ENCRYPTION_PLAIN], budget: BUDGET},
+            label: 'ready, with its checks, its budget and its links',
+            answer: {state: 'ready', problem: null, variable: null, checks: [SMTP_OK, ENCRYPTION_PLAIN], budget: BUDGET, links: {ready: true, base: PUBLIC_URL, problem: null}},
+            status: {state: 'ready', problem: null, variable: null, checks: [SMTP_OK, ENCRYPTION_PLAIN], budget: BUDGET, links: {ready: true, base: PUBLIC_URL, problem: null}},
         },
         {
-            label: 'invalid, with the problem and the variable at fault',
-            answer: {state: 'invalid', problem: 'SMTP_PORT_INVALID', variable: 'LIBREFOLIO_SMTP_PORT', checks: [SMTP_INVALID, ENCRYPTION_OK], budget: null},
-            status: {state: 'invalid', problem: 'SMTP_PORT_INVALID', variable: 'LIBREFOLIO_SMTP_PORT', checks: [SMTP_INVALID, ENCRYPTION_OK], budget: null},
+            label: 'invalid, with the problem and the variable at fault, and no links',
+            answer: {state: 'invalid', problem: 'SMTP_PORT_INVALID', variable: 'LIBREFOLIO_SMTP_PORT', checks: [SMTP_INVALID, ENCRYPTION_OK], budget: null, links: {ready: false, base: null, problem: 'PUBLIC_URL_MISSING'}},
+            status: {state: 'invalid', problem: 'SMTP_PORT_INVALID', variable: 'LIBREFOLIO_SMTP_PORT', checks: [SMTP_INVALID, ENCRYPTION_OK], budget: null, links: {ready: false, base: null, problem: 'PUBLIC_URL_MISSING'}},
         },
     ])('a full answer ($label) is kept as answered, asked once through its alias', async ({answer, status}) => {
         const alias = vi.spyOn(zodiosApi, 'get_email_status_api_v1_email_status_get').mockResolvedValueOnce(answer);
@@ -113,38 +121,38 @@ describe('fetchEmailStatus — GET /email/status, normalized into EmailStatus', 
         expect(alias).toHaveBeenCalledWith();
     });
 
-    it('a minimal answer ({state: off}) gets every key: problem, variable and budget null, no checks', async () => {
+    it('a minimal answer ({state: off}) gets every key: problem, variable and budget null, no checks, no links', async () => {
         vi.spyOn(zodiosApi, 'get_email_status_api_v1_email_status_get').mockResolvedValueOnce({state: 'off'});
 
-        await expect(fetchEmailStatus()).resolves.toStrictEqual({state: 'off', problem: null, variable: null, checks: [], budget: null});
+        await expect(fetchEmailStatus()).resolves.toStrictEqual({state: 'off', problem: null, variable: null, checks: [], budget: null, links: NO_LINKS});
     });
 
     it('an empty problem or variable names nothing: null', async () => {
         vi.spyOn(zodiosApi, 'get_email_status_api_v1_email_status_get').mockResolvedValueOnce({state: 'invalid', problem: '', variable: '', checks: [SMTP_OK], budget: null});
 
-        await expect(fetchEmailStatus()).resolves.toStrictEqual({state: 'invalid', problem: null, variable: null, checks: [SMTP_OK], budget: null});
+        await expect(fetchEmailStatus()).resolves.toStrictEqual({state: 'invalid', problem: null, variable: null, checks: [SMTP_OK], budget: null, links: NO_LINKS});
     });
 
     it.each<{label: string; answer: StatusAnswer; status: EmailStatus}>([
         {
             label: 'an array in problem',
             answer: {state: 'invalid', problem: ['SMTP_PORT_INVALID'], variable: 'LIBREFOLIO_SMTP_PORT'},
-            status: {state: 'invalid', problem: null, variable: 'LIBREFOLIO_SMTP_PORT', checks: [], budget: null},
+            status: {state: 'invalid', problem: null, variable: 'LIBREFOLIO_SMTP_PORT', checks: [], budget: null, links: NO_LINKS},
         },
         {
             label: 'an array in variable',
             answer: {state: 'invalid', problem: 'SMTP_PORT_INVALID', variable: ['LIBREFOLIO_SMTP_PORT']},
-            status: {state: 'invalid', problem: 'SMTP_PORT_INVALID', variable: null, checks: [], budget: null},
+            status: {state: 'invalid', problem: 'SMTP_PORT_INVALID', variable: null, checks: [], budget: null, links: NO_LINKS},
         },
         {
             label: 'an array in budget',
             answer: {state: 'ready', checks: [SMTP_OK], budget: [BUDGET]},
-            status: {state: 'ready', problem: null, variable: null, checks: [SMTP_OK], budget: null},
+            status: {state: 'ready', problem: null, variable: null, checks: [SMTP_OK], budget: null, links: NO_LINKS},
         },
         {
             label: 'an empty array in budget',
             answer: {state: 'ready', checks: [SMTP_OK], budget: []},
-            status: {state: 'ready', problem: null, variable: null, checks: [SMTP_OK], budget: null},
+            status: {state: 'ready', problem: null, variable: null, checks: [SMTP_OK], budget: null, links: NO_LINKS},
         },
     ])('$label — the generated type admits it, the schema does not — is dropped: null', async ({answer, status}) => {
         vi.spyOn(zodiosApi, 'get_email_status_api_v1_email_status_get').mockResolvedValueOnce(answer);
@@ -157,6 +165,55 @@ describe('fetchEmailStatus — GET /email/status, normalized into EmailStatus', 
         vi.spyOn(zodiosApi, 'get_email_status_api_v1_email_status_get').mockRejectedValueOnce(refusal);
 
         await expect(fetchEmailStatus()).rejects.toBe(refusal);
+    });
+});
+
+// =====================================================================================================================
+describe('fetchEmailStatus — links narrowed to what the tab can trust (lot E3p)', () => {
+    it.each<{label: string; links: unknown; expected: EmailLinks}>([
+        {label: 'ready with a base', links: {ready: true, base: PUBLIC_URL, problem: null}, expected: {ready: true, base: PUBLIC_URL, problem: null}},
+        {label: 'missing, with its problem', links: {ready: false, base: null, problem: 'PUBLIC_URL_MISSING'}, expected: {ready: false, base: null, problem: 'PUBLIC_URL_MISSING'}},
+        {label: 'invalid, with its problem', links: {ready: false, base: null, problem: 'PUBLIC_URL_INVALID'}, expected: {ready: false, base: null, problem: 'PUBLIC_URL_INVALID'}},
+        {label: 'absent (an older server)', links: undefined, expected: NO_LINKS},
+        {label: 'an empty object', links: {}, expected: NO_LINKS},
+        {label: 'ready without a base', links: {ready: true, base: null, problem: null}, expected: NO_LINKS},
+        {label: 'ready with an empty base', links: {ready: true, base: '', problem: null}, expected: NO_LINKS},
+        {label: 'ready with a base that is not a string', links: {ready: true, base: [PUBLIC_URL], problem: null}, expected: NO_LINKS},
+        {label: 'a base while not ready', links: {ready: false, base: PUBLIC_URL, problem: 'PUBLIC_URL_INVALID'}, expected: {ready: false, base: null, problem: 'PUBLIC_URL_INVALID'}},
+        {label: 'a base without ready', links: {base: PUBLIC_URL}, expected: NO_LINKS},
+        {label: 'ready written as a string', links: {ready: 'true', base: PUBLIC_URL}, expected: NO_LINKS},
+        {label: 'ready written as a number', links: {ready: 1, base: PUBLIC_URL}, expected: NO_LINKS},
+        {label: 'an empty problem', links: {ready: false, base: null, problem: ''}, expected: NO_LINKS},
+        {label: 'a problem that is not a string', links: {ready: false, base: null, problem: 42}, expected: NO_LINKS},
+        {label: 'null', links: null, expected: NO_LINKS},
+        {label: 'an array', links: [{ready: true, base: PUBLIC_URL}], expected: NO_LINKS},
+        {label: 'a string', links: PUBLIC_URL, expected: NO_LINKS},
+    ])('EAP-01: links $label', async ({links, expected}) => {
+        // Through the spied alias, past the generated schema: what the narrowing must survive is a shape the schema refuses.
+        vi.spyOn(zodiosApi, 'get_email_status_api_v1_email_status_get').mockResolvedValueOnce({state: 'ready', checks: [SMTP_OK], budget: BUDGET, links} as unknown as StatusAnswer);
+
+        const status = await fetchEmailStatus();
+
+        expect(status.links).toStrictEqual(expected);
+        expect(status.links.ready === (status.links.base !== null), 'ready exactly when there is a base').toBe(true);
+    });
+});
+
+// =====================================================================================================================
+describe('issueProbeNonce — POST /users/address-probe (lot E3p)', () => {
+    it('EAP-02: posts once, through its alias, with no body, and answers the nonce alone', async () => {
+        const alias = vi.spyOn(zodiosApi, 'issue_address_probe_api_v1_users_address_probe_post').mockResolvedValueOnce({nonce: 'zq-nonce_0123', expires_at: '2026-10-15T20:00:00Z'});
+
+        await expect(issueProbeNonce()).resolves.toBe('zq-nonce_0123');
+        expect(alias).toHaveBeenCalledTimes(1);
+        expect(alias.mock.calls[0][0], 'the nonce needs no body').toBeUndefined();
+    });
+
+    it('EAP-03: a refusal reaches the caller as the client raised it', async () => {
+        const refusal = axiosRefusal(403, 'Forbidden', {detail: 'Admin privileges required'});
+        vi.spyOn(zodiosApi, 'issue_address_probe_api_v1_users_address_probe_post').mockRejectedValueOnce(refusal);
+
+        await expect(issueProbeNonce()).rejects.toBe(refusal);
     });
 });
 
@@ -246,7 +303,7 @@ describe('readTestFailure — what carries no body is UNKNOWN', () => {
 });
 
 // =====================================================================================================================
-describe('through the real client, only the transport faked: what a refused sendTestEmail() rejects with is read', () => {
+describe('through the real client, only the transport faked: the status with its links, the probe nonce, and what a refused sendTestEmail() rejects with are read', () => {
     /** The requests the fake transport received. */
     const received: InternalAxiosRequestConfig[] = [];
     let realAdapter: typeof axiosInstance.defaults.adapter;
@@ -282,8 +339,35 @@ describe('through the real client, only the transport faked: what a refused send
     it('control: GET /email/status reaches the transport, and its answer comes back through the generated schema, normalized', async () => {
         serverAnswers(200, {state: 'ready', problem: null, variable: null, checks: [SMTP_OK, ENCRYPTION_PLAIN], budget: BUDGET});
 
-        await expect(fetchEmailStatus()).resolves.toStrictEqual({state: 'ready', problem: null, variable: null, checks: [SMTP_OK, ENCRYPTION_PLAIN], budget: BUDGET});
+        await expect(fetchEmailStatus()).resolves.toStrictEqual({state: 'ready', problem: null, variable: null, checks: [SMTP_OK, ENCRYPTION_PLAIN], budget: BUDGET, links: NO_LINKS});
         expect(received.map(({method, url}) => `${method} ${url}`)).toEqual(['get /api/v1/email/status']);
+    });
+
+    it('EAP-04: links ready come back through the generated schema, their base kept as answered', async () => {
+        serverAnswers(200, {state: 'ready', problem: null, variable: null, checks: [SMTP_OK], budget: BUDGET, links: {ready: true, base: PUBLIC_URL, problem: null}});
+
+        await expect(fetchEmailStatus()).resolves.toStrictEqual({state: 'ready', problem: null, variable: null, checks: [SMTP_OK], budget: BUDGET, links: {ready: true, base: PUBLIC_URL, problem: null}});
+    });
+
+    it('EAP-05: links missing come back with their problem, and no base', async () => {
+        serverAnswers(200, {state: 'ready', problem: null, variable: null, checks: [SMTP_OK], budget: BUDGET, links: {ready: false, base: null, problem: 'PUBLIC_URL_MISSING'}});
+
+        await expect(fetchEmailStatus()).resolves.toMatchObject({links: {ready: false, base: null, problem: 'PUBLIC_URL_MISSING'}});
+    });
+
+    it('EAP-06: issueProbeNonce — POST /users/address-probe reaches the transport with no body, and the nonce comes back', async () => {
+        serverAnswers(200, {nonce: 'zq-nonce_0123', expires_at: '2026-10-15T20:00:00Z'});
+
+        await expect(issueProbeNonce()).resolves.toBe('zq-nonce_0123');
+        expect(received.map(({method, url}) => `${method} ${url}`)).toEqual(['post /api/v1/users/address-probe']);
+        expect(received[0]?.data, 'no body').toBeUndefined();
+    });
+
+    it('EAP-07: issueProbeNonce — a 403, as the client raises it, rejects: no nonce is made up', async () => {
+        serverAnswers(403, {detail: 'Admin privileges required'});
+
+        await expect(issueProbeNonce()).rejects.toBeInstanceOf(AxiosError);
+        expect(received, 'premise: the request reached the transport').toHaveLength(1);
     });
 
     it('control: POST /email/test reaches the transport with no body, and its answer comes back', async () => {

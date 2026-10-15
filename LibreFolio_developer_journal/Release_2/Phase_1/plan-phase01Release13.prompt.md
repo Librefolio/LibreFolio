@@ -1321,3 +1321,16 @@ confermato e con il mio via); **prima consegna: solo l'analisi, nessun codice**.
 > (`htmlInterpolation.gate.test.ts`, la chiave `email.problems.SMTP_FROM_INVALID` con `<`), trovato da T nella sua
 > validazione. Corretto in 15 minuti riformulando nelle 4 lingue. **Regola d'ingresso nuova**: un lotto che cambia
 > cataloghi i18n porta `front-utility core-unit` verde (gate di markup, ICU, lingua).
+
+### Treni 50–60, pause per le gallerie, deleghe (2026-10-15, 19:00–21:40)
+
+> **Note implementazione**: entrati B, H CP2b, W N2, B8, A6b, J CP-4c, lo scatto di B, X CP10, Y8, Z6b parte 2, E3
+> con E3s e la correzione del flash. Due pause delle corsie 1.3 per le gallerie dei colori (20:49–20:53 e 21:00–21:08):
+> i rossi di DV erano saturazione, i tre scatti nuovi sono stabili (6 su 6 in due run). Il developer ha delegato al
+> coordinatore l'avvio dei lotti di Y e di Z. Decisione 36 completata (scopo dei file, D36-1…3 approvate).
+>
+> **⚠️ Fuori pista**: la revisione di sicurezza di E3 ha trovato che il cambio dell'email non chiede la password; con
+> «password dimenticata» diventava una presa dell'account. La rotta anonima resta spenta (409) fino ad A6e (password
+> attuale per cambiare l'email, chiusura delle altre sessioni). J ha trovato un MWRR sbagliato in circa il 4 % dei
+> portafogli simulati (CP-4d, risolutore verificato). G ha trovato G-15 (barra delle schede di Settings che trabocca
+> in spagnolo), affidato ad A.

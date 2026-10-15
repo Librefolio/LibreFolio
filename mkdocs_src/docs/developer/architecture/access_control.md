@@ -29,11 +29,16 @@ There are three roles with increasing levels of privilege:
 | **View Broker Details**              |   ✅    |   ✅    |   ✅   |
 | **View Transactions**                |   ✅    |   ✅    |   ✅   |
 | **View Reports/Charts**              |   ✅    |   ✅    |   ✅   |
+| **View Report Files (BRIM)**         |   ✅    |   ✅    |   ✅   |
 | **Add/Edit Transactions**            |   ❌    |   ✅    |   ✅   |
-| **Import Files (BRIM)**              |   ❌    |   ✅    |   ✅   |
+| **Upload/Parse/Delete Files (BRIM)** |   ❌    |   ✅    |   ✅   |
 | **Edit Broker Settings**             |   ❌    |   ✅    |   ✅   |
 | **Manage Access (Add/Remove Users)** |   ❌    |   ❌    |   ✅   |
 | **Delete Broker**                    |   ❌    |   ❌    |   ✅   |
+
+For BRIM report files the administrator (`is_superuser`) needs no role, a file with no broker is its
+uploader's and the administrator's only, and a parse also needs EDITOR or OWNER on the broker it
+imports into: see [Who reaches a report file](../backend/brim/architecture.md#file-access).
 
 ### 📋 Role Definitions
 

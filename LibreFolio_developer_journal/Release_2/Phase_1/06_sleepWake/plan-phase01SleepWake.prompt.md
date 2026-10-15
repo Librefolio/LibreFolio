@@ -474,6 +474,48 @@ Pagine (solo i cicli di polling e il punto della pillola):
    > 65, il livello del via del coordinatore (soglia mia): è partita alle 15:57 a 38,8. Nel merge
    > `frontend/package.json` e il lock cambiano solo la versione della radice (1.1.0 → 0.0.0): `node_modules` resta
    > valido, nessun `npm ci`.
+7. Il flash del prezzo dal vivo nel dettaglio: correzione del test, solo test ✅ 2026-10-15
+
+   > **Richiesta del coordinatore** (15/10 ~21:13): Y ha trovato 3 rossi intermittenti nel blocco «Live price direction
+   > flash» di `front-asset asset-detail`. Il prezzo è passato al nuovo valore, ma `data-live-price-direction` restava
+   > `neutral`. La correzione spetta a Z, in un lotto piccolo, prima i rossi.
+   >
+   > **Rosso riprodotto** (21:19): 1 rosso su 4 («consecutive», atteso `up`, trovato `neutral`), con la pagina che
+   > mostrava `101.00`.
+   >
+   > Due corse nel test, entrambe con la stessa istantanea:
+   > 1. Fino al primo prezzo dal vivo l'elemento mostra l'ultima chiusura del grafico (Apple, 175–185), già `neutral`,
+   >    e i test 2–4 aspettavano solo `neutral` prima di cambiare il prezzo del mock. Con Z1 il primo poll parte da un
+   >    timer a 0 ms, per scelta, mentre prima partiva in modo sincrono dentro l'effetto. Sotto il `page.clock` e con
+   >    la pagina occupata può scattare dopo la mutazione, e allora il primo valore letto è già quello nuovo.
+   > 2. `page.clock.install()` senza pausa lascia scorrere il tempo reale, quindi il decadimento di circa 1,3 s parte
+   >    da solo, e una pausa della pagina o del worker oltre quel tempo nasconde il lampo ai controlli. L'ha segnalata
+   >    test-author.
+   >
+   > Il comportamento del prodotto è giusto: il primo valore è `neutral`, poi `up` o `down`. Difetto del test, non di
+   > Z1.
+   >
+   > **Correzione** (test-author, `frontend/e2e/assets/asset-detail.spec.ts`, 36 righe aggiunte e 3 tolte):
+   > - nei test 2–4, prima di cambiare il prezzo, `toHaveText('100.00')`: 100,00 può venire solo dal primo poll vivo;
+   > - poi `page.clock.pauseAt(ora della pagina + 5 s)`, così da lì in poi il tempo lo muove solo `fastForward`. Il
+   >   margine è 5 s perché `pauseAt` rifiuta il passato e non risincronizza l'orologio prima del calcolo. Nei 5 s non
+   >   scatta niente: il prossimo poll è a 30 s, la pausa per inattività a 2 min, nessun decadimento è in attesa;
+   > - corretto il commento del mock, che parlava ancora di «due poller»;
+   > - Prettier pulito.
+   >
+   > **Verdi**, slot pesante 1, una run alla volta:
+   >
+   > | Run | Workers | Esito |
+   > |---|---|---|
+   > | a | 1 | 4/4 |
+   > | b | 1 | 4/4 |
+   > | c | 2 | 4/4 |
+   >
+   > Comando: `dev.py test … --workers N front-asset asset-detail "Live price direction flash"`. Porta libera dopo
+   > ogni run. Log in `/tmp/libreFolio_flash_{a,b,c}.log`.
+   >
+   > **Fuori pista**: la prima run di riproduzione ha preso tutta la spec senza filtro (32/33), perché il mio wrapper
+   > delle prove mette le opzioni prima della categoria. Il filtro va dopo l'azione.
 
 ## Z7 — disegno: attesa crescente sui 429 (15/10, prima del codice)
 
