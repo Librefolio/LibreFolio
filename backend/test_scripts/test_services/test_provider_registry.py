@@ -9,7 +9,7 @@ import pytest
 from backend.app.schemas.provider import FAVolumeKind
 from backend.app.services.assets.base import AssetSourceProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
-from backend.app.services.fx.fx import FXRateProvider
+from backend.app.services.fx.base import FXRateProvider
 from backend.app.services.fx.registry import FXProviderRegistry
 
 

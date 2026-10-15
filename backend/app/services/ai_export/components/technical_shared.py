@@ -119,7 +119,7 @@ from backend.app.services.ai_export.temporal.policy import (
 )
 from backend.app.services.ai_export.temporal.warmup import slice_to_requested_period
 from backend.app.services.assets.manager import AssetSourceManager
-from backend.app.services.fx.fx import convert_bulk
+from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.signal_service import SignalExecutionPlan, SignalService
 from backend.app.services.signals.registry import SignalPluginRegistry
 
@@ -623,7 +623,7 @@ BROKER_TECHNICAL_UNIVERSE_KWARGS: Mapping[str, ResourceKey] = MappingProxyType(
 #: workstream's `FX_RATE_SERIES_RESOURCE` (which is scoped to the visible
 #: period only - see `fx_core.py`'s `_load_rate_series`): both loaders share
 #: the same `FxRateSeriesResource` *type* and the same underlying
-#: `backend.app.services.fx.fx.convert_bulk` source of truth, but a shared
+#: `backend.app.services.fx.conversion.convert_bulk` source of truth, but a shared
 #: request-scoped cache key must always mean the exact same date range to
 #: every caller. Reusing the literal `FX_RATE_SERIES_RESOURCE` key here would
 #: make correctness depend on which sibling component resolves it first
@@ -660,7 +660,7 @@ def _fx_warmup_days(scope: BuildScope) -> int:
 async def load_fx_rate_series(context: BuildContext) -> FxRateSeriesResource:
     """Loads a daily base->quote conversion rate series over the warm-up + visible range.
 
-    Routed entirely through the existing `backend.app.services.fx.fx.convert_bulk`
+    Routed entirely through the existing `backend.app.services.fx.conversion.convert_bulk`
     batch conversion service (unlimited backward-fill, no invented economics -
     requirement 6), exactly like the sibling FX-core workstream's own rate
     series loader, just over a wider (warm-up-inclusive) date range and under

@@ -25,7 +25,7 @@ from backend.app.services.financial_math.portfolio.daily_state import DailyState
 from backend.app.services.financial_math.portfolio.derived_views import build_cost_positions
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval, PortfolioCalculationResult, SplitHistory, SplitRecord
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
-from backend.app.services.fx.fx import convert_bulk
+from backend.app.services.fx.conversion import convert_bulk
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 logger = structlog.get_logger(__name__)

@@ -81,11 +81,11 @@ i18n keys + balance walk tests (8/8 pass) + FormModal context-aware validate + D
 | Role | Path |
 |------|------|
 | MockFX providers | `backend/app/services/fx_providers/mockfx/plugin.py` |
-| FX API (filter MOCKFX) | `backend/app/api/v1/fx.py` |
+| FX API (filter MOCKFX) | `backend/app/api/v1/fx/providers.py` |
 | Asset source (auto-populate removed) | `backend/app/services/assets/provider_management.py` |
 | DistributionEditor | `frontend/src/lib/components/ui/input/DistributionEditor.svelte` |
 | FX pair page | `frontend/src/routes/(app)/fx/[pair]/+page.svelte` |
-| FX service (errors fix) | `backend/app/services/fx/fx.py` |
+| FX service (errors fix) | `backend/app/services/fx/sync.py` |
 | dev.py (build order) | `dev.py` |
 | AssetModal (data-testid) | `frontend/src/lib/components/assets/AssetModal.svelte` |
 | Test asset source | `backend/test_scripts/test_services/test_asset_source.py` |
